@@ -70,31 +70,30 @@ LogB(::Val{:ℯ}, ::Type{Float16}) = -0.6931472f0
 LogB(::Val{10}, ::Type{Float16}) = -0.30103f0
 
 # Range reduced kernels
-@inline function expm1b_kernel(::Val{2}, x::Float64)
+function expm1b_kernel(::Val{2}, x::Float64)
     return x * evalpoly(x, (0.6931471805599393, 0.24022650695910058,
                             0.05550411502333161, 0.009618129548366803))
 end
-@inline function expm1b_kernel(::Val{:ℯ}, x::Float64)
+function expm1b_kernel(::Val{:ℯ}, x::Float64)
     return x * evalpoly(x, (0.9999999999999912, 0.4999999999999997,
                             0.1666666857598779, 0.04166666857598777))
 end
-
-@inline function expm1b_kernel(::Val{10}, x::Float64)
+function expm1b_kernel(::Val{10}, x::Float64)
     return x * evalpoly(x, (2.3025850929940255, 2.6509490552391974,
                             2.034678825384765, 1.1712552025835192))
 end
 
-@inline function expb_kernel(::Val{2}, x::Float32)
+function expb_kernel(::Val{2}, x::Float32)
     return evalpoly(x, (1.0f0, 0.6931472f0, 0.2402265f0,
                         0.05550411f0, 0.009618025f0,
                         0.0013333423f0, 0.00015469732f0, 1.5316464f-5))
 end
-@inline function expb_kernel(::Val{:ℯ}, x::Float32)
+function expb_kernel(::Val{:ℯ}, x::Float32)
     return evalpoly(x, (1.0f0, 1.0f0, 0.5f0, 0.16666667f0,
                         0.041666217f0, 0.008333249f0,
                         0.001394858f0, 0.00019924171f0))
 end
-@inline function expb_kernel(::Val{10}, x::Float32)
+function expb_kernel(::Val{10}, x::Float32)
     return evalpoly(x, (1.0f0, 2.3025851f0, 2.650949f0,
                         2.0346787f0, 1.1712426f0, 0.53937745f0,
                         0.20788547f0, 0.06837386f0))
@@ -176,7 +175,7 @@ const J_TABLE = (0x0000000000000000, 0xaac00b1afa5abcbe, 0x9b60163da9fb3335, 0xa
                  0xa12f7bfdad9cbe13, 0xaeef91d802243c88, 0x874fa7c1819e90d8, 0xacdfbdba3692d513, 0x62efd3c22b8f71f1, 0x74afe9d96b2a23d9)
 
 # :nothrow needed since the compiler can't prove `ind` is inbounds.
-Base.@assume_effects :nothrow @inline function table_unpack(ind::Int32)
+Base.@assume_effects :nothrow function table_unpack(ind::Int32)
     ind = ind & 255 + 1 # 255 == length(J_TABLE) - 1
     j = getfield(J_TABLE, ind) # use getfield so the compiler can prove consistent
     jU = reinterpret(Float64, JU_CONST | (j&JU_MASK))
@@ -222,7 +221,7 @@ end
         if k <= -53
             # The UInt64 forces promotion. (Only matters for 32 bit systems.)
             twopk = (k + UInt64(53)) << 52
-            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*(2.0^-53)
+            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
         end
         #k == 1024 && return (small_part * 2.0) * 2.0^1023
     end
@@ -239,15 +238,17 @@ end
     r = muladd(N_float, LogBo256L(base, T), r)
     k = N >> 8
     jU, jL = table_unpack(N)
-    very_small = muladd(jU, expm1b_kernel(base, r), jL)
-    small_part =  muladd(jU,xlo,very_small) + jU
+    kern = expm1b_kernel(base, r)
+    very_small = muladd(kern, jU*xlo, jL)
+    hi, lo = Base.canonicalize2(1.0, kern)
+    small_part = fma(jU, hi, muladd(jU, (lo+xlo), very_small))
     if !(abs(x) <= SUBNORM_EXP(base, T))
         x >= MAX_EXP(base, T) && return Inf
         x <= MIN_EXP(base, T) && return 0.0
         if k <= -53
             # The UInt64 forces promotion. (Only matters for 32 bit systems.)
             twopk = (k + UInt64(53)) << 52
-            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*(2.0^-53)
+            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
         end
         #k == 1024 && return (small_part * 2.0) * 2.0^1023
     end
@@ -323,8 +324,8 @@ for (func, fast_func, base) in ((:exp2,  :exp2_fast,  Val(2)),
                                 (:exp,   :exp_fast,   Val(:ℯ)),
                                 (:exp10, :exp10_fast, Val(10)))
     @eval begin
-        $func(x::Union{Float16,Float32,Float64}) = exp_impl(x, $base)
-        $fast_func(x::Union{Float32,Float64}) = exp_impl_fast(x, $base)
+        @noinline $func(x::Union{Float16,Float32,Float64}) = exp_impl(x, $base)
+        @noinline $fast_func(x::Union{Float32,Float64}) = exp_impl_fast(x, $base)
     end
 end
 
@@ -459,7 +460,7 @@ function expm1(x::Float32)
     end
     x = Float64(x)
     N_float = round(x*Ln2INV(Float64))
-    N = unsafe_trunc(UInt64, N_float)
+    N = unsafe_trunc(Int64, N_float)
     r = muladd(N_float, Ln2(Float64), x)
     hi = evalpoly(r, (1.0, .5, 0.16666667546642386, 0.041666183019487026,
                       0.008332997481506921, 0.0013966479175977883, 0.0002004037059220124))
@@ -476,7 +477,7 @@ function expm1(x::Float16)
         return Float16(x*evalpoly(x, (1f0, .5f0, 0.16666628f0, 0.04166785f0, 0.008351848f0, 0.0013675707f0)))
     end
     N_float = round(x*Ln2INV(Float32))
-    N = unsafe_trunc(UInt32, N_float)
+    N = unsafe_trunc(Int32, N_float)
     r = muladd(N_float, Ln2(Float32), x)
     hi = evalpoly(r, (1f0, .5f0, 0.16666667f0, 0.041665863f0, 0.008333111f0, 0.0013981499f0, 0.00019983904f0))
     small_part = r*hi

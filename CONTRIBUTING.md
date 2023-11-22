@@ -58,9 +58,9 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ### Writing tests
 
-There are never enough tests. Track [code coverage at Coveralls](https://coveralls.io/r/JuliaLang/julia), and help improve it.
+There are never enough tests. Track [code coverage at Codecov](https://codecov.io/github/JuliaLang/julia), and help improve it.
 
-1. Go visit https://coveralls.io/r/JuliaLang/julia.
+1. Go visit https://codecov.io/github/JuliaLang/julia.
 
 2. Browse through the source files and find some untested functionality (highlighted in red) that you think you might be able to write a test for.
 
@@ -74,7 +74,7 @@ There are never enough tests. Track [code coverage at Coveralls](https://coveral
 * You can see the current buildbot setup at: https://build.julialang.org/builders
 * [Issue 9493](https://github.com/JuliaLang/julia/issues/9493) and [issue 11885](https://github.com/JuliaLang/julia/issues/11885) have more detailed discussion on code coverage.
 
-Coveralls shows functionality that still needs "proof of concept" tests. These are important, as are tests for tricky edge cases, such as converting between integer types when the number to convert is near the maximum of the range of one of the integer types. Even if a function already has some coverage on Coveralls, it may still benefit from tests for edge cases.
+Code coverage shows functionality that still needs "proof of concept" tests. These are important, as are tests for tricky edge cases, such as converting between integer types when the number to convert is near the maximum of the range of one of the integer types. Even if a function already has some coverage on Codecov, it may still benefit from tests for edge cases.
 
 ### Improving documentation
 
@@ -185,7 +185,14 @@ At the moment, this should always be done with the following `compat` admonition
 
 *By contributing code to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
 
-The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR). You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready for merging. This will prevent accidental merging of work that is in progress.
+The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR).
+
+Issues and pull requests should have self explanatory titles such that they can be understood from the list of PRs and Issues.
+i.e. `Add {feature}` and `Fix {bug}` are good, `Fix #12345. Corrects the bug.` is bad.
+
+You can make pull requests for incomplete features to get code review. The convention is to open these a draft PRs and prefix
+the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready
+for merging. This will prevent accidental merging of work that is in progress.
 
 Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse forum](https://discourse.julialang.org) or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
 
@@ -269,7 +276,7 @@ Be sure to change the UUID value back before making the pull request.
 
 ### Contributing to patch releases
 
-The process of creating a patch release is roughly as follows:
+The process of [creating a patch release](https://docs.julialang.org/en/v1/devdocs/build/distributing/#Point-releasing-101) is roughly as follows:
 
 1. Create a new branch (e.g. `backports-release-1.6`) against the relevant minor release
    branch (e.g. `release-1.6`). Usually a corresponding pull request is created as well.
@@ -293,7 +300,7 @@ The process of creating a patch release is roughly as follows:
 6. Ping `@JuliaLang/releases` to tag the patch release and update the website.
 
 7. Open a pull request that bumps the version of the relevant minor release to the
-   next prerelase patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37724).
+   next prerelease patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37724).
 
 Step 2 above, i.e. backporting commits to the `backports-release-X.Y` branch, has largely
 been automated via [`Backporter`](https://github.com/KristofferC/Backporter): Backporter
@@ -325,7 +332,7 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
  - use lower case with underscores for method names
  - it is generally preferred to use ASCII operators and identifiers over
    Unicode equivalents whenever possible
- - in docstring refer to the language as "Julia" and the executable as "`julia`"
+ - in docstrings refer to the language as "Julia" and the executable as "`julia`"
 
 #### General Formatting Guidelines For C code contributions
 
@@ -340,9 +347,8 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
 ### Git Recommendations For Pull Requests
 
  - Avoid working from the `master` branch of your fork, creating a new branch will make it easier if Julia's `master` changes and you need to update your pull request.
- - Try to [squash](http://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) together small commits that make repeated changes to the same section of code so your pull request is easier to review, and Julia's history won't have any broken intermediate commits. A reasonable number of separate well-factored commits is fine, especially for larger changes.
+ - Try to [squash](http://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) together small commits that make repeated changes to the same section of code so your pull request is easier to review. A reasonable number of separate well-factored commits is fine, especially for larger changes.
  - If any conflicts arise due to changes in Julia's `master`, prefer updating your pull request branch with `git rebase` versus `git merge` or `git pull`, since the latter will introduce merge commits that clutter the git history with noise that makes your changes more difficult to review.
- - If you see any unrelated changes to submodules like `deps/libuv`, `deps/openlibm`, etc., try running `git submodule update` first.
  - Descriptive commit messages are good.
  - Using `git add -p` or `git add -i` can be useful to avoid accidentally committing unrelated changes.
  - When linking to specific lines of code in discussion of an issue or pull request, hit the `y` key while viewing code on GitHub to reload the page with a URL that includes the specific version that you're viewing. That way any lines of code that you refer to will still make sense in the future, even if the content of the file changes.
@@ -364,7 +370,7 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
   - **Community:** <https://julialang.org/community/>
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Documentation:** <https://docs.julialang.org>
-  - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
+  - **Code coverage:** <https://codecov.io/github/JuliaLang/julia>
 
 * Design of Julia
   - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/assets/research/julia-fresh-approach-BEKS.pdf)

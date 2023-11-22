@@ -1,13 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# preserve HermOrSym wrapper
+eigencopy_oftype(A::Hermitian, S) = Hermitian(copy_similar(A, S), sym_uplo(A.uplo))
+eigencopy_oftype(A::Symmetric, S) = Symmetric(copy_similar(A, S), sym_uplo(A.uplo))
+
 # Eigensolvers for symmetric and Hermitian matrices
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) =
     Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
 
 function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
+    S = eigtype(eltype(A))
+    eigen!(eigencopy_oftype(A, S), sortby=sortby)
 end
 
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) =
@@ -31,9 +34,8 @@ The [`UnitRange`](@ref) `irange` specifies indices of the sorted eigenvalues to 
     will be a *truncated* factorization.
 """
 function eigen(A::RealHermSymComplexHerm, irange::UnitRange)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
+    S = eigtype(eltype(A))
+    eigen!(eigencopy_oftype(A, S), irange)
 end
 
 eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal} =
@@ -57,9 +59,8 @@ The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`
     will be a *truncated* factorization.
 """
 function eigen(A::RealHermSymComplexHerm, vl::Real, vh::Real)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
+    S = eigtype(eltype(A))
+    eigen!(eigencopy_oftype(A, S), vl, vh)
 end
 
 function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing)
@@ -69,9 +70,8 @@ function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby:
 end
 
 function eigvals(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
+    S = eigtype(eltype(A))
+    eigvals!(eigencopy_oftype(A, S), sortby=sortby)
 end
 
 """
@@ -110,9 +110,8 @@ julia> eigvals(A)
 ```
 """
 function eigvals(A::RealHermSymComplexHerm, irange::UnitRange)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
+    S = eigtype(eltype(A))
+    eigvals!(eigencopy_oftype(A, S), irange)
 end
 
 """
@@ -150,13 +149,17 @@ julia> eigvals(A)
 ```
 """
 function eigvals(A::RealHermSymComplexHerm, vl::Real, vh::Real)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
+    S = eigtype(eltype(A))
+    eigvals!(eigencopy_oftype(A, S), vl, vh)
 end
 
-eigmax(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]
-eigmin(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, 1:1)[1]
+eigmax(A::RealHermSymComplexHerm{<:Real}) = eigvals(A, size(A, 1):size(A, 1))[1]
+eigmin(A::RealHermSymComplexHerm{<:Real}) = eigvals(A, 1:1)[1]
+
+function eigen(A::HermOrSym{TA}, B::HermOrSym{TB}; kws...) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return eigen!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+end
 
 function eigen!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.data, B.uplo == A.uplo ? B.data : copy(B.data'))
@@ -167,105 +170,29 @@ function eigen!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,Not
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
-function eigen!(A::RealHermSymComplexHerm{T,S}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
-    U = cholesky(B).U
-    vals, w = eigen!(UtiAUi!(A, U))
-    vecs = U \ w
+function eigen(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=nothing)
+    if ishermitian(A)
+        eigen!(eigencopy_oftype(Hermitian(A), eigtype(eltype(A))), C; sortby)
+    else
+        eigen!(copy_similar(A, eigtype(eltype(A))), C; sortby)
+    end
+end
+function eigen!(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=nothing)
+    # Cholesky decomposition based eigenvalues and eigenvectors
+    vals, w = eigen!(UtiAUi!(A, C.U))
+    vecs = C.U \ w
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
-# Perform U' \ A / U in-place.
-UtiAUi!(As::Symmetric, Utr::UpperTriangular) = Symmetric(_UtiAsymUi!(As.uplo, parent(As), parent(Utr)), sym_uplo(As.uplo))
-UtiAUi!(As::Hermitian, Utr::UpperTriangular) = Hermitian(_UtiAsymUi!(As.uplo, parent(As), parent(Utr)), sym_uplo(As.uplo))
-UtiAUi!(As::Symmetric, Udi::Diagonal) = Symmetric(_UtiAsymUi_diag!(As.uplo, parent(As), Udi), sym_uplo(As.uplo))
-UtiAUi!(As::Hermitian, Udi::Diagonal) = Hermitian(_UtiAsymUi_diag!(As.uplo, parent(As), Udi), sym_uplo(As.uplo))
+# Perform U' \ A / U in-place, where U::Union{UpperTriangular,Diagonal}
+UtiAUi!(A, U) = _UtiAUi!(A, U)
+UtiAUi!(A::Symmetric, U) = Symmetric(_UtiAUi!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
+UtiAUi!(A::Hermitian, U) = Hermitian(_UtiAUi!(copytri!(parent(A), A.uplo, true), U), sym_uplo(A.uplo))
+_UtiAUi!(A, U) = rdiv!(ldiv!(U', A), U)
 
-# U is upper triangular
-function _UtiAsymUi!(uplo, A, U)
-    n = size(A, 1)
-    μ⁻¹ = 1 / U[1, 1]
-    αμ⁻² = A[1, 1] * μ⁻¹' * μ⁻¹
-
-    # Update (1, 1) element
-    A[1, 1] = αμ⁻²
-    if n > 1
-        Unext = view(U, 2:n, 2:n)
-
-        if uplo === 'U'
-            # Update submatrix
-            for j in 2:n, i in 2:j
-                A[i, j] = (
-                    A[i, j]
-                    - μ⁻¹' * U[1, j] * A[1, i]'
-                    - μ⁻¹ * A[1, j] * U[1, i]'
-                    + αμ⁻² * U[1, j] * U[1, i]'
-                )
-            end
-
-            # Update vector
-            for j in 2:n
-                A[1, j] = A[1, j] * μ⁻¹' - U[1, j] * αμ⁻²
-            end
-            ldiv!(view(A', 2:n, 1), UpperTriangular(Unext)', view(A', 2:n, 1))
-        else
-            # Update submatrix
-            for j in 2:n, i in 2:j
-                A[j, i] = (
-                    A[j, i]
-                    - μ⁻¹ * A[i, 1]' * U[1, j]'
-                    - μ⁻¹' * U[1, i] * A[j, 1]
-                    + αμ⁻² * U[1, i] * U[1, j]'
-                )
-            end
-
-            # Update vector
-            for j in 2:n
-                A[j, 1] = A[j, 1] * μ⁻¹ - U[1, j]' * αμ⁻²
-            end
-            ldiv!(view(A, 2:n, 1), UpperTriangular(Unext)', view(A, 2:n, 1))
-        end
-
-        # Recurse
-        _UtiAsymUi!(uplo, view(A, 2:n, 2:n), Unext)
-    end
-
-    return A
-end
-
-# U is diagonal
-function _UtiAsymUi_diag!(uplo, A, U)
-    n = size(A, 1)
-    μ⁻¹ = 1 / U[1, 1]
-    αμ⁻² = A[1, 1] * μ⁻¹' * μ⁻¹
-
-    # Update (1, 1) element
-    A[1, 1] = αμ⁻²
-    if n > 1
-        Unext = view(U, 2:n, 2:n)
-
-        if uplo === 'U'
-            # No need to update any submatrix when U is diagonal
-
-            # Update vector
-            for j in 2:n
-                A[1, j] = A[1, j] * μ⁻¹'
-            end
-            ldiv!(view(A', 2:n, 1), Diagonal(Unext)', view(A', 2:n, 1))
-        else
-            # No need to update any submatrix when U is diagonal
-
-            # Update vector
-            for j in 2:n
-                A[j, 1] = A[j, 1] * μ⁻¹
-            end
-            ldiv!(view(A, 2:n, 1), Diagonal(Unext)', view(A, 2:n, 1))
-        end
-
-        # Recurse
-        _UtiAsymUi!(uplo, view(A, 2:n, 2:n), Unext)
-    end
-
-    return A
+function eigvals(A::HermOrSym{TA}, B::HermOrSym{TB}; kws...) where {TA,TB}
+    S = promote_type(eigtype(TA), TB)
+    return eigvals!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
 end
 
 function eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasReal,S<:StridedMatrix}
@@ -279,3 +206,15 @@ function eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}; sortby::Union{Function,N
     return vals
 end
 eigvecs(A::HermOrSym) = eigvecs(eigen(A))
+
+function eigvals(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=nothing)
+    if ishermitian(A)
+        eigvals!(eigencopy_oftype(Hermitian(A), eigtype(eltype(A))), C; sortby)
+    else
+        eigvals!(copy_similar(A, eigtype(eltype(A))), C; sortby)
+    end
+end
+function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+    # Cholesky decomposition based eigenvalues
+    return eigvals!(UtiAUi!(A, C.U); sortby)
+end

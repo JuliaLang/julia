@@ -170,7 +170,7 @@ stat(fd::Integer)           = stat(RawFD(fd))
 """
     stat(file)
 
-Returns a structure whose fields contain information about the file.
+Return a structure whose fields contain information about the file.
 The fields of the structure are:
 
 | Name    | Description                                                        |
@@ -185,7 +185,7 @@ The fields of the structure are:
 | gid     | The group id of the file owner                                     |
 | rdev    | If this file refers to a device, the ID of the device it refers to |
 | blksize | The file-system preferred block size for the file                  |
-| blocks  | The number of such blocks allocated                                |
+| blocks  | The number of 512-byte blocks allocated                            |
 | mtime   | Unix timestamp of when the file was last modified                  |
 | ctime   | Unix timestamp of when the file's metadata was changed             |
 
@@ -464,22 +464,16 @@ end
 islink(path...) = islink(lstat(path...))
 
 # samefile can be used for files and directories: #11145#issuecomment-99511194
-samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
+function samefile(a::StatStruct, b::StatStruct)
+    ispath(a) && ispath(b) && a.device == b.device && a.inode == b.inode
+end
 
 """
     samefile(path_a::AbstractString, path_b::AbstractString)
 
 Check if the paths `path_a` and `path_b` refer to the same existing file or directory.
 """
-function samefile(a::AbstractString, b::AbstractString)
-    infoa = stat(a)
-    infob = stat(b)
-    if ispath(infoa) && ispath(infob)
-        samefile(infoa, infob)
-    else
-        return false
-    end
-end
+samefile(a::AbstractString, b::AbstractString) = samefile(stat(a), stat(b))
 
 """
     ismount(path) -> Bool

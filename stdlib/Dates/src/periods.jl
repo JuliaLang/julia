@@ -17,8 +17,6 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
     accessor_str = lowercase(period_str)
     # Convenience method for show()
     @eval _units(x::$period) = " " * $accessor_str * (abs(value(x)) == 1 ? "" : "s")
-    # periodisless
-    @eval periodisless(x::$period, y::$period) = value(x) < value(y)
     # AbstractString parsing (mainly for IO code)
     @eval $period(x::AbstractString) = $period(Base.parse(Int64, x))
     # The period type is printed when output, thus it already implies its own typeinfo
@@ -60,7 +58,7 @@ Base.isfinite(::Union{Type{P}, P}) where {P<:Period} = true
 """
     default(p::Period) -> Period
 
-Returns a sensible "default" value for the input Period by returning `T(1)` for Year,
+Return a sensible "default" value for the input Period by returning `T(1)` for Year,
 Month, and Day, and `T(0)` for Hour, Minute, Second, and Millisecond.
 """
 function default end
@@ -105,43 +103,6 @@ Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b));
 Base.abs(a::T) where {T<:Period} = T(abs(value(a)))
 Base.sign(x::Period) = sign(value(x))
 
-periodisless(::Period,::Year)        = true
-periodisless(::Period,::Quarter)     = true
-periodisless(::Year,::Quarter)       = false
-periodisless(::Period,::Month)       = true
-periodisless(::Year,::Month)         = false
-periodisless(::Quarter,::Month)      = false
-periodisless(::Period,::Week)        = true
-periodisless(::Year,::Week)          = false
-periodisless(::Quarter,::Week)       = false
-periodisless(::Month,::Week)         = false
-periodisless(::Period,::Day)         = true
-periodisless(::Year,::Day)           = false
-periodisless(::Quarter,::Day)        = false
-periodisless(::Month,::Day)          = false
-periodisless(::Week,::Day)           = false
-periodisless(::Period,::Hour)        = false
-periodisless(::Minute,::Hour)        = true
-periodisless(::Second,::Hour)        = true
-periodisless(::Millisecond,::Hour)   = true
-periodisless(::Microsecond,::Hour)   = true
-periodisless(::Nanosecond,::Hour)    = true
-periodisless(::Period,::Minute)      = false
-periodisless(::Second,::Minute)      = true
-periodisless(::Millisecond,::Minute) = true
-periodisless(::Microsecond,::Minute) = true
-periodisless(::Nanosecond,::Minute)  = true
-periodisless(::Period,::Second)      = false
-periodisless(::Millisecond,::Second) = true
-periodisless(::Microsecond,::Second) = true
-periodisless(::Nanosecond,::Second)  = true
-periodisless(::Period,::Millisecond) = false
-periodisless(::Microsecond,::Millisecond) = true
-periodisless(::Nanosecond,::Millisecond)  = true
-periodisless(::Period,::Microsecond)      = false
-periodisless(::Nanosecond,::Microsecond)  = true
-periodisless(::Period,::Nanosecond)       = false
-
 # return (next coarser period, conversion factor):
 coarserperiod(::Type{P}) where {P<:Period} = (P, 1)
 coarserperiod(::Type{Nanosecond})  = (Microsecond, 1000)
@@ -170,7 +131,14 @@ struct CompoundPeriod <: AbstractTime
     function CompoundPeriod(p::Vector{Period})
         n = length(p)
         if n > 1
-            sort!(p, rev=true, lt=periodisless)
+            # We sort periods in decreasing order (rev = true) according to the length of
+            # the period's type (by = tons ∘ oneunit). We sort by type, not value, so that
+            # we can merge equal types.
+            #
+            # This works by computing how many nanoseconds are in a single period, and sorting
+            # by that. For example, (tons ∘ oneunit)(Week(10)) = tons(oneunit(Week(10))) =
+            # tons(Week(1)) ≈ 6.0e14, which is less than (tons ∘ oneunit)(Month(-2)) ≈ 2.6e15
+            sort!(p, rev = true, by = tons ∘ oneunit)
             # canonicalize p by merging equal period types and removing zeros
             i = j = 1
             while j <= n
@@ -357,7 +325,7 @@ end
 Base.show(io::IO,x::CompoundPeriod) = print(io, string(x))
 
 Base.convert(::Type{T}, x::CompoundPeriod) where T<:Period =
-    isconcretetype(T) ? sum(T, x.periods) : throw(MethodError(convert,(T,x)))
+    isconcretetype(T) ? sum(T, x.periods; init = zero(T)) : throw(MethodError(convert,(T,x)))
 
 # E.g. Year(1) + Day(1)
 (+)(x::Period,y::Period) = CompoundPeriod(Period[x, y])
@@ -415,68 +383,42 @@ end
 # hitting the deprecated construct-to-convert fallback.
 (::Type{T})(p::Period) where {T<:Period} = convert(T, p)::T
 
-# FixedPeriod conversions and promotion rules
-const fixedperiod_conversions = [(:Week, 7), (:Day, 24), (:Hour, 60), (:Minute, 60), (:Second, 1000),
-                                 (:Millisecond, 1000), (:Microsecond, 1000), (:Nanosecond, 1)]
-for i = 1:length(fixedperiod_conversions)
-    T, n = fixedperiod_conversions[i]
-    N = Int64(1)
-    for j = (i - 1):-1:1 # less-precise periods
-        Tc, nc = fixedperiod_conversions[j]
-        N *= nc
-        vmax = typemax(Int64) ÷ N
-        vmin = typemin(Int64) ÷ N
-        @eval function Base.convert(::Type{$T}, x::$Tc)
-            $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, $T, x))
-            return $T(value(x) * $N)
+# Conversions and promotion rules
+function define_conversions(periods)
+    for i = eachindex(periods)
+        T, n = periods[i]
+        N = Int64(1)
+        for j = (i - 1):-1:firstindex(periods) # less-precise periods
+            Tc, nc = periods[j]
+            N *= nc
+            vmax = typemax(Int64) ÷ N
+            vmin = typemin(Int64) ÷ N
+            @eval function Base.convert(::Type{$T}, x::$Tc)
+                $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, $T, x))
+                return $T(value(x) * $N)
+            end
+        end
+        N = n
+        for j = (i + 1):lastindex(periods) # more-precise periods
+            Tc, nc = periods[j]
+            @eval Base.convert(::Type{$T}, x::$Tc) = $T(divexact(value(x), $N))
+            @eval Base.promote_rule(::Type{$T}, ::Type{$Tc}) = $Tc
+            N *= nc
         end
     end
-    N = n
-    for j = (i + 1):length(fixedperiod_conversions) # more-precise periods
-        Tc, nc = fixedperiod_conversions[j]
-        @eval Base.convert(::Type{$T}, x::$Tc) = $T(divexact(value(x), $N))
-        @eval Base.promote_rule(::Type{$T}, ::Type{$Tc}) = $Tc
-        N *= nc
-    end
 end
-
-# other periods with fixed conversions but which aren't fixed time periods
-const OtherPeriod = Union{Month, Quarter, Year}
-let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
-    @eval function Base.convert(::Type{Month}, x::Year)
-        $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Month, x))
-        Month(value(x) * 12)
-    end
-end
-Base.convert(::Type{Year}, x::Month) = Year(divexact(value(x), 12))
-Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
-
-let vmax = typemax(Int64) ÷ 4, vmin = typemin(Int64) ÷ 4
-    @eval function Base.convert(::Type{Quarter}, x::Year)
-        $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Quarter, x))
-        Quarter(value(x) * 4)
-    end
-end
-Base.convert(::Type{Year}, x::Quarter) = Year(divexact(value(x), 4))
-Base.promote_rule(::Type{Year}, ::Type{Quarter}) = Quarter
-
-let vmax = typemax(Int64) ÷ 3, vmin = typemin(Int64) ÷ 3
-    @eval function Base.convert(::Type{Month}, x::Quarter)
-        $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Month, x))
-        Month(value(x) * 3)
-    end
-end
-Base.convert(::Type{Quarter}, x::Month) = Quarter(divexact(value(x), 3))
-Base.promote_rule(::Type{Quarter}, ::Type{Month}) = Month
-
+define_conversions([(:Week, 7), (:Day, 24), (:Hour, 60), (:Minute, 60), (:Second, 1000),
+                    (:Millisecond, 1000), (:Microsecond, 1000), (:Nanosecond, 1)])
+define_conversions([(:Year, 4), (:Quarter, 3), (:Month, 1)])
 
 # fixed is not comparable to other periods, except when both are zero (#37459)
+const OtherPeriod = Union{Month, Quarter, Year}
 (==)(x::FixedPeriod, y::OtherPeriod) = iszero(x) & iszero(y)
 (==)(x::OtherPeriod, y::FixedPeriod) = y == x
 
 const zero_or_fixedperiod_seed = UInt === UInt64 ? 0x5b7fc751bba97516 : 0xeae0fdcb
 const nonzero_otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00
-otherperiod_seed(x::OtherPeriod) = iszero(value(x)) ? zero_or_fixedperiod_seed : nonzero_otherperiod_seed
+otherperiod_seed(x) = iszero(value(x)) ? zero_or_fixedperiod_seed : nonzero_otherperiod_seed
 # tons() will overflow for periods longer than ~300,000 years, implying a hash collision
 # which is relatively harmless given how infrequently such periods should appear
 Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + zero_or_fixedperiod_seed)
@@ -501,8 +443,8 @@ Base.isless(x::CompoundPeriod, y::Period) = x < CompoundPeriod(y)
 Base.isless(x::CompoundPeriod, y::CompoundPeriod) = tons(x) < tons(y)
 # truncating conversions to milliseconds, nanoseconds and days:
 # overflow can happen for periods longer than ~300,000 years
-toms(c::Nanosecond)  = div(value(c), 1000000)
-toms(c::Microsecond) = div(value(c), 1000)
+toms(c::Nanosecond)  = div(value(c), 1000000, RoundNearest)
+toms(c::Microsecond) = div(value(c), 1000, RoundNearest)
 toms(c::Millisecond) = value(c)
 toms(c::Second)      = 1000 * value(c)
 toms(c::Minute)      = 60000 * value(c)
@@ -523,3 +465,7 @@ days(c::Year)        = 365.2425 * value(c)
 days(c::Quarter)     = 91.310625 * value(c)
 days(c::Month)       = 30.436875 * value(c)
 days(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(days, c.periods))
+seconds(x::Nanosecond) = value(x) / 1000000000
+seconds(x::Microsecond) = value(x) / 1000000
+seconds(x::Millisecond) = value(x) / 1000
+seconds(x::Period) = value(Second(x))

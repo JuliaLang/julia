@@ -30,6 +30,8 @@ Base.StridedArray
 Base.StridedVector
 Base.StridedMatrix
 Base.StridedVecOrMat
+Base.Memory
+Base.MemoryRef
 Base.Slices
 Base.RowSlices
 Base.ColumnSlices
@@ -145,6 +147,7 @@ Base.vcat
 Base.hcat
 Base.hvcat
 Base.hvncat
+Base.stack
 Base.vect
 Base.circshift
 Base.circshift!

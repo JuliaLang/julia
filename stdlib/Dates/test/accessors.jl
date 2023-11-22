@@ -29,7 +29,7 @@ using Test
     @test Dates.yearmonthday(730120) == (2000, 1, 1)
 end
 @testset "year/month/day" begin
-    # year, month, and day return the indivial components
+    # year, month, and day return the individual components
     # of yearmonthday, avoiding additional calculations when possible
     @test Dates.year(-1) == 0
     @test Dates.month(-1) == 12

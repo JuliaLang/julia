@@ -13,7 +13,7 @@ See also: [`AbstractSet`](@ref), [`BitSet`](@ref), [`Dict`](@ref),
 [`push!`](@ref), [`empty!`](@ref), [`union!`](@ref), [`in`](@ref), [`isequal`](@ref)
 
 # Examples
-```jldoctest filter = r"^\\S.+"
+```jldoctest; filter = r"^  '.'"ma
 julia> s = Set("aaBca")
 Set{Char} with 3 elements:
   'a'
@@ -23,9 +23,9 @@ Set{Char} with 3 elements:
 julia> push!(s, 'b')
 Set{Char} with 4 elements:
   'a'
-  'c'
   'b'
   'B'
+  'c'
 
 julia> s = Set([NaN, 0.0, 1.0, 2.0]);
 
@@ -101,8 +101,26 @@ function in!(x, s::Set)
 end
 
 push!(s::Set, x) = (s.dict[x] = nothing; s)
-pop!(s::Set, x) = (pop!(s.dict, x); x)
-pop!(s::Set, x, default) = (x in s ? pop!(s, x) : default)
+
+function pop!(s::Set, x, default)
+    dict = s.dict
+    index = ht_keyindex(dict, x)
+    if index > 0
+        @inbounds key = dict.keys[index]
+        _delete!(dict, index)
+        return key
+    else
+        return default
+    end
+end
+
+function pop!(s::Set, x)
+    index = ht_keyindex(s.dict, x)
+    index < 1 && throw(KeyError(x))
+    result = @inbounds s.dict.keys[index]
+    _delete!(s.dict, index)
+    result
+end
 
 function pop!(s::Set)
     isempty(s) && throw(ArgumentError("set must be non-empty"))
@@ -117,7 +135,7 @@ copymutable(s::Set{T}) where {T} = Set{T}(s)
 # Set is the default mutable fall-back
 copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 
-sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
+sizehint!(s::Set, newsz; shrink::Bool=true) = (sizehint!(s.dict, newsz; shrink); s)
 empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
@@ -210,7 +228,7 @@ unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin:begin])
 """
     unique(f, itr)
 
-Returns an array containing one value from `itr` for each unique value produced by `f`
+Return an array containing one value from `itr` for each unique value produced by `f`
 applied to elements of `itr`.
 
 # Examples
@@ -548,7 +566,7 @@ function hash(s::AbstractSet, h::UInt)
 end
 
 convert(::Type{T}, s::T) where {T<:AbstractSet} = s
-convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
+convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)::T
 
 
 ## replace/replace! ##
@@ -617,7 +635,7 @@ function replace_pairs!(res, A, count::Int, old_new::Tuple{Vararg{Pair}})
 end
 
 """
-    replace!(new::Function, A; [count::Integer])
+    replace!(new::Union{Function, Type}, A; [count::Integer])
 
 Replace each element `x` in collection `A` by `new(x)`.
 If `count` is specified, then replace at most `count` values in total
@@ -710,7 +728,7 @@ subtract_singletontype(::Type{T}, x::Pair{K}, y::Pair...) where {T, K} =
     subtract_singletontype(subtract_singletontype(T, y...), x)
 
 """
-    replace(new::Function, A; [count::Integer])
+    replace(new::Union{Function, Type}, A; [count::Integer])
 
 Return a copy of `A` where each value `x` in `A` is replaced by `new(x)`.
 If `count` is specified, then replace at most `count` values in total
