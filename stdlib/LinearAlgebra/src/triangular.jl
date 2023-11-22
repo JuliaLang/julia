@@ -2267,7 +2267,6 @@ function _sqrt_quasitriu_diag_block!(R, A)
         else
             # this branch is never reached when A is complex triangular
             @assert eltype(A) <: Real
-            @assert eltype(R) <: Real
             @views _sqrt_real_2x2!(R[i:(i + 1), i:(i + 1)], A[i:(i + 1), i:(i + 1)])
             i += 2
         end
