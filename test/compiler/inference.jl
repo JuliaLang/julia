@@ -5560,7 +5560,7 @@ function foo_typed_throw_metherr()
 end
 @test Base.return_types(foo_typed_throw_metherr) |> only === Float64
 
-# using `exct` information if `:nothrow` is proven
+# refine `exct` when `:nothrow` is proven
 Base.@assume_effects :nothrow function sin_nothrow(x::Float64)
     x == Inf && return zero(x)
     return sin(x)

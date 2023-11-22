@@ -463,6 +463,11 @@ function adjust_effects(sv::InferenceState)
         # always throwing an error counts or never returning both count as consistent
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
+    if sv.exc_bestguess === Bottom
+        # if the exception type of this frame is known to be `Bottom`,
+        # this frame is known to be safe
+        ipo_effects = Effects(ipo_effects; nothrow=true)
+    end
     if is_inaccessiblemem_or_argmemonly(ipo_effects) && all(1:narguments(sv, #=include_va=#true)) do i::Int
             return is_mutation_free_argtype(sv.slottypes[i])
         end
