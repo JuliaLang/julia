@@ -411,6 +411,7 @@ typedef struct _jl_code_instance_t {
 
     // inference state cache
     jl_value_t *rettype; // return type for fptr
+    jl_value_t *exctype; // thrown type for fptr
     jl_value_t *rettype_const; // inferred constant return value, or null
     _Atomic(jl_value_t *) inferred; // inferred jl_code_info_t (may be compressed), or jl_nothing, or null
     //TODO: jl_array_t *edges; // stored information about edges from this object
@@ -2287,10 +2288,9 @@ void (ijl_longjmp)(jmp_buf _Buf, int _Value);
 #define jl_setjmp_name "sigsetjmp"
 #endif
 #define jl_setjmp(a,b) sigsetjmp(a,b)
-#if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
-// Bypass the ASAN longjmp wrapper - we're unpoisoning the stack ourselves.
-JL_DLLIMPORT int __attribute__ ((nothrow)) (__libc_siglongjmp)(jl_jmp_buf buf, int val);
-#define jl_longjmp(a,b) __libc_siglongjmp(a,b)
+#if defined(_COMPILER_ASAN_ENABLED_) && defined(__GLIBC__)
+extern void (*real_siglongjmp)(jmp_buf _Buf, int _Value);
+#define jl_longjmp(a,b) real_siglongjmp(a,b)
 #else
 #define jl_longjmp(a,b) siglongjmp(a,b)
 #endif

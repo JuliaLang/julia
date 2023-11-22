@@ -81,6 +81,7 @@ mutable struct InferenceResult
     const argtypes::Vector{Any}
     const overridden_by_const::BitVector
     result                   # extended lattice element if inferred, nothing otherwise
+    exc_result               # like `result`, but for the thrown value
     src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
     valid_worlds::WorldRange # if inference and optimization is finished
     ipo_effects::Effects     # if inference is finished
@@ -91,7 +92,7 @@ mutable struct InferenceResult
         # def = linfo.def
         # nargs = def isa Method ? Int(def.nargs) : 0
         # @assert length(cache_argtypes) == nargs
-        return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing,
+        return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing, nothing,
             WorldRange(), Effects(), Effects(), NULL_ANALYSIS_RESULTS, false)
     end
 end

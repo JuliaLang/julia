@@ -583,7 +583,7 @@ function refine_effects!(interp::AbstractInterpreter, sv::PostOptAnalysisState)
     if !is_effect_free(sv.result.ipo_effects) && sv.all_effect_free && !isempty(sv.ea_analysis_pending)
         ir = sv.ir
         nargs = length(ir.argtypes)
-        estate = EscapeAnalysis.analyze_escapes(ir, nargs, GetNativeEscapeCache(interp))
+        estate = EscapeAnalysis.analyze_escapes(ir, nargs, optimizer_lattice(interp), GetNativeEscapeCache(interp))
         argescapes = EscapeAnalysis.ArgEscapeCache(estate)
         stack_analysis_result!(sv.result, argescapes)
         validate_mutable_arg_escapes!(estate, sv)
@@ -925,8 +925,10 @@ function run_passes_ipo_safe(
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
-    @pass "compact 3" ir = compact!(ir, true)
+    @pass "ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
+    if made_changes
+        @pass "compact 3" ir = compact!(ir, true)
+    end
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp)); verify_linetable(ir.linetable))
     end

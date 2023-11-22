@@ -423,12 +423,13 @@ A14009(a::T) where {T} = A14009{T}()
 f14009(a) = rand(Bool) ? f14009(A14009(a)) : a
 code_typed(f14009, (Int,))
 code_llvm(devnull, f14009, (Int,))
+@test Base.infer_exception_type(f14009, (Int,)) != Union{}
 
 mutable struct B14009{T}; end
 g14009(a) = g14009(B14009{a})
 code_typed(g14009, (Type{Int},))
-code_llvm(devnull, f14009, (Int,))
-
+code_llvm(devnull, g14009, (Type{Int},))
+@test Base.infer_exception_type(g14009, (Type{Int},)) == StackOverflowError
 
 # issue #9232
 arithtype9232(::Type{T},::Type{T}) where {T<:Real} = arithtype9232(T)
@@ -4439,8 +4440,8 @@ let x = Tuple{Int,Any}[
         #=21=# (0, Expr(:pop_exception, Core.SSAValue(2)))
         #=22=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
-    handler_at = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
-    @test handler_at == first.(x)
+    handler_at, handlers = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
 end
 
 @test only(Base.return_types((Bool,)) do y
@@ -5533,3 +5534,62 @@ function test_exit_bottom(s)
     n
 end
 @test only(Base.return_types(test_exit_bottom, Tuple{String})) == Int
+
+function foo_typed_throw_error()
+    try
+        error()
+    catch e
+        if isa(e, ErrorException)
+            return 1.0
+        end
+    end
+    return 1
+end
+@test Base.return_types(foo_typed_throw_error) |> only === Float64
+
+will_throw_no_method(x::Int) = 1
+function foo_typed_throw_metherr()
+    try
+        will_throw_no_method(1.0)
+    catch e
+        if isa(e, MethodError)
+            return 1.0
+        end
+    end
+    return 1
+end
+@test Base.return_types(foo_typed_throw_metherr) |> only === Float64
+
+# using `exct` information if `:nothrow` is proven
+Base.@assume_effects :nothrow function sin_nothrow(x::Float64)
+    x == Inf && return zero(x)
+    return sin(x)
+end
+@test Base.infer_exception_type(sin_nothrow, (Float64,)) == Union{}
+@test Base.return_types((Float64,)) do x
+    try
+        return sin_nothrow(x)
+    catch err
+        return err
+    end
+end |> only === Float64
+# for semi-concrete interpretation result too
+Base.@constprop :aggressive function sin_maythrow(x::Float64, maythrow::Bool)
+    if maythrow
+        return sin(x)
+    else
+        return @noinline sin_nothrow(x)
+    end
+end
+@test Base.return_types((Float64,)) do x
+    try
+        return sin_maythrow(x, false)
+    catch err
+        return err
+    end
+end |> only === Float64
+
+# exception type from GotoIfNot
+@test Base.infer_exception_type(c::Bool -> c ? 1 : 2) == Union{}
+@test Base.infer_exception_type(c::Missing -> c ? 1 : 2) == TypeError
+@test Base.infer_exception_type(c::Any -> c ? 1 : 2) == TypeError

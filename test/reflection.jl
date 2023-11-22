@@ -1047,6 +1047,33 @@ ambig_effects_test(a, b) = 1
     @test (Base.infer_effects(Core.Intrinsics.mul_int, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
 end
 
+@testset "infer_exception_type[s]" begin
+    # generic functions
+    @test Base.infer_exception_type(issue41694, (Int,)) == only(Base.infer_exception_types(issue41694, (Int,))) == ErrorException
+    @test Base.infer_exception_type((Int,)) do x
+        issue41694(x)
+    end == Base.infer_exception_types((Int,)) do x
+        issue41694(x)
+    end |> only == ErrorException
+    @test Base.infer_exception_type(issue41694) == only(Base.infer_exception_types(issue41694)) == ErrorException # use `default_tt`
+    let excts = Base.infer_exception_types(maybe_effectful, (Any,))
+        @test any(==(Any), excts)
+        @test any(==(Union{}), excts)
+    end
+    @test Base.infer_exception_type(maybe_effectful, (Any,)) == Any
+    # `infer_exception_type` should account for MethodError
+    @test Base.infer_exception_type(issue41694, (Float64,)) == MethodError # definitive dispatch error
+    @test Base.infer_exception_type(issue41694, (Integer,)) == Union{MethodError,ErrorException} # possible dispatch error
+    @test Base.infer_exception_type(f_no_methods) == MethodError # no possible matching methods
+    @test Base.infer_exception_type(ambig_effects_test, (Int,Int)) == MethodError # ambiguity error
+    @test Base.infer_exception_type(ambig_effects_test, (Int,Any)) == MethodError # ambiguity error
+    # builtins
+    @test Base.infer_exception_type(typeof, (Any,)) === only(Base.infer_exception_types(typeof, (Any,))) === Union{}
+    @test Base.infer_exception_type(===, (Any,Any)) === only(Base.infer_exception_types(===, (Any,Any))) === Union{}
+    @test (Base.infer_exception_type(setfield!, ()); Base.infer_exception_types(setfield!, ()); true) # `infer_exception_type[s]` shouldn't throw on empty `argtypes`
+    @test (Base.infer_exception_type(Core.Intrinsics.mul_int, ()); Base.infer_exception_types(Core.Intrinsics.mul_int, ()); true) # `infer_exception_type[s]` shouldn't throw on empty `argtypes`
+end
+
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
 @test length(methods(Base.Broadcast.broadcasted, Tuple{Any, Any, Vararg})) >
       length(methods(Base.Broadcast.broadcasted, Tuple{Base.Broadcast.BroadcastStyle, Any, Vararg})) >=

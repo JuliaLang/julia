@@ -1278,7 +1278,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
     for (ext, triggers) in extensions
         triggers = triggers::Union{String, Vector{String}}
         triggers isa String && (triggers = [triggers])
-        id = PkgId(uuid5(parent.uuid, ext), ext)
+        id = PkgId(uuid5(parent.uuid::UUID, ext), ext)
         if id in keys(EXT_PRIMED) || haskey(Base.loaded_modules, id)
             continue  # extension is already primed or loaded, don't add it again
         end
@@ -1747,7 +1747,7 @@ end
 # we throw PrecompilableError when a module doesn't want to be precompiled
 import Core: PrecompilableError
 function show(io::IO, ex::PrecompilableError)
-    print(io, "Declaring __precompile__(false) is not allowed in files that are being precompiled.")
+    print(io, "Error when precompiling module, potentially caused by a __precompile__(false) declaration in the module.")
 end
 precompilableerror(ex::PrecompilableError) = true
 precompilableerror(ex::WrappedException) = precompilableerror(ex.error)

@@ -382,7 +382,9 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
             elseif isexpr(def, :new)
                 typ = unwrap_unionall(widenconst(types(compact)[leaf]))
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
-                @assert !ismutabletype(typ)
+                if ismutabletype(typ)
+                    isconst(typ, field) || return nothing
+                end
                 if length(def.args) < 1+field
                     if field > fieldcount(typ)
                         return nothing
@@ -1735,7 +1737,8 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
     unionphis = Pair{Int,Any}[] # sorted
-    compact = IncrementalCompact(ir)
+    compact = IncrementalCompact(ir, true)
+    made_changes = false
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
@@ -1757,7 +1760,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 # nullify safe `typeassert` calls
                 ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact), true)
                 if isexact && ⊑(𝕃ₒ, argextype(stmt.args[2], compact), ty)
-                    compact[idx] = nothing
+                    delete_inst_here!(compact)
                     continue
                 end
             end
@@ -1799,6 +1802,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         if t === Union{}
             stmt = compact[SSAValue(phi)][:stmt]::PhiNode
             kill_phi!(compact, phi_uses, 1:length(stmt.values), SSAValue(phi), stmt, true)
+            made_changes = true
             continue
         elseif t === Any
             continue
@@ -1820,16 +1824,17 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
         compact.result[phi][:type] = t
         kill_phi!(compact, phi_uses, to_drop, SSAValue(phi), stmt, false)
+        made_changes = true
     end
     # Perform simple DCE for unused values
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        adce_erase!(phi_uses, extra_worklist, compact, idx, false)
+        made_changes |= adce_erase!(phi_uses, extra_worklist, compact, idx, false)
     end
     while !isempty(extra_worklist)
-        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
+        made_changes |= adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
     end
     # Go back and erase any phi cycles
     changed = true
@@ -1850,10 +1855,11 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         while !isempty(extra_worklist)
             if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
                 changed = true
+                made_changes = true
             end
         end
     end
-    return complete(compact)
+    return Pair{IRCode, Bool}(complete(compact), made_changes)
 end
 
 function is_bb_empty(ir::IRCode, bb::BasicBlock)
@@ -2203,13 +2209,14 @@ function cfg_simplify!(ir::IRCode)
     # Run instruction compaction to produce the result,
     # but we're messing with the CFG
     # so we don't want compaction to do so independently
-    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ))
+    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ, nothing))
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb
         bb_start = true
         while ms != 0
-            for i in bbs[ms].stmts
+            old_bb_stmts = bbs[ms].stmts
+            for i in old_bb_stmts
                 node = ir.stmts[i]
                 compact.result[compact.result_idx] = node
                 stmt = node[:stmt]
@@ -2221,8 +2228,13 @@ function cfg_simplify!(ir::IRCode)
                     values = phi.values
                     (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
                     ssa_rename[i] = SSAValue(compact.result_idx)
-                    processed_idx = i
-                    renamed_values = process_phinode_values(values, late_fixup, processed_idx, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
+                    already_inserted = function (i::Int, val::OldSSAValue)
+                        if val.id in old_bb_stmts
+                            return val.id <= i
+                        end
+                        return bb_rename_pred[phi.edges[i]] < idx
+                    end
+                    renamed_values = process_phinode_values(values, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                     edges = Int32[]
                     values = Any[]
                     sizehint!(edges, length(phi.edges)); sizehint!(values, length(renamed_values))

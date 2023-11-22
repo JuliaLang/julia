@@ -1584,4 +1584,35 @@ let (ir, _) = only(Base.code_ircode(f_with_merge_to_entry_block))
     Core.Compiler.verify_ir(ir)
 end
 
+# Test that CFG simplify doesn't leave an un-renamed SSA Value
+let m = Meta.@lower 1 + 1
+    # Test that CFG simplify doesn't try to merge every block in a loop into
+    # its predecessor
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        # Block 1
+        GotoIfNot(Argument(1), 3),
+        # Block 2
+        GotoNode(5),
+        # Block 3
+        Expr(:call, Base.inferencebarrier, 1),
+        GotoNode(6),
+        # Block 4
+        Expr(:call, Base.inferencebarrier, 2), # fallthrough
+        # Block 5
+        PhiNode(Int32[4, 5], Any[SSAValue(3), SSAValue(5)]),
+        ReturnNode(1)
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 4
+end
+
 # JET.test_opt(Core.Compiler.cfg_simplify!, (Core.Compiler.IRCode,))
