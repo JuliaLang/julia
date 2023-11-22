@@ -472,6 +472,9 @@ function allunique(C)
 end
 
 function _hashed_allunique(C)
+    if issorted(C)
+        return all(i -> C[i] != C[i+1], 1:length(C)-1)
+    end
     seen = Set{eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
