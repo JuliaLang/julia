@@ -1688,6 +1688,7 @@ precompile_test_harness("Issue #46558") do load_path
     @test (@eval $Foo.foo(1)) == 2
 end
 
+# TODO: Decide if we need to keep supporting this.
 precompile_test_harness("issue #46296") do load_path
     write(joinpath(load_path, "CodeInstancePrecompile.jl"),
         """
@@ -1703,6 +1704,62 @@ precompile_test_harness("issue #46296") do load_path
         """)
     Base.compilecache(Base.PkgId("CodeInstancePrecompile"))
     (@eval (using CodeInstancePrecompile))
+end
+
+precompile_test_harness("AbstractInterpreter caching") do load_path
+    write(joinpath(load_path, "CustomAbstractInterpreterCaching.jl"),
+        """
+        module CustomAbstractInterpreterCaching
+            module Custom
+                const CC = Core.Compiler
+                import Core: MethodInstance, CodeInstance
+                import .CC: WorldRange, WorldView
+
+                struct InvalidationTesterToken end
+                const INVALIDATION_TESTER_CACHE = Core.Compiler.InternalCodeCache(InvalidationTesterToken())
+
+                struct InvalidationTester <: CC.AbstractInterpreter
+                    world::UInt
+                    inf_params::CC.InferenceParams
+                    opt_params::CC.OptimizationParams
+                    inf_cache::Vector{CC.InferenceResult}
+                    code_cache::Core.Compiler.InternalCodeCache
+                    function InvalidationTester(;
+                                                world::UInt = Base.get_world_counter(),
+                                                inf_params::CC.InferenceParams = CC.InferenceParams(),
+                                                opt_params::CC.OptimizationParams = CC.OptimizationParams(),
+                                                inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
+                                                code_cache::Core.Compiler.InternalCodeCache = INVALIDATION_TESTER_CACHE)
+                        return new(world, inf_params, opt_params, inf_cache, code_cache)
+                    end
+                end
+
+                CC.InferenceParams(interp::InvalidationTester) = interp.inf_params
+                CC.OptimizationParams(interp::InvalidationTester) = interp.opt_params
+                CC.get_world_counter(interp::InvalidationTester) = interp.world
+                CC.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
+                CC.cache_owner(::InvalidationTester) = InvalidationTesterToken()
+                CC.code_cache(interp::InvalidationTester) = WorldView(interp.code_cache, interp.world)
+            end
+
+            basic_callee(x) = x
+            basic_caller(x) = basic_callee(x)
+
+            Base.return_types((Float64,); interp=Custom.InvalidationTester()) do x
+                basic_caller(x)
+            end
+        end
+        """)
+    Base.compilecache(Base.PkgId("CustomAbstractInterpreterCaching"))
+    (@eval (using CustomAbstractInterpreterCaching))
+    let m = only(methods(CustomAbstractInterpreterCaching.basic_callee))
+        mi = only(Base.specializations(m))
+        ci = mi.cache
+        @test !isdefined(ci, :next)
+        @test ci.owner === CustomAbstractInterpreterCaching.Custom.InvalidationTesterToken()
+        @test ci.max_world == typemax(UInt)
+        @test ci.min_world == m.primary_world
+    end
 end
 
 precompile_test_harness("Recursive types") do load_path
