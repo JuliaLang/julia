@@ -1751,15 +1751,17 @@ precompile_test_harness("AbstractInterpreter caching") do load_path
         end
         """)
     Base.compilecache(Base.PkgId("CustomAbstractInterpreterCaching"))
-    (@eval (using CustomAbstractInterpreterCaching))
-    let m = only(methods(CustomAbstractInterpreterCaching.basic_callee))
-        mi = only(Base.specializations(m))
-        ci = mi.cache
-        @test !isdefined(ci, :next)
-        @test ci.owner === CustomAbstractInterpreterCaching.Custom.InvalidationTesterToken()
-        @test ci.max_world == typemax(UInt)
-        @test ci.min_world == m.primary_world
-    end
+    (@eval begin
+        using CustomAbstractInterpreterCaching
+        let m = only(methods(CustomAbstractInterpreterCaching.basic_callee))
+            mi = only(Base.specializations(m))
+            ci = mi.cache
+            @test !isdefined(ci, :next)
+            @test ci.owner === CustomAbstractInterpreterCaching.Custom.InvalidationTesterToken()
+            @test ci.max_world == typemax(UInt)
+            @test ci.min_world == m.primary_world
+        end
+    end)
 end
 
 precompile_test_harness("Recursive types") do load_path
