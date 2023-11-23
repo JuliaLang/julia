@@ -1051,7 +1051,11 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
     if contains_is(unwrap_unionall(atype).parameters, Union{})
         return Union{} # don't ask: it does weird and unnecessary things, if it occurs during bootstrap
     end
-    mi = specialize_method(method, atype, sparams)::MethodInstance
+    return typeinf_type(interp, specialize_method(method, atype, sparams))
+end
+typeinf_type(interp::AbstractInterpreter, match::MethodMatch) =
+    typeinf_type(interp, specialize_method(match))
+function typeinf_type(interp::AbstractInterpreter, mi::MethodInstance)
     start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance
@@ -1120,8 +1124,7 @@ function _return_type(interp::AbstractInterpreter, t::DataType)
         rt = widenconst(rt)
     else
         for match in _methods_by_ftype(t, -1, get_world_counter(interp))::Vector
-            match = match::MethodMatch
-            ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
+            ty = typeinf_type(interp, match::MethodMatch)
             ty === nothing && return Any
             rt = tmerge(rt, ty)
             rt === Any && break
