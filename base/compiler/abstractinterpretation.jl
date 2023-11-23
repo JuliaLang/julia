@@ -2705,7 +2705,7 @@ end
 
 function stmt_taints_inbounds_consistency(sv::AbsIntState)
     propagate_inbounds(sv) && return true
-    return (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0
+    return has_curr_ssaflag(sv, IR_FLAG_INBOUNDS)
 end
 
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
@@ -2718,7 +2718,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     else
         (; rt, exct, effects) = abstract_eval_statement_expr(interp, e, vtypes, sv)
         if effects.noub === NOUB_IF_NOINBOUNDS
-            if !iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS)
+            if has_curr_ssaflag(sv, IR_FLAG_INBOUNDS)
                 effects = Effects(effects; noub=ALWAYS_FALSE)
             elseif !propagate_inbounds(sv)
                 # The callee read our inbounds flag, but unless we propagate inbounds,
@@ -3258,7 +3258,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             if exct !== Union{}
                 update_exc_bestguess!(exct, frame, ipo_lattice(interp))
             end
-            if (get_curr_ssaflag(frame) & IR_FLAG_NOTHROW) != IR_FLAG_NOTHROW
+            if !has_curr_ssaflag(frame, IR_FLAG_NOTHROW)
                 propagate_to_error_handler!(currstate, frame, 𝕃ᵢ)
             end
             if rt === Bottom

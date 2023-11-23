@@ -25,9 +25,9 @@ using ._TOP_MOD:     # Base definitions
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using Core.Compiler: # Core.Compiler specific definitions
     Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
-    argextype, check_effect_free!, fieldcount_noerror, hasintersect, intrinsic_nothrow,
-    is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow, singleton_type,
-    try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
+    argextype, check_effect_free!, fieldcount_noerror, hasintersect, has_flag,
+    intrinsic_nothrow, is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow,
+    singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -975,7 +975,7 @@ end
     error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
 end
 
-is_nothrow(ir::IRCode, pc::Int) = ir[SSAValue(pc)][:flag] & IR_FLAG_NOTHROW ≠ 0
+is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 
 # NOTE if we don't maintain the alias set that is separated from the lattice state, we can do
 # something like below: it essentially incorporates forward escape propagation in our default

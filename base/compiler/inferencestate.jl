@@ -888,6 +888,9 @@ end
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
 
+has_curr_ssaflag(sv::InferenceState, flag::UInt32) = has_flag(sv.src.ssaflags[sv.currpc], flag)
+has_curr_ssaflag(sv::IRInterpretationState, flag::UInt32) = has_flag(sv.ir.stmts[sv.curridx][:flag], flag)
+
 function set_curr_ssaflag!(sv::InferenceState, flag::UInt32, mask::UInt32=typemax(UInt32))
     curr_flag = sv.src.ssaflags[sv.currpc]
     sv.src.ssaflags[sv.currpc] = (curr_flag & ~mask) | flag
@@ -898,10 +901,10 @@ function set_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32, mask::UInt32
 end
 
 add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] |= flag
-add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] |= flag
+add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = add_flag!(sv.ir.stmts[sv.curridx], flag)
 
 sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] &= ~flag
-sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] &= ~flag
+sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sub_flag!(sv.ir.stmts[sv.curridx], flag)
 
 function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
     if effects.effect_free === EFFECT_FREE_GLOBALLY
