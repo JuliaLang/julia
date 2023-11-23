@@ -4499,8 +4499,7 @@ static jl_value_t *widen_diagonal(jl_value_t *t, jl_unionall_t *u, jl_varbinding
     if (vb.innervars != NULL) {
         for (size_t i = 0; i < jl_array_nrows(vb.innervars); i++) {
             jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb.innervars, i);
-            if (jl_has_typevar(nt, var))
-                nt = jl_type_unionall(var, nt);
+            nt = jl_type_unionall(var, nt);
         }
     }
     JL_GC_POP();
