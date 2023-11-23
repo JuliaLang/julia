@@ -10,6 +10,7 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/PassTimingInfo.h>
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
@@ -101,14 +102,9 @@ struct OptimizationOptions {
 
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
-#if JL_LLVM_VERSION < 160000
-    StandardInstrumentations SI;
-#endif
-    std::unique_ptr<PassInstrumentationCallbacks> PIC;
-    PassBuilder PB;
-    ModulePassManager MPM;
     OptimizationLevel O;
-
+    OptimizationOptions options;
+    TimePassesHandler TimePasses;
     NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options = OptimizationOptions::defaults()) JL_NOTSAFEPOINT;
     ~NewPM() JL_NOTSAFEPOINT;
 
@@ -582,6 +578,7 @@ private:
     jl_locked_stream dump_compiles_stream;
     jl_locked_stream dump_llvm_opt_stream;
 
+    std::mutex llvm_printing_mutex{};
     SmallVector<std::function<void()>, 0> PrintLLVMTimers;
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
