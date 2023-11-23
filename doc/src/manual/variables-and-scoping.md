@@ -91,7 +91,7 @@ julia> module D
            b = a # errors as D's global scope is separate from A's
        end;
 ERROR: UndefVarError: `a` not defined in `D`
-Suggestion: check for spelling errors or missing imports. No global of this name exists in this module.
+Suggestion: check for spelling errors or missing imports.
 ```
 
 If a top-level expression contains a variable declaration with keyword `local`,
