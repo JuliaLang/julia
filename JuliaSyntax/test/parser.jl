@@ -1012,9 +1012,13 @@ parsestmt_test_specs = [
     "(abstract\ntype X end)" => "(wrapper (parens abstract (error-t type X)) (error-t end ✘))"
     "(mutable\nstruct X end)" => "(wrapper (parens mutable (error-t struct X)) (error-t end ✘))"
 
-    # The following is currently broken but at least the parser shouldn't
-    # crash.
+    # Lexer vs parser: issues detecting which tokens are string delimiters and
+    # detecting raw vs non-raw strings. The old parser was tightly coupled to
+    # the lexer and the parser state was used to disambiguate these cases.
     "x in' '" => "(call-i x in (char (error)))"
+    "x in'``\$" => "(call-i x in (call-i (juxtapose (char '`' (error-t)) (macrocall core_@cmd (cmdstring-r (error-t)))) \$ (error)))"
+    "var\"#\"`str`" => "(juxtapose (var # (error-t)) (macrocall core_@cmd (cmdstring-r \"str\")))"
+    "var\"#\"\"str\"" => "(juxtapose (var # (error-t)) (error-t) (string \"str\"))"
 ]
 
 @testset "Parser does not crash on broken code" begin

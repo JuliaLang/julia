@@ -301,6 +301,10 @@ function is_both_unary_and_binary(t)
     )
 end
 
+function is_string_macro_suffix(k)
+    k == K"Identifier" || is_keyword(k) || is_word_operator(k) || is_number(k)
+end
+
 # flisp: invalid-identifier?
 function is_valid_identifier(k)
     k = kind(k)
@@ -1707,7 +1711,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             parse_string(ps, true)
             t = peek_token(ps)
             k = kind(t)
-            if !preceding_whitespace(t) && (k == K"Identifier" || is_keyword(k) || is_word_operator(k) || is_number(k))
+            if !preceding_whitespace(t) && is_string_macro_suffix(k)
                 # Macro sufficies can include keywords and numbers
                 # x"s"y    ==> (macrocall @x_str (string-r "s") "y")
                 # x"s"end  ==> (macrocall @x_str (string-r "s") "end")
@@ -2344,7 +2348,7 @@ function parse_macro_name(ps::ParseState)
     # @! x   ==>  (macrocall @! x)
     # @.. x  ==>  (macrocall @.. x)
     # @$ x   ==>  (macrocall @$ x)
-    # @var"#" x   ==>  (macrocall (var #) @$ x)
+    # @var"#" x   ==>  (macrocall (var @#) x)
     bump_disallowed_space(ps)
     mark = position(ps)
     parse_atom(ps, false)
@@ -3182,7 +3186,13 @@ function parse_string(ps::ParseState, raw::Bool)
         t = peek_full_token(ps)
         k = kind(t)
         if k == K"$"
-            @assert !raw  # The lexer detects raw strings separately
+            if raw
+                # FIXME: This case is actually a tokenization error:
+                # The `K"$"` token should not occur when a raw string
+                # is being parsed, but this would require the lexer to know
+                # about the parse state. (see also parse_atom)
+                break
+            end
             if prev_chunk_newline
                 # """\n$x\n a"""  ==>  (string-s x "\n" " a")
                 indent_ref_i = first_byte(t)
@@ -3526,11 +3536,16 @@ function parse_atom(ps::ParseState, check_identifiers=true)
                 # var"x"+  ==>  x
                 # var"x")  ==>  x
                 # var"x"(  ==>  x
-            else
+            elseif is_string_macro_suffix(k)
                 # var"x"end  ==>  (var x (error-t))
                 # var"x"1    ==>  (var x (error-t))
                 # var"x"y    ==>  (var x (error-t))
-                bump(ps, TRIVIA_FLAG, error="suffix not allowed after var\"...\" syntax")
+                bump(ps, TRIVIA_FLAG, error="suffix not allowed after `var\"...\"` syntax")
+            elseif k == K"`" || k == K"\"" || k == K"\"\"\"" || k == K"```"
+                # Disallow `var"#""str". To allow this we'd need to fix `raw`
+                # detection in lex_quote to be consistent with the parser.
+                bump_invisible(ps, K"error", TRIVIA_FLAG,
+                               error="`var\"...\"` syntax not supported as string macro name")
             end
             emit(ps, mark, K"var")
         elseif check_identifiers && is_closing_token(ps, leading_kind)
