@@ -24,6 +24,11 @@ following meanings:
   * `EFFECT_FREE_IF_INACCESSIBLEMEMONLY`: the `:effect-free`-ness of this method can later be
     refined to `ALWAYS_TRUE` in a case when `:inaccessiblememonly` is proven.
 - `nothrow::Bool`: this method is guaranteed to not throw an exception.
+  If the execution of this method may raise `MethodError`s and similar exceptions, then
+  the method is not considered as `:nothrow`.
+  However, note that environment-dependent errors like `StackOverflowError` or `InterruptException`
+  are not modeled by this effect and thus a method that may result in `StackOverflowError`
+  does not necessarily need to taint `:nothrow` (although it should usually taint `:terminates` too).
 - `terminates::Bool`: this method is guaranteed to terminate.
 - `notaskstate::Bool`: this method does not access any state bound to the current
   task and may thus be moved to a different task without changing observable
