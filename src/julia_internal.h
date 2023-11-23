@@ -373,24 +373,48 @@ static const int jl_gc_sizeclasses[] = {
     144, 160, 176, 192, 208, 224, 240, 256,
 
     // the following tables are computed for maximum packing efficiency via the formula:
-    // pg = 2^14
+    // pg = GC_SMALL_PAGE ? 2^12 : 2^14
     // sz = (div.(pg-8, rng).÷16)*16; hcat(sz, (pg-8).÷sz, pg .- (pg-8).÷sz.*sz)'
 
+#ifdef GC_SMALL_PAGE
+    // rng = 15:-1:2 (14 pools)
+    272, 288, 304, 336, 368, 400, 448, 496, 576, 672, 816, 1008, 1360, 2032
+//  15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, /pool
+//  16, 64, 144, 64, 48, 96, 64, 128, 64, 64, 16, 64, 16, 32, bytes lost
+#else
     // rng = 60:-4:32 (8 pools)
     272, 288, 304, 336, 368, 400, 448, 496,
-//   60,  56,  53,  48,  44,  40,  36,  33, /pool
-//   64, 256, 272, 256, 192, 384, 256,  16, bytes lost
+//  60, 56, 53, 48, 44, 40, 36, 33, /pool
+//  64, 256, 272, 256, 192, 384, 256,  16, bytes lost
 
     // rng = 30:-2:16 (8 pools)
     544, 576, 624, 672, 736, 816, 896, 1008,
-//   30,  28,  26,  24,  22,  20,  18,  16, /pool
-//   64, 256, 160, 256, 192,  64, 256, 256, bytes lost
+//  30, 28, 26, 24, 22, 20, 18, 16, /pool
+//  64, 256, 160, 256, 192,  64, 256, 256, bytes lost
 
     // rng = 15:-1:8 (8 pools)
     1088, 1168, 1248, 1360, 1488, 1632, 1808, 2032
-//    15,   14,   13,   12,   11,   10,    9,    8, /pool
-//    64,   32,  160,   64,   16,   64,  112,  128, bytes lost
+//   15, 14, 13, 12, 11, 10, 9, 8, /pool
+//   64, 32, 160, 64, 16, 64, 112,  128, bytes lost
+#endif
 };
+#ifdef GC_SMALL_PAGE
+#ifdef _P64
+#  define JL_GC_N_POOLS 39
+#elif MAX_ALIGN == 8
+#  define JL_GC_N_POOLS 40
+#else
+#  define JL_GC_N_POOLS 41
+#endif
+#else
+#ifdef _P64
+#  define JL_GC_N_POOLS 49
+#elif MAX_ALIGN == 8
+#  define JL_GC_N_POOLS 50
+#else
+#  define JL_GC_N_POOLS 51
+#endif
+#endif
 static_assert(sizeof(jl_gc_sizeclasses) / sizeof(jl_gc_sizeclasses[0]) == JL_GC_N_POOLS, "");
 
 STATIC_INLINE int jl_gc_alignment(size_t sz) JL_NOTSAFEPOINT
@@ -417,7 +441,12 @@ JL_DLLEXPORT int jl_alignment(size_t sz) JL_NOTSAFEPOINT;
 
 // the following table is computed as:
 // [searchsortedfirst(jl_gc_sizeclasses, i) - 1 for i = 0:16:jl_gc_sizeclasses[end]]
-static const uint8_t szclass_table[] = {0, 1, 3, 5, 7, 9, 11, 13, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 28, 29, 29, 30, 30, 31, 31, 31, 32, 32, 32, 33, 33, 33, 34, 34, 35, 35, 35, 36, 36, 36, 37, 37, 37, 37, 38, 38, 38, 38, 38, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 40, 40, 41, 41, 41, 41, 41, 42, 42, 42, 42, 42, 43, 43, 43, 43, 43, 44, 44, 44, 44, 44, 44, 44, 45, 45, 45, 45, 45, 45, 45, 45, 46, 46, 46, 46, 46, 46, 46, 46, 46, 47, 47, 47, 47, 47, 47, 47, 47, 47, 47, 47, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 48};
+static const uint8_t szclass_table[] =
+#ifdef GC_SMALL_PAGE
+    {0,1,3,5,7,9,11,13,15,17,18,19,20,21,22,23,24,25,26,27,28,28,29,29,30,30,31,31,31,32,32,32,33,33,33,33,33,34,34,34,34,34,34,35,35,35,35,35,35,35,35,35,36,36,36,36,36,36,36,36,36,36,36,36,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,37,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38,38};
+#else
+    {0,1,3,5,7,9,11,13,15,17,18,19,20,21,22,23,24,25,26,27,28,28,29,29,30,30,31,31,31,32,32,32,33,33,33,34,34,35,35,35,36,36,36,37,37,37,37,38,38,38,38,38,39,39,39,39,39,40,40,40,40,40,40,40,41,41,41,41,41,42,42,42,42,42,43,43,43,43,43,44,44,44,44,44,44,44,45,45,45,45,45,45,45,45,46,46,46,46,46,46,46,46,46,47,47,47,47,47,47,47,47,47,47,47,48,48,48,48,48,48,48,48,48,48,48,48,48,48};
+#endif
 static_assert(sizeof(szclass_table) == 128, "");
 
 STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz) JL_NOTSAFEPOINT
@@ -621,6 +650,13 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_codeinst_for_src(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_code_info_t *src);
 jl_method_instance_t *jl_get_unspecialized_from_mi(jl_method_instance_t *method JL_PROPAGATES_ROOT);
 jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT);
+
+JL_DLLEXPORT jl_code_instance_t* jl_new_codeinst(
+        jl_method_instance_t *mi, jl_value_t *rettype, jl_value_t *exctype,
+        jl_value_t *inferred_const, jl_value_t *inferred,
+        int32_t const_flags, size_t min_world, size_t max_world,
+        uint32_t ipo_effects, uint32_t effects, jl_value_t *analysis_results,
+        uint8_t relocatability);
 
 JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tupletype_t *types, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);

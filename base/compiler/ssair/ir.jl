@@ -283,6 +283,10 @@ function setindex!(node::Instruction, newval::Instruction)
     return node
 end
 
+has_flag(inst::Instruction, flag::UInt32) = has_flag(inst[:flag], flag)
+add_flag!(inst::Instruction, flag::UInt32) = inst[:flag] |= flag
+sub_flag!(inst::Instruction, flag::UInt32) = inst[:flag] &= ~flag
+
 struct NewNodeInfo
     # Insertion position (interpretation depends on which array this is in)
     pos::Int
@@ -334,18 +338,24 @@ function NewInstruction(inst::Instruction;
     return NewInstruction(stmt, type, info, line, flag)
 end
 @specialize
-effect_free_and_nothrow(newinst::NewInstruction) = NewInstruction(newinst; flag=add_flag(newinst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
-with_flags(newinst::NewInstruction, flags::UInt32) = NewInstruction(newinst; flag=add_flag(newinst, flags))
-without_flags(newinst::NewInstruction, flags::UInt32) = NewInstruction(newinst; flag=sub_flag(newinst, flags))
+effect_free_and_nothrow(newinst::NewInstruction) = add_flag(newinst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
 function add_flag(newinst::NewInstruction, newflag::UInt32)
     flag = newinst.flag
-    flag === nothing && return newflag
-    return flag | newflag
+    if flag === nothing
+        flag = newflag
+    else
+        flag |= newflag
+    end
+    return NewInstruction(newinst; flag)
 end
 function sub_flag(newinst::NewInstruction, newflag::UInt32)
     flag = newinst.flag
-    flag === nothing && return IR_FLAG_NULL
-    return flag & ~newflag
+    if flag === nothing
+        flag = IR_FLAG_NULL
+    else
+        flag &= ~newflag
+    end
+    return NewInstruction(newinst; flag)
 end
 
 struct IRCode
@@ -587,6 +597,7 @@ struct CFGTransformState
     result_bbs::Vector{BasicBlock}
     bb_rename_pred::Vector{Int}
     bb_rename_succ::Vector{Int}
+    domtree::Union{Nothing, DomTree}
 end
 
 # N.B.: Takes ownership of the CFG array
@@ -622,11 +633,14 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
         let blocks = blocks, bb_rename = bb_rename
             result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
         end
+        # TODO: This could be done by just renaming the domtree
+        domtree = construct_domtree(result_bbs)
     else
         bb_rename = Vector{Int}()
         result_bbs = blocks
+        domtree = nothing
     end
-    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename)
+    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree)
 end
 
 mutable struct IncrementalCompact
@@ -681,7 +695,7 @@ mutable struct IncrementalCompact
         bb_rename = Vector{Int}()
         pending_nodes = NewNodeStream()
         pending_perm = Int[]
-        return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename),
+        return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing),
             ssa_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
@@ -940,6 +954,14 @@ function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction,
     inst = SSAValue(result_idx)
     refinish && finish_current_bb!(compact, 0)
     return inst
+end
+
+function delete_inst_here!(compact)
+    # Delete the statement, update refcounts etc
+    compact[SSAValue(compact.result_idx-1)] = nothing
+    # Pretend that we never compacted this statement in the first place
+    compact.result_idx -= 1
+    return nothing
 end
 
 function getindex(view::TypesView, v::OldSSAValue)
@@ -1222,19 +1244,25 @@ end
 
 # N.B.: from and to are non-renamed indices
 function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
-    # Note: We recursively kill as many edges as are obviously dead. However, this
-    # may leave dead loops in the IR. We kill these later in a CFG cleanup pass (or
-    # worstcase during codegen).
-    (; bb_rename_pred, bb_rename_succ, result_bbs) = compact.cfg_transform
+    # Note: We recursively kill as many edges as are obviously dead.
+    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree) = compact.cfg_transform
     preds = result_bbs[bb_rename_succ[to]].preds
     succs = result_bbs[bb_rename_pred[from]].succs
     deleteat!(preds, findfirst(x::Int->x==bb_rename_pred[from], preds)::Int)
     deleteat!(succs, findfirst(x::Int->x==bb_rename_succ[to], succs)::Int)
+    if domtree !== nothing
+        domtree_delete_edge!(domtree, result_bbs, bb_rename_pred[from], bb_rename_succ[to])
+    end
     # Check if the block is now dead
-    if length(preds) == 0
-        for succ in copy(result_bbs[bb_rename_succ[to]].succs)
-            kill_edge!(compact, active_bb, to, findfirst(x::Int->x==succ, bb_rename_pred)::Int)
+    if length(preds) == 0 || (domtree !== nothing && bb_unreachable(domtree, bb_rename_succ[to]))
+        to_succs = result_bbs[bb_rename_succ[to]].succs
+        for succ in copy(to_succs)
+            new_succ = findfirst(x::Int->x==succ, bb_rename_pred)
+            new_succ === nothing && continue
+            kill_edge!(compact, active_bb, to, new_succ)
         end
+        empty!(preds)
+        empty!(to_succs)
         if to < active_bb
             # Kill all statements in the block
             stmts = result_bbs[bb_rename_succ[to]].stmts
@@ -1307,7 +1335,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     elseif isa(stmt, GlobalRef)
         total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE
         flag = result[result_idx][:flag]
-        if (flag & total_flags) == total_flags
+        if has_flag(flag, total_flags)
             ssa_rename[idx] = stmt
         else
             ssa_rename[idx] = SSAValue(result_idx)
@@ -1514,7 +1542,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         else
             # Constant assign, replace uses of this ssa value with its result
         end
-        if (inst[:flag] & IR_FLAG_REFINED) != 0 && !isa(stmt, Refined)
+        if has_flag(inst, IR_FLAG_REFINED) && !isa(stmt, Refined)
             # If we're compacting away an instruction that was marked as refined,
             # leave a marker in the ssa_rename, so we can taint any users.
             stmt = Refined(stmt)
@@ -1749,7 +1777,7 @@ function maybe_erase_unused!(callback::Function, compact::IncrementalCompact, id
     stmt = inst[:stmt]
     stmt === nothing && return false
     inst[:type] === Bottom && return false
-    effect_free = (inst[:flag] & (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)) == IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    effect_free = has_flag(inst, (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
     effect_free || return false
     foreachssa(stmt) do val::SSAValue
         if compact.used_ssas[val.id] == 1

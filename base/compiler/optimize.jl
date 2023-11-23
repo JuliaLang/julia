@@ -15,35 +15,37 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 # NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
 
-const IR_FLAG_NULL        = UInt32(0)
+const IR_FLAG_NULL        = zero(UInt32)
 # This statement is marked as @inbounds by user.
 # Ff replaced by inlining, any contained boundschecks may be removed.
-const IR_FLAG_INBOUNDS    = UInt32(1) << 0
+const IR_FLAG_INBOUNDS    = one(UInt32) << 0
 # This statement is marked as @inline by user
-const IR_FLAG_INLINE      = UInt32(1) << 1
+const IR_FLAG_INLINE      = one(UInt32) << 1
 # This statement is marked as @noinline by user
-const IR_FLAG_NOINLINE    = UInt32(1) << 2
-const IR_FLAG_THROW_BLOCK = UInt32(1) << 3
+const IR_FLAG_NOINLINE    = one(UInt32) << 2
+const IR_FLAG_THROW_BLOCK = one(UInt32) << 3
 # This statement was proven :effect_free
-const IR_FLAG_EFFECT_FREE = UInt32(1) << 4
+const IR_FLAG_EFFECT_FREE = one(UInt32) << 4
 # This statement was proven not to throw
-const IR_FLAG_NOTHROW     = UInt32(1) << 5
+const IR_FLAG_NOTHROW     = one(UInt32) << 5
 # This is :consistent
-const IR_FLAG_CONSISTENT  = UInt32(1) << 6
+const IR_FLAG_CONSISTENT  = one(UInt32) << 6
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
-const IR_FLAG_REFINED     = UInt32(1) << 7
+const IR_FLAG_REFINED     = one(UInt32) << 7
 # This is :noub == ALWAYS_TRUE
-const IR_FLAG_NOUB        = UInt32(1) << 8
+const IR_FLAG_NOUB        = one(UInt32) << 8
 
 # TODO: Both of these should eventually go away once
 # This is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
-const IR_FLAG_EFIIMO      = UInt32(1) << 9
+const IR_FLAG_EFIIMO      = one(UInt32) << 9
 # This is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
-const IR_FLAG_INACCESSIBLE_OR_ARGMEM = UInt32(1) << 10
+const IR_FLAG_INACCESSIBLE_OR_ARGMEM = one(UInt32) << 10
 
 const IR_FLAGS_EFFECTS = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_CONSISTENT | IR_FLAG_NOUB
+
+has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
@@ -218,9 +220,9 @@ end
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
-is_stmt_inline(stmt_flag::UInt32)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
-is_stmt_noinline(stmt_flag::UInt32)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
-is_stmt_throw_block(stmt_flag::UInt32) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
+is_stmt_inline(stmt_flag::UInt32)      = has_flag(stmt_flag, IR_FLAG_INLINE)
+is_stmt_noinline(stmt_flag::UInt32)    = has_flag(stmt_flag, IR_FLAG_NOINLINE)
+is_stmt_throw_block(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_THROW_BLOCK)
 
 function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
     Targ = args[1]
@@ -468,7 +470,7 @@ end
 
 function any_stmt_may_throw(ir::IRCode, bb::Int)
     for stmt in ir.cfg.blocks[bb].stmts
-        if (ir[SSAValue(stmt)][:flag] & IR_FLAG_NOTHROW) != 0
+        if has_flag(ir[SSAValue(stmt)], IR_FLAG_NOTHROW)
             return true
         end
     end
@@ -702,7 +704,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
             # ignore control flow node – they are not removable on their own and thus not
             # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
             # the whole method invocation
-            sv.all_effect_free &= !iszero(flag & IR_FLAG_EFFECT_FREE)
+            sv.all_effect_free &= has_flag(flag, IR_FLAG_EFFECT_FREE)
         end
     elseif sv.all_effect_free
         if (isexpr(stmt, :invoke) || isexpr(stmt, :new) ||
@@ -714,8 +716,8 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
             sv.all_effect_free = false
         end
     end
-    sv.all_nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
-    if iszero(flag & IR_FLAG_NOUB)
+    sv.all_nothrow &= has_flag(flag, IR_FLAG_NOTHROW)
+    if !has_flag(flag, IR_FLAG_NOUB)
         # Special case: `:boundscheck` into `getfield` or memory operations is `:noub_if_noinbounds`
         if is_conditional_noub(inst, sv)
             sv.any_conditional_ub = true
@@ -925,8 +927,10 @@ function run_passes_ipo_safe(
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
-    @pass "compact 3" ir = compact!(ir, true)
+    @pass "ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
+    if made_changes
+        @pass "compact 3" ir = compact!(ir, true)
+    end
     if JLOptions().debug_level == 2
         @timeit "verify 3" (verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp)); verify_linetable(ir.linetable))
     end
@@ -958,11 +962,11 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                     ((block + 1) != destblock) && cfg_delete_edge!(sv.cfg, block, destblock)
                     expr = Expr(:call, Core.typeassert, expr.cond, Bool)
                 elseif i + 1 in sv.unreachable
-                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    @assert has_flag(ci.ssaflags[i], IR_FLAG_NOTHROW)
                     cfg_delete_edge!(sv.cfg, block, block + 1)
                     expr = GotoNode(expr.dest)
                 elseif expr.dest in sv.unreachable
-                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    @assert has_flag(ci.ssaflags[i], IR_FLAG_NOTHROW)
                     cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
                     expr = nothing
                 end

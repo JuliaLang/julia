@@ -46,22 +46,28 @@ end
 
 function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, irsv::IRInterpretationState)
     si = StmtInfo(true) # TODO better job here?
-    (; rt, effects, info) = abstract_call(interp, arginfo, si, irsv)
+    (; rt, exct, effects, info) = abstract_call(interp, arginfo, si, irsv)
     irsv.ir.stmts[irsv.curridx][:info] = info
-    return RTEffects(rt, effects)
+    return RTEffects(rt, exct, effects)
+end
+
+function kill_block!(ir::IRCode, bb::Int)
+    # Kill the entire block
+    stmts = ir.cfg.blocks[bb].stmts
+    for bidx = stmts
+        inst = ir[SSAValue(bidx)]
+        inst[:stmt] = nothing
+        inst[:type] = Bottom
+        inst[:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    end
+    ir[SSAValue(last(stmts))][:stmt] = ReturnNode()
+    return
 end
 
 function update_phi!(irsv::IRInterpretationState, from::Int, to::Int)
     ir = irsv.ir
     if length(ir.cfg.blocks[to].preds) == 0
-        # Kill the entire block
-        for bidx = ir.cfg.blocks[to].stmts
-            inst = ir[SSAValue(bidx)]
-            inst[:stmt] = nothing
-            inst[:type] = Bottom
-            inst[:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-        end
-        return
+        kill_block!(ir, to)
     end
     for sidx = ir.cfg.blocks[to].stmts
         stmt = ir[SSAValue(sidx)][:stmt]
@@ -83,15 +89,38 @@ function kill_terminator_edges!(irsv::IRInterpretationState, term_idx::Int, bb::
     ir = irsv.ir
     stmt = ir[SSAValue(term_idx)][:stmt]
     if isa(stmt, GotoIfNot)
-        kill_edge!(ir, bb, stmt.dest, update_phi!(irsv))
-        kill_edge!(ir, bb, bb+1, update_phi!(irsv))
+        kill_edge!(irsv, bb, stmt.dest)
+        kill_edge!(irsv, bb, bb+1)
     elseif isa(stmt, GotoNode)
-        kill_edge!(ir, bb, stmt.label, update_phi!(irsv))
+        kill_edge!(irsv, bb, stmt.label)
     elseif isa(stmt, ReturnNode)
         # Nothing to do
     else
         @assert !isexpr(stmt, :enter)
-        kill_edge!(ir, bb, bb+1, update_phi!(irsv))
+        kill_edge!(irsv, bb, bb+1)
+    end
+end
+
+function kill_edge!(irsv::IRInterpretationState, from::Int, to::Int)
+    ir = irsv.ir
+    kill_edge!(ir, from, to, update_phi!(irsv))
+
+    lazydomtree = irsv.lazydomtree
+    domtree = nothing
+    if isdefined(lazydomtree, :domtree)
+        domtree = get!(lazydomtree)
+        domtree_delete_edge!(domtree, ir.cfg.blocks, from, to)
+    elseif length(ir.cfg.blocks[to].preds) != 0
+        # TODO: If we're not maintaining the domtree, computing it just for this
+        # is slightly overkill - just the dfs tree would be enough.
+        domtree = get!(lazydomtree)
+    end
+
+    if domtree !== nothing && bb_unreachable(domtree, to)
+        kill_block!(ir, to)
+        for edge in ir.cfg.blocks[to].succs
+            kill_edge!(irsv, to, edge)
+        end
     end
 end
 
@@ -109,14 +138,14 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             if bb === nothing
                 bb = block_for_inst(ir, idx)
             end
-            inst[:flag] |= IR_FLAG_NOTHROW
+            add_flag!(inst, IR_FLAG_NOTHROW)
             if condval
                 inst[:stmt] = nothing
                 inst[:type] = Any
-                kill_edge!(ir, bb, stmt.dest, update_phi!(irsv))
+                kill_edge!(irsv, bb, stmt.dest)
             else
                 inst[:stmt] = GotoNode(stmt.dest)
-                kill_edge!(ir, bb, bb+1, update_phi!(irsv))
+                kill_edge!(irsv, bb, bb+1)
             end
             return true
         end
@@ -127,14 +156,14 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         head = stmt.head
         if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined || head === :boundscheck
             (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
-            inst[:flag] |= flags_for_effects(effects)
+            add_flag!(inst, flags_for_effects(effects))
         elseif head === :invoke
             rt, (nothrow, noub) = concrete_eval_invoke(interp, stmt, stmt.args[1]::MethodInstance, irsv)
             if nothrow
-                inst[:flag] |= IR_FLAG_NOTHROW
+                add_flag!(inst, IR_FLAG_NOTHROW)
             end
             if noub
-                inst[:flag] |= IR_FLAG_NOUB
+                add_flag!(inst, IR_FLAG_NOUB)
             end
         elseif head === :throw_undef_if_not
             condval = maybe_extract_const_bool(argextype(stmt.args[2], ir))
@@ -168,7 +197,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     if rt !== nothing
         if isa(rt, Const)
             inst[:type] = rt
-            if is_inlineable_constant(rt.val) && (inst[:flag] & (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)) == IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+            if is_inlineable_constant(rt.val) && has_flag(inst, (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
                 inst[:stmt] = quoted(rt.val)
             end
             return true
@@ -270,9 +299,9 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         typ = inst[:type]
         flag = inst[:flag]
         any_refined = false
-        if (flag & IR_FLAG_REFINED) != 0
+        if has_flag(flag, IR_FLAG_REFINED)
             any_refined = true
-            inst[:flag] &= ~IR_FLAG_REFINED
+            sub_flag!(inst, IR_FLAG_REFINED)
         end
         for ur in userefs(stmt)
             val = ur[]
@@ -322,8 +351,8 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             irsv.curridx = idx
             stmt = inst[:stmt]
             flag = inst[:flag]
-            if (flag & IR_FLAG_REFINED) != 0
-                inst[:flag] &= ~IR_FLAG_REFINED
+            if has_flag(flag, IR_FLAG_REFINED)
+                sub_flag!(inst, IR_FLAG_REFINED)
                 push!(stmt_ip, idx)
             end
             check_ret!(stmt, idx)
@@ -379,8 +408,8 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     nothrow = noub = true
     for idx = 1:length(ir.stmts)
         flag = ir[SSAValue(idx)][:flag]
-        nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
-        noub &= !iszero(flag & IR_FLAG_NOUB)
+        nothrow &= has_flag(flag, IR_FLAG_NOTHROW)
+        noub &= has_flag(flag, IR_FLAG_NOUB)
         (nothrow | noub) || break
     end
 

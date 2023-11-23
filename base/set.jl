@@ -446,6 +446,8 @@ end
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 
+`allunique` may use a specialized implementation when the input is sorted.
+
 See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
@@ -494,7 +496,31 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
-allunique(A::StridedArray) = length(A) < 32 ? _indexed_allunique(A) : _hashed_allunique(A)
+function allunique(A::StridedArray)
+    if length(A) < 32
+        _indexed_allunique(A)
+    elseif OrderStyle(eltype(A)) === Ordered()
+        a1, rest1 = Iterators.peel(A)
+        a2, rest = Iterators.peel(rest1)
+        if !isequal(a1, a2)
+            compare = isless(a1, a2) ? isless : (a,b) -> isless(b,a)
+            for a in rest
+                if compare(a2, a)
+                    a2 = a
+                elseif isequal(a2, a)
+                    return false
+                else
+                    return _hashed_allunique(A)
+                end
+            end
+        else # isequal(a1, a2)
+            return false
+        end
+        return true
+    else
+        _hashed_allunique(A)
+    end
+end
 
 function _indexed_allunique(A)
     length(A) < 2 && return true

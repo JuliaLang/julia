@@ -8006,7 +8006,16 @@ static jl_llvm_functions_t
 
             auto scan_ssavalue = [&](jl_value_t *val) {
                 if (jl_is_ssavalue(val)) {
-                    ctx.ssavalue_usecount[((jl_ssavalue_t*)val)->id-1] += 1;
+                    size_t ssa_idx = ((jl_ssavalue_t*)val)->id-1;
+                    /*
+                     * We technically allow out of bounds SSAValues in dead IR, so make
+                     * sure to bounds check this here. It's still not *good* to leave
+                     * dead code in the IR, because this will conservatively overcount
+                     * it, but let's at least make it not crash.
+                     */
+                    if (ssa_idx < ctx.ssavalue_usecount.size()) {
+                        ctx.ssavalue_usecount[ssa_idx] += 1;
+                    }
                     return true;
                 }
                 return false;
