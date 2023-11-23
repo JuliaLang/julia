@@ -1750,25 +1750,26 @@ end
     return ConditionalTypes(thentype, elsetype)
 end
 
-function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs, argtypes)::ArgInfo,
+function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, arginfo::ArgInfo,
                                sv::AbsIntState)
     @nospecialize f
+    (; fargs, argtypes) = arginfo
     la = length(argtypes)
     𝕃ᵢ = typeinf_lattice(interp)
     ⊑ᵢ = ⊑(𝕃ᵢ)
-    if has_conditional(𝕃ᵢ, sv) && f === Core.ifelse && fargs isa Vector{Any} && la == 4
-        cnd = argtypes[2]
+    if has_conditional(𝕃ᵢ, sv) && f === Core.ifelse && fargs isa Vector{Any} && la == 3
+        cnd = argtypes[1]
         if isa(cnd, Conditional)
             newcnd = widenconditional(cnd)
-            tx = argtypes[3]
-            ty = argtypes[4]
+            tx = argtypes[2]
+            ty = argtypes[3]
             if isa(newcnd, Const)
                 # if `cnd` is constant, we should just respect its constantness to keep inference accuracy
                 return newcnd.val::Bool ? tx : ty
             else
                 # try to simulate this as a real conditional (`cnd ? x : y`), so that the penalty for using `ifelse` instead isn't too high
-                a = ssa_def_slot(fargs[3], sv)
-                b = ssa_def_slot(fargs[4], sv)
+                a = ssa_def_slot(fargs[2], sv)
+                b = ssa_def_slot(fargs[3], sv)
                 if isa(a, SlotNumber) && cnd.slot == slot_id(a)
                     tx = (cnd.thentype ⊑ᵢ tx ? cnd.thentype : tmeet(𝕃ᵢ, tx, widenconst(cnd.thentype)))
                 end
@@ -1779,15 +1780,15 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             end
         end
     end
-    rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
-    if has_mustalias(𝕃ᵢ) && f === getfield && isa(fargs, Vector{Any}) && la ≥ 3
-        a3 = argtypes[3]
-        if isa(a3, Const)
+    rt = builtin_tfunction(interp, f, argtypes, sv)
+    if has_mustalias(𝕃ᵢ) && f === getfield && isa(fargs, Vector{Any}) && la ≥ 2
+        a2 = argtypes[2]
+        if isa(a2, Const)
             if rt !== Bottom && !isalreadyconst(rt)
-                var = ssa_def_slot(fargs[2], sv)
+                var = ssa_def_slot(fargs[1], sv)
                 if isa(var, SlotNumber)
-                    vartyp = widenslotwrapper(argtypes[2])
-                    fldidx = maybe_const_fldidx(vartyp, a3.val)
+                    vartyp = widenslotwrapper(argtypes[1])
+                    fldidx = maybe_const_fldidx(vartyp, a2.val)
                     if fldidx !== nothing
                         # wrap this aliasable field into `MustAlias` for possible constraint propagations
                         return MustAlias(var, vartyp, fldidx, rt)
@@ -1799,38 +1800,38 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
         # perform very limited back-propagation of type information for `is` and `isa`
         if f === isa
             # try splitting value argument, based on types
-            a = ssa_def_slot(fargs[2], sv)
+            a = ssa_def_slot(fargs[1], sv)
+            a1 = argtypes[1]
             a2 = argtypes[2]
-            a3 = argtypes[3]
             if isa(a, SlotNumber)
-                cndt = isa_condition(a2, a3, InferenceParams(interp).max_union_splitting, rt)
+                cndt = isa_condition(a1, a2, InferenceParams(interp).max_union_splitting, rt)
                 if cndt !== nothing
                     return Conditional(a, cndt.thentype, cndt.elsetype)
                 end
             end
-            if isa(a2, MustAlias)
+            if isa(a1, MustAlias)
                 if !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = isa_condition(a2, a3, InferenceParams(interp).max_union_splitting)
+                    cndt = isa_condition(a1, a2, InferenceParams(interp).max_union_splitting)
                     if cndt !== nothing
-                        return form_mustalias_conditional(a2, cndt.thentype, cndt.elsetype)
+                        return form_mustalias_conditional(a1, cndt.thentype, cndt.elsetype)
                     end
                 end
             end
             # try splitting type argument, based on value
-            if isdispatchelem(widenconst(a2)) && a3 isa Union && !has_free_typevars(a3) && !isa(rt, Const)
-                b = ssa_def_slot(fargs[3], sv)
+            if isdispatchelem(widenconst(a1)) && a2 isa Union && !has_free_typevars(a2) && !isa(rt, Const)
+                b = ssa_def_slot(fargs[2], sv)
                 if isa(b, SlotNumber)
                     # !(x isa T) implies !(Type{a2} <: T)
                     # TODO: complete splitting, based on which portions of the Union a3 for which isa_tfunc returns Const(true) or Const(false) instead of Bool
-                    elsetype = typesubtract(a3, Type{widenconst(a2)}, InferenceParams(interp).max_union_splitting)
-                    return Conditional(b, a3, elsetype)
+                    elsetype = typesubtract(a2, Type{widenconst(a1)}, InferenceParams(interp).max_union_splitting)
+                    return Conditional(b, a2, elsetype)
                 end
             end
         elseif f === (===)
-            a = ssa_def_slot(fargs[2], sv)
-            b = ssa_def_slot(fargs[3], sv)
-            aty = argtypes[2]
-            bty = argtypes[3]
+            a = ssa_def_slot(fargs[1], sv)
+            b = ssa_def_slot(fargs[2], sv)
+            aty = argtypes[1]
+            bty = argtypes[2]
             # if doing a comparison to a singleton, consider returning a `Conditional` instead
             if isa(aty, Const)
                 if isa(b, SlotNumber)
@@ -1881,17 +1882,17 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 return Conditional(a, thentype, elsetype)
             end
         elseif f === Core.Compiler.not_int
-            aty = argtypes[2]
+            aty = argtypes[1]
             if isa(aty, Conditional)
                 thentype = rt === Const(false) ? Bottom : aty.elsetype
                 elsetype = rt === Const(true)  ? Bottom : aty.thentype
                 return Conditional(aty.slot, thentype, elsetype)
             end
         elseif f === isdefined
-            uty = argtypes[2]
-            a = ssa_def_slot(fargs[2], sv)
+            uty = argtypes[1]
+            a = ssa_def_slot(fargs[1], sv)
             if isa(uty, Union) && isa(a, SlotNumber)
-                fld = argtypes[3]
+                fld = argtypes[2]
                 thentype = Bottom
                 elsetype = Bottom
                 for ty in uniontypes(uty)
@@ -2067,10 +2068,10 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             end
             return CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo())
         end
+        ft, farg = popfirst!(argtypes), fargs !== nothing && popfirst!(fargs)
         rt = abstract_call_builtin(interp, f, arginfo, sv)
-        ft = popfirst!(argtypes)
         effects = builtin_effects(𝕃ᵢ, f, argtypes, rt)
-        pushfirst!(argtypes, ft)
+        pushfirst!(argtypes, ft); fargs !== nothing && pushfirst!(fargs, farg);
         return CallMeta(rt, effects.nothrow ? Union{} : Any, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
