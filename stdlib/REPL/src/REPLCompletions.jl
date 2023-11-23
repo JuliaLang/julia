@@ -1409,7 +1409,9 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
             else
                 owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), scope, var)
                 if C_NULL == owner
-                    print(io, "\nSuggestion: check for spelling errors or missing imports. No global of this name exists in this module.")
+                    # No global of this name exists in this module.
+                    # This is the common case, so do not print that information.
+                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
                     owner = bnd
                 else
                     owner = unsafe_pointer_to_objref(owner)::Core.Binding
