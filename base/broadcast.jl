@@ -945,6 +945,11 @@ end
 broadcast_unalias(dest, src) = dest === src ? src : unalias(dest, src)
 broadcast_unalias(::Nothing, src) = src
 
+# `Base.mightalias` considers two arrays to be aliased iff they have the same
+# base pointer in memory, which is exactly the case where it is safe to not
+# make a defensive copy due to the traversal mentioned above.
+broadcast_unalias(dest::Array{T}, src::Array{T}) where T = src
+
 # Preprocessing a `Broadcasted` does two things:
 # * unaliases any arguments from `dest`
 # * "extrudes" the arguments where it is advantageous to pre-compute the broadcasted indices
