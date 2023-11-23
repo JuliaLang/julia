@@ -1779,7 +1779,9 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             end
         end
     end
-    rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
+    ft = popfirst!(argtypes)
+    rt = builtin_tfunction(interp, f, argtypes, sv)
+    pushfirst!(argtypes, ft)
     if has_mustalias(𝕃ᵢ) && f === getfield && isa(fargs, Vector{Any}) && la ≥ 3
         a3 = argtypes[3]
         if isa(a3, Const)
