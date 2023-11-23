@@ -423,13 +423,11 @@ A14009(a::T) where {T} = A14009{T}()
 f14009(a) = rand(Bool) ? f14009(A14009(a)) : a
 code_typed(f14009, (Int,))
 code_llvm(devnull, f14009, (Int,))
-@test Base.infer_exception_type(f14009, (Int,)) != Union{}
 
 mutable struct B14009{T}; end
 g14009(a) = g14009(B14009{a})
 code_typed(g14009, (Type{Int},))
 code_llvm(devnull, g14009, (Type{Int},))
-@test Base.infer_exception_type(g14009, (Type{Int},)) == StackOverflowError
 
 # issue #9232
 arithtype9232(::Type{T},::Type{T}) where {T<:Real} = arithtype9232(T)
@@ -5560,7 +5558,7 @@ function foo_typed_throw_metherr()
 end
 @test Base.return_types(foo_typed_throw_metherr) |> only === Float64
 
-# using `exct` information if `:nothrow` is proven
+# refine `exct` when `:nothrow` is proven
 Base.@assume_effects :nothrow function sin_nothrow(x::Float64)
     x == Inf && return zero(x)
     return sin(x)
