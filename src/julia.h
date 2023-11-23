@@ -248,20 +248,21 @@ typedef struct _jl_line_info_node_t {
 // the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
 typedef union __jl_purity_overrides_t {
     struct {
-        uint8_t ipo_consistent          : 1;
-        uint8_t ipo_effect_free         : 1;
-        uint8_t ipo_nothrow             : 1;
-        uint8_t ipo_terminates_globally : 1;
+        uint16_t ipo_consistent          : 1;
+        uint16_t ipo_effect_free         : 1;
+        uint16_t ipo_nothrow             : 1;
+        uint16_t ipo_terminates_globally : 1;
         // Weaker form of `terminates` that asserts
         // that any control flow syntactically in the method
         // is guaranteed to terminate, but does not make
         // assertions about any called functions.
-        uint8_t ipo_terminates_locally  : 1;
-        uint8_t ipo_notaskstate         : 1;
-        uint8_t ipo_inaccessiblememonly : 1;
-        uint8_t ipo_noub                : 1;
+        uint16_t ipo_terminates_locally  : 1;
+        uint16_t ipo_notaskstate         : 1;
+        uint16_t ipo_inaccessiblememonly : 1;
+        uint16_t ipo_noub                : 1;
+        uint16_t ipo_noub_if_noinbounds  : 1;
     } overrides;
-    uint8_t bits;
+    uint16_t bits;
 } _jl_purity_overrides_t;
 
 // This type describes a single function body
@@ -410,6 +411,7 @@ typedef struct _jl_code_instance_t {
 
     // inference state cache
     jl_value_t *rettype; // return type for fptr
+    jl_value_t *exctype; // thrown type for fptr
     jl_value_t *rettype_const; // inferred constant return value, or null
     _Atomic(jl_value_t *) inferred; // inferred jl_code_info_t (may be compressed), or jl_nothing, or null
     //TODO: jl_array_t *edges; // stored information about edges from this object
@@ -435,7 +437,7 @@ typedef struct _jl_code_instance_t {
     //     uint8_t nonoverlayed        : 1;
     //     uint8_t notaskstate         : 2;
     //     uint8_t inaccessiblememonly : 2;
-    jl_value_t *argescapes; // escape information of call arguments
+    jl_value_t *analysis_results; // Analysis results about this code (IPO-safe)
 
     // compilation state cache
     _Atomic(uint8_t) specsigflags; // & 0b001 == specptr is a specialized function signature for specTypes->rettype
@@ -827,6 +829,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_typeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_methoderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_undefvarerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_missingcodeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_exception JL_GLOBALLY_ROOTED;
@@ -1877,7 +1880,6 @@ JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
-JL_DLLEXPORT jl_binding_t *jl_get_binding_if_bound(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
@@ -1953,7 +1955,7 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error_rt(const char *fname,
                                                const char *context,
                                                jl_value_t *ty JL_MAYBE_UNROOTED,
                                                jl_value_t *got JL_MAYBE_UNROOTED);
-JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var);
+JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *scope JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_sym_t *type_name, jl_sym_t *var);
 JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str);
 JL_DLLEXPORT void JL_NORETURN jl_bounds_error(jl_value_t *v JL_MAYBE_UNROOTED,
@@ -2285,10 +2287,9 @@ void (ijl_longjmp)(jmp_buf _Buf, int _Value);
 #define jl_setjmp_name "sigsetjmp"
 #endif
 #define jl_setjmp(a,b) sigsetjmp(a,b)
-#if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
-// Bypass the ASAN longjmp wrapper - we're unpoisoning the stack ourselves.
-JL_DLLIMPORT int __attribute__ ((nothrow)) (__libc_siglongjmp)(jl_jmp_buf buf, int val);
-#define jl_longjmp(a,b) __libc_siglongjmp(a,b)
+#if defined(_COMPILER_ASAN_ENABLED_) && defined(__GLIBC__)
+extern void (*real_siglongjmp)(jmp_buf _Buf, int _Value);
+#define jl_longjmp(a,b) real_siglongjmp(a,b)
 #else
 #define jl_longjmp(a,b) siglongjmp(a,b)
 #endif

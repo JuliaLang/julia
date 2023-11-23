@@ -158,7 +158,7 @@ julia> rand2(2,2)
  1.15119   0.918912
 
 julia> fetch(@spawnat :any rand2(2,2))
-ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
+ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))))
 Stacktrace:
 [...]
 ```
@@ -209,7 +209,7 @@ MyType(7)
 
 julia> fetch(@spawnat 2 MyType(7))
 ERROR: On worker 2:
-UndefVarError: `MyType` not defined
+UndefVarError: `MyType` not defined in `Main`
 ⋮
 
 julia> fetch(@spawnat 2 DummyModule.MyType(7))
@@ -539,9 +539,72 @@ Methods [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and 
 on a [`RemoteChannel`](@ref) are proxied onto the backing store on the remote process.
 
 [`RemoteChannel`](@ref) can thus be used to refer to user implemented `AbstractChannel` objects.
-A simple example of this is provided in `dictchannel.jl` in the
-[Examples repository](https://github.com/JuliaAttic/Examples), which uses a dictionary as its
-remote store.
+A simple example of this is the following `DictChannel` which uses a dictionary as its
+remote store:
+
+```jldoctest
+julia> struct DictChannel{T} <: AbstractChannel{T}
+           d::Dict
+           cond_take::Threads.Condition    # waiting for data to become available
+           DictChannel{T}() where {T} = new(Dict(), Threads.Condition())
+           DictChannel() = DictChannel{Any}()
+       end
+
+julia> begin
+       function Base.put!(D::DictChannel, k, v)
+           @lock D.cond_take begin
+               D.d[k] = v
+               notify(D.cond_take)
+           end
+           return D
+       end
+       function Base.take!(D::DictChannel, k)
+           @lock D.cond_take begin
+               v = fetch(D, k)
+               delete!(D.d, k)
+               return v
+           end
+       end
+       Base.isready(D::DictChannel) = @lock D.cond_take !isempty(D.d)
+       Base.isready(D::DictChannel, k) = @lock D.cond_take haskey(D.d, k)
+       function Base.fetch(D::DictChannel, k)
+           @lock D.cond_take begin
+               wait(D, k)
+               return D.d[k]
+           end
+       end
+       function Base.wait(D::DictChannel, k)
+           @lock D.cond_take begin
+               while !isready(D, k)
+                   wait(D.cond_take)
+               end
+           end
+       end
+       end;
+
+julia> d = DictChannel();
+
+julia> isready(d)
+false
+
+julia> put!(d, :k, :v);
+
+julia> isready(d, :k)
+true
+
+julia> fetch(d, :k)
+:v
+
+julia> wait(d, :k)
+
+julia> take!(d, :k)
+:v
+
+julia> isready(d, :k)
+false
+```
+
+
 
 
 ## Channels and RemoteChannels

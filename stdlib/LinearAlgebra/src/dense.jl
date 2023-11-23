@@ -136,7 +136,7 @@ function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
-            M[i,j] = zero(M[i,j])
+            @inbounds M[i,j] = zero(M[i,j])
         end
     end
     M

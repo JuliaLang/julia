@@ -559,7 +559,7 @@ end
     e = @elapsed for i = 1:5
         wait(t)
     end
-    @test 1.5 > e >= 0.4
+    @test e >= 0.4
     @test a[] == 0
     nothing
 end

@@ -1079,6 +1079,7 @@ end
 @testset "IndexStyle for various types" begin
     @test Base.IndexStyle(UpperTriangular) == IndexCartesian() # subtype of AbstractArray, not of Array
     @test Base.IndexStyle(Vector) == IndexLinear()
+    @test Base.IndexStyle(Memory) == IndexLinear()
     @test Base.IndexStyle(UnitRange) == IndexLinear()
     @test Base.IndexStyle(UpperTriangular(rand(3, 3)), [1; 2; 3]) == IndexCartesian()
     @test Base.IndexStyle(UpperTriangular(rand(3, 3)), rand(3, 3), [1; 2; 3]) == IndexCartesian()
@@ -1351,6 +1352,28 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     tpa = TestPushArray{Int, 2}(a_orig)
     pushfirst!(tpa, 6, 5, 4, 3, 2)
     @test tpa.data == reverse(collect(1:6))
+end
+
+mutable struct SimpleArray{T} <: AbstractVector{T}
+    els::Vector{T}
+end
+Base.size(sa::SimpleArray) = size(sa.els)
+Base.getindex(sa::SimpleArray, idx...) = getindex(sa.els, idx...)
+Base.setindex!(sa::SimpleArray, v, idx...) = setindex!(sa.els, v, idx...)
+Base.resize!(sa::SimpleArray, n) = resize!(sa.els, n)
+Base.copy(sa::SimpleArray) = SimpleArray(copy(sa.els))
+
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
+@testset "Failing `$f` should not grow the array $a" for
+        f in (push!, append!, pushfirst!, prepend!),
+        a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1))
+    for args in ((1,), (1,2), ([1], [2]), [1])
+        orig = copy(a)
+        @test_throws Exception f(a, args...)
+        @test a == orig
+    end
 end
 
 @testset "splatting into hvcat" begin

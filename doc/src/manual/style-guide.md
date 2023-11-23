@@ -346,7 +346,7 @@ This would provide custom showing of vectors with a specific new element type. W
 this should be avoided. The trouble is that users will expect a well-known type like `Vector()`
 to behave in a certain way, and overly customizing its behavior can make it harder to work with.
 
-## Avoid type piracy
+## [Avoid type piracy](@id avoid-type-piracy)
 
 "Type piracy" refers to the practice of extending or redefining methods in Base
 or other packages on types that you have not defined. In extreme cases, you can crash Julia

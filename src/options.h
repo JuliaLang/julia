@@ -78,6 +78,11 @@
 // OBJPROFILE counts objects by type
 // #define OBJPROFILE
 
+// pool allocator configuration options
+
+// GC_SMALL_PAGE allocates objects in 4k pages
+// #define GC_SMALL_PAGE
+
 
 // method dispatch profiling --------------------------------------------------
 
