@@ -477,7 +477,7 @@ end
                 @test b1[ax1] == c1[ax1] == d1[ax1] == a1[ax1]
                 @test b1[:] == c1[:] == d1[:] == a1[:]
 
-                # some arbitary indices
+                # some arbitrary indices
                 inds1 = 2:4
                 c1 = @view a1[inds1]
                 @test c1[axes(c1,1)] == c1[:] == a1[inds1]
@@ -504,7 +504,7 @@ end
                 @test b2[ax2] == b22[ax2] == c2[ax2] == d2[ax2] == a2[ax2]
                 @test b2[:] == b22[:] == c2[:] == d2[:] == a2[:]
 
-                # some arbitary indices
+                # some arbitrary indices
                 inds1 = 2:4
                 c2 = @view a2[inds1]
                 @test c2[axes(c2,1)] == c2[:] == a2[inds1]
@@ -531,7 +531,7 @@ end
             @test (b1[ax1] = a12; b1) == (c1[ax1] = a12; c1) == (d1[ax1] = a12; d1) == (a1[ax1] = a12; a1)
             @test (b1[:] = a12; b1) == (c1[:] = a12; c1) == (d1[:] = a12; d1) == (a1[:] = a12; a1)
 
-            # some arbitary indices
+            # some arbitrary indices
             ind1 = 2:4
             c1 = a12[ind1]
             @test (c1[axes(c1,1)] = a12[ind1]; c1) == (c1[:] = a12[ind1]; c1) == a12[ind1]
@@ -556,7 +556,7 @@ end
             @test (b2[eachindex(b2)] = a2v; vec(b2)) == (c2[eachindex(c2)] = a2v; c2) == a2v
             @test (d2[eachindex(d2)] = a2v; d2) == a2v
 
-            # some arbitary indices
+            # some arbitrary indices
             inds1 = 3:9
             c2 = @view a2[inds1]
             @test (c2[eachindex(c2)] = @view(a22[inds1]); c2) == @view(a22[inds1])
