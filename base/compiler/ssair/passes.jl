@@ -934,17 +934,17 @@ end
 
 function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
     inst = compact[SSAValue(idx)]
-    if (inst[:flag] & (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE)) == (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE)
+    if has_flag(inst, (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE))
         return # already accurate
     end
     (consistent, effect_free_and_nothrow, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
     if consistent
-        inst[:flag] |= IR_FLAG_CONSISTENT
+        add_flag!(inst, IR_FLAG_CONSISTENT)
     end
     if effect_free_and_nothrow
-        inst[:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        add_flag!(inst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
     elseif nothrow
-        inst[:flag] |= IR_FLAG_NOTHROW
+        add_flag!(inst, IR_FLAG_NOTHROW)
     end
     return nothing
 end
@@ -1195,7 +1195,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
         if lifted_val !== nothing
             if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
-                compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+                add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
             end
         end
     end
@@ -1270,7 +1270,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     return true
 end
 
-is_nothrow(ir::IRCode, ssa::SSAValue) = (ir[ssa][:flag] & IR_FLAG_NOTHROW) ≠ 0
+is_nothrow(ir::IRCode, ssa::SSAValue) = has_flag(ir[ssa], IR_FLAG_NOTHROW)
 
 function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Union{Nothing,Int} = nothing)
     worklist = Int[from_bb]
@@ -1386,7 +1386,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
 
     finalizer_stmt = ir[SSAValue(finalizer_idx)][:stmt]
     argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
-    flags = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
+    flag = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
         if inline === nothing
@@ -1396,11 +1396,13 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
             if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, mi, info, inlining, attach_after)
                 # the finalizer body has been inlined
             else
-                insert_node!(ir, loc, with_flags(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flags), attach_after)
+                newinst = add_flag(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flag)
+                insert_node!(ir, loc, newinst, attach_after)
             end
         end
     else
-        insert_node!(ir, loc, with_flags(NewInstruction(Expr(:call, argexprs...), Nothing), flags), attach_after)
+        newinst = add_flag(NewInstruction(Expr(:call, argexprs...), Nothing), flag)
+        insert_node!(ir, loc, newinst, attach_after)
     end
     # Erase the call to `finalizer`
     ir[SSAValue(finalizer_idx)][:stmt] = nothing
@@ -1542,9 +1544,10 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 # Now go through all uses and rewrite them
                 for use in du.uses
                     if use.kind === :getfield
-                        ir[SSAValue(use.idx)][:stmt] = compute_value_for_use(ir, domtree, allblocks,
+                        inst = ir[SSAValue(use.idx)]
+                        inst[:stmt] = compute_value_for_use(ir, domtree, allblocks,
                             du, phinodes, fidx, use.idx)
-                        ir[SSAValue(use.idx)][:flag] |= IR_FLAG_REFINED
+                        add_flag!(inst, IR_FLAG_REFINED)
                     elseif use.kind === :isdefined
                         continue # already rewritten if possible
                     elseif use.kind === :nopreserve
@@ -1590,7 +1593,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     # know we have removed all uses of the mutable allocation.
                     # As a result, if we ever do prove nothrow, we can delete
                     # this statement then.
-                    ir[ssa][:flag] |= IR_FLAG_EFFECT_FREE
+                    add_flag!(ir[ssa], IR_FLAG_EFFECT_FREE)
                 end
             end
         end
