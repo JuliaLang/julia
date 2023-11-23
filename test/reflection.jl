@@ -1020,7 +1020,22 @@ ambig_effects_test(a::Int, b) = 1
 ambig_effects_test(a, b::Int) = 1
 ambig_effects_test(a, b) = 1
 
-@testset "infer_effects" begin
+@testset "Base.infer_return_type[s]" begin
+    # generic function case
+    @test only(Base.return_types(issue41694, (Int,))) == Base.infer_return_type(issue41694, (Int,)) == Int
+    # case when it's not fully covered
+    @test only(Base.return_types(issue41694, (Integer,))) == Base.infer_return_type(issue41694, (Integer,)) == Int
+    # MethodError case
+    @test isempty(Base.return_types(issue41694, (Float64,)))
+    @test Base.infer_return_type(issue41694, (Float64,)) == Union{}
+    # builtin case
+    @test only(Base.return_types(typeof, (Any,))) == Base.infer_return_type(typeof, (Any,)) == DataType
+    @test only(Base.return_types(===, (Any,Any))) == Base.infer_return_type(===, (Any,Any)) == Bool
+    @test only(Base.return_types(setfield!, ())) == Base.infer_return_type(setfield!, ()) == Union{}
+    @test only(Base.return_types(Core.Intrinsics.mul_int, ())) == Base.infer_return_type(Core.Intrinsics.mul_int, ()) == Union{}
+end
+
+@testset "Base.infer_effects" begin
     # generic functions
     @test Base.infer_effects(issue41694, (Int,)) |> Core.Compiler.is_terminates
     @test Base.infer_effects((Int,)) do x
@@ -1047,7 +1062,7 @@ ambig_effects_test(a, b) = 1
     @test (Base.infer_effects(Core.Intrinsics.mul_int, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
 end
 
-@testset "infer_exception_type[s]" begin
+@testset "Base.infer_exception_type[s]" begin
     # generic functions
     @test Base.infer_exception_type(issue41694, (Int,)) == only(Base.infer_exception_types(issue41694, (Int,))) == ErrorException
     @test Base.infer_exception_type((Int,)) do x
@@ -1119,7 +1134,9 @@ end
         return :(x)
     end
 end
-@test only(Base.return_types(generated_only_simple, (Real,))) == Core.Compiler.return_type(generated_only_simple, Tuple{Real}) == Any
+@test only(Base.return_types(generated_only_simple, (Real,))) ==
+      Base.infer_return_type(generated_only_simple, (Real,)) ==
+      Core.Compiler.return_type(generated_only_simple, Tuple{Real}) == Any
 let (src, rt) = only(code_typed(generated_only_simple, (Real,)))
     @test src isa Method
     @test rt == Any
