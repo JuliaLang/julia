@@ -824,7 +824,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         // Should this now be:
         // if (ci !in ci->defs->cache)
         //     record_field_change((jl_value_t**)&ci->next, NULL);
-        // Why are we checking that the method/module this orignates from is in_image?
+        // Why are we checking that the method/module this originates from is in_image?
         // and then disconnect this CI?
         if (jl_object_in_image((jl_value_t*)ci->def->def.value)) {
             // TODO: if (ci in ci->defs->cache)
