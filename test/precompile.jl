@@ -504,6 +504,17 @@ precompile_test_harness(false) do dir
           """)
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
+
+    OverwriteMethodError_file = joinpath(dir, "OverwriteMethodError.jl")
+    write(OverwriteMethodError_file,
+          """
+          module OverwriteMethodError
+              Base.:(+)(x::Bool, y::Bool) = false
+          end
+          """)
+
+    @test Base.compilecache(Base.PkgId("OverwriteMethodError")) == Base.PrecompilableError() # due to piracy
+
     @eval using Baz
     @test Base.invokelatest(Baz.baz) == 1
 
