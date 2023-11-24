@@ -1745,7 +1745,7 @@ function include_dependency(path::AbstractString)
 end
 
 # we throw PrecompilableError when a module doesn't want to be precompiled
-struct PrecompilableError <: Exception end
+import Core: PrecompilableError
 function show(io::IO, ex::PrecompilableError)
     print(io, "Error when precompiling module, potentially caused by a __precompile__(false) declaration in the module.")
 end
