@@ -2237,9 +2237,11 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, si
 {
     jl_methtable_t *mt = C_NULL;
     if (_mt == jl_nothing)
-        jl_gf_ft_mtable(jl_tparam0(tt));
-    else
-        _mt = (jl_method_instnace_t*) _mt;
+        mt = jl_gf_ft_mtable(jl_tparam0(tt));
+    else {
+        assert(jl_isa(_mt, jl_methtable_type));
+        mt = (jl_methtable_t*) _mt;
+    }
 
     // TODO: The fast path is heavily optimized for args and avoids forming the signature type
     jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
