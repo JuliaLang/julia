@@ -243,7 +243,7 @@ end
     @test F.vectors ≈ F32.vectors
 end
 
-@testset "complex eigen inference" begin
+@testset "complex eigen inference (#52289)" begin
     A = ComplexF64[1.0 0.0; 0.0 8.0]
     TC = Eigen{ComplexF64, ComplexF64, Matrix{ComplexF64}, Vector{ComplexF64}}
     TR = Eigen{ComplexF64, Float64, Matrix{ComplexF64}, Vector{Float64}}
