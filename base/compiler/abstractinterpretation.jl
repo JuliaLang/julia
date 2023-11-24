@@ -872,7 +872,7 @@ function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResu
     elseif result.rt === Bottom
         if is_terminates(result.effects) && is_effect_free(result.effects)
             # In the future, we may want to add `&& isa(result.exct, Const)` to
-            # the list of conditions here, but currently, our effect system is
+            # the list of conditions here, but currently, our effect system isn't
             # precise enough to let us determine :consistency of `exct`, so we
             # would have to force constprop just to determine this, which is too
             # expensive.
