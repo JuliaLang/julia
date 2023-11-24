@@ -124,6 +124,14 @@ end
     @test isempty(s)
     @test_throws ArgumentError pop!(s)
     @test length(Set(['x',120])) == 2
+
+    # Test that pop! returns the element in the set, not the query
+    s = Set{Any}(Any[0x01, UInt(2), 3, 4.0])
+    @test pop!(s, 1) === 0x01
+    @test pop!(s, 2) === UInt(2)
+    @test pop!(s, 3) === 3
+    @test pop!(s, 4) === 4.0
+    @test_throws KeyError pop!(s, 5)
 end
 @testset "copy" begin
     data_in = (1,2,9,8,4)
@@ -164,6 +172,19 @@ end
     sizehint!(s2, 10)
     @test s2 == GenericSet(s)
 end
+
+@testset "shrinking" begin # Similar test as for the underlying Dict
+    d = Set(i for i = 1:1000)
+    filter!(x -> x < 10, d)
+    sizehint!(d, 10)
+    @test length(d.dict.slots) < 100
+    sizehint!(d, 1000)
+    sizehint!(d, 1; shrink = false)
+    @test length(d.dict.slots) >= 1000
+    sizehint!(d, 1; shrink = true)
+    @test length(d.dict.slots) < 1000
+end
+
 @testset "rehash!" begin
     # Use a pointer type to have defined behavior for uninitialized
     # array element
@@ -559,6 +580,9 @@ end
     @test !allunique([1,1,2])
     @test !allunique([:a,:b,:c,:a])
     @test allunique(unique(randn(100)))  # longer than 32
+    @test allunique(collect(1:100)) # sorted/unique && longer than 32
+    @test allunique(collect(100:-1:1)) # sorted/unique && longer than 32
+    @test !allunique(fill(1,100)) # sorted/repeating && longer than 32
     @test allunique(collect('A':'z')) # 58-element Vector{Char}
     @test !allunique(repeat(1:99, 1, 2))
     @test !allunique(vcat(pi, randn(1998), pi))  # longer than 1000
@@ -966,4 +990,6 @@ end
     end
     set = TestSet{Any}()
     @test sizehint!(set, 1) === set
+    @test sizehint!(set, 1; shrink = true) === set
+    @test sizehint!(set, 1; shrink = false) === set
 end

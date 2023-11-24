@@ -12,6 +12,8 @@ Base.Sys.loadavg()
 
 @test length(ccall(:jl_get_cpu_name, String, ())) != 0
 @test length(ccall(:jl_get_cpu_features, String, ())) >= 0
+foo_fma() = Core.Intrinsics.have_fma(Int64)
+@test ccall(:jl_cpu_has_fma, Bool, (Cint,), 64) == foo_fma()
 
 if Sys.isunix()
     mktempdir() do tempdir

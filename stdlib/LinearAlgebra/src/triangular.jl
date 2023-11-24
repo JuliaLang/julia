@@ -3,6 +3,12 @@
 ## Triangular
 
 # could be renamed to Triangular when that name has been fully deprecated
+"""
+    AbstractTriangular
+
+Supertype of triangular matrix types such as [`LowerTriangular`](@ref), [`UpperTriangular`](@ref),
+[`UnitLowerTriangular`](@ref) and [`UnitUpperTriangular`](@ref).
+"""
 abstract type AbstractTriangular{T} <: AbstractMatrix{T} end
 
 # First loop through all methods that don't need special care for upper/lower and unit diagonal

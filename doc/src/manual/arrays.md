@@ -326,8 +326,8 @@ These syntaxes are shorthands for function calls that themselves are convenience
 | Syntax                 | Function         | Description                                                                                                |
 |:---------------------- |:---------------- |:---------------------------------------------------------------------------------------------------------- |
 |                        | [`cat`](@ref)    | concatenate input arrays along dimension(s) `k`                                                            |
-| `[A; B; C; ...]`       | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)`                                                                           |
-| `[A B C ...]`          | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)`                                                                           |
+| `[A; B; C; ...]`       | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)`                                                                          |
+| `[A B C ...]`          | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)`                                                                          |
 | `[A B; C D; ...]`      | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                                         |
 | `[A; C;; B; D;;; ...]` | [`hvncat`](@ref) | simultaneous n-dimensional concatenation, where number of semicolons indicate the dimension to concatenate |
 
@@ -934,13 +934,13 @@ element of `axes(A, d)` where `d` is that particular dimension number). This
 allows vectors to be indexed like one-column matrices, for example:
 
 ```jldoctest
-julia> A = [8,6,7]
+julia> A = [8, 6, 7]
 3-element Vector{Int64}:
  8
  6
  7
 
-julia> A[2,1]
+julia> A[2, 1]
 6
 ```
 
@@ -1005,7 +1005,7 @@ The following operators are supported for arrays:
 
 To enable convenient vectorization of mathematical and other operations,
 Julia [provides the dot syntax](@ref man-vectorized) `f.(args...)`, e.g. `sin.(x)`
-or `min.(x,y)`, for elementwise operations over arrays or mixtures of arrays and
+or `min.(x, y)`, for elementwise operations over arrays or mixtures of arrays and
 scalars (a [Broadcasting](@ref) operation); these have the additional advantage of
 "fusing" into a single loop when combined with other dot calls, e.g. `sin.(cos.(x))`.
 
@@ -1019,7 +1019,7 @@ operations like `<`, *only* the elementwise `.<` version is applicable to arrays
 
 Also notice the difference between `max.(a,b)`, which [`broadcast`](@ref)s [`max`](@ref)
 elementwise over `a` and `b`, and [`maximum(a)`](@ref), which finds the largest value within
-`a`. The same relationship holds for `min.(a,b)` and `minimum(a)`.
+`a`. The same relationship holds for `min.(a, b)` and `minimum(a)`.
 
 ## Broadcasting
 
@@ -1110,10 +1110,10 @@ generally work correctly as a fallback for any specific array implementation.
 The `AbstractArray` type includes anything vaguely array-like, and implementations of it might
 be quite different from conventional arrays. For example, elements might be computed on request
 rather than stored. However, any concrete `AbstractArray{T,N}` type should generally implement
-at least [`size(A)`](@ref) (returning an `Int` tuple), [`getindex(A,i)`](@ref) and [`getindex(A,i1,...,iN)`](@ref getindex);
-mutable arrays should also implement [`setindex!`](@ref). It is recommended that these operations
-have nearly constant time complexity, as otherwise some array
-functions may be unexpectedly slow. Concrete types should also typically provide a [`similar(A,T=eltype(A),dims=size(A))`](@ref)
+at least [`size(A)`](@ref) (returning an `Int` tuple), [`getindex(A, i)`](@ref) and
+[`getindex(A, i1, ..., iN)`](@ref getindex); mutable arrays should also implement [`setindex!`](@ref).
+It is recommended that these operations have nearly constant time complexity, as otherwise some array
+functions may be unexpectedly slow. Concrete types should also typically provide a [`similar(A, T=eltype(A), dims=size(A))`](@ref)
 method, which is used to allocate a similar array for [`copy`](@ref) and other out-of-place
 operations. No matter how an `AbstractArray{T,N}` is represented internally, `T` is the type of
 object returned by *integer* indexing (`A[1, ..., 1]`, when `A` is not empty) and `N` should be
@@ -1160,7 +1160,7 @@ julia> stride(A, 1)
 
 The stride of the second dimension is the spacing between elements in the same row, skipping
 as many elements as there are in a single column (`5`). Similarly, jumping between the two
-"pages" (in the third dimension) requires skipping `5*7 == 35` elements.  The [`strides`](@ref)
+"pages" (in the third dimension) requires skipping `5*7 == 35` elements. The [`strides`](@ref)
 of this array is the tuple of these three numbers together:
 
 ```julia-repl

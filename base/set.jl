@@ -101,8 +101,26 @@ function in!(x, s::Set)
 end
 
 push!(s::Set, x) = (s.dict[x] = nothing; s)
-pop!(s::Set, x) = (pop!(s.dict, x); x)
-pop!(s::Set, x, default) = (x in s ? pop!(s, x) : default)
+
+function pop!(s::Set, x, default)
+    dict = s.dict
+    index = ht_keyindex(dict, x)
+    if index > 0
+        @inbounds key = dict.keys[index]
+        _delete!(dict, index)
+        return key
+    else
+        return default
+    end
+end
+
+function pop!(s::Set, x)
+    index = ht_keyindex(s.dict, x)
+    index < 1 && throw(KeyError(x))
+    result = @inbounds s.dict.keys[index]
+    _delete!(s.dict, index)
+    result
+end
 
 function pop!(s::Set)
     isempty(s) && throw(ArgumentError("set must be non-empty"))
@@ -117,7 +135,7 @@ copymutable(s::Set{T}) where {T} = Set{T}(s)
 # Set is the default mutable fall-back
 copymutable(s::AbstractSet{T}) where {T} = Set{T}(s)
 
-sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
+sizehint!(s::Set, newsz; shrink::Bool=true) = (sizehint!(s.dict, newsz; shrink); s)
 empty!(s::Set) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 
@@ -428,6 +446,8 @@ end
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 
+`allunique` may use a specialized implementation when the input is sorted.
+
 See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
 # Examples
@@ -476,7 +496,31 @@ allunique(::Union{AbstractSet,AbstractDict}) = true
 
 allunique(r::AbstractRange) = !iszero(step(r)) || length(r) <= 1
 
-allunique(A::StridedArray) = length(A) < 32 ? _indexed_allunique(A) : _hashed_allunique(A)
+function allunique(A::StridedArray)
+    if length(A) < 32
+        _indexed_allunique(A)
+    elseif OrderStyle(eltype(A)) === Ordered()
+        a1, rest1 = Iterators.peel(A)
+        a2, rest = Iterators.peel(rest1)
+        if !isequal(a1, a2)
+            compare = isless(a1, a2) ? isless : (a,b) -> isless(b,a)
+            for a in rest
+                if compare(a2, a)
+                    a2 = a
+                elseif isequal(a2, a)
+                    return false
+                else
+                    return _hashed_allunique(A)
+                end
+            end
+        else # isequal(a1, a2)
+            return false
+        end
+        return true
+    else
+        _hashed_allunique(A)
+    end
+end
 
 function _indexed_allunique(A)
     length(A) < 2 && return true

@@ -1492,9 +1492,9 @@ end
     sizehint!(d, 10)
     @test length(d.slots) < 100
     sizehint!(d, 1000)
-    Base._sizehint!(d, 1; shrink = false)
+    sizehint!(d, 1; shrink = false)
     @test length(d.slots) >= 1000
-    Base._sizehint!(d, 1; shrink = true)
+    sizehint!(d, 1; shrink = true)
     @test length(d.slots) < 1000
 end
 
@@ -1527,4 +1527,11 @@ Base.hash(::BadHash, ::UInt)=UInt(1)
     @test d.maxprobe < length(d.keys)
     d[BadHash(1)]=nothing
     @test !(BadHash(2) in keys(d))
+end
+
+# Issue #52066
+let d = Dict()
+    d[1] = 'a'
+    d[1.0] = 'b'
+    @test only(d) === Pair{Any,Any}(1.0, 'b')
 end
