@@ -941,7 +941,7 @@ bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
             isGCTrackedType(ParmType->getPointeeType())) {
           // This is probably an out parameter. Find the value it refers to now.
           SVal Loaded =
-              State->getSVal(Call.getArgSVal(i).getAs<Loc>().getValue());
+              State->getSVal(*(Call.getArgSVal(i).getAs<Loc>()));
           SpeciallyRootedSymbol = Loaded.getAsSymbol();
           continue;
         }
@@ -1520,7 +1520,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       }
     }
     if (FD) {
-      Loc ItemsLoc = State->getLValue(FD, ArrayList).getAs<Loc>().getValue();
+      Loc ItemsLoc = *(State->getLValue(FD, ArrayList).getAs<Loc>());
       SVal Items = State->getSVal(ItemsLoc);
       if (Items.isUnknown()) {
         Items = C.getSValBuilder().conjureSymbolVal(
@@ -1688,7 +1688,7 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
   // better than this.
   if (IsLoad && (RS = State->get<GCRootMap>(SLoc.getAsRegion()))) {
     SymbolRef LoadedSym =
-        State->getSVal(SLoc.getAs<Loc>().getValue()).getAsSymbol();
+        State->getSVal(*SLoc.getAs<Loc>()).getAsSymbol();
     if (LoadedSym) {
       const ValueState *ValS = State->get<GCValueMap>(LoadedSym);
       if (!ValS || !ValS->isRooted() || ValS->RootDepth > RS->RootedAtDepth) {

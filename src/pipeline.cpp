@@ -157,10 +157,16 @@ namespace {
             // Opts.UseAfterScope = CodeGenOpts.SanitizeAddressUseAfterScope;
             // Opts.UseAfterReturn = CodeGenOpts.getSanitizeAddressUseAfterReturn();
             // MPM.addPass(RequireAnalysisPass<ASanGlobalsMetadataAnalysis, Module>());
+            //Let's assume the defaults are actually fine for our purposes
+    #if JL_LLVM_VERSION < 160000
             // MPM.addPass(ModuleAddressSanitizerPass(
             //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
-            //Let's assume the defaults are actually fine for our purposes
             MPM.addPass(ModuleAddressSanitizerPass(AddressSanitizerOptions()));
+    #else // LLVM 16+
+            // MPM.addPass(AddressSanitizerPass(
+            //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
+            MPM.addPass(AddressSanitizerPass(AddressSanitizerOptions()));
+    #endif
         //   }
         };
         ASanPass(/*SanitizerKind::Address, */false);
