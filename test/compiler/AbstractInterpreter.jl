@@ -368,7 +368,7 @@ let NoinlineModule = Module()
     # it should work for cached results
     method = only(methods(inlined_usually, (Float64,Float64,Float64,)))
     mi = CC.specialize_method(method, Tuple{typeof(inlined_usually),Float64,Float64,Float64}, Core.svec())
-    @test CC.haskey(interp.code_cache, mi)
+    @test CC.haskey(CC.WorldView(interp.code_cache, interp.world), mi)
     let src = code_typed1((Float64,Float64,Float64); interp) do x, y, z
             inlined_usually(x, y, z)
         end
@@ -443,7 +443,7 @@ function custom_lookup(mi::MethodInstance, min_world::UInt, max_world::UInt)
         end
     end
     # XXX: This seems buggy, custom_lookup should probably construct the absint on demand.
-    return WorldView(CONST_INVOKE_INTERP.code_cache, CONST_INVOKE_INTERP.world)[mi]
+    return CC.getindex(CC.code_cache(CONST_INVOKE_INTERP), mi)
 end
 
 let # generate cache
