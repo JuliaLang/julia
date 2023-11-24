@@ -2235,7 +2235,7 @@ static jl_tupletype_t *lookup_arg_type_tuple(jl_value_t *arg1 JL_PROPAGATES_ROOT
 
 JL_DLLEXPORT jl_method_instance_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, size_t world, jl_value_t *_mt)
 {
-    jl_methtable_t *mt = C_NULL;
+    jl_methtable_t *mt = NULL;
     if (_mt == jl_nothing)
         mt = jl_gf_ft_mtable(jl_tparam0(tt));
     else {

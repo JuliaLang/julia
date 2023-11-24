@@ -1004,6 +1004,14 @@ end
     @test Base.default_tt(m.f4) == Tuple
 end
 
+@testset "lookup mi" begin
+    @test 1+1 == 2
+    mi1 = @ccall jl_method_lookup_by_tt(Tuple{typeof(+), Int, Int}::Any, Base.get_world_counter()::Csize_t, nothing::Any)::Ref{Core.MethodInstance}
+    @test mi.test.name == :+
+    mi2 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
+    @test mi1 == mi2
+end
+
 Base.@assume_effects :terminates_locally function issue41694(x::Int)
     res = 1
     0 ≤ x < 20 || error("bad fact")
