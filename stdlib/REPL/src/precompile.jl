@@ -175,7 +175,7 @@ generate_precompile_statements() = try
     for statement in statements_step
         # Main should be completely clean
         occursin("Main.", statement) && continue
-        Base.in!(statement, statements) && continue
+        in!(statement, statements) && continue
         try
             ps = Meta.parse(statement)
             if !isexpr(ps, :call)

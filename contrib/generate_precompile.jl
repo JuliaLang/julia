@@ -285,7 +285,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     for sts in [statements_step1,], statement in sts
         # Main should be completely clean
         occursin("Main.", statement) && continue
-        Base.in!(statement, statements) && continue
+        in!(statement, statements) && continue
         # println(statement)
         try
             ps = Meta.parse(statement)
