@@ -1272,8 +1272,10 @@ function instancemethods(t::Type, @nospecialize(tmatch),
     world = get_world_counter()
     mm = _instancemethods(t, tmatch, -1, world)
     ms = collect_methods(mm, mod)
-    mt = t === Function ? typeof(t).name.mt : typename(t).mt
-    return MethodList(ms, mt)
+    if t in (Any, Function, Core.Builtin)
+        t = DataType
+    end
+    return MethodList(ms, typename(t).mt)
 end
 
 instancemethods(t::Type, @nospecialize(tmatch), mod::Module) =
