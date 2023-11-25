@@ -519,8 +519,20 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             // store current top of exception stack for restore in pop_exception.
             s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state());
-            if (!jl_setjmp(__eh.eh_ctx, 1)) {
-                return eval_body(stmts, s, next_ip, toplevel);
+            if (jl_enternode_scope(stmt)) {
+                jl_value_t *old_scope = jl_current_task->scope;
+                JL_GC_PUSH1(&old_scope);
+                jl_value_t *new_scope = eval_value(jl_enternode_scope(stmt), s);
+                jl_current_task->scope = new_scope;
+                if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                    return eval_body(stmts, s, next_ip, toplevel);
+                }
+                jl_current_task->scope = old_scope;
+                JL_GC_POP();
+            } else {
+                if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                    return eval_body(stmts, s, next_ip, toplevel);
+                }
             }
             jl_eh_restore_state(&__eh);
             if (s->continue_at) { // means we reached a :leave expression

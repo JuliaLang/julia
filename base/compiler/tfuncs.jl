@@ -2488,6 +2488,12 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return Effects(EFFECTS_TOTAL;
             consistent = (isa(setting, Const) && setting.val === :conditional) ? ALWAYS_TRUE : ALWAYS_FALSE,
             nothrow = compilerbarrier_nothrow(setting, nothing))
+    elseif f === Core.current_scope
+        length(argtypes) == 0 || return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
+        return Effects(EFFECTS_TOTAL;
+            consistent = ALWAYS_FALSE,
+            notaskstate = false,
+        )
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
@@ -2554,6 +2560,32 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     return false
 end
 
+function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
+    pc = sv.currpc
+    while true
+        handleridx = sv.handler_at[pc][2]
+        if handleridx == 0
+            # No local scope available - inherited from the outside
+            return Any
+        end
+        pchandler = sv.handlers[handleridx]
+        # Remember that we looked at this handler, so we get re-scheduled
+        # if the scope information changes
+        isdefined(pchandler, :scope_uses) || (pchandler.scope_uses = Int[])
+        pcbb = block_for_inst(sv.cfg, pc)
+        if findfirst(pchandler.scope_uses, pcbb) === nothing
+            push!(pchandler.scope_uses, pcbb)
+        end
+        scope = pchandler.scopet
+        if scope !== nothing
+            # Found the scope - forward it
+            return scope
+        end
+        pc = pchandler.enter_idx
+    end
+end
+current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
+
 """
     builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Bool
 
@@ -2568,9 +2600,6 @@ end
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
                            sv::Union{AbsIntState, Nothing})
     𝕃ᵢ = typeinf_lattice(interp)
-    if f === tuple
-        return tuple_tfunc(𝕃ᵢ, argtypes)
-    end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && all(@nospecialize(a) -> isa(a, Const), argtypes)
             argvals = anymap(@nospecialize(a) -> (a::Const).val, argtypes)
@@ -2596,6 +2625,12 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         end
         tf = T_IFUNC[iidx]
     else
+        if f === tuple
+            return tuple_tfunc(𝕃ᵢ, argtypes)
+        elseif f === Core.current_scope
+            length(argtypes) == 0 || return Bottom
+            return current_scope_tfunc(interp, sv)
+        end
         fidx = find_tfunc(f)
         if fidx === nothing
             # unknown/unhandled builtin function

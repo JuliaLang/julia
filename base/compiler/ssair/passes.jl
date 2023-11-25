@@ -1076,6 +1076,29 @@ function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr)
     return false
 end
 
+function fold_current_scope!(compact::IncrementalCompact, idx::Int, stmt::Expr, lazydomtree)
+    domtree = get!(lazydomtree)
+
+    # The frontend enforces the invariant that any :enter dominates its active
+    # region, so all we have to do here is walk the domtree to find it.
+    dombb = block_for_inst(compact, SSAValue(idx))
+
+    local bbterminator
+    while true
+        dombb = domtree.idoms_bb[dombb]
+
+        # Did not find any dominating :enter - scope is inherited from the outside
+        dombb == 0 && return nothing
+
+        bbterminator = compact[SSAValue(last(compact.cfg_transform.result_bbs[dombb].stmts))][:stmt]
+        isa(bbterminator, EnterNode) || continue
+        isdefined(bbterminator, :scope) || continue
+        compact[idx] = bbterminator.scope
+        return nothing
+    end
+end
+
+
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
 # which can be very large sometimes, and program counters in question are often very sparse
 const SPCSet = IdSet{Int}
@@ -1208,6 +1231,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             elseif is_known_invoke_or_call(stmt, Core.OptimizedGenerics.KeyValue.get, compact)
                 2 == (length(stmt.args) - (isexpr(stmt, :invoke) ? 2 : 1)) || continue
                 lift_keyvalue_get!(compact, idx, stmt, 𝕃ₒ)
+            elseif is_known_call(stmt, Core.current_scope, compact)
+                fold_current_scope!(compact, idx, stmt, lazydomtree)
             elseif isexpr(stmt, :new)
                 refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             end

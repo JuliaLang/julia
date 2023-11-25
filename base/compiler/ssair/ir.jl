@@ -1414,6 +1414,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             result_idx += 1
         end
     elseif cfg_transforms_enabled && isa(stmt, EnterNode)
+        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::EnterNode
         label = bb_rename_succ[stmt.catch_dest]
         @assert label > 0
         ssa_rename[idx] = SSAValue(result_idx)

@@ -69,6 +69,10 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     # given control flow information, we prefer to print these with the basic block #, instead of the ssa %
     elseif isa(stmt, EnterNode)
         print(io, "enter #", stmt.catch_dest, "")
+        if isdefined(stmt, :scope)
+            print(io, " with scope ")
+            show_unquoted(io, stmt.scope, indent)
+        end
     elseif stmt isa GotoNode
         print(io, "goto #", stmt.label)
     elseif stmt isa PhiNode
