@@ -902,6 +902,10 @@ returns a new dictionary separate from the previous one, but the underlying
 implementation is space-efficient and may share storage across multiple
 separate dictionaries.
 
+!!!note
+    It behaves like an IdDict.
+
+
     PersistentDict(KV::Pair)
 
 # Examples
@@ -922,24 +926,31 @@ Base.PersistentDict{Symbol, Int64} with 1 entry:
 PersistentDict
 
 PersistentDict{K,V}() where {K,V} = PersistentDict(HAMT.HAMT{K,V}())
-PersistentDict{K,V}(KV::Pair) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV...))
-PersistentDict(KV::Pair{K,V}) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV...))
+PersistentDict{K,V}(KV::Pair) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV))
+PersistentDict(KV::Pair{K,V}) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV))
 PersistentDict(dict::PersistentDict, pair::Pair) = PersistentDict(dict, pair...)
 PersistentDict{K,V}(dict::PersistentDict{K,V}, pair::Pair) where {K,V} = PersistentDict(dict, pair...)
 function PersistentDict(dict::PersistentDict{K,V}, key, val) where {K,V}
     key = convert(K, key)
     val = convert(V, val)
     trie = dict.trie
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
     HAMT.insert!(found, present, trie, i, bi, hs, val)
     return PersistentDict(top)
 end
 
+function PersistentDict{K,V}(KV::Pair, rest::Pair...) where {K,V}
+    dict = PersistentDict{K,V}(KV)
+    for (key, value) in rest
+        dict = PersistentDict(dict, key, value)
+    end
+    return dict
+end
+
 function PersistentDict(kv::Pair, rest::Pair...)
     dict = PersistentDict(kv)
-    for kv in rest
-        key, value = kv
+    for (key, value) in rest
         dict = PersistentDict(dict, key, value)
     end
     return dict
@@ -955,7 +966,7 @@ function in(key_val::Pair{K,V}, dict::PersistentDict{K,V}, valcmp=(==)) where {K
 
     key, val = key_val
 
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
@@ -966,7 +977,7 @@ end
 
 function haskey(dict::PersistentDict{K}, key::K) where K
     trie = dict.trie
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, _, _, _, _, _ = HAMT.path(trie, key, h)
     return found && present
 end
@@ -976,7 +987,7 @@ function getindex(dict::PersistentDict{K,V}, key::K) where {K,V}
     if HAMT.islevel_empty(trie)
         throw(KeyError(key))
     end
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
@@ -990,7 +1001,7 @@ function get(dict::PersistentDict{K,V}, key::K, default) where {K,V}
     if HAMT.islevel_empty(trie)
         return default
     end
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
@@ -1004,7 +1015,7 @@ function get(default::Callable, dict::PersistentDict{K,V}, key::K) where {K,V}
     if HAMT.islevel_empty(trie)
         return default
     end
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
@@ -1017,7 +1028,7 @@ iterate(dict::PersistentDict, state=nothing) = HAMT.iterate(dict.trie, state)
 
 function delete(dict::PersistentDict{K}, key::K) where K
     trie = dict.trie
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
     if found && present
         deleteat!(trie.data, i)
