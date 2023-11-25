@@ -735,6 +735,8 @@ end
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 
+@propagate_inbounds Iterators.only(t::Dict) = only(t, Val(:first))
+
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
