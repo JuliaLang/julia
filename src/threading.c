@@ -681,6 +681,7 @@ void jl_init_threading(void)
         }
     }
 
+    int cpu = jl_cpu_threads();
     jl_n_markthreads = jl_options.nmarkthreads - 1;
     jl_n_sweepthreads = jl_options.nsweepthreads;
     if (jl_n_markthreads == -1) { // --gcthreads not specified
@@ -709,7 +710,19 @@ void jl_init_threading(void)
             else {
                 jl_n_markthreads = (nthreads / 2) - 1;
             }
+            // if `--gcthreads` or ENV[NUM_GCTHREADS_NAME] was not specified,
+            // cap the number of threads that may run the mark phase to
+            // the number of CPU cores
+            if (jl_n_markthreads + 1 >= cpu) {
+                jl_n_markthreads = cpu - 1;
+            }
         }
+    }
+    // warn the user if they try to run with a number
+    // of GC threads which is larger than the number
+    // of physical cores
+    if (jl_n_markthreads + 1 > cpu) {
+        jl_safe_printf("WARNING: running Julia with %d GC threads on %d CPU cores\n", jl_n_markthreads + 1, cpu);
     }
     int16_t ngcthreads = jl_n_markthreads + jl_n_sweepthreads;
 

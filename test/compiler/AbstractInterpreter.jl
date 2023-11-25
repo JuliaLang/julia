@@ -330,7 +330,7 @@ function CC.abstract_call(interp::NoinlineInterpreter,
     ret = @invoke CC.abstract_call(interp::CC.AbstractInterpreter,
         arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
     if sv.mod in noinline_modules(interp)
-        return CC.CallMeta(ret.rt, ret.effects, NoinlineCallInfo(ret.info))
+        return CC.CallMeta(ret.rt, ret.exct, ret.effects, NoinlineCallInfo(ret.info))
     end
     return ret
 end
@@ -464,6 +464,7 @@ let # generate cache
         lookup)
     io = IOBuffer()
     code_llvm(io, custom_lookup_target, (Bool,Int,); params)
-    @test  occursin("j_sin_", String(take!(io)))
-    @test !occursin("j_cos_", String(take!(io)))
+    s = String(take!(io))
+    @test  occursin("j_sin_", s)
+    @test !occursin("j_cos_", s)
 end

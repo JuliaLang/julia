@@ -248,20 +248,21 @@ typedef struct _jl_line_info_node_t {
 // the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
 typedef union __jl_purity_overrides_t {
     struct {
-        uint8_t ipo_consistent          : 1;
-        uint8_t ipo_effect_free         : 1;
-        uint8_t ipo_nothrow             : 1;
-        uint8_t ipo_terminates_globally : 1;
+        uint16_t ipo_consistent          : 1;
+        uint16_t ipo_effect_free         : 1;
+        uint16_t ipo_nothrow             : 1;
+        uint16_t ipo_terminates_globally : 1;
         // Weaker form of `terminates` that asserts
         // that any control flow syntactically in the method
         // is guaranteed to terminate, but does not make
         // assertions about any called functions.
-        uint8_t ipo_terminates_locally  : 1;
-        uint8_t ipo_notaskstate         : 1;
-        uint8_t ipo_inaccessiblememonly : 1;
-        uint8_t ipo_noub                : 1;
+        uint16_t ipo_terminates_locally  : 1;
+        uint16_t ipo_notaskstate         : 1;
+        uint16_t ipo_inaccessiblememonly : 1;
+        uint16_t ipo_noub                : 1;
+        uint16_t ipo_noub_if_noinbounds  : 1;
     } overrides;
-    uint8_t bits;
+    uint16_t bits;
 } _jl_purity_overrides_t;
 
 // This type describes a single function body
@@ -319,7 +320,7 @@ typedef struct _jl_method_t {
 
     // table of all jl_method_instance_t specializations we have
     _Atomic(jl_value_t*) specializations; // allocated as [hashable, ..., NULL, linear, ....], or a single item
-    _Atomic(jl_array_t*) speckeyset; // index lookup by hash into specializations
+    _Atomic(jl_genericmemory_t*) speckeyset; // index lookup by hash into specializations
 
     jl_value_t *slot_syms; // compacted list of slot names (String)
     jl_value_t *external_mt; // reference to the method table this method is part of, null if part of the internal table
@@ -410,6 +411,7 @@ typedef struct _jl_code_instance_t {
 
     // inference state cache
     jl_value_t *rettype; // return type for fptr
+    jl_value_t *exctype; // thrown type for fptr
     jl_value_t *rettype_const; // inferred constant return value, or null
     _Atomic(jl_value_t *) inferred; // inferred jl_code_info_t (may be compressed), or jl_nothing, or null
     //TODO: jl_array_t *edges; // stored information about edges from this object
@@ -435,7 +437,7 @@ typedef struct _jl_code_instance_t {
     //     uint8_t nonoverlayed        : 1;
     //     uint8_t notaskstate         : 2;
     //     uint8_t inaccessiblememonly : 2;
-    jl_value_t *argescapes; // escape information of call arguments
+    jl_value_t *analysis_results; // Analysis results about this code (IPO-safe)
 
     // compilation state cache
     _Atomic(uint8_t) specsigflags; // & 0b001 == specptr is a specialized function signature for specTypes->rettype
@@ -609,7 +611,7 @@ typedef struct _jl_module_t {
     jl_sym_t *name;
     struct _jl_module_t *parent;
     _Atomic(jl_svec_t*) bindings;
-    _Atomic(jl_array_t*) bindingkeyset; // index lookup by name into bindings
+    _Atomic(jl_genericmemory_t*) bindingkeyset; // index lookup by name into bindings
     // hidden fields:
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_uuid_t build_id;
@@ -827,6 +829,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_typeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_methoderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_undefvarerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_missingcodeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_exception JL_GLOBALLY_ROOTED;
@@ -834,6 +837,7 @@ extern JL_DLLIMPORT jl_value_t *jl_readonlymemory_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_diverror_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_undefref_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_interrupt_exception JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_precompilable_error JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_boundserror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_an_empty_vec_any JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_an_empty_memory_any JL_GLOBALLY_ROOTED;
@@ -877,6 +881,9 @@ extern JL_DLLIMPORT jl_value_t *jl_array_int32_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_uint32_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_uint64_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_uint8_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_memory_uint16_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_memory_uint32_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_memory_uint64_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_any_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memoryref_uint8_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memoryref_any_type JL_GLOBALLY_ROOTED;
@@ -2284,10 +2291,9 @@ void (ijl_longjmp)(jmp_buf _Buf, int _Value);
 #define jl_setjmp_name "sigsetjmp"
 #endif
 #define jl_setjmp(a,b) sigsetjmp(a,b)
-#if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
-// Bypass the ASAN longjmp wrapper - we're unpoisoning the stack ourselves.
-JL_DLLIMPORT int __attribute__ ((nothrow)) (__libc_siglongjmp)(jl_jmp_buf buf, int val);
-#define jl_longjmp(a,b) __libc_siglongjmp(a,b)
+#if defined(_COMPILER_ASAN_ENABLED_) && defined(__GLIBC__)
+extern void (*real_siglongjmp)(jmp_buf _Buf, int _Value);
+#define jl_longjmp(a,b) real_siglongjmp(a,b)
 #else
 #define jl_longjmp(a,b) siglongjmp(a,b)
 #endif

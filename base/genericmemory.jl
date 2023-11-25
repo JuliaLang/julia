@@ -196,17 +196,6 @@ function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     setindex!(A, x, i1)
 end
 
-function __inbounds_setindex!(A::Memory{T}, x, i1::Int) where {T}
-    val = x isa T ? x : convert(T,x)::T
-    ref = memoryref(memoryref(A), i1, false)
-    memoryrefset!(ref, val, :not_atomic, false)
-    return A
-end
-function __inbounds_setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
-    @boundscheck (i2 == 1 && all(==(1), I)) || throw_boundserror(A, (i1, i2, I...))
-    __inbounds_setindex(A, x, i1)
-end
-
 # Faster contiguous setindex! with copyto!
 function setindex!(A::Memory{T}, X::Memory{T}, I::AbstractUnitRange{Int}) where T
     @inline
