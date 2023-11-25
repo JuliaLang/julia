@@ -368,7 +368,7 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
             push!(ip, pc + 1)
-            handler_at[l] = (handler_id, handler_id)
+            handler_at[l] = (0, handler_id)
             push!(ip, l)
         end
     end
@@ -399,7 +399,10 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
             elseif isa(stmt, Expr)
                 head = stmt.head
                 if head === :enter
-                    # Already set above
+                    l = stmt.args[1]::Int
+                    # We assigned a handler number above. Here we just merge that
+                    # with out current handler information.
+                    handler_at[l] = (cur_stacks[1], handler_at[l][2])
                     cur_stacks = (handler_at[pc´][1], cur_stacks[2])
                 elseif head === :leave
                     l = 0
