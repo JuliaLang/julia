@@ -5592,6 +5592,13 @@ end |> only === Float64
 @test Base.infer_exception_type(c::Missing -> c ? 1 : 2) == TypeError
 @test Base.infer_exception_type(c::Any -> c ? 1 : 2) == TypeError
 
+# semi-concrete interpretation accuracy
+# https://github.com/JuliaLang/julia/issues/50037
+@inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
+@test Base.infer_return_type() do var::Int
+    Val(countvars50037(1, var))
+end == Val{1}
+
 # Issue #52168
 f52168(x, t::Type) = x::NTuple{2, Base.inferencebarrier(t)::Type}
 @test f52168((1, 2.), Any) === (1, 2.)
