@@ -8745,11 +8745,16 @@ static jl_llvm_functions_t
             sj->setCanReturnTwice();
             Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
             BasicBlock *tryblk = BasicBlock::Create(ctx.builder.getContext(), "try", f);
+            BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_pop", f);
             BasicBlock *handlr = NULL;
             handlr = BB[lname];
             workstack.push_back(lname - 1);
             come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
-            ctx.builder.CreateCondBr(isz, tryblk, handlr);
+            ctx.builder.CreateCondBr(isz, tryblk, catchpop);
+            ctx.builder.SetInsertPoint(catchpop);
+            ctx.builder.CreateCall(prepare_call(jlleave_func),
+                            ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1));
+            ctx.builder.CreateBr(handlr);
             ctx.builder.SetInsertPoint(tryblk);
         }
         else {

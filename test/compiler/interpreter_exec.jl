@@ -94,7 +94,6 @@ let m = Meta.@lower 1 + 1
         # block 6
         Core.PhiCNode(Any[Core.SSAValue(5), Core.SSAValue(7), Core.SSAValue(9)]), # NULL, :a, :b
         Core.PhiCNode(Any[Core.SSAValue(6)]), # NULL
-        Expr(:leave, Core.SSAValue(4)),
         # block 7
         ReturnNode(Core.SSAValue(11)),
     ]
