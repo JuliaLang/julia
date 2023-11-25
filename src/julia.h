@@ -320,7 +320,7 @@ typedef struct _jl_method_t {
 
     // table of all jl_method_instance_t specializations we have
     _Atomic(jl_value_t*) specializations; // allocated as [hashable, ..., NULL, linear, ....], or a single item
-    _Atomic(jl_array_t*) speckeyset; // index lookup by hash into specializations
+    _Atomic(jl_genericmemory_t*) speckeyset; // index lookup by hash into specializations
 
     jl_value_t *slot_syms; // compacted list of slot names (String)
     jl_value_t *external_mt; // reference to the method table this method is part of, null if part of the internal table
@@ -611,7 +611,7 @@ typedef struct _jl_module_t {
     jl_sym_t *name;
     struct _jl_module_t *parent;
     _Atomic(jl_svec_t*) bindings;
-    _Atomic(jl_array_t*) bindingkeyset; // index lookup by name into bindings
+    _Atomic(jl_genericmemory_t*) bindingkeyset; // index lookup by name into bindings
     // hidden fields:
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_uuid_t build_id;
@@ -881,6 +881,9 @@ extern JL_DLLIMPORT jl_value_t *jl_array_int32_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_uint32_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_uint64_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_uint8_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_memory_uint16_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_memory_uint32_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_memory_uint64_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_any_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memoryref_uint8_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memoryref_any_type JL_GLOBALLY_ROOTED;
