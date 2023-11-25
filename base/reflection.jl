@@ -1173,6 +1173,15 @@ function MethodList(mt::Core.MethodTable)
     return MethodList(ms, mt)
 end
 
+function collect_methods(list, mod)
+    ms = Method[]
+    for m in list::Vector
+        m = m::Core.MethodMatch
+        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
+    end
+    return ms
+end
+
 """
     methods(f, [types], [module])
 
@@ -1192,11 +1201,8 @@ function methods(@nospecialize(f), @nospecialize(t),
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
-    ms = Method[]
-    for m in _methods(f, t, -1, world)::Vector
-        m = m::Core.MethodMatch
-        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
-    end
+    mm = _methods(f, t, -1, world)
+    ms = collect_methods(mm, mod)
     MethodList(ms, typeof(f).name.mt)
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
@@ -1223,18 +1229,19 @@ function _instancemethods(t::Type, @nospecialize(mt), lim::Int, world::UInt)
 end
 
 """
-    instancemethods(t::Type, [types], [module])
+    instancemethods(T::Type, [types], [module])
 
-Return the method list for instances of type `t`.
+Return the method list for instances of type `T`. In particular, for any
+object `x`, `methods(x)` is the same as `instancemethods(typeof(x))`.
+The key difference is that `instancemethods` allows to retrieve the method
+list for instances of a type without instantiating any object. Another
+difference is that the type `T` need not be concrete.
 
 If `types` is specified, return the methods whose types match.
 If `module` is specified, return the methods defined in that module.
 Multiple modules can also be specified as an array.
 
 # Example
-
-The `instancemethods` function enables the return of methods defined for a callable
-object of a given type, eliminating the need to instantiate the object first.
 
 ```julia
 julia> struct A{T}
@@ -1251,34 +1258,30 @@ A{Float64}(1.0)
 julia> methods(a) == instancemethods(A{Float64})
 true
 
-julia> length(instancemethods(A{<:Any})) == 2
-true
+julia> length(instancemethods(A))
+2
 ```
 
-!!! compat "Julia 1.4"
-    At least Julia 1.4 is required for specifying a module.
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
 
 See also: [`methods`](@ref).
 """
-function instancemethods(t::Type,
-    @nospecialize(tmatch),
-    mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
+function instancemethods(t::Type, @nospecialize(tmatch),
+                         mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
     world = get_world_counter()
-    ms = Method[]
-    for m in _instancemethods(t, tmatch, -1, world)::Vector
-        m = m::Core.MethodMatch
-        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
-    end
-    t === Function && return MethodList(ms, typeof(t).name.mt)
-    mt = t isa UnionAll ? unwrap_unionall(t).name.mt : t.name.mt
+    mm = _instancemethods(t, tmatch, -1, world)
+    ms = collect_methods(mm, mod)
+    mt = t === Function ? typeof(t).name.mt : typename(t).mt
     return MethodList(ms, mt)
 end
-instancemethods(t::Type, @nospecialize(tmatch), mod::Module) = instancemethods(t, tmatch, (mod,))
 
-function instancemethods(t::Type,
-    mod::Union{Module,AbstractArray{Module},Nothing}=nothing)
-    return instancemethods(t, Tuple{Vararg{Any}}, mod)
-end
+instancemethods(t::Type, @nospecialize(tmatch), mod::Module) =
+    instancemethods(t, tmatch, (mod,))
+
+instancemethods(t::Type,
+                mod::Union{Module,AbstractArray{Module},Nothing}=nothing) =
+    instancemethods(t, Tuple, mod)
 
 function visit(f, mt::Core.MethodTable)
     mt.defs !== nothing && visit(f, mt.defs)

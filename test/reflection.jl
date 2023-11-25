@@ -960,38 +960,70 @@ end
 end
 
 module TestInstanceMethods
+
 struct A{T}
     x::T
 end
-(a::A)(y) = a.x + y
-(a::A)(x::String) = "$x: $a.x"
-(a::A{Float64})(x::Float64) = a.x + x
+
+(a::A)(y::Int) = a.x + y
+(a::A{Float64})(y::Float64) = a.x + y
+(a::A)(y::String) = "$y: $a.x"
+(a::A)(y::Char) = "$y: $a.x"
+(a::A{String})(y::Char) = "$y: $a.x"
 
 struct B
     x::Int
 end
 
 (b::B)(y) = b.x + y
-(b::B)(x::String) = string(b.x) * x
 (b::B)(y::Float64) = b.x + y
+(b::B)(y::String) = string(b.x) * y
+
 end
 
 @testset "instancemethods" begin
-    using .TestInstanceMethods: A, B
+    using .TestInstanceMethods: TestInstanceMethods, A, B
 
-    @test methods(A(1)) == instancemethods(A{Int})
-    @test methods(B(1)) == instancemethods(B)
+    for x in (1, 1.0, "1")
+        T = typeof(x)
+        @test instancemethods(A{T}) == methods(A(x))
+        @test instancemethods(A{T}, Tuple{String}) == methods(A(x), Tuple{String})
+        @test instancemethods(A{T}, TestInstanceMethods) ==
+            methods(A(x), TestInstanceMethods)
+        @test isempty(instancemethods(A{T}, [Base]))
+        @test instancemethods(A{T}, Tuple{Float64}, [TestInstanceMethods]) ==
+            methods(A(x), Tuple{Float64}, TestInstanceMethods)
+        @test isempty(instancemethods(A{T}, Tuple{String}, Base))
+    end
 
-    @test length(methods(A{<:Any})) == 1
-    @test length(instancemethods(A{<:Any})) == 3
+    @test instancemethods(B) == methods(B(1))
+    @test instancemethods(B, Tuple{Float64}) == methods(B(1), Tuple{Float64})
+    @test instancemethods(B, [TestInstanceMethods]) ==
+        methods(B(1), TestInstanceMethods)
+    @test isempty(instancemethods(B, Base))
+    @test instancemethods(B, Tuple{Float64}, TestInstanceMethods) ==
+        methods(B(1), Tuple{Float64}, TestInstanceMethods)
+    @test isempty(instancemethods(B, Tuple{Float64}, [Base]))
 
-    @test methods(A("s")) == instancemethods(A{String})
+    @test length(instancemethods(A)) == 5
+    @test length(instancemethods(A, Tuple{Char})) == 2
+    @test length(instancemethods(A, TestInstanceMethods)) == 5
+    @test length(instancemethods(A, Tuple{Char}, [TestInstanceMethods])) == 2
+    @test length(instancemethods(A, [Base])) == 0
+    @test length(instancemethods(A, Tuple{Char}, Base)) == 0
 
-    @test length(methods(A{String})) == 1
-    @test length(instancemethods(A{String})) == 2
-
-    @test length(methods(B)) == 2
     @test length(instancemethods(B)) == 3
+    @test length(instancemethods(B, Tuple{Char})) == 1
+    @test length(instancemethods(B, [TestInstanceMethods])) == 3
+    @test length(instancemethods(B, Base)) == 0
+    @test length(instancemethods(B, Tuple{Char}, TestInstanceMethods)) == 1
+    @test length(instancemethods(B, Tuple{Char}, [Base])) == 0
+
+    @test instancemethods(typeof(+)) == methods(+)
+    @test instancemethods(typeof(+), Base) == methods(+, Base)
+    @test instancemethods(typeof(+), Tuple{Number,Number}) == methods(+, Tuple{Number,Number})
+    @test instancemethods(typeof(+), Tuple{Number,Number}, Base) ==
+        methods(+, Tuple{Number,Number}, Base)
 end
 
 module BodyFunctionLookup
