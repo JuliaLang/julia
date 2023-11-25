@@ -8,11 +8,12 @@ that have been created for the given method instance, stratified by world age
 ranges. This struct abstracts over access to this cache.
 """
 struct InternalCodeCache
-    owner::Any # Needs to be a token/objectid
+    owner::Any # `jl_egal` is used for comparision
 end
 
 function setindex!(cache::InternalCodeCache, ci::CodeInstance, mi::MethodInstance)
-    @assert ci.owner === cache.owner
+    # note `jl_egal` and `===` can disagree, but the former is used for cache matches.
+    @assert @ccall jl_egal(ci.owner::Any, cache.owner::Any)::Bool
     ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
     return cache
 end
@@ -60,9 +61,7 @@ function get(wvc::WorldView{InternalCodeCache}, mi::MethodInstance, default)
     if r === nothing
         return default
     end
-    ci = r::CodeInstance
-    @assert ci.owner === wvc.cache.owner
-    return ci
+    return r::CodeInstance
 end
 
 function getindex(wvc::WorldView{InternalCodeCache}, mi::MethodInstance)
