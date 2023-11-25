@@ -1712,7 +1712,7 @@ end
     @test s.gid isa UInt
     @test s.rdev isa UInt
     @test s.blksize isa Int64
-    @test s.blocks isa Int
+    @test s.blocks isa Int64
     @test s.mtime isa Float64
     @test s.ctime isa Float64
 end
