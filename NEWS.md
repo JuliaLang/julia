@@ -54,6 +54,7 @@ Build system changes
 New library functions
 ---------------------
 
+* `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not.
 * The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
 * `hardlink(src, dst)` can be used to create hard links ([#41639]).
 * `diskstat(path=pwd())` can be used to return statistics about the disk ([#42248]).
