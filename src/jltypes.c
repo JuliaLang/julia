@@ -3287,7 +3287,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type, jl_any_type), // fptrs
                         jl_emptysvec,
                         0, 1, 1);
-    jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
+    jl_svecset(jl_code_instance_type->types, 2, jl_code_instance_type);
     const static uint32_t code_instance_constfields[1]  = { 0b00000101011100011 }; // Set fields 1, 2, 6-8, 10, 12 as const
     const static uint32_t code_instance_atomicfields[1] = { 0b11010010100000100 }; // Set fields 3, 9, 11, 14, 16-17 as atomic
     //Fields 4-5 are only operated on by construction and deserialization, so are const at runtime
