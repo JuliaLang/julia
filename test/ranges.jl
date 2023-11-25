@@ -2558,3 +2558,24 @@ end
     a = StepRangeLen(1,2,3,2)
     @test a[UInt(1)] == -1
 end
+
+@testset "StepRangeLen of CartesianIndex-es" begin
+    CIstart = CartesianIndex(2,3)
+    CIstep = CartesianIndex(1,1)
+    r = StepRangeLen(CIstart, CIstep, 4)
+    @test length(r) == 4
+    @test first(r) == CIstart
+    @test step(r) == CIstep
+    @test last(r) == CartesianIndex(5,6)
+    @test r[2] == CartesianIndex(3,4)
+
+    @test repr(r) == "StepRangeLen($CIstart, $CIstep, 4)"
+
+    r = StepRangeLen(CartesianIndex(), CartesianIndex(), 3)
+    @test all(==(CartesianIndex()), r)
+    @test length(r) == 3
+    @test repr(r) == "StepRangeLen(CartesianIndex(), CartesianIndex(), 3)"
+
+    errmsg = ("deliberately unsupported for CartesianIndex", "StepRangeLen")
+    @test_throws errmsg range(CartesianIndex(1), step=CartesianIndex(1), length=3)
+end

@@ -158,7 +158,7 @@ julia> rand2(2,2)
  1.15119   0.918912
 
 julia> fetch(@spawnat :any rand2(2,2))
-ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
+ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))))
 Stacktrace:
 [...]
 ```
@@ -209,7 +209,7 @@ MyType(7)
 
 julia> fetch(@spawnat 2 MyType(7))
 ERROR: On worker 2:
-UndefVarError: `MyType` not defined
+UndefVarError: `MyType` not defined in `Main`
 ⋮
 
 julia> fetch(@spawnat 2 DummyModule.MyType(7))

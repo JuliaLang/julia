@@ -268,11 +268,12 @@ ccall(:jl_toplevel_eval_in, Any, (Any, Any),
 macro nospecialize(x)
     _expr(:meta, :nospecialize, x)
 end
+Expr(@nospecialize args...) = _expr(args...)
 
 _is_internal(__module__) = __module__ === Core
 # can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
 macro _foldable_meta()
-    return _is_internal(__module__) && _expr(:meta, _expr(:purity,
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#true,
         #=:effect_free=#true,
         #=:nothrow=#false,
@@ -280,8 +281,14 @@ macro _foldable_meta()
         #=:terminates_locally=#false,
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
-        #=:noub=#true))
+        #=:noub=#true,
+        #=:noub_if_noinbounds=#false))
 end
+
+macro inline()   Expr(:meta, :inline)   end
+macro noinline() Expr(:meta, :noinline) end
+
+macro _boundscheck() Expr(:boundscheck) end
 
 # n.b. the effects and model of these is refined in inference abstractinterpretation.jl
 TypeVar(@nospecialize(n)) = _typevar(n::Symbol, Union{}, Any)
@@ -309,15 +316,10 @@ kwftype(@nospecialize(t)) = typeof(kwcall)
 Union{}(a...) = throw(ArgumentError("cannot construct a value of type Union{} for return result"))
 kwcall(kwargs, ::Type{Union{}}, a...) = Union{}(a...)
 
-Expr(@nospecialize args...) = _expr(args...)
-
 abstract type Exception end
 struct ErrorException <: Exception
     msg::AbstractString
 end
-
-macro inline()   Expr(:meta, :inline)   end
-macro noinline() Expr(:meta, :noinline) end
 
 struct BoundsError <: Exception
     a::Any
@@ -334,9 +336,15 @@ struct StackOverflowError  <: Exception end
 struct UndefRefError       <: Exception end
 struct UndefVarError <: Exception
     var::Symbol
+    scope # a Module or Symbol or other object describing the context where this variable was looked for (e.g. Main or :local or :static_parameter)
+    UndefVarError(var::Symbol) = new(var)
+    UndefVarError(var::Symbol, @nospecialize scope) = new(var, scope)
 end
 struct ConcurrencyViolationError <: Exception
     msg::AbstractString
+end
+struct MissingCodeError <: Exception
+    mi::MethodInstance
 end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
@@ -405,6 +413,8 @@ struct InitError <: WrappedException
     error
 end
 
+struct PrecompilableError <: Exception end
+
 String(s::String) = s  # no constructor yet
 
 const Cvoid = Nothing
@@ -471,14 +481,14 @@ eval(Core, quote
 end)
 
 function CodeInstance(
-    mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
+    mi::MethodInstance, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
-    ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
+    ipo_effects::UInt32, effects::UInt32, @nospecialize(analysis_results),
     relocatability::UInt8)
     return ccall(:jl_new_codeinst, Ref{CodeInstance},
-        (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
-        mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
-        ipo_effects, effects, argescapes,
+        (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
+        mi, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
+        ipo_effects, effects, analysis_results,
         relocatability)
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
@@ -509,14 +519,14 @@ const undef = UndefInitializer()
 const Memory{T} = GenericMemory{:not_atomic, T, CPU}
 const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
-eval(Core, :(GenericMemoryRef(ref::GenericMemoryRef, i::Integer) = memoryref(ref, Int(i), $(Expr(:boundscheck)))))
-eval(Core, :(GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(memoryref(mem), Int(i), $(Expr(:boundscheck)))))
+GenericMemoryRef(ref::GenericMemoryRef, i::Integer) = memoryref(ref, Int(i), @_boundscheck)
+GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(memoryref(mem), Int(i), @_boundscheck)
 MemoryRef(mem::Memory) = memoryref(mem)
-eval(Core, :(MemoryRef(ref::MemoryRef, i::Integer) = memoryref(ref, Int(i), $(Expr(:boundscheck)))))
-eval(Core, :(MemoryRef(mem::Memory, i::Integer) = memoryref(memoryref(mem), Int(i), $(Expr(:boundscheck)))))
+MemoryRef(ref::MemoryRef, i::Integer) = memoryref(ref, Int(i), @_boundscheck)
+MemoryRef(mem::Memory, i::Integer) = memoryref(memoryref(mem), Int(i), @_boundscheck)
 MemoryRef{T}(mem::Memory{T}) where {T} = memoryref(mem)
-eval(Core, :(MemoryRef{T}(ref::MemoryRef{T}, i::Integer) where {T} = memoryref(ref, Int(i), $(Expr(:boundscheck)))))
-eval(Core, :(MemoryRef{T}(mem::Memory{T}, i::Integer) where {T} = memoryref(memoryref(mem), Int(i), $(Expr(:boundscheck)))))
+MemoryRef{T}(ref::MemoryRef{T}, i::Integer) where {T} = memoryref(ref, Int(i), @_boundscheck)
+MemoryRef{T}(mem::Memory{T}, i::Integer) where {T} = memoryref(memoryref(mem), Int(i), @_boundscheck)
 
 # construction helpers for Array
 new_as_memoryref(self::Type{GenericMemoryRef{isatomic,T,addrspace}}, m::Int) where {T,isatomic,addrspace} = memoryref(fieldtype(self, :mem)(undef, m))
@@ -559,20 +569,16 @@ end
 
 # type and dimensionality specified, accepting dims as series of Ints
 eval(Core, :(function (self::Type{Array{T,1}})(::UndefInitializer, m::Int) where {T}
-    @noinline
     mem = fieldtype(fieldtype(self, :ref), :mem)(undef, m)
     return $(Expr(:new, :self, :(memoryref(mem)), :((m,))))
 end))
 eval(Core, :(function (self::Type{Array{T,2}})(::UndefInitializer, m::Int, n::Int) where {T}
-    @noinline
     return $(Expr(:new, :self, :(new_as_memoryref(fieldtype(self, :ref), checked_dims(m, n))), :((m, n))))
 end))
 eval(Core, :(function (self::Type{Array{T,3}})(::UndefInitializer, m::Int, n::Int, o::Int) where {T}
-    @noinline
     return $(Expr(:new, :self, :(new_as_memoryref(fieldtype(self, :ref), checked_dims(m, n, o))), :((m, n, o))))
 end))
 eval(Core, :(function (self::Type{Array{T, N}})(::UndefInitializer, d::Vararg{Int, N}) where {T, N}
-    @noinline
     return $(Expr(:new, :self, :(new_as_memoryref(fieldtype(self, :ref), checked_dims(d...))), :d))
 end))
 # type and dimensionality specified, accepting dims as tuples of Ints

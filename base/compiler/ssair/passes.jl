@@ -382,7 +382,9 @@ function lift_leaves(compact::IncrementalCompact, field::Int,
             elseif isexpr(def, :new)
                 typ = unwrap_unionall(widenconst(types(compact)[leaf]))
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
-                @assert !ismutabletype(typ)
+                if ismutabletype(typ)
+                    isconst(typ, field) || return nothing
+                end
                 if length(def.args) < 1+field
                     if field > fieldcount(typ)
                         return nothing
@@ -932,17 +934,17 @@ end
 
 function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
     inst = compact[SSAValue(idx)]
-    if (inst[:flag] & (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE)) == (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE)
+    if has_flag(inst, (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE))
         return # already accurate
     end
     (consistent, effect_free_and_nothrow, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
     if consistent
-        inst[:flag] |= IR_FLAG_CONSISTENT
+        add_flag!(inst, IR_FLAG_CONSISTENT)
     end
     if effect_free_and_nothrow
-        inst[:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        add_flag!(inst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
     elseif nothrow
-        inst[:flag] |= IR_FLAG_NOTHROW
+        add_flag!(inst, IR_FLAG_NOTHROW)
     end
     return nothing
 end
@@ -1193,7 +1195,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
         if lifted_val !== nothing
             if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
-                compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+                add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
             end
         end
     end
@@ -1236,7 +1238,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         src = nothing
     end
 
-    src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL, mi, Any[])
+    src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL)
     src === nothing && return false
     src = retrieve_ir_for_inlining(mi, src)
 
@@ -1259,8 +1261,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         stmt′ = ssamap(stmt′) do ssa::SSAValue
             ssa_rename[ssa.id]
         end
-        stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′,
-                                   ssa_substitute, :default)
+        stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, ssa_substitute)
         ssa_rename[idx′] = insert_node!(ir, idx,
             NewInstruction(inst; stmt=stmt′, line=inst[:line]+ssa_substitute.linetable_offset),
             attach_after)
@@ -1269,7 +1270,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     return true
 end
 
-is_nothrow(ir::IRCode, ssa::SSAValue) = (ir[ssa][:flag] & IR_FLAG_NOTHROW) ≠ 0
+is_nothrow(ir::IRCode, ssa::SSAValue) = has_flag(ir[ssa], IR_FLAG_NOTHROW)
 
 function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Union{Nothing,Int} = nothing)
     worklist = Int[from_bb]
@@ -1385,7 +1386,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
 
     finalizer_stmt = ir[SSAValue(finalizer_idx)][:stmt]
     argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
-    flags = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
+    flag = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
         if inline === nothing
@@ -1395,11 +1396,13 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
             if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, mi, info, inlining, attach_after)
                 # the finalizer body has been inlined
             else
-                insert_node!(ir, loc, with_flags(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flags), attach_after)
+                newinst = add_flag(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flag)
+                insert_node!(ir, loc, newinst, attach_after)
             end
         end
     else
-        insert_node!(ir, loc, with_flags(NewInstruction(Expr(:call, argexprs...), Nothing), flags), attach_after)
+        newinst = add_flag(NewInstruction(Expr(:call, argexprs...), Nothing), flag)
+        insert_node!(ir, loc, newinst, attach_after)
     end
     # Erase the call to `finalizer`
     ir[SSAValue(finalizer_idx)][:stmt] = nothing
@@ -1541,9 +1544,10 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 # Now go through all uses and rewrite them
                 for use in du.uses
                     if use.kind === :getfield
-                        ir[SSAValue(use.idx)][:stmt] = compute_value_for_use(ir, domtree, allblocks,
+                        inst = ir[SSAValue(use.idx)]
+                        inst[:stmt] = compute_value_for_use(ir, domtree, allblocks,
                             du, phinodes, fidx, use.idx)
-                        ir[SSAValue(use.idx)][:flag] |= IR_FLAG_REFINED
+                        add_flag!(inst, IR_FLAG_REFINED)
                     elseif use.kind === :isdefined
                         continue # already rewritten if possible
                     elseif use.kind === :nopreserve
@@ -1589,7 +1593,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     # know we have removed all uses of the mutable allocation.
                     # As a result, if we ever do prove nothrow, we can delete
                     # this statement then.
-                    ir[ssa][:flag] |= IR_FLAG_EFFECT_FREE
+                    add_flag!(ir[ssa], IR_FLAG_EFFECT_FREE)
                 end
             end
         end
@@ -1736,7 +1740,8 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
     unionphis = Pair{Int,Any}[] # sorted
-    compact = IncrementalCompact(ir)
+    compact = IncrementalCompact(ir, true)
+    made_changes = false
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
@@ -1758,7 +1763,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 # nullify safe `typeassert` calls
                 ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact), true)
                 if isexact && ⊑(𝕃ₒ, argextype(stmt.args[2], compact), ty)
-                    compact[idx] = nothing
+                    delete_inst_here!(compact)
                     continue
                 end
             end
@@ -1800,6 +1805,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         if t === Union{}
             stmt = compact[SSAValue(phi)][:stmt]::PhiNode
             kill_phi!(compact, phi_uses, 1:length(stmt.values), SSAValue(phi), stmt, true)
+            made_changes = true
             continue
         elseif t === Any
             continue
@@ -1821,16 +1827,17 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
         compact.result[phi][:type] = t
         kill_phi!(compact, phi_uses, to_drop, SSAValue(phi), stmt, false)
+        made_changes = true
     end
     # Perform simple DCE for unused values
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        adce_erase!(phi_uses, extra_worklist, compact, idx, false)
+        made_changes |= adce_erase!(phi_uses, extra_worklist, compact, idx, false)
     end
     while !isempty(extra_worklist)
-        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
+        made_changes |= adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
     end
     # Go back and erase any phi cycles
     changed = true
@@ -1851,10 +1858,11 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         while !isempty(extra_worklist)
             if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
                 changed = true
+                made_changes = true
             end
         end
     end
-    return complete(compact)
+    return Pair{IRCode, Bool}(complete(compact), made_changes)
 end
 
 function is_bb_empty(ir::IRCode, bb::BasicBlock)
@@ -2029,7 +2037,7 @@ function cfg_simplify!(ir::IRCode)
         i = popfirst!(worklist)
         # Drop blocks that will be merged away
         if merge_into[i] != 0
-            bb_rename_succ[i] = -1
+            bb_rename_succ[i] = typemin(Int)
         end
         # Mark dropped blocks for fixup
         if !isempty(searchsorted(dropped_bbs, i))
@@ -2049,7 +2057,7 @@ function cfg_simplify!(ir::IRCode)
                 # we have to schedule that block next
                 while merged_succ[curr] != 0
                     if bb_rename_succ[curr] == 0
-                        bb_rename_succ[curr] = -1
+                        bb_rename_succ[curr] = typemin(Int)
                     end
                     curr = merged_succ[curr]
                 end
@@ -2089,9 +2097,9 @@ function cfg_simplify!(ir::IRCode)
         resolved_all = true
         for bb in dropped_bbs
             obb = bb_rename_succ[bb]
-            if obb < -1
+            if obb < 0 && obb != typemin(Int)
                 nsucc = bb_rename_succ[-obb]
-                if nsucc == -1
+                if nsucc == typemin(Int)
                     nsucc = -merge_into[-obb]
                 end
                 bb_rename_succ[bb] = nsucc
@@ -2106,6 +2114,8 @@ function cfg_simplify!(ir::IRCode)
         if bb_rename_succ[i] == 0
             bb_rename_succ[i] = -1
             bb_rename_pred[i] = -2
+        elseif bb_rename_succ[i] == typemin(Int)
+            bb_rename_succ[i] = -1
         end
     end
 
@@ -2202,13 +2212,14 @@ function cfg_simplify!(ir::IRCode)
     # Run instruction compaction to produce the result,
     # but we're messing with the CFG
     # so we don't want compaction to do so independently
-    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ))
+    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ, nothing))
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb
         bb_start = true
         while ms != 0
-            for i in bbs[ms].stmts
+            old_bb_stmts = bbs[ms].stmts
+            for i in old_bb_stmts
                 node = ir.stmts[i]
                 compact.result[compact.result_idx] = node
                 stmt = node[:stmt]
@@ -2220,8 +2231,13 @@ function cfg_simplify!(ir::IRCode)
                     values = phi.values
                     (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
                     ssa_rename[i] = SSAValue(compact.result_idx)
-                    processed_idx = i
-                    renamed_values = process_phinode_values(values, late_fixup, processed_idx, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
+                    already_inserted = function (i::Int, val::OldSSAValue)
+                        if val.id in old_bb_stmts
+                            return val.id <= i
+                        end
+                        return bb_rename_pred[phi.edges[i]] < idx
+                    end
+                    renamed_values = process_phinode_values(values, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                     edges = Int32[]
                     values = Any[]
                     sizehint!(edges, length(phi.edges)); sizehint!(values, length(renamed_values))
