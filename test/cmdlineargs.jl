@@ -4,8 +4,8 @@ import Libdl
 
 # helper function for passing input to stdin
 # and returning the stdout result
-function writereadpipeline(input, exename)
-    p = open(exename, "w+")
+function writereadpipeline(input, exename; stderr=nothing)
+    p = open(pipeline(exename; stderr), "w+")
     @async begin
         write(p.in, input)
         close(p.in)
@@ -145,14 +145,19 @@ end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # tests for handling of ENV errors
-    let v = writereadpipeline(
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
             "println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
             setenv(`$exename -i -E '@assert isempty(LOAD_PATH); push!(LOAD_PATH, "@stdlib"); @isdefined InteractiveUtils'`,
                     "JULIA_LOAD_PATH" => "",
                     "JULIA_DEPOT_PATH" => ";:",
-                    "HOME" => homedir()))
+                    "HOME" => homedir());
+            stderr=io)
         # @which is undefined
         @test_broken v == ("false\nREPL: InteractiveUtilstrue\n", true)
+        stderr = String(take!(io))
+        @test_broken isempty(stderr)
     end
     let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
                 setenv(`$exename -i -e 'const InteractiveUtils = 3'`,

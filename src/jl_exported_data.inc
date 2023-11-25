@@ -146,6 +146,7 @@
     XX(jl_weakref_type) \
     XX(jl_libdl_module) \
     XX(jl_libdl_dlopen_func) \
+    XX(jl_precompilable_error) \
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \

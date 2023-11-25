@@ -1290,3 +1290,15 @@ end |> !Core.Compiler.is_noub
 @test Base.infer_effects((Vector{Any},Int)) do xs, i
     @inbounds getindex_dont_propagate(xs, i)
 end |> Core.Compiler.is_noub
+
+# refine `:nothrow` when `exct` is known to be `Bottom`
+@test Base.infer_exception_type(getindex, (Vector{Int},Int)) == BoundsError
+function getindex_nothrow(xs::Vector{Int}, i::Int)
+    try
+        return xs[i]
+    catch err
+        err isa BoundsError && return nothing
+        rethrow(err)
+    end
+end
+@test Core.Compiler.is_nothrow(Base.infer_effects(getindex_nothrow, (Vector{Int}, Int)))

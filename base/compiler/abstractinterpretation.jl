@@ -1196,13 +1196,14 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
                 # state = InliningState(interp)
                 # ir = ssa_inlining_pass!(irsv.ir, state, propagate_inbounds(irsv))
                 effects = result.effects
-                if !is_nothrow(effects)
-                    effects = Effects(effects; nothrow)
+                if nothrow
+                    effects = Effects(effects; nothrow=true)
                 end
                 if noub
-                    effects = Effects(effects; noub = ALWAYS_TRUE)
+                    effects = Effects(effects; noub=ALWAYS_TRUE)
                 end
-                return ConstCallResults(rt, result.exct, SemiConcreteResult(mi, ir, effects), effects, mi)
+                exct = refine_exception_type(result.exct, effects)
+                return ConstCallResults(rt, exct, SemiConcreteResult(mi, ir, effects), effects, mi)
             end
         end
     end
@@ -2136,7 +2137,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
         return abstract_call_known(interp, <:, ArgInfo(fargs, argtypes), si, sv, max_methods)
     elseif la == 2 && istopfunction(f, :typename)
-        return CallMeta(typename_static(argtypes[2]), Any, EFFECTS_TOTAL, MethodResultPure())
+        return CallMeta(typename_static(argtypes[2]), Bottom, EFFECTS_TOTAL, MethodResultPure())
     elseif f === Core._hasmethod
         return _hasmethod_tfunc(interp, argtypes, sv)
     end
@@ -2704,7 +2705,7 @@ end
 
 function stmt_taints_inbounds_consistency(sv::AbsIntState)
     propagate_inbounds(sv) && return true
-    return (get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS) != 0
+    return has_curr_ssaflag(sv, IR_FLAG_INBOUNDS)
 end
 
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
@@ -2717,7 +2718,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     else
         (; rt, exct, effects) = abstract_eval_statement_expr(interp, e, vtypes, sv)
         if effects.noub === NOUB_IF_NOINBOUNDS
-            if !iszero(get_curr_ssaflag(sv) & IR_FLAG_INBOUNDS)
+            if has_curr_ssaflag(sv, IR_FLAG_INBOUNDS)
                 effects = Effects(effects; noub=ALWAYS_FALSE)
             elseif !propagate_inbounds(sv)
                 # The callee read our inbounds flag, but unless we propagate inbounds,
@@ -3072,16 +3073,46 @@ function update_bestguess!(interp::AbstractInterpreter, frame::InferenceState,
     end
 end
 
-function propagate_to_error_handler!(frame::InferenceState, currpc::Int, W::BitSet, 𝕃ᵢ::AbstractLattice, currstate::VarTable)
+function update_exc_bestguess!(@nospecialize(exct), frame::InferenceState, 𝕃ₚ::AbstractLattice)
+    cur_hand = frame.handler_at[frame.currpc][1]
+    if cur_hand == 0
+        if !⊑(𝕃ₚ, exct, frame.exc_bestguess)
+            frame.exc_bestguess = tmerge(𝕃ₚ, frame.exc_bestguess, exct)
+            update_cycle_worklists!(frame) do caller::InferenceState, caller_pc::Int
+                caller_handler = caller.handler_at[caller_pc][1]
+                caller_exct = caller_handler == 0 ?
+                    caller.exc_bestguess : caller.handlers[caller_handler].exct
+                return caller_exct !== Any
+            end
+        end
+    else
+        handler_frame = frame.handlers[cur_hand]
+        if !⊑(𝕃ₚ, exct, handler_frame.exct)
+            handler_frame.exct = tmerge(𝕃ₚ, handler_frame.exct, exct)
+            enter = frame.src.code[handler_frame.enter_idx]::Expr
+            exceptbb = block_for_inst(frame.cfg, enter.args[1]::Int)
+            push!(frame.ip, exceptbb)
+        end
+    end
+end
+
+function propagate_to_error_handler!(currstate::VarTable, frame::InferenceState, 𝕃ᵢ::AbstractLattice)
     # If this statement potentially threw, propagate the currstate to the
     # exception handler, BEFORE applying any state changes.
-    cur_hand = frame.handler_at[currpc][1]
+    cur_hand = frame.handler_at[frame.currpc][1]
     if cur_hand != 0
         enter = frame.src.code[frame.handlers[cur_hand].enter_idx]::Expr
-        l = enter.args[1]::Int
-        exceptbb = block_for_inst(frame.cfg, l)
+        exceptbb = block_for_inst(frame.cfg, enter.args[1]::Int)
         if update_bbstate!(𝕃ᵢ, frame, exceptbb, currstate)
-            push!(W, exceptbb)
+            push!(frame.ip, exceptbb)
+        end
+    end
+end
+
+function update_cycle_worklists!(callback, frame::InferenceState)
+    for (caller, caller_pc) in frame.cycle_backedges
+        if callback(caller, caller_pc)
+            push!(caller.ip, block_for_inst(caller.cfg, caller_pc))
         end
     end
 end
@@ -3143,7 +3174,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if nothrow
                         add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     else
-                        propagate_to_error_handler!(frame, currpc, W, 𝕃ᵢ, currstate)
+                        update_exc_bestguess!(TypeError, frame, ipo_lattice(interp))
+                        propagate_to_error_handler!(currstate, frame, 𝕃ᵢ)
                         merge_effects!(interp, frame, EFFECTS_THROWS)
                     end
 
@@ -3204,11 +3236,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 elseif isa(stmt, ReturnNode)
                     rt = abstract_eval_value(interp, stmt.val, currstate, frame)
                     if update_bestguess!(interp, frame, currstate, rt)
-                        for (caller, caller_pc) in frame.cycle_backedges
-                            if caller.ssavaluetypes[caller_pc] !== Any
-                                # no reason to revisit if that call-site doesn't affect the final result
-                                push!(caller.ip, block_for_inst(caller.cfg, caller_pc))
-                            end
+                        update_cycle_worklists!(frame) do caller::InferenceState, caller_pc::Int
+                            # no reason to revisit if that call-site doesn't affect the final result
+                            return caller.ssavaluetypes[caller_pc] !== Any
                         end
                     end
                     ssavaluetypes[frame.currpc] = Any
@@ -3226,31 +3256,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             (; changes, rt, exct) = abstract_eval_basic_statement(interp,
                 stmt, currstate, frame)
             if exct !== Union{}
-                𝕃ₚ = ipo_lattice(interp)
-                cur_hand = frame.handler_at[currpc][1]
-                if cur_hand == 0
-                    if !⊑(𝕃ₚ, exct, frame.exc_bestguess)
-                        frame.exc_bestguess = tmerge(𝕃ₚ, frame.exc_bestguess, exct)
-                        for (caller, caller_pc) in frame.cycle_backedges
-                            handler = caller.handler_at[caller_pc][1]
-                            if (handler == 0 ? caller.exc_bestguess : caller.handlers[handler].exct) !== Any
-                                push!(caller.ip, block_for_inst(caller.cfg, caller_pc))
-                            end
-                        end
-                    end
-                else
-                    handler_frame = frame.handlers[cur_hand]
-                    if !⊑(𝕃ₚ, exct, handler_frame.exct)
-                        handler_frame.exct = tmerge(𝕃ₚ, handler_frame.exct, exct)
-                        enter = frame.src.code[handler_frame.enter_idx]::Expr
-                        l = enter.args[1]::Int
-                        exceptbb = block_for_inst(frame.cfg, l)
-                        push!(W, exceptbb)
-                    end
-                end
+                update_exc_bestguess!(exct, frame, ipo_lattice(interp))
             end
-            if (get_curr_ssaflag(frame) & IR_FLAG_NOTHROW) != IR_FLAG_NOTHROW
-                propagate_to_error_handler!(frame, currpc, W, 𝕃ᵢ, currstate)
+            if !has_curr_ssaflag(frame, IR_FLAG_NOTHROW)
+                propagate_to_error_handler!(currstate, frame, 𝕃ᵢ)
             end
             if rt === Bottom
                 ssavaluetypes[currpc] = Bottom

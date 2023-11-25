@@ -2924,7 +2924,7 @@ static bool local_var_occurs(jl_value_t *e, int sl)
 static std::set<int> assigned_in_try(jl_array_t *stmts, int s, long l)
 {
     std::set<int> av;
-    for(int i=s; i <= l; i++) {
+    for(int i=s; i < l; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts,i);
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == jl_assign_sym) {
@@ -2946,7 +2946,7 @@ static void mark_volatile_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> 
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == jl_enter_sym) {
                 int last = jl_unbox_long(jl_exprarg(st, 0));
-                std::set<int> as = assigned_in_try(stmts, i + 1, last);
+                std::set<int> as = assigned_in_try(stmts, i + 1, last - 1);
                 for (int j = 0; j < (int)slength; j++) {
                     if (j < i || j > last) {
                         std::set<int>::iterator it = as.begin();
@@ -9483,6 +9483,8 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
+int jl_is_timing_passes = 0;
+
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
@@ -9541,6 +9543,11 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0) {
         clopt->addOccurrence(1, clopt->ArgStr, "false", true);
     }
+
+    clopt = llvmopts.lookup("time-passes");
+    if (clopt && clopt->getNumOccurrences() > 0)
+        jl_is_timing_passes = 1;
+
     jl_ExecutionEngine = new JuliaOJIT();
 
     bool jl_using_gdb_jitevents = false;
