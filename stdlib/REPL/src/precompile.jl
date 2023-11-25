@@ -205,9 +205,5 @@ end
 
 generate_precompile_statements()
 
-# As a last step in system image generation,
-# remove some references to build time environment for a more reproducible build.
-Base.Filesystem.temp_cleanup_purge(force=true)
-
 precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
 end # Precompile

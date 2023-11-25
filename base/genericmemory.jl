@@ -26,6 +26,8 @@ size(a::GenericMemory, d::Int) =
 size(a::GenericMemory, d::Integer) =  size(a, convert(d, Int))
 size(a::GenericMemory) = (length(a),)
 
+IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
+
 pointer(mem::GenericMemoryRef) = unsafe_convert(Ptr{Cvoid}, mem) # no bounds check, even for empty array
 
 _unsetindex!(A::Memory, i::Int) =  (@_propagate_inbounds_meta; _unsetindex!(GenericMemoryRef(A, i)); A)
@@ -64,7 +66,7 @@ function isassigned(a::Memory, i::Int)
     return @inbounds memoryref_isassigned(GenericMemoryRef(a, i), :not_atomic, false)
 end
 
-@eval isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, :not_atomic, $(Expr(:boundscheck)))
+isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, :not_atomic, @_boundscheck)
 
 ## copy ##
 function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
@@ -182,29 +184,16 @@ getindex(A::Memory, c::Colon) = copy(A)
 
 ## Indexing: setindex! ##
 
-@eval begin
 function setindex!(A::Memory{T}, x, i1::Int) where {T}
     val = x isa T ? x : convert(T,x)::T
-    ref = memoryref(memoryref(A), i1, $(Expr(:boundscheck)))
-    memoryrefset!(ref, val, :not_atomic, $(Expr(:boundscheck)))
+    ref = memoryref(memoryref(A), i1, @_boundscheck)
+    memoryrefset!(ref, val, :not_atomic, @_boundscheck)
     return A
-end
 end
 function setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
     @boundscheck (i2 == 1 && all(==(1), I)) || throw_boundserror(A, (i1, i2, I...))
     setindex!(A, x, i1)
-end
-
-function __inbounds_setindex!(A::Memory{T}, x, i1::Int) where {T}
-    val = x isa T ? x : convert(T,x)::T
-    ref = memoryref(memoryref(A), i1, false)
-    memoryrefset!(ref, val, :not_atomic, false)
-    return A
-end
-function __inbounds_setindex!(A::Memory{T}, x, i1::Int, i2::Int, I::Int...) where {T}
-    @boundscheck (i2 == 1 && all(==(1), I)) || throw_boundserror(A, (i1, i2, I...))
-    __inbounds_setindex(A, x, i1)
 end
 
 # Faster contiguous setindex! with copyto!

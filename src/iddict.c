@@ -5,7 +5,7 @@
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 
-#define keyhash(k) jl_object_id_(jl_typeof(k), k)
+#define keyhash(k) jl_object_id_(jl_typetagof(k), k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
 static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val);
@@ -194,3 +194,4 @@ size_t jl_eqtable_nextind(jl_genericmemory_t *t, size_t i)
 
 #undef hash_size
 #undef max_probe
+#undef h2index
