@@ -13,7 +13,7 @@ end
 
 function setindex!(cache::InternalCodeCache, ci::CodeInstance, mi::MethodInstance)
     # note `jl_egal` and `===` can disagree, but the former is used for cache matches.
-    @assert @ccall jl_egal(ci.owner::Any, cache.owner::Any)::Bool
+    @assert ccall(:jl_egal, Bool, (Any, Any), ci.owner, cache.owner)
     ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
     return cache
 end
