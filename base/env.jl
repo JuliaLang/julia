@@ -7,10 +7,16 @@ if Sys.iswindows()
     _hasenv(s::Vector{UInt16}) = _getenvlen(s) != 0 || Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND
     _hasenv(s::AbstractString) = _hasenv(cwstring(s))
 
-    const JULIA_DEBUG_CWSTRING = cwstring("JULIA_DEBUG")
+    const env_dict = IdDict{String, Vector{Cwchar_t}}()
+    const env_lock = ReentrantLock()
 
     function access_env(onError::Function, str::AbstractString)
-        var = str == "JULIA_DEBUG" ? JULIA_DEBUG_CWSTRING : cwstring(str)
+        var = get(env_dict, str, nothing)
+        if isnothing(var)
+            var = @lock env_lock begin
+                env_dict[str] = cwstring(str)
+            end
+        end
         len = _getenvlen(var)
         if len == 0
             return Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND ? "" : onError(str)
