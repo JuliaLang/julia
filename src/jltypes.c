@@ -2977,6 +2977,9 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_memory_any_type = jl_apply_type3((jl_value_t*)jl_genericmemory_type, (jl_value_t*)jl_not_atomic_sym, (jl_value_t*)jl_any_type, cpumem);
     jl_memory_uint8_type = jl_apply_type3((jl_value_t*)jl_genericmemory_type, (jl_value_t*)jl_not_atomic_sym, (jl_value_t*)jl_uint8_type, cpumem);
+    jl_memory_uint16_type = jl_apply_type3((jl_value_t*)jl_genericmemory_type, (jl_value_t*)jl_not_atomic_sym, (jl_value_t*)jl_uint16_type, cpumem);
+    jl_memory_uint32_type = jl_apply_type3((jl_value_t*)jl_genericmemory_type, (jl_value_t*)jl_not_atomic_sym, (jl_value_t*)jl_uint32_type, cpumem);
+    jl_memory_uint64_type = jl_apply_type3((jl_value_t*)jl_genericmemory_type, (jl_value_t*)jl_not_atomic_sym, (jl_value_t*)jl_uint64_type, cpumem);
     jl_memoryref_any_type = jl_apply_type3((jl_value_t*)jl_genericmemoryref_type, (jl_value_t*)jl_not_atomic_sym, (jl_value_t*)jl_any_type, cpumem);
     jl_memoryref_uint8_type = jl_apply_type3((jl_value_t*)jl_genericmemoryref_type, (jl_value_t*)jl_not_atomic_sym, (jl_value_t*)jl_uint8_type, cpumem);
 
@@ -3004,7 +3007,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     // finish initializing module Core
     core = jl_core_module;
-    jl_atomic_store_relaxed(&core->bindingkeyset, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&core->bindingkeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
     // export own name, so "using Foo" makes "Foo" itself visible
     jl_set_const(core, core->name, (jl_value_t*)core);
     jl_module_public(core, core->name, 1);
@@ -3180,7 +3183,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_ulong_type,
                             jl_type_type,
                             jl_any_type, // union(jl_simplevector_type, jl_method_instance_type),
-                            jl_array_type,
+                            jl_genericmemory_type, // union(jl_memory_uint8_type, jl_memory_uint16_type, jl_memory_uint32_type, jl_memory_uint64_type, jl_memory_any_type)
                             jl_string_type,
                             jl_any_type,
                             jl_any_type,
