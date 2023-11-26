@@ -39,7 +39,7 @@ if Sys.iswindows()
 
     function _setenv(svar::AbstractString, sval::AbstractString, overwrite::Bool=true)
         var = memoized_env_lookup(svar)
-        val = memoized_env_lookup(sval)
+        val = cwstring(sval)
         if overwrite || !_hasenv(var)
             ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,val)
             windowserror(:setenv, ret == 0)
