@@ -331,7 +331,7 @@ let
     @test p4[2, 3] == (:b, 'k')
     @test_throws BoundsError p4[2]
 end
- 
+
 # collect stateful iterator
 let itr
     itr = Iterators.Stateful(Iterators.map(identity, 1:5))
