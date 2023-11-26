@@ -3186,4 +3186,6 @@ end
     @test wrap(Array, memref2, 2) == ones(Int, 2)
     @test wrap(Array, memref2, (2,2,2)) == ones(Int,2,2,2)
     @test wrap(Array, memref2, (3, 2)) == ones(Int, 3, 2)
+    @test_throws DimensionMismatch wrap(Array, memref2, 9)
+    @test_throws DimensionMismatch wrap(Array, memref2, 10)
 end
