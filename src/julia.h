@@ -893,6 +893,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_globalref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_linenumbernode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_gotonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_gotoifnot_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_enternode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_returnnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_phinode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_pinode_type JL_GLOBALLY_ROOTED;
@@ -1272,6 +1273,7 @@ STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint8_t x) JL_NOTSAFEP
 #define jl_gotonode_label(x) (((intptr_t*)(x))[0])
 #define jl_gotoifnot_cond(x) (((jl_value_t**)(x))[0])
 #define jl_gotoifnot_label(x) (((intptr_t*)(x))[1])
+#define jl_enternode_catch_dest(x) (((intptr_t*)(x))[0])
 #define jl_globalref_mod(s) (*(jl_module_t**)(s))
 #define jl_globalref_name(s) (((jl_sym_t**)(s))[1])
 #define jl_quotenode_value(x) (((jl_value_t**)x)[0])
@@ -1455,6 +1457,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_gotonode(v)    jl_typetagis(v,jl_gotonode_type)
 #define jl_is_gotoifnot(v)   jl_typetagis(v,jl_gotoifnot_type)
 #define jl_is_returnnode(v)  jl_typetagis(v,jl_returnnode_type)
+#define jl_is_enternode(v)   jl_typetagis(v,jl_enternode_type)
 #define jl_is_argument(v)    jl_typetagis(v,jl_argument_type)
 #define jl_is_pinode(v)      jl_typetagis(v,jl_pinode_type)
 #define jl_is_phinode(v)     jl_typetagis(v,jl_phinode_type)

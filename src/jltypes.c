@@ -3046,6 +3046,12 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_svec(2, jl_any_type, jl_long_type),
                         jl_emptysvec, 0, 0, 2);
 
+    jl_enternode_type =
+        jl_new_datatype(jl_symbol("EnterNode"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(1, "catch_dest"),
+                        jl_svec(1, jl_long_type),
+                        jl_emptysvec, 0, 0, 1);
+
     jl_returnnode_type =
         jl_new_datatype(jl_symbol("ReturnNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(1, "val"),

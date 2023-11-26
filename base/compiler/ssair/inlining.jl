@@ -459,8 +459,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 end
             elseif isa(stmt′, GotoNode)
                 stmt′ = GotoNode(stmt′.label + bb_offset)
-            elseif isa(stmt′, Expr) && stmt′.head === :enter
-                stmt′ = Expr(:enter, stmt′.args[1]::Int + bb_offset)
+            elseif isa(stmt′, EnterNode)
+                stmt′ = EnterNode(stmt′, stmt′.catch_dest + bb_offset)
             elseif isa(stmt′, GotoIfNot)
                 stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
             elseif isa(stmt′, PhiNode)
@@ -710,8 +710,8 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                 end
             elseif isa(stmt, GotoNode)
                 compact[idx] = GotoNode(state.bb_rename[stmt.label])
-            elseif isa(stmt, Expr) && stmt.head === :enter
-                compact[idx] = Expr(:enter, state.bb_rename[stmt.args[1]::Int])
+            elseif isa(stmt, EnterNode)
+                compact[idx] = EnterNode(stmt, state.bb_rename[stmt.catch_dest])
             elseif isa(stmt, GotoIfNot)
                 compact[idx] = GotoIfNot(stmt.cond, state.bb_rename[stmt.dest])
             elseif isa(stmt, PhiNode)
