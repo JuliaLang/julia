@@ -184,7 +184,7 @@ log_nonpublic_access(expr, ::Module, _) = expr
 
 function insert_internal_warning(md::Markdown.MD, internal_access::Set{Pair{Module,Symbol}})
     if !isempty(internal_access)
-        items = Any[Any[Markdown.Paragraph(Any[Markdown.Code("", s)])] for s in sort("$mod.$sym" for (mod, sym) in internal_access)]
+        items = Any[Any[Markdown.Paragraph(Any[Markdown.Code("", s)])] for s in sort!(["$mod.$sym" for (mod, sym) in internal_access])]
         admonition = Markdown.Admonition("warning", "Warning", Any[
             Markdown.Paragraph(Any["The following bindings may be internal; they may change or be removed in future versions:"]),
             Markdown.List(items, -1, false)])

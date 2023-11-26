@@ -248,20 +248,21 @@ typedef struct _jl_line_info_node_t {
 // the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
 typedef union __jl_purity_overrides_t {
     struct {
-        uint8_t ipo_consistent          : 1;
-        uint8_t ipo_effect_free         : 1;
-        uint8_t ipo_nothrow             : 1;
-        uint8_t ipo_terminates_globally : 1;
+        uint16_t ipo_consistent          : 1;
+        uint16_t ipo_effect_free         : 1;
+        uint16_t ipo_nothrow             : 1;
+        uint16_t ipo_terminates_globally : 1;
         // Weaker form of `terminates` that asserts
         // that any control flow syntactically in the method
         // is guaranteed to terminate, but does not make
         // assertions about any called functions.
-        uint8_t ipo_terminates_locally  : 1;
-        uint8_t ipo_notaskstate         : 1;
-        uint8_t ipo_inaccessiblememonly : 1;
-        uint8_t ipo_noub                : 1;
+        uint16_t ipo_terminates_locally  : 1;
+        uint16_t ipo_notaskstate         : 1;
+        uint16_t ipo_inaccessiblememonly : 1;
+        uint16_t ipo_noub                : 1;
+        uint16_t ipo_noub_if_noinbounds  : 1;
     } overrides;
-    uint8_t bits;
+    uint16_t bits;
 } _jl_purity_overrides_t;
 
 // This type describes a single function body
@@ -435,7 +436,7 @@ typedef struct _jl_code_instance_t {
     //     uint8_t nonoverlayed        : 1;
     //     uint8_t notaskstate         : 2;
     //     uint8_t inaccessiblememonly : 2;
-    jl_value_t *argescapes; // escape information of call arguments
+    jl_value_t *analysis_results; // Analysis results about this code (IPO-safe)
 
     // compilation state cache
     _Atomic(uint8_t) specsigflags; // & 0b001 == specptr is a specialized function signature for specTypes->rettype
@@ -827,6 +828,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_typeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_methoderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_undefvarerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_missingcodeerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_memory_exception JL_GLOBALLY_ROOTED;

@@ -124,8 +124,8 @@ const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
     @_safeindex
 
 This internal macro converts:
-- `getindex(xs::Tuple, )` -> `__inbounds_getindex(args...)`
-- `setindex!(xs::Vector, args...)` -> `__inbounds_setindex!(xs, args...)`
+- `getindex(xs::Tuple, i::Int)` -> `__safe_getindex(xs, i)`
+- `setindex!(xs::Vector{T}, x, i::Int)` -> `__safe_setindex!(xs, x, i)`
 to tell the compiler that indexing operations within the applied expression are always
 inbounds and do not need to taint `:consistent` and `:nothrow`.
 """
@@ -143,10 +143,10 @@ function _safeindex(__module__, ex)
             for i = 2:length(lhs.args)
                 args[i-1] = _safeindex(__module__, lhs.args[i])
             end
-            return Expr(:call, GlobalRef(__module__, :__inbounds_setindex!), xs, _safeindex(__module__, rhs), args...)
+            return Expr(:call, GlobalRef(__module__, :__safe_setindex!), xs, _safeindex(__module__, rhs), args...)
         end
     elseif ex.head === :ref # xs[i]
-        return Expr(:call, GlobalRef(__module__, :__inbounds_getindex), ex.args...)
+        return Expr(:call, GlobalRef(__module__, :__safe_getindex), ex.args...)
     end
     args = Vector{Any}(undef, length(ex.args))
     for i = 1:length(ex.args)
@@ -236,6 +236,7 @@ sizeof(a::Array) = length(a) * elsize(typeof(a)) # n.b. this ignores bitsunion b
 
 function isassigned(a::Array, i::Int...)
     @inline
+    @_noub_if_noinbounds_meta
     @boundscheck checkbounds(Bool, a, i...) || return false
     ii = _sub2ind(size(a), i...)
     return @inbounds isassigned(memoryref(a.ref, ii, false))
@@ -243,6 +244,7 @@ end
 
 function isassigned(a::Vector, i::Int) # slight compiler simplification for the most common case
     @inline
+    @_noub_if_noinbounds_meta
     @boundscheck checkbounds(Bool, a, i) || return false
     return @inbounds isassigned(memoryref(a.ref, i, false))
 end
@@ -962,29 +964,23 @@ Dict{String, Int64} with 2 entries:
 function setindex! end
 
 function setindex!(A::Array{T}, x, i::Int) where {T}
+    @_noub_if_noinbounds_meta
     @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
     memoryrefset!(memoryref(A.ref, i, false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
     return A
 end
 function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     @inline
+    @_noub_if_noinbounds_meta
     @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
     memoryrefset!(memoryref(A.ref, _to_linear_index(A, i1, i2, I...), false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
     return A
 end
 
-function __inbounds_setindex!(A::Array{T}, x, i::Int) where {T}
-    @inline
-    val = x isa T ? x : convert(T,x)::T
-    memoryrefset!(memoryref(A.ref, i, false), val, :not_atomic, false)
-    return A
-end
-function __inbounds_setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
-    @inline
-    val = x isa T ? x : convert(T,x)::T
-    memoryrefset!(memoryref(A.ref, _to_linear_index(A, i1, i2, I...), false), val, :not_atomic, false)
-    return A
-end
+__safe_setindex!(A::Vector{T}, x::T, i::Int) where {T} = (@inline; @_nothrow_noub_meta;
+    memoryrefset!(memoryref(A.ref, i, false), x, :not_atomic, false); return A)
+__safe_setindex!(A::Vector{T}, x,    i::Int) where {T} = (@inline;
+    __safe_setindex!(A, convert(T, x)::T, i))
 
 # This is redundant with the abstract fallbacks but needed and helpful for bootstrap
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})

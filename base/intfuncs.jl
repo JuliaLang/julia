@@ -218,7 +218,7 @@ gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
 # multiplicative inverse of n mod m, error if none
 
 """
-    invmod(n, m)
+    invmod(n::Integer, m::Integer)
 
 Take the inverse of `n` modulo `m`: `y` such that ``n y = 1 \\pmod m``,
 and ``div(y,m) = 0``. This will throw an error if ``m = 0``, or if
@@ -255,6 +255,43 @@ function invmod(n::Integer, m::Integer)
     end
     # The postcondition is: mod(result * n, m) == mod(T(1), m) && div(result, m) == 0
     return mod(x, m)
+end
+
+"""
+    invmod(n::Integer, T) where {T <: Base.BitInteger}
+    invmod(n::T) where {T <: Base.BitInteger}
+
+Compute the modular inverse of `n` in the integer ring of type `T`, i.e. modulo
+`2^N` where `N = 8*sizeof(T)` (e.g. `N = 32` for `Int32`). In other words these
+methods satisfy the following identities:
+```
+n * invmod(n) == 1
+(n * invmod(n, T)) % T == 1
+(n % T) * invmod(n, T) == 1
+```
+Note that `*` here is modular multiplication in the integer ring, `T`.
+
+Specifying the modulus implied by an integer type as an explicit value is often
+inconvenient since the modulus is by definition too big to be represented by the
+type.
+
+The modular inverse is computed much more efficiently than the general case
+using the algorithm described in https://arxiv.org/pdf/2204.04342.pdf.
+
+!!! compat "Julia 1.11"
+    The `invmod(n)` and `invmod(n, T)` methods require Julia 1.11 or later.
+"""
+invmod(n::Integer, ::Type{T}) where {T<:BitInteger} = invmod(n % T)
+
+function invmod(n::T) where {T<:BitInteger}
+    isodd(n) || throw(DomainError(n, "Argument must be odd."))
+    x = (3*n ⊻ 2) % T
+    y = (1 - n*x) % T
+    for _ = 1:trailing_zeros(2*sizeof(T))
+        x *= y + true
+        y *= y
+    end
+    return x
 end
 
 # ^ for any x supporting *
