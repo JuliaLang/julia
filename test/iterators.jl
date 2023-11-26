@@ -320,6 +320,18 @@ let (a, b) = (1:3, [4 6;
     end
 end
 
+let
+    p1 = product(Dict(:a => 1, :b => 2), [1, 2, 3])
+    p2 = product(-5:5, 12:10000)
+    p3 = product(rand(3), (x for x in 1:10 if rand(Bool)))
+    p4 = product([:a, :b, :c], ['i', 'j', 'k'])
+    @test p1[:b, 3] == (2, 3)
+    @test p2[2, 1] == (-4, 12)
+    @test_throws MethodError p3[1, 2]
+    @test p4[2, 3] == (:b, 'k')
+    @test_throws BoundsError p4[2]
+end
+ 
 # collect stateful iterator
 let itr
     itr = Iterators.Stateful(Iterators.map(identity, 1:5))
