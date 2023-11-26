@@ -5,7 +5,7 @@ if Sys.iswindows()
 
     _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
     _hasenv(s::Vector{UInt16}) = _getenvlen(s) != 0 || Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND
-    _hasenv(s::AbstractString) = _hasenv(cwstring(s))
+    _hasenv(s::AbstractString) = _hasenv(memoized_env_lookup(s))
 
     const env_dict = IdDict{String, Vector{Cwchar_t}}()
     const env_lock = ReentrantLock()
