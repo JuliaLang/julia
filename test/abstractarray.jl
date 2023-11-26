@@ -2,6 +2,9 @@
 
 using Random, LinearAlgebra
 
+isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
+using .Main.InfiniteArrays
+
 A = rand(5,4,3)
 @testset "Bounds checking" begin
     @test checkbounds(Bool, A, 1, 1, 1) == true
@@ -54,6 +57,20 @@ end
     @test checkbounds(Bool, A, 6, CartesianIndex((4, 3)))  == false
     @test checkbounds(Bool, A, 5, CartesianIndex((5,)), 3) == false
     @test checkbounds(Bool, A, CartesianIndex((5,)), CartesianIndex((4,)), CartesianIndex((4,)))  == false
+end
+
+@testset "Infinite axes" begin
+    r = OneToInf()
+    @testset "CartesianIndices" begin
+        C = CartesianIndices(size(r))
+        ax = to_indices(r, (C,))[1]
+        @test ax === r
+    end
+    @testset "LinearIndices" begin
+        L = LinearIndices(size(r))
+        ax = to_indices(r, (L,))[1]
+        @test ax === L
+    end
 end
 
 @testset "vector indices" begin
@@ -233,6 +250,19 @@ end
             end
             @test pr9256() == (3,2)
         end
+    end
+end
+
+@testset "AbstractArray fallbacks for CartesianIndices" begin
+    @test ndims(CartesianIndices{3}) == 3
+    @test eltype(CartesianIndices{3}) == CartesianIndex{3}
+    for t in ((1:2, 1:2), (3:4,), ())
+        C2 = CartesianIndices(t)
+        @test ndims(C2) == length(t)
+        @test ndims(typeof(C2)) == length(t)
+        @test IndexStyle(C2) == IndexCartesian()
+        @test eltype(C2) == CartesianIndex{length(t)}
+        @test Base.IteratorSize(C2) isa Base.HasShape{length(t)}
     end
 end
 
@@ -520,9 +550,6 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test convert(Matrix, Y) == Y
     @test convert(Matrix, view(Y, 1:2, 1:2)) == Y
     @test_throws MethodError convert(Matrix, X)
-
-    # convert(::Type{Union{}}, A::AbstractMatrix)
-    @test_throws MethodError convert(Union{}, X)
 end
 
 mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
@@ -673,8 +700,8 @@ function test_cat(::Type{TestAbstractArray})
     @test hcat() == Any[]
     @test vcat(1, 1.0, 3, 3.0) == [1.0, 1.0, 3.0, 3.0]
     @test hcat(1, 1.0, 3, 3.0) == [1.0 1.0 3.0 3.0]
-    @test_throws ArgumentError hcat(B1, B2)
-    @test_throws ArgumentError vcat(C1, C2)
+    @test_throws DimensionMismatch hcat(B1, B2)
+    @test_throws DimensionMismatch vcat(C1, C2)
 
     @test vcat(B) == B
     @test hcat(B) == B
@@ -684,6 +711,14 @@ function test_cat(::Type{TestAbstractArray})
     @test Base.typed_hcat(Float64, B) == TSlow(b_float)
     @test Base.typed_hcat(Float64, B, B) == TSlow(b2hcat)
     @test Base.typed_hcat(Float64, B, B, B) == TSlow(b3hcat)
+
+    @testset "issue #49676, bad error message on v[1 +1]" begin
+        # This is here because all these expressions are handled by Base.typed_hcat
+        v = [1 2 3]
+        @test_throws ArgumentError v[1 +1]
+        @test_throws ArgumentError v[1 1]
+        @test_throws ArgumentError v[[1 2] [2 3]]
+    end
 
     @test vcat(B1, B2) == TSlow(vcat([1:24...], [1:25...]))
     @test hcat(C1, C2) == TSlow([1 2 1 2 3; 3 4 4 5 6])
@@ -695,9 +730,9 @@ function test_cat(::Type{TestAbstractArray})
     end
 
     @test_throws ArgumentError hvcat(7, 1:20...)
-    @test_throws ArgumentError hvcat((2), C1, C3)
-    @test_throws ArgumentError hvcat((1), C1, C2)
-    @test_throws ArgumentError hvcat((1), C2, C3)
+    @test_throws DimensionMismatch hvcat((2), C1, C3)
+    @test_throws DimensionMismatch hvcat((1), C1, C2)
+    @test_throws DimensionMismatch hvcat((1), C2, C3)
 
     tup = tuple(rand(1:10, i)...)
     @test hvcat(tup) == []
@@ -706,8 +741,8 @@ function test_cat(::Type{TestAbstractArray})
     @test_throws ArgumentError hvcat((2, 2), 1, 2, 3, 4, 5)
     @test_throws ArgumentError Base.typed_hvcat(Int, (2, 2), 1, 2, 3, 4, 5)
     # check for # of columns mismatch b/w rows
-    @test_throws ArgumentError hvcat((3, 2), 1, 2, 3, 4, 5, 6)
-    @test_throws ArgumentError Base.typed_hvcat(Int, (3, 2), 1, 2, 3, 4, 5, 6)
+    @test_throws DimensionMismatch hvcat((3, 2), 1, 2, 3, 4, 5, 6)
+    @test_throws DimensionMismatch Base.typed_hvcat(Int, (3, 2), 1, 2, 3, 4, 5, 6)
 
     # 18395
     @test isa(Any["a" 5; 2//3 1.0][2,1], Rational{Int})
@@ -993,9 +1028,9 @@ end
     end
 
     i = CartesianIndex(17,-2)
-    @test CR .+ i === i .+ CR === CartesianIndices((19:21, -1:3))
-    @test CR .- i === CartesianIndices((-15:-13, 3:7))
-    @test collect(i .- CR) == Ref(i) .- collect(CR)
+    @test CR .+ i === i .+ CR === CartesianIndices((19:21, -1:3)) == collect(CR) .+ i
+    @test CR .- i === CartesianIndices((-15:-13, 3:7)) == collect(CR) .- i
+    @test collect(i .- CR) == Ref(i) .- collect(CR) == i .- collect(CR)
 end
 
 @testset "issue #25770" begin
@@ -1044,6 +1079,7 @@ end
 @testset "IndexStyle for various types" begin
     @test Base.IndexStyle(UpperTriangular) == IndexCartesian() # subtype of AbstractArray, not of Array
     @test Base.IndexStyle(Vector) == IndexLinear()
+    @test Base.IndexStyle(Memory) == IndexLinear()
     @test Base.IndexStyle(UnitRange) == IndexLinear()
     @test Base.IndexStyle(UpperTriangular(rand(3, 3)), [1; 2; 3]) == IndexCartesian()
     @test Base.IndexStyle(UpperTriangular(rand(3, 3)), rand(3, 3), [1; 2; 3]) == IndexCartesian()
@@ -1073,23 +1109,23 @@ end
 @testset "sizeof" begin
     let arrUInt8 = zeros(UInt8, 10)
         @test sizeof(arrUInt8) == 10
-        @test Core.sizeof(arrUInt8) == 10
+        @test Core.sizeof(arrUInt8) == 3 * sizeof(Int)
     end
 
     let arrUInt32 = zeros(UInt32, 10)
         @test sizeof(arrUInt32) == 40
-        @test Core.sizeof(arrUInt32) == 40
+        @test Core.sizeof(arrUInt32) == 3 * sizeof(Int)
     end
 
     let arrFloat64 = zeros(Float64, 10, 10)
         @test sizeof(arrFloat64) == 800
-        @test Core.sizeof(arrFloat64) == 800
+        @test Core.sizeof(arrFloat64) == 4 * sizeof(Int)
     end
 
     # Test union arrays (Issue #23321)
     let arrUnion = Union{Int64, Cvoid}[rand(Bool) ? k : nothing for k = 1:10]
         @test sizeof(arrUnion) == 80
-        @test Core.sizeof(arrUnion) == 80
+        @test Core.sizeof(arrUnion) == 3 * sizeof(Int)
     end
 
     # Test non-power of 2 types (Issue #35884)
@@ -1103,7 +1139,7 @@ end
     let arrayOfUInt48 = [a, b, c]
         f35884(x) = sizeof(x)
         @test f35884(arrayOfUInt48) == 24
-        @test Core.sizeof(arrayOfUInt48) == 24
+        @test Core.sizeof(arrayOfUInt48) == 3 * sizeof(Int)
     end
 end
 
@@ -1129,7 +1165,7 @@ function Base.getindex(S::Strider{<:Any,N}, I::Vararg{Int,N}) where {N}
 end
 Base.strides(S::Strider) = S.strides
 Base.elsize(::Type{<:Strider{T}}) where {T} = Base.elsize(Vector{T})
-Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S.offset)
+Base.cconvert(::Type{Ptr{T}}, S::Strider{T}) where {T} = MemoryRef(S.data.ref, S.offset)
 
 @testset "Simple 3d strided views and permutes" for sz in ((5, 3, 2), (7, 11, 13))
     A = collect(reshape(1:prod(sz), sz))
@@ -1160,8 +1196,9 @@ Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S
             Ps = Strider{Int, 3}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
             @test pointer(Ap) == pointer(Sp) == pointer(Ps)
             for i in 1:length(Ap)
-                # This is intentionally disabled due to ambiguity
-                @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i)
+                # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`.
+                # But only evaluate one iteration as broken to reduce test report noise
+                i == 1 && @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i)
                 @test P[i] == Ap[i] == Sp[i] == Ps[i]
             end
             Pv = view(P, idxs[collect(perm)]...)
@@ -1180,8 +1217,9 @@ Base.unsafe_convert(::Type{Ptr{T}}, S::Strider{T}) where {T} = pointer(S.data, S
             Svp = Base.PermutedDimsArray(Sv, perm)
             @test pointer(Avp) == pointer(Svp)
             for i in 1:length(Avp)
-                # This is intentionally disabled due to ambiguity
-                @test_broken pointer(Avp, i) == pointer(Svp, i)
+                # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
+                # But only evaluate one iteration as broken to reduce test report noise
+                i == 1 && @test_broken pointer(Avp, i) == pointer(Svp, i)
                 @test Ip[i] == Vp[i] == Avp[i] == Svp[i]
             end
         end
@@ -1220,8 +1258,9 @@ end
         Ps = Strider{Int, 2}(vec(A), 1, strides(A)[collect(perm)], sz[collect(perm)])
         @test pointer(Ap) == pointer(Sp) == pointer(Ps) == pointer(At) == pointer(Aa)
         for i in 1:length(Ap)
-            # This is intentionally disabled due to ambiguity
-            @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
+            # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
+            # But only evaluate one iteration as broken to reduce test report noise
+            i == 1 && @test_broken pointer(Ap, i) == pointer(Sp, i) == pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
             @test pointer(Ps, i) == pointer(At, i) == pointer(Aa, i) == pointer(St, i) == pointer(Sa, i)
             @test P[i] == Ap[i] == Sp[i] == Ps[i] == At[i] == Aa[i] == St[i] == Sa[i]
         end
@@ -1247,8 +1286,9 @@ end
         Svp = Base.PermutedDimsArray(Sv, perm)
         @test pointer(Avp) == pointer(Svp) == pointer(Avt) == pointer(Ava)
         for i in 1:length(Avp)
-            # This is intentionally disabled due to ambiguity
-            @test_broken pointer(Avp, i) == pointer(Svp, i) == pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
+            # This is intentionally disabled due to ambiguity. See `Base.pointer(A::PermutedDimsArray, i::Integer)`
+            # But only evaluate one iteration as broken to reduce test report noise
+            i == 1 && @test_broken pointer(Avp, i) == pointer(Svp, i) == pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
             @test pointer(Avt, i) == pointer(Ava, i) == pointer(Svt, i) == pointer(Sva, i)
             @test Vp[i] == Avp[i] == Svp[i] == Avt[i] == Ava[i] == Svt[i] == Sva[i]
         end
@@ -1268,6 +1308,13 @@ end
     @test last(itr, 25) !== itr
     @test last(itr, 1) == [itr[end]]
     @test_throws ArgumentError last(itr, -6)
+
+    @testset "overflow (issue #45842)" begin
+        @test_throws OverflowError first(typemin(Int):typemax(Int), 10)
+        @test first(2:typemax(Int)-1, typemax(Int)÷2) === 2:((typemax(Int)÷2) + 1)
+        @test last(2:typemax(Int), typemax(Int)÷2) ===
+            range(stop=typemax(Int), length=typemax(Int)÷2)
+    end
 end
 
 @testset "Base.rest" begin
@@ -1307,6 +1354,28 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     @test tpa.data == reverse(collect(1:6))
 end
 
+mutable struct SimpleArray{T} <: AbstractVector{T}
+    els::Vector{T}
+end
+Base.size(sa::SimpleArray) = size(sa.els)
+Base.getindex(sa::SimpleArray, idx...) = getindex(sa.els, idx...)
+Base.setindex!(sa::SimpleArray, v, idx...) = setindex!(sa.els, v, idx...)
+Base.resize!(sa::SimpleArray, n) = resize!(sa.els, n)
+Base.copy(sa::SimpleArray) = SimpleArray(copy(sa.els))
+
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
+@testset "Failing `$f` should not grow the array $a" for
+        f in (push!, append!, pushfirst!, prepend!),
+        a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1))
+    for args in ((1,), (1,2), ([1], [2]), [1])
+        orig = copy(a)
+        @test_throws Exception f(a, args...)
+        @test a == orig
+    end
+end
+
 @testset "splatting into hvcat" begin
     t = (1, 2)
     @test [t...; 3 4] == [1 2; 3 4]
@@ -1315,7 +1384,7 @@ end
 
     @test Int[t...; 3 4] == [1 2; 3 4]
     @test Int[0 t...; t... 0] == [0 1 2; 1 2 0]
-    @test_throws ArgumentError Int[t...; 3 4 5]
+    @test_throws DimensionMismatch Int[t...; 3 4 5]
 end
 
 @testset "issue #39896, modified getindex " begin
@@ -1369,15 +1438,15 @@ using Base: typed_hvncat
     @test [1;;] == fill(1, (1,1))
 
     for v in (1, fill(1), fill(1,1,1), fill(1, 1, 1, 1))
-        @test_throws ArgumentError [v; v;; v]
-        @test_throws ArgumentError [v; v;; v; v; v]
-        @test_throws ArgumentError [v; v; v;; v; v]
-        @test_throws ArgumentError [v; v;; v; v;;; v; v;; v; v;; v; v]
-        @test_throws ArgumentError [v; v;; v; v;;; v; v]
-        @test_throws ArgumentError [v; v;; v; v;;; v; v; v;; v; v]
-        @test_throws ArgumentError [v; v;; v; v;;; v; v;; v; v; v]
+        @test_throws DimensionMismatch [v; v;; v]
+        @test_throws DimensionMismatch [v; v;; v; v; v]
+        @test_throws DimensionMismatch [v; v; v;; v; v]
+        @test_throws DimensionMismatch [v; v;; v; v;;; v; v;; v; v;; v; v]
+        @test_throws DimensionMismatch [v; v;; v; v;;; v; v]
+        @test_throws DimensionMismatch [v; v;; v; v;;; v; v; v;; v; v]
+        @test_throws DimensionMismatch [v; v;; v; v;;; v; v;; v; v; v]
         # ensure a wrong shape with the right number of elements doesn't pass through
-        @test_throws ArgumentError [v; v;; v; v;;; v; v; v; v]
+        @test_throws DimensionMismatch [v; v;; v; v;;; v; v; v; v]
 
         @test [v; v;; v; v] == fill(1, ndims(v) == 3 ? (2, 2, 1) : (2,2))
         @test [v; v;; v; v;;;] == fill(1, 2, 2, 1)
@@ -1445,7 +1514,7 @@ using Base: typed_hvncat
     end
 
     # reject shapes that don't nest evenly between levels (e.g. 1 + 2 does not fit into 2)
-    @test_throws ArgumentError hvncat(((1, 2, 1), (2, 2), (4,)), true, [1 2], [3], [4], [1 2; 3 4])
+    @test_throws DimensionMismatch hvncat(((1, 2, 1), (2, 2), (4,)), true, [1 2], [3], [4], [1 2; 3 4])
 
     # zero-length arrays are handled appropriately
     @test [zeros(Int, 1, 2, 0) ;;; 1 3] == [1 3;;;]
@@ -1460,18 +1529,18 @@ using Base: typed_hvncat
     for v1 ∈ (zeros(Int, 0, 0), zeros(Int, 0, 0, 0, 0), zeros(Int, 0, 0, 0, 0, 0, 0, 0))
         for v2 ∈ (1, [1])
             for v3 ∈ (2, [2])
-                @test_throws ArgumentError [v1 ;;; v2]
-                @test_throws ArgumentError [v1 ;;; v2 v3]
-                @test_throws ArgumentError [v1 v1 ;;; v2 v3]
+                @test_throws DimensionMismatch [v1 ;;; v2]
+                @test_throws DimensionMismatch [v1 ;;; v2 v3]
+                @test_throws DimensionMismatch [v1 v1 ;;; v2 v3]
             end
         end
     end
     v1 = zeros(Int, 0, 0, 0)
     for v2 ∈ (1, [1])
         for v3 ∈ (2, [2])
-            @test_throws ArgumentError [v1 ;;; v2 v3]
-            @test_throws ArgumentError [v1 ;;; v2]
-            @test_throws ArgumentError [v1 v1 ;;; v2 v3]
+            @test_throws DimensionMismatch [v1 ;;; v2 v3]
+            @test_throws DimensionMismatch [v1 ;;; v2]
+            @test_throws DimensionMismatch [v1 v1 ;;; v2 v3]
         end
     end
 
@@ -1539,8 +1608,8 @@ using Base: typed_hvncat
     @test Array{Int, 3}(undef, 0, 0, 0) == typed_hvncat(Int, 3) isa Array{Int, 3}
 
     # Issue 43933 - semicolon precedence mistake should produce an error
-    @test_throws ArgumentError [[1 1]; 2 ;; 3 ; [3 4]]
-    @test_throws ArgumentError [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
+    @test_throws DimensionMismatch [[1 1]; 2 ;; 3 ; [3 4]]
+    @test_throws DimensionMismatch [[1 ;;; 1]; 2 ;;; 3 ; [3 ;;; 4]]
 
     @test [[1 2; 3 4] [5; 6]; [7 8] 9;;;] == [1 2 5; 3 4 6; 7 8 9;;;]
 
@@ -1713,47 +1782,50 @@ module IRUtils
     include("compiler/irutils.jl")
 end
 
-@testset "strides for ReshapedArray" begin
-    function check_strides(A::AbstractArray)
-        # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
-        dims = ntuple(identity, ndims(A))
-        map(i -> stride(A, i), dims) == @inferred(strides(A)) || return false
-        # Test strides via value check.
-        for i in eachindex(IndexLinear(), A)
-            A[i] === Base.unsafe_load(pointer(A, i)) || return false
-        end
-        return true
+function check_pointer_strides(A::AbstractArray)
+    # Make sure stride(A, i) is equivalent with strides(A)[i] (if 1 <= i <= ndims(A))
+    dims = ntuple(identity, ndims(A))
+    map(i -> stride(A, i), dims) == @inferred(strides(A)) || return false
+    # Test pointer via value check.
+    first(A) === Base.unsafe_load(pointer(A)) || return false
+    # Test strides via value check.
+    for i in eachindex(IndexLinear(), A)
+        A[i] === Base.unsafe_load(pointer(A, i)) || return false
     end
+    return true
+end
+
+@testset "strides for ReshapedArray" begin
     # Type-based contiguous Check
     a = vec(reinterpret(reshape, Int16, reshape(view(reinterpret(Int32, randn(10)), 2:11), 5, :)))
     f(a) = only(strides(a));
     @test IRUtils.fully_eliminated(f, Base.typesof(a)) && f(a) == 1
     # General contiguous check
     a = view(rand(10,10), 1:10, 1:10)
-    @test check_strides(vec(a))
+    @test check_pointer_strides(vec(a))
     b = view(parent(a), 1:9, 1:10)
     @test_throws "Input is not strided." strides(vec(b))
     # StridedVector parent
     for n in 1:3
         a = view(collect(1:60n), 1:n:60n)
-        @test check_strides(reshape(a, 3, 4, 5))
-        @test check_strides(reshape(a, 5, 6, 2))
+        @test check_pointer_strides(reshape(a, 3, 4, 5))
+        @test check_pointer_strides(reshape(a, 5, 6, 2))
         b = view(parent(a), 60n:-n:1)
-        @test check_strides(reshape(b, 3, 4, 5))
-        @test check_strides(reshape(b, 5, 6, 2))
+        @test check_pointer_strides(reshape(b, 3, 4, 5))
+        @test check_pointer_strides(reshape(b, 5, 6, 2))
     end
     # StridedVector like parent
     a = randn(10, 10, 10)
     b = view(a, 1:10, 1:1, 5:5)
-    @test check_strides(reshape(b, 2, 5))
+    @test check_pointer_strides(reshape(b, 2, 5))
     # Other StridedArray parent
     a = view(randn(10,10), 1:9, 1:10)
-    @test check_strides(reshape(a,3,3,2,5))
-    @test check_strides(reshape(a,3,3,5,2))
-    @test check_strides(reshape(a,9,5,2))
-    @test check_strides(reshape(a,3,3,10))
-    @test check_strides(reshape(a,1,3,1,3,1,5,1,2))
-    @test check_strides(reshape(a,3,3,5,1,1,2,1,1))
+    @test check_pointer_strides(reshape(a,3,3,2,5))
+    @test check_pointer_strides(reshape(a,3,3,5,2))
+    @test check_pointer_strides(reshape(a,9,5,2))
+    @test check_pointer_strides(reshape(a,3,3,10))
+    @test check_pointer_strides(reshape(a,1,3,1,3,1,5,1,2))
+    @test check_pointer_strides(reshape(a,3,3,5,1,1,2,1,1))
     @test_throws "Input is not strided." strides(reshape(a,3,6,5))
     @test_throws "Input is not strided." strides(reshape(a,3,2,3,5))
     @test_throws "Input is not strided." strides(reshape(a,3,5,3,2))
@@ -1766,7 +1838,14 @@ end
     @test @inferred(strides(a)) == (1, 1, 1)
     # Dense parent (but not StridedArray)
     A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
-    @test check_strides(reshape(A, 3, 2, 3))
+    @test check_pointer_strides(reshape(A, 3, 2, 3))
+end
+
+@testset "pointer for SubArray with none-dense parent." begin
+    a = view(Matrix(reshape(0x01:0xc8, 20, :)), 1:2:20, :)
+    b = reshape(a, 20, :)
+    @test check_pointer_strides(view(b, 2:11, 1:5))
+    @test check_pointer_strides(view(b, reshape(2:11, 2, :), 1:5))
 end
 
 @testset "stride for 0 dims array #44087" begin
@@ -1810,4 +1889,14 @@ end
     @inline _has_offset_axes(As...) = @inline any(_has_offset_axes, As)
     a, b = zeros(2, 2, 2), zeros(2, 2)
     @test_broken IRUtils.fully_eliminated(_has_offset_axes, Base.typesof(a, a, b, b))
+end
+
+# type stable [x;;] (https://github.com/JuliaLang/julia/issues/45952)
+f45952(x) = [x;;]
+@inferred f45952(1.0)
+
+@testset "isassigned with a Bool index" begin
+    A = zeros(2,2)
+    @test_throws "invalid index: true of type Bool" isassigned(A, 1, true)
+    @test_throws "invalid index: true of type Bool" isassigned(A, true)
 end

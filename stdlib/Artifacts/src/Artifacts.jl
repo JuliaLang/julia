@@ -52,9 +52,26 @@ function artifacts_dirs(args...)
         return String[abspath(depot, "artifacts", args...) for depot in Base.DEPOT_PATH]
     else
         # If we've been given an override, use _only_ that directory.
-        return String[abspath(ARTIFACTS_DIR_OVERRIDE[], args...)]
+        return String[abspath(ARTIFACTS_DIR_OVERRIDE[]::String, args...)]
     end
 end
+
+# Recursive function, let's not make this a closure because it then has to
+# be boxed.
+function parse_mapping(mapping::String, name::String, override_file::String)
+    if !isabspath(mapping) && !isempty(mapping)
+        mapping = tryparse(Base.SHA1, mapping)
+        if mapping === nothing
+            @error("Invalid override in '$(override_file)': entry '$(name)' must map to an absolute path or SHA1 hash!")
+        end
+    end
+    return mapping
+end
+function parse_mapping(mapping::Dict, name::String, override_file::String)
+    return Dict(k => parse_mapping(v, name, override_file) for (k, v) in mapping)
+end
+# Fallthrough for invalid Overrides.toml files
+parse_mapping(mapping, name::String, override_file::String) = nothing
 
 """
     ARTIFACT_OVERRIDES
@@ -103,24 +120,9 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
         # Load the toml file
         depot_override_dict = parse_toml(override_file)
 
-        function parse_mapping(mapping::String, name::String)
-            if !isabspath(mapping) && !isempty(mapping)
-                mapping = tryparse(Base.SHA1, mapping)
-                if mapping === nothing
-                    @error("Invalid override in '$(override_file)': entry '$(name)' must map to an absolute path or SHA1 hash!")
-                end
-            end
-            return mapping
-        end
-        function parse_mapping(mapping::Dict, name::String)
-            return Dict(k => parse_mapping(v, name) for (k, v) in mapping)
-        end
-        # Fallthrough for invalid Overrides.toml files
-        parse_mapping(mapping, name::String) = nothing
-
         for (k, mapping) in depot_override_dict
             # First, parse the mapping. Is it an absolute path, a valid SHA1-hash, or neither?
-            mapping = parse_mapping(mapping, k)
+            mapping = parse_mapping(mapping, k, override_file)
             if mapping === nothing
                 @error("Invalid override in '$(override_file)': failed to parse entry `$(k)`")
                 continue
@@ -242,7 +244,7 @@ end
 """
     artifact_exists(hash::SHA1; honor_overrides::Bool=true)
 
-Returns whether or not the given artifact (identified by its sha1 git tree hash) exists
+Return whether or not the given artifact (identified by its sha1 git tree hash) exists
 on-disk.  Note that it is possible that the given artifact exists in multiple locations
 (e.g. within multiple depots).
 
@@ -325,7 +327,7 @@ function process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
     # override for this UUID, and inserting new overrides for those hashes.
     overrides = load_overrides()
     if haskey(overrides[:UUID], pkg_uuid)
-        pkg_overrides = overrides[:UUID][pkg_uuid]
+        pkg_overrides = overrides[:UUID][pkg_uuid]::Dict{String, <:Any}
 
         for name in keys(artifact_dict)
             # Skip names that we're not overriding
@@ -455,7 +457,7 @@ end
                                   include_lazy = false,
                                   pkg_uuid = nothing)
 
-Returns a dictionary where every entry is an artifact from the given `Artifacts.toml`
+Return a dictionary where every entry is an artifact from the given `Artifacts.toml`
 that should be downloaded for the requested platform.  Lazy artifacts are included if
 `include_lazy` is set.
 """
@@ -546,7 +548,7 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
             if nameof(lazyartifacts) in (:Pkg, :Artifacts)
                 Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
             end
-            return jointail(lazyartifacts.ensure_artifact_installed(string(name), artifacts_toml; platform), path_tail)
+            return jointail(lazyartifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform), path_tail)
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
     end
@@ -611,7 +613,7 @@ end
     artifact_slash_lookup(name::String, atifact_dict::Dict,
                           artifacts_toml::String, platform::Platform)
 
-Returns `artifact_name`, `artifact_path_tail`, and `hash` by looking the results up in
+Return `artifact_name`, `artifact_path_tail`, and `hash` by looking the results up in
 the given `artifacts_toml`, first extracting the name and path tail from the given `name`
 to support slash-indexing within the given artifact.
 """
@@ -738,5 +740,8 @@ artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml:
 precompile(load_artifacts_toml, (String,))
 precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
 precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
+precompile(parse_mapping, (String, String, String))
+precompile(parse_mapping, (Dict{String, Any}, String, String))
+
 
 end # module Artifacts

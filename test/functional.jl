@@ -139,6 +139,20 @@ end
 @test findall(!iszero, x^2 for x in -1:0.5:1) == [1, 2, 4, 5]
 @test argmin(x^2 for x in -1:0.5:1) == 3
 
+# findall return type, see #45495
+let gen = (i for i in 1:3);
+    @test @inferred(findall(x -> true, gen))::Vector{Int} == [1, 2, 3]
+    @test @inferred(findall(x -> false, gen))::Vector{Int} == Int[]
+    @test @inferred(findall(x -> x < 0, gen))::Vector{Int} == Int[]
+end
+let d = Dict()
+    d[7]=2
+    d[3]=6
+    @test @inferred(sort(findall(x -> true, d)))::Vector{Int} == [3, 7]
+    @test @inferred(sort(findall(x -> false, d)))::Vector{Any} == []
+    @test @inferred(sort(findall(x -> x < 0, d)))::Vector{Any} == []
+end
+
 # inference on vararg generator of a type (see #22907 comments)
 let f(x) = collect(Base.Generator(=>, x, x))
     @test @inferred(f((1,2))) == [1=>1, 2=>2]

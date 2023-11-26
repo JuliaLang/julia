@@ -21,6 +21,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
@@ -61,6 +62,7 @@ let m = Meta.@lower 1 + 1
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
@@ -79,7 +81,7 @@ let m = Meta.@lower 1 + 1
         QuoteNode(:b),
         GlobalRef(@__MODULE__, :test29262),
         # block 2
-        Expr(:enter, 11),
+        Core.EnterNode(11),
         # block 3
         Core.UpsilonNode(),
         Core.UpsilonNode(),
@@ -92,12 +94,12 @@ let m = Meta.@lower 1 + 1
         # block 6
         Core.PhiCNode(Any[Core.SSAValue(5), Core.SSAValue(7), Core.SSAValue(9)]), # NULL, :a, :b
         Core.PhiCNode(Any[Core.SSAValue(6)]), # NULL
-        Expr(:leave, 1),
         # block 7
         ReturnNode(Core.SSAValue(11)),
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
     src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
@@ -106,3 +108,17 @@ let m = Meta.@lower 1 + 1
     global test29262 = false
     @test :b === @eval $m
 end
+
+# https://github.com/JuliaLang/julia/issues/47065
+# `Core.Compiler.sort!` should be able to handle a big list
+let n = 1000
+    ex = :(return 1)
+    for _ in 1:n
+        ex = :(rand() < .1 && $(ex))
+    end
+    @eval global function f_1000_blocks()
+        $ex
+        return 0
+    end
+end
+@test f_1000_blocks() == 0

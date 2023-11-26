@@ -48,7 +48,7 @@ arguments of type `Any`.
 
 To restrict deprecation to a specific signature, annotate the
 arguments of `old`. For example,
-```jldoctest; filter = r"@ .*"
+```jldoctest; filter = r"@ .*"a
 julia> new(x::Int) = x;
 
 julia> new(x::Float64) = 2x;
@@ -167,11 +167,8 @@ function firstcaller(bt::Vector, funcsyms)
             if !found
                 li = lkup.linfo
                 if li isa Core.MethodInstance
-                    ft = ccall(:jl_first_argument_datatype, Any, (Any,), (li.def::Method).sig)
-                    if isType(ft)
-                        ft = unwrap_unionall(ft.parameters[1])
-                        found = (isa(ft, DataType) && ft.name.name in funcsyms)
-                    end
+                    def = li.def
+                    found = def isa Method && def.name in funcsyms
                 end
             end
         end
@@ -321,8 +318,6 @@ const var"@_noinline_meta" = var"@noinline"
 
 # BEGIN 1.9 deprecations
 
-@deprecate splat(x) Splat(x) false
-
 # We'd generally like to avoid direct external access to internal fields
 # Core.Compiler.is_inlineable and Core.Compiler.set_inlineable! move towards this direction,
 # but we need to keep these around for compat
@@ -336,4 +331,65 @@ function setproperty!(ci::CodeInfo, s::Symbol, v)
     return setfield!(ci, s, convert(fieldtype(CodeInfo, s), v))
 end
 
+@eval Threads nthreads() = threadpoolsize()
+
+@eval Threads begin
+    """
+        resize_nthreads!(A, copyvalue=A[1])
+
+    Resize the array `A` to length [`nthreads()`](@ref).   Any new
+    elements that are allocated are initialized to `deepcopy(copyvalue)`,
+    where `copyvalue` defaults to `A[1]`.
+
+    This is typically used to allocate per-thread variables, and
+    should be called in `__init__` if `A` is a global constant.
+
+    !!! warning
+
+        This function is deprecated, since as of Julia v1.9 the number of
+        threads can change at run time. Instead, per-thread state should be
+        created as needed based on the thread id of the caller.
+    """
+    function resize_nthreads!(A::AbstractVector, copyvalue=A[1])
+        nthr = nthreads()
+        nold = length(A)
+        resize!(A, nthr)
+        for i = nold+1:nthr
+            A[i] = deepcopy(copyvalue)
+        end
+        return A
+    end
+end
+
 # END 1.9 deprecations
+
+# BEGIN 1.10 deprecations
+
+"""
+    @pure ex
+
+`@pure` gives the compiler a hint for the definition of a pure function,
+helping for type inference.
+
+!!! warning
+    This macro is intended for internal compiler use and may be subject to changes.
+
+!!! warning
+    In Julia 1.8 and higher, it is favorable to use [`@assume_effects`](@ref) instead of `@pure`.
+    This is because `@assume_effects` allows a finer grained control over Julia's purity
+    modeling and the effect system enables a wider range of optimizations.
+"""
+macro pure(ex)
+    return esc(:(Base.@assume_effects :foldable $ex))
+end
+
+# END 1.10 deprecations
+
+# BEGIN 1.11 deprecations
+
+# these were never a part of the public API and so they can be removed without deprecation
+# in a minor release but we're being nice and trying to avoid transient breakage.
+@deprecate permute!!(a, p::AbstractVector{<:Integer}) permute!(a, p) false
+@deprecate invpermute!!(a, p::AbstractVector{<:Integer}) invpermute!(a, p) false
+
+# END 1.11 deprecations

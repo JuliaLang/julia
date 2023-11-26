@@ -49,6 +49,13 @@ JL_DLLEXPORT jl_datatype_t *jl_new_foreign_type(
         int haspointers,
         int large);
 
+
+#define HAVE_JL_REINIT_FOREIGN_TYPE 1
+JL_DLLEXPORT int jl_reinit_foreign_type(
+        jl_datatype_t *dt,
+        jl_markfunc_t markfunc,
+        jl_sweepfunc_t sweepfunc);
+
 JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt);
 
 JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void);
@@ -79,7 +86,7 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
 // will result in the custom sweep function actually being called.
 // This must be done at most once per object and should usually be
 // done right after allocating the object.
-JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t * bj);
+JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *bj);
 
 // The following functions enable support for conservative marking. This
 // functionality allows the user to determine if a machine word can be
@@ -120,6 +127,8 @@ JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void);
 // external allocations may not all be valid objects and that for those,
 // the user *must* validate that they have a proper type, i.e. that
 // jl_typeof(obj) is an actual type object.
+//
+// NOTE: Only valid to call from within a GC context.
 JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p);
 
 // Return a non-null pointer to the start of the stack area if the task

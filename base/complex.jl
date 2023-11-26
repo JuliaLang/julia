@@ -120,6 +120,7 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
+real(::Type{Union{}}, slurp...) = Union{}(im)
 
 """
     isreal(x) -> Bool
@@ -177,7 +178,7 @@ complex(x::Real, y::Real) = Complex(x, y)
     complex(T::Type)
 
 Return an appropriate type which can represent a value of type `T` as a complex number.
-Equivalent to `typeof(complex(zero(T)))`.
+Equivalent to `typeof(complex(zero(T)))` if `T` does not contain `Missing`.
 
 # Examples
 ```jldoctest
@@ -186,6 +187,9 @@ Complex{Int64}
 
 julia> complex(Int)
 Complex{Int64}
+
+julia> complex(Union{Int, Missing})
+Union{Missing, Complex{Int64}}
 ```
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
@@ -195,7 +199,7 @@ flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
 function show(io::IO, z::Complex)
     r, i = reim(z)
-    compact = get(io, :compact, false)
+    compact = get(io, :compact, false)::Bool
     show(io, r)
     if signbit(i) && !isnan(i)
         print(io, compact ? "-" : " - ")
@@ -244,7 +248,9 @@ bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 ==(z::Complex, x::Real) = isreal(z) && real(z) == x
 ==(x::Real, z::Complex) = isreal(z) && real(z) == x
 
-isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
+isequal(z::Complex, w::Complex) = isequal(real(z),real(w))::Bool & isequal(imag(z),imag(w))::Bool
+isequal(z::Complex, w::Real) = isequal(real(z),w)::Bool & isequal(imag(z),zero(w))::Bool
+isequal(z::Real, w::Complex) = isequal(z,real(w))::Bool & isequal(zero(z),imag(w))::Bool
 
 in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 
@@ -472,9 +478,13 @@ function inv(z::Complex{T}) where T<:Union{Float16,Float32}
 end
 function inv(w::ComplexF64)
     c, d = reim(w)
-    (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
     absc, absd = abs(c), abs(d)
-    cd = ifelse(absc>absd, absc, absd) # cheap `max`: don't need sign- and nan-checks here
+    cd, dc = ifelse(absc>absd, (absc, absd), (absd, absc))
+    # no overflow from abs2
+    if sqrt(floatmin(Float64)/2) <= cd <= sqrt(floatmax(Float64)/2)
+        return conj(w) / muladd(cd, cd, dc*dc)
+    end
+    (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
 
     ϵ  = eps(Float64)
     bs = 2/(ϵ*ϵ)
@@ -493,12 +503,13 @@ function inv(w::ComplexF64)
     else
         q, p = robust_cinv(-d, -c)
     end
-    return ComplexF64(p*s, q*s) # undo scaling
+    return ComplexF64(p*s, q*s)
 end
 function robust_cinv(c::Float64, d::Float64)
     r = d/c
-    p = inv(muladd(d, r, c))
-    q = -r*p
+    z = muladd(d, r, c)
+    p = 1.0/z
+    q = -r/z
     return p, q
 end
 
@@ -594,7 +605,7 @@ julia> cispi(10000)
 1.0 + 0.0im
 
 julia> cispi(0.25 + 1im)
-0.030556854645954562 + 0.030556854645954562im
+0.030556854645954562 + 0.03055685464595456im
 ```
 
 !!! compat "Julia 1.6"
@@ -742,7 +753,7 @@ function log1p(z::Complex{T}) where T
         # allegedly due to Kahan, only modified to handle real(u) <= 0
         # differently to avoid inaccuracy near z==-2 and for correct branch cut
         u = one(float(T)) + z
-        u == 1 ? convert(typeof(u), z) : real(u) <= 0 ? log(u) : log(u)*z/(u-1)
+        u == 1 ? convert(typeof(u), z) : real(u) <= 0 ? log(u) : log(u)*(z/(u-1))
     elseif isnan(zr)
         Complex(zr, zr)
     elseif isfinite(zi)

@@ -9,8 +9,11 @@
     deepcopy(x)
 
 Create a deep copy of `x`: everything is copied recursively, resulting in a fully
-independent object. For example, deep-copying an array produces a new array whose elements
-are deep copies of the original elements. Calling `deepcopy` on an object should generally
+independent object. For example, deep-copying an array creates deep copies of all
+the objects it contains and produces a new array with the consistent relationship
+structure (e.g., if the first two elements are the same object in the original array,
+the first two elements of the new array will also be the same `deepcopy`ed object).
+Calling `deepcopy` on an object should generally
 have the same effect as serializing and then deserializing it.
 
 While it isn't normally necessary, user-defined types can override the default `deepcopy`
@@ -21,7 +24,7 @@ so far within the recursion. Within the definition, `deepcopy_internal` should b
 in place of `deepcopy`, and the `dict` variable should be
 updated as appropriate before returning.
 """
-function deepcopy(x)
+function deepcopy(@nospecialize x)
     isbitstype(typeof(x)) && return x
     return deepcopy_internal(x, IdDict())::typeof(x)
 end
@@ -85,30 +88,51 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
     return y::T
 end
 
-function deepcopy_internal(x::Array, stackdict::IdDict)
+function deepcopy_internal(x::Memory, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
-    _deepcopy_array_t(x, eltype(x), stackdict)
+    _deepcopy_memory_t(x, eltype(x), stackdict)
 end
 
-function _deepcopy_array_t(@nospecialize(x::Array), T, stackdict::IdDict)
+function _deepcopy_memory_t(@nospecialize(x::Memory), T, stackdict::IdDict)
     if isbitstype(T)
         return (stackdict[x]=copy(x))
     end
-    dest = similar(x)
+    dest = typeof(x)(undef, length(x))
     stackdict[x] = dest
+    xr = Core.memoryref(x)
+    dr = Core.memoryref(dest)
     for i = 1:length(x)
-        if ccall(:jl_array_isassigned, Cint, (Any, Csize_t), x, i-1) != 0
-            xi = ccall(:jl_arrayref, Any, (Any, Csize_t), x, i-1)
+        xi = Core.memoryref(xr, i, false)
+        if Core.memoryref_isassigned(xi, :not_atomic, false)
+            xi = Core.memoryrefget(xi, :not_atomic, false)
             if !isbits(xi)
                 xi = deepcopy_internal(xi, stackdict)::typeof(xi)
             end
-            ccall(:jl_arrayset, Cvoid, (Any, Any, Csize_t), dest, xi, i-1)
+            di = Core.memoryref(dr, i, false)
+            di = Core.memoryrefset!(di, xi, :not_atomic, false)
         end
     end
     return dest
 end
+@eval function deepcopy_internal(x::Array{T, N}, stackdict::IdDict) where {T, N}
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+    stackdict[x] = $(Expr(:new, :(Array{T, N}), :(deepcopy_internal(x.ref, stackdict)), :(x.size)))
+end
+function deepcopy_internal(x::GenericMemoryRef, stackdict::IdDict)
+    if haskey(stackdict, x)
+        return stackdict[x]::typeof(x)
+    end
+    mem = getfield(x, :mem)
+    dest = GenericMemoryRef(deepcopy_internal(mem, stackdict)::typeof(mem))
+    i = memoryrefoffset(x)
+    i == 1 || (dest = Core.memoryref(dest, i, true))
+    return dest
+end
+
 
 function deepcopy_internal(x::Union{Dict,IdDict}, stackdict::IdDict)
     if haskey(stackdict, x)

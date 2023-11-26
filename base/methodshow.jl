@@ -7,11 +7,11 @@ function strip_gensym(sym)
     if sym === :var"#self#" || sym === :var"#unused#"
         return empty_sym
     end
-    return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$" => s"\1"))
+    return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$"sa => s"\1"))
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
-    t = sig.parameters[unwrapva(min(i, end))]
+    t = unwrapva(sig.parameters[min(i, end)])
     if i == nargs && isva
         va = sig.parameters[end]
         if isvarargtype(va) && (!isdefined(va, :N) || !isa(va.N, Int))
@@ -78,13 +78,9 @@ end
 
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
-    if m.sig === Tuple # OpaqueClosure
-        return Symbol[]
-    end
-    mt = get_methodtable(m)
-    if isdefined(mt, :kwsorter)
-        kwtype = typeof(mt.kwsorter)
-        sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
+    if m.sig !== Tuple # OpaqueClosure or Builtin
+        kwtype = typeof(Core.kwcall)
+        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
@@ -97,6 +93,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
                 push!(kws, kws[i])
                 deleteat!(kws, i)
             end
+            isempty(kws) && push!(kws,  :var"...")
             return kws
         end
     end
@@ -164,7 +161,7 @@ functionloc(m::Core.MethodInstance) = functionloc(m.def)
 """
     functionloc(m::Method)
 
-Returns a tuple `(filename,line)` giving the location of a `Method` definition.
+Return a tuple `(filename,line)` giving the location of a `Method` definition.
 """
 function functionloc(m::Method)
     file, ln = updated_methodloc(m)
@@ -177,7 +174,7 @@ end
 """
     functionloc(f::Function, types)
 
-Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
+Return a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
 functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
 
@@ -197,6 +194,9 @@ function functionloc(@nospecialize(f))
 end
 
 function sym_to_string(sym)
+    if sym === :var"..."
+        return "..."
+    end
     s = String(sym)
     if endswith(s, "...")
         return string(sprint(show_sym, Symbol(s[1:end-3])), "...")
@@ -246,13 +246,12 @@ function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_
         show_method_params(io, tv)
     end
 
-    # module & file, re-using function from errorshow.jl
-    if get(io, :compact, false) # single-line mode
-        print_module_path_file(io, m.module, string(file), line; modulecolor, digit_align_width)
-    else
+    if !(get(io, :compact, false)::Bool) # single-line mode
         println(io)
-        print_module_path_file(io, m.module, string(file), line; modulecolor, digit_align_width=digit_align_width+4)
+        digit_align_width += 4
     end
+    # module & file, re-using function from errorshow.jl
+    print_module_path_file(io, parentmodule(m), string(file), line; modulecolor, digit_align_width)
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
@@ -268,7 +267,7 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     if hasname
         what = (startswith(sname, '@') ?
                     "macro"
-               : mt.module === Core && last(ms).sig === Tuple ?
+               : mt.module === Core && mt.defs isa Core.TypeMapEntry && (mt.defs.func::Method).sig === Tuple ?
                     "builtin function"
                : # else
                     "generic function")
@@ -316,10 +315,10 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
 
             print(io, " ", lpad("[$n]", digit_align_width + 2), " ")
 
-            modulecolor = if meth.module == modul
+            modulecolor = if parentmodule(meth) == modul
                 nothing
             else
-                m = parentmodule_before_main(meth.module)
+                m = parentmodule_before_main(meth)
                 get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
             end
             show_method(io, meth; modulecolor)
@@ -362,11 +361,11 @@ end
 fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
 
 function url(m::Method)
-    M = m.module
+    M = parentmodule(m)
     (m.file === :null || m.file === :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || occursin(r"In\[[0-9]+\]", file) && return ""
+    line <= 0 || occursin(r"In\[[0-9]+\]"a, file) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
     libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
     if inbase(M)
@@ -406,7 +405,7 @@ function show(io::IO, ::MIME"text/html", m::Method)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
         # Builtin
-        print(io, m.name, "(...) in ", m.module)
+        print(io, m.name, "(...) in ", parentmodule(m))
         return
     end
     print(io, decls[1][2], "(")
@@ -430,7 +429,7 @@ function show(io::IO, ::MIME"text/html", m::Method)
         show_method_params(io, tv)
         print(io,"</i>")
     end
-    print(io, " in ", m.module)
+    print(io, " in ", parentmodule(m))
     if line > 0
         file, line = updated_methodloc(m)
         u = url(m)
@@ -472,6 +471,8 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
             push!(last_shown_line_infos, (string(file), line))
         end
     end
+    first && summary(io, mt)
+    nothing
 end
 
 function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
@@ -484,4 +485,5 @@ function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
         end
         print(io, "</ul>")
     end
+    nothing
 end
