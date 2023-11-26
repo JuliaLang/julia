@@ -10,13 +10,22 @@ if Sys.iswindows()
     const env_dict = IdDict{String, Vector{Cwchar_t}}()
     const env_lock = ReentrantLock()
 
-    function access_env(onError::Function, str::AbstractString)
+    function memoized_env_lookup(str::AbstractString)
+        # Windows environment variables have a different format from Linux / MacOS, and previously
+        # incurred allocations because we had to convert a String to a Vector{Cwchar_t} each time
+        # an environment variable was looked up. This function memoizes that lookup process, storing
+        # the String => Vector{Cwchar_t} pairs in env_dict
         var = get(env_dict, str, nothing)
         if isnothing(var)
             var = @lock env_lock begin
                 env_dict[str] = cwstring(str)
             end
         end
+        var
+    end
+
+    function access_env(onError::Function, str::AbstractString)
+        var = memoized_env_lookup(str)
         len = _getenvlen(var)
         if len == 0
             return Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND ? "" : onError(str)
@@ -29,7 +38,7 @@ if Sys.iswindows()
     end
 
     function _setenv(svar::AbstractString, sval::AbstractString, overwrite::Bool=true)
-        var = cwstring(svar)
+        var = memoized_env_lookup(str)
         val = cwstring(sval)
         if overwrite || !_hasenv(var)
             ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,val)
@@ -38,7 +47,7 @@ if Sys.iswindows()
     end
 
     function _unsetenv(svar::AbstractString)
-        var = cwstring(svar)
+        var = memoized_env_lookup(str)
         ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,C_NULL)
         windowserror(:setenv, ret == 0 && Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND)
     end
