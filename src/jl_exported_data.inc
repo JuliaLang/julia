@@ -52,6 +52,7 @@
     XX(jl_binding_type) \
     XX(jl_globalref_type) \
     XX(jl_gotoifnot_type) \
+    XX(jl_enternode_type) \
     XX(jl_gotonode_type) \
     XX(jl_initerror_type) \
     XX(jl_int16_type) \

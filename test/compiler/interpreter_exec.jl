@@ -81,7 +81,7 @@ let m = Meta.@lower 1 + 1
         QuoteNode(:b),
         GlobalRef(@__MODULE__, :test29262),
         # block 2
-        Expr(:enter, 11),
+        Core.EnterNode(11),
         # block 3
         Core.UpsilonNode(),
         Core.UpsilonNode(),

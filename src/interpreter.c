@@ -489,6 +489,50 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             ssize_t id = ((jl_ssavalue_t*)phic)->id - 1;
             s->locals[jl_source_nslots(s->src) + id] = val;
         }
+        else if (jl_is_enternode(stmt)) {
+            jl_enter_handler(&__eh);
+            // This is a bit tricky, but supports the implementation of PhiC nodes.
+            // They are conceptually slots, but the slot to store to doesn't get explicitly
+            // mentioned in the store (aka the "UpsilonNode") (this makes them integrate more
+            // nicely with the rest of the SSA representation). In a compiler, we would figure
+            // out which slot to store to at compile time when we encounter the statement. We
+            // can't quite do that here, but we do something similar: We scan the catch entry
+            // block (the only place where PhiC nodes may occur) to find all the Upsilons we
+            // can possibly encounter. Then, we remember which slot they store to (we abuse the
+            // SSA value result array for this purpose). TODO: We could do this only the first
+            // time we encounter a given enter.
+            size_t catch_ip = jl_enternode_catch_dest(stmt) - 1;
+            while (catch_ip < ns) {
+                jl_value_t *phicnode = jl_array_ptr_ref(stmts, catch_ip);
+                if (!jl_is_phicnode(phicnode))
+                    break;
+                jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(phicnode, 0);
+                for (size_t i = 0; i < jl_array_nrows(values); ++i) {
+                    jl_value_t *val = jl_array_ptr_ref(values, i);
+                    assert(jl_is_ssavalue(val));
+                    size_t upsilon = ((jl_ssavalue_t*)val)->id - 1;
+                    assert(jl_is_upsilonnode(jl_array_ptr_ref(stmts, upsilon)));
+                    s->locals[jl_source_nslots(s->src) + upsilon] = jl_box_ssavalue(catch_ip + 1);
+                }
+                s->locals[jl_source_nslots(s->src) + catch_ip] = NULL;
+                catch_ip += 1;
+            }
+            // store current top of exception stack for restore in pop_exception.
+            s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state());
+            if (!jl_setjmp(__eh.eh_ctx, 1)) {
+                return eval_body(stmts, s, next_ip, toplevel);
+            }
+            jl_eh_restore_state(&__eh);
+            if (s->continue_at) { // means we reached a :leave expression
+                ip = s->continue_at;
+                s->continue_at = 0;
+                continue;
+            }
+            else { // a real exception
+                ip = catch_ip;
+                continue;
+            }
+        }
         else if (jl_is_expr(stmt)) {
             // Most exprs are allowed to end a BB by fall through
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
@@ -516,51 +560,6 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     jl_binding_t *b = jl_get_binding_wr(modu, sym);
                     jl_checked_assignment(b, modu, sym, rhs);
                     JL_GC_POP();
-                }
-            }
-            else if (head == jl_enter_sym) {
-                jl_enter_handler(&__eh);
-                // This is a bit tricky, but supports the implementation of PhiC nodes.
-                // They are conceptually slots, but the slot to store to doesn't get explicitly
-                // mentioned in the store (aka the "UpsilonNode") (this makes them integrate more
-                // nicely with the rest of the SSA representation). In a compiler, we would figure
-                // out which slot to store to at compile time when we encounter the statement. We
-                // can't quite do that here, but we do something similar: We scan the catch entry
-                // block (the only place where PhiC nodes may occur) to find all the Upsilons we
-                // can possibly encounter. Then, we remember which slot they store to (we abuse the
-                // SSA value result array for this purpose). TODO: We could do this only the first
-                // time we encounter a given enter.
-                size_t catch_ip = jl_unbox_long(jl_exprarg(stmt, 0)) - 1;
-                while (catch_ip < ns) {
-                    jl_value_t *phicnode = jl_array_ptr_ref(stmts, catch_ip);
-                    if (!jl_is_phicnode(phicnode))
-                        break;
-                    jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(phicnode, 0);
-                    for (size_t i = 0; i < jl_array_nrows(values); ++i) {
-                        jl_value_t *val = jl_array_ptr_ref(values, i);
-                        assert(jl_is_ssavalue(val));
-                        size_t upsilon = ((jl_ssavalue_t*)val)->id - 1;
-                        assert(jl_is_upsilonnode(jl_array_ptr_ref(stmts, upsilon)));
-                        s->locals[jl_source_nslots(s->src) + upsilon] = jl_box_ssavalue(catch_ip + 1);
-                    }
-                    s->locals[jl_source_nslots(s->src) + catch_ip] = NULL;
-                    catch_ip += 1;
-                }
-                // store current top of exception stack for restore in pop_exception.
-                s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state());
-                if (!jl_setjmp(__eh.eh_ctx, 1)) {
-                    return eval_body(stmts, s, next_ip, toplevel);
-                } else {
-                    jl_eh_restore_state(&__eh);
-                    if (s->continue_at) { // means we reached a :leave expression
-                        ip = s->continue_at;
-                        s->continue_at = 0;
-                        continue;
-                    }
-                    else { // a real exception
-                        ip = catch_ip;
-                        continue;
-                    }
                 }
             }
             else if (head == jl_leave_sym) {
