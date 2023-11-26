@@ -246,25 +246,16 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
 
     jl_task_t *ct = jl_get_current_task();
 
-    if (ct) {
-        if (exitcode == 0)
-            jl_write_compiler_output();
+    if (ct == NULL && jl_base_module) {
+        ct = container_of(jl_adopt_thread(), jl_task_t, gcstack);
+    }
+    else if (ct != NULL) {
         // we are about to start tearing everything down, so lets try not to get
         // upset by the local mess of things when we run the user's _atexit hooks
         // this also forces us into a GC-unsafe region without a safepoint
         jl_task_frame_noreturn(ct);
-    }
-
-    if (ct == NULL && jl_base_module)
-        ct = container_of(jl_adopt_thread(), jl_task_t, gcstack);
-    else if (ct != NULL)
         jl_gc_safepoint_(ct->ptls);
-
-    jl_print_gc_stats(JL_STDERR);
-    if (jl_options.code_coverage)
-        jl_write_coverage_data(jl_options.output_code_coverage);
-    if (jl_options.malloc_log)
-        jl_write_malloc_log();
+    }
 
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
@@ -289,6 +280,15 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
             JL_GC_POP();
         }
     }
+
+    if (ct && exitcode == 0)
+        jl_write_compiler_output();
+
+    jl_print_gc_stats(JL_STDERR);
+    if (jl_options.code_coverage)
+        jl_write_coverage_data(jl_options.output_code_coverage);
+    if (jl_options.malloc_log)
+        jl_write_malloc_log();
 
     // replace standard output streams with something that we can still print to
     // after the finalizers from base/stream.jl close the TTY
@@ -575,6 +575,14 @@ static char *abspath(const char *in, int nprefix)
         }
     }
 #else
+    // GetFullPathName intentionally errors if given an empty string so manually insert `.` to invoke cwd
+    char *in2 = (char*)malloc_s(JL_PATH_MAX);
+    if (strlen(in) - nprefix == 0) {
+        memcpy(in2, in, nprefix);
+        in2[nprefix] = '.';
+        in2[nprefix+1] = '\0';
+        in = in2;
+    }
     DWORD n = GetFullPathName(in + nprefix, 0, NULL, NULL);
     if (n <= 0) {
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
@@ -585,6 +593,7 @@ static char *abspath(const char *in, int nprefix)
         jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
     }
     memcpy(out, in, nprefix);
+    free(in2);
 #endif
     return out;
 }
@@ -680,7 +689,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     if (jl_options.output_code_coverage)
         jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
     if (jl_options.tracked_path)
-        jl_options.tracked_path = absformat(jl_options.tracked_path);
+        jl_options.tracked_path = abspath(jl_options.tracked_path, 0);
 
     const char **cmdp = jl_options.cmds;
     if (cmdp) {
@@ -710,6 +719,7 @@ extern jl_mutex_t jl_modules_mutex;
 extern jl_mutex_t precomp_statement_out_lock;
 extern jl_mutex_t newly_inferred_mutex;
 extern jl_mutex_t global_roots_lock;
+extern jl_mutex_t profile_show_peek_cond_lock;
 
 static void restore_fp_env(void)
 {
@@ -729,6 +739,7 @@ static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
     JL_MUTEX_INIT(&jl_codegen_lock, "jl_codegen_lock");
     JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
+    JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
 }
 
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
@@ -803,11 +814,6 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #endif
 #endif
 
-    if ((jl_options.outputo || jl_options.outputbc || jl_options.outputasm) &&
-        (jl_options.code_coverage || jl_options.malloc_log)) {
-        jl_error("cannot generate code-coverage or track allocation information while generating a .o, .bc, or .s output file");
-    }
-
     jl_init_rand();
     jl_init_runtime_ccall();
     jl_init_tasks();
@@ -850,21 +856,19 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_options.cpu_target = "native";
     jl_init_codegen();
 
+    jl_init_common_symbols();
     if (jl_options.image_file) {
         jl_restore_system_image(jl_options.image_file);
     } else {
         jl_init_types();
-        jl_global_roots_table = jl_alloc_vec_any(0);
+        jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
+        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
     }
 
-    jl_init_common_symbols();
     jl_init_flisp();
     jl_init_serializer();
 
     if (!jl_options.image_file) {
-        jl_core_module = jl_new_module(jl_symbol("Core"), NULL);
-        jl_core_module->parent = jl_core_module;
-        jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
@@ -892,7 +896,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_array_t *init_order = jl_module_init_order;
         JL_GC_PUSH1(&init_order);
         jl_module_init_order = NULL;
-        int i, l = jl_array_len(init_order);
+        int i, l = jl_array_nrows(init_order);
         for (i = 0; i < l; i++) {
             jl_value_t *mod = jl_array_ptr_ref(init_order, i);
             jl_module_run_initializer((jl_module_t*)mod);

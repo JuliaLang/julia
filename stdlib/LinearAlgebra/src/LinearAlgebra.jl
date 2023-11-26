@@ -161,6 +161,9 @@ export
 # Constants
     I
 
+# not exported, but public names
+public AbstractTriangular
+
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
 const BlasComplex = Union{ComplexF64,ComplexF32}
@@ -465,7 +468,7 @@ wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
 wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
 wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
 
-function wrap(A::AbstractVecOrMat, tA::AbstractChar)
+Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     if tA == 'N'
         return A
     elseif tA == 'T'
@@ -619,7 +622,9 @@ function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3
     if parallel
         let Distributed = Base.require(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            return sum(Distributed.pmap(peakflops, fill(n, Distributed.nworkers())))
+            nworkers = @invokelatest Distributed.nworkers()
+            results = @invokelatest Distributed.pmap(peakflops, fill(n, nworkers))
+            return sum(results)
         end
     else
         return 2*Float64(n)^3 / minimum(t)

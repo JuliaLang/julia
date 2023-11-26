@@ -64,9 +64,9 @@ Dict{String, Int64} with 2 entries:
 """
 mutable struct Dict{K,V} <: AbstractDict{K,V}
     # Metadata: empty => 0x00, removed => 0x7f, full => 0b1[7 most significant hash bits]
-    slots::Vector{UInt8}
-    keys::Array{K,1}
-    vals::Array{V,1}
+    slots::Memory{UInt8}
+    keys::Memory{K}
+    vals::Memory{V}
     ndel::Int
     count::Int
     age::UInt
@@ -75,13 +75,15 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
 
     function Dict{K,V}() where V where K
         n = 16
-        new(zeros(UInt8,n), Vector{K}(undef, n), Vector{V}(undef, n), 0, 0, 0, n, 0)
+        slots = Memory{UInt8}(undef,n)
+        fill!(slots, 0x0)
+        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, n, 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
             d.idxfloor, d.maxprobe)
     end
-    function Dict{K, V}(slots, keys, vals, ndel, count, age, idxfloor, maxprobe) where {K, V}
+    function Dict{K, V}(slots::Memory{UInt8}, keys::Memory{K}, vals::Memory{V}, ndel::Int, count::Int, age::UInt, idxfloor::Int, maxprobe::Int) where {K, V}
         new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
     end
 end
@@ -179,17 +181,20 @@ end
     h.age += 1
     h.idxfloor = 1
     if h.count == 0
-        resize!(h.slots, newsz)
+        # TODO: tryresize
+        h.slots = Memory{UInt8}(undef, newsz)
         fill!(h.slots, 0x0)
-        resize!(h.keys, newsz)
-        resize!(h.vals, newsz)
+        h.keys = Memory{K}(undef, newsz)
+        h.vals = Memory{V}(undef, newsz)
         h.ndel = 0
+        h.maxprobe = 0
         return h
     end
 
-    slots = zeros(UInt8,newsz)
-    keys = Vector{K}(undef, newsz)
-    vals = Vector{V}(undef, newsz)
+    slots = Memory{UInt8}(undef, newsz)
+    fill!(slots, 0x0)
+    keys = Memory{K}(undef, newsz)
+    vals = Memory{V}(undef, newsz)
     age0 = h.age
     count = 0
     maxprobe = 0
@@ -223,13 +228,13 @@ end
     return h
 end
 
-function sizehint!(d::Dict{T}, newsz) where T
+function sizehint!(d::Dict{T}, newsz; shrink::Bool=true) where T
     oldsz = length(d.slots)
     # limit new element count to max_values of the key type
     newsz = min(max(newsz, length(d)), max_values(T)::Int)
     # need at least 1.5n space to hold n elements
     newsz = _tablesz(cld(3 * newsz, 2))
-    return newsz == oldsz ? d : rehash!(d, newsz)
+    return (shrink ? newsz == oldsz : newsz <= oldsz) ? d : rehash!(d, newsz)
 end
 
 """
@@ -253,12 +258,13 @@ Dict{String, Int64}()
 function empty!(h::Dict{K,V}) where V where K
     fill!(h.slots, 0x0)
     sz = length(h.slots)
-    empty!(h.keys)
-    empty!(h.vals)
-    resize!(h.keys, sz)
-    resize!(h.vals, sz)
+    for i in 1:sz
+        _unsetindex!(h.keys, i)
+        _unsetindex!(h.vals, i)
+    end
     h.ndel = 0
     h.count = 0
+    h.maxprobe = 0
     h.age += 1
     h.idxfloor = sz
     return h
@@ -372,7 +378,7 @@ function setindex!(h::Dict{K,V}, v0, key0) where V where K
     else
         key = convert(K, key0)::K
         if !(isequal(key, key0)::Bool)
-            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+            throw(KeyTypeError(K, key0))
         end
     end
     setindex!(h, v0, key)
@@ -470,7 +476,7 @@ function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     else
         key = convert(K, key0)::K
         if !isequal(key, key0)
-            throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
+            throw(KeyTypeError(K, key0))
         end
     end
     return get!(default, h, key)
@@ -769,7 +775,7 @@ function map!(f, iter::ValueIterator{<:Dict})
 end
 
 function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
-    haslength(d2) && sizehint!(d1, length(d1) + length(d2))
+    haslength(d2) && sizehint!(d1, length(d1) + length(d2), shrink=false)
     for (k, v) in d2
         i, sh = ht_keyindex2_shorthash!(d1, k)
         if i > 0
@@ -778,7 +784,7 @@ function mergewith!(combine, d1::Dict{K, V}, d2::AbstractDict) where {K, V}
             if !(k isa K)
                 k1 = convert(K, k)::K
                 if !isequal(k, k1)
-                    throw(ArgumentError("$(limitrepr(k)) is not a valid key for type $K"))
+                    throw(KeyTypeError(K, k))
                 end
                 k = k1
             end
@@ -892,9 +898,13 @@ end
 
 `PersistentDict` is a dictionary implemented as an hash array mapped trie,
 which is optimal for situations where you need persistence, each operation
-returns a new dictonary separate from the previous one, but the underlying
+returns a new dictionary separate from the previous one, but the underlying
 implementation is space-efficient and may share storage across multiple
 separate dictionaries.
+
+!!!note
+    It behaves like an IdDict.
+
 
     PersistentDict(KV::Pair)
 
@@ -916,24 +926,31 @@ Base.PersistentDict{Symbol, Int64} with 1 entry:
 PersistentDict
 
 PersistentDict{K,V}() where {K,V} = PersistentDict(HAMT.HAMT{K,V}())
-PersistentDict{K,V}(KV::Pair) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV...))
-PersistentDict(KV::Pair{K,V}) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV...))
+PersistentDict{K,V}(KV::Pair) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV))
+PersistentDict(KV::Pair{K,V}) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV))
 PersistentDict(dict::PersistentDict, pair::Pair) = PersistentDict(dict, pair...)
 PersistentDict{K,V}(dict::PersistentDict{K,V}, pair::Pair) where {K,V} = PersistentDict(dict, pair...)
 function PersistentDict(dict::PersistentDict{K,V}, key, val) where {K,V}
     key = convert(K, key)
     val = convert(V, val)
     trie = dict.trie
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
     HAMT.insert!(found, present, trie, i, bi, hs, val)
     return PersistentDict(top)
 end
 
+function PersistentDict{K,V}(KV::Pair, rest::Pair...) where {K,V}
+    dict = PersistentDict{K,V}(KV)
+    for (key, value) in rest
+        dict = PersistentDict(dict, key, value)
+    end
+    return dict
+end
+
 function PersistentDict(kv::Pair, rest::Pair...)
     dict = PersistentDict(kv)
-    for kv in rest
-        key, value = kv
+    for (key, value) in rest
         dict = PersistentDict(dict, key, value)
     end
     return dict
@@ -949,7 +966,7 @@ function in(key_val::Pair{K,V}, dict::PersistentDict{K,V}, valcmp=(==)) where {K
 
     key, val = key_val
 
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
@@ -960,7 +977,7 @@ end
 
 function haskey(dict::PersistentDict{K}, key::K) where K
     trie = dict.trie
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, _, _, _, _, _ = HAMT.path(trie, key, h)
     return found && present
 end
@@ -970,7 +987,7 @@ function getindex(dict::PersistentDict{K,V}, key::K) where {K,V}
     if HAMT.islevel_empty(trie)
         throw(KeyError(key))
     end
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
@@ -984,7 +1001,7 @@ function get(dict::PersistentDict{K,V}, key::K, default) where {K,V}
     if HAMT.islevel_empty(trie)
         return default
     end
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
@@ -998,7 +1015,7 @@ function get(default::Callable, dict::PersistentDict{K,V}, key::K) where {K,V}
     if HAMT.islevel_empty(trie)
         return default
     end
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
@@ -1011,7 +1028,7 @@ iterate(dict::PersistentDict, state=nothing) = HAMT.iterate(dict.trie, state)
 
 function delete(dict::PersistentDict{K}, key::K) where K
     trie = dict.trie
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
     if found && present
         deleteat!(trie.data, i)

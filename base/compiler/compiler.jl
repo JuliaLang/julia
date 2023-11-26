@@ -28,6 +28,8 @@ include(mod, x) = Core.include(mod, x)
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
+macro _boundscheck() Expr(:boundscheck) end
+
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 
@@ -104,6 +106,7 @@ include("strings/lazy.jl")
 
 # core array operations
 include("indices.jl")
+include("genericmemory.jl")
 include("array.jl")
 include("abstractarray.jl")
 

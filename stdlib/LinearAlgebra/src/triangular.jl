@@ -3,6 +3,12 @@
 ## Triangular
 
 # could be renamed to Triangular when that name has been fully deprecated
+"""
+    AbstractTriangular
+
+Supertype of triangular matrix types such as [`LowerTriangular`](@ref), [`UpperTriangular`](@ref),
+[`UnitLowerTriangular`](@ref) and [`UnitUpperTriangular`](@ref).
+"""
 abstract type AbstractTriangular{T} <: AbstractMatrix{T} end
 
 # First loop through all methods that don't need special care for upper/lower and unit diagonal
@@ -19,20 +25,14 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         end
         $t(A::$t) = A
         $t{T}(A::$t{T}) where {T} = A
-        function $t(A::AbstractMatrix)
-            return $t{eltype(A), typeof(A)}(A)
-        end
-        function $t{T}(A::AbstractMatrix) where T
-            $t(convert(AbstractMatrix{T}, A))
-        end
+        $t(A::AbstractMatrix) = $t{eltype(A), typeof(A)}(A)
+        $t{T}(A::AbstractMatrix) where {T} = $t(convert(AbstractMatrix{T}, A))
+        $t{T}(A::$t) where {T} = $t(convert(AbstractMatrix{T}, A.data))
 
-        function $t{T}(A::$t) where T
-            Anew = convert(AbstractMatrix{T}, A.data)
-            $t(Anew)
-        end
         Matrix(A::$t{T}) where {T} = Matrix{T}(A)
 
         AbstractMatrix{T}(A::$t) where {T} = $t{T}(A)
+        AbstractMatrix{T}(A::$t{T}) where {T} = copy(A)
 
         size(A::$t) = size(A.data)
 
@@ -2265,7 +2265,8 @@ function _sqrt_quasitriu_diag_block!(R, A)
             R[i, i] = sqrt(ta(A[i, i]))
             i += 1
         else
-            # this branch is never reached when A is complex triangular
+            # This branch is never reached when A is complex triangular
+            @assert eltype(A) <: Real
             @views _sqrt_real_2x2!(R[i:(i + 1), i:(i + 1)], A[i:(i + 1), i:(i + 1)])
             i += 2
         end

@@ -285,21 +285,27 @@ void jl_set_profile_peek_duration(double t)
     profile_peek_duration = t;
 }
 
-uintptr_t profile_show_peek_cond_loc;
-JL_DLLEXPORT void jl_set_peek_cond(uintptr_t cond)
+jl_mutex_t profile_show_peek_cond_lock;
+static uv_async_t *profile_show_peek_cond_loc;
+JL_DLLEXPORT void jl_set_peek_cond(uv_async_t *cond)
 {
+    JL_LOCK_NOGC(&profile_show_peek_cond_lock);
     profile_show_peek_cond_loc = cond;
+    JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
 }
 
 static void jl_check_profile_autostop(void)
 {
-    if ((profile_autostop_time != -1.0) && (jl_hrtime() > profile_autostop_time)) {
+    if (profile_show_peek_cond_loc != NULL && profile_autostop_time != -1.0 && jl_hrtime() > profile_autostop_time) {
         profile_autostop_time = -1.0;
         jl_profile_stop_timer();
         jl_safe_printf("\n==============================================================\n");
         jl_safe_printf("Profile collected. A report will print at the next yield point\n");
         jl_safe_printf("==============================================================\n\n");
-        uv_async_send((uv_async_t*)profile_show_peek_cond_loc);
+        JL_LOCK_NOGC(&profile_show_peek_cond_lock);
+        if (profile_show_peek_cond_loc != NULL)
+            uv_async_send(profile_show_peek_cond_loc);
+        JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
     }
 }
 
@@ -425,11 +431,18 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
         ct->gcstack = NULL;
         ct->eh = NULL;
         ct->world_age = 1;
-        ct->ptls->locks.len = 0;
+        // Force all locks to drop. Is this a good idea? Of course not. But the alternative would probably deadlock instead of crashing.
+        small_arraylist_t *locks = &ct->ptls->locks;
+        for (size_t i = locks->len; i > 0; i--)
+            jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
+        locks->len = 0;
         ct->ptls->in_pure_callback = 0;
         ct->ptls->in_finalizer = 0;
         ct->ptls->defer_signal = 0;
-        jl_atomic_store_release(&ct->ptls->gc_state, 0); // forceably exit GC (if we were in it) or safe into unsafe, without the mandatory safepoint
+        // forcibly exit GC (if we were in it) or safe into unsafe, without the mandatory safepoint
+        jl_atomic_store_release(&ct->ptls->gc_state, 0);
+        // allow continuing to use a Task that should have already died--unsafe necromancy!
+        jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
     }
 }
 
@@ -463,9 +476,9 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
         if (si_code)
-            jl_safe_printf("\n[%d] signal (%d.%d): %s\n", getpid(), sig, si_code, strsignal(sig));
+            jl_safe_printf("\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
         else
-            jl_safe_printf("\n[%d] signal (%d): %s\n", getpid(), sig, strsignal(sig));
+            jl_safe_printf("\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
     }
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
     if (context && ct) {

@@ -51,9 +51,10 @@ The *direct* subtypes of any `DataType` may be listed using [`subtypes`](@ref). 
 the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
 
 ```jldoctest; setup = :(using InteractiveUtils)
-julia> subtypes(AbstractFloat)
-4-element Vector{Any}:
+julia> InteractiveUtils.subtypes(AbstractFloat)
+5-element Vector{Any}:
  BigFloat
+ Core.BFloat16
  Float16
  Float32
  Float64
@@ -61,6 +62,9 @@ julia> subtypes(AbstractFloat)
 
 Any abstract subtype will also be included in this list, but further subtypes thereof will not;
 recursive application of [`subtypes`](@ref) may be used to inspect the full type tree.
+
+Note that [`subtypes`](@ref) is located inside [`InteractiveUtils`](@ref man-interactive-utils) but
+is automatically exported when using the REPL.
 
 ## DataType layout
 
@@ -82,7 +86,7 @@ the unquoted and interpolated expression ([`Expr`](@ref)) form for a given macro
 be passed instead!). For example:
 
 ```jldoctest; setup = :(using InteractiveUtils)
-julia> macroexpand(@__MODULE__, :(@edit println("")) )
+julia> InteractiveUtils.macroexpand(@__MODULE__, :(@edit println("")) )
 :(InteractiveUtils.edit(println, (Base.typesof)("")))
 ```
 
@@ -93,7 +97,7 @@ Finally, the [`Meta.lower`](@ref) function gives the `lowered` form of any expre
 particular interest for understanding how language constructs map to primitive operations such
 as assignments, branches, and calls:
 
-```jldoctest
+```jldoctest; setup = (using Base: +, sin)
 julia> Meta.lower(@__MODULE__, :( [1+2, sin(0.5)] ))
 :($(Expr(:thunk, CodeInfo(
     @ none within `top-level scope`
@@ -139,10 +143,10 @@ For more information see [`@code_lowered`](@ref), [`@code_typed`](@ref), [`@code
 The aforementioned functions and macros take the keyword argument `debuginfo` that controls the level
 debug information printed.
 
-```julia-repl
-julia> @code_typed debuginfo=:source +(1,1)
+```jldoctest; setup = :(using InteractiveUtils), filter = r"int.jl:\d+"
+julia> InteractiveUtils.@code_typed debuginfo=:source +(1,1)
 CodeInfo(
-    @ int.jl:53 within `+'
+    @ int.jl:87 within `+`
 1 ─ %1 = Base.add_int(x, y)::Int64
 └──      return %1
 ) => Int64

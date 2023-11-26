@@ -47,7 +47,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         end
 
         use_inst = ir[op]
-        if isa(use_inst[:stmt], Union{GotoIfNot, GotoNode, ReturnNode})
+        if isa(use_inst[:stmt], Union{GotoIfNot, GotoNode, ReturnNode}) && !(isa(use_inst[:stmt], ReturnNode) && !isdefined(use_inst[:stmt], :val))
+            # Allow uses of `unreachable`, which may have been inserted when
+            # an earlier block got deleted, but for some reason we didn't figure
+            # out yet that this entire block is dead also.
             @verify_error "At statement %$use_idx: Invalid use of value statement or terminator %$(op.id)"
             error("")
         end
@@ -361,6 +364,20 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     if f isa GlobalRef && f.name === :cglobal
                         # TODO: these are not yet linearized
                         continue
+                    end
+                elseif stmt.head === :leave
+                    for i in 1:length(stmt.args)
+                        arg = stmt.args[i]
+                        if !isa(arg, Union{Nothing, SSAValue})
+                            @verify_error "Malformed :leave - Expected `Nothing` or SSAValue"
+                            error()
+                        elseif isa(arg, SSAValue)
+                            enter_stmt = ir[arg::SSAValue][:stmt]
+                            if !isa(enter_stmt, Nothing) && !isexpr(enter_stmt, :enter)
+                                @verify_error "Malformed :leave - argument ssavalue should point to `nothing` or :enter"
+                                error()
+                            end
+                        end
                     end
                 end
             end

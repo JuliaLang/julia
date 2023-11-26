@@ -14,7 +14,7 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :splatnew => 2:2,
     :the_exception => 0:0,
     :enter => 1:1,
-    :leave => 1:1,
+    :leave => 1:typemax(Int),
     :pop_exception => 1:1,
     :inbounds => 1:1,
     :inline => 1:1,
@@ -253,5 +253,3 @@ function is_valid_rvalue(@nospecialize(x))
 end
 
 is_valid_return(@nospecialize(x)) = is_valid_argument(x) || (isa(x, Expr) && x.head === :lambda)
-
-is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag

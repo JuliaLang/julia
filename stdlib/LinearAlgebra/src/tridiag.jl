@@ -103,8 +103,12 @@ julia> SymTridiagonal(B)
 ```
 """
 function SymTridiagonal(A::AbstractMatrix)
-    if (diag(A, 1) == transpose.(diag(A, -1))) && all(issymmetric.(diag(A, 0)))
-        SymTridiagonal(diag(A, 0), diag(A, 1))
+    checksquare(A)
+    du = diag(A, 1)
+    d  = diag(A)
+    dl = diag(A, -1)
+    if all(((x, y),) -> x == transpose(y), zip(du, dl)) && all(issymmetric, d)
+        SymTridiagonal(d, du)
     else
         throw(ArgumentError("matrix is not symmetric; cannot convert to SymTridiagonal"))
     end
@@ -116,12 +120,12 @@ SymTridiagonal{T,V}(S::SymTridiagonal) where {T,V<:AbstractVector{T}} =
 SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = S
 SymTridiagonal{T}(S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+                    convert(AbstractVector{T}, S.ev)::AbstractVector{T})
 SymTridiagonal(S::SymTridiagonal) = S
 
-AbstractMatrix{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+AbstractMatrix{T}(S::SymTridiagonal) where {T} = SymTridiagonal{T}(S)
+AbstractMatrix{T}(S::SymTridiagonal{T}) where {T} = copy(S)
+
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = Matrix{T}(undef, n, n)
@@ -508,8 +512,8 @@ Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiag
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
     Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
 end
-function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
-    Tridiagonal{T,V}(A.dl, A.d, A.du)
+function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector) where {T}
+    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du, du2))...)
 end
 
 """
@@ -540,12 +544,20 @@ Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
 Tridiagonal(A::Tridiagonal) = A
 Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
 function Tridiagonal{T}(A::Tridiagonal) where {T}
-    dl, d, du = map(x->convert(AbstractVector{T}, x)::AbstractVector{T},
-                    (A.dl, A.d, A.du))
+    dl, d, du = map(x -> convert(AbstractVector{T}, x)::AbstractVector{T}, (A.dl, A.d, A.du))
     if isdefined(A, :du2)
-        Tridiagonal(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
+        Tridiagonal{T}(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
     else
-        Tridiagonal(dl, d, du)
+        Tridiagonal{T}(dl, d, du)
+    end
+end
+Tridiagonal{T,V}(A::Tridiagonal{T,V}) where {T,V<:AbstractVector{T}} = A
+function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
+    dl, d, du = map(x -> convert(V, x)::V, (A.dl, A.d, A.du))
+    if isdefined(A, :du2)
+        Tridiagonal{T,V}(dl, d, du, convert(V, A.du2)::V)
+    else
+        Tridiagonal{T,V}(dl, d, du)
     end
 end
 
@@ -763,6 +775,7 @@ end
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
 AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)
+AbstractMatrix{T}(M::Tridiagonal{T}) where {T} = copy(M)
 Tridiagonal{T}(M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
 function SymTridiagonal{T}(M::Tridiagonal) where T
     if issymmetric(M)

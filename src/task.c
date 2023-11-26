@@ -42,6 +42,13 @@ extern "C" {
 #endif
 
 #if defined(_COMPILER_ASAN_ENABLED_)
+#if __GLIBC__
+#include <dlfcn.h>
+// Bypass the ASAN longjmp wrapper - we are unpoisoning the stack ourselves,
+// since ASAN normally unpoisons far too much.
+// c.f. interceptor in jl_dlopen as well
+void (*real_siglongjmp)(jmp_buf _Buf, int _Value) = NULL;
+#endif
 static inline void sanitizer_start_switch_fiber(jl_ptls_t ptls, jl_task_t *from, jl_task_t *to) {
     if (to->copy_stack)
         __sanitizer_start_switch_fiber(&from->ctx.asan_fake_stack, (char*)ptls->stackbase-ptls->stacksize, ptls->stacksize);
@@ -1223,6 +1230,17 @@ void jl_init_tasks(void) JL_GC_DISABLED
 #ifndef COPY_STACKS
     if (always_copy_stacks) {
         jl_safe_printf("Julia built without COPY_STACKS support");
+        exit(1);
+    }
+#endif
+#if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
+    void *libc_handle = dlopen("libc.so.6", RTLD_NOW | RTLD_NOLOAD);
+    if (libc_handle) {
+        *(void**)&real_siglongjmp = dlsym(libc_handle, "siglongjmp");
+        dlclose(libc_handle);
+    }
+    if (real_siglongjmp == NULL) {
+        jl_safe_printf("failed to get real siglongjmp\n");
         exit(1);
     }
 #endif
