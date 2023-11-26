@@ -977,6 +977,8 @@ function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     return A
 end
 
+__safe_setindex!(A::Vector{Any}, @nospecialize(x), i::Int) = (@inline; @_nothrow_noub_meta;
+    memoryrefset!(memoryref(A.ref, i, false), x, :not_atomic, false); return A)
 __safe_setindex!(A::Vector{T}, x::T, i::Int) where {T} = (@inline; @_nothrow_noub_meta;
     memoryrefset!(memoryref(A.ref, i, false), x, :not_atomic, false); return A)
 __safe_setindex!(A::Vector{T}, x,    i::Int) where {T} = (@inline;

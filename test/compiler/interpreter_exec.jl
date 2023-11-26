@@ -81,7 +81,7 @@ let m = Meta.@lower 1 + 1
         QuoteNode(:b),
         GlobalRef(@__MODULE__, :test29262),
         # block 2
-        Expr(:enter, 11),
+        Core.EnterNode(11),
         # block 3
         Core.UpsilonNode(),
         Core.UpsilonNode(),
@@ -94,7 +94,6 @@ let m = Meta.@lower 1 + 1
         # block 6
         Core.PhiCNode(Any[Core.SSAValue(5), Core.SSAValue(7), Core.SSAValue(9)]), # NULL, :a, :b
         Core.PhiCNode(Any[Core.SSAValue(6)]), # NULL
-        Expr(:leave, Core.SSAValue(4)),
         # block 7
         ReturnNode(Core.SSAValue(11)),
     ]
