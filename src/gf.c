@@ -1446,32 +1446,39 @@ static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT
 
 static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world)
 {
-    // caller must hold the mt->writelock
+    JL_GC_PUSH1(&tt);
+    JL_LOCK(&mt->writelock);
     assert(tt->isdispatchtuple || tt->hasfreetypevars);
+    jl_method_instance_t *mi = NULL;
     if (tt->isdispatchtuple) {
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
         jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
         if (entry)
-            return entry->func.linfo;
+            mi = entry->func.linfo;
     }
 
-    struct jl_typemap_assoc search = {(jl_value_t*)tt, world, NULL, 0, ~(size_t)0};
-    jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mt->cache), &search, jl_cachearg_offset(mt), /*subtype*/1);
-    if (entry)
-        return entry->func.linfo;
-
-    size_t min_valid = 0;
-    size_t max_valid = ~(size_t)0;
-    jl_method_match_t *matc = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
-    jl_method_instance_t *nf = NULL;
-    if (matc) {
-        JL_GC_PUSH1(&matc);
-        jl_method_t *m = matc->method;
-        jl_svec_t *env = matc->sparams;
-        nf = cache_method(mt, &mt->cache, (jl_value_t*)mt, tt, m, world, min_valid, max_valid, env);
-        JL_GC_POP();
+    if (!mi) {
+        struct jl_typemap_assoc search = {(jl_value_t*)tt, world, NULL, 0, ~(size_t)0};
+        jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mt->cache), &search, jl_cachearg_offset(mt), /*subtype*/1);
+        if (entry)
+            mi = entry->func.linfo;
     }
-    return nf;
+
+    if (!mi) {
+        size_t min_valid = 0;
+        size_t max_valid = ~(size_t)0;
+        jl_method_match_t *matc = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
+        if (matc) {
+            JL_GC_PUSH1(&matc);
+            jl_method_t *m = matc->method;
+            jl_svec_t *env = matc->sparams;
+            mi = cache_method(mt, &mt->cache, (jl_value_t*)mt, tt, m, world, min_valid, max_valid, env);
+            JL_GC_POP();
+        }
+    }
+    JL_UNLOCK(&mt->writelock);
+    JL_GC_POP();
+    return mi;
 }
 
 
@@ -2239,7 +2246,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, si
     if (_mt == jl_nothing)
         mt = jl_gf_ft_mtable(jl_tparam0(tt));
     else {
-        assert(jl_isa(_mt, jl_methtable_type));
+        assert(jl_isa(_mt, (jl_value_t*)jl_methtable_type));
         mt = (jl_methtable_t*) _mt;
     }
 
@@ -2248,12 +2255,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, si
     jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
     if (entry)
         return entry->func.linfo;
-    JL_GC_PUSH1(&tt);
-    JL_LOCK(&mt->writelock);
-    jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, tt, world);
-    JL_UNLOCK(&mt->writelock);
-    JL_GC_POP();
-    return sf;
+    return jl_mt_assoc_by_type(mt, tt, world);
 }
 
 JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world)
@@ -2269,12 +2271,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t na
     entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
     if (entry)
         return entry->func.linfo;
-    JL_GC_PUSH1(&tt);
-    JL_LOCK(&mt->writelock);
-    jl_method_instance_t *sf = jl_mt_assoc_by_type(mt, tt, world);
-    JL_UNLOCK(&mt->writelock);
-    JL_GC_POP();
-    return sf;
+    return jl_mt_assoc_by_type(mt, tt, world);
 }
 
 // return a Vector{Any} of svecs, each describing a method match:
@@ -3074,14 +3071,10 @@ have_entry:
         mfunc = entry->func.linfo;
     }
     else {
-        JL_GC_PUSH1(&tt);
         assert(tt);
-        JL_LOCK(&mt->writelock);
         // cache miss case
         JL_TIMING(METHOD_LOOKUP_SLOW, METHOD_LOOKUP_SLOW);
         mfunc = jl_mt_assoc_by_type(mt, tt, world);
-        JL_UNLOCK(&mt->writelock);
-        JL_GC_POP();
         if (jl_options.malloc_log)
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
         if (mfunc == NULL) {
