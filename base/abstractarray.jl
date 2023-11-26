@@ -1258,7 +1258,7 @@ Return a subset of array `A` as selected by the indices `inds`.
 
 Each index may be any [supported index type](@ref man-supported-index-types), such
 as an [`Integer`](@ref), [`CartesianIndex`](@ref), [range](@ref Base.AbstractRange), or [array](@ref man-multi-dim-arrays) of supported indices.
-A [:](@ref Base.Colon) can be used to select all elements in some dimension, and a [`BitArray`](@ref) can be used to select all `true` elements.
+A [:](@ref Base.Colon) may be used to select all elements along a specific dimension, and a boolean array (e.g. an `Array{Bool}` or a [`BitArray`](@ref)) may be used to filter for elements where the corresponding index is `true`.
 
 When `inds` selects multiple elements, this function returns a newly
 allocated array. To index multiple elements without making a copy,
