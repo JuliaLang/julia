@@ -643,4 +643,11 @@ end
     @test isequal(sort(X, alg=MergeSort, rev=true), XRP)
 end
 
-sortperm(reverse([NaN, missing, NaN, missing]))
+@test (sortperm(reverse([NaN, missing, NaN, missing])); true)
+
+# use LazyString for MissingException to get the better effects
+for func in (round, ceil, floor, trunc)
+    @testset let func = func
+        @test Core.Compiler.is_foldable(Base.infer_effects(func, (Type{Int},Union{Int,Missing})))
+    end
+end

@@ -27,7 +27,7 @@ Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, basetype(T)))
 Compute hash for an enum value `x`. This internal method will be specialized
 for every enum type created through [`@enum`](@ref).
 """
-_enum_hash(x::Enum, h::UInt) = hash(x, h)
+_enum_hash(x::Enum, h::UInt) = invoke(hash, Tuple{Any, UInt}, x, h)
 Base.hash(x::Enum, h::UInt) = _enum_hash(x, h)
 Base.isless(x::T, y::T) where {T<:Enum} = isless(basetype(T)(x), basetype(T)(y))
 

@@ -15,7 +15,11 @@ mutable struct BitSet <: AbstractSet{Int}
     # 1st stored Int equals 64*offset
     offset::Int
 
-    BitSet() = new(resize!(Vector{UInt64}(undef, 4), 0), NO_OFFSET)
+    function BitSet()
+        a = Vector{UInt64}(undef, 4) # start with some initial space for holding 0:255 without additional allocations later
+        setfield!(a, :size, (0,)) # aka `empty!(a)` inlined
+        return new(a, NO_OFFSET)
+   end
 end
 
 """
@@ -51,7 +55,10 @@ function copy!(dest::BitSet, src::BitSet)
     dest
 end
 
-sizehint!(s::BitSet, n::Integer) = (sizehint!(s.bits, (n+63) >> 6); s)
+function sizehint!(s::BitSet, n::Integer; first::Bool=false, shrink::Bool=true)
+    sizehint!(s.bits, (n+63) >> 6; first, shrink)
+    s
+end
 
 function _bits_getindex(b::Bits, n::Int, offset::Int)
     ci = _div64(n) - offset + 1
@@ -391,7 +398,7 @@ function ==(s1::BitSet, s2::BitSet)
     if overlap > 0
         t1 = @_gc_preserve_begin a1
         t2 = @_gc_preserve_begin a2
-        _memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 || return false
+        memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 || return false
         @_gc_preserve_end t2
         @_gc_preserve_end t1
     end

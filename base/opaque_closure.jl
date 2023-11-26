@@ -26,13 +26,13 @@ macro opaque(ty, ex)
 end
 
 # OpaqueClosure construction from pre-inferred CodeInfo/IRCode
-using Core.Compiler: IRCode
+using Core.Compiler: IRCode, SSAValue
 using Core: CodeInfo
 
 function compute_ir_rettype(ir::IRCode)
     rt = Union{}
     for i = 1:length(ir.stmts)
-        stmt = ir.stmts[i][:inst]
+        stmt = ir[SSAValue(i)][:stmt]
         if isa(stmt, Core.Compiler.ReturnNode) && isdefined(stmt, :val)
             rt = Core.Compiler.tmerge(Core.Compiler.argextype(stmt.val, ir), rt)
         end

@@ -18,6 +18,10 @@ See also [Multi-Threading](@ref man-multithreading).
 ## Atomic operations
 
 ```@docs
+atomic
+```
+
+```@docs
 Base.@atomic
 Base.@atomicswap
 Base.@atomicreplace

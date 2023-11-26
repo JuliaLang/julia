@@ -6,6 +6,8 @@ using Base.Ryu
 
 export @printf, @sprintf
 
+public format, Format
+
 # format specifier categories
 const Ints = Union{Val{'d'}, Val{'i'}, Val{'u'}, Val{'x'}, Val{'X'}, Val{'o'}}
 const Floats = Union{Val{'e'}, Val{'E'}, Val{'f'}, Val{'F'}, Val{'g'}, Val{'G'}, Val{'a'}, Val{'A'}}
@@ -122,7 +124,6 @@ end
 
 # parse format string
 function Format(f::AbstractString)
-    isempty(f) && throw(InvalidFormatStringError("Format string must not be empty", f, 1, 1))
     bytes = codeunits(f)
     len = length(bytes)
     pos = 1
@@ -238,7 +239,7 @@ function Format(f::AbstractString)
         !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(InvalidFormatStringError("'$(Char(b))' is not a valid type specifier", f, last_percent_pos, pos-1))
         type = Val{Char(b)}
         if type <: Ints && precision > 0
-            # note - we should also set zero to false if dynamic precison > 0
+            # note - we should also set zero to false if dynamic precision > 0
             # this is taken care of in fmt() for Ints
             zero = false
         elseif (type <: Strings || type <: Chars) && !parsedprecdigits
@@ -975,7 +976,7 @@ Use shorter of decimal or scientific 1.23 1.23e+07
 julia> @printf "Use dynamic width and precision  %*.*f" 10 2 0.12345
 Use dynamic width and precision        0.12
 ```
-For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
+For a systematic specification of the format, see [here](https://en.cppreference.com/w/c/io/fprintf).
 See also [`@sprintf`](@ref) to get the result as a `String` instead of it being printed.
 
 # Caveats

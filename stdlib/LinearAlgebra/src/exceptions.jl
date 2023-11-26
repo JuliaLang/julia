@@ -38,7 +38,7 @@ function Base.showerror(io::IO, ex::PosDefException)
     else
         print(io, "positive definite")
     end
-    print(io, "; Cholesky factorization failed.")
+    print(io, "; Factorization failed.")
 end
 
 struct RankDeficientException <: Exception

@@ -380,6 +380,8 @@ function type_multiply(a::Float64, b::Float64)
     a * b
 end
 
+export greet, simple_add, type_multiply
+
 end
 ```
 
@@ -441,7 +443,7 @@ end
 
 #### Writing Tests for `greeting_tests.jl`
 
-Using our knowledge of `Test.jl`, here are some example tests we could add to `math_tests.jl`:
+Using our knowledge of `Test.jl`, here are some example tests we could add to `greeting_tests.jl`:
 
 ```julia
 @testset "Testset 3" begin
@@ -489,3 +491,15 @@ Using `Test.jl`, more complicated tests can be added for packages but this shoul
 ```@meta
 DocTestSetup = nothing
 ```
+
+### Code Coverage
+
+Code coverage tracking during tests can be enabled using the `pkg> test --coverage` flag (or at a lower level using the
+[`--code-coverage`](@ref command-line-interface) julia arg). This is on by default in the
+[julia-runtest](https://github.com/julia-actions/julia-runtest) GitHub action.
+
+To evaluate coverage either manually inspect the `.cov` files that are generated beside the source files locally,
+or in CI use the [julia-processcoverage](https://github.com/julia-actions/julia-processcoverage) GitHub action.
+
+!!! compat "Julia 1.11"
+    Since Julia 1.11, coverage is not collected during the package precompilation phase.

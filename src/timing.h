@@ -31,7 +31,7 @@ void jl_init_timing(void);
 void jl_destroy_timing(void) JL_NOTSAFEPOINT;
 
 // Update the enable bit-mask to enable/disable tracing events for
-// the subsystem in `jl_timing_names` matching the provided string.
+// the subsystem in `jl_timing_subsystems` matching the provided string.
 //
 // Returns -1 if no matching sub-system was found.
 JL_DLLEXPORT int jl_timing_set_enable(const char *subsystem, uint8_t enabled);
@@ -50,6 +50,11 @@ void jl_timing_apply_env(void);
 // Configurable item limit, runtime code should use this to limit printing
 // when adding potentially many items of metadata to a single timing zone.
 extern JL_DLLEXPORT uint32_t jl_timing_print_limit;
+
+JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, const char *name, const char *function, const char *file, int line, int color);
+JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event);
+JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *cur_block);
+JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *cur_block);
 
 #ifdef __cplusplus
 }
@@ -82,11 +87,12 @@ extern JL_DLLEXPORT uint32_t jl_timing_print_limit;
 #define jl_timing_show_macro(macro, lno, mod, b)
 #define jl_timing_printf(b, f, ...)
 #define jl_timing_puts(b, s)
-#define jl_timing_init_task(t)
+#define jl_timing_task_init(t)
+#define jl_timing_event_create(blk)
 #define jl_timing_block_start(blk)
-#define jl_timing_block_enter_task(ct, ptls, blk)
-#define jl_timing_block_exit_task(ct, ptls) ((jl_timing_block_t *)NULL)
-#define jl_pop_timing_block(blk)
+#define jl_timing_block_task_enter(ct, ptls, blk)
+#define jl_timing_block_task_exit(ct, ptls) ((jl_timing_block_t *)NULL)
+#define jl_timing_block_pop(blk)
 
 #define jl_timing_counter_inc(counter, value)
 #define jl_timing_counter_dec(counter, value)
@@ -102,6 +108,7 @@ extern JL_DLLEXPORT uint32_t jl_timing_print_limit;
 #include "julia_assert.h"
 #ifdef USE_TRACY
 #include "tracy/TracyC.h"
+typedef struct ___tracy_source_location_data TracySrcLocData;
 #endif
 
 #ifdef USE_ITTAPI
@@ -112,11 +119,11 @@ extern JL_DLLEXPORT uint32_t jl_timing_print_limit;
 extern "C" {
 #endif
 void jl_print_timings(void);
-jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block);
 
-void jl_timing_init_task(jl_task_t *t);
-void jl_timing_block_enter_task(jl_task_t *ct, jl_ptls_t ptls, jl_timing_block_t *prev_blk);
-jl_timing_block_t *jl_timing_block_exit_task(jl_task_t *ct, jl_ptls_t ptls);
+void jl_timing_task_init(jl_task_t *t);
+void jl_timing_block_task_enter(jl_task_t *ct, jl_ptls_t ptls, jl_timing_block_t *prev_blk);
+jl_timing_block_t *jl_timing_block_task_exit(jl_task_t *ct, jl_ptls_t ptls);
+jl_timing_block_t *jl_timing_block_pop(jl_timing_block_t *cur_block);
 
 // Add the output of `jl_static_show(x)` as a text annotation to the
 // profiling region corresponding to `cur_block`.
@@ -132,6 +139,10 @@ JL_DLLEXPORT void jl_timing_show_location(const char *file, int line, jl_module_
 JL_DLLEXPORT void jl_timing_show_macro(jl_method_instance_t *macro, jl_value_t* lno, jl_module_t* mod, jl_timing_block_t *cur_block);
 JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *format, ...);
 JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
+
+#define jl_timing_event_create(subsystem, name, function, file, line, color) _jl_timing_event_create(subsystem, name, function, file, line, color)
+#define jl_timing_block_start(blk) _jl_timing_block_start(blk)
+#define jl_timing_block_end(blk) _jl_timing_block_end(blk)
 
 #ifdef __cplusplus
 }
@@ -149,8 +160,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(METHOD_LOOKUP_SLOW)    \
         X(METHOD_LOOKUP_FAST)    \
         X(CODEINST_COMPILE)      \
-        X(LLVM_OPT)              \
-        X(LLVM_ORC)              \
+        X(LLVM_JIT)              \
         X(METHOD_MATCH)          \
         X(TYPE_CACHE_LOOKUP)     \
         X(TYPE_CACHE_INSERT)     \
@@ -164,34 +174,13 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(LOAD_MODULE)           \
         X(LOAD_IMAGE)            \
         X(VERIFY_IMAGE)          \
+        X(VERIFY_IR)             \
         X(SAVE_MODULE)           \
         X(INIT_MODULE)           \
         X(LOCK_SPIN)             \
         X(STACKWALK)             \
         X(DL_OPEN)               \
         X(JULIA_INIT)            \
-
-
-#define JL_TIMING_EVENTS \
-        JL_TIMING_SUBSYSTEMS \
-        X(GC_Stop) \
-        X(GC_Mark) \
-        X(GC_FullSweep) \
-        X(GC_IncrementalSweep) \
-        X(GC_Finalizers) \
-        X(CODEGEN_LLVM) \
-        X(CODEGEN_Codeinst) \
-        X(CODEGEN_Workqueue) \
-        X(LOAD_Sysimg) \
-        X(LOAD_Pkgimg) \
-        X(LOAD_Processor) \
-        X(VERIFY_Edges) \
-        X(VERIFY_Methods) \
-        X(VERIFY_Graph) \
-        X(STACKWALK_Backtrace) \
-        X(STACKWALK_Excstack) \
-        X(NATIVE_Dump) \
-        X(NATIVE_Create) \
 
 
 #define JL_TIMING_COUNTERS \
@@ -203,18 +192,11 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(ImageSize) \
 
 
-enum jl_timing_subsystems {
+enum jl_timing_subsystem {
 #define X(name) JL_TIMING_ ## name,
     JL_TIMING_SUBSYSTEMS
 #undef X
-    JL_TIMING_LAST
-};
-
-enum jl_timing_events {
-#define X(name) JL_TIMING_EVENT_ ## name,
-    JL_TIMING_EVENTS
-#undef X
-    JL_TIMING_EVENT_LAST
+    JL_TIMING_SUBSYSTEM_LAST
 };
 
 enum jl_timing_counter_types {
@@ -231,63 +213,12 @@ enum jl_timing_counter_types {
  * Timing Backend: Aggregated timing counts (implemented in timing.c)
  **/
 
-#ifdef USE_TIMING_COUNTS
-#define _COUNTS_CTX_MEMBER jl_timing_counts_t counts_ctx;
-#define _COUNTS_START(block, t) _jl_timing_counts_start(block, t)
-#define _COUNTS_STOP(block, event, t) _jl_timing_counts_stop(block, event, t)
-#define _COUNTS_PAUSE(block, t) _jl_timing_counts_pause(block, t)
-#define _COUNTS_RESUME(block, t) _jl_timing_counts_resume(block, t)
-#else
-#define _COUNTS_CTX_MEMBER
-#define _COUNTS_START(block, t)
-#define _COUNTS_STOP(block, event, t)
-#define _COUNTS_PAUSE(block, t)
-#define _COUNTS_RESUME(block, t)
-#endif
+typedef struct jl_timing_counts_event_t {
+    const char *name;
+    _Atomic(uint64_t) self;
+    _Atomic(uint64_t) total;
+} jl_timing_counts_event_t;
 
-/**
- * Timing Backend: Tracy
- **/
-
-#ifdef USE_TRACY
-#define _TRACY_CTX_MEMBER TracyCZoneCtx tracy_ctx; const struct ___tracy_source_location_data *tracy_srcloc;
-#define _TRACY_CTOR(block, name) static const struct ___tracy_source_location_data TIMING_CONCAT(__tracy_source_location,__LINE__) = { name, __func__,  TracyFile, (uint32_t)__LINE__, 0 }; \
-                                         (block)->tracy_srcloc = &TIMING_CONCAT(__tracy_source_location,__LINE__); \
-                                         (block)->tracy_ctx.active = 0
-#define _TRACY_START(block) (block)->tracy_ctx = ___tracy_emit_zone_begin( (block)->tracy_srcloc, 1 );
-#define _TRACY_STOP(ctx) TracyCZoneEnd(ctx)
-#else
-#define _TRACY_CTX_MEMBER
-#define _TRACY_CTOR(block, name)
-#define _TRACY_START(block)
-#define _TRACY_STOP(ctx)
-#endif
-
-/**
- * Timing Backend: Intel VTune (ITTAPI)
- **/
-
-#ifdef USE_ITTAPI
-#define _ITTAPI_CTX_MEMBER __itt_event ittapi_event;
-#define _ITTAPI_CTOR(block, name) static __itt_event TIMING_CONCAT(__itt_event,__LINE__) = INT_MAX; \
-                                  if (TIMING_CONCAT(__itt_event,__LINE__) == INT_MAX) \
-                                      TIMING_CONCAT(__itt_event,__LINE__) = __itt_event_create(name, strlen(name)); \
-                                  (block)->ittapi_event = TIMING_CONCAT(__itt_event,__LINE__)
-#define _ITTAPI_START(block) __itt_event_start((block)->ittapi_event)
-#define _ITTAPI_STOP(block) __itt_event_end((block)->ittapi_event)
-#else
-#define _ITTAPI_CTX_MEMBER
-#define _ITTAPI_CTOR(block, name)
-#define _ITTAPI_START(block)
-#define _ITTAPI_STOP(block)
-#endif
-
-/**
- * Implementation: Aggregated counts back-end
- **/
-
-extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_self_counts[(int)JL_TIMING_EVENT_LAST];
-extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_full_counts[(int)JL_TIMING_EVENT_LAST];
 typedef struct _jl_timing_counts_t {
     uint64_t total;
     uint64_t start;
@@ -297,102 +228,95 @@ typedef struct _jl_timing_counts_t {
 #endif
 } jl_timing_counts_t;
 
-STATIC_INLINE void _jl_timing_counts_pause(jl_timing_counts_t *block, uint64_t t) JL_NOTSAFEPOINT {
-#ifdef JL_DEBUG_BUILD
-    assert(block->running);
-    block->running = 0;
+#ifdef USE_TIMING_COUNTS
+#define _COUNTS_EVENT_MEMBER             jl_timing_counts_event_t *counts_event;
+#define _COUNTS_BLOCK_MEMBER             jl_timing_counts_t counts_ctx;
+#define _COUNTS_START(block, t)          _jl_timing_counts_start(block, t)
+#define _COUNTS_STOP(block, t)           _jl_timing_counts_stop(block, t)
+#define _COUNTS_PAUSE(block, t)          _jl_timing_counts_pause(block, t)
+#define _COUNTS_RESUME(block, t)         _jl_timing_counts_resume(block, t)
+#else
+#define _COUNTS_EVENT_MEMBER
+#define _COUNTS_BLOCK_MEMBER
+#define _COUNTS_START(block, t)
+#define _COUNTS_STOP(block, t)
+#define _COUNTS_PAUSE(block, t)
+#define _COUNTS_RESUME(block, t)
 #endif
-    block->total += t - block->start;
-}
 
-STATIC_INLINE void _jl_timing_counts_resume(jl_timing_counts_t *block, uint64_t t) JL_NOTSAFEPOINT {
-#ifdef JL_DEBUG_BUILD
-    assert(!block->running);
-    block->running = 1;
-#endif
-    block->start = t;
-}
+/**
+ * Timing Backend: Tracy
+ **/
 
-STATIC_INLINE void _jl_timing_counts_start(jl_timing_counts_t *block, uint64_t t) JL_NOTSAFEPOINT {
-    block->total = 0;
-    block->start = t;
-    block->t0 = t;
-#ifdef JL_DEBUG_BUILD
-    block->running = 1;
+#ifdef USE_TRACY
+#define _TRACY_EVENT_MEMBER              TracySrcLocData tracy_srcloc;
+#define _TRACY_BLOCK_MEMBER              TracyCZoneCtx tracy_ctx;
+#define _TRACY_START(block)              (block)->tracy_ctx = ___tracy_emit_zone_begin( &(block)->event->tracy_srcloc, 1 );
+#define _TRACY_STOP(ctx)                 TracyCZoneEnd(ctx)
+#else
+#define _TRACY_EVENT_MEMBER
+#define _TRACY_BLOCK_MEMBER
+#define _TRACY_START(block)
+#define _TRACY_STOP(ctx)
 #endif
-}
 
-STATIC_INLINE void _jl_timing_counts_stop(jl_timing_counts_t *block, int event, uint64_t t) JL_NOTSAFEPOINT {
-#ifdef JL_DEBUG_BUILD
-    assert(block->running);
-    block->running = 0;
+/**
+ * Timing Backend: Intel VTune (ITTAPI)
+ **/
+
+#ifdef USE_ITTAPI
+#define _ITTAPI_EVENT_MEMBER              __itt_event ittapi_event;
+#define _ITTAPI_BLOCK_MEMBER
+#define _ITTAPI_START(block)              __itt_event_start((block)->event->ittapi_event)
+#define _ITTAPI_STOP(block)               __itt_event_end((block)->event->ittapi_event)
+#else
+#define _ITTAPI_EVENT_MEMBER
+#define _ITTAPI_BLOCK_MEMBER
+#define _ITTAPI_START(block)
+#define _ITTAPI_STOP(block)
 #endif
-    block->total += t - block->start;
-    jl_atomic_fetch_add_relaxed(jl_timing_self_counts + event, block->total);
-    jl_atomic_fetch_add_relaxed(jl_timing_full_counts + event, t - block->t0);
-}
 
 /**
  * Top-level jl_timing implementation
  **/
 
-extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask[(JL_TIMING_LAST + sizeof(uint64_t) * CHAR_BIT - 1) / (sizeof(uint64_t) * CHAR_BIT)];
+extern JL_DLLEXPORT _Atomic(uint64_t) jl_timing_disable_mask[(JL_TIMING_SUBSYSTEM_LAST + sizeof(uint64_t) * CHAR_BIT - 1) / (sizeof(uint64_t) * CHAR_BIT)];
+extern const char *jl_timing_subsystems[(int)JL_TIMING_SUBSYSTEM_LAST];
 
-struct _jl_timing_block_t { // typedef in julia.h
-    struct _jl_timing_block_t *prev;
-
-    _TRACY_CTX_MEMBER
-    _ITTAPI_CTX_MEMBER
-    _COUNTS_CTX_MEMBER
+/**
+ * Stores all static attributes associated with a profiling event.
+ *
+ * A single event can be used to create many timing blocks with
+ * the same name/source information.
+ **/
+struct _jl_timing_event_t { // typedef in julia.h
+    _TRACY_EVENT_MEMBER
+    _ITTAPI_EVENT_MEMBER
+    _COUNTS_EVENT_MEMBER
 
     int subsystem;
-    int event;
-    int8_t is_running;
+};
+
+/**
+ * Stores all dynamic attributes associated with a timing block.
+ *
+ * Every time the application enters an instrumented block of code,
+ * a new timing block is created. A timing block corresponds to one
+ * "span" of time in the profiler.
+ **/
+struct _jl_timing_block_t { // typedef in julia.h
+    struct _jl_timing_block_t *prev;
+    jl_timing_event_t *event;
+
+    _TRACY_BLOCK_MEMBER
+    _ITTAPI_BLOCK_MEMBER
+    _COUNTS_BLOCK_MEMBER
+
+    uint8_t is_running;
 };
 
 STATIC_INLINE int _jl_timing_enabled(int subsystem) JL_NOTSAFEPOINT {
     return (jl_atomic_load_relaxed(jl_timing_disable_mask + subsystem / (sizeof(uint64_t) * CHAR_BIT)) & (1 << (subsystem % (sizeof(uint64_t) * CHAR_BIT)))) == 0;
-}
-
-STATIC_INLINE void jl_timing_block_start(jl_timing_block_t *block) {
-    assert(!block->is_running);
-    if (!_jl_timing_enabled(block->subsystem)) return;
-
-    uint64_t t = cycleclock(); (void)t;
-    _COUNTS_START(&block->counts_ctx, t);
-    _ITTAPI_START(block);
-    _TRACY_START(block);
-
-    jl_timing_block_t **prevp = &jl_current_task->ptls->timing_stack;
-    block->prev = *prevp;
-    block->is_running = 1;
-    if (block->prev) {
-        _COUNTS_PAUSE(&block->prev->counts_ctx, t);
-    }
-    *prevp = block;
-}
-
-STATIC_INLINE void _jl_timing_block_ctor(jl_timing_block_t *block, int subsystem, int event) JL_NOTSAFEPOINT {
-    block->subsystem = subsystem;
-    block->event = event;
-    block->is_running = 0;
-}
-
-STATIC_INLINE void _jl_timing_block_destroy(jl_timing_block_t *block) JL_NOTSAFEPOINT {
-    if (block->is_running) {
-        uint64_t t = cycleclock(); (void)t;
-        _ITTAPI_STOP(block);
-        _TRACY_STOP(block->tracy_ctx);
-        _COUNTS_STOP(&block->counts_ctx, block->event, cycleclock());
-
-        jl_task_t *ct = jl_current_task;
-        jl_timing_block_t **pcur = &ct->ptls->timing_stack;
-        assert(*pcur == block);
-        *pcur = block->prev;
-        if (block->prev) {
-            _COUNTS_RESUME(&block->prev->counts_ctx, t);
-        }
-    }
 }
 
 typedef struct _jl_timing_suspend_t {
@@ -412,16 +336,19 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
 #endif
 }
 
-#define JL_TIMING(subsystem, event) \
-    JL_TIMING_CREATE_BLOCK(__timing_block, subsystem, event); \
+#define JL_TIMING(subsystem, event)                                           \
+    JL_TIMING_CREATE_BLOCK(__timing_block, subsystem, event);                 \
     jl_timing_block_start(&__timing_block)
 
-#define JL_TIMING_CREATE_BLOCK(block, subsystem, event) \
-    __attribute__((cleanup(_jl_timing_block_destroy))) \
-    jl_timing_block_t block; \
-    _jl_timing_block_ctor(&block, JL_TIMING_ ## subsystem, JL_TIMING_EVENT_ ## event); \
-    _TRACY_CTOR(&block, #event); \
-    _ITTAPI_CTOR(&block, #event)
+#define JL_TIMING_CREATE_BLOCK(block, subsystem_name, event_name)             \
+    static jl_timing_event_t *TIMING_CONCAT(__timing_event, __LINE__) = 0;    \
+    if (!TIMING_CONCAT(__timing_event, __LINE__))                             \
+        TIMING_CONCAT(__timing_event, __LINE__) = jl_timing_event_create(     \
+            #subsystem_name, #event_name, __func__, __FILE__, __LINE__, 0     \
+        );                                                                    \
+    __attribute__((cleanup(_jl_timing_block_end)))                            \
+    jl_timing_block_t block = { 0 };                                          \
+    block.event = TIMING_CONCAT(__timing_event, __LINE__)
 
 #define JL_TIMING_SUSPEND_TASK(subsystem, ct) \
     __attribute__((cleanup(_jl_timing_suspend_destroy))) \

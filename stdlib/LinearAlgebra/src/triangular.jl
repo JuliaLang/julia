@@ -3,13 +3,18 @@
 ## Triangular
 
 # could be renamed to Triangular when that name has been fully deprecated
-abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} end
+"""
+    AbstractTriangular
+
+Supertype of triangular matrix types such as [`LowerTriangular`](@ref), [`UpperTriangular`](@ref),
+[`UnitLowerTriangular`](@ref) and [`UnitUpperTriangular`](@ref).
+"""
+abstract type AbstractTriangular{T} <: AbstractMatrix{T} end
 
 # First loop through all methods that don't need special care for upper/lower and unit diagonal
-for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
-          :UnitUpperTriangular)
+for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTriangular)
     @eval begin
-        struct $t{T,S<:AbstractMatrix{T}} <: AbstractTriangular{T,S}
+        struct $t{T,S<:AbstractMatrix{T}} <: AbstractTriangular{T}
             data::S
 
             function $t{T,S}(data) where {T,S<:AbstractMatrix{T}}
@@ -20,22 +25,15 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular,
         end
         $t(A::$t) = A
         $t{T}(A::$t{T}) where {T} = A
-        function $t(A::AbstractMatrix)
-            return $t{eltype(A), typeof(A)}(A)
-        end
-        function $t{T}(A::AbstractMatrix) where T
-            $t(convert(AbstractMatrix{T}, A))
-        end
+        $t(A::AbstractMatrix) = $t{eltype(A), typeof(A)}(A)
+        $t{T}(A::AbstractMatrix) where {T} = $t(convert(AbstractMatrix{T}, A))
+        $t{T}(A::$t) where {T} = $t(convert(AbstractMatrix{T}, A.data))
 
-        function $t{T}(A::$t) where T
-            Anew = convert(AbstractMatrix{T}, A.data)
-            $t(Anew)
-        end
         Matrix(A::$t{T}) where {T} = Matrix{T}(A)
 
         AbstractMatrix{T}(A::$t) where {T} = $t{T}(A)
+        AbstractMatrix{T}(A::$t{T}) where {T} = copy(A)
 
-        size(A::$t, d) = size(A.data, d)
         size(A::$t) = size(A.data)
 
         # For A<:AbstractTriangular, similar(A[, neweltype]) should yield a matrix with the same
@@ -231,6 +229,15 @@ Base.isassigned(A::UnitUpperTriangular, i::Int, j::Int) =
     i < j ? isassigned(A.data, i, j) : true
 Base.isassigned(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? isassigned(A.data, i, j) : true
+
+Base.isstored(A::UnitLowerTriangular, i::Int, j::Int) =
+    i > j ? Base.isstored(A.data, i, j) : false
+Base.isstored(A::LowerTriangular, i::Int, j::Int) =
+    i >= j ? Base.isstored(A.data, i, j) : false
+Base.isstored(A::UnitUpperTriangular, i::Int, j::Int) =
+    i < j ? Base.isstored(A.data, i, j) : false
+Base.isstored(A::UpperTriangular, i::Int, j::Int) =
+    i <= j ? Base.isstored(A.data, i, j) : false
 
 getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
@@ -464,9 +471,9 @@ end
 
 # Define `mul!` for (Unit){Upper,Lower}Triangular matrices times a number.
 # be permissive here and require compatibility later in _triscale!
-@inline mul!(A::UpperOrLowerTriangular, B::UpperOrLowerTriangular, C::Number, alpha::Number, beta::Number) =
+@inline mul!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
-@inline mul!(A::UpperOrLowerTriangular, B::Number, C::UpperOrLowerTriangular, alpha::Number, beta::Number) =
+@inline mul!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
 
 function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
@@ -671,11 +678,54 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 # BlasFloat routines #
 ######################
 
+# which triangle to use of the underlying data
+uplo_char(::UpperOrUnitUpperTriangular) = 'U'
+uplo_char(::LowerOrUnitLowerTriangular) = 'L'
+uplo_char(::UpperOrUnitUpperTriangular{<:Any,<:AdjOrTrans}) = 'L'
+uplo_char(::LowerOrUnitLowerTriangular{<:Any,<:AdjOrTrans}) = 'U'
+uplo_char(::UpperOrUnitUpperTriangular{<:Any,<:Adjoint{<:Any,<:Transpose}}) = 'U'
+uplo_char(::LowerOrUnitLowerTriangular{<:Any,<:Adjoint{<:Any,<:Transpose}}) = 'L'
+uplo_char(::UpperOrUnitUpperTriangular{<:Any,<:Transpose{<:Any,<:Adjoint}}) = 'U'
+uplo_char(::LowerOrUnitLowerTriangular{<:Any,<:Transpose{<:Any,<:Adjoint}}) = 'L'
+
+isunit_char(::UpperTriangular) = 'N'
+isunit_char(::UnitUpperTriangular) = 'U'
+isunit_char(::LowerTriangular) = 'N'
+isunit_char(::UnitLowerTriangular) = 'U'
+
 lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) = _multrimat!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix) = _multrimat!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = _mulmattri!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractTriangular) = _multrimat!(C, A, B)
+mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) = _trimul!(C, A, B)
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix) = _trimul!(C, A, B)
+mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = _trimul!(C, A, B)
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractTriangular) = _trimul!(C, A, B)
+
+# generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
+_trimul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) =
+    lmul!(A, copyto!(C, B))
+_trimul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix) =
+    lmul!(A, inplace_adj_or_trans(B)(C, _unwrap_at(B)))
+_trimul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) =
+    rmul!(inplace_adj_or_trans(A)(C, _unwrap_at(A)), B)
+_trimul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractTriangular) =
+    lmul!(A, copyto!(C, B))
+# redirect for UpperOrLowerTriangular
+_trimul!(C::AbstractVecOrMat, A::UpperOrLowerTriangular, B::AbstractVector) =
+    generic_trimatmul!(C, uplo_char(A), isunit_char(A), wrapperop(parent(A)), _unwrap_at(parent(A)), B)
+_trimul!(C::AbstractMatrix, A::UpperOrLowerTriangular, B::AbstractMatrix) =
+    generic_trimatmul!(C, uplo_char(A), isunit_char(A), wrapperop(parent(A)), _unwrap_at(parent(A)), B)
+_trimul!(C::AbstractMatrix, A::AbstractMatrix, B::UpperOrLowerTriangular) =
+    generic_mattrimul!(C, uplo_char(B), isunit_char(B), wrapperop(parent(B)), A, _unwrap_at(parent(B)))
+_trimul!(C::AbstractMatrix, A::UpperOrLowerTriangular, B::UpperOrLowerTriangular) =
+    generic_trimatmul!(C, uplo_char(A), isunit_char(A), wrapperop(parent(A)), _unwrap_at(parent(A)), B)
+# disambiguation with AbstractTriangular
+_trimul!(C::AbstractMatrix, A::UpperOrLowerTriangular, B::AbstractTriangular) =
+    generic_trimatmul!(C, uplo_char(A), isunit_char(A), wrapperop(parent(A)), _unwrap_at(parent(A)), B)
+_trimul!(C::AbstractMatrix, A::AbstractTriangular, B::UpperOrLowerTriangular) =
+    generic_mattrimul!(C, uplo_char(B), isunit_char(B), wrapperop(parent(B)), A, _unwrap_at(parent(B)))
+
+lmul!(A::AbstractTriangular, B::AbstractVecOrMat) = @inline _trimul!(B, A, B)
+rmul!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _trimul!(A, A, B)
+
 
 for TC in (:AbstractVector, :AbstractMatrix)
     @eval @inline function mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
@@ -699,13 +749,22 @@ for (TA, TB) in ((:AbstractTriangular, :AbstractMatrix),
     end
 end
 
+ldiv!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = _ldiv!(C, A, B)
+# generic fallback for AbstractTriangular, directs to 2-arg [l/r]div!
+_ldiv!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) =
+    ldiv!(A, inplace_adj_or_trans(B)(C, _unwrap_at(B)))
+_rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) =
+    rdiv!(inplace_adj_or_trans(A)(C, _unwrap_at(A)), B)
+# redirect for UpperOrLowerTriangular to generic_*div!
+_ldiv!(C::AbstractVecOrMat, A::UpperOrLowerTriangular, B::AbstractVecOrMat) =
+    generic_trimatdiv!(C, uplo_char(A), isunit_char(A), wrapperop(parent(A)), _unwrap_at(parent(A)), B)
+_rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperOrLowerTriangular) =
+    generic_mattridiv!(C, uplo_char(B), isunit_char(B), wrapperop(parent(B)), A, _unwrap_at(parent(B)))
 
-# generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
-_multrimat!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) =
-    lmul!(A, inplace_adj_or_trans(B)(C, _parent(B)))
-_mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = rmul!(copyto!(C, A), B)
+ldiv!(A::AbstractTriangular, B::AbstractVecOrMat) = @inline _ldiv!(B, A, B)
+rdiv!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _rdiv!(A, A, B)
 
-# preserve triangular structure in in-place multiplication
+# preserve triangular structure in in-place multiplication/division
 for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
                         (:UpperTriangular, :UpperTriangular, :UnitUpperTriangular),
                         (:UpperTriangular, :UnitUpperTriangular, :UpperTriangular),
@@ -714,39 +773,40 @@ for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
                         (:LowerTriangular, :LowerTriangular, :UnitLowerTriangular),
                         (:LowerTriangular, :UnitLowerTriangular, :LowerTriangular),
                         (:UnitLowerTriangular, :UnitLowerTriangular, :UnitLowerTriangular))
-    @eval function _multrimat!(C::$cty, A::$aty, B::$bty)
-        _multrimat!(parent(C), A, B)
-        return C
+    @eval begin
+        function _trimul!(C::$cty, A::$aty, B::$bty)
+            _trimul!(parent(C), A, B)
+            return C
+        end
+        function _ldiv!(C::$cty, A::$aty, B::$bty)
+            _ldiv!(parent(C), A, B)
+            return C
+        end
+        function _rdiv!(C::$cty, A::$aty, B::$bty)
+            _rdiv!(parent(C), A, B)
+            return C
+        end
     end
 end
 
-# direct multiplication/division
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitLowerTriangular, 'L', 'U'),
                             (:UpperTriangular, 'U', 'N'),
                             (:UnitUpperTriangular, 'U', 'U'))
     @eval begin
-        # Vector multiplication
-        lmul!(A::$t{T,<:StridedMatrix}, b::StridedVector{T}) where {T<:BlasFloat} =
-            BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
-
-        # Matrix multiplication
-        lmul!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-            BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
-        rmul!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
-            BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
-
-        # Left division
-        ldiv!(A::$t{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
-            LAPACK.trtrs!($uploc, 'N', $isunitc, A.data, B)
-
-        # Right division
-        rdiv!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
-            BLAS.trsm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
-
         # Matrix inverse
         inv!(A::$t{T,S}) where {T<:BlasFloat,S<:StridedMatrix} =
             $t{T,S}(LAPACK.trtri!($uploc, $isunitc, A.data))
+
+        function inv(A::$t{T}) where {T}
+            S = typeof(inv(oneunit(T)))
+            if S <: BlasFloat || S === T # i.e. A is unitless
+                $t(ldiv!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A))))
+            else
+                J = (one(T)*I)(size(A, 1))
+                $t(ldiv!(similar(A, S, size(A)), A, J))
+            end
+        end
 
         # Error bounds for triangular solve
         errorbounds(A::$t{T,<:StridedMatrix}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
@@ -766,97 +826,22 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
     end
 end
 
-# adjoint/transpose multiplication ('uploc' reversed)
-for (t, uploc, isunitc) in ((:LowerTriangular, 'U', 'N'),
-                            (:UnitLowerTriangular, 'U', 'U'),
-                            (:UpperTriangular, 'L', 'N'),
-                            (:UnitUpperTriangular, 'L', 'U'))
-    @eval begin
-        # Vector multiplication
-        lmul!(A::$t{<:Any,<:Transpose{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasFloat} =
-            BLAS.trmv!($uploc, 'T', $isunitc, parent(parent(A)), b)
-        lmul!(A::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasReal} =
-            BLAS.trmv!($uploc, 'T', $isunitc, parent(parent(A)), b)
-        lmul!(A::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}, b::StridedVector{T}) where {T<:BlasComplex} =
-            BLAS.trmv!($uploc, 'C', $isunitc, parent(parent(A)), b)
+# multiplication
+generic_trimatmul!(c::StridedVector{T}, uploc, isunitc, tfun::Function, A::StridedMatrix{T}, b::AbstractVector{T}) where {T<:BlasFloat} =
+    BLAS.trmv!(uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, A, c === b ? c : copyto!(c, b))
+generic_trimatmul!(C::StridedMatrix{T}, uploc, isunitc, tfun::Function, A::StridedMatrix{T}, B::AbstractMatrix{T}) where {T<:BlasFloat} =
+    BLAS.trmm!('L', uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, one(T), A, C === B ? C : copyto!(C, B))
+generic_mattrimul!(C::StridedMatrix{T}, uploc, isunitc, tfun::Function, A::AbstractMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
+    BLAS.trmm!('R', uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, one(T), B, C === A ? C : copyto!(C, A))
+# division
+generic_trimatdiv!(C::StridedVecOrMat{T}, uploc, isunitc, tfun::Function, A::StridedMatrix{T}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
+    LAPACK.trtrs!(uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, A, C === B ? C : copyto!(C, B))
+generic_mattridiv!(C::StridedMatrix{T}, uploc, isunitc, tfun::Function, A::AbstractMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
+    BLAS.trsm!('R', uploc, tfun === identity ? 'N' : tfun === transpose ? 'T' : 'C', isunitc, one(T), B, C === A ? C : copyto!(C, A))
 
-        # Matrix multiplication
-        lmul!(A::$t{<:Any,<:Transpose{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-            BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), parent(parent(A)), B)
-        lmul!(A::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasComplex} =
-            BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), parent(parent(A)), B)
-        lmul!(A::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}, B::StridedMatrix{T}) where {T<:BlasReal} =
-            BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), parent(parent(A)), B)
-
-        rmul!(A::StridedMatrix{T}, B::$t{<:Any,<:Transpose{T,<:StridedMatrix}}) where {T<:BlasFloat} =
-            BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), parent(parent(B)), A)
-        rmul!(A::StridedMatrix{T}, B::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}) where {T<:BlasComplex} =
-            BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), parent(parent(B)), A)
-        rmul!(A::StridedMatrix{T}, B::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}) where {T<:BlasReal} =
-            BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), parent(parent(B)), A)
-
-        # Left division
-        ldiv!(A::$t{<:Any,<:Transpose{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
-            LAPACK.trtrs!($uploc, 'T', $isunitc, parent(parent(A)), B)
-        ldiv!(A::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
-            LAPACK.trtrs!($uploc, 'T', $isunitc, parent(parent(A)), B)
-        ldiv!(A::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
-            LAPACK.trtrs!($uploc, 'C', $isunitc, parent(parent(A)), B)
-
-        # Right division
-        rdiv!(A::StridedMatrix{T}, B::$t{<:Any,<:Transpose{T,<:StridedMatrix}}) where {T<:BlasFloat} =
-            BLAS.trsm!('R', $uploc, 'T', $isunitc, one(T), parent(parent(B)), A)
-        rdiv!(A::StridedMatrix{T}, B::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}) where {T<:BlasReal} =
-            BLAS.trsm!('R', $uploc, 'T', $isunitc, one(T), parent(parent(B)), A)
-        rdiv!(A::StridedMatrix{T}, B::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}) where {T<:BlasComplex} =
-            BLAS.trsm!('R', $uploc, 'C', $isunitc, one(T), parent(parent(B)), A)
-    end
-end
-
-# redirect back to BLAS
-for t in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
-    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{T,<:StridedMatrix}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
-        lmul!(A, copyto!(C, B))
-    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
-        lmul!(A, copyto!(C, B))
-    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{<:Any,<:Transpose{T,<:StridedMatrix}}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
-        lmul!(A, copyto!(C, B))
-    @eval _mulmattri!(C::StridedMatrix{T}, A::AbstractMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
-        rmul!(copyto!(C, A), B)
-    @eval _mulmattri!(C::StridedMatrix{T}, A::AbstractMatrix{T}, B::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}) where {T<:BlasFloat} =
-        rmul!(copyto!(C, A), B)
-    @eval _mulmattri!(C::StridedMatrix{T}, A::AbstractMatrix{T}, B::$t{<:Any,<:Transpose{T,<:StridedMatrix}}) where {T<:BlasFloat} =
-        rmul!(copyto!(C, A), B)
-
-    @eval ldiv!(C::StridedVecOrMat{T}, A::$t{T,<:StridedMatrix}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
-        ldiv!(A, copyto!(C, B))
-    @eval ldiv!(C::StridedVecOrMat{T}, A::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
-        ldiv!(A, copyto!(C, B))
-    @eval ldiv!(C::StridedVecOrMat{T}, A::$t{<:Any,<:Transpose{T,<:StridedMatrix}}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
-        ldiv!(A, copyto!(C, B))
-    @eval _rdiv!(C::StridedMatrix{T}, A::AbstractMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
-        rdiv!(copyto!(C, A), B)
-    @eval _rdiv!(C::StridedMatrix{T}, A::AbstractMatrix{T}, B::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}) where {T<:BlasFloat} =
-        rdiv!(copyto!(C, A), B)
-    @eval _rdiv!(C::StridedMatrix{T}, A::AbstractMatrix{T}, B::$t{<:Any,<:Transpose{T,<:StridedMatrix}}) where {T<:BlasFloat} =
-        rdiv!(copyto!(C, A), B)
-end
-
-for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTriangular)
-    @eval function inv(A::$t{T}) where {T}
-        S = typeof(inv(oneunit(T)))
-        if S <: BlasFloat || S === T # i.e. A is unitless
-            $t(ldiv!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A))))
-        else
-            J = (one(T)*I)(size(A, 1))
-            $t(ldiv!(similar(A, S, size(A)), A, J))
-        end
-    end
-end
-
-errorbounds(A::AbstractTriangular{T,<:AbstractMatrix}, X::AbstractVecOrMat{T}, B::AbstractVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
+errorbounds(A::AbstractTriangular{T}, X::AbstractVecOrMat{T}, B::AbstractVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
     error("not implemented yet! Please submit a pull request.")
-function errorbounds(A::AbstractTriangular{TA,<:AbstractMatrix}, X::AbstractVecOrMat{TX}, B::AbstractVecOrMat{TB}) where {TA<:Number,TX<:Number,TB<:Number}
+function errorbounds(A::AbstractTriangular{TA}, X::AbstractVecOrMat{TX}, B::AbstractVecOrMat{TB}) where {TA<:Number,TX<:Number,TB<:Number}
     TAXB = promote_type(TA, TB, TX, Float32)
     errorbounds(convert(AbstractMatrix{TAXB}, A), convert(AbstractArray{TAXB}, X), convert(AbstractArray{TAXB}, B))
 end
@@ -930,17 +915,11 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
             end
             $t(B)
         end
-
-        lmul!(A::$t, B::AbstractVecOrMat)     = @inline _multrimat!(B, A, B)
-        lmul!(A::$unitt, B::AbstractVecOrMat) = @inline _multrimat!(B, A, B)
-
-        rmul!(A::AbstractMatrix, B::$t)     = @inline _mulmattri!(A, A, B)
-        rmul!(A::AbstractMatrix, B::$unitt) = @inline _mulmattri!(A, A, B)
     end
 end
 
 ## Generic triangular multiplication
-function _multrimat!(C::AbstractVecOrMat, A::UpperTriangular, B::AbstractVecOrMat)
+function generic_trimatmul!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
     m, n = size(B, 1), size(B, 2)
     N = size(A, 1)
@@ -951,63 +930,58 @@ function _multrimat!(C::AbstractVecOrMat, A::UpperTriangular, B::AbstractVecOrMa
     if mc != N || nc != n
         throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($N,$n)"))
     end
-    @inbounds for j in 1:n
-        for i in 1:m
-            Cij = A.data[i,i] * B[i,j]
-            for k in i + 1:m
-                Cij += A.data[i,k] * B[k,j]
+    oA = oneunit(eltype(A))
+    unit = isunitc == 'U'
+    @inbounds if uploc == 'U'
+        if tfun === identity
+            for j in 1:n
+                for i in 1:m
+                    Cij = (unit ? oA : A[i,i]) * B[i,j]
+                    for k in i + 1:m
+                        Cij += A[i,k] * B[k,j]
+                    end
+                    C[i,j] = Cij
+                end
             end
-            C[i,j] = Cij
+        else # tfun in (transpose, adjoint)
+            for j in 1:n
+                for i in m:-1:1
+                    Cij = (unit ? oA : tfun(A[i,i])) * B[i,j]
+                    for k in 1:i - 1
+                        Cij += tfun(A[k,i]) * B[k,j]
+                    end
+                    C[i,j] = Cij
+                end
+            end
+        end
+    else # uploc == 'L'
+        if tfun === identity
+            for j in 1:n
+                for i in m:-1:1
+                    Cij = (unit ? oA : A[i,i]) * B[i,j]
+                    for k in 1:i - 1
+                        Cij += A[i,k] * B[k,j]
+                    end
+                    C[i,j] = Cij
+                end
+            end
+        else # tfun in (transpose, adjoint)
+            for j in 1:n
+                for i in 1:m
+                    Cij = (unit ? oA : tfun(A[i,i])) * B[i,j]
+                    for k in i + 1:m
+                        Cij += tfun(A[k,i]) * B[k,j]
+                    end
+                    C[i,j] = Cij
+                end
+            end
         end
     end
     return C
 end
-function _multrimat!(C::AbstractVecOrMat, A::UnitUpperTriangular, B::AbstractVecOrMat)
-    require_one_based_indexing(C, A, B)
-    m, n = size(B, 1), size(B, 2)
-    N = size(A, 1)
-    if m != N
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-
-    mc, nc = size(C, 1), size(C, 2)
-    if mc != N || nc != n
-        throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($N,$n)"))
-    end
-    @inbounds for j in 1:n
-        for i in 1:m
-            Cij = oneunit(eltype(A)) * B[i,j]
-            for k in i + 1:m
-                Cij += A.data[i,k] * B[k,j]
-            end
-            C[i,j] = Cij
-        end
-    end
-    return C
-end
-function _multrimat!(C::AbstractVecOrMat, A::LowerTriangular, B::AbstractVecOrMat)
-    require_one_based_indexing(C, A, B)
-    m, n = size(B, 1), size(B, 2)
-    N = size(A, 1)
-    if m != N
-        throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
-    end
-    mc, nc = size(C, 1), size(C, 2)
-    if mc != N || nc != n
-        throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($N,$n)"))
-    end
-    @inbounds for j in 1:n
-        for i in m:-1:1
-            Cij = A.data[i,i] * B[i,j]
-            for k in 1:i - 1
-                Cij += A.data[i,k] * B[k,j]
-            end
-            C[i,j] = Cij
-        end
-    end
-    return C
-end
-function _multrimat!(C::AbstractVecOrMat, A::UnitLowerTriangular, B::AbstractVecOrMat)
+# conjugate cases
+function generic_trimatmul!(C::AbstractVecOrMat, uploc, isunitc, ::Function, xA::AdjOrTrans, B::AbstractVecOrMat)
+    A = parent(xA)
     require_one_based_indexing(C, A, B)
     m, n = size(B, 1), size(B, 2)
     N = size(A, 1)
@@ -1018,85 +992,33 @@ function _multrimat!(C::AbstractVecOrMat, A::UnitLowerTriangular, B::AbstractVec
     if mc != N || nc != n
         throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($N,$n)"))
     end
-    @inbounds for j in 1:n
-        for i in m:-1:1
-            Cij = oneunit(eltype(A)) * B[i,j]
-            for k in 1:i - 1
-                Cij += A.data[i,k] * B[k,j]
-            end
-            C[i,j] = Cij
-        end
-    end
-    return C
-end
-
-function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
-    require_one_based_indexing(C, A, B)
-    m, n = size(A, 1), size(A, 2)
-    N = size(B, 1)
-    if n != N
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
-    end
-    mc, nc = size(C, 1), size(C, 2)
-    if mc != m || nc != N
-        throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($m,$N)"))
-    end
-    @inbounds for i in 1:m
-        for j in n:-1:1
-            Cij = A[i,j] * B.data[j,j]
-            for k in 1:j - 1
-                Cij += A[i,k] * B.data[k,j]
-            end
-            C[i,j] = Cij
-        end
-    end
-    return C
-end
-function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangular)
-    require_one_based_indexing(C, A, B)
-    m, n = size(A, 1), size(A, 2)
-    N = size(B, 1)
-    if n != N
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
-    end
-    mc, nc = size(C, 1), size(C, 2)
-    if mc != m || nc != N
-        throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($m,$N)"))
-    end
-    @inbounds for i in 1:m
-        for j in n:-1:1
-            Cij = A[i,j] * oneunit(eltype(B))
-            for k in 1:j - 1
-                Cij += A[i,k] * B.data[k,j]
-            end
-            C[i,j] = Cij
-        end
-    end
-    return C
-end
-function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::LowerTriangular)
-    require_one_based_indexing(C, A, B)
-    m, n = size(A, 1), size(A, 2)
-    N = size(B, 1)
-    if n != N
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
-    end
-    mc, nc = size(C, 1), size(C, 2)
-    if mc != m || nc != N
-        throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($m,$N)"))
-    end
-    @inbounds for i in 1:m
+    oA = oneunit(eltype(A))
+    unit = isunitc == 'U'
+    @inbounds if uploc == 'U'
         for j in 1:n
-            Cij = A[i,j] * B.data[j,j]
-            for k in j + 1:n
-                Cij += A[i,k] * B.data[k,j]
+            for i in 1:m
+                Cij = (unit ? oA : conj(A[i,i])) * B[i,j]
+                for k in i + 1:m
+                    Cij += conj(A[i,k]) * B[k,j]
+                end
+                C[i,j] = Cij
             end
-            C[i,j] = Cij
+        end
+    else # uploc == 'L'
+        for j in 1:n
+            for i in m:-1:1
+                Cij = (unit ? oA : conj(A[i,i])) * B[i,j]
+                for k in 1:i - 1
+                    Cij += conj(A[i,k]) * B[k,j]
+                end
+                C[i,j] = Cij
+            end
         end
     end
     return C
 end
-function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangular)
+
+function generic_mattrimul!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractMatrix)
     require_one_based_indexing(C, A, B)
     m, n = size(A, 1), size(A, 2)
     N = size(B, 1)
@@ -1107,177 +1029,325 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangula
     if mc != m || nc != N
         throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($m,$N)"))
     end
-    @inbounds for i in 1:m
-        for j in 1:n
-            Cij = A[i,j] * oneunit(eltype(B))
-            for k in j + 1:n
-                Cij += A[i,k] * B.data[k,j]
+    oB = oneunit(eltype(B))
+    unit = isunitc == 'U'
+    @inbounds if uploc == 'U'
+        if tfun === identity
+            for i in 1:m
+                for j in n:-1:1
+                    Cij = A[i,j] * (unit ? oB : B[j,j])
+                    for k in 1:j - 1
+                        Cij += A[i,k] * B[k,j]
+                    end
+                    C[i,j] = Cij
+                end
             end
-            C[i,j] = Cij
+        else # tfun in (transpose, adjoint)
+            for i in 1:m
+                for j in 1:n
+                    Cij = A[i,j] * (unit ? oB : tfun(B[j,j]))
+                    for k in j + 1:n
+                        Cij += A[i,k] * tfun(B[j,k])
+                    end
+                    C[i,j] = Cij
+                end
+            end
+        end
+    else # uploc == 'L'
+        if tfun === identity
+            for i in 1:m
+                for j in 1:n
+                    Cij = A[i,j] * (unit ? oB : B[j,j])
+                    for k in j + 1:n
+                        Cij += A[i,k] * B[k,j]
+                    end
+                    C[i,j] = Cij
+                end
+            end
+        else # tfun in (transpose, adjoint)
+            for i in 1:m
+                for j in n:-1:1
+                    Cij = A[i,j] * (unit ? oB : tfun(B[j,j]))
+                    for k in 1:j - 1
+                        Cij += A[i,k] * tfun(B[j,k])
+                    end
+                    C[i,j] = Cij
+                end
+            end
+        end
+    end
+    return C
+end
+# conjugate cases
+function generic_mattrimul!(C::AbstractMatrix, uploc, isunitc, ::Function, A::AbstractMatrix, xB::AdjOrTrans)
+    B = parent(xB)
+    require_one_based_indexing(C, A, B)
+    m, n = size(A, 1), size(A, 2)
+    N = size(B, 1)
+    if n != N
+        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
+    end
+    mc, nc = size(C, 1), size(C, 2)
+    if mc != m || nc != N
+        throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($m,$N)"))
+    end
+    oB = oneunit(eltype(B))
+    unit = isunitc == 'U'
+    @inbounds if uploc == 'U'
+        for i in 1:m
+            for j in n:-1:1
+                Cij = A[i,j] * (unit ? oB : conj(B[j,j]))
+                for k in 1:j - 1
+                    Cij += A[i,k] * conj(B[k,j])
+                end
+                C[i,j] = Cij
+            end
+        end
+    else # uploc == 'L'
+        for i in 1:m
+            for j in 1:n
+                Cij = A[i,j] * (unit ? oB : conj(B[j,j]))
+                for k in j + 1:n
+                    Cij += A[i,k] * conj(B[k,j])
+                end
+                C[i,j] = Cij
+            end
         end
     end
     return C
 end
 
 #Generic solver using naive substitution
-# manually hoisting b[j] significantly improves performance as of Dec 2015
-# manually eliding bounds checking significantly improves performance as of Dec 2015
-# directly indexing A.data rather than A significantly improves performance as of Dec 2015
-# replacing repeated references to A.data with [Adata = A.data and references to Adata]
-# does not significantly impact performance as of Dec 2015
-# replacing repeated references to A.data[j,j] with [Ajj = A.data[j,j] and references to Ajj]
-# does not significantly impact performance as of Dec 2015
-ldiv!(A::AbstractTriangular, b::AbstractVecOrMat) = @inline ldiv!(b, A, b)
-function ldiv!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix)
-    require_one_based_indexing(C, A, B)
-    nA, mA = size(A)
-    n = size(B, 1)
-    if nA != n
-        throw(DimensionMismatch("second dimension of left hand side A, $mA, and first dimension of right hand side B, $n, must be equal"))
-    end
-    if size(C) != size(B)
-        throw(DimensionMismatch("size of output, $(size(C)), does not match size of right hand side, $(size(B))"))
-    end
-    @inbounds for (c, b) in zip(eachcol(C), eachcol(B))
-        ldiv!(c, A, b)
-    end
-    C
-end
-@inline function ldiv!(c::AbstractVector, A::AbstractTriangular, b::AbstractVector)
-    @boundscheck begin
-        require_one_based_indexing(c, A, b)
-        n = size(A, 2)
-        if !(n == length(b))
-            throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
-        end
-        if !(n == length(c))
-            throw(DimensionMismatch("length of output c, $(length(c)), does not match length of right hand side b, $(length(b))"))
-        end
-    end
-    return _ldiv!(c, A, b)
-end
-
-_uconvert_copyto!(c, b, oA) = (c .= Ref(oA) .\ b)
-_uconvert_copyto!(c::AbstractArray{T}, b::AbstractArray{T}, _) where {T} = copyto!(c, b)
 
 @inline _ustrip(a) = oneunit(a) \ a
 @inline _ustrip(a::Union{AbstractFloat,Integer,Complex,Rational}) = a
 
-# all of the following _ldiv! methods are "unsafe" in that they assume one-based indexing
-# and compatible sizes
-function _ldiv!(c::AbstractVector, A::UpperTriangular, b::AbstractVector)
-    n = size(A, 2)
-    c !== b && _uconvert_copyto!(c, b, oneunit(eltype(A)))
-    @inbounds for j in n:-1:1
-        ajj = A.data[j,j]
-        iszero(ajj) && throw(SingularException(j))
-        cj = c[j] = _ustrip(ajj) \ c[j]
-        for i in j-1:-1:1
-            c[i] -= _ustrip(A.data[i,j]) * cj
-        end
-    end
-    return c
-end
-function _ldiv!(c::AbstractVector, A::UnitUpperTriangular, b::AbstractVector)
-    n = size(A, 2)
-    c !== b && _uconvert_copyto!(c, b, oneunit(eltype(A)))
-    @inbounds for j in n:-1:1
-        cj = c[j]
-        for i in 1:j-1
-            c[i] -= _ustrip(A.data[i,j]) * cj
-        end
-    end
-    return c
-end
-function _ldiv!(c::AbstractVector, A::LowerTriangular, b::AbstractVector)
-    n = size(A, 2)
-    c !== b && _uconvert_copyto!(c, b, oneunit(eltype(A)))
-    @inbounds for j in 1:n
-        ajj = A.data[j,j]
-        iszero(ajj) && throw(SingularException(j))
-        cj = c[j] = _ustrip(ajj) \ c[j]
-        for i in j+1:n
-            c[i] -= _ustrip(A.data[i,j]) * cj
-        end
-    end
-    return c
-end
-function _ldiv!(c::AbstractVector, A::UnitLowerTriangular, b::AbstractVector)
-    n = size(A, 2)
-    c !== b && _uconvert_copyto!(c, b, oneunit(eltype(A)))
-    @inbounds for j in 1:n
-        cj = c[j]
-        for i in j+1:n
-            c[i] -= _ustrip(A.data[i,j]) * cj
-        end
-    end
-    return c
-end
-
-
-# in the following transpose and conjugate transpose naive substitution variants,
+# manually hoisting b[j] significantly improves performance as of Dec 2015
+# manually eliding bounds checking significantly improves performance as of Dec 2015
+# replacing repeated references to A.data[j,j] with [Ajj = A.data[j,j] and references to Ajj]
+# does not significantly impact performance as of Dec 2015
+# in the transpose and conjugate transpose naive substitution variants,
 # accumulating in z rather than b[j,k] significantly improves performance as of Dec 2015
-function _ldiv!(c::AbstractVector, xA::UpperTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
-    tfun = adj_or_trans(parent(xA))
-    A = parent(parent(xA))
-    n = size(A, 2)
-    @inbounds for j in n:-1:1
-        ajj = A[j,j]
-        iszero(ajj) && throw(SingularException(j))
-        bj = b[j]
-        for i in j+1:n
-            bj -= tfun(A[i,j]) * c[i]
-        end
-        c[j] = tfun(ajj) \ bj
+function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractVecOrMat)
+    require_one_based_indexing(C, A, B)
+    mA, nA = size(A)
+    m, n = size(B, 1), size(B,2)
+    if nA != m
+        throw(DimensionMismatch("second dimension of left hand side A, $nA, and first dimension of right hand side B, $m, must be equal"))
     end
-    return c
-end
-function _ldiv!(c::AbstractVector, xA::UnitUpperTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
-    tfun = adj_or_trans(parent(xA))
-    A = parent(parent(xA))
+    if size(C) != size(B)
+        throw(DimensionMismatch("size of output, $(size(C)), does not match size of right hand side, $(size(B))"))
+    end
     oA = oneunit(eltype(A))
-    n = size(A, 2)
-    @inbounds for j in n:-1:1
-        bj = b[j]
-        for i in j+1:n
-            bj -= tfun(A[i,j]) * c[i]
+    @inbounds if uploc == 'U'
+        if isunitc == 'N'
+            if tfun === identity
+                for k in 1:n
+                    amm = A[m,m]
+                    iszero(amm) && throw(SingularException(m))
+                    Cm = C[m,k] = amm \ B[m,k]
+                    # fill C-column
+                    for i in m-1:-1:1
+                        C[i,k] = oA \ B[i,k] - _ustrip(A[i,m]) * Cm
+                    end
+                    for j in m-1:-1:1
+                        ajj = A[j,j]
+                        iszero(ajj) && throw(SingularException(j))
+                        Cj = C[j,k] = _ustrip(ajj) \ C[j,k]
+                        for i in j-1:-1:1
+                            C[i,k] -= _ustrip(A[i,j]) * Cj
+                        end
+                    end
+                end
+            else # tfun in (adjoint, transpose)
+                for k in 1:n
+                    for j in 1:m
+                        ajj = A[j,j]
+                        iszero(ajj) && throw(SingularException(j))
+                        Bj = B[j,k]
+                        for i in 1:j-1
+                            Bj -= tfun(A[i,j]) * C[i,k]
+                        end
+                        C[j,k] = tfun(ajj) \ Bj
+                    end
+                end
+            end
+        else # isunitc == 'U'
+            if tfun === identity
+                for k in 1:n
+                    Cm = C[m,k] = oA \ B[m,k]
+                    # fill C-column
+                    for i in m-1:-1:1
+                        C[i,k] = oA \ B[i,k] - _ustrip(A[i,m]) * Cm
+                    end
+                    for j in m-1:-1:1
+                        Cj = C[j,k]
+                        for i in 1:j-1
+                            C[i,k] -= _ustrip(A[i,j]) * Cj
+                        end
+                    end
+                end
+            else # tfun in (adjoint, transpose)
+                for k in 1:n
+                    for j in 1:m
+                        Bj = B[j,k]
+                        for i in 1:j-1
+                            Bj -= tfun(A[i,j]) * C[i,k]
+                        end
+                        C[j,k] = oA \ Bj
+                    end
+                end
+            end
         end
-        c[j] = oA \ bj
-    end
-    return c
-end
-function _ldiv!(c::AbstractVector, xA::LowerTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
-    tfun = adj_or_trans(parent(xA))
-    A = parent(parent(xA))
-    n = size(A, 2)
-    @inbounds for j in 1:n
-        ajj = A[j,j]
-        iszero(ajj) && throw(SingularException(j))
-        bj = b[j]
-        for i in 1:j-1
-            bj -= tfun(A[i,j]) * c[i]
+    else # uploc == 'L'
+        if isunitc == 'N'
+            if tfun === identity
+                for k in 1:n
+                    a11 = A[1,1]
+                    iszero(a11) && throw(SingularException(1))
+                    C1 = C[1,k] = a11 \ B[1,k]
+                    # fill C-column
+                    for i in 2:m
+                        C[i,k] = oA \ B[i,k] - _ustrip(A[i,1]) * C1
+                    end
+                    for j in 2:m
+                        ajj = A[j,j]
+                        iszero(ajj) && throw(SingularException(j))
+                        Cj = C[j,k] = _ustrip(ajj) \ C[j,k]
+                        for i in j+1:m
+                            C[i,k] -= _ustrip(A[i,j]) * Cj
+                        end
+                    end
+                end
+            else # tfun in (adjoint, transpose)
+                for k in 1:n
+                    for j in m:-1:1
+                        ajj = A[j,j]
+                        iszero(ajj) && throw(SingularException(j))
+                        Bj = B[j,k]
+                        for i in j+1:m
+                            Bj -= tfun(A[i,j]) * C[i,k]
+                        end
+                        C[j,k] = tfun(ajj) \ Bj
+                    end
+                end
+            end
+        else # isunitc == 'U'
+            if tfun === identity
+                for k in 1:n
+                    C1 = C[1,k] = oA \ B[1,k]
+                    # fill C-column
+                    for i in 2:m
+                        C[i,k] = oA \ B[i,k] - _ustrip(A[i,1]) * C1
+                    end
+                    for j in 2:m
+                        Cj = C[j,k]
+                        for i in j+1:m
+                            C[i,k] -= _ustrip(A[i,j]) * Cj
+                        end
+                    end
+                end
+            else # tfun in (adjoint, transpose)
+                for k in 1:n
+                    for j in m:-1:1
+                        Bj = B[j,k]
+                        for i in j+1:m
+                            Bj -= tfun(A[i,j]) * C[i,k]
+                        end
+                        C[j,k] = oA \ Bj
+                    end
+                end
+            end
         end
-        c[j] = tfun(ajj) \ bj
     end
-    return c
+    return C
 end
-function _ldiv!(c::AbstractVector, xA::UnitLowerTriangular{<:Any,<:AdjOrTrans}, b::AbstractVector)
-    tfun = adj_or_trans(parent(xA))
-    A = parent(parent(xA))
+# conjugate cases
+function generic_trimatdiv!(C::AbstractVecOrMat, uploc, isunitc, ::Function, xA::AdjOrTrans, B::AbstractVecOrMat)
+    A = parent(xA)
+    require_one_based_indexing(C, A, B)
+    mA, nA = size(A)
+    m, n = size(B, 1), size(B,2)
+    if nA != m
+        throw(DimensionMismatch("second dimension of left hand side A, $nA, and first dimension of right hand side B, $m, must be equal"))
+    end
+    if size(C) != size(B)
+        throw(DimensionMismatch("size of output, $(size(C)), does not match size of right hand side, $(size(B))"))
+    end
     oA = oneunit(eltype(A))
-    n = size(A, 2)
-    @inbounds for j in 1:n
-        bj = b[j]
-        for i in 1:j-1
-            bj -= tfun(A[i,j]) * c[i]
+    @inbounds if uploc == 'U'
+        if isunitc == 'N'
+            for k in 1:n
+                amm = conj(A[m,m])
+                iszero(amm) && throw(SingularException(m))
+                Cm = C[m,k] = amm \ B[m,k]
+                # fill C-column
+                for i in m-1:-1:1
+                    C[i,k] = oA \ B[i,k] - _ustrip(conj(A[i,m])) * Cm
+                end
+                for j in m-1:-1:1
+                    ajj = conj(A[j,j])
+                    iszero(ajj) && throw(SingularException(j))
+                    Cj = C[j,k] = _ustrip(ajj) \ C[j,k]
+                    for i in j-1:-1:1
+                        C[i,k] -= _ustrip(conj(A[i,j])) * Cj
+                    end
+                end
+            end
+        else # isunitc == 'U'
+            for k in 1:n
+                Cm = C[m,k] = oA \ B[m,k]
+                # fill C-column
+                for i in m-1:-1:1
+                    C[i,k] = oA \ B[i,k] - _ustrip(conj(A[i,m])) * Cm
+                end
+                for j in m-1:-1:1
+                    Cj = C[j,k]
+                    for i in 1:j-1
+                        C[i,k] -= _ustrip(conj(A[i,j])) * Cj
+                    end
+                end
+            end
         end
-        c[j] = oA \ bj
+    else # uploc == 'L'
+        if isunitc == 'N'
+            for k in 1:n
+                a11 = conj(A[1,1])
+                iszero(a11) && throw(SingularException(1))
+                C1 = C[1,k] = a11 \ B[1,k]
+                # fill C-column
+                for i in 2:m
+                    C[i,k] = oA \ B[i,k] - _ustrip(conj(A[i,1])) * C1
+                end
+                for j in 2:m
+                    ajj = conj(A[j,j])
+                    iszero(ajj) && throw(SingularException(j))
+                    Cj = C[j,k] = _ustrip(ajj) \ C[j,k]
+                    for i in j+1:m
+                        C[i,k] -= _ustrip(conj(A[i,j])) * Cj
+                    end
+                end
+            end
+        else # isunitc == 'U'
+            for k in 1:n
+                C1 = C[1,k] = oA \ B[1,k]
+                # fill C-column
+                for i in 2:m
+                    C[i,k] = oA \ B[i,k] - _ustrip(conj(A[i,1])) * C1
+                end
+                for j in 1:m
+                    Cj = C[j,k]
+                    for i in j+1:m
+                        C[i,k] -= _ustrip(conj(A[i,j])) * Cj
+                    end
+                end
+            end
+        end
     end
-    return c
+    return C
 end
 
-rdiv!(A::AbstractMatrix, B::AbstractTriangular) = @inline _rdiv!(A, A, B)
-function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
+function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, tfun::Function, A::AbstractMatrix, B::AbstractMatrix)
     require_one_based_indexing(C, A, B)
     m, n = size(A)
     if size(B, 1) != n
@@ -1286,19 +1356,61 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
     if size(C) != size(A)
         throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
     end
-    @inbounds for i in 1:m
-        for j in 1:n
-            Aij = A[i,j]
-            for k in 1:j - 1
-                Aij -= C[i,k]*B.data[k,j]
+    oB = oneunit(eltype(B))
+    unit = isunitc == 'U'
+    @inbounds if uploc == 'U'
+        if tfun === identity
+            for i in 1:m
+                for j in 1:n
+                    Aij = A[i,j]
+                    for k in 1:j - 1
+                        Aij -= C[i,k]*B[k,j]
+                    end
+                    unit || (iszero(B[j,j]) && throw(SingularException(j)))
+                    C[i,j] = Aij / (unit ? oB : B[j,j])
+                end
             end
-            iszero(B.data[j,j]) && throw(SingularException(j))
-            C[i,j] = Aij / B.data[j,j]
+        else # tfun in (adjoint, transpose)
+            for i in 1:m
+                for j in n:-1:1
+                    Aij = A[i,j]
+                    for k in j + 1:n
+                        Aij -= C[i,k]*tfun(B[j,k])
+                    end
+                    unit || (iszero(B[j,j]) && throw(SingularException(j)))
+                    C[i,j] = Aij / (unit ? oB : tfun(B[j,j]))
+                end
+            end
+        end
+    else # uploc == 'L'
+        if tfun === identity
+            for i in 1:m
+                for j in n:-1:1
+                    Aij = A[i,j]
+                    for k in j + 1:n
+                        Aij -= C[i,k]*B[k,j]
+                    end
+                    unit || (iszero(B[j,j]) && throw(SingularException(j)))
+                    C[i,j] = Aij / (unit ? oB : B[j,j])
+                end
+            end
+        else # tfun in (adjoint, transpose)
+            for i in 1:m
+                for j in 1:n
+                    Aij = A[i,j]
+                    for k in 1:j - 1
+                        Aij -= C[i,k]*tfun(B[j,k])
+                    end
+                    unit || (iszero(B[j,j]) && throw(SingularException(j)))
+                    C[i,j] = Aij / (unit ? oB : tfun(B[j,j]))
+                end
+            end
         end
     end
-    C
+    return C
 end
-function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangular)
+function generic_mattridiv!(C::AbstractMatrix, uploc, isunitc, ::Function, A::AbstractMatrix, xB::AdjOrTrans)
+    B = parent(xB)
     require_one_based_indexing(C, A, B)
     m, n = size(A)
     if size(B, 1) != n
@@ -1307,74 +1419,35 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangular)
     if size(C) != size(A)
         throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
     end
-    @inbounds for i in 1:m
-        for j in 1:n
-            Aij = A[i,j]
-            for k in 1:j - 1
-                Aij -= C[i,k]*B.data[k,j]
+    oB = oneunit(eltype(B))
+    unit = isunitc == 'U'
+    if uploc == 'U'
+        @inbounds for i in 1:m
+            for j in 1:n
+                Aij = A[i,j]
+                for k in 1:j - 1
+                    Aij -= C[i,k]*conj(B[k,j])
+                end
+                unit || (iszero(B[j,j]) && throw(SingularException(j)))
+                C[i,j] = Aij / (unit ? oB : conj(B[j,j]))
             end
-            C[i,j] = Aij / oneunit(eltype(B))
+        end
+    else # uploc == 'L'
+        @inbounds for i in 1:m
+            for j in n:-1:1
+                Aij = A[i,j]
+                for k in j + 1:n
+                    Aij -= C[i,k]*conj(B[k,j])
+                end
+                unit || (iszero(B[j,j]) && throw(SingularException(j)))
+                C[i,j] = Aij / (unit ? oB : conj(B[j,j]))
+            end
         end
     end
-    C
-end
-function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::LowerTriangular)
-    require_one_based_indexing(C, A, B)
-    m, n = size(A)
-    if size(B, 1) != n
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
-    end
-    if size(C) != size(A)
-        throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
-    end
-    @inbounds for i in 1:m
-        for j in n:-1:1
-            Aij = A[i,j]
-            for k in j + 1:n
-                Aij -= C[i,k]*B.data[k,j]
-            end
-            iszero(B.data[j,j]) && throw(SingularException(j))
-            C[i,j] = Aij / B.data[j,j]
-        end
-    end
-    C
-end
-function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangular)
-    require_one_based_indexing(C, A, B)
-    m, n = size(A)
-    if size(B, 1) != n
-        throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
-    end
-    if size(C) != size(A)
-        throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
-    end
-    @inbounds for i in 1:m
-        for j in n:-1:1
-            Aij = A[i,j]
-            for k in j + 1:n
-                Aij -= C[i,k]*B.data[k,j]
-            end
-            C[i,j] = Aij / oneunit(eltype(B))
-        end
-    end
-    C
+    return C
 end
 
-lmul!(A::UpperTriangular,     B::UpperTriangular) = UpperTriangular(lmul!(A, triu!(B.data)))
-lmul!(A::UnitUpperTriangular, B::UpperTriangular) = UpperTriangular(lmul!(A, triu!(B.data)))
-lmul!(A::LowerTriangular,     B::LowerTriangular) = LowerTriangular(lmul!(A, tril!(B.data)))
-lmul!(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(lmul!(A, tril!(B.data)))
-
-ldiv!(A::UpperTriangular,     B::UpperTriangular) = UpperTriangular(ldiv!(A, triu!(B.data)))
-ldiv!(A::UnitUpperTriangular, B::UpperTriangular) = UpperTriangular(ldiv!(A, triu!(B.data)))
-ldiv!(A::LowerTriangular,     B::LowerTriangular) = LowerTriangular(ldiv!(A, tril!(B.data)))
-ldiv!(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(ldiv!(A, tril!(B.data)))
-
-rdiv!(A::UpperTriangular, B::UpperTriangular)     = UpperTriangular(rdiv!(triu!(A.data), B))
-rdiv!(A::UpperTriangular, B::UnitUpperTriangular) = UpperTriangular(rdiv!(triu!(A.data), B))
-rdiv!(A::LowerTriangular, B::LowerTriangular)     = LowerTriangular(rdiv!(tril!(A.data), B))
-rdiv!(A::LowerTriangular, B::UnitLowerTriangular) = LowerTriangular(rdiv!(tril!(A.data), B))
-
+# these are needed because we don't keep track of left- and right-multiplication in tritrimul!
 rmul!(A::UpperTriangular, B::UpperTriangular)     = UpperTriangular(rmul!(triu!(A.data), B))
 rmul!(A::UpperTriangular, B::UnitUpperTriangular) = UpperTriangular(rmul!(triu!(A.data), B))
 rmul!(A::LowerTriangular, B::LowerTriangular)     = LowerTriangular(rmul!(tril!(A.data), B))
@@ -1394,11 +1467,7 @@ _inner_type_promotion(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
 ## The general promotion methods
 function *(A::AbstractTriangular, B::AbstractTriangular)
     TAB = _init_eltype(*, eltype(A), eltype(B))
-    if TAB <: BlasFloat
-        lmul!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
-    else
-        mul!(similar(B, TAB, size(B)), A, B)
-    end
+    mul!(similar(B, TAB, size(B)), A, B)
 end
 
 for mat in (:AbstractVector, :AbstractMatrix)
@@ -1406,51 +1475,31 @@ for mat in (:AbstractVector, :AbstractMatrix)
     @eval function *(A::AbstractTriangular, B::$mat)
         require_one_based_indexing(B)
         TAB = _init_eltype(*, eltype(A), eltype(B))
-        if TAB <: BlasFloat
-            lmul!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
-        else
-            mul!(similar(B, TAB, size(B)), A, B)
-        end
+        mul!(similar(B, TAB, size(B)), A, B)
     end
     ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
     @eval function \(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
         require_one_based_indexing(B)
         TAB = _inner_type_promotion(\, eltype(A), eltype(B))
-        if TAB <: BlasFloat
-            ldiv!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
-        else
-            ldiv!(similar(B, TAB, size(B)), A, B)
-        end
+        ldiv!(similar(B, TAB, size(B)), A, B)
     end
     ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
     @eval function \(A::Union{UpperTriangular,LowerTriangular}, B::$mat)
         require_one_based_indexing(B)
         TAB = _init_eltype(\, eltype(A), eltype(B))
-        if TAB <: BlasFloat
-            ldiv!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
-        else
-            ldiv!(similar(B, TAB, size(B)), A, B)
-        end
+        ldiv!(similar(B, TAB, size(B)), A, B)
     end
     ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
     @eval function /(A::$mat, B::Union{UnitUpperTriangular, UnitLowerTriangular})
         require_one_based_indexing(A)
         TAB = _inner_type_promotion(/, eltype(A), eltype(B))
-        if TAB <: BlasFloat
-            rdiv!(copy_similar(A, TAB), convert(AbstractArray{TAB}, B))
-        else
-            _rdiv!(similar(A, TAB, size(A)), A, B)
-        end
+        _rdiv!(similar(A, TAB, size(A)), A, B)
     end
     ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
     @eval function /(A::$mat, B::Union{UpperTriangular,LowerTriangular})
         require_one_based_indexing(A)
         TAB = _init_eltype(/, eltype(A), eltype(B))
-        if TAB <: BlasFloat
-            rdiv!(copy_similar(A, TAB), convert(AbstractArray{TAB}, B))
-        else
-            _rdiv!(similar(A, TAB, size(A)), A, B)
-        end
+        _rdiv!(similar(A, TAB, size(A)), A, B)
     end
 end
 ### Multiplication with triangle to the right and hence lhs cannot be transposed.
@@ -1458,11 +1507,7 @@ end
 function *(A::AbstractMatrix, B::AbstractTriangular)
     require_one_based_indexing(A)
     TAB = _init_eltype(*, eltype(A), eltype(B))
-    if TAB <: BlasFloat
-        rmul!(copy_similar(A, TAB), convert(AbstractArray{TAB}, B))
-    else
-        mul!(similar(A, TAB, size(A)), A, B)
-    end
+    mul!(similar(A, TAB, size(A)), A, B)
 end
 # ambiguity resolution with definitions in matmul.jl
 *(v::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) * v.parent)
@@ -2220,7 +2265,8 @@ function _sqrt_quasitriu_diag_block!(R, A)
             R[i, i] = sqrt(ta(A[i, i]))
             i += 1
         else
-            # this branch is never reached when A is complex triangular
+            # This branch is never reached when A is complex triangular
+            @assert eltype(A) <: Real
             @views _sqrt_real_2x2!(R[i:(i + 1), i:(i + 1)], A[i:(i + 1), i:(i + 1)])
             i += 2
         end

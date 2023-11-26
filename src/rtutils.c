@@ -127,11 +127,34 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
     jl_type_error_rt(fname, "", expected, got);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
+JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *scope)
 {
-    if (!jl_undefvarerror_type)
-        jl_errorf("UndefVarError(%s)", jl_symbol_name(var));
-    jl_throw(jl_new_struct(jl_undefvarerror_type, var));
+    if (!jl_undefvarerror_type) {
+        const char *s1 = "";
+        const char *s2 = "";
+        if (scope) {
+            if (jl_is_symbol(scope)) {
+                s1 = ", :";
+                s2 = jl_symbol_name((jl_sym_t*)scope);
+            }
+            else if (jl_is_module(scope)) {
+                s1 = ", module ";
+                s2 = jl_symbol_name(((jl_module_t*)scope)->name);
+            }
+            else {
+                s1 = ", ";
+                s2 = "unknown scope";
+            }
+        }
+        jl_errorf("UndefVarError(%s%s%s)", jl_symbol_name(var), s1, s2);
+    }
+    JL_GC_PUSH1(&scope);
+    jl_throw(jl_new_struct(jl_undefvarerror_type, var, scope));
+}
+
+JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_sym_t *type_name, jl_sym_t *var)
+{
+    jl_errorf("type %s has no field %s", jl_symbol_name(type_name), jl_symbol_name(var));
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_atomicerror_type, "%s", str)
@@ -270,15 +293,12 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     }
     ct->world_age = eh->world_age;
     ct->ptls->defer_signal = eh->defer_signal;
-    if (old_gc_state != eh->gc_state) {
+    if (old_gc_state != eh->gc_state)
         jl_atomic_store_release(&ct->ptls->gc_state, eh->gc_state);
-        if (old_gc_state) {
-            jl_gc_safepoint_(ct->ptls);
-        }
-    }
-    if (old_defer_signal && !eh->defer_signal) {
+    if (!eh->gc_state)
+        jl_gc_safepoint_(ct->ptls);
+    if (old_defer_signal && !eh->defer_signal)
         jl_sigint_safepoint(ct->ptls);
-    }
     if (jl_atomic_load_relaxed(&jl_gc_have_pending_finalizers) &&
             unlocks && eh->locks_len == 0) {
         jl_gc_run_pending_finalizers(ct);
@@ -320,7 +340,7 @@ static void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFE
     dest->top = src->top;
 }
 
-static void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+static void jl_reserve_excstack(jl_task_t* task, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
                                 size_t reserved_size)
 {
     jl_excstack_t *s = *stack;
@@ -334,13 +354,14 @@ static void jl_reserve_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
     if (s)
         jl_copy_excstack(new_s, s);
     *stack = new_s;
+    jl_gc_wb(task, new_s);
 }
 
-void jl_push_excstack(jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+void jl_push_excstack(jl_task_t* task, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
                       jl_value_t *exception JL_ROOTED_ARGUMENT,
                       jl_bt_element_t *bt_data, size_t bt_size)
 {
-    jl_reserve_excstack(stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
+    jl_reserve_excstack(task, stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
     jl_excstack_t *s = *stack;
     jl_bt_element_t *rawstack = jl_excstack_raw(s);
     memcpy(rawstack + s->top, bt_data, sizeof(jl_bt_element_t)*bt_size);
@@ -359,7 +380,10 @@ JL_DLLEXPORT void *(jl_symbol_name)(jl_sym_t *s)
 // WARNING: THIS FUNCTION IS NEVER CALLED BUT INLINE BY CCALL
 JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 {
-    return a->data;
+    const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typetagof(a->ref.mem))->layout;
+    if (layout->flags.arrayelem_isunion || layout->size == 0)
+        return (char*)a->ref.mem->ptr + (size_t)jl_array_data_(a);
+    return jl_array_data_(a);
 }
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 {
@@ -1025,7 +1049,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;
-        if (e->head == jl_assign_sym && jl_array_len(e->args) == 2) {
+        if (e->head == jl_assign_sym && jl_array_nrows(e->args) == 2) {
             n += jl_static_show_x(out, jl_exprarg(e,0), depth, ctx);
             n += jl_printf(out, " = ");
             n += jl_static_show_x(out, jl_exprarg(e,1), depth, ctx);
@@ -1033,7 +1057,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         else {
             char sep = ' ';
             n += jl_printf(out, "Expr(:%s", jl_symbol_name(e->head));
-            size_t i, len = jl_array_len(e->args);
+            size_t i, len = jl_array_nrows(e->args);
             for (i = 0; i < len; i++) {
                 n += jl_printf(out, ",%c", sep);
                 n += jl_static_show_x(out, jl_exprarg(e,i), depth, ctx);
@@ -1043,24 +1067,63 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (jl_array_type && jl_is_array_type(vt)) {
         n += jl_printf(out, "Array{");
-        n += jl_static_show_x(out, (jl_value_t*)jl_tparam0(vt), depth, ctx);
-        n += jl_printf(out, ", (");
+        jl_value_t *el_type = jl_tparam0(vt);
+        n += jl_static_show_x(out, el_type, depth, ctx);
+        jl_array_t *av = (jl_array_t*)v;
         size_t i, ndims = jl_array_ndims(v);
+        n += jl_printf(out, ", %" PRIdPTR "}(dims=(", ndims);
         if (ndims == 1)
             n += jl_printf(out, "%" PRIdPTR ",", jl_array_dim0(v));
         else
             for (i = 0; i < ndims; i++)
                 n += jl_printf(out, (i > 0 ? ", %" PRIdPTR : "%" PRIdPTR), jl_array_dim(v, i));
-        n += jl_printf(out, ")}[");
-        size_t j, tlen = jl_array_len(v);
-        jl_array_t *av = (jl_array_t*)v;
-        jl_value_t *el_type = jl_tparam0(vt);
-        char *typetagdata = (!av->flags.ptrarray && jl_is_uniontype(el_type)) ? jl_array_typetagdata(av) : NULL;
+        n += jl_printf(out, "), mem=");
+        n += jl_static_show_x(out, (jl_value_t*)av->ref.mem, depth, ctx);
+        n += jl_printf(out, ")");
+    }
+    else if (jl_genericmemoryref_type && jl_is_genericmemoryref_type(vt)) {
+        jl_genericmemoryref_t *ref = (jl_genericmemoryref_t*)v;
+        n += jl_printf(out, "MemoryRef(offset=");
+        size_t offset = (size_t)ref->ptr_or_offset;
+        if (ref->mem) {
+            const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typeof(ref->mem))->layout;
+            if (layout->size != 0 && !layout->flags.arrayelem_isunion)
+                offset = ((char*)offset - (char*)ref->mem->ptr) / layout->size;
+        }
+        n += jl_printf(out, "%" PRIdPTR, offset);
+        n += jl_printf(out, ", ptr_or_offset=%p, mem=", ref->ptr_or_offset);
+        n += jl_static_show_x(out, (jl_value_t*)ref->mem, depth, ctx);
+    }
+    else if (jl_genericmemory_type && jl_is_genericmemory_type(vt)) {
+        jl_genericmemory_t *m = (jl_genericmemory_t*)v;
+        jl_value_t *isatomic = jl_tparam0(vt);
+        jl_value_t *addrspace = jl_tparam2(vt);
+        if (isatomic == (jl_value_t*)jl_not_atomic_sym && jl_is_addrspacecore(addrspace) && jl_unbox_uint8(addrspace) == 0) {
+            n += jl_printf(out, "Memory{");
+        }
+        else {
+            n += jl_printf(out, "GenericMemory{");
+            n += jl_static_show_x(out, isatomic, depth, ctx);
+            n += jl_printf(out, ", ");
+            n += jl_static_show_x(out, addrspace, depth, ctx);
+            n += jl_printf(out, ", ");
+        }
+        jl_value_t *el_type = jl_tparam1(vt);
+        n += jl_static_show_x(out, el_type, depth, ctx);
+        size_t j, tlen = m->length;
+        n += jl_printf(out, "}(%" PRIdPTR ", %p)[", tlen, m->ptr);
+//#ifdef _P64
+//        n += jl_printf(out, "0x%016" PRIx64, tlen);
+//#else
+//        n += jl_printf(out, "0x%08" PRIx32, tlen);
+//#endif
+        const jl_datatype_layout_t *layout = vt->layout;
         int nlsep = 0;
-        if (av->flags.ptrarray) {
+        const char *typetagdata = NULL;
+        if (layout->flags.arrayelem_isboxed) {
             // print arrays with newlines, unless the elements are probably small
             for (j = 0; j < tlen; j++) {
-                jl_value_t **ptr = ((jl_value_t**)av->data) + j;
+                jl_value_t **ptr = ((jl_value_t**)m->ptr) + j;
                 jl_value_t *p = *ptr;
                 if (p != NULL && (uintptr_t)p >= 4096U) {
                     jl_value_t *p_ty = jl_typeof(p);
@@ -1073,21 +1136,30 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 }
             }
         }
-        if (nlsep && tlen > 1)
-            n += jl_printf(out, "\n  ");
-        for (j = 0; j < tlen; j++) {
-            if (av->flags.ptrarray) {
-                jl_value_t **ptr = ((jl_value_t**)av->data) + j;
-                n += jl_static_show_x(out, *ptr, depth, ctx);
+        else if (layout->flags.arrayelem_isunion) {
+            typetagdata = jl_genericmemory_typetagdata(m);
+        }
+        if (layout->size == 0 && tlen >= 3) {
+            n += jl_static_show_x_(out, (jl_value_t*)m->ptr, (jl_datatype_t*)el_type, depth, ctx);
+            n += jl_printf(out, ", ...");
+        }
+        else {
+            if (nlsep && tlen > 1)
+                n += jl_printf(out, "\n  ");
+            for (size_t j = 0; j < tlen; j++) {
+                if (layout->flags.arrayelem_isboxed) {
+                    jl_value_t **ptr = ((jl_value_t**)m->ptr) + j;
+                    n += jl_static_show_x(out, *ptr, depth, ctx);
+                }
+                else {
+                    char *ptr = ((char*)m->ptr) + j * layout->size;
+                    n += jl_static_show_x_(out, (jl_value_t*)ptr,
+                            (jl_datatype_t*)(typetagdata ? jl_nth_union_component(el_type, typetagdata[j]) : el_type),
+                            depth, ctx);
+                }
+                if (j != tlen - 1)
+                    n += jl_printf(out, nlsep ? ",\n  " : ", ");
             }
-            else {
-                char *ptr = ((char*)av->data) + j * av->elsize;
-                n += jl_static_show_x_(out, (jl_value_t*)ptr,
-                        typetagdata ? (jl_datatype_t*)jl_nth_union_component(el_type, typetagdata[j]) : (jl_datatype_t*)el_type,
-                        depth, ctx);
-            }
-            if (j != tlen - 1)
-                n += jl_printf(out, nlsep ? ",\n  " : ", ");
         }
         n += jl_printf(out, "]");
     }

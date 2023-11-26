@@ -33,6 +33,9 @@ macro gensym(names...)
     return blk
 end
 
+## line numbers ##
+convert(::Type{LineNumberNode}, lin::Core.LineInfoNode) = LineNumberNode(Int(lin.line), lin.file)
+
 ## expressions ##
 
 isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
@@ -343,39 +346,39 @@ macro noinline(x)
 end
 
 """
-    @constprop setting [ex]
+    Base.@constprop setting [ex]
 
 Control the mode of interprocedural constant propagation for the annotated function.
 
 Two `setting`s are supported:
 
-- `@constprop :aggressive [ex]`: apply constant propagation aggressively.
+- `Base.@constprop :aggressive [ex]`: apply constant propagation aggressively.
   For a method where the return type depends on the value of the arguments,
   this can yield improved inference results at the cost of additional compile time.
-- `@constprop :none [ex]`: disable constant propagation. This can reduce compile
+- `Base.@constprop :none [ex]`: disable constant propagation. This can reduce compile
   times for functions that Julia might otherwise deem worthy of constant-propagation.
   Common cases are for functions with `Bool`- or `Symbol`-valued arguments or keyword arguments.
 
-`@constprop` can be applied immediately before a function definition or within a function body.
+`Base.@constprop` can be applied immediately before a function definition or within a function body.
 
 ```julia
 # annotate long-form definition
-@constprop :aggressive function longdef(x)
-  ...
+Base.@constprop :aggressive function longdef(x)
+    ...
 end
 
 # annotate short-form definition
-@constprop :aggressive shortdef(x) = ...
+Base.@constprop :aggressive shortdef(x) = ...
 
 # annotate anonymous function that a `do` block creates
 f() do
-    @constprop :aggressive
+    Base.@constprop :aggressive
     ...
 end
 ```
 
 !!! compat "Julia 1.10"
-  The usage within a function body requires at least Julia 1.10.
+    The usage within a function body requires at least Julia 1.10.
 """
 macro constprop(setting, ex)
     sym = constprop_setting(setting)
@@ -398,7 +401,7 @@ function constprop_setting(@nospecialize setting)
 end
 
 """
-    @assume_effects setting... [ex]
+    Base.@assume_effects setting... [ex]
 
 Override the compiler's effect modeling for the given method or foreign call.
 `@assume_effects` can be applied immediately before a function definition or within a function body.
@@ -409,23 +412,22 @@ It can also be applied immediately before a `@ccall` expression.
 
 # Examples
 ```jldoctest
-julia> Base.@assume_effects :terminates_locally function pow(x)
-           # this :terminates_locally allows `pow` to be constant-folded
+julia> Base.@assume_effects :terminates_locally function fact(x)
+           # this :terminates_locally allows `fact` to be constant-folded
            res = 1
-           1 < x < 20 || error("bad pow")
+           0 ≤ x < 20 || error("bad fact")
            while x > 1
                res *= x
                x -= 1
            end
            return res
        end
-pow (generic function with 1 method)
+fact (generic function with 1 method)
 
 julia> code_typed() do
-           pow(12)
-       end
-1-element Vector{Any}:
- CodeInfo(
+           fact(12)
+       end |> only
+CodeInfo(
 1 ─     return 479001600
 ) => Int64
 
@@ -434,16 +436,15 @@ julia> code_typed() do
                # this :terminates_locally allows this anonymous function to be constant-folded
                Base.@assume_effects :terminates_locally
                res = 1
-               1 < x < 20 || error("bad pow")
+               0 ≤ x < 20 || error("bad fact")
                while x > 1
                    res *= x
                    x -= 1
                end
                return res
            end
-       end
-1-element Vector{Any}:
- CodeInfo(
+       end |> only
+CodeInfo(
 1 ─     return (2, 6, 24)
 ) => Tuple{Int64, Int64, Int64}
 
@@ -452,7 +453,7 @@ Vector{Int64} (alias for Array{Int64, 1})
 ```
 
 !!! compat "Julia 1.10"
-  The usage within a function body requires at least Julia 1.10.
+    The usage within a function body requires at least Julia 1.10.
 
 !!! warning
     Improper use of this macro causes undefined behavior (including crashes,
@@ -475,6 +476,8 @@ The following `setting`s are supported.
 - `:terminates_locally`
 - `:notaskstate`
 - `:inaccessiblememonly`
+- `:noub`
+- `:noub_if_noinbounds`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -513,13 +516,6 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
     the other was optimized).
 
 !!! note
-    The `:consistent`-cy assertion currrently includes the assertion that the function
-    will not execute any undefined behavior (for any input). Note that undefined behavior
-    may technically cause the function to violate other effect assertions (such as
-    `:nothrow` or `:effect_free`) as well, but we do not model this, and all effects
-    except `:consistent` assume the absence of undefined behavior.
-
-!!! note
     If `:consistent` functions terminate by throwing an exception, that exception
     itself is not required to meet the egality requirement specified above.
 
@@ -556,7 +552,7 @@ were not executed.
 ---
 ## `:nothrow`
 
-The `:nothrow` settings asserts that this method does not terminate abnormally
+The `:nothrow` settings asserts that this method does not throw an exception
 (i.e. will either always return a value or never return).
 
 !!! note
@@ -565,7 +561,11 @@ The `:nothrow` settings asserts that this method does not terminate abnormally
     method itself.
 
 !!! note
-    `MethodErrors` and similar exceptions count as abnormal termination.
+    If the execution of a method may raise `MethodError`s and similar exceptions, then
+    the method is not considered as `:nothrow`.
+    However, note that environment-dependent errors like `StackOverflowError` or `InterruptException`
+    are not modeled by this effect and thus a method that may result in `StackOverflowError`
+    does not necessarily need to be `!:nothrow` (although it should usually be `!:terminates` too).
 
 ---
 ## `:terminates_globally`
@@ -578,7 +578,7 @@ The `:terminates_globally` settings asserts that this method will eventually ter
 
 !!! note
     The compiler will consider this a strong indication that the method will
-    terminate relatively *quickly* and may (if otherwise legal), call this
+    terminate relatively *quickly* and may (if otherwise legal) call this
     method at compile time. I.e. it is a bad idea to annotate this setting
     on a method that *technically*, but not *practically*, terminates.
 
@@ -639,6 +639,14 @@ global state or mutable memory pointed to by its arguments.
     This `:inaccessiblememonly` assertion covers any other methods called by the annotated method.
 
 ---
+## `:noub`
+
+The `:noub` setting asserts that the method will not execute any undefined behavior
+(for any input). Note that undefined behavior may technically cause the method to violate
+any other effect assertions (such as `:consistent` or `:effect_free`) as well, but we do
+not model this, and they assume the absence of undefined behavior.
+
+---
 ## `:foldable`
 
 This setting is a convenient shortcut for the set of effects that the compiler
@@ -647,6 +655,7 @@ currently equivalent to the following `setting`s:
 - `:consistent`
 - `:effect_free`
 - `:terminates_globally`
+- `:noub`
 
 !!! note
     This list in particular does not include `:nothrow`. The compiler will still
@@ -656,7 +665,7 @@ currently equivalent to the following `setting`s:
 
 !!! note
     An explicit `@inbounds` annotation inside the function will also disable
-    constant folding and not be overriden by `:foldable`.
+    constant folding and not be overridden by `:foldable`.
 
 ---
 ## `:removable`
@@ -679,6 +688,7 @@ the following other `setting`s:
 - `:terminates_globally`
 - `:notaskstate`
 - `:inaccessiblememonly`
+- `:noub`
 
 !!! warning
     `:total` is a very strong assertion and will likely gain additional semantics
@@ -709,9 +719,10 @@ macro assume_effects(args...)
         ex = nothing
         idx = length(args)
     end
-    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly) =
-        (false, false, false, false, false, false, false, false)
-    for org_setting in args[1:idx]
+    consistent = effect_free = nothrow = terminates_globally = terminates_locally =
+        notaskstate = inaccessiblememonly = noub = noub_if_noinbounds = false
+    for i in 1:idx
+        org_setting = args[i]
         (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
             consistent = val
@@ -727,28 +738,34 @@ macro assume_effects(args...)
             notaskstate = val
         elseif setting === :inaccessiblememonly
             inaccessiblememonly = val
+        elseif setting === :noub
+            noub = val
+        elseif setting === :noub_if_noinbounds
+            noub_if_noinbounds = val
         elseif setting === :foldable
-            consistent = effect_free = terminates_globally = val
+            consistent = effect_free = terminates_globally = noub = val
         elseif setting === :removable
             effect_free = nothrow = terminates_globally = val
         elseif setting === :total
-            consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = val
+            consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = noub = val
         else
             throw(ArgumentError("@assume_effects $org_setting not supported"))
         end
     end
     if is_function_def(inner)
         return esc(pushmeta!(ex, :purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
+            notaskstate, inaccessiblememonly, noub, noub_if_noinbounds))
     elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly,
-        )))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
+            notaskstate, inaccessiblememonly, noub, noub_if_noinbounds)))
         return esc(ex)
     else # anonymous function case
         return Expr(:meta, Expr(:purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
+            notaskstate, inaccessiblememonly, noub, noub_if_noinbounds))
     end
 end
 
@@ -1023,7 +1040,6 @@ macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]
         lno = body.args[1]
-        tmp = gensym("tmp")
         return Expr(:escape,
                     Expr(f.head, f.args[1],
                          Expr(:block,
@@ -1044,6 +1060,7 @@ end
     @atomic order ex
 
 Mark `var` or `ex` as being performed atomically, if `ex` is a supported expression.
+If no `order` is specified it defaults to :sequentially_consistent.
 
     @atomic a.b.x = new
     @atomic a.b.x += addend

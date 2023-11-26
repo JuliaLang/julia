@@ -96,7 +96,7 @@ Instead of:
 
 ```julia
 function double(a::AbstractArray{<:Number})
-    for i = firstindex(a):lastindex(a)
+    for i in eachindex(a)
         a[i] *= 2
     end
     return a
@@ -107,7 +107,7 @@ use:
 
 ```julia
 function double!(a::AbstractArray{<:Number})
-    for i = firstindex(a):lastindex(a)
+    for i in eachindex(a)
         a[i] *= 2
     end
     return a
@@ -118,6 +118,10 @@ Julia Base uses this convention throughout and contains examples of functions
 with both copying and modifying forms (e.g., [`sort`](@ref) and [`sort!`](@ref)), and others
 which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)).  It
 is typical for such functions to also return the modified array for convenience.
+
+Functions related to IO or making use of random number generators (RNG) are notable exceptions:
+Since these functions almost invariably must mutate the IO or RNG, functions ending with `!` are used to signify a mutation _other_ than mutating the IO or advancing the RNG state.
+For example, `rand(x)` mutates the RNG, whereas `rand!(x)` mutates both the RNG and `x`; similarly, `read(io)` mutates `io`, whereas `read!(io, x)` mutates both arguments.
 
 ## Avoid strange type `Union`s
 
@@ -342,7 +346,7 @@ This would provide custom showing of vectors with a specific new element type. W
 this should be avoided. The trouble is that users will expect a well-known type like `Vector()`
 to behave in a certain way, and overly customizing its behavior can make it harder to work with.
 
-## Avoid type piracy
+## [Avoid type piracy](@id avoid-type-piracy)
 
 "Type piracy" refers to the practice of extending or redefining methods in Base
 or other packages on types that you have not defined. In extreme cases, you can crash Julia

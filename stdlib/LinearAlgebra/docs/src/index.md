@@ -730,6 +730,9 @@ and define matrix-matrix operations.
 [Dongarra-1990]: https://dl.acm.org/doi/10.1145/77626.79170
 
 ```@docs
+LinearAlgebra.BLAS.gemmt!
+LinearAlgebra.BLAS.gemmt(::Any, ::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.gemmt(::Any, ::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.gemm!
 LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any)

@@ -173,7 +173,8 @@ function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     ishermitian(A) && return eigen!(Hermitian(A), sortby=sortby)
-    eval, evec = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]
+    E = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
+    eval, evec = E[2], E[4]
     return Eigen(sorteig!(eval, evec, sortby)...)
 end
 
@@ -524,7 +525,7 @@ true
 """
 function eigen(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    eigen!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+    eigen!(copy_similar(A, S), copy_similar(B, S); kws...)
 end
 eigen(A::Number, B::Number) = eigen(fill(A,1,1), fill(B,1,1))
 
@@ -619,7 +620,7 @@ julia> eigvals(A,B)
 """
 function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    return eigvals!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+    return eigvals!(copy_similar(A, S), copy_similar(B, S); kws...)
 end
 
 """

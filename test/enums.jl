@@ -184,6 +184,10 @@ end
 @enum HashEnum3 Enum3_a=1
 @test which(hash, (HashEnum3, UInt)).sig != Tuple{typeof(hash), HashEnum3, UInt64}
 
+# Check that generic `hash` on custom enum subtypes works.
+struct HashEnum4 <: Enum{Int} end
+@test hash(HashEnum4(), zero(UInt)) == invoke(hash, Tuple{Any, UInt}, HashEnum4(), zero(UInt))
+
 @test (Vector{Fruit}(undef, 3) .= apple) == [apple, apple, apple]
 
 # long, discongruous

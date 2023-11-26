@@ -59,6 +59,9 @@ using InteractiveUtils: code_llvm
     @test last(10:0.2:3) === 9.8
     @test step(10:0.2:3) === 0.2
     @test isempty(10:0.2:3)
+
+    unitrangeerrstr = "promotion of types Char and Char failed to change any arguments"
+    @test_throws unitrangeerrstr UnitRange('a', 'b')
 end
 
 using Dates, Random
@@ -628,11 +631,30 @@ end
     end
 end
 @testset "indexing range with empty range (#4309)" begin
-    @test (3:6)[5:4] === 7:6
+    @test (@inferred (3:6)[5:4]) === 7:6
     @test_throws BoundsError (3:6)[5:5]
     @test_throws BoundsError (3:6)[5]
-    @test (0:2:10)[7:6] === 12:2:10
+    @test (@inferred (0:2:10)[7:6]) === 12:2:11
     @test_throws BoundsError (0:2:10)[7:7]
+
+    for start in [true], stop in [true, false]
+        @test (@inferred (start:stop)[1:0]) === true:false
+    end
+    @test (@inferred (true:false)[true:false]) == true:false
+
+    @testset "issue #40760" begin
+        empty_range = 1:0
+        r = range(false, length = 0)
+        @test r isa UnitRange && first(r) == 0 && last(r) == -1
+        r = (true:true)[empty_range]
+        @test r isa UnitRange && first(r) == true && last(r) == false
+        @testset for r in Any[true:true, true:true:true, 1:2, 1:1:2]
+            @test (@inferred r[1:0]) isa AbstractRange
+            @test r[1:0] == empty_range
+            @test (@inferred r[1:1:0]) isa AbstractRange
+            @test r[1:1:0] == empty_range
+        end
+    end
 end
 # indexing with negative ranges (#8351)
 for a=AbstractRange[3:6, 0:2:10], b=AbstractRange[0:1, 2:-1:0]
@@ -1004,6 +1026,7 @@ end
         end
         a = prevfloat(a)
     end
+    @test (1:2:3)[StepRangeLen{Bool}(true,-1,2)] == [1]
 end
 
 # issue #20380
@@ -1283,6 +1306,8 @@ end
 
     @test sprint(show, UnitRange(1, 2)) == "1:2"
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
+
+    @test sprint(show, LinRange{Float32}(1.5, 2.5, 10)) == "LinRange{Float32}(1.5, 2.5, 10)"
 end
 
 @testset "Issue 11049, and related" begin
@@ -1799,6 +1824,7 @@ Base.div(x::Displacement, y::Displacement) = Displacement(div(x.val, y.val))
 # required for collect (summing lengths); alternatively, should length return Int by default?
 Base.promote_rule(::Type{Displacement}, ::Type{Int}) = Int
 Base.convert(::Type{Int}, x::Displacement) = x.val
+Base.Int(x::Displacement) = x.val
 
 # Unsigned complement, for testing checked_length
 struct UPosition <: Unsigned
@@ -2299,6 +2325,7 @@ end
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[true:true:true]
 end
+
 @testset "Non-Int64 endpoints that are identical (#39798)" begin
     for T in DataType[Float16,Float32,Float64,Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128],
         r in [ LinRange(1, 1, 10), StepRangeLen(7, 0, 5) ]
@@ -2476,4 +2503,79 @@ end
     @test !occursin("steprange_last", ir)
     @test !occursin("_colon", ir)
     @test !occursin("StepRange", ir)
+end
+
+# DimensionMismatch and LazyString
+function check_ranges(rx, ry)
+    if length(rx) != length(ry)
+        throw(DimensionMismatch(lazy"length of rx, $(length(rx)), does not equal length of ry, $(length(ry))"))
+    end
+    rx, ry
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(check_ranges, (UnitRange{Int},UnitRange{Int})))
+# TODO JET.@test_opt check_ranges(1:2, 3:4)
+
+@testset "checkbounds overflow (#26623)" begin
+    # the reported issue:
+    @test_throws BoundsError (1:3:4)[typemax(Int)÷3*2+3]
+
+    # a case that using mul_with_overflow & add_with_overflow might get wrong:
+    @test (-10:2:typemax(Int))[typemax(Int)÷2+2] == typemax(Int)-9
+end
+
+@testset "collect with specialized vcat" begin
+    struct OneToThree <: AbstractUnitRange{Int} end
+    Base.size(r::OneToThree) = (3,)
+    Base.first(r::OneToThree) = 1
+    Base.length(r::OneToThree) = 3
+    Base.last(r::OneToThree) = 3
+    function Base.getindex(r::OneToThree, i::Int)
+        checkbounds(r, i)
+        i
+    end
+    Base.vcat(r::OneToThree) = r
+    r = OneToThree()
+    a = Array(r)
+    @test a isa Vector{Int}
+    @test a == r
+    @test collect(r) isa Vector{Int}
+    @test collect(r) == r
+end
+
+@testset "isassigned" begin
+    for (r, val) in ((1:3, 3), (1:big(2)^65, big(2)^65))
+        @test isassigned(r, lastindex(r))
+        # test that the indexing actually succeeds
+        @test r[end] == val
+        @test_throws ArgumentError isassigned(r, true)
+    end
+
+end
+
+@testset "unsigned index #44895" begin
+    x = range(-1,1,length=11)
+    @test x[UInt(1)] == -1.0
+    a = StepRangeLen(1,2,3,2)
+    @test a[UInt(1)] == -1
+end
+
+@testset "StepRangeLen of CartesianIndex-es" begin
+    CIstart = CartesianIndex(2,3)
+    CIstep = CartesianIndex(1,1)
+    r = StepRangeLen(CIstart, CIstep, 4)
+    @test length(r) == 4
+    @test first(r) == CIstart
+    @test step(r) == CIstep
+    @test last(r) == CartesianIndex(5,6)
+    @test r[2] == CartesianIndex(3,4)
+
+    @test repr(r) == "StepRangeLen($CIstart, $CIstep, 4)"
+
+    r = StepRangeLen(CartesianIndex(), CartesianIndex(), 3)
+    @test all(==(CartesianIndex()), r)
+    @test length(r) == 3
+    @test repr(r) == "StepRangeLen(CartesianIndex(), CartesianIndex(), 3)"
+
+    errmsg = ("deliberately unsupported for CartesianIndex", "StepRangeLen")
+    @test_throws errmsg range(CartesianIndex(1), step=CartesianIndex(1), length=3)
 end

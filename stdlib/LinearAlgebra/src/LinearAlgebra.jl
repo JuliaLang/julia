@@ -9,14 +9,14 @@ module LinearAlgebra
 
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!,
-    copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
-    getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!,
-    length, log, map, ndims, one, oneunit, parent, permutedims, power_by_squaring,
-    print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar, sin,
+    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, collect, conj, convert, copy,
+    copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
+    getindex, hcat, getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle,
+    kron, kron!, length, log, map, ndims, one, oneunit, parent, permutedims,
+    power_by_squaring, promote_rule, real, sec, sech, setindex!, show, similar, sin,
     sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc, typed_hcat,
     vec, view, zero
-using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
+using Base: IndexLinear, promote_eltype, promote_op, promote_typeof, print_matrix,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
 using Base.Broadcast: Broadcasted, broadcasted
@@ -160,6 +160,9 @@ export
 
 # Constants
     I
+
+# not exported, but public names
+public AbstractTriangular
 
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
@@ -465,7 +468,7 @@ wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
 wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
 wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
 
-function wrap(A::AbstractVecOrMat, tA::AbstractChar)
+Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
     if tA == 'N'
         return A
     elseif tA == 'T'
@@ -619,7 +622,9 @@ function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3
     if parallel
         let Distributed = Base.require(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            return sum(Distributed.pmap(peakflops, fill(n, Distributed.nworkers())))
+            nworkers = @invokelatest Distributed.nworkers()
+            results = @invokelatest Distributed.pmap(peakflops, fill(n, nworkers))
+            return sum(results)
         end
     else
         return 2*Float64(n)^3 / minimum(t)
@@ -678,7 +683,8 @@ end
 
 function __init__()
     try
-        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
+        verbose = parse(Bool, get(ENV, "LBT_VERBOSE", "false"))
+        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true, verbose)
         BLAS.check()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")
