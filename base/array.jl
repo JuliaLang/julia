@@ -3058,8 +3058,8 @@ function wrap end
     $(Expr(:new, :(Array{T, N}), :ref, :dims))
 end
 
-@noinline invalid_wrap_err(len, dims) = throw(DimensionMismatch(
-    "Attempted to wrap a MemoryRef of length $len with an Array of size dims=$dims, which is invalid because prod(dims) = $(prod(dims)) > $len, so that the array would have more elements than the underlying memory can store."))
+@noinline invalid_wrap_err(len, dims, proddims) = throw(DimensionMismatch(
+    "Attempted to wrap a MemoryRef of length $len with an Array of size dims=$dims, which is invalid because prod(dims) = $proddims > $len, so that the array would have more elements than the underlying memory can store."))
 
 function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
     wrap(Array, MemoryRef(m), dims)
