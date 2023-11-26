@@ -96,7 +96,7 @@ function kill_terminator_edges!(irsv::IRInterpretationState, term_idx::Int, bb::
     elseif isa(stmt, ReturnNode)
         # Nothing to do
     else
-        @assert !isexpr(stmt, :enter)
+        @assert !isa(stmt, EnterNode)
         kill_edge!(irsv, bb, bb+1)
     end
 end
@@ -222,8 +222,8 @@ function process_terminator!(@nospecialize(stmt), bb::Int, bb_ip::BitSetBoundedM
         backedge || push!(bb_ip, stmt.dest)
         push!(bb_ip, bb+1)
         return backedge
-    elseif isexpr(stmt, :enter)
-        dest = stmt.args[1]::Int
+    elseif isa(stmt, EnterNode)
+        dest = stmt.catch_dest
         @assert dest > bb
         push!(bb_ip, dest)
         push!(bb_ip, bb+1)
@@ -329,8 +329,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             delete!(ssa_refined, idx)
         end
         check_ret!(stmt, idx)
-        is_terminator_or_phi = (isa(stmt, PhiNode) || isa(stmt, GotoNode) ||
-            isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isexpr(stmt, :enter))
+        is_terminator_or_phi = (isa(stmt, PhiNode) || isterminator(stmt))
         if typ === Bottom && !(idx == lstmt && is_terminator_or_phi)
             return true
         end

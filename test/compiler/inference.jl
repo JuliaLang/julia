@@ -4416,9 +4416,9 @@ g41908() = f41908(Any[1][1])
 # issue #42022
 let x = Tuple{Int,Any}[
         #= 1=# (0, Expr(:(=), Core.SlotNumber(3), 1))
-        #= 2=# (0, Expr(:enter, 17))
+        #= 2=# (0, EnterNode(17))
         #= 3=# (2, Expr(:(=), Core.SlotNumber(3), 2.0))
-        #= 4=# (2, Expr(:enter, 12))
+        #= 4=# (2, EnterNode(12))
         #= 5=# (4, Expr(:(=), Core.SlotNumber(3), '3'))
         #= 6=# (4, Core.GotoIfNot(Core.SlotNumber(2), 9))
         #= 7=# (4, Expr(:leave, Core.SSAValue(4), Core.SSAValue(2)))
