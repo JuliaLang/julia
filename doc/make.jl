@@ -54,7 +54,7 @@ end
 function parse_stdlib_version_file(path)
     values = Dict{String,String}()
     for line in readlines(path)
-        m = match(r"^([A-Z0-9_]+)\s+:?=\s+(\S+)\s?$", line)
+        m = match(r"^([A-Z0-9_]+)\s+:?=\s+(\S+)$", line)
         if isnothing(m)
             @warn "Unable to parse line in $(path)" line
         else
