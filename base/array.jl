@@ -3050,7 +3050,7 @@ function wrap end
     mem = ref.mem
     mem_len = length(mem)
     len = Core.checked_dims(dims...)
-    @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
+    @boundscheck mem_len + memoryrefoffset(ref) > len || invalid_wrap_err(mem_len, dims, len)
     if N != 1 && !(ref === GenericMemoryRef(mem) && len === mem_len)
         mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
         ref = MemoryRef(mem)
