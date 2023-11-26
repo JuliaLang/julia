@@ -1158,7 +1158,11 @@ end
 reverse(p::ProductIterator) = ProductIterator(Base.map(reverse, p.iterators))
 last(p::ProductIterator) = Base.map(last, p.iterators)
 intersect(a::ProductIterator, b::ProductIterator) = ProductIterator(intersect.(a.iterators, b.iterators))
-getindex(p::ProductIterator, inds...) = Base.map(getindex, p.iterators, inds)
+function getindex(p::ProductIterator, inds...)
+    length(inds) == length(p.iterators) || prod_indexing_error(p, inds)
+    Base.map(getindex, p.iterators, inds)
+end
+@noinline prod_indexing_error(p, inds) = throw(BoundsError(p, inds))
 
 # flatten an iterator of iterators
 
