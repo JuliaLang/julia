@@ -1911,7 +1911,7 @@ function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vec
         end
         ir[last_fallthrough_term_ssa] = nothing
         kill_edge!(bbs, last_fallthrough, terminator.dest)
-    elseif isexpr(terminator, :enter)
+    elseif isa(terminator, EnterNode)
         return false
     elseif isa(terminator, GotoNode)
         return true
@@ -1922,8 +1922,6 @@ function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vec
     bbs[last_fallthrough] = BasicBlock(first(bbs[last_fallthrough].stmts):last(bb.stmts), bbs[last_fallthrough].preds, bbs[last_fallthrough].succs)
     return true
 end
-
-is_terminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isexpr(stmt, :enter)
 
 function follow_map(map::Vector{Int}, idx::Int)
     while map[idx] ≠ 0
@@ -1992,7 +1990,7 @@ function cfg_simplify!(ir::IRCode)
             if length(bbs[succ].preds) == 1 && succ != 1
                 # Can't merge blocks with :enter terminator even if they
                 # only have one successor.
-                if isexpr(ir[SSAValue(last(bb.stmts))][:stmt], :enter)
+                if isa(ir[SSAValue(last(bb.stmts))][:stmt], EnterNode)
                     continue
                 end
                 # Prevent cycles by making sure we don't end up back at `idx`
@@ -2068,7 +2066,7 @@ function cfg_simplify!(ir::IRCode)
                     if bb_rename_succ[terminator.dest] == 0
                         push!(worklist, terminator.dest)
                     end
-                elseif isexpr(terminator, :enter)
+                elseif isa(terminator, EnterNode)
                     enteridx = terminator.args[1]::Int
                     if bb_rename_succ[enteridx] == 0
                         push!(worklist, enteridx)

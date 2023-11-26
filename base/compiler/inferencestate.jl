@@ -362,13 +362,13 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # start from all :enter statements and record the location of the try
     for pc = 1:n
         stmt = code[pc]
-        if isexpr(stmt, :enter)
-            l = stmt.args[1]::Int
+        if isa(stmt, EnterNode)
+            l = stmt.catch_dest
             push!(handlers, TryCatchFrame(Bottom, pc))
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
             push!(ip, pc + 1)
-            handler_at[l] = (handler_id, handler_id)
+            handler_at[l] = (0, handler_id)
             push!(ip, l)
         end
     end
@@ -396,12 +396,15 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
             elseif isa(stmt, ReturnNode)
                 @assert !isdefined(stmt, :val) || cur_stacks[1] == 0 "unbalanced try/catch"
                 break
+            elseif isa(stmt, EnterNode)
+                l = stmt.catch_dest
+                # We assigned a handler number above. Here we just merge that
+                # with out current handler information.
+                handler_at[l] = (cur_stacks[1], handler_at[l][2])
+                cur_stacks = (handler_at[pc´][1], cur_stacks[2])
             elseif isa(stmt, Expr)
                 head = stmt.head
-                if head === :enter
-                    # Already set above
-                    cur_stacks = (handler_at[pc´][1], cur_stacks[2])
-                elseif head === :leave
+                if head === :leave
                     l = 0
                     for j = 1:length(stmt.args)
                         arg = stmt.args[j]
@@ -412,7 +415,7 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                             if enter_stmt === nothing
                                 continue
                             end
-                            @assert isexpr(enter_stmt, :enter) "malformed :leave"
+                            @assert isa(enter_stmt, EnterNode) "malformed :leave"
                         end
                         l += 1
                     end
