@@ -95,7 +95,7 @@ add_tfunc(throw, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
 # if isexact is false, the actual runtime type may (will) be a subtype of t
 # if isconcrete is true, the actual runtime type is definitely concrete (unreachable if not valid as a typeof)
 # if istype is true, the actual runtime value will definitely be a type (e.g. this is false for Union{Type{Int}, Int})
-function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
+function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot) = t)
     if isa(t, Const)
         if isa(t.val, Type) && valid_as_lattice(t.val, astag)
             return t.val, true, isconcretetype(t.val), true
@@ -103,6 +103,7 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
         return Bottom, true, false, false # runtime throws on non-Type
     end
     t = widenconst(t)
+    troot = widenconst(troot)
     if t === Bottom
         return Bottom, true, true, false # runtime unreachable
     elseif t === typeof(Bottom) || !hasintersect(t, Type)
@@ -110,10 +111,15 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
     elseif isType(t)
         tp = t.parameters[1]
         valid_as_lattice(tp, astag) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
+        if troot isa UnionAll
+            # Free `TypeVar`s inside `Type` has violated the "diagonal" rule.
+            # Widen them before `UnionAll` rewraping to relax concrete constraint.
+            tp = widen_diagonal(tp, troot)
+        end
         return tp, !has_free_typevars(tp), isconcretetype(tp), true
     elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
-        t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, astag)
+        t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, astag, rewrap_unionall(t, troot))
         tr = rewrap_unionall(t′′, t)
         if t′′ isa DataType && t′′.name !== Tuple.name && !has_free_typevars(tr)
             # a real instance must be within the declared bounds of the type,
@@ -128,8 +134,8 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
         end
         return tr, isexact, isconcrete, istype
     elseif isa(t, Union)
-        ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(t.a, astag)
-        tb, isexact_b, isconcrete_b, istype_b = instanceof_tfunc(t.b, astag)
+        ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(t.a, astag, troot)
+        tb, isexact_b, isconcrete_b, istype_b = instanceof_tfunc(t.b, astag, troot)
         isconcrete = isconcrete_a && isconcrete_b
         istype = istype_a && istype_b
         # most users already handle the Union case, so here we assume that
@@ -1374,10 +1380,10 @@ end
 function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
-        nargs - 1 <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
-        nargs > 3 || return CallMeta(Any, Effects(), NoCallInfo())
+        nargs - 1 <= 6 || return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+        nargs > 3 || return CallMeta(Any, Any, Effects(), NoCallInfo())
     else
-        5 <= nargs <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
+        5 <= nargs <= 6 || return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
     end
     𝕃ᵢ = typeinf_lattice(interp)
     o = unwrapva(argtypes[2])
@@ -1399,7 +1405,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         end
         info = ModifyFieldInfo(callinfo.info)
     end
-    return CallMeta(RT, Effects(), info)
+    return CallMeta(RT, Any, Effects(), info)
 end
 @nospecs function replacefield!_tfunc(𝕃::AbstractLattice, o, f, x, v, success_order, failure_order)
     return replacefield!_tfunc(𝕃, o, f, x, v)
@@ -2742,7 +2748,7 @@ end
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
-    UNKNOWN = CallMeta(Type, EFFECTS_THROWS, NoCallInfo())
+    UNKNOWN = CallMeta(Type, Any, EFFECTS_THROWS, NoCallInfo())
     if !(2 <= length(argtypes) <= 3)
         return UNKNOWN
     end
@@ -2771,7 +2777,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     end
 
     if contains_is(argtypes_vec, Union{})
-        return CallMeta(Const(Union{}), EFFECTS_TOTAL, NoCallInfo())
+        return CallMeta(Const(Union{}), Union{}, EFFECTS_TOTAL, NoCallInfo())
     end
 
     # Run the abstract_call without restricting abstract call
@@ -2789,33 +2795,33 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
     rt = widenslotwrapper(call.rt)
     if isa(rt, Const)
         # output was computed to be constant
-        return CallMeta(Const(typeof(rt.val)), EFFECTS_TOTAL, info)
+        return CallMeta(Const(typeof(rt.val)), Union{}, EFFECTS_TOTAL, info)
     end
     rt = widenconst(rt)
     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
         # output cannot be improved so it is known for certain
-        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
+        return CallMeta(Const(rt), Union{}, EFFECTS_TOTAL, info)
     elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
         # conservatively express uncertainty of this result
         # in two ways: both as being a subtype of this, and
         # because of LimitedAccuracy causes
-        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{<:rt}, Union{}, EFFECTS_TOTAL, info)
     elseif isa(tt, Const) || isconstType(tt)
         # input arguments were known for certain
         # XXX: this doesn't imply we know anything about rt
-        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
+        return CallMeta(Const(rt), Union{}, EFFECTS_TOTAL, info)
     elseif isType(rt)
-        return CallMeta(Type{rt}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{rt}, Union{}, EFFECTS_TOTAL, info)
     else
-        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
+        return CallMeta(Type{<:rt}, Union{}, EFFECTS_TOTAL, info)
     end
 end
 
 # a simplified model of abstract_call_gf_by_type for applicable
 function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
                              sv::AbsIntState, max_methods::Int)
-    length(argtypes) < 2 && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
-    isvarargtype(argtypes[2]) && return CallMeta(Bool, EFFECTS_UNKNOWN, NoCallInfo())
+    length(argtypes) < 2 && return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+    isvarargtype(argtypes[2]) && return CallMeta(Bool, Any, EFFECTS_UNKNOWN, NoCallInfo())
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
     matches = find_matching_methods(typeinf_lattice(interp), argtypes, atype, method_table(interp),
@@ -2854,7 +2860,7 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
             end
         end
     end
-    return CallMeta(rt, EFFECTS_TOTAL, NoCallInfo())
+    return CallMeta(rt, Union{}, EFFECTS_TOTAL, NoCallInfo())
 end
 add_tfunc(applicable, 1, INT_INF, @nospecs((𝕃::AbstractLattice, f, args...)->Bool), 40)
 
@@ -2863,26 +2869,26 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     if length(argtypes) == 3 && !isvarargtype(argtypes[3])
         ft′ = argtype_by_index(argtypes, 2)
         ft = widenconst(ft′)
-        ft === Bottom && return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
+        ft === Bottom && return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
         typeidx = 3
     elseif length(argtypes) == 2 && !isvarargtype(argtypes[2])
         typeidx = 2
     else
-        return CallMeta(Any, Effects(), NoCallInfo())
+        return CallMeta(Any, Any, Effects(), NoCallInfo())
     end
     (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, typeidx), false)
-    isexact || return CallMeta(Bool, Effects(), NoCallInfo())
+    isexact || return CallMeta(Bool, Any, Effects(), NoCallInfo())
     unwrapped = unwrap_unionall(types)
     if types === Bottom || !(unwrapped isa DataType) || unwrapped.name !== Tuple.name
-        return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
+        return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
     end
     if typeidx == 3
-        isdispatchelem(ft) || return CallMeta(Bool, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
+        isdispatchelem(ft) || return CallMeta(Bool, Any, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
         types = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     end
     mt = ccall(:jl_method_table_for, Any, (Any,), types)
     if !isa(mt, MethodTable)
-        return CallMeta(Bool, EFFECTS_THROWS, NoCallInfo())
+        return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
     end
     match, valid_worlds = findsup(types, method_table(interp))
     update_valid_age!(sv, valid_worlds)
@@ -2894,7 +2900,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
         edge = specialize_method(match)::MethodInstance
         add_invoke_backedge!(sv, types, edge)
     end
-    return CallMeta(rt, EFFECTS_TOTAL, NoCallInfo())
+    return CallMeta(rt, Any, EFFECTS_TOTAL, NoCallInfo())
 end
 
 # N.B.: typename maps type equivalence classes to a single value

@@ -24,6 +24,11 @@ following meanings:
   * `EFFECT_FREE_IF_INACCESSIBLEMEMONLY`: the `:effect-free`-ness of this method can later be
     refined to `ALWAYS_TRUE` in a case when `:inaccessiblememonly` is proven.
 - `nothrow::Bool`: this method is guaranteed to not throw an exception.
+  If the execution of this method may raise `MethodError`s and similar exceptions, then
+  the method is not considered as `:nothrow`.
+  However, note that environment-dependent errors like `StackOverflowError` or `InterruptException`
+  are not modeled by this effect and thus a method that may result in `StackOverflowError`
+  does not necessarily need to taint `:nothrow` (although it should usually taint `:terminates` too).
 - `terminates::Bool`: this method is guaranteed to terminate.
 - `notaskstate::Bool`: this method does not access any state bound to the current
   task and may thus be moved to a different task without changing observable
@@ -169,6 +174,68 @@ function Effects(effects::Effects = _EFFECTS_UNKNOWN;
         inaccessiblememonly,
         noub,
         nonoverlayed)
+end
+
+function is_better_effects(new::Effects, old::Effects)
+    any_improved = false
+    if new.consistent == ALWAYS_TRUE
+        any_improved |= old.consistent != ALWAYS_TRUE
+    else
+        if !iszero(new.consistent & CONSISTENT_IF_NOTRETURNED)
+            old.consistent == ALWAYS_TRUE && return false
+            any_improved |= iszero(old.consistent & CONSISTENT_IF_NOTRETURNED)
+        elseif !iszero(new.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
+            old.consistent == ALWAYS_TRUE && return false
+            any_improved |= iszero(old.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
+        else
+            return false
+        end
+    end
+    if new.effect_free == ALWAYS_TRUE
+        any_improved |= old.consistent != ALWAYS_TRUE
+    elseif new.effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+        old.effect_free == ALWAYS_TRUE && return false
+        any_improved |= old.effect_free != EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+    elseif new.effect_free != old.effect_free
+        return false
+    end
+    if new.nothrow
+        any_improved |= !old.nothrow
+    elseif new.nothrow != old.nothrow
+        return false
+    end
+    if new.terminates
+        any_improved |= !old.terminates
+    elseif new.terminates != old.terminates
+        return false
+    end
+    if new.notaskstate
+        any_improved |= !old.notaskstate
+    elseif new.notaskstate != old.notaskstate
+        return false
+    end
+    if new.inaccessiblememonly == ALWAYS_TRUE
+        any_improved |= old.inaccessiblememonly != ALWAYS_TRUE
+    elseif new.inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
+        old.inaccessiblememonly == ALWAYS_TRUE && return false
+        any_improved |= old.inaccessiblememonly != INACCESSIBLEMEM_OR_ARGMEMONLY
+    elseif new.inaccessiblememonly != old.inaccessiblememonly
+        return false
+    end
+    if new.noub == ALWAYS_TRUE
+        any_improved |= old.noub != ALWAYS_TRUE
+    elseif new.noub == NOUB_IF_NOINBOUNDS
+        old.noub == ALWAYS_TRUE && return false
+        any_improved |= old.noub != NOUB_IF_NOINBOUNDS
+    elseif new.noub != old.noub
+        return false
+    end
+    if new.nonoverlayed
+        any_improved |= !old.nonoverlayed
+    elseif new.nonoverlayed != old.nonoverlayed
+        return false
+    end
+    return any_improved
 end
 
 function merge_effects(old::Effects, new::Effects)

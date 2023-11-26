@@ -550,15 +550,17 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state());
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
                     return eval_body(stmts, s, next_ip, toplevel);
-                }
-                else if (s->continue_at) { // means we reached a :leave expression
-                    ip = s->continue_at;
-                    s->continue_at = 0;
-                    continue;
-                }
-                else { // a real exception
-                    ip = catch_ip;
-                    continue;
+                } else {
+                    jl_eh_restore_state(&__eh);
+                    if (s->continue_at) { // means we reached a :leave expression
+                        ip = s->continue_at;
+                        s->continue_at = 0;
+                        continue;
+                    }
+                    else { // a real exception
+                        ip = catch_ip;
+                        continue;
+                    }
                 }
             }
             else if (head == jl_leave_sym) {
@@ -575,11 +577,11 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 }
                 if (hand_n_leave > 0) {
                     assert(hand_n_leave > 0);
-                    // equivalent to jl_pop_handler(hand_n_leave), but retaining eh for longjmp:
+                    // equivalent to jl_pop_handler(hand_n_leave), longjmping
+                    // to the :enter code above instead, which handles cleanup
                     jl_handler_t *eh = ct->eh;
                     while (--hand_n_leave > 0)
                         eh = eh->prev;
-                    jl_eh_restore_state(eh);
                     // leave happens during normal control flow, but we must
                     // longjmp to pop the eval_body call for each enter.
                     s->continue_at = next_ip;

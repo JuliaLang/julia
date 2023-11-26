@@ -2924,7 +2924,7 @@ static bool local_var_occurs(jl_value_t *e, int sl)
 static std::set<int> assigned_in_try(jl_array_t *stmts, int s, long l)
 {
     std::set<int> av;
-    for(int i=s; i <= l; i++) {
+    for(int i=s; i < l; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts,i);
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == jl_assign_sym) {
@@ -2946,7 +2946,7 @@ static void mark_volatile_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> 
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == jl_enter_sym) {
                 int last = jl_unbox_long(jl_exprarg(st, 0));
-                std::set<int> as = assigned_in_try(stmts, i + 1, last);
+                std::set<int> as = assigned_in_try(stmts, i + 1, last - 1);
                 for (int j = 0; j < (int)slength; j++) {
                     if (j < i || j > last) {
                         std::set<int>::iterator it = as.begin();
@@ -8006,7 +8006,16 @@ static jl_llvm_functions_t
 
             auto scan_ssavalue = [&](jl_value_t *val) {
                 if (jl_is_ssavalue(val)) {
-                    ctx.ssavalue_usecount[((jl_ssavalue_t*)val)->id-1] += 1;
+                    size_t ssa_idx = ((jl_ssavalue_t*)val)->id-1;
+                    /*
+                     * We technically allow out of bounds SSAValues in dead IR, so make
+                     * sure to bounds check this here. It's still not *good* to leave
+                     * dead code in the IR, because this will conservatively overcount
+                     * it, but let's at least make it not crash.
+                     */
+                    if (ssa_idx < ctx.ssavalue_usecount.size()) {
+                        ctx.ssavalue_usecount[ssa_idx] += 1;
+                    }
                     return true;
                 }
                 return false;
@@ -8736,11 +8745,16 @@ static jl_llvm_functions_t
             sj->setCanReturnTwice();
             Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
             BasicBlock *tryblk = BasicBlock::Create(ctx.builder.getContext(), "try", f);
+            BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_pop", f);
             BasicBlock *handlr = NULL;
             handlr = BB[lname];
             workstack.push_back(lname - 1);
             come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
-            ctx.builder.CreateCondBr(isz, tryblk, handlr);
+            ctx.builder.CreateCondBr(isz, tryblk, catchpop);
+            ctx.builder.SetInsertPoint(catchpop);
+            ctx.builder.CreateCall(prepare_call(jlleave_func),
+                            ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1));
+            ctx.builder.CreateBr(handlr);
             ctx.builder.SetInsertPoint(tryblk);
         }
         else {
@@ -9474,6 +9488,8 @@ char jl_using_oprofile_jitevents = 0; // Non-zero if running under OProfile
 char jl_using_perf_jitevents = 0;
 #endif
 
+int jl_is_timing_passes = 0;
+
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
@@ -9532,6 +9548,11 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0) {
         clopt->addOccurrence(1, clopt->ArgStr, "false", true);
     }
+
+    clopt = llvmopts.lookup("time-passes");
+    if (clopt && clopt->getNumOccurrences() > 0)
+        jl_is_timing_passes = 1;
+
     jl_ExecutionEngine = new JuliaOJIT();
 
     bool jl_using_gdb_jitevents = false;

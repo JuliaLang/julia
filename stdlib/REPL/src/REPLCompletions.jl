@@ -565,9 +565,9 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
                                     sv::CC.InferenceState)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
         if CC.isdefined_globalref(g)
-            return CC.RTEffects(Const(ccall(:jl_get_globalref_value, Any, (Any,), g)), CC.EFFECTS_TOTAL)
+            return CC.RTEffects(Const(ccall(:jl_get_globalref_value, Any, (Any,), g)), Union{}, CC.EFFECTS_TOTAL)
         end
-        return CC.RTEffects(Union{}, CC.EFFECTS_THROWS)
+        return CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS)
     end
     return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef,
                                               sv::CC.InferenceState)
@@ -609,7 +609,7 @@ function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                    sv::CC.InferenceState)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
         neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
-        result = CC.MethodCallResult(result.rt, result.edgecycle, result.edgelimited,
+        result = CC.MethodCallResult(result.rt, result.exct, result.edgecycle, result.edgelimited,
                                      result.edge, neweffects)
     end
     ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter, f::Any,
@@ -1409,7 +1409,9 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
             else
                 owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), scope, var)
                 if C_NULL == owner
-                    print(io, "\nSuggestion: check for spelling errors or missing imports. No global of this name exists in this module.")
+                    # No global of this name exists in this module.
+                    # This is the common case, so do not print that information.
+                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
                     owner = bnd
                 else
                     owner = unsafe_pointer_to_objref(owner)::Core.Binding

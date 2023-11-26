@@ -25,9 +25,9 @@ using ._TOP_MOD:     # Base definitions
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using Core.Compiler: # Core.Compiler specific definitions
     Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
-    argextype, check_effect_free!, fieldcount_noerror, hasintersect, intrinsic_nothrow,
-    is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow, singleton_type,
-    try_compute_field, try_compute_fieldidx, widenconst, ⊑
+    argextype, check_effect_free!, fieldcount_noerror, hasintersect, has_flag,
+    intrinsic_nothrow, is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow,
+    singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -37,7 +37,6 @@ else
 end
 
 const AInfo = IdSet{Any}
-const 𝕃ₒ = SimpleInferenceLattice.instance
 
 """
     x::EscapeInfo
@@ -598,10 +597,11 @@ struct LivenessChange <: Change
 end
 const Changes = Vector{Change}
 
-struct AnalysisState{T}
+struct AnalysisState{T, L <: AbstractLattice}
     ir::IRCode
     estate::EscapeState
     changes::Changes
+    𝕃ₒ::L
     get_escape_cache::T
 end
 
@@ -613,14 +613,14 @@ Analyzes escape information in `ir`:
 - `get_escape_cache(::MethodInstance) -> Union{Bool,ArgEscapeCache}`:
   retrieves cached argument escape information
 """
-function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
+function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_escape_cache)
     stmts = ir.stmts
     nstmts = length(stmts) + length(ir.new_nodes.stmts)
 
     tryregions, arrayinfo = compute_frameinfo(ir)
     estate = EscapeState(nargs, nstmts, arrayinfo)
     changes = Changes() # keeps changes that happen at current statement
-    astate = AnalysisState(ir, estate, changes, get_escape_cache)
+    astate = AnalysisState(ir, estate, changes, 𝕃ₒ, get_escape_cache)
 
     local debug_itr_counter = 0
     while true
@@ -975,7 +975,7 @@ end
     error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
 end
 
-is_nothrow(ir::IRCode, pc::Int) = ir[SSAValue(pc)][:flag] & IR_FLAG_NOTHROW ≠ 0
+is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 
 # NOTE if we don't maintain the alias set that is separated from the lattice state, we can do
 # something like below: it essentially incorporates forward escape propagation in our default
@@ -1452,10 +1452,10 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     add_escape_change!(astate, val, ssainfo)
     # compute the throwness of this setfield! call here since builtin_nothrow doesn't account for that
     @label add_thrown_escapes
-    if length(args) == 4 && setfield!_nothrow(𝕃ₒ,
+    if length(args) == 4 && setfield!_nothrow(astate.𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir))
         return true
-    elseif length(args) == 3 && setfield!_nothrow(𝕃ₒ,
+    elseif length(args) == 3 && setfield!_nothrow(astate.𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir))
         return true
     else

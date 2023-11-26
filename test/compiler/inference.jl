@@ -427,8 +427,7 @@ code_llvm(devnull, f14009, (Int,))
 mutable struct B14009{T}; end
 g14009(a) = g14009(B14009{a})
 code_typed(g14009, (Type{Int},))
-code_llvm(devnull, f14009, (Int,))
-
+code_llvm(devnull, g14009, (Type{Int},))
 
 # issue #9232
 arithtype9232(::Type{T},::Type{T}) where {T<:Real} = arithtype9232(T)
@@ -4417,7 +4416,7 @@ g41908() = f41908(Any[1][1])
 # issue #42022
 let x = Tuple{Int,Any}[
         #= 1=# (0, Expr(:(=), Core.SlotNumber(3), 1))
-        #= 2=# (0, Expr(:enter, 18))
+        #= 2=# (0, Expr(:enter, 17))
         #= 3=# (2, Expr(:(=), Core.SlotNumber(3), 2.0))
         #= 4=# (2, Expr(:enter, 12))
         #= 5=# (4, Expr(:(=), Core.SlotNumber(3), '3'))
@@ -4426,21 +4425,19 @@ let x = Tuple{Int,Any}[
         #= 8=# (0, Core.ReturnNode(1))
         #= 9=# (4, Expr(:call, GlobalRef(Main, :throw)))
         #=10=# (4, Expr(:leave, Core.SSAValue(4)))
-        #=11=# (2, Core.GotoNode(16))
-        #=12=# (4, Expr(:leave, Core.SSAValue(4)))
-        #=13=# (2, Expr(:(=), Core.SlotNumber(4), Expr(:the_exception)))
-        #=14=# (2, Expr(:call, GlobalRef(Main, :rethrow)))
-        #=15=# (2, Expr(:pop_exception, Core.SSAValue(4)))
-        #=16=# (2, Expr(:leave, Core.SSAValue(2)))
-        #=17=# (0, Core.GotoNode(22))
-        #=18=# (2, Expr(:leave, Core.SSAValue(2)))
-        #=19=# (0, Expr(:(=), Core.SlotNumber(5), Expr(:the_exception)))
-        #=20=# (0, nothing)
-        #=21=# (0, Expr(:pop_exception, Core.SSAValue(2)))
-        #=22=# (0, Core.ReturnNode(Core.SlotNumber(3)))
+        #=11=# (2, Core.GotoNode(15))
+        #=12=# (2, Expr(:(=), Core.SlotNumber(4), Expr(:the_exception)))
+        #=13=# (2, Expr(:call, GlobalRef(Main, :rethrow)))
+        #=14=# (2, Expr(:pop_exception, Core.SSAValue(4)))
+        #=15=# (2, Expr(:leave, Core.SSAValue(2)))
+        #=16=# (0, Core.GotoNode(20))
+        #=17=# (0, Expr(:(=), Core.SlotNumber(5), Expr(:the_exception)))
+        #=18=# (0, nothing)
+        #=19=# (0, Expr(:pop_exception, Core.SSAValue(2)))
+        #=20=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
-    handler_at = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
-    @test handler_at == first.(x)
+    handler_at, handlers = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
 end
 
 @test only(Base.return_types((Bool,)) do y
@@ -5533,3 +5530,82 @@ function test_exit_bottom(s)
     n
 end
 @test only(Base.return_types(test_exit_bottom, Tuple{String})) == Int
+
+function foo_typed_throw_error()
+    try
+        error()
+    catch e
+        if isa(e, ErrorException)
+            return 1.0
+        end
+    end
+    return 1
+end
+@test Base.return_types(foo_typed_throw_error) |> only === Float64
+
+will_throw_no_method(x::Int) = 1
+function foo_typed_throw_metherr()
+    try
+        will_throw_no_method(1.0)
+    catch e
+        if isa(e, MethodError)
+            return 1.0
+        end
+    end
+    return 1
+end
+@test Base.return_types(foo_typed_throw_metherr) |> only === Float64
+
+# refine `exct` when `:nothrow` is proven
+Base.@assume_effects :nothrow function sin_nothrow(x::Float64)
+    x == Inf && return zero(x)
+    return sin(x)
+end
+@test Base.infer_exception_type(sin_nothrow, (Float64,)) == Union{}
+@test Base.return_types((Float64,)) do x
+    try
+        return sin_nothrow(x)
+    catch err
+        return err
+    end
+end |> only === Float64
+# for semi-concrete interpretation result too
+Base.@constprop :aggressive function sin_maythrow(x::Float64, maythrow::Bool)
+    if maythrow
+        return sin(x)
+    else
+        return @noinline sin_nothrow(x)
+    end
+end
+@test Base.return_types((Float64,)) do x
+    try
+        return sin_maythrow(x, false)
+    catch err
+        return err
+    end
+end |> only === Float64
+
+# exception type from GotoIfNot
+@test Base.infer_exception_type(c::Bool -> c ? 1 : 2) == Union{}
+@test Base.infer_exception_type(c::Missing -> c ? 1 : 2) == TypeError
+@test Base.infer_exception_type(c::Any -> c ? 1 : 2) == TypeError
+
+# semi-concrete interpretation accuracy
+# https://github.com/JuliaLang/julia/issues/50037
+@inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
+@test Base.infer_return_type() do var::Int
+    Val(countvars50037(1, var))
+end == Val{1}
+
+# Issue #52168
+f52168(x, t::Type) = x::NTuple{2, Base.inferencebarrier(t)::Type}
+@test f52168((1, 2.), Any) === (1, 2.)
+
+# Issue #27031
+let x = 1, _Any = Any
+    @noinline bar27031(tt::Tuple{T,T}, ::Type{Val{T}}) where {T} = notsame27031(tt)
+    @noinline notsame27031(tt::Tuple{T, T}) where {T} = error()
+    @noinline notsame27031(tt::Tuple{T, S}) where {T, S} = "OK"
+    foo27031() = bar27031((x, 1.0), Val{_Any})
+    @test foo27031() == "OK"
+end
