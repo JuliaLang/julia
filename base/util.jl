@@ -144,7 +144,7 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
     printstyled(stdout, msg...; bold=bold, italic=italic, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
-    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()); cpu_target)
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String}=nothing)
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
@@ -153,6 +153,8 @@ Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-nat
 command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
+
+Unless set to `nothing`, the `cpu_target` keyword argument can be used to override the CPU target set for the running process.
 
 To get the julia command without propagated command line arguments, `julia_cmd()[1]` can be used.
 
@@ -246,7 +248,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
         # If pkgimage is set, malloc_log and code_coverage should not
         @assert opts.malloc_log == 0 && opts.code_coverage == 0
     end
-    return `$julia -C$cpu_target -J$image_file $addflags`
+    return `$julia -C $cpu_target -J$image_file $addflags`
 end
 
 function julia_exename()
