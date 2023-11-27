@@ -542,7 +542,7 @@ end
              100798//32085
              103993//33102
              312689//99532 ]
-    @test rationalize(pi) == rationalize(Int, pi)
+    @test rationalize(pi) == rationalize(Float64(pi))
 end
 
 @testset "issue #12536" begin
