@@ -2,7 +2,7 @@
 
 ### Multidimensional iterators
 module IteratorsMD
-    import .Base: eltype, length, size, first, last, in, getindex, setindex!,
+    import .Base: eltype, length, size, first, last, lastindex, front, tail, in, getindex, setindex!,
                   min, max, zero, oneunit, isless, eachindex,
                   convert, show, iterate, promote_rule
 
