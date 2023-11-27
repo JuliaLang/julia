@@ -3181,7 +3181,7 @@ end
     @test wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
     @test wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)
 
-    memref2 = MemoryRef(mem, 2)
+    memref2 = MemoryRef(mem, 3)
     @test wrap(Array, memref2, (5,)) == ones(Int, 5)
     @test wrap(Array, memref2, 2) == ones(Int, 2)
     @test wrap(Array, memref2, (2,2,2)) == ones(Int,2,2,2)
