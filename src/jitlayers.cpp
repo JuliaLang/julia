@@ -155,6 +155,26 @@ void jl_link_global(GlobalVariable *GV, void *addr) JL_NOTSAFEPOINT
     }
 }
 
+void jl_optimize_small_typeof(GlobalVariable *GV) JL_NOTSAFEPOINT
+{
+    GV->setDSOLocal(true);
+    if (jl_options.image_codegen) {
+        // If we are forcing imaging mode codegen for debugging,
+        // emit external non-const symbol to avoid LLVM optimizing the code
+        // similar to non-imaging mode.
+        assert(GV->hasExternalLinkage());
+    }
+    else {
+        Constant *data = ConstantDataArray::get(GV->getContext(),
+            ArrayRef<uint8_t>((const unsigned char*)jl_small_typeof, sizeof(jl_small_typeof)));
+        GV->setInitializer(data);
+        GV->setConstant(true);
+        GV->setLinkage(GlobalValue::PrivateLinkage);
+        GV->setVisibility(GlobalValue::DefaultVisibility);
+        GV->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+    }
+}
+
 void jl_jit_globals(std::map<void *, GlobalVariable*> &globals) JL_NOTSAFEPOINT
 {
     for (auto &global : globals) {
@@ -246,6 +266,9 @@ static jl_callptr_t _jl_compile_codeinst(
                     if (InitValue != NewGlobals.end()) {
                         jl_link_global(&GV, InitValue->second);
                     }
+                }
+                if (auto GV = M->getNamedGlobal("jl_small_typeof")) {
+                    jl_optimize_small_typeof(GV);
                 }
             }
         }
@@ -399,12 +422,18 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
             jl_jit_globals(params.global_targets);
             assert(params.workqueue.empty());
             if (params._shared_module) {
+                if (auto GV = params._shared_module->getNamedGlobal("jl_small_typeof")) {
+                    jl_optimize_small_typeof(GV);
+                }
                 jl_ExecutionEngine->optimizeDLSyms(*params._shared_module);
                 jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
             }
         }
         if (success && llvmmod == NULL) {
             into->withModuleDo([&](Module &M) {
+                if (auto GV = M.getNamedGlobal("jl_small_typeof")) {
+                    jl_optimize_small_typeof(GV);
+                }
                 jl_ExecutionEngine->optimizeDLSyms(M);
             });
             jl_ExecutionEngine->addModule(std::move(*into));

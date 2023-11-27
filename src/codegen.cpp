@@ -750,7 +750,7 @@ static const auto jldlli_var = new JuliaVariable{
 static const auto jl_small_typeof_var = new JuliaVariable{
     XSTR(jl_small_typeof),
     true,
-    [](Type *T_size) -> Type * { return getInt8Ty(T_size->getContext()); },
+    [](Type *T_size) -> Type * { return ArrayType::get(getInt8Ty(T_size->getContext()), sizeof(jl_small_typeof)); },
 };
 
 static const auto jlstack_chk_guard_var = new JuliaVariable{

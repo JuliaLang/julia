@@ -420,7 +420,9 @@ static Constant *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
         if (addr->smalltag) {
             // some common builtin datatypes have a special pool for accessing them by smalltag id
             Constant *tag = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), addr->smalltag << 4);
-            Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(getInt8Ty(ctx.builder.getContext()), prepare_global_in(jl_Module, jl_small_typeof_var), tag);
+            SmallVector<Constant*,2> idxs = {ConstantInt::get(ctx.types().T_size, 0), tag};
+            auto GV = prepare_global_in(jl_Module, jl_small_typeof_var);
+            Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(GV->getValueType(), GV, idxs);
             auto ty = ctx.types().T_ppjlvalue;
             if (ty->getPointerAddressSpace() == smallp->getType()->getPointerAddressSpace())
                 return ConstantExpr::getBitCast(smallp, ty);
@@ -1484,7 +1486,9 @@ static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull, bool just
             // we lied a bit: this wasn't really an object (though it was valid for GC rooting)
             // and we need to use it as an index to get the real object now
             Module *M = jl_Module;
-            Value *smallp = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), prepare_global_in(M, jl_small_typeof_var), tag);
+            auto GV = prepare_global_in(M, jl_small_typeof_var);
+            SmallVector<Value*,2> idx = {ConstantInt::get(ctx.types().T_size, 0), tag};
+            Value *smallp = ctx.builder.CreateInBoundsGEP(GV->getValueType(), GV, idx);
             smallp = ctx.builder.CreateBitCast(smallp, typetag->getType()->getPointerTo(0));
             jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
             auto small = ctx.builder.CreateAlignedLoad(typetag->getType(), smallp, M->getDataLayout().getPointerABIAlignment(0));

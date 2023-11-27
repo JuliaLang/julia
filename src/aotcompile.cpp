@@ -1819,7 +1819,7 @@ void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIR
     PM->add(new TargetLibraryInfoWrapperPass(triple));
     PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
 }
-
+void jl_optimize_small_typeof(GlobalVariable *GV) JL_NOTSAFEPOINT;
 // --- native code info, and dump function to IR and ASM ---
 // Get pointer to llvm::Function instance, compiling if necessary
 // for use in reflection from Julia.
@@ -1919,6 +1919,9 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
                     global.second->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
                     global.second->setVisibility(GlobalValue::DefaultVisibility);
                 }
+            }
+            if (auto GV = (*m.getModuleUnlocked()).getNamedGlobal("jl_small_typeof")) {
+                jl_optimize_small_typeof(GV);
             }
             if (!jl_options.image_codegen) {
                 optimizeDLSyms(*m.getModuleUnlocked());
