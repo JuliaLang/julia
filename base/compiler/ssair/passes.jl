@@ -2334,6 +2334,12 @@ function cfg_simplify!(ir::IRCode)
                             else
                                 resize!(values, length(values)+1)
                             end
+                        elseif new_edge == -1
+                            @assert length(phi.edges) == 1
+                            if isassigned(phi.values, old_index)
+                                push!(edges, -1)
+                                push!(values, phi.values[old_index])
+                            end
                         elseif new_edge == -3
                             # Multiple predecessors, we need to expand out this phi
                             all_new_preds = Int32[]

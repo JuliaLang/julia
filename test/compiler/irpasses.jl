@@ -1653,3 +1653,29 @@ let m = Meta.@lower 1 + 1
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 4
 end
+
+# Test CFG simplify with single predecessor phi node
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        # Block 1
+        Expr(:call, Base.inferencebarrier, 1),
+        GotoNode(3),
+        # Block 2
+        PhiNode(Int32[1], Any[SSAValue(1)]),
+        ReturnNode(SSAValue(3))
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 1
+    ir = Core.Compiler.compact!(ir)
+    @test length(ir.stmts) == 2
+    @test (ir[SSAValue(2)][:stmt]::ReturnNode).val == SSAValue(1)
+end
