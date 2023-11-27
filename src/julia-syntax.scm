@@ -4718,7 +4718,9 @@ f(x) = yt(x)
                #f))
 
             ;; exception handlers are lowered using
-            ;; (= tok (enter L)) - push handler with catch block at label L, yielding token
+            ;; (= tok (enter L scope))
+            ;;      push handler with catch block at label L and scope `scope`, yielding token
+            ;;      `scope` is only recognized for tryfinally and may be omitted in the lowering
             ;; (leave n) - pop N exception handlers
             ;; (pop_exception tok) - pop exception stack back to state of associated enter
             ((trycatch tryfinally trycatchelse)

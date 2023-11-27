@@ -1076,7 +1076,7 @@ function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr)
     return false
 end
 
-function fold_current_scope!(compact::IncrementalCompact, idx::Int, stmt::Expr, lazydomtree)
+function fold_current_scope!(compact::IncrementalCompact, idx::Int, stmt::Expr, lazydomtree::LazyDomtree)
     domtree = get!(lazydomtree)
 
     # The frontend enforces the invariant that any :enter dominates its active

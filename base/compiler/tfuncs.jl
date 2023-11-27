@@ -2489,10 +2489,17 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
             consistent = (isa(setting, Const) && setting.val === :conditional) ? ALWAYS_TRUE : ALWAYS_FALSE,
             nothrow = compilerbarrier_nothrow(setting, nothing))
     elseif f === Core.current_scope
-        length(argtypes) == 0 || return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
+        nothrow = true
+        if length(argtypes) != 0
+            if length(argtypes) != 1 || !isvarargtype(argtypes[1])
+                return EFFECTS_THROWS
+            end
+            nothrow = false
+        end
         return Effects(EFFECTS_TOTAL;
             consistent = ALWAYS_FALSE,
             notaskstate = false,
+            nothrow
         )
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
@@ -2563,7 +2570,7 @@ end
 function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
     pc = sv.currpc
     while true
-        handleridx = sv.handler_at[pc][2]
+        handleridx = sv.handler_at[pc][1]
         if handleridx == 0
             # No local scope available - inherited from the outside
             return Any
@@ -2573,7 +2580,7 @@ function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
         # if the scope information changes
         isdefined(pchandler, :scope_uses) || (pchandler.scope_uses = Int[])
         pcbb = block_for_inst(sv.cfg, pc)
-        if findfirst(pchandler.scope_uses, pcbb) === nothing
+        if findfirst(==(pcbb), pchandler.scope_uses) === nothing
             push!(pchandler.scope_uses, pcbb)
         end
         scope = pchandler.scopet
@@ -2628,7 +2635,11 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         if f === tuple
             return tuple_tfunc(𝕃ᵢ, argtypes)
         elseif f === Core.current_scope
-            length(argtypes) == 0 || return Bottom
+            if length(argtypes) != 0
+                if length(argtypes) != 1 || !isvarargtype(argtypes[1])
+                    return Bottom
+                end
+            end
             return current_scope_tfunc(interp, sv)
         end
         fidx = find_tfunc(f)
