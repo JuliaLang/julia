@@ -636,12 +636,12 @@ end
     @test condskeel(A) ≈ condskeel(A, [8,8,8])
 end
 
-@testset "copytotri!" begin
+@testset "copytrito!" begin
     n = 10
     A = rand(n, n)
     for uplo in ('L', 'U')
         B = zeros(n, n)
-        copytotri!(B, A, uplo)
+        copytrito!(B, A, uplo)
         C = uplo == 'L' ? tril(A) : triu(A)
         @test B ≈ C
     end
