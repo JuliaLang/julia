@@ -1626,3 +1626,30 @@ end
 # but currently this would require an extra round of constprop
 @test_broken fully_eliminated(persistent_dict_elim)
 @test code_typed(persistent_dict_elim)[1][1].code[end] == Core.ReturnNode(1)
+
+# Test CFG simplify with try/catch blocks
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    src = m.args[1]::CodeInfo
+    src.code = Any[
+        # Block 1
+        GotoIfNot(Argument(1), 5),
+        # Block 2
+        EnterNode(4),
+        # Block 3
+        Expr(:leave),
+        # Block 4
+        GotoNode(5),
+        # Block 5
+        ReturnNode(1)
+    ]
+    nstmts = length(src.code)
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    ir = Core.Compiler.inflate_ir(src)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 4
+end
