@@ -28,6 +28,7 @@ typedef struct {
     jl_ptls_t ptls;
     uint8_t relocatability;
     jl_genericmemory_t *roots_ids; // iddict for method root ids; only needed during compression
+    jl_genericmemory_t *roots_keys; // idset for method root ids; only needed during compression
 } jl_ircode_state;
 
 // type => tag hash for a few core types (e.g., Expr, PhiNode, etc)
@@ -73,16 +74,18 @@ static void literal_val_id(rle_reference *rr, jl_ircode_state *s, jl_value_t *v)
 {
     jl_array_t *rs = s->method->roots;
     jl_genericmemory_t *rt = s->roots_ids;
-    int i;
+    jl_genericmemory_t *rs1 = s->roots_keys;
 
-    jl_value_t *ival = jl_eqtable_get(rt, v, NULL);
-    if (!ival) {
+    ssize_t i = jl_idset_peek_bp(rs1, rt, v);
+
+    if (i == -1) {
         i = jl_array_nrows(rs);
         jl_add_method_root(s->method, jl_precompile_toplevel_module, v);
-        s->roots_ids = rt = jl_eqtable_put(rt, v, jl_box_long(i), NULL);
+
+        ssize_t k = i;
+        s->roots_keys = rs1 = jl_idset_put_key(rs1, v, &k);
+        s->roots_ids = rt = jl_idset_put_idx(rs1, rt, k);
     }
-    else
-        i = jl_unbox_long(ival);
 
     return tagged_root(rr, s, i);
 }
@@ -819,11 +822,15 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         m,
         jl_current_task->ptls,
         1,
+        jl_alloc_memory_any(0),
         jl_alloc_memory_any(0)
     };
     // generate hash table to lookup root indexes
-    for (int i = 0; i < jl_array_nrows(m->roots); i++)
-        s.roots_ids = jl_eqtable_put(s.roots_ids, jl_array_ptr_ref(m->roots, i), jl_box_long(i), NULL);
+    for (int i = 0; i < jl_array_nrows(m->roots); i++) {
+        ssize_t k;
+        s.roots_keys = jl_idset_put_key(s.roots_keys, jl_array_ptr_ref(m->roots, i), &k);
+        s.roots_ids = jl_idset_put_idx(s.roots_keys, s.roots_ids, k);
+    }
 
     jl_code_info_flags_t flags = code_info_flags(code->inferred, code->propagate_inbounds, code->has_fcall,
                                                  code->nospecializeinfer, code->inlining, code->constprop);
@@ -919,6 +926,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         m,
         jl_current_task->ptls,
         1,
+        NULL,
         NULL
     };
 
