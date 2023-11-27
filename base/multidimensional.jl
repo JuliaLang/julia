@@ -95,18 +95,24 @@ module IteratorsMD
     length(::CartesianIndex{N}) where {N} = N
     length(::Type{CartesianIndex{N}}) where {N} = N
 
-    # indexing
-    getindex(index::CartesianIndex, i::Integer) = index.I[i]
-    Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, I.I, default)
+    # access to index tuple
+    Tuple(I::CartesianIndex) = I.I
     eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
-    # access to index tuple
-    Tuple(index::CartesianIndex) = index.I
+    # apply tuple interface
+    getindex(I::CartesianIndex, i::Integer) = getindex(Tuple(I), i)
+    getindex(I::CartesianIndex, i) = CartesianIndex(getindex(Tuple(I), i))
+    Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, Tuple(I), default)
+    
+    first(I::CartesianIndex) = first(Tuple(I))
+    last(I::CartesianIndex) = last(Tuple(I))
+    lastindex(I::CartesianIndex) = lastindex(Tuple(I))
+    front(I::CartesianIndex) = CartesianIndex(front(Tuple(I)))
+    tail(I::CartesianIndex) = CartesianIndex(tail(Tuple(I)))
 
     Base.setindex(x::CartesianIndex,i,j) = CartesianIndex(Base.setindex(Tuple(x),i,j))
 
-    # equality
-    Base.:(==)(a::CartesianIndex{N}, b::CartesianIndex{N}) where N = a.I == b.I
+    Base.:(==)(a::CartesianIndex{N}, b::CartesianIndex{N}) where N = Tuple(a) == Tuple(b)
 
     # zeros and ones
     zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
