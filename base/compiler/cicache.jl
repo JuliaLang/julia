@@ -8,12 +8,11 @@ that have been created for the given method instance, stratified by world age
 ranges. This struct abstracts over access to this cache.
 """
 struct InternalCodeCache
-    owner::Any # `jl_egal` is used for comparision
+    owner::Any # `jl_egal` is used for comparison
 end
 
 function setindex!(cache::InternalCodeCache, ci::CodeInstance, mi::MethodInstance)
-    # note `jl_egal` and `===` can disagree, but the former is used for cache matches.
-    @assert ccall(:jl_egal, Bool, (Any, Any), ci.owner, cache.owner)
+    @assert ci.owner === cache.owner
     ccall(:jl_mi_cache_insert, Cvoid, (Any, Any), mi, ci)
     return cache
 end
