@@ -957,7 +957,6 @@ function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
 
-
 # for backward compat
 arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...)
 const_arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...)
@@ -968,5 +967,7 @@ export arrayref, arrayset, arraysize, const_arrayref
 
 # For convenience
 EnterNode(old::EnterNode, new_dest::Int) = EnterNode(new_dest)
+
+include(Core, "optimized_generics.jl")
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)
