@@ -103,7 +103,7 @@ module IteratorsMD
     getindex(I::CartesianIndex, i::Integer) = getindex(Tuple(I), i)
     getindex(I::CartesianIndex, i) = CartesianIndex(getindex(Tuple(I), i))
     Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, Tuple(I), default)
-    
+
     first(I::CartesianIndex) = first(Tuple(I))
     last(I::CartesianIndex) = last(Tuple(I))
     lastindex(I::CartesianIndex) = lastindex(Tuple(I))
