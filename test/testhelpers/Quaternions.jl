@@ -20,6 +20,7 @@ Base.abs2(q::Quaternion) = q.s*q.s + q.v1*q.v1 + q.v2*q.v2 + q.v3*q.v3
 Base.float(z::Quaternion{T}) where T = Quaternion(float(z.s), float(z.v1), float(z.v2), float(z.v3))
 Base.abs(q::Quaternion) = sqrt(abs2(q))
 Base.real(::Type{Quaternion{T}}) where {T} = T
+Base.real(q::Quaternion) = q.s
 Base.conj(q::Quaternion) = Quaternion(q.s, -q.v1, -q.v2, -q.v3)
 Base.isfinite(q::Quaternion) = isfinite(q.s) & isfinite(q.v1) & isfinite(q.v2) & isfinite(q.v3)
 Base.zero(::Type{Quaternion{T}}) where T = Quaternion{T}(zero(T), zero(T), zero(T), zero(T))
