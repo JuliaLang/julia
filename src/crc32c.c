@@ -1,6 +1,6 @@
 /* crc32c.c -- compute CRC-32C using software table or available hardware instructions
  * Copyright (C) 2013, 2021 Mark Adler
- * Version 1.1  1 Aug 2013  Mark Adler, updated 31 May 2021
+ * Version 1.1  1 Aug 2013  Mark Adler, updates from Version 1.2 5 June 2021
  *
  * Code retrieved in August 2016 from August 2013 post by Mark Adler on
  *    http://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software
@@ -40,7 +40,8 @@
 /* Version history:
    1.0  10 Feb 2013  First version
    1.1   1 Aug 2013  Correct comments on why three crc instructions in parallel
-        31 May 2021  Correct register constraints on assembly instructions
+   1.2   5 Jun 2021  Correct register constraints on assembly instructions
+                     (+ other changes that were superfluous for us)
 */
 
 #include "julia.h"
