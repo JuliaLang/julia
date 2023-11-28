@@ -106,10 +106,8 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
         len--;
     }
 
-    /* compute the crc on sets of LONG*3 bytes, executing three independent crc
-       instructions, each on LONG bytes -- this is optimized for the Nehalem,
-       Westmere, Sandy Bridge, and Ivy Bridge architectures, which have a
-       throughput of one crc per cycle, but a latency of three cycles */
+    /* compute the crc on sets of LONG*3 bytes,
+       making use of three ALUs in parallel on a single core. */
     while (len >= LONG * 3) {
         uintptr_t crc1 = 0;
         uintptr_t crc2 = 0;
