@@ -453,7 +453,10 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
-for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:Hermitian, :adjoint, :real)]
+for (T, trans, real) in [
+    (:Symmetric, :transpose, :identity),
+    (:(Hermitian{<:Union{Real,Complex}}), :adjoint, :real),
+]
     @eval begin
         function dot(A::$T, B::$T)
             n = size(A, 2)
