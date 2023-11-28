@@ -243,6 +243,19 @@ julia> ex = :(a in $:((1,2,3)) )
 :(a in (1, 2, 3))
 ```
 
+- a in $:((1,2,3)) is a quoted expression created using : It consists of two parts:
+
+* a in ...: This represents a membership test where a is checked for membership in a collection.
+* $:((1,2,3)): This is an interpolated expression within the quoted block. 
+
+- $(1,2,3): Inside the interpolation $(), (1,2,3) represents a tuple containing three elements: 1, 2, and 3.
+
+- The interpolation $:((1,2,3)) substitutes the tuple (1,2,3) into the expression. It results in the expression a in (1, 2, 3).
+
+- a in (1, 2, 3): This checks whether the value of a is present in the tuple (1, 2, 3).
+
+- ex = :(a in $:((1,2,3))): Assigns the quoted expression a in $:((1,2,3)) to the variable ex.
+
 The use of `$` for expression interpolation is intentionally reminiscent of [string interpolation](@ref string-interpolation)
 and [command interpolation](@ref command-interpolation). Expression interpolation allows convenient, readable programmatic
 construction of complex Julia expressions.
