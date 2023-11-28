@@ -1559,15 +1559,11 @@ Stacktrace:
     return ret
 end
 
-# Collections of known size
-only(x::Ref) = x[]
-only(x::Number) = x
-only(x::Char) = x
+# Specific error messsages for tuples and named tuples
 only(x::Tuple{Any}) = x[1]
 only(x::Tuple) = throw(
     ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
 )
-only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
 only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
