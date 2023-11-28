@@ -1559,7 +1559,7 @@ Stacktrace:
     return ret
 end
 
-# Specific error messsages for tuples and named tuples
+# Specific error messages for tuples and named tuples
 only(x::Tuple{Any}) = x[1]
 only(x::Tuple) = throw(
     ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
