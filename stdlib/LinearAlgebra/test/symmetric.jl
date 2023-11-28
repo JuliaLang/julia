@@ -4,6 +4,9 @@ module TestSymmetric
 
 using Test, LinearAlgebra, Random
 
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
+
 Random.seed!(1010)
 
 @testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
@@ -460,6 +463,14 @@ end
             end
         end
     end
+end
+
+# bug identified in PR #52318: dot products of quaternionic Hermitian matrices,
+# or any number type where conj(a)*conj(b) ≠ conj(a*b):
+@testset "dot Hermitian quaternion #52318" begin
+    A, B = [Quaternion.(randn(3,3), randn(3, 3), randn(3, 3), randn(3,3)) |> t -> t + t' for i in 1:2]
+    @test A == Hermitian(A) && B == Hermitian(B)
+    @test dot(A,B) ≈ dot(Hermitian(A),Hermitian(B))
 end
 
 #Issue #7647: test xsyevr, xheevr, xstevr drivers.
