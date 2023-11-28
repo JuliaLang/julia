@@ -1263,6 +1263,12 @@ static void construct_vars(Module &M, Partition &partition) {
     gidxs_var->setDSOLocal(true);
 }
 
+extern "C" void lambda_trampoline(void* arg) {
+    std::function<void()>* func = static_cast<std::function<void()>*>(arg);
+    (*func)();
+    delete func;
+}
+
 // Entrypoint to optionally-multithreaded image compilation. This handles global coordination of the threading,
 // as well as partitioning, serialization, and deserialization.
 template<typename ModuleReleasedFunc>
@@ -1351,13 +1357,19 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     // Start all of the worker threads
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Opt);
-        std::vector<std::thread> workers(threads);
+        std::vector<uv_thread_t> workers(threads);
         for (unsigned i = 0; i < threads; i++) {
-            workers[i] = std::thread([&, i]() {
+            std::function<void()> func = [&, i]() {
                 LLVMContext ctx;
                 // Lazily deserialize the entire module
                 timers[i].deserialize.startTimer();
-                auto M = cantFail(getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx), "Error loading module");
+                auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx);
+                // Make sure this also fails with only julia, but not LLVM assertions enabled,
+                // otherwise, the first error we hit is the LLVM module verification failure,
+                // which will look very confusing, because the module was partially deserialized.
+                bool deser_succeeded = (bool)EM;
+                auto M = cantFail(std::move(EM), "Error loading module");
+                assert(deser_succeeded); (void)deser_succeeded;
                 timers[i].deserialize.stopTimer();
 
                 timers[i].materialize.startTimer();
@@ -1375,12 +1387,14 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 timers[i].construct.stopTimer();
 
                 outputs[i] = add_output_impl(*M, TM, timers[i], unopt_out, opt_out, obj_out, asm_out);
-            });
+            };
+            auto arg = new std::function<void()>(func);
+            uv_thread_create(&workers[i], lambda_trampoline, arg); // Use libuv thread to avoid issues with stack sizes
         }
 
         // Wait for all of the worker threads to finish
-        for (auto &w : workers)
-            w.join();
+        for (unsigned i = 0; i < threads; i++)
+            uv_thread_join(&workers[i]);
     }
 
     output_timer.stopTimer();
@@ -1406,19 +1420,21 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
+extern int jl_is_timing_passes;
 static unsigned compute_image_thread_count(const ModuleInfo &info) {
     // 32-bit systems are very memory-constrained
 #ifdef _P32
     LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
     return 1;
 #endif
+    if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes https://github.com/llvm/llvm-project/issues/44417
+        return 1;
     // COFF has limits on external symbols (even hidden) up to 65536. We reserve the last few
     // for any of our other symbols that we insert during compilation.
     if (info.triple.isOSBinFormatCOFF() && info.globals > 64000) {
         LLVM_DEBUG(dbgs() << "COFF is restricted to a single thread for large images\n");
         return 1;
     }
-
     // This is not overridable because empty modules do occasionally appear, but they'll be very small and thus exit early to
     // known easy behavior. Plus they really don't warrant multiple threads
     if (info.weight < 1000) {

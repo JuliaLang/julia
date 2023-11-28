@@ -221,7 +221,7 @@ end
     @test_throws MethodError gcdx(MyOtherRational(2//3), MyOtherRational(3//4))
 end
 
-@testset "invmod" begin
+@testset "invmod(n, m)" begin
     @test invmod(6, 31) === 26
     @test invmod(-1, 3) === 2
     @test invmod(1, -3) === -2
@@ -252,6 +252,37 @@ end
                     @test_throws DomainError invmod(x, m)
                 end
             end
+        end
+    end
+end
+
+@testset "invmod(n)" begin
+    for T in (Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128)
+        if sizeof(T) ≤ 2
+            # test full domain for small types
+            for a = typemin(T)+true:T(2):typemax(T)
+                b = invmod(a)
+                @test a * b == 1
+            end
+        else
+            # test random sample for large types
+            for _ = 1:2^12
+                a = rand(T) | true
+                b = invmod(a)
+                @test a * b == 1
+            end
+        end
+    end
+end
+
+@testset "invmod(n, T)" begin
+    for S in (Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128),
+        T in (Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128)
+        for _ = 1:2^8
+            a = rand(S) | true
+            b = invmod(a, T)
+            @test (a * b) % T == 1
+            @test (a % T) * b == 1
         end
     end
 end

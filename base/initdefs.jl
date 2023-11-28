@@ -367,9 +367,7 @@ end
 
 ## atexit: register exit hooks ##
 
-const atexit_hooks = Callable[
-    () -> Filesystem.temp_cleanup_purge(force=true)
-]
+const atexit_hooks = Callable[]
 const _atexit_hooks_lock = ReentrantLock()
 global _atexit_hooks_finished::Bool = false
 
@@ -413,7 +411,7 @@ function _atexit(exitcode::Cint)
     # will immediately run here.
     while true
         local f
-        Base.@lock _atexit_hooks_lock begin
+        @lock _atexit_hooks_lock begin
             # If this is the last iteration, atomically disable atexit hooks to prevent
             # someone from registering a hook that will never be run.
             # (We do this inside the loop, so that it is atomic: no one can have registered
@@ -434,7 +432,7 @@ function _atexit(exitcode::Cint)
             end
         catch ex
             showerror(stderr, ex)
-            Base.show_backtrace(stderr, catch_backtrace())
+            show_backtrace(stderr, catch_backtrace())
             println(stderr)
         end
     end
@@ -454,7 +452,7 @@ function _postoutput()
             f()
         catch ex
             showerror(stderr, ex)
-            Base.show_backtrace(stderr, catch_backtrace())
+            show_backtrace(stderr, catch_backtrace())
             println(stderr)
         end
     end
