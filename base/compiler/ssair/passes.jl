@@ -678,24 +678,28 @@ function perform_lifting!(compact::IncrementalCompact,
         end
     end
 
-    the_leaf_val = isa(the_leaf, LiftedValue) ? the_leaf.val : nothing
-    if !isa(the_leaf_val, SSAValue)
-        all_same = false
-    end
-
-    if all_same
+    if all_same && isa(the_leaf, LiftedValue)
         dominates_all = true
-        if lazydomtree !== nothing
-            domtree = get!(lazydomtree)
-            for item in visited_philikes
-                if !dominates_ssa(compact, domtree, the_leaf_val, item)
-                    dominates_all = false
-                    break
+        the_leaf_val = the_leaf.val
+        if isa(the_leaf_val, Union{SSAValue, OldSSAValue})
+            if lazydomtree === nothing
+                # Must conservatively assume this
+                dominates_all = false
+            else
+                domtree = get!(lazydomtree)
+                for item in visited_philikes
+                    if !dominates_ssa(compact, domtree, the_leaf_val, item)
+                        dominates_all = false
+                        break
+                    end
                 end
             end
-            if dominates_all
-                return the_leaf
+        end
+        if dominates_all
+            if isa(the_leaf, OldSSAValue)
+                the_leaf = simple_walk(compact, the_leaf)
             end
+            return the_leaf
         end
     end
 

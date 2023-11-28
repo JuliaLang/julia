@@ -1918,7 +1918,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
             end
         end
     end
-    isa(val, Union{SSAValue, NewSSAValue}) && return val # avoid infinite loop
+    isa(val, Union{SSAValue, OldSSAValue, NewSSAValue}) && return val # avoid infinite loop
     urs = userefs(val)
     for op in urs
         op[] = ssa_substitute_op!(insert_node!, subst_inst, op[], ssa_substitute)

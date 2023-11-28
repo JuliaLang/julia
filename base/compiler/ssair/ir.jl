@@ -464,7 +464,7 @@ struct UndefToken end; const UNDEF_TOKEN = UndefToken()
         isdefined(stmt, :val) || return OOB_TOKEN
         op == 1 || return OOB_TOKEN
         return stmt.val
-    elseif isa(stmt, Union{SSAValue, NewSSAValue, GlobalRef})
+    elseif isa(stmt, Union{SSAValue, OldSSAValue, NewSSAValue, GlobalRef})
         op == 1 || return OOB_TOKEN
         return stmt
     elseif isa(stmt, UpsilonNode)
@@ -520,7 +520,7 @@ end
     elseif isa(stmt, ReturnNode)
         op == 1 || throw(BoundsError())
         stmt = typeof(stmt)(v)
-    elseif isa(stmt, Union{SSAValue, NewSSAValue, GlobalRef})
+    elseif isa(stmt, Union{SSAValue, OldSSAValue, NewSSAValue, GlobalRef})
         op == 1 || throw(BoundsError())
         stmt = v
     elseif isa(stmt, UpsilonNode)
@@ -550,7 +550,7 @@ end
 
 function userefs(@nospecialize(x))
     relevant = (isa(x, Expr) && is_relevant_expr(x)) ||
-        isa(x, GotoIfNot) || isa(x, ReturnNode) || isa(x, SSAValue) || isa(x, NewSSAValue) ||
+        isa(x, GotoIfNot) || isa(x, ReturnNode) || isa(x, SSAValue) || isa(x, OldSSAValue) || isa(x, NewSSAValue) ||
         isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode)
     return UseRefIterator(x, relevant)
 end
