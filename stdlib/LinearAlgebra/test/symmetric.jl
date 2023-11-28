@@ -4,6 +4,8 @@ module TestSymmetric
 
 using Test, LinearAlgebra, Random
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
 
