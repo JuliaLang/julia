@@ -1590,3 +1590,24 @@ let code = Any[
     @test length(ir.stmts) == 2
     @test (ir[SSAValue(2)][:stmt]::ReturnNode).val == SSAValue(1)
 end
+
+let code = Any[
+    Expr(:call, Base.inferencebarrier, Argument(1)), # ::Bool
+    Expr(:call, Core.tuple, 1), # ::Tuple{Int}
+    Expr(:call, Core.tuple, 1.0), # ::Tuple{Float64}
+    Expr(:call, Core.ifelse, SSAValue(1), SSAValue(2), SSAValue(3)), # ::Tuple{Int} (e.g. from inlining)
+    Expr(:call, Core.getfield, SSAValue(4), 1), # ::Int
+    ReturnNode(SSAValue(5))
+]
+    try
+        argtypes = Any[Bool]
+        ssavaluetypes = Any[Bool, Tuple{Int}, Tuple{Float64}, Tuple{Int}, Int, Any]
+        ir = make_ircode(code; slottypes=argtypes, ssavaluetypes)
+        Core.Compiler.verify_ir(ir)
+        Core.Compiler.__set_check_ssa_counts(true)
+        ir = Core.Compiler.sroa_pass!(ir)
+        Core.Compiler.verify_ir(ir)
+    finally
+        Core.Compiler.__set_check_ssa_counts(false)
+    end
+end

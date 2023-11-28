@@ -762,8 +762,7 @@ function perform_lifting!(compact::IncrementalCompact,
                 only_result = (then_result === SKIP_TOKEN) ? else_result : then_result
 
                 # Replace Core.ifelse(%cond, %a, %b) with %a
-                compact[lf.ssa][:stmt] = only_result
-                should_count && _count_added_node!(compact, only_result)
+                compact[lf.ssa] = only_result
 
                 # Note: Core.ifelse(%cond, %a, %b) has observable effects (!nothrow), but since
                 # we have not deleted the preceding statement that this was derived from, this
