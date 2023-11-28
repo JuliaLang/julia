@@ -94,7 +94,7 @@ integers specifying the permutation.
 
 If `A` is a 2d array ([`AbstractMatrix`](@ref)), then
 `perm` defaults to `(2,1)`, swapping the two axes of `A` (the rows and columns
-of the matrix).   This differs from `LinearAlgebra`'s [`transpose`](@ref) in that the
+of the matrix).   This differs from [`transpose`](@ref) in that the
 operation is not recursive, which is especially useful for arrays of non-numeric values
 (where the recursive `transpose` would throw an error) and/or 2d arrays that do not represent
 linear operators.
@@ -204,7 +204,7 @@ permutedims(A::AbstractMatrix) = permutedims(A, (2,1))
     permutedims(v::AbstractVector)
 
 Reshape vector `v` into a `1 × length(v)` row matrix.
-Differs from `LinearAlgebra`'s [`transpose`](@ref) in that
+Differs from [`transpose`](@ref) in that
 the operation is not recursive, which is especially useful for arrays of non-numeric values
 (where the recursive `transpose` might throw an error).
 
@@ -218,7 +218,7 @@ julia> permutedims(["a", "b", "c"])
 ```
 For vectors of numbers, `permutedims(v)` works much like `transpose(v)`
 except that the return type differs (it uses [`reshape`](@ref)
-rather than a [`LinearAlgebra.Transpose`](@ref) view, though both
+rather than a `LinearAlgebra.Transpose` view, though both
 share memory with the original array `v`):
 ```jldoctest; setup = :(using LinearAlgebra)
 julia> v = [1, 2, 3, 4]
