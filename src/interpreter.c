@@ -525,14 +525,16 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 jl_value_t *new_scope = eval_value(jl_enternode_scope(stmt), s);
                 ct->scope = new_scope;
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
-                    return eval_body(stmts, s, next_ip, toplevel);
+                    eval_body(stmts, s, next_ip, toplevel);
+                    jl_unreachable();
                 }
                 ct->scope = old_scope;
                 JL_GC_POP();
             }
             else {
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
-                    return eval_body(stmts, s, next_ip, toplevel);
+                    eval_body(stmts, s, next_ip, toplevel);
+                    jl_unreachable();
                 }
             }
             jl_eh_restore_state(&__eh);
