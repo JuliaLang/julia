@@ -1529,6 +1529,7 @@ Type unstable wrapper around an IO to avoid specializing write, get, and print
 """
 struct UnstableIO <: IO
     io::IO
+    UnstableIO(@nospecialize(x)) = new(inferencebarrier(x))
 end
 Base.write(io::UnstableIO, b::UInt8) = write(io.io, b)::Int
 Base.get(io::UnstableIO, val, default) = get(io.io, val, default)
