@@ -4,13 +4,15 @@ module GMP
 
 export BigInt
 
-import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, nand, nor,
-             binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd, gcdx, lcm, mod,
-             ndigits, promote_rule, rem, show, isqrt, string, powermod, sum, prod,
-             trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
-             bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
-             widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit
+import .Base:
+    *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), one, zero, xor,
+    nand, nor, binomial, cmp, convert, div, divrem, factorial, cld, fld, gcd,
+    gcdx, lcm, mod, ndigits, promote_rule, rem, show, isqrt, string, powermod,
+    sum, prod, trailing_zeros, trailing_ones, count_ones, count_zeros,
+    tryparse_internal, bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2,
+    ndigits0zpb, widen, signed, unsafe_trunc, trunc, iszero, isone, big,
+    flipsign, signbit, sign, hastypemax, isodd, iseven, digits!, hash,
+    hash_integer, top_set_bit
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -268,9 +270,12 @@ tstbit(a::BigInt, b) = ccall((:__gmpz_tstbit, libgmp), Cint, (mpz_t, bitcnt_t), 
 
 end # module MPZ
 
-const ZERO = BigInt()
-const ONE  = BigInt()
+const ZERO = BigInt() # initialized later
+const ONE  = BigInt() # initialized later
 const _ONE = Limb[1]
+
+zero(::Type{BigInt}) = ZERO
+one(::Type{BigInt})  = ONE
 
 widen(::Type{Int128})  = BigInt
 widen(::Type{UInt128}) = BigInt
@@ -1068,4 +1073,4 @@ end
 
 end # MPQ module
 
-end # module
+end # GMP module
