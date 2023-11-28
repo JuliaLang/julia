@@ -2336,9 +2336,9 @@ function cfg_simplify!(ir::IRCode)
                             end
                         elseif new_edge == -1
                             @assert length(phi.edges) == 1
-                            if isassigned(phi.values, old_index)
+                            if isassigned(renamed_values, old_index)
                                 push!(edges, -1)
-                                push!(values, phi.values[old_index])
+                                push!(values, renamed_values[old_index])
                             end
                         elseif new_edge == -3
                             # Multiple predecessors, we need to expand out this phi
