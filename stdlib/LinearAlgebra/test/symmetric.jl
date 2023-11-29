@@ -472,7 +472,10 @@ end
 @testset "dot Hermitian quaternion #52318" begin
     A, B = [Quaternion.(randn(3,3), randn(3, 3), randn(3, 3), randn(3,3)) |> t -> t + t' for i in 1:2]
     @test A == Hermitian(A) && B == Hermitian(B)
-    @test dot(A,B) ≈ dot(Hermitian(A),Hermitian(B))
+    @test dot(A, B) ≈ dot(Hermitian(A), Hermitian(B))
+    A, B = [Quaternion.(randn(3,3), randn(3, 3), randn(3, 3), randn(3,3)) |> t -> t + transpose(t) for i in 1:2]
+    @test A == Symmetric(A) && B == Symmetric(B)
+    @test dot(A, B) ≈ dot(Symmetric(A), Symmetric(B))
 end
 
 #Issue #7647: test xsyevr, xheevr, xstevr drivers.
