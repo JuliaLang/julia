@@ -2,7 +2,7 @@
 
 Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
-isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode)
+isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, EnterNode)
 
 struct CFG
     blocks::Vector{BasicBlock}
@@ -60,16 +60,16 @@ block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
             # This is a fake dest to force the next stmt to start a bb
             idx < length(stmts) && push!(jump_dests, idx+1)
             push!(jump_dests, stmt.label)
+        elseif isa(stmt, EnterNode)
+            # :enter starts/ends a BB
+            push!(jump_dests, idx)
+            push!(jump_dests, idx+1)
+            # The catch block is a jump dest
+            push!(jump_dests, stmt.catch_dest)
         elseif isa(stmt, Expr)
             if stmt.head === :leave
                 # :leave terminates a BB
                 push!(jump_dests, idx+1)
-            elseif stmt.head === :enter
-                # :enter starts/ends a BB
-                push!(jump_dests, idx)
-                push!(jump_dests, idx+1)
-                # The catch block is a jump dest
-                push!(jump_dests, stmt.args[1]::Int)
             end
         end
         if isa(stmt, PhiNode)
@@ -125,11 +125,11 @@ function compute_basic_blocks(stmts::Vector{Any})
                 push!(blocks[block′].preds, num)
                 push!(b.succs, block′)
             end
-        elseif isexpr(terminator, :enter)
+        elseif isa(terminator, EnterNode)
             # :enter gets a virtual edge to the exception handler and
             # the exception handler gets a virtual edge from outside
             # the function.
-            block′ = block_for_inst(basic_block_index, terminator.args[1]::Int)
+            block′ = block_for_inst(basic_block_index, terminator.catch_dest)
             push!(blocks[block′].preds, num)
             push!(blocks[block′].preds, 0)
             push!(b.succs, block′)
@@ -456,6 +456,10 @@ struct UndefToken end; const UNDEF_TOKEN = UndefToken()
         isdefined(stmt, :val) || return OOB_TOKEN
         op == 1 || return OOB_TOKEN
         return stmt.val
+    elseif isa(stmt, EnterNode)
+        isdefined(stmt, :scope) || return OOB_TOKEN
+        op == 1 || return OOB_TOKEN
+        return stmt.scope
     elseif isa(stmt, PiNode)
         isdefined(stmt, :val) || return OOB_TOKEN
         op == 1 || return OOB_TOKEN
@@ -510,6 +514,9 @@ end
     elseif isa(stmt, GotoIfNot)
         op == 1 || throw(BoundsError())
         stmt = GotoIfNot(v, stmt.dest)
+    elseif isa(stmt, EnterNode)
+        op == 1 || throw(BoundsError())
+        stmt = EnterNode(stmt.catch_dest, v)
     elseif isa(stmt, ReturnNode)
         op == 1 || throw(BoundsError())
         stmt = typeof(stmt)(v)
@@ -544,7 +551,7 @@ end
 function userefs(@nospecialize(x))
     relevant = (isa(x, Expr) && is_relevant_expr(x)) ||
         isa(x, GotoIfNot) || isa(x, ReturnNode) || isa(x, SSAValue) || isa(x, NewSSAValue) ||
-        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
+        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode)
     return UseRefIterator(x, relevant)
 end
 
@@ -1379,13 +1386,15 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             result[result_idx][:stmt] = GotoIfNot(cond, label)
             result_idx += 1
         end
+    elseif cfg_transforms_enabled && isa(stmt, EnterNode)
+        label = bb_rename_succ[stmt.catch_dest]
+        @assert label > 0
+        ssa_rename[idx] = SSAValue(result_idx)
+        result[result_idx][:stmt] = EnterNode(stmt, label)
+        result_idx += 1
     elseif isa(stmt, Expr)
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::Expr
-        if cfg_transforms_enabled && isexpr(stmt, :enter)
-            label = bb_rename_succ[stmt.args[1]::Int]
-            @assert label > 0
-            stmt.args[1] = label
-        elseif isexpr(stmt, :throw_undef_if_not)
+        if isexpr(stmt, :throw_undef_if_not)
             cond = stmt.args[2]
             if isa(cond, Bool) && cond === true
                 # cond was folded to true - this statement
@@ -1445,7 +1454,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         ssa_rename[idx] = SSAValue(result_idx)
         result[result_idx][:stmt] = stmt
         result_idx += 1
-    elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode) || isa(stmt, GotoIfNot)
+    elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode) || isa(stmt, GotoIfNot) || isa(stmt, EnterNode)
         ssa_rename[idx] = SSAValue(result_idx)
         result[result_idx][:stmt] = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)
         result_idx += 1
