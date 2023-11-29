@@ -141,7 +141,10 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
                     CRC32_PTR "\t" SHORTx1 "(%3), %1\n\t"
                     CRC32_PTR "\t" SHORTx2 "(%3), %2"
                     : "+r"(crc0), "+r"(crc1), "+r"(crc2)
-                    : "r"(buf), "m"(*buf));
+                    : "r"(buf),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[0]),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[SHORT]),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[SHORT*2]));
             buf += sizeof(void*);
         } while (buf < end);
         crc0 = crc32c_shift(crc32c_short, crc0) ^ crc1;
