@@ -651,3 +651,12 @@ for func in (round, ceil, floor, trunc)
         @test Core.Compiler.is_foldable(Base.infer_effects(func, (Type{Int},Union{Int,Missing})))
     end
 end
+
+@testset "New Missing" begin
+    _replace_missing(itr, replacement) = Iterators.map(x->ismissing(x) ? replacement : x, itr)
+    struct NewMissing end
+    newmissing = NewMissing()
+    Base.ismissing(::NewMissing) = true
+    arr = [missing 1 2 3 missing 10 11 12 missing]
+    @test all(skipmissing(arr) .== skipmissing(_replace_missing(arr, newmissing)))
+end
