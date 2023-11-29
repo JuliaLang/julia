@@ -459,6 +459,7 @@ eval(Core, quote
     ReturnNode(@nospecialize val) = $(Expr(:new, :ReturnNode, :val))
     ReturnNode() = $(Expr(:new, :ReturnNode)) # unassigned val indicates unreachable
     GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))
+    EnterNode(dest::Int) = $(Expr(:new, :EnterNode, :dest))
     LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))
     function LineNumberNode(l::Int, @nospecialize(f))
         isa(f, String) && (f = Symbol(f))
@@ -626,12 +627,12 @@ module IR
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct, InterConditional
+    Const, PartialStruct, InterConditional, EnterNode
 
 using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct, InterConditional
+    Const, PartialStruct, InterConditional, EnterNode
 
 end # module IR
 
@@ -956,7 +957,6 @@ function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
 
-
 # for backward compat
 arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...)
 const_arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...)
@@ -964,5 +964,10 @@ arrayset(inbounds::Bool, A::Array{T}, x::Any, i::Int...) where {T} = Main.Base.s
 arraysize(a::Array) = a.size
 arraysize(a::Array, i::Int) = sle_int(i, nfields(a.size)) ? getfield(a.size, i) : 1
 export arrayref, arrayset, arraysize, const_arrayref
+
+# For convenience
+EnterNode(old::EnterNode, new_dest::Int) = EnterNode(new_dest)
+
+include(Core, "optimized_generics.jl")
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

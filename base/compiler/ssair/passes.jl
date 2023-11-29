@@ -6,6 +6,13 @@ function is_known_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,I
     return singleton_type(ft) === func
 end
 
+function is_known_invoke_or_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
+    isinvoke = isexpr(x, :invoke)
+    (isinvoke || isexpr(x, :call)) || return false
+    ft = argextype(x.args[isinvoke ? 2 : 1], ir)
+    return singleton_type(ft) === func
+end
+
 struct SSAUse
     kind::Symbol
     idx::Int
@@ -819,6 +826,76 @@ function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
     return
 end
 
+function lift_leaves_keyvalue(compact::IncrementalCompact, @nospecialize(key),
+                             leaves::Vector{Any}, 𝕃ₒ::AbstractLattice)
+    # For every leaf, the lifted value
+    lifted_leaves = LiftedLeaves()
+    for i = 1:length(leaves)
+        leaf = leaves[i]
+        cache_key = leaf
+        if isa(leaf, AnySSAValue)
+            (def, leaf) = walk_to_def(compact, leaf)
+            if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
+                @assert isexpr(def, :invoke)
+                if length(def.args) in (5, 6)
+                    collection = def.args[end-2]
+                    set_key = def.args[end-1]
+                    set_val_idx = length(def.args)
+                elseif length(def.args) == 4
+                    collection = def.args[end-1]
+                    # Key is deleted
+                    # TODO: Model this
+                    return nothing
+                elseif length(def.args) == 3
+                    collection = def.args[end]
+                    # The whole collection is deleted
+                    # TODO: Model this
+                    return nothing
+                else
+                    return nothing
+                end
+                if set_key === key || (egal_tfunc(𝕃ₒ, argextype(key, compact), argextype(set_key, compact)) == Const(true))
+                    lift_arg!(compact, leaf, cache_key, def, set_val_idx, lifted_leaves)
+                    continue
+                end
+                # TODO: Continue walking the chain
+                return nothing
+            end
+        end
+        return nothing
+    end
+    return lifted_leaves
+end
+
+function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
+    collection = stmt.args[end-1]
+    key = stmt.args[end]
+
+    leaves, visited_philikes = collect_leaves(compact, collection, Any, 𝕃ₒ, phi_or_ifelse_predecessors)
+    isempty(leaves) && return
+
+    lifted_leaves = lift_leaves_keyvalue(compact, key, leaves, 𝕃ₒ)
+    lifted_leaves === nothing && return
+
+    result_t = Union{}
+    for v in values(lifted_leaves)
+        v === nothing && return
+        result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
+    end
+
+    lifted_val = perform_lifting!(compact,
+        visited_philikes, key, result_t, lifted_leaves, collection, nothing)
+
+    compact[idx] = lifted_val === nothing ? nothing : Expr(:call, Core.tuple, lifted_val.val)
+    if lifted_val !== nothing
+        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
+            compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+        end
+    end
+
+    return
+end
+
 # TODO: We could do the whole lifing machinery here, but really all
 # we want to do is clean this up when it got inserted by inlining,
 # which always targets simple `svec` call or `_compute_sparams`,
@@ -1004,7 +1081,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     for ((_, idx), stmt) in compact
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         isa(stmt, Expr) || continue
-        is_setfield = is_isdefined = is_finalizer = false
+        is_setfield = is_isdefined = is_finalizer = is_keyvalue_get = false
         field_ordering = :unspecified
         if is_known_call(stmt, setfield!, compact)
             4 <= length(stmt.args) <= 5 || continue
@@ -1094,6 +1171,9 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 lift_comparison!(isa, compact, idx, stmt, 𝕃ₒ)
             elseif is_known_call(stmt, Core.ifelse, compact)
                 fold_ifelse!(compact, idx, stmt)
+            elseif is_known_invoke_or_call(stmt, Core.OptimizedGenerics.KeyValue.get, compact)
+                2 == (length(stmt.args) - (isexpr(stmt, :invoke) ? 2 : 1)) || continue
+                lift_keyvalue_get!(compact, idx, stmt, 𝕃ₒ)
             elseif isexpr(stmt, :new)
                 refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             end
@@ -1911,7 +1991,7 @@ function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vec
         end
         ir[last_fallthrough_term_ssa] = nothing
         kill_edge!(bbs, last_fallthrough, terminator.dest)
-    elseif isexpr(terminator, :enter)
+    elseif isa(terminator, EnterNode)
         return false
     elseif isa(terminator, GotoNode)
         return true
@@ -1923,8 +2003,6 @@ function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vec
     return true
 end
 
-is_terminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isexpr(stmt, :enter)
-
 function follow_map(map::Vector{Int}, idx::Int)
     while map[idx] ≠ 0
         idx = map[idx]
@@ -1933,6 +2011,7 @@ function follow_map(map::Vector{Int}, idx::Int)
 end
 
 function ascend_eliminated_preds(bbs::Vector{BasicBlock}, pred::Int)
+    pred == 0 && return pred
     while pred != 1 && length(bbs[pred].preds) == 1 && length(bbs[pred].succs) == 1
         pred = bbs[pred].preds[1]
     end
@@ -1970,6 +2049,10 @@ function add_preds!(all_new_preds::Vector{Int32}, bbs::Vector{BasicBlock}, bb_re
     preds = copy(bbs[old_edge].preds)
     while !isempty(preds)
         old_edge′ = popfirst!(preds)
+        if old_edge′ == 0
+            push!(all_new_preds, old_edge′)
+            continue
+        end
         new_edge = bb_rename_pred[old_edge′]
         if new_edge > 0 && new_edge ∉ all_new_preds
             push!(all_new_preds, Int32(new_edge))
@@ -1992,7 +2075,7 @@ function cfg_simplify!(ir::IRCode)
             if length(bbs[succ].preds) == 1 && succ != 1
                 # Can't merge blocks with :enter terminator even if they
                 # only have one successor.
-                if isexpr(ir[SSAValue(last(bb.stmts))][:stmt], :enter)
+                if isa(ir[SSAValue(last(bb.stmts))][:stmt], EnterNode)
                     continue
                 end
                 # Prevent cycles by making sure we don't end up back at `idx`
@@ -2068,10 +2151,10 @@ function cfg_simplify!(ir::IRCode)
                     if bb_rename_succ[terminator.dest] == 0
                         push!(worklist, terminator.dest)
                     end
-                elseif isexpr(terminator, :enter)
-                    enteridx = terminator.args[1]::Int
-                    if bb_rename_succ[enteridx] == 0
-                        push!(worklist, enteridx)
+                elseif isa(terminator, EnterNode)
+                    catchbb = terminator.catch_dest
+                    if bb_rename_succ[catchbb] == 0
+                        push!(worklist, catchbb)
                     end
                 end
                 ncurr = curr + 1
@@ -2250,6 +2333,12 @@ function cfg_simplify!(ir::IRCode)
                                 push!(values, renamed_values[old_index])
                             else
                                 resize!(values, length(values)+1)
+                            end
+                        elseif new_edge == -1
+                            @assert length(phi.edges) == 1
+                            if isassigned(renamed_values, old_index)
+                                push!(edges, -1)
+                                push!(values, renamed_values[old_index])
                             end
                         elseif new_edge == -3
                             # Multiple predecessors, we need to expand out this phi
