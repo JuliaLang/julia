@@ -2660,13 +2660,15 @@ end
 # Find depot in DEPOT_PATH for which all @depot tags from the `includes`
 # can be replaced so that they point to a file on disk each.
 function resolve_depot(includes::Union{AbstractVector,AbstractSet})
-    if any(includes) do inc
+    # `all` because it's possible to have a mixture of includes inside and outside of the depot
+    if all(includes) do inc
             !startswith(inc, "@depot")
         end
-        return :missing_depot_tag
+        return :fully_outside_depot
     end
     for depot in DEPOT_PATH
-        if all(includes) do inc
+        # `any` because it's possible to have a mixture of includes inside and outside of the depot
+        if any(includes) do inc
                 isfile(restore_depot_path(inc, depot))
             end
             return depot
@@ -2767,8 +2769,8 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     end
     if depot === :no_depot_found
         @debug("Unable to resolve @depot tag in cache file $cachefile", srcfiles)
-    elseif depot === :missing_depot_tag
-        @debug("Missing @depot tag for include dependencies in cache file $cachefile.", srcfiles)
+    elseif depot === :fully_outside_depot
+        @debug("All include dependencies in cache file $cachefile are outside of a depot.", srcfiles)
     else
         for inc in includes
             inc.filename = restore_depot_path(inc.filename, depot)
