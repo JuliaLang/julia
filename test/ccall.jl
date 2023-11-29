@@ -1477,7 +1477,7 @@ end
 # issue #20835
 @test_throws(ErrorException("could not evaluate ccall argument type (it might depend on a local variable)"),
              eval(:(f20835(x) = ccall(:fn, Cvoid, (Ptr{typeof(x)},), x))))
-@test_throws(UndefVarError(:Something_not_defined_20835),
+@test_throws(UndefVarError(:Something_not_defined_20835, @__MODULE__),
              eval(:(f20835(x) = ccall(:fn, Something_not_defined_20835, (Ptr{typeof(x)},), x))))
 @test isempty(methods(f20835))
 
@@ -1838,7 +1838,7 @@ ccall_lazy_lib_name(x) = ccall((:testUcharX, compute_lib_name()), Int32, (UInt8,
 @test ccall_lazy_lib_name(0) == 0
 @test ccall_lazy_lib_name(3) == 1
 ccall_with_undefined_lib() = ccall((:time, xx_nOt_DeFiNeD_xx), Cint, (Ptr{Cvoid},), C_NULL)
-@test_throws UndefVarError(:xx_nOt_DeFiNeD_xx) ccall_with_undefined_lib()
+@test_throws UndefVarError(:xx_nOt_DeFiNeD_xx, @__MODULE__) ccall_with_undefined_lib()
 
 @testset "transcode for UInt8 and UInt16" begin
     a   = [UInt8(1), UInt8(2), UInt8(3)]

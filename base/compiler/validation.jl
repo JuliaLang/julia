@@ -253,5 +253,3 @@ function is_valid_rvalue(@nospecialize(x))
 end
 
 is_valid_return(@nospecialize(x)) = is_valid_argument(x) || (isa(x, Expr) && x.head === :lambda)
-
-is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag
