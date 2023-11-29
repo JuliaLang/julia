@@ -2,6 +2,28 @@
 
 const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
 
+# This bit is set in the `havelock` of a `ReentrantLock` when that lock is locked by some task.
+const LOCKED_BIT = 0b01
+# This bit is set in the `havelock` of a `ReentrantLock` just before parking a task. A task is being
+# parked if it wants to lock the lock, but it is currently being held by some other task.
+const PARKED_BIT = 0b10
+
+# Spins without yielding the thread to the OS.
+#
+# Instead, the backoff is simply capped at a maximum value. This can be
+# used to improve throughput in `compare_exchange` loops that have high
+# contention.
+@inline function spin(iteration::Int)
+    if iteration >= 10
+        return 10
+    end
+
+    for _ in 1:(1 << iteration)
+        ccall(:jl_cpu_pause, Cvoid, ())
+    end
+    return iteration + 1
+end
+
 # Advisory reentrant lock
 """
     ReentrantLock()
@@ -36,7 +58,28 @@ mutable struct ReentrantLock <: AbstractLock
     # offset32 = 20, offset64 = 24
     reentrancy_cnt::UInt32
     # offset32 = 24, offset64 = 28
-    @atomic havelock::UInt8 # 0x0 = none, 0x1 = lock, 0x2 = conflict
+    #
+    # This atomic integer holds the current state of the lock instance. Only the two lowest bits
+    # are used. See `LOCKED_BIT` and `PARKED_BIT` for the bitmask for these bits.
+    #
+    # # State table:
+    #
+    # PARKED_BIT | LOCKED_BIT | Description
+    #     0      |     0      | The lock is not locked, nor is anyone waiting for it.
+    # -----------+------------+------------------------------------------------------------------
+    #     0      |     1      | The lock is locked by exactly one task. No other task is
+    #            |            | waiting for it.
+    # -----------+------------+------------------------------------------------------------------
+    #     1      |     0      | The lock is not locked. One or more tasks are parked.
+    # -----------+------------+------------------------------------------------------------------
+    #     1      |     1      | The lock is locked by exactly one task. One or more tasks are
+    #            |            | parked waiting for the lock to become available.
+    #            |            | In this state, PARKED_BIT is only ever cleared when the cond_wait lock
+    #            |            | is held (i.e. on unlock). This ensures that
+    #            |            | we never end up in a situation where there are parked tasks but
+    #            |            | PARKED_BIT is not set (which would result in those tasks
+    #            |            | potentially never getting woken up).
+    @atomic havelock::UInt8
     # offset32 = 28, offset64 = 32
     cond_wait::ThreadSynchronizer # 2 words
     # offset32 = 36, offset64 = 48
@@ -91,7 +134,7 @@ function islocked end
 # `ReentrantLock`.
 
 function islocked(rl::ReentrantLock)
-    return (@atomic :monotonic rl.havelock) != 0
+    return (@atomic :monotonic rl.havelock) & LOCKED_BIT != 0
 end
 
 """
@@ -122,16 +165,25 @@ function trylock end
     return _trylock(rl, ct)
 end
 @noinline function _trylock(rl::ReentrantLock, ct::Task)
-    GC.disable_finalizers()
-    if (@atomicreplace :acquire rl.havelock 0x00 => 0x01).success
-        #@assert rl.locked_by === nothing
-        #@assert rl.reentrancy_cnt === 0
-        rl.reentrancy_cnt = 0x0000_0001
-        @atomic :release rl.locked_by = ct
-        return true
+    state = @atomic :monotonic rl.havelock
+    while true
+        if state & LOCKED_BIT != 0
+            return false
+        end
+
+        GC.disable_finalizers()
+        result = (@atomicreplace :acquire :monotonic rl.havelock state => state | LOCKED_BIT)
+        if result.success
+            #@assert rl.locked_by === nothing
+            #@assert rl.reentrancy_cnt === 0
+            rl.reentrancy_cnt = 0x0000_0001
+            @atomic :release rl.locked_by = ct
+            return true
+        else
+            state = result.old
+        end
+        GC.enable_finalizers()
     end
-    GC.enable_finalizers()
-    return false
 end
 
 """
@@ -146,18 +198,60 @@ Each `lock` must be matched by an [`unlock`](@ref).
 @inline function lock(rl::ReentrantLock)
     trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
         c = rl.cond_wait
-        lock(c.lock)
-        try
-            while true
-                if (@atomicreplace rl.havelock 0x01 => 0x02).old == 0x00 # :sequentially_consistent ? # now either 0x00 or 0x02
-                    # it was unlocked, so try to lock it ourself
-                    _trylock(rl, current_task()) && break
-                else # it was locked, so now wait for the release to notify us
-                    wait(c)
+        ct = current_task()
+        iteration = 0
+        state = @atomic :monotonic rl.havelock
+        while true
+            # Grab the lock if it isn't locked, even if there is a queue on it
+            if state & LOCKED_BIT == 0
+                GC.disable_finalizers()
+                result = (@atomicreplace :acquire :monotonic rl.havelock state => (state | LOCKED_BIT))
+                if result.success
+                    rl.reentrancy_cnt = 0x0000_0001
+                    @atomic :release rl.locked_by = ct
+                    return
+                else
+                    state = result.old
+                end
+                GC.enable_finalizers()
+                continue
+            end
+
+            # If there is no queue, try spinning a few times
+            iteration += 1
+            if state & PARKED_BIT == 0 && iteration < 10
+                state = @atomic :monotonic rl.havelock
+                continue
+            end
+
+            # If still not locked, set the parked bit
+            if state & PARKED_BIT == 0
+                result = (@atomicreplace :monotonic :monotonic rl.havelock state => (state | PARKED_BIT))
+                if !result.success
+                    state = result.old
+                    continue
                 end
             end
-        finally
-            unlock(c.lock)
+
+            # With the parked bit set, lock the `cond_wait`
+            lock(c.lock)
+            try
+                # Last check before we wait to make sure `unlock` did not win the race
+                # to the `cond_wait` lock and cleared the parked bit
+                state = @atomic :acquire rl.havelock
+                if state != LOCKED_BIT | PARKED_BIT
+                    continue
+                end
+
+                # It was locked, so now wait for the unlock to notify us
+                wait(c)
+            finally
+                unlock(c.lock)
+            end
+
+            # Loop back and try locking again
+            iteration = 0
+            state = @atomic :monotonic rl.havelock
         end
     end)(rl)
     return
@@ -179,18 +273,38 @@ internal counter and return immediately.
         rl.reentrancy_cnt = n
         if n == 0x0000_00000
             @atomic :monotonic rl.locked_by = nothing
-            if (@atomicswap :release rl.havelock = 0x00) == 0x02
+            result = (@atomicreplace :release :monotonic rl.havelock LOCKED_BIT => 0x00)
+            if result.success
+                return true
+            else
                 (@noinline function notifywaiters(rl)
                     cond_wait = rl.cond_wait
                     lock(cond_wait)
                     try
-                        notify(cond_wait)
+
+                        tasks_notified = notify(cond_wait, all=false)
+                        if tasks_notified == 0
+                            # Either:
+                            # - We won the race to the `cond_wait` lock as a task was about to park
+                            # - We are the last task on the queue
+                            #
+                            # Unlock anyway as any parking task will retry
+
+                            @atomic :release rl.havelock = 0x00
+                        elseif isempty(cond_wait.waitq)
+                            # We notified the last task, unlock and unset the parked bit
+                            @atomic :release rl.havelock = 0x00
+                        else
+                            # There are more tasks on the queue, we unlock and keep the parked bit set
+                            @atomic :release rl.havelock = PARKED_BIT
+                            notify(cond_wait, all=false)
+                        end
                     finally
                         unlock(cond_wait)
                     end
                 end)(rl)
+                return true
             end
-            return true
         end
         return false
     end)(rl) && GC.enable_finalizers()
