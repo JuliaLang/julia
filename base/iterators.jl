@@ -11,7 +11,7 @@ const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
-    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict, Val,
+    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
@@ -1547,9 +1547,9 @@ Stacktrace:
 [...]
 ```
 """
-@propagate_inbounds only(x) = only(x, Val(:iterate))
+@propagate_inbounds only(x) = _only(x, iterate)
 
-@propagate_inbounds function only(x, ::Val{:iterate})
+@propagate_inbounds function _only(x, ::typeof(iterate))
     i = iterate(x)
     @boundscheck if i === nothing
         throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
@@ -1561,14 +1561,14 @@ Stacktrace:
     return ret
 end
 
-@inline function only(x, ::Val{:first})
+@inline function _only(x, ::typeof(first))
     @boundscheck if length(x) != 1
         throw(ArgumentError("Collection must contain exactly 1 element"))
     end
     @inbounds first(x)
 end
 
-@propagate_inbounds only(x::IdDict) = only(x, Val(:first))
+@propagate_inbounds only(x::IdDict) = _only(x, first)
 
 # Specific error messages for tuples and named tuples
 only(x::Tuple{Any}) = x[1]

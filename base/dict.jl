@@ -735,10 +735,10 @@ end
 end
 @propagate_inbounds iterate(t::Dict, i) = _iterate(t, skip_deleted(t, i))
 
-@propagate_inbounds Iterators.only(t::Dict) = only(t, Val(:first))
-
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
+
+@propagate_inbounds Iterators.only(t::Dict) = Iterators._only(t, first)
 
 @propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
     i == 0 && return nothing
@@ -1051,3 +1051,5 @@ iterate(dict::PersistentDict, state=nothing) = HAMT.iterate(dict.trie, state)
 length(dict::PersistentDict) = HAMT.length(dict.trie)
 isempty(dict::PersistentDict) = HAMT.isempty(dict.trie)
 empty(::PersistentDict, ::Type{K}, ::Type{V}) where {K, V} = PersistentDict{K, V}()
+
+@propagate_inbounds Iterators.only(dict::PersistentDict) = Iterators._only(dict, first)

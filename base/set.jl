@@ -175,7 +175,7 @@ rehash!(s::Set) = (rehash!(s.dict); s)
 
 iterate(s::Set, i...)       = iterate(KeySet(s.dict), i...)
 
-@propagate_inbounds Iterators.only(s::Set) = only(s, Val(:first))
+@propagate_inbounds Iterators.only(s::Set) = Iterators._only(s, first)
 
 # In case the size(s) is smaller than size(t) its more efficient to iterate through
 # elements of s instead and only delete the ones also contained in t.
