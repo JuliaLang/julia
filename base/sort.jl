@@ -478,7 +478,7 @@ for (sym, exp, type) in [
     @eval function $usym(v, o, kw)
         # using missing instead of nothing because scratch could === nothing.
         res = get(kw, $(Expr(:quote, sym)), missing)
-        res !== missing && return kw, res::$type
+        !ismissing(res) && return kw, res::$type
         $sym = $exp
         (;kw..., $sym), $sym::$type
     end

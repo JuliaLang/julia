@@ -422,7 +422,7 @@ function locate_package_env(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)
             env′ = env
             path = manifest_uuid_path(env, pkg)
             # missing is used as a sentinel to stop looking further down in envs
-            if path === missing
+            if ismissing(path)
                 path = nothing
                 @goto done
             end
@@ -712,7 +712,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     cache = LOADING_CACHE[]
     if cache !== nothing
         manifest_path = get(cache.project_file_manifest_path, project_file, missing)
-        manifest_path === missing || return manifest_path
+        ismissing(manifest_path) || return manifest_path
     end
     dir = abspath(dirname(project_file))
     d = parsed_toml(project_file)

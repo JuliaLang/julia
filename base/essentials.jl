@@ -1017,7 +1017,7 @@ false
 """
 function isempty(itr)
     d = isdone(itr)
-    d !== missing && return d
+    !ismissing(d) && return d
     iterate(itr) === nothing
 end
 
