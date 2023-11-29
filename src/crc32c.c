@@ -159,7 +159,7 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
     while (buf < end) {
         __asm__(CRC32_PTR "\t" "(%1), %0"
                 : "+r"(crc0)
-                : "r"(buf), "m"(*buf));
+                : "r"(buf), "m"(* (const char (*)[sizeof(void*)]) buf));
         buf += sizeof(void*);
     }
     len &= 7;
