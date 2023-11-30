@@ -553,7 +553,7 @@ julia> [DateTime(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     dt = parse(DateTime, dt, DateFormat(format, locale))
-    1583 <= year(dt) <= 9999 ? dt : throw("Year is outside the legal ISO 8601 year-range, to support such, use an explicit constructor")
+    1583 <= year(dt) <= 9999 ? dt : throw("Year is outside the legal ISO 8601 year-range, to support such, use an explicit constructor.")
 end
 
 """
@@ -595,7 +595,7 @@ julia> [Date(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     d = parse(Date, d, DateFormat(format, locale))
     1583 <= year(d) <= 9999 ? d : throw("Year is outside the legal ISO 8601 year-range, to support such, use an explicit constructor.")
-endTime/
+end
 """
     Date(d::AbstractString, df::DateFormat=ISODateFormat) -> Date
 
