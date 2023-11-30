@@ -469,7 +469,7 @@ end
 """
     Dates.ISODateTimeFormat
 
-Describes the ISO8601 formatting for a date and time. This is the default value for `Dates.format`
+Describes the ISO 8601 formatting for a date and time. This is the default value for `Dates.format`
 of a `DateTime`.
 
 # Example
@@ -484,7 +484,7 @@ default_format(::Type{DateTime}) = ISODateTimeFormat
 """
     Dates.ISODateFormat
 
-Describes the ISO8601 formatting for a date. This is the default value for `Dates.format` of a `Date`.
+Describes the ISO 8601 formatting for a date. This is the default value for `Dates.format` of a `Date`.
 
 # Example
 ```jldoctest
@@ -498,7 +498,7 @@ default_format(::Type{Date}) = ISODateFormat
 """
     Dates.ISOTimeFormat
 
-Describes the ISO8601 formatting for a time. This is the default value for `Dates.format` of a `Time`.
+Describes the ISO 8601 formatting for a time. This is the default value for `Dates.format` of a `Time`.
 
 # Example
 ```jldoctest
@@ -552,7 +552,8 @@ julia> [DateTime(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 ```
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    return parse(DateTime, dt, DateFormat(format, locale))
+    dt = parse(DateTime, dt, DateFormat(format, locale))
+    1583 <= year(dt) <= 9999 ? dt : throw("Year is outside the legal ISO 8601 year-range, to support such, use an explicit constructor")
 end
 
 """
@@ -592,9 +593,9 @@ julia> [Date(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 ```
 """
 function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    parse(Date, d, DateFormat(format, locale))
-end
-
+    d = parse(Date, d, DateFormat(format, locale))
+    1583 <= year(d) <= 9999 ? d : throw("Year is outside the legal ISO 8601 year-range, to support such, use an explicit constructor.")
+endTime/
 """
     Date(d::AbstractString, df::DateFormat=ISODateFormat) -> Date
 
