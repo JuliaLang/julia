@@ -522,6 +522,14 @@ julia> Dates.format(DateTime(2018, 8, 8, 12, 0, 43, 1), RFC1123Format)
 """
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
+@outline function _check_year(d, format)
+    if contains(lowercase(format), "yyyy") && !contains(lowercase(format), "yyyyy") # is 4-digit year format, allows strictly 4-digit
+        !(1583 <= year(dt) <= 9999) || throw("Year is outside the legal ISO 8601 year-range, to support such, use an explicit constructor.")!(0 <= year(dt) <= 99) ? d : throw("Year is outside the legal ISO 8601 year-range, to support such, use an explicit constructor.")
+    else if contains(lowercase(format), "yy") # is 2-digit (or 3-digit...) year format, allows only 1- or 2-digit year
+        !(0 <= year(dt) <= 99) || throw("Year is outside the 0 to 99 year-range, asked for.")
+    end
+    return d
+end
 
 ### API
 
@@ -552,10 +560,9 @@ julia> [DateTime(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 ```
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    dt = parse(DateTime, dt, DateFormat(format, locale))
-    1583 <= year(dt) <= 9999 ? dt : throw("Year is outside the legal ISO 8601 year-range, to support such, use an explicit constructor.")
+    f = DateFormat(format, locale)
+    return check_year(parse(DateTime, dt, f), f)
 end
-
 """
     DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) -> DateTime
 
@@ -566,8 +573,13 @@ Similar to `DateTime(::AbstractString, ::AbstractString)` but more efficient whe
 repeatedly parsing similarly formatted date time strings with a pre-created
 `DateFormat` object.
 """
-DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) = parse(DateTime, dt, df)
-
+function DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat)
+    dt = parse(DateTime, dt, df)
+    if df != ISODateTimeFormat && df != RFC1123Format
+        return dt
+    end
+    return _check_year(dt, "yyyy") # dummy format that ok for both
+end
 """
     Date(d::AbstractString, format::AbstractString; locale="english") -> Date
 
@@ -593,8 +605,8 @@ julia> [Date(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 ```
 """
 function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    d = parse(Date, d, DateFormat(format, locale))
-    1583 <= year(d) <= 9999 ? d : throw("Year is outside the legal ISO 8601 year-range, to support such, use an explicit constructor.")
+    f = DateFormat(format, locale)
+    return _check_year(parse(Date, d, f), f)
 end
 """
     Date(d::AbstractString, df::DateFormat=ISODateFormat) -> Date
