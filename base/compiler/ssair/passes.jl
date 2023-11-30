@@ -473,9 +473,14 @@ function lift_arg!(
     if is_old(compact, leaf) && isa(lifted, SSAValue)
         lifted = OldSSAValue(lifted.id)
         if already_inserted(compact, lifted)
-            lifted = compact.ssa_rename[lifted.id]
-            if isa(lifted, Refined)
-                lifted = lifted.val
+            new_lifted = compact.ssa_rename[lifted.id]
+            if isa(new_lifted, Refined)
+                new_lifted = new_lifted.val
+            end
+            # Special case: If lifted happens to be the statement we're currently processing,
+            # leave it as old SSAValue in case we decide to handle this in the renamer
+            if !isa(new_lifted, SSAValue) || new_lifted != SSAValue(compact.result_idx-1)
+                lifted = new_lifted
             end
         end
     end
@@ -602,10 +607,12 @@ function lift_comparison_leaves!(@specialize(tfunc),
     end
 
     # perform lifting
-    lifted_val = perform_lifting!(compact,
-        visited_philikes, cmp, Bool, lifted_leaves::LiftedLeaves, val, nothing)::LiftedValue
+    (lifted_val, nest) = perform_lifting!(compact,
+        visited_philikes, cmp, Bool, lifted_leaves::LiftedLeaves, val, nothing)
 
-    compact[idx] = lifted_val.val
+    compact[idx] = (lifted_val::LiftedValue).val
+
+    finish_phi_nest!(compact, nest)
 end
 
 struct IfElseCall
@@ -651,84 +658,22 @@ function lifted_value(compact::IncrementalCompact, @nospecialize(old_node_ssa#=:
 end
 
 function is_old(compact, @nospecialize(old_node_ssa))
-    isa(old_node_ssa, OldSSAValue) &&
-        !is_pending(compact, old_node_ssa) &&
-        !already_inserted(compact, old_node_ssa)
+    isa(old_node_ssa, OldSSAValue) || return false
+    is_pending(compact, old_node_ssa) && return false
+    already_inserted(compact, old_node_ssa) && return false
+    return true
 end
 
-function perform_lifting!(compact::IncrementalCompact,
-        visited_philikes::Vector{AnySSAValue}, @nospecialize(cache_key),
-        @nospecialize(result_t), lifted_leaves::Union{LiftedLeaves, LiftedDefs}, @nospecialize(stmt_val),
-        lazydomtree::Union{LazyDomtree,Nothing})
-    reverse_mapping = IdDict{AnySSAValue, Int}()
-    for id in 1:length(visited_philikes)
-        reverse_mapping[visited_philikes[id]] = id
-    end
+struct PhiNest
+    visited_philikes::Vector{AnySSAValue}
+    lifted_philikes::Vector{LiftedPhilike}
+    lifted_leaves::Union{LiftedLeaves, LiftedDefs}
+    reverse_mapping::IdDict{AnySSAValue, Int}
+end
 
-    # Check if all the lifted leaves are the same
-    local the_leaf
-    all_same = true
-    for (_, val) in lifted_leaves
-        if !@isdefined(the_leaf)
-            the_leaf = val
-            continue
-        end
-        if val !== the_leaf
-            all_same = false
-        end
-    end
-
-    if all_same && isa(the_leaf, LiftedValue)
-        dominates_all = true
-        the_leaf_val = the_leaf.val
-        if isa(the_leaf_val, Union{SSAValue, OldSSAValue})
-            if lazydomtree === nothing
-                # Must conservatively assume this
-                dominates_all = false
-            else
-                domtree = get!(lazydomtree)
-                for item in visited_philikes
-                    if !dominates_ssa(compact, domtree, the_leaf_val, item)
-                        dominates_all = false
-                        break
-                    end
-                end
-            end
-        end
-        if dominates_all
-            if isa(the_leaf, OldSSAValue)
-                the_leaf = simple_walk(compact, the_leaf)
-            end
-            return the_leaf
-        end
-    end
-
-    # Insert PhiNodes
-    nphilikes = length(visited_philikes)
-    lifted_philikes = Vector{LiftedPhilike}(undef, nphilikes)
-    for i = 1:nphilikes
-        old_ssa = visited_philikes[i]
-        old_inst = compact[old_ssa]
-        old_node = old_inst[:stmt]::Union{PhiNode,Expr}
-        if isa(old_node, PhiNode)
-            new_node = PhiNode()
-            ssa = insert_node!(compact, old_ssa, effect_free_and_nothrow(NewInstruction(new_node, result_t)))
-            lifted_philikes[i] = LiftedPhilike(ssa, new_node, true)
-        else
-            @assert is_known_call(old_node, Core.ifelse, compact)
-            ifelse_func, condition = old_node.args
-            if is_old(compact, old_ssa) && isa(condition, SSAValue)
-                condition = OldSSAValue(condition.id)
-            end
-
-            new_node = Expr(:call, ifelse_func, condition) # Renamed then_result, else_result added below
-            new_inst = NewInstruction(new_node, result_t, NoCallInfo(), old_inst[:line], old_inst[:flag])
-
-            ssa = insert_node!(compact, old_ssa, new_inst, #= attach_after =# true)
-            lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(new_node), true)
-        end
-    end
-
+function finish_phi_nest!(compact::IncrementalCompact, nest::PhiNest)
+    (;visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping) = nest
+    nphilikes = length(lifted_philikes)
     # Fix up arguments
     for i = 1:nphilikes
         (old_node_ssa, lf) = visited_philikes[i], lifted_philikes[i]
@@ -786,6 +731,91 @@ function perform_lifting!(compact::IncrementalCompact,
             push!(lfnode.call.args, else_result)
         end
     end
+end
+
+function perform_lifting!(compact::IncrementalCompact,
+        visited_philikes::Vector{AnySSAValue}, @nospecialize(cache_key),
+        @nospecialize(result_t), lifted_leaves::Union{LiftedLeaves, LiftedDefs}, @nospecialize(stmt_val),
+        lazydomtree::Union{LazyDomtree,Nothing})
+    reverse_mapping = IdDict{AnySSAValue, Int}()
+    for id in 1:length(visited_philikes)
+        reverse_mapping[visited_philikes[id]] = id
+    end
+
+    # Check if all the lifted leaves are the same
+    local the_leaf
+    all_same = true
+    for (_, val) in lifted_leaves
+        if !@isdefined(the_leaf)
+            the_leaf = val
+            continue
+        end
+        if val !== the_leaf
+            all_same = false
+        end
+    end
+
+    if all_same && isa(the_leaf, LiftedValue)
+        dominates_all = true
+        the_leaf_val = the_leaf.val
+        if isa(the_leaf_val, AnySSAValue)
+            if lazydomtree === nothing
+                # Must conservatively assume this
+                dominates_all = false
+            else
+                # This code guards against the possibility of accidentally forwarding a value from a
+                # previous iteration. Consider for example:
+                #
+                # %p = phi(%arg, %t)
+                # %b = <...>
+                # %c = getfield(%p, 1)
+                # %t = tuple(%b)
+                #
+                # It would be incorrect to replace `%c` by `%b`, because that would read the value of
+                # `%b` in the *current* iteration, while the value of `%b` that comes in via `%p` is
+                # that of the previous iteration.
+                domtree = get!(lazydomtree)
+                for item in visited_philikes
+                    if !dominates_ssa(compact, domtree, the_leaf_val, item)
+                        dominates_all = false
+                        break
+                    end
+                end
+            end
+        end
+        if dominates_all
+            if isa(the_leaf, OldSSAValue)
+                the_leaf = simple_walk(compact, the_leaf)
+            end
+            return Pair{Any, PhiNest}(the_leaf, PhiNest(visited_philikes, Vector{LiftedPhilike}(undef, 0), lifted_leaves, reverse_mapping))
+        end
+    end
+
+    # Insert PhiNodes
+    nphilikes = length(visited_philikes)
+    lifted_philikes = Vector{LiftedPhilike}(undef, nphilikes)
+    for i = 1:nphilikes
+        old_ssa = visited_philikes[i]
+        old_inst = compact[old_ssa]
+        old_node = old_inst[:stmt]::Union{PhiNode,Expr}
+        if isa(old_node, PhiNode)
+            new_node = PhiNode()
+            ssa = insert_node!(compact, old_ssa, effect_free_and_nothrow(NewInstruction(new_node, result_t)))
+            lifted_philikes[i] = LiftedPhilike(ssa, new_node, true)
+        else
+            @assert is_known_call(old_node, Core.ifelse, compact)
+            ifelse_func, condition = old_node.args
+            if is_old(compact, old_ssa) && isa(condition, SSAValue)
+                condition = OldSSAValue(condition.id)
+            end
+
+            new_node = Expr(:call, ifelse_func, condition) # Renamed then_result, else_result added below
+            new_inst = NewInstruction(new_node, result_t, NoCallInfo(), old_inst[:line], old_inst[:flag])
+
+            ssa = insert_node!(compact, old_ssa, new_inst, #= attach_after =# true)
+            lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(new_node), true)
+        end
+    end
 
     # Fixup the stmt itself
     if isa(stmt_val, Union{SSAValue, OldSSAValue})
@@ -793,12 +823,12 @@ function perform_lifting!(compact::IncrementalCompact,
     end
 
     if stmt_val in keys(lifted_leaves)
-        return lifted_leaves[stmt_val]
+        stmt_val = lifted_leaves[stmt_val]
     elseif isa(stmt_val, AnySSAValue) && stmt_val in keys(reverse_mapping)
-        return LiftedValue(lifted_philikes[reverse_mapping[stmt_val]].ssa)
+        stmt_val = LiftedValue(lifted_philikes[reverse_mapping[stmt_val]].ssa)
     end
 
-    return stmt_val # N.B. should never happen
+    return Pair{Any, PhiNest}(stmt_val, PhiNest(visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping))
 end
 
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
@@ -886,10 +916,11 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
         result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
     end
 
-    lifted_val = perform_lifting!(compact,
+    (lifted_val, nest) = perform_lifting!(compact,
         visited_philikes, key, result_t, lifted_leaves, collection, nothing)
 
     compact[idx] = lifted_val === nothing ? nothing : Expr(:call, Core.tuple, lifted_val.val)
+    finish_phi_nest!(compact, nest)
     if lifted_val !== nothing
         if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
             compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
@@ -1081,7 +1112,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     # initialization of domtree is delayed to avoid the expensive computation in many cases
     lazydomtree = LazyDomtree(ir)
-    for ((_, idx), stmt) in compact
+    for ((old_idx, idx), stmt) in compact
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         isa(stmt, Expr) || continue
         is_setfield = is_isdefined = is_finalizer = is_keyvalue_get = false
@@ -1252,8 +1283,26 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
         end
 
-        lifted_val = perform_lifting!(compact,
+        (lifted_val, nest) = perform_lifting!(compact,
             visited_philikes, field, result_t, lifted_leaves, val, lazydomtree)
+
+        node_was_deleted = false
+        line = compact[SSAValue(idx)][:line]
+        if lifted_val !== nothing && !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
+            compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
+            add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
+        elseif lifted_val === nothing || isa(lifted_val.val, AnySSAValue)
+            # Save some work in a later compaction, by inserting this into the renamer now,
+            # but only do this if we didn't set the REFINED flag, to save work for irinterp
+            # in revisiting only the renamings that came through *this* idx.
+            delete_inst_here!(compact)
+            compact.ssa_rename[old_idx] = lifted_val === nothing ? nothing : lifted_val.val
+            node_was_deleted = true
+        else
+            compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
+        end
+
+        finish_phi_nest!(compact, nest)
 
         # Insert the undef check if necessary
         if any_undef
@@ -1264,22 +1313,21 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 for (k, v) in pairs(lifted_leaves)
                     lifted_leaves_def[k] = v === nothing ? false : true
                 end
-                def_val = perform_lifting!(compact,
-                    visited_philikes, field, Bool, lifted_leaves_def, val, lazydomtree).val
+                (def_val, nest) = perform_lifting!(compact,
+                    visited_philikes, field, Bool, lifted_leaves_def, val, lazydomtree)
+                def_val = (def_val::LiftedValue).val
+                finish_phi_nest!(compact, nest)
             end
-            insert_node!(compact, SSAValue(idx), NewInstruction(
-                Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val), Nothing))
-
+            ni = NewInstruction(
+                Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val), Nothing, line)
+            if node_was_deleted
+                insert_node_here!(compact, ni, true)
+            else
+                insert_node!(compact, SSAValue(idx), ni)
+            end
         else
             # val must be defined
             @assert lifted_val !== nothing
-        end
-
-        compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
-        if lifted_val !== nothing
-            if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
-                add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
-            end
         end
     end
 
