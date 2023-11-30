@@ -294,6 +294,8 @@ end
     end
     # This line is unreachable
 end
+@assume_effects :noub ht_keyindex(h::Dict{Symbol,V}, key::Symbol) where V =
+    @invoke ht_keyindex(h::Dict{Symbol,V}, key::Any)
 
 # get (index, sh) for the key
 #     index - where a key is stored, or -pos if not present
@@ -509,6 +511,8 @@ function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
     @inbounds return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V
 end
+@assume_effects :noub getindex(h::Dict{Symbol,V}, key::Symbol) where V =
+    @invoke getindex(h::Dict{Symbol,V}, key::Any)
 
 """
     get(collection, key, default)
