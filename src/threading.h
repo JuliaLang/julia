@@ -11,6 +11,7 @@ extern "C" {
 #include "julia.h"
 
 #define PROFILE_JL_THREADING            0
+#define MAX_DEFAULT_GC_THREADS          8
 
 extern _Atomic(jl_ptls_t*) jl_all_tls_states JL_GLOBALLY_ROOTED; /* thread local storage */
 

@@ -716,6 +716,12 @@ void jl_init_threading(void)
             if (jl_n_markthreads + 1 >= cpu) {
                 jl_n_markthreads = cpu - 1;
             }
+            // if `--gcthreads` or ENV[NUM_GCTHREADS_NAME] was not specified,
+            // cap the number of threads that may ran the mark phase
+            // to MAX_DEFAULT_GC_THREADS as defined in threading.h
+            if (jl_n_markthreads > (MAX_DEFAULT_GC_THREADS)) {
+                jl_n_markthreads = (MAX_DEFAULT_GC_THREADS);
+            }
         }
     }
     // warn the user if they try to run with a number
