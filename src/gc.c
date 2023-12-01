@@ -1422,8 +1422,6 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 
 gc_fragmentation_stat_t gc_page_fragmentation_stats[JL_GC_N_POOLS];
 
-extern gc_fragmentation_stat_t gc_page_fragmentation_stats[JL_GC_N_POOLS];
-
 STATIC_INLINE void gc_update_page_fragmentation_data(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
 #ifdef GC_MEASURE_PAGE_FRAGMENTATION
