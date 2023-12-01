@@ -73,13 +73,19 @@ environment variable if set.
 Each entry in `DEPOT_PATH` is a path to a directory which contains subdirectories used by Julia for various purposes.
 Here is an overview of some of the subdirectories that may exist in a depot:
 
+* `artifacts`: Contains content that packages use for which Pkg manages the installation of.
 * `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
+* `config`: Contains julia-level configuration such as a `startup.jl`
 * `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
 * `dev`: Default directory for `Pkg.develop`. Maintained by `Pkg.jl` and the user.
 * `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`.
 * `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and `Julia`.
 * `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
 * `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
+* `scratchspaces`: Contains content that a package itself installs via the `Scratch.jl` package. Automatic `Pkg.gc()` will delete content that is known to be unused.
+
+!!! note
+    Rather than create new depot root directories packages should use `scratchspaces` via `Scratch.jl`
 
 See also [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
 [Code Loading](@ref code-loading).
