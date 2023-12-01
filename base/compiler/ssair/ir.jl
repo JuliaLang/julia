@@ -464,7 +464,7 @@ struct UndefToken end; const UNDEF_TOKEN = UndefToken()
         isdefined(stmt, :val) || return OOB_TOKEN
         op == 1 || return OOB_TOKEN
         return stmt.val
-    elseif isa(stmt, Union{SSAValue, OldSSAValue, NewSSAValue, GlobalRef})
+    elseif isa(stmt, Union{AnySSAValue, GlobalRef})
         op == 1 || return OOB_TOKEN
         return stmt
     elseif isa(stmt, UpsilonNode)
@@ -520,7 +520,7 @@ end
     elseif isa(stmt, ReturnNode)
         op == 1 || throw(BoundsError())
         stmt = typeof(stmt)(v)
-    elseif isa(stmt, Union{SSAValue, OldSSAValue, NewSSAValue, GlobalRef})
+    elseif isa(stmt, Union{AnySSAValue, GlobalRef})
         op == 1 || throw(BoundsError())
         stmt = v
     elseif isa(stmt, UpsilonNode)
