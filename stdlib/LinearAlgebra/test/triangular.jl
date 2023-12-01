@@ -564,7 +564,7 @@ end
     end
 end
 
-@testset "check matrix logarithm type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
+@testset "check matrix logarithm type-inferable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
     A = UpperTriangular(exp(triu(randn(elty, n, n))))
     @inferred Union{typeof(A),typeof(complex(A))} log(A)
     @test exp(Matrix(log(A))) ≈ A

@@ -769,3 +769,51 @@ end
     @test view(m, 1:2, 3, 1, 1) == m[1:2, 3]
     @test parent(view(m, 1:2, 3, 1, 1)) === m
 end
+
+@testset "replace_in_print_matrix" begin
+    struct MyIdentity <: AbstractMatrix{Bool}
+        n :: Int
+    end
+    Base.size(M::MyIdentity) = (M.n, M.n)
+    function Base.getindex(M::MyIdentity, i::Int, j::Int)
+        checkbounds(M, i, j)
+        i == j
+    end
+    function Base.replace_in_print_matrix(M::MyIdentity, i::Integer, j::Integer, s::AbstractString)
+        i == j ? s : Base.replace_with_centered_mark(s)
+    end
+    V = view(MyIdentity(3), 1:2, 1:3)
+    @test sprint(show, "text/plain", V) == "$(summary(V)):\n 1  ⋅  ⋅\n ⋅  1  ⋅"
+
+    struct OneElVec <: AbstractVector{Bool}
+        n :: Int
+        ind :: Int
+    end
+    Base.size(M::OneElVec) = (M.n,)
+    function Base.getindex(M::OneElVec, i::Int)
+        checkbounds(M, i)
+        i == M.ind
+    end
+    function Base.replace_in_print_matrix(M::OneElVec, i::Integer, j::Integer, s::AbstractString)
+        i == M.ind ? s : Base.replace_with_centered_mark(s)
+    end
+    V = view(OneElVec(6, 2), 1:5)
+    @test sprint(show, "text/plain", V) == "$(summary(V)):\n ⋅\n 1\n ⋅\n ⋅\n ⋅"
+
+    V = view(1:2, [CartesianIndex(2)])
+    @test sprint(show, "text/plain", V) == "$(summary(V)):\n 2"
+end
+
+@testset "Base.first_index for offset indices" begin
+    a = Vector(1:10)
+    b = view(a, Base.IdentityUnitRange(4:7))
+    @test first(b) == a[Base.first_index(b)]
+end
+
+@testset "StepRangeLen of CartesianIndex-es" begin
+    v = view(1:2, StepRangeLen(CartesianIndex(1,1), CartesianIndex(1,1), 0))
+    @test isempty(v)
+    r = StepRangeLen(CartesianIndex(1), CartesianIndex(1), 1)
+    v = view(1:2, r)
+    @test v == view(1:2, collect(r))
+end

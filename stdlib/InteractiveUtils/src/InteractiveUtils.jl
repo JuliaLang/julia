@@ -201,6 +201,8 @@ The optional second argument restricts the search to a particular module or func
 
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
+
+See also: [`methods`](@ref).
 """
 function methodswith(@nospecialize(t::Type), @nospecialize(f::Base.Callable), meths = Method[]; supertypes::Bool=false)
     for d in methods(f)

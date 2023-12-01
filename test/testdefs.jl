@@ -5,6 +5,9 @@ using Test, Random
 function runtests(name, path, isolate=true; seed=nothing)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
     Test.TESTSET_PRINT_ENABLE[] = false
+    # remove all hint_handlers, so that errorshow tests are not changed by which packages have been loaded on this worker already
+    # packages that call register_error_hint should also call this again, and then re-add any hooks they want to test
+    empty!(Base.Experimental._hint_handlers)
     try
         if isolate
             # Simple enough to type and random enough so that no one will hard

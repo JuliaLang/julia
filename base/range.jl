@@ -372,6 +372,7 @@ function steprange_last_empty(start::Integer, step, stop)::typeof(stop)
     end
     return last
 end
+steprange_last_empty(start::Bool, step, stop) = start ⊻ (step > zero(step)) # isnegative(step) ? start : !start
 # For types where x+oneunit(x) may not be well-defined use the user-given value for stop
 steprange_last_empty(start, step, stop) = stop
 
@@ -597,7 +598,7 @@ function show(io::IO, r::LinRange{T}) where {T}
     print(io, "LinRange{")
     show(io, T)
     print(io, "}(")
-    ioc = IOContext(io, :typeinto=>T)
+    ioc = IOContext(io, :typeinfo=>T)
     show(ioc, first(r))
     print(io, ", ")
     show(ioc, last(r))
@@ -987,13 +988,14 @@ function getindex(r::AbstractUnitRange, s::StepRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        return range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length=last(s))
+        len = Int(last(s))
+        return range(first(s) ? first(r) : last(r), step=oneunit(eltype(r)), length=len)
     else
         f = first(r)
         start = oftype(f, f + s.start - firstindex(r))
         st = step(s)
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)) * st)
+        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
         return range(start, stop; step=st)
     end
 end
@@ -1003,26 +1005,22 @@ function getindex(r::StepRange, s::AbstractRange{T}) where {T<:Integer}
     @boundscheck checkbounds(r, s)
 
     if T === Bool
-        if length(s) == 0
-            start, len = first(r), 0
-        elseif length(s) == 1
-            if first(s)
-                start, len = first(r), 1
-            else
-                start, len = first(r), 0
-            end
-        else # length(s) == 2
-            start, len = last(r), 1
-        end
-        return range(start, step=step(r); length=len)
+        # treat as a zero, one, or two-element vector, where at most one element is true
+        # staying inbounds on the original range (preserving either start or
+        # stop as either stop or start, depending on the length)
+        st = step(s)
+        nonempty = st > zero(st) ? last(s) : first(s)
+        # n.b. isempty(r) implies isempty(r) which means !nonempty and !first(s)
+        range((first(s) ⊻ nonempty) ⊻ isempty(r) ? last(r) : first(r), step=step(r), length=Int(nonempty))
     else
         f = r.start
         fs = first(s)
         st = r.step
-        start = oftype(f, f + (fs - oneunit(fs)) * st)
-        st = st * step(s)
+        start = oftype(f, f + (fs - firstindex(r)) * st)
+        st *= step(s)
         len = length(s)
-        stop = oftype(f, start + (len - oneunit(len)) * st)
+        # mimic steprange_last_empty here, to try to avoid overflow
+        stop = oftype(f, start + (len - oneunit(len)) * (iszero(len) ? copysign(oneunit(st), st) : st))
         return range(start, stop; step=st)
     end
 end

@@ -83,7 +83,7 @@ MersenneTwister(seed, state::DSFMT_state) =
 Create a `MersenneTwister` RNG object. Different RNG objects can have
 their own seeds, which may be useful for generating different streams
 of random numbers.
-The `seed` may be an integer or a vector of `UInt32` integers.
+The `seed` may be an integer, a string, or a vector of `UInt32` integers.
 If no seed is provided, a randomly generated one is created (using entropy from the system).
 See the [`seed!`](@ref) function for reseeding an already existing `MersenneTwister` object.
 
@@ -316,12 +316,32 @@ function hash_seed(seed::Union{AbstractArray{UInt32}, AbstractArray{UInt64}})
     SHA.digest!(ctx)
 end
 
+function hash_seed(str::AbstractString)
+    ctx = SHA.SHA2_256_CTX()
+    # convert to String such that `codeunits(str)` below is consistent between equal
+    # strings of different types
+    str = String(str)
+    SHA.update!(ctx, codeunits(str))
+    # signature for strings: so far, all hash_seed functions end-up hashing a multiple
+    # of 4 bytes of data, and add the signature (1 byte) at the end; so hash as many
+    # bytes as necessary to have a total number of hashed bytes equal to 0 mod 4 (padding),
+    # and then hash the signature 0x05; in order for strings of different lengths to have
+    # different hashes, padding bytes are set equal to the number of padding bytes
+    pad = 4 - mod(ncodeunits(str), 4)
+    for _=1:pad
+        SHA.update!(ctx, (pad % UInt8,))
+    end
+    SHA.update!(ctx, (0x05,))
+    SHA.digest!(ctx)
+end
+
 
 """
     hash_seed(seed) -> AbstractVector{UInt8}
 
 Return a cryptographic hash of `seed` of size 256 bits (32 bytes).
-`seed` can currently be of type `Union{Integer, DenseArray{UInt32}, DenseArray{UInt64}}`,
+`seed` can currently be of type
+`Union{Integer, AbstractString, AbstractArray{UInt32}, AbstractArray{UInt64}}`,
 but modules can extend this function for types they own.
 
 `hash_seed` is "injective" : if `n != m`, then `hash_seed(n) != `hash_seed(m)`.
@@ -750,13 +770,13 @@ jump!(r::MersenneTwister, steps::Integer) = copy!(r, jump(r, steps))
 # 3, 4: .adv_vals, .idxF (counters to reconstruct the float cache, optional if 5-6 not shown))
 # 5, 6: .adv_ints, .idxI (counters to reconstruct the integer cache, optional)
 
-Random.MersenneTwister(seed::Union{Integer,Vector{UInt32}}, advance::NTuple{6,Integer}) =
+Random.MersenneTwister(seed, advance::NTuple{6,Integer}) =
     advance!(MersenneTwister(seed), advance...)
 
-Random.MersenneTwister(seed::Union{Integer,Vector{UInt32}}, advance::NTuple{4,Integer}) =
+Random.MersenneTwister(seed, advance::NTuple{4,Integer}) =
     MersenneTwister(seed, (advance..., 0, 0))
 
-Random.MersenneTwister(seed::Union{Integer,Vector{UInt32}}, advance::NTuple{2,Integer}) =
+Random.MersenneTwister(seed, advance::NTuple{2,Integer}) =
     MersenneTwister(seed, (advance..., 0, 0, 0, 0))
 
 # advances raw state (per fill_array!) of r by n steps (Float64 values)

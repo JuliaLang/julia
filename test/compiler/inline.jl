@@ -71,7 +71,7 @@ function bar12620()
         foo_inl(i==1)
     end
 end
-@test_throws UndefVarError(:y) bar12620()
+@test_throws UndefVarError(:y, :local) bar12620()
 
 # issue #16165
 @inline f16165(x) = (x = UInt(x) + 1)
@@ -147,8 +147,10 @@ end
         s
     end
 
-    (src, _) = code_typed(sum27403, Tuple{Vector{Int}})[1]
-    @test !any(x -> x isa Expr && x.head === :invoke, src.code)
+    (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
+    @test !any(src.code) do x
+        x isa Expr && x.head === :invoke && x.args[2] !== Core.GlobalRef(Base, :throw_boundserror)
+    end
 end
 
 # check that ismutabletype(type) can be fully eliminated
@@ -311,7 +313,7 @@ end
 const _a_global_array = [1]
 f_inline_global_getindex() = _a_global_array[1]
 let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
-    @test any(x->(isexpr(x, :call) && x.args[1] === GlobalRef(Base, :arrayref)), ci.code)
+    @test any(x->(isexpr(x, :call) && x.args[1] === GlobalRef(Base, :memoryrefget)), ci.code)
 end
 
 # Issue #29114 & #36087 - Inlining of non-tuple splats
@@ -505,6 +507,17 @@ end
         Base.@constprop :aggressive noinlined_constprop_implicit(a) = a+g
         force_inline_constprop_implicit() = @inline noinlined_constprop_implicit(0)
 
+        function force_inline_constprop_cached1()
+            r1 =         noinlined_constprop_implicit(0)
+            r2 = @inline noinlined_constprop_implicit(0)
+            return (r1, r2)
+        end
+        function force_inline_constprop_cached2()
+            r1 = @inline noinlined_constprop_implicit(0)
+            r2 =         noinlined_constprop_implicit(0)
+            return (r1, r2)
+        end
+
         @inline Base.@constprop :aggressive inlined_constprop_explicit(a) = a+g
         force_noinline_constprop_explicit() = @noinline inlined_constprop_explicit(0)
         @inline Base.@constprop :aggressive inlined_constprop_implicit(a) = a+g
@@ -555,6 +568,12 @@ end
     let code = get_code(M.force_inline_constprop_implicit)
         @test all(!isinvoke(:noinlined_constprop_implicit), code)
     end
+    let code = get_code(M.force_inline_constprop_cached1)
+        @test count(isinvoke(:noinlined_constprop_implicit), code) == 1
+    end
+    let code = get_code(M.force_inline_constprop_cached2)
+        @test count(isinvoke(:noinlined_constprop_implicit), code) == 1
+    end
 
     let code = get_code(M.force_noinline_constprop_explicit)
         @test any(isinvoke(:inlined_constprop_explicit), code)
@@ -566,6 +585,18 @@ end
     let code = get_code(M.nested, (Int,Int))
         @test count(isinvoke(:notinlined), code) == 1
     end
+end
+
+@noinline fresh_edge_noinlined(a::Integer) = unresolvable(a)
+let src = code_typed1((Integer,)) do x
+        @inline fresh_edge_noinlined(x)
+    end
+    @test count(iscall((src, fresh_edge_noinlined)), src.code) == 0
+end
+let src = code_typed1((Integer,)) do x
+        @inline fresh_edge_noinlined(x)
+    end
+    @test count(iscall((src, fresh_edge_noinlined)), src.code) == 0 # should be idempotent
 end
 
 # force constant-prop' for `setproperty!`
@@ -777,8 +808,8 @@ end
 let src = code_typed((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
         g42840(xs, 2)
     end |> only |> first
-    # `(xs::Vector{Int})[a::Const(2)]` => `Base.arrayref(true, xs, 2)`
-    @test count(iscall((src, Base.arrayref)), src.code) == 1
+    # `(xs::Vector{Int})[a::Const(2)]`
+    @test count(iscall((src, Base.memoryrefget)), src.code) == 1
     @test count(isinvoke(:g42840), src.code) == 1
 end
 
@@ -1562,20 +1593,22 @@ end
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
 @testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
     @eval begin
-        let src = code_typed1((Vector{Any}, Any)) do xs, x
-                $f(xs, x)
+        for T in [Int, Any]
+            let src = code_typed1((Vector{T}, T)) do xs, x
+                    $f(xs, x)
+                end
+                @test count(iscall((src, $f)), src.code) == 0
             end
-            @test count(iscall((src, $f)), src.code) == 0
-            @test count(src.code) do @nospecialize x
-                isa(x, Core.GotoNode) ||
-                isa(x, Core.GotoIfNot) ||
-                iscall((src, getfield))(x)
-            end == 0 # no loop should be involved for the common single arg case
-        end
-        let src = code_typed1((Vector{Any}, Any, Any)) do xs, x, y
-                $f(xs, x, y)
+            let effects = Base.infer_effects((Vector{T}, T)) do xs, x
+                    $f(xs, x)
+                end
+                @test Core.Compiler.Core.Compiler.is_terminates(effects)
             end
-            @test count(iscall((src, $f)), src.code) == 0
+            let src = code_typed1((Vector{T}, T, T)) do xs, x, y
+                    $f(xs, x, y)
+                end
+                @test count(iscall((src, $f)), src.code) == 0
+            end
         end
         let xs = Any[]
             $f(xs, :x, "y", 'z')
@@ -1642,13 +1675,12 @@ function oc_capture_oc(z)
 end
 @test fully_eliminated(oc_capture_oc, (Int,))
 
+# inlining with unmatched type parameters
 @eval struct OldVal{T}
-    x::T
     (OV::Type{OldVal{T}})() where T = $(Expr(:new, :OV))
 end
-with_unmatched_typeparam1(x::OldVal{i}) where {i} = i
-with_unmatched_typeparam2() = [ Base.donotdelete(OldVal{i}()) for i in 1:10000 ]
-function with_unmatched_typeparam3()
+@test OldVal{0}() === OldVal{0}.instance
+function with_unmatched_typeparam()
     f(x::OldVal{i}) where {i} = i
     r = 0
     for i = 1:10000
@@ -1656,17 +1688,15 @@ function with_unmatched_typeparam3()
     end
     return r
 end
-
-@testset "Inlining with unmatched type parameters" begin
-    let src = code_typed1(with_unmatched_typeparam1, (Any,))
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
+let src = code_typed1(with_unmatched_typeparam)
+    found = nothing
+    for x in src.code
+        if isexpr(x, :call) && length(x.args) == 1
+            found = x
+            break
+        end
     end
-    let src = code_typed1(with_unmatched_typeparam2)
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
-    end
-    let src = code_typed1(with_unmatched_typeparam3)
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
-    end
+    @test isnothing(found) || (source=src, statement=found)
 end
 
 function twice_sitofp(x::Int, y::Int)
@@ -1710,7 +1740,7 @@ let getfield_tfunc(@nospecialize xs...) =
 end
 @test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
 
-# TODO: Remove compute sparams for vararg_retrival
+# TODO: Remove compute sparams for vararg_retrieval
 fvarargN_inline(x::Tuple{Vararg{Int, N}}) where {N} = N
 fvarargN_inline(args...) = fvarargN_inline(args)
 let src = code_typed1(fvarargN_inline, (Tuple{Vararg{Int}},))
@@ -1836,26 +1866,16 @@ end
 # Test that inlining can still use nothrow information from concrete-eval
 # even if the result itself is too big to be inlined, and nothrow is not
 # known without concrete-eval
-const THE_BIG_TUPLE = ntuple(identity, 1024)
+const THE_BIG_TUPLE = ntuple(identity, 1024);
 function return_the_big_tuple(err::Bool)
     err && error("BAD")
     return THE_BIG_TUPLE
 end
-@noinline function return_the_big_tuple_noinline(err::Bool)
-    err && error("BAD")
-    return THE_BIG_TUPLE
+@test fully_eliminated() do
+    return_the_big_tuple(false)[1]
 end
-big_tuple_test1() = return_the_big_tuple(false)[1]
-big_tuple_test2() = return_the_big_tuple_noinline(false)[1]
-
-@test fully_eliminated(big_tuple_test2, Tuple{})
-# Currently we don't run these cleanup passes, but let's make sure that
-# if we did, inlining would be able to remove this
-let ir = Base.code_ircode(big_tuple_test1, Tuple{})[1][1]
-    ir = Core.Compiler.compact!(ir, true)
-    ir = Core.Compiler.cfg_simplify!(ir)
-    ir = Core.Compiler.compact!(ir, true)
-    @test length(ir.stmts) == 1
+@test fully_eliminated() do
+    @inline return_the_big_tuple(false)[1]
 end
 
 # inlineable but removable call should be eligible for DCE
