@@ -525,7 +525,7 @@ const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 @outline function _check_year(d, format)
     if contains(lowercase(format), "yyyy") && !contains(lowercase(format), "yyyyy") # is 4-digit year format, allows strictly 4-digit
         !(1583 <= year(dt) <= 9999) || throw("Year is outside the legal ISO 8601 year-range, to support such, use an explicit constructor.")
-    else if contains(lowercase(format), "yy") # is 2-digit (or 3-digit...) year format, allows only 1- or 2-digit year
+    elseif contains(lowercase(format), "yy") # is 2-digit (or 3-digit...) year format, allows only 1- or 2-digit year
         !(0 <= year(dt) <= 99) || throw("Year is outside the 0 to 99 year-range, asked for.")
     end
     return d
