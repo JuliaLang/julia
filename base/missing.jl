@@ -267,10 +267,8 @@ function show(io::IO, s::SkipMissing)
 end
 
 # Optimized mapreduce implementation
-# The generic method is faster when !(eltype(A) >: Missing) since it does not need
-# additional loops to identify the two first non-missing values of each block
 mapreduce(f, op, itr::SkipMissing{<:AbstractArray}) =
-    _mapreduce(f, op, IndexStyle(itr.x), eltype(itr.x) >: Missing ? itr : itr.x)
+    _mapreduce(f, op, IndexStyle(itr.x), itr)
 
 function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     A = itr.x
