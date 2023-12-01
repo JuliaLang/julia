@@ -1549,10 +1549,19 @@ function persistent_dict_elim()
     a = Base.PersistentDict(:a => 1)
     return a[:a]
 end
+
 # Ideally we would be able to fully eliminate this,
 # but currently this would require an extra round of constprop
 @test_broken fully_eliminated(persistent_dict_elim)
 @test code_typed(persistent_dict_elim)[1][1].code[end] == Core.ReturnNode(1)
+
+function persistent_dict_elim_multiple()
+    a = Base.PersistentDict(:a => 1)
+    b = Base.PersistentDict(a, :b => 2)
+    return b[:a]
+end
+@test_broken fully_eliminated(persistent_dict_elim_multiple)
+@test code_typed(persistent_dict_elim_multiple)[1][1].code[end] == Core.ReturnNode(1)
 
 # Test CFG simplify with try/catch blocks
 let code = Any[

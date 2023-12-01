@@ -70,11 +70,14 @@ function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where 
     return Scope(ScopeStorage(parent.values, key=>val))
 end
 
-function Scope(scope, pairs::Pair{<:ScopedValue}...)
-    for pair in pairs
-        scope = Scope(scope, pair...)
-    end
-    return scope::Scope
+function Scope(scope, pair::Pair{<:ScopedValue})
+    return Scope(scope, pair...)
+end
+
+function Scope(scope, pair1::Pair{<:ScopedValue}, pair2::Pair{<:ScopedValue}, pairs::Pair{<:ScopedValue}...)
+    # Unroll this loop through recursion to make sure that
+    # our compiler optimization support works
+    return Scope(Scope(scope, pair1...), pair2, pairs...)
 end
 Scope(::Nothing) = nothing
 
