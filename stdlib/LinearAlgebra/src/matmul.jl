@@ -689,7 +689,7 @@ end
     return _generic_matvecmul!(C, ta, Anew, B, _add)
 end
 
-Base.@constprop :aggressive function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
+function _generic_matvecmul!(C::AbstractVector, tA, A::AbstractVecOrMat, B::AbstractVector,
                             _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
     @assert tA in ('N', 'T', 'C')
