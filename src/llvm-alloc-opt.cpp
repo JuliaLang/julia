@@ -643,8 +643,6 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
     }
     insertLifetime(ptr, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz), orig_inst);
     Instruction *new_inst = cast<Instruction>(prolog_builder.CreateBitCast(ptr, JuliaType::get_pjlvalue_ty(prolog_builder.getContext(), buff->getType()->getPointerAddressSpace())));
-    if (orig_inst->getModule()->getDataLayout().getAllocaAddrSpace() != 0)
-        new_inst = cast<Instruction>(prolog_builder.CreateAddrSpaceCast(new_inst, JuliaType::get_pjlvalue_ty(prolog_builder.getContext(), orig_inst->getType()->getPointerAddressSpace())));
     new_inst->takeName(orig_inst);
 
     auto simple_replace = [&] (Instruction *orig_i, Instruction *new_i) {
@@ -692,7 +690,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
             if (pass.pointer_from_objref_func == callee) {
-                call->replaceAllUsesWith(new_i);
+                call->replaceAllUsesWith(prolog_builder.CreateAddrSpaceCast(new_i, call->getCalledFunction()->getReturnType()));
                 call->eraseFromParent();
                 return;
             }

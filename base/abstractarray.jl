@@ -905,6 +905,8 @@ If `dst` and `src` are of the same type, `dst == src` should hold after
 the call. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
 
+$(_DOCS_ALIASING_WARNING)
+
 See also [`copyto!`](@ref).
 
 !!! compat "Julia 1.1"
@@ -1369,6 +1371,8 @@ _unsafe_ind2sub(sz, i) = (@inline; _ind2sub(sz, i))
 Store values from array `X` within some subset of `A` as specified by `inds`.
 The syntax `A[inds...] = X` is equivalent to `(setindex!(A, X, inds...); X)`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = zeros(2,2);
@@ -1587,10 +1591,14 @@ eltypeof(x::AbstractArray) = eltype(x)
 promote_eltypeof() = error()
 promote_eltypeof(v1) = eltypeof(v1)
 promote_eltypeof(v1, vs...) = promote_type(eltypeof(v1), promote_eltypeof(vs...))
+promote_eltypeof(v1::T, vs::T...) where {T} = eltypeof(v1)
+promote_eltypeof(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 promote_eltype() = error()
 promote_eltype(v1) = eltype(v1)
 promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+promote_eltype(v1::T, vs::T...) where {T} = eltype(T)
+promote_eltype(v1::AbstractArray{T}, vs::AbstractArray{T}...) where {T} = T
 
 #TODO: ERROR CHECK
 _cat(catdim::Int) = Vector{Any}()
@@ -3338,6 +3346,8 @@ end
 
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the smallest collection.
+
+$(_DOCS_ALIASING_WARNING)
 
 See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 

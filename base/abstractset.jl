@@ -65,6 +65,8 @@ const ∪ = union
 Construct the [`union`](@ref) of passed in sets and overwrite `s` with the result.
 Maintain order with arrays.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> a = Set([3, 4, 5]);
@@ -182,6 +184,8 @@ const ∩ = intersect
 
 Intersect all passed in sets and overwrite `s` with the result.
 Maintain order with arrays.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function intersect!(s::AbstractSet, itrs...)
     for x in itrs
@@ -217,6 +221,8 @@ setdiff(s) = union(s)
 
 Remove from set `s` (in-place) each element of each iterable from `itrs`.
 Maintain order with arrays.
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -272,6 +278,8 @@ symdiff(s) = symdiff!(copy(s))
 Construct the symmetric difference of the passed in sets, and overwrite `s` with the result.
 When `s` is an array, the order is maintained.
 Note that in this case the multiplicity of elements matters.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function symdiff!(s::AbstractSet, itrs...)
     for x in itrs

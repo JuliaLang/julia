@@ -848,3 +848,7 @@ let res = @timed a50317[:b]
     @test res.bytes == 0
     return res
 end
+
+# https://github.com/JuliaLang/julia/issues/51233
+obj51233 = (1,)
+@test_throws ErrorException obj51233.x

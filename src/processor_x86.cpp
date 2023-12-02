@@ -4,6 +4,7 @@
 
 // CPUID
 
+#include "julia.h"
 extern "C" JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
     asm volatile (
@@ -1053,6 +1054,16 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
 JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
 {
     return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+}
+
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
+{
+    TargetData<feature_sz> target = jit_targets.front();
+    FeatureList<feature_sz> features = target.en.features;
+    if ((bits == 32 || bits == 64) && (test_nbit(features, Feature::fma) || test_nbit(features, Feature::fma4)))
+        return jl_true;
+    else
+        return jl_false;
 }
 
 jl_image_t jl_init_processor_sysimg(void *hdl)

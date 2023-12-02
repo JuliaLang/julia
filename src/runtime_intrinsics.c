@@ -1454,6 +1454,7 @@ un_fintrinsic(trunc_float,trunc_llvm)
 un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm_fast)
+jl_value_t *jl_cpu_has_fma(int bits);
 
 JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
 {
@@ -1463,7 +1464,11 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
 
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
 {
-    JL_TYPECHK(have_fma, datatype, typ);
-    // TODO: run-time feature check?
-    return jl_false;
+    JL_TYPECHK(have_fma, datatype, typ); // TODO what about float16/bfloat16?
+    if (typ == (jl_value_t*)jl_float32_type)
+        return jl_cpu_has_fma(32);
+    else if (typ == (jl_value_t*)jl_float64_type)
+        return jl_cpu_has_fma(64);
+    else
+        return jl_false;
 }

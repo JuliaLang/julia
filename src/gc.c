@@ -420,7 +420,7 @@ JL_DLLEXPORT void jl_gc_init_finalizer_rng_state(void)
     jl_rng_split(finalizer_rngState, jl_current_task->rngState);
 }
 
-static void run_finalizers(jl_task_t *ct)
+static void run_finalizers(jl_task_t *ct, int finalizers_thread)
 {
     // Racy fast path:
     // The race here should be OK since the race can only happen if
@@ -448,7 +448,7 @@ static void run_finalizers(jl_task_t *ct)
 
     // This releases the finalizers lock.
     int8_t was_in_finalizer = ct->ptls->in_finalizer;
-    ct->ptls->in_finalizer = 1;
+    ct->ptls->in_finalizer = !finalizers_thread;
     jl_gc_run_finalizers_in_list(ct, &copied_list);
     ct->ptls->in_finalizer = was_in_finalizer;
     arraylist_free(&copied_list);
@@ -462,7 +462,7 @@ JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
         ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     if (!ptls->in_finalizer && ptls->locks.len == 0 && ptls->finalizers_inhibited == 0) {
-        run_finalizers(ct);
+        run_finalizers(ct, 0);
     }
 }
 
@@ -555,7 +555,7 @@ void jl_gc_run_all_finalizers(jl_task_t *ct)
     JL_UNLOCK_NOGC(&finalizers_lock);
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
-    run_finalizers(ct);
+    run_finalizers(ct, 1);
 }
 
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
@@ -947,7 +947,7 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls,
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*),
                                                   jl_weakref_type);
     wr->value = value;  // NOTE: wb not needed here
-    arraylist_push(&ptls->heap.weak_refs, wr);
+    small_arraylist_push(&ptls->heap.weak_refs, wr);
     return wr;
 }
 
@@ -2278,19 +2278,10 @@ STATIC_INLINE void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, siz
 }
 
 // Mark module binding
-STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent, jl_binding_t **mb_begin,
-                            jl_binding_t **mb_end, uintptr_t nptr,
+STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent, uintptr_t nptr,
                             uint8_t bits) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
-    for (; mb_begin < mb_end; mb_begin++) {
-        jl_binding_t *b = *mb_begin;
-        if (b == (jl_binding_t *)jl_nothing)
-            continue;
-        verify_parent1("module", mb_parent, mb_begin, "binding_buff");
-        gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)b);
-        gc_try_claim_and_push(mq, b, &nptr);
-    }
     jl_value_t *bindings = (jl_value_t *)jl_atomic_load_relaxed(&mb_parent->bindings);
     gc_assert_parent_validity((jl_value_t *)mb_parent, bindings);
     gc_try_claim_and_push(mq, bindings, &nptr);
@@ -2422,13 +2413,8 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
                 else if (foreign_alloc)
                     objprofile_count(jl_module_type, bits == GC_OLD_MARKED, sizeof(jl_module_t));
                 jl_module_t *mb_parent = (jl_module_t *)new_obj;
-                jl_svec_t *bindings = jl_atomic_load_relaxed(&mb_parent->bindings);
-                jl_binding_t **table = (jl_binding_t**)jl_svec_data(bindings);
-                size_t bsize = jl_svec_len(bindings);
-                uintptr_t nptr = ((bsize + mb_parent->usings.len + 1) << 2) | (bits & GC_OLD);
-                jl_binding_t **mb_begin = table + 1;
-                jl_binding_t **mb_end = table + bsize;
-                gc_mark_module_binding(ptls, mb_parent, mb_begin, mb_end, nptr, bits);
+                uintptr_t nptr = ((mb_parent->usings.len + 1) << 2) | (bits & GC_OLD);
+                gc_mark_module_binding(ptls, mb_parent, nptr, bits);
             }
             else if (vtag == jl_task_tag << 4) {
                 if (update_meta)
@@ -3466,7 +3452,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // or wait for finalizers on other threads without dead lock).
     if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
         JL_TIMING(GC, GC_Finalizers);
-        run_finalizers(ct);
+        run_finalizers(ct, 0);
     }
     JL_PROBE_GC_FINALIZER();
 
@@ -3510,8 +3496,10 @@ void jl_init_thread_heap(jl_ptls_t ptls)
         p[i].freelist = NULL;
         p[i].newpages = NULL;
     }
-    arraylist_new(&heap->weak_refs, 0);
-    arraylist_new(&heap->live_tasks, 0);
+    small_arraylist_new(&heap->weak_refs, 0);
+    small_arraylist_new(&heap->live_tasks, 0);
+    for (int i = 0; i < JL_N_STACK_POOLS; i++)
+        small_arraylist_new(&heap->free_stacks[i], 0);
     heap->mallocarrays = NULL;
     heap->mafreelist = NULL;
     heap->big_objects = NULL;
@@ -3866,8 +3854,7 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
     errno = last_errno;
     jl_may_leak(base);
     assert(align > 0);
-    unsigned diff = (offset - (uintptr_t)base) % align;
-    return (void*)((char*)base + diff);
+    return (void*)(LLT_ALIGN((uintptr_t)base + offset, (uintptr_t)align) - offset);
 }
 
 STATIC_INLINE void *gc_try_perm_alloc_pool(size_t sz, unsigned align, unsigned offset) JL_NOTSAFEPOINT

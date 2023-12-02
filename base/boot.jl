@@ -370,6 +370,8 @@ struct InitError <: WrappedException
     error
 end
 
+struct PrecompilableError <: Exception end
+
 String(s::String) = s  # no constructor yet
 
 const Cvoid = Nothing

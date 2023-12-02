@@ -65,7 +65,8 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 // we define this separately so that we can populate the frame before we add it to the backtrace
 // it's recommended to mark the containing function with NOINLINE, though not essential
 #define JL_GC_ENABLEFRAME(frame) \
-  ((void**)&frame[1])[0] = __builtin_frame_address(0);
+    jl_signal_fence(); \
+    ((void**)&frame[1])[0] = __builtin_frame_address(0);
 
 #endif
 

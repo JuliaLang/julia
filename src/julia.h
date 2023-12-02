@@ -829,6 +829,7 @@ extern JL_DLLIMPORT jl_value_t *jl_readonlymemory_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_diverror_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_undefref_exception JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_interrupt_exception JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_precompilable_error JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_boundserror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_an_empty_vec_any JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_an_empty_string JL_GLOBALLY_ROOTED;
@@ -1048,6 +1049,11 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
 JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
                                          int isaligned, jl_value_t *owner);
 JL_DLLEXPORT void jl_gc_safepoint(void);
+
+void *mtarraylist_get(small_arraylist_t *_a, size_t idx) JL_NOTSAFEPOINT;
+size_t mtarraylist_length(small_arraylist_t *_a) JL_NOTSAFEPOINT;
+void mtarraylist_add(small_arraylist_t *_a, void *elt, size_t idx) JL_NOTSAFEPOINT;
+void mtarraylist_push(small_arraylist_t *_a, void *elt) JL_NOTSAFEPOINT;
 
 // object accessors -----------------------------------------------------------
 

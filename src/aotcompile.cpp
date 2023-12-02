@@ -835,8 +835,12 @@ static SmallVector<Partition, 32> partitionModule(Module &M, unsigned threads) {
             continue;
         if (!canPartition(G))
             continue;
-        G.setLinkage(GlobalValue::ExternalLinkage);
-        G.setVisibility(GlobalValue::HiddenVisibility);
+        // Currently ccallable global aliases have extern linkage, we only want to make the
+        // internally linked functions/global variables extern+hidden
+        if (G.hasLocalLinkage()) {
+            G.setLinkage(GlobalValue::ExternalLinkage);
+            G.setVisibility(GlobalValue::HiddenVisibility);
+        }
         if (auto F = dyn_cast<Function>(&G)) {
             partitioner.make(&G, getFunctionWeight(*F).weight);
         } else {
@@ -1568,6 +1572,16 @@ void jl_dump_native_impl(void *native_code,
         auto &Context = dataM.getContext();
 
         Type *T_psize = dataM.getDataLayout().getIntPtrType(Context)->getPointerTo();
+
+        // This should really be in jl_create_native, but we haven't
+        // yet set the target triple binary format correctly at that
+        // point. This should be resolved when we start JITting for
+        // COFF when we switch over to JITLink.
+        for (auto &GA : dataM.aliases()) {
+            // Global aliases are only used for ccallable things, so we should
+            // mark them as dllexport
+            addComdat(&GA, TheTriple);
+        }
 
         // add metadata information
         if (imaging_mode) {

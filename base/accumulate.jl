@@ -42,6 +42,8 @@ end
     cumsum!(B, A; dims::Integer)
 
 Cumulative sum of `A` along the dimension `dims`, storing the result in `B`. See also [`cumsum`](@ref).
+
+$(_DOCS_ALIASING_WARNING)
 """
 cumsum!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(add_sum, B, A, dims=dims)
@@ -150,6 +152,8 @@ cumsum(itr) = accumulate(add_sum, itr)
 
 Cumulative product of `A` along the dimension `dims`, storing the result in `B`.
 See also [`cumprod`](@ref).
+
+$(_DOCS_ALIASING_WARNING)
 """
 cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(mul_prod, B, A, dims=dims)
@@ -159,6 +163,8 @@ cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
 
 Cumulative product of a vector `x`, storing the result in `y`.
 See also [`cumprod`](@ref).
+
+$(_DOCS_ALIASING_WARNING)
 """
 cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, dims=1)
 
@@ -300,6 +306,8 @@ end
 Cumulative operation `op` on `A` along the dimension `dims`, storing the result in `B`.
 Providing `dims` is optional for vectors.  If the keyword argument `init` is given, its
 value is used to instantiate the accumulation.
+
+$(_DOCS_ALIASING_WARNING)
 
 See also [`accumulate`](@ref), [`cumsum!`](@ref), [`cumprod!`](@ref).
 

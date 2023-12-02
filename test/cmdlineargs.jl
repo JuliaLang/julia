@@ -66,7 +66,9 @@ end
     get_julia_cmd(arg) = strip(read(`$julia_basic $arg -e 'print(repr(Base.julia_cmd()))'`, String), ['`'])
 
     for (arg, default) in (
-                            ("-C$(unsafe_string(opts.cpu_target))",  false),
+                            # Use a Cmd to handle space nicely when
+                            # interpolating inside another Cmd.
+                            (`-C $(unsafe_string(opts.cpu_target))`,  false),
 
                             ("-J$(unsafe_string(opts.image_file))",  false),
 
@@ -123,13 +125,21 @@ end
                             ("--pkgimages=no",  false),
                         )
         @testset "$arg" begin
+            str = arg isa Cmd ? join(arg.exec, ' ') : arg
             if default
-                @test !occursin(arg, get_julia_cmd(arg))
+                @test !occursin(str, get_julia_cmd(arg))
             else
-                @test occursin(arg, get_julia_cmd(arg))
+                @test occursin(str, get_julia_cmd(arg))
             end
         end
     end
+
+    # Test empty `cpu_target` gives a helpful error message, issue #52209.
+    io = IOBuffer()
+    p = run(pipeline(`$(Base.julia_cmd(; cpu_target="")) --startup-file=no -e ''`; stderr=io); wait=false)
+    wait(p)
+    @test p.exitcode == 1
+    @test occursin("empty CPU name", String(take!(io)))
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
@@ -465,10 +475,47 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test occursin(expected, got) || (expected, got)
         @test_broken occursin(expected_good, got)
 
+        # Ask for coverage in current directory
+        tdir = dirname(realpath(inputfile))
+        cd(tdir) do
+            # there may be atrailing separator here so use rstrip
+            @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, rstrip(unsafe_string(Base.JLOptions().tracked_path), '/'))" -L $inputfile
+                --code-coverage=$covfile --code-coverage=@`) == "(3, $(repr(tdir)))"
+        end
+        @test isfile(covfile)
+        got = read(covfile, String)
+        rm(covfile)
+        @test occursin(expected, got) || (expected, got)
+        @test_broken occursin(expected_good, got)
+
+        # Ask for coverage in relative directory
+        tdir = dirname(realpath(inputfile))
+        cd(dirname(tdir)) do
+            @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+                --code-coverage=$covfile --code-coverage=@testhelpers`) == "(3, $(repr(tdir)))"
+        end
+        @test isfile(covfile)
+        got = read(covfile, String)
+        rm(covfile)
+        @test occursin(expected, got) || (expected, got)
+        @test_broken occursin(expected_good, got)
+
+        # Ask for coverage in relative directory with dot-dot notation
+        tdir = dirname(realpath(inputfile))
+        cd(tdir) do
+            @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
+                --code-coverage=$covfile --code-coverage=@../testhelpers`) == "(3, $(repr(tdir)))"
+        end
+        @test isfile(covfile)
+        got = read(covfile, String)
+        rm(covfile)
+        @test occursin(expected, got) || (expected, got)
+        @test_broken occursin(expected_good, got)
+
         # Ask for coverage in a different directory
         tdir = mktempdir() # a dir that contains no code
         @test readchomp(`$exename -E "(Base.JLOptions().code_coverage, unsafe_string(Base.JLOptions().tracked_path))" -L $inputfile
-            --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(tdir)))"
+            --code-coverage=$covfile --code-coverage=@$tdir`) == "(3, $(repr(realpath(tdir))))"
         @test isfile(covfile)
         got = read(covfile, String)
         @test isempty(got)

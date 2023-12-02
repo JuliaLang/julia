@@ -1926,9 +1926,12 @@ static bool valid_as_globalinit(const Value *v) {
     return isa<Constant>(v);
 }
 
+static Value *zext_struct(jl_codectx_t &ctx, Value *V);
+
 static inline jl_cgval_t value_to_pointer(jl_codectx_t &ctx, Value *v, jl_value_t *typ, Value *tindex)
 {
     Value *loc;
+    v = zext_struct(ctx, v);
     if (valid_as_globalinit(v)) { // llvm can't handle all the things that could be inside a ConstantExpr
         assert(jl_is_concrete_type(typ)); // not legal to have an unboxed abstract type
         loc = get_pointer_to_constant(ctx.emission_context, cast<Constant>(v), Align(julia_alignment(typ)), "_j_const", *jl_Module);
@@ -2053,17 +2056,6 @@ static void alloc_def_flag(jl_codectx_t &ctx, jl_varinfo_t& vi)
 
 
 // --- utilities ---
-
-static Constant *undef_value_for_type(Type *T) {
-    auto tracked = CountTrackedPointers(T);
-    Constant *undef;
-    if (tracked.count)
-        // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
-        undef = Constant::getNullValue(T);
-    else
-        undef = UndefValue::get(T);
-    return undef;
-}
 
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block)
 {
@@ -3346,7 +3338,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     if (f == jl_builtin_is && nargs == 2) {
         // emit comparison test
         Value *ans = emit_f_is(ctx, argv[1], argv[2]);
-        *ret = mark_julia_type(ctx, ctx.builder.CreateZExt(ans, getInt8Ty(ctx.builder.getContext())), false, jl_bool_type);
+        *ret = mark_julia_type(ctx, ans, false, jl_bool_type);
         return true;
     }
 
@@ -3385,8 +3377,6 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         if (jl_is_type_type(ty.typ) && !jl_has_free_typevars(ty.typ)) {
             jl_value_t *tp0 = jl_tparam0(ty.typ);
             Value *isa_result = emit_isa(ctx, arg, tp0, NULL).first;
-            if (isa_result->getType() == getInt1Ty(ctx.builder.getContext()))
-                isa_result = ctx.builder.CreateZExt(isa_result, getInt8Ty(ctx.builder.getContext()));
             *ret = mark_julia_type(ctx, isa_result, false, jl_bool_type);
             return true;
         }
@@ -3840,7 +3830,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         else if (fld.typ == (jl_value_t*)jl_symbol_type) { // Known type but unknown symbol
             if (jl_is_datatype(utt) && (utt != jl_module_type) && jl_struct_try_layout(utt)) {
-                if ((jl_datatype_nfields(utt) == 1 && !jl_is_namedtuple_type(utt))) {
+                if ((jl_datatype_nfields(utt) == 1 && !jl_is_namedtuple_type(utt) && !jl_is_tuple_type(utt))) {
                     jl_svec_t *fn = jl_field_names(utt);
                     assert(jl_svec_len(fn) == 1);
                     Value *typ_sym = literal_pointer_val(ctx, jl_svecref(fn, 0));
@@ -5271,16 +5261,15 @@ static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const s
         emit_typecheck(ctx, condV, (jl_value_t*)jl_bool_type, msg);
     }
     if (isbool) {
-        Value *cond = emit_unbox(ctx, getInt8Ty(ctx.builder.getContext()), condV, (jl_value_t*)jl_bool_type);
-        assert(cond->getType() == getInt8Ty(ctx.builder.getContext()));
-        return ctx.builder.CreateXor(ctx.builder.CreateTrunc(cond, getInt1Ty(ctx.builder.getContext())), ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 1));
+        Value *cond = emit_unbox(ctx, getInt1Ty(ctx.builder.getContext()), condV, (jl_value_t*)jl_bool_type);
+        return ctx.builder.CreateNot(cond);
     }
     if (condV.isboxed) {
         return ctx.builder.CreateICmpEQ(boxed(ctx, condV),
             track_pjlvalue(ctx, literal_pointer_val(ctx, jl_false)));
     }
-    // not a boolean
-    return ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0); // TODO: replace with Undef
+    // not a boolean (unreachable dead code)
+    return UndefValue::get(getInt1Ty(ctx.builder.getContext()));
 }
 
 static Value *emit_condition(jl_codectx_t &ctx, jl_value_t *cond, const std::string &msg)
@@ -6797,6 +6786,10 @@ const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysi
                 int found = jl_dlsym(sysimg_handle, name, &addr, 0);
                 if (found)
                     add_named_global(name, addr);
+                else {
+                    err = jl_get_exceptionf(jl_errorexception_type, "%s not found in sysimg", name);
+                    jl_throw(err);
+                }
             }
             else {
                 jl_method_instance_t *lam = jl_get_specialization1((jl_tupletype_t*)sigt, world, &min_valid, &max_valid, 0);
@@ -9294,6 +9287,8 @@ extern "C" JL_DLLEXPORT_CODEGEN void jl_teardown_codegen_impl() JL_NOTSAFEPOINT
     if (jl_ExecutionEngine)
         jl_ExecutionEngine->printTimers();
     PrintStatistics();
+    JL_LOCK(&jl_codegen_lock); // TODO: If this lock gets removed reconsider
+                                    // LLVM global state/destructors (maybe a rwlock)
 }
 
 // the rest of this file are convenience functions
