@@ -223,6 +223,10 @@ Similarly, `@views` converts string slices into [`SubString`](@ref) views.
     that appear explicitly in the given `expression`, not array slicing that
     occurs in functions called by that code.
 
+!!! compat "Julia 1.5"
+    Using `begin` in an indexing expression to refer to the first index requires at least
+    was implemented in Julia 1.4, but was only supported by `@views` starting in Julia 1.5.
+
 # Examples
 ```jldoctest
 julia> A = zeros(3, 3);
