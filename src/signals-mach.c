@@ -364,7 +364,7 @@ kern_return_t catch_mach_exception_raise(
           jl_throw_in_thread(ptls2, thread, jl_inexact_fp_exception);
       }
 #elif defined(_CPU_AARCH64_)
-    // https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/bsd/dev/i386/unix_signal.c#L535-L551
+    // https://github.com/apple/darwin-xnu/blob/2ff845c2e033bd0ff64b5b6aa6063a1f8f65aa32/bsd/dev/arm/unix_signal.c#L436-L459
       switch (code[0]) {
       case EXC_ARM_FP_UF:
         jl_throw_in_thread(ptls2, thread, jl_underflow_fp_exception);
@@ -387,6 +387,8 @@ kern_return_t catch_mach_exception_raise(
       default:
         break;
       }
+#else
+    jl_throw_in_thread(ptls2, thread, jl_diverror_exception);
 #endif
         return KERN_SUCCESS;
     }
