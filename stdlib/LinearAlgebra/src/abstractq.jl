@@ -158,7 +158,7 @@ qsize_check(Q::AbstractQ, P::AbstractQ) =
         throw(DimensionMismatch("second dimension of A, $(size(Q,2)), must coincide with first dimension of B, $(size(P,1))"))
 
 # mimic the AbstractArray fallback
-*(Q::AbstractQ) = Q
+*(Q::AbstractQ{<:Number}) = Q
 
 (*)(Q::AbstractQ, J::UniformScaling) = Q*J.λ
 function (*)(Q::AbstractQ, b::Number)
