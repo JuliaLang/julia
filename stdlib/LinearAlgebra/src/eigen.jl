@@ -173,7 +173,8 @@ function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     ishermitian(A) && return eigen!(Hermitian(A), sortby=sortby)
-    eval, evec = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]
+    E = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
+    eval, evec = E[2], E[4]
     return Eigen(sorteig!(eval, evec, sortby)...)
 end
 

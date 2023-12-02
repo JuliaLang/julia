@@ -30,6 +30,7 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 >   * jl_in_stackwalk (Win32)
 >   * ResourcePool<?>::mutex
 >   * RLST_mutex
+>   * llvm_printing_mutex
 >   * jl_locked_stream::mutex
 >   * debuginfo_asyncsafe
 >   * inference_timing_mutex

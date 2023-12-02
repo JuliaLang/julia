@@ -481,6 +481,7 @@ include("summarysize.jl")
 include("errorshow.jl")
 
 include("initdefs.jl")
+Filesystem.__postinit__()
 
 # worker threads
 include("threadcall.jl")
@@ -594,14 +595,12 @@ if is_primary_base_module
 # Profiling helper
 # triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
 # Needs to be in Base because Profile is no longer loaded on boot
-const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
-function profile_printing_listener()
+function profile_printing_listener(cond::Base.AsyncCondition)
     profile = nothing
     try
-        while true
-            wait(PROFILE_PRINT_COND[])
-            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))
-
+        while _trywait(cond)
+            # this call to require is mostly legal, only because Profile has no dependencies and is usually in LOAD_PATH
+            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))::Module
             invokelatest(profile.peek_report[])
             if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
@@ -614,10 +613,13 @@ function profile_printing_listener()
             @error "Profile printing listener crashed" exception=ex,catch_backtrace()
         end
     end
+    nothing
 end
 
 function __init__()
     # Base library init
+    global _atexit_hooks_finished = false
+    Filesystem.__postinit__()
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
@@ -633,9 +635,20 @@ function __init__()
         # triggering a profile via signals is not implemented on windows
         cond = Base.AsyncCondition()
         Base.uv_unref(cond.handle)
-        PROFILE_PRINT_COND[] = cond
-        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
-        errormonitor(Threads.@spawn(profile_printing_listener()))
+        t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
+        atexit() do
+            # destroy this callback when exiting
+            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+            # this will prompt any ongoing or pending event to flush also
+            close(cond)
+            # error-propagation is not needed, since the errormonitor will handle printing that better
+            _wait(t)
+        end
+        finalizer(cond) do c
+            # if something goes south, still make sure we aren't keeping a reference in C to this
+            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        end
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
     end
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.

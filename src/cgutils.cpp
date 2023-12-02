@@ -783,9 +783,6 @@ static Type *_julia_struct_to_llvm(jl_codegen_params_t *ctx, LLVMContext &ctxt, 
                 lty = JuliaType::get_prjlvalue_ty(ctxt);
                 isvector = false;
             }
-            else if (ty == (jl_value_t*)jl_bool_type) {
-                lty = getInt8Ty(ctxt);
-            }
             else if (jl_is_uniontype(ty)) {
                 // pick an Integer type size such that alignment will generally be correct,
                 // and always end with an Int8 (selector byte).
@@ -2899,7 +2896,7 @@ static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t)
 
 // --- boxing ---
 
-static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt);
+static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt, bool fully_initialized);
 
 static void init_bits_value(jl_codectx_t &ctx, Value *newv, Value *v, MDNode *tbaa,
                             unsigned alignment = sizeof(void*)) // min alignment in julia's gc is pointer-aligned
@@ -3209,7 +3206,7 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
                     jl_cgval_t vinfo_r = jl_cgval_t(vinfo, (jl_value_t*)jt, NULL);
                     box = _boxed_special(ctx, vinfo_r, t);
                     if (!box) {
-                        box = emit_allocobj(ctx, jt);
+                        box = emit_allocobj(ctx, jt, true);
                         setName(ctx.emission_context, box, "unionbox");
                         init_bits_cgval(ctx, box, vinfo_r, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
                     }
@@ -3336,7 +3333,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
             if (do_promote && is_promotable) {
                 auto IP = ctx.builder.saveIP();
                 ctx.builder.SetInsertPoint(vinfo.promotion_point);
-                box = emit_allocobj(ctx, (jl_datatype_t*)jt);
+                box = emit_allocobj(ctx, (jl_datatype_t*)jt, true);
                 Value *decayed = decay_derived(ctx, box);
                 AllocaInst *originalAlloca = cast<AllocaInst>(vinfo.V);
                 box->takeName(originalAlloca);
@@ -3352,7 +3349,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
                 auto arg_typename = [&] JL_NOTSAFEPOINT {
                     return "box::" + std::string(jl_symbol_name(((jl_datatype_t*)(jt))->name->name));
                 };
-                box = emit_allocobj(ctx, (jl_datatype_t*)jt);
+                box = emit_allocobj(ctx, (jl_datatype_t*)jt, true);
                 setName(ctx.emission_context, box, arg_typename);
                 init_bits_cgval(ctx, box, vinfo, jl_is_mutable(jt) ? ctx.tbaa().tbaa_mutab : ctx.tbaa().tbaa_immut);
             }
@@ -3481,7 +3478,7 @@ static void emit_cpointercheck(jl_codectx_t &ctx, const jl_cgval_t &x, const Twi
 // allocation for known size object
 // returns a prjlvalue
 static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt,
-                             unsigned align=sizeof(void*)) // Allocations are at least pointer alingned
+                            bool fully_initialized, unsigned align)
 {
     ++EmittedAllocObjs;
     Value *current_task = get_current_task(ctx);
@@ -3489,15 +3486,19 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt,
     auto call = ctx.builder.CreateCall(F, {current_task, ConstantInt::get(ctx.types().T_size, static_size), maybe_decay_untracked(ctx, jt)});
     call->setAttributes(F->getAttributes());
     if (static_size > 0)
-        call->addRetAttr(Attribute::getWithDereferenceableBytes(ctx.builder.getContext(), static_size));
-    call->addRetAttr(Attribute::getWithAlignment(ctx.builder.getContext(), Align(align)));
+        call->addRetAttr(Attribute::getWithDereferenceableBytes(call->getContext(), static_size));
+    call->addRetAttr(Attribute::getWithAlignment(call->getContext(), Align(align)));
+#if JL_LLVM_VERSION >= 150000
+    if (fully_initialized)
+        call->addFnAttr(Attribute::get(call->getContext(), Attribute::AllocKind, uint64_t(AllocFnKind::Alloc | AllocFnKind::Uninitialized)));
+#endif
     return call;
 }
 
-static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt)
+static Value *emit_allocobj(jl_codectx_t &ctx, jl_datatype_t *jt, bool fully_initialized)
 {
     return emit_allocobj(ctx, jl_datatype_size(jt), ctx.builder.CreateIntToPtr(emit_tagfrom(ctx, jt), ctx.types().T_pjlvalue),
-                        julia_alignment((jl_value_t*)jt));
+                         fully_initialized, julia_alignment((jl_value_t*)jt));
 }
 
 // allocation for unknown object from an untracked pointer
@@ -3719,14 +3720,20 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 strct = NULL;
             }
             else if (init_as_value) {
-                if (tracked.count)
+                if (tracked.count) {
                     strct = Constant::getNullValue(lt);
-                else
+                }
+                else {
                     strct = UndefValue::get(lt);
+                    if (nargs < nf)
+                        strct = ctx.builder.CreateFreeze(strct);
+                }
             }
             else {
                 strct = emit_static_alloca(ctx, lt);
                 setName(ctx.emission_context, strct, arg_typename);
+                if (nargs < nf)
+                    promotion_point = ctx.builder.CreateStore(ctx.builder.CreateFreeze(UndefValue::get(lt)), strct);
                 if (tracked.count)
                     undef_derived_strct(ctx, strct, sty, ctx.tbaa().tbaa_stack);
             }
@@ -3896,7 +3903,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 return ret;
             }
         }
-        Value *strct = emit_allocobj(ctx, sty);
+        Value *strct = emit_allocobj(ctx, sty, nargs >= nf);
         setName(ctx.emission_context, strct, arg_typename);
         jl_cgval_t strctinfo = mark_julia_type(ctx, strct, true, ty);
         strct = decay_derived(ctx, strct);
@@ -3929,13 +3936,14 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         return strctinfo;
     }
     else {
-        // 0 fields, ghost or bitstype
+        // 0 fields, ghost or primitive type
         if (jl_datatype_nbits(sty) == 0)
             return ghostValue(ctx, sty);
+        // n.b. this is not valid IR form to construct a primitive type (use bitcast for example)
         bool isboxed;
         Type *lt = julia_type_to_llvm(ctx, ty, &isboxed);
         assert(!isboxed);
-        return mark_julia_type(ctx, UndefValue::get(lt), false, ty);
+        return mark_julia_type(ctx, ctx.builder.CreateFreeze(UndefValue::get(lt)), false, ty);
     }
 }
 

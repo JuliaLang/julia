@@ -4755,9 +4755,9 @@ f(x) = yt(x)
                             (let ((v3 (compile (cadddr e) break-labels value tail))) ;; emit else block code
                               (if val (emit-assignment val v3)))
                             (if endl (emit `(goto ,endl)))))
-                 ;; emit either catch or finally block
+                 ;; emit either catch or finally block. A combined try/catch/finally block was split into
+                 ;; separate trycatch and tryfinally blocks earlier.
                  (mark-label catch)
-                 (emit `(leave ,handler-token))
                  (if finally
                      (begin (enter-finally-block '(call (top rethrow)) #f) ;; enter block via exception
                             (mark-label endl) ;; non-exceptional control flow enters here
