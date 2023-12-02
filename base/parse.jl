@@ -36,6 +36,7 @@ julia> parse(Complex{Float64}, "3.2e-1 + 4.5im")
 ```
 """
 parse(T::Type, str; base = Int)
+parse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
 function parse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integer
     a::Int = (base <= 36 ? 10 : 36)
@@ -90,8 +91,8 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
 end
 
 # '0':'9' -> 0:9
-# 'A':'Z' -> 10:26
-# 'a':'z' -> 10:26 if base <= 36, 36:62 otherwise
+# 'A':'Z' -> 10:35
+# 'a':'z' -> 10:35 if base <= 36, 36:61 otherwise
 # input outside of that is mapped to base
 @inline function __convert_digit(_c::UInt32, base::UInt32)
     _0 = UInt32('0')
@@ -209,9 +210,11 @@ function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
     len = endpos - startpos + 1
     if sbuff isa Union{String, SubString{String}}
         p = pointer(sbuff) + startpos - 1
-        GC.@preserve sbuff begin
-            (len == 4) && (0 == _memcmp(p, "true", 4)) && (return true)
-            (len == 5) && (0 == _memcmp(p, "false", 5)) && (return false)
+        truestr = "true"
+        falsestr = "false"
+        GC.@preserve sbuff truestr falsestr begin
+            (len == 4) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, truestr), 4)) && (return true)
+            (len == 5) && (0 == memcmp(p, unsafe_convert(Ptr{UInt8}, falsestr), 5)) && (return false)
         end
     else
         (len == 4) && (SubString(sbuff, startpos:startpos+3) == "true") && (return true)
@@ -251,6 +254,7 @@ function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = noth
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s),
                                  base===nothing ? 0 : check_valid_base(base), true))
 end
+tryparse(::Type{Union{}}, slurp...; kwargs...) = error("cannot parse a value as Union{}")
 
 ## string to float functions ##
 
@@ -317,14 +321,14 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     if i₊ == i # leading ± sign
         i₊ = something(findnext(in(('+','-')), s, i₊+1), 0)
     end
-    if i₊ != 0 && s[i₊-1] in ('e','E') # exponent sign
+    if i₊ != 0 && s[prevind(s, i₊)] in ('e','E') # exponent sign
         i₊ = something(findnext(in(('+','-')), s, i₊+1), 0)
     end
 
     # find trailing im/i/j
     iᵢ = something(findprev(in(('m','i','j')), s, e), 0)
     if iᵢ > 0 && s[iᵢ] == 'm' # im
-        iᵢ -= 1
+        iᵢ = prevind(s, iᵢ)
         if s[iᵢ] != 'i'
             raise && throw(ArgumentError("expected trailing \"im\", found only \"m\""))
             return nothing
@@ -333,7 +337,7 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
 
     if i₊ == 0 # purely real or imaginary value
         if iᵢ > i && !(iᵢ == i+1 && s[i] in ('+','-')) # purely imaginary (not "±inf")
-            x = tryparse_internal(T, s, i, iᵢ-1, raise)
+            x = tryparse_internal(T, s, i, prevind(s, iᵢ), raise)
             x === nothing && return nothing
             return Complex{T}(zero(x),x)
         else # purely real
@@ -349,11 +353,11 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     # parse real part
-    re = tryparse_internal(T, s, i, i₊-1, raise)
+    re = tryparse_internal(T, s, i, prevind(s, i₊), raise)
     re === nothing && return nothing
 
     # parse imaginary part
-    im = tryparse_internal(T, s, i₊+1, iᵢ-1, raise)
+    im = tryparse_internal(T, s, i₊+1, prevind(s, iᵢ), raise)
     im === nothing && return nothing
 
     return Complex{T}(re, s[i₊]=='-' ? -im : im)

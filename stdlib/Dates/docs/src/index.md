@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/docs/src/index.md"
+```
+
 # Dates
 
 ```@meta
@@ -339,12 +343,12 @@ First the mapping is loaded into the `LOCALES` variable:
 julia> french_months = ["janvier", "février", "mars", "avril", "mai", "juin",
                         "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 
-julia> french_monts_abbrev = ["janv","févr","mars","avril","mai","juin",
+julia> french_months_abbrev = ["janv","févr","mars","avril","mai","juin",
                               "juil","août","sept","oct","nov","déc"];
 
 julia> french_days = ["lundi","mardi","mercredi","jeudi","vendredi","samedi","dimanche"];
 
-julia> Dates.LOCALES["french"] = Dates.DateLocale(french_months, french_monts_abbrev, french_days, [""]);
+julia> Dates.LOCALES["french"] = Dates.DateLocale(french_months, french_months_abbrev, french_days, [""]);
 ```
 
  The above mentioned functions can then be used to perform the queries:

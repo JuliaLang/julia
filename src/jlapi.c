@@ -15,6 +15,10 @@
 #include "julia_assert.h"
 #include "julia_internal.h"
 
+#ifdef USE_TRACY
+#include "tracy/TracyC.h"
+#endif
+
 #ifdef _OS_WINDOWS_
 #include <float.h>
 #endif
@@ -41,12 +45,12 @@ JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
             jl_set_const(jl_core_module, jl_symbol("ARGS"), (jl_value_t*)args);
             JL_GC_POP();
         }
-        assert(jl_array_len(args) == 0);
+        assert(jl_array_nrows(args) == 0);
         jl_array_grow_end(args, argc);
         int i;
         for (i = 0; i < argc; i++) {
             jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
-            jl_arrayset(args, s, i);
+            jl_array_ptr_set(args, i, s);
         }
     }
 }
@@ -165,8 +169,11 @@ JL_DLLEXPORT int jl_array_rank(jl_value_t *a)
     return jl_array_ndims(a);
 }
 
-JL_DLLEXPORT size_t jl_array_size(jl_value_t *a, int d)
+JL_DLLEXPORT size_t jl_array_size(jl_array_t *a, int d)
 {
+    // n.b this functions only use was to violate the vector abstraction, so we have to continue to emulate that
+    if (d >= jl_array_ndims(a))
+        return a->ref.mem->length;
     return jl_array_dim(a, d);
 }
 
@@ -477,6 +484,11 @@ JL_DLLEXPORT void (jl_cpu_pause)(void)
     jl_cpu_pause();
 }
 
+JL_DLLEXPORT void (jl_cpu_suspend)(void)
+{
+    jl_cpu_suspend();
+}
+
 JL_DLLEXPORT void (jl_cpu_wake)(void)
 {
     jl_cpu_wake();
@@ -644,16 +656,20 @@ static NOINLINE int true_main(int argc, char *argv[])
 
     if (start_client) {
         jl_task_t *ct = jl_current_task;
+        int ret = 1;
         JL_TRY {
             size_t last_age = ct->world_age;
             ct->world_age = jl_get_world_counter();
-            jl_apply(&start_client, 1);
+            jl_value_t *r = jl_apply(&start_client, 1);
+            if (jl_typeof(r) != (jl_value_t*)jl_int32_type)
+                jl_type_error("typeassert", (jl_value_t*)jl_int32_type, r);
+            ret = jl_unbox_int32(r);
             ct->world_age = last_age;
         }
         JL_CATCH {
             jl_no_exc_handler(jl_current_exception(), ct);
         }
-        return 0;
+        return ret;
     }
 
     // run program if specified, otherwise enter REPL
@@ -757,6 +773,11 @@ static void rr_detach_teleport(void) {
 
 JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 {
+#ifdef USE_TRACY
+    if (getenv("JULIA_WAIT_FOR_TRACY"))
+        while (!TracyCIsConnected) jl_cpu_pause(); // Wait for connection
+#endif
+
     // no-op on Windows, note that the caller must have already converted
     // from `wchar_t` to `UTF-8` already if we're running on Windows.
     uv_setup_args(argc, argv);

@@ -18,10 +18,11 @@ Number
 ```
 """
 typejoin() = Bottom
-typejoin(@nospecialize(t)) = t
-typejoin(@nospecialize(t), ts...) = (@_total_meta; typejoin(t, typejoin(ts...)))
+typejoin(@nospecialize(t)) = (@_nospecializeinfer_meta; t)
+typejoin(@nospecialize(t), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(t, typejoin(ts...)))
 function typejoin(@nospecialize(a), @nospecialize(b))
-    @_total_meta
+    @_foldable_meta
+    @_nospecializeinfer_meta
     if isa(a, TypeVar)
         return typejoin(a.ub, b)
     elseif isa(b, TypeVar)
@@ -90,9 +91,9 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    while b !== Any
+    while !(b === Any)
         if a <: b.name.wrapper
-            while a.name !== b.name
+            while !(a.name === b.name)
                 a = supertype(a)::DataType
             end
             if a.name === Type.body.name
@@ -116,9 +117,10 @@ function typejoin(@nospecialize(a), @nospecialize(b))
                 if ai === bi || (isa(ai,Type) && isa(bi,Type) && ai <: bi && bi <: ai)
                     aprimary = aprimary{ai}
                 else
+                    aprimary = aprimary::UnionAll
                     # pushfirst!(vars, aprimary.var)
                     _growbeg!(vars, 1)
-                    arrayset(false, vars, aprimary.var, 1)
+                    vars[1] = aprimary.var
                     aprimary = aprimary.body
                 end
             end
@@ -138,6 +140,7 @@ end
 #          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
 function typesplit(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
+    @_nospecializeinfer_meta
     if a <: b
         return Bottom
     end
@@ -171,7 +174,12 @@ function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
     return Union{a, b, c}::Type
 end
-_promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
+_promote_typesubtract(@nospecialize(a)) =
+    a === Any ? a :
+    a >: Union{Nothing, Missing} ? typesplit(a, Union{Nothing, Missing}) :
+    a >: Nothing ? typesplit(a, Nothing) :
+    a >: Missing ? typesplit(a, Missing) :
+    a
 
 function promote_typejoin_union(::Type{T}) where T
     if T === Union{}
@@ -233,7 +241,8 @@ function full_va_len(p::Core.SimpleVector)
 end
 
 # reduce typejoin over A[i:end]
-function tailjoin(A, i)
+function tailjoin(A::SimpleVector, i::Int)
+    @_foldable_meta
     if i > length(A)
         return unwrapva(A[end])
     end
@@ -317,6 +326,12 @@ it for new types as appropriate.
 function promote_rule end
 
 promote_rule(::Type, ::Type) = Bottom
+# Define some methods to avoid needing to enumerate unrelated possibilities when presented
+# with Type{<:T}, and return a value in general accordance with the result given by promote_type
+promote_rule(::Type{Bottom}, slurp...) = Bottom
+promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly necessary, since the next method would match unambiguously anyways
+promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
+promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
 
 promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
@@ -466,18 +481,124 @@ else
     _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
 
+function TupleOrBottom(tt...)
+    any(p -> p === Union{}, tt) && return Union{}
+    return Tuple{tt...}
+end
+
 """
     promote_op(f, argtypes...)
 
 Guess what an appropriate container eltype would be for storing results of
 `f(::argtypes...)`. The guess is in part based on type inference, so can change any time.
 
+Accordingly, return a type `R` such that `f(args...) isa R` where `args isa T`.
+
 !!! warning
     Due to its fragility, use of `promote_op` should be avoided. It is preferable to base
     the container eltype on the type of the actual elements. Only in the absence of any
     elements (for an empty result container), it may be unavoidable to call `promote_op`.
+
+The type `R` obtained from `promote_op` is merely an upper bound. There may exist a stricter
+type `S` such that `f(args...) isa S` for every `args isa T` with `S <: R` and `S != R`.
+Furthermore, the exact type `R` obtained from `promote_op` depends on various factors
+including but not limited to the exact Julia version used, packages loaded, and command line
+options. As such, when used in publicly registered packages, **it is the package authors'
+responsibility to ensure that the API guarantees provided by the package do not depend on
+the exact type `R` obtained from `promote_op`.**
+
+Additionally, the result may return overly exact types, such as `DataType`, `Type`, or
+`Union{...}`, while the desired inputs or outputs may be different from those. The internal
+`promote_typejoin_union` function may be helpful to improve the result in some of these
+cases.
+
+# Extended help
+
+## Examples
+
+The following function is an invalid use-case of `promote_op`.
+
+```julia
+\"""
+    invalid_usecase1(f, xs::AbstractArray) -> ys::Array
+
+Return an array `ys` such that `vec(ys)` is `isequal`-equivalent to
+
+    [f(xs[1]), f(xs[2]), ..., f(xs[end])]
+\"""
+function invalid_usecase1(f, xs)
+    R = promote_op(f, eltype(xs))
+    ys = similar(xs, R)
+    for i in eachindex(xs, ys)
+        ys[i] = f(xs[i])
+    end
+    return ys
+end
+```
+
+This is because the value obtained through `eltype(invalid_usecase1(f, xs))` depends on
+exactly what `promote_op` returns. It may be improved by re-computing the element type
+before returning the result.
+
+```julia
+function valid_usecase1(f, xs)
+    R = promote_typejoin_union(promote_op(f, eltype(xs)))
+    ys = similar(xs, R)
+    S = Union{}
+    for i in eachindex(xs, ys)
+        ys[i] = f(xs[i])
+        S = promote_type(S, typeof(ys[i]))
+    end
+    if S != R
+        zs = similar(xs, S)
+        copyto!(zs, ys)
+        return zs
+    end
+    return ys
+end
+```
+
+Note that using [`isconcretetype`](@ref) on the result is not enough to safely use
+`promote_op`. The following function is another invalid use-case of `promote_op`.
+
+```julia
+function invalid_usecase2(f, xs)
+    R = promote_op(f, eltype(xs))
+    if isconcretetype(R)
+        ys = similar(xs, R)
+    else
+        ys = similar(xs, Any)
+    end
+    for i in eachindex(xs, ys)
+        ys[i] = f(xs[i])
+    end
+    return ys
+end
+```
+
+This is because whether or not the caller gets `Any` element type depends on if `promote_op`
+can infer a concrete return type of the given function. A fix similar to `valid_usecase1`
+can be used.
+
+*Technically*, another possible fix for `invalid_usecase1` and `invalid_usecase2` is to
+loosen the API guarantee:
+
+>     another_valid_usecase1(f, xs::AbstractArray) -> ys::Array
+>
+> Return an array `ys` such that every element in `xs` with the same index
+> is mapped with `f`.
+>
+> The element type of `ys` is _undefined_. It must not be used with generic
+> functions whose behavior depend on the element type of `ys`.
+
+However, it is discouraged to define such unconventional API guarantees.
 """
-promote_op(f, S::Type...) = _return_type(f, Tuple{S...})
+function promote_op(f, S::Type...)
+    argT = TupleOrBottom(S...)
+    argT === Union{} && return Union{}
+    return _return_type(f, argT)
+end
+
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 

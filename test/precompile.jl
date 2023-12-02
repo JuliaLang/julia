@@ -4,6 +4,7 @@ original_depot_path = copy(Base.DEPOT_PATH)
 original_load_path = copy(Base.LOAD_PATH)
 
 using Test, Distributed, Random
+using REPL # doc lookup function
 
 Foo_module = :Foo4b3a94a1a081a8cb
 Foo2_module = :F2oo4b3a94a1a081a8cb
@@ -28,8 +29,18 @@ function precompile_test_harness(@nospecialize(f), separate::Bool)
         pushfirst!(DEPOT_PATH, load_cache_path)
         f(load_path)
     finally
-        rm(load_path, recursive=true, force=true)
-        separate && rm(load_cache_path, recursive=true, force=true)
+        try
+            rm(load_path, force=true, recursive=true)
+        catch err
+            @show err
+        end
+        if separate
+            try
+                rm(load_cache_path, force=true, recursive=true)
+            catch err
+                @show err
+            end
+        end
         filter!((≠)(load_path), LOAD_PATH)
         separate && filter!((≠)(load_cache_path), DEPOT_PATH)
     end
@@ -123,6 +134,7 @@ precompile_test_harness(false) do dir
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
+              public foo, Bar
               module Inner
                   import $FooBase_module.hash
                   using ..$Foo_module
@@ -139,6 +151,7 @@ precompile_test_harness(false) do dir
               include_dependency("foo.jl")
               include_dependency("foo.jl")
               module Bar
+                  public bar
                   include_dependency("bar.jl")
               end
               @doc "Bar module" Bar # this needs to define the META dictionary via eval
@@ -233,6 +246,9 @@ precompile_test_harness(false) do dir
               const abigint_f() = big"123"
               const abigint_x = big"124"
 
+              # issue #51111
+              abigfloat_to_f32() = Float32(big"1.5")
+
               # issue #31488
               _v31488 = Base.StringVector(2)
               resize!(_v31488, 0)
@@ -251,6 +267,30 @@ precompile_test_harness(false) do dir
 
               # check that @ccallable works from precompiled modules
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
+
+              # check that Tasks work from serialized state
+              ch1 = Channel(x -> nothing)
+              ch2 = Channel(x -> (push!(x, 2); nothing), Inf)
+
+              # check that Memory aliasing is respected
+              a_vec_int = Int[]
+              push!(a_vec_int, 1, 2)
+              a_mat_int = reshape(a_vec_int, (1, 2))
+
+              a_vec_any = Any[]
+              push!(a_vec_any, 1, 2)
+              a_mat_any = reshape(a_vec_any, (1, 2))
+
+              a_vec_union = Union{Int,Nothing}[]
+              push!(a_vec_union, 1, 2)
+              a_mat_union = reshape(a_vec_union, (1, 2))
+
+              a_vec_inline = Pair{Int,Any}[]
+              push!(a_vec_inline, 1=>2, 3=>4)
+              a_mat_inline = reshape(a_vec_inline, (1, 2))
+
+              oid_vec_int = objectid(a_vec_int)
+              oid_mat_int = objectid(a_mat_int)
           end
           """)
     # Issue #12623
@@ -284,6 +324,9 @@ precompile_test_harness(false) do dir
         @test Foo.abigint_f()::BigInt == big"123"
         @test Foo.abigint_x::BigInt + 1 == big"125"
 
+        # Issue #51111
+        @test Foo.abigfloat_to_f32() == 1.5f0
+
         @test Foo.x28297.result === missing
 
         @test Foo.d29936a === Dict
@@ -300,6 +343,41 @@ precompile_test_harness(false) do dir
         @test Foo.layout2 == Any[Ptr{Int8}(0), Ptr{Int16}(0), Ptr{Int32}(-1)]
         @test typeof.(Foo.layout2) == [Ptr{Int8}, Ptr{Int16}, Ptr{Int32}]
         @test Foo.layout3 == ["ab", "cd", "ef", "gh", "ij"]
+
+        @test !isopen(Foo.ch1)
+        @test !isopen(Foo.ch2)
+        @test !isready(Foo.ch1)
+        @test isready(Foo.ch2)
+        @test take!(Foo.ch2) === 2
+        @test !isready(Foo.ch2)
+    end
+
+    let
+        @test Foo.a_vec_int == Int[1, 2]
+        @test Foo.a_mat_int == Int[1 2]
+        Foo.a_mat_int[1, 2] = 3
+        @test Foo.a_vec_int[2] === 3
+
+        @test Foo.a_vec_any == Int[1, 2]
+        @test Foo.a_mat_any == Int[1 2]
+        Foo.a_mat_any[1, 2] = 3
+        @test Foo.a_vec_any[2] === 3
+
+        @test Foo.a_vec_union == Union{Int,Nothing}[1, 2]
+        @test Foo.a_mat_union == Union{Int,Nothing}[1 2]
+        Foo.a_mat_union[1, 2] = 3
+        @test Foo.a_vec_union[2] === 3
+        Foo.a_mat_union[1, 2] = nothing
+        @test Foo.a_vec_union[2] === nothing
+
+        @test Foo.a_vec_inline == Pair{Int,Any}[1=>2, 3=>4]
+        @test Foo.a_mat_inline == Pair{Int,Any}[1=>2 3=>4]
+        Foo.a_mat_inline[1, 2] = 5=>6
+        @test Foo.a_vec_inline[2] === Pair{Int,Any}(5, 6)
+
+        @test objectid(Foo.a_vec_int) === Foo.oid_vec_int
+        @test objectid(Foo.a_mat_int) === Foo.oid_mat_int
+        @test Foo.oid_vec_int !== Foo.oid_mat_int
     end
 
     @eval begin function ccallable_test()
@@ -318,12 +396,20 @@ precompile_test_harness(false) do dir
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachedir2 = joinpath(dir2, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachefile = joinpath(cachedir, "$Foo_module.ji")
-    # use _require_from_serialized to ensure that the test fails if
-    # the module doesn't reload from the image:
-    @test_warn "@ccallable was already defined for this method name" begin
-        @test_logs (:warn, "Replacing module `$Foo_module`") begin
-            m = Base._require_from_serialized(Base.PkgId(Foo), cachefile)
-            @test isa(m, Module)
+    do_pkgimg = Base.JLOptions().use_pkgimages == 1 && Base.JLOptions().permalloc_pkgimg == 1
+    if do_pkgimg ||  Base.JLOptions().use_pkgimages == 0
+        if do_pkgimg
+            ocachefile = Base.ocachefile_from_cachefile(cachefile)
+        else
+            ocachefile = nothing
+        end
+            # use _require_from_serialized to ensure that the test fails if
+            # the module doesn't reload from the image:
+        @test_warn "@ccallable was already defined for this method name" begin
+            @test_logs (:warn, "Replacing module `$Foo_module`") begin
+                m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile)
+                @test isa(m, Module)
+            end
         end
     end
 
@@ -343,8 +429,8 @@ precompile_test_harness(false) do dir
         @test string(Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
         @test string(Base.Docs.doc(Foo.Bar)) == "Bar module\n"
 
-        modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
-        discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
+        modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
+        discard_module = mod_fl_mt -> mod_fl_mt.filename
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
         @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
@@ -358,27 +444,33 @@ precompile_test_harness(false) do dir
         @test_throws ErrorException Base.read_dependency_src(cachefile, joinpath(dir, "foo.jl"))
 
         modules, deps1 = Base.cache_dependencies(cachefile)
-        @test Dict(modules) == merge(
+        modules_ok = merge(
             Dict(let m = Base.PkgId(s)
                     m => Base.module_build_id(Base.root_module(m))
                  end for s in
                  [ "Base", "Core", "Main",
-                   string(Foo2_module), string(FooBase_module) ]),
+                   string(Foo2_module), string(FooBase_module),]),
             # plus modules included in the system image
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
-                 end for s in
-                [:ArgTools, :Artifacts, :Base64, :CompilerSupportLibraries_jll, :CRC32c, :Dates,
-                 :Distributed, :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
-                 :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
-                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
-                 :Profile, :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
-                 :SparseArrays, :TOML, :Tar, :Test, :UUIDs, :Unicode,
-                 :nghttp2_jll]
-            ),
+                 end for s in [Symbol(x.name) for x in Base._sysimage_modules if !(x.name in ["Base", "Core", "Main"])]),
+            # plus test module,
+            Dict(Base.PkgId(Base.root_module(Base, :Test)) => Base.module_build_id(Base.root_module(Base, :Test))),
+            # plus dependencies of test module
+            Dict(Base.PkgId(Base.root_module(Base, :InteractiveUtils)) => Base.module_build_id(Base.root_module(Base, :InteractiveUtils))),
+            Dict(Base.PkgId(Base.root_module(Base, :Logging)) => Base.module_build_id(Base.root_module(Base, :Logging))),
+            Dict(Base.PkgId(Base.root_module(Base, :Random)) => Base.module_build_id(Base.root_module(Base, :Random))),
+            Dict(Base.PkgId(Base.root_module(Base, :Serialization)) => Base.module_build_id(Base.root_module(Base, :Serialization))),
+            # and their dependencies
+            Dict(Base.PkgId(Base.root_module(Base, :SHA)) => Base.module_build_id(Base.root_module(Base, :SHA))),
+            Dict(Base.PkgId(Base.root_module(Base, :Markdown)) => Base.module_build_id(Base.root_module(Base, :Markdown))),
+            # and their dependencies
+            Dict(Base.PkgId(Base.root_module(Base, :Base64)) => Base.module_build_id(Base.root_module(Base, :Base64))),
         )
+        @test Dict(modules) == modules_ok
+
         @test discard_module.(deps) == deps1
-        modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
+        modules, (_, deps, requires), required_modules, _... = Base.parse_cache_header(cachefile)
         @test map(x -> x.filename, deps) == [Foo_file]
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -441,7 +533,7 @@ precompile_test_harness(false) do dir
         """)
     Nest = Base.require(Main, Nest_module)
     cachefile = joinpath(cachedir, "$Nest_module.ji")
-    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
     @test last(deps).modpath == ["NestInner"]
 
     UsesB_module = :UsesB4b3a94a1a081a8cb
@@ -463,7 +555,7 @@ precompile_test_harness(false) do dir
         """)
     UsesB = Base.require(Main, UsesB_module)
     cachefile = joinpath(cachedir, "$UsesB_module.ji")
-    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
     id1, id2 = only(requires)
     @test Base.pkgorigins[id1].cachepath == cachefile
     @test Base.pkgorigins[id2].cachepath == joinpath(cachedir, "$B_module.ji")
@@ -471,15 +563,50 @@ precompile_test_harness(false) do dir
     Baz_file = joinpath(dir, "Baz.jl")
     write(Baz_file,
           """
-          true && __precompile__(false)
+          haskey(Base.loaded_modules, Base.PkgId("UseBaz")) || __precompile__(false)
           module Baz
           baz() = 1
           end
           """)
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
+
+    OverwriteMethodError_file = joinpath(dir, "OverwriteMethodError.jl")
+    write(OverwriteMethodError_file,
+          """
+          module OverwriteMethodError
+              Base.:(+)(x::Bool, y::Bool) = false
+          end
+          """)
+
+    @test Base.compilecache(Base.PkgId("OverwriteMethodError")) == Base.PrecompilableError() # due to piracy
+
+    UseBaz_file = joinpath(dir, "UseBaz.jl")
+    write(UseBaz_file,
+          """
+          module UseBaz
+          biz() = 1
+          @assert haskey(Base.loaded_modules, Base.PkgId("UseBaz"))
+          @assert !haskey(Base.loaded_modules, Base.PkgId("Baz"))
+          using Baz
+          @assert haskey(Base.loaded_modules, Base.PkgId("Baz"))
+          buz() = 2
+          const generating = ccall(:jl_generating_output, Cint, ())
+          const incremental = Base.JLOptions().incremental
+          end
+          """)
+
+    @test Base.compilecache(Base.PkgId("UseBaz")) == Base.PrecompilableError() # due to __precompile__(false)
+    @eval using UseBaz
+    @test haskey(Base.loaded_modules, Base.PkgId("UseBaz"))
+    @test haskey(Base.loaded_modules, Base.PkgId("Baz"))
+    @test Base.invokelatest(UseBaz.biz) === 1
+    @test Base.invokelatest(UseBaz.buz) === 2
+    @test UseBaz.generating == 0
+    @test UseBaz.incremental == 0
     @eval using Baz
-    @test Base.invokelatest(Baz.baz) == 1
+    @test Base.invokelatest(Baz.baz) === 1
+    @test Baz === UseBaz.Baz
 
     # Issue #12720
     FooBar1_file = joinpath(dir, "FooBar1.jl")
@@ -497,30 +624,31 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    cachefile = Base.compilecache(Base.PkgId("FooBar"))
+    cachefile, _ = Base.compilecache(Base.PkgId("FooBar"))
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
+    Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String} : Tuple{<:Vector, Nothing}
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Vector : Bool) # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Tuple{<:Vector, String} : Bool) # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
-    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
+    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
 
     @eval using FooBar
     fb_uuid = Base.module_build_id(FooBar)
     sleep(2); touch(FooBar_file)
     insert!(DEPOT_PATH, 1, dir2)
-    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @eval using FooBar1
     @test !isfile(joinpath(cachedir2, "FooBar.ji"))
     @test !isfile(joinpath(cachedir, "FooBar1.ji"))
     @test isfile(joinpath(cachedir2, "FooBar1.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
-    @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Vector
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
+    @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Tsc
     @test fb_uuid == Base.module_build_id(FooBar)
     fb_uuid1 = Base.module_build_id(FooBar1)
     @test fb_uuid != fb_uuid1
@@ -552,7 +680,11 @@ precompile_test_harness(false) do dir
     FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
     write(FooBar3_inc, "x=1\n")
     for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
-        write(FooBar3_file, code)
+        write(FooBar3_file, """
+        module FooBar3
+        $code
+        end
+        """)
         @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
                 Base.require(Main, :FooBar3)
             catch exc
@@ -624,7 +756,10 @@ precompile_test_harness("code caching") do dir
               precompile(getelsize, (Vector{Int32},))
           end
           """)
-    Base.compilecache(Base.PkgId(string(Cache_module)))
+    pkgid = Base.PkgId(string(Cache_module))
+    @test !Base.isprecompiled(pkgid)
+    Base.compilecache(pkgid)
+    @test Base.isprecompiled(pkgid)
     @eval using $Cache_module
     M = getfield(@__MODULE__, Cache_module)
     # Test that this cache file "owns" all the roots
@@ -635,13 +770,13 @@ precompile_test_harness("code caching") do dir
         @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
     end
     # Check that we can cache external CodeInstances:
-    # size(::Vector) has an inferred specialization for Vector{X}
-    msize = which(size, (Vector{<:Any},))
+    # length(::Vector) has an inferred specialization for `Vector{X}`
+    msize = which(length, (Vector{<:Any},))
     hasspec = false
-    for i = 1:length(msize.specializations)
-        mi = msize.specializations[i]
-        if isa(mi, Core.MethodInstance) && mi.specTypes == Tuple{typeof(size),Vector{Cacheb8321416e8a3e2f1.X}}
-            if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing
+    for mi in Base.specializations(msize)
+        if mi.specTypes == Tuple{typeof(length),Vector{Cacheb8321416e8a3e2f1.X}}
+            if (isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) &&
+                mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing)
                 hasspec = true
                 break
             end
@@ -650,19 +785,19 @@ precompile_test_harness("code caching") do dir
     @test hasspec
     # Test that compilation adds to method roots with appropriate provenance
     m = which(setindex!, (Dict{M.X,Any}, Any, M.X))
-    @test M.X ∈ m.roots
+    @test Memory{M.X} ∈ m.roots
     # Check that roots added outside of incremental builds get attributed to a moduleid of 0
     Base.invokelatest() do
         Dict{M.X2,Any}()[M.X2()] = nothing
     end
-    @test M.X2 ∈ m.roots
+    @test Memory{M.X2} ∈ m.roots
     groups = group_roots(m)
-    @test M.X ∈ groups[Mid]           # attributed to M
-    @test M.X2 ∈ groups[0]            # activate module is not known
+    @test Memory{M.X} ∈ groups[Mid]           # attributed to M
+    @test Memory{M.X2} ∈ groups[0]            # activate module is not known
     @test !isempty(groups[Bid])
     # Check that internal methods and their roots are accounted appropriately
     minternal = which(M.getelsize, (Vector,))
-    mi = minternal.specializations[1]
+    mi = minternal.specializations::Core.MethodInstance
     @test mi.specTypes == Tuple{typeof(M.getelsize),Vector{Int32}}
     ci = mi.cache
     @test ci.relocatability == 1
@@ -671,7 +806,9 @@ precompile_test_harness("code caching") do dir
     Base.invokelatest() do
         M.getelsize(M.X2[])
     end
-    mi = minternal.specializations[2]
+    mispecs = minternal.specializations::Core.SimpleVector
+    @test mispecs[1] === mi
+    mi = mispecs[2]::Core.MethodInstance
     ci = mi.cache
     @test ci.relocatability == 0
     # PkgA loads PkgB, and both add roots to the same `push!` method (both before and after loading B)
@@ -706,10 +843,10 @@ precompile_test_harness("code caching") do dir
     end
     mT = which(push!, (Vector{T} where T, Any))
     groups = group_roots(mT)
-    @test M2.Y ∈ groups[M2id]
-    @test M2.Z ∈ groups[M2id]
-    @test M.X ∈ groups[Mid]
-    @test M.X ∉ groups[M2id]
+    @test Memory{M2.Y} ∈ groups[M2id]
+    @test Memory{M2.Z} ∈ groups[M2id]
+    @test Memory{M.X} ∈ groups[Mid]
+    @test Memory{M.X} ∉ groups[M2id]
     # backedges of external MethodInstances
     # Root gets used by RootA and RootB, and both consumers end up inferring the same MethodInstance from Root
     # Do both callers get listed as backedges?
@@ -756,8 +893,9 @@ precompile_test_harness("code caching") do dir
     MB = getfield(@__MODULE__, RootB)
     M = getfield(MA, RootModule)
     m = which(M.f, (Any,))
-    for mi in m.specializations
+    for mi in Base.specializations(m)
         mi === nothing && continue
+        mi = mi::Core.MethodInstance
         if mi.specTypes.parameters[2] === Int8
             # external callers
             mods = Module[]
@@ -827,9 +965,13 @@ precompile_test_harness("code caching") do dir
 
         # This will be invalidated if StaleC is loaded
         useA() = $StaleA.stale("hello")
+        useA2() = useA()
 
         # force precompilation
-        useA()
+        begin
+            Base.Experimental.@force_compile
+            useA2()
+        end
 
         ## Reporting tests
         call_nbits(x::Integer) = $StaleA.nbits(x)
@@ -867,12 +1009,13 @@ precompile_test_harness("code caching") do dir
     MC = getfield(@__MODULE__, StaleC)
     world = Base.get_world_counter()
     m = only(methods(MA.use_stale))
-    mi = m.specializations[1]
+    mi = m.specializations::Core.MethodInstance
     @test hasvalid(mi, world)   # it was re-inferred by StaleC
     m = only(methods(MA.build_stale))
-    mis = filter(!isnothing, collect(m.specializations))
+    mis = filter(!isnothing, collect(m.specializations::Core.SimpleVector))
     @test length(mis) == 2
     for mi in mis
+        mi = mi::Core.MethodInstance
         if mi.specTypes.parameters[2] == Int
             @test mi.cache.max_world < world
         else
@@ -882,17 +1025,16 @@ precompile_test_harness("code caching") do dir
         end
     end
     m = only(methods(MB.useA))
-    mi = m.specializations[1]
+    mi = m.specializations::Core.MethodInstance
     @test !hasvalid(mi, world)      # invalidated by the stale(x::String) method in StaleC
     m = only(methods(MC.call_buildstale))
-    mi = m.specializations[1]
+    mi = m.specializations::Core.MethodInstance
     @test hasvalid(mi, world)       # was compiled with the new method
 
-    # Reporting test
+    # Reporting test (ensure SnoopCompile works)
     @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
     m = only(methods(MB.call_nbits))
-    for mi in m.specializations
-        mi === nothing && continue
+    for mi in Base.specializations(m)
         hv = hasvalid(mi, world)
         @test mi.specTypes.parameters[end] === Integer ? !hv : hv
     end
@@ -910,9 +1052,13 @@ precompile_test_harness("code caching") do dir
     @test invalidations[j-1] == "insert_backedges_callee"
     @test isa(invalidations[j-2], Type)
     @test isa(invalidations[j+1], Vector{Any}) # [nbits(::UInt8)]
+    m = only(methods(MB.useA2))
+    mi = only(Base.specializations(m))
+    @test !hasvalid(mi, world)
+    @test mi ∈ invalidations
 
     m = only(methods(MB.map_nbits))
-    @test !hasvalid(m.specializations[1], world+1) # insert_backedges invalidations also trigger their backedges
+    @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
 end
 
 precompile_test_harness("invoke") do dir
@@ -1038,7 +1184,7 @@ precompile_test_harness("invoke") do dir
 
     for func in (M.f, M.g, M.internal, M.fnc, M.gnc, M.internalnc)
         m = get_method_for_type(func, Real)
-        mi = m.specializations[1]
+        mi = m.specializations::Core.MethodInstance
         @test length(mi.backedges) == 2
         @test mi.backedges[1] === Tuple{typeof(func), Real}
         @test isa(mi.backedges[2], Core.MethodInstance)
@@ -1046,7 +1192,7 @@ precompile_test_harness("invoke") do dir
     end
     for func in (M.q, M.qnc)
         m = get_method_for_type(func, Integer)
-        mi = m.specializations[1]
+        mi = m.specializations::Core.MethodInstance
         @test length(mi.backedges) == 2
         @test mi.backedges[1] === Tuple{typeof(func), Integer}
         @test isa(mi.backedges[2], Core.MethodInstance)
@@ -1054,31 +1200,31 @@ precompile_test_harness("invoke") do dir
     end
 
     m = get_method_for_type(M.h, Real)
-    @test isempty(m.specializations)
+    @test isempty(Base.specializations(m))
     m = get_method_for_type(M.hnc, Real)
-    @test isempty(m.specializations)
+    @test isempty(Base.specializations(m))
     m = only(methods(M.callq))
-    @test isempty(m.specializations) || nvalid(m.specializations[1]) == 0
+    @test isempty(Base.specializations(m)) || nvalid(m.specializations::Core.MethodInstance) == 0
     m = only(methods(M.callqnc))
-    @test isempty(m.specializations) || nvalid(m.specializations[1]) == 0
+    @test isempty(Base.specializations(m)) || nvalid(m.specializations::Core.MethodInstance) == 0
     m = only(methods(M.callqi))
-    @test m.specializations[1].specTypes == Tuple{typeof(M.callqi), Int}
+    @test (m.specializations::Core.MethodInstance).specTypes == Tuple{typeof(M.callqi), Int}
     m = only(methods(M.callqnci))
-    @test m.specializations[1].specTypes == Tuple{typeof(M.callqnci), Int}
+    @test (m.specializations::Core.MethodInstance).specTypes == Tuple{typeof(M.callqnci), Int}
 
     m = only(methods(M.g44320))
-    @test m.specializations[1].cache.max_world == typemax(UInt)
+    @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)
 
     m = which(MI.getlast, (Any,))
-    @test m.specializations[1].cache.max_world == typemax(UInt)
+    @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)
 
     # Precompile specific methods for arbitrary arg types
     invokeme(x) = 1
     invokeme(::Int) = 2
     m_any, m_int = sort(collect(methods(invokeme)); by=m->(m.file,m.line))
     @test precompile(invokeme, (Int,), m_any)
-    @test m_any.specializations[1].specTypes === Tuple{typeof(invokeme), Int}
-    @test isempty(m_int.specializations)
+    @test (m_any.specializations::Core.MethodInstance).specTypes === Tuple{typeof(invokeme), Int}
+    @test isempty(Base.specializations(m_int))
 end
 
 # test --compiled-modules=no command line option
@@ -1260,7 +1406,11 @@ end
         end
     finally
         cd(save_cwd)
-        rm(temp_path, recursive=true)
+        try
+            rm(temp_path, recursive=true)
+        catch err
+            @show err
+        end
         pop!(test_workers) # remove myid
         rmprocs(test_workers)
     end
@@ -1400,13 +1550,13 @@ precompile_test_harness("Issue #25971") do load_path
     sourcefile = joinpath(load_path, "Foo25971.jl")
     write(sourcefile, "module Foo25971 end")
     chmod(sourcefile, 0o666)
-    cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     @test filemode(sourcefile) == filemode(cachefile)
     chmod(sourcefile, 0o600)
-    cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     @test filemode(sourcefile) == filemode(cachefile)
     chmod(sourcefile, 0o444)
-    cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     # Check writable
     @test touch(cachefile) == cachefile
 end
@@ -1479,10 +1629,10 @@ precompile_test_harness("No external edges") do load_path
     Base.compilecache(Base.PkgId("NoExternalEdges"))
     @eval begin
         using NoExternalEdges
-        @test only(methods(NoExternalEdges.foo1)).specializations[1].cache.max_world != 0
-        @test only(methods(NoExternalEdges.foo2)).specializations[1].cache.max_world != 0
-        @test only(methods(NoExternalEdges.foo3)).specializations[1].cache.max_world != 0
-        @test only(methods(NoExternalEdges.foo4)).specializations[1].cache.max_world != 0
+        @test (only(methods(NoExternalEdges.foo1)).specializations::Core.MethodInstance).cache.max_world != 0
+        @test (only(methods(NoExternalEdges.foo2)).specializations::Core.MethodInstance).cache.max_world != 0
+        @test (only(methods(NoExternalEdges.foo3)).specializations::Core.MethodInstance).cache.max_world != 0
+        @test (only(methods(NoExternalEdges.foo4)).specializations::Core.MethodInstance).cache.max_world != 0
     end
 end
 
@@ -1496,7 +1646,7 @@ end
     @test precompile(M.f, (Int, Any))
     @test precompile(M.f, (AbstractFloat, Any))
     mis = map(methods(M.f)) do m
-        m.specializations[1]
+        m.specializations::Core.MethodInstance
     end
     @test any(mi -> mi.specTypes.parameters[2] === Any, mis)
     @test all(mi -> isa(mi.cache, Core.CodeInstance), mis)
@@ -1543,8 +1693,8 @@ precompile_test_harness("issue #46296") do load_path
         """
         module CodeInstancePrecompile
 
-        mi = first(methods(identity)).specializations[1]
-        ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
+        mi = first(Base.specializations(first(methods(identity))))
+        ci = Core.CodeInstance(mi, Any, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
         __init__() = @assert ci isa Core.CodeInstance
@@ -1577,7 +1727,7 @@ end
     f46778(::Any, ::Type{Int}) = 1
     f46778(::Any, ::DataType) = 2
     @test precompile(Tuple{typeof(f46778), Int, DataType})
-    @test which(f46778, Tuple{Any,DataType}).specializations[1].cache.invoke != C_NULL
+    @test (which(f46778, Tuple{Any,DataType}).specializations::Core.MethodInstance).cache.invoke != C_NULL
 end
 
 
@@ -1595,6 +1745,175 @@ precompile_test_harness("Module tparams") do load_path
     Base.compilecache(Base.PkgId("ModuleTparams"))
     (@eval (using ModuleTparams))
     @test ModuleTparams.the_struct === Base.invokelatest(ModuleTparams.ParamStruct{ModuleTparams.TheTParam})
+end
+
+precompile_test_harness("PkgCacheInspector") do load_path
+    # Test functionality needed by PkgCacheInspector.jl
+    write(joinpath(load_path, "PCI.jl"),
+        """
+        module PCI
+        Base.repl_cmd() = 55            # external method
+        f() = Base.repl_cmd(7, "hello")   # external specialization (should never exist otherwise)
+        try
+            f()
+        catch
+        end
+        end
+        """)
+    cachefile, ocachefile = Base.compilecache(Base.PkgId("PCI"))
+
+    # Get the depmods
+    local depmods
+    @lock Base.require_lock begin
+        local depmodnames
+        io = open(cachefile, "r")
+        try
+            # isvalid_cache_header returns checksum id or zero
+            Base.isvalid_cache_header(io) == 0 && throw(ArgumentError("Invalid header in cache file $cachefile."))
+            depmodnames = Base.parse_cache_header(io, cachefile)[3]
+            Base.isvalid_file_crc(io) || throw(ArgumentError("Invalid checksum in cache file $cachefile."))
+        finally
+            close(io)
+        end
+        ndeps = length(depmodnames)
+        depmods = Vector{Any}(undef, ndeps)
+        for i in 1:ndeps
+            modkey, build_id = depmodnames[i]
+            dep = Base._tryrequire_from_serialized(modkey, build_id)
+            if !isa(dep, Module)
+                return dep
+            end
+            depmods[i] = dep
+        end
+    end
+
+    if ocachefile !== nothing
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachefile, depmods, true, "PCI", false)
+    else
+        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
+    end
+
+    modules, init_order, external_methods, new_specializations, new_method_roots, external_targets, edges = sv
+    m = only(external_methods)
+    @test m.name == :repl_cmd && m.nargs < 2
+    @test any(new_specializations) do ci
+        mi = ci.def
+        mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
+    end
+end
+
+precompile_test_harness("DynamicExpressions") do load_path
+    # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
+    write(joinpath(load_path, "Float16MWE.jl"),
+        """
+        module Float16MWE
+        struct Node{T}
+            val::T
+        end
+        doconvert(::Type{<:Node}, val) = convert(Float16, val)
+        precompile(Tuple{typeof(doconvert), Type{Node{Float16}}, Float64})
+        end # module Float16MWE
+        """)
+    Base.compilecache(Base.PkgId("Float16MWE"))
+    @eval using Float16MWE
+    @test @invokelatest(Float16MWE.doconvert(Float16MWE.Node{Float16}, -1.2)) === Float16(-1.2)
+end
+
+precompile_test_harness("BadInvalidations") do load_path
+    write(joinpath(load_path, "BadInvalidations.jl"),
+        """
+        module BadInvalidations
+        Base.Experimental.@compiler_options compile=min optimize=1
+        getval() = Base.a_method_to_overwrite_in_test()
+        getval()
+        end # module BadInvalidations
+        """)
+    Base.compilecache(Base.PkgId("BadInvalidations"))
+    @eval Base a_method_to_overwrite_in_test() = inferencebarrier(2)
+    @eval using BadInvalidations
+    @test Base.invokelatest(BadInvalidations.getval) === 2
+end
+
+# https://github.com/JuliaLang/julia/issues/48074
+precompile_test_harness("WindowsCacheOverwrite") do load_path
+    # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
+    write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
+        """
+        module WindowsCacheOverwrite
+        end # module
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
+    @eval using WindowsCacheOverwrite
+
+    write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
+        """
+        module WindowsCacheOverwrite
+        f() = "something new"
+        end # module
+        """)
+
+    ji_2, ofile_2 = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
+    @test ofile_2 == Base.ocachefile_from_cachefile(ji_2)
+end
+
+precompile_test_harness("Issue #48391") do load_path
+    write(joinpath(load_path, "I48391.jl"),
+        """
+        module I48391
+        struct SurrealFinite <: Real end
+        precompile(Tuple{typeof(Base.isless), SurrealFinite, SurrealFinite})
+        Base.:(<)(x::SurrealFinite, y::SurrealFinite) = "good"
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("I48391"))
+    @eval using I48391
+    x = Base.invokelatest(I48391.SurrealFinite)
+    @test Base.invokelatest(isless, x, x) === "good"
+    @test_throws ErrorException isless(x, x)
+end
+
+precompile_test_harness("Generator nospecialize") do load_path
+    write(joinpath(load_path, "GenNoSpec.jl"),
+        """
+        module GenNoSpec
+        @generated function f(x...)
+            :((\$(Base.Meta.quot(x)),))
+        end
+        @assert precompile(Tuple{typeof(which(f, (Any,Any)).generator.gen), Any, Any})
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("GenNoSpec"))
+    @eval using GenNoSpec
+end
+
+precompile_test_harness("Issue #50538") do load_path
+    write(joinpath(load_path, "I50538.jl"),
+        """
+        module I50538
+        const newglobal = try
+            Base.newglobal = false
+        catch ex
+            ex isa ErrorException || rethrow()
+            ex
+        end
+        const newtype = try
+            Core.set_binding_type!(Base, :newglobal)
+        catch ex
+            ex isa ErrorException || rethrow()
+            ex
+        end
+        global undefglobal
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("I50538"))
+    @eval using I50538
+    @test I50538.newglobal.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
+    @test I50538.newtype.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
+    @test_throws(ErrorException("cannot set type for global I50538.undefglobal. It already has a value or is already set to a different type."),
+                 Core.set_binding_type!(I50538, :undefglobal, Int))
+    Core.set_binding_type!(I50538, :undefglobal, Any)
+    @test Core.get_binding_type(I50538, :undefglobal) === Any
+    @test !isdefined(I50538, :undefglobal)
 end
 
 empty!(Base.DEPOT_PATH)

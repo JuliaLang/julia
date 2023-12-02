@@ -144,8 +144,8 @@ baremodule B
     x = 1
     module M; x = 2; end
     import Base
-    @Base.eval x = 3
-    @Base.eval M x = 4
+    Base.@eval x = 3
+    Base.@eval M x = 4
 end
 @test B.x == 3
 @test B.M.x == 4
@@ -221,8 +221,25 @@ let a = 1
     @test @macroexpand @is_dollar_expr $a
 end
 
-@test Meta.parseatom("@foo", 1, filename=:bar)[1].args[2].file === :bar
-@test Meta.parseall("@foo", filename=:bar).args[1].file === :bar
+let ex = Meta.parse("@foo"; filename=:bar)
+    @test Meta.isexpr(ex, :macrocall)
+    arg2 = ex.args[2]
+    @test isa(arg2, LineNumberNode) && arg2.file === :bar
+end
+let ex = Meta.parseatom("@foo", 1, filename=:bar)[1]
+    @test Meta.isexpr(ex, :macrocall)
+    arg2 = ex.args[2]
+    @test isa(arg2, LineNumberNode) && arg2.file === :bar
+end
+let ex = Meta.parseall("@foo", filename=:bar)
+    @test Meta.isexpr(ex, :toplevel)
+    arg1 = ex.args[1]
+    @test isa(arg1, LineNumberNode) && arg1.file === :bar
+    arg2 = ex.args[2]
+    @test Meta.isexpr(arg2, :macrocall)
+    arg2arg2 = arg2.args[2]
+    @test isa(arg2arg2, LineNumberNode) && arg2arg2.file === :bar
+end
 
 _lower(m::Module, ex, world::UInt) = ccall(:jl_expand_in_world, Any, (Any, Ref{Module}, Cstring, Cint, Csize_t), ex, m, "none", 0, world)
 
@@ -237,14 +254,14 @@ end
 f(::T) where {T} = T
 ci = code_lowered(f, Tuple{Int})[1]
 @test Meta.partially_inline!(ci.code, [], Tuple{typeof(f),Int}, Any[Int], 0, 0, :propagate) ==
-    Any[Core.ReturnNode(QuoteNode(Int))]
+    Any[QuoteNode(Int), Core.ReturnNode(Core.SSAValue(1))]
 
 g(::Val{x}) where {x} = x ? 1 : 0
 ci = code_lowered(g, Tuple{Val{true}})[1]
-@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 0, :propagate)[1] ==
-   Core.GotoIfNot(QuoteNode(true), 3)
-@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 2, :propagate)[1] ==
-   Core.GotoIfNot(QuoteNode(true), 5)
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 0, :propagate)[2] ==
+   Core.GotoIfNot(Core.SSAValue(1), 4)
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 2, :propagate)[2] ==
+   Core.GotoIfNot(Core.SSAValue(3), 6)
 
 @testset "inlining with isdefined" begin
     isdefined_slot(x) = @isdefined(x)

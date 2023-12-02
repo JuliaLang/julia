@@ -136,7 +136,7 @@ function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
-            M[i,j] = zero(M[i,j])
+            @inbounds M[i,j] = zero(M[i,j])
         end
     end
     M
@@ -875,7 +875,9 @@ julia> sqrt(A)
 sqrt(::AbstractMatrix)
 
 function sqrt(A::AbstractMatrix{T}) where {T<:Union{Real,Complex}}
-    if ishermitian(A)
+    if checksquare(A) == 0
+        return copy(A)
+    elseif ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
         return ishermitian(sqrtHermA) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
     elseif istriu(A)
@@ -907,14 +909,12 @@ sqrt(A::TransposeAbsMat) = transpose(sqrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
-    S = typeof((oneunit(T)*zero(T) + oneunit(T)*zero(T))/oneunit(T))
-    AA = convert(AbstractArray{S}, A)
-    if istriu(AA)
-        Ai = triu!(parent(inv(UpperTriangular(AA))))
-    elseif istril(AA)
-        Ai = tril!(parent(inv(LowerTriangular(AA))))
+    if istriu(A)
+        Ai = triu!(parent(inv(UpperTriangular(A))))
+    elseif istril(A)
+        Ai = tril!(parent(inv(LowerTriangular(A))))
     else
-        Ai = inv!(lu(AA))
+        Ai = inv!(lu(A))
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai
@@ -1483,10 +1483,10 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
         return B
     end
     SVD         = svd(A)
-    tol         = max(rtol*maximum(SVD.S), atol)
+    tol2        = max(rtol*maximum(SVD.S), atol)
     Stype       = eltype(SVD.S)
     Sinv        = fill!(similar(A, Stype, length(SVD.S)), 0)
-    index       = SVD.S .> tol
+    index       = SVD.S .> tol2
     Sinv[index] .= pinv.(view(SVD.S, index))
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end

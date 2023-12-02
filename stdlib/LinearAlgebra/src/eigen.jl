@@ -173,7 +173,8 @@ function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     ishermitian(A) && return eigen!(Hermitian(A), sortby=sortby)
-    eval, evec = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]
+    E = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
+    eval, evec = E[2], E[4]
     return Eigen(sorteig!(eval, evec, sortby)...)
 end
 
@@ -182,7 +183,9 @@ end
 
 Compute the eigenvalue decomposition of `A`, returning an [`Eigen`](@ref) factorization object `F`
 which contains the eigenvalues in `F.values` and the eigenvectors in the columns of the
-matrix `F.vectors`. (The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
+matrix `F.vectors`. This corresponds to solving an eigenvalue problem of the form
+`Ax =  λx`, where `A` is a matrix, `x` is an eigenvector, and `λ` is an eigenvalue.
+(The `k`th eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
 
@@ -440,7 +443,11 @@ det(A::Eigen) = prod(A.values)
 function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
     issymmetric(A) && isposdef(B) && return eigen!(Symmetric(A), Symmetric(B), sortby=sortby)
     n = size(A, 1)
-    alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
+    if LAPACK.version() < v"3.6.0"
+        alphar, alphai, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
+    else
+        alphar, alphai, beta, _, vr = LAPACK.ggev3!('N', 'V', A, B)
+    end
     iszero(alphai) && return GeneralizedEigen(sorteig!(alphar ./ beta, vr, sortby)...)
 
     vecs = zeros(Complex{T}, n, n)
@@ -462,7 +469,11 @@ end
 
 function eigen!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasComplex
     ishermitian(A) && isposdef(B) && return eigen!(Hermitian(A), Hermitian(B), sortby=sortby)
-    alpha, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
+    if LAPACK.version() < v"3.6.0"
+        alpha, beta, _, vr = LAPACK.ggev!('N', 'V', A, B)
+    else
+        alpha, beta, _, vr = LAPACK.ggev3!('N', 'V', A, B)
+    end
     return GeneralizedEigen(sorteig!(alpha./beta, vr, sortby)...)
 end
 
@@ -472,6 +483,8 @@ end
 Compute the generalized eigenvalue decomposition of `A` and `B`, returning a
 [`GeneralizedEigen`](@ref) factorization object `F` which contains the generalized eigenvalues in
 `F.values` and the generalized eigenvectors in the columns of the matrix `F.vectors`.
+This corresponds to solving a generalized eigenvalue problem of the form
+`Ax =  λBx`, where `A, B` are matrices, `x` is an eigenvector, and `λ` is an eigenvalue.
 (The `k`th generalized eigenvector can be obtained from the slice `F.vectors[:, k]`.)
 
 Iterating the decomposition produces the components `F.values` and `F.vectors`.
@@ -512,7 +525,7 @@ true
 """
 function eigen(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    eigen!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+    eigen!(copy_similar(A, S), copy_similar(B, S); kws...)
 end
 eigen(A::Number, B::Number) = eigen(fill(A,1,1), fill(B,1,1))
 
@@ -565,12 +578,20 @@ julia> B
 """
 function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasReal
     issymmetric(A) && isposdef(B) && return sorteig!(eigvals!(Symmetric(A), Symmetric(B)), sortby)
-    alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
+    if LAPACK.version() < v"3.6.0"
+        alphar, alphai, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
+    else
+        alphar, alphai, beta, vl, vr = LAPACK.ggev3!('N', 'N', A, B)
+    end
     return sorteig!((iszero(alphai) ? alphar : complex.(alphar, alphai))./beta, sortby)
 end
 function eigvals!(A::StridedMatrix{T}, B::StridedMatrix{T}; sortby::Union{Function,Nothing}=eigsortby) where T<:BlasComplex
     ishermitian(A) && isposdef(B) && return sorteig!(eigvals!(Hermitian(A), Hermitian(B)), sortby)
-    alpha, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
+    if LAPACK.version() < v"3.6.0"
+        alpha, beta, vl, vr = LAPACK.ggev!('N', 'N', A, B)
+    else
+        alpha, beta, vl, vr = LAPACK.ggev3!('N', 'N', A, B)
+    end
     return sorteig!(alpha./beta, sortby)
 end
 
@@ -599,7 +620,7 @@ julia> eigvals(A,B)
 """
 function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    return eigvals!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
+    return eigvals!(copy_similar(A, S), copy_similar(B, S); kws...)
 end
 
 """

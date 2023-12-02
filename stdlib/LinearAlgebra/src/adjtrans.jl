@@ -1,8 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @propagate_inbounds
-import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
-
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
 
 # note that Adjoint and Transpose must be able to wrap not only vectors and matrices
@@ -12,7 +9,7 @@ import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, c
     Adjoint
 
 Lazy wrapper type for an adjoint view of the underlying linear algebra object,
-usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+usually an `AbstractVector`/`AbstractMatrix`.
 Usually, the `Adjoint` constructor should not be called directly, use [`adjoint`](@ref)
 instead. To materialize the view use [`copy`](@ref).
 
@@ -39,7 +36,7 @@ end
     Transpose
 
 Lazy wrapper type for a transpose view of the underlying linear algebra object,
-usually an `AbstractVector`/`AbstractMatrix`, but also some `Factorization`, for instance.
+usually an `AbstractVector`/`AbstractMatrix`.
 Usually, the `Transpose` constructor should not be called directly, use [`transpose`](@ref)
 instead. To materialize the view use [`copy`](@ref).
 
@@ -66,6 +63,30 @@ end
 # basic outer constructors
 Adjoint(A) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
 Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
+
+"""
+    inplace_adj_or_trans(::AbstractArray) -> adjoint!|transpose!|copyto!
+    inplace_adj_or_trans(::Type{<:AbstractArray}) -> adjoint!|transpose!|copyto!
+
+Return [`adjoint!`](@ref) from an `Adjoint` type or object and
+[`transpose!`](@ref) from a `Transpose` type or object. Otherwise,
+return [`copyto!`](@ref). Note that `Adjoint` and `Transpose` have
+to be the outer-most wrapper object for a non-`identity` function to be
+returned.
+"""
+inplace_adj_or_trans(::T) where {T <: AbstractArray} = inplace_adj_or_trans(T)
+inplace_adj_or_trans(::Type{<:AbstractArray}) = copyto!
+inplace_adj_or_trans(::Type{<:Adjoint}) = adjoint!
+inplace_adj_or_trans(::Type{<:Transpose}) = transpose!
+
+# unwraps Adjoint, Transpose, Symmetric, Hermitian
+_unwrap(A::Adjoint)   = parent(A)
+_unwrap(A::Transpose) = parent(A)
+
+# unwraps Adjoint and Transpose only
+_unwrap_at(A) = A
+_unwrap_at(A::Adjoint)   = parent(A)
+_unwrap_at(A::Transpose) = parent(A)
 
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
 Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))
@@ -260,6 +281,11 @@ adjoint(A::Adjoint) = A.parent
 transpose(A::Transpose) = A.parent
 adjoint(A::Transpose{<:Real}) = A.parent
 transpose(A::Adjoint{<:Real}) = A.parent
+adjoint(A::Transpose{<:Any,<:Adjoint}) = transpose(A.parent.parent)
+transpose(A::Adjoint{<:Any,<:Transpose}) = adjoint(A.parent.parent)
+# disambiguation
+adjoint(A::Transpose{<:Real,<:Adjoint}) = transpose(A.parent.parent)
+transpose(A::Adjoint{<:Real,<:Transpose}) = A.parent
 
 # printing
 function Base.showarg(io::IO, v::Adjoint, toplevel)
@@ -291,6 +317,9 @@ wrapperop(_) = identity
 wrapperop(::Adjoint) = adjoint
 wrapperop(::Transpose) = transpose
 
+# the following fallbacks can be removed if Adjoint/Transpose are restricted to AbstractVecOrMat
+size(A::AdjOrTrans) = reverse(size(A.parent))
+axes(A::AdjOrTrans) = reverse(axes(A.parent))
 # AbstractArray interface, basic definitions
 length(A::AdjOrTrans) = length(A.parent)
 size(v::AdjOrTransAbsVec) = (1, length(v.parent))
@@ -299,6 +328,8 @@ axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
+@propagate_inbounds Base.isassigned(v::AdjOrTransAbsVec, i::Int) = isassigned(v.parent, i-1+first(axes(v.parent)[1]))
+@propagate_inbounds Base.isassigned(v::AdjOrTransAbsMat, i::Int, j::Int) = isassigned(v.parent, j, i)
 @propagate_inbounds getindex(v::AdjOrTransAbsVec{T}, i::Int) where {T} = wrapperop(v)(v.parent[i-1+first(axes(v.parent)[1])])::T
 @propagate_inbounds getindex(A::AdjOrTransAbsMat{T}, i::Int, j::Int) where {T} = wrapperop(A)(A.parent[j, i])::T
 @propagate_inbounds setindex!(v::AdjOrTransAbsVec, x, i::Int) = (setindex!(v.parent, wrapperop(v)(x), i-1+first(axes(v.parent)[1])); v)
@@ -318,8 +349,8 @@ Base.strides(A::Transpose{<:Any, <:AbstractVector}) = (stride(A.parent, 2), stri
 Base.strides(A::Adjoint{<:Real, <:AbstractMatrix}) = reverse(strides(A.parent))
 Base.strides(A::Transpose{<:Any, <:AbstractMatrix}) = reverse(strides(A.parent))
 
-Base.unsafe_convert(::Type{Ptr{T}}, A::Adjoint{<:Real, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
-Base.unsafe_convert(::Type{Ptr{T}}, A::Transpose{<:Any, <:AbstractVecOrMat}) where {T} = Base.unsafe_convert(Ptr{T}, A.parent)
+Base.cconvert(::Type{Ptr{T}}, A::Adjoint{<:Real, <:AbstractVecOrMat}) where {T} = Base.cconvert(Ptr{T}, A.parent)
+Base.cconvert(::Type{Ptr{T}}, A::Transpose{<:Any, <:AbstractVecOrMat}) where {T} = Base.cconvert(Ptr{T}, A.parent)
 
 Base.elsize(::Type{<:Adjoint{<:Real, P}}) where {P<:AbstractVecOrMat} = Base.elsize(P)
 Base.elsize(::Type{<:Transpose{<:Any, P}}) where {P<:AbstractVecOrMat} = Base.elsize(P)
@@ -369,11 +400,16 @@ map(f, avs::AdjointAbsVec...) = adjoint(map((xs...) -> adjoint(f(adjoint.(xs)...
 map(f, tvs::TransposeAbsVec...) = transpose(map((xs...) -> transpose(f(transpose.(xs)...)), parent.(tvs)...))
 quasiparentt(x) = parent(x); quasiparentt(x::Number) = x # to handle numbers in the defs below
 quasiparenta(x) = parent(x); quasiparenta(x::Number) = conj(x) # to handle numbers in the defs below
+quasiparentc(x) = parent(parent(x)); quasiparentc(x::Number) = conj(x) # to handle numbers in the defs below
 broadcast(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
 # Hack to preserve behavior after #32122; this needs to be done with a broadcast style instead to support dotted fusion
 Broadcast.broadcast_preserving_zero_d(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
+Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,Transpose{<:Any,<:AdjointAbsVec}}...) =
+    transpose(adjoint(broadcast((xs...) -> adjoint(transpose(f(conj.(xs)...))), quasiparentc.(tvs)...)))
+Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,Adjoint{<:Any,<:TransposeAbsVec}}...) =
+    adjoint(transpose(broadcast((xs...) -> transpose(adjoint(f(conj.(xs)...))), quasiparentc.(tvs)...)))
 # TODO unify and allow mixed combinations with a broadcast style
 
 
@@ -406,6 +442,7 @@ Base.mapreducedim!(f::typeof(identity), op::Union{typeof(*),typeof(Base.mul_prod
     (Base.mapreducedim!(f∘adjoint, op, switch_dim12(B), parent(A)); B)
 
 switch_dim12(B::AbstractVector) = permutedims(B)
+switch_dim12(B::AbstractVector{<:Number}) = transpose(B) # avoid allocs due to permutedims
 switch_dim12(B::AbstractArray{<:Any,0}) = B
 switch_dim12(B::AbstractArray) = PermutedDimsArray(B, (2, 1, ntuple(Base.Fix1(+,2), ndims(B) - 2)...))
 
@@ -469,3 +506,8 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 ## complex conjugate
 conj(A::Transpose) = adjoint(A.parent)
 conj(A::Adjoint) = transpose(A.parent)
+
+## structured matrix methods ##
+function Base.replace_in_print_matrix(A::AdjOrTrans,i::Integer,j::Integer,s::AbstractString)
+    Base.replace_in_print_matrix(parent(A), j, i, s)
+end

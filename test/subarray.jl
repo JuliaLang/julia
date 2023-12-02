@@ -256,7 +256,7 @@ runviews(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) where {T} = nothing
 
 ######### Tests #########
 
-testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+testfull = Base.get_bool_env("JULIA_TESTFULL", false)
 
 ### Views from Arrays ###
 index5 = (1, :, 2:5, [4,1,5], reshape([2]), view(1:5,[2 3 4 1]))  # all work with at least size 5
@@ -274,9 +274,6 @@ end
 # "outer" indices create snips that have at least size 5 along each dimension,
 # with the exception of Int-slicing
 oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9], reshape(2:11, 2, 5))
-
-_ndims(::AbstractArray{T,N}) where {T,N} = N
-_ndims(x) = 1
 
 if testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
@@ -771,4 +768,52 @@ end
     m = randn(4,5).+im
     @test view(m, 1:2, 3, 1, 1) == m[1:2, 3]
     @test parent(view(m, 1:2, 3, 1, 1)) === m
+end
+
+@testset "replace_in_print_matrix" begin
+    struct MyIdentity <: AbstractMatrix{Bool}
+        n :: Int
+    end
+    Base.size(M::MyIdentity) = (M.n, M.n)
+    function Base.getindex(M::MyIdentity, i::Int, j::Int)
+        checkbounds(M, i, j)
+        i == j
+    end
+    function Base.replace_in_print_matrix(M::MyIdentity, i::Integer, j::Integer, s::AbstractString)
+        i == j ? s : Base.replace_with_centered_mark(s)
+    end
+    V = view(MyIdentity(3), 1:2, 1:3)
+    @test sprint(show, "text/plain", V) == "$(summary(V)):\n 1  ⋅  ⋅\n ⋅  1  ⋅"
+
+    struct OneElVec <: AbstractVector{Bool}
+        n :: Int
+        ind :: Int
+    end
+    Base.size(M::OneElVec) = (M.n,)
+    function Base.getindex(M::OneElVec, i::Int)
+        checkbounds(M, i)
+        i == M.ind
+    end
+    function Base.replace_in_print_matrix(M::OneElVec, i::Integer, j::Integer, s::AbstractString)
+        i == M.ind ? s : Base.replace_with_centered_mark(s)
+    end
+    V = view(OneElVec(6, 2), 1:5)
+    @test sprint(show, "text/plain", V) == "$(summary(V)):\n ⋅\n 1\n ⋅\n ⋅\n ⋅"
+
+    V = view(1:2, [CartesianIndex(2)])
+    @test sprint(show, "text/plain", V) == "$(summary(V)):\n 2"
+end
+
+@testset "Base.first_index for offset indices" begin
+    a = Vector(1:10)
+    b = view(a, Base.IdentityUnitRange(4:7))
+    @test first(b) == a[Base.first_index(b)]
+end
+
+@testset "StepRangeLen of CartesianIndex-es" begin
+    v = view(1:2, StepRangeLen(CartesianIndex(1,1), CartesianIndex(1,1), 0))
+    @test isempty(v)
+    r = StepRangeLen(CartesianIndex(1), CartesianIndex(1), 1)
+    v = view(1:2, r)
+    @test v == view(1:2, collect(r))
 end

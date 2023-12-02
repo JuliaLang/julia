@@ -221,7 +221,7 @@ end
     @test_throws MethodError gcdx(MyOtherRational(2//3), MyOtherRational(3//4))
 end
 
-@testset "invmod" begin
+@testset "invmod(n, m)" begin
     @test invmod(6, 31) === 26
     @test invmod(-1, 3) === 2
     @test invmod(1, -3) === -2
@@ -256,6 +256,37 @@ end
     end
 end
 
+@testset "invmod(n)" begin
+    for T in (Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128)
+        if sizeof(T) ≤ 2
+            # test full domain for small types
+            for a = typemin(T)+true:T(2):typemax(T)
+                b = invmod(a)
+                @test a * b == 1
+            end
+        else
+            # test random sample for large types
+            for _ = 1:2^12
+                a = rand(T) | true
+                b = invmod(a)
+                @test a * b == 1
+            end
+        end
+    end
+end
+
+@testset "invmod(n, T)" begin
+    for S in (Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128),
+        T in (Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128)
+        for _ = 1:2^8
+            a = rand(S) | true
+            b = invmod(a, T)
+            @test (a * b) % T == 1
+            @test (a % T) * b == 1
+        end
+    end
+end
+
 @testset "powermod" begin
     @test powermod(2, 3, 5) == 3
     @test powermod(2, 3, -5) == -2
@@ -267,6 +298,14 @@ end
     @test powermod(2, -2, 5) == 4
     @test powermod(2, -1, -5) == -2
     @test powermod(2, -2, -5) == -1
+
+    @test powermod(2, typemin(Int128), 5) == 1
+    @test powermod(2, typemin(Int128), -5) == -4
+
+    @test powermod(2, big(3), 5) == 3
+    @test powermod(2, big(3), -5) == -2
+    @inferred  powermod(2, -2, -5)
+    @inferred  powermod(big(2), -2, UInt(5))
 end
 
 @testset "nextpow/prevpow" begin
@@ -441,11 +480,41 @@ end
     end
 end
 
-@testset "leading_ones and count_zeros" begin
+@testset "leading_ones, count_zeros, etc." begin
     @test leading_ones(UInt32(Int64(2) ^ 32 - 2)) == 31
     @test leading_ones(1) == 0
     @test leading_zeros(Int32(1)) == 31
     @test leading_zeros(UInt32(Int64(2) ^ 32 - 2)) == 0
+
+    @test Base.top_set_bit(3) == 2
+    @test Base.top_set_bit(-Int64(17)) == 64
+    @test Base.top_set_bit(big(15)) != Base.top_set_bit(big(16)) == Base.top_set_bit(big(17)) == 5
+    @test_throws DomainError Base.top_set_bit(big(-17))
+
+    struct MyInt <: Integer
+        x::Int
+    end
+    MyInt(x::MyInt) = x
+    Base.:+(a::MyInt, b::MyInt) = a.x + b.x
+
+    for n in 0:100
+        x = ceil(Int, log2(n + 1))
+        @test x == Base.top_set_bit(Int128(n)) == Base.top_set_bit(unsigned(Int128(n)))
+        @test x == Base.top_set_bit(Int32(n)) == Base.top_set_bit(unsigned(Int64(n)))
+        @test x == Base.top_set_bit(Int8(n)) == Base.top_set_bit(unsigned(Int8(n)))
+        @test x == Base.top_set_bit(big(n))   # BigInt fallback
+        @test x == Base.top_set_bit(MyInt(n)) # generic fallback
+    end
+
+    for n in -10:-1
+        @test 128 == Base.top_set_bit(Int128(n)) == Base.top_set_bit(unsigned(Int128(n)))
+        @test 32  == Base.top_set_bit(Int32(n)) == Base.top_set_bit(unsigned(Int32(n)))
+        @test 8   == Base.top_set_bit(Int8(n)) == Base.top_set_bit(unsigned(Int8(n)))
+        @test_throws DomainError Base.top_set_bit(big(n))
+        # This error message should never be exposed to the end user anyway.
+        err = n == -1 ? InexactError : DomainError
+        @test_throws err Base.top_set_bit(MyInt(n))
+    end
 
     @test count_zeros(Int64(1)) == 63
 end
@@ -518,6 +587,14 @@ end
     for x in ((false,false), (false,true), (true,false), (true,true))
         @test binomial(x...) == (x != (false,true))
     end
+
+    # binomial(x,k) for non-integer x
+    @test @inferred(binomial(10.0,3)) === 120.0
+    @test @inferred(binomial(10//1,3)) === 120//1
+    @test binomial(2.5,3) ≈ 5//16 === binomial(5//2,3)
+    @test binomial(2.5,0) == 1.0
+    @test binomial(35.0, 30) ≈ binomial(35, 30) # naive method overflows
+    @test binomial(2.5,-1) == 0.0
 end
 
 # concrete-foldability

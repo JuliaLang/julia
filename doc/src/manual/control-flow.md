@@ -139,7 +139,7 @@ julia> test(1,2)
 x is less than y.
 
 julia> test(2,1)
-ERROR: UndefVarError: `relation` not defined
+ERROR: UndefVarError: `relation` not defined in local scope
 Stacktrace:
  [1] test(::Int64, ::Int64) at ./none:7
 ```
@@ -397,7 +397,7 @@ julia> while i <= 3
 3
 ```
 
-The `while` loop evaluates the condition expression (`i <= 5` in this case), and as long it remains
+The `while` loop evaluates the condition expression (`i <= 3` in this case), and as long it remains
 `true`, keeps also evaluating the body of the `while` loop. If the condition expression is `false`
 when the `while` loop is first reached, the body is never evaluated.
 
@@ -414,48 +414,10 @@ julia> for i = 1:3
 3
 ```
 
-Here the `1:3` is a range object, representing the sequence of numbers 1, 2, 3. The `for`
-loop iterates through these values, assigning each one in turn to the variable `i`. One rather
-important distinction between the previous `while` loop form and the `for` loop form is the scope
-during which the variable is visible. A `for` loop always introduces a new iteration variable in
-its body, regardless of whether a variable of the same name exists in the enclosing scope.
-This implies that on the one hand `i` need not be declared before the loop. On the other hand it
-will not be visible outside the loop, nor will an outside variable of the same name be affected.
-You'll either need a new interactive session instance or a different variable
-name to test this:
-
-```jldoctest
-julia> for j = 1:3
-           println(j)
-       end
-1
-2
-3
-
-julia> j
-ERROR: UndefVarError: `j` not defined
-```
-
-```jldoctest
-julia> j = 0;
-
-julia> for j = 1:3
-           println(j)
-       end
-1
-2
-3
-
-julia> j
-0
-```
-
-Use `for outer` to modify the latter behavior and reuse an existing local variable.
-
-See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope, [`outer`](@ref), and how it works in
-Julia.
-
-In general, the `for` loop construct can iterate over any container. In these cases, the alternative
+Here the `1:3` is a [`range`](@ref) object, representing the sequence of numbers 1, 2, 3. The `for`
+loop iterates through these values, assigning each one in turn to the variable `i`.
+In general, the `for` construct can loop over any "iterable" object (or "container"), from a  range like `1:3` or `1:3:13` (a [`StepRange`](@ref) indicating every 3rd integer 1, 4, 7, …, 13) to more generic containers like arrays, including [iterators defined by user code](@ref man-interface-iteration)
+or external packages. For containers other than ranges, the alternative
 (but fully equivalent) keyword `in` or `∈` is typically used instead of `=`, since it makes
 the code read more clearly:
 
@@ -477,6 +439,46 @@ baz
 
 Various types of iterable containers will be introduced and discussed in later sections of the
 manual (see, e.g., [Multi-dimensional Arrays](@ref man-multi-dim-arrays)).
+
+One rather
+important distinction between the previous `while` loop form and the `for` loop form is the scope
+during which the variable is visible. A `for` loop always introduces a new iteration variable in
+its body, regardless of whether a variable of the same name exists in the enclosing scope.
+This implies that on the one hand `i` need not be declared before the loop. On the other hand it
+will not be visible outside the loop, nor will an outside variable of the same name be affected.
+You'll either need a new interactive session instance or a different variable
+name to test this:
+
+```jldoctest
+julia> for j = 1:3
+           println(j)
+       end
+1
+2
+3
+
+julia> j
+ERROR: UndefVarError: `j` not defined in `Main`
+```
+
+```jldoctest
+julia> j = 0;
+
+julia> for j = 1:3
+           println(j)
+       end
+1
+2
+3
+
+julia> j
+0
+```
+
+Use `for outer` to modify the latter behavior and reuse an existing local variable.
+
+See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope, [`outer`](@ref), and how it works in
+Julia.
 
 It is sometimes convenient to terminate the repetition of a `while` before the test condition
 is falsified or stop iterating in a `for` loop before the end of the iterable object is reached.
@@ -623,7 +625,7 @@ real value:
 ```jldoctest
 julia> sqrt(-1)
 ERROR: DomainError with -1.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 ```
@@ -637,11 +639,11 @@ julia> struct MyCustomException <: Exception end
 ### The [`throw`](@ref) function
 
 Exceptions can be created explicitly with [`throw`](@ref). For example, a function defined only
-for nonnegative numbers could be written to [`throw`](@ref) a [`DomainError`](@ref) if the argument
+for non-negative numbers could be written to [`throw`](@ref) a [`DomainError`](@ref) if the argument
 is negative:
 
 ```jldoctest; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
-julia> f(x) = x>=0 ? exp(-x) : throw(DomainError(x, "argument must be nonnegative"))
+julia> f(x) = x>=0 ? exp(-x) : throw(DomainError(x, "argument must be non-negative"))
 f (generic function with 1 method)
 
 julia> f(1)
@@ -649,7 +651,7 @@ julia> f(1)
 
 julia> f(-1)
 ERROR: DomainError with -1:
-argument must be nonnegative
+argument must be non-negative
 Stacktrace:
  [1] f(::Int64) at ./none:1
 ```
@@ -797,7 +799,7 @@ julia> sqrt_second(9)
 
 julia> sqrt_second(-9)
 ERROR: DomainError with -9.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 ```
@@ -826,6 +828,45 @@ immediately to a much higher level in the stack of calling functions. There are 
 no error has occurred, but the ability to unwind the stack and pass a value to a higher level
 is desirable. Julia provides the [`rethrow`](@ref), [`backtrace`](@ref), [`catch_backtrace`](@ref)
 and [`current_exceptions`](@ref) functions for more advanced error handling.
+
+### `else` Clauses
+
+!!! compat "Julia 1.8"
+    This functionality requires at least Julia 1.8.
+
+In some cases, one may not only want to appropriately handle the error case, but also want to run
+some code only if the `try` block succeeds. For this, an `else` clause can be specified after the
+`catch` block that is run whenever no error was thrown previously. The advantage over including
+this code in the `try` block instead is that any further errors don't get silently caught by the
+`catch` clause.
+
+```julia
+local x
+try
+    x = read("file", String)
+catch
+    # handle read errors
+else
+    # do something with x
+end
+```
+
+!!! note
+    The `try`, `catch`, `else`, and `finally` clauses each introduce their own scope blocks, so if
+    a variable is only defined in the `try` block, it can not be accessed by the `else` or `finally`
+    clause:
+    ```jldoctest
+    julia> try
+               foo = 1
+           catch
+           else
+               foo
+           end
+    ERROR: UndefVarError: `foo` not defined in `Main`
+    Suggestion: check for spelling errors or missing imports.
+    ```
+    Use the [`local` keyword](@ref local-scope) outside the `try` block to make the variable
+    accessible from anywhere within the outer scope.
 
 ### `finally` Clauses
 
