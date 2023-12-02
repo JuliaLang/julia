@@ -561,7 +561,7 @@ julia> [DateTime(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     f = DateFormat(format, locale)
-    return check_year(parse(DateTime, dt, f), f)
+    return _check_year(parse(DateTime, dt, f), f)
 end
 """
     DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) -> DateTime
