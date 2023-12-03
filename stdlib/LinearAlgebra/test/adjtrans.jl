@@ -97,8 +97,8 @@ end
         @test axes(Transpose(intmat)) == reverse(axes(intmat))
 
         A = OffsetArray([1,2], 2)
-        @test axes(A')[2] === axes(A,1)
-        @test axes(A')[1] === axes(A,2)
+        @test (@inferred axes(A')[2]) === axes(A,1)
+        @test (@inferred axes(A')[1]) === axes(A,2)
     end
     @testset "IndexStyle methods" begin
         @test IndexStyle(Adjoint(intvec)) == IndexLinear()
