@@ -2458,6 +2458,15 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
 
                 // Update the pointer numbering.
                 UpdatePtrNumbering(CI, newI, S);
+            } else if (alloc_genericmemory_func && callee == alloc_genericmemory_func) {
+                assert(CI->arg_size() == 6);
+                auto gmalloc = F.getParent()->getOrInsertFunction("jl_alloc_genericmemory", T_prjlvalue, T_prjlvalue, T_size);
+                IRBuilder<> builder(CI);
+                builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                auto newI = builder.CreateCall(gmalloc, {CI->getArgOperand(0), CI->getArgOperand(1)});
+                newI->takeName(CI);
+                CI->replaceAllUsesWith(newI);
+                UpdatePtrNumbering(CI, newI, S);
             } else if (typeof_func && callee == typeof_func) {
                 assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);

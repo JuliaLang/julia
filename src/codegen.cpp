@@ -1303,12 +1303,20 @@ static const auto sync_gc_total_bytes_func = new JuliaFunction<>{
     nullptr,
 };
 static const auto jl_allocgenericmemory = new JuliaFunction<TypeFnContextAndSizeT>{
-    XSTR(jl_alloc_genericmemory),
+    "julia.gc_alloc_genericmemory",
     [](LLVMContext &C, Type *T_Size) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue, // new Memory
                                 {T_prjlvalue, // type
-                                T_Size        // nelements
+                                T_Size,       // nelements
+                                // these fields are for alloc-opt, because
+                                // when compiling for images we need to know these
+                                // to stack allocate arrays
+                                // if it's dynamic, we just set everything to 0
+                                T_Size,       // elsize
+                                getInt8Ty(C), // isunion
+                                getInt8Ty(C), // zeroinit
+                                getInt8Ty(C), // boxed
                                 }, false); },
         [](LLVMContext &C) {
             AttrBuilder FnAttrs(C);
@@ -1426,7 +1434,7 @@ static const auto gc_loaded_func = new JuliaFunction<>{
         AttributeSet FnAttrs = Attributes(C, {Attribute::ReadNone, Attribute::NoSync, Attribute::NoUnwind, Attribute::Speculatable, Attribute::WillReturn, Attribute::NoRecurse});
         AttributeSet RetAttrs = Attributes(C, {Attribute::NonNull, Attribute::NoUndef});
         return AttributeList::get(C, FnAttrs, RetAttrs,
-                { Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone, Attribute::NoCapture}),
+                { Attributes(C, {Attribute::NoUndef, Attribute::ReadNone, Attribute::NoCapture}),
                   Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}) }); },
 };
 
@@ -9432,7 +9440,7 @@ static void init_jit_functions(void)
     add_named_global(jlfieldindex_func, &jl_field_index);
     add_named_global(diff_gc_total_bytes_func, &jl_gc_diff_total_bytes);
     add_named_global(sync_gc_total_bytes_func, &jl_gc_sync_total_bytes);
-    add_named_global(jl_allocgenericmemory, &jl_alloc_genericmemory);
+    add_named_global(jl_allocgenericmemory, (void*)NULL);
     add_named_global(gcroot_flush_func, (void*)NULL);
     add_named_global(gc_preserve_begin_func, (void*)NULL);
     add_named_global(gc_preserve_end_func, (void*)NULL);

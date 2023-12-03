@@ -1783,8 +1783,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(!isVa && !llvmcall && nccallargs == 2);
         const jl_cgval_t &typ = argv[0];
         const jl_cgval_t &nel = argv[1];
+        auto istyp = argv[0].constant;
         auto arg_typename = [&] JL_NOTSAFEPOINT {
-            auto istyp = argv[0].constant;
             std::string type_str;
             if (istyp && jl_is_datatype(istyp) && jl_is_genericmemory_type(istyp)){
                 auto eltype = jl_tparam1(istyp);
@@ -1798,8 +1798,23 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             else
                 type_str = "<unknown type>";
             return "Memory{" + type_str + "}[]";
-            };
-        auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory), { boxed(ctx,typ), emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_ulong_type)});
+        };
+        auto elsize = emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_ulong_type);
+        jl_genericmemory_info_t info;
+        if (istyp && jl_is_datatype(istyp) && jl_is_genericmemory_type(istyp)) {
+            info = jl_get_genericmemory_info(istyp);
+        } else {
+            info = {0, 0, 0, 0};
+        }
+        auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory),
+            {
+                boxed(ctx,typ),
+                elsize,
+                static_cast<Value*>(ConstantInt::get(ctx.types().T_size, info.elsize)),
+                static_cast<Value*>(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), info.isunion)),
+                static_cast<Value*>(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), info.zeroinit)),
+                static_cast<Value*>(ConstantInt::get(getInt8Ty(ctx.builder.getContext()), info.isboxed)),
+            });
         setName(ctx.emission_context, alloc, arg_typename);
         JL_GC_POP();
         return mark_julia_type(ctx, alloc, true, jl_any_type);
