@@ -56,3 +56,36 @@ end
 macro fully_eliminated(ex0...)
     return gen_call_with_extracted_types_and_kwargs(__module__, :fully_eliminated, ex0)
 end
+
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    orig_src = m.args[1]::CodeInfo
+    global function make_codeinfo(code::Vector{Any};
+                                  ssavaluetypes::Union{Nothing,Vector{Any}}=nothing,
+                                  slottypes::Union{Nothing,Vector{Any}}=nothing)
+        src = copy(orig_src)
+        src.code = code
+        nstmts = length(src.code)
+        if ssavaluetypes === nothing
+            src.ssavaluetypes = nstmts
+        else
+            src.ssavaluetypes = ssavaluetypes
+        end
+        src.codelocs = fill(one(Int32), nstmts)
+        src.ssaflags = fill(zero(UInt32), nstmts)
+        if slottypes !== nothing
+            src.slottypes = slottypes
+            src.slotflags = fill(zero(UInt8), length(slottypes))
+        end
+        return src
+    end
+    global function make_ircode(code::Vector{Any};
+                                ssavaluetypes::Union{Nothing,Vector{Any}}=nothing,
+                                slottypes::Union{Nothing,Vector{Any}}=nothing,
+                                verify::Bool=true)
+        src = make_codeinfo(code; ssavaluetypes, slottypes)
+        ir = Core.Compiler.inflate_ir(src)
+        verify && Core.Compiler.verify_ir(ir)
+        return ir
+    end
+end

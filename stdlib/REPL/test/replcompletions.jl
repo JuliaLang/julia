@@ -2139,3 +2139,20 @@ end
 
 # issue #51823
 @test "include" in test_complete_context("inc", Main)[1]
+
+# REPL completions should not try to concrete-evaluate !:noub methods
+function very_unsafe_method(i::Int)
+    xs = Any[]
+    @inbounds xs[i]
+end
+let t = REPLCompletions.repl_eval_ex(:(unsafe_method(42)), @__MODULE__)
+    @test isnothing(t)
+end
+
+# https://github.com/JuliaLang/julia/issues/52099
+const issue52099 = []
+let t = REPLCompletions.repl_eval_ex(:(Base.PersistentDict(issue52099 => 3)), @__MODULE__)
+    if t isa Core.Const
+        @test length(t.val) == 1
+    end
+end

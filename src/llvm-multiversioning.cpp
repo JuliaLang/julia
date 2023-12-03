@@ -532,7 +532,7 @@ void CloneCtx::clone_decls()
             new_F->setVisibility(F->getVisibility());
             new_F->setDSOLocal(true);
             auto base_func = F;
-            if (specs[i].flags & JL_TARGET_CLONE_ALL)
+            if (!(specs[i].flags & JL_TARGET_CLONE_ALL))
                 base_func = static_cast<Group*>(linearized[specs[i].base])->base_func(F);
             (*linearized[i]->vmap)[base_func] = new_F;
         }
@@ -587,7 +587,7 @@ void CloneCtx::clone_bodies()
             }
             for (auto &target : groups[i].clones) {
                 prepare_vmap(*target.vmap);
-                auto target_F = cast_or_null<Function>(map_get(*target.vmap, F));
+                auto target_F = cast_or_null<Function>(map_get(*target.vmap, group_F));
                 if (target_F) {
                     if (!F->isDeclaration()) {
                         clone_function(group_F, target_F, *target.vmap);

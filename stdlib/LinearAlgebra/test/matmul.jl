@@ -23,6 +23,10 @@ mul_wrappers = [
     @test @inferred(f(A)) === A
     g(A) = LinearAlgebra.wrap(A, 'T')
     @test @inferred(g(A)) === transpose(A)
+    # https://github.com/JuliaLang/julia/issues/52202
+    @test Base.infer_return_type((Vector{Float64},)) do v
+        LinearAlgebra.wrap(v, 'N')
+    end == Vector{Float64}
 end
 
 @testset "matrices with zero dimensions" begin
