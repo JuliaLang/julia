@@ -76,6 +76,7 @@ export
     cond,
     condskeel,
     copyto!,
+    copytrito!,
     copy_transpose!,
     cross,
     adjoint,
