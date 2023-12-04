@@ -20,7 +20,7 @@ The `Test` module provides simple *unit testing* functionality. Unit testing is 
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
 of specifying the behaviors your code should have when complete. You may also want to look at the
-documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
+documentation for [adding tests to your Julia Package](@ref adding-tests-to-packages).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
@@ -420,7 +420,7 @@ end
 We will need to create those two included files, `math_tests.jl` and `greeting_tests.jl`, and add some tests to them.
 
 > **Note:** Notice how we did not have to specify add `Example` into the `test` environment's `Project.toml`.
-> This is a benefit of Julia's testing system that you could [read about more here](https://pkgdocs.julialang.org/dev/creating-packages/).
+> This is a benefit of Julia's testing system that you could [read about more here](@ref adding-tests-to-packages).
 
 #### Writing Tests for `math_tests.jl`
 
