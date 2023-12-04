@@ -1028,8 +1028,8 @@ end
     @test lyap(1.0+2.0im, 3.0+4.0im) == -1.5 - 2.0im
 end
 
-@testset "Matrix to real power" for elty in (Float64, ComplexF64)
-# Tests proposed at Higham, Deadman: Testing Matrix Function Algorithms Using Identities, March 2014
+@testset "$elty Matrix to real power" for elty in (Float64, ComplexF64)
+    # Tests proposed at Higham, Deadman: Testing Matrix Function Algorithms Using Identities, March 2014
     #Aa : only positive real eigenvalues
     Aa = convert(Matrix{elty}, [5 4 2 1; 0 1 -1 -1; -1 -1 3 0; 1 1 -1 2])
 
@@ -1065,6 +1065,9 @@ end
         @test (A^(2/3))*(A^(1/3)) ≈ A
         @test (A^im)^(-im) ≈ A
     end
+
+    Tschurpow = Union{Matrix{real(elty)}, Matrix{complex(elty)}}
+    @test (@inferred Tschurpow LinearAlgebra.schurpow(Aa, 2.0)) ≈ Aa^2
 end
 
 @testset "diagonal integer matrix to real power" begin

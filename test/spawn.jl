@@ -1015,5 +1015,19 @@ end
     args = ["ab ^` c", " \" ", "\"", ascii95, ascii95,
             "\"\\\"\\", "", "|", "&&", ";"];
     @test Base.shell_escape_wincmd(Base.escape_microsoft_c_args(args...)) == "\"ab ^` c\" \" \\\" \" \"\\\"\" \" !\\\"#\$%^&'^(^)*+,-./0123456789:;^<=^>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^^_`abcdefghijklmnopqrstuvwxyz{^|}~\" \" ^!\\\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\" \"\\\"\\\\\\\"\\\\\" \"\" ^| ^&^& ;"
+end
 
+# effects for Cmd construction
+for f in (() -> `a b c`, () -> `a a$("bb")a $("c")`)
+    effects = Base.infer_effects(f)
+    @test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_terminates(effects)
+    @test Core.Compiler.is_noub(effects)
+    @test !Core.Compiler.is_consistent(effects)
+end
+let effects = Base.infer_effects(x -> `a $x`, (Any,))
+    @test !Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_terminates(effects)
+    @test !Core.Compiler.is_noub(effects)
+    @test !Core.Compiler.is_consistent(effects)
 end

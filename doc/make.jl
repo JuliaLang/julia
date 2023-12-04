@@ -128,6 +128,7 @@ BaseDocs = [
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
 
 Tutorials = [
+    "tutorials/creating-packages.md",
     "tutorials/profile.md",
     "tutorials/external.md",
 ]

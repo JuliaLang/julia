@@ -4,8 +4,8 @@ import Libdl
 
 # helper function for passing input to stdin
 # and returning the stdout result
-function writereadpipeline(input, exename)
-    p = open(exename, "w+")
+function writereadpipeline(input, exename; stderr=nothing)
+    p = open(pipeline(exename; stderr), "w+")
     @async begin
         write(p.in, input)
         close(p.in)
@@ -62,11 +62,24 @@ end
 
 @testset "julia_cmd" begin
     julia_basic = Base.julia_cmd()
+    function get_julia_cmd(arg)
+        io = Base.BufferStream()
+        cmd = `$julia_basic $arg -e 'print(repr(Base.julia_cmd()))'`
+        try
+            run(pipeline(cmd, stdout=io, stderr=io))
+        catch
+            @error "cmd failed" cmd read(io, String)
+            rethrow()
+        end
+        return read(io, String)
+    end
+
     opts = Base.JLOptions()
-    get_julia_cmd(arg) = strip(read(`$julia_basic $arg -e 'print(repr(Base.julia_cmd()))'`, String), ['`'])
 
     for (arg, default) in (
-                            ("-C$(unsafe_string(opts.cpu_target))",  false),
+                            # Use a Cmd to handle space nicely when
+                            # interpolating inside another Cmd.
+                            (`-C $(unsafe_string(opts.cpu_target))`,  false),
 
                             ("-J$(unsafe_string(opts.image_file))",  false),
 
@@ -123,25 +136,38 @@ end
                             ("--pkgimages=no",  false),
                         )
         @testset "$arg" begin
+            str = arg isa Cmd ? join(arg.exec, ' ') : arg
             if default
-                @test !occursin(arg, get_julia_cmd(arg))
+                @test !occursin(str, get_julia_cmd(arg))
             else
-                @test occursin(arg, get_julia_cmd(arg))
+                @test occursin(str, get_julia_cmd(arg))
             end
         end
     end
+
+    # Test empty `cpu_target` gives a helpful error message, issue #52209.
+    io = IOBuffer()
+    p = run(pipeline(`$(Base.julia_cmd(; cpu_target="")) --startup-file=no -e ''`; stderr=io); wait=false)
+    wait(p)
+    @test p.exitcode == 1
+    @test occursin("empty CPU name", String(take!(io)))
 end
 
 let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # tests for handling of ENV errors
-    let v = writereadpipeline(
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
             "println(\"REPL: \", @which(less), @isdefined(InteractiveUtils))",
             setenv(`$exename -i -E '@assert isempty(LOAD_PATH); push!(LOAD_PATH, "@stdlib"); @isdefined InteractiveUtils'`,
                     "JULIA_LOAD_PATH" => "",
                     "JULIA_DEPOT_PATH" => ";:",
-                    "HOME" => homedir()))
+                    "HOME" => homedir());
+            stderr=io)
         # @which is undefined
         @test_broken v == ("false\nREPL: InteractiveUtilstrue\n", true)
+        stderr = String(take!(io))
+        @test_broken isempty(stderr)
     end
     let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
                 setenv(`$exename -i -e 'const InteractiveUtils = 3'`,

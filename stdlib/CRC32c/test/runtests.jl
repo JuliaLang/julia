@@ -45,6 +45,15 @@ function test_crc32c(crc32c)
             rm(f, force=true)
         end
     end
+
+    # test longer arrays to cover all the code paths in crc32c.c
+    LONG = 8192 # from crc32c.c
+    SHORT = 256 # from crc32c.c
+    n = LONG*3+SHORT*3+SHORT*2+64+7
+    big = vcat(reinterpret(UInt8, hton.(0x74d7f887 .^ (1:n÷4))), UInt8[1:n%4;])
+    for (offset,crc) in [(0, 0x13a5ecd5), (1, 0xecf34b7e), (2, 0xfa71b596), (3, 0xbfd24745), (4, 0xf0cb3370), (5, 0xb0ec88b5), (6, 0x258c20a8), (7, 0xa9bd638d)]
+        @test crc == crc32c(@view big[1+offset:end])
+    end
 end
 unsafe_crc32c_sw(a, n, crc) =
     ccall(:jl_crc32c_sw, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)

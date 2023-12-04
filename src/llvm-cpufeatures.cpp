@@ -59,7 +59,7 @@ static bool have_fma(Function &intr, Function &caller, const Triple &TT) JL_NOTS
     StringRef FS =
         FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
 
-    SmallVector<StringRef, 6> Features;
+    SmallVector<StringRef, 128> Features;
     FS.split(Features, ',');
     for (StringRef Feature : Features)
     if (TT.isARM()) {
@@ -67,7 +67,7 @@ static bool have_fma(Function &intr, Function &caller, const Triple &TT) JL_NOTS
         return typ == "f32" || typ == "f64";
       else if (Feature == "+vfp4sp")
         return typ == "f32";
-    } else {
+    } else if (TT.isX86()) {
       if (Feature == "+fma" || Feature == "+fma4")
         return typ == "f32" || typ == "f64";
     }

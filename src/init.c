@@ -814,11 +814,6 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #endif
 #endif
 
-    if ((jl_options.outputo || jl_options.outputbc || jl_options.outputasm) &&
-        (jl_options.code_coverage || jl_options.malloc_log)) {
-        jl_error("cannot generate code-coverage or track allocation information while generating a .o, .bc, or .s output file");
-    }
-
     jl_init_rand();
     jl_init_runtime_ccall();
     jl_init_tasks();
@@ -866,7 +861,8 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_restore_system_image(jl_options.image_file);
     } else {
         jl_init_types();
-        jl_global_roots_table = jl_alloc_memory_any(0);
+        jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
+        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
     }
 
     jl_init_flisp();
