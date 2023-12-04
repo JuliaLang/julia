@@ -4,13 +4,18 @@ import Base: ScopedValues
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0
     @test_throws InexactError ScopedValue{Int}(1.5)
-    val = ScopedValue(1)
-    @test_throws MethodError val[] = 2
-    with() do
+    let val = ScopedValue(1)
         @test_throws MethodError val[] = 2
+        with() do
+            @test_throws MethodError val[] = 2
+        end
     end
-    val = ScopedValue{Int}()
-    @test_throws KeyError val[]
+    let val = ScopedValue{String}()
+        @test_throws KeyError val[]
+    end
+    let val = ScopedValue{Int}()
+        @test_throws KeyError val[]
+    end
     @test_throws MethodError ScopedValue()
 end
 
