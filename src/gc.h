@@ -233,6 +233,14 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFE
     }
 }
 
+// data structures for tracking fragmentation in the pool allocator
+// #define GC_MEASURE_PAGE_FRAGMENTATION
+
+typedef struct {
+    _Atomic(size_t) n_freed_objs;
+    _Atomic(size_t) n_pages_allocd;
+} gc_fragmentation_stat_t;
+
 #ifdef _P64
 #define REGION0_PG_COUNT (1 << 16)
 #define REGION1_PG_COUNT (1 << 16)
