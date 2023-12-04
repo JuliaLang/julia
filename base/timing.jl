@@ -100,15 +100,9 @@ end
 
 # must be kept in sync with the value from `src/julia_threads.h``
 const JL_GC_N_MAX_POOLS = 51
-
-page_utilization = zeros(Float64, JL_GC_N_MAX_POOLS)
-
 function gc_page_utilization_data()
     page_utilization_raw = cglobal(:gc_page_utilization_stats, Float64)
-    for i in 1:JL_GC_N_MAX_POOLS
-        page_utilization[i] = unsafe_load(page_utilization_raw, i)
-    end
-    return page_utilization
+    return Base.unsafe_wrap(Array, page_utilization_raw, JL_GC_N_MAX_POOLS, own=false)
 end
 
 """
