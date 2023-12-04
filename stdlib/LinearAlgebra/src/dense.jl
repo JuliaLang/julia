@@ -490,7 +490,7 @@ end
 function schurpow(A::AbstractMatrix, p)
     if istriu(A)
         # Integer part
-        retmat = A ^ floor(p)
+        retmat = A ^ floor(Integer, p)
         # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrt(A)
@@ -501,7 +501,7 @@ function schurpow(A::AbstractMatrix, p)
     else
         S,Q,d = Schur{Complex}(schur(A))
         # Integer part
-        R = S ^ floor(p)
+        R = S ^ floor(Integer, p)
         # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrt(A)

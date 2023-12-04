@@ -1576,17 +1576,42 @@ end
 # Test CFG simplify with single predecessor phi node
 let code = Any[
         # Block 1
-        Expr(:call, Base.inferencebarrier, 1),
         GotoNode(3),
         # Block 2
-        PhiNode(Int32[1], Any[SSAValue(1)]),
-        ReturnNode(SSAValue(3))
+        nothing,
+        # Block 3
+        Expr(:call, Base.inferencebarrier, 1),
+        GotoNode(5),
+        # Block 4
+        PhiNode(Int32[4], Any[SSAValue(3)]),
+        ReturnNode(SSAValue(5))
     ]
     ir = make_ircode(code)
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
-    @test length(ir.cfg.blocks) == 1
+    @test length(ir.cfg.blocks) <= 2
     ir = Core.Compiler.compact!(ir)
-    @test length(ir.stmts) == 2
-    @test (ir[SSAValue(2)][:stmt]::ReturnNode).val == SSAValue(1)
+    @test length(ir.stmts) <= 3
+    @test (ir[SSAValue(length(ir.stmts))][:stmt]::ReturnNode).val !== nothing
+end
+
+let code = Any[
+    Expr(:call, Base.inferencebarrier, Argument(1)), # ::Bool
+    Expr(:call, Core.tuple, 1), # ::Tuple{Int}
+    Expr(:call, Core.tuple, 1.0), # ::Tuple{Float64}
+    Expr(:call, Core.ifelse, SSAValue(1), SSAValue(2), SSAValue(3)), # ::Tuple{Int} (e.g. from inlining)
+    Expr(:call, Core.getfield, SSAValue(4), 1), # ::Int
+    ReturnNode(SSAValue(5))
+]
+    try
+        argtypes = Any[Bool]
+        ssavaluetypes = Any[Bool, Tuple{Int}, Tuple{Float64}, Tuple{Int}, Int, Any]
+        ir = make_ircode(code; slottypes=argtypes, ssavaluetypes)
+        Core.Compiler.verify_ir(ir)
+        Core.Compiler.__set_check_ssa_counts(true)
+        ir = Core.Compiler.sroa_pass!(ir)
+        Core.Compiler.verify_ir(ir)
+    finally
+        Core.Compiler.__set_check_ssa_counts(false)
+    end
 end

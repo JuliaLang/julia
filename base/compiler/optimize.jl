@@ -698,7 +698,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
     # If we can prove that the argmem does not escape the current function, we can
     # refine this to :effect_free.
-    needs_ea_validation = (flag & IR_FLAGS_NEEDS_EA) == IR_FLAGS_NEEDS_EA
+    needs_ea_validation = has_flag(flag, IR_FLAGS_NEEDS_EA)
     stmt = inst[:stmt]
     if !needs_ea_validation
         if !isterminator(stmt) && stmt !== nothing
@@ -730,7 +730,7 @@ end
 
 function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
-    stmt_inconsistent = iszero(flag & IR_FLAG_CONSISTENT)
+    stmt_inconsistent = !has_flag(flag, IR_FLAG_CONSISTENT)
     stmt = inst[:stmt]
     # Special case: For `getfield` and memory operations, we allow inconsistency of the :boundscheck argument
     (; inconsistent, tpdum) = sv

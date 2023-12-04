@@ -1003,14 +1003,13 @@ function kill_current_uses!(compact::IncrementalCompact, @nospecialize(stmt))
     end
 end
 
-function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::SSAValue)
-    @assert idx.id < compact.result_idx
-    (compact.result[idx.id][:stmt] === v) && return compact
+function setindex!(compact::IncrementalCompact, @nospecialize(v), ssa::Union{SSAValue, NewSSAValue})
+    (compact[ssa][:stmt] === v) && return compact
     # Kill count for current uses
-    kill_current_uses!(compact, compact.result[idx.id][:stmt])
-    compact.result[idx.id][:stmt] = v
+    kill_current_uses!(compact, compact[ssa][:stmt])
+    compact[ssa][:stmt] = v
     # Add count for new use
-    count_added_node!(compact, v) && push!(compact.late_fixup, idx.id)
+    count_added_node!(compact, v) && isa(ssa, SSAValue) && push!(compact.late_fixup, ssa.id)
     return compact
 end
 
