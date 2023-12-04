@@ -202,11 +202,11 @@ function mul!(C::AbstractVecOrMat{T}, Q::AbstractQ{T}, B::Union{AbstractVecOrMat
     nB != nC && throw(DimensionMismatch())
     if mB < mC
         inds = CartesianIndices(axes(B))
-        copyto!(view(C, inds), B)
+        _at_copyto!(view(C, inds), B)
         C[CartesianIndices((mB+1:mC, axes(C, 2)))] .= zero(T)
         return lmul!(Q, C)
     else
-        return lmul!(Q, copyto!(C, B))
+        return lmul!(Q, _at_copyto!(C, B))
     end
 end
 function mul!(C::AbstractVecOrMat{T}, A::AbstractVecOrMat, Q::AbstractQ{T}) where {T}
@@ -217,11 +217,11 @@ function mul!(C::AbstractVecOrMat{T}, A::AbstractVecOrMat, Q::AbstractQ{T}) wher
     qsize_check(A, Q)
     if nA < nC
         inds = CartesianIndices(axes(A))
-        copyto!(view(C, inds), A)
+        _at_copyto!(view(C, inds), A)
         C[CartesianIndices((axes(C, 1), nA+1:nC))] .= zero(T)
         return rmul!(C, Q)
     else
-        return rmul!(copyto!(C, A), Q)
+        return rmul!(_at_copyto!(C, A), Q)
     end
 end
 
