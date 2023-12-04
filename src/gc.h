@@ -331,9 +331,6 @@ typedef struct {
 //  structure of this representation allows us to partially unroll and optimize
 //  various conditions at each level.
 
-// data structures for tracking fragmentation in the pool allocator
-// #define GC_MEASURE_PAGE_FRAGMENTATION
-
 typedef struct {
     _Atomic(size_t) n_freed_objs;
     _Atomic(size_t) n_pages_allocd;
