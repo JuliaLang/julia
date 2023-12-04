@@ -377,10 +377,6 @@ using .CoreLogging
 
 include("env.jl")
 
-# functions defined in Random
-function rand end
-function randn end
-
 # I/O
 include("libuv.jl")
 include("asyncevent.jl")

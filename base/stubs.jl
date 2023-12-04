@@ -1,6 +1,21 @@
 module Stubs
 
+macro stub(old, mod)
+    dep_message = """: `$old` has been moved to the standard library package `$mod`.
+                        Add `using $mod` to your imports."""
+    return Expr(:toplevel,
+        quote
+            import Base: $old
+            function $(esc(old))(args...)
+                Base.depwarn($dep_message, $(QuoteNode(old)))
+                Base.invoke_in_world($(esc(:delay_initialize))(), $(esc(old)), args...)
+            end
+            Base.Docs.getdoc(::typeof($(esc(old)))) = ($(esc(:delay_initialize))(); nothing)
+        end)
+end
+
 module Random
+    import ..Stubs: @stub
     let Random_PkgID = Base.PkgId(Base.UUID(0x9a3f8284_a2c9_5f02_9a11_845980a1fd5c), "Random")
         RANDOM_MODULE_REF = Ref{Module}()
 
@@ -12,19 +27,9 @@ module Random
             return ccall(:jl_module_world, Csize_t, (Any,), RANDOM_MODULE_REF[])
         end
     end
-
-    import Base: rand, randn
-    function rand(args...)
-        Base.invoke_in_world(delay_initialize(), rand, args...)
-    end
-
-    function randn(args...)
-        Base.invoke_in_world(delay_initialize(), randn, args...)
-    end
+    @stub rand Random
+    @stub randn Random
 end
-
-Base.Docs.getdoc(::typeof(Base.rand)) = (Random.delay_initialize(); nothing)
-Base.Docs.getdoc(::typeof(Base.randn)) = (Random.delay_initialize(); nothing)
 
 function delete_stubs(mod)
     for name in names(mod, imported=true)

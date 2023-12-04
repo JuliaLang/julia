@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+using Random
 
 # MWE from https://github.com/JuliaLang/julia/issues/49501
 N = 1_000_000  # or larger

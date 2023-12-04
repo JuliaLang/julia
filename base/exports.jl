@@ -995,10 +995,6 @@ export
     unsafe_store!,
     unsafe_swap!,
 
-# implemented in Random module
-    rand,
-    randn,
-
 # Macros
     # parser internal
     @__FILE__,

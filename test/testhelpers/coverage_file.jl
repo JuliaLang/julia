@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+using Random
 
 function code_coverage_test()
     if rand(1:2) == 3

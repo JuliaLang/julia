@@ -396,4 +396,9 @@ end
 @deprecate permute!!(a, p::AbstractVector{<:Integer}) permute!(a, p) false
 @deprecate invpermute!!(a, p::AbstractVector{<:Integer}) invpermute!(a, p) false
 
+# functions defined in Random
+function rand end
+function randn end
+export rand, randn
+
 # END 1.11 deprecations
