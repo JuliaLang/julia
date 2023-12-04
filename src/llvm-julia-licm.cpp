@@ -339,6 +339,22 @@ struct JuliaLICM : public JuliaPassContext {
                         MSSAU.insertDef(cast<MemoryDef>(clear_mdef), true);
                     }
                     changed = true;
+                } else if (callee == gc_loaded_func) {
+                    bool valid = true;
+                    for (std::size_t i = 0; i < call->arg_size(); i++) {
+                        if (!makeLoopInvariant(L, call->getArgOperand(i),
+                            changed, preheader->getTerminator(),
+                            MSSAU, SE)) {
+                            valid = false;
+                            LLVM_DEBUG(dbgs() << "Failed to hoist gc_loaded argument: " << *call->getArgOperand(i) << "\n");
+                            break;
+                        }
+                    }
+                    if (!valid) {
+                        LLVM_DEBUG(dbgs() << "Failed to hoist gc_loaded: " << *call << "\n");
+                        continue;
+                    }
+                    moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                 }
             }
         }

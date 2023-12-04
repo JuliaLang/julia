@@ -150,9 +150,9 @@ private:
     void optimizeObject(CallInst *orig_inst, size_t sz);
     void optimizeArray(CallInst *orig_inst, jl_genericmemory_info_t info);
 
-    void moveSizedArrayToStack(CallInst *orig, jl_genericmemory_info_t info);
-    void moveUnsizedArrayToStack(CallInst *orig, jl_genericmemory_info_t info);
-    void replaceArrayUses(CallInst *orig, Value *root, function_ref<Value*()> shell, Value *data);
+    void moveSizedBitsArrayToStack(CallInst *orig, jl_genericmemory_info_t info);
+    void moveUnsizedBitsArrayToStack(CallInst *orig, jl_genericmemory_info_t info);
+    void replaceBitsArrayUses(CallInst *orig, Value *root, function_ref<Value*()> shell, Value *data);
 
     Function &F;
     OptimizationRemarkEmitter ORE;
@@ -297,7 +297,7 @@ void Optimizer::optimizeObject(CallInst *orig, size_t sz) {
     moveToStack(orig, sz, has_ref, use_info.allockind);
 }
 
-void Optimizer::moveSizedArrayToStack(CallInst *orig, jl_genericmemory_info_t info) {
+void Optimizer::moveSizedBitsArrayToStack(CallInst *orig, jl_genericmemory_info_t info) {
     auto length = orig->getArgOperand(1);
     auto ilen = cast<ConstantInt>(length)->getZExtValue();
     size_t bytes = jl_genericmemory_bytesize(&info, ilen);
@@ -335,11 +335,11 @@ void Optimizer::moveSizedArrayToStack(CallInst *orig, jl_genericmemory_info_t in
 
     // This is kind of a dirty cleanup, but subsequent DCE should clean up all the
     // nullptr manipulations
-    replaceArrayUses(orig, root, shell, data);
+    replaceBitsArrayUses(orig, root, shell, data);
     orig->eraseFromParent();
 }
 
-void Optimizer::moveUnsizedArrayToStack(CallInst *orig, jl_genericmemory_info_t info) {
+void Optimizer::moveUnsizedBitsArrayToStack(CallInst *orig, jl_genericmemory_info_t info) {
     size_t maxStackAlloc = 4096; // TODO parameterize by module flag/ctor param
     IRBuilder<> builder(&*F.getEntryBlock().getFirstInsertionPt());
     StringRef origName = orig->getName();
@@ -355,7 +355,8 @@ void Optimizer::moveUnsizedArrayToStack(CallInst *orig, jl_genericmemory_info_t 
     auto origBB = orig->getParent();
     builder.SetInsertPoint(orig);
     auto length = orig->getArgOperand(1);
-    auto fallback = SplitBlockAndInsertIfThen(builder.CreateICmpUGT(length, ConstantInt::get(length->getType(), maxStackAlloc)), orig, false, nullptr, _DT);
+    auto maxElements = ConstantInt::get(length->getType(), maxStackAlloc / info.elsize);
+    auto fallback = SplitBlockAndInsertIfThen(builder.CreateICmpUGT(length, maxElements), orig, false, nullptr, _DT);
     pass.cfgChanged = true;
     fallback->getParent()->setName("stack_alloc_fallback");
     builder.SetInsertPoint(orig);
@@ -380,9 +381,9 @@ void Optimizer::moveUnsizedArrayToStack(CallInst *orig, jl_genericmemory_info_t 
         shellPhi->addIncoming(shellStack, origBB);
         return shellPhi;
     };
-    
+
     // Replace all the uses now, before we make the original instruction conditional on array size
-    replaceArrayUses(orig, ownerPhi, shell, dataPhi);
+    replaceBitsArrayUses(orig, ownerPhi, shell, dataPhi);
 
     orig->moveBefore(fallback);
     builder.SetInsertPoint(fallback);
@@ -405,7 +406,7 @@ void Optimizer::moveUnsizedArrayToStack(CallInst *orig, jl_genericmemory_info_t 
     ownerPhi->getParent()->setName("allocated_array");
 }
 
-void Optimizer::replaceArrayUses(CallInst *alloc, Value *root, function_ref<Value *()>shell, Value *data) {
+void Optimizer::replaceBitsArrayUses(CallInst *alloc, Value *root, function_ref<Value *()>shell, Value *data) {
     IRBuilder<> builder(alloc->getContext());
     auto type = alloc->getArgOperand(0);
     auto length = alloc->getArgOperand(1);
@@ -470,6 +471,7 @@ void Optimizer::replaceArrayUses(CallInst *alloc, Value *root, function_ref<Valu
 }
 
 void Optimizer::optimizeArray(CallInst *orig, jl_genericmemory_info_t info) {
+    return;
     checkInst(orig);
     dbgs() << "checking array allocation\n";
     if (use_info.escaped) {
@@ -510,10 +512,10 @@ void Optimizer::optimizeArray(CallInst *orig, jl_genericmemory_info_t info) {
     dbgs() << "Moving array allocation to stack\n";
     if (isa<ConstantInt>(orig->getArgOperand(1))) {
         dbgs() << "allocation was sized\n";
-        moveSizedArrayToStack(orig, info);
+        moveSizedBitsArrayToStack(orig, info);
     } else {
         dbgs() << "allocation was unsized\n";
-        moveUnsizedArrayToStack(orig, info);
+        moveUnsizedBitsArrayToStack(orig, info);
     }
 }
 
