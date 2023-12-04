@@ -98,6 +98,19 @@ function gc_live_bytes()
     Int(ccall(:jl_gc_live_bytes, Int64, ())) + num.allocd + num.deferred_alloc
 end
 
+# must be kept in sync with the value from `src/julia_threads.h``
+const JL_GC_N_MAX_POOLS = 51
+
+page_utilization = zeros(Float64, JL_GC_N_MAX_POOLS)
+
+function gc_page_utilization_data()
+    page_utilization_raw = cglobal(:gc_page_utilization_stats, Float64)
+    for i in 1:JL_GC_N_MAX_POOLS
+        page_utilization[i] = unsafe_load(page_utilization_raw, i)
+    end
+    return page_utilization
+end
+
 """
     Base.jit_total_bytes()
 
