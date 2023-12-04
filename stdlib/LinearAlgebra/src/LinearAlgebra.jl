@@ -162,7 +162,11 @@ export
     I
 
 # not exported, but public names
-public AbstractTriangular
+public AbstractTriangular,
+        hermitian,
+        hermitian_type,
+        symmetric,
+        symmetric_type
 
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
