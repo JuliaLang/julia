@@ -52,7 +52,7 @@ end
         @test err.source.first_line == 1
         @test err.diagnostics[1].first_byte == 6
         @test err.diagnostics[1].last_byte == 5
-        @test err.diagnostics[1].message == "Expected `}`"
+        @test err.diagnostics[1].message == "Expected `}` or `,`"
     end
 
     @testset "toplevel errors" begin

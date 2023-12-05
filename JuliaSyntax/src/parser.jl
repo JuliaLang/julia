@@ -141,15 +141,20 @@ end
 #
 # Crude recovery heuristic: bump any tokens which aren't block or bracket
 # closing tokens.
-function bump_closing_token(ps, closing_kind)
+function bump_closing_token(ps, closing_kind, alternative_closer_hint=nothing)
     # todo: Refactor with recover() ?
-    bump_trivia(ps)
     if peek(ps) == closing_kind
+        bump_trivia(ps)
         bump(ps, TRIVIA_FLAG)
         return
     end
+    errmsg = "Expected `$(untokenize(closing_kind))`"
+    if !isnothing(alternative_closer_hint)
+        errmsg *= alternative_closer_hint
+    end
     # We didn't find the closing token. Read ahead in the stream
     mark = position(ps)
+    emit_diagnostic(ps, mark, mark, error=errmsg)
     while true
         k = peek(ps)
         if is_closing_token(ps, k) && !(k in KSet", ;")
@@ -158,8 +163,7 @@ function bump_closing_token(ps, closing_kind)
         bump(ps)
     end
     # mark as trivia => ignore in AST.
-    emit(ps, mark, K"error", TRIVIA_FLAG,
-         error="Expected `$(untokenize(closing_kind))`")
+    emit(ps, mark, K"error", TRIVIA_FLAG)
     if peek(ps) == closing_kind
         bump(ps, TRIVIA_FLAG)
     end
@@ -3101,7 +3105,6 @@ function parse_brackets(after_parse::Function,
     had_splat = false
     param_start = nothing
     while true
-        bump_trivia(ps)
         k = peek(ps)
         if k == closing_kind
             break
@@ -3127,7 +3130,6 @@ function parse_brackets(after_parse::Function,
             end
             t = peek_token(ps, skip_newlines=true)
             k = kind(t)
-            bump_trivia(ps)
             if k == K","
                 had_commas = true
                 bump(ps, TRIVIA_FLAG)
@@ -3156,7 +3158,7 @@ function parse_brackets(after_parse::Function,
         end
     end
     release_positions(ps.stream, params_positions)
-    bump_closing_token(ps, closing_kind)
+    bump_closing_token(ps, closing_kind, " or `,`")
     return opts
 end
 
