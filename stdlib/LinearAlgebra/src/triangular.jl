@@ -703,9 +703,9 @@ mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractTriangular) = _trimul!
 _trimul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) =
     lmul!(A, copyto!(C, B))
 _trimul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix) =
-    lmul!(A, inplace_adj_or_trans(B)(C, _unwrap_at(B)))
+    lmul!(A, copyto!(C, B))
 _trimul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) =
-    rmul!(inplace_adj_or_trans(A)(C, _unwrap_at(A)), B)
+    rmul!(copyto!(C, A), B)
 _trimul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractTriangular) =
     lmul!(A, copyto!(C, B))
 # redirect for UpperOrLowerTriangular
@@ -752,9 +752,9 @@ end
 ldiv!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = _ldiv!(C, A, B)
 # generic fallback for AbstractTriangular, directs to 2-arg [l/r]div!
 _ldiv!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) =
-    ldiv!(A, inplace_adj_or_trans(B)(C, _unwrap_at(B)))
+    ldiv!(A, copyto!(C, B))
 _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) =
-    rdiv!(inplace_adj_or_trans(A)(C, _unwrap_at(A)), B)
+    rdiv!(copyto!(C, A), B)
 # redirect for UpperOrLowerTriangular to generic_*div!
 _ldiv!(C::AbstractVecOrMat, A::UpperOrLowerTriangular, B::AbstractVecOrMat) =
     generic_trimatdiv!(C, uplo_char(A), isunit_char(A), wrapperop(parent(A)), _unwrap_at(parent(A)), B)
