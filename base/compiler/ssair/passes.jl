@@ -762,8 +762,7 @@ function perform_lifting!(compact::IncrementalCompact,
                 only_result = (then_result === SKIP_TOKEN) ? else_result : then_result
 
                 # Replace Core.ifelse(%cond, %a, %b) with %a
-                compact[lf.ssa][:stmt] = only_result
-                should_count && _count_added_node!(compact, only_result)
+                compact[lf.ssa] = only_result
 
                 # Note: Core.ifelse(%cond, %a, %b) has observable effects (!nothrow), but since
                 # we have not deleted the preceding statement that this was derived from, this
@@ -2011,6 +2010,7 @@ function follow_map(map::Vector{Int}, idx::Int)
 end
 
 function ascend_eliminated_preds(bbs::Vector{BasicBlock}, pred::Int)
+    pred == 0 && return pred
     while pred != 1 && length(bbs[pred].preds) == 1 && length(bbs[pred].succs) == 1
         pred = bbs[pred].preds[1]
     end
@@ -2048,6 +2048,10 @@ function add_preds!(all_new_preds::Vector{Int32}, bbs::Vector{BasicBlock}, bb_re
     preds = copy(bbs[old_edge].preds)
     while !isempty(preds)
         old_edge′ = popfirst!(preds)
+        if old_edge′ == 0
+            push!(all_new_preds, old_edge′)
+            continue
+        end
         new_edge = bb_rename_pred[old_edge′]
         if new_edge > 0 && new_edge ∉ all_new_preds
             push!(all_new_preds, Int32(new_edge))
@@ -2147,9 +2151,9 @@ function cfg_simplify!(ir::IRCode)
                         push!(worklist, terminator.dest)
                     end
                 elseif isa(terminator, EnterNode)
-                    enteridx = terminator.args[1]::Int
-                    if bb_rename_succ[enteridx] == 0
-                        push!(worklist, enteridx)
+                    catchbb = terminator.catch_dest
+                    if bb_rename_succ[catchbb] == 0
+                        push!(worklist, catchbb)
                     end
                 end
                 ncurr = curr + 1
@@ -2328,6 +2332,12 @@ function cfg_simplify!(ir::IRCode)
                                 push!(values, renamed_values[old_index])
                             else
                                 resize!(values, length(values)+1)
+                            end
+                        elseif new_edge == -1
+                            @assert length(phi.edges) == 1
+                            if isassigned(renamed_values, old_index)
+                                push!(edges, -1)
+                                push!(values, renamed_values[old_index])
                             end
                         elseif new_edge == -3
                             # Multiple predecessors, we need to expand out this phi

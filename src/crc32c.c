@@ -1,6 +1,6 @@
 /* crc32c.c -- compute CRC-32C using software table or available hardware instructions
- * Copyright (C) 2013 Mark Adler
- * Version 1.1  1 Aug 2013  Mark Adler
+ * Copyright (C) 2013, 2021 Mark Adler
+ * Version 1.1  1 Aug 2013  Mark Adler, updates from Version 1.2 5 June 2021
  *
  * Code retrieved in August 2016 from August 2013 post by Mark Adler on
  *    http://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software
@@ -10,6 +10,7 @@
  *    - architecture and compiler detection
  *    - precompute crc32c tables and store in a generated .c file
  *    - ARMv8 support
+ * Updated to incorporate upstream 2021 patch by Mark Adler to register constraints.
  */
 
 /*
@@ -39,6 +40,8 @@
 /* Version history:
    1.0  10 Feb 2013  First version
    1.1   1 Aug 2013  Correct comments on why three crc instructions in parallel
+   1.2   5 Jun 2021  Correct register constraints on assembly instructions
+                     (+ other changes that were superfluous for us)
 */
 
 #include "julia.h"
@@ -98,16 +101,14 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
        to an eight-byte boundary */
     while (len && ((uintptr_t)buf & 7) != 0) {
         __asm__("crc32b\t" "(%1), %0"
-                : "=r"(crc0)
-                : "r"(buf), "0"(crc0));
+                : "+r"(crc0)
+                : "r"(buf), "m"(*buf));
         buf++;
         len--;
     }
 
-    /* compute the crc on sets of LONG*3 bytes, executing three independent crc
-       instructions, each on LONG bytes -- this is optimized for the Nehalem,
-       Westmere, Sandy Bridge, and Ivy Bridge architectures, which have a
-       throughput of one crc per cycle, but a latency of three cycles */
+    /* compute the crc on sets of LONG*3 bytes,
+       making use of three ALUs in parallel on a single core. */
     while (len >= LONG * 3) {
         uintptr_t crc1 = 0;
         uintptr_t crc2 = 0;
@@ -116,8 +117,11 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
             __asm__(CRC32_PTR "\t" "(%3), %0\n\t"
                     CRC32_PTR "\t" LONGx1 "(%3), %1\n\t"
                     CRC32_PTR "\t" LONGx2 "(%3), %2"
-                    : "=r"(crc0), "=r"(crc1), "=r"(crc2)
-                    : "r"(buf), "0"(crc0), "1"(crc1), "2"(crc2));
+                    : "+r"(crc0), "+r"(crc1), "+r"(crc2)
+                    : "r"(buf),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[0]),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[LONG]),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[LONG*2]));
             buf += sizeof(void*);
         } while (buf < end);
         crc0 = crc32c_shift(crc32c_long, crc0) ^ crc1;
@@ -136,8 +140,11 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
             __asm__(CRC32_PTR "\t" "(%3), %0\n\t"
                     CRC32_PTR "\t" SHORTx1 "(%3), %1\n\t"
                     CRC32_PTR "\t" SHORTx2 "(%3), %2"
-                    : "=r"(crc0), "=r"(crc1), "=r"(crc2)
-                    : "r"(buf), "0"(crc0), "1"(crc1), "2"(crc2));
+                    : "+r"(crc0), "+r"(crc1), "+r"(crc2)
+                    : "r"(buf),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[0]),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[SHORT]),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[SHORT*2]));
             buf += sizeof(void*);
         } while (buf < end);
         crc0 = crc32c_shift(crc32c_short, crc0) ^ crc1;
@@ -151,8 +158,8 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
     const char *end = buf + (len - (len & 7));
     while (buf < end) {
         __asm__(CRC32_PTR "\t" "(%1), %0"
-                : "=r"(crc0)
-                : "r"(buf), "0"(crc0));
+                : "+r"(crc0)
+                : "r"(buf), "m"(* (const char (*)[sizeof(void*)]) buf));
         buf += sizeof(void*);
     }
     len &= 7;
@@ -160,8 +167,8 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
     /* compute the crc for up to seven trailing bytes */
     while (len) {
         __asm__("crc32b\t" "(%1), %0"
-                : "=r"(crc0)
-                : "r"(buf), "0"(crc0));
+                : "+r"(crc0)
+                : "r"(buf), "m"(*buf));
         buf++;
         len--;
     }
