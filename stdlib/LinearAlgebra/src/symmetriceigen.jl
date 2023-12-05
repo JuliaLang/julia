@@ -286,6 +286,9 @@ end
 function eigvals!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
     L = UnitLowerTriangular(F.L)
     U = UpperTriangular(F.U)
+    # Compute generalized eigenvalues of equivalent matrix:
+    #    A' = inv(L)*(P*A)*inv(U)
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
     permuterows!(A, F.p)
     ldiv!(L, A)
     rdiv!(A, U)
