@@ -281,7 +281,7 @@ mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Int
 # implements an index-free in-order pairwise strategy:
 function mapreduce_impl(f, op, nt, itr)
     it = iterate(itr)
-    it === nothing && return nt isa _InitialValue ? mapreduce_empty_iter(f, op, itr, IteratorEltype(itr)) : nt
+    it === nothing && return nt isa _InitialValue ? reduce_empty_iter(_xfadjoint(BottomRF(op), Generator(f, itr))...) : nt
     a1, state = it
     it = iterate(itr, state)
     it === nothing && return nt isa _InitialValue ? mapreduce_first(f, op, a1) : op(nt, f(a1))

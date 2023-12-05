@@ -615,6 +615,7 @@ test18695(r) = sum( t^2 for t in r )
 @test_throws str -> ( occursin("reducing over an empty", str) &&
                       occursin("consider supplying `init`", str) &&
                      !occursin("or defining", str)) test18695(Any[])
+@test_throws MethodError test18695(Any[])
 
 # For Core.IntrinsicFunction
 @test_throws str -> ( occursin("reducing over an empty", str) &&
