@@ -360,7 +360,7 @@ function mapreduce(f, op, itr; init=_InitialValue())
     if haslength(itr) && length(itr) ≤ pairwise_blocksize(f, op)
         return mapfoldl(f, op, itr; init) # skip overhead for small iterators
     else
-        return mapreduce_impl(f, op, init, itr, IteratorSize(itr))
+        return mapreduce_impl(f, op, init, itr)
     end
 end
 mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
