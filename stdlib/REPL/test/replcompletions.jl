@@ -2165,12 +2165,12 @@ for (DictT, KeyT) = Any[(Dict{Symbol,Any}, Symbol),
         effects = Base.infer_effects(getindex, (DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter())
         @test Core.Compiler.is_effect_free(effects)
         @test Core.Compiler.is_terminates(effects)
-        @test Core.Compiler.is_noub(effects) broken=(KeyT!==Symbol)
+        @test Core.Compiler.is_noub(effects)
         effects = Base.infer_effects((DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter()) do d, key
             key in keys(d)
         end
         @test Core.Compiler.is_effect_free(effects)
         @test Core.Compiler.is_terminates(effects)
-        @test Core.Compiler.is_noub(effects) broken=(KeyT!==Symbol)
+        @test Core.Compiler.is_noub(effects)
     end
 end

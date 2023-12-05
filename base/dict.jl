@@ -271,7 +271,7 @@ function empty!(h::Dict{K,V}) where V where K
 end
 
 # get the index where a key is stored, or -1 if not present
-@assume_effects :terminates_locally function ht_keyindex(h::Dict{K,V}, key) where V where K
+function ht_keyindex(h::Dict{K,V}, key) where V where K
     isempty(h) && return -1
     sz = length(h.keys)
     iter = 0
@@ -280,9 +280,9 @@ end
     index, sh = hashindex(key, sz)
     keys = h.keys
 
-    @inbounds while true
+    @assume_effects :terminates_locally :noub @inbounds while true
         isslotempty(h,index) && return -1
-        if h.slots[index] == sh
+        if sh == h.slots[index]
             k = keys[index]
             if (key ===  k || isequal(key, k))
                 return index
@@ -294,8 +294,6 @@ end
     end
     # This line is unreachable
 end
-@assume_effects :noub ht_keyindex(h::Dict{Symbol,V}, key::Symbol) where V =
-    @invoke ht_keyindex(h::Dict{Symbol,V}, key::Any)
 
 # get (index, sh) for the key
 #     index - where a key is stored, or -pos if not present
@@ -509,10 +507,8 @@ end
 
 function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
-    @inbounds return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V
+    return index < 0 ? throw(KeyError(key)) : @assume_effects :noub @inbounds h.vals[index]::V
 end
-@assume_effects :noub getindex(h::Dict{Symbol,V}, key::Symbol) where V =
-    @invoke getindex(h::Dict{Symbol,V}, key::Any)
 
 """
     get(collection, key, default)
