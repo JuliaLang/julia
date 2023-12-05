@@ -708,15 +708,16 @@ static inline const char *find_cpu_name(uint32_t cpu)
 
 static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 {
+    using namespace llvm;
     char buffer[128];
     size_t bufferlen = 128;
     sysctlbyname("machdep.cpu.brand_string",&buffer,&bufferlen,NULL,0);
-    std::string cpu_name(buffer);
-    if (cpu_name.find("M1") != std::string::npos)
+    StringRef cpu_name(buffer);
+    if (cpu_name.find("M1") != StringRef ::npos)
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
-    else if (cpu_name.find("M2") != std::string::npos)
+    else if (cpu_name.find("M2") != StringRef ::npos)
         return std::make_pair((uint32_t)CPU::apple_m2, Feature::apple_m2);
-    else if (cpu_name.find("M3") != std::string::npos)
+    else if (cpu_name.find("M3") != StringRef ::npos)
         return std::make_pair((uint32_t)CPU::apple_m2, Feature::apple_m2); // TODO: M3 is not yet supported
     else
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
