@@ -306,7 +306,7 @@ function _mapreduce_impl(f, op, nt, itr, state, n)
     it === nothing && return nt, nothing
     a1, state = it
     it = iterate(itr, state)
-    it === nothing && return op(nt, f(a1))
+    it === nothing && return op(nt, f(a1)), nothing
     a2, state = it
     v = op(f(a1), f(a2))
 
