@@ -1423,7 +1423,7 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 // sweep phase
 
 gc_fragmentation_stat_t gc_page_fragmentation_stats[JL_GC_N_POOLS];
-JL_DLLEXPORT double gc_page_utilization_stats[JL_GC_N_MAX_POOLS];
+JL_DLLEXPORT double *jl_gc_page_utilization_stats;
 
 STATIC_INLINE void gc_update_page_fragmentation_data(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
@@ -1442,7 +1442,7 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
         if (n_pages_allocd != 0) {
             utilization -= ((double)n_freed_objs * (double)jl_gc_sizeclasses[i]) / (double)n_pages_allocd / (double)GC_PAGE_SZ;
         }
-        gc_page_utilization_stats[i] = utilization;
+        jl_gc_page_utilization_stats[i] = utilization;
         jl_atomic_store_relaxed(&stats->n_freed_objs, 0);
         jl_atomic_store_relaxed(&stats->n_pages_allocd, 0);
     }
@@ -3819,6 +3819,7 @@ void jl_gc_init(void)
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
     gc_num.max_memory = 0;
+    jl_gc_page_utilization_stats = (double *)malloc_s(JL_GC_N_MAX_POOLS * sizeof(double));
 
 #ifdef _P64
     total_mem = uv_get_total_memory();

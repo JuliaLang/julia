@@ -148,6 +148,7 @@
     XX(jl_libdl_module) \
     XX(jl_libdl_dlopen_func) \
     XX(jl_precompilable_error) \
+    XX(jl_gc_page_utilization_stats) \
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \
