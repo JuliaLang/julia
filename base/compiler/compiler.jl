@@ -71,6 +71,7 @@ function EffectsOverride(
         noub,
         noub_if_noinbounds)
 end
+const NUM_EFFECTS_OVERRIDES = 9 # sync with julia.h
 
 # essential files and libraries
 include("essentials.jl")
