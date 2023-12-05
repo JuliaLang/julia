@@ -81,6 +81,11 @@
 // Automatic Instrumenting Profiler
 //#define ENABLE_TIMINGS
 
+// pool allocator configuration options
+
+// GC_SMALL_PAGE allocates objects in 4k pages
+// #define GC_SMALL_PAGE
+
 
 // method dispatch profiling --------------------------------------------------
 

@@ -31,8 +31,12 @@
 extern "C" {
 #endif
 
+#ifdef GC_SMALL_PAGE
+#define GC_PAGE_LG2 12 // log2(size of a page)
+#else
 #define GC_PAGE_LG2 14 // log2(size of a page)
-#define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
+#endif
+#define GC_PAGE_SZ (1 << GC_PAGE_LG2)
 #define GC_PAGE_OFFSET (JL_HEAP_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_HEAP_ALIGNMENT))
 
 #define jl_malloc_tag ((void*)0xdeadaa01)
@@ -241,6 +245,23 @@ typedef struct {
     _Atomic(size_t) n_pages_allocd;
 } gc_fragmentation_stat_t;
 
+#ifdef GC_SMALL_PAGE
+#ifdef _P64
+#define REGION0_PG_COUNT (1 << 16)
+#define REGION1_PG_COUNT (1 << 18)
+#define REGION2_PG_COUNT (1 << 18)
+#define REGION0_INDEX(p) (((uintptr_t)(p) >> 12) & 0xFFFF) // shift by GC_PAGE_LG2
+#define REGION1_INDEX(p) (((uintptr_t)(p) >> 28) & 0x3FFFF)
+#define REGION_INDEX(p)  (((uintptr_t)(p) >> 46) & 0x3FFFF)
+#else
+#define REGION0_PG_COUNT (1 << 10)
+#define REGION1_PG_COUNT (1 << 10)
+#define REGION2_PG_COUNT (1 << 0)
+#define REGION0_INDEX(p) (((uintptr_t)(p) >> 12) & 0x3FF) // shift by GC_PAGE_LG2
+#define REGION1_INDEX(p) (((uintptr_t)(p) >> 22) & 0x3FF)
+#define REGION_INDEX(p)  (0)
+#endif
+#else
 #ifdef _P64
 #define REGION0_PG_COUNT (1 << 16)
 #define REGION1_PG_COUNT (1 << 16)
@@ -255,6 +276,7 @@ typedef struct {
 #define REGION0_INDEX(p) (((uintptr_t)(p) >> 14) & 0xFF) // shift by GC_PAGE_LG2
 #define REGION1_INDEX(p) (((uintptr_t)(p) >> 22) & 0x3FF)
 #define REGION_INDEX(p)  (0)
+#endif
 #endif
 
 // define the representation of the levels of the page-table (0 to 2)
