@@ -88,6 +88,7 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
+* `cbrt(::AbstractMatrix{<:Real})` is now defined and returns real-valued matrix cube roots of real-valued matrices ([#50661]).
 
 #### Printf
 

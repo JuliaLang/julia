@@ -812,6 +812,13 @@ for func in (:log, :sqrt)
     end
 end
 
+# Cube root of a real-valued symmetric matrix
+function cbrt(A::HermOrSym{<:Real})
+    F = eigen(A)
+    A = F.vectors * Diagonal(cbrt.(F.values)) * F.vectors'
+    return A
+end
+
 """
     hermitianpart(A, uplo=:U) -> Hermitian
 

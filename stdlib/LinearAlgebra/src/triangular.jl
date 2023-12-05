@@ -2537,3 +2537,94 @@ for (tritype, comptritype) in ((:LowerTriangular, :UpperTriangular),
     @eval /(u::TransposeAbsVec, A::$tritype{<:Any,<:Adjoint}) = transpose($comptritype(conj(parent(parent(A)))) \ u.parent)
     @eval /(u::TransposeAbsVec, A::$tritype{<:Any,<:Transpose}) = transpose(transpose(A) \ u.parent)
 end
+
+# Cube root of a 2x2 real-valued matrix with complex conjugate eigenvalues and equal diagonal values.
+# Reference [1]: Smith, M. I. (2003). A Schur Algorithm for Computing Matrix pth Roots.
+#   SIAM Journal on Matrix Analysis and Applications (Vol. 24, Issue 4, pp. 971–989).
+#   https://doi.org/10.1137/s0895479801392697
+function _cbrt_2x2!(A::AbstractMatrix{T}) where {T<:Real}
+    @assert checksquare(A) == 2
+    @inbounds begin
+        (A[1,1] == A[2,2]) || throw(ArgumentError("_cbrt_2x2!: Matrix A must have equal diagonal values."))
+        (A[1,2]*A[2,1] < 0) || throw(ArgumentError("_cbrt_2x2!: Matrix A must have complex conjugate eigenvalues."))
+        μ = sqrt(-A[1,2]*A[2,1])
+        r = cbrt(hypot(A[1,1], μ))
+        θ = atan(μ, A[1,1])
+        s, c = sincos(θ/3)
+        α, β′ = r*c, r*s/µ
+        A[1,1] = α
+        A[2,2] = α
+        A[1,2] = β′*A[1,2]
+        A[2,1] = β′*A[2,1]
+    end
+    return A
+end
+
+# Cube root of a quasi upper triangular matrix (output of Schur decomposition)
+# Reference [1]: Smith, M. I. (2003). A Schur Algorithm for Computing Matrix pth Roots.
+#   SIAM Journal on Matrix Analysis and Applications (Vol. 24, Issue 4, pp. 971–989).
+#   https://doi.org/10.1137/s0895479801392697
+@views function _cbrt_quasi_triu!(A::AbstractMatrix{T}) where {T<:Real}
+    m, n = size(A)
+    (m == n) || throw(ArgumentError("_cbrt_quasi_triu!: Matrix A must be square."))
+    # Cube roots of 1x1 and 2x2 diagonal blocks
+    i = 1
+    sizes = ones(Int,n)
+    S = zeros(T,2,n)
+    while i < n
+        if !iszero(A[i+1,i])
+            _cbrt_2x2!(A[i:i+1,i:i+1])
+            mul!(S[1:2,i:i+1], A[i:i+1,i:i+1], A[i:i+1,i:i+1])
+            sizes[i] = 2
+            sizes[i+1] = 0
+            i += 2
+        else
+            A[i,i] = cbrt(A[i,i])
+            S[1,i] = A[i,i]*A[i,i]
+            i += 1
+        end
+    end
+    if i == n
+        A[n,n] = cbrt(A[n,n])
+        S[1,n] = A[n,n]*A[n,n]
+    end
+    # Algorithm 4.3 in Reference [1]
+    Δ = I(4)
+    M_L₀ = zeros(T,4,4)
+    M_L₁ = zeros(T,4,4)
+    M_Bᵢⱼ⁽⁰⁾ = zeros(T,2,2)
+    M_Bᵢⱼ⁽¹⁾ = zeros(T,2,2)
+    for k = 1:n-1
+        for i = 1:n-k
+            if sizes[i] == 0 || sizes[i+k] == 0 continue end
+            k₁, k₂ = i+1+(sizes[i+1]==0), i+k-1
+            i₁, i₂, j₁, j₂, s₁, s₂ = i, i+sizes[i]-1, i+k, i+k+sizes[i+k]-1, sizes[i], sizes[i+k]
+            L₀ = M_L₀[1:s₁*s₂,1:s₁*s₂]
+            L₁ = M_L₁[1:s₁*s₂,1:s₁*s₂]
+            Bᵢⱼ⁽⁰⁾ = M_Bᵢⱼ⁽⁰⁾[1:s₁, 1:s₂]
+            Bᵢⱼ⁽¹⁾ = M_Bᵢⱼ⁽¹⁾[1:s₁, 1:s₂]
+            # Compute Bᵢⱼ⁽⁰⁾ and Bᵢⱼ⁽¹⁾
+            mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,k₁:k₂], A[k₁:k₂,j₁:j₂])
+            # Retreive Rᵢ,ᵢ₊ₖ as A[i+k,i]'
+            mul!(Bᵢⱼ⁽¹⁾, A[i₁:i₂,k₁:k₂], A[j₁:j₂,k₁:k₂]')
+            # Solve Uᵢ,ᵢ₊ₖ using Reference [1, (4.10)]
+            kron!(L₀, Δ[1:s₂,1:s₂], S[1:s₁,i₁:i₂])
+            L₀ .+= kron!(L₁, A[j₁:j₂,j₁:j₂]', A[i₁:i₂,i₁:i₂])
+            L₀ .+= kron!(L₁, S[1:s₂,j₁:j₂]', Δ[1:s₁,1:s₁])
+            mul!(A[i₁:i₂,j₁:j₂], A[i₁:i₂,i₁:i₂], Bᵢⱼ⁽⁰⁾, -1.0, 1.0)
+            A[i₁:i₂,j₁:j₂] .-= Bᵢⱼ⁽¹⁾
+            ldiv!(lu!(L₀), A[i₁:i₂,j₁:j₂][:])
+            # Compute and store Rᵢ,ᵢ₊ₖ' in A[i+k,i]
+            mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,i₁:i₂], A[i₁:i₂,j₁:j₂], 1.0, 1.0)
+            mul!(Bᵢⱼ⁽⁰⁾, A[i₁:i₂,j₁:j₂], A[j₁:j₂,j₁:j₂], 1.0, 1.0)
+            A[j₁:j₂,i₁:i₂] .= Bᵢⱼ⁽⁰⁾'
+        end
+    end
+    # Make quasi triangular
+    for j=1:n for i=j+1+(sizes[j]==2):n A[i,j] = 0 end end
+    return A
+end
+
+# Cube roots of real-valued triangular matrices
+cbrt(A::UpperTriangular{T}) where {T<:Real} = UpperTriangular(_cbrt_quasi_triu!(Matrix{T}(A)))
+cbrt(A::LowerTriangular{T}) where {T<:Real} = LowerTriangular(_cbrt_quasi_triu!(Matrix{T}(A'))')
