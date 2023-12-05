@@ -369,10 +369,9 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 
 # handling empty arrays
-_empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
+_empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed; consider supplying `init` to the reducer"))
 _empty_reduce_error(@nospecialize(f), @nospecialize(T::Type)) = throw(ArgumentError("""
-    reducing with $f over an empty collection of element type $T is not allowed.
-    You may be able to prevent this error by supplying an `init` value to the reducer."""))
+    reducing with $f over an empty collection of element type $T is not allowed; consider supplying `init` to the reducer"""))
 
 """
     Base.reduce_empty(op, T)
@@ -435,9 +434,7 @@ mapreduce_empty_iter(f, op, itr, ItrEltype) =
 
 @inline reduce_empty_iter(op, itr) = reduce_empty_iter(op, itr, IteratorEltype(itr))
 @inline reduce_empty_iter(op, itr, ::HasEltype) = reduce_empty(op, eltype(itr))
-reduce_empty_iter(op, itr, ::EltypeUnknown) = throw(ArgumentError("""
-    reducing over an empty collection of unknown element type is not allowed.
-    You may be able to prevent this error by supplying an `init` value to the reducer."""))
+reduce_empty_iter(op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
 
 # handling of single-element iterators
