@@ -1425,6 +1425,8 @@ end
 
 Rank-1 update of the matrix `A` with vectors `x` and `y` as `alpha*x*transpose(y) + A`.
 """
+function geru! end
+
 for (fname, elty) in ((:zgeru_,:ComplexF64), (:cgeru_,:ComplexF32))
     @eval begin
         function geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty})
