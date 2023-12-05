@@ -38,7 +38,9 @@ julia> sval[]
     implementation is available from the package ScopedValues.jl.
 """
 mutable struct ScopedValue{T}
-    const has_default::Bool
+    # NOTE this struct must be defined as mutable one since it's used as a key of
+    #      `ScopeStorage` dictionary and thus needs object identity
+    const has_default::Bool # this field is necessary since isbitstype `default` field may be initialized with undefined value
     const default::T
     ScopedValue{T}() where T = new(false)
     ScopedValue{T}(val) where T = new{T}(true, val)
@@ -56,7 +58,7 @@ Base.isassigned(val::ScopedValue) = val.has_default
 
 const ScopeStorage = Base.PersistentDict{ScopedValue, Any}
 
-mutable struct Scope
+struct Scope
     values::ScopeStorage
 end
 
@@ -114,15 +116,15 @@ function get(val::ScopedValue{T}) where {T}
     # Inline current_scope to avoid doing the type assertion twice.
     scope = current_task().scope
     if scope === nothing
-        isassigned(val) && return Some(val.default)
+        isassigned(val) && return Some{T}(val.default)
         return nothing
     end
     scope = scope::Scope
     if isassigned(val)
-        return Some(Base.get(scope.values, val, val.default)::T)
+        return Some{T}(Base.get(scope.values, val, val.default)::T)
     else
         v = Base.get(scope.values, val, novalue)
-        v === novalue || return Some(v::T)
+        v === novalue || return Some{T}(v::T)
     end
     return nothing
 end

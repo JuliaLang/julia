@@ -786,7 +786,10 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 
     if (!clones.empty()) {
         assert(!fvars.empty());
-        std::sort(clones.begin(), clones.end());
+        std::sort(clones.begin(), clones.end(),
+            [](const std::pair<uint32_t, const char *> &a, const std::pair<uint32_t, const char *> &b) {
+                return (a.first & jl_sysimg_val_mask) < (b.first & jl_sysimg_val_mask);
+        });
         auto clone_offsets = (int32_t *) malloc(sizeof(int32_t) * clones.size());
         auto clone_idxs = (uint32_t *) malloc(sizeof(uint32_t) * clones.size());
         for (size_t i = 0; i < clones.size(); i++) {
@@ -993,7 +996,7 @@ extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
     }
 
     jl_value_t *arr = (jl_value_t*)jl_alloc_array_1d(jl_array_uint8_type, data.size());
-    uint8_t *out = (uint8_t*)jl_array_data(arr);
+    uint8_t *out = jl_array_data(arr, uint8_t);
     memcpy(out, data.data(), data.size());
     return arr;
 }

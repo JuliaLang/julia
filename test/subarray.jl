@@ -799,4 +799,21 @@ end
     end
     V = view(OneElVec(6, 2), 1:5)
     @test sprint(show, "text/plain", V) == "$(summary(V)):\n ⋅\n 1\n ⋅\n ⋅\n ⋅"
+
+    V = view(1:2, [CartesianIndex(2)])
+    @test sprint(show, "text/plain", V) == "$(summary(V)):\n 2"
+end
+
+@testset "Base.first_index for offset indices" begin
+    a = Vector(1:10)
+    b = view(a, Base.IdentityUnitRange(4:7))
+    @test first(b) == a[Base.first_index(b)]
+end
+
+@testset "StepRangeLen of CartesianIndex-es" begin
+    v = view(1:2, StepRangeLen(CartesianIndex(1,1), CartesianIndex(1,1), 0))
+    @test isempty(v)
+    r = StepRangeLen(CartesianIndex(1), CartesianIndex(1), 1)
+    v = view(1:2, r)
+    @test v == view(1:2, collect(r))
 end

@@ -210,8 +210,10 @@ static char *_buf_realloc(ios_t *s, size_t sz)
         if (temp == NULL)
             return NULL;
         s->ownbuf = 1;
-        if (s->size > 0)
+        if (s->size > 0) {
+            assert(s->buf != NULL);
             memcpy(temp, s->buf, (size_t)s->size);
+        }
     }
 
     s->buf = temp;
@@ -721,8 +723,10 @@ char *ios_take_buffer(ios_t *s, size_t *psize)
         buf = (char*)LLT_ALLOC((size_t)s->size + 1);
         if (buf == NULL)
             return NULL;
-        if (s->size)
+        if (s->size) {
+            assert(s->buf != NULL);
             memcpy(buf, s->buf, (size_t)s->size);
+        }
     }
     else if (s->size == s->maxsize) {
         buf = (char*)LLT_REALLOC(s->buf, (size_t)s->size + 1);
@@ -1219,7 +1223,9 @@ char *ios_readline(ios_t *s)
     ios_mem(&dest, 0);
     ios_copyuntil(&dest, s, '\n', 1);
     size_t n;
-    return ios_take_buffer(&dest, &n);
+    char * ret = ios_take_buffer(&dest, &n);
+    ios_close(&dest);
+    return ret;
 }
 
 extern int vasprintf(char **strp, const char *fmt, va_list ap);

@@ -288,7 +288,7 @@ julia> using .A, .B
 
 julia> f
 WARNING: both B and A export "f"; uses of it in module Main must be qualified
-ERROR: UndefVarError: `f` not defined
+ERROR: UndefVarError: `f` not defined in `Main`
 ```
 
 Here, Julia cannot decide which `f` you are referring to, so you have to make a choice. The following solutions are commonly used:
@@ -404,7 +404,7 @@ x = 0
 
 module Sub
 using ..TestPackage
-z = y # ERROR: UndefVarError: `y` not defined
+z = y # ERROR: UndefVarError: `y` not defined in `Main`
 end
 
 y = 1
@@ -420,7 +420,7 @@ For similar reasons, you cannot use a cyclic ordering:
 module A
 
 module B
-using ..C # ERROR: UndefVarError: `C` not defined
+using ..C # ERROR: UndefVarError: `C` not defined in `Main.A`
 end
 
 module C
@@ -447,10 +447,12 @@ recompiled upon `using` or `import`. Dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by [`include_dependency(path)`](@ref)
 in the module file(s).
 
-For file dependencies, a change is determined by examining whether the modification time (`mtime`)
-of each file loaded by `include` or added explicitly by `include_dependency` is unchanged, or equal
-to the modification time truncated to the nearest second (to accommodate systems that can't copy
-mtime with sub-second accuracy). It also takes into account whether the path to the file chosen
+For file dependencies loaded by `include`, a change is determined by examining whether the
+file size (`fsize`) or content (condensed into a hash) is unchanged.
+For file dependencies loaded by `include_dependency` a change is determined by examining whether the modification time (`mtime`)
+is unchanged, or equal to the modification time truncated to the nearest second
+(to accommodate systems that can't copy mtime with sub-second accuracy).
+It also takes into account whether the path to the file chosen
 by the search logic in `require` matches the path that had created the precompile file. It also takes
 into account the set of dependencies already loaded into the current process and won't recompile those
 modules, even if their files change or disappear, in order to avoid creating incompatibilities between

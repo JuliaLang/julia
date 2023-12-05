@@ -9,7 +9,7 @@
 """
 module Experimental
 
-using Base: Threads, sync_varname, is_function_def
+using Base: Threads, sync_varname, is_function_def, @propagate_inbounds
 using Base.Meta
 
 """
@@ -28,10 +28,7 @@ end
 Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
-@eval Base.getindex(A::Const, i1::Int) =
-    (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =
-  (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+@propagate_inbounds Base.getindex(A::Const, i1::Int, I::Int...) = A.a[i1, I...]
 
 """
     @aliasscope expr
@@ -146,7 +143,7 @@ code to resort to runtime dispatch instead.
 Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to `3`).
 """
 macro max_methods(n::Int)
-    0 < n < 5 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
+    1 <= n <= 4 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
     return Expr(:meta, :max_methods, n)
 end
 
@@ -159,13 +156,13 @@ for max_methods. This setting is global for the entire generic function (or more
 the MethodTable).
 """
 macro max_methods(n::Int, fdef::Expr)
-    0 < n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
+    1 <= n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
     (fdef.head === :function && length(fdef.args) == 1) || error("Second argument must be a function forward declaration")
     return :(typeof($(esc(fdef))).name.max_methods = $(UInt8(n)))
 end
 
 """
-    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,...}
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,4}
 
 Set compiler options for code in the enclosing module. Options correspond directly to
 command-line options with the same name, where applicable. The following options
@@ -198,7 +195,7 @@ macro compiler_options(args...)
             elseif ex.args[1] === :max_methods
                 a = ex.args[2]
                 a = a === :default ? 3 :
-                  a isa Int ? ((0 < a < 5) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
+                  a isa Int ? ((1 <= a <= 4) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
                   error("invalid argument to \"max_methods\" option")
                 push!(opts.args, Expr(:meta, :max_methods, a))
             else

@@ -185,6 +185,8 @@ it is even faster to write into a pre-allocated output array with `u .= @view v[
 (Even though `permute!` overwrites `v` in-place, it internally requires some allocation
 to keep track of which elements have been moved.)
 
+$(_DOCS_ALIASING_WARNING)
+
 See also [`invpermute!`](@ref).
 
 # Examples
@@ -213,6 +215,8 @@ Like [`permute!`](@ref), but the inverse of the given permutation is applied.
 Note that if you have a pre-allocated output array (e.g. `u = similar(v)`),
 it is quicker to instead employ `u[p] = v`.  (`invpermute!` internally
 allocates a copy of the data.)
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest

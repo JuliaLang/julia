@@ -161,6 +161,18 @@ end
     r
 end
 
+function Base.minimum(D::Diagonal{T}) where T <: Number
+    mindiag = minimum(D.diag)
+    size(D, 1) > 1 && return (min(zero(T), mindiag))
+    return mindiag
+end
+
+function Base.maximum(D::Diagonal{T}) where T <: Number
+    maxdiag = Base.maximum(D.diag)
+    size(D, 1) > 1 && return (max(zero(T), maxdiag))
+    return maxdiag
+end
+
 @inline function getindex(D::Diagonal, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j
@@ -307,15 +319,6 @@ end
 
 rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
 lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
-
-function (*)(A::AdjOrTransAbsMat, D::Diagonal)
-    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
-    rmul!(Ac, D)
-end
-function (*)(D::Diagonal, A::AdjOrTransAbsMat)
-    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
-    lmul!(D, Ac)
-end
 
 function __muldiag!(out, D::Diagonal, B, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
     require_one_based_indexing(out, B)
@@ -723,6 +726,9 @@ for f in (:exp, :cis, :log, :sqrt,
           :acosh, :asinh, :atanh, :acsch, :asech, :acoth)
     @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
 end
+
+# Cube root of a real-valued diagonal matrix
+cbrt(A::Diagonal{<:Real}) = Diagonal(cbrt.(A.diag))
 
 function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(oneunit(T))))
