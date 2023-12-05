@@ -1423,7 +1423,7 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 // sweep phase
 
 gc_fragmentation_stat_t gc_page_fragmentation_stats[JL_GC_N_POOLS];
-JL_DLLEXPORT double *jl_gc_page_utilization_stats;
+JL_DLLEXPORT double jl_gc_page_utilization_stats[JL_GC_N_MAX_POOLS];
 
 STATIC_INLINE void gc_update_page_fragmentation_data(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
