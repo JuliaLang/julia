@@ -197,22 +197,12 @@ end
 
 function greedy_func(itr, lidx, lbody)
     quote
-        let r = Ref{Task}(), c = Channel{eltype($itr)}(threadpoolsize(),taskref=r) do ch
+        let c = Channel{eltype($itr)}(threadpoolsize(),spawn=true) do ch
             for item in $itr
                 put!(ch, item)
             end
         end
         function threadsfor_fun(tid)
-            t = r[]
-            # We have to wait until the task producing items
-            # is actually producing items, otherwise we'll
-            # skip the working loop below entirely.
-            # Yield to that task explicitly to make sure this loop
-            # is shortlived.
-            while !istaskstarted(t)
-                yield(t)
-            end
-
             for item in c
                 local $(esc(lidx)) = item
                 $(esc(lbody))
