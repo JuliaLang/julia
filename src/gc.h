@@ -187,19 +187,6 @@ extern jl_gc_global_page_pool_t global_page_pool_lazily_freed;
 extern jl_gc_global_page_pool_t global_page_pool_clean;
 extern jl_gc_global_page_pool_t global_page_pool_freed;
 
-#define GC_BACKOFF_MIN 4
-#define GC_BACKOFF_MAX 12
-
-STATIC_INLINE void gc_backoff(int *i) JL_NOTSAFEPOINT
-{
-    if (*i < GC_BACKOFF_MAX) {
-        (*i)++;
-    }
-    for (int j = 0; j < (1 << *i); j++) {
-        jl_cpu_pause();
-    }
-}
-
 // Lock-free stack implementation taken
 // from Herlihy's "The Art of Multiprocessor Programming"
 
