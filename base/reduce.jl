@@ -288,7 +288,7 @@ function mapreduce_impl(f, op, nt, itr)
     a2, state = it
     v = op(nt isa _InitialValue ? f(a1) : op(nt, f(a1)), f(a2))
     n = pairwise_blocksize(f, op)
-    n < 3 && return mapfoldl(f, op, itr; init=v)
+    n < 3 && return mapfoldl(f, op, itr; init=v) # not supported
     v, state = _mapreduce_impl(f, op, v, itr, state, n-2)
     while state !== nothing
         v, state = _mapreduce_impl(f, op, v, itr, state, n)
