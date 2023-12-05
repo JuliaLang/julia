@@ -629,6 +629,18 @@ julia> @showarg(1+1)
 
 julia> @showarg(println("Yo!"))
 :(println("Yo!"))
+
+# Numeric literal
+julia> @showarg(1)
+1
+
+# String literal
+julia> @showarg("Yo!")
+"Yo!"
+
+# String with interpolation is an Expr rather than a String
+julia> @showarg("Yo! $("hello")")
+:("Yo! $("hello")")
 ```
 
 In addition to the given argument list, every macro is passed extra arguments named `__source__` and `__module__`.
