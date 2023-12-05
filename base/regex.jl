@@ -459,7 +459,18 @@ match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
 ))
 
 findnext(re::Regex, str::Union{String,SubString}, idx::Integer) = _findnext_re(re, str, idx, C_NULL)
-
+findprev(re::Regex, str::Union{String,SubString}, idx::Integer) = begin
+    if idx > nextind(str,lastindex(str)) || idx < prevind(str,firstindex(str))
+        throw(BoundsError())
+    end
+    cur_ind = idx
+    ans = nothing 
+    while ans === nothing && cur_ind > firstindex(str)
+        ans = findnext(re,str,cur_ind)
+        cur_ind -= 1
+    end
+    return ans
+end
 # TODO: return only start index and update deprecation
 # duck-type str so that external UTF-8 string packages like StringViews can hook in
 function _findnext_re(re::Regex, str, idx::Integer, match_data::Ptr{Cvoid})
@@ -488,7 +499,7 @@ findnext(r::Regex, s::AbstractString, idx::Integer) = throw(ArgumentError(
     "regex search is only available for the String type; use String(s) to convert"
 ))
 findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
-
+findlast(r::Regex, s::AbstractString) = findprev(r,s,lastindex(s))
 
 """
     findall(c::AbstractChar, s::AbstractString)
