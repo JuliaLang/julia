@@ -476,10 +476,6 @@ end
 
 # vector * Adjoint/Transpose-vector
 *(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
-# Adjoint/Transpose-vector * Adjoint/Transpose-vector
-# (necessary for disambiguation with fallback methods in linalg/matmul)
-*(u::AdjointAbsVec, v::AdjointAbsVec) = throw(MethodError(*, (u, v)))
-*(u::TransposeAbsVec, v::TransposeAbsVec) = throw(MethodError(*, (u, v)))
 
 # AdjOrTransAbsVec{<:Any,<:AdjOrTransAbsVec} is a lazy conj vectors
 # We need to expand the combinations to avoid ambiguities
