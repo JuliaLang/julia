@@ -277,6 +277,57 @@ end
 mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
+# the following mapreduce_impl is called by mapreduce for non-array iterators, and
+# implements an index-free in-order pairwise strategy:
+function mapreduce_impl(f, op, nt, itr)
+    it = iterate(itr)
+    it === nothing && return nt isa _InitialValue ? mapreduce_empty_iter(f, op, itr, IteratorEltype(itr)) : nt
+    a1, state = it
+    it = iterate(itr, state)
+    it === nothing && return nt isa _InitialValue ? mapreduce_first(f, op, a1) : op(nt, f(a1))
+    a2, state = it
+    v = op(nt isa _InitialValue ? f(a1) : op(nt, f(a1)), f(a2))
+    n = pairwise_blocksize(f, op)
+    v, state = _mapreduce_impl(f, op, v, itr, state, n)
+    while state !== nothing
+        v, state = _mapreduce_impl(f, op, v, itr, state, n)
+        n *= 2
+    end
+    return v
+end
+
+# apply mapreduce to at most n elements of itr, in a pairwise recursive fashion,
+# returning op(nt, ...n elements...), state --- state=nothing if itr ended
+function _mapreduce_impl(f, op, nt, itr, state, n)
+    # for the pairwise algorithm we want to reduce this block
+    # separately *before* combining it with nt ... try to peel
+    # off the first two elements to construct block's initial v
+    it = iterate(itr, state)
+    it === nothing && return nt, nothing
+    a1, state = it
+    it = iterate(itr, state)
+    it === nothing && return op(nt, f(a1))
+    a2, state = it
+    v = op(f(a1), f(a2))
+
+    if n ≤ pairwise_blocksize(f, op) # coarsened base case
+        @simd for _ = 3:n
+            it = iterate(itr, state)
+            it === nothing && return op(nt, v), nothing
+            a, state = it
+            v = op(v, f(a))
+        end
+        return op(nt, v), state
+    else
+        n >>= 1
+        v, state = _mapreduce_impl(f, op, v, itr, state, n-2)
+        state === nothing && return op(nt, v), nothing
+        v, state = _mapreduce_impl(f, op, v, itr, state, n)
+        # break return statement into two cases to help type inference
+        return state === nothing ? (op(nt, v), nothing) : (op(nt, v), state)
+    end
+end
+
 """
     mapreduce(f, op, itrs...; [init])
 
@@ -304,8 +355,16 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
+function mapreduce(f, op, itr; init=_InitialValue())
+    if haslength(itr) && length(itr) ≤ pairwise_blocksize(f, op)
+        return mapfoldl(f, op, itr; init) # skip overhead for small iterators
+    else
+        return mapreduce_impl(f, op, init, itr, IteratorSize(itr))
+    end
+end
 mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
+
+mapreduce(f, op, itr::Union{Tuple,NamedTuple}; kw...) = mapfoldl(f, op, itr; kw...)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
