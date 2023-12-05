@@ -320,15 +320,6 @@ end
 rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
 lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
 
-function (*)(A::AdjOrTransAbsMat, D::Diagonal)
-    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
-    rmul!(Ac, D)
-end
-function (*)(D::Diagonal, A::AdjOrTransAbsMat)
-    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
-    lmul!(D, Ac)
-end
-
 function __muldiag!(out, D::Diagonal, B, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
     require_one_based_indexing(out, B)
     alpha, beta = _add.alpha, _add.beta
