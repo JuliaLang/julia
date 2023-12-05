@@ -167,7 +167,7 @@ enum class CPU : uint32_t {
     apple_a15,
     apple_a16,
     apple_m1,
-    apple_m2, 
+    apple_m2,
     apple_s4,
     apple_s5,
 
