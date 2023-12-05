@@ -144,7 +144,7 @@ Random.seed!(100)
             @test BLAS.ger!(α,x,y,copy(A)) ≈ A + α*x*y'
             @test_throws DimensionMismatch BLAS.ger!(α,Vector{elty}(undef,n+1),y,copy(A))
 
-            @test BLAS.geru!(α,x,y,copy(A)) ≈ A + α*x*y'
+            @test BLAS.geru!(α,x,y,copy(A)) ≈ A + α*x*transpose(y)
             @test_throws DimensionMismatch BLAS.geru!(α,Vector{elty}(undef,n+1),y,copy(A))
 
             A = rand(elty,n,n)
