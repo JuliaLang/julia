@@ -76,6 +76,30 @@ function break_me_docs end
 @test !isdefined(Base, :_this_name_doesnt_exist_) && !Docs.hasdoc(Base, :_this_name_doesnt_exist_)
 @test isdefined(Base, :_typed_vcat) && !Docs.hasdoc(Base, :_typed_vcat)
 
+"This module has names without documentation."
+module _ModuleWithUndocumentedNames
+export f
+f() = 1
+end 
+
+"This module has some documentation."
+module _ModuleWithSomeDocumentedNames 
+export f
+"f() is 1."
+f() = 1
+g() = 2
+end
+
+# Error for undocumented names.
+@test_throws Error Docs.check_documented(_ModuleWithUndocumentedNames)
+# Pass for documented exported names.
+@test isnothing(Docs.check_documented(_ModuleWithSomeDocumentedNames))
+# Error for undocumented unexported names when `all=true`.
+@test_throws Docs.check_documented(_ModuleWithSomeDocumentedNames; all=true)
+
+
+
+
 # issue #11548
 
 module ModuleMacroDoc
