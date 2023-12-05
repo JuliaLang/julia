@@ -145,6 +145,8 @@ function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     P = promote_type(T,S)
     convert(T, convert(P,x.num)/convert(P,x.den))::T
 end
+Float16(x::Rational{<:Union{Int16,Int32,Int64,Int128,UInt16,UInt32,UInt64,UInt128}})
+    = Float16(Float32(x)) # avoid spurious overflow (#52394)
 
 function Rational{T}(x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
