@@ -355,13 +355,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-function mapreduce(f, op, itr; init=_InitialValue())
-    if haslength(itr) && length(itr) ≤ pairwise_blocksize(f, op)
-        return mapfoldl(f, op, itr; init) # skip overhead for small iterators
-    else
-        return mapreduce_impl(f, op, init, itr)
-    end
-end
+mapreduce(f, op, itr; init=_InitialValue()) = mapreduce_impl(f, op, init, itr)
 mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
 
 mapreduce(f, op, itr::Union{Tuple,NamedTuple}; kw...) = mapfoldl(f, op, itr; kw...)
