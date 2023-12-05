@@ -71,7 +71,7 @@ New library features
   write the output to a stream rather than returning a string ([#48625]).
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
 * New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
-* New function `Docs.check_documented(module; all)` checks whether a module's names are documented.
+* New function `Docs.check_documented(module; all)` checks whether a module's names are documented ([#52413]).
 
 Standard library changes
 ------------------------
