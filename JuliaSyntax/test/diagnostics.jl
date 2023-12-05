@@ -64,14 +64,17 @@ end
         Diagnostic(16, 16, :error, "missing condition in `elseif`")
 
     @test diagnostic("f(x::V) where {V) = x", allow_multiple=true) == [
-        Diagnostic(17, 16, :error, "Expected `}`")
+        Diagnostic(17, 16, :error, "Expected `}` or `,`")
         Diagnostic(17, 21, :error, "extra tokens after end of expression")
     ]
     @test diagnostic("[1)", allow_multiple=true) == [
-        Diagnostic(3, 2, :error, "Expected `]`")
+        Diagnostic(3, 2, :error, "Expected `]` or `,`")
         Diagnostic(3, 3, :error, "extra tokens after end of expression")
     ]
-
+    @test diagnostic("f(x, y #=hi=#\ng(z)") == Diagnostic(7, 6, :error, "Expected `)` or `,`")
+    @test diagnostic("(x, y \nz") == Diagnostic(6, 5, :error, "Expected `)` or `,`")
+    @test diagnostic("function f(x, y \nz end") == Diagnostic(16, 15, :error, "Expected `)` or `,`")
+ 
     @test diagnostic("sin. (1)") ==
         Diagnostic(5, 5, :error, "whitespace is not allowed here")
     @test diagnostic("x [i]") ==
