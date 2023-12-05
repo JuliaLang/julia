@@ -287,8 +287,7 @@ function mapreduce_impl(f, op, nt, itr)
     it === nothing && return nt isa _InitialValue ? mapreduce_first(f, op, a1) : op(nt, f(a1))
     a2, state = it
     v = op(nt isa _InitialValue ? f(a1) : op(nt, f(a1)), f(a2))
-    n = pairwise_blocksize(f, op)
-    n < 3 && return mapfoldl(f, op, itr; init=v) # not supported
+    n = max(2, pairwise_blocksize(f, op))
     v, state = _mapreduce_impl(f, op, v, itr, state, n-2)
     while state !== nothing
         v, state = _mapreduce_impl(f, op, v, itr, state, n)
@@ -311,7 +310,7 @@ function _mapreduce_impl(f, op, nt, itr, state, n)
     a2, state = it
     v = op(f(a1), f(a2))
 
-    if n ≤ pairwise_blocksize(f, op) # coarsened base case
+    if n ≤ max(2, pairwise_blocksize(f, op)) # coarsened base case
         @simd for _ = 3:n
             it = iterate(itr, state)
             it === nothing && return op(nt, v), nothing
