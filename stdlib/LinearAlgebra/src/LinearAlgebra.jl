@@ -405,7 +405,7 @@ matrix), then use `copy_similar`.
 
 See also: `Base.copymutable`, `copy_similar`.
 """
-copymutable_oftype(A::AbstractArray, ::Type{S}) where {S} = _at_copyto!(similar(A, S), A)
+copymutable_oftype(A::AbstractArray, ::Type{S}) where {S} = copyto!(similar(A, S), A)
 
 """
     copy_similar(A, T)
@@ -417,7 +417,7 @@ of the output corresponds to that of the three-argument method `similar(A, T, si
 
 See also: `copymutable_oftype`.
 """
-copy_similar(A::AbstractArray, ::Type{T}) where {T} = _at_copyto!(similar(A, T, size(A)), A)
+copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
 
 
 include("adjtrans.jl")
@@ -568,9 +568,9 @@ function ldiv(F::Factorization, B::AbstractVecOrMat)
 
     if n > size(B, 1)
         # Underdetermined
-        _at_copyto!(view(BB, 1:m, :), B)
+        copyto!(view(BB, 1:m, :), B)
     else
-        _at_copyto!(BB, B)
+        copyto!(BB, B)
     end
 
     ldiv!(FF, BB)

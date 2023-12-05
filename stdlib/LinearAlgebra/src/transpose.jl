@@ -213,7 +213,8 @@ end
 
 function Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractMatrix, srcstyle::IndexCartesian, src::AdjOrTransAbsMat)
     if axes(dest) == axes(src)
-        _at_copyto!(dest, src)
+        f! = inplace_adj_or_trans(src)
+        f!(dest, parent(src))
     else
         @invoke Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
     end
