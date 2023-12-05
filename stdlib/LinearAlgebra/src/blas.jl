@@ -1423,18 +1423,31 @@ end
 """
     geru!(alpha, x, y, A)
 
-Performs an unconjugated rank-1 update of the matrix `A` with vectors `x` and `y` as `alpha*x*transpose(y) + A`.
+Rank-1 update of the matrix `A` with vectors `x` and `y` as `alpha*x*transpose(y) + A`.
 """
-function geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty})
-    if isreal(α)
-        if isreal(x) && isreal(y) && isreal(A)
-            BLAS.ger!(α, x, y, A)
+for (fname, elty) in ((:zgeru_,:ComplexF64), (:cgeru_,:ComplexF32))
+    @eval begin
+        function geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A, x, y)
+            m, n = size(A)
+            if m != length(x) || n != length(y)
+                throw(DimensionMismatch(lazy"A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
+            end
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            py, sty = vec_pointer_stride(y, ArgumentError("input vector with 0 stride is not allowed"))
+            GC.@preserve x y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+                (Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
+                 Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                 Ref{BlasInt}),
+                 m, n, α, px, stx, py, sty, A, max(1,stride(A,2)))
+            A
         end
-    else
-        if iscomplex(x) && iscomplex(y) && iscomplex(A)
-                # For complex inputs, call zgeru (conjugate-ignoring) to perform the rank-1 update
-            BLAS.zgeru!(Complex(α), x, y, A)
-        end
+    end
+end
+for elty in (:Float64, :Float32)
+    @eval begin
+        geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty}) =
+            ger!(α, x, y, A)
     end
 end
 
