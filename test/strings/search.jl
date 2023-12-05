@@ -247,7 +247,7 @@ end
 @test findlast(r"H", astr) == 1:1
 @test findprev(r"l", astr, 4) == 4:4
 @test findprev(r"l", astr, 11) == 11:11
-@test findprev(r"l", astr, 3) === nothing
+@test findprev(r"l", astr, 3) === 3:3
 
 # string forward search with a zero-char string
 for i = 1:lastindex(astr)

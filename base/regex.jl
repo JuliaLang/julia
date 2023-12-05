@@ -465,7 +465,7 @@ findprev(re::Regex, str::Union{String,SubString}, idx::Integer) = begin
     end
     cur_ind = idx
     ans = nothing
-    while ans === nothing && cur_ind > firstindex(str)
+    while ans === nothing && cur_ind >= firstindex(str)
         ans = findnext(re,str,cur_ind)
         cur_ind -= 1
     end
