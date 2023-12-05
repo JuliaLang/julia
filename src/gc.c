@@ -3819,7 +3819,6 @@ void jl_gc_init(void)
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
     gc_num.max_memory = 0;
-    jl_gc_page_utilization_stats = (double *)malloc_s(JL_GC_N_MAX_POOLS * sizeof(double));
 
 #ifdef _P64
     total_mem = uv_get_total_memory();
