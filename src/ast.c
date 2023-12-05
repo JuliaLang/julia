@@ -153,15 +153,59 @@ static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mo
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v);
 static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel, size_t world, int throw_load_error);
 
+static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
+{
+    assert(issymbol(s));
+    if (fl_isgensym(fl_ctx, s)) {
+        char gsname[16];
+        char *n = uint2str(&gsname[1], sizeof(gsname)-1,
+                           ((gensym_t*)ptr(s))->id, 10);
+        *(--n) = '#';
+        return jl_symbol(n);
+    }
+    return jl_symbol(symbol_name(fl_ctx, s));
+}
+
 static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     // tells whether a var is defined in and *by* the current module
     argcount(fl_ctx, "defined-julia-global", nargs, 1);
     (void)tosymbol(fl_ctx, args[0], "defined-julia-global");
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
-    jl_sym_t *var = jl_symbol(symbol_name(fl_ctx, args[0]));
+    jl_sym_t *var = scmsym_to_julia(fl_ctx, args[0]);
     jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
     return (b != NULL && jl_atomic_load_relaxed(&b->owner) == b) ? fl_ctx->T : fl_ctx->F;
+}
+
+static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    // tells whether a var is defined, in the sense that accessing it is nothrow
+    // can take either a symbol or a module and a symbol
+    jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
+    jl_module_t *mod = ctx->module;
+    jl_sym_t *var = NULL;
+    if (nargs == 1) {
+        (void)tosymbol(fl_ctx, args[0], "nothrow-julia-global");
+        var = scmsym_to_julia(fl_ctx, args[0]);
+    }
+    else {
+        argcount(fl_ctx, "nothrow-julia-global", nargs, 2);
+        value_t argmod = args[0];
+        if (iscvalue(argmod) && cv_class((cvalue_t*)ptr(argmod)) == jl_ast_ctx(fl_ctx)->jvtype) {
+            mod = *(jl_module_t**)cv_data((cvalue_t*)ptr(argmod));
+            JL_GC_PROMISE_ROOTED(mod);
+        } else {
+            (void)tosymbol(fl_ctx, argmod, "nothrow-julia-global");
+            if (scmsym_to_julia(fl_ctx, argmod) != jl_thismodule_sym) {
+                lerrorf(fl_ctx, fl_ctx->ArgError, "nothrow-julia-global: Unknown globalref module kind");
+            }
+        }
+        (void)tosymbol(fl_ctx, args[1], "nothrow-julia-global");
+        var = scmsym_to_julia(fl_ctx, args[1]);
+    }
+    jl_binding_t *b = jl_get_module_binding(mod, var, 0);
+    b = b ? jl_atomic_load_relaxed(&b->owner) : NULL;
+    return b != NULL && jl_atomic_load_relaxed(&b->value) != NULL ? fl_ctx->T : fl_ctx->F;
 }
 
 static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
@@ -210,6 +254,7 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global }, // TODO: can we kill this safepoint
+    { "nothrow-julia-global", fl_nothrow_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
     { "julia-current-file", fl_julia_current_file },
@@ -421,20 +466,6 @@ JL_DLLEXPORT void fl_profile(const char *fname)
     jl_ast_ctx_leave(ctx);
 }
 
-
-static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
-{
-    assert(issymbol(s));
-    if (fl_isgensym(fl_ctx, s)) {
-        char gsname[16];
-        char *n = uint2str(&gsname[1], sizeof(gsname)-1,
-                           ((gensym_t*)ptr(s))->id, 10);
-        *(--n) = '#';
-        return jl_symbol(n);
-    }
-    return jl_symbol(symbol_name(fl_ctx, s));
-}
-
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod)
 {
     jl_value_t *v = NULL;
@@ -571,6 +602,11 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = scm_to_julia(fl_ctx, car_(cdr_(e)), mod);
             temp = jl_new_struct(jl_gotoifnot_type, ex, temp);
+        }
+        else if (sym == jl_enter_sym) {
+            ex = scm_to_julia_(fl_ctx, car_(e), mod);
+            temp = jl_new_struct_uninit(jl_enternode_type);
+            jl_enternode_catch_dest(temp) = jl_unbox_long(ex);
         }
         else if (sym == jl_newvar_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);

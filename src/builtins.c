@@ -344,6 +344,9 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
             i++;
             pe = pe->prev;
         }
+        uintptr_t bits = jl_astaggedvalue(v)->header;
+        if (bits & GC_IN_IMAGE)
+            return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
     }
     if (tv == jl_uniontype_type) {
@@ -432,55 +435,62 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
     return h;
 }
 
-static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) JL_NOTSAFEPOINT
+static uintptr_t NOINLINE jl_object_id__cold(uintptr_t tv, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    if (dt == jl_simplevector_type)
-        return hash_svec((jl_svec_t*)v);
-    if (dt == jl_datatype_type) {
-        jl_datatype_t *dtv = (jl_datatype_t*)v;
-        uintptr_t h = ~dtv->name->hash;
-        return bitmix(h, hash_svec(dtv->parameters));
-    }
-    if (dt == jl_string_type) {
+    jl_datatype_t *dt = (jl_datatype_t*)jl_to_typeof(tv);
+    if (dt->name->mutabl) {
+        if (dt == jl_string_type) {
 #ifdef _P64
-        return memhash_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
+            return memhash_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
 #else
-        return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
+            return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
 #endif
-    }
-    if (dt == jl_module_type) {
-        jl_module_t *m = (jl_module_t*)v;
-        return m->hash;
-    }
-    if (dt->name->mutabl)
+        }
+        if (dt == jl_simplevector_type)
+            return hash_svec((jl_svec_t*)v);
+        if (dt == jl_datatype_type) {
+            jl_datatype_t *dtv = (jl_datatype_t*)v;
+            uintptr_t h = ~dtv->name->hash;
+            return bitmix(h, hash_svec(dtv->parameters));
+        }
+        if (dt == jl_module_type) {
+            jl_module_t *m = (jl_module_t*)v;
+            return m->hash;
+        }
+        uintptr_t bits = jl_astaggedvalue(v)->header;
+        if (bits & GC_IN_IMAGE)
+            return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
+    }
     return immut_id_(dt, v, dt->hash);
 }
 
-JL_DLLEXPORT inline uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT
+JL_DLLEXPORT inline uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    jl_datatype_t *dt = (jl_datatype_t*)tv;
-    if (dt == jl_symbol_type)
+    if (tv == jl_symbol_tag << 4) {
         return ((jl_sym_t*)v)->hash;
-    if (dt == jl_typename_type)
-        return ((jl_typename_t*)v)->hash;
-    if (dt == jl_datatype_type) {
+    }
+    else if (tv == jl_datatype_tag << 4) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
         if (dtv->isconcretetype)
             return dtv->hash;
     }
-    return jl_object_id__cold(dt, v);
+    else if (tv == (uintptr_t)jl_typename_type) {
+        return ((jl_typename_t*)v)->hash;
+    }
+    return jl_object_id__cold(tv, v);
 }
 
 
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    return jl_object_id_(jl_typeof(v), v);
+    return jl_object_id_(jl_typetagof(v), v);
 }
 
 // eq hash table --------------------------------------------------------------
 
 #include "iddict.c"
+#include "idset.c"
 
 // object model and type primitives -------------------------------------------
 
@@ -1968,7 +1978,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         f = cglobal_auto;
     unsigned fargs = intrinsic_nargs[f];
     if (!fargs)
-        jl_errorf("`%s` must be compiled to be called", jl_intrinsic_name(f));
+        jl_errorf("`%s` requires the compiler", jl_intrinsic_name(f));
     JL_NARGS(intrinsic_call, fargs, fargs);
 
     union {
@@ -2204,6 +2214,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("LineInfoNode", (jl_value_t*)jl_lineinfonode_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
     add_builtin("GotoIfNot", (jl_value_t*)jl_gotoifnot_type);
+    add_builtin("EnterNode", (jl_value_t*)jl_enternode_type);
     add_builtin("ReturnNode", (jl_value_t*)jl_returnnode_type);
     add_builtin("PiNode", (jl_value_t*)jl_pinode_type);
     add_builtin("PhiNode", (jl_value_t*)jl_phinode_type);

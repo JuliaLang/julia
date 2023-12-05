@@ -97,7 +97,7 @@ Finally, the [`Meta.lower`](@ref) function gives the `lowered` form of any expre
 particular interest for understanding how language constructs map to primitive operations such
 as assignments, branches, and calls:
 
-```jldoctest
+```jldoctest; setup = (using Base: +, sin)
 julia> Meta.lower(@__MODULE__, :( [1+2, sin(0.5)] ))
 :($(Expr(:thunk, CodeInfo(
     @ none within `top-level scope`
