@@ -524,7 +524,7 @@ const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
 @noinline function _check_year(d, format)
     if contains(lowercase(format), "yyyy") && !contains(lowercase(format), "yyyyy") # is 4-digit year format, allows strictly 4-digit
-        !(1583 <= year(d) <= 9999) || throw("Year is outside the legal ISO 8601 year-range, to support such, use an explicit constructor.")
+        !(1583 <= year(d) <= 9999) || throw("Year is outside the legal ISO 8601 year-range. To support such, use an explicit constructor.")
     elseif contains(lowercase(format), "yy") # is 2-digit (or 3-digit...) year format, allows only 1- or 2-digit year
         !(0 <= year(d) <= 99) || throw("Year is outside the 0 to 99 year-range, asked for.")
     end
@@ -560,8 +560,7 @@ julia> [DateTime(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 ```
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    f = DateFormat(format, locale)
-    return _check_year(parse(DateTime, dt, f), f)
+    return _check_year(parse(DateTime, dt, DateFormat(format, locale)), format)
 end
 """
     DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) -> DateTime
@@ -574,11 +573,10 @@ repeatedly parsing similarly formatted date time strings with a pre-created
 `DateFormat` object.
 """
 function DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat)
-    dt = parse(DateTime, dt, df)
     if df != ISODateTimeFormat && df != RFC1123Format
         return dt
     end
-    return _check_year(dt, "yyyy") # dummy format that ok for both
+    return _check_year(parse(DateTime, dt, df), "yyyy") # dummy format that ok for both
 end
 """
     Date(d::AbstractString, format::AbstractString; locale="english") -> Date
@@ -605,8 +603,7 @@ julia> [Date(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 ```
 """
 function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    f = DateFormat(format, locale)
-    return _check_year(parse(Date, d, f), f)
+    return _check_year(parse(Date, d, DateFormat(format, locale)), format)
 end
 """
     Date(d::AbstractString, df::DateFormat=ISODateFormat) -> Date
