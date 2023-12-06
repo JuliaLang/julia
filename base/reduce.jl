@@ -279,14 +279,14 @@ mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Int
 
 # the following reduce_impl is called by mapreduce/reduce for non-array iterators,
 # and implements an index-free in-order pairwise strategy:
-function reduce_impl(op, itr, nt)
+function reduce_impl(op, itr)
     it = iterate(itr)
-    it === nothing && return nt isa _InitialValue ? reduce_empty_iter(op, itr) : nt
+    it === nothing && return reduce_empty_iter(op, itr)
     a1, state = it
     it = iterate(itr, state)
-    it === nothing && return nt isa _InitialValue ? reduce_first(op, a1) : op(nt, a1)
+    it === nothing && return reduce_first(op, a1)
     a2, state = it
-    v = op(nt isa _InitialValue ? a1 : op(nt, a1), a2)
+    v = op(a1, a2)
     n = max(2, pairwise_blocksize(op))
     v, state = reduce_impl(op, itr, v, state, n-2)
     while state !== nothing
@@ -328,7 +328,12 @@ function reduce_impl(op, itr, nt, state, n)
     end
 end
 
-mapreduce_impl(f, op, itr, nt) = reduce_impl(_xfadjoint(op, Generator(f, itr))..., nt)
+mapreduce_impl(f::F, op::OP, itr, ::_InitialValue) where {F,OP} = reduce_impl(_xfadjoint(op, Generator(f, itr))...)
+
+# for an arbitrary initial value, we need to call foldl,
+# because op(nt, itr[i]) may have a different type than op(nt, itr[j]))
+# … it's not clear how to reliably determine this without foldl associativity.
+mapreduce_impl(f::F, op::OP, itr, nt) where {F,OP} = mapfoldl_impl(f, op, nt, itr)
 
 """
     mapreduce(f, op, itrs...; [init])
