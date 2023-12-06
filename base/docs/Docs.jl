@@ -678,7 +678,7 @@ end
 """
     check_documented(mod::Module; all=false)
 
-Check all names in the module are documented. `all` determines which names are checked, 
+Check all names in the module are documented. `all` determines which names are checked,
 following the behavior of `names(mod; all)`.
 """
 function check_documented(mod::Module; all=false)

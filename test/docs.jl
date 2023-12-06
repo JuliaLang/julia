@@ -93,7 +93,7 @@ end
 # Error for undocumented names.
 @test_throws ErrorException Docs.check_documented(_ModuleWithUndocumentedNames)
 # Pass for documented exported names.
-@test isnothing(Docs.check_documented(_ModuleWithSomeDocumentedNames))
+@test Docs.check_documented(_ModuleWithSomeDocumentedNames)
 # Error for undocumented unexported names when `all=true`.
 @test_throws ErrorException Docs.check_documented(_ModuleWithSomeDocumentedNames; all=true)
 
