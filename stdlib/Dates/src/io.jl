@@ -524,9 +524,9 @@ const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
 @noinline function _check_year(d, format)
     if contains(lowercase(format), "yyyy") && !contains(lowercase(format), "yyyyy") # is 4-digit year format, allows strictly 4-digit
-        !(1583 <= year(d) <= 9999) || throw("Year is outside the legal ISO 8601 year-range. To support such, use an explicit constructor.")
+        1583 <= year(d) <= 9999 || throw("Year is outside the legal ISO 8601 year-range. To support such, use an explicit constructor.")
     elseif contains(lowercase(format), "yy") # is 2-digit (or 3-digit...) year format, allows only 1- or 2-digit year
-        !(0 <= year(d) <= 99) || throw("Year is outside the 0 to 99 year-range, asked for.")
+        0 <= year(d) <= 99 || throw("Year is outside the 0 to 99 year-range, asked for.")
     end
     return d
 end
@@ -560,7 +560,8 @@ julia> [DateTime(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 ```
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    return _check_year(parse(DateTime, dt, DateFormat(format, locale)), format)
+    f = DateFormat(format, locale)
+    return _check_year(parse(DateTime, dt, f), f)
 end
 """
     DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) -> DateTime
