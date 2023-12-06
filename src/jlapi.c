@@ -878,6 +878,7 @@ JL_DLLEXPORT int jl_get_fenv_rounding(void)
  * @brief Set the floating-point rounding mode.
  *
  * @param i An integer representing the desired floating-point rounding mode.
+          See also "floating-point rounding" macros in `<fenv.h>`.
  * @return An integer indicating the success or failure of setting the rounding mode.
  */
 JL_DLLEXPORT int jl_set_fenv_rounding(int i)
