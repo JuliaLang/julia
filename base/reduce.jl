@@ -277,28 +277,28 @@ end
 mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
-# the following mapreduce_impl is called by mapreduce for non-array iterators, and
-# implements an index-free in-order pairwise strategy:
-function mapreduce_impl(f, op, nt, itr)
+# the following reduce_impl is called by mapreduce/reduce for non-array iterators,
+# and implements an index-free in-order pairwise strategy:
+function reduce_impl(op, itr, nt)
     it = iterate(itr)
-    it === nothing && return nt isa _InitialValue ? reduce_empty_iter(_xfadjoint(op, Generator(f, itr))...) : nt
+    it === nothing && return nt isa _InitialValue ? reduce_empty_iter(op, itr) : nt
     a1, state = it
     it = iterate(itr, state)
-    it === nothing && return nt isa _InitialValue ? mapreduce_first(f, op, a1) : op(nt, f(a1))
+    it === nothing && return nt isa _InitialValue ? reduce_first(op, a1) : op(nt, a1)
     a2, state = it
-    v = op(nt isa _InitialValue ? f(a1) : op(nt, f(a1)), f(a2))
-    n = max(2, pairwise_blocksize(f, op))
-    v, state = _mapreduce_impl(f, op, v, itr, state, n-2)
+    v = op(nt isa _InitialValue ? a1 : op(nt, a1), a2)
+    n = max(2, pairwise_blocksize(op))
+    v, state = reduce_impl(op, itr, v, state, n-2)
     while state !== nothing
-        v, state = _mapreduce_impl(f, op, v, itr, state, n)
+        v, state = reduce_impl(op, itr, v, state, n)
         n *= 2
     end
     return v
 end
 
-# apply mapreduce to at most n elements of itr, in a pairwise recursive fashion,
+# apply reduction to at most n elements of itr, in a pairwise recursive fashion,
 # returning op(nt, ...n elements...), state --- state=nothing if itr ended
-function _mapreduce_impl(f, op, nt, itr, state, n)
+function reduce_impl(op, itr, nt, state, n)
     # for the pairwise algorithm we want to reduce this block
     # separately *before* combining it with nt ... try to peel
     # off the first two elements to construct block's initial v
@@ -306,27 +306,29 @@ function _mapreduce_impl(f, op, nt, itr, state, n)
     it === nothing && return nt, nothing
     a1, state = it
     it = iterate(itr, state)
-    it === nothing && return op(nt, f(a1)), nothing
+    it === nothing && return op(nt, a1), nothing
     a2, state = it
-    v = op(f(a1), f(a2))
+    v = op(a1, a2)
 
-    if n ≤ max(2, pairwise_blocksize(f, op)) # coarsened base case
+    if n ≤ max(2, pairwise_blocksize(op)) # coarsened base case
         @simd for _ = 3:n
             it = iterate(itr, state)
             it === nothing && return op(nt, v), nothing
             a, state = it
-            v = op(v, f(a))
+            v = op(v, a)
         end
         return op(nt, v), state
     else
         n >>= 1
-        v, state = _mapreduce_impl(f, op, v, itr, state, n-2)
+        v, state = reduce_impl(op, itr, v, state, n-2)
         state === nothing && return op(nt, v), nothing
-        v, state = _mapreduce_impl(f, op, v, itr, state, n)
+        v, state = reduce_impl(op, itr, v, state, n)
         # break return statement into two cases to help type inference
         return state === nothing ? (op(nt, v), nothing) : (op(nt, v), state)
     end
 end
+
+mapreduce_impl(f, op, itr, nt) = reduce_impl(_xfadjoint(op, Generator(f, itr))..., nt)
 
 """
     mapreduce(f, op, itrs...; [init])
@@ -355,7 +357,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-mapreduce(f, op, itr; init=_InitialValue()) = mapreduce_impl(f, op, init, itr)
+mapreduce(f, op, itr; init=_InitialValue()) = mapreduce_impl(f, op, itr, init)
 mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
 
 mapreduce(f, op, itr::Union{Tuple,NamedTuple}; kw...) = mapfoldl(f, op, itr; kw...)
@@ -366,6 +368,10 @@ pairwise_blocksize(f, op) = 1024
 
 # This combination appears to show a benefit from a larger block size
 pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
+
+# for reduce_impl:
+pairwise_blocksize(op) = pairwise_blocksize(identity, op)
+pairwise_blocksize(op::MappingRF) = pairwise_blocksize(op.f, op.rf)
 
 
 # handling empty arrays
