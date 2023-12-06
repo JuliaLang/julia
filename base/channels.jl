@@ -178,9 +178,9 @@ end
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
 
-isbuffered(c::Channel) = c.sz_max==0 ? false : true
+isbuffered(@nospecialize(c::Channel)) = c.sz_max==0 ? false : true
 
-function check_channel_state(c::Channel)
+function check_channel_state(@nospecialize(c::Channel))
     if !isopen(c)
         # if the monotonic load succeed, now do an acquire fence
         (@atomic :acquire c.state) === :open && concurrency_violation()
@@ -197,8 +197,8 @@ Close a channel. An exception (optionally given by `excp`), is thrown by:
 * [`put!`](@ref) on a closed channel.
 * [`take!`](@ref) and [`fetch`](@ref) on an empty, closed channel.
 """
-close(c::Channel) = close(c, closed_exception()) # nospecialize on default arg seems to confuse makedocs
-function close(c::Channel, @nospecialize(excp::Exception))
+close(@nospecialize(c::Channel)) = close(c, closed_exception()) # nospecialize on default arg seems to confuse makedocs
+function close(@nospecialize(c::Channel), @nospecialize(excp::Exception))
     lock(c)
     try
         c.excp = excp
@@ -211,7 +211,7 @@ function close(c::Channel, @nospecialize(excp::Exception))
     end
     nothing
 end
-isopen(c::Channel) = ((@atomic :monotonic c.state) === :open)
+isopen(@nospecialize(c::Channel)) = ((@atomic :monotonic c.state) === :open)
 
 """
     bind(chnl::Channel, task::Task)
@@ -265,7 +265,7 @@ Stacktrace:
 [...]
 ```
 """
-function bind(c::Channel, task::Task)
+function bind(@nospecialize(c::Channel), @nospecialize(task::Task))
     T = Task(() -> close_chnl_on_taskdone(task, c))
     T.sticky = false
     _wait2(task, T)
@@ -298,7 +298,7 @@ function channeled_tasks(n::Int, funcs...; ctypes=fill(Any,n), csizes=fill(0,n))
     return (chnls, tasks)
 end
 
-function close_chnl_on_taskdone(t::Task, c::Channel)
+function close_chnl_on_taskdone(@nospecialize(task::Task), @nospecialize(c::Channel))
     isopen(c) || return
     lock(c)
     try
@@ -338,7 +338,7 @@ function put!(c::Channel{T}, v) where T
 end
 
 # Atomically update channel n_avail, *assuming* we hold the channel lock.
-function _increment_n_avail(c, inc)
+function _increment_n_avail(@nospecialize(c), @nospecialize(inc))
     # We hold the channel lock so it's safe to non-atomically read and
     # increment c.n_avail_items
     newlen = c.n_avail_items + inc
@@ -531,17 +531,17 @@ true
 ```
 
 """
-isready(c::Channel) = n_avail(c) > 0
-isempty(c::Channel) = n_avail(c) == 0
-function n_avail(c::Channel)
+isready(@nospecialize(c::Channel)) = n_avail(c) > 0
+isempty(@nospecialize(c::Channel)) = n_avail(c) == 0
+function n_avail(@nospecialize(c::Channel))
     # Lock-free equivalent to `length(c.data) + length(c.cond_put.waitq)`
     @atomic :monotonic c.n_avail_items
 end
 
-lock(c::Channel) = lock(c.cond_take)
-lock(f, c::Channel) = lock(f, c.cond_take)
-unlock(c::Channel) = unlock(c.cond_take)
-trylock(c::Channel) = trylock(c.cond_take)
+lock(@nospecialize(c::Channel)) = lock(c.cond_take)
+lock(f, @nospecialize(c::Channel)) = lock(f, c.cond_take)
+unlock(@nospecialize(c::Channel)) = unlock(c.cond_take)
+trylock(@nospecialize(c::Channel)) = trylock(c.cond_take)
 
 """
     wait(c::Channel)
@@ -567,7 +567,7 @@ julia> istaskdone(task)  # task is now unblocked
 true
 ```
 """
-function wait(c::Channel)
+function wait(@nospecialize(c::Channel))
     isready(c) && return
     lock(c)
     try
