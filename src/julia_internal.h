@@ -1498,10 +1498,6 @@ void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_en
 
 // -- simplevector.c -- //
 
-// For codegen only.
-JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i);
-
 // check whether the specified number of arguments is compatible with the
 // specified number of parameters of the tuple type
 JL_DLLEXPORT int jl_tupletype_length_compat(jl_value_t *v, size_t nargs) JL_NOTSAFEPOINT;

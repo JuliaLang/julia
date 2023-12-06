@@ -998,7 +998,7 @@ static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st,
     }
     if (mutabl && jl_field_isconst(st, idx)) {
         jl_errorf("%s: const field .%s of type %s cannot be changed", name,
-                jl_symbol_name((jl_sym_t*)jl_svec_ref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
+                jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
     }
     return idx;
 }
@@ -1767,7 +1767,7 @@ JL_CALLABLE(jl_f__svec_ref)
     if (idx < 1 || idx > len) {
         jl_bounds_error_int((jl_value_t*)s, idx);
     }
-    return jl_svec_ref(s, idx-1);
+    return jl_svecref(s, idx-1);
 }
 
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)

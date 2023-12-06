@@ -1107,6 +1107,9 @@ import Base.PersistentDict
         @test hs.hash == hsr.hash
         @test hs.depth == hsr.depth
         @test hs.shift == hsr.shift
+
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(Base.HAMT.init_hamt, (Type{Vector{Any}},Type{Int},Vector{Any},Int)))
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(Base.HAMT.HAMT{Vector{Any},Int}, (Pair{Vector{Any},Int},)))
     end
     @testset "basics" begin
         dict = PersistentDict{Int, Int}()
