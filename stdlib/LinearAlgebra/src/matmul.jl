@@ -453,7 +453,7 @@ end
 
 Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar,
         A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
-        α::Number = true, β::Number = false) where {T<:BlasFloat}
+        α::Number = true, β::Number = false) where {T<:BlasReal}
     mA, nA = lapack_size(tA, A)
     nA != length(x) &&
         throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match length of x, $(length(x))"))
