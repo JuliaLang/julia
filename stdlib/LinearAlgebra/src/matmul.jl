@@ -2,6 +2,9 @@
 
 # matmul.jl: Everything to do with dense matrix multiplication
 
+# unused internal constant, here for legacy reasons
+const tilebufsize = 10800  # Approximately 32k/3
+
 # Matrix-matrix multiplication
 
 AdjOrTransStridedMat{T} = Union{Adjoint{<:Any, <:StridedMatrix{T}}, Transpose{<:Any, <:StridedMatrix{T}}}
