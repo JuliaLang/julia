@@ -762,8 +762,7 @@ function perform_lifting!(compact::IncrementalCompact,
                 only_result = (then_result === SKIP_TOKEN) ? else_result : then_result
 
                 # Replace Core.ifelse(%cond, %a, %b) with %a
-                compact[lf.ssa][:stmt] = only_result
-                should_count && _count_added_node!(compact, only_result)
+                compact[lf.ssa] = only_result
 
                 # Note: Core.ifelse(%cond, %a, %b) has observable effects (!nothrow), but since
                 # we have not deleted the preceding statement that this was derived from, this
@@ -2336,9 +2335,9 @@ function cfg_simplify!(ir::IRCode)
                             end
                         elseif new_edge == -1
                             @assert length(phi.edges) == 1
-                            if isassigned(phi.values, old_index)
+                            if isassigned(renamed_values, old_index)
                                 push!(edges, -1)
-                                push!(values, phi.values[old_index])
+                                push!(values, renamed_values[old_index])
                             end
                         elseif new_edge == -3
                             # Multiple predecessors, we need to expand out this phi

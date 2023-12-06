@@ -167,6 +167,18 @@ JL_DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr)
     return new_array(atype, 1, &nr);
 }
 
+JL_DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr, size_t nc)
+{
+    size_t dims[2] = {nr, nc};
+    return new_array(atype, 2, &dims[0]);
+}
+
+JL_DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr, size_t nc, size_t z)
+{
+    size_t dims[3] = {nr, nc, z};
+    return new_array(atype, 3, &dims[0]);
+}
+
 JL_DLLEXPORT jl_array_t *jl_alloc_array_nd(jl_value_t *atype, size_t *dims, size_t ndims)
 {
     return new_array(atype, ndims, dims);

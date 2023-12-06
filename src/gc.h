@@ -190,25 +190,12 @@ extern jl_gc_page_stack_t global_page_pool_lazily_freed;
 extern jl_gc_page_stack_t global_page_pool_clean;
 extern jl_gc_page_stack_t global_page_pool_freed;
 
-#define GC_BACKOFF_MIN 4
-#define GC_BACKOFF_MAX 12
-
-STATIC_INLINE void gc_backoff(int *i) JL_NOTSAFEPOINT
-{
-    if (*i < GC_BACKOFF_MAX) {
-        (*i)++;
-    }
-    for (int j = 0; j < (1 << *i); j++) {
-        jl_cpu_pause();
-    }
-}
-
 // Lock-free stack implementation taken
 // from Herlihy's "The Art of Multiprocessor Programming"
 // XXX: this is not a general-purpose lock-free stack. We can
 // get away with just using a CAS and not implementing some ABA
 // prevention mechanism since once a node is popped from the
-// `jl_gc_global_page_pool_t`, it may only be pushed back to them
+// `jl_gc_page_stack_t`, it may only be pushed back to them
 // in the sweeping phase, which also doesn't push a node into the
 // same stack after it's popped
 
@@ -237,9 +224,6 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFE
         jl_cpu_pause();
     }
 }
-
-// data structures for tracking fragmentation in the pool allocator
-// #define GC_MEASURE_PAGE_FRAGMENTATION
 
 typedef struct {
     _Atomic(size_t) n_freed_objs;
