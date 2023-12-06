@@ -9,10 +9,10 @@ baremodule Iterators
 import ..@__MODULE__, ..parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
-    @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
-    SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
+    @inline, @noinline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector,
+    Vector, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
-    AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
+    AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom, DimensionMismatch,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
@@ -1162,7 +1162,7 @@ function getindex(p::ProductIterator, inds...)
     length(inds) == length(p.iterators) || prod_indexing_error(p, inds)
     Base.map(getindex, p.iterators, inds)
 end
-@noinline prod_indexing_error(p, inds) = throw(BoundsError(p, inds))
+@noinline prod_indexing_error(p, inds) = throw(DimensionMismatch("Attempted to index a product of $(length(p.iterators)) iterators with $(length(inds)) indices."))
 
 # flatten an iterator of iterators
 
