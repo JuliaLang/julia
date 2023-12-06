@@ -127,11 +127,29 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
     jl_type_error_rt(fname, "", expected, got);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
+JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *scope)
 {
-    if (!jl_undefvarerror_type)
-        jl_errorf("UndefVarError(%s)", jl_symbol_name(var));
-    jl_throw(jl_new_struct(jl_undefvarerror_type, var));
+    if (!jl_undefvarerror_type) {
+        const char *s1 = "";
+        const char *s2 = "";
+        if (scope) {
+            if (jl_is_symbol(scope)) {
+                s1 = ", :";
+                s2 = jl_symbol_name((jl_sym_t*)scope);
+            }
+            else if (jl_is_module(scope)) {
+                s1 = ", module ";
+                s2 = jl_symbol_name(((jl_module_t*)scope)->name);
+            }
+            else {
+                s1 = ", ";
+                s2 = "unknown scope";
+            }
+        }
+        jl_errorf("UndefVarError(%s%s%s)", jl_symbol_name(var), s1, s2);
+    }
+    JL_GC_PUSH1(&scope);
+    jl_throw(jl_new_struct(jl_undefvarerror_type, var, scope));
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_sym_t *type_name, jl_sym_t *var)

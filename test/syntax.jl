@@ -553,7 +553,7 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
 end
 
 # meta nodes for optional positional arguments
-let src = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3]
+let src = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-2].args[3]
     @test Core.Compiler.is_declared_inline(src)
 end
 
@@ -713,7 +713,7 @@ m1_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m1 end))
 let low3 = Meta.lower(@__MODULE__, quote @m3 end)
     m3_exprs = get_expr_list(low3)
     ci = low3.args[1]::Core.CodeInfo
-    @test ci.codelocs == [4, 2]
+    @test ci.codelocs in ([4, 4, 2], [4, 2])
     @test is_return_ssavalue(m3_exprs[end])
 end
 
@@ -1706,7 +1706,7 @@ end
 @test Meta.parse("(a...)") == Expr(Symbol("..."), :a)
 
 # #19324
-@test_throws UndefVarError(:x) eval(:(module M19324
+@test_throws UndefVarError(:x, :local) eval(:(module M19324
                  x=1
                  for i=1:10
                      x += i
@@ -1923,7 +1923,7 @@ function capture_with_conditional_label()
     return y->x
 end
 let f = capture_with_conditional_label()  # should not throw
-    @test_throws UndefVarError(:x) f(0)
+    @test_throws UndefVarError(:x, :local) f(0)
 end
 
 # `_` should not create a global (or local)
@@ -2511,7 +2511,14 @@ end
 function ncalls_in_lowered(ex, fname)
     lowered_exprs = Meta.lower(Main, ex).args[1].code
     return count(lowered_exprs) do ex
-        Meta.isexpr(ex, :call) && ex.args[1] == fname
+        if Meta.isexpr(ex, :call)
+            arg = ex.args[1]
+            if isa(arg, Core.SSAValue)
+                arg = lowered_exprs[arg.id]
+            end
+            return arg == fname
+        end
+        return false
     end
 end
 

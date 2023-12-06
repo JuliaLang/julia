@@ -334,10 +334,6 @@ end
 
 generate_precompile_statements()
 
-# As a last step in system image generation,
-# remove some references to build time environment for a more reproducible build.
-Base.Filesystem.temp_cleanup_purge(force=true)
-
 let stdout = Ref{IO}(stdout)
     Base.PROGRAM_FILE = ""
     Sys.BINDIR = ""

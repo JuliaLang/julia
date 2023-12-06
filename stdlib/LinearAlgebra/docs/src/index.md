@@ -184,8 +184,8 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 
 | Matrix type                   | `+` | `-` | `*` | `\` | Other functions with optimized methods                      |
 |:----------------------------- |:--- |:--- |:--- |:--- |:----------------------------------------------------------- |
-| [`Symmetric`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
-| [`Hermitian`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
+| [`Symmetric`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`cbrt`](@ref), [`exp`](@ref)                |
+| [`Hermitian`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`cbrt`](@ref), [`exp`](@ref)                |
 | [`UpperTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
 | [`UnitUpperTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
 | [`LowerTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
@@ -516,6 +516,7 @@ Base.:^(::AbstractMatrix, ::Number)
 Base.:^(::Number, ::AbstractMatrix)
 LinearAlgebra.log(::StridedMatrix)
 LinearAlgebra.sqrt(::StridedMatrix)
+LinearAlgebra.cbrt(::AbstractMatrix{<:Real})
 LinearAlgebra.cos(::StridedMatrix{<:Real})
 LinearAlgebra.sin(::StridedMatrix{<:Real})
 LinearAlgebra.sincos(::StridedMatrix{<:Real})

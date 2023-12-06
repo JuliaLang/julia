@@ -6,6 +6,9 @@
     XX(jl_adopt_thread) \
     XX(jl_alignment) \
     XX(jl_alloc_array_1d) \
+    XX(jl_alloc_array_2d) \
+    XX(jl_alloc_array_3d) \
+    XX(jl_alloc_array_nd) \
     XX(jl_alloc_string) \
     XX(jl_alloc_svec) \
     XX(jl_alloc_svec_uninit) \
@@ -200,6 +203,7 @@
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
+    XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
     XX(jl_get_excstack) \
@@ -441,7 +445,6 @@
     XX(jl_svec2) \
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
-    XX(jl_svec_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \

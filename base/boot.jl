@@ -281,7 +281,8 @@ macro _foldable_meta()
         #=:terminates_locally=#false,
         #=:notaskstate=#true,
         #=:inaccessiblememonly=#true,
-        #=:noub=#true))
+        #=:noub=#true,
+        #=:noub_if_noinbounds=#false))
 end
 
 macro inline()   Expr(:meta, :inline)   end
@@ -335,9 +336,15 @@ struct StackOverflowError  <: Exception end
 struct UndefRefError       <: Exception end
 struct UndefVarError <: Exception
     var::Symbol
+    scope # a Module or Symbol or other object describing the context where this variable was looked for (e.g. Main or :local or :static_parameter)
+    UndefVarError(var::Symbol) = new(var)
+    UndefVarError(var::Symbol, @nospecialize scope) = new(var, scope)
 end
 struct ConcurrencyViolationError <: Exception
     msg::AbstractString
+end
+struct MissingCodeError <: Exception
+    mi::MethodInstance
 end
 struct InterruptException <: Exception end
 struct DomainError <: Exception
@@ -406,6 +413,8 @@ struct InitError <: WrappedException
     error
 end
 
+struct PrecompilableError <: Exception end
+
 String(s::String) = s  # no constructor yet
 
 const Cvoid = Nothing
@@ -450,6 +459,7 @@ eval(Core, quote
     ReturnNode(@nospecialize val) = $(Expr(:new, :ReturnNode, :val))
     ReturnNode() = $(Expr(:new, :ReturnNode)) # unassigned val indicates unreachable
     GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))
+    EnterNode(dest::Int) = $(Expr(:new, :EnterNode, :dest))
     LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))
     function LineNumberNode(l::Int, @nospecialize(f))
         isa(f, String) && (f = Symbol(f))
@@ -472,14 +482,14 @@ eval(Core, quote
 end)
 
 function CodeInstance(
-    mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
+    mi::MethodInstance, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
-    ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
+    ipo_effects::UInt32, effects::UInt32, @nospecialize(analysis_results),
     relocatability::UInt8)
     return ccall(:jl_new_codeinst, Ref{CodeInstance},
-        (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
-        mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
-        ipo_effects, effects, argescapes,
+        (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
+        mi, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
+        ipo_effects, effects, analysis_results,
         relocatability)
 end
 GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
@@ -617,12 +627,12 @@ module IR
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct, InterConditional
+    Const, PartialStruct, InterConditional, EnterNode
 
 using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, LineInfoNode,
-    Const, PartialStruct, InterConditional
+    Const, PartialStruct, InterConditional, EnterNode
 
 end # module IR
 
@@ -947,7 +957,6 @@ function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
 
-
 # for backward compat
 arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...)
 const_arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...)
@@ -955,5 +964,10 @@ arrayset(inbounds::Bool, A::Array{T}, x::Any, i::Int...) where {T} = Main.Base.s
 arraysize(a::Array) = a.size
 arraysize(a::Array, i::Int) = sle_int(i, nfields(a.size)) ? getfield(a.size, i) : 1
 export arrayref, arrayset, arraysize, const_arrayref
+
+# For convenience
+EnterNode(old::EnterNode, new_dest::Int) = EnterNode(new_dest)
+
+include(Core, "optimized_generics.jl")
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

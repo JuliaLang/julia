@@ -1818,14 +1818,14 @@ In these examples, `a` is a [`Rational`](@ref), which has two fields.
 nfields
 
 """
-    UndefVarError(var::Symbol)
+    UndefVarError(var::Symbol, [scope])
 
 A symbol in the current scope is not defined.
 
 # Examples
 ```jldoctest
 julia> a
-ERROR: UndefVarError: `a` not defined
+ERROR: UndefVarError: `a` not defined in `Main`
 
 julia> a = 1;
 
@@ -2346,7 +2346,8 @@ See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 julia> module M end;
 
 julia> M.a  # same as `getglobal(M, :a)`
-ERROR: UndefVarError: `a` not defined
+ERROR: UndefVarError: `a` not defined in `M`
+Suggestion: check for spelling errors or missing imports.
 
 julia> setglobal!(M, :a, 1)
 1
