@@ -6,7 +6,46 @@ using .Base
 
 # Set up Main module
 using Base.MainInclude # ans, err, and sometimes Out
-import Base.MainInclude: eval, include
+
+# These definitions calls Base._include rather than Base.include to get
+# one-frame stacktraces for the common case of using include(fname) in Main.
+
+"""
+    include([mapexpr::Function,] path::AbstractString)
+
+Evaluate the contents of the input source file in the global scope of the containing module.
+Every module (except those defined with `baremodule`) has its own
+definition of `include`, which evaluates the file in that module.
+Returns the result of the last evaluated expression of the input file. During including,
+a task-local include path is set to the directory containing the file. Nested calls to
+`include` will search relative to that path. This function is typically used to load source
+interactively, or to combine files in packages that are broken into multiple source files.
+The argument `path` is normalized using [`normpath`](@ref) which will resolve
+relative path tokens such as `..` and convert `/` to the appropriate path separator.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `path`, the `include` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
+
+Use [`Base.include`](@ref) to evaluate a file into another module.
+
+!!! compat "Julia 1.5"
+    Julia 1.5 is required for passing the `mapexpr` argument.
+"""
+include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
+function include(fname::AbstractString)
+    isa(fname, String) || (fname = Base.convert(String, fname)::String)
+    Base._include(identity, Main, fname)
+end
+
+"""
+    eval(expr)
+
+Evaluate an expression in the global scope of the containing module.
+Every `Module` (except those defined with `baremodule`) has its own 1-argument
+definition of `eval`, which evaluates expressions in that module.
+"""
+eval(x) = Core.eval(Main, x)
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, abspath(@__FILE__)))
@@ -63,8 +102,9 @@ let
             print_time(stdlib, tt)
         end
         for dep in Base._require_dependencies
-            dep[3] == 0.0 && continue
-            push!(Base._included_files, dep[1:2])
+            mod, path, fsize, mtime = dep[1], dep[2], dep[3], dep[5]
+            (fsize == 0 || mtime == 0.0) && continue
+            push!(Base._included_files, (mod, path))
         end
         empty!(Base._require_dependencies)
         Base._track_dependencies[] = false
@@ -79,6 +119,7 @@ let
     Base.init_load_path() # want to be able to find external packages in userimg.jl
 
     ccall(:jl_clear_implicit_imports, Cvoid, (Any,), Main)
+
     tot_time_userimg = @elapsed (isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
 
     tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)

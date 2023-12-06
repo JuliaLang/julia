@@ -136,60 +136,6 @@ julia> nthreads()
 Either or both numbers can be replaced with the word `auto`, which causes
 Julia to choose a reasonable default.
 
-## Communication and synchronization
-
-Although Julia's threads can communicate through shared memory, it is notoriously
-difficult to write correct and data-race free multi-threaded code. Julia's
-[`Channel`](@ref)s are thread-safe and may be used to communicate safely.
-
-### Data-race freedom
-
-You are entirely responsible for ensuring that your program is data-race free,
-and nothing promised here can be assumed if you do not observe that
-requirement. The observed results may be highly unintuitive.
-
-The best way to ensure this is to acquire a lock around any access to data that
-can be observed from multiple threads. For example, in most cases you should
-use the following code pattern:
-
-```julia-repl
-julia> lock(lk) do
-           use(a)
-       end
-
-julia> begin
-           lock(lk)
-           try
-               use(a)
-           finally
-               unlock(lk)
-           end
-       end
-
-julia> @lock lk use(a)
-```
-where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
-
-Additionally, Julia is not memory safe in the presence of a data race. Be very
-careful about reading _any_ data if another thread might write to it!
-Instead, always use the lock pattern above when changing data (such as assigning
-to a global or closure variable) accessed by other threads.
-
-```julia
-Thread 1:
-global b = false
-global a = rand()
-global b = true
-
-Thread 2:
-while !b; end
-bad_read1(a) # it is NOT safe to access `a` here!
-
-Thread 3:
-while !@isdefined(a); end
-bad_read2(a) # it is NOT safe to access `a` here
-```
-
 ## The `@threads` Macro
 
 Let's work a simple example using our native threads. Let us create an array of zeros:
@@ -241,10 +187,10 @@ julia> a
 
 Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@distributed`](@ref).
 
-### Using `@threads` without data races
+### Using `@threads` without data-races
+The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just known that a data race can result in incorrect results and dangerous errors.
 
-Taking the example of a naive sum
-
+Lets say we want to make the function `sum_single` below multithreaded.
 ```julia-repl
 julia> function sum_single(a)
            s = 0
@@ -277,9 +223,8 @@ julia> sum_multi_bad(1:1_000_000)
 Note that the result is not `500000500000` as it should be, and will most likely change each evaluation.
 
 To fix this, buffers that are specific to the task may be used to segment the sum into chunks that are race-free.
-Here `sum_single` is reused, with its own internal buffer `s`, and vector `a` is split into `nthreads()`
-chunks for parallel work via `nthreads()` `@spawn`-ed tasks.
-
+Here `sum_single` is reused, with its own internal buffer `s`. The input vector `a` is split into `nthreads()`
+chunks for parallel work. We then use `Threads.@spawn` to create tasks that individually sum each chunk. Finally, we sum the results from each task using `sum_single` again:
 ```julia-repl
 julia> function sum_multi_good(a)
            chunks = Iterators.partition(a, length(a) ÷ Threads.nthreads())
@@ -303,7 +248,72 @@ julia> sum_multi_good(1:1_000_000)
 Another option is the use of atomic operations on variables shared across tasks/threads, which may be more performant
 depending on the characteristics of the operations.
 
-## Atomic Operations
+## [Communication and data-races between threads](@id man-communication-and-data-races)
+
+Although Julia's threads can communicate through shared memory, it is notoriously difficult to write correct and data-race free multi-threaded code. Julia's
+[`Channel`](@ref)s are thread-safe and may be used to communicate safely. There are also sections below that explain how to use [locks](@ref man-using-locks) and [atomics](@ref man-atomic-operations) to avoid data-races.
+
+### Data-race freedom
+
+You are entirely responsible for ensuring that your program is data-race free,
+and nothing promised here can be assumed if you do not observe that
+requirement. The observed results may be highly unintuitive.
+
+If data-races are introduced, Julia is not memory safe. **Be very
+careful about reading _any_ data if another thread might write to it, as it could result in segmentation faults or worse**. Below are a couple of unsafe ways to access global variables from different threads:
+```julia
+Thread 1:
+global b = false
+global a = rand()
+global b = true
+
+Thread 2:
+while !b; end
+bad_read1(a) # it is NOT safe to access `a` here!
+
+Thread 3:
+while !@isdefined(a); end
+bad_read2(a) # it is NOT safe to access `a` here
+```
+
+### [Using locks to avoid data-races](@id man-using-locks)
+An important tool to avoid data-races, and thereby write thread-safe code, is the concept of a "lock". A lock can be locked and unlocked. If a thread has locked a lock, and not unlocked it, it is said to "hold" the lock. If there is only one lock, and we write code the requires holding the lock to access some data, we can ensure that multiple threads will never access the same data simultaneously. Note that the link between a lock and a variable is made by the programmer, and not the program.
+
+For example, we can create a lock `my_lock`, and lock it while we mutate a variable `my_variable`. This is done most simply with the `@lock` macro:
+
+```julia-repl
+julia> my_lock = ReentrantLock();
+
+julia> my_variable = [1, 2, 3];
+
+julia> @lock my_lock my_variable[1] = 100
+100
+```
+
+By using a similar pattern with the same lock and variable, but on another thread, the operations are free from data-races.
+
+We could have performed the operation above with the functional version of `lock`, in the following two ways:
+```julia-repl
+julia> lock(my_lock) do
+           my_variable[1] = 100
+       end
+100
+
+julia> begin
+           lock(my_lock)
+           try
+               my_variable[1] = 100
+           finally
+               unlock(my_lock)
+           end
+       end
+100
+```
+
+All three options are equivalent. Note how the final version requires an explicit `try`-block to ensure that the lock is always unlocked, whereas the first two version do this internally. One should always use the lock pattern above when changing data (such as assigning
+to a global or closure variable) accessed by other threads. Failing to do this could have unforeseen and serious consequences.
+
+### [Atomic Operations](@id man-atomic-operations)
 
 Julia supports accessing and modifying values *atomically*, that is, in a thread-safe way to avoid
 [race conditions](https://en.wikipedia.org/wiki/Race_condition). A value (which must be of a primitive
@@ -372,7 +382,7 @@ julia> acc[]
 ```
 
 
-## [Per-field atomics](@id man-atomics)
+#### [Per-field atomics](@id man-atomics)
 
 We can also use atomics on a more granular level using the [`@atomic`](@ref
 Base.@atomic), [`@atomicswap`](@ref Base.@atomicswap), and
@@ -450,7 +460,8 @@ threads in Julia:
     method, and module definitions in parallel.
   * Be aware that finalizers registered by a library may break if threads are enabled.
     This may require some transitional work across the ecosystem before threading
-    can be widely adopted with confidence. See the next section for further details.
+    can be widely adopted with confidence. See the section on
+    [the safe use of finalizers](@ref man-finalizers) for further details.
 
 ## [Task Migration](@id man-task-migration)
 
@@ -466,7 +477,7 @@ and therefore should not be used to index into a vector of buffers or stateful o
     Task migration was introduced in Julia 1.7. Before this tasks always remained on the same thread that they were
     started on.
 
-## Safe use of Finalizers
+## [Safe use of Finalizers](@id man-finalizers)
 
 Because finalizers can interrupt any code, they must be very careful in how
 they interact with any global state. Unfortunately, the main reason that

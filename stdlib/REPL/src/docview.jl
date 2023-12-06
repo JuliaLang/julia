@@ -166,7 +166,7 @@ struct Logged{F}
     collection::Set{Pair{Module,Symbol}}
 end
 function (la::Logged)(m::Module, s::Symbol)
-    m !== la.mod && !Base.ispublic(m, s) && push!(la.collection, m => s)
+    m !== la.mod && Base.isdefined(m, s) && !Base.ispublic(m, s) && push!(la.collection, m => s)
     la.f(m, s)
 end
 (la::Logged)(args...) = la.f(args...)
@@ -184,7 +184,7 @@ log_nonpublic_access(expr, ::Module, _) = expr
 
 function insert_internal_warning(md::Markdown.MD, internal_access::Set{Pair{Module,Symbol}})
     if !isempty(internal_access)
-        items = Any[Any[Markdown.Paragraph(Any[Markdown.Code("", s)])] for s in sort("$mod.$sym" for (mod, sym) in internal_access)]
+        items = Any[Any[Markdown.Paragraph(Any[Markdown.Code("", s)])] for s in sort!(["$mod.$sym" for (mod, sym) in internal_access])]
         admonition = Markdown.Admonition("warning", "Warning", Any[
             Markdown.Paragraph(Any["The following bindings may be internal; they may change or be removed in future versions:"]),
             Markdown.List(items, -1, false)])
@@ -193,7 +193,8 @@ function insert_internal_warning(md::Markdown.MD, internal_access::Set{Pair{Modu
     md
 end
 function insert_internal_warning(other, internal_access::Set{Pair{Module,Symbol}})
-    println("oops.")
+    # We don't know how to insert an internal symbol warning into non-markdown
+    # content, so we don't.
     other
 end
 
@@ -242,8 +243,6 @@ function doc(binding::Binding, sig::Type = Union{})
         md = catdoc(mapany(parsedoc, results)...)
         # Save metadata in the generated markdown.
         if isa(md, Markdown.MD)
-            # We don't know how to insert an internal symbol warning into non-markdown
-            # content, so we don't.
             md.meta[:results] = results
             md.meta[:binding] = binding
             md.meta[:typesig] = sig

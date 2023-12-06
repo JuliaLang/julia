@@ -246,9 +246,9 @@ function exec_options(opts)
             # If we're doing a bug report, don't load anything else. We will
             # spawn a child in which to execute these options.
             let InteractiveUtils = load_InteractiveUtils()
-                InteractiveUtils.report_bug(arg)
+                invokelatest(InteractiveUtils.report_bug, arg)
             end
-            return nothing
+            return false
         else
             @warn "Unexpected command -$cmd'$arg'"
         end
@@ -261,8 +261,8 @@ function exec_options(opts)
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
         let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            Core.eval(Main, :(const Distributed = $Distributed))
-            Core.eval(Main, :(using .Distributed))
+            Core.eval(MainInclude, :(const Distributed = $Distributed))
+            Core.eval(Main, :(using Base.MainInclude.Distributed))
         end
 
         invokelatest(Main.Distributed.process_opts, opts)
@@ -270,6 +270,10 @@ function exec_options(opts)
 
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
     is_interactive::Bool |= interactiveinput
+
+    # load terminfo in for styled printing
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    global current_terminfo = load_terminfo(term_env)
 
     # load ~/.julia/config/startup.jl file
     if startup
@@ -380,19 +384,18 @@ _atreplinit(repl) = invokelatest(__atreplinit, repl)
 
 function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
-    if !isdefined(mod, :InteractiveUtils)
+    if !isdefined(MainInclude, :InteractiveUtils)
         try
             let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-                Core.eval(mod, :(const InteractiveUtils = $InteractiveUtils))
-                Core.eval(mod, :(using .InteractiveUtils))
-                return InteractiveUtils
+                Core.eval(MainInclude, :(const InteractiveUtils = $InteractiveUtils))
             end
         catch ex
             @warn "Failed to import InteractiveUtils into module $mod" exception=(ex, catch_backtrace())
+            return nothing
         end
-        return nothing
     end
-    return getfield(mod, :InteractiveUtils)
+    Core.eval(mod, :(using Base.MainInclude.InteractiveUtils))
+    return MainInclude.InteractiveUtils
 end
 
 function load_REPL()
@@ -417,13 +420,11 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         end
     end
     # TODO cleanup REPL_MODULE_REF
-
     if !fallback_repl && interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-            global current_terminfo = load_terminfo(term_env)
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            banner == :no || Base.banner(term, short=banner==:short)
+            banner == :no || REPL.banner(term, short=banner==:short)
             if term.term_type == "dumb"
                 repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
@@ -443,7 +444,6 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
         if !fallback_repl && interactive && !quiet
             @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end
-        banner == :no || Base.banner(short=banner==:short)
         let input = stdin
             if isa(input, File) || isa(input, IOStream)
                 # for files, we can slurp in the whole thing at once
@@ -485,17 +485,9 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_f
     nothing
 end
 
-# MainInclude exists to hide Main.include and eval from `names(Main)`.
+# MainInclude exists to weakly add certain identifiers to Main
 baremodule MainInclude
 using ..Base
-# These definitions calls Base._include rather than Base.include to get
-# one-frame stacktraces for the common case of using include(fname) in Main.
-include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
-function include(fname::AbstractString)
-    isa(fname, String) || (fname = Base.convert(String, fname)::String)
-    Base._include(identity, Main, fname)
-end
-eval(x) = Core.eval(Main, x)
 
 """
     ans
@@ -514,17 +506,7 @@ global err = nothing
 
 # weakly exposes ans and err variables to Main
 export ans, err
-
 end
-
-"""
-    eval(expr)
-
-Evaluate an expression in the global scope of the containing module.
-Every `Module` (except those defined with `baremodule`) has its own 1-argument
-definition of `eval`, which evaluates expressions in that module.
-"""
-MainInclude.eval
 
 function should_use_main_entrypoint()
     isdefined(Main, :main) || return false
@@ -532,30 +514,6 @@ function should_use_main_entrypoint()
     (isdefined(M_binding_owner, Symbol("#__main_is_entrypoint__#")) && M_binding_owner.var"#__main_is_entrypoint__#") || return false
     return true
 end
-
-"""
-    include([mapexpr::Function,] path::AbstractString)
-
-Evaluate the contents of the input source file in the global scope of the containing module.
-Every module (except those defined with `baremodule`) has its own
-definition of `include`, which evaluates the file in that module.
-Returns the result of the last evaluated expression of the input file. During including,
-a task-local include path is set to the directory containing the file. Nested calls to
-`include` will search relative to that path. This function is typically used to load source
-interactively, or to combine files in packages that are broken into multiple source files.
-The argument `path` is normalized using [`normpath`](@ref) which will resolve
-relative path tokens such as `..` and convert `/` to the appropriate path separator.
-
-The optional first argument `mapexpr` can be used to transform the included code before
-it is evaluated: for each parsed expression `expr` in `path`, the `include` function
-actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
-
-Use [`Base.include`](@ref) to evaluate a file into another module.
-
-!!! compat "Julia 1.5"
-    Julia 1.5 is required for passing the `mapexpr` argument.
-"""
-MainInclude.include
 
 function _start()
     empty!(ARGS)

@@ -154,7 +154,7 @@ static void jl_compile_all_defs(jl_array_t *mis)
 
     jl_foreach_reachable_mtable(compile_all_collect_, allmeths);
 
-    size_t i, l = jl_array_len(allmeths);
+    size_t i, l = jl_array_nrows(allmeths);
     for (i = 0; i < l; i++) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(allmeths, i);
         if (jl_is_datatype(m->sig) && jl_isa_compileable_sig((jl_tupletype_t*)m->sig, jl_emptysvec, m)) {
@@ -243,7 +243,7 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
     jl_method_instance_t *mi = NULL;
     JL_GC_PUSH2(&m2, &mi);
     m2 = jl_alloc_vec_any(0);
-    for (size_t i = 0; i < jl_array_len(m); i++) {
+    for (size_t i = 0; i < jl_array_nrows(m); i++) {
         jl_value_t *item = jl_array_ptr_ref(m, i);
         if (jl_is_method_instance(item)) {
             mi = (jl_method_instance_t*)item;
@@ -287,13 +287,13 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
     // type signatures that were inferred but haven't been compiled
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
-    size_t i, n = jl_array_len(worklist);
+    size_t i, n = jl_array_nrows(worklist);
     for (i = 0; i < n; i++) {
         jl_module_t *mod = (jl_module_t*)jl_array_ptr_ref(worklist, i);
         assert(jl_is_module(mod));
         foreach_mtable_in_module(mod, precompile_enq_all_specializations_, m);
     }
-    n = jl_array_len(extext_methods);
+    n = jl_array_nrows(extext_methods);
     for (i = 0; i < n; i++) {
         jl_method_t *method = (jl_method_t*)jl_array_ptr_ref(extext_methods, i);
         assert(jl_is_method(method));
@@ -310,7 +310,7 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
             }
         }
     }
-    n = jl_array_len(new_specializations);
+    n = jl_array_nrows(new_specializations);
     for (i = 0; i < n; i++) {
         jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_specializations, i);
         precompile_enq_specialization_(ci->def, m);

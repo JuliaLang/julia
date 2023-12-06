@@ -6994,4 +6994,57 @@ Returns `X` (overwriting `C`) and `scale`.
 """
 trsyl!(transa::AbstractChar, transb::AbstractChar, A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, isgn::Int=1)
 
+for (fn, elty) in ((:dlacpy_, :Float64),
+                   (:slacpy_, :Float32),
+                   (:zlacpy_, :ComplexF64),
+                   (:clacpy_, :ComplexF32))
+    @eval begin
+        # SUBROUTINE DLACPY( UPLO, M, N, A, LDA, B, LDB )
+        #     .. Scalar Arguments ..
+        #      CHARACTER          UPLO
+        #      INTEGER            LDA, LDB, M, N
+        #     ..
+        #     .. Array Arguments ..
+        #     DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
+        #     ..
+        function lacpy!(B::AbstractMatrix{$elty}, A::AbstractMatrix{$elty}, uplo::AbstractChar)
+            require_one_based_indexing(A, B)
+            chkstride1(A, B)
+            m,n = size(A)
+            m1,n1 = size(B)
+            (m1 < m || n1 < n) && throw(DimensionMismatch("B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
+            ccall((@blasfunc($fn), libblastrampoline), Cvoid,
+                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
+                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong),
+                  uplo, m, n, A, lda, B, ldb, 1)
+            B
+        end
+    end
+end
+
+"""
+    lacpy!(B, A, uplo) -> B
+
+Copies all or part of a matrix `A` to another matrix `B`.
+uplo specifies the part of the matrix `A` to be copied to `B`.
+Set `uplo = 'L'` for the lower triangular part, `uplo = 'U'`
+for the upper triangular part, any other character for all
+the matrix `A`.
+
+# Examples
+```jldoctest
+julia> A = [1. 2. ; 3. 4.];
+
+julia> B = [0. 0. ; 0. 0.];
+
+julia> LAPACK.lacpy!(B, A, 'U')
+2×2 Matrix{Float64}:
+ 1.0  2.0
+ 0.0  4.0
+```
+"""
+lacpy!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
+
 end # module

@@ -172,6 +172,11 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
     return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
 }
 
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
+{
+    return jl_false; // Match behaviour of have_fma in src/llvm-cpufeatures.cpp (assume false)
+}
+
 JL_DLLEXPORT void jl_dump_host_cpu(void)
 {
     jl_safe_printf("CPU: %s\n", host_cpu_name().c_str());

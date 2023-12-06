@@ -92,7 +92,6 @@
 #include "julia_assert.h"
 #include "passes.h"
 
-
 using namespace llvm;
 
 namespace {
@@ -351,7 +350,12 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
         FPM.addPass(DCEPass());
         FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
         if (O.getSpeedupLevel() >= 1) {
+#if JL_LLVM_VERSION >= 160000
+            // TODO check the LLVM 15 default.
+            FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+#else
             FPM.addPass(SROAPass());
+#endif
         }
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
@@ -386,7 +390,12 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
     if (O.getSpeedupLevel() >= 1) {
         FunctionPassManager FPM;
         if (O.getSpeedupLevel() >= 2) {
+#if JL_LLVM_VERSION >= 160000
+            // TODO check the LLVM 15 default.
+            FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+#else
             FPM.addPass(SROAPass());
+#endif
             // SROA can duplicate PHI nodes which can block LowerSIMD
             FPM.addPass(InstCombinePass());
             FPM.addPass(JumpThreadingPass());
@@ -456,7 +465,12 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
     FPM.addPass(BeforeScalarOptimizationMarkerPass());
     if (O.getSpeedupLevel() >= 2) {
         JULIA_PASS(FPM.addPass(AllocOptPass()));
+#if JL_LLVM_VERSION >= 160000
+        // TODO check the LLVM 15 default.
+        FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+#else
         FPM.addPass(SROAPass());
+#endif
         FPM.addPass(InstSimplifyPass());
         FPM.addPass(GVNPass());
         FPM.addPass(MemCpyOptPass());
@@ -687,13 +701,6 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         PIC.addClassToPassName("AfterOptimizationMarkerPass", "AfterOptimization");
     }
 
-    auto createPIC(StandardInstrumentations &SI) JL_NOTSAFEPOINT {
-        auto PIC = std::make_unique<PassInstrumentationCallbacks>();
-        adjustPIC(*PIC);
-        SI.registerCallbacks(*PIC);
-        return PIC;
-    }
-
     FunctionAnalysisManager createFAM(OptimizationLevel O, TargetMachine &TM) JL_NOTSAFEPOINT {
 
         FunctionAnalysisManager FAM;
@@ -722,9 +729,8 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 }
 
 NewPM::NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options) :
-    TM(std::move(TM)), SI(false), PIC(createPIC(SI)),
-    PB(this->TM.get(), PipelineTuningOptions(), None, PIC.get()),
-    MPM(createMPM(PB, O, options)), O(O) {}
+    TM(std::move(TM)), O(O), options(options), TimePasses() {}
+
 
 NewPM::~NewPM() = default;
 
@@ -750,14 +756,34 @@ void NewPM::run(Module &M) {
     //We must recreate the analysis managers every time
     //so that analyses from previous runs of the pass manager
     //do not hang around for the next run
-    AnalysisManagers AM{*TM, PB, O};
+#if JL_LLVM_VERSION >= 160000
+    StandardInstrumentations SI(M.getContext(),false);
+#else
+    StandardInstrumentations SI(false);
+#endif
+    FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
+    PassInstrumentationCallbacks PIC;
+    adjustPIC(PIC);
+    TimePasses.registerCallbacks(PIC);
+    SI.registerCallbacks(PIC, &FAM);
+    SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
+    LoopAnalysisManager LAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+    PassBuilder PB(TM.get(), PipelineTuningOptions(), None, &PIC);
+    PB.registerLoopAnalyses(LAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerModuleAnalyses(MAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+    ModulePassManager MPM = createMPM(PB, O, options);
 #ifndef __clang_gcanalyzer__ /* the analyzer cannot prove we have not added instrumentation callbacks with safepoints */
-    MPM.run(M, AM.MAM);
+    MPM.run(M, MAM);
 #endif
 }
 
 void NewPM::printTimers() {
-    SI.getTimePasses().print();
+    TimePasses.print();
 }
 
 OptimizationLevel getOptLevel(int optlevel) {
@@ -775,7 +801,7 @@ OptimizationLevel getOptLevel(int optlevel) {
 }
 
 //This part is also basically stolen from LLVM's PassBuilder.cpp file
-static llvm::Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJuliaPipelineOptions(StringRef name) {
+static Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJuliaPipelineOptions(StringRef name) {
     if (name.consume_front("julia")) {
         auto O = OptimizationLevel::O2;
         auto options = OptimizationOptions::defaults();
@@ -825,7 +851,7 @@ static llvm::Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJu
         }
         return {{O, options}};
     }
-    return {};
+    return None;
 }
 
 bool verifyLLVMIR(const Module &M) JL_NOTSAFEPOINT {

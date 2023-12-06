@@ -165,7 +165,7 @@ kw"__init__"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base` or local definitions of
-[`eval`](@ref Base.MainInclude.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+[`eval`](@ref Main.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
 module Mod
@@ -217,7 +217,7 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling [`eval`](@ref Base.MainInclude.eval),
+Macros are a way to run generated code without calling [`eval`](@ref Main.eval),
 since the generated code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
@@ -1818,14 +1818,14 @@ In these examples, `a` is a [`Rational`](@ref), which has two fields.
 nfields
 
 """
-    UndefVarError(var::Symbol)
+    UndefVarError(var::Symbol, [scope])
 
 A symbol in the current scope is not defined.
 
 # Examples
 ```jldoctest
 julia> a
-ERROR: UndefVarError: `a` not defined
+ERROR: UndefVarError: `a` not defined in `Main`
 
 julia> a = 1;
 
@@ -2346,7 +2346,8 @@ See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 julia> module M end;
 
 julia> M.a  # same as `getglobal(M, :a)`
-ERROR: UndefVarError: `a` not defined
+ERROR: UndefVarError: `a` not defined in `M`
+Suggestion: check for spelling errors or missing imports.
 
 julia> setglobal!(M, :a, 1)
 1
@@ -2420,6 +2421,42 @@ false
 """
 isdefined
 
+"""
+    Memory{T}(undef, n)
+
+Construct an uninitialized [`Memory{T}`](@ref) of length `n`. All Memory
+objects of length 0 might alias, since there is no reachable mutable content
+from them.
+
+# Examples
+```julia-repl
+julia> Memory{Float64}(undef, 3)
+3-element Memory{Float64}:
+ 6.90966e-310
+ 6.90966e-310
+ 6.90966e-310
+```
+"""
+Memory{T}(::UndefInitializer, n)
+
+"""
+    MemoryRef(memory)
+
+Construct a MemoryRef from a memory object. This does not fail, but the
+resulting memory may point out-of-bounds if the memory is empty.
+"""
+MemoryRef(::Memory)
+
+"""
+    MemoryRef(::Memory, index::Integer)
+    MemoryRef(::MemoryRef, index::Integer)
+
+Construct a MemoryRef from a memory object and an offset index (1-based) which
+can also be negative. This always returns an inbounds object, and will throw an
+error if that is not possible (because the index would result in a shift
+out-of-bounds of the underlying memory).
+"""
+MemoryRef(::Union{Memory,MemoryRef}, ::Integer)
 
 """
     Vector{T}(undef, n)
@@ -2821,23 +2858,33 @@ kw"Union{}", Base.Bottom
 """
     Union{Types...}
 
-A type union is an abstract type which includes all instances of any of its argument types. The empty
-union [`Union{}`](@ref) is the bottom type of Julia.
+A `Union` type is an abstract type which includes all instances of any of its argument types.
+This means that `T <: Union{T,S}` and `S <: Union{T,S}`.
+
+Like other abstract types, it cannot be instantiated, even if all of its arguments are non
+abstract.
 
 # Examples
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
 Union{Int64, AbstractString}
 
-julia> 1 isa IntOrString
+julia> 1 isa IntOrString # instance of Int is included in the union
 true
 
-julia> "Hello!" isa IntOrString
+julia> "Hello!" isa IntOrString # String is also included
 true
 
-julia> 1.0 isa IntOrString
+julia> 1.0 isa IntOrString # Float64 is not included because it is neither Int nor AbstractString
 false
 ```
+
+# Extended Help
+
+Unlike most other parametric types, unions are covariant in their parameters. For example,
+`Union{Real, String}` is a subtype of `Union{Number, AbstractString}`.
+
+The empty union [`Union{}`](@ref) is the bottom type of Julia.
 """
 Union
 
@@ -3372,5 +3419,7 @@ The current differences are:
 - `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
+
+Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end
