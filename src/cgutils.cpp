@@ -3733,7 +3733,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 strct = emit_static_alloca(ctx, lt);
                 setName(ctx.emission_context, strct, arg_typename);
                 if (nargs < nf)
-                    ctx.builder.CreateStore(ctx.builder.CreateFreeze(UndefValue::get(lt)), strct);
+                    promotion_point = ctx.builder.CreateStore(ctx.builder.CreateFreeze(UndefValue::get(lt)), strct);
                 if (tracked.count)
                     undef_derived_strct(ctx, strct, sty, ctx.tbaa().tbaa_stack);
             }

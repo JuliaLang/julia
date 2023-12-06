@@ -129,9 +129,10 @@ function macroexpand(m::Module, @nospecialize(x); recursive=true)
 end
 
 """
-    @macroexpand
+    @macroexpand [mod,] ex
 
 Return equivalent expression with all macros removed (expanded).
+If two arguments are provided, the first is the module to evaluate in.
 
 There are differences between `@macroexpand` and [`macroexpand`](@ref).
 
@@ -166,19 +167,27 @@ julia> M.f()
 ```
 With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module `M` in the example).
 With `macroexpand` the expression expands in the module given as the first argument.
+
+!!! compat "Julia 1.11"
+    The two-argument form requires at least Julia 1.11.
 """
 macro macroexpand(code)
     return :(macroexpand($__module__, $(QuoteNode(code)), recursive=true))
 end
-
+macro macroexpand(mod, code)
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=true))
+end
 
 """
-    @macroexpand1
+    @macroexpand1 [mod,] ex
 
 Non recursive version of [`@macroexpand`](@ref).
 """
 macro macroexpand1(code)
     return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
+end
+macro macroexpand1(mod, code)
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=false))
 end
 
 ## misc syntax ##
@@ -719,64 +728,71 @@ macro assume_effects(args...)
         ex = nothing
         idx = length(args)
     end
-    consistent = effect_free = nothrow = terminates_globally = terminates_locally =
-        notaskstate = inaccessiblememonly = noub = noub_if_noinbounds = false
-    for i in 1:idx
-        org_setting = args[i]
-        (setting, val) = compute_assumed_setting(org_setting)
-        if setting === :consistent
-            consistent = val
-        elseif setting === :effect_free
-            effect_free = val
-        elseif setting === :nothrow
-            nothrow = val
-        elseif setting === :terminates_globally
-            terminates_globally = val
-        elseif setting === :terminates_locally
-            terminates_locally = val
-        elseif setting === :notaskstate
-            notaskstate = val
-        elseif setting === :inaccessiblememonly
-            inaccessiblememonly = val
-        elseif setting === :noub
-            noub = val
-        elseif setting === :noub_if_noinbounds
-            noub_if_noinbounds = val
-        elseif setting === :foldable
-            consistent = effect_free = terminates_globally = noub = val
-        elseif setting === :removable
-            effect_free = nothrow = terminates_globally = val
-        elseif setting === :total
-            consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = noub = val
-        else
-            throw(ArgumentError("@assume_effects $org_setting not supported"))
-        end
+    override = EffectsOverride()
+    for i = 1:idx
+        setting = args[i]
+        override = compute_assumed_setting(override, setting)
+        override === nothing &&
+            throw(ArgumentError("@assume_effects $setting not supported"))
     end
     if is_function_def(inner)
-        return esc(pushmeta!(ex, :purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
-            notaskstate, inaccessiblememonly, noub, noub_if_noinbounds))
+        return esc(pushmeta!(ex, form_purity_expr(override)))
     elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
-        insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
-            notaskstate, inaccessiblememonly, noub, noub_if_noinbounds)))
+        insert!(ex.args, 3, Core.Compiler.encode_effects_override(override))
         return esc(ex)
     else # anonymous function case
-        return Expr(:meta, Expr(:purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally,
-            notaskstate, inaccessiblememonly, noub, noub_if_noinbounds))
+        return Expr(:meta, form_purity_expr(override))
     end
 end
 
-function compute_assumed_setting(@nospecialize(setting), val::Bool=true)
+using Core.Compiler: EffectsOverride
+
+function compute_assumed_setting(override::EffectsOverride, @nospecialize(setting), val::Bool=true)
     if isexpr(setting, :call) && setting.args[1] === :(!)
-        return compute_assumed_setting(setting.args[2], !val)
+        return compute_assumed_setting(override, setting.args[2], !val)
     elseif isa(setting, QuoteNode)
-        return compute_assumed_setting(setting.value, val)
-    else
-        return (setting, val)
+        return compute_assumed_setting(override, setting.value, val)
     end
+    if setting === :consistent
+        return EffectsOverride(override; consistent = val)
+    elseif setting === :effect_free
+        return EffectsOverride(override; effect_free = val)
+    elseif setting === :nothrow
+        return EffectsOverride(override; nothrow = val)
+    elseif setting === :terminates_globally
+        return EffectsOverride(override; terminates_globally = val)
+    elseif setting === :terminates_locally
+        return EffectsOverride(override; terminates_locally = val)
+    elseif setting === :notaskstate
+        return EffectsOverride(override; notaskstate = val)
+    elseif setting === :inaccessiblememonly
+        return EffectsOverride(override; inaccessiblememonly = val)
+    elseif setting === :noub
+        return EffectsOverride(override; noub = val)
+    elseif setting === :noub_if_noinbounds
+        return EffectsOverride(override; noub_if_noinbounds = val)
+    elseif setting === :foldable
+        consistent = effect_free = terminates_globally = noub = val
+        return EffectsOverride(override; consistent, effect_free, terminates_globally, noub)
+    elseif setting === :removable
+        effect_free = nothrow = terminates_globally = val
+        return EffectsOverride(override; effect_free, nothrow, terminates_globally)
+    elseif setting === :total
+        consistent = effect_free = nothrow = terminates_globally = notaskstate =
+            inaccessiblememonly = noub = val
+        return EffectsOverride(override;
+            consistent, effect_free, nothrow, terminates_globally, notaskstate,
+            inaccessiblememonly, noub)
+    end
+    return nothing
+end
+
+function form_purity_expr(override::EffectsOverride)
+    return Expr(:purity,
+        override.consistent, override.effect_free, override.nothrow,
+        override.terminates_globally, override.terminates_locally, override.notaskstate,
+        override.inaccessiblememonly, override.noub, override.noub_if_noinbounds)
 end
 
 """
@@ -850,23 +866,17 @@ function unwrap_macrocalls(ex::Expr)
     return inner
 end
 
-function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
-    if isempty(args)
-        tag = sym
-    else
-        tag = Expr(sym, args...)::Expr
-    end
-
+function pushmeta!(ex::Expr, tag::Union{Symbol,Expr})
     inner = unwrap_macrocalls(ex)
-
     idx, exargs = findmeta(inner)
     if idx != 0
-        push!(exargs[idx].args, tag)
+        metastmt = exargs[idx]::Expr
+        push!(metastmt.args, tag)
     else
         body = inner.args[2]::Expr
         pushfirst!(body.args, Expr(:meta, tag))
     end
-    ex
+    return ex
 end
 
 popmeta!(body, sym) = _getmeta(body, sym, true)

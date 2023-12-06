@@ -246,7 +246,7 @@ in expression starting at /home/kc/HelloWorld/deps/build.jl:1
     A build step should generally not create or modify any files in the package directory. If you need to store some files
     from the build step, use the [Scratch.jl](https://github.com/JuliaPackaging/Scratch.jl) package.
 
-## Adding tests to the package
+## [Adding tests to the package](@id adding-tests-to-packages)
 
 When a package is tested the file `test/runtests.jl` is executed:
 

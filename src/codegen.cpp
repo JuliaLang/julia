@@ -211,7 +211,7 @@ void setNameWithField(jl_codegen_params_t &params, Value *V, std::function<Strin
         } else {
             auto flds = jl_field_names(jt);
             if (idx < jl_svec_len(flds)) {
-                auto name = jl_svec_ref(flds, idx);
+                auto name = jl_svecref(flds, idx);
                 assert(jl_is_symbol(name));
                 V->setName(Twine(GetObjName()) + "." + Twine(jl_symbol_name((jl_sym_t*)name)) + suffix);
                 return;
@@ -2937,7 +2937,7 @@ static bool local_var_occurs(jl_value_t *e, int sl)
 static std::set<int> assigned_in_try(jl_array_t *stmts, int s, long l)
 {
     std::set<int> av;
-    for(int i=s; i <= l; i++) {
+    for(int i=s; i < l; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts,i);
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == jl_assign_sym) {
@@ -2956,18 +2956,16 @@ static void mark_volatile_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> 
     size_t slength = jl_array_dim0(stmts);
     for (int i = 0; i < (int)slength; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
-        if (jl_is_expr(st)) {
-            if (((jl_expr_t*)st)->head == jl_enter_sym) {
-                int last = jl_unbox_long(jl_exprarg(st, 0));
-                std::set<int> as = assigned_in_try(stmts, i + 1, last);
-                for (int j = 0; j < (int)slength; j++) {
-                    if (j < i || j > last) {
-                        std::set<int>::iterator it = as.begin();
-                        for (; it != as.end(); it++) {
-                            if (local_var_occurs(jl_array_ptr_ref(stmts, j), *it)) {
-                                jl_varinfo_t &vi = slots[*it];
-                                vi.isVolatile = true;
-                            }
+        if (jl_is_enternode(st)) {
+            int last = jl_enternode_catch_dest(st);
+            std::set<int> as = assigned_in_try(stmts, i + 1, last - 1);
+            for (int j = 0; j < (int)slength; j++) {
+                if (j < i || j > last) {
+                    std::set<int>::iterator it = as.begin();
+                    for (; it != as.end(); it++) {
+                        if (local_var_occurs(jl_array_ptr_ref(stmts, j), *it)) {
+                            jl_varinfo_t &vi = slots[*it];
+                            vi.isVolatile = true;
                         }
                     }
                 }
@@ -3536,7 +3534,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
                 else if (jl_field_isconst(uty, idx)) {
                     std::string msg = fname + ": const field ."
-                        + std::string(jl_symbol_name((jl_sym_t*)jl_svec_ref(jl_field_names(uty), idx)))
+                        + std::string(jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(uty), idx)))
                         + " of type "
                         + std::string(jl_symbol_name(uty->name->name))
                         + " cannot be changed";
@@ -8536,14 +8534,11 @@ static jl_llvm_functions_t
                 // targets.
                 if (i + 2 <= stmtslen)
                     branch_targets.insert(i + 2);
-            } else if (jl_is_expr(stmt)) {
-                if (((jl_expr_t*)stmt)->head == jl_enter_sym) {
-                    branch_targets.insert(i + 1);
-                    if (i + 2 <= stmtslen)
-                        branch_targets.insert(i + 2);
-                    int dest = jl_unbox_long(jl_array_ptr_ref(((jl_expr_t*)stmt)->args, 0));
-                    branch_targets.insert(dest);
-                }
+            } else if (jl_is_enternode(stmt)) {
+                branch_targets.insert(i + 1);
+                if (i + 2 <= stmtslen)
+                    branch_targets.insert(i + 2);
+                branch_targets.insert(jl_enternode_catch_dest(stmt));
             } else if (jl_is_gotonode(stmt)) {
                 int dest = jl_gotonode_label(stmt);
                 branch_targets.insert(dest);
@@ -8589,7 +8584,6 @@ static jl_llvm_functions_t
         }
         ctx.noalias().aliasscope.current = aliasscopes[cursor];
         jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
-        jl_expr_t *expr = jl_is_expr(stmt) ? (jl_expr_t*)stmt : nullptr;
         if (jl_is_returnnode(stmt)) {
             jl_value_t *retexpr = jl_returnnode_value(stmt);
             if (retexpr == NULL) {
@@ -8743,11 +8737,8 @@ static jl_llvm_functions_t
             find_next_stmt(cursor + 1);
             continue;
         }
-        else if (expr && expr->head == jl_enter_sym) {
-            jl_value_t **args = jl_array_data(expr->args, jl_value_t*);
-
-            assert(jl_is_long(args[0]));
-            int lname = jl_unbox_long(args[0]);
+        else if (jl_is_enternode(stmt)) {
+            int lname = jl_enternode_catch_dest(stmt);
             // Save exception stack depth at enter for use in pop_exception
             Value *excstack_state =
                 ctx.builder.CreateCall(prepare_call(jl_excstack_state_func));
@@ -8759,11 +8750,16 @@ static jl_llvm_functions_t
             sj->setCanReturnTwice();
             Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
             BasicBlock *tryblk = BasicBlock::Create(ctx.builder.getContext(), "try", f);
+            BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_pop", f);
             BasicBlock *handlr = NULL;
             handlr = BB[lname];
             workstack.push_back(lname - 1);
             come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
-            ctx.builder.CreateCondBr(isz, tryblk, handlr);
+            ctx.builder.CreateCondBr(isz, tryblk, catchpop);
+            ctx.builder.SetInsertPoint(catchpop);
+            ctx.builder.CreateCall(prepare_call(jlleave_func),
+                            ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1));
+            ctx.builder.CreateBr(handlr);
             ctx.builder.SetInsertPoint(tryblk);
         }
         else {

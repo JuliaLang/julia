@@ -194,3 +194,4 @@ size_t jl_eqtable_nextind(jl_genericmemory_t *t, size_t i)
 
 #undef hash_size
 #undef max_probe
+#undef h2index

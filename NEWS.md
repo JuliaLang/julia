@@ -54,6 +54,7 @@ Build system changes
 New library functions
 ---------------------
 
+* `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not.
 * The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
 * `hardlink(src, dst)` can be used to create hard links ([#41639]).
 * `diskstat(path=pwd())` can be used to return statistics about the disk ([#42248]).
@@ -69,6 +70,7 @@ New library features
 * `replace(string, pattern...)` now supports an optional `IO` argument to
   write the output to a stream rather than returning a string ([#48625]).
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
+* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
 
 Standard library changes
 ------------------------
@@ -87,6 +89,7 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
+* `cbrt(::AbstractMatrix{<:Real})` is now defined and returns real-valued matrix cube roots of real-valued matrices ([#50661]).
 
 #### Printf
 

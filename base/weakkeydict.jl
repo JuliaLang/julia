@@ -213,4 +213,6 @@ function iterate(t::WeakKeyDict{K,V}, state...) where {K, V}
     end
 end
 
+@propagate_inbounds Iterators.only(d::WeakKeyDict) = Iterators._only(d, first)
+
 filter!(f, d::WeakKeyDict) = filter_in_one_pass!(f, d)

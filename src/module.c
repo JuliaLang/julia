@@ -1,4 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
+//
 
 /*
   modules and top-level bindings
@@ -39,7 +40,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
         bitmix(name->hash, parent->hash);
     JL_MUTEX_INIT(&m->lock, "module->lock");
     jl_atomic_store_relaxed(&m->bindings, jl_emptysvec);
-    jl_atomic_store_relaxed(&m->bindingkeyset, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&m->bindingkeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
     arraylist_new(&m->usings, 0);
     if (jl_core_module && default_names) {
         JL_GC_PUSH1(&m);
@@ -641,7 +642,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
     // silently override a "using" name. see issue #2054.
     jl_svec_t *table = jl_atomic_load_relaxed(&from->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
         if (b->exportp && (jl_atomic_load_relaxed(&b->owner) == b || b->imported)) {
@@ -699,14 +700,14 @@ JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
     return b && jl_atomic_load_relaxed(&b->owner) != NULL;
 }
 
-static uint_t bindingkey_hash(size_t idx, jl_svec_t *data)
+static uint_t bindingkey_hash(size_t idx, jl_value_t *data)
 {
     jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx);
     jl_sym_t *var = b->globalref->name;
     return var->hash;
 }
 
-static int bindingkey_eq(size_t idx, const void *var, jl_svec_t *data, uint_t hv)
+static int bindingkey_eq(size_t idx, const void *var, jl_value_t *data, uint_t hv)
 {
     jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx);
     jl_sym_t *name = b->globalref->name;
@@ -717,9 +718,9 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
 {
     uint_t hv = var->hash;
     for (int locked = 0; ; locked++) {
-        jl_array_t *bindingkeyset = jl_atomic_load_acquire(&m->bindingkeyset);
+        jl_genericmemory_t *bindingkeyset = jl_atomic_load_acquire(&m->bindingkeyset);
         jl_svec_t *bindings = jl_atomic_load_relaxed(&m->bindings);
-        ssize_t idx = jl_smallintset_lookup(bindingkeyset, bindingkey_eq, var, bindings, hv); // acquire
+        ssize_t idx = jl_smallintset_lookup(bindingkeyset, bindingkey_eq, var, (jl_value_t*)bindings, hv, 0); // acquire
         if (idx != -1) {
             jl_binding_t *b = (jl_binding_t*)jl_svecref(bindings, idx); // relaxed
             if (locked)
@@ -753,7 +754,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
             jl_binding_t *b = new_binding(m, var);
             assert(jl_svecref(bindings, i) == jl_nothing);
             jl_svecset(bindings, i, b); // relaxed
-            jl_smallintset_insert(&m->bindingkeyset, (jl_value_t*)m, bindingkey_hash, i, bindings); // release
+            jl_smallintset_insert(&m->bindingkeyset, (jl_value_t*)m, bindingkey_hash, i, (jl_value_t*)bindings); // release
             JL_UNLOCK(&m->lock);
             return b;
         }
@@ -939,7 +940,7 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
     JL_GC_PUSH1(&a);
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
         jl_sym_t *asname = b->globalref->name;
@@ -996,7 +997,7 @@ JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
     JL_LOCK(&m->lock);
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
         if (jl_atomic_load_relaxed(&b->owner) && jl_atomic_load_relaxed(&b->owner) != b && !b->imported)

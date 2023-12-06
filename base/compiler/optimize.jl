@@ -270,6 +270,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, PiNode) && return (true, true, true)
     isa(stmt, PhiNode) && return (true, true, true)
     isa(stmt, ReturnNode) && return (true, false, true)
+    isa(stmt, EnterNode) && return (true, false, true)
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     if isa(stmt, GlobalRef)
@@ -697,7 +698,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
     # If we can prove that the argmem does not escape the current function, we can
     # refine this to :effect_free.
-    needs_ea_validation = (flag & IR_FLAGS_NEEDS_EA) == IR_FLAGS_NEEDS_EA
+    needs_ea_validation = has_flag(flag, IR_FLAGS_NEEDS_EA)
     stmt = inst[:stmt]
     if !needs_ea_validation
         if !isterminator(stmt) && stmt !== nothing
@@ -729,7 +730,7 @@ end
 
 function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
-    stmt_inconsistent = iszero(flag & IR_FLAG_CONSISTENT)
+    stmt_inconsistent = !has_flag(flag, IR_FLAG_CONSISTENT)
     stmt = inst[:stmt]
     # Special case: For `getfield` and memory operations, we allow inconsistency of the :boundscheck argument
     (; inconsistent, tpdum) = sv
@@ -761,7 +762,7 @@ end
 function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
     stmt = inst[:stmt]
 
-    if isexpr(stmt, :enter)
+    if isa(stmt, EnterNode)
         # try/catch not yet modeled
         give_up_refinements!(sv)
         return nothing
@@ -971,8 +972,8 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                     expr = nothing
                 end
                 code[i] = expr
-            elseif isexpr(expr, :enter)
-                catchdest = expr.args[1]::Int
+            elseif isa(expr, EnterNode)
+                catchdest = expr.catch_dest
                 if catchdest in sv.unreachable
                     cfg_delete_edge!(sv.cfg, block_for_inst(sv.cfg, i), block_for_inst(sv.cfg, catchdest))
                     code[i] = nothing
@@ -1239,12 +1240,6 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         return cost
     elseif head === :copyast
         return 100
-    elseif head === :enter
-        # try/catch is a couple function calls,
-        # but don't inline functions with try/catch
-        # since these aren't usually performance-sensitive functions,
-        # and llvm is more likely to miscompile them when these functions get large
-        return typemax(Int)
     end
     return 0
 end
@@ -1263,6 +1258,12 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
         thiscost = dst(stmt.label) < line ? 40 : 0
     elseif stmt isa GotoIfNot
         thiscost = dst(stmt.dest) < line ? 40 : 0
+    elseif stmt isa EnterNode
+        # try/catch is a couple function calls,
+        # but don't inline functions with try/catch
+        # since these aren't usually performance-sensitive functions,
+        # and llvm is more likely to miscompile them when these functions get large
+        thiscost = typemax(Int)
     end
     return thiscost
 end
@@ -1359,19 +1360,19 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                     i += 1
                 end
             end
+        elseif isa(el, EnterNode)
+            tgt = el.catch_dest
+            was_deleted = labelchangemap[tgt] == typemin(Int)
+            if was_deleted
+                body[i] = nothing
+            else
+                body[i] = EnterNode(el, tgt + labelchangemap[tgt])
+            end
         elseif isa(el, Expr)
             if el.head === :(=) && el.args[2] isa Expr
                 el = el.args[2]::Expr
             end
-            if el.head === :enter
-                tgt = el.args[1]::Int
-                was_deleted = labelchangemap[tgt] == typemin(Int)
-                if was_deleted
-                    body[i] = nothing
-                else
-                    el.args[1] = tgt + labelchangemap[tgt]
-                end
-            elseif !is_meta_expr_head(el.head)
+            if !is_meta_expr_head(el.head)
                 args = el.args
                 for i = 1:length(args)
                     el = args[i]

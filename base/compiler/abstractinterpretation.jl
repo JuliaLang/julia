@@ -869,6 +869,15 @@ function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResu
         if isa(result.rt, Const) || call_result_unused(si)
             return true
         end
+    elseif result.rt === Bottom
+        if is_terminates(result.effects) && is_effect_free(result.effects)
+            # In the future, we may want to add `&& isa(result.exct, Const)` to
+            # the list of conditions here, but currently, our effect system isn't
+            # precise enough to let us determine :consistency of `exct`, so we
+            # would have to force constprop just to determine this, which is too
+            # expensive.
+            return true
+        end
     end
     return false
 end
@@ -903,11 +912,13 @@ end
 is_all_const_arg(arginfo::ArgInfo, start::Int) = is_all_const_arg(arginfo.argtypes, start::Int)
 function is_all_const_arg(argtypes::Vector{Any}, start::Int)
     for i = start:length(argtypes)
-        a = widenslotwrapper(argtypes[i])
-        isa(a, Const) || isconstType(a) || issingletontype(a) || return false
+        argtype = widenslotwrapper(argtypes[i])
+        is_const_argtype(argtype) || return false
     end
     return true
 end
+
+is_const_argtype(@nospecialize argtype) = isa(argtype, Const) || isconstType(argtype) || issingletontype(argtype)
 
 any_conditional(argtypes::Vector{Any}) = any(@nospecialize(x)->isa(x, Conditional), argtypes)
 any_conditional(arginfo::ArgInfo) = any_conditional(arginfo.argtypes)
@@ -1779,7 +1790,9 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             end
         end
     end
-    rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
+    ft = popfirst!(argtypes)
+    rt = builtin_tfunction(interp, f, argtypes, sv)
+    pushfirst!(argtypes, ft)
     if has_mustalias(𝕃ᵢ) && f === getfield && isa(fargs, Vector{Any}) && la ≥ 3
         a3 = argtypes[3]
         if isa(a3, Const)
@@ -3089,8 +3102,8 @@ function update_exc_bestguess!(@nospecialize(exct), frame::InferenceState, 𝕃�
         handler_frame = frame.handlers[cur_hand]
         if !⊑(𝕃ₚ, exct, handler_frame.exct)
             handler_frame.exct = tmerge(𝕃ₚ, handler_frame.exct, exct)
-            enter = frame.src.code[handler_frame.enter_idx]::Expr
-            exceptbb = block_for_inst(frame.cfg, enter.args[1]::Int)
+            enter = frame.src.code[handler_frame.enter_idx]::EnterNode
+            exceptbb = block_for_inst(frame.cfg, enter.catch_dest)
             push!(frame.ip, exceptbb)
         end
     end
@@ -3101,8 +3114,8 @@ function propagate_to_error_handler!(currstate::VarTable, frame::InferenceState,
     # exception handler, BEFORE applying any state changes.
     cur_hand = frame.handler_at[frame.currpc][1]
     if cur_hand != 0
-        enter = frame.src.code[frame.handlers[cur_hand].enter_idx]::Expr
-        exceptbb = block_for_inst(frame.cfg, enter.args[1]::Int)
+        enter = frame.src.code[frame.handlers[cur_hand].enter_idx]::EnterNode
+        exceptbb = block_for_inst(frame.cfg, enter.catch_dest)
         if update_bbstate!(𝕃ᵢ, frame, exceptbb, currstate)
             push!(frame.ip, exceptbb)
         end
@@ -3243,8 +3256,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     end
                     ssavaluetypes[frame.currpc] = Any
                     @goto find_next_bb
-                elseif isexpr(stmt, :enter)
+                elseif isa(stmt, EnterNode)
                     ssavaluetypes[currpc] = Any
+                    add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     @goto fallthrough
                 elseif isexpr(stmt, :leave)
                     ssavaluetypes[currpc] = Any

@@ -31,6 +31,8 @@ uv_mutex_t gc_threads_lock;
 uv_cond_t gc_threads_cond;
 // To indicate whether concurrent sweeping should run
 uv_sem_t gc_sweep_assists_needed;
+// Mutex used to coordinate entry of GC threads in the mark loop
+uv_mutex_t gc_queue_observer_lock;
 
 // Linked list of callback functions
 
@@ -1421,21 +1423,17 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 // sweep phase
 
 gc_fragmentation_stat_t gc_page_fragmentation_stats[JL_GC_N_POOLS];
-
-extern gc_fragmentation_stat_t gc_page_fragmentation_stats[JL_GC_N_POOLS];
+JL_DLLEXPORT double jl_gc_page_utilization_stats[JL_GC_N_MAX_POOLS];
 
 STATIC_INLINE void gc_update_page_fragmentation_data(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
-#ifdef GC_MEASURE_PAGE_FRAGMENTATION
     gc_fragmentation_stat_t *stats = &gc_page_fragmentation_stats[pg->pool_n];
     jl_atomic_fetch_add(&stats->n_freed_objs, pg->nfree);
     jl_atomic_fetch_add(&stats->n_pages_allocd, 1);
-#endif
 }
 
 STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
 {
-#ifdef GC_MEASURE_PAGE_FRAGMENTATION
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
         gc_fragmentation_stat_t *stats = &gc_page_fragmentation_stats[i];
         double utilization = 1.0;
@@ -1444,12 +1442,10 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
         if (n_pages_allocd != 0) {
             utilization -= ((double)n_freed_objs * (double)jl_gc_sizeclasses[i]) / (double)n_pages_allocd / (double)GC_PAGE_SZ;
         }
-        jl_safe_printf("Size class %d: %.2f%% utilization\n", jl_gc_sizeclasses[i], utilization * 100.0);
+        jl_gc_page_utilization_stats[i] = utilization;
         jl_atomic_store_relaxed(&stats->n_freed_objs, 0);
         jl_atomic_store_relaxed(&stats->n_pages_allocd, 0);
     }
-    jl_safe_printf("-----------------------------------------\n");
-#endif
 }
 
 int64_t buffered_pages = 0;
@@ -2863,8 +2859,10 @@ void gc_mark_and_steal(jl_ptls_t ptls)
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_gc_markqueue_t *mq_master = NULL;
     int master_tid = jl_atomic_load(&gc_master_tid);
-    if (master_tid != -1)
-        mq_master = &gc_all_tls_states[master_tid]->mark_queue;
+    if (master_tid == -1) {
+        return;
+    }
+    mq_master = &gc_all_tls_states[master_tid]->mark_queue;
     void *new_obj;
     jl_gc_chunk_t c;
     pop : {
@@ -2939,28 +2937,108 @@ void gc_mark_and_steal(jl_ptls_t ptls)
     }
 }
 
+size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    // assume each chunk is worth 256 units of work and each pointer
+    // is worth 1 unit of work
+    size_t work = 256 * (jl_atomic_load_relaxed(&ptls->mark_queue.chunk_queue.bottom) -
+        jl_atomic_load_relaxed(&ptls->mark_queue.chunk_queue.top));
+    work += (jl_atomic_load_relaxed(&ptls->mark_queue.ptr_queue.bottom) -
+        jl_atomic_load_relaxed(&ptls->mark_queue.ptr_queue.top));
+    return work;
+}
+
+/**
+ * Correctness argument for the mark-loop termination protocol.
+ *
+ * Safety properties:
+ * - No work items shall be in any thread's queues when `gc_mark_loop_barrier` observes
+ * that `gc_n_threads_marking` is zero.
+ *
+ * - No work item shall be stolen from the master thread (i.e. mutator thread which started
+ * GC and which helped the `jl_n_markthreads` - 1 threads to mark) after
+ * `gc_mark_loop_barrier` observes that `gc_n_threads_marking` is zero. This property is
+ * necessary because we call `gc_mark_loop_serial` after marking the finalizer list in
+ * `_jl_gc_collect`, and want to ensure that we have the serial mark-loop semantics there,
+ * and that no work is stolen from us at that point.
+ *
+ * Proof:
+ * - Suppose the master thread observes that `gc_n_threads_marking` is zero in
+ * `gc_mark_loop_barrier` and there is a work item left in one thread's queue at that point.
+ * Since threads try to steal from all threads' queues, this implies that all threads must
+ * have tried to steal from the queue which still has a work item left, but failed to do so,
+ * which violates the semantics of Chase-Lev's work-stealing queue.
+ *
+ * - Let E1 be the event "master thread writes -1 to gc_master_tid" and E2 be the event
+ * "master thread observes that `gc_n_threads_marking` is zero". Since we're using
+ * sequentially consistent atomics, E1 => E2. Now suppose one thread which is spinning in
+ * `gc_should_mark` tries to enter the mark-loop after E2. In order to do so, it must
+ * increment `gc_n_threads_marking` to 1 in an event E3, and then read `gc_master_tid` in an
+ * event E4. Since we're using sequentially consistent atomics, E3 => E4. Since we observed
+ * `gc_n_threads_marking` as zero in E2, then E2 => E3, and we conclude E1 => E4, so that
+ * the thread which is spinning in `gc_should_mark` must observe that `gc_master_tid` is -1
+ * and therefore won't enter the mark-loop.
+ */
+
+int gc_should_mark(jl_ptls_t ptls)
+{
+    int should_mark = 0;
+    int n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
+    // fast path
+    if (n_threads_marking == 0) {
+        return 0;
+    }
+    uv_mutex_lock(&gc_queue_observer_lock);
+    while (1) {
+        int tid = jl_atomic_load(&gc_master_tid);
+        // fast path
+        if (tid == -1) {
+            break;
+        }
+        n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
+        // fast path
+        if (n_threads_marking == 0) {
+            break;
+        }
+        size_t work = gc_count_work_in_queue(gc_all_tls_states[tid]);
+        for (tid = gc_first_tid; tid < gc_first_tid + jl_n_markthreads; tid++) {
+            work += gc_count_work_in_queue(gc_all_tls_states[tid]);
+        }
+        // if there is a lot of work left, enter the mark loop
+        if (work >= 16 * n_threads_marking) {
+            jl_atomic_fetch_add(&gc_n_threads_marking, 1);
+            should_mark = 1;
+            break;
+        }
+        jl_cpu_pause();
+    }
+    uv_mutex_unlock(&gc_queue_observer_lock);
+    return should_mark;
+}
+
+void gc_wake_all_for_marking(jl_ptls_t ptls)
+{
+    jl_atomic_store(&gc_master_tid, ptls->tid);
+    uv_mutex_lock(&gc_threads_lock);
+    jl_atomic_fetch_add(&gc_n_threads_marking, 1);
+    uv_cond_broadcast(&gc_threads_cond);
+    uv_mutex_unlock(&gc_threads_lock);
+}
+
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
 {
-    int backoff = GC_BACKOFF_MIN;
     if (master) {
-        jl_atomic_store(&gc_master_tid, ptls->tid);
-        // Wake threads up and try to do some work
-        uv_mutex_lock(&gc_threads_lock);
-        jl_atomic_fetch_add(&gc_n_threads_marking, 1);
-        uv_cond_broadcast(&gc_threads_cond);
-        uv_mutex_unlock(&gc_threads_lock);
+        gc_wake_all_for_marking(ptls);
         gc_mark_and_steal(ptls);
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
     }
-    while (jl_atomic_load(&gc_n_threads_marking) > 0) {
-        // Try to become a thief while other threads are marking
-        jl_atomic_fetch_add(&gc_n_threads_marking, 1);
-        if (jl_atomic_load(&gc_master_tid) != -1) {
-            gc_mark_and_steal(ptls);
+    while (1) {
+        int should_mark = gc_should_mark(ptls);
+        if (!should_mark) {
+            break;
         }
+        gc_mark_and_steal(ptls);
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
-        // Failed to steal
-        gc_backoff(&backoff);
     }
 }
 
@@ -3096,7 +3174,8 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq)
     // constants
     gc_try_claim_and_push(mq, jl_emptytuple_type, NULL);
     gc_try_claim_and_push(mq, cmpswap_names, NULL);
-    gc_try_claim_and_push(mq, jl_global_roots_table, NULL);
+    gc_try_claim_and_push(mq, jl_global_roots_list, NULL);
+    gc_try_claim_and_push(mq, jl_global_roots_keyset, NULL);
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".
@@ -3727,6 +3806,7 @@ void jl_gc_init(void)
     uv_mutex_init(&gc_threads_lock);
     uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
+    uv_mutex_init(&gc_queue_observer_lock);
 
     jl_gc_init_page();
     jl_gc_debug_init();
