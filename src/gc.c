@@ -2969,7 +2969,7 @@ size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
  * have tried to steal from the queue which still has a work item left, but failed to do so,
  * which violates the semantics of Chase-Lev's work-stealing queue.
  *
- * - Let E1 be the event "master thread writes -1 to gc_master_tid" and E2 be the even
+ * - Let E1 be the event "master thread writes -1 to gc_master_tid" and E2 be the event
  * "master thread observes that `gc_n_threads_marking` is zero". Since we're using
  * sequentially consistent atomics, E1 => E2. Now suppose one thread which is spinning in
  * `gc_should_mark` tries to enter the mark-loop after E2. In order to do so, it must
