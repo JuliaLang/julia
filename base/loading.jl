@@ -668,7 +668,20 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
         return explicit_manifest_uuid_path(project_file, pkg)
     elseif project_file
         # if env names a directory, search it
-        return implicit_manifest_uuid_path(env, pkg)
+        proj = implicit_manifest_uuid_path(env, pkg)
+        proj === nothing || return proj
+        # if not found
+        parentid = get(EXT_PRIMED, pkg, nothing)
+        if parentid !== nothing
+            _, parent_project_file = entry_point_and_project_file(env, parentid.name)
+            if parent_project_file !== nothing
+                parentproj = project_file_name_uuid(parent_project_file, parentid.name)
+                if parentproj == parentid
+                    mby_ext = project_file_ext_path(parent_project_file, pkg.name)
+                    mby_ext === nothing || return mby_ext
+                end
+            end
+        end
     end
     return nothing
 end
@@ -1221,11 +1234,19 @@ end
 
 function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
     project_file = env_project_file(env)
-    if project_file isa String
+    if project_file isa String || project_file
+        implicit_project_file = project_file
+        if !(implicit_project_file isa String)
+            # if env names a directory, search it for an implicit project file (for stdlibs)
+            path, implicit_project_file = entry_point_and_project_file(env, pkg.name)
+            if !(implicit_project_file isa String)
+                return nothing
+            end
+        end
         # Look in project for extensions to insert
-        proj_pkg = project_file_name_uuid(project_file, pkg.name)
+        proj_pkg = project_file_name_uuid(implicit_project_file, pkg.name)
         if pkg == proj_pkg
-            d_proj = parsed_toml(project_file)
+            d_proj = parsed_toml(implicit_project_file)
             weakdeps = get(d_proj, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
             extensions = get(d_proj, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             extensions === nothing && return
@@ -1236,6 +1257,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         end
 
         # Now look in manifest
+        project_file isa String || return nothing
         manifest_file = project_file_manifest_path(project_file)
         manifest_file === nothing && return
         d = get_deps(parsed_toml(manifest_file))
@@ -2371,6 +2393,22 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     depot_path = map(abspath, DEPOT_PATH)
     dl_load_path = map(abspath, DL_LOAD_PATH)
     load_path = map(abspath, Base.load_path())
+    # if pkg is a stdlib, append its parent Project.toml to the load path
+    parentid = get(EXT_PRIMED, pkg, nothing)
+    if parentid !== nothing
+        for env in load_path
+            project_file = env_project_file(env)
+            if project_file === true
+                _, parent_project_file = entry_point_and_project_file(env, parentid.name)
+                if parent_project_file !== nothing
+                    parentproj = project_file_name_uuid(parent_project_file, parentid.name)
+                    if parentproj == parentid
+                        push!(load_path, parent_project_file)
+                    end
+                end
+            end
+        end
+    end
     path_sep = Sys.iswindows() ? ';' : ':'
     any(path -> path_sep in path, load_path) &&
         error("LOAD_PATH entries cannot contain $(repr(path_sep))")
