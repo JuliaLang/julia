@@ -412,16 +412,16 @@ end
 """
     Base.@assume_effects setting... [ex]
 
-Override the compiler's effect modeling for the given method or foreign call.
-`@assume_effects` can be applied immediately before a function definition or within a function body.
-It can also be applied immediately before a `@ccall` expression.
-
-!!! compat "Julia 1.8"
-    Using `Base.@assume_effects` requires Julia version 1.8.
+Override the compiler's effect modeling.
+This macro can be used in several contexts:
+1. Immediately before a method definition, to override the entire effect modeling of the applied method.
+2. Within a function body without any arguments, to override the entire effect modeling of the enclosing method.
+3. Applied to a code block, to override the local effect modeling of the applied code block.
 
 # Examples
 ```jldoctest
 julia> Base.@assume_effects :terminates_locally function fact(x)
+           # usage 1:
            # this :terminates_locally allows `fact` to be constant-folded
            res = 1
            0 ≤ x < 20 || error("bad fact")
@@ -442,6 +442,7 @@ CodeInfo(
 
 julia> code_typed() do
            map((2,3,4)) do x
+               # usage 2:
                # this :terminates_locally allows this anonymous function to be constant-folded
                Base.@assume_effects :terminates_locally
                res = 1
@@ -457,12 +458,34 @@ CodeInfo(
 1 ─     return (2, 6, 24)
 ) => Tuple{Int64, Int64, Int64}
 
-julia> Base.@assume_effects :total !:nothrow @ccall jl_type_intersection(Vector{Int}::Any, Vector{<:Integer}::Any)::Any
-Vector{Int64} (alias for Array{Int64, 1})
+julia> code_typed() do
+           map((2,3,4)) do x
+               res = 1
+               0 ≤ x < 20 || error("bad fact")
+               # usage 3:
+               # with this :terminates_locally annotation the compiler skips tainting
+               # `:terminates` effect within this `while` block, allowing the parent
+               # anonymous function to be constant-folded
+               Base.@assume_effects :terminates_locally while x > 1
+                   res *= x
+                   x -= 1
+               end
+               return res
+           end
+       end |> only
+CodeInfo(
+1 ─     return (2, 6, 24)
+) => Tuple{Int64, Int64, Int64}
 ```
+
+!!! compat "Julia 1.8"
+    Using `Base.@assume_effects` requires Julia version 1.8.
 
 !!! compat "Julia 1.10"
     The usage within a function body requires at least Julia 1.10.
+
+!!! compact "Julia 1.11"
+    The code block annotation requires at least Julia 1.11.
 
 !!! warning
     Improper use of this macro causes undefined behavior (including crashes,
@@ -717,33 +740,36 @@ the call is generally total, it may however throw.
 """
 macro assume_effects(args...)
     lastex = args[end]
-    inner = unwrap_macrocalls(lastex)
-    if is_function_def(inner)
-        ex = lastex
-        idx = length(args)-1
+    override = compute_assumed_settings(args[begin:end-1])
+    if is_function_def(unwrap_macrocalls(lastex))
+        return esc(pushmeta!(lastex, form_purity_expr(override)))
     elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
-        ex = lastex
-        idx = length(args)-1
-    else # anonymous function case
-        ex = nothing
-        idx = length(args)
+        lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
+        insert!(lastex.args, 3, Core.Compiler.encode_effects_override(override))
+        return esc(lastex)
     end
+    override′ = compute_assumed_setting(override, lastex)
+    if override′ !== nothing
+        # anonymous function case
+        return Expr(:meta, form_purity_expr(override′))
+    else
+        # call site annotation case
+        return Expr(:block,
+                    form_purity_expr(override),
+                    Expr(:local, Expr(:(=), :val, esc(lastex))),
+                    Expr(:purity), # region end token
+                    :val)
+    end
+end
+
+function compute_assumed_settings(settings)
     override = EffectsOverride()
-    for i = 1:idx
-        setting = args[i]
+    for setting in settings
         override = compute_assumed_setting(override, setting)
         override === nothing &&
             throw(ArgumentError("@assume_effects $setting not supported"))
     end
-    if is_function_def(inner)
-        return esc(pushmeta!(ex, form_purity_expr(override)))
-    elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
-        ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
-        insert!(ex.args, 3, Core.Compiler.encode_effects_override(override))
-        return esc(ex)
-    else # anonymous function case
-        return Expr(:meta, form_purity_expr(override))
-    end
+    return override
 end
 
 using Core.Compiler: EffectsOverride

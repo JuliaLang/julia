@@ -34,6 +34,7 @@ Compiler/Runtime improvements
 * Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
 * A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
   loads, primarily to be used within JLLs ([#50074]).
+* Added a support for annotating `Base.@assume_effects` on code block ([#52400]).
 
 Command-line option changes
 ---------------------------
