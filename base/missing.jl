@@ -296,7 +296,7 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
     something(mapreduce_impl(f, op, itr, first(inds), last(inds)))
 end
 
-_mapreduce(f, op, ::IndexCartesian, itr::SkipMissing) = mapfoldl(f, op, itr)
+_mapreduce(f, op, ::IndexCartesian, itr::SkipMissing) = mapreduce_impl(f, op, itr, init)
 
 mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
