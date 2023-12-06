@@ -129,9 +129,10 @@ function macroexpand(m::Module, @nospecialize(x); recursive=true)
 end
 
 """
-    @macroexpand
+    @macroexpand [mod,] ex
 
 Return equivalent expression with all macros removed (expanded).
+If two arguments are provided, the first is the module to evaluate in.
 
 There are differences between `@macroexpand` and [`macroexpand`](@ref).
 
@@ -166,19 +167,27 @@ julia> M.f()
 ```
 With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module `M` in the example).
 With `macroexpand` the expression expands in the module given as the first argument.
+
+!!! compat "Julia 1.11"
+    The two-argument form requires at least Julia 1.11.
 """
 macro macroexpand(code)
     return :(macroexpand($__module__, $(QuoteNode(code)), recursive=true))
 end
-
+macro macroexpand(mod, code)
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=true))
+end
 
 """
-    @macroexpand1
+    @macroexpand1 [mod,] ex
 
 Non recursive version of [`@macroexpand`](@ref).
 """
 macro macroexpand1(code)
     return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
+end
+macro macroexpand1(mod, code)
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=false))
 end
 
 ## misc syntax ##
