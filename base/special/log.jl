@@ -159,7 +159,7 @@ logbL(::Type{Float64},::Val{10}) = 1.098319650216765e-17
     jp = unsafe_trunc(Int,128.0*F)-127
 
     ## Steps 1 and 2
-    Base.@_safeindex hi,lo = t_log_Float64[jp]
+    Base.@assume_effects :nothrow :noub @inbounds hi,lo = t_log_Float64[jp]
     l_hi = mf* 0.6931471805601177 + hi
     l_lo = mf*-1.7239444525614835e-13 + lo
 
@@ -217,7 +217,7 @@ end
     jp = unsafe_trunc(Int,128.0f0*F)-127
 
     ## Steps 1 and 2
-    Base.@_safeindex hi = t_log_Float32[jp]
+    Base.@assume_effects :nothrow :noub @inbounds hi = t_log_Float32[jp]
     l = mf*0.6931471805599453 + hi
 
     ## Step 3
@@ -564,7 +564,9 @@ function _log_ext(xu::UInt64)
     z = reinterpret(Float64, xu - (tmp & 0xfff0000000000000))
     k = Float64(tmp >> 52)
     # log(x) = k*Ln2 + log(c) + log1p(z/c-1).
-    t, logctail = compute_logctail(tmp)
+    # N.B. :nothrow and :noub since `idx` is known to be `1 ≤ idx ≤ length(t_log_table_compact)`
+    idx = (tmp >> 45) & (length(t_log_table_compact)-1) + 1
+    t, logctail = Base.@assume_effects :nothrow :noub @inbounds t_log_table_compact[idx]
     invc, logc = log_tab_unpack(t)
     # Note: invc is j/N or j/N/2 where j is an integer in [N,2N) and
     # |z/c - 1| < 1/N, so r = z/c - 1 is exactly representable.
@@ -582,11 +584,4 @@ function _log_ext(xu::UInt64)
     p = evalpoly(r, (-0x1.555555555556p-1, 0x1.0000000000006p-1, -0x1.999999959554ep-2, 0x1.555555529a47ap-2, -0x1.2495b9b4845e9p-2, 0x1.0002b8b263fc3p-2))
     lo = lo1 + lo2 + lo3 + muladd(r*ar2, p, lo4)
     return hi, lo
-end
-
-# N.B. :nothrow and :noub since `idx` is known to be `1 ≤ idx ≤ length(t_log_table_compact)`
-Base.@assume_effects :nothrow :noub function compute_logctail(tmp::Int64)
-    i = (tmp >> 45) & (length(t_log_table_compact)-1)
-    idx = i + 1
-    return @inbounds t_log_table_compact[idx]
 end

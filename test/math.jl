@@ -1547,6 +1547,7 @@ end
             for f = Any[sin, cos, tan, log, log2, log10, log1p, exponent, sqrt, cbrt, fourthroot,
                         asin, atan, acos, sinh, cosh, tanh, asinh, acosh, atanh, exp, exp2, exp10, expm1]
                 @testset let f = f
+                    @test Base.infer_return_type(f, (T,)) != Union{}
                     @test Core.Compiler.is_foldable(Base.infer_effects(f, (T,)))
                 end
             end
@@ -1581,7 +1582,7 @@ end;
         end
     end
 end;
-@test Base.return_types((Int,)) do x
+@test Base.infer_return_type((Int,)) do x
     local r = nothing
     try
         r = sin(x)
@@ -1591,7 +1592,7 @@ end;
         end
     end
     return r
-end |> only === Float64
+end === Float64
 
 @testset "BigInt Rationals with special funcs" begin
     @test sinpi(big(1//1)) == big(0.0)

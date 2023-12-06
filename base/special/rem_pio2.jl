@@ -165,7 +165,7 @@ function paynehanek(x::Float64)
     idx = k >> 6
 
     shift = k - (idx << 6)
-    Base.@_safeindex if shift == 0
+    Base.@assume_effects :nothrow :noub @inbounds if shift == 0
         a1 = INV_2PI[idx+1]
         a2 = INV_2PI[idx+2]
         a3 = INV_2PI[idx+3]
