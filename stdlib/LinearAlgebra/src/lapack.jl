@@ -7043,5 +7043,6 @@ julia> LAPACK.lacpy!(B, A, 'U')
  0.0  4.0
 ```
 """
+lacpy!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
 
 end # module
