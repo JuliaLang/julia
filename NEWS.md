@@ -23,6 +23,11 @@ Language changes
   allows users to safely tear down background state (such as closing Timers and sending
   disconnect notifications to heartbeat tasks) and cleanup other resources when the program
   wants to begin exiting.
+* Code coverage and malloc tracking is no longer generated during the package precompilation stage.
+  Further, during these modes pkgimage caches are now used for packages that are not being tracked.
+  Meaning that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
+  pkgimage caches for all other packages than the package being tested, likely meaning faster test
+  execution. ([#52123])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -49,6 +54,7 @@ Build system changes
 New library functions
 ---------------------
 
+* `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not.
 * The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
 * `hardlink(src, dst)` can be used to create hard links ([#41639]).
 * `diskstat(path=pwd())` can be used to return statistics about the disk ([#42248]).
@@ -58,9 +64,13 @@ New library functions
 
 New library features
 --------------------
+
+* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
+* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
 * `replace(string, pattern...)` now supports an optional `IO` argument to
   write the output to a stream rather than returning a string ([#48625]).
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
+* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
 
 Standard library changes
 ------------------------
@@ -79,6 +89,7 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
+* `cbrt(::AbstractMatrix{<:Real})` is now defined and returns real-valued matrix cube roots of real-valued matrices ([#50661]).
 
 #### Printf
 

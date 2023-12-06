@@ -789,7 +789,7 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
 typedef jl_value_t jl_string_t; // for local expressibility
 
 #define IR_DATASIZE_FLAGS         sizeof(uint8_t)
-#define IR_DATASIZE_PURITY        sizeof(uint8_t)
+#define IR_DATASIZE_PURITY        sizeof(uint16_t)
 #define IR_DATASIZE_INLINING_COST sizeof(uint16_t)
 #define IR_DATASIZE_NSLOTS        sizeof(int32_t)
 typedef enum {
@@ -826,7 +826,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
                                                  code->nospecializeinfer, code->inlining, code->constprop);
     write_uint8(s.s, flags.packed);
     static_assert(sizeof(flags.packed) == IR_DATASIZE_FLAGS, "ir_datasize_flags is mismatched with the actual size");
-    write_uint8(s.s, code->purity.bits);
+    write_uint16(s.s, code->purity.bits);
     static_assert(sizeof(code->purity.bits) == IR_DATASIZE_PURITY, "ir_datasize_purity is mismatched with the actual size");
     write_uint16(s.s, code->inlining_cost);
     static_assert(sizeof(code->inlining_cost) == IR_DATASIZE_INLINING_COST, "ir_datasize_inlining_cost is mismatched with the actual size");
@@ -927,7 +927,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->propagate_inbounds = flags.bits.propagate_inbounds;
     code->has_fcall = flags.bits.has_fcall;
     code->nospecializeinfer = flags.bits.nospecializeinfer;
-    code->purity.bits = read_uint8(s.s);
+    code->purity.bits = read_uint16(s.s);
     code->inlining_cost = read_uint16(s.s);
 
     size_t nslots = read_int32(&src);

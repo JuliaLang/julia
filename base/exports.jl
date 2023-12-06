@@ -532,6 +532,7 @@ export
     getkey,
     haskey,
     in,
+    in!,
     intersect!,
     intersect,
     isdisjoint,

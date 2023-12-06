@@ -2089,8 +2089,8 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     end
     @test popfirst!(lines2) == "   │          $(QuoteNode(2))"
     @test pop!(lines2) == "   └───       \$(QuoteNode(4))"
-    @test pop!(lines1) == "18 └───       return %22"
-    @test pop!(lines2) == "   │          return %22"
+    @test pop!(lines1) == "18 └───       return %21"
+    @test pop!(lines2) == "   │          return %21"
     @test pop!(lines2) == "18 │          \$(QuoteNode(3))"
     @test lines1 == lines2
 

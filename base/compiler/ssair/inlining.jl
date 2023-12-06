@@ -399,7 +399,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
 
     ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.mi, inlined_at, argexprs)
 
-    boundscheck = iszero(compact.result[idx][:flag] & IR_FLAG_INBOUNDS) ? boundscheck : :off
+    boundscheck = has_flag(compact.result[idx], IR_FLAG_INBOUNDS) ? :off : boundscheck
 
     # If the iterator already moved on to the next basic block,
     # temporarily re-open in again.
@@ -459,8 +459,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 end
             elseif isa(stmt′, GotoNode)
                 stmt′ = GotoNode(stmt′.label + bb_offset)
-            elseif isa(stmt′, Expr) && stmt′.head === :enter
-                stmt′ = Expr(:enter, stmt′.args[1]::Int + bb_offset)
+            elseif isa(stmt′, EnterNode)
+                stmt′ = EnterNode(stmt′, stmt′.catch_dest + bb_offset)
             elseif isa(stmt′, GotoIfNot)
                 stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
             elseif isa(stmt′, PhiNode)
@@ -710,8 +710,8 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                 end
             elseif isa(stmt, GotoNode)
                 compact[idx] = GotoNode(state.bb_rename[stmt.label])
-            elseif isa(stmt, Expr) && stmt.head === :enter
-                compact[idx] = Expr(:enter, state.bb_rename[stmt.args[1]::Int])
+            elseif isa(stmt, EnterNode)
+                compact[idx] = EnterNode(stmt, state.bb_rename[stmt.catch_dest])
             elseif isa(stmt, GotoIfNot)
                 compact[idx] = GotoIfNot(stmt.cond, state.bb_rename[stmt.dest])
             elseif isa(stmt, PhiNode)
@@ -1003,11 +1003,16 @@ function flags_for_effects(effects::Effects)
     end
     if is_effect_free(effects)
         flags |= IR_FLAG_EFFECT_FREE
+    elseif is_effect_free_if_inaccessiblememonly(effects)
+        flags |= IR_FLAG_EFIIMO
+    end
+    if is_inaccessiblemem_or_argmemonly(effects)
+        flags |= IR_FLAG_INACCESSIBLE_OR_ARGMEM
     end
     if is_nothrow(effects)
         flags |= IR_FLAG_NOTHROW
     end
-    if is_noub(effects, false)
+    if is_noub(effects)
         flags |= IR_FLAG_NOUB
     end
     return flags
@@ -1027,7 +1032,7 @@ function handle_single_case!(todo::Vector{Pair{Int,Any}},
             stmt.head = :invoke
             pushfirst!(stmt.args, case.invoke)
         end
-        ir[SSAValue(idx)][:flag] |= flags_for_effects(case.effects)
+        add_flag!(ir[SSAValue(idx)], flags_for_effects(case.effects))
     elseif case === nothing
         # Do, well, nothing
     else
@@ -1252,21 +1257,22 @@ function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecia
 end
 function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecialize(rt), 𝕃ₒ::AbstractLattice)
     (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(𝕃ₒ, stmt, rt, ir)
+    inst = ir.stmts[idx]
     if consistent
-        ir.stmts[idx][:flag] |= IR_FLAG_CONSISTENT
+        add_flag!(inst, IR_FLAG_CONSISTENT)
     end
     if effect_free_and_nothrow
-        ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        add_flag!(inst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
     elseif nothrow
-        ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
+        add_flag!(inst, IR_FLAG_NOTHROW)
     end
-    if !isexpr(stmt, :call) && !isexpr(stmt, :invoke)
+    if !(isexpr(stmt, :call) || isexpr(stmt, :invoke))
         # There is a bit of a subtle point here, which is that some non-call
         # statements (e.g. PiNode) can be UB:, however, we consider it
         # illegal to introduce such statements that actually cause UB (for any
         # input). Ideally that'd be handled at insertion time (TODO), but for
         # the time being just do that here.
-        ir.stmts[idx][:flag] |= IR_FLAG_NOUB
+        add_flag!(inst, IR_FLAG_NOUB)
     end
     return effect_free_and_nothrow
 end
@@ -1578,7 +1584,7 @@ function handle_cases!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stmt::
         end
         push!(todo, idx=>UnionSplit(fully_covered, atype, cases))
     else
-        ir[SSAValue(idx)][:flag] |= flags_for_effects(joint_effects)
+        add_flag!(ir[SSAValue(idx)], flags_for_effects(joint_effects))
     end
     return nothing
 end
@@ -1677,7 +1683,7 @@ function inline_const_if_inlineable!(inst::Instruction)
         inst[:stmt] = quoted(rt.val)
         return true
     end
-    inst[:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    add_flag!(inst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
     return false
 end
 
@@ -1874,7 +1880,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
                 return quoted(val)
             else
                 flag = subst_inst[:flag]
-                maybe_undef = (flag & IR_FLAG_NOTHROW) == 0 && isa(val, TypeVar)
+                maybe_undef = !has_flag(flag, IR_FLAG_NOTHROW) && isa(val, TypeVar)
                 (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef)
                 if maybe_undef
                     insert_node!(

@@ -1363,7 +1363,13 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 LLVMContext ctx;
                 // Lazily deserialize the entire module
                 timers[i].deserialize.startTimer();
-                auto M = cantFail(getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx), "Error loading module");
+                auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx);
+                // Make sure this also fails with only julia, but not LLVM assertions enabled,
+                // otherwise, the first error we hit is the LLVM module verification failure,
+                // which will look very confusing, because the module was partially deserialized.
+                bool deser_succeeded = (bool)EM;
+                auto M = cantFail(std::move(EM), "Error loading module");
+                assert(deser_succeeded); (void)deser_succeeded;
                 timers[i].deserialize.stopTimer();
 
                 timers[i].materialize.startTimer();
@@ -1414,12 +1420,15 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
+extern int jl_is_timing_passes;
 static unsigned compute_image_thread_count(const ModuleInfo &info) {
     // 32-bit systems are very memory-constrained
 #ifdef _P32
     LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
     return 1;
 #endif
+    if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes https://github.com/llvm/llvm-project/issues/44417
+        return 1;
     // COFF has limits on external symbols (even hidden) up to 65536. We reserve the last few
     // for any of our other symbols that we insert during compilation.
     if (info.triple.isOSBinFormatCOFF() && info.globals > 64000) {

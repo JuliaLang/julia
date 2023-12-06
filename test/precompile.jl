@@ -571,6 +571,16 @@ precompile_test_harness(false) do dir
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
 
+    OverwriteMethodError_file = joinpath(dir, "OverwriteMethodError.jl")
+    write(OverwriteMethodError_file,
+          """
+          module OverwriteMethodError
+              Base.:(+)(x::Bool, y::Bool) = false
+          end
+          """)
+
+    @test Base.compilecache(Base.PkgId("OverwriteMethodError")) == Base.PrecompilableError() # due to piracy
+
     UseBaz_file = joinpath(dir, "UseBaz.jl")
     write(UseBaz_file,
           """
@@ -1684,7 +1694,7 @@ precompile_test_harness("issue #46296") do load_path
         module CodeInstancePrecompile
 
         mi = first(Base.specializations(first(methods(identity))))
-        ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
+        ci = Core.CodeInstance(mi, Any, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
         __init__() = @assert ci isa Core.CodeInstance
@@ -1778,7 +1788,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     if ocachefile !== nothing
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring), ocachefile, depmods, true, "PCI")
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachefile, depmods, true, "PCI", false)
     else
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
     end

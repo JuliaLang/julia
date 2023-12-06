@@ -9,8 +9,8 @@ module LinearAlgebra
 
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, collect, conj, convert, copy,
-    copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
+    asin, asinh, atan, atanh, axes, big, broadcast, cbrt, ceil, cis, collect, conj, convert,
+    copy, copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
     getindex, hcat, getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle,
     kron, kron!, length, log, map, ndims, one, oneunit, parent, permutedims,
     power_by_squaring, promote_rule, real, sec, sech, setindex!, show, similar, sin,
@@ -76,6 +76,7 @@ export
     cond,
     condskeel,
     copyto!,
+    copytrito!,
     copy_transpose!,
     cross,
     adjoint,
@@ -160,6 +161,13 @@ export
 
 # Constants
     I
+
+# not exported, but public names
+public AbstractTriangular,
+        hermitian,
+        hermitian_type,
+        symmetric,
+        symmetric_type
 
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
