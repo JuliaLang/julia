@@ -730,7 +730,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
     if (jl_options.strip_metadata) {
         jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
         for (size_t i = 0; i < jl_svec_len(table); i++) {
-            jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+            jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
             if ((void*)b == jl_nothing)
                 break;
             jl_sym_t *name = b->globalref->name;
