@@ -118,7 +118,6 @@ end
     A = complex.(randn(N,N),randn(N,N))
     B = complex.(randn(N,N),randn(N,N))
     BH = (B+B')/2
-    sf = x->(real(x),imag(x))
     # eigen
     e0 = eigvals(A,BH; sortby=sf)
     e,v = eigen(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
