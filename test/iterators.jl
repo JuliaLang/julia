@@ -329,7 +329,7 @@ let
     @test p2[2, 1] == (-4, 12)
     @test_throws MethodError p3[1, 2]
     @test p4[2, 3] == (:b, 'k')
-    @test_throws BoundsError p4[2]
+    @test_throws DimensionMismatch p4[2]
 end
 
 # collect stateful iterator
