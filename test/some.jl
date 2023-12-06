@@ -56,6 +56,10 @@
 # Two Somes forward to their wrapped things
 @test ==(Some([0x1]), Some([1]))
 
+# hashing implications
+@test hash(Some(0x1)) != hash(0x1)
+@test hash(Some(0x1)) == hash(Some(1))
+
 @testset "something" begin
     @test_throws ArgumentError something()
     @test something(1) === 1

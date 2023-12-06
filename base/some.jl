@@ -147,3 +147,4 @@ macro something(args...)
 end
 
 ==(a::Some, b::Some) = a.value == b.value
+hash(s::Some, h::UInt) = hash(s.value, hash(Some, h))
