@@ -184,6 +184,7 @@ typedef struct _jl_gc_pagemeta_t {
     uint16_t fl_end_offset;   // offset of last free object in this page
     uint16_t thread_n;        // thread id of the heap that owns this page
     char *data;
+    int64_t *ages;            // allocation timestamp for each object in this page
 } jl_gc_pagemeta_t;
 
 extern jl_gc_page_stack_t global_page_pool_lazily_freed;

@@ -12,6 +12,8 @@
 extern "C" {
 #endif
 
+// Number of collections so far
+int jl_n_gc_so_far;
 // Number of GC threads that may run parallel marking
 int jl_n_markthreads;
 // Number of GC threads that may run concurrent sweeping (0 or 1)
@@ -1297,6 +1299,7 @@ STATIC_INLINE jl_taggedvalue_t *gc_reset_page(jl_ptls_t ptls2, const jl_gc_pool_
     pg->nold = 0;
     pg->fl_begin_offset = UINT16_MAX;
     pg->fl_end_offset = UINT16_MAX;
+    pg->ages = (int64_t *)calloc_s(sizeof(int64_t) * pg->nfree);
     return beg;
 }
 
@@ -1448,6 +1451,43 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
     }
 }
 
+static void gc_dump_oldest_object_in_page(void) JL_NOTSAFEPOINT
+{
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL) {
+            continue;
+        }
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
+        while (pg != NULL) {
+            // find maximum age in `pg->ages`
+            size_t nobjs = (GC_PAGE_SZ - GC_PAGE_OFFSET) / pg->osize;
+            int64_t max_age = 0;
+            int64_t *age_start = pg->ages;
+            int64_t *age_end = pg->ages + nobjs;
+            for (int64_t *age = age_start; age < age_end; age++) {
+                if (*age > max_age) {
+                    max_age = *age;
+                }
+            }
+            if (max_age != 0) {
+                jl_taggedvalue_t *v = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
+                while ((char*)v <= (char*)pg->data + GC_PAGE_SZ - pg->osize) {
+                    if (pg->ages[((char*)v - (char*)pg->data - GC_PAGE_OFFSET) / pg->osize] == max_age) {
+                        // pretty print the type of the oldest object
+                        const char *name = jl_typeof_str(jl_valueof(v));
+                        jl_safe_printf("gc page %p (osize %d) has the oldest object %p (type %s) in thread %d\n", pg, pg->osize, v, name, ptls2->tid);
+                        break;
+                    }
+                    v = (jl_taggedvalue_t*)((char*)v + pg->osize);
+                }
+            }
+            pg = pg->next;
+        }
+    }
+    jl_safe_printf("---------------\n");
+}
+
 int64_t buffered_pages = 0;
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
@@ -1455,7 +1495,8 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
                           jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
-    jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
+    char *beg = data + GC_PAGE_OFFSET;
+    jl_taggedvalue_t *v = (jl_taggedvalue_t*)beg;
     char *lim = data + GC_PAGE_SZ - osize;
     char *lim_newpages = data + GC_PAGE_SZ;
     if (gc_page_data((char*)p->newpages - 1) == data) {
@@ -1506,14 +1547,23 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
         jl_taggedvalue_t **pfl_begin = NULL;
         while ((char*)v <= lim) {
             int bits = v->bits.gc;
+            size_t offset = ((char*)v - beg) / osize;
             // if an object is past `lim_newpages` then we can guarantee it's garbage
             if (!gc_marked(bits) || (char*)v >= lim_newpages) {
+                pg->ages[offset] = 0;
                 *pfl = v;
                 pfl = &v->next;
                 pfl_begin = (pfl_begin != NULL) ? pfl_begin : pfl;
                 pg_nfree++;
+                pg->ages[offset] = 0;
             }
             else { // marked young or old
+                if (bits == GC_MARKED) { // fresh object allocated during the mutator phase preceding this GC cycle
+                    pg->ages[offset] = jl_n_gc_so_far;
+                }
+                else {
+                    pg->ages[offset]++;
+                }
                 if (current_sweep_full || bits == GC_MARKED) { // old enough
                     bits = v->bits.gc = GC_OLD; // promote
                 }
@@ -1771,6 +1821,7 @@ static void gc_sweep_pool(void)
 #else
     gc_free_pages();
 #endif
+    gc_dump_oldest_object_in_page();
     gc_dump_page_utilization_data();
     gc_time_pool_end(current_sweep_full);
 }
@@ -3334,6 +3385,7 @@ size_t jl_maxrss(void);
 // Only one thread should be running in this function
 static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 {
+    jl_n_gc_so_far++;
     combine_thread_gc_counts(&gc_num, 1);
 
     // We separate the update of the graph from the update of live_bytes here
