@@ -80,10 +80,10 @@ function break_me_docs end
 module _ModuleWithUndocumentedNames
 export f
 f() = 1
-end 
+end
 
 "This module has some documentation."
-module _ModuleWithSomeDocumentedNames 
+module _ModuleWithSomeDocumentedNames
 export f
 "f() is 1."
 f() = 1
