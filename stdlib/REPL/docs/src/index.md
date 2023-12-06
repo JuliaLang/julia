@@ -7,8 +7,9 @@ shell modes. The REPL can be started by simply calling `julia` with no arguments
 on the executable:
 
 ```@eval
+using REPL
 io = IOBuffer()
-Base.banner(io)
+REPL.banner(io)
 banner = String(take!(io))
 import Markdown
 Markdown.parse("```\n\$ julia\n\n$(banner)\njulia>\n```")
@@ -577,8 +578,8 @@ Main
 
 It is possible to change this contextual module via the function
 `REPL.activate(m)` where `m` is a `Module` or by typing the module in the REPL
-and pressing the keybinding Alt-m (the cursor must be on the module name). The
-active module is shown in the prompt:
+and pressing the keybinding Alt-m (the cursor must be on the module name). The `Main` module can be "activated" with an empty prompt plus the keybinding. The
+active module is shown in the prompt (unless it is `Main`):
 
 ```julia-repl
 julia> using REPL
@@ -598,7 +599,7 @@ julia> Core<Alt-m> # using the keybinding to change module
 
 (Core) julia>
 
-(Core) julia> Main<Alt-m> # going back to Main via keybinding
+(Core) julia> <Alt-m> # going back to Main via keybinding
 
 julia>
 ```

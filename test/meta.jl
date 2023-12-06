@@ -43,77 +43,70 @@ end
 @test foundfunc(h_inlined(), :g_inlined)
 @test foundfunc(h_noinlined(), :g_noinlined)
 
-using Base: pushmeta!, popmeta!
+using Base: popmeta!
 
-macro attach(val, ex)
-    esc(_attach(val, ex))
+macro attach_meta(val, ex)
+    esc(_attach_meta(val, ex))
 end
+_attach_meta(val, ex) = Base.pushmeta!(ex, Expr(:test, val))
 
-_attach(val, ex) = pushmeta!(ex, :test, val)
-
-@attach 42 function dummy()
+@attach_meta 42 function dummy()
     false
 end
-
-asts = code_lowered(dummy, Tuple{})
-@test length(asts) == 1
-ast = asts[1]
-
-body = Expr(:block)
-body.args = ast.code
-
-@test popmeta!(body, :test) == (true, [42])
-@test popmeta!(body, :nonexistent) == (false, [])
+let ast = only(code_lowered(dummy, Tuple{}))
+    body = Expr(:block)
+    body.args = ast.code
+    @test popmeta!(body, :test) == (true, [42])
+    @test popmeta!(body, :nonexistent) == (false, [])
+end
 
 # Simple popmeta!() tests
-ex1 = quote
-    $(Expr(:meta, :foo))
-    x*x+1
+let ex1 = quote
+        $(Expr(:meta, :foo))
+        x*x+1
+    end
+    @test popmeta!(ex1, :foo)[1]
+    @test !popmeta!(ex1, :foo)[1]
+    @test !popmeta!(ex1, :bar)[1]
+    @test !(popmeta!(:(x*x+1), :foo)[1])
 end
-@test popmeta!(ex1, :foo)[1]
-@test !popmeta!(ex1, :foo)[1]
-@test !popmeta!(ex1, :bar)[1]
-@test !(popmeta!(:(x*x+1), :foo)[1])
 
 # Find and pop meta information from general ast locations
-multi_meta = quote
-    $(Expr(:meta, :foo1))
-    y = x
-    $(Expr(:meta, :foo2, :foo3))
-    begin
-        $(Expr(:meta, :foo4, Expr(:foo5, 1, 2)))
+let multi_meta = quote
+        $(Expr(:meta, :foo1))
+        y = x
+        $(Expr(:meta, :foo2, :foo3))
+        begin
+            $(Expr(:meta, :foo4, Expr(:foo5, 1, 2)))
+        end
+        x*x+1
     end
-    x*x+1
-end
-@test popmeta!(deepcopy(multi_meta), :foo1) == (true, [])
-@test popmeta!(deepcopy(multi_meta), :foo2) == (true, [])
-@test popmeta!(deepcopy(multi_meta), :foo3) == (true, [])
-@test popmeta!(deepcopy(multi_meta), :foo4) == (true, [])
-@test popmeta!(deepcopy(multi_meta), :foo5) == (true, [1,2])
-@test popmeta!(deepcopy(multi_meta), :bar)  == (false, [])
+    @test popmeta!(deepcopy(multi_meta), :foo1) == (true, [])
+    @test popmeta!(deepcopy(multi_meta), :foo2) == (true, [])
+    @test popmeta!(deepcopy(multi_meta), :foo3) == (true, [])
+    @test popmeta!(deepcopy(multi_meta), :foo4) == (true, [])
+    @test popmeta!(deepcopy(multi_meta), :foo5) == (true, [1,2])
+    @test popmeta!(deepcopy(multi_meta), :bar)  == (false, [])
 
-# Test that popmeta!() removes meta blocks entirely when they become empty.
-for m in [:foo1, :foo2, :foo3, :foo4, :foo5]
-    @test popmeta!(multi_meta, m)[1]
+    # Test that popmeta!() removes meta blocks entirely when they become empty.
+    ast = :(dummy() = $multi_meta)
+    for m in [:foo1, :foo2, :foo3, :foo4, :foo5]
+        @test popmeta!(multi_meta, m)[1]
+    end
+    @test Base.findmeta(ast)[1] == 0
 end
-@test Base.findmeta(multi_meta.args)[1] == 0
 
 # Test that pushmeta! can push across other macros,
 # in the case multiple pushmeta!-based macros are combined
-
-@attach 40 @attach 41 @attach 42 dummy_multi() = return nothing
-
-asts = code_lowered(dummy_multi, Tuple{})
-@test length(asts) == 1
-ast = asts[1]
-
-body = Expr(:block)
-body.args = ast.code
-
-@test popmeta!(body, :test) == (true, [40])
-@test popmeta!(body, :test) == (true, [41])
-@test popmeta!(body, :test) == (true, [42])
-@test popmeta!(body, :nonexistent) == (false, [])
+@attach_meta 40 @attach_meta 41 @attach_meta 42 dummy_multi() = return nothing
+let ast = only(code_lowered(dummy_multi, Tuple{}))
+    body = Expr(:block)
+    body.args = ast.code
+    @test popmeta!(body, :test) == (true, [40])
+    @test popmeta!(body, :test) == (true, [41])
+    @test popmeta!(body, :test) == (true, [42])
+    @test popmeta!(body, :nonexistent) == (false, [])
+end
 
 # tests to fully cover functions in base/meta.jl
 using Base.Meta
@@ -254,14 +247,14 @@ end
 f(::T) where {T} = T
 ci = code_lowered(f, Tuple{Int})[1]
 @test Meta.partially_inline!(ci.code, [], Tuple{typeof(f),Int}, Any[Int], 0, 0, :propagate) ==
-    Any[Core.ReturnNode(QuoteNode(Int))]
+    Any[QuoteNode(Int), Core.ReturnNode(Core.SSAValue(1))]
 
 g(::Val{x}) where {x} = x ? 1 : 0
 ci = code_lowered(g, Tuple{Val{true}})[1]
-@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 0, :propagate)[1] ==
-   Core.GotoIfNot(QuoteNode(true), 3)
-@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 2, :propagate)[1] ==
-   Core.GotoIfNot(QuoteNode(true), 5)
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 0, :propagate)[2] ==
+   Core.GotoIfNot(Core.SSAValue(1), 4)
+@test Meta.partially_inline!(ci.code, [], Tuple{typeof(g),Val{true}}, Any[true], 0, 2, :propagate)[2] ==
+   Core.GotoIfNot(Core.SSAValue(3), 6)
 
 @testset "inlining with isdefined" begin
     isdefined_slot(x) = @isdefined(x)

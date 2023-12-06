@@ -51,9 +51,9 @@ static void jl_uv_cb_walk_print(uv_handle_t *h, void *arg)
     npad += strlen(type);
     pad += npad < strlen(pad) ? npad : strlen(pad);
     if (fd == -1)
-        jl_safe_printf(" %s   %s@%p->%p\n", type,             pad, (void*)h, (void*)h->data);
+        jl_safe_printf(" %s   %s%p->%p\n", type,             pad, (void*)h, (void*)h->data);
     else
-        jl_safe_printf(" %s[%zd] %s@%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
+        jl_safe_printf(" %s[%zd] %s%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
 }
 
 static void jl_uv_cb_wait_empty(uv_timer_t *t) JL_NOTSAFEPOINT_ENTER
@@ -63,11 +63,14 @@ static void jl_uv_cb_wait_empty(uv_timer_t *t) JL_NOTSAFEPOINT_ENTER
     if (!uv_loop_alive(t->loop))
         return;
     jl_safe_printf("\n[pid %zd] waiting for IO to finish:\n"
-                   " TYPE[FD/PID]       @UV_HANDLE_T->DATA\n",
+                   " Handle type        uv_handle_t->data\n",
                    (size_t)uv_os_getpid());
     uv_walk(jl_io_loop, jl_uv_cb_walk_print, NULL);
     jl_ptls_t ptls = jl_current_task->ptls;
     int old_state = jl_gc_unsafe_enter(ptls);
+    if (jl_generating_output() && jl_options.incremental) {
+        jl_safe_printf("This means that a package has started a background task or event source that has not finished running. For precompilation to complete successfully, the event source needs to be closed explicitly. See the developer documentation on fixing precompilation hangs for more help.\n");
+    }
     jl_gc_collect(JL_GC_FULL);
     jl_gc_unsafe_leave(ptls, old_state);
 }
@@ -86,12 +89,10 @@ void jl_wait_empty_begin(void)
     }
     JL_UV_UNLOCK();
 }
-
 void jl_wait_empty_end(void)
 {
-    JL_UV_LOCK();
+    // n.b. caller must be holding jl_uv_mutex
     uv_close((uv_handle_t*)&wait_empty_worker, NULL);
-    JL_UV_UNLOCK();
 }
 
 

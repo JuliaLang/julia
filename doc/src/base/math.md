@@ -138,6 +138,7 @@ Base.minmax
 Base.Math.clamp
 Base.Math.clamp!
 Base.abs
+Base.Checked
 Base.Checked.checked_abs
 Base.Checked.checked_neg
 Base.Checked.checked_add
@@ -158,7 +159,7 @@ Base.signbit
 Base.flipsign
 Base.sqrt(::Number)
 Base.isqrt
-Base.Math.cbrt
+Base.Math.cbrt(::AbstractFloat)
 Base.real
 Base.imag
 Base.reim

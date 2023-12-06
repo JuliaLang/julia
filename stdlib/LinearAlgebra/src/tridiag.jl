@@ -472,13 +472,13 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
                 "lengths of subdiagonal, diagonal and superdiagonal: ",
                 "($(length(dl)), $(length(d)), $(length(du)))")))
         end
-        new{T,V}(dl, d, du)
+        new{T,V}(dl, d, Base.unalias(dl, du))
     end
     # constructor used in lu!
     function Tridiagonal{T,V}(dl, d, du, du2) where {T,V<:AbstractVector{T}}
         require_one_based_indexing(dl, d, du, du2)
         # length checks?
-        new{T,V}(dl, d, du, du2)
+        new{T,V}(dl, d, Base.unalias(dl, du), du2)
     end
 end
 
@@ -490,6 +490,10 @@ respectively. The result is of type `Tridiagonal` and provides efficient special
 solvers, but may be converted into a regular matrix with
 [`convert(Array, _)`](@ref) (or `Array(_)` for short).
 The lengths of `dl` and `du` must be one less than the length of `d`.
+
+!!! note
+    The subdiagonal `dl` and the superdiagonal `du` must not be aliased to each other.
+    If aliasing is detected, the constructor will use a copy of `du` as its argument.
 
 # Examples
 ```jldoctest
@@ -912,9 +916,6 @@ function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
     dl = A.dl
     d = A.d
     du = A.du
-    if dl === du
-        throw(ArgumentError("off-diagonals of `A` must not alias"))
-    end
 
     @inbounds begin
         for i in 1:n-1

@@ -156,6 +156,15 @@
         @test "aaa \\g \\n" == unescape_string(str, ['g', 'n'])
     end
     @test Base.escape_raw_string(raw"\"\\\"\\-\\") == "\\\"\\\\\\\"\\\\-\\\\"
+    @test Base.escape_raw_string(raw"`\`\\-\\") == "\`\\\`\\\\-\\\\"
+    @test Base.escape_raw_string(raw"\"\\\"\\-\\", '`') == "\"\\\"\\\\-\\\\"
+    @test Base.escape_raw_string(raw"`\`\\-\\", '`') == "\\\`\\\\\\\`\\\\-\\\\"
+    @test Base.escape_raw_string(raw"some`string") == "some`string"
+    @test Base.escape_raw_string(raw"some\"string", '`') == "some\"string"
+    @test Base.escape_raw_string(raw"some`string\\") == "some`string\\\\"
+    @test Base.escape_raw_string(raw"some\"string\\", '`') == "some\"string\\\\"
+    @test Base.escape_raw_string(raw"some\"string") == "some\\\"string"
+    @test Base.escape_raw_string(raw"some`string", '`') == "some\\`string"
 end
 @testset "join()" begin
     @test join([]) == join([],",") == ""

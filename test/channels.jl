@@ -450,8 +450,8 @@ end
         Libc.systemsleep(0.02)
         close(async) # and close
         @test !isopen(async)
-        @test tc[] == 2
-        @test tc[] == 2
+        @test tc[] == 3
+        @test tc[] == 3
         yield() # consume event & then close
         @test tc[] == 3
         sleep(0.1) # no further events
@@ -551,7 +551,7 @@ end
     e = @elapsed for i = 1:5
         wait(t)
     end
-    @test 1.5 > e >= 0.4
+    @test e >= 0.4
     @test a[] == 0
     nothing
 end

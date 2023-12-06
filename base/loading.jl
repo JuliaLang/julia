@@ -1044,7 +1044,21 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
-function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any})
+function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}, ignore_native::Union{Nothing,Bool}=nothing)
+    if isnothing(ignore_native)
+        if JLOptions().code_coverage == 0 && JLOptions().malloc_log == 0
+            ignore_native = false
+        else
+            io = open(path, "r")
+            try
+                iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
+                _, (includes, _, _), _, _, _, _, _, _ = parse_cache_header(io, path)
+                ignore_native = pkg_tracked(includes)
+            finally
+                close(io)
+            end
+        end
+    end
     assert_havelock(require_lock)
     timing_imports = TIMING_IMPORTS[] > 0
     try
@@ -1056,7 +1070,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
 
     if ocachepath !== nothing
         @debug "Loading object cache file $ocachepath for $pkg"
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring), ocachepath, depmods, false, pkg.name)
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachepath, depmods, false, pkg.name, ignore_native)
     else
         @debug "Loading cache file $path for $pkg"
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), path, depmods, false, pkg.name)
@@ -1264,7 +1278,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
     for (ext, triggers) in extensions
         triggers = triggers::Union{String, Vector{String}}
         triggers isa String && (triggers = [triggers])
-        id = PkgId(uuid5(parent.uuid, ext), ext)
+        id = PkgId(uuid5(parent.uuid::UUID, ext), ext)
         if id in keys(EXT_PRIMED) || haskey(Base.loaded_modules, id)
             continue  # extension is already primed or loaded, don't add it again
         end
@@ -1495,15 +1509,45 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Un
     return loaded
 end
 
+# returns whether the package is tracked in coverage or malloc tracking based on
+# JLOptions and includes
+function pkg_tracked(includes)
+    if JLOptions().code_coverage == 0 && JLOptions().malloc_log == 0
+        return false
+    elseif JLOptions().code_coverage == 1 || JLOptions().malloc_log == 1 # user
+        # Just say true. Pkgimages aren't in Base
+        return true
+    elseif JLOptions().code_coverage == 2 || JLOptions().malloc_log == 2 # all
+        return true
+    elseif JLOptions().code_coverage == 3 || JLOptions().malloc_log == 3 # tracked path
+        if JLOptions().tracked_path == C_NULL
+            return false
+        else
+            tracked_path = unsafe_string(JLOptions().tracked_path)
+            if isempty(tracked_path)
+                return false
+            else
+                return any(includes) do inc
+                    startswith(inc.filename, tracked_path)
+                end
+            end
+        end
+    end
+end
+
 # loads a precompile cache file, ignoring stale_cachefile tests
 # load the best available (non-stale) version of all dependent modules first
 function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String})
     assert_havelock(require_lock)
     local depmodnames
     io = open(path, "r")
+    ignore_native = false
     try
         iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
-        _, _, depmodnames, _, _, _, clone_targets, _ = parse_cache_header(io, path)
+        _, (includes, _, _), depmodnames, _, _, _, clone_targets, _ = parse_cache_header(io, path)
+
+        ignore_native = pkg_tracked(includes)
+
         pkgimage = !isempty(clone_targets)
         if pkgimage
             ocachepath !== nothing || return ArgumentError("Expected ocachepath to be provided")
@@ -1529,7 +1573,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
         depmods[i] = dep
     end
     # then load the file
-    return _include_from_serialized(pkg, path, ocachepath, depmods)
+    return _include_from_serialized(pkg, path, ocachepath, depmods, ignore_native)
 end
 
 # returns `nothing` if require found a precompile cache for this sourcepath, but couldn't load it
@@ -1701,9 +1745,9 @@ function include_dependency(path::AbstractString)
 end
 
 # we throw PrecompilableError when a module doesn't want to be precompiled
-struct PrecompilableError <: Exception end
+import Core: PrecompilableError
 function show(io::IO, ex::PrecompilableError)
-    print(io, "Declaring __precompile__(false) is not allowed in files that are being precompiled.")
+    print(io, "Error when precompiling module, potentially caused by a __precompile__(false) declaration in the module.")
 end
 precompilableerror(ex::PrecompilableError) = true
 precompilableerror(ex::WrappedException) = precompilableerror(ex.error)
@@ -2493,12 +2537,6 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
 
             # inherit permission from the source file (and make them writable)
             chmod(tmppath, filemode(path) & 0o777 | 0o200)
-            if cache_objects
-                # Ensure that the user can execute the `.so` we're generating
-                # Note that on windows, `filemode(path)` typically returns `0o666`, so this
-                # addition of the execute bit for the user is doubly needed.
-                chmod(tmppath_so, filemode(path) & 0o777 | 0o333)
-            end
 
             # prune the directory with cache files
             if pkg.uuid !== nothing
@@ -2600,18 +2638,28 @@ end
 
 function replace_depot_path(path::AbstractString)
     for depot in DEPOT_PATH
+        !isdir(depot) && continue
+
+        # Strip extraneous pathseps through normalization.
+        if isdirpath(depot)
+            depot = dirname(depot)
+        end
+
         if startswith(path, depot)
-            path = replace(path, depot => "@depot")
+            path = replace(path, depot => "@depot"; count=1)
             break
         end
     end
     return path
 end
 
+function restore_depot_path(path::AbstractString, depot::AbstractString)
+    replace(path, r"^@depot" => depot; count=1)
+end
+
 # Find depot in DEPOT_PATH for which all @depot tags from the `includes`
 # can be replaced so that they point to a file on disk each.
-# Return nothing when no depot matched.
-function resolve_depot(includes)
+function resolve_depot(includes::Union{AbstractVector,AbstractSet})
     if any(includes) do inc
             !startswith(inc, "@depot")
         end
@@ -2619,7 +2667,7 @@ function resolve_depot(includes)
     end
     for depot in DEPOT_PATH
         if all(includes) do inc
-                isfile(replace(inc, r"^@depot" => depot))
+                isfile(restore_depot_path(inc, depot))
             end
             return depot
         end
@@ -2718,14 +2766,12 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
         chi.filename ∈ srcfiles && push!(keepidx, i)
     end
     if depot === :no_depot_found
-        throw(ArgumentError("""
-              Failed to determine depot from srctext files in cache file $cachefile.
-              - Make sure you have adjusted DEPOT_PATH in case you relocated depots."""))
+        @debug("Unable to resolve @depot tag in cache file $cachefile", srcfiles)
     elseif depot === :missing_depot_tag
-        @debug "Missing @depot tag for include dependencies in cache file $cachefile."
+        @debug("Missing @depot tag for include dependencies in cache file $cachefile.", srcfiles)
     else
         for inc in includes
-            inc.filename = replace(inc.filename, r"^@depot" => depot)
+            inc.filename = restore_depot_path(inc.filename, depot)
         end
     end
     includes_srcfiles_only = includes[keepidx]
@@ -2788,7 +2834,7 @@ function _read_dependency_src(io::IO, filename::AbstractString, includes::Vector
         fn = if !startswith(depotfn, "@depot")
             depotfn
         else
-            basefn = replace(depotfn, r"^@depot" => "")
+            basefn = restore_depot_path(depotfn, "")
             idx = findfirst(includes) do inc
                 endswith(inc.filename, basefn)
             end
@@ -3275,6 +3321,10 @@ end
             end
             for chi in includes
                 f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
+                if startswith(f, "@depot/")
+                    @debug("Rejecting stale cache file $cachefile because its depot could not be resolved")
+                    return true
+                end
                 if !ispath(f)
                     _f = fixup_stdlib_path(f)
                     if isfile(_f) && startswith(_f, Sys.STDLIB)

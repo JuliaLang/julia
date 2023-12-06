@@ -90,7 +90,8 @@ julia> module B
 julia> module D
            b = a # errors as D's global scope is separate from A's
        end;
-ERROR: UndefVarError: `a` not defined
+ERROR: UndefVarError: `a` not defined in `D`
+Suggestion: check for spelling errors or missing imports.
 ```
 
 If a top-level expression contains a variable declaration with keyword `local`,
@@ -187,7 +188,7 @@ julia> greet()
 hello
 
 julia> x # global
-ERROR: UndefVarError: `x` not defined
+ERROR: UndefVarError: `x` not defined in `Main`
 ```
 
 Inside of the `greet` function, the assignment `x = "hello"` causes `x` to be a new local variable
@@ -256,7 +257,7 @@ julia> sum_to(10)
 55
 
 julia> s # global
-ERROR: UndefVarError: `s` not defined
+ERROR: UndefVarError: `s` not defined in `Main`
 ```
 
 Since `s` is local to the function `sum_to`, calling the function has no effect on the global
@@ -343,7 +344,7 @@ hello
 hello
 
 julia> x
-ERROR: UndefVarError: `x` not defined
+ERROR: UndefVarError: `x` not defined in `Main`
 ```
 
 Since the global `x` is not defined when the `for` loop is evaluated, the first clause of the soft
@@ -408,7 +409,7 @@ julia> code = """
 julia> include_string(Main, code)
 ┌ Warning: Assignment to `s` in soft scope is ambiguous because a global variable by the same name exists: `s` will be treated as a new local. Disambiguate by using `local s` to suppress this warning or `global s` to assign to the existing global variable.
 └ @ string:4
-ERROR: LoadError: UndefVarError: `s` not defined
+ERROR: LoadError: UndefVarError: `s` not defined in local scope
 ```
 
 Here we use [`include_string`](@ref), to evaluate `code` as though it were the contents of a file.
@@ -559,7 +560,7 @@ julia> let x = 1, z
            println("z: $z") # errors as z has not been assigned yet but is local
        end
 x: 1, y: -1
-ERROR: UndefVarError: `z` not defined
+ERROR: UndefVarError: `z` not defined in local scope
 ```
 
 The assignments are evaluated in order, with each right-hand side evaluated in the scope before

@@ -88,8 +88,9 @@ public:
 
     struct libc_frames_t {
 #if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
-        std::atomic<void(*)(void*)> libc_register_frame_{nullptr};
-        std::atomic<void(*)(void*)> libc_deregister_frame_{nullptr};
+        typedef void (*frame_register_func)(void *) JL_NOTSAFEPOINT;
+        std::atomic<frame_register_func> libc_register_frame_{nullptr};
+        std::atomic<frame_register_func> libc_deregister_frame_{nullptr};
 
         void libc_register_frame(const char *Entry) JL_NOTSAFEPOINT;
 

@@ -532,6 +532,7 @@ export
     getkey,
     haskey,
     in,
+    in!,
     intersect!,
     intersect,
     isdisjoint,
@@ -1089,7 +1090,14 @@ public
     Generator,
     ImmutableDict,
     OneTo,
+    AnnotatedString,
+    AnnotatedChar,
     UUID,
+
+# Annotated strings
+    annotatedstring,
+    annotate!,
+    annotations,
 
 # Semaphores
     Semaphore,

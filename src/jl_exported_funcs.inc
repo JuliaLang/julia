@@ -8,6 +8,7 @@
     XX(jl_alloc_array_1d) \
     XX(jl_alloc_array_2d) \
     XX(jl_alloc_array_3d) \
+    XX(jl_alloc_array_nd) \
     XX(jl_alloc_string) \
     XX(jl_alloc_svec) \
     XX(jl_alloc_svec_uninit) \
@@ -21,29 +22,15 @@
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
     XX(jl_argument_datatype) \
-    XX(jl_arraylen) \
-    XX(jl_arrayref) \
-    XX(jl_arrayset) \
-    XX(jl_arrayunset) \
-    XX(jl_array_copy) \
-    XX(jl_array_del_at) \
-    XX(jl_array_del_beg) \
     XX(jl_array_del_end) \
     XX(jl_array_eltype) \
-    XX(jl_array_grow_at) \
-    XX(jl_array_grow_beg) \
     XX(jl_array_grow_end) \
-    XX(jl_array_isassigned) \
     XX(jl_array_ptr) \
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
-    XX(jl_array_ptr_copy) \
+    XX(jl_genericmemory_owner) \
     XX(jl_array_rank) \
-    XX(jl_array_size) \
-    XX(jl_array_sizehint) \
     XX(jl_array_to_string) \
-    XX(jl_array_typetagdata) \
-    XX(jl_array_validate_dims) \
     XX(jl_atexit_hook) \
     XX(jl_atomic_bool_cmpswap_bits) \
     XX(jl_atomic_cmpswap_bits) \
@@ -214,6 +201,7 @@
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
+    XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
     XX(jl_get_excstack) \
@@ -224,7 +212,6 @@
     XX(jl_get_JIT) \
     XX(jl_get_julia_bin) \
     XX(jl_get_julia_bindir) \
-    XX(jl_get_method_inferred) \
     XX(jl_get_module_compile) \
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
@@ -339,7 +326,6 @@
     XX(jl_module_uuid) \
     XX(jl_native_alignment) \
     XX(jl_nb_available) \
-    XX(jl_new_array) \
     XX(jl_new_bits) \
     XX(jl_new_codeinst) \
     XX(jl_new_code_info_uninit) \
@@ -391,7 +377,6 @@
     XX(jl_profile_maxlen_data) \
     XX(jl_profile_start_timer) \
     XX(jl_profile_stop_timer) \
-    XX(jl_ptrarrayref) \
     XX(jl_ptr_to_array) \
     XX(jl_ptr_to_array_1d) \
     XX(jl_queue_work) \
@@ -402,7 +387,6 @@
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
-    XX(jl_reshape_array) \
     XX(jl_resolve_globals_in_ir) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
@@ -458,7 +442,6 @@
     XX(jl_svec2) \
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
-    XX(jl_svec_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \
@@ -514,6 +497,7 @@
     XX(jl_uncompress_argname_n) \
     XX(jl_uncompress_ir) \
     XX(jl_undefined_var_error) \
+    XX(jl_unwrap_unionall) \
     XX(jl_has_no_field_error) \
     XX(jl_value_ptr) \
     XX(jl_ver_is_release) \

@@ -271,6 +271,26 @@ precompile_test_harness(false) do dir
               # check that Tasks work from serialized state
               ch1 = Channel(x -> nothing)
               ch2 = Channel(x -> (push!(x, 2); nothing), Inf)
+
+              # check that Memory aliasing is respected
+              a_vec_int = Int[]
+              push!(a_vec_int, 1, 2)
+              a_mat_int = reshape(a_vec_int, (1, 2))
+
+              a_vec_any = Any[]
+              push!(a_vec_any, 1, 2)
+              a_mat_any = reshape(a_vec_any, (1, 2))
+
+              a_vec_union = Union{Int,Nothing}[]
+              push!(a_vec_union, 1, 2)
+              a_mat_union = reshape(a_vec_union, (1, 2))
+
+              a_vec_inline = Pair{Int,Any}[]
+              push!(a_vec_inline, 1=>2, 3=>4)
+              a_mat_inline = reshape(a_vec_inline, (1, 2))
+
+              oid_vec_int = objectid(a_vec_int)
+              oid_mat_int = objectid(a_mat_int)
           end
           """)
     # Issue #12623
@@ -330,6 +350,34 @@ precompile_test_harness(false) do dir
         @test isready(Foo.ch2)
         @test take!(Foo.ch2) === 2
         @test !isready(Foo.ch2)
+    end
+
+    let
+        @test Foo.a_vec_int == Int[1, 2]
+        @test Foo.a_mat_int == Int[1 2]
+        Foo.a_mat_int[1, 2] = 3
+        @test Foo.a_vec_int[2] === 3
+
+        @test Foo.a_vec_any == Int[1, 2]
+        @test Foo.a_mat_any == Int[1 2]
+        Foo.a_mat_any[1, 2] = 3
+        @test Foo.a_vec_any[2] === 3
+
+        @test Foo.a_vec_union == Union{Int,Nothing}[1, 2]
+        @test Foo.a_mat_union == Union{Int,Nothing}[1 2]
+        Foo.a_mat_union[1, 2] = 3
+        @test Foo.a_vec_union[2] === 3
+        Foo.a_mat_union[1, 2] = nothing
+        @test Foo.a_vec_union[2] === nothing
+
+        @test Foo.a_vec_inline == Pair{Int,Any}[1=>2, 3=>4]
+        @test Foo.a_mat_inline == Pair{Int,Any}[1=>2 3=>4]
+        Foo.a_mat_inline[1, 2] = 5=>6
+        @test Foo.a_vec_inline[2] === Pair{Int,Any}(5, 6)
+
+        @test objectid(Foo.a_vec_int) === Foo.oid_vec_int
+        @test objectid(Foo.a_mat_int) === Foo.oid_mat_int
+        @test Foo.oid_vec_int !== Foo.oid_mat_int
     end
 
     @eval begin function ccallable_test()
@@ -522,6 +570,16 @@ precompile_test_harness(false) do dir
           """)
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
+
+    OverwriteMethodError_file = joinpath(dir, "OverwriteMethodError.jl")
+    write(OverwriteMethodError_file,
+          """
+          module OverwriteMethodError
+              Base.:(+)(x::Bool, y::Bool) = false
+          end
+          """)
+
+    @test Base.compilecache(Base.PkgId("OverwriteMethodError")) == Base.PrecompilableError() # due to piracy
 
     UseBaz_file = joinpath(dir, "UseBaz.jl")
     write(UseBaz_file,
@@ -727,15 +785,15 @@ precompile_test_harness("code caching") do dir
     @test hasspec
     # Test that compilation adds to method roots with appropriate provenance
     m = which(setindex!, (Dict{M.X,Any}, Any, M.X))
-    @test M.X ∈ m.roots
+    @test Memory{M.X} ∈ m.roots
     # Check that roots added outside of incremental builds get attributed to a moduleid of 0
     Base.invokelatest() do
         Dict{M.X2,Any}()[M.X2()] = nothing
     end
-    @test M.X2 ∈ m.roots
+    @test Memory{M.X2} ∈ m.roots
     groups = group_roots(m)
-    @test M.X ∈ groups[Mid]           # attributed to M
-    @test M.X2 ∈ groups[0]            # activate module is not known
+    @test Memory{M.X} ∈ groups[Mid]           # attributed to M
+    @test Memory{M.X2} ∈ groups[0]            # activate module is not known
     @test !isempty(groups[Bid])
     # Check that internal methods and their roots are accounted appropriately
     minternal = which(M.getelsize, (Vector,))
@@ -785,10 +843,10 @@ precompile_test_harness("code caching") do dir
     end
     mT = which(push!, (Vector{T} where T, Any))
     groups = group_roots(mT)
-    @test M2.Y ∈ groups[M2id]
-    @test M2.Z ∈ groups[M2id]
-    @test M.X ∈ groups[Mid]
-    @test M.X ∉ groups[M2id]
+    @test Memory{M2.Y} ∈ groups[M2id]
+    @test Memory{M2.Z} ∈ groups[M2id]
+    @test Memory{M.X} ∈ groups[Mid]
+    @test Memory{M.X} ∉ groups[M2id]
     # backedges of external MethodInstances
     # Root gets used by RootA and RootB, and both consumers end up inferring the same MethodInstance from Root
     # Do both callers get listed as backedges?
@@ -1636,7 +1694,7 @@ precompile_test_harness("issue #46296") do load_path
         module CodeInstancePrecompile
 
         mi = first(Base.specializations(first(methods(identity))))
-        ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
+        ci = Core.CodeInstance(mi, Any, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
         __init__() = @assert ci isa Core.CodeInstance
@@ -1730,7 +1788,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     if ocachefile !== nothing
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring), ocachefile, depmods, true, "PCI")
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachefile, depmods, true, "PCI", false)
     else
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
     end

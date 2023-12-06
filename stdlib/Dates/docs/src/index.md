@@ -1,7 +1,3 @@
-```@meta
-EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Dates/docs/src/index.md"
-```
-
 # Dates
 
 ```@meta

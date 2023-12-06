@@ -329,9 +329,14 @@ void jl_task_wait_empty(void)
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         if (f)
             jl_apply_generic(f, NULL, 0);
+        // we are back from jl_task_get_next now
         ct->world_age = lastage;
         wait_empty = NULL;
+        // TODO: move this lock acquire-release pair to the caller, so that we ensure new work
+        // (from uv_unref objects) didn't unexpectedly get scheduled and start running behind our back
+        JL_UV_LOCK();
         jl_wait_empty_end();
+        JL_UV_UNLOCK();
     }
 }
 

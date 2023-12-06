@@ -268,8 +268,9 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
 
-@assume_effects :total function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
-    @nospecialize an bn
+function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_total_meta
     names = Symbol[an...]
     for n in bn
         if !sym_in(n, an)
@@ -279,19 +280,21 @@ end
     (names...,)
 end
 
-@assume_effects :total function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
-    @nospecialize names a b
+function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
+    @nospecialize
+    @_total_meta
     bn = _nt_names(b)
     return Tuple{Any[ fieldtype(sym_in(names[n], bn) ? b : a, names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :foldable function merge_fallback(a::NamedTuple, b::NamedTuple,
-                                                  an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+function merge_fallback(a::NamedTuple, b::NamedTuple,
+                        an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize
+    @_foldable_meta
     names = merge_names(an, bn)
     types = merge_types(names, typeof(a), typeof(b))
     n = length(names)
-    A = Vector{Any}(undef, n)
+    A = Memory{Any}(undef, n)
     for i=1:n
         n = names[i]
         A[i] = getfield(sym_in(n, bn) ? b : a, n)
@@ -388,8 +391,9 @@ tail(t::NamedTuple{names}) where names = NamedTuple{tail(names::Tuple)}(t)
 front(t::NamedTuple{names}) where names = NamedTuple{front(names::Tuple)}(t)
 reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
 
-@assume_effects :total function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
-    @nospecialize an bn
+function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_total_meta
     names = Symbol[]
     for n in an
         if !sym_in(n, bn)
@@ -399,16 +403,20 @@ reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
     (names...,)
 end
 
-@assume_effects :foldable function diff_types(@nospecialize(a::NamedTuple), @nospecialize(names::Tuple{Vararg{Symbol}}))
+function diff_types(a::NamedTuple, names::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_foldable_meta
     return Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :foldable function diff_fallback(@nospecialize(a::NamedTuple), @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+function diff_fallback(a::NamedTuple, an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_foldable_meta
     names = diff_names(an, bn)
     isempty(names) && return (;)
     types = diff_types(a, names)
     n = length(names)
-    A = Vector{Any}(undef, n)
+    A = Memory{Any}(undef, n)
     for i=1:n
         n = names[i]
         A[i] = getfield(a, n)

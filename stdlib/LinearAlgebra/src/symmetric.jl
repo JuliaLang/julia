@@ -453,7 +453,7 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
-for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:Hermitian, :adjoint, :real)]
+for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Union{Real,Complex}}), :adjoint, :real)]
     @eval begin
         function dot(A::$T, B::$T)
             n = size(A, 2)
@@ -574,6 +574,12 @@ function _factorize(A::HermOrSym{T}; check::Bool=true) where T
     end
 end
 
+logabsdet(A::RealHermSymComplexHerm) = ((l, s) = logabsdet(_factorize(A; check=false)); return real(l), s)
+logabsdet(A::Symmetric{<:Real}) = logabsdet(_factorize(A; check=false))
+logabsdet(A::Symmetric) = logabsdet(_factorize(A; check=false))
+logdet(A::RealHermSymComplexHerm) = real(logdet(_factorize(A; check=false)))
+logdet(A::Symmetric{<:Real}) = logdet(_factorize(A; check=false))
+logdet(A::Symmetric) = logdet(_factorize(A; check=false))
 det(A::RealHermSymComplexHerm) = real(det(_factorize(A; check=false)))
 det(A::Symmetric{<:Real}) = det(_factorize(A; check=false))
 det(A::Symmetric) = det(_factorize(A; check=false))
@@ -810,6 +816,13 @@ for func in (:log, :sqrt)
             end
         end
     end
+end
+
+# Cube root of a real-valued symmetric matrix
+function cbrt(A::HermOrSym{<:Real})
+    F = eigen(A)
+    A = F.vectors * Diagonal(cbrt.(F.values)) * F.vectors'
+    return A
 end
 
 """

@@ -7,6 +7,7 @@
 
 #include "llvm-version.h"
 
+#include "llvm/IR/Attributes.h"
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
@@ -25,9 +26,9 @@ JuliaPassContext::JuliaPassContext()
 
         pgcstack_getter(nullptr), adoptthread_func(nullptr), gc_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
-        pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
+        pointer_from_objref_func(nullptr), gc_loaded_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), write_barrier_func(nullptr),
-        call_func(nullptr), call2_func(nullptr), module(nullptr)
+        call_func(nullptr), call2_func(nullptr), call3_func(nullptr), module(nullptr)
 {
 }
 
@@ -48,11 +49,13 @@ void JuliaPassContext::initFunctions(Module &M)
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
     gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
+    gc_loaded_func = M.getFunction("julia.gc_loaded");
     typeof_func = M.getFunction("julia.typeof");
     write_barrier_func = M.getFunction("julia.write_barrier");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
     call_func = M.getFunction("julia.call");
     call2_func = M.getFunction("julia.call2");
+    call3_func = M.getFunction("julia.call3");
 }
 
 void JuliaPassContext::initAll(Module &M)
@@ -121,9 +124,16 @@ namespace jl_intrinsics {
 
     // Annotates a function with attributes suitable for GC allocation
     // functions. Specifically, the return value is marked noalias and nonnull.
-    // The allocation size is set to the first argument.
     static Function *addGCAllocAttributes(Function *target)
     {
+        auto FnAttrs = AttrBuilder(target->getContext());
+#if JL_LLVM_VERSION >= 160000
+        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | inaccessibleMemOnly(ModRefInfo::ModRef));
+#endif
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        target->addFnAttrs(FnAttrs);
         addRetAttr(target, Attribute::NoAlias);
         addRetAttr(target, Attribute::NonNull);
         return target;
@@ -216,7 +226,11 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 QUEUE_GC_ROOT_NAME);
+#if JL_LLVM_VERSION >= 160000
+            intrinsic->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+#else
             intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+#endif
             return intrinsic;
         });
 
@@ -232,7 +246,11 @@ namespace jl_intrinsics {
                     false),
                 Function::ExternalLinkage,
                 SAFEPOINT_NAME);
+#if JL_LLVM_VERSION >= 160000
+            intrinsic->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+#else
             intrinsic->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+#endif
             return intrinsic;
         });
 }
@@ -289,7 +307,11 @@ namespace jl_well_known {
                     false),
                 Function::ExternalLinkage,
                 GC_QUEUE_ROOT_NAME);
+#if JL_LLVM_VERSION >= 160000
+            func->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
+#else
             func->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
+#endif
             return func;
         });
 
