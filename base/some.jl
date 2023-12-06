@@ -145,3 +145,5 @@ macro something(args...)
     something = GlobalRef(Base, :something)
     return :($something($expr))
 end
+
+==(a::Some, b::Some) = a.value == b.value

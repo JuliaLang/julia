@@ -49,6 +49,13 @@
 @test !isequal(Some(1), nothing)
 @test !isequal(Some(nothing), nothing)
 
+# Some with something else is false
+@test !=(Some(nothing), nothing)
+@test !=(nothing, Some(nothing))
+
+# Two Somes forward to their wrapped things
+@test ==(Some([0x1]), Some([1]))
+
 @testset "something" begin
     @test_throws ArgumentError something()
     @test something(1) === 1
