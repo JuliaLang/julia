@@ -360,7 +360,7 @@ mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
     reduce(op, map(f, A...); kw...)
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
-    mapreduce_impl(f, op, A, nt)
+    mapreduce_impl(f, op, nt, A)
 
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
     _mapreduce(f, op, IndexStyle(A), A)

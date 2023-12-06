@@ -328,12 +328,12 @@ function reduce_impl(op, itr, nt, state, n)
     end
 end
 
-mapreduce_impl(f::F, op::OP, itr, ::_InitialValue) where {F,OP} = reduce_impl(_xfadjoint(op, Generator(f, itr))...)
+mapreduce_impl(f::F, op::OP, ::_InitialValue, itr) where {F,OP} = reduce_impl(_xfadjoint(op, Generator(f, itr))...)
 
 # for an arbitrary initial value, we need to call foldl,
 # because op(nt, itr[i]) may have a different type than op(nt, itr[j]))
 # … it's not clear how to reliably determine this without foldl associativity.
-mapreduce_impl(f::F, op::OP, itr, nt) where {F,OP} = mapfoldl_impl(f, op, nt, itr)
+mapreduce_impl(f::F, op::OP, nt, itr) where {F,OP} = mapfoldl_impl(f, op, nt, itr)
 
 """
     mapreduce(f, op, itrs...; [init])
@@ -362,7 +362,7 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-mapreduce(f, op, itr; init=_InitialValue()) = mapreduce_impl(f, op, itr, init)
+mapreduce(f, op, itr; init=_InitialValue()) = mapreduce_impl(f, op, init, itr)
 mapreduce(f, op, itrs...; kw...) = reduce(op, Generator(f, itrs...); kw...)
 
 mapreduce(f, op, itr::Union{Tuple,NamedTuple}; kw...) = mapfoldl(f, op, itr; kw...)
@@ -511,7 +511,7 @@ end
 
 mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapreduce_impl(f, op, itr, _InitialValue())
+_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapreduce_impl(f, op, _InitialValue(), itr)
 
 """
     reduce(op, itr; [init])
