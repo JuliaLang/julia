@@ -147,5 +147,7 @@ macro something(args...)
 end
 
 ==(a::Some, b::Some) = a.value == b.value
+==(::Some{Missing}, ::Some{T}) where T = T === Missing
+==(::Some{T}, ::Some{Missing}) where T = T === Missing
 isequal(a::Some, b::Some) = isequal(a.value, b.value)
 hash(s::Some, h::UInt) = hash(s.value, hash(Some, h))
