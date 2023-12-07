@@ -3424,7 +3424,7 @@ julia> # create script at /home/JuliaUser/Projects
 
 julia> # outputs script directory and current working directory
        include("/home/JuliaUser/Projects/test.jl")
-@__DIR__ = /home/JuliaUser/Documents
+@__DIR__ = /home/JuliaUser/Projects
 pwd() = /home/JuliaUser
 ```
     
