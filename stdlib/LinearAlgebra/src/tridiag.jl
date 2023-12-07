@@ -73,10 +73,8 @@ function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
     SymTridiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
                    convert(AbstractVector{T}, ev)::AbstractVector{T})
 end
-function SymTridiagonal(d::Vector{T}, e::Vector{S}) where {T,S}
-    TS = promote_type(T,S)
-    return SymTridiagonal{TS,Vector{TS}}(d, e)
-end
+SymTridiagonal(d::AbstractVector{T}, e::AbstractVector{S) where {T,S} =
+    SymTridiagonal{promote_type(T, S)}(d, e)
 
 """
     SymTridiagonal(A::AbstractMatrix)
