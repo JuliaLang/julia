@@ -1615,3 +1615,42 @@ let code = Any[
         Core.Compiler.__set_check_ssa_counts(false)
     end
 end
+
+# Test SROA all_same on NewNode
+let code = Any[
+    # Block 1
+    Expr(:call, tuple, Argument(1)),
+    GotoIfNot(Argument(4), 5),
+    # Block 2
+    Expr(:call, tuple, Argument(2)),
+    GotoIfNot(Argument(4), 9),
+    # Block 3
+    PhiNode(Int32[2, 4], Any[SSAValue(1), SSAValue(3)]),
+    Expr(:call, getfield, SSAValue(5), 1),
+    Expr(:call, tuple, SSAValue(6), Argument(2)), # ::Tuple{Int, Int}
+    Expr(:call, tuple, SSAValue(7), Argument(3)), # ::Tuple{Tuple{Int, Int}, Int}
+    # Block 4
+    PhiNode(Int32[4, 8], Any[nothing, SSAValue(8)]),
+    Expr(:call, Core.Intrinsics.not_int, Argument(4)),
+    GotoIfNot(SSAValue(10), 13),
+    # Block 5
+    ReturnNode(1),
+    # Block 6
+    PiNode(SSAValue(9), Tuple{Tuple{Int, Int}, Int}),
+    Expr(:call, getfield, SSAValue(13), 1),
+    Expr(:call, getfield, SSAValue(14), 1),
+    ReturnNode(SSAValue(15))
+]
+
+    argtypes = Any[Int, Int, Int, Bool]
+    ssavaluetypes = Any[Tuple{Int}, Any, Tuple{Int}, Any, Tuple{Int}, Int, Tuple{Int, Int}, Tuple{Tuple{Int, Int}, Int},
+                        Union{Nothing, Tuple{Tuple{Int, Int}, Int}}, Bool, Any, Any,
+                        Tuple{Tuple{Int, Int}, Int},
+                        Tuple{Int, Int}, Int, Any]
+    ir = make_ircode(code; slottypes=argtypes, ssavaluetypes)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.sroa_pass!(ir)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.compact!(ir)
+    Core.Compiler.verify_ir(ir)
+end
