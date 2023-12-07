@@ -1,4 +1,5 @@
-module BinaryPlatformTests
+module BinaryPlatformPkgCompatTests
+# This test module was ported over from Pkg.jl/test/binaryplatforms.jl
 
 using Test, Base.BinaryPlatforms.PkgCompat
 import Base.BinaryPlatforms.PkgCompat: platform_name
