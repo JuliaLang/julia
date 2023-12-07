@@ -277,6 +277,11 @@ end
 mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
+# repeat expr n times in a block
+macro _repeat(n::Int, expr)
+    Expr(:block, fill(esc(expr), n)...)
+end
+
 # the following mapreduce_impl is called by mapreduce for non-array iterators,
 # and implements an index-free in-order pairwise strategy:
 function mapreduce_impl(f, op, ::_InitialValue, itr)
@@ -287,8 +292,15 @@ function mapreduce_impl(f, op, ::_InitialValue, itr)
     it === nothing && return mapreduce_first(f, op, a1)
     a2, state = it
     v = op(f(a1), f(a2))
+    # unroll a few iterations to reduce overhead for small iterators:
+    @_repeat 14 begin
+        it = iterate(itr, state)
+        it === nothing && return v
+        a, state = it
+        v = op(v, f(a))
+    end
     n = max(2, pairwise_blocksize(f, op))
-    v, state = _mapreduce_impl(f, op, itr, v, state, n)
+    v, state = _mapreduce_impl(f, op, itr, v, state, n-16)
     while state !== nothing
         v, state = _mapreduce_impl(f, op, itr, v, state, n)
         n *= 2
@@ -330,8 +342,9 @@ end
 
 # for an arbitrary initial value, we need to call foldl,
 # because op(nt, itr[i]) may have a different type than op(nt, itr[j]))
-# … it's not clear how to reliably determine this without foldl associativity.
+# … it's not clear how to reliably do this without foldl associativity.
 mapreduce_impl(f, op, nt, itr) = mapfoldl_impl(f, op, nt, itr)
+
 
 
 """
