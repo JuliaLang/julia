@@ -303,4 +303,4 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
     @test hash(5//3) == hash(big(5)//3)
 end
 
-@test Base.infer_effects(hash, Tuple{Type{Int}, UInt}) == Core.Compiler.EFFECTS_TOTAL
+@test Core.Compiler.is_foldable_nothrow(hash, Tuple{Type{Int}, UInt})
