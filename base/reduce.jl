@@ -331,7 +331,7 @@ end
 # for an arbitrary initial value, we need to call foldl,
 # because op(nt, itr[i]) may have a different type than op(nt, itr[j]))
 # … it's not clear how to reliably determine this without foldl associativity.
-mapreduce_impl(f::F, op::OP, nt, itr) where {F,OP} = mapfoldl_impl(f, op, nt, itr)
+mapreduce_impl(f, op, nt, itr) = mapfoldl_impl(f, op, nt, itr)
 
 
 """
