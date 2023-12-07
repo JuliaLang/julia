@@ -3403,7 +3403,7 @@ end
 
 Macro to obtain the absolute path of the current directory as a string.
 
-If in a script, returns the directory of the script containing the `@__DIR__` macrocall. If run from a 
+If in a script, returns the directory of the script containing the `@__DIR__` macrocall. If run from a
 REPL or if evaluated by `julia -e <expr>`, returns the current working directory.
 
 # Example
@@ -3427,7 +3427,6 @@ julia> # outputs script directory and current working directory
 @__DIR__ = /home/JuliaUser/Projects
 pwd() = /home/JuliaUser
 ```
-    
 """
 macro __DIR__()
     __source__.file === nothing && return nothing
