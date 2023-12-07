@@ -82,10 +82,12 @@ Here is an overview of some of the subdirectories that may exist in a depot:
 * `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and `Julia`.
 * `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
 * `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
-* `scratchspaces`: Contains content that a package itself installs via the `Scratch.jl` package. Automatic `Pkg.gc()` will delete content that is known to be unused.
+* `scratchspaces`: Contains content that a package itself installs via the [`Scratch.jl`](https://github.com/JuliaPackaging/Scratch.jl) package. `Pkg.gc()` will delete content that is known to be unused.
 
 !!! note
-    Rather than create new depot root directories packages should use `scratchspaces` via `Scratch.jl`
+    Packages that want to store content should use the `scratchspaces` subdirectory via
+    [`Scratch.jl`](https://github.com/JuliaPackaging/Scratch.jl) instead of creating new
+    subdirectories in the depot root.
 
 See also [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
 [Code Loading](@ref code-loading).
