@@ -484,15 +484,6 @@ function lift_arg!(
             end
         end
     end
-    if isa(lifted, GlobalRef) || isa(lifted, Expr)
-        lifted = insert_node!(compact, leaf, effect_free_and_nothrow(NewInstruction(lifted, argextype(lifted, compact))))
-        compact[leaf] = nothing
-        stmt.args[argidx] = lifted
-        compact[leaf] = stmt
-        if isa(leaf, SSAValue) && leaf.id < compact.result_idx
-            push!(compact.late_fixup, leaf.id)
-        end
-    end
     lifted_leaves[cache_key] = LiftedValue(lifted)
     return nothing
 end
