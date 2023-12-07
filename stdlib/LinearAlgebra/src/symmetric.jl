@@ -453,47 +453,46 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
-for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Union{Real,Complex}}), :adjoint, :real)]
-    @eval begin
-        function dot(A::$T, B::$T)
-            n = size(A, 2)
-            if n != size(B, 2)
-                throw(DimensionMismatch("A has dimensions $(size(A)) but B has dimensions $(size(B))"))
-            end
+dot(A::Symmetric, B::Symmetric) = _dot_hermsym(A, B, transpose, identity)
+dot(A::Hermitian{<:Union{Real,Complex}}, B::Hermitian{<:Union{Real,Complex}}) = _dot_hermsym(A, B, conj, real)
 
-            dotprod = $real(zero(dot(first(A), first(B))))
-            @inbounds if A.uplo == 'U' && B.uplo == 'U'
-                for j in 1:n
-                    for i in 1:(j - 1)
-                        dotprod += 2 * $real(dot(A.data[i, j], B.data[i, j]))
-                    end
-                    dotprod += $real(dot(A[j, j], B[j, j]))
-                end
-            elseif A.uplo == 'L' && B.uplo == 'L'
-                for j in 1:n
-                    dotprod += $real(dot(A[j, j], B[j, j]))
-                    for i in (j + 1):n
-                        dotprod += 2 * $real(dot(A.data[i, j], B.data[i, j]))
-                    end
-                end
-            elseif A.uplo == 'U' && B.uplo == 'L'
-                for j in 1:n
-                    for i in 1:(j - 1)
-                        dotprod += 2 * $real(dot(A.data[i, j], $trans(B.data[j, i])))
-                    end
-                    dotprod += $real(dot(A[j, j], B[j, j]))
-                end
-            else
-                for j in 1:n
-                    dotprod += $real(dot(A[j, j], B[j, j]))
-                    for i in (j + 1):n
-                        dotprod += 2 * $real(dot(A.data[i, j], $trans(B.data[j, i])))
-                    end
-                end
+function _dot_hermsym(A, B, trans, real)
+    n = size(A, 2)
+    if n != size(B, 2)
+        throw(DimensionMismatch("A has dimensions $(size(A)) but B has dimensions $(size(B))"))
+    end
+
+    dotprod = real(zero(dot(first(A), first(B))))
+    @inbounds if A.uplo == 'U' && B.uplo == 'U'
+        for j in 1:n
+            for i in 1:(j-1)
+                dotprod += 2 * real(dot(A.data[i, j], B.data[i, j]))
             end
-            return dotprod
+            dotprod += real(dot(A[j, j], B[j, j]))
+        end
+    elseif A.uplo == 'L' && B.uplo == 'L'
+        for j in 1:n
+            dotprod += real(dot(A[j, j], B[j, j]))
+            for i in (j+1):n
+                dotprod += 2 * real(dot(A.data[i, j], B.data[i, j]))
+            end
+        end
+    elseif A.uplo == 'U' && B.uplo == 'L'
+        for j in 1:n
+            for i in 1:(j-1)
+                dotprod += 2 * real(dot(A.data[i, j], trans(B.data[j, i])))
+            end
+            dotprod += real(dot(A[j, j], B[j, j]))
+        end
+    else
+        for j in 1:n
+            dotprod += real(dot(A[j, j], B[j, j]))
+            for i in (j+1):n
+                dotprod += 2 * real(dot(A.data[i, j], trans(B.data[j, i])))
+            end
         end
     end
+    return dotprod
 end
 
 (-)(A::Symmetric) = Symmetric(-A.data, sym_uplo(A.uplo))
