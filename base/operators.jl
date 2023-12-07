@@ -1057,6 +1057,7 @@ struct Constructor{F} <: Function end
 maybeconstructor(::Type{F}) where {F} = Constructor{F}()
 maybeconstructor(f) = f
 
+∘() = identity
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
 ∘(f, g, h...) = ∘(f ∘ g, h...)

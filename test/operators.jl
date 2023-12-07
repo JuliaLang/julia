@@ -167,6 +167,7 @@ end
     @test ∘(x -> x-2, x -> x-3, x -> x+5)(7) == 7
     fs = [x -> x[1:2], uppercase, lowercase]
     @test ∘(fs...)("ABC") == "AB"
+    @test ∘() === identity
 
     # Like +() and *() we leave ∘() undefined.
     # While `∘() = identity` is a reasonable definition for functions, this
