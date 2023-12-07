@@ -302,7 +302,7 @@ function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
     if N <= 1
         eigen(parent(A); kwargs...)
     else
-        S = Vector{ComplexF64}(undef, N)
+        S = Vector{Complex{T}}(undef, N)
         E = dl
         Er = abs.(E)
         S[1] = 1
