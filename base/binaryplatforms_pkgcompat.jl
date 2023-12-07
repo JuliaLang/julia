@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    Base.BinaryPlatforms.PkgCompat is the old BinaryPlatforms API exposed by
-    Pkg.jl as Pkg.BinaryPlatforms
+Base.BinaryPlatforms.PkgCompat is the old BinaryPlatforms API exposed by
+Pkg.jl as Pkg.BinaryPlatforms
 """
 module PkgCompat
 
