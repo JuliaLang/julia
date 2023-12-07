@@ -5,3 +5,5 @@
 e66bfa5dd32f93e76068c00ad882c1fc839c5af8
 # whitespace: replace non-breaking space => space
 100a741e7ab38c91d48cc929bb001afc8e09261f
+# whitespace: replace tabs => space
+b03e8ab9c7bd3e001add519571858fa04d6a249b

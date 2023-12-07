@@ -345,8 +345,13 @@ Base.iterate(S::GeneralizedSchur, ::Val{:done}) = nothing
 
 Same as [`schur`](@ref) but uses the input matrices `A` and `B` as workspace.
 """
-schur!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
-    GeneralizedSchur(LinearAlgebra.LAPACK.gges!('V', 'V', A, B)...)
+function schur!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat}
+    if LAPACK.version() < v"3.6.0"
+        GeneralizedSchur(LinearAlgebra.LAPACK.gges!('V', 'V', A, B)...)
+    else
+        GeneralizedSchur(LinearAlgebra.LAPACK.gges3!('V', 'V', A, B)...)
+    end
+end
 
 """
     schur(A, B) -> F::GeneralizedSchur

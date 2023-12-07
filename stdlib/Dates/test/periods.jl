@@ -329,6 +329,14 @@ end
     @test Dates.default(Dates.Nanosecond) == zero(Dates.Nanosecond)
 end
 @testset "Conversions" begin
+    @test Dates.toms(1499 * us) == 1
+    @test Dates.toms(501 * us) == 1
+    @test Dates.toms(us) == 0
+
+    @test Dates.toms(1_499_999 * ns) == 1
+    @test Dates.toms(500_001 * ns) == 1
+    @test Dates.toms(ns) == 0
+
     @test Dates.toms(ms) == Dates.value(Dates.Millisecond(ms)) == 1
     @test Dates.toms(s)  == Dates.value(Dates.Millisecond(s)) == 1000
     @test Dates.toms(mi) == Dates.value(Dates.Millisecond(mi)) == 60000
@@ -343,6 +351,15 @@ end
     @test Dates.days(Dates.Hour(24)) == 1
     @test Dates.days(d) == 1
     @test Dates.days(w) == 7
+
+    @test Dates.seconds(ns) == 0.000000001
+    @test Dates.seconds(us) == 0.000001
+    @test Dates.seconds(ms) == 0.001
+    @test Dates.seconds(s) == 1
+    @test Dates.seconds(mi) == 60
+    @test Dates.seconds(h) == 3600
+    @test Dates.seconds(d) == 86400
+    @test Dates.seconds(w) == 604800
 end
 @testset "issue #9214" begin
     @test 2s + (7ms + 1ms) == (2s + 7ms) + 1ms == 1ms + (2s + 7ms) == 1ms + (1s + 7ms) + 1s == 1ms + (2s + 3d + 7ms) + (-3d) == (1ms + (2s + 3d)) + (7ms - 3d) == (1ms + (2s + 3d)) - (3d - 7ms)
@@ -523,6 +540,7 @@ end
     @test convert(Second, Minute(1) + Second(30)) === Second(90)
     @test convert(Minute, Minute(1) + Second(60)) === Minute(2)
     @test convert(Millisecond, Minute(1) + Second(30)) === Millisecond(90_000)
+    @test convert(Millisecond,  Dates.CompoundPeriod()) === Millisecond(0)
     @test_throws InexactError convert(Minute, Minute(1) + Second(30))
     @test_throws MethodError convert(Month, Minute(1) + Second(30))
     @test_throws MethodError convert(Second, Month(1) + Second(30))

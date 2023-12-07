@@ -260,11 +260,12 @@ end
     end
 end
 
-@testset "behavior for non-positive definite matrices" for T in (Float64, ComplexF64)
+@testset "behavior for non-positive definite matrices" for T in (Float64, ComplexF64, BigFloat)
     A = T[1 2; 2 1]
     B = T[1 2; 0 1]
+    C = T[2 0; 0 0]
     # check = (true|false)
-    for M in (A, Hermitian(A), B)
+    for M in (A, Hermitian(A), B, C)
         @test_throws PosDefException cholesky(M)
         @test_throws PosDefException cholesky!(copy(M))
         @test_throws PosDefException cholesky(M; check = true)
@@ -272,17 +273,19 @@ end
         @test !LinearAlgebra.issuccess(cholesky(M; check = false))
         @test !LinearAlgebra.issuccess(cholesky!(copy(M); check = false))
     end
-    for M in (A, Hermitian(A), B)
-        @test_throws RankDeficientException cholesky(M, RowMaximum())
-        @test_throws RankDeficientException cholesky!(copy(M), RowMaximum())
-        @test_throws RankDeficientException cholesky(M, RowMaximum(); check = true)
-        @test_throws RankDeficientException cholesky!(copy(M), RowMaximum(); check = true)
-        @test !LinearAlgebra.issuccess(cholesky(M, RowMaximum(); check = false))
-        @test !LinearAlgebra.issuccess(cholesky!(copy(M), RowMaximum(); check = false))
-        C = cholesky(M, RowMaximum(); check = false)
-        @test_throws RankDeficientException chkfullrank(C)
-        C = cholesky!(copy(M), RowMaximum(); check = false)
-        @test_throws RankDeficientException chkfullrank(C)
+    if T !== BigFloat # generic pivoted cholesky is not implemented
+        for M in (A, Hermitian(A), B)
+            @test_throws RankDeficientException cholesky(M, RowMaximum())
+            @test_throws RankDeficientException cholesky!(copy(M), RowMaximum())
+            @test_throws RankDeficientException cholesky(M, RowMaximum(); check = true)
+            @test_throws RankDeficientException cholesky!(copy(M), RowMaximum(); check = true)
+            @test !LinearAlgebra.issuccess(cholesky(M, RowMaximum(); check = false))
+            @test !LinearAlgebra.issuccess(cholesky!(copy(M), RowMaximum(); check = false))
+            C = cholesky(M, RowMaximum(); check = false)
+            @test_throws RankDeficientException chkfullrank(C)
+            C = cholesky!(copy(M), RowMaximum(); check = false)
+            @test_throws RankDeficientException chkfullrank(C)
+        end
     end
     @test !isposdef(A)
     str = sprint((io, x) -> show(io, "text/plain", x), cholesky(A; check = false))

@@ -3,12 +3,29 @@
 if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
+    const env_dict = IdDict{String, Vector{Cwchar_t}}()
+    const env_lock = ReentrantLock()
+
+    function memoized_env_lookup(str::AbstractString)
+        # Windows environment variables have a different format from Linux / MacOS, and previously
+        # incurred allocations because we had to convert a String to a Vector{Cwchar_t} each time
+        # an environment variable was looked up. This function memoizes that lookup process, storing
+        # the String => Vector{Cwchar_t} pairs in env_dict
+        var = get(env_dict, str, nothing)
+        if isnothing(var)
+            var = @lock env_lock begin
+                env_dict[str] = cwstring(str)
+            end
+        end
+        var
+    end
+
     _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
     _hasenv(s::Vector{UInt16}) = _getenvlen(s) != 0 || Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND
-    _hasenv(s::AbstractString) = _hasenv(cwstring(s))
+    _hasenv(s::AbstractString) = _hasenv(memoized_env_lookup(s))
 
     function access_env(onError::Function, str::AbstractString)
-        var = cwstring(str)
+        var = memoized_env_lookup(str)
         len = _getenvlen(var)
         if len == 0
             return Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND ? "" : onError(str)
@@ -21,7 +38,7 @@ if Sys.iswindows()
     end
 
     function _setenv(svar::AbstractString, sval::AbstractString, overwrite::Bool=true)
-        var = cwstring(svar)
+        var = memoized_env_lookup(svar)
         val = cwstring(sval)
         if overwrite || !_hasenv(var)
             ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,val)
@@ -30,7 +47,7 @@ if Sys.iswindows()
     end
 
     function _unsetenv(svar::AbstractString)
-        var = cwstring(svar)
+        var = memoized_env_lookup(svar)
         ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,C_NULL)
         windowserror(:setenv, ret == 0 && Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND)
     end
@@ -74,7 +91,7 @@ all keys to uppercase for display, iteration, and copying. Portable code should 
 ability to distinguish variables by case, and should beware that setting an ostensibly lowercase
 variable may result in an uppercase `ENV` key.)
 
-    !!! warning
+!!! warning
     Mutating the environment is not thread-safe.
 
 # Examples
@@ -138,6 +155,10 @@ end
 getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvDict, k::AbstractString, def) = access_env(Returns(def), k)
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
+function get!(default::Callable, ::EnvDict, k::AbstractString)
+    haskey(ENV, k) && return ENV[k]
+    ENV[k] = default()
+end
 in(k::AbstractString, ::KeySet{String, EnvDict}) = _hasenv(k)
 pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
@@ -222,7 +243,7 @@ by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 environment variable (if it is set). When `withenv` returns, the original environment has
 been restored.
 
-    !!! warning
+!!! warning
     Changing the environment is not thread-safe. For running external commands with a different
     environment from the parent process, prefer using [`addenv`](@ref) over `withenv`.
 """

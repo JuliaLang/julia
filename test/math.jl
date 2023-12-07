@@ -180,6 +180,7 @@ end
             @test atan(x,y) ≈ atan(big(x),big(y))
             @test atanh(x) ≈ atanh(big(x))
             @test cbrt(x) ≈ cbrt(big(x))
+            @test fourthroot(x) ≈ fourthroot(big(x))
             @test cos(x) ≈ cos(big(x))
             @test cosh(x) ≈ cosh(big(x))
             @test cospi(x) ≈ cospi(big(x))
@@ -187,6 +188,7 @@ end
             @test exp10(x) ≈ exp10(big(x))
             @test exp2(x) ≈ exp2(big(x))
             @test expm1(x) ≈ expm1(big(x))
+            @test expm1(T(-1.1)) ≈ expm1(big(T(-1.1)))
             @test hypot(x,y) ≈ hypot(big(x),big(y))
             @test hypot(x,x,y) ≈ hypot(hypot(big(x),big(x)),big(y))
             @test hypot(x,x,y,y) ≈ hypot(hypot(big(x),big(x)),hypot(big(y),big(y)))
@@ -219,6 +221,9 @@ end
             @test isequal(cbrt(T(0)), T(0))
             @test isequal(cbrt(T(1)), T(1))
             @test isequal(cbrt(T(1000000000))^3, T(1000)^3)
+            @test isequal(fourthroot(T(0)), T(0))
+            @test isequal(fourthroot(T(1)), T(1))
+            @test isequal(fourthroot(T(100000000))^4, T(100)^4)
             @test isequal(cos(T(0)), T(1))
             @test cos(T(pi)/2) ≈ T(0) atol=eps(T)
             @test isequal(cos(T(pi)), T(-1))
@@ -271,6 +276,8 @@ end
             @test asin(sin(x)) ≈ x
             @test cbrt(x)^3 ≈ x
             @test cbrt(x^3) ≈ x
+            @test fourthroot(x)^4 ≈ x
+            @test fourthroot(x^4) ≈ x
             @test asinh(sinh(x)) ≈ x
             @test atan(tan(x)) ≈ x
             @test atan(x,y) ≈ atan(x/y)
@@ -1255,6 +1262,22 @@ end
     end
 end
 
+@testset "fourthroot" begin
+    for T in (Float32, Float64)
+        @test fourthroot(zero(T)) === zero(T)
+        @test fourthroot(one(T)) === one(T)
+        @test fourthroot(T(Inf)) === T(Inf)
+        @test isnan_type(T, fourthroot(T(NaN)))
+        for x in (pcnfloat(nextfloat(nextfloat(zero(T))))...,
+                  0.45, 0.6, 0.98,
+                  map(x->x^3, 1.0:1.0:1024.0)...,
+                  prevfloat(T(Inf)))
+            by = fourthroot(big(T(x)))
+            @test fourthroot(T(x)) ≈ by rtol=eps(T)
+        end
+    end
+end
+
 @testset "hypot" begin
     @test hypot(0, 0) == 0.0
     @test hypot(3, 4) == 5.0
@@ -1518,21 +1541,34 @@ end
     @test (@allocated f44336()) == 0
 end
 
-# test constant-foldability
-for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt,
-           :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
-           :exp, :exp2, :exp10, :expm1
-           )
+@testset "constant-foldability of core math functions" begin
+    for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt, :fourthroot,
+            :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
+            :exp, :exp2, :exp10, :expm1
+            )
+        for T in (Float16, Float32, Float64)
+            @testset let f = getfield(@__MODULE__, fn), T = T
+                @test Core.Compiler.is_foldable(Base.infer_effects(f, (T,)))
+            end
+        end
+    end
+end;
+@testset "removability of core math functions" begin
     for T in (Float16, Float32, Float64)
-        f = getfield(@__MODULE__, fn)
-        eff = Base.infer_effects(f, (T,))
-        @test Core.Compiler.is_foldable(eff)
+        @testset let T = T
+            for f in (exp, exp2, exp10)
+                @testset let f = f
+                    @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+                end
+            end
+            @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
+            @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
+        end
     end
-end
-for T in (Float16, Float32, Float64)
-    for f in (exp, exp2, exp10)
-        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
-    end
-    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
+end;
+
+@testset "BigInt Rationals with special funcs" begin
+    @test sinpi(big(1//1)) == big(0.0)
+    @test tanpi(big(1//1)) == big(0.0)
+    @test cospi(big(1//1)) == big(-1.0)
 end

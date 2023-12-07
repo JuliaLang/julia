@@ -10,7 +10,7 @@ export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        acosd, acotd, acscd, asecd, asind, atand,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
-       cbrt, sqrt, significand,
+       cbrt, sqrt, fourthroot, significand,
        hypot, max, min, minmax, ldexp, frexp,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
        @evalpoly, evalpoly
@@ -45,6 +45,11 @@ end
 end
 
 # non-type specific math functions
+
+function two_mul(x::T, y::T) where {T<:Number}
+    xy = x*y
+    xy, fma(x, y, -xy)
+end
 
 @assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
     if Core.Intrinsics.have_fma(Float64)
@@ -716,6 +721,13 @@ julia> .√(1:4)
 sqrt(x)
 
 """
+    fourthroot(x)
+
+Return the fourth root of `x` by applying `sqrt` twice successively.
+"""
+fourthroot(x::Number) = sqrt(sqrt(x))
+
+"""
     hypot(x, y)
 
 Compute the hypotenuse ``\\sqrt{|x|^2+|y|^2}`` avoiding overflow and underflow.
@@ -967,27 +979,28 @@ end
 ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 """
-    exponent(x) -> Int
+    exponent(x::Real) -> Int
 
 Returns the largest integer `y` such that `2^y ≤ abs(x)`.
-For a normalized floating-point number `x`, this corresponds to the exponent of `x`.
+
+Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
+For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
+
+See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref).
 
 # Examples
 ```jldoctest
 julia> exponent(8)
 3
 
-julia> exponent(64//1)
-6
-
 julia> exponent(6.5)
 2
 
-julia> exponent(16.0)
-4
+julia> exponent(-1//4)
+-2
 
-julia> exponent(3.142e-4)
--12
+julia> exponent(floatmin(Float32)), exponent(nextfloat(0.0f0))
+(-126, -149)
 ```
 """
 function exponent(x::T) where T<:IEEEFloat
@@ -1330,7 +1343,8 @@ julia> rem2pi(7pi/4, RoundDown)
 """
 function rem2pi end
 function rem2pi(x::Float64, ::RoundingMode{:Nearest})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     abs(x) < pi && return x
 
@@ -1355,7 +1369,8 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
     end
 end
 function rem2pi(x::Float64, ::RoundingMode{:ToZero})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     ax = abs(x)
     ax <= 2*Float64(pi,RoundDown) && return x
@@ -1382,7 +1397,8 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     copysign(z,x)
 end
 function rem2pi(x::Float64, ::RoundingMode{:Down})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     if x < pi4o2_h
         if x >= 0
@@ -1413,7 +1429,8 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
     end
 end
 function rem2pi(x::Float64, ::RoundingMode{:Up})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     if x > -pi4o2_h
         if x <= 0
@@ -1537,7 +1554,7 @@ include("special/log.jl")
 # Float16 definitions
 
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:log,:log2,:log10,:sqrt,:log1p)
+             :atanh,:log,:log2,:log10,:sqrt,:fourthroot,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
@@ -1555,7 +1572,7 @@ sincos(a::Float16) = Float16.(sincos(Float32(a)))
 for f in (:sin, :cos, :tan, :asin, :atan, :acos,
           :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
           :exp, :exp2, :exp10, :expm1, :log, :log2, :log10, :log1p,
-          :exponent, :sqrt, :cbrt)
+          :exponent, :sqrt, :cbrt, :sinpi, :cospi, :sincospi, :tanpi)
     @eval function ($f)(x::Real)
         xf = float(x)
         x === xf && throw(MethodError($f, (x,)))
@@ -1573,5 +1590,6 @@ end
 exp2(x::AbstractFloat) = 2^x
 exp10(x::AbstractFloat) = 10^x
 clamp(::Missing, lo, hi) = missing
+fourthroot(::Missing) = missing
 
 end # module

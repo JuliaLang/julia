@@ -136,7 +136,7 @@ function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
-            M[i,j] = zero(M[i,j])
+            @inbounds M[i,j] = zero(M[i,j])
         end
     end
     M
@@ -198,8 +198,16 @@ function fillband!(A::AbstractMatrix{T}, x, l, u) where T
     return A
 end
 
-diagind(m::Integer, n::Integer, k::Integer=0) =
+diagind(m::Integer, n::Integer, k::Integer=0) = diagind(IndexLinear(), m, n, k)
+diagind(::IndexLinear, m::Integer, n::Integer, k::Integer=0) =
     k <= 0 ? range(1-k, step=m+1, length=min(m+k, n)) : range(k*m+1, step=m+1, length=min(m, n-k))
+
+function diagind(::IndexCartesian, m::Integer, n::Integer, k::Integer=0)
+    Cstart = CartesianIndex(1 + max(0,-k), 1 + max(0,k))
+    Cstep = CartesianIndex(1, 1)
+    length = max(0, k <= 0 ? min(m+k, n) : min(m, n-k))
+    StepRangeLen(Cstart, Cstep, length)
+end
 
 """
     diagind(M, k::Integer=0)
@@ -222,7 +230,7 @@ julia> diagind(A,-1)
 """
 function diagind(A::AbstractMatrix, k::Integer=0)
     require_one_based_indexing(A)
-    diagind(size(A,1), size(A,2), k)
+    diagind(IndexStyle(A), size(A,1), size(A,2), k)
 end
 
 """
@@ -490,7 +498,7 @@ end
 function schurpow(A::AbstractMatrix, p)
     if istriu(A)
         # Integer part
-        retmat = A ^ floor(p)
+        retmat = A ^ floor(Integer, p)
         # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrt(A)
@@ -501,7 +509,7 @@ function schurpow(A::AbstractMatrix, p)
     else
         S,Q,d = Schur{Complex}(schur(A))
         # Integer part
-        R = S ^ floor(p)
+        R = S ^ floor(Integer, p)
         # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrt(A)
@@ -875,7 +883,9 @@ julia> sqrt(A)
 sqrt(::AbstractMatrix)
 
 function sqrt(A::AbstractMatrix{T}) where {T<:Union{Real,Complex}}
-    if ishermitian(A)
+    if checksquare(A) == 0
+        return copy(A)
+    elseif ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
         return ishermitian(sqrtHermA) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
     elseif istriu(A)
@@ -905,16 +915,62 @@ end
 sqrt(A::AdjointAbsMat) = adjoint(sqrt(parent(A)))
 sqrt(A::TransposeAbsMat) = transpose(sqrt(parent(A)))
 
+"""
+    cbrt(A::AbstractMatrix{<:Real})
+
+Computes the real-valued cube root of a real-valued matrix `A`. If `T = cbrt(A)`, then
+we have `T*T*T ≈ A`, see example given below.
+
+If `A` is symmetric, i.e., of type `HermOrSym{<:Real}`, then ([`eigen`](@ref)) is used to
+find the cube root. Otherwise, a specialized version of the p-th root algorithm [^S03] is
+utilized, which exploits the real-valued Schur decomposition ([`schur`](@ref))
+to compute the cube root.
+
+[^S03]:
+
+    Matthew I. Smith, "A Schur Algorithm for Computing Matrix pth Roots",
+    SIAM Journal on Matrix Analysis and Applications, vol. 24, 2003, pp. 971–989.
+    [doi:10.1137/S0895479801392697](https://doi.org/10.1137/s0895479801392697)
+
+# Examples
+```jldoctest
+julia> A = [0.927524 -0.15857; -1.3677 -1.01172]
+2×2 Matrix{Float64}:
+  0.927524  -0.15857
+ -1.3677    -1.01172
+
+julia> T = cbrt(A)
+2×2 Matrix{Float64}:
+  0.910077  -0.151019
+ -1.30257   -0.936818
+
+julia> T*T*T ≈ A
+true
+```
+"""
+function cbrt(A::AbstractMatrix{<:Real})
+    if checksquare(A) == 0
+        return copy(A)
+    elseif issymmetric(A)
+        return cbrt(Symmetric(A, :U))
+    else
+        S = schur(A)
+        return S.Z * _cbrt_quasi_triu!(S.T) * S.Z'
+    end
+end
+
+# Cube roots of adjoint and transpose matrices
+cbrt(A::AdjointAbsMat) = adjoint(cbrt(parent(A)))
+cbrt(A::TransposeAbsMat) = transpose(cbrt(parent(A)))
+
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
-    S = typeof((oneunit(T)*zero(T) + oneunit(T)*zero(T))/oneunit(T))
-    AA = convert(AbstractArray{S}, A)
-    if istriu(AA)
-        Ai = triu!(parent(inv(UpperTriangular(AA))))
-    elseif istril(AA)
-        Ai = tril!(parent(inv(LowerTriangular(AA))))
+    if istriu(A)
+        Ai = triu!(parent(inv(UpperTriangular(A))))
+    elseif istril(A)
+        Ai = tril!(parent(inv(LowerTriangular(A))))
     else
-        Ai = inv!(lu(AA))
+        Ai = inv!(lu(A))
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai
@@ -1483,10 +1539,10 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
         return B
     end
     SVD         = svd(A)
-    tol         = max(rtol*maximum(SVD.S), atol)
+    tol2        = max(rtol*maximum(SVD.S), atol)
     Stype       = eltype(SVD.S)
     Sinv        = fill!(similar(A, Stype, length(SVD.S)), 0)
-    index       = SVD.S .> tol
+    index       = SVD.S .> tol2
     Sinv[index] .= pinv.(view(SVD.S, index))
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end

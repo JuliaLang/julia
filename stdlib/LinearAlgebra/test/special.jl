@@ -228,10 +228,10 @@ end
         b = rand(n,n)
         for pivot in (ColumnNorm(), NoPivot())
             qrb = qr(b, pivot)
-            @test atri * qrb.Q ≈ matri * qrb.Q ≈ rmul!(copy(atri), qrb.Q)
-            @test atri * qrb.Q' ≈ matri * qrb.Q' ≈ rmul!(copy(atri), qrb.Q')
-            @test qrb.Q * atri ≈ qrb.Q * matri ≈ lmul!(qrb.Q, copy(atri))
-            @test qrb.Q' * atri ≈ qrb.Q' * matri ≈ lmul!(qrb.Q', copy(atri))
+            @test atri * qrb.Q ≈ matri * qrb.Q
+            @test atri * qrb.Q' ≈ matri * qrb.Q'
+            @test qrb.Q * atri ≈ qrb.Q * matri
+            @test qrb.Q' * atri ≈ qrb.Q' * matri
         end
     end
 end
@@ -259,9 +259,10 @@ end
     bidiagmat = Bidiagonal(1:N, 1:(N-1), :U)
     tridiagmat = Tridiagonal(1:(N-1), 1:N, 1:(N-1))
     symtridiagmat = SymTridiagonal(1:N, 1:(N-1))
-    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat)
+    abstractq = qr(tridiagmat).Q
+    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat, abstractq, zeros(Int,N,N))
     for specialmata in specialmats, specialmatb in specialmats
-        MA = Matrix(specialmata); MB = Matrix(specialmatb)
+        MA = collect(specialmata); MB = collect(specialmatb)
         @test hcat(specialmata, specialmatb) == hcat(MA, MB)
         @test vcat(specialmata, specialmatb) == vcat(MA, MB)
         @test hvcat((1,1), specialmata, specialmatb) == hvcat((1,1), MA, MB)

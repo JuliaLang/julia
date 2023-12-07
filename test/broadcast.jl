@@ -774,14 +774,27 @@ let X = zeros(2, 3)
 end
 
 # issue #27988: inference of Broadcast.flatten
-using .Broadcast: Broadcasted
+using .Broadcast: Broadcasted, cat_nested
 let
     bc = Broadcasted(+, (Broadcasted(*, (1, 2)), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
-    @test @inferred(Broadcast.cat_nested(bc)) == (1,2,3,4,5)
+    @test @inferred(cat_nested(bc)) == (1,2,3,4,5)
     @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 62
     bc = Broadcasted(+, (Broadcasted(*, (1, Broadcasted(/, (2.0, 2.5)))), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
-    @test @inferred(Broadcast.cat_nested(bc)) == (1,2.0,2.5,3,4,5)
+    @test @inferred(cat_nested(bc)) == (1,2.0,2.5,3,4,5)
     @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 60.8
+    # 1 .* 1 .- 1 .* 1 .^2 .+ 1 .* 1 .+ 1 .^ 3
+    bc = Broadcasted(+, (Broadcasted(+, (Broadcasted(-, (Broadcasted(*, (1, 1)), Broadcasted(*, (1, Broadcasted(Base.literal_pow, (Ref(^), 1, Ref(Val(2)))))))), Broadcasted(*, (1, 1)))), Broadcasted(Base.literal_pow, (Base.RefValue{typeof(^)}(^), 1, Base.RefValue{Val{3}}(Val{3}())))))
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 2
+    # @. 1 + 1 * (1 + 1 + 1 + 1)
+    bc = Broadcasted(+, (1, Broadcasted(*, (1, Broadcasted(+, (1, 1, 1, 1))))))
+    @test @inferred(cat_nested(bc)) == (1, 1, 1, 1, 1, 1) # `cat_nested` failed to infer this
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == Broadcast.materialize(bc)
+    # @. 1 + (1 + 1) + 1 + (1 + 1) + 1 + (1 + 1) + 1
+    bc = Broadcasted(+, (1, Broadcasted(+, (1, 1)), 1, Broadcasted(+, (1, 1)), 1, Broadcasted(+, (1, 1)), 1))
+    @test @inferred(cat_nested(bc)) == (1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == Broadcast.materialize(bc)
+    bc = Broadcasted(Float32, (Broadcasted(+, (1, 1)),))
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == Broadcast.materialize(bc)
 end
 
 let
@@ -880,7 +893,7 @@ let
     @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{Broadcast.ArrayConflict}
     @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{<:Broadcast.AbstractArrayStyle{Any}}
 
-    @test @inferred(Base.IteratorSize(Broadcast.broadcasted((1,2,3),a1,zeros(3,3,3)))) === Base.HasShape{3}()
+    @test @inferred(Base.IteratorSize(Broadcast.broadcasted(+, (1,2,3), a1, zeros(3,3,3)))) === Base.HasShape{3}()
 
     # inference on nested
     bc = Base.broadcasted(+, AD1(randn(3)), AD1(randn(3)))
@@ -1129,7 +1142,26 @@ end
     @test CartesianIndex(1,2) .+ [CartesianIndex(3,4), CartesianIndex(5,6)] == [CartesianIndex(4, 6), CartesianIndex(6, 8)]
 end
 
+struct MyBroadcastStyleWithField <: Broadcast.BroadcastStyle
+    i::Int
+end
+# asymmetry intended
+Base.BroadcastStyle(a::MyBroadcastStyleWithField, b::MyBroadcastStyleWithField) = a
+
+@testset "issue #50937: styles that have fields" begin
+    @test Broadcast.result_style(MyBroadcastStyleWithField(1), MyBroadcastStyleWithField(1)) ==
+        MyBroadcastStyleWithField(1)
+    @test_throws ErrorException Broadcast.result_style(MyBroadcastStyleWithField(1),
+                                                       MyBroadcastStyleWithField(2))
+    dest = [0, 0]
+    dest .= Broadcast.Broadcasted(MyBroadcastStyleWithField(1), +, (1:2, 2:3))
+    @test dest == [3, 5]
+end
+
 # test that `Broadcast` definition is defined as total and eligible for concrete evaluation
 import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 @test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
     Core.Compiler.is_foldable
+
+f51129(v, x) = (1 .- (v ./ x) .^ 2)
+@test @inferred(f51129([13.0], 6.5)) == [-3.0]

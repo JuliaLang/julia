@@ -26,7 +26,8 @@
     <tr>
         <td>Code coverage</td>
         <td>
-            <a href="https://coveralls.io/r/JuliaLang/julia?branch=master"><img src='https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls'/></a> <a href="https://codecov.io/github/JuliaLang/julia?branch=master"><img src='https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov'/></a>
+            <a href='https://coveralls.io/github/JuliaLang/julia?branch=master'><img src='https://coveralls.io/repos/github/JuliaLang/julia/badge.svg?branch=master' alt='Coverage Status'/></a>
+            <a href="https://codecov.io/gh/JuliaLang/julia"><img src="https://codecov.io/gh/JuliaLang/julia/branch/master/graph/badge.svg?token=TckCRxc7HS"/></a>
         </td>
     </tr>
 </table>
@@ -47,6 +48,7 @@ and installing Julia, below.
 - **Documentation:** <https://docs.julialang.org>
 - **Packages:** <https://julialang.org/packages/>
 - **Discussion forum:** <https://discourse.julialang.org>
+- **Zulip:** <https://julialang.zulipchat.com/>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://julialang.org/slack/>)
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
@@ -92,7 +94,7 @@ and then use the command prompt to change into the resulting julia directory. By
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by running:
 
-    git checkout v1.8.4
+    git checkout v1.9.4
 
 To build the `julia` executable, run `make` from within the julia directory.
 

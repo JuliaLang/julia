@@ -184,8 +184,8 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 
 | Matrix type                   | `+` | `-` | `*` | `\` | Other functions with optimized methods                      |
 |:----------------------------- |:--- |:--- |:--- |:--- |:----------------------------------------------------------- |
-| [`Symmetric`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
-| [`Hermitian`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
+| [`Symmetric`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`cbrt`](@ref), [`exp`](@ref)                |
+| [`Hermitian`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`cbrt`](@ref), [`exp`](@ref)                |
 | [`UpperTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
 | [`UnitUpperTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
 | [`LowerTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
@@ -516,6 +516,7 @@ Base.:^(::AbstractMatrix, ::Number)
 Base.:^(::Number, ::AbstractMatrix)
 LinearAlgebra.log(::StridedMatrix)
 LinearAlgebra.sqrt(::StridedMatrix)
+LinearAlgebra.cbrt(::AbstractMatrix{<:Real})
 LinearAlgebra.cos(::StridedMatrix{<:Real})
 LinearAlgebra.sin(::StridedMatrix{<:Real})
 LinearAlgebra.sincos(::StridedMatrix{<:Real})
@@ -730,6 +731,9 @@ and define matrix-matrix operations.
 [Dongarra-1990]: https://dl.acm.org/doi/10.1145/77626.79170
 
 ```@docs
+LinearAlgebra.BLAS.gemmt!
+LinearAlgebra.BLAS.gemmt(::Any, ::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.gemmt(::Any, ::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.gemm!
 LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any)
@@ -797,6 +801,7 @@ LinearAlgebra.LAPACK.ggsvd!
 LinearAlgebra.LAPACK.ggsvd3!
 LinearAlgebra.LAPACK.geevx!
 LinearAlgebra.LAPACK.ggev!
+LinearAlgebra.LAPACK.ggev3!
 LinearAlgebra.LAPACK.gtsv!
 LinearAlgebra.LAPACK.gttrf!
 LinearAlgebra.LAPACK.gttrs!
@@ -837,6 +842,7 @@ LinearAlgebra.LAPACK.hetri!
 LinearAlgebra.LAPACK.hetrs!
 LinearAlgebra.LAPACK.syev!
 LinearAlgebra.LAPACK.syevr!
+LinearAlgebra.LAPACK.syevd!
 LinearAlgebra.LAPACK.sygvd!
 LinearAlgebra.LAPACK.bdsqr!
 LinearAlgebra.LAPACK.bdsdc!
@@ -845,6 +851,7 @@ LinearAlgebra.LAPACK.gehrd!
 LinearAlgebra.LAPACK.orghr!
 LinearAlgebra.LAPACK.gees!
 LinearAlgebra.LAPACK.gges!
+LinearAlgebra.LAPACK.gges3!
 LinearAlgebra.LAPACK.trexc!
 LinearAlgebra.LAPACK.trsen!
 LinearAlgebra.LAPACK.tgsen!

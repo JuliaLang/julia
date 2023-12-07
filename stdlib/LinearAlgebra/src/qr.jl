@@ -314,8 +314,7 @@ julia> a = [1. 2.; 3. 4.]
 
 julia> qr!(a)
 LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}, Matrix{Float64}}
-Q factor:
-2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
+Q factor: 2×2 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
 R factor:
 2×2 Matrix{Float64}:
  -3.16228  -4.42719
@@ -367,6 +366,11 @@ The individual components of the decomposition `F` can be retrieved via property
  - `F.p`: the permutation vector of the pivot ([`QRPivoted`](@ref) only)
  - `F.P`: the permutation matrix of the pivot ([`QRPivoted`](@ref) only)
 
+!!! note
+    Each reference to the upper triangular factor via `F.R` allocates a new array.
+    It is therefore advisable to cache that array, say, by `R = F.R` and continue working
+    with `R`.
+
 Iterating the decomposition produces the components `Q`, `R`, and if extant `p`.
 
 The following functions are available for the `QR` objects: [`inv`](@ref), [`size`](@ref),
@@ -379,7 +383,7 @@ Multiplication with respect to either full/square or non-full/square `Q` is allo
 and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix with
 [`Matrix`](@ref). This operation returns the "thin" Q factor, i.e., if `A` is `m`×`n` with `m>=n`, then
 `Matrix(F.Q)` yields an `m`×`n` matrix with orthonormal columns.  To retrieve the "full" Q factor, an
-`m`×`m` orthogonal matrix, use `F.Q*I`. If `m<=n`, then `Matrix(F.Q)` yields an `m`×`m`
+`m`×`m` orthogonal matrix, use `F.Q*I` or `collect(F.Q)`. If `m<=n`, then `Matrix(F.Q)` yields an `m`×`m`
 orthogonal matrix.
 
 The block size for QR decomposition can be specified by keyword argument
@@ -399,8 +403,7 @@ julia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]
 
 julia> F = qr(A)
 LinearAlgebra.QRCompactWY{Float64, Matrix{Float64}, Matrix{Float64}}
-Q factor:
-3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
+Q factor: 3×3 LinearAlgebra.QRCompactWYQ{Float64, Matrix{Float64}, Matrix{Float64}}
 R factor:
 2×2 Matrix{Float64}:
  -5.0  10.0
@@ -419,11 +422,14 @@ true
 function qr(A::AbstractMatrix{T}, arg...; kwargs...) where T
     require_one_based_indexing(A)
     AA = copy_similar(A, _qreltype(T))
-    return qr!(AA, arg...; kwargs...)
+    return _qr(AA, arg...; kwargs...)
 end
 # TODO: remove in Julia v2.0
 @deprecate qr(A::AbstractMatrix, ::Val{false}; kwargs...) qr(A, NoPivot(); kwargs...)
 @deprecate qr(A::AbstractMatrix, ::Val{true}; kwargs...)  qr(A, ColumnNorm(); kwargs...)
+
+# allow packages like SparseArrays.jl to hook into here and redirect to out-of-place `qr`
+_qr(A::AbstractMatrix, args...; kwargs...) = qr!(A, args...; kwargs...)
 
 qr(x::Number) = qr(fill(x,1,1))
 function qr(v::AbstractVector)
@@ -452,7 +458,7 @@ Array(F::QRPivoted) = Matrix(F)
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::Union{QR, QRCompactWY, QRPivoted})
     summary(io, F); println(io)
-    println(io, "Q factor:")
+    print(io, "Q factor: ")
     show(io, mime, F.Q)
     println(io, "\nR factor:")
     show(io, mime, F.R)
@@ -531,45 +537,89 @@ end
 
 # Julia implementation similar to xgelsy
 function ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractMatrix{T}, rcond::Real) where {T<:BlasFloat}
-    mA, nA = size(A.factors)
-    nr = min(mA,nA)
-    nrhs = size(B, 2)
-    if nr == 0
+    require_one_based_indexing(B)
+    m, n = size(A)
+
+    if m > size(B, 1) || n > size(B, 1)
+        throw(DimensionMismatch("B has leading dimension $(size(B, 1)) but needs at least $(max(m, n))"))
+    end
+
+    if length(A.factors) == 0 || length(B) == 0
         return B, 0
     end
-    ar = abs(A.factors[1])
-    if ar == 0
-        B[1:nA, :] .= 0
-        return B, 0
-    end
-    rnk = 1
-    xmin = T[1]
-    xmax = T[1]
-    tmin = tmax = ar
-    while rnk < nr
-        tmin, smin, cmin = LAPACK.laic1!(2, xmin, tmin, view(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
-        tmax, smax, cmax = LAPACK.laic1!(1, xmax, tmax, view(A.factors, 1:rnk, rnk + 1), A.factors[rnk + 1, rnk + 1])
-        tmax*rcond > tmin && break
-        push!(xmin, cmin)
-        push!(xmax, cmax)
-        for i = 1:rnk
-            xmin[i] *= smin
-            xmax[i] *= smax
+
+    @inbounds begin
+        smin = smax = abs(A.factors[1])
+
+        if smax == 0
+            return fill!(B, 0), 0
         end
-        rnk += 1
+
+        mn = min(m, n)
+
+        # allocate temporary work space
+        tmp  = Vector{T}(undef, 2mn)
+        wmin = view(tmp, 1:mn)
+        wmax = view(tmp, mn+1:2mn)
+
+        rnk = 1
+        wmin[1] = 1
+        wmax[1] = 1
+
+        while rnk < mn
+            i = rnk + 1
+
+            smin, s1, c1 = LAPACK.laic1!(2, view(wmin, 1:rnk), smin, view(A.factors, 1:rnk, i), A.factors[i,i])
+            smax, s2, c2 = LAPACK.laic1!(1, view(wmax, 1:rnk), smax, view(A.factors, 1:rnk, i), A.factors[i,i])
+
+            if smax*rcond > smin
+                break
+            end
+
+            for j in 1:rnk
+                wmin[j] *= s1
+                wmax[j] *= s2
+            end
+            wmin[i] = c1
+            wmax[i] = c2
+
+            rnk += 1
+        end
+
+        if rnk < n
+            C, τ = LAPACK.tzrzf!(A.factors[1:rnk, :])
+            work = vec(C)
+        else
+            C, τ = A.factors, A.τ
+            work = resize!(tmp, n)
+        end
+
+        lmul!(adjoint(A.Q), view(B, 1:m, :))
+        ldiv!(UpperTriangular(view(C, 1:rnk, 1:rnk)), view(B, 1:rnk, :))
+
+        if rnk < n
+            B[rnk+1:n,:] .= zero(T)
+            LAPACK.ormrz!('L', T <: Complex ? 'C' : 'T', C, τ, view(B, 1:n, :))
+        end
+
+        for j in axes(B, 2)
+            for i in 1:n
+                work[A.p[i]] = B[i,j]
+            end
+            for i in 1:n
+                B[i,j] = work[i]
+            end
+        end
     end
-    C, τ = LAPACK.tzrzf!(A.factors[1:rnk, :])
-    lmul!(A.Q', view(B, 1:mA, :))
-    ldiv!(UpperTriangular(view(C, :, 1:rnk)), view(B, 1:rnk, :))
-    B[rnk+1:end,:] .= zero(T)
-    LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, view(B, 1:nA, :))
-    B[A.p,:] = B[1:nA,:]
+
     return B, rnk
 end
+
 ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractVector{T}) where {T<:BlasFloat} =
     vec(ldiv!(A, reshape(B, length(B), 1)))
 ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractMatrix{T}) where {T<:BlasFloat} =
-    ldiv!(A, B, min(size(A)...)*eps(real(float(one(eltype(B))))))[1]
+    ldiv!(A, B, min(size(A)...)*eps(real(T)))[1]
+
 function _wide_qr_ldiv!(A::QR{T}, B::AbstractMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
@@ -601,14 +651,14 @@ function _wide_qr_ldiv!(A::QR{T}, B::AbstractMatrix{T}) where T
             B[m + 1:mB,1:nB] .= zero(T)
             for j = 1:nB
                 for k = 1:m
-                    vBj = B[k,j]
+                    vBj = B[k,j]'
                     for i = m + 1:n
-                        vBj += B[i,j]*R[k,i]'
+                        vBj += B[i,j]'*R[k,i]'
                     end
                     vBj *= τ[k]
-                    B[k,j] -= vBj
+                    B[k,j] -= vBj'
                     for i = m + 1:n
-                        B[i,j] -= R[k,i]*vBj
+                        B[i,j] -= R[k,i]'*vBj'
                     end
                 end
             end

@@ -27,7 +27,7 @@ export TestLogger, LogRecord
 using Random
 using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
-using Base: typesplit
+using Base: typesplit, remove_linenums!
 using Serialization: Serialization
 
 const DISPLAY_FAILED = (
@@ -47,23 +47,57 @@ const FAIL_FAST = Ref{Bool}(false)
 
 # Backtrace utility functions
 function ip_has_file_and_func(ip, file, funcs)
-    return any(fr -> (string(fr.file) == file && fr.func in funcs), StackTraces.lookup(ip))
+    return any(fr -> (in_file(fr, file) && fr.func in funcs), StackTraces.lookup(ip))
+end
+in_file(frame, file) = string(frame.file) == file
+
+function test_location(bt, file_ts, file_t)
+    if (isnothing(file_ts) || isnothing(file_t))
+        return macrocall_location(bt, something(file_ts, @__FILE__))
+    else
+        return test_callsite(bt, file_ts, file_t)
+    end
 end
 
-function scrub_backtrace(bt)
+function test_callsite(bt, file_ts, file_t)
+    # We avoid duplicate calls to `StackTraces.lookup`, as it is an expensive call.
+    # For that, we retrieve locations from lower to higher stack elements
+    # and only traverse parts of the backtrace which we haven't traversed before.
+    # The order will always be <internal functions> -> `@test` -> `@testset`.
+    internal = @something(macrocall_location(bt, @__FILE__), return nothing)
+    test = internal - 1 + @something(findfirst(ip -> any(frame -> in_file(frame, file_t), StackTraces.lookup(ip)), @view bt[internal:end]), return nothing)
+    testset = test - 1 + @something(macrocall_location(@view(bt[test:end]), file_ts), return nothing)
+
+    # If stacktrace locations differ, include frames until the `@testset` appears.
+    test != testset && return testset
+    # `@test` and `@testset` occurred at the same stacktrace location.
+    # This may happen if `@test` occurred directly in scope of the testset,
+    # or if `@test` occurred in a function that has been inlined in the testset.
+    frames = StackTraces.lookup(bt[testset])
+    outer_frame = findfirst(frame -> in_file(frame, file_ts) && frame.func == Symbol("macro expansion"), frames)
+    isnothing(outer_frame) && return nothing
+    # The `@test` call occurred directly in scope of a `@testset`.
+    # The __source__ from `@test` will be printed in the test message upon failure.
+    # There is no need to include more frames, but always include at least the internal macrocall location in the stacktrace.
+    in_file(frames[outer_frame], file_t) && return internal
+    # The `@test` call was inlined, so we still need to include the callsite.
+    return testset
+end
+
+macrocall_location(bt, file) = findfirst(ip -> ip_has_file_and_func(ip, file, (Symbol("macro expansion"),)), bt)
+
+function scrub_backtrace(bt, file_ts, file_t)
     do_test_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (:do_test, :do_test_throws)), bt)
     if do_test_ind !== nothing && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
-    name_ind = findfirst(ip -> ip_has_file_and_func(ip, @__FILE__, (Symbol("macro expansion"),)), bt)
-    if name_ind !== nothing && length(bt) != 0
-        bt = bt[1:name_ind]
-    end
+    stop_at = test_location(bt, file_ts, file_t)
+    !isnothing(stop_at) && !isempty(bt) && return bt[1:stop_at]
     return bt
 end
 
-function scrub_exc_stack(stack)
-    return Any[ (x[1], scrub_backtrace(x[2]::Vector{Union{Ptr{Nothing},Base.InterpreterIP}})) for x in stack ]
+function scrub_exc_stack(stack, file_ts, file_t)
+    return Any[ (x[1], scrub_backtrace(x[2]::Vector{Union{Ptr{Nothing},Base.InterpreterIP}}, file_ts, file_t)) for x in stack ]
 end
 
 # define most of the test infrastructure without type specialization
@@ -121,14 +155,16 @@ struct Fail <: Result
     context::Union{Nothing, String}
     source::LineNumberNode
     message_only::Bool
-    function Fail(test_type::Symbol, orig_expr, data, value, context, source::LineNumberNode, message_only::Bool)
+    backtrace::Union{Nothing, String}
+    function Fail(test_type::Symbol, orig_expr, data, value, context, source::LineNumberNode, message_only::Bool, backtrace=nothing)
         return new(test_type,
             string(orig_expr),
             data === nothing ? nothing : string(data),
             string(isa(data, Type) ? typeof(value) : value),
             context,
             source,
-            message_only)
+            message_only,
+            backtrace)
     end
 end
 
@@ -150,6 +186,11 @@ function Base.show(io::IO, t::Fail)
         else
             print(io, "\n    Expected: ", data)
             print(io, "\n      Thrown: ", value)
+            print(io, "\n")
+            if t.backtrace !== nothing
+                # Capture error message and indent to match
+                join(io, ("      " * line for line in split(t.backtrace, "\n")), "\n")
+            end
         end
     elseif t.test_type === :test_throws_nothing
         # An exception was expected, but no exception was thrown
@@ -185,7 +226,7 @@ struct Error <: Result
 
     function Error(test_type::Symbol, orig_expr, value, bt, source::LineNumberNode)
         if test_type === :test_error
-            bt = scrub_exc_stack(bt)
+            bt = scrub_exc_stack(bt, nothing, extract_file(source))
         end
         if test_type === :test_error || test_type === :nontest_error
             bt_str = try # try the latest world for this, since we might have eval'd new code for show
@@ -466,19 +507,20 @@ macro test(ex, kws...)
 
     # Build the test expression
     test_expr!("@test", ex, kws...)
-    orig_ex = Expr(:inert, ex)
 
     result = get_test_result(ex, __source__)
 
-    return quote
+    ex = Expr(:inert, ex)
+    result = quote
         if $(length(skip) > 0 && esc(skip[1]))
-            record(get_testset(), Broken(:skipped, $orig_ex))
+            record(get_testset(), Broken(:skipped, $ex))
         else
             let _do = $(length(broken) > 0 && esc(broken[1])) ? do_broken_test : do_test
-                _do($result, $orig_ex)
+                _do($result, $ex)
             end
         end
     end
+    return result
 end
 
 """
@@ -506,10 +548,10 @@ Test Broken
 """
 macro test_broken(ex, kws...)
     test_expr!("@test_broken", ex, kws...)
-    orig_ex = Expr(:inert, ex)
     result = get_test_result(ex, __source__)
     # code to call do_test with execution result and original expr
-    :(do_broken_test($result, $orig_ex))
+    ex = Expr(:inert, ex)
+    return :(do_broken_test($result, $ex))
 end
 
 """
@@ -536,9 +578,9 @@ Test Broken
 """
 macro test_skip(ex, kws...)
     test_expr!("@test_skip", ex, kws...)
-    orig_ex = Expr(:inert, ex)
-    testres = :(Broken(:skipped, $orig_ex))
-    :(record(get_testset(), $testres))
+    ex = Expr(:inert, ex)
+    testres = :(Broken(:skipped, $ex))
+    return :(record(get_testset(), $testres))
 end
 
 # An internal function, called by the code generated by the @test
@@ -626,7 +668,8 @@ function get_test_result(ex, source)
             $negate,
         ))
     else
-        testret = :(Returned($(esc(orig_ex)), nothing, $(QuoteNode(source))))
+        ex = Expr(:block, source, esc(orig_ex))
+        testret = :(Returned($ex, nothing, $(QuoteNode(source))))
     end
     result = quote
         try
@@ -636,7 +679,6 @@ function get_test_result(ex, source)
             Threw(_e, Base.current_exceptions(), $(QuoteNode(source)))
         end
     end
-    Base.remove_linenums!(result)
     result
 end
 
@@ -725,18 +767,18 @@ In the final example, instead of matching a single string it could alternatively
 """
 macro test_throws(extype, ex)
     orig_ex = Expr(:inert, ex)
+    ex = Expr(:block, __source__, esc(ex))
     result = quote
         try
-            Returned($(esc(ex)), nothing, $(QuoteNode(__source__)))
+            Returned($ex, nothing, $(QuoteNode(__source__)))
         catch _e
             if $(esc(extype)) != InterruptException && _e isa InterruptException
                 rethrow()
             end
-            Threw(_e, nothing, $(QuoteNode(__source__)))
+            Threw(_e, Base.current_exceptions(), $(QuoteNode(__source__)))
         end
     end
-    Base.remove_linenums!(result)
-    :(do_test_throws($result, $orig_ex, $(esc(extype))))
+    return :(do_test_throws($result, $orig_ex, $(esc(extype))))
 end
 
 const MACROEXPAND_LIKE = Symbol.(("@macroexpand", "@macroexpand1", "macroexpand"))
@@ -790,7 +832,22 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
         if success
             testres = Pass(:test_throws, orig_expr, extype, exc, result.source, message_only)
         else
-            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only)
+            if result.backtrace !== nothing
+                bt = scrub_exc_stack(result.backtrace, nothing, extract_file(result.source))
+                bt_str = try # try the latest world for this, since we might have eval'd new code for show
+                    Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
+                catch ex
+                    "#=ERROR showing exception stack=# " *
+                        try
+                            sprint(Base.showerror, ex, catch_backtrace(); context=stdout)
+                        catch
+                            "of type " * string(typeof(ex))
+                        end
+                end
+            else
+                bt_str = nothing
+            end
+            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only, bt_str)
         end
     else
         testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, nothing, result.source, false)
@@ -1013,8 +1070,9 @@ mutable struct DefaultTestSet <: AbstractTestSet
     time_start::Float64
     time_end::Union{Float64,Nothing}
     failfast::Bool
+    file::Union{String,Nothing}
 end
-function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing)
+function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming::Bool = true, failfast::Union{Nothing,Bool} = nothing, source = nothing)
     if isnothing(failfast)
         # pass failfast state into child testsets
         parent_ts = get_testset()
@@ -1024,8 +1082,11 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming:
             failfast = false
         end
     end
-    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast)
+    return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast, extract_file(source))
 end
+extract_file(source::LineNumberNode) = extract_file(source.file)
+extract_file(file::Symbol) = string(file)
+extract_file(::Nothing) = nothing
 
 struct FailFastError <: Exception end
 
@@ -1043,7 +1104,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TE
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
             if !isa(t, Error) # if not gets printed in the show method
-                Base.show_backtrace(stdout, scrub_backtrace(backtrace()))
+                Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)))
             end
             println()
         end
@@ -1312,11 +1373,11 @@ function _check_testset(testsettype, testsetname)
 end
 
 """
-    @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description"] foo()
-    @testset let v = (...) ... end
+    @testset [CustomTestSet] [options...] ["description"] begin test_ex end
+    @testset [CustomTestSet] [options...] ["description \$v"] for v in itr test_ex end
+    @testset [CustomTestSet] [options...] ["description \$v, \$w"] for v in itrv, w in itrw test_ex end
+    @testset [CustomTestSet] [options...] ["description"] test_func()
+    @testset let v = v, w = w; test_ex; end
 
 # With begin/end or function call
 
@@ -1341,7 +1402,7 @@ accepts three boolean options:
   This can also be set globally via the env var `JULIA_TEST_FAILFAST`.
 
 !!! compat "Julia 1.8"
-    `@testset foo()` requires at least Julia 1.8.
+    `@testset test_func()` requires at least Julia 1.8.
 
 !!! compat "Julia 1.9"
     `failfast` requires at least Julia 1.9.
@@ -1397,6 +1458,9 @@ parent test set (with the context object appended to any failing tests.)
 !!! compat "Julia 1.9"
     `@testset let` requires at least Julia 1.9.
 
+!!! compat "Julia 1.10"
+    Multiple `let` assignments are supported since Julia 1.10.
+
 ## Examples
 ```jldoctest
 julia> @testset let logi = log(im)
@@ -1406,6 +1470,17 @@ julia> @testset let logi = log(im)
 Test Failed at none:3
   Expression: !(iszero(real(logi)))
      Context: logi = 0.0 + 1.5707963267948966im
+
+ERROR: There was an error during testing
+
+julia> @testset let logi = log(im), op = !iszero
+           @test imag(logi) == π/2
+           @test op(real(logi))
+       end
+Test Failed at none:3
+  Expression: op(real(logi))
+     Context: logi = 0.0 + 1.5707963267948966im
+              op = !iszero
 
 ERROR: There was an error during testing
 ```
@@ -1438,7 +1513,7 @@ trigger_test_failure_break(@nospecialize(err)) =
 """
 Generate the code for an `@testset` with a `let` argument.
 """
-function testset_context(args, tests, source)
+function testset_context(args, ex, source)
     desc, testsettype, options = parse_testset_args(args[1:end-1])
     if desc !== nothing || testsettype !== nothing
         # Reserve this syntax if we ever want to allow this, but for now,
@@ -1446,22 +1521,38 @@ function testset_context(args, tests, source)
         error("@testset with a `let` argument cannot be customized")
     end
 
-    assgn = tests.args[1]
-    if !isa(assgn, Expr) || assgn.head !== :(=)
-        error("`@testset let` must have exactly one assignment")
-    end
-    assignee = assgn.args[1]
+    let_ex = ex.args[1]
 
-    tests.args[2] = quote
-        $push_testset($(ContextTestSet)($(QuoteNode(assignee)), $assignee; $options...))
+    if Meta.isexpr(let_ex, :(=))
+        contexts = Any[let_ex.args[1]]
+    elseif Meta.isexpr(let_ex, :block)
+        contexts = Any[]
+        for assign_ex in let_ex.args
+            if Meta.isexpr(assign_ex, :(=))
+                push!(contexts, assign_ex.args[1])
+            else
+                error("Malformed `let` expression is given")
+            end
+        end
+    else
+        error("Malformed `let` expression is given")
+    end
+    reverse!(contexts)
+
+    test_ex = ex.args[2]
+
+    ex.args[2] = quote
+        $(map(contexts) do context
+            :($push_testset($(ContextTestSet)($(QuoteNode(context)), $context; $options...)))
+        end...)
         try
-            $(tests.args[2])
+            $(test_ex)
         finally
-            $pop_testset()
+            $(map(_->:($pop_testset()), contexts)...)
         end
     end
 
-    return esc(tests)
+    return esc(ex)
 end
 
 """
@@ -1489,17 +1580,20 @@ function testset_beginend_call(args, tests, source)
     ex = quote
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         local ret
-        local ts = $(testsettype)($desc; $options...)
+        local ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
+            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options...)
+        else
+            $(testsettype)($desc; $options...)
+        end
         push_testset(ts)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
-        local RNG = default_rng()
-        local oldrng = copy(RNG)
-        local oldseed = Random.GLOBAL_SEED
+        local default_rng_orig = copy(default_rng())
+        local tls_seed_orig = copy(Random.get_tls_seed())
         try
-            # RNG is re-seeded with its own seed to ease reproduce a failed test
-            Random.seed!(Random.GLOBAL_SEED)
+            # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
+            copy!(Random.default_rng(), tls_seed_orig)
             let
                 $(esc(tests))
             end
@@ -1514,8 +1608,8 @@ function testset_beginend_call(args, tests, source)
                 record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
             end
         finally
-            copy!(RNG, oldrng)
-            Random.set_global_seed!(oldseed)
+            copy!(default_rng(), default_rng_orig)
+            copy!(Random.get_tls_seed(), tls_seed_orig)
             pop_testset()
             ret = finish(ts)
         end
@@ -1580,12 +1674,13 @@ function testset_forloop(args, testloop, source)
             finish_errored = true
             push!(arr, finish(ts))
             finish_errored = false
-
-            # it's 1000 times faster to copy from tmprng rather than calling Random.seed!
-            copy!(RNG, tmprng)
-
+            copy!(default_rng(), tls_seed_orig)
         end
-        ts = $(testsettype)($desc; $options...)
+        ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
+            $(testsettype)($desc; source=$(QuoteNode(source.file)), $options...)
+        else
+            $(testsettype)($desc; $options...)
+        end
         push_testset(ts)
         first_iteration = false
         try
@@ -1605,11 +1700,9 @@ function testset_forloop(args, testloop, source)
         local first_iteration = true
         local ts
         local finish_errored = false
-        local RNG = default_rng()
-        local oldrng = copy(RNG)
-        local oldseed = Random.GLOBAL_SEED
-        Random.seed!(Random.GLOBAL_SEED)
-        local tmprng = copy(RNG)
+        local default_rng_orig = copy(default_rng())
+        local tls_seed_orig = copy(Random.get_tls_seed())
+        copy!(Random.default_rng(), tls_seed_orig)
         try
             let
                 $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
@@ -1620,8 +1713,8 @@ function testset_forloop(args, testloop, source)
                 pop_testset()
                 push!(arr, finish(ts))
             end
-            copy!(RNG, oldrng)
-            Random.set_global_seed!(oldseed)
+            copy!(default_rng(), default_rng_orig)
+            copy!(Random.get_tls_seed(), tls_seed_orig)
         end
         arr
     end
@@ -1721,7 +1814,7 @@ matches the inferred type modulo `AllowedType`, or when the return type is a sub
 `AllowedType`. This is useful when testing type stability of functions returning a small
 union such as `Union{Nothing, T}` or `Union{Missing, T}`.
 
-```jldoctest; setup = :(using InteractiveUtils), filter = r"begin\\n(.|\\n)*end"
+```jldoctest; setup = :(using InteractiveUtils; using Base: >), filter = r"begin\\n(.|\\n)*end"
 julia> f(a) = a > 1 ? 1 : 1.0
 f (generic function with 1 method)
 
@@ -1782,10 +1875,9 @@ function _inferred(ex, mod, allow = :(Union{}))
         ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
             farg, ex.args[2:end]...)
     end
-    Base.remove_linenums!(let ex = ex;
+    result = let ex = ex
         quote
-            let
-                allow = $(esc(allow))
+            let allow = $(esc(allow))
                 allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
                 $(if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
                     # Has keywords
@@ -1809,7 +1901,8 @@ function _inferred(ex, mod, allow = :(Union{}))
                 result
             end
         end
-    end)
+    end
+    return remove_linenums!(result)
 end
 
 function is_in_mods(m::Module, recursive::Bool, mods)
@@ -2031,6 +2124,8 @@ for G in (GenericSet, GenericDict)
 end
 
 Base.get(s::GenericDict, x, y) = get(s.s, x, y)
+Base.pop!(s::GenericDict, k) = pop!(s.s, k)
+Base.setindex!(s::GenericDict, v, k) = setindex!(s.s, v, k)
 
 """
 The `GenericArray` can be used to test generic array APIs that program to
@@ -2096,5 +2191,6 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
 end
 
 include("logging.jl")
+include("precompile.jl")
 
 end # module
