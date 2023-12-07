@@ -2179,9 +2179,6 @@ end
 
 # concatenations of (in)homogeneous combinations of vectors, horizontal and vertical
 
-vcat() = Vector{Any}()
-hcat() = Vector{Any}()
-
 function hcat(V::Vector{T}...) where T
     height = length(V[1])
     for j = 2:length(V)
@@ -2189,7 +2186,8 @@ function hcat(V::Vector{T}...) where T
             throw(DimensionMismatch("vectors must have same lengths"))
         end
     end
-    return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
+    T′ = @isdefined(T) ? T : Any # edge case: empty input
+    return [ V[j][i]::T′ for i=1:length(V[1]), j=1:length(V) ]
 end
 hcat(A::Vector...) = cat(A...; dims=Val(2)) # more special than SparseArrays's hcat
 
@@ -2198,7 +2196,8 @@ function vcat(arrays::Vector{T}...) where T
     for a in arrays
         n += length(a)
     end
-    arr = Vector{T}(undef, n)
+    T′ = @isdefined(T) ? T : Any # edge case: empty input
+    arr = Vector{T′}(undef, n)
     nd = 1
     for a in arrays
         na = length(a)

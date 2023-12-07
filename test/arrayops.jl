@@ -3170,3 +3170,11 @@ end
         @test c + zero(c) == c
     end
 end
+
+# https://github.com/aviatesk/JET.jl/issues/413
+function jet413(idx)
+    N = 4
+    indices_flat = [idx...;]
+    Int[i for i=1:N if i ∉ indices_flat]
+end
+@inferred jet413([[1,2], [3]])
