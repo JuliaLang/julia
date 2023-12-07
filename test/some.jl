@@ -59,6 +59,7 @@
 # Don't propagate wrapped missings
 @test !=(Some(1), Some(missing))
 @test !=(Some(missing), Some(1))
+@test ==(Some(missing), Some(missing))
 
 # Make sure to still propagate non-wrapped Missing
 @test ==(Some(1), missing) isa Missing
@@ -68,6 +69,9 @@
 @test !isequal(Some(missing), Some([1]))
 @test !isequal(Some(1), Some(missing))
 @test isequal(Some(missing), Some(missing))
+
+@test !isequal(missing, Some(missing))
+@test !isequal(Some(missing), missing)
 
 # hashing implications
 @test hash(Some(0x1)) != hash(0x1)
