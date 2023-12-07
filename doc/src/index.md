@@ -115,14 +115,25 @@ Julia aims to create an unprecedented combination of ease-of-use, power, and eff
 language. In addition to the above, some advantages of Julia over comparable systems include:
 
   * Free and open source ([MIT licensed](https://github.com/JuliaLang/julia/blob/master/LICENSE.md))
+  * Reliable built-in package manager that automatically installs compatible dependencies
+  * Talented, active, and welcoming community of developers
   * User-defined types are as fast and compact as built-ins
   * No need to vectorize code for performance; devectorized code is fast
   * Designed for parallelism and distributed computation
   * Lightweight "green" threading ([coroutines](https://en.wikipedia.org/wiki/Coroutine))
   * Unobtrusive yet powerful type system
+  * Reusability and composability—it is often possible to pass objects created
+    by one package to generic functions defined by a different author
   * Elegant and extensible conversions and promotions for numeric and other types
   * Efficient support for [Unicode](https://en.wikipedia.org/wiki/Unicode), including but not limited
     to [UTF-8](https://en.wikipedia.org/wiki/UTF-8)
   * Call C functions directly (no wrappers or special APIs needed)
   * Powerful shell-like capabilities for managing other processes
   * Lisp-like macros and other metaprogramming facilities
+
+### [Disadvantages of Julia](@id man-disadvantages-of-julia)
+
+  * It is difficult to generate self-contained binaries or libraries such as .exe, .dll, .so,
+    and impossible to generate small self-contained binaries with very fast runtimes
+  * Slow compile times - for example, it takes too long to generate the first plot
+  * When using deeply nested types or functions, error messages can be confusing and too verbose
