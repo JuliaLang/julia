@@ -7,7 +7,7 @@ function strip_gensym(sym)
     if sym === :var"#self#" || sym === :var"#unused#"
         return empty_sym
     end
-    return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$" => s"\1"))
+    return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$"sa => s"\1"))
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
@@ -80,7 +80,7 @@ end
 function kwarg_decl(m::Method, kwtype = nothing)
     if m.sig !== Tuple # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
-        sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
+        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
@@ -93,6 +93,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
                 push!(kws, kws[i])
                 deleteat!(kws, i)
             end
+            isempty(kws) && push!(kws,  :var"...")
             return kws
         end
     end
@@ -193,6 +194,9 @@ function functionloc(@nospecialize(f))
 end
 
 function sym_to_string(sym)
+    if sym === :var"..."
+        return "..."
+    end
     s = String(sym)
     if endswith(s, "...")
         return string(sprint(show_sym, Symbol(s[1:end-3])), "...")
@@ -361,7 +365,7 @@ function url(m::Method)
     (m.file === :null || m.file === :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || occursin(r"In\[[0-9]+\]", file) && return ""
+    line <= 0 || occursin(r"In\[[0-9]+\]"a, file) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
     libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
     if inbase(M)

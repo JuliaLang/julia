@@ -28,7 +28,7 @@ module FastMath
 export @fastmath
 
 import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
-    add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
+    add_float_fast, sub_float_fast, mul_float_fast, div_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
 const fast_op =
@@ -112,19 +112,10 @@ function make_fastmath(expr::Expr)
         if isa(var, Symbol)
             # simple assignment
             expr = :($var = $op($var, $rhs))
-        elseif isa(var, Expr) && var.head === :ref
-            var = var::Expr
-            # array reference
-            arr = var.args[1]
-            inds = var.args[2:end]
-            arrvar = gensym()
-            indvars = Any[gensym() for _ in inds]
-            expr = quote
-                $(Expr(:(=), arrvar, arr))
-                $(Expr(:(=), Base.exprarray(:tuple, indvars), Base.exprarray(:tuple, inds)))
-                $arrvar[$(indvars...)] = $op($arrvar[$(indvars...)], $rhs)
-            end
         end
+        # It is hard to optimize array[i += 1] += 1
+        # and array[end] += 1 without bugs. (#47241)
+        # We settle for not optimizing the op= call.
     end
     Base.exprarray(make_fastmath(expr.head), Base.mapany(make_fastmath, expr.args))
 end
@@ -173,7 +164,6 @@ add_fast(x::T, y::T) where {T<:FloatTypes} = add_float_fast(x, y)
 sub_fast(x::T, y::T) where {T<:FloatTypes} = sub_float_fast(x, y)
 mul_fast(x::T, y::T) where {T<:FloatTypes} = mul_float_fast(x, y)
 div_fast(x::T, y::T) where {T<:FloatTypes} = div_float_fast(x, y)
-rem_fast(x::T, y::T) where {T<:FloatTypes} = rem_float_fast(x, y)
 
 add_fast(x::T, y::T, zs::T...) where {T<:FloatTypes} =
     add_fast(add_fast(x, y), zs...)
@@ -303,6 +293,11 @@ end
 sincos_fast(v::AbstractFloat) = (sin_fast(v), cos_fast(v))
 sincos_fast(v::Real) = sincos_fast(float(v)::AbstractFloat)
 sincos_fast(v) = (sin_fast(v), cos_fast(v))
+
+
+function rem_fast(x::T, y::T) where {T<:FloatTypes}
+    return @fastmath copysign(Base.rem_internal(abs(x), abs(y)), x)
+end
 
 @fastmath begin
     hypot_fast(x::T, y::T) where {T<:FloatTypes} = sqrt(x*x + y*y)

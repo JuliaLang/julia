@@ -14,7 +14,6 @@
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Dominators.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -162,13 +161,17 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 void GCInvariantVerifier::visitCallInst(CallInst &CI) {
     Function *Callee = CI.getCalledFunction();
     if (Callee && (Callee->getName() == "julia.call" ||
-                   Callee->getName() == "julia.call2")) {
-        bool First = true;
+                   Callee->getName() == "julia.call2" ||
+                   Callee->getName() == "julia.call3")) {
+        unsigned Fixed = CI.getFunctionType()->getNumParams();
         for (Value *Arg : CI.args()) {
+            if (Fixed) {
+                Fixed--;
+                continue;
+            }
             Type *Ty = Arg->getType();
-            Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == (First ? 0 : AddressSpace::Tracked),
+            Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == AddressSpace::Tracked,
                 "Invalid derived pointer in jlcall", &CI);
-            First = false;
         }
     }
 }
@@ -192,37 +195,4 @@ PreservedAnalyses GCInvariantVerifierPass::run(Function &F, FunctionAnalysisMana
         abort();
     }
     return PreservedAnalyses::all();
-}
-
-struct GCInvariantVerifierLegacy : public FunctionPass {
-    static char ID;
-    bool Strong;
-    GCInvariantVerifierLegacy(bool Strong=false) : FunctionPass(ID), Strong(Strong) {}
-
-public:
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
-        FunctionPass::getAnalysisUsage(AU);
-        AU.setPreservesAll();
-    }
-
-    bool runOnFunction(Function &F) override {
-        GCInvariantVerifier GIV(Strong);
-        GIV.visit(F);
-        if (GIV.Broken) {
-            abort();
-        }
-        return false;
-    }
-};
-
-char GCInvariantVerifierLegacy::ID = 0;
-static RegisterPass<GCInvariantVerifierLegacy> X("GCInvariantVerifier", "GC Invariant Verification Pass", false, false);
-
-Pass *createGCInvariantVerifierPass(bool Strong) {
-    return new GCInvariantVerifierLegacy(Strong);
-}
-
-extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_impl(LLVMPassManagerRef PM, LLVMBool Strong)
-{
-    unwrap(PM)->add(createGCInvariantVerifierPass(Strong));
 }

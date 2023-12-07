@@ -78,8 +78,10 @@
 // OBJPROFILE counts objects by type
 // #define OBJPROFILE
 
-// Automatic Instrumenting Profiler
-//#define ENABLE_TIMINGS
+// pool allocator configuration options
+
+// GC_SMALL_PAGE allocates objects in 4k pages
+// #define GC_SMALL_PAGE
 
 
 // method dispatch profiling --------------------------------------------------
@@ -133,6 +135,9 @@
 
 // threadpools specification
 #define THREADPOOLS_NAME                "JULIA_THREADPOOLS"
+
+// GC threads
+#define NUM_GC_THREADS_NAME             "JULIA_NUM_GC_THREADS"
 
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"

@@ -208,18 +208,43 @@ function mmap(io::IO,
     mmaplen = (offset - offset_page) + len
 
     file_desc = gethandle(io)
+    szfile = convert(Csize_t, len + offset)
+    requestedSizeLarger = false
+    if !(io isa Mmap.Anonymous)
+        @static if !Sys.isapple()
+            requestedSizeLarger = szfile > filesize(io)
+        end
+    end
     # platform-specific mmapping
     @static if Sys.isunix()
         prot, flags, iswrite = settings(file_desc, shared)
-        iswrite && grow && grow!(io, offset, len)
+        if requestedSizeLarger
+            if iswrite
+                if grow
+                    grow!(io, offset, len)
+                else
+                    throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
+                end
+            else
+                throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+            end
+        end
+        @static if Sys.isapple()
+            iswrite && grow && grow!(io, offset, len)
+        end
         # mmap the file
         ptr = ccall(:jl_mmap, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t, Cint, Cint, RawFD, Int64),
             C_NULL, mmaplen, prot, flags, file_desc, offset_page)
         systemerror("memory mapping failed", reinterpret(Int, ptr) == -1)
     else
         name, readonly, create = settings(io)
-        szfile = convert(Csize_t, len + offset)
-        readonly && szfile > filesize(io) && throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+        if requestedSizeLarger
+            if readonly
+                throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
+            elseif !grow
+                throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
+            end
+        end
         handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                                 file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
@@ -342,8 +367,9 @@ Forces synchronization between the in-memory version of a memory-mapped `Array` 
 [`BitArray`](@ref) and the on-disk version.
 """
 function sync!(m::Array, flags::Integer=MS_SYNC)
-    offset = rem(UInt(pointer(m)), PAGESIZE)
-    ptr = pointer(m) - offset
+    ptr = pointer(m)
+    offset = rem(UInt(ptr), PAGESIZE)
+    ptr = ptr - offset
     mmaplen = sizeof(m) + offset
     GC.@preserve m @static if Sys.isunix()
         systemerror("msync",
@@ -404,8 +430,9 @@ Advises the kernel on the intended usage of the memory-mapped `array`, with the 
 `flag` being one of the available `MADV_*` constants.
 """
 function madvise!(m::Array, flag::Integer=MADV_NORMAL)
-    offset = rem(UInt(pointer(m)), PAGESIZE)
-    ptr = pointer(m) - offset
+    ptr = pointer(m)
+    offset = rem(UInt(ptr), PAGESIZE)
+    ptr = ptr - offset
     mmaplen = sizeof(m) + offset
     GC.@preserve m begin
         systemerror("madvise",

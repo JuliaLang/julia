@@ -6,8 +6,8 @@ In Julia compiler, "type inference" refers to the process of deducing the types 
 values from the types of input values. Julia's approach to inference has been described in
 the blog posts below:
 1. [Shows a simplified implementation of the data-flow analysis algorithm, that Julia's type inference routine is based on.](https://aviatesk.github.io/posts/data-flow-problem/)
-2. [Gives a high level view of inference with a focus on its inter-procedural convergence guarantee.](https://juliacomputing.com/blog/2016/04/inference-convergence/)
-3. [Explains a refinement on the algorithm introduced in 2.](https://juliacomputing.com/blog/2017/05/inference-converage2/)
+2. [Gives a high level view of inference with a focus on its inter-procedural convergence guarantee.](https://info.juliahub.com/inference-convergence-algorithm-in-julia)
+3. [Explains a refinement on the algorithm introduced in 2.](https://info.juliahub.com/inference-convergence-algorithm-in-julia-revisited)
 
 ## Debugging compiler.jl
 
@@ -36,9 +36,9 @@ m = first(mths)
 # Create variables needed to call `typeinf_code`
 interp = Core.Compiler.NativeInterpreter()
 sparams = Core.svec()      # this particular method doesn't have type-parameters
-optimize = true            # run all inference optimizations
+run_optimizer = true       # run all inference optimizations
 types = Tuple{typeof(convert), atypes.parameters...} # Tuple{typeof(convert), Type{Int}, UInt}
-Core.Compiler.typeinf_code(interp, m, types, sparams, optimize)
+Core.Compiler.typeinf_code(interp, m, types, sparams, run_optimizer)
 ```
 
 If your debugging adventures require a `MethodInstance`, you can look it up by
@@ -96,18 +96,20 @@ Each statement gets analyzed for its total cost in a function called
 as follows:
 ```jldoctest; filter=r"tuple.jl:\d+"
 julia> Base.print_statement_costs(stdout, map, (typeof(sqrt), Tuple{Int},)) # map(sqrt, (2,))
-map(f, t::Tuple{Any}) @ Base tuple.jl:273
-  0 1 ─ %1  = Base.getfield(_3, 1, true)::Int64
-  1 │   %2  = Base.sitofp(Float64, %1)::Float64
-  2 │   %3  = Base.lt_float(%2, 0.0)::Bool
-  0 └──       goto #3 if not %3
-  0 2 ─       invoke Base.Math.throw_complex_domainerror(:sqrt::Symbol, %2::Float64)::Union{}
+map(f, t::Tuple{Any}) @ Base tuple.jl:281
+  0 1 ─ %1  = $(Expr(:boundscheck, true))::Bool
+  0 │   %2  = Base.getfield(_3, 1, %1)::Int64
+  1 │   %3  = Base.sitofp(Float64, %2)::Float64
+  0 │   %4  = Base.lt_float(%3, 0.0)::Bool
+  0 └──       goto #3 if not %4
+  0 2 ─       invoke Base.Math.throw_complex_domainerror(:sqrt::Symbol, %3::Float64)::Union{}
   0 └──       unreachable
- 20 3 ─ %7  = Base.Math.sqrt_llvm(%2)::Float64
+ 20 3 ─ %8  = Base.Math.sqrt_llvm(%3)::Float64
   0 └──       goto #4
   0 4 ─       goto #5
-  0 5 ─ %10 = Core.tuple(%7)::Tuple{Float64}
-  0 └──       return %10
+  0 5 ─ %11 = Core.tuple(%8)::Tuple{Float64}
+  0 └──       return %11
+
 ```
 
 The line costs are in the left column. This includes the consequences of inlining and other forms of optimization.

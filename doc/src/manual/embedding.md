@@ -6,7 +6,8 @@ calling Julia functions from C code. This can be used to integrate Julia code in
 C/C++ project, without the need to rewrite everything in C/C++. Julia has a C API to make
 this possible. As almost all programming languages have some way to call C functions, the
 Julia C API can also be used to build further language bridges (e.g. calling Julia from
-Python or C#).
+Python, Rust or C#). Even though Rust and C++ can use the C embedding API directly, both
+have packages helping with it, for C++ [Jluna](https://github.com/Clemapfel/jluna) is useful.
 
 ## High-Level Embedding
 
@@ -431,14 +432,14 @@ object has just been allocated and no garbage collection has run since then. Not
 `jl_...` functions can sometimes invoke garbage collection.
 
 The write barrier is also necessary for arrays of pointers when updating their data directly.
-For example:
+Calling `jl_array_ptr_set` is usually much preferred. But direct updates can be done. For example:
 
 ```c
 jl_array_t *some_array = ...; // e.g. a Vector{Any}
-void **data = (void**)jl_array_data(some_array);
+void **data = jl_array_data(some_array, void*);
 jl_value_t *some_value = ...;
 data[0] = some_value;
-jl_gc_wb(some_array, some_value);
+jl_gc_wb(jl_array_owner(some_array), some_value);
 ```
 
 ### Controlling the Garbage Collector
@@ -486,13 +487,13 @@ referenced.
 In order to access the data of `x`, we can use `jl_array_data`:
 
 ```c
-double *xData = (double*)jl_array_data(x);
+double *xData = jl_array_data(x, double);
 ```
 
 Now we can fill the array:
 
 ```c
-for(size_t i=0; i<jl_array_len(x); i++)
+for (size_t i = 0; i < jl_array_nrows(x); i++)
     xData[i] = i;
 ```
 
@@ -526,10 +527,11 @@ that creates a 2D array and accesses its properties:
 ```c
 // Create 2D array of float64 type
 jl_value_t *array_type = jl_apply_array_type((jl_value_t*)jl_float64_type, 2);
-jl_array_t *x  = jl_alloc_array_2d(array_type, 10, 5);
+int dims[] = {10,5};
+jl_array_t *x  = jl_alloc_array_nd(array_type, dims, 2);
 
 // Get array pointer
-double *p = (double*)jl_array_data(x);
+double *p = jl_array_data(x, double);
 // Get number of dimensions
 int ndims = jl_array_ndims(x);
 // Get the size of the i-th dim

@@ -20,22 +20,39 @@ export
 
 if Sys.isunix()
     const path_separator    = "/"
-    const path_separator_re = r"/+"
-    const path_directory_re = r"(?:^|/)\.{0,2}$"
-    const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
-    const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
+    const path_separator_re = r"/+"sa
+    const path_directory_re = r"(?:^|/)\.{0,2}$"sa
+    const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"sa
+    const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"sa
 
     splitdrive(path::String) = ("",path)
 elseif Sys.iswindows()
     const path_separator    = "\\"
-    const path_separator_re = r"[/\\]+"
-    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"
-    const path_directory_re = r"(?:^|[/\\])\.{0,2}$"
-    const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"
-    const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
+    const path_separator_re = r"[/\\]+"sa
+    const path_absolute_re  = r"^(?:[A-Za-z]+:)?[/\\]"sa
+    const path_directory_re = r"(?:^|[/\\])\.{0,2}$"sa
+    const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"sa
+    const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"sa
+
+    const splitdrive_re = let
+        # Slash in either direction.
+        S = raw"[\\/]"
+        # Not a slash in either direction.
+        N = raw"[^\\/]"
+        # Drive letter, e.g. `C:`
+        drive = "$(N)+:"
+        # UNC path, e.g. `\\server\share`
+        unc = "$(S)$(S)$(N)+$(S)$(N)+"
+        # Long drive letter, e.g. `\\?\C:`
+        long_drive = "$(S)$(S)\\?$(S)$(drive)"
+        # Long UNC path, e.g. `\\?\UNC\server\share`
+        long_unc = "$(S)$(S)\\?$(S)UNC$(S)$(N)+$(S)$(N)+"
+        # Need to match the long patterns first so they get priority.
+        Regex("^($long_unc|$long_drive|$unc|$drive|)(.*)\$", "sa")
+    end
 
     function splitdrive(path::String)
-        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)::AbstractMatch
+        m = match(splitdrive_re, path)::AbstractMatch
         String(something(m.captures[1])), String(something(m.captures[2]))
     end
 else

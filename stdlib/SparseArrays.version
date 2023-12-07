@@ -1,4 +1,4 @@
 SPARSEARRAYS_BRANCH = main
-SPARSEARRAYS_SHA1 = 4eaa4582569a76c3199849d8194582d948b7a70f
+SPARSEARRAYS_SHA1 = f154de2b6801ec8d5afaf58b73b830c8e71013c3
 SPARSEARRAYS_GIT_URL := https://github.com/JuliaSparse/SparseArrays.jl.git
 SPARSEARRAYS_TAR_URL = https://api.github.com/repos/JuliaSparse/SparseArrays.jl/tarball/$1

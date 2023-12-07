@@ -339,7 +339,6 @@ end
     @test Printf.@sprintf("1%%2%%3") == "1%2%3"
     @test Printf.@sprintf("GAP[%%]") == "GAP[%]"
     @test Printf.@sprintf("hey there") == "hey there"
-    @test_throws Printf.InvalidFormatStringError Printf.Format("")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%+")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%.")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%.0")
@@ -488,6 +487,10 @@ end
     @test @sprintf("%d", 3//1) == "3"
     @test @sprintf("%d", Inf) == "Inf"
     @test @sprintf(" %d", NaN) == " NaN"
+
+    # 50011
+    @test Printf.@sprintf("") == ""
+    @test Printf.format(Printf.Format("")) == ""
 end
 
 @testset "integers" begin

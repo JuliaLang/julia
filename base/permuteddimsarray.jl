@@ -49,10 +49,8 @@ Base.parent(A::PermutedDimsArray) = A.parent
 Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(size(parent(A)), perm)
 Base.axes(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(axes(parent(A)), perm)
 Base.has_offset_axes(A::PermutedDimsArray) = Base.has_offset_axes(A.parent)
-
 Base.similar(A::PermutedDimsArray, T::Type, dims::Base.Dims) = similar(parent(A), T, dims)
-
-Base.unsafe_convert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))
+Base.cconvert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.cconvert(Ptr{T}, parent(A))
 
 # It's OK to return a pointer to the first element, and indeed quite
 # useful for wrapping C routines that require a different storage
@@ -76,6 +74,12 @@ end
     @boundscheck checkbounds(A, I...)
     @inbounds setindex!(A.parent, val, genperm(I, iperm)...)
     val
+end
+
+function Base.isassigned(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
+    @boundscheck checkbounds(Bool, A, I...) || return false
+    @inbounds x = isassigned(A.parent, genperm(I, iperm)...)
+    x
 end
 
 @inline genperm(I::NTuple{N,Any}, perm::Dims{N}) where {N} = ntuple(d -> I[perm[d]], Val(N))

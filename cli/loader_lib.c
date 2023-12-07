@@ -227,13 +227,13 @@ static void read_wrapper(int fd, char **ret, size_t *ret_len)
     size_t have_read = 0;
     while (1) {
         ssize_t n = read(fd, buf + have_read, len - have_read);
-        have_read += n;
         if (n == 0) break;
         if (n == -1 && errno != EINTR) {
             perror("(julia) libstdcxxprobe read");
             exit(1);
         }
         if (n == -1 && errno == EINTR) continue;
+        have_read += n;
         if (have_read == len) {
             buf = (char *)realloc(buf, 1 + (len *= 2));
             if (!buf) {
@@ -281,6 +281,7 @@ static char *libstdcxxprobe(void)
         // See if the version is compatible
         char *dlerr = dlerror(); // clear out dlerror
         void *sym = dlsym(handle, GLIBCXX_LEAST_VERSION_SYMBOL);
+        (void)sym;
         dlerr = dlerror();
         if (dlerr) {
             // We can't use the library that was found, so don't write anything.
@@ -345,6 +346,8 @@ static char *libstdcxxprobe(void)
             free(path);
             return NULL;
         }
+        // Ensure that `path` is zero-terminated.
+        path[pathlen] = '\0';
         return path;
     }
 }
@@ -353,6 +356,17 @@ static char *libstdcxxprobe(void)
 void *libjulia_internal = NULL;
 void *libjulia_codegen = NULL;
 __attribute__((constructor)) void jl_load_libjulia_internal(void) {
+#if defined(_OS_LINUX_)
+    // Julia uses `sigwait()` to handle signals, and all threads are required
+    // to mask the corresponding handlers so that the signals can be waited on.
+    // Here, we setup that masking early, so that it is inherited by any threads
+    // spawned (e.g. by constructors) when loading deps of libjulia-internal.
+
+    sigset_t all_signals, prev_mask;
+    sigfillset(&all_signals);
+    pthread_sigmask(SIG_BLOCK, &all_signals, &prev_mask);
+#endif
+
     // Only initialize this once
     if (libjulia_internal != NULL) {
         return;
@@ -362,7 +376,6 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     const char *lib_dir = jl_get_libdir();
 
     // Pre-load libraries that libjulia-internal needs.
-    int deps_len = strlen(&dep_libs[1]);
     char *curr_dep = &dep_libs[1];
 
     // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
@@ -438,6 +451,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
                     char *cxxpath = libstdcxxprobe();
                     if (cxxpath) {
                         void *cxx_handle = dlopen(cxxpath, RTLD_LAZY);
+                        (void)cxx_handle;
                         const char *dlr = dlerror();
                         if (dlr) {
                             jl_loader_print_stderr("ERROR: Unable to dlopen(cxxpath) in parent!\n");
@@ -514,13 +528,25 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     }
     void *fptr = lookup_symbol(RTLD_DEFAULT, "jl_get_pgcstack_static");
     void *(*key)(void) = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_addr_static");
-    if (fptr != NULL && key != NULL)
-        jl_pgcstack_setkey(fptr, key);
+    _Atomic(char) *semaphore = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_static_semaphore");
+    if (fptr != NULL && key != NULL && semaphore != NULL) {
+        char already_used = 0;
+        atomic_compare_exchange_strong(semaphore, &already_used, 1);
+        if (already_used == 0) // RMW succeeded - we have exclusive access
+            jl_pgcstack_setkey(fptr, key);
+    }
 #endif
 
     // jl_options must be initialized very early, in case an embedder sets some
     // values there before calling jl_init
     ((void (*)(void))jl_init_options_addr)();
+
+#if defined(_OS_LINUX_)
+    // Restore the original signal mask. `jl_init()` will later setup blocking
+    // for the specific set of signals we `sigwait()` on, and any threads spawned
+    // during loading above will still retain their inherited signal mask.
+    pthread_sigmask(SIG_SETMASK, &prev_mask, NULL);
+#endif
 }
 
 // Load libjulia and run the REPL with the given arguments (in UTF-8 format)

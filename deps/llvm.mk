@@ -64,7 +64,7 @@ endif
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
 # Figure out which targets to build
-LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly;BPF
+LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly;BPF;AVR
 LLVM_EXPERIMENTAL_TARGETS :=
 
 LLVM_CFLAGS :=
@@ -120,7 +120,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_LINK_LLVM_DYLIB:BOOL=ON
 endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
-LLVM_CMAKE += -DLLVM_USE_INTEL_JITEVENTS:BOOL=ON
+LLVM_CMAKE += -DLLVM_USE_INTEL_JITEVENTS:BOOL=ON -DITTAPI_SOURCE_DIR=$(SRCCACHE)/$(ITTAPI_SRC_DIR)
 endif # USE_INTEL_JITEVENTS
 
 ifeq ($(USE_OPROFILE_JITEVENTS), 1)
@@ -214,7 +214,7 @@ LLVM_CMAKE += -DLLVM_SHLIB_SYMBOL_VERSION:STRING="JL_LLVM_$(LLVM_VER_SHORT)"
 LLVM_PATCH_PREV :=
 define LLVM_PATCH
 $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
-	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm && patch -p1 < $$(SRCDIR)/patches/$1.patch
+	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm && patch -p1 -f < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 # declare that applying any patch must re-run the compile step
 $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
@@ -223,12 +223,14 @@ endef
 
 define LLVM_PROJ_PATCH
 $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
-	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
+	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR) && patch -p1 -f < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 # declare that applying any patch must re-run the compile step
 $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
+
+$(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
 
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
@@ -238,6 +240,21 @@ endif
 
 # declare that all patches must be applied before running ./configure
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
+
+# Apply Julia's specific patches if requested, e.g. if not using Julia's fork of LLVM.
+ifeq ($(LLVM_APPLY_JULIA_PATCHES), 1)
+# Download Julia's patchset.
+$(BUILDDIR)/julia-patches.patch:
+	$(JLDOWNLOAD) $@ $(LLVM_JULIA_DIFF_GITHUB_REPO)/compare/$(LLVM_BASE_REF)...$(LLVM_JULIA_REF).diff
+
+# Apply the patch.
+$(SRCCACHE)/$(LLVM_SRC_DIR)/julia-patches.patch-applied: $(BUILDDIR)/julia-patches.patch $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
+	cd $(SRCCACHE)/$(LLVM_SRC_DIR) && patch -p1 -f < $(realpath $<)
+	echo 1 > $@
+
+# Require application of Julia's patchset before configuring LLVM.
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(SRCCACHE)/$(LLVM_SRC_DIR)/julia-patches.patch-applied
+endif
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
@@ -286,6 +303,11 @@ configure-llvm: $(LLVM_BUILDDIR_withtype)/build-configured
 compile-llvm: $(LLVM_BUILDDIR_withtype)/build-compiled
 fastcheck-llvm: #none
 check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
+
+ifeq ($(USE_INTEL_JITEVENTS),1)
+$(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/source-extracted
+endif
+
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
 
 else # USE_BINARYBUILDER_LLVM

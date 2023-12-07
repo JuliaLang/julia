@@ -147,6 +147,10 @@ module ObjLoadTest
     using Base: llvmcall, @ccallable
     using Test
     didcall = false
+    """    jl_the_callback()
+
+    Sets the global didcall when it did the call
+    """
     @ccallable Cvoid function jl_the_callback()
         global didcall
         didcall = true
@@ -264,5 +268,7 @@ MyStruct(kern) = MyStruct(kern, reinterpret(Core.LLVMPtr{UInt8,1}, 0))
 MyStruct() = MyStruct(0)
 s = MyStruct()
 
+# ensure LLVMPtr properly subtypes
+@test eltype(supertype(Core.LLVMPtr{UInt8,1})) <: UInt8
 @test s.kern == 0
 @test reinterpret(Int, s.ptr) == 0

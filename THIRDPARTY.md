@@ -24,6 +24,10 @@ own licenses:
 - [LLVM](https://releases.llvm.org/12.0.1/LICENSE.TXT) [APACHE 2.0 with LLVM Exception]
 - [UTF8PROC](https://github.com/JuliaStrings/utf8proc) [MIT]
 
+and optionally:
+
+- [ITTAPI](https://github.com/intel/ittapi/blob/master/LICENSES/BSD-3-Clause.txt) [BSD-3]
+
 Julia's `stdlib` uses the following external libraries, which have their own licenses:
 
 - [DSFMT](https://github.com/MersenneTwister-Lab/dSFMT/blob/master/LICENSE.txt) [BSD-3]
