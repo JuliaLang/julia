@@ -894,7 +894,6 @@ function cholesky(S::SymTridiagonal, ::NoPivot = NoPivot(); check::Bool = true)
     cholesky!(Hermitian(Bidiagonal{T}(diag(S, 0), diag(S, 1), :U)), NoPivot(); check = check)
 end
 
-
 # See dgtsv.f
 """
     ldiv!(A::Tridiagonal, B::AbstractVecOrMat) -> B
