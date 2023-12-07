@@ -1588,7 +1588,7 @@ function finish_current_bb!(compact::IncrementalCompact, active_bb::Int,
             if unreachable
                 node[:stmt], node[:type], node[:line] = ReturnNode(), Union{}, 0
             else
-                node[:stmt], node[:type], node[:line] = nothing, Nothing, 0
+                node[:stmt], node[:type], node[:line], node[:flag] = nothing, Nothing, 0, IR_FLAGS_EFFECTS
             end
             compact.result_idx = old_result_idx + 1
         elseif cfg_transforms_enabled && compact.result_idx - 1 == first(bb.stmts)
