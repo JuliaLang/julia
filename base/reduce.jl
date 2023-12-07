@@ -281,7 +281,7 @@ mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Int
 # and implements an index-free in-order pairwise strategy:
 function mapreduce_impl(f, op, ::_InitialValue, itr)
     it = iterate(itr)
-    it === nothing && return reduce_empty_iter(_xfadjoint(op, Generator(f, itr))...)
+    it === nothing && return mapreduce_empty_iter(f, op, itr)
     a1, state = it
     it = iterate(itr, state)
     it === nothing && return mapreduce_first(f, op, a1)
@@ -434,6 +434,8 @@ mapreduce_empty(::typeof(abs2), op, T)     = abs2(reduce_empty(op, T))
 mapreduce_empty(f::typeof(abs),  ::typeof(max), T) = abs(zero(T))
 mapreduce_empty(f::typeof(abs2), ::typeof(max), T) = abs2(zero(T))
 
+mapreduce_empty_iter(f::F, op::OP, itr) where {F,OP} = reduce_empty_iter(_xfadjoint(op, Generator(f, itr))...)
+
 # For backward compatibility:
 mapreduce_empty_iter(f, op, itr, ItrEltype) =
     reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
@@ -485,7 +487,7 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
     inds = LinearIndices(A)
     n = length(inds)
     if n == 0
-        return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
+        return mapreduce_empty_iter(f, op, A)
     elseif n == 1
         @inbounds a1 = A[first(inds)]
         return mapreduce_first(f, op, a1)
