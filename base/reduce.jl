@@ -277,63 +277,62 @@ end
 mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
     mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
-# the following reduce_impl is called by mapreduce/reduce for non-array iterators,
+# the following mapreduce_impl is called by mapreduce for non-array iterators,
 # and implements an index-free in-order pairwise strategy:
-function reduce_impl(op, itr)
+function mapreduce_impl(f, op, ::_InitialValue, itr)
     it = iterate(itr)
-    it === nothing && return reduce_empty_iter(op, itr)
+    it === nothing && return reduce_empty_iter(_xfadjoint(op, Generator(f, itr))...)
     a1, state = it
     it = iterate(itr, state)
-    it === nothing && return reduce_first(op, a1)
+    it === nothing && return mapreduce_first(f, op, a1)
     a2, state = it
-    v = op(a1, a2)
-    n = max(2, pairwise_blocksize(op))
-    v, state = reduce_impl(op, itr, v, state, n-2)
+    v = op(f(a1), f(a2))
+    n = max(2, pairwise_blocksize(f, op))
+    v, state = _mapreduce_impl(f, op, itr, v, state, n)
     while state !== nothing
-        v, state = reduce_impl(op, itr, v, state, n)
+        v, state = _mapreduce_impl(f, op, itr, v, state, n)
         n *= 2
     end
     return v
 end
 
-# apply reduction to at most n elements of itr, in a pairwise recursive fashion,
+# apply reduction to at most ≈ n elements of itr, in a pairwise recursive fashion,
 # returning op(nt, ...n elements...), state --- state=nothing if itr ended
-function reduce_impl(op, itr, nt, state, n)
+function _mapreduce_impl(f, op, itr, nt, state, n)
     # for the pairwise algorithm we want to reduce this block
-    # separately *before* combining it with nt ... try to peel
-    # off the first two elements to construct block's initial v
+    # separately *before* combining it with nt, so we peel
+    # off the first element to initialize the block reduction:
     it = iterate(itr, state)
     it === nothing && return nt, nothing
     a1, state = it
     it = iterate(itr, state)
-    it === nothing && return op(nt, a1), nothing
+    it === nothing && return op(nt, f(a1)), nothing
     a2, state = it
-    v = op(a1, a2)
+    v = op(f(a1), f(a2))
 
-    if n ≤ max(2, pairwise_blocksize(op)) # coarsened base case
+    if n ≤ max(2, pairwise_blocksize(f, op)) # coarsened base case
         @simd for _ = 3:n
             it = iterate(itr, state)
             it === nothing && return op(nt, v), nothing
             a, state = it
-            v = op(v, a)
+            v = op(v, f(a))
         end
         return op(nt, v), state
     else
         n >>= 1
-        v, state = reduce_impl(op, itr, v, state, n-2)
+        v, state = _mapreduce_impl(f, op, itr, v, state, n-2)
         state === nothing && return op(nt, v), nothing
-        v, state = reduce_impl(op, itr, v, state, n)
+        v, state = _mapreduce_impl(f, op, itr, v, state, n)
         # break return statement into two cases to help type inference
         return state === nothing ? (op(nt, v), nothing) : (op(nt, v), state)
     end
 end
 
-mapreduce_impl(f::F, op::OP, ::_InitialValue, itr) where {F,OP} = reduce_impl(_xfadjoint(op, Generator(f, itr))...)
-
 # for an arbitrary initial value, we need to call foldl,
 # because op(nt, itr[i]) may have a different type than op(nt, itr[j]))
 # … it's not clear how to reliably determine this without foldl associativity.
 mapreduce_impl(f::F, op::OP, nt, itr) where {F,OP} = mapfoldl_impl(f, op, nt, itr)
+
 
 """
     mapreduce(f, op, itrs...; [init])
@@ -373,10 +372,6 @@ pairwise_blocksize(f, op) = 1024
 
 # This combination appears to show a benefit from a larger block size
 pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
-
-# for reduce_impl:
-pairwise_blocksize(op) = pairwise_blocksize(identity, op)
-pairwise_blocksize(op::MappingRF) = pairwise_blocksize(op.f, op.rf)
 
 
 # handling empty arrays
