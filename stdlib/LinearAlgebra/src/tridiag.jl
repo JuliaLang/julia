@@ -894,30 +894,6 @@ function cholesky(S::SymTridiagonal, ::NoPivot = NoPivot(); check::Bool = true)
     cholesky!(Hermitian(Bidiagonal{T}(diag(S, 0), diag(S, 1), :U)), NoPivot(); check = check)
 end
 
-function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
-    (; dl, d) = parent(A)
-    N = length(d)
-    if N <= 1
-        eigen(parent(A); kwargs...)
-    else
-        S = Vector{ComplexF64}(undef, N)
-        E = dl
-        Er = abs.(E)
-        S[1] = 1
-        S[2] = Er[1] == 0 ? one(T) : S[1] * E[1]/Er[1]
-        for i ∈ 2:N-1
-            S[i+1] = Er[i] == 0 ? one(T) : S[i] * E[i]/Er[i]
-        end
-        B = SymTridiagonal(real.(d), Er)
-        Λ, Φ = eigen(B; kwargs...)
-
-        return Eigen(Λ, Diagonal(S) * Φ)
-    end
-end
-
-function eigvals(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
-    (; dl, d) = parent(A)
-    eigvals(SymTridiagonal(real.(d), abs.(dl)); kwargs...)
 
 # See dgtsv.f
 """
