@@ -421,3 +421,5 @@ end
     @test platforms_match(ac, ac)
     @test platforms_match(bc, bc)
 end
+
+include("binaryplatforms_pkgcompat.jl")
