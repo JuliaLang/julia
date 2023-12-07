@@ -40,7 +40,7 @@ const platform = @inferred Platform platform_key_abi()
 
         # Explicitly test that we can pass arguments to UnknownPlatform,
         # and it doesn't do anything.
-        @test UnknownPlatform(:riscv; libc=:fuschia_libc) == UnknownPlatform()
+        @test UnknownPlatform(:riscv; libc=:fuchsia_libc) == UnknownPlatform()
     end
 
     @testset "Platform properties" begin
