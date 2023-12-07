@@ -347,6 +347,8 @@ reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
+reduce_empty(::typeof(∘), ::Type{Union{}}) = _empty_reduce_error(∘, Union{})
+reduce_empty(::typeof(∘), ::Type) = identity
 
 reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error(add_sum, Union{})
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
@@ -356,6 +358,9 @@ reduce_empty(::typeof(mul_prod), ::Type{Union{}}) = _empty_reduce_error(mul_prod
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T} = reduce_empty(*, T)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
+reduce_empty(::typeof(max), ::Type{T}) where {T} = _empty_reduce_error(maximum, T)
+reduce_empty(::typeof(max), ::Type{T}) where {T<:Unsigned} = zero(T)
+reduce_empty(::typeof(max), ::Type{Union{}}) = _empty_reduce_error(maximum, Union{})
 
 reduce_empty(op::BottomRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, T)
@@ -753,7 +758,8 @@ julia> maximum([1,2,3])
 3
 
 julia> maximum(())
-ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
+ERROR: ArgumentError: reducing with maximum over an empty collection of element type Union{} is not allowed.
+You may be able to prevent this error by supplying an `init` value to the reducer.
 Stacktrace:
 [...]
 

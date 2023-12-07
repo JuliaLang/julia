@@ -53,6 +53,9 @@ end
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1:5; init=1000) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+, 1) == 1
+@test reduce(∘, [])(42) == 42
+@test reduce(∘, [x->2x+1])(42) == 85
+@test reduce(∘, [x->x*"2", x->x*"1"])("0") == "012"
 @test_throws "reducing with * over an empty collection of element type Union{} is not allowed" reduce(*, ())
 @test_throws "reducing with * over an empty collection of element type Union{} is not allowed" reduce(*, Union{}[])
 
@@ -248,9 +251,11 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 # maximum & minimum & extrema
 
-@test_throws "reducing over an empty" maximum(Int[])
+@test_throws "reducing with maximum over an empty" maximum(Int[])
 @test_throws "reducing over an empty" minimum(Int[])
 @test_throws "reducing over an empty" extrema(Int[])
+
+@test maximum(UInt[]) === UInt(0)
 
 @test maximum(Int[]; init=-1) == -1
 @test minimum(Int[]; init=-1) == -1
