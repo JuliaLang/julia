@@ -70,7 +70,7 @@ end
 """
     TaskFailedException
 
-This exception is thrown by a `wait(t)` call when task `t` fails.
+This exception is thrown by a [`wait(t)`](@ref) call when task `t` fails.
 `TaskFailedException` wraps the failed task `t`.
 """
 struct TaskFailedException <: Exception
@@ -104,7 +104,9 @@ function show_task_exception(io::IO, t::Task; indent = true)
 end
 
 function show(io::IO, t::Task)
-    print(io, "Task ($(t.state)) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))")
+    state = t.state
+    state_str = "$state" * ((state == :runnable && istaskstarted(t)) ? ", started" : "")
+    print(io, "Task ($state_str) @0x$(string(convert(UInt, pointer_from_objref(t)), base = 16, pad = Sys.WORD_SIZE>>2))")
 end
 
 """
@@ -131,7 +133,8 @@ true
 ```
 """
 macro task(ex)
-    :(Task(()->$(esc(ex))))
+    thunk = Base.replace_linenums!(:(()->$(esc(ex))), __source__)
+    :(Task($thunk))
 end
 
 """
@@ -253,7 +256,7 @@ istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
 function Threads.threadpool(t::Task)
     tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), t)
-    return tpid == 0 ? :default : :interactive
+    return Threads._tpid_to_sym(tpid)
 end
 
 task_result(t::Task) = t.result
@@ -302,13 +305,14 @@ end
 # just wait for a task to be done, no error propagation
 function _wait(t::Task)
     if !istaskdone(t)
-        lock(t.donenotify)
+        donenotify = t.donenotify::ThreadSynchronizer
+        lock(donenotify)
         try
             while !istaskdone(t)
-                wait(t.donenotify)
+                wait(donenotify)
             end
         finally
-            unlock(t.donenotify)
+            unlock(donenotify)
         end
     end
     nothing
@@ -317,25 +321,26 @@ end
 # have `waiter` wait for `t`
 function _wait2(t::Task, waiter::Task)
     if !istaskdone(t)
-        lock(t.donenotify)
+        # since _wait2 is similar to schedule, we should observe the sticky
+        # bit, even if we don't call `schedule` with early-return below
+        if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
+            # Issue #41324
+            # t.sticky && tid == 0 is a task that needs to be co-scheduled with
+            # the parent task. If the parent (current_task) is not sticky we must
+            # set it to be sticky.
+            # XXX: Ideally we would be able to unset this
+            current_task().sticky = true
+            tid = Threads.threadid()
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
+        end
+        donenotify = t.donenotify::ThreadSynchronizer
+        lock(donenotify)
         if !istaskdone(t)
-            push!(t.donenotify.waitq, waiter)
-            unlock(t.donenotify)
-            # since _wait2 is similar to schedule, we should observe the sticky
-            # bit, even if we aren't calling `schedule` due to this early-return
-            if waiter.sticky && Threads.threadid(waiter) == 0
-                # Issue #41324
-                # t.sticky && tid == 0 is a task that needs to be co-scheduled with
-                # the parent task. If the parent (current_task) is not sticky we must
-                # set it to be sticky.
-                # XXX: Ideally we would be able to unset this
-                current_task().sticky = true
-                tid = Threads.threadid()
-                ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
-            end
+            push!(donenotify.waitq, waiter)
+            unlock(donenotify)
             return nothing
         else
-            unlock(t.donenotify)
+            unlock(donenotify)
         end
     end
     schedule(waiter)
@@ -361,8 +366,8 @@ fetch(@nospecialize x) = x
 """
     fetch(t::Task)
 
-Wait for a Task to finish, then return its result value.
-If the task fails with an exception, a `TaskFailedException` (which wraps the failed task)
+Wait for a [`Task`](@ref) to finish, then return its result value.
+If the task fails with an exception, a [`TaskFailedException`](@ref) (which wraps the failed task)
 is thrown.
 """
 function fetch(t::Task)
@@ -452,9 +457,23 @@ const sync_varname = gensym(:sync)
 """
     @sync
 
-Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn),
+`Distributed.@spawnat` and `Distributed.@distributed`
 are complete. All exceptions thrown by enclosed async operations are collected and thrown as
-a `CompositeException`.
+a [`CompositeException`](@ref).
+
+# Examples
+```julia-repl
+julia> Threads.nthreads()
+4
+
+julia> @sync begin
+           Threads.@spawn println("Thread-id \$(Threads.threadid()), task 1")
+           Threads.@spawn println("Thread-id \$(Threads.threadid()), task 2")
+       end;
+Thread-id 3, task 1
+Thread-id 1, task 2
+```
 """
 macro sync(block)
     var = esc(sync_varname)
@@ -490,15 +509,15 @@ isolating the asynchronous code from changes to the variable's value in the curr
     Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
-    do_async_macro(expr)
+    do_async_macro(expr, __source__)
 end
 
 # generate the code for @async, possibly wrapping the task in something before
 # pushing it to the wait queue.
-function do_async_macro(expr; wrap=identity)
+function do_async_macro(expr, linenums; wrap=identity)
     letargs = Base._lift_one_interp!(expr)
 
-    thunk = esc(:(()->($expr)))
+    thunk = Base.replace_linenums!(:(()->($(esc(expr)))), linenums)
     var = esc(sync_varname)
     quote
         let $(letargs...)
@@ -513,7 +532,7 @@ function do_async_macro(expr; wrap=identity)
 end
 
 # task wrapper that doesn't create exceptions wrapped in TaskFailedException
-struct UnwrapTaskFailedException
+struct UnwrapTaskFailedException <: Exception
     task::Task
 end
 
@@ -538,13 +557,21 @@ fetch(t::UnwrapTaskFailedException) = unwrap_task_failed(fetch, t)
 
 # macro for running async code that doesn't throw wrapped exceptions
 macro async_unwrap(expr)
-    do_async_macro(expr, wrap=task->:(Base.UnwrapTaskFailedException($task)))
+    do_async_macro(expr, __source__, wrap=task->:(Base.UnwrapTaskFailedException($task)))
 end
 
 """
     errormonitor(t::Task)
 
 Print an error log to `stderr` if task `t` fails.
+
+# Examples
+```julia-repl
+julia> Base._wait(errormonitor(Threads.@spawn error("task failed")))
+Unhandled Task ERROR: task failed
+Stacktrace:
+[...]
+```
 """
 function errormonitor(t::Task)
     t2 = Task() do
@@ -667,7 +694,7 @@ end
 
 ## scheduler and work queue
 
-struct IntrusiveLinkedListSynchronized{T}
+mutable struct IntrusiveLinkedListSynchronized{T}
     queue::IntrusiveLinkedList{T}
     lock::Threads.SpinLock
     IntrusiveLinkedListSynchronized{T}() where {T} = new(IntrusiveLinkedList{T}(), Threads.SpinLock())
@@ -729,11 +756,12 @@ function workqueue_for(tid::Int)
         return @inbounds qs[tid]
     end
     # slow path to allocate it
+    @assert tid > 0
     l = Workqueues_lock
     @lock l begin
         qs = Workqueues
         if length(qs) < tid
-            nt = Threads.nthreads()
+            nt = Threads.maxthreadid()
             @assert tid <= nt
             global Workqueues = qs = copyto!(typeof(qs)(undef, length(qs) + nt - 1), qs)
         end
@@ -746,22 +774,41 @@ end
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    if t.sticky || Threads.nthreads() == 1
+
+    # Sticky tasks go into their thread's work queue.
+    if t.sticky
         tid = Threads.threadid(t)
         if tid == 0
-            # Issue #41324
-            # t.sticky && tid == 0 is a task that needs to be co-scheduled with
-            # the parent task. If the parent (current_task) is not sticky we must
-            # set it to be sticky.
-            # XXX: Ideally we would be able to unset this
-            current_task().sticky = true
-            tid = Threads.threadid()
-            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
+            # The task is not yet stuck to a thread. Stick it to the current
+            # thread and do the same to the parent task (the current task) so
+            # that the tasks are correctly co-scheduled (issue #41324).
+            # XXX: Ideally we would be able to unset this.
+            if GC.in_finalizer()
+                # The task was launched in a finalizer. There is no thread to sticky it
+                # to, so just allow it to run anywhere as if it had been non-sticky.
+                t.sticky = false
+                @goto not_sticky
+            else
+                tid = Threads.threadid()
+                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
+                current_task().sticky = true
+            end
         end
         push!(workqueue_for(tid), t)
     else
-        Partr.multiq_insert(t, t.priority)
-        tid = 0
+        @label not_sticky
+        tp = Threads.threadpool(t)
+        if tp === :foreign || Threads.threadpoolsize(tp) == 1
+            # There's only one thread in the task's assigned thread pool;
+            # use its work queue.
+            tid = (tp === :interactive) ? 1 : Threads.threadpoolsize(:interactive)+1
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
+            push!(workqueue_for(tid), t)
+        else
+            # Otherwise, put the task in the multiqueue.
+            Partr.multiq_insert(t, t.priority)
+            tid = 0
+        end
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
     return t
@@ -807,7 +854,7 @@ function schedule(t::Task, @nospecialize(arg); error=false)
     # schedule a task to be (re)started with the given value or exception
     t._state === task_state_runnable || Base.error("schedule: Task not runnable")
     if error
-        t.queue === nothing || Base.list_deletefirst!(t.queue, t)
+        t.queue === nothing || Base.list_deletefirst!(t.queue::IntrusiveLinkedList{Task}, t)
         setfield!(t, :result, arg)
         setfield!(t, :_isexception, true)
     else
@@ -831,7 +878,7 @@ function yield()
     try
         wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         rethrow()
     end
 end

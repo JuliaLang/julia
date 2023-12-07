@@ -5,6 +5,20 @@ Profiling support, main entry point is the [`@profile`](@ref) macro.
 """
 module Profile
 
+global print
+public @profile,
+    clear,
+    print,
+    fetch,
+    retrieve,
+    add_fake_meta,
+    flatten,
+    callers,
+    init,
+    take_heap_snapshot,
+    clear_malloc_data,
+    Allocs
+
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
@@ -23,10 +37,7 @@ appended to an internal buffer of backtraces.
 macro profile(ex)
     return quote
         try
-            status = start_timer()
-            if status < 0
-                error(error_codes[status])
-            end
+            start_timer()
             $(esc(ex))
         finally
             stop_timer()
@@ -34,27 +45,12 @@ macro profile(ex)
     end
 end
 
-# triggers printing the report after a SIGINFO/SIGUSR1 profile request
-const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
-function profile_printing_listener()
-    try
-        while true
-            wait(PROFILE_PRINT_COND[])
-            peek_report[]()
-        end
-    catch ex
-        if !isa(ex, InterruptException)
-            @error "Profile printing listener crashed" exception=ex,catch_backtrace()
-        end
-    end
-end
-
 # An internal function called to show the report after an information request (SIGINFO or SIGUSR1).
 function _peek_report()
     iob = IOBuffer()
-    ioc = IOContext(IOContext(iob, stdout), :displaysize=>displaysize(stdout))
+    ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
     print(ioc, groupby = [:thread, :task])
-    Base.print(stdout, String(take!(iob)))
+    Base.print(stderr, String(take!(iob)))
 end
 # This is a ref so that it can be overridden by other profile info consumers.
 const peek_report = Ref{Function}(_peek_report)
@@ -72,12 +68,7 @@ Set the duration in seconds of the profile "peek" that is triggered via `SIGINFO
 """
 set_peek_duration(t::Float64) = ccall(:jl_set_profile_peek_duration, Cvoid, (Float64,), t)
 
-precompile_script = """
-import Profile
-Profile.@profile while Profile.len_data() < 1000; rand(10,10) * rand(10,10); end
-Profile.peek_report[]()
-Profile.clear()
-"""
+
 
 ####
 #### User-level functions
@@ -91,17 +82,17 @@ stored per thread. Each instruction pointer corresponds to a single line of code
 list of instruction pointers. Note that 6 spaces for instruction pointers per backtrace are used to store metadata and two
 NULL end markers. Current settings can be obtained by calling this function with no arguments, and each can be set independently
 using keywords or in the order `(n, delay)`.
-
-!!! compat "Julia 1.8"
-    As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
-    Previously this was `n` total.
 """
 function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, limitwarn::Bool = true)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
+    if n_cur == 0 && isnothing(n) && isnothing(delay)
+        # indicates that the buffer hasn't been initialized at all, so set the default
+        default_init()
+        n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
+    end
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
-        nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
-        return round(Int, n_cur / nthreads), delay_cur
+        return n_cur, delay_cur
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
@@ -109,24 +100,21 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
 end
 
 function init(n::Integer, delay::Real; limitwarn::Bool = true)
-    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
-    buffer_samples = n * nthreads
+    buffer_samples = n
     buffer_size_bytes = buffer_samples * sample_size_bytes
     if buffer_size_bytes > 2^29 && Sys.WORD_SIZE == 32
-        buffer_size_bytes_per_thread = floor(Int, 2^29 / nthreads)
-        buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
-        buffer_samples = buffer_samples_per_thread * nthreads
+        buffer_samples = floor(Int, 2^29 / sample_size_bytes)
         buffer_size_bytes = buffer_samples * sample_size_bytes
-        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples) given that this system is 32-bit"
     end
-    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64, 10^9*delay))
     if status == -1
-        error("could not allocate space for ", n, " instruction pointers per thread being profiled ($nthreads threads, $(Base.format_bytes(buffer_size_bytes)) total)")
+        error("could not allocate space for ", n, " instruction pointers ($(Base.format_bytes(buffer_size_bytes)))")
     end
 end
 
-function __init__()
+function default_init()
     # init with default values
     # Use a max size of 10M profile samples, and fire timer every 1ms
     # (that should typically give around 100 seconds of record)
@@ -136,15 +124,18 @@ function __init__()
         n = 1_000_000
         delay = 0.01
     else
+        # Keep these values synchronized with trigger_profile_peek
         n = 10_000_000
         delay = 0.001
     end
     init(n, delay, limitwarn = false)
-    @static if !Sys.iswindows()
-        # triggering a profile via signals is not implemented on windows
-        PROFILE_PRINT_COND[] = Base.AsyncCondition()
-        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
-        errormonitor(Threads.@spawn(profile_printing_listener()))
+end
+
+# Checks whether the profile buffer has been initialized. If not, initializes it with the default size.
+function check_init()
+    buffer_size = @ccall jl_profile_maxlen_data()::Int
+    if buffer_size == 0
+        default_init()
     end
 end
 
@@ -243,18 +234,22 @@ function print(io::IO,
 
     pf = ProfileFormat(;C, combine, maxdepth, mincount, noisefloor, sortedby, recur)
     if groupby === :none
-        print(io, data, lidict, pf, format, threads, tasks, false)
+        print_group(io, data, lidict, pf, format, threads, tasks, false)
     else
         if !in(groupby, [:thread, :task, [:task, :thread], [:thread, :task]])
             error(ArgumentError("Unrecognized groupby option: $groupby. Options are :none (default), :task, :thread, [:task, :thread], or [:thread, :task]"))
         elseif Sys.iswindows() && in(groupby, [:thread, [:task, :thread], [:thread, :task]])
             @warn "Profiling on windows is limited to the main thread. Other threads have not been sampled and will not show in the report"
         end
-        any_nosamples = false
-        println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
-        println(io, "=========================================================")
+        any_nosamples = true
+        if format === :tree
+            Base.print(io, "Overhead ╎ [+additional indent] Count File:Line; Function\n")
+            Base.print(io, "=========================================================\n")
+        end
         if groupby == [:task, :thread]
-            for taskid in intersect(get_task_ids(data), tasks)
+            taskids = intersect(get_task_ids(data), tasks)
+            isempty(taskids) && (any_nosamples = true)
+            for taskid in taskids
                 threadids = intersect(get_thread_ids(data, taskid), threads)
                 if length(threadids) == 0
                     any_nosamples = true
@@ -263,14 +258,16 @@ function print(io::IO,
                     printstyled(io, "Task $(Base.repr(taskid))$nl"; bold=true, color=Base.debug_color())
                     for threadid in threadids
                         printstyled(io, " Thread $threadid "; bold=true, color=Base.info_color())
-                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
                 end
             end
         elseif groupby == [:thread, :task]
-            for threadid in intersect(get_thread_ids(data), threads)
+            threadids = intersect(get_thread_ids(data), threads)
+            isempty(threadids) && (any_nosamples = true)
+            for threadid in threadids
                 taskids = intersect(get_task_ids(data, threadid), tasks)
                 if length(taskids) == 0
                     any_nosamples = true
@@ -279,7 +276,7 @@ function print(io::IO,
                     printstyled(io, "Thread $threadid$nl"; bold=true, color=Base.info_color())
                     for taskid in taskids
                         printstyled(io, " Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
-                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
@@ -287,17 +284,21 @@ function print(io::IO,
             end
         elseif groupby === :task
             threads = 1:typemax(Int)
-            for taskid in intersect(get_task_ids(data), tasks)
+            taskids = intersect(get_task_ids(data), tasks)
+            isempty(taskids) && (any_nosamples = true)
+            for taskid in taskids
                 printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
-                nosamples = print(io, data, lidict, pf, format, threads, taskid, true)
+                nosamples = print_group(io, data, lidict, pf, format, threads, taskid, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
         elseif groupby === :thread
             tasks = 1:typemax(UInt)
-            for threadid in intersect(get_thread_ids(data), threads)
+            threadids = intersect(get_thread_ids(data), threads)
+            isempty(threadids) && (any_nosamples = true)
+            for threadid in threadids
                 printstyled(io, "Thread $threadid "; bold=true, color=Base.info_color())
-                nosamples = print(io, data, lidict, pf, format, threadid, tasks, true)
+                nosamples = print_group(io, data, lidict, pf, format, threadid, tasks, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
@@ -319,7 +320,7 @@ See `Profile.print([io], data)` for an explanation of the valid keyword argument
 print(data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
     print(stdout, data, lidict; kwargs...)
 
-function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
+function print_group(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
                 format::Symbol, threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}},
                 is_subsection::Bool = false)
     cols::Int = Base.displaysize(io)[2]
@@ -410,7 +411,8 @@ function getdict!(dict::LineInfoDict, data::Vector{UInt})
     n_unique_ips = length(unique_ips)
     n_unique_ips == 0 && return dict
     iplookups = similar(unique_ips, Vector{StackFrame})
-    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.nthreads(), RoundUp))
+    sort!(unique_ips) # help each thread to get a disjoint set of libraries, as much if possible
+    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.threadpoolsize(), RoundUp))
         Threads.@spawn begin
             for i in indexes_part
                 iplookups[i] = _lookup_corrected(unique_ips[i])
@@ -504,7 +506,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
                 end
             end
             return path
-        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "src", "base", path))
+        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
             # do the same mechanic for Base (or Core/Compiler) files as above,
             # but they start from a relative path
             return joinpath("@Base", normpath(path))
@@ -567,7 +569,14 @@ Julia, and examine the resulting `*.mem` files.
 clear_malloc_data() = ccall(:jl_clear_malloc_data, Cvoid, ())
 
 # C wrappers
-start_timer() = ccall(:jl_profile_start_timer, Cint, ())
+function start_timer()
+    check_init() # if the profile buffer hasn't been initialized, initialize with default size
+    status = ccall(:jl_profile_start_timer, Cint, ())
+    if status < 0
+        error(error_codes[status])
+    end
+end
+
 
 stop_timer() = ccall(:jl_profile_stop_timer, Cvoid, ())
 
@@ -591,7 +600,7 @@ error_codes = Dict(
 """
     fetch(;include_meta = true) -> data
 
-Returns a copy of the buffer of profile backtraces. Note that the
+Return a copy of the buffer of profile backtraces. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
@@ -599,6 +608,9 @@ By default metadata such as threadid and taskid is included. Set `include_meta` 
 """
 function fetch(;include_meta = true, limitwarn = true)
     maxlen = maxlen_data()
+    if maxlen == 0
+        error("The profiling data buffer is not initialized. A profile has not been requested this session.")
+    end
     len = len_data()
     if limitwarn && is_buffer_full()
         @warn """The profile data buffer is full; profiling probably terminated
@@ -666,7 +678,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
     m = Int[]
     lilist_idx = Dict{T, Int}()
     recursive = Set{T}()
-    first = true
+    leaf = 0
     totalshots = 0
     startframe = length(data)
     skip = false
@@ -690,12 +702,16 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
             skip = false
             totalshots += 1
             empty!(recursive)
-            first = true
+            if leaf != 0
+                m[leaf] += 1
+            end
+            leaf = 0
             startframe = i
         elseif !skip
             frames = lidict[ip]
             nframes = (frames isa Vector ? length(frames) : 1)
-            for j = 1:nframes
+            # the last lookup is the non-inlined root frame, the first is the inlined leaf frame
+            for j = nframes:-1:1
                 frame = (frames isa Vector ? frames[j] : frames)
                 !C && frame.from_c && continue
                 key = (T === UInt64 ? ip : frame)
@@ -709,10 +725,7 @@ function parse_flat(::Type{T}, data::Vector{UInt64}, lidict::Union{LineInfoDict,
                     push!(recursive, key)
                     n[idx] += 1
                 end
-                if first
-                    m[idx] += 1
-                    first = false
-                end
+                leaf = idx
             end
         end
     end
@@ -723,30 +736,31 @@ end
 function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfoFlatDict}, cols::Int, fmt::ProfileFormat,
                 threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}}, is_subsection::Bool)
     lilist, n, m, totalshots, nsleeping = parse_flat(fmt.combine ? StackFrame : UInt64, data, lidict, fmt.C, threads, tasks)
-    util_perc = (1 - (nsleeping / totalshots)) * 100
-    if isempty(lilist)
-        if is_subsection
-            Base.print(io, "Total snapshots: ")
-            printstyled(io, "$(totalshots)", color=Base.warn_color())
-            Base.println(io, " (", round(Int, util_perc), "% utilization)")
-        else
-            warning_empty()
-        end
-        return true
-    end
     if false # optional: drop the "non-interpretable" ones
         keep = map(frame -> frame != UNKNOWN && frame.line != 0, lilist)
         lilist = lilist[keep]
         n = n[keep]
         m = m[keep]
     end
+    util_perc = (1 - (nsleeping / totalshots)) * 100
     filenamemap = Dict{Symbol,String}()
-    print_flat(io, lilist, n, m, cols, filenamemap, fmt)
-    Base.print(io, "Total snapshots: ", totalshots, " (", round(Int, util_perc), "% utilization")
+    if isempty(lilist)
+        if is_subsection
+            Base.print(io, "Total snapshots: ")
+            printstyled(io, "$(totalshots)", color=Base.warn_color())
+            Base.print(io, ". Utilization: ", round(Int, util_perc), "%\n")
+        else
+            warning_empty()
+        end
+        return true
+    end
+    is_subsection || print_flat(io, lilist, n, m, cols, filenamemap, fmt)
+    Base.print(io, "Total snapshots: ", totalshots, ". Utilization: ", round(Int, util_perc), "%")
     if is_subsection
-        println(io, ")")
+        println(io)
+        print_flat(io, lilist, n, m, cols, filenamemap, fmt)
     else
-        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task)")
+        Base.print(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task.\n")
     end
     return false
 end
@@ -965,8 +979,8 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             root.count += 1
             startframe = i
         elseif !skip
-            pushfirst!(build, parent)
             if recur === :flat || recur === :flatc
+                pushfirst!(build, parent)
                 # Rewind the `parent` tree back, if this exact ip was already present *higher* in the current tree
                 found = false
                 for j in 1:(startframe - i)
@@ -1067,8 +1081,8 @@ function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat
     filenamemap = Dict{Symbol,String}()
     worklist = [(bt, 0, 0, "")]
     if !is_subsection
-        println(io, "Overhead ╎ [+additional indent] Count File:Line; Function")
-        println(io, "=========================================================")
+        Base.print(io, "Overhead ╎ [+additional indent] Count File:Line; Function\n")
+        Base.print(io, "=========================================================\n")
     end
     while !isempty(worklist)
         (bt, level, noisefloor, str) = popfirst!(worklist)
@@ -1114,24 +1128,23 @@ function tree(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoFlatDict, Line
         root, nsleeping = tree!(StackFrameTree{UInt64}(), data, lidict, fmt.C, fmt.recur, threads, tasks)
     end
     util_perc = (1 - (nsleeping / root.count)) * 100
-    !is_subsection && print_tree(io, root, cols, fmt, is_subsection)
+    is_subsection || print_tree(io, root, cols, fmt, is_subsection)
     if isempty(root.down)
         if is_subsection
             Base.print(io, "Total snapshots: ")
             printstyled(io, "$(root.count)", color=Base.warn_color())
-            Base.println(io, ". Utilization: ", round(Int, util_perc), "%")
+            Base.print(io, ". Utilization: ", round(Int, util_perc), "%\n")
         else
             warning_empty()
         end
         return true
-    else
-        Base.print(io, "Total snapshots: ", root.count, ". Utilization: ", round(Int, util_perc), "%")
     end
+    Base.print(io, "Total snapshots: ", root.count, ". Utilization: ", round(Int, util_perc), "%")
     if is_subsection
-        println(io)
+        Base.println(io)
         print_tree(io, root, cols, fmt, is_subsection)
     else
-        println(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task")
+        Base.print(io, " across all threads and tasks. Use the `groupby` kwarg to break down by thread and/or task.\n")
     end
     return false
 end
@@ -1212,6 +1225,50 @@ function warning_empty(;summary = false)
     end
 end
 
+
+"""
+    Profile.take_heap_snapshot(io::IOStream, all_one::Bool=false)
+    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
+    Profile.take_heap_snapshot(all_one::Bool=false; dir::String)
+
+Write a snapshot of the heap, in the JSON format expected by the Chrome
+Devtools Heap Snapshot viewer (.heapsnapshot extension) to a file
+(`\$pid_\$timestamp.heapsnapshot`) in the current directory by default (or tempdir if
+the current directory is unwritable), or in `dir` if given, or the given
+full file path, or IO stream.
+
+If `all_one` is true, then report the size of every object as one so they can be easily
+counted. Otherwise, report the actual size.
+"""
+function take_heap_snapshot(io::IOStream, all_one::Bool=false)
+    Base.@_lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
+end
+function take_heap_snapshot(filepath::String, all_one::Bool=false)
+    open(filepath, "w") do io
+        take_heap_snapshot(io, all_one)
+    end
+    return filepath
+end
+function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) where {S <: AbstractString}
+    fname = "$(getpid())_$(time_ns()).heapsnapshot"
+    if isnothing(dir)
+        wd = pwd()
+        fpath = joinpath(wd, fname)
+        try
+            touch(fpath)
+            rm(fpath; force=true)
+        catch
+            @warn "Cannot write to current directory `$(pwd())` so saving heap snapshot to `$(tempdir())`" maxlog=1 _id=Symbol(wd)
+            fpath = joinpath(tempdir(), fname)
+        end
+    else
+        fpath = joinpath(expanduser(dir), fname)
+    end
+    return take_heap_snapshot(fpath, all_one)
+end
+
+
 include("Allocs.jl")
+include("precompile.jl")
 
 end # module

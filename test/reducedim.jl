@@ -6,7 +6,16 @@ using Random
 
 # issue #35800
 # tested very early since it can be state-dependent
-@test @inferred(mapreduce(x->count(!iszero,x), +, [rand(1)]; init = 0.)) == 1.0
+
+function my_simple_count(pred, g::Vector{T}) where {T}
+    n::T = zero(T)
+    for x in g
+        n += pred(x)
+    end
+    return n
+end
+
+@test @inferred(mapreduce(x->my_simple_count(!iszero,x), +, [rand(1)]; init = 0.)) == 1.0
 
 function safe_mapslices(op, A, region)
     newregion = intersect(region, 1:ndims(A))

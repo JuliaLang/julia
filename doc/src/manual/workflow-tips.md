@@ -10,57 +10,40 @@ your experience at the command line.
 
 ### A basic editor/REPL workflow
 
-The most basic Julia workflows involve using a text editor in conjunction with the `julia` command
-line. A common pattern includes the following elements:
+The most basic Julia workflows involve using a text editor in conjunction with the `julia` command line.
 
-  * **Put code under development in a temporary module.** Create a file, say `Tmp.jl`, and include
-    within it
+Create a file, say `Tmp.jl`, and include within it
+```julia
+module Tmp
 
-    ```julia
-    module Tmp
-    export say_hello
+say_hello() = println("Hello!")
 
-    say_hello() = println("Hello!")
+# Your other definitions here
 
-    # your other definitions here
+end # module
 
-    end
-    ```
-  * **Put your test code in another file.** Create another file, say `tst.jl`, which looks like
+using .Tmp
+```
+Then, in the same directory, start the Julia REPL (using the `julia` command).
+Run the new file as follows:
+```
+julia> include("Tmp.jl")
 
-    ```julia
-    include("Tmp.jl")
-    import .Tmp
-    # using .Tmp # we can use `using` to bring the exported symbols in `Tmp` into our namespace
+julia> Tmp.say_hello()
+Hello!
+```
+Explore ideas in the REPL. Save good ideas in `Tmp.jl`.
+To reload the file after it has been changed, just `include` it again.
 
-    Tmp.say_hello()
-    # say_hello()
+The key in the above is that your code is encapsulated in a module.
+That allows you to edit `struct` definitions and remove methods, without restarting Julia.
 
-    # your other test code here
-    ```
+(Explanation: `struct`s cannot be edited after definition, nor can methods be deleted.
+But you _can_ overwrite the definition of a module, which is what we do when we re-`include("Tmp.jl")`).
 
-    and includes tests for the contents of `Tmp`.
-    Alternatively, you can wrap the contents of your test file in a module, as
+In addition, the encapsulation of code in a module protects it from being influenced
+by previous state in the REPL, protecting you from hard-to-detect errors.
 
-    ```julia
-    module Tst
-        include("Tmp.jl")
-        import .Tmp
-        #using .Tmp
-
-        Tmp.say_hello()
-        # say_hello()
-
-        # your other test code here
-    end
-    ```
-
-    The advantage is that your testing code is now contained in a module and does not use the global scope in `Main` for
-    definitions, which is a bit more tidy.
-
-  * `include` the `tst.jl` file in the Julia REPL with `include("tst.jl")`.
-
-  * **Lather. Rinse. Repeat.** Explore ideas at the `julia` command prompt. Save good ideas in `tst.jl`. To execute `tst.jl` after it has been changed, just `include` it again.
 
 ## Browser-based workflow
 

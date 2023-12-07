@@ -105,7 +105,7 @@ function eof(s::LibuvStream)
     bytesavailable(s) > 0 && return false
     wait_readnb(s, 1)
     # This function is race-y if used from multiple threads, but we guarantee
-    # it to never return false until the stream is definitively exhausted
+    # it to never return true until the stream is definitively exhausted
     # and that we won't return true if there's a readerror pending (it'll instead get thrown).
     # This requires some careful ordering here (TODO: atomic loads)
     bytesavailable(s) > 0 && return false
@@ -409,7 +409,7 @@ function wait_readnb(x::LibuvStream, nb::Int)
         while bytesavailable(x.buffer) < nb
             x.readerror === nothing || throw(x.readerror)
             isopen(x) || break
-            x.status != StatusEOF || break
+            x.status == StatusEOF && break
             x.throttle = max(nb, x.throttle)
             start_reading(x) # ensure we are reading
             iolock_end()
@@ -457,7 +457,7 @@ function closewrite(s::LibuvStream)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we won't get spurious notifications later
@@ -565,7 +565,6 @@ displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
 
 function displaysize(io::TTY)
-    # A workaround for #34620 and #26687 (this still has the TOCTOU problem).
     check_open(io)
 
     local h::Int, w::Int
@@ -588,6 +587,7 @@ function displaysize(io::TTY)
     s1 = Ref{Int32}(0)
     s2 = Ref{Int32}(0)
     iolock_begin()
+    check_open(io)
     Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
                                       Int32, (Ptr{Cvoid}, Ptr{Int32}, Ptr{Int32}),
                                       io, s1, s2) != 0)
@@ -665,12 +665,11 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
             elseif nread == UV_EOF # libuv called uv_stop_reading already
                 if stream.status != StatusClosing
                     stream.status = StatusEOF
+                    notify(stream.cond)
                     if stream isa TTY
                         # stream can still be used by reseteof (or possibly write)
-                        notify(stream.cond)
                     elseif !(stream isa PipeEndpoint) && ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
                         # stream can still be used by write
-                        notify(stream.cond)
                     else
                         # underlying stream is no longer useful: begin finalization
                         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
@@ -679,6 +678,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                 end
             else
                 stream.readerror = _UVError("read", nread)
+                notify(stream.cond)
                 # This is a fatal connection error
                 ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                 stream.status = StatusClosing
@@ -1050,7 +1050,7 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
@@ -1361,7 +1361,7 @@ julia> io1 = open("same/path", "w")
 
 julia> io2 = open("same/path", "w")
 
-julia> redirect_stdio(f, stdout=io1, stderr=io2) # not suppored
+julia> redirect_stdio(f, stdout=io1, stderr=io2) # not supported
 ```
 Also the `stdin` argument may not be the same descriptor as `stdout` or `stderr`.
 ```julia-repl

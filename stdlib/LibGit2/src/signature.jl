@@ -13,7 +13,7 @@ Signature(sig::GitSignature) = Signature(sig.ptr)
 function Signature(name::AbstractString, email::AbstractString)
     ensure_initialized()
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
-    @check ccall((:git_signature_now, :libgit2), Cint,
+    @check ccall((:git_signature_now, libgit2), Cint,
                  (Ptr{Ptr{SignatureStruct}}, Cstring, Cstring), sig_ptr_ptr, name, email)
     sig = GitSignature(sig_ptr_ptr[])
     s = Signature(sig.ptr)
@@ -31,7 +31,7 @@ end
 function Base.convert(::Type{GitSignature}, sig::Signature)
     ensure_initialized()
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
-    @check ccall((:git_signature_new, :libgit2), Cint,
+    @check ccall((:git_signature_new, libgit2), Cint,
                  (Ptr{Ptr{SignatureStruct}}, Cstring, Cstring, Int64, Cint),
                  sig_ptr_ptr, sig.name, sig.email, sig.time, sig.time_offset)
     return GitSignature(sig_ptr_ptr[])
@@ -66,7 +66,7 @@ end
 function default_signature(repo::GitRepo)
     ensure_initialized()
     sig_ptr_ptr = Ref{Ptr{SignatureStruct}}(C_NULL)
-    @check ccall((:git_signature_default, :libgit2), Cint,
+    @check ccall((:git_signature_default, libgit2), Cint,
                  (Ptr{Ptr{SignatureStruct}}, Ptr{Cvoid}), sig_ptr_ptr, repo.ptr)
     return GitSignature(sig_ptr_ptr[])
 end

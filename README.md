@@ -26,7 +26,8 @@
     <tr>
         <td>Code coverage</td>
         <td>
-            <a href="https://coveralls.io/r/JuliaLang/julia?branch=master"><img src='https://img.shields.io/coveralls/github/JuliaLang/julia/master.svg?label=coveralls'/></a> <a href="https://codecov.io/github/JuliaLang/julia?branch=master"><img src='https://img.shields.io/codecov/c/github/JuliaLang/julia/master.svg?label=codecov'/></a>
+            <a href='https://coveralls.io/github/JuliaLang/julia?branch=master'><img src='https://coveralls.io/repos/github/JuliaLang/julia/badge.svg?branch=master' alt='Coverage Status'/></a>
+            <a href="https://codecov.io/gh/JuliaLang/julia"><img src="https://codecov.io/gh/JuliaLang/julia/branch/master/graph/badge.svg?token=TckCRxc7HS"/></a>
         </td>
     </tr>
 </table>
@@ -47,6 +48,7 @@ and installing Julia, below.
 - **Documentation:** <https://docs.julialang.org>
 - **Packages:** <https://julialang.org/packages/>
 - **Discussion forum:** <https://discourse.julialang.org>
+- **Zulip:** <https://julialang.zulipchat.com/>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://julialang.org/slack/>)
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
@@ -88,26 +90,25 @@ Then, acquire the source code by cloning the git repository:
 
     git clone https://github.com/JuliaLang/julia.git
 
-By default you will be building the latest unstable version of
+and then use the command prompt to change into the resulting julia directory. By default you will be building the latest unstable version of
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
-of Julia. You can get this version by changing to the Julia directory
-and running:
+of Julia. You can get this version by running:
 
-    git checkout v1.7.3
+    git checkout v1.9.4
 
-Now run `make` to build the `julia` executable.
+To build the `julia` executable, run `make` from within the julia directory.
 
 Building Julia requires 2GiB of disk space and approximately 4GiB of virtual memory.
 
 **Note:** The build process will fail badly if any of the build directory's parent directories have spaces or other shell meta-characters such as `$` or `:` in their names (this is due to a limitation in GNU make).
 
-Once it is built, you can run the `julia` executable after you enter your julia directory and run
+Once it is built, you can run the `julia` executable. From within the julia directory, run
 
     ./julia
 
 Your first test of Julia determines whether your build is working
-properly. From the UNIX/Windows command prompt inside the `julia`
-source directory, type `make testall`. You should see output that
+properly. From the julia
+directory, type `make testall`. You should see output that
 lists a series of running tests; if they complete without error, you
 should be in good shape to start using Julia.
 
