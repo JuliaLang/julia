@@ -2156,3 +2156,21 @@ let t = REPLCompletions.repl_eval_ex(:(Base.PersistentDict(issue52099 => 3)), @_
         @test length(t.val) == 1
     end
 end
+
+# test REPLInterpreter effects for `getindex(::Dict, key)`
+for (DictT, KeyT) = Any[(Dict{Symbol,Any}, Symbol),
+                        (Dict{Int,Any}, Int),
+                        (Dict{String,Any}, String)]
+    @testset let DictT=DictT, KeyT=KeyT
+        effects = Base.infer_effects(getindex, (DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter())
+        @test Core.Compiler.is_effect_free(effects)
+        @test Core.Compiler.is_terminates(effects)
+        @test Core.Compiler.is_noub(effects)
+        effects = Base.infer_effects((DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter()) do d, key
+            key in keys(d)
+        end
+        @test Core.Compiler.is_effect_free(effects)
+        @test Core.Compiler.is_terminates(effects)
+        @test Core.Compiler.is_noub(effects)
+    end
+end
