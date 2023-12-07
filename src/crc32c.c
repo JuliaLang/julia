@@ -56,14 +56,9 @@
 #define POLY 0x82f63b78
 
 /* Block sizes for three-way parallel crc computation.  LONG and SHORT must
-   both be powers of two.  The associated string constants must be set
-   accordingly, for use in constructing the assembler instructions. */
+   both be powers of two. */
 #define LONG 8192
-#define LONGx1 "8192"
-#define LONGx2 "16384"
 #define SHORT 256
-#define SHORTx1 "256"
-#define SHORTx2 "512"
 
 #ifndef GEN_CRC32C_TABLES
 #include "crc32c-tables.c"
@@ -114,13 +109,13 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
         uintptr_t crc2 = 0;
         const char *end = buf + LONG;
         do {
-            __asm__(CRC32_PTR "\t" "(%1), %0"
+            __asm__(CRC32_PTR "\t(%1), %0"
                     : "+r"(crc0),
                     : "rm"(* (const char (*)[sizeof(void*)]) &buf[0]));
-            __asm__(CRC32_PTR "\t" LONGx1 "(%1), %0"
+            __asm__(CRC32_PTR "\t(%1), %0"
                     :  "+r"(crc1),
                     : "rm"(* (const char (*)[sizeof(void*)]) &buf[LONG]));
-            __asm__(CRC32_PTR "\t" LONGx2 "(%1), %0"
+            __asm__(CRC32_PTR "\t(%1), %0"
                     :  "+r"(crc2),
                     : "rm"(* (const char (*)[sizeof(void*)]) &buf[LONG*2]));
             buf += sizeof(void*);
@@ -138,13 +133,13 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
         uintptr_t crc2 = 0;
         const char *end = buf + SHORT;
         do {
-            __asm__(CRC32_PTR "\t" "(%1), %0"
+            __asm__(CRC32_PTR "\t(%1), %0"
                     : "+r"(crc0),
                     : "rm"(* (const char (*)[sizeof(void*)]) &buf[0]));
-            __asm__(CRC32_PTR "\t" SHORTx1 "(%1), %0"
+            __asm__(CRC32_PTR "\t(%1), %0"
                     :  "+r"(crc1),
                     : "rm"(* (const char (*)[sizeof(void*)]) &buf[SHORT]));
-            __asm__(CRC32_PTR "\t" SHORTx2 "(%1), %0"
+            __asm__(CRC32_PTR "\t(%1), %0"
                     :  "+r"(crc2),
                     : "rm"(* (const char (*)[sizeof(void*)]) &buf[SHORT*2]));
             buf += sizeof(void*);
