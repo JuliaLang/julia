@@ -134,6 +134,6 @@ language. In addition to the above, some advantages of Julia over comparable sys
 ### [Disadvantages of Julia](@id man-disadvantages-of-julia)
 
   * It is difficult to generate self-contained binaries or libraries such as .exe, .dll, .so,
-    and impossible to generate small self-contained binaries with very fast runtimes
+    and prohibitively difficult to generate small self-contained binaries with very fast runtimes
   * Slow compile times - for example, it takes too long to generate the first plot
   * When using deeply nested types or functions, error messages can be confusing and too verbose
