@@ -155,7 +155,7 @@ static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, 
     }
     else {
         ios_write(s->s, (char*)mem->ptr + offset * layout->size, len * layout->size);
-        if (jl_genericmemory_isbitsunion(mem))
+        if (layout->flags.arrayelem_isunion)
             ios_write(s->s, jl_genericmemory_typetagdata(mem) + offset, len);
     }
 }
@@ -392,7 +392,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         if (layout->flags.arrayelem_isunion || layout->size == 0)
             offset = (uintptr_t)ar->ref.ptr_or_offset;
         else
-            offset = (char*)ar->ref.ptr_or_offset - (char*)ar->ref.mem->ptr;
+            offset = ((char*)ar->ref.ptr_or_offset - (char*)ar->ref.mem->ptr) / layout->size;
         jl_encode_memory_slice(s, ar->ref.mem, offset, l);
     }
     else if (as_literal && jl_is_genericmemory(v)) {

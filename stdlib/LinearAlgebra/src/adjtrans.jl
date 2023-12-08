@@ -324,7 +324,7 @@ axes(A::AdjOrTrans) = reverse(axes(A.parent))
 length(A::AdjOrTrans) = length(A.parent)
 size(v::AdjOrTransAbsVec) = (1, length(v.parent))
 size(A::AdjOrTransAbsMat) = reverse(size(A.parent))
-axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
+axes(v::AdjOrTransAbsVec) = (axes(v.parent,2), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
@@ -476,10 +476,6 @@ end
 
 # vector * Adjoint/Transpose-vector
 *(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
-# Adjoint/Transpose-vector * Adjoint/Transpose-vector
-# (necessary for disambiguation with fallback methods in linalg/matmul)
-*(u::AdjointAbsVec, v::AdjointAbsVec) = throw(MethodError(*, (u, v)))
-*(u::TransposeAbsVec, v::TransposeAbsVec) = throw(MethodError(*, (u, v)))
 
 # AdjOrTransAbsVec{<:Any,<:AdjOrTransAbsVec} is a lazy conj vectors
 # We need to expand the combinations to avoid ambiguities

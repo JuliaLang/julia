@@ -1897,3 +1897,48 @@ end
 
 normalize(x) = x / norm(x)
 normalize(x, p::Real) = x / norm(x, p)
+
+"""
+    copytrito!(B, A, uplo) -> B
+
+Copies a triangular part of a matrix `A` to another matrix `B`.
+`uplo` specifies the part of the matrix `A` to be copied to `B`.
+Set `uplo = 'L'` for the lower triangular part or `uplo = 'U'
+for the upper triangular part.
+
+!!! compat "Julia 1.11"
+    `copytrito!` requires at least Julia 1.11.
+
+# Examples
+```jldoctest
+julia> A = [1 2 ; 3 4];
+
+julia> B = [0 0 ; 0 0];
+
+julia> copytrito!(B, A, 'L')
+2×2 Matrix{Int64}:
+ 1  0
+ 3  4
+```
+"""
+function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
+    require_one_based_indexing(A, B)
+    BLAS.chkuplo(uplo)
+    m,n = size(A)
+    m1,n1 = size(B)
+    (m1 < m || n1 < n) && throw(DimensionMismatch("B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+    if uplo == 'U'
+        for j=1:n
+            for i=1:min(j,m)
+                @inbounds B[i,j] = A[i,j]
+            end
+        end
+    else  # uplo == 'L'
+        for j=1:n
+            for i=j:m
+                @inbounds B[i,j] = A[i,j]
+            end
+        end
+    end
+    return B
+end

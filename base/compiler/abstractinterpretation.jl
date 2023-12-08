@@ -2692,14 +2692,7 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes:
     cconv = e.args[5]
     if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt16}))
         override = decode_effects_override(v[2])
-        effects = Effects(effects;
-            consistent          = override.consistent ? ALWAYS_TRUE : effects.consistent,
-            effect_free         = override.effect_free ? ALWAYS_TRUE : effects.effect_free,
-            nothrow             = override.nothrow ? true : effects.nothrow,
-            terminates          = override.terminates_globally ? true : effects.terminates,
-            notaskstate         = override.notaskstate ? true : effects.notaskstate,
-            inaccessiblememonly = override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
-            noub                = override.noub ? ALWAYS_TRUE : override.noub_if_noinbounds ? NOUB_IF_NOINBOUNDS : effects.noub)
+        effects = override_effects(effects, override)
     end
     return RTEffects(t, Any, effects)
 end
@@ -2754,15 +2747,28 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     # N.B.: This only applies to the effects of the statement itself.
     # It is possible for arguments (GlobalRef/:static_parameter) to throw,
     # but these will be recomputed during SSA construction later.
+    override = decode_statement_effects_override(sv)
+    effects = override_effects(effects, override)
     set_curr_ssaflag!(sv, flags_for_effects(effects), IR_FLAGS_EFFECTS)
     merge_effects!(interp, sv, effects)
 
     return RTEffects(rt, exct, effects)
 end
 
-function isdefined_globalref(g::GlobalRef)
-    return ccall(:jl_globalref_boundp, Cint, (Any,), g) != 0
+function override_effects(effects::Effects, override::EffectsOverride)
+    return Effects(effects;
+        consistent = override.consistent ? ALWAYS_TRUE : effects.consistent,
+        effect_free = override.effect_free ? ALWAYS_TRUE : effects.effect_free,
+        nothrow = override.nothrow ? true : effects.nothrow,
+        terminates = override.terminates_globally ? true : effects.terminates,
+        notaskstate = override.notaskstate ? true : effects.notaskstate,
+        inaccessiblememonly = override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
+        noub = override.noub ? ALWAYS_TRUE :
+               override.noub_if_noinbounds && effects.noub !== ALWAYS_TRUE ? NOUB_IF_NOINBOUNDS :
+               effects.noub)
 end
+
+isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
 
 function abstract_eval_globalref_type(g::GlobalRef)
     if isdefined_globalref(g) && isconst(g)

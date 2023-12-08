@@ -34,6 +34,7 @@ Compiler/Runtime improvements
 * Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
 * A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
   loads, primarily to be used within JLLs ([#50074]).
+* Added a support for annotating `Base.@assume_effects` on code block ([#52400]).
 
 Command-line option changes
 ---------------------------
@@ -70,6 +71,7 @@ New library features
 * `replace(string, pattern...)` now supports an optional `IO` argument to
   write the output to a stream rather than returning a string ([#48625]).
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
+* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
 
 Standard library changes
 ------------------------
@@ -88,6 +90,10 @@ Standard library changes
 #### Package Manager
 
 #### LinearAlgebra
+* `cbrt(::AbstractMatrix{<:Real})` is now defined and returns real-valued matrix cube roots of real-valued matrices ([#50661]).
+* `eigvals/eigen(A, bunchkaufman(B))` and `eigvals/eigen(A, lu(B))`, which utilize the Bunchkaufman (LDL) and LU decomposition of `B`,
+   respectively, now efficiently compute the generalized eigenvalues (`eigen`: and eigenvectors) of `A` and `B`. Note: The second
+   argument is the output of `bunchkaufman` or `lu` ([#50471]).
 
 #### Printf
 

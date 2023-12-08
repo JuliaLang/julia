@@ -319,18 +319,6 @@ function decode_effects(e::UInt32)
         _Bool((e >> 12) & 0x01))
 end
 
-struct EffectsOverride
-    consistent::Bool
-    effect_free::Bool
-    nothrow::Bool
-    terminates_globally::Bool
-    terminates_locally::Bool
-    notaskstate::Bool
-    inaccessiblememonly::Bool
-    noub::Bool
-    noub_if_noinbounds::Bool
-end
-
 function encode_effects_override(eo::EffectsOverride)
     e = 0x0000
     eo.consistent          && (e |= (0x0001 << 0))
@@ -357,3 +345,6 @@ function decode_effects_override(e::UInt16)
         !iszero(e & (0x0001 << 7)),
         !iszero(e & (0x0001 << 8)))
 end
+
+decode_statement_effects_override(ssaflag::UInt32) =
+    decode_effects_override(UInt16((ssaflag >> NUM_IR_FLAGS) & (1 << NUM_EFFECTS_OVERRIDES - 1)))
