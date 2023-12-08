@@ -866,36 +866,38 @@ function lift_leaves_keyvalue(compact::IncrementalCompact, @nospecialize(key),
     for i = 1:length(leaves)
         leaf = leaves[i]
         cache_key = leaf
-        if isa(leaf, AnySSAValue)
-            (def, leaf) = walk_to_def(compact, leaf)
-            if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
-                @assert isexpr(def, :invoke)
-                if length(def.args) in (5, 6)
-                    collection = def.args[end-2]
-                    set_key = def.args[end-1]
-                    set_val_idx = length(def.args)
-                elseif length(def.args) == 4
-                    collection = def.args[end-1]
-                    # Key is deleted
-                    # TODO: Model this
-                    return nothing
-                elseif length(def.args) == 3
-                    collection = def.args[end]
-                    # The whole collection is deleted
-                    # TODO: Model this
-                    return nothing
-                else
-                    return nothing
-                end
-                if set_key === key || (egal_tfunc(𝕃ₒ, argextype(key, compact), argextype(set_key, compact)) == Const(true))
-                    lift_arg!(compact, leaf, cache_key, def, set_val_idx, lifted_leaves)
+        while true
+            if isa(leaf, AnySSAValue)
+                (def, leaf) = walk_to_def(compact, leaf)
+                if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
+                    @assert isexpr(def, :invoke)
+                    if length(def.args) in (5, 6)
+                        collection = def.args[end-2]
+                        set_key = def.args[end-1]
+                        set_val_idx = length(def.args)
+                    elseif length(def.args) == 4
+                        collection = def.args[end-1]
+                        # Key is deleted
+                        # TODO: Model this
+                        return nothing
+                    elseif length(def.args) == 3
+                        collection = def.args[end]
+                        # The whole collection is deleted
+                        # TODO: Model this
+                        return nothing
+                    else
+                        return nothing
+                    end
+                    if set_key === key || (egal_tfunc(𝕃ₒ, argextype(key, compact), argextype(set_key, compact)) == Const(true))
+                        lift_arg!(compact, leaf, cache_key, def, set_val_idx, lifted_leaves)
+                        break
+                    end
+                    leaf = collection
                     continue
                 end
-                # TODO: Continue walking the chain
-                return nothing
             end
+            return nothing
         end
-        return nothing
     end
     return lifted_leaves
 end
@@ -919,11 +921,11 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
     (lifted_val, nest) = perform_lifting!(compact,
         visited_philikes, key, result_t, lifted_leaves, collection, nothing)
 
-    compact[idx] = lifted_val === nothing ? nothing : Expr(:call, Core.tuple, lifted_val.val)
+    compact[idx] = lifted_val === nothing ? nothing : Expr(:call, GlobalRef(Core, :tuple), lifted_val.val)
     finish_phi_nest!(compact, nest)
     if lifted_val !== nothing
-        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
-            compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], tuple_tfunc(𝕃ₒ, Any[result_t]))
+            add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
         end
     end
 
