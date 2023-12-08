@@ -110,7 +110,6 @@ end
 @assume_effects :total function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where T
     return rationalize(T, big(x), tol=tol)
 end
-rationalize(x::Real; kwargs...) = rationalize(Int, x; kwargs...)
 
 @assume_effects :total function lessrational(rx::Rational{<:Integer}, x::AbstractIrrational)
     # an @assume_effects :total version of `<` for determining if the rationalization of
