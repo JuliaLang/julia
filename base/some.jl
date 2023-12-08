@@ -147,8 +147,8 @@ macro something(args...)
 end
 
 ==(a::Some, b::Some) = a.value == b.value
-==(::Some{Missing}, ::Some{T}) where T = T === Missing
-==(::Some{T}, ::Some{Missing}) where T = T === Missing
+==(::Some{Missing}, ::Some) = false
+==(::Some, ::Some{Missing}) = false
 ==(::Some{Missing}, ::Some{Missing}) = true
 
 isequal(a::Some, b::Some) = isequal(a.value, b.value)
