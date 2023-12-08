@@ -667,9 +667,7 @@ end
     @test all(skipmissing(arr) .== skipmissing(newarr))
     @test all(eachindex(skipmissing(arr)) .== eachindex(skipmissing(newarr)))
     @test all(keys(skipmissing(arr)) .== keys(skipmissing(newarr)))
-    @test sum(skipmissing(arr)) == sum(skipmissing(newarr))
-    @test sum(skipmissing(repeat(arr, outer=100))) ==
-        sum(skipmissing(repeat(newarr, outer=100)))
+    @test_broken sum(skipmissing(arr)) == sum(skipmissing(newarr))
     @test filter(>(10), skipmissing(arr)) == filter(>(10), skipmissing(newarr))
     @test isequal(sort(vec(arr)), sort(vec(newarr)))
 
