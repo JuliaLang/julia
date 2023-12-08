@@ -133,6 +133,10 @@ language. In addition to the above, some advantages of Julia over comparable sys
 
 ### [Disadvantages of Julia](@id man-disadvantages-of-julia)
 
+As of 2023, the current implementation of Julia has some practical limitations that folks
+should be aware of. However, none of these are fundamental limitations of the language design
+and all are under active development:
+
   * It is difficult to generate self-contained binaries or libraries such as .exe, .dll, .so,
     and prohibitively difficult to generate small self-contained binaries with very fast runtimes
   * Slow compile times - for example, it takes too long to generate the first plot
