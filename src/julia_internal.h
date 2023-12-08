@@ -497,8 +497,20 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (sz <= GC_MAX_SZCLASS) {
         int pool_id = jl_gc_szclass(allocsz);
-        jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
+        jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
+        if (ty == jl_simplevector_type) {
+            p += JL_GC_N_MAX_POOLS;
+        }
+        else if (ty == jl_code_instance_type) {
+            p = &ptls->heap.norm_pools[2 * JL_GC_N_MAX_POOLS];
+        }
+        else if (ty == jl_method_instance_type) {
+            p = &ptls->heap.norm_pools[2 * JL_GC_N_MAX_POOLS + 1];
+        }
+        else if (ty == jl_typemap_entry_type) {
+            p = &ptls->heap.norm_pools[2 * JL_GC_N_MAX_POOLS + 2];
+        }
         // We call `jl_gc_pool_alloc_noinline` instead of `jl_gc_pool_alloc` to avoid double-counting in
         // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
         v = jl_gc_pool_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);

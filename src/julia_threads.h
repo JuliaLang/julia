@@ -162,7 +162,13 @@ typedef struct {
 
     // variables for allocating objects from pools
 #define JL_GC_N_MAX_POOLS 51 // conservative. must be kept in sync with `src/julia_internal.h`
-    jl_gc_pool_t norm_pools[JL_GC_N_MAX_POOLS];
+    // pool layout:
+    // - [0, JL_GC_N_MAX_POOLS): small objects which are not special cased (see below)
+    // - [JL_GC_N_MAX_POOLS, 2 * JL_GC_N_MAX_POOLS): SimpleVector
+    // - 2 * JL_GC_N_MAX_POOLS: CodeInstance
+    // - 2 * JL_GC_N_MAX_POOLS + 1: MethodInstance
+    // - 2 * JL_GC_N_MAX_POOLS + 2: TypeMapEntry
+    jl_gc_pool_t norm_pools[2 * JL_GC_N_MAX_POOLS + 3];
 
 #define JL_N_STACK_POOLS 16
     small_arraylist_t free_stacks[JL_N_STACK_POOLS];

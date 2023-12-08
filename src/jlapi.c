@@ -694,6 +694,8 @@ static void rr_detach_teleport(void) {
 }
 #endif
 
+void gc_enable_heap_dump(void);
+
 JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 {
 #ifdef USE_TRACY
@@ -737,6 +739,8 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
     }
     int ret = true_main(argc, (char**)new_argv);
     jl_atexit_hook(ret);
+    gc_enable_heap_dump();
+    jl_gc_collect(JL_GC_FULL);
     return ret;
 }
 
