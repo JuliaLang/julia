@@ -464,7 +464,7 @@ struct UndefToken end; const UNDEF_TOKEN = UndefToken()
         isdefined(stmt, :val) || return OOB_TOKEN
         op == 1 || return OOB_TOKEN
         return stmt.val
-    elseif isa(stmt, Union{SSAValue, NewSSAValue, GlobalRef})
+    elseif isa(stmt, Union{AnySSAValue, GlobalRef})
         op == 1 || return OOB_TOKEN
         return stmt
     elseif isa(stmt, UpsilonNode)
@@ -520,7 +520,7 @@ end
     elseif isa(stmt, ReturnNode)
         op == 1 || throw(BoundsError())
         stmt = typeof(stmt)(v)
-    elseif isa(stmt, Union{SSAValue, NewSSAValue, GlobalRef})
+    elseif isa(stmt, Union{AnySSAValue, GlobalRef})
         op == 1 || throw(BoundsError())
         stmt = v
     elseif isa(stmt, UpsilonNode)
@@ -550,7 +550,7 @@ end
 
 function userefs(@nospecialize(x))
     relevant = (isa(x, Expr) && is_relevant_expr(x)) ||
-        isa(x, GotoIfNot) || isa(x, ReturnNode) || isa(x, SSAValue) || isa(x, NewSSAValue) ||
+        isa(x, GotoIfNot) || isa(x, ReturnNode) || isa(x, SSAValue) || isa(x, OldSSAValue) || isa(x, NewSSAValue) ||
         isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode)
     return UseRefIterator(x, relevant)
 end
@@ -781,6 +781,16 @@ function dominates_ssa(compact::IncrementalCompact, domtree::DomTree, x::AnySSAV
     xb = block_for_inst(compact, x)
     yb = block_for_inst(compact, y)
     if xb == yb
+        if isa(compact[x][:stmt], PhiNode)
+            if isa(compact[y][:stmt], PhiNode)
+                # A node dominates another only if it dominates all uses of that note.
+                # Usually that is not a distinction. However, for phi nodes, the use
+                # occurs on the edge to the predecessor block. Thus, by definition, for
+                # any other PhiNode in the same BB there must be (at least) one edge
+                # that this phi node does not dominate.
+                return false
+            end
+        end
         xinfo = yinfo = nothing
         if isa(x, OldSSAValue)
             x′ = compact.ssa_rename[x.id]::SSAValue
@@ -939,17 +949,23 @@ function insert_node!(compact::IncrementalCompact, @nospecialize(before), newins
     end
 end
 
+function maybe_reopen_bb!(compact)
+    result_idx = compact.result_idx
+    result_bbs = compact.cfg_transform.result_bbs
+    if (compact.active_result_bb == length(result_bbs) + 1) ||
+        result_idx == first(result_bbs[compact.active_result_bb].stmts)
+        compact.active_result_bb -= 1
+        return true
+    end
+    return false
+end
+
 function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction, reverse_affinity::Bool=false)
     newline = newinst.line::Int32
     refinish = false
     result_idx = compact.result_idx
     result_bbs = compact.cfg_transform.result_bbs
-    if reverse_affinity &&
-            ((compact.active_result_bb == length(result_bbs) + 1) ||
-             result_idx == first(result_bbs[compact.active_result_bb].stmts))
-        compact.active_result_bb -= 1
-        refinish = true
-    end
+    refinish = reverse_affinity && maybe_reopen_bb!(compact)
     if result_idx > length(compact.result)
         @assert result_idx == length(compact.result) + 1
         resize!(compact, result_idx)
@@ -964,10 +980,17 @@ function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction,
 end
 
 function delete_inst_here!(compact::IncrementalCompact)
+    # If we already closed this bb, reopen it for our modification
+    refinish = maybe_reopen_bb!(compact)
+
     # Delete the statement, update refcounts etc
     compact[SSAValue(compact.result_idx-1)] = nothing
+
     # Pretend that we never compacted this statement in the first place
     compact.result_idx -= 1
+
+    refinish && finish_current_bb!(compact, 0)
+
     return nothing
 end
 
@@ -1169,12 +1192,14 @@ function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int}
             end
         elseif isa(val, NewSSAValue)
             if val.id < 0
-                push!(late_fixup, result_idx)
                 new_new_used_ssas[-val.id] += 1
             else
                 @assert do_rename_ssa
                 val = SSAValue(val.id)
             end
+        end
+        if isa(val, NewSSAValue)
+            push!(late_fixup, result_idx)
         end
         values[i] = val
     end
@@ -1196,6 +1221,9 @@ function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{In
     end
     if isa(val, SSAValue)
         used_ssas[val.id] += 1
+    elseif isa(val, NewSSAValue)
+        @assert val.id < 0
+        new_new_used_ssas[-val.id] += 1
     end
     return val
 end
@@ -1834,14 +1862,20 @@ function fixup_node(compact::IncrementalCompact, @nospecialize(stmt), reify_new_
             return FixedNode(stmt, true)
         end
     elseif isa(stmt, OldSSAValue)
-        val = compact.ssa_rename[stmt.id]
-        if isa(val, Refined)
-            val = val.val
+        node = compact.ssa_rename[stmt.id]
+        if isa(node, Refined)
+            node = node.val
         end
-        if isa(val, SSAValue)
-            compact.used_ssas[val.id] += 1
+        needs_fixup = false
+        if isa(node, NewSSAValue)
+            (;node, needs_fixup) = fixup_node(compact, node, reify_new_nodes)
         end
-        return FixedNode(val, false)
+        if isa(node, SSAValue)
+            compact.used_ssas[node.id] += 1
+        elseif isa(node, NewSSAValue)
+            compact.new_new_used_ssas[-node.id] += 1
+        end
+        return FixedNode(node, needs_fixup)
     else
         urs = userefs(stmt)
         fixup = false

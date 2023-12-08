@@ -1429,7 +1429,7 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     else
         scope = undef
     end
-    warnfor(m, var) = Base.isbindingresolved(m, var) && isdefined(m, var) && (print(io, "\nHint: a global variable of this name also exists in $m."); true)
+    warnfor(m, var) = Base.isbindingresolved(m, var) && (Base.isexported(m, var) || Base.ispublic(m, var)) && (print(io, "\nHint: a global variable of this name also exists in $m."); true)
     if scope !== Base && !warnfor(Base, var)
         warned = false
         for m in Base.loaded_modules_order
