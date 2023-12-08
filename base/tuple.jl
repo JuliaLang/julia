@@ -643,4 +643,4 @@ julia> circshift(y, 1)
 ((5, 6), (1, 2), (3, 4))
 ```
 """
-circshift(x::Tuple, shift::Int) = ntuple(j -> x[mod1(j-shift, length(x))], Val(length(x)))
+circshift(x::Tuple, shift::Integer) = ntuple(j -> x[mod1(j-shift, length(x))], Val(length(x)))
