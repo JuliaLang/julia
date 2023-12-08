@@ -310,7 +310,6 @@ function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
             Er = abs.(E)
         end
         S = Vector{Complex{T}}(undef, N)
-        
         S[1] = 1
         S[2] = Er[1] == 0 ? one(T) : S[1] * E[1]/Er[1]
         for i ∈ 2:N-1
