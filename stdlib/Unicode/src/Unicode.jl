@@ -272,7 +272,7 @@ function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bo
             if c < 0x80 # fast path for common ASCII case
                 n = 1 + offset
                 n > length(d) && resize!(d, 2n)
-                d[1+offset] = casefold ? (0x41 ≤ c ≤ 0x5A ? c+0x20 : c) : c
+                d[n] = casefold ? (0x41 ≤ c ≤ 0x5A ? c+0x20 : c) : c
             else
                 while true
                     n = _decompose_char!(c, d, offset, options) + offset
