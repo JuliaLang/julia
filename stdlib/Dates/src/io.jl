@@ -81,7 +81,7 @@ end
     format(io, d, dt)
 end
 
-# Information for parsing and formatting date time values.
+# Information for parsing and formatting DateTime values.
 struct DateFormat{S, T<:Tuple}
     tokens::T
     locale::DateLocale
@@ -360,10 +360,10 @@ string:
 |:-----------|:----------|:--------------------------------------------------------------|
 | `Y`        | 1996, 96  | Returns year of 1996, 0096                                    |
 | `y`        | 1996, 96  | Same as `Y` on `parse` but discards excess digits on `format` |
-| `m`        | 1, 01     | Matches 1 or 2-digit months                                   |
+| `m`        | 1, 01     | Matches 1- or 2-digit months                                  |
 | `u`        | Jan       | Matches abbreviated months according to the `locale` keyword  |
 | `U`        | January   | Matches full month names according to the `locale` keyword    |
-| `d`        | 1, 01     | Matches 1 or 2-digit days                                     |
+| `d`        | 1, 01     | Matches 1- or 2-digit days                                    |
 | `H`        | 00        | Matches hours (24-hour clock)                                 |
 | `I`        | 00        | For outputting hours with 12-hour clock                       |
 | `M`        | 00        | Matches minutes                                               |
@@ -479,6 +479,7 @@ julia> Dates.format(DateTime(2018, 8, 8, 12, 0, 43, 1), ISODateTimeFormat)
 ```
 """
 const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
+const _typo_ISODateTimeFormat = DateFormat("yy-mm-dd\\THH:MM:SS.s")
 default_format(::Type{DateTime}) = ISODateTimeFormat
 
 """
@@ -493,6 +494,7 @@ julia> Dates.format(Date(2018, 8, 8), ISODateFormat)
 ```
 """
 const ISODateFormat = DateFormat("yyyy-mm-dd")
+const _typo_ISODateFormat = DateFormat("yy-mm-dd")
 default_format(::Type{Date}) = ISODateFormat
 
 """
@@ -523,13 +525,18 @@ julia> Dates.format(DateTime(2018, 8, 8, 12, 0, 43, 1), RFC1123Format)
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
 @noinline function _check_year(d, format)
-    if contains(lowercase(format), "yyyy") && !contains(lowercase(format), "yyyyy") # is 4-digit year format, allows strictly 4-digit
-        1583 <= year(d) <= 9999 || throw("Year is outside the legal ISO 8601 year-range. To support such, use an explicit constructor.")
+    y = year(d)
+    1800 <= y <= 2099 && return d # always allowed, note sometimes more; restrictive to prevent typos
+    if !contains(lowercase(format), "yyyy")  # yy format or other shorter than yyyy, used for ISO (typo) format
     # TODO: There is no legal yy-mm-dd format, so not sure what to do about it, for now allow as proleptic, but arguably it should add 19 or 20
     # elseif contains(lowercase(format), "yy") # is 2-digit (or 3-digit...) year format, allows only 1- or 2-digit year
     #     0 <= year(d) <= 99 || throw("Year is outside the 0 to 99 year-range, asked for.")
+        0 <= y <= 99 && return d  # The ISO standard doesn't allow this, but allowing as exception in Julia; the new default typo format doesn't allow this
+    else
+    # if contains(lowercase(format), "yyyy")  # && !contains(lowercase(format), "yyyyy") # is 4-digit year format, allows strictly 4-digit
+        1583 <= y <= 9999 && return d   
     end
-    return d
+    throw("Year is outside the legal ISO 8601 year-range. To support such, use an explicit constructor.")
 end
 
 ### API
@@ -574,11 +581,15 @@ Similar to `DateTime(::AbstractString, ::AbstractString)` but more efficient whe
 repeatedly parsing similarly formatted date time strings with a pre-created
 `DateFormat` object.
 """
-function DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat)
-    if df != ISODateTimeFormat && df != RFC1123Format
-        return dt
+function DateTime(dt::AbstractString, df::DateFormat=_typo_ISODateTimeFormat)
+    d = parse(DateTime, dt, df)
+    if df == _typo_ISODateTimeFormat
+        return _check_year(d, "yy") # dummy format
+    elseif df == ISODateTimeFormat || df == RFC1123Format
+        return _check_year(d, "yyyy") # dummy format that's ok for both
+    else
+        return d
     end
-    return _check_year(parse(DateTime, dt, df), "yyyy") # dummy format that ok for both
 end
 """
     Date(d::AbstractString, format::AbstractString; locale="english") -> Date
@@ -606,6 +617,7 @@ julia> [Date(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
 """
 function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     return _check_year(parse(Date, d, DateFormat(format, locale)), format)
+    # return Date(d, DateFormat(format, locale))
 end
 """
     Date(d::AbstractString, df::DateFormat=ISODateFormat) -> Date
@@ -617,7 +629,7 @@ Similar to `Date(::AbstractString, ::AbstractString)` but more efficient when
 repeatedly parsing similarly formatted date strings with a pre-created
 `DateFormat` object.
 """
-Date(d::AbstractString, df::DateFormat=ISODateFormat) = parse(Date, d, df)
+Date(d::AbstractString, df::DateFormat=_typo_ISODateFormat) = _check_year(parse(Date, d, df), df)
 
 """
     Time(t::AbstractString, format::AbstractString; locale="english") -> Time
