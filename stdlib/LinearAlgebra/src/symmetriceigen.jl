@@ -297,14 +297,20 @@ end
 
 
 function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
-    (; dl, d) = parent(A)
+    (; dl, d, du) = parent(A)
     N = length(d)
     if N <= 1
         eigen(parent(A); kwargs...)
     else
+        if A.uplo == 'U'
+            E = du'
+            Er = abs.(du)
+        else
+            E = dl
+            Er = abs.(E)
+        end
         S = Vector{Complex{T}}(undef, N)
-        E = dl
-        Er = abs.(E)
+        
         S[1] = 1
         S[2] = Er[1] == 0 ? one(T) : S[1] * E[1]/Er[1]
         for i ∈ 2:N-1
