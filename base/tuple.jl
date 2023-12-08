@@ -617,7 +617,7 @@ foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itrs...), init=nothing)
 
 """
-    circshift(x::Tuple, shift::Int)
+    circshift(x::Tuple, shift::Integer)
 
 Circularly shift, i.e. rotate, the data in a tuple. The second argument specifies
 the shift amount.
