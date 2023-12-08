@@ -261,7 +261,13 @@ julia> isequal_normalized(s1, "NOËL", casefold=true)
 true
 ```
 """
-function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bool=false, stripmark::Bool=false, chartransform=identity)
+isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bool=false, stripmark::Bool=false, chartransform=identity) =
+    _isequal_normalized!(s1, s2, Vector{UInt32}(undef, 4), Vector{UInt32}(undef, 4), chartransform; casefold, stripmark)
+
+# like isequal_normalized, but takes pre-allocated codepoint buffers as arguments, and chartransform is a positional argument
+function _isequal_normalized!(s1::AbstractString, s2::AbstractString,
+                              d1::Vector{UInt32}, d2::Vector{UInt32}, chartransform::F=identity;
+                              casefold::Bool=false, stripmark::Bool=false) where {F}
     function decompose_next_chars!(state, d, options, s)
         local n
         offset = 0
@@ -273,6 +279,7 @@ function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bo
                 n = 1 + offset
                 n > length(d) && resize!(d, 2n)
                 d[n] = casefold ? (0x41 ≤ c ≤ 0x5A ? c+0x20 : c) : c
+                break # ASCII characters are all zero combining class
             else
                 while true
                     n = _decompose_char!(c, d, offset, options) + offset
@@ -317,7 +324,6 @@ function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bo
     casefold && (options |= UTF8PROC_CASEFOLD)
     stripmark && (options |= UTF8PROC_STRIPMARK)
     i1,i2 = iterate(s1),iterate(s2)
-    d1,d2 = Vector{UInt32}(undef, 4), Vector{UInt32}(undef, 4) # codepoint buffers
     n1 = n2 = 0 # lengths of codepoint buffers
     j1 = j2 = 1 # indices in d1, d2
     while true
