@@ -36,6 +36,15 @@ CC.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
 CC.cache_owner(::InvalidationTester) = InvalidationTesterToken()
 CC.code_cache(interp::InvalidationTester) = WorldView(interp.code_cache, interp.world)
 
+has_active_cache(mi::MethodInstance, args...) =
+    isdefined(mi, :cache) && has_active_cache(mi.cache, args...)
+function has_active_cache(codeinst::CodeInstance, owner)
+    if codeinst.owner === owner && codeinst.max_world == typemax(UInt)
+        return true
+    end
+    return isdefined(codeinst, :next) && has_active_cache(codeinst.next, owner)
+end
+
 # basic functionality test
 # ------------------------
 
@@ -47,52 +56,20 @@ basic_caller(x) = basic_callee(x)
     basic_caller(x)
 end |> only === Float64
 
-let mi = only(Base.specializations(only(methods(basic_callee))))
-    ci = mi.cache
-    @test !isdefined(ci, :next)
-    @test ci.owner === InvalidationTesterToken()
-    @test ci.max_world == typemax(UInt)
-end
-
-let mi = only(Base.specializations(only(methods(basic_caller))))
-    ci = mi.cache
-    @test !isdefined(ci, :next)
-    @test ci.owner === InvalidationTesterToken()
-    @test ci.max_world == typemax(UInt)
-end
+@test has_active_cache(only(Base.specializations(only(methods(basic_callee)))), InvalidationTesterToken())
+@test has_active_cache(only(Base.specializations(only(methods(basic_caller)))), InvalidationTesterToken())
 
 # this redefinition below should invalidate the cache
 basic_callee(x) = x, x
 @test isempty(Base.specializations(only(methods(basic_callee))))
-let mi = only(Base.specializations(only(methods(basic_caller))))
-    ci = mi.cache
-    @test !isdefined(ci, :next)
-    @test ci.owner === InvalidationTesterToken()
-    @test ci.max_world != typemax(UInt)
-end
+@test !has_active_cache(only(Base.specializations(only(methods(basic_caller)))), InvalidationTesterToken())
 
 # re-run inference and check the result is updated (and new cache exists)
 @test Base.return_types((Float64,); interp=InvalidationTester()) do x
     basic_caller(x)
 end |> only === Tuple{Float64,Float64}
-let mi = only(Base.specializations(only(methods(basic_callee))))
-    ci = mi.cache
-    @test !isdefined(ci, :next)
-    @test ci.owner === InvalidationTesterToken()
-    @test ci.max_world == typemax(UInt)
-end
-
-let mi = only(Base.specializations(only(methods(basic_caller))))
-    ci = mi.cache
-    @test isdefined(ci, :next)
-    @test ci.owner === InvalidationTesterToken()
-    @test ci.max_world == typemax(UInt)
-    ci = ci.next
-    @test !isdefined(ci, :next)
-    @test ci.owner === InvalidationTesterToken()
-    @test ci.max_world != typemax(UInt)
-end
-
+@test has_active_cache(only(Base.specializations(only(methods(basic_callee)))), InvalidationTesterToken())
+@test has_active_cache(only(Base.specializations(only(methods(basic_caller)))), InvalidationTesterToken())
 
 # backedge optimization
 # ---------------------
@@ -109,7 +86,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee, (Any,)))
         @test rt === Any
         effects = Base.infer_effects(pr48932_callee, (Any,))
-        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
+        @test effects == Core.Compiler.Effects()
     end
 
     # run inference on both `pr48932_caller` and `pr48932_callee`
@@ -121,22 +98,12 @@ begin take!(GLOBAL_BUFFER)
     end
 
     let mi = only(Base.specializations(only(methods(pr48932_callee))))
-        ci = mi.cache
-        @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
-        @test ci.max_world == typemax(UInt)
-
-        # In cache due to Base.return_types(pr48932_callee, (Any,))
-        ci = ci.next
-        @test !isdefined(ci, :next)
-        @test ci.owner === nothing
-        @test ci.max_world == typemax(UInt)
+        @test has_active_cache(mi, InvalidationTesterToken())
+        @test has_active_cache(mi, nothing)
     end
     let mi = only(Base.specializations(only(methods(pr48932_caller))))
-        ci = mi.cache
-        @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
-        @test ci.max_world == typemax(UInt)
+        @test has_active_cache(mi, InvalidationTesterToken())
+        @test !has_active_cache(mi, nothing)
     end
 
     @test 42 == pr48932_caller(42)
@@ -148,14 +115,8 @@ begin take!(GLOBAL_BUFFER)
 
     @test isempty(Base.specializations(only(methods(pr48932_callee))))
     let mi = only(Base.specializations(only(methods(pr48932_caller))))
-        ci = mi.cache
-        @test isdefined(ci, :next)
-        @test ci.owner === nothing
-        @test ci.max_world == typemax(UInt)
-        ci = ci.next
-        @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
-        @test ci.max_world == typemax(UInt)
+        @test has_active_cache(mi, InvalidationTesterToken())
+        @test has_active_cache(mi, nothing)
     end
 
     @test isnothing(pr48932_caller(42))
@@ -172,7 +133,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee_inferable, (Any,)))
         @test rt === Int
         effects = Base.infer_effects(pr48932_callee_inferable, (Any,))
-        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
+        @test effects == Core.Compiler.Effects()
     end
 
     # run inference on both `pr48932_caller` and `pr48932_callee`:
@@ -186,20 +147,12 @@ begin take!(GLOBAL_BUFFER)
     end
 
     let mi = only(Base.specializations(only(methods(pr48932_callee_inferable))))
-        ci = mi.cache
-        @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
-        @test ci.max_world == typemax(UInt)
-        ci = ci.next
-        @test !isdefined(ci, :next)
-        @test ci.owner === nothing
-        @test ci.max_world == typemax(UInt)
+        @test has_active_cache(mi, InvalidationTesterToken())
+        @test has_active_cache(mi, nothing)
     end
     let mi = only(Base.specializations(only(methods(pr48932_caller_unuse))))
-        ci = mi.cache
-        @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
-        @test ci.max_world == typemax(UInt)
+        @test has_active_cache(mi, InvalidationTesterToken())
+        @test !has_active_cache(mi, nothing)
     end
 
     @test isnothing(pr48932_caller_unuse(42))
@@ -211,14 +164,8 @@ begin take!(GLOBAL_BUFFER)
 
     @test isempty(Base.specializations(only(methods(pr48932_callee_inferable))))
     let mi = only(Base.specializations(only(methods(pr48932_caller_unuse))))
-        ci = mi.cache
-        @test isdefined(ci, :next)
-        @test ci.owner === nothing
-        @test ci.max_world == typemax(UInt)
-        ci = ci.next
-        @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
-        @test ci.max_world == typemax(UInt)
+        @test has_active_cache(mi, InvalidationTesterToken())
+        @test has_active_cache(mi, nothing)
     end
     @test isnothing(pr48932_caller_unuse(42))
     @test "foo" == String(take!(GLOBAL_BUFFER))
@@ -234,7 +181,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee_inlined, (Any,)))
         @test rt === Any
         effects = Base.infer_effects(pr48932_callee_inlined, (Any,))
-        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
+        @test effects == Core.Compiler.Effects()
     end
 
     # run inference on `pr48932_caller_inlined` and `pr48932_callee_inlined`
@@ -246,20 +193,12 @@ begin take!(GLOBAL_BUFFER)
     end
 
     let mi = only(Base.specializations(only(methods(pr48932_callee_inlined))))
-        ci = mi.cache
-        @test isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
-        @test ci.max_world == typemax(UInt)
-        ci = ci.next
-        @test !isdefined(ci, :next)
-        @test ci.owner === nothing
-        @test ci.max_world == typemax(UInt)
+        @test has_active_cache(mi, InvalidationTesterToken())
+        @test has_active_cache(mi, nothing)
     end
     let mi = only(Base.specializations(only(methods(pr48932_caller_inlined))))
-        ci = mi.cache
-        @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
-        @test ci.max_world == typemax(UInt)
+        @test has_active_cache(mi, InvalidationTesterToken())
+        @test !has_active_cache(mi, nothing)
     end
 
     @test 42 == pr48932_caller_inlined(42)
@@ -271,14 +210,8 @@ begin take!(GLOBAL_BUFFER)
 
     @test isempty(Base.specializations(only(methods(pr48932_callee_inlined))))
     let mi = only(Base.specializations(only(methods(pr48932_caller_inlined))))
-        ci = mi.cache
-        @test isdefined(ci, :next)
-        @test ci.owner === nothing
-        @test ci.max_world != typemax(UInt)
-        ci = ci.next
-        @test !isdefined(ci, :next)
-        @test ci.owner === InvalidationTesterToken()
-        @test ci.max_world != typemax(UInt)
+        @test !has_active_cache(mi, InvalidationTesterToken())
+        @test !has_active_cache(mi, nothing)
     end
 
     @test isnothing(pr48932_caller_inlined(42))
