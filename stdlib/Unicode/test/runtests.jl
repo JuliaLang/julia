@@ -503,6 +503,10 @@ isequal_normalized_naive(s1, s2; kws...) = normalize(s1; kws...) == normalize(s2
                 @test isequal_normalized(cs, ns, casefold=true) ==
                       isequal_normalized_naive(cs, ns, casefold=true)
             end
+            for _ = 1:3
+                s = randcc(5,1000) # exercise sort!-based fallback
+                @test isequal_normalized(s, normalize(s))
+            end
             function randcc2(n, n_cc) # 2 strings with equivalent reordered combiners
                 buf1 = IOBuffer()
                 buf2 = IOBuffer()
