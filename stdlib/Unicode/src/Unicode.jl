@@ -232,6 +232,9 @@ As with [`Unicode.normalize`](@ref), you can also pass an arbitrary
 function via the `chartransform` keyword (mapping `Integer` codepoints to codepoints)
 to perform custom normalizations, such as [`Unicode.julia_chartransform`](@ref).
 
+!!! compat "Julia 1.8"
+    The `isequal_normalized` function was added in Julia 1.8.
+
 # Examples
 
 For example, the string `"noël"` can be constructed in two canonically equivalent ways
