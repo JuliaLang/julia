@@ -2174,3 +2174,10 @@ for (DictT, KeyT) = Any[(Dict{Symbol,Any}, Symbol),
         @test Core.Compiler.is_noub(effects)
     end
 end
+
+# test invalidation support
+replinterp_invalidation_callee(c::Bool=rand(Bool)) = Some(c ? r"foo" : r"bar")
+replinterp_invalidation_caller() = replinterp_invalidation_callee().value
+@test REPLCompletions.repl_eval_ex(:(replinterp_invalidation_caller()), @__MODULE__) == Regex
+replinterp_invalidation_callee(c::Bool=rand(Bool)) = Some(c ? "foo" : "bar")
+@test REPLCompletions.repl_eval_ex(:(replinterp_invalidation_caller()), @__MODULE__) == String
