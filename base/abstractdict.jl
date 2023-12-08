@@ -12,6 +12,8 @@ struct KeyError <: Exception
     key
 end
 
+KeyTypeError(K, key) = TypeError(:var"dict key", K, key)
+
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::AbstractDict, k) = in(k, keys(d))
@@ -218,7 +220,7 @@ Dict{Int64, Int64} with 3 entries:
 function merge!(d::AbstractDict, others::AbstractDict...)
     for other in others
         if haslength(d) && haslength(other)
-            sizehint!(d, length(d) + length(other))
+            sizehint!(d, length(d) + length(other); shrink = false)
         end
         for (k,v) in other
             d[k] = v

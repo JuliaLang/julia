@@ -1142,7 +1142,26 @@ end
     @test CartesianIndex(1,2) .+ [CartesianIndex(3,4), CartesianIndex(5,6)] == [CartesianIndex(4, 6), CartesianIndex(6, 8)]
 end
 
+struct MyBroadcastStyleWithField <: Broadcast.BroadcastStyle
+    i::Int
+end
+# asymmetry intended
+Base.BroadcastStyle(a::MyBroadcastStyleWithField, b::MyBroadcastStyleWithField) = a
+
+@testset "issue #50937: styles that have fields" begin
+    @test Broadcast.result_style(MyBroadcastStyleWithField(1), MyBroadcastStyleWithField(1)) ==
+        MyBroadcastStyleWithField(1)
+    @test_throws ErrorException Broadcast.result_style(MyBroadcastStyleWithField(1),
+                                                       MyBroadcastStyleWithField(2))
+    dest = [0, 0]
+    dest .= Broadcast.Broadcasted(MyBroadcastStyleWithField(1), +, (1:2, 2:3))
+    @test dest == [3, 5]
+end
+
 # test that `Broadcast` definition is defined as total and eligible for concrete evaluation
 import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 @test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
     Core.Compiler.is_foldable
+
+f51129(v, x) = (1 .- (v ./ x) .^ 2)
+@test @inferred(f51129([13.0], 6.5)) == [-3.0]

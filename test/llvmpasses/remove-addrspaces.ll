@@ -1,11 +1,15 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=0 --opaque-pointers=0 -load libjulia-codegen%shlibext -RemoveJuliaAddrspaces -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
 ; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='RemoveJuliaAddrspaces' -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
 
-; RUN: opt -enable-new-pm=0 --opaque-pointers=1 -load libjulia-codegen%shlibext -RemoveJuliaAddrspaces -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 ; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='RemoveJuliaAddrspaces' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
+
+; COM: check that package image fptrs work
+@pjlsys_BoundsError_32 = internal global {} addrspace(10)* ({}***, {} addrspace(10)*, [1 x i64] addrspace(11)*)* null
+; CHECK: @pjlsys_BoundsError_32 = internal global
+; TYPED-SAME: {}* ({}***, {}*, [1 x i64]*)* null
+; OPAQUE-SAME: ptr null
 
 define i64 @getindex({} addrspace(10)* nonnull align 16 dereferenceable(40)) {
 ; CHECK-LABEL: @getindex

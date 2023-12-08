@@ -183,16 +183,15 @@ nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
 convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
 
-function convert(::Type{NT}, nt::NamedTuple{names}) where {names, T<:Tuple, NT<:NamedTuple{names,T}}
-    if !@isdefined T
-        # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
-        # _tuple_error(NT, nt)
-        T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
-        NT1 = NamedTuple{names, T1}
-    else
-        T1 = T
-        NT1 = NT
-    end
+function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
+    NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
+end
+
+function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple{names}}
+    # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
+    # _tuple_error(NT, nt)
+    T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
+    NT1 = NamedTuple{names, T1}
     return NT1(T1(nt))::NT1::NT
 end
 
@@ -271,8 +270,9 @@ end
 
 filter(f, xs::NamedTuple) = xs[filter(k -> f(xs[k]), keys(xs))]
 
-@assume_effects :total function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
-    @nospecialize an bn
+function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_total_meta
     names = Symbol[an...]
     for n in bn
         if !sym_in(n, an)
@@ -282,24 +282,31 @@ filter(f, xs::NamedTuple) = xs[filter(k -> f(xs[k]), keys(xs))]
     (names...,)
 end
 
-@assume_effects :total function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
-    @nospecialize names a b
+function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
+    @nospecialize
+    @_total_meta
     bn = _nt_names(b)
     return Tuple{Any[ fieldtype(sym_in(names[n], bn) ? b : a, names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :foldable function merge_fallback(@nospecialize(a::NamedTuple), @nospecialize(b::NamedTuple),
-        @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+function merge_fallback(a::NamedTuple, b::NamedTuple,
+                        an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_foldable_meta
     names = merge_names(an, bn)
     types = merge_types(names, typeof(a), typeof(b))
     n = length(names)
-    A = Vector{Any}(undef, n)
+    A = Memory{Any}(undef, n)
     for i=1:n
         n = names[i]
         A[i] = getfield(sym_in(n, bn) ? b : a, n)
     end
     _new_NamedTuple(NamedTuple{names, types}, (A...,))
 end
+
+# This is `Experimental.@max_methods 4 function merge end`, which is not
+# defined at this point in bootstrap.
+typeof(function merge end).name.max_methods = UInt8(4)
 
 """
     merge(a::NamedTuple, bs::NamedTuple...)
@@ -386,8 +393,9 @@ tail(t::NamedTuple{names}) where names = NamedTuple{tail(names::Tuple)}(t)
 front(t::NamedTuple{names}) where names = NamedTuple{front(names::Tuple)}(t)
 reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
 
-@assume_effects :total function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
-    @nospecialize an bn
+function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_total_meta
     names = Symbol[]
     for n in an
         if !sym_in(n, bn)
@@ -397,16 +405,20 @@ reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
     (names...,)
 end
 
-@assume_effects :foldable function diff_types(@nospecialize(a::NamedTuple), @nospecialize(names::Tuple{Vararg{Symbol}}))
+function diff_types(a::NamedTuple, names::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_foldable_meta
     return Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :foldable function diff_fallback(@nospecialize(a::NamedTuple), @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+function diff_fallback(a::NamedTuple, an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_foldable_meta
     names = diff_names(an, bn)
     isempty(names) && return (;)
     types = diff_types(a, names)
     n = length(names)
-    A = Vector{Any}(undef, n)
+    A = Memory{Any}(undef, n)
     for i=1:n
         n = names[i]
         A[i] = getfield(a, n)

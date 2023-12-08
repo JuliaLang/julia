@@ -70,7 +70,7 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT
 {
-    if (tpid < 0 || tpid >= jl_n_threadpools)
+    if (tpid < -1 || tpid >= jl_n_threadpools)
         return 0;
     task->threadpoolid = tpid;
     return 1;
@@ -107,14 +107,18 @@ void jl_init_threadinginfra(void)
 
 void JL_NORETURN jl_finish_task(jl_task_t *t);
 
-
 static inline int may_mark(void) JL_NOTSAFEPOINT
 {
     return (jl_atomic_load(&gc_n_threads_marking) > 0);
 }
 
-// gc thread mark function
-void jl_gc_mark_threadfun(void *arg)
+static inline int may_sweep(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    return (jl_atomic_load(&ptls->gc_sweeps_requested) > 0);
+}
+
+// parallel gc thread function
+void jl_parallel_gc_threadfun(void *arg)
 {
     jl_threadarg_t *targ = (jl_threadarg_t*)arg;
 
@@ -130,16 +134,22 @@ void jl_gc_mark_threadfun(void *arg)
 
     while (1) {
         uv_mutex_lock(&gc_threads_lock);
-        while (!may_mark()) {
+        while (!may_mark() && !may_sweep(ptls)) {
             uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
         }
         uv_mutex_unlock(&gc_threads_lock);
-        gc_mark_loop_parallel(ptls, 0);
+        if (may_mark()) {
+            gc_mark_loop_parallel(ptls, 0);
+        }
+        if (may_sweep(ptls)) { // not an else!
+            gc_sweep_pool_parallel();
+            jl_atomic_fetch_add(&ptls->gc_sweeps_requested, -1);
+        }
     }
 }
 
-// gc thread sweep function
-void jl_gc_sweep_threadfun(void *arg)
+// concurrent gc thread function
+void jl_concurrent_gc_threadfun(void *arg)
 {
     jl_threadarg_t *targ = (jl_threadarg_t*)arg;
 
@@ -155,14 +165,7 @@ void jl_gc_sweep_threadfun(void *arg)
 
     while (1) {
         uv_sem_wait(&gc_sweep_assists_needed);
-        while (1) {
-            jl_gc_pagemeta_t *pg = pop_lf_page_metadata_back(&global_page_pool_lazily_freed);
-            if (pg == NULL) {
-                break;
-            }
-            jl_gc_free_page(pg);
-            push_lf_page_metadata_back(&global_page_pool_freed, pg);
-        }
+        gc_free_pages();
     }
 }
 
@@ -354,9 +357,14 @@ void jl_task_wait_empty(void)
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         if (f)
             jl_apply_generic(f, NULL, 0);
+        // we are back from jl_task_get_next now
         ct->world_age = lastage;
         wait_empty = NULL;
+        // TODO: move this lock acquire-release pair to the caller, so that we ensure new work
+        // (from uv_unref objects) didn't unexpectedly get scheduled and start running behind our back
+        JL_UV_LOCK();
         jl_wait_empty_end();
+        JL_UV_UNLOCK();
     }
 }
 

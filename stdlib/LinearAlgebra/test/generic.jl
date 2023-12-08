@@ -77,6 +77,17 @@ n = 5 # should be odd
         X = fill(x, 1, 1)
         @test logabsdet(x)[1] ≈ logabsdet(X)[1]
         @test logabsdet(x)[2] ≈ logabsdet(X)[2]
+        # Diagonal, upper, and lower triangular matrices
+        chksign(s1, s2) = if elty <: Real s1 == s2 else s1 ≈ s2 end
+        D = Matrix(Diagonal(A))
+        v, s = logabsdet(D)
+        @test v ≈ log(abs(det(D))) && chksign(s, sign(det(D)))
+        R = triu(A)
+        v, s = logabsdet(R)
+        @test v ≈ log(abs(det(R))) && chksign(s, sign(det(R)))
+        L = tril(A)
+        v, s = logabsdet(L)
+        @test v ≈ log(abs(det(L))) && chksign(s, sign(det(L)))
     end
 
     @testset "det with nonstandard Number type" begin
@@ -623,6 +634,17 @@ end
 @testset "condskeel #34512" begin
     A = rand(3, 3)
     @test condskeel(A) ≈ condskeel(A, [8,8,8])
+end
+
+@testset "copytrito!" begin
+    n = 10
+    A = rand(n, n)
+    for uplo in ('L', 'U')
+        B = zeros(n, n)
+        copytrito!(B, A, uplo)
+        C = uplo == 'L' ? tril(A) : triu(A)
+        @test B ≈ C
+    end
 end
 
 end # module TestGeneric

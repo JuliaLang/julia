@@ -9,7 +9,6 @@
 #include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/IR/Value.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -115,32 +114,4 @@ PreservedAnalyses CombineMulAddPass::run(Function &F, FunctionAnalysisManager &A
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
-}
-
-
-struct CombineMulAddLegacy : public FunctionPass {
-    static char ID;
-    CombineMulAddLegacy() : FunctionPass(ID)
-    {}
-
-private:
-    bool runOnFunction(Function &F) override {
-        return combineMulAdd(F);
-    }
-};
-
-char CombineMulAddLegacy::ID = 0;
-static RegisterPass<CombineMulAddLegacy> X("CombineMulAdd", "Combine mul and add to muladd",
-                                     false /* Only looks at CFG */,
-                                     false /* Analysis Pass */);
-
-Pass *createCombineMulAddPass()
-{
-    return new CombineMulAddLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddCombineMulAddPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createCombineMulAddPass());
 }

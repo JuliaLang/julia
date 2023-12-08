@@ -509,7 +509,7 @@
                   sparams))
          (kw      (gensy))
          (kwdecl  `(|::| ,kw (core NamedTuple)))
-         (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
+         (rkw     (if (null? restkw) '() (symbol (string (car restkw) "..."))))
          (restkw  (map (lambda (v) `(|::| ,v (call (top pairs) (core NamedTuple)))) restkw))
          (mangled (let ((und (and name (undot-name name))))
                     (symbol (string (if (and name (= (string.char (string name) 0) #\#))
@@ -608,16 +608,18 @@
                                ,tempslot)))
                    vars vals)
               `(block
-                (= ,rkw (call (top pairs)
-                              ,(if (null? keynames)
-                                   kw
-                                   `(call (top structdiff) ,kw (curly (core NamedTuple)
-                                                                      (tuple ,@(map quotify keynames)))))))
-                ,@(if (null? restkw)
-                      `((if (call (top isempty) ,rkw)
+                ,(if (null? restkw)
+                      `(if (call (top isempty)
+                                 (call (top diff_names)
+                                       (call (top keys) ,kw)
+                                       (tuple ,@(map quotify keynames))))
                             (null)
-                            (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg)))
-                      '())
+                            (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg))
+                      `(= ,rkw (call (top pairs)
+                                     ,(if (null? keynames)
+                                          kw
+                                          `(call (top structdiff) ,kw (curly (core NamedTuple)
+                                                                             (tuple ,@(map quotify keynames))))))))
                 (return (call ,mangled  ;; finally, call the core function
                               ,@keyvars
                               ,@(if (null? restkw) '() (list rkw))
@@ -1424,7 +1426,7 @@
                 (scope-block ,finalb)))))
           ((length> e 3)
            (and (length> e 6) (error "invalid \"try\" form"))
-           (let ((elseb (if (length= e 6) (cdddddr e) '())))
+           (let ((elseb (if (length= e 6) `((scope-block ,@(cdddddr e))) '())))
              (expand-forms
                `(,(if (null? elseb) 'trycatch 'trycatchelse)
                  (scope-block ,tryb)
@@ -2364,7 +2366,7 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export thismodule toplevel-only)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export public thismodule toplevel-only)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -3481,7 +3483,7 @@ f(x) = yt(x)
 
 
 (define (vinfo:not-capt vi)
-  (list (car vi) (cadr vi) (logand (caddr vi) (lognot 5))))
+  (list (car vi) (cadr vi) (logand (caddr vi) (lognot 1))))
 
 (define (clear-capture-bits vinfos)
   (map vinfo:not-capt vinfos))
@@ -3708,7 +3710,7 @@ f(x) = yt(x)
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
-         error gc_preserve_begin gc_preserve_end import using export inline noinline)))
+         error gc_preserve_begin gc_preserve_end import using export public inline noinline purity)))
 
 (define (local-in? s lam (tab #f))
   (or (and tab (has? tab s))
@@ -3812,8 +3814,6 @@ f(x) = yt(x)
              (let ((prev  (table.clone live))
                    (decl- (table.clone decl)))
                (let ((result (eager-any visit (cdr e))))
-                 (if (eq? (car e) '_while)
-                     (kill))  ;; body might not have run
                  (leave-loop! decl-)
                  (if result
                      #t
@@ -4254,17 +4254,21 @@ f(x) = yt(x)
         (else (for-each linearize (cdr e))))
   e)
 
+;; N.B.: This assumes that resolve-scopes has run, so outerref is equivalent to
+;; a global in the current scope.
 (define (valid-ir-argument? e)
-  (or (simple-atom? e) (symbol? e)
+  (or (simple-atom? e)
+      (and (outerref? e) (nothrow-julia-global (cadr e)))
+      (and (globalref? e) (nothrow-julia-global (cadr e) (caddr e)))
       (and (pair? e)
-           (memq (car e) '(quote inert top core globalref outerref
-                                 slot static_parameter boundscheck)))))
+           (memq (car e) '(quote inert top core
+                                 slot static_parameter)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast new_opaque_closure)))))
+           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast new_opaque_closure globalref outerref)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
@@ -4293,7 +4297,7 @@ f(x) = yt(x)
                               ;; be emitted at the exit of the block. Code
                               ;; should enter the finally block via `enter-finally-block`.
         (handler-goto-fixups '())  ;; `goto`s that might need `leave` exprs added
-        (handler-level 0)     ;; exception handler nesting depth
+        (handler-token-stack '())  ;; tokens identifying handler stack while active
         (catch-token-stack '())) ;; tokens identifying handler enter for current catch blocks
     (define (emit c)
       (or c (raise "missing value in IR"))
@@ -4324,12 +4328,13 @@ f(x) = yt(x)
         (emit `(= ,(car finally-handler) ,tag))
         (if need-goto
             (let ((label (cadr finally-handler))
-                  (dest-handler-level (cadddr finally-handler))
-                  (dest-tokens        (caddddr finally-handler)))
+                  (dest-handler-tokens (cadddr finally-handler))
+                  (dest-catch-tokens   (caddddr finally-handler)))
               ;; Leave current exception handling scope and jump to finally block
-              (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
+              (let ((pexc (pop-exc-expr catch-token-stack dest-catch-tokens)))
                 (if pexc (emit pexc)))
-              (emit `(leave ,(+ 1 (- handler-level dest-handler-level))))
+              (let ((plist (pop-handler-list handler-token-stack (cdr dest-handler-tokens) '())))
+                (emit `(leave ,@plist)))
               (emit `(goto ,label))))
         tag))
     (define (pop-exc-expr src-tokens dest-tokens)
@@ -4342,6 +4347,18 @@ f(x) = yt(x)
                                      (car s)
                                      (loop (cdr s))))))
             `(pop_exception ,restore-token))))
+    (define (pop-handler-list src-tokens dest-tokens lab)
+      (if (eq? src-tokens dest-tokens)
+          #f
+          (let loop ((s src-tokens)
+                     (l '()))
+            (if (not (pair? s))
+                (if (null? lab)
+                  (error "Attempt to jump into catch block")
+                  (error (string "cannot goto label \"" lab "\" inside try/catch block"))))
+            (if (eq? (cdr s) dest-tokens)
+                (cons (car s) l)
+                (loop (cdr s) (cons (car s) l))))))
     (define (emit-return x)
       (define (emit- x)
         (let* ((tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
@@ -4359,27 +4376,27 @@ f(x) = yt(x)
             (if pexc (emit pexc)))
           (emit `(return ,x))))
       (if x
-          (if (> handler-level 0)
+          (if (null? handler-token-stack)
+              (actually-return x)
               (let ((tmp (cond ((and (simple-atom? x) (or (not (ssavalue? x)) (not finally-handler))) #f)
                                (finally-handler  (new-mutable-var))
                                (else             (make-ssavalue)))))
                 (if tmp (emit `(= ,tmp ,x)))
                 (if finally-handler
                     (enter-finally-block `(return ,(or tmp x)))
-                    (begin (emit `(leave ,handler-level))
+                    (begin (emit `(leave ,@handler-token-stack))
                            (actually-return (or tmp x))))
-                (or tmp x))
-              (actually-return x))))
+                (or tmp x)))))
     (define (emit-break labl)
-      (let ((lvl (caddr labl))
+      (let ((dest-handler-tokens (caddr labl))
             (dest-tokens (cadddr labl)))
-        (if (and finally-handler (> (cadddr finally-handler) lvl))
+        (if (and finally-handler (> (length (cadddr finally-handler)) (length dest-handler-tokens)))
             (enter-finally-block `(break ,labl))
             (begin
               (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
                 (if pexc (emit pexc)))
-              (if (> handler-level lvl)
-                  (emit `(leave ,(- handler-level lvl))))
+              (let ((plist (pop-handler-list handler-token-stack dest-handler-tokens '())))
+                (if plist (emit `(leave ,@plist))))
               (emit `(goto ,(cadr labl)))))))
     (define (new-mutable-var . name)
       (let ((g (if (null? name) (gensy) (named-gensy (car name)))))
@@ -4397,48 +4414,59 @@ f(x) = yt(x)
           (else                (string "\"" h "\" expression"))))
       (if (not (null? (cadr lam)))
           (error (string (head-to-text (car e)) " not at top level"))))
+    (define (valid-body-ir-argument? aval)
+      (or (valid-ir-argument? aval)
+          (and (symbol? aval) ; Arguments are always defined slots
+               (or (memq aval (lam:args lam))
+                   (let ((vi (get vinfo-table aval #f)))
+                     (and vi (vinfo:never-undef vi)))))))
+    (define (single-assign-var? aval)
+      (and (symbol? aval) ; Arguments are always sa
+           (or (memq aval (lam:args lam))
+               (let ((vi (get vinfo-table aval #f)))
+                 (and vi (vinfo:sa vi))))))
+    ;; TODO: We could also allow const globals here
+    (define (const-read-arg? x)
+      ;; Even if we have side effects, we know that singly-assigned
+      ;; locals cannot be affected them, so we can inline them anyway.
+      (or (simple-atom? x) (single-assign-var? x)
+        (and (pair? x)
+          (memq (car x) '(quote inert top core)))))
     ;; evaluate the arguments of a call, creating temporary locations as needed
     (define (compile-args lst break-labels)
       (if (null? lst) '()
-          (let ((simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
-                                                (and (pair? x)
-                                                     (memq (car x) '(quote inert top core globalref outerref boundscheck)))))
-                                lst)))
-            (let loop ((lst  lst)
-                       (vals '()))
-              (if (null? lst)
-                  (reverse! vals)
-                  (let* ((arg (car lst))
-                         (aval (or (compile arg break-labels #t #f)
-                                   ;; TODO: argument exprs that don't yield a value?
-                                   '(null))))
-                    (loop (cdr lst)
-                          (cons (if (and (not simple?)
-                                         (not (simple-atom? arg))
-                                         (not (simple-atom? aval))
-                                         (not (and (pair? arg)
-                                                   (memq (car arg) '(quote inert top core boundscheck))))
-                                         (not (and (symbol? aval) ;; function args are immutable and always assigned
-                                                   (memq aval (lam:args lam))))
-                                         (not (and (or (symbol? arg)
-                                                       (and (pair? arg)
-                                                            (memq (car arg) '(globalref outerref))))
-                                                   (or (null? (cdr lst))
-                                                       (null? vals)))))
-                                    (let ((tmp (make-ssavalue)))
-                                      (emit `(= ,tmp ,aval))
-                                      tmp)
-                                    aval)
-                                vals))))))))
+        ;; First check if all the arguments as simple (and therefore side-effect free).
+        ;; Otherwise, we need to use ssa values for all arguments to ensure proper
+        ;; left-to-right evaluation semantics.
+        (let ((simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
+                                              (and (pair? x)
+                                                   (memq (car x) '(quote inert top core globalref outerref)))))
+                              lst)))
+          (let loop ((lst  lst)
+                     (vals '()))
+            (if (null? lst)
+                (reverse! vals)
+                (let* ((arg (car lst))
+                       (aval (or (compile arg break-labels #t #f)
+                                 ;; TODO: argument exprs that don't yield a value?
+                                 '(null))))
+                  (loop (cdr lst)
+                        (cons (if (and
+                                   (or simple? (const-read-arg? aval))
+                                   (valid-body-ir-argument? aval))
+                                  aval
+                                  (let ((tmp (make-ssavalue)))
+                                    (emit `(= ,tmp ,aval))
+                                    tmp))
+                              vals))))))))
     (define (compile-cond ex break-labels)
       (let ((cnd (or (compile ex break-labels #t #f)
                      ;; TODO: condition exprs that don't yield a value?
                      '(null))))
-        (if (not (valid-ir-argument? cnd))
+        (if (valid-body-ir-argument? cnd) cnd
             (let ((tmp (make-ssavalue)))
               (emit `(= ,tmp ,cnd))
-              tmp)
-            cnd)))
+              tmp))))
     (define (emit-cond cnd break-labels endl)
       (let* ((cnd (if (and (pair? cnd) (eq? (car cnd) 'block))
                       (flatten-ex 'block cnd)
@@ -4490,7 +4518,7 @@ f(x) = yt(x)
                                (and (pair? e) (or (eq? (car e) 'outerref)
                                                   (eq? (car e) 'globalref))
                                     (underscore-symbol? (cadr e)))))
-                (error (string "all-underscore identifier used as rvalue" (format-loc current-loc))))
+                (error (string "all-underscore identifiers are write-only and their values cannot be used in expressions" (format-loc current-loc))))
             (cond (tail  (emit-return e1))
                   (value e1)
                   ((symbol? e1) (emit e1) #f)  ;; keep symbols for undefined-var checking
@@ -4656,7 +4684,7 @@ f(x) = yt(x)
             ((break-block)
              (let ((endl (make-label)))
                (compile (caddr e)
-                        (cons (list (cadr e) endl handler-level catch-token-stack)
+                        (cons (list (cadr e) endl handler-token-stack catch-token-stack)
                               break-labels)
                         #f #f)
                (mark-label endl))
@@ -4670,7 +4698,7 @@ f(x) = yt(x)
              (if (eq? (car e) 'symboliclabel)
                  (if (has? label-nesting (cadr e))
                      (error (string "label \"" (cadr e) "\" defined multiple times"))
-                     (put! label-nesting (cadr e) (list handler-level catch-token-stack))))
+                     (put! label-nesting (cadr e) (list handler-token-stack catch-token-stack))))
              (let ((m (get label-map (cadr e) #f)))
                (if m
                    (emit `(label ,m))
@@ -4686,7 +4714,7 @@ f(x) = yt(x)
                (emit `(null))  ;; save space for `leave` that might be needed
                (emit `(goto ,m))
                (set! handler-goto-fixups
-                     (cons (list code handler-level catch-token-stack (cadr e)) handler-goto-fixups))
+                     (cons (list code handler-token-stack catch-token-stack (cadr e)) handler-goto-fixups))
                #f))
 
             ;; exception handlers are lowered using
@@ -4703,8 +4731,8 @@ f(x) = yt(x)
                    (my-finally-handler #f))
                ;; handler block entry
                (emit `(= ,handler-token (enter ,catch)))
-               (set! handler-level (+ handler-level 1))
-               (if finally (begin (set! my-finally-handler (list finally endl '() handler-level catch-token-stack))
+               (set! handler-token-stack (cons handler-token handler-token-stack))
+               (if finally (begin (set! my-finally-handler (list finally endl '() handler-token-stack catch-token-stack))
                                   (set! finally-handler my-finally-handler)
                                   (emit `(= ,finally -1))))
                (let* ((v1  (compile (cadr e) break-labels value #f)) ;; emit try block code
@@ -4715,21 +4743,21 @@ f(x) = yt(x)
                  (if tail
                      (begin (if els
                                 (begin (if (and (not val) v1) (emit v1))
-                                       (emit '(leave 1)))
+                                       (emit `(leave ,handler-token)))
                                 (if v1 (emit-return v1)))
                             (if (not finally) (set! endl #f)))
-                     (begin (emit '(leave 1))
+                     (begin (emit `(leave ,handler-token))
                             (emit `(goto ,(or els endl)))))
-                 (set! handler-level (- handler-level 1))
+                 (set! handler-token-stack (cdr handler-token-stack))
                  ;; emit else block
                  (if els
                      (begin (mark-label els)
                             (let ((v3 (compile (cadddr e) break-labels value tail))) ;; emit else block code
                               (if val (emit-assignment val v3)))
                             (if endl (emit `(goto ,endl)))))
-                 ;; emit either catch or finally block
+                 ;; emit either catch or finally block. A combined try/catch/finally block was split into
+                 ;; separate trycatch and tryfinally blocks earlier.
                  (mark-label catch)
-                 (emit `(leave 1))
                  (if finally
                      (begin (enter-finally-block '(call (top rethrow)) #f) ;; enter block via exception
                             (mark-label endl) ;; non-exceptional control flow enters here
@@ -4836,7 +4864,7 @@ f(x) = yt(x)
                val))
 
             ;; other top level expressions
-            ((import using export)
+            ((import using export public)
              (check-top-level e)
              (emit e)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
@@ -4849,7 +4877,7 @@ f(x) = yt(x)
                (cons (car e) args)))
 
             ;; metadata expressions
-            ((lineinfo line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope inline noinline)
+            ((lineinfo line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope inline noinline purity)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)
@@ -4887,21 +4915,18 @@ f(x) = yt(x)
     (compile e '() #t #t)
     (for-each (lambda (x)
                 (let ((point (car x))
-                      (hl    (cadr x))
-                      (src-tokens (caddr x))
+                      (src-handler-tokens (cadr x))
+                      (src-catch-tokens (caddr x))
                       (lab   (cadddr x)))
                   (let ((target-nesting (get label-nesting lab #f)))
                     (if (not target-nesting)
                         (error (string "label \"" lab "\" referenced but not defined")))
-                    (let ((target-level (car target-nesting)))
-                      (cond ((> target-level hl)
-                            (error (string "cannot goto label \"" lab "\" inside try/catch block")))
-                            ((= target-level hl)
-                             (set-cdr! point (cddr point))) ;; remove empty slot
-                            (else
-                             (set-car! (cdr point) `(leave ,(- hl target-level))))))
-                    (let ((pexc (pop-exc-expr src-tokens (cadr target-nesting))))
-                      (if pexc (set-cdr! point (cons pexc (cdr point))))))))
+                    (let ((target-handler-tokens (car target-nesting))
+                          (target-catch-tokens (cadr target-nesting)))
+                      (let ((plist (pop-handler-list src-handler-tokens target-handler-tokens lab)))
+                        (if plist (set-car! (cdr point) `(leave ,@plist))))
+                      (let ((pexc (pop-exc-expr src-catch-tokens target-catch-tokens)))
+                        (if pexc (set-cdr! point (cons pexc (cdr point)))))))))
               handler-goto-fixups)
     (if global-const-error
         (error (string "`global const` declaration not allowed inside function" (format-loc global-const-error))))

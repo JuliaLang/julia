@@ -83,6 +83,7 @@ module IteratorsMD
     CartesianIndex{N}(index::Integer...) where {N} = CartesianIndex{N}(index)
     CartesianIndex{N}() where {N} = CartesianIndex{N}(())
     # Un-nest passed CartesianIndexes
+    CartesianIndex{N}(index::CartesianIndex{N}) where {N} = index
     CartesianIndex(index::Union{Integer, CartesianIndex}...) = CartesianIndex(flatten(index))
     flatten(::Tuple{}) = ()
     flatten(I::Tuple{Any}) = Tuple(I[1])
@@ -165,6 +166,19 @@ module IteratorsMD
     # see #23719
     Base.iterate(::CartesianIndex) =
         error("iteration is deliberately unsupported for CartesianIndex. Use `I` rather than `I...`, or use `Tuple(I)...`")
+
+    # ranges are deliberately disabled to prevent ambiguities with the colon constructor
+    Base.range_start_step_length(start::CartesianIndex, step::CartesianIndex, len::Integer) =
+        error("range with a specified length is deliberately unsupported for CartesianIndex arguments."*
+            " Use StepRangeLen($start, $step, $len) to construct this range")
+
+    # show is special-cased to avoid the start:stop:step display,
+    # which constructs a CartesianIndices
+    # See #50784
+    function show(io::IO, r::StepRangeLen{<:CartesianIndex})
+        print(io, "StepRangeLen(", first(r), ", ",
+                    step(r), ", ", length(r), ")")
+    end
 
     # Iteration
     const OrdinalRangeInt = OrdinalRange{Int, Int}
@@ -424,27 +438,17 @@ module IteratorsMD
     @inline function __inc(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
         I = state[1] + step(rng)
-        valid = __is_valid_range(I, rng) && state[1] != last(rng)
-        return valid, (I, )
+        valid = state[1] != last(rng)
+        return valid, (I,)
     end
     @inline function __inc(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
         I = state[1] + step(rng)
-        if __is_valid_range(I, rng) && state[1] != last(rng)
+        if state[1] != last(rng)
             return true, (I, tail(state)...)
         end
         valid, I = __inc(tail(state), tail(indices))
         return valid, (first(rng), I...)
-    end
-
-    @inline __is_valid_range(I, rng::AbstractUnitRange) = I in rng
-    @inline function __is_valid_range(I, rng::OrdinalRange)
-        if step(rng) > 0
-            lo, hi = first(rng), last(rng)
-        else
-            lo, hi = last(rng), first(rng)
-        end
-        lo <= I <= hi
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once
@@ -556,13 +560,13 @@ module IteratorsMD
     @inline function __dec(state::Tuple{Int}, indices::Tuple{OrdinalRangeInt})
         rng = indices[1]
         I = state[1] - step(rng)
-        valid = __is_valid_range(I, rng) && state[1] != first(rng)
+        valid = state[1] != first(rng)
         return valid, (I,)
     end
     @inline function __dec(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
         I = state[1] - step(rng)
-        if __is_valid_range(I, rng) && state[1] != first(rng)
+        if state[1] != first(rng)
             return true, (I, tail(state)...)
         end
         valid, I = __dec(tail(state), tail(indices))
@@ -1179,8 +1183,7 @@ circshift!(dest::AbstractArray, src, ::Tuple{}) = copyto!(dest, src)
 Circularly shift, i.e. rotate, the data in `src`, storing the result in
 `dest`. `shifts` specifies the amount to shift in each dimension.
 
-The `dest` array must be distinct from the `src` array (they cannot
-alias each other).
+$(_DOCS_ALIASING_WARNING)
 
 See also [`circshift`](@ref).
 """
@@ -1237,6 +1240,8 @@ Copy `src` to `dest`, indexing each dimension modulo its length.
 their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
+
+$(_DOCS_ALIASING_WARNING)
 
 See also: [`circshift`](@ref).
 
@@ -1564,7 +1569,7 @@ end
 
 isassigned(a::AbstractArray, i::CartesianIndex) = isassigned(a, Tuple(i)...)
 function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
-    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(i...))
+    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(to_indices(A, i)))
     @boundscheck checkbounds(Bool, A, i...) || return false
     S = IndexStyle(A)
     ninds = length(i)
@@ -1843,7 +1848,7 @@ but the result order will be row-major instead.
 
 # Higher dimensional examples
 ```
-julia> A = permutedims(reshape([4 3; 2 1; 'A' 'B'; 'C' 'D'], (2, 2, 2)), (1, 3, 2))
+julia> A = [4 3; 2 1 ;;; 'A' 'B'; 'C' 'D']
 2×2×2 Array{Any, 3}:
 [:, :, 1] =
  4  3
@@ -1892,39 +1897,25 @@ julia> sortslices(reshape([5; 4; 3; 2; 1], (1,1,5)), dims=3, by=x->x[1,1])
 ```
 """
 function sortslices(A::AbstractArray; dims::Union{Integer, Tuple{Vararg{Integer}}}, kws...)
-    _sortslices(A, Val{dims}(); kws...)
+    if A isa Matrix && dims isa Integer && dims == 1
+        # TODO: remove once the generic version becomes as fast or faster
+        perm = sortperm(eachslice(A; dims); kws...)
+        return A[perm, :]
+    end
+
+    B = similar(A)
+    _sortslices!(B, A, Val{dims}(); kws...)
+    B
 end
 
-# Works around inference's lack of ability to recognize partial constness
-struct DimSelector{dims, T}
-    A::T
-end
-DimSelector{dims}(x::T) where {dims, T} = DimSelector{dims, T}(x)
-(ds::DimSelector{dims, T})(i) where {dims, T} = i in dims ? axes(ds.A, i) : (:,)
+function _sortslices!(B, A, ::Val{dims}; kws...) where dims
+    ves = vec(eachslice(A; dims))
+    perm = sortperm(ves; kws...)
+    bes = eachslice(B; dims)
 
-_negdims(n, dims) = filter(i->!(i in dims), 1:n)
-
-function compute_itspace(A, ::Val{dims}) where {dims}
-    negdims = _negdims(ndims(A), dims)
-    axs = Iterators.product(ntuple(DimSelector{dims}(A), ndims(A))...)
-    vec(permutedims(collect(axs), (dims..., negdims...)))
-end
-
-function _sortslices(A::AbstractArray, d::Val{dims}; kws...) where dims
-    itspace = compute_itspace(A, d)
-    vecs = map(its->view(A, its...), itspace)
-    p = sortperm(vecs; kws...)
-    if ndims(A) == 2 && isa(dims, Integer) && isa(A, Array)
-        # At the moment, the performance of the generic version is subpar
-        # (about 5x slower). Hardcode a fast-path until we're able to
-        # optimize this.
-        return dims == 1 ? A[p, :] : A[:, p]
-    else
-        B = similar(A)
-        for (x, its) in zip(p, itspace)
-            B[its...] = vecs[x]
-        end
-        B
+    # TODO for further optimization: traverse in memory order
+    for (slice, i) in zip(eachslice(B; dims), perm)
+        slice .= ves[i]
     end
 end
 

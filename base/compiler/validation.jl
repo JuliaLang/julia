@@ -14,12 +14,12 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :splatnew => 2:2,
     :the_exception => 0:0,
     :enter => 1:1,
-    :leave => 1:1,
+    :leave => 1:typemax(Int),
     :pop_exception => 1:1,
     :inbounds => 1:1,
     :inline => 1:1,
     :noinline => 1:1,
-    :boundscheck => 0:0,
+    :boundscheck => 0:1,
     :copyast => 1:1,
     :meta => 0:typemax(Int),
     :global => 1:1,
@@ -230,11 +230,11 @@ end
 
 validate_code(args...) = validate_code!(Vector{InvalidCodeError}(), args...)
 
-is_valid_lvalue(@nospecialize(x)) = isa(x, UnoptSlot) || isa(x, GlobalRef)
+is_valid_lvalue(@nospecialize(x)) = isa(x, SlotNumber) || isa(x, GlobalRef)
 
 function is_valid_argument(@nospecialize(x))
-    if isa(x, UnoptSlot) || isa(x, Argument) || isa(x, SSAValue) ||
-       isa(x, GlobalRef) || isa(x, QuoteNode) || isexpr(x, (:static_parameter, :boundscheck)) ||
+    if isa(x, SlotNumber) || isa(x, Argument) || isa(x, SSAValue) ||
+       isa(x, GlobalRef) || isa(x, QuoteNode) || (isa(x, Expr) && is_value_pos_expr_head(x.head))  ||
        isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
        isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
         return true
@@ -253,5 +253,3 @@ function is_valid_rvalue(@nospecialize(x))
 end
 
 is_valid_return(@nospecialize(x)) = is_valid_argument(x) || (isa(x, Expr) && x.head === :lambda)
-
-is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag

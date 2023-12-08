@@ -70,6 +70,8 @@ function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
     if ex.expected === Bool
         print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
+    elseif ex.func === :var"dict key"
+        print(io, "$(limitrepr(ex.got)) is not a valid key for type $(ex.expected)")
     else
         if isvarargtype(ex.got)
             targs = (ex.got,)
@@ -80,7 +82,7 @@ function showerror(io::IO, ex::TypeError)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
-        elseif ex.func === Symbol("keyword argument")
+        elseif ex.func === :var"keyword argument"
             ctx = "in keyword argument $(ex.context)"
         else
             ctx = "in $(ex.func), in $(ex.context)"
@@ -168,13 +170,25 @@ showerror(io::IO, ex::UndefKeywordError) =
 
 function showerror(io::IO, ex::UndefVarError)
     print(io, "UndefVarError: `$(ex.var)` not defined")
+    if isdefined(ex, :scope)
+        scope = ex.scope
+        if scope isa Module
+            print(io, " in `$scope`")
+        elseif scope === :static_parameter
+            print(io, " in static parameter matching")
+        else
+            print(io, " in $scope scope")
+        end
+    end
     Experimental.show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
-    nameof(ex.T) === ex.func || print(io, ex.T, ", ")
-    print(io, ex.val, ')')
+    T = first(ex.args)
+    nameof(T) === ex.func || print(io, T, ", ")
+    join(io, ex.args[2:end], ", ")
+    print(io, ")")
     Experimental.show_error_hints(io, ex)
 end
 
@@ -268,20 +282,24 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
         end
         print(io, "no method matching ")
-        show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
-        print(io, "(")
+        iob = IOContext(IOBuffer(), io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
+        show_signature_function(iob, isa(f, Type) ? Type{f} : typeof(f))
+        print(iob, "(")
         for (i, typ) in enumerate(arg_types_param)
-            print(io, "::", typ)
-            i == length(arg_types_param) || print(io, ", ")
+            print(iob, "::", typ)
+            i == length(arg_types_param) || print(iob, ", ")
         end
         if !isempty(kwargs)
-            print(io, "; ")
+            print(iob, "; ")
             for (i, (k, v)) in enumerate(kwargs)
-                print(io, k, "::", typeof(v))
-                i == length(kwargs)::Int || print(io, ", ")
+                print(iob, k, "::", typeof(v))
+                i == length(kwargs)::Int || print(iob, ", ")
             end
         end
-        print(io, ")")
+        print(iob, ")")
+        str = String(take!(unwrapcontext(iob)[1]))
+        str = type_limited_string_from_context(io, str)
+        print(io, str)
     end
     # catch the two common cases of element-wise addition and subtraction
     if (f === Base.:+ || f === Base.:-) && length(arg_types_param) == 2
@@ -675,7 +693,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
             printstyled(io,
-                "--- the last ", cycle_length, " lines are repeated ",
+                "--- the above ", cycle_length, " lines are repeated ",
                   repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
             if i < length(displayed_stackframes)
                 println(io)
@@ -716,9 +734,6 @@ parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
     file, line = string(frame.file), frame.line
-    file = fixup_stdlib_path(file)
-    stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
-    stacktrace_contract_userdir() && (file = contractuser(file))
 
     # Used by the REPL to make it possible to open
     # the location of a stackframe/method in the editor.
@@ -758,6 +773,7 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     end
 
     # filepath
+    file = fixup_stdlib_path(file)
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
     stacktrace_contract_userdir() && (file = contractuser(file))
     print(io, " ")
@@ -783,7 +799,7 @@ function show_backtrace(io::IO, t::Vector)
 
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
         f = filtered[1][1]::StackFrame
-        if f.line == 0 && f.file === Symbol("")
+        if f.line == 0 && f.file === :var""
             # don't show a single top-level frame with no location info
             return
         end

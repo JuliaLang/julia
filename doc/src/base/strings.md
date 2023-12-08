@@ -17,6 +17,11 @@ Core.String(::AbstractString)
 Base.SubString
 Base.LazyString
 Base.@lazy_str
+Base.AnnotatedString
+Base.AnnotatedChar
+Base.annotatedstring
+Base.annotations
+Base.annotate!
 Base.transcode
 Base.unsafe_string
 Base.ncodeunits(::AbstractString)
@@ -53,6 +58,7 @@ Base.occursin
 Base.reverse(::Union{String,SubString{String}})
 Base.replace(::IO, s::AbstractString, ::Pair...)
 Base.eachsplit
+Base.eachrsplit
 Base.split
 Base.rsplit
 Base.strip
@@ -89,5 +95,6 @@ Base.isspace
 Base.isuppercase
 Base.isxdigit
 Base.escape_string
+Base.escape_raw_string
 Base.unescape_string
 ```

@@ -379,7 +379,7 @@ make_makeargs(args::Tuple) = _make_makeargs(args, 1)[1]
 end
 _make_makeargs(::Tuple{}, n::Int) = (), n
 
-# A help struct to store the flattened index staticly
+# A help struct to store the flattened index statically
 struct Pick{N} <: Function end
 (::Pick{N})(@nospecialize(args::Tuple)) where {N} = args[N]
 
@@ -419,6 +419,10 @@ function combine_styles end
 
 combine_styles() = DefaultArrayStyle{0}()
 combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
+function combine_styles(bc::Broadcasted)
+    bc.style isa Union{Nothing,Unknown} || return bc.style
+    throw(ArgumentError("Broadcasted{Unknown} wrappers do not have a style assigned"))
+end
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
@@ -441,7 +445,9 @@ Base.Broadcast.DefaultArrayStyle{1}()
 function result_style end
 
 result_style(s::BroadcastStyle) = s
-result_style(s1::S, s2::S) where S<:BroadcastStyle = S()
+function result_style(s1::S, s2::S) where S<:BroadcastStyle
+    s1 ≡ s2 ? s1 : error("inconsistent broadcast styles, custom rule needed")
+end
 # Test both orders so users typically only have to declare one order
 result_style(s1, s2) = result_join(s1, s2, BroadcastStyle(s1, s2), BroadcastStyle(s2, s1))
 
@@ -457,7 +463,8 @@ result_join(::Any, ::Any, s::BroadcastStyle, ::Unknown) = s
 result_join(::AbstractArrayStyle, ::AbstractArrayStyle, ::Unknown, ::Unknown) =
     ArrayConflict()
 # Fallbacks in case users define `rule` for both argument-orders (not recommended)
-result_join(::Any, ::Any, ::S, ::S) where S<:BroadcastStyle = S()
+result_join(::Any, ::Any, s1::S, s2::S) where S<:BroadcastStyle = result_style(s1, s2)
+
 @noinline function result_join(::S, ::T, ::U, ::V) where {S,T,U,V}
     error("""
 conflicting broadcast rules defined
@@ -711,8 +718,8 @@ _broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
 eltypes(::Tuple{}) = Tuple{}
 eltypes(t::Tuple{Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]))
 eltypes(t::Tuple{Any,Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2]))
-# eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
-eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
+eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
+# eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
 
 # Inferred eltype of result of broadcast(f, args...)
 function combine_eltypes(f, args::Tuple)
@@ -963,6 +970,32 @@ preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
     # for loop or not. (cf. https://github.com/JuliaLang/julia/issues/38086)
     @inbounds @simd for I in eachindex(bc′)
         dest[I] = bc′[I]
+    end
+    return dest
+end
+
+# Performance optimization: for BitVector outputs, we cache the result
+# in a 64-bit register before writing into memory (to bypass LSQ)
+@inline function copyto!(dest::BitVector, bc::Broadcasted{Nothing})
+    axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
+    ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
+    destc = dest.chunks
+    bcp = preprocess(dest, bc)
+    length(bcp) <= 0 && return dest
+    len = Base.num_bit_chunks(Int(length(bcp)))
+    @inbounds for i = 0:(len - 2)
+        z = UInt64(0)
+        for j = 0:63
+           z |= UInt64(bcp[i*64 + j + 1]::Bool) << (j & 63)
+        end
+        destc[i + 1] = z
+    end
+    @inbounds let i = len - 1
+        z = UInt64(0)
+        for j = 0:((length(bcp) - 1) & 63)
+             z |= UInt64(bcp[i*64 + j + 1]::Bool) << (j & 63)
+        end
+        destc[i + 1] = z
     end
     return dest
 end

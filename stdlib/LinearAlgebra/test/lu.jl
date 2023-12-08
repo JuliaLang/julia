@@ -97,7 +97,9 @@ dimg  = randn(n)/2
             dlu = convert.(eltya, [1, 1])
             dia = convert.(eltya, [-2, -2, -2])
             tri = Tridiagonal(dlu, dia, dlu)
-            @test_throws ArgumentError lu!(tri)
+            L = lu(tri)
+            @test lu!(tri) == L
+            @test UpperTriangular(tri) == L.U
         end
     end
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
@@ -301,7 +303,7 @@ end
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
         seekstart(bf)
         @test String(take!(bf)) == """
-LinearAlgebra.LU{Float64, Matrix{Float64}, Vector{$Int}}
+$(LinearAlgebra.LU){Float64, Matrix{Float64}, Vector{$Int}}
 L factor:
 4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0

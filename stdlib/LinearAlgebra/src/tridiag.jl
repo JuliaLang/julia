@@ -103,8 +103,12 @@ julia> SymTridiagonal(B)
 ```
 """
 function SymTridiagonal(A::AbstractMatrix)
-    if (diag(A, 1) == transpose.(diag(A, -1))) && all(issymmetric.(diag(A, 0)))
-        SymTridiagonal(diag(A, 0), diag(A, 1))
+    checksquare(A)
+    du = diag(A, 1)
+    d  = diag(A)
+    dl = diag(A, -1)
+    if all(((x, y),) -> x == transpose(y), zip(du, dl)) && all(issymmetric, d)
+        SymTridiagonal(d, du)
     else
         throw(ArgumentError("matrix is not symmetric; cannot convert to SymTridiagonal"))
     end
@@ -116,12 +120,12 @@ SymTridiagonal{T,V}(S::SymTridiagonal) where {T,V<:AbstractVector{T}} =
 SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = S
 SymTridiagonal{T}(S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+                    convert(AbstractVector{T}, S.ev)::AbstractVector{T})
 SymTridiagonal(S::SymTridiagonal) = S
 
-AbstractMatrix{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+AbstractMatrix{T}(S::SymTridiagonal) where {T} = SymTridiagonal{T}(S)
+AbstractMatrix{T}(S::SymTridiagonal{T}) where {T} = copy(S)
+
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = Matrix{T}(undef, n, n)
@@ -138,16 +142,7 @@ end
 Matrix(M::SymTridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M)
 Array(M::SymTridiagonal) = Matrix(M)
 
-size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
-function size(A::SymTridiagonal, d::Integer)
-    if d < 1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    elseif d<=2
-        return length(A.dv)
-    else
-        return 1
-    end
-end
+size(A::SymTridiagonal) = (n = length(A.dv); (n, n))
 
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(S.dv, T, dims)
@@ -477,13 +472,13 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
                 "lengths of subdiagonal, diagonal and superdiagonal: ",
                 "($(length(dl)), $(length(d)), $(length(du)))")))
         end
-        new{T,V}(dl, d, du)
+        new{T,V}(dl, d, Base.unalias(dl, du))
     end
     # constructor used in lu!
     function Tridiagonal{T,V}(dl, d, du, du2) where {T,V<:AbstractVector{T}}
         require_one_based_indexing(dl, d, du, du2)
         # length checks?
-        new{T,V}(dl, d, du, du2)
+        new{T,V}(dl, d, Base.unalias(dl, du), du2)
     end
 end
 
@@ -495,6 +490,10 @@ respectively. The result is of type `Tridiagonal` and provides efficient special
 solvers, but may be converted into a regular matrix with
 [`convert(Array, _)`](@ref) (or `Array(_)` for short).
 The lengths of `dl` and `du` must be one less than the length of `d`.
+
+!!! note
+    The subdiagonal `dl` and the superdiagonal `du` must not be aliased to each other.
+    If aliasing is detected, the constructor will use a copy of `du` as its argument.
 
 # Examples
 ```jldoctest
@@ -517,8 +516,8 @@ Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiag
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
     Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
 end
-function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
-    Tridiagonal{T,V}(A.dl, A.d, A.du)
+function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector) where {T}
+    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du, du2))...)
 end
 
 """
@@ -549,25 +548,24 @@ Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
 Tridiagonal(A::Tridiagonal) = A
 Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
 function Tridiagonal{T}(A::Tridiagonal) where {T}
-    dl, d, du = map(x->convert(AbstractVector{T}, x)::AbstractVector{T},
-                    (A.dl, A.d, A.du))
+    dl, d, du = map(x -> convert(AbstractVector{T}, x)::AbstractVector{T}, (A.dl, A.d, A.du))
     if isdefined(A, :du2)
-        Tridiagonal(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
+        Tridiagonal{T}(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
     else
-        Tridiagonal(dl, d, du)
+        Tridiagonal{T}(dl, d, du)
+    end
+end
+Tridiagonal{T,V}(A::Tridiagonal{T,V}) where {T,V<:AbstractVector{T}} = A
+function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
+    dl, d, du = map(x -> convert(V, x)::V, (A.dl, A.d, A.du))
+    if isdefined(A, :du2)
+        Tridiagonal{T,V}(dl, d, du, convert(V, A.du2)::V)
+    else
+        Tridiagonal{T,V}(dl, d, du)
     end
 end
 
-size(M::Tridiagonal) = (length(M.d), length(M.d))
-function size(M::Tridiagonal, d::Integer)
-    if d < 1
-        throw(ArgumentError("dimension d must be ≥ 1, got $d"))
-    elseif d <= 2
-        return length(M.d)
-    else
-        return 1
-    end
-end
+size(M::Tridiagonal) = (n = length(M.d); (n, n))
 
 function Matrix{T}(M::Tridiagonal) where {T}
     A = Matrix{T}(undef, size(M))
@@ -781,6 +779,7 @@ end
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
 AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)
+AbstractMatrix{T}(M::Tridiagonal{T}) where {T} = copy(M)
 Tridiagonal{T}(M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
 function SymTridiagonal{T}(M::Tridiagonal) where T
     if issymmetric(M)
@@ -893,4 +892,75 @@ function cholesky(S::SymTridiagonal, ::NoPivot = NoPivot(); check::Bool = true)
     end
     T = choltype(eltype(S))
     cholesky!(Hermitian(Bidiagonal{T}(diag(S, 0), diag(S, 1), :U)), NoPivot(); check = check)
+end
+
+# See dgtsv.f
+"""
+    ldiv!(A::Tridiagonal, B::AbstractVecOrMat) -> B
+
+Compute `A \\ B` in-place by Gaussian elimination with partial pivoting and store the result
+in `B`, returning the result. In the process, the diagonals of `A` are overwritten as well.
+
+!!! compat "Julia 1.11"
+    `ldiv!` for `Tridiagonal` left-hand sides requires at least Julia 1.11.
+"""
+function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
+    LinearAlgebra.require_one_based_indexing(B)
+    n = size(A, 1)
+    if n != size(B,1)
+        throw(DimensionMismatch("matrix has dimensions ($n,$n) but right hand side has $(size(B,1)) rows"))
+    end
+    nrhs = size(B, 2)
+
+    # Initialize variables
+    dl = A.dl
+    d = A.d
+    du = A.du
+
+    @inbounds begin
+        for i in 1:n-1
+            # pivot or not?
+            if abs(d[i]) >= abs(dl[i])
+                # No interchange
+                if d[i] != 0
+                    fact = dl[i]/d[i]
+                    d[i+1] -= fact*du[i]
+                    for j in 1:nrhs
+                        B[i+1,j] -= fact*B[i,j]
+                    end
+                else
+                    checknonsingular(i, RowMaximum())
+                end
+                i < n-1 && (dl[i] = 0)
+            else
+                # Interchange
+                fact = d[i]/dl[i]
+                d[i] = dl[i]
+                tmp = d[i+1]
+                d[i+1] = du[i] - fact*tmp
+                du[i] = tmp
+                if i < n-1
+                    dl[i] = du[i+1]
+                    du[i+1] = -fact*dl[i]
+                end
+                for j in 1:nrhs
+                    temp = B[i,j]
+                    B[i,j] = B[i+1,j]
+                    B[i+1,j] = temp - fact*B[i+1,j]
+                end
+            end
+        end
+        iszero(d[n]) && checknonsingular(n, RowMaximum())
+        # backward substitution
+        for j in 1:nrhs
+            B[n,j] /= d[n]
+            if n > 1
+                B[n-1,j] = (B[n-1,j] - du[n-1]*B[n,j])/d[n-1]
+            end
+            for i in n-2:-1:1
+                B[i,j] = (B[i,j] - du[i]*B[i+1,j] - dl[i]*B[i+2,j]) / d[i]
+            end
+        end
+    end
+    return B
 end

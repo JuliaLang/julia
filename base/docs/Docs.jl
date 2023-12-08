@@ -33,8 +33,8 @@ The macro has special parsing so that the documented object may occur on the nex
 By default, documentation is written as Markdown, but any object can be used as
 the first argument.
 
-## Documenting objects after they are defined
-You can document an object after its definition by
+## Documenting objects separately from their definitions
+You can document an object before or after its definition with
 
     @doc "foo" function_to_doc
     @doc "bar" TypeToDoc
@@ -535,7 +535,7 @@ function docm(source::LineNumberNode, mod::Module, ex)
     elseif isassigned(Base.REPL_MODULE_REF)
         # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
         REPL = Base.REPL_MODULE_REF[]
-        return REPL.lookup_doc(ex)
+        return invokelatest(REPL.lookup_doc, ex)
     end
     return nothing
 end
@@ -654,5 +654,25 @@ function formatdoc end
 function parsedoc end
 function apropos end
 function doc end
+
+
+"""
+    Docs.hasdoc(mod::Module, sym::Symbol)::Bool
+
+Return `true` if `sym` in `mod` has a docstring and `false` otherwise.
+"""
+hasdoc(mod::Module, sym::Symbol) = hasdoc(Docs.Binding(mod, sym))
+function hasdoc(binding::Docs.Binding, sig::Type = Union{})
+    # this function is based on the Base.Docs.doc method implemented
+    # in REPL/src/docview.jl.  TODO: refactor and unify these methods.
+    defined(binding) && !isnothing(getdoc(resolve(binding), sig)) && return true
+    for mod in modules
+        dict = meta(mod; autoinit=false)
+        !isnothing(dict) && haskey(dict, binding) && return true
+    end
+    alias = aliasof(binding)
+    return alias == binding ? false : hasdoc(alias, sig)
+end
+
 
 end

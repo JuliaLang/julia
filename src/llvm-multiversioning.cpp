@@ -16,7 +16,6 @@
 #include <llvm/ADT/Statistic.h>
 #include <llvm/ADT/Triple.h>
 #include <llvm/IR/Module.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
@@ -24,7 +23,6 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/Analysis/LoopInfo.h>
 #include <llvm/Analysis/CallGraph.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
 #include <llvm/IR/Verifier.h>
@@ -52,7 +50,7 @@ extern Optional<bool> always_have_fma(Function&, const Triple &TT);
 
 namespace {
 constexpr uint32_t clone_mask =
-    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16;
+    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16 | JL_TARGET_CLONE_BFLOAT16;
 
 // Treat identical mapping as missing and return `def` in that case.
 // We mainly need this to identify cloned function using value map after LLVM cloning
@@ -105,7 +103,8 @@ static uint32_t collect_func_info(Function &F, const Triple &TT, bool &has_vecca
                         if (name.startswith("julia.cpu.have_fma.")) {
                             // for some platforms we know they always do (or don't) support
                             // FMA. in those cases we don't need to clone the function.
-                            if (!always_have_fma(*callee, TT).hasValue())
+                            // always_have_fma returns an optional<bool>
+                            if (!always_have_fma(*callee, TT))
                                 flag |= JL_TARGET_CLONE_CPU;
                         } else {
                             flag |= JL_TARGET_CLONE_CPU;
@@ -128,12 +127,14 @@ static uint32_t collect_func_info(Function &F, const Triple &TT, bool &has_vecca
             }
 
             for (size_t i = 0; i < I.getNumOperands(); i++) {
-                if(I.getOperand(i)->getType()->isHalfTy()){
+                if(I.getOperand(i)->getType()->isHalfTy()) {
                     flag |= JL_TARGET_CLONE_FLOAT16;
                 }
-                // Check for BFloat16 when they are added to julia can be done here
+                if(I.getOperand(i)->getType()->isBFloatTy()) {
+                    flag |= JL_TARGET_CLONE_BFLOAT16;
+                }
             }
-            uint32_t veccall_flags = JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16;
+            uint32_t veccall_flags = JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU | JL_TARGET_CLONE_FLOAT16 | JL_TARGET_CLONE_BFLOAT16;
             if (has_veccall && (flag & veccall_flags) == veccall_flags) {
                 return flag;
             }
@@ -179,12 +180,12 @@ struct TargetSpec {
     }
 };
 
-static Optional<std::vector<TargetSpec>> get_target_specs(Module &M) {
+static Optional<SmallVector<TargetSpec, 0>> get_target_specs(Module &M) {
     auto md = M.getModuleFlag("julia.mv.specs");
     if (!md)
         return None;
     auto tup = cast<MDTuple>(md);
-    std::vector<TargetSpec> out(tup->getNumOperands());
+    SmallVector<TargetSpec, 0> out(tup->getNumOperands());
     for (unsigned i = 0; i < tup->getNumOperands(); i++) {
         out[i] = TargetSpec::fromMD(cast<MDTuple>(tup->getOperand(i).get()));
     }
@@ -192,7 +193,7 @@ static Optional<std::vector<TargetSpec>> get_target_specs(Module &M) {
 }
 
 static void set_target_specs(Module &M, ArrayRef<TargetSpec> specs) {
-    std::vector<Metadata *> md;
+    SmallVector<Metadata *, 0> md;
     md.reserve(specs.size());
     for (auto &spec: specs) {
         md.push_back(spec.toMD(M.getContext()));
@@ -203,14 +204,14 @@ static void set_target_specs(Module &M, ArrayRef<TargetSpec> specs) {
 static void annotate_module_clones(Module &M) {
     auto TT = Triple(M.getTargetTriple());
     CallGraph CG(M);
-    std::vector<Function *> orig_funcs;
+    SmallVector<Function *, 0> orig_funcs;
     for (auto &F: M) {
         if (F.isDeclaration())
             continue;
         orig_funcs.push_back(&F);
     }
     bool has_veccall = false;
-    std::vector<TargetSpec> specs;
+    SmallVector<TargetSpec, 0> specs;
     if (auto maybe_specs = get_target_specs(M)) {
         specs = std::move(*maybe_specs);
     } else {
@@ -221,10 +222,10 @@ static void annotate_module_clones(Module &M) {
         }
         set_target_specs(M, specs);
     }
-    std::vector<APInt> clones(orig_funcs.size(), APInt(specs.size(), 0));
+    SmallVector<APInt, 0> clones(orig_funcs.size(), APInt(specs.size(), 0));
     BitVector subtarget_cloned(orig_funcs.size());
 
-    std::vector<unsigned> func_infos(orig_funcs.size());
+    SmallVector<unsigned, 0> func_infos(orig_funcs.size());
     for (unsigned i = 0; i < orig_funcs.size(); i++) {
         func_infos[i] = collect_func_info(*orig_funcs[i], TT, has_veccall);
     }
@@ -340,7 +341,7 @@ struct CloneCtx {
         }
     };
     struct Group : Target {
-        std::vector<Target> clones;
+        SmallVector<Target, 0> clones;
         explicit Group(int base) :
             Target(base),
             clones{}
@@ -379,20 +380,20 @@ private:
     void rewrite_alias(GlobalAlias *alias, Function* F);
 
     MDNode *tbaa_const;
-    std::vector<TargetSpec> specs;
-    std::vector<Group> groups{};
-    std::vector<Target *> linearized;
-    std::vector<Function*> fvars;
-    std::vector<Constant*> gvars;
+    SmallVector<TargetSpec, 0> specs;
+    SmallVector<Group, 0> groups{};
+    SmallVector<Target *, 0> linearized;
+    SmallVector<Function*, 0> fvars;
+    SmallVector<Constant*, 0> gvars;
     Module &M;
     Type *T_size;
     Triple TT;
 
     // Map from original function to one based index in `fvars`
     std::map<const Function*,uint32_t> func_ids{};
-    std::vector<Function*> orig_funcs{};
+    SmallVector<Function*, 0> orig_funcs{};
     // GV addresses and their corresponding function id (i.e. 0-based index in `fvars`)
-    std::vector<std::pair<Constant*,uint32_t>> gv_relocs{};
+    SmallVector<std::pair<Constant*,uint32_t>, 0> gv_relocs{};
     // Mapping from function id (i.e. 0-based index in `fvars`) to GVs to be initialized.
     std::map<uint32_t,GlobalVariable*> const_relocs;
     std::map<Function *, GlobalVariable*> extern_relocs;
@@ -400,7 +401,7 @@ private:
 };
 
 template<typename T>
-static inline std::vector<T*> consume_gv(Module &M, const char *name, bool allow_bad_fvars)
+static inline SmallVector<T*, 0> consume_gv(Module &M, const char *name, bool allow_bad_fvars)
 {
     // Get information about sysimg export functions from the two global variables.
     // Strip them from the Module so that it's easier to handle the uses.
@@ -408,7 +409,7 @@ static inline std::vector<T*> consume_gv(Module &M, const char *name, bool allow
     assert(gv && gv->hasInitializer());
     ArrayType *Ty = cast<ArrayType>(gv->getInitializer()->getType());
     unsigned nele = Ty->getArrayNumElements();
-    std::vector<T*> res(nele);
+    SmallVector<T*, 0> res(nele);
     ConstantArray *ary = nullptr;
     if (gv->getInitializer()->isNullValue()) {
         for (unsigned i = 0; i < nele; ++i)
@@ -449,7 +450,7 @@ CloneCtx::CloneCtx(Module &M, bool allow_bad_fvars)
     groups.emplace_back(0);
     linearized.resize(specs.size());
     linearized[0] = &groups[0];
-    std::vector<unsigned> group_ids(specs.size(), 0);
+    SmallVector<unsigned, 0> group_ids(specs.size(), 0);
     uint32_t ntargets = specs.size();
     for (uint32_t i = 1; i < ntargets; i++) {
         auto &spec = specs[i];
@@ -514,7 +515,7 @@ void CloneCtx::prepare_slots()
 
 void CloneCtx::clone_decls()
 {
-    std::vector<std::string> suffixes(specs.size());
+    SmallVector<std::string, 0> suffixes(specs.size());
     for (unsigned i = 1; i < specs.size(); i++) {
         suffixes[i] = "." + std::to_string(i);
     }
@@ -531,7 +532,7 @@ void CloneCtx::clone_decls()
             new_F->setVisibility(F->getVisibility());
             new_F->setDSOLocal(true);
             auto base_func = F;
-            if (specs[i].flags & JL_TARGET_CLONE_ALL)
+            if (!(specs[i].flags & JL_TARGET_CLONE_ALL))
                 base_func = static_cast<Group*>(linearized[specs[i].base])->base_func(F);
             (*linearized[i]->vmap)[base_func] = new_F;
         }
@@ -586,7 +587,7 @@ void CloneCtx::clone_bodies()
             }
             for (auto &target : groups[i].clones) {
                 prepare_vmap(*target.vmap);
-                auto target_F = cast_or_null<Function>(map_get(*target.vmap, F));
+                auto target_F = cast_or_null<Function>(map_get(*target.vmap, group_F));
                 if (target_F) {
                     if (!F->isDeclaration()) {
                         clone_function(group_F, target_F, *target.vmap);
@@ -687,10 +688,10 @@ void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
     ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
     ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(F->getContext(), None));
 
-    std::vector<Value *> Args;
+    SmallVector<Value *, 0> Args;
     for (auto &arg : trampoline->args())
         Args.push_back(&arg);
-    auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, makeArrayRef(Args));
+    auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, ArrayRef<Value *>(Args));
     if (F->isVarArg()) {
         assert(!TT.isARM() && !TT.isPPC() && "musttail not supported on ARM/PPC!");
         call->setTailCallKind(CallInst::TCK_MustTail);
@@ -879,7 +880,8 @@ static Constant *get_ptrdiff32(Type *T_size, Constant *ptr, Constant *base)
 }
 
 template<typename T>
-static Constant *emit_offset_table(Module &M, Type *T_size, const std::vector<T*> &vars, StringRef name, StringRef suffix)
+static Constant *emit_offset_table(Module &M, Type *T_size, const SmallVectorImpl<T*> &vars,
+                                   StringRef name, StringRef suffix)
 {
     auto T_int32 = Type::getInt32Ty(M.getContext());
     uint32_t nvars = vars.size();
@@ -898,7 +900,7 @@ static Constant *emit_offset_table(Module &M, Type *T_size, const std::vector<T*
         base = gv;
     }
     auto vbase = ConstantExpr::getPtrToInt(base, T_size);
-    std::vector<Constant*> offsets(nvars + 1);
+    SmallVector<Constant*, 0> offsets(nvars + 1);
     offsets[0] = ConstantInt::get(T_int32, nvars);
     if (nvars > 0) {
         offsets[1] = ConstantInt::get(T_int32, 0);
@@ -946,7 +948,7 @@ void CloneCtx::emit_metadata()
                              const std::pair<Constant*,uint32_t> &rhs) {
                              return lhs.second < rhs.second;
                          });
-        std::vector<Constant*> values{nullptr};
+        SmallVector<Constant*, 0> values{nullptr};
         uint32_t gv_reloc_idx = 0;
         uint32_t ngv_relocs = gv_relocs.size();
         for (uint32_t id = 0; id < nfvars; id++) {
@@ -978,8 +980,8 @@ void CloneCtx::emit_metadata()
 
     // Generate `jl_dispatch_fvars_idxs` and `jl_dispatch_fvars_offsets`
     {
-        std::vector<uint32_t> idxs;
-        std::vector<Constant*> offsets;
+        SmallVector<uint32_t, 0> idxs;
+        SmallVector<Constant*, 0> offsets;
         for (uint32_t i = 0; i < ntargets; i++) {
             auto tgt = linearized[i];
             auto &spec = specs[i];
@@ -1110,28 +1112,6 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
     return true;
 }
 
-struct MultiVersioningLegacy: public ModulePass {
-    static char ID;
-    MultiVersioningLegacy(bool allow_bad_fvars=false)
-        : ModulePass(ID), allow_bad_fvars(allow_bad_fvars)
-    {}
-
-private:
-    bool runOnModule(Module &M) override;
-    bool allow_bad_fvars;
-};
-
-bool MultiVersioningLegacy::runOnModule(Module &M)
-{
-    return runMultiVersioning(M, allow_bad_fvars);
-}
-
-
-char MultiVersioningLegacy::ID = 0;
-static RegisterPass<MultiVersioningLegacy> X("JuliaMultiVersioning", "JuliaMultiVersioning Pass",
-                                       false /* Only looks at CFG */,
-                                       false /* Analysis Pass */);
-
 } // anonymous namespace
 
 void multiversioning_preannotate(Module &M)
@@ -1148,15 +1128,4 @@ PreservedAnalyses MultiVersioningPass::run(Module &M, ModuleAnalysisManager &AM)
         return preserved;
     }
     return PreservedAnalyses::all();
-}
-
-Pass *createMultiVersioningPass(bool allow_bad_fvars)
-{
-    return new MultiVersioningLegacy(allow_bad_fvars);
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddMultiVersioningPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createMultiVersioningPass(false));
 }

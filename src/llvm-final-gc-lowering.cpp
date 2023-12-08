@@ -4,7 +4,6 @@
 #include "passes.h"
 
 #include <llvm/ADT/Statistic.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
@@ -117,7 +116,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
                     PointerType::get(T_ppjlvalue, 0)),
             Align(sizeof(void*)));
     inst->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
-    inst = builder.CreateAlignedStore(
+    builder.CreateAlignedStore(
             gcframe,
             builder.CreateBitCast(pgcstack, PointerType::get(PointerType::get(T_prjlvalue, 0), 0)),
             Align(sizeof(void*)));
@@ -190,8 +189,7 @@ void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     IRBuilder<> builder(target);
     auto ptls = target->getArgOperand(0);
     auto type = target->getArgOperand(2);
-    Attribute derefAttr;
-
+    uint64_t derefBytes = 0;
     if (auto CI = dyn_cast<ConstantInt>(target->getArgOperand(1))) {
         size_t sz = (size_t)CI->getZExtValue();
         // This is strongly architecture and OS dependent
@@ -201,22 +199,27 @@ void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
             newI = builder.CreateCall(
                 bigAllocFunc,
                 { ptls, ConstantInt::get(T_size, sz + sizeof(void*)), type });
-            derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sz + sizeof(void*));
+            if (sz > 0)
+                derefBytes = sz;
         }
         else {
             auto pool_offs = ConstantInt::get(Type::getInt32Ty(F.getContext()), offset);
             auto pool_osize = ConstantInt::get(Type::getInt32Ty(F.getContext()), osize);
             newI = builder.CreateCall(poolAllocFunc, { ptls, pool_offs, pool_osize, type });
-            derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), osize);
+            if (sz > 0)
+                derefBytes = sz;
         }
     } else {
         auto size = builder.CreateZExtOrTrunc(target->getArgOperand(1), T_size);
         size = builder.CreateAdd(size, ConstantInt::get(T_size, sizeof(void*)));
         newI = builder.CreateCall(allocTypedFunc, { ptls, size, type });
-        derefAttr = Attribute::getWithDereferenceableBytes(F.getContext(), sizeof(void*));
+        derefBytes = sizeof(void*);
     }
     newI->setAttributes(newI->getCalledFunction()->getAttributes());
-    newI->addRetAttr(derefAttr);
+    unsigned align = std::max((unsigned)target->getRetAlign().valueOrOne().value(), (unsigned)sizeof(void*));
+    newI->addRetAttr(Attribute::getWithAlignment(F.getContext(), Align(align)));
+    if (derefBytes > 0)
+        newI->addDereferenceableRetAttr(derefBytes);
     newI->takeName(target);
     target->replaceAllUsesWith(newI);
     target->eraseFromParent();
@@ -276,29 +279,6 @@ bool FinalLowerGC::runOnFunction(Function &F)
     return true;
 }
 
-struct FinalLowerGCLegacy: public FunctionPass {
-    static char ID;
-    FinalLowerGCLegacy() : FunctionPass(ID), finalLowerGC(FinalLowerGC()) {}
-
-protected:
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
-        FunctionPass::getAnalysisUsage(AU);
-    }
-
-private:
-    bool runOnFunction(Function &F) override;
-
-    FinalLowerGC finalLowerGC;
-};
-
-bool FinalLowerGCLegacy::runOnFunction(Function &F) {
-    auto modified = finalLowerGC.runOnFunction(F);
-#ifdef JL_VERIFY_PASSES
-    assert(!verifyLLVMIR(F));
-#endif
-    return modified;
-}
-
 PreservedAnalyses FinalLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
 {
     if (FinalLowerGC().runOnFunction(F)) {
@@ -308,18 +288,4 @@ PreservedAnalyses FinalLowerGCPass::run(Function &F, FunctionAnalysisManager &AM
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
-}
-
-char FinalLowerGCLegacy::ID = 0;
-static RegisterPass<FinalLowerGCLegacy> X("FinalLowerGC", "Final GC intrinsic lowering pass", false, false);
-
-Pass *createFinalLowerGCPass()
-{
-    return new FinalLowerGCLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddFinalLowerGCPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createFinalLowerGCPass());
 }

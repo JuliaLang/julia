@@ -1338,6 +1338,16 @@ type -- either [`Int32`](@ref) or [`Int64`](@ref).
 reflects the size of a native pointer on that machine, the floating point register sizes
 are specified by the IEEE-754 standard.)
 
+Type aliases may be parametrized:
+
+```jldoctest
+julia> const Family{T} = Set{T}
+Set
+
+julia> Family{Char} === Set{Char}
+true
+```
+
 ## Operations on Types
 
 Since types in Julia are themselves objects, ordinary functions can operate on them. Some functions
