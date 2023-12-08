@@ -1523,14 +1523,14 @@ countlines(f::AbstractString; eol::AbstractChar = '\n') = open(io->countlines(io
 
 # From Pkg.jl
 """
-    UnstableIO <: IO
+    UnstableIO <: AbstractPipe
 
 Type unstable wrapper around an IO to avoid specializing write, get, and print
 """
-struct UnstableIO <: IO
-    io::IO
+struct UnstableIO <: AbstractPipe
+    in::IO
     UnstableIO(@nospecialize(x)) = new(inferencebarrier(x))
 end
-Base.write(io::UnstableIO, b::UInt8) = write(io.io, b)::Int
-Base.get(io::UnstableIO, val, default) = get(io.io, val, default)
-Base.print(io::UnstableIO, arg::Union{SubString{String}, String}) = print(io.io, arg)
+pipe_writer(io::UnstableIO) = io.in
+parent(io::UnstableIO) = io.in
+get(io::UnstableIO, val, default) = get(pipe_writer(io), val, default)

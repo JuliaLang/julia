@@ -189,7 +189,7 @@ end
 @testset "inference" begin
     @test all(T -> T <: Union{UInt, Int}, Base.return_types(unsafe_write, (IO, Ptr{UInt8}, UInt)))
     @test all(T -> T === Bool, Base.return_types(eof, (IO,)))
-    @test all(T -> T === IO, Base.return_types(()->(iob = IOBuffer(); Base.UnstableIO(iob).io)))
+    @test all(T -> T === IO, Base.return_types(()->(iob = IOBuffer(); Base.pipe_writer(Base.UnstableIO(iob)))))
 end
 
 @testset "UnstableIO" begin
