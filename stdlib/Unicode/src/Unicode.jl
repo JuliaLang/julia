@@ -303,8 +303,7 @@ function _isequal_normalized!(s1::AbstractString, s2::AbstractString,
                 cc = combining_class(d[j1])
                 iszero(cc) && continue # don't re-order non-combiners
                 for j2 = j1:-1:2
-                    cc1 = combining_class(d[j2-1])
-                    cc1 ≤ cc && break
+                    combining_class(d[j2-1]) ≤ cc && break
                     d[j2-1], d[j2] = d[j2], d[j2-1]
                 end
             end
