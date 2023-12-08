@@ -357,6 +357,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     JL_TIMING(INFERENCE, INFERENCE);
     jl_value_t **fargs;
     JL_GC_PUSHARGS(fargs, 3);
+    jl_current_task->ptls->codegen_count++;
     fargs[0] = (jl_value_t*)jl_typeinf_func;
     fargs[1] = (jl_value_t*)mi;
     fargs[2] = jl_box_ulong(world);
@@ -418,6 +419,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     if (src && !jl_is_code_info(src)) {
         src = NULL;
     }
+    jl_current_task->ptls->codegen_count--;
     JL_GC_POP();
 #endif
 
