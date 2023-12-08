@@ -208,14 +208,7 @@ end
 
 using Base.Unicode: utf8proc_error, UTF8PROC_DECOMPOSE, UTF8PROC_CASEFOLD, UTF8PROC_STRIPMARK
 
-_isascii(c::AbstractChar) = isascii(c)
-_isascii(u::Integer) = u < 0x80
-
 function _decompose_char!(codepoint::Union{Integer,Char}, dest::Vector{UInt32}, offset::Integer, options::Integer)
-    if _isascii(codepoint) # fast path for common ASCII case
-        length(dest) > offset && (dest[1+offset] = UInt32(codepoint))
-        return 1
-    end
     ret = GC.@preserve dest @ccall utf8proc_decompose_char(codepoint::UInt32, pointer(dest, 1+offset)::Ptr{UInt32}, (length(dest)-offset)::Int, options::Cint, C_NULL::Ptr{Cint})::Int
     ret < 0 && utf8proc_error(ret)
     return ret
@@ -276,13 +269,19 @@ function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bo
             # read a char and decompose it to d
             c = chartransform(UInt32(state[1]))
             state = iterate(s, state[2])
-            while true
-                n = _decompose_char!(c, d, offset, options) + offset
-                if n > length(d)
-                    resize!(d, n)
-                    continue
+            if c < 0x80 # fast path for common ASCII case
+                n = 1 + offset
+                n > length(d) && resize!(d, 2n)
+                d[1+offset] = casefold ? (0x41 ≤ c ≤ 0x5A ? c+0x20 : c) : c
+            else
+                while true
+                    n = _decompose_char!(c, d, offset, options) + offset
+                    if n > length(d)
+                        resize!(d, 2n)
+                        continue
+                    end
+                    break
                 end
-                break
             end
 
             # decomposed chars must be sorted in ascending order of combining class,
