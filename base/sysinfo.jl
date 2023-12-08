@@ -582,6 +582,8 @@ user = get(Sys.username, ENV, "USER")
 
 !!! compat "Julia 1.11"
     This function requires at least Julia 1.11.
+
+See also [`homedir`](@ref).
 """
 function username()
     pw = Libc.getpw()
