@@ -1504,3 +1504,31 @@ end
         @test occursin(r"Loading object cache file .+ for Parent", log)
     end
 end
+
+@testset "including non-existent file throws proper error #52462" begin
+    mktempdir() do depot
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+
+        # Create a `Foo.jl` package
+        foo_path = joinpath(depot, "dev", "Foo")
+        mkpath(joinpath(foo_path, "src"))
+        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+            println(io, """
+            module Foo
+            include("non-existent.jl")
+            end
+            """)
+        end
+        open(joinpath(foo_path, "Project.toml"); write=true) do io
+            println(io, """
+            name = "Foo"
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+        end
+
+        file = joinpath(depot, "dev", "non-existent.jl")
+        @test_throws SystemError("opening file \"$file\"") include(file)
+    end
+end
