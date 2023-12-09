@@ -109,15 +109,13 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
         uintptr_t crc2 = 0;
         const char *end = buf + LONG;
         do {
-            __asm__(CRC32_PTR "\t%1, %0"
-                    : "+r"(crc0)
-                    : "m"(* (const char (*)[sizeof(void*)]) &buf[0]));
-            __asm__(CRC32_PTR "\t%1, %0"
-                    : "+r"(crc1)
-                    : "m"(* (const char (*)[sizeof(void*)]) &buf[LONG]));
-            __asm__(CRC32_PTR "\t%1, %0"
-                    : "+r"(crc2)
-                    : "m"(* (const char (*)[sizeof(void*)]) &buf[LONG*2]));
+            __asm__(CRC32_PTR "\t%3, %0\n\t"
+                    CRC32_PTR "\t%4, %1\n\t"
+                    CRC32_PTR "\t%5, %2"
+                    : "+r"(crc0), "+r"(crc1), "+r"(crc2)
+                    : "m"(* (const char (*)[sizeof(void*)]) &buf[0]),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[LONG]),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[LONG*2]));
             buf += sizeof(void*);
         } while (buf < end);
         crc0 = crc32c_shift(crc32c_long, crc0) ^ crc1;
@@ -133,15 +131,13 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
         uintptr_t crc2 = 0;
         const char *end = buf + SHORT;
         do {
-            __asm__(CRC32_PTR "\t%1, %0"
-                    : "+r"(crc0)
-                    : "m"(* (const char (*)[sizeof(void*)]) &buf[0]));
-            __asm__(CRC32_PTR "\t%1, %0"
-                    : "+r"(crc1)
-                    : "m"(* (const char (*)[sizeof(void*)]) &buf[SHORT]));
-            __asm__(CRC32_PTR "\t%1, %0"
-                    : "+r"(crc2)
-                    : "m"(* (const char (*)[sizeof(void*)]) &buf[SHORT*2]));
+            __asm__(CRC32_PTR "\t%3, %0\n\t"
+                    CRC32_PTR "\t%4, %1\n\t"
+                    CRC32_PTR "\t%5, %2"
+                    : "+r"(crc0), "+r"(crc1), "+r"(crc2)
+                    : "m"(* (const char (*)[sizeof(void*)]) &buf[0]),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[SHORT]),
+                      "m"(* (const char (*)[sizeof(void*)]) &buf[SHORT*2]));
             buf += sizeof(void*);
         } while (buf < end);
         crc0 = crc32c_shift(crc32c_short, crc0) ^ crc1;
