@@ -18,6 +18,8 @@ const patterns = split("""
     *Makefile
 """)
 
+# Note: `git ls-files` gives `/` as a path separator on Windows,
+#   so we just use `/` for all platforms.
 allow_tabs(path) =
     path == "Make.inc" ||
     endswith(path, "Makefile") ||
