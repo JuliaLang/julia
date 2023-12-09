@@ -265,20 +265,28 @@ typedef union __jl_purity_overrides_t {
     uint16_t bits;
 } _jl_purity_overrides_t;
 
+#define NUM_EFFECTS_OVERRIDES 9
+#define NUM_IR_FLAGS 11
+
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     // ssavalue-indexed arrays of properties:
     jl_array_t *code;  // Any array of statements
     jl_value_t *codelocs; // Int32 array of indices into the line table
     jl_value_t *ssavaluetypes; // types of ssa values (or count of them)
-    jl_array_t *ssaflags; // flags associated with each statement:
-        // 0 = inbounds
-        // 1 = inline
-        // 2 = noinline
-        // 3 = <reserved> strict-ieee (strictfp)
-        // 4 = effect-free (may be deleted if unused)
-        // 5-6 = <unused>
-        // 7 = has out-of-band info
+    jl_array_t *ssaflags; // 32 bits flags associated with each statement:
+        // 1 << 0 = inbounds region
+        // 1 << 1 = callsite inline region
+        // 1 << 2 = callsite noinline region
+        // 1 << 3 = throw block
+        // 1 << 4 = :effect_free
+        // 1 << 5 = :nothrow
+        // 1 << 6 = :consistent
+        // 1 << 7 = :refined
+        // 1 << 8 = :noub
+        // 1 << 9 = :effect_free_if_inaccessiblememonly
+        // 1 << 10 = :inaccessiblemem_or_argmemonly
+        // 1 << 11-18 = callsite effects overrides
     // miscellaneous data:
     jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
     jl_value_t *linetable; // Table of locations [TODO: make this volatile like slotnames]
@@ -1250,7 +1258,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
     assert(i < jl_array_len(a));
     jl_array_data(a, uint8_t)[i] = x;
 }
-STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint32_t x) JL_NOTSAFEPOINT
 {
     assert(i < jl_array_len(a));
     assert(jl_typetagis(a, jl_array_uint32_type) || jl_typetagis(a, jl_array_int32_type));

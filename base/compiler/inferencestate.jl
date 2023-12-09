@@ -818,7 +818,14 @@ frame_world(sv::IRInterpretationState) = sv.world
 callers_in_cycle(sv::InferenceState) = sv.callers_in_cycle
 callers_in_cycle(sv::IRInterpretationState) = ()
 
-is_effect_overridden(sv::AbsIntState, effect::Symbol) = is_effect_overridden(frame_instance(sv), effect)
+function is_effect_overridden(sv::AbsIntState, effect::Symbol)
+    if is_effect_overridden(frame_instance(sv), effect)
+        return true
+    elseif is_effect_overridden(decode_statement_effects_override(sv), effect)
+        return true
+    end
+    return false
+end
 function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
     def = linfo.def
     return isa(def, Method) && is_effect_overridden(def, effect)
@@ -917,6 +924,9 @@ function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
 end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
+
+decode_statement_effects_override(sv::AbsIntState) =
+    decode_statement_effects_override(get_curr_ssaflag(sv))
 
 struct InferenceLoopState
     sig
