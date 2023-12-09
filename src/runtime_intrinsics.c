@@ -256,6 +256,7 @@ JL_DLLEXPORT float julia_half_to_float(uint16_t param) {
 #if ((defined(__GNUC__) && __GNUC__ > 11) || \
      (defined(__clang__) && __clang_major__ > 14)) && \
     !defined(_CPU_PPC64_) && !defined(_CPU_PPC_) && \
+    !defined(_CPU_ARM_) && \
     !defined(_OS_WINDOWS_)
     #define FLOAT16_TYPE _Float16
     #define FLOAT16_TO_UINT16(x) (*(uint16_t*)&(x))
@@ -267,9 +268,9 @@ JL_DLLEXPORT float julia_half_to_float(uint16_t param) {
     #define FLOAT16_TYPE __m128
     #define FLOAT16_TO_UINT16(x) take_from_xmm(x)
     #define FLOAT16_FROM_UINT16(x) return_in_xmm(x)
-#elif defined(_CPU_PPC64_) || defined(_CPU_PPC_)
-    // on PPC, pass Float16 as if it were an integer, similar to the old x86 ABI
-    // before _Float16
+#elif defined(_CPU_PPC64_) || defined(_CPU_PPC_) || defined(_CPU_ARM_)
+    // on PPC and ARM, pass Float16 as if it were an integer, similar to the
+    // old x86 ABI before _Float16
     #define FLOAT16_TYPE uint16_t
     #define FLOAT16_TO_UINT16(x) (x)
     #define FLOAT16_FROM_UINT16(x) (x)
