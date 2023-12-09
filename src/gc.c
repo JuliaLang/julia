@@ -1793,9 +1793,9 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
     // most once, since the mark phase may update page metadata,
     // which is not idempotent. See comments in https://github.com/JuliaLang/julia/issues/50419
     uintptr_t header = jl_atomic_load_relaxed((_Atomic(uintptr_t) *)&o->header);
-    header &= ~(0x3); // clear the second lowest bit
+    header &= ~GC_OLD; // clear the age bit
     header = jl_atomic_exchange_relaxed((_Atomic(uintptr_t) *)&o->header, header);
-    if (header & 0x3) { // write barrier has not been triggered in this object yet
+    if (header & GC_OLD) { // write barrier has not been triggered in this object yet
         arraylist_push(ptls->heap.remset, (jl_value_t*)ptr);
         ptls->heap.remset_nptr++; // conservative
     }
