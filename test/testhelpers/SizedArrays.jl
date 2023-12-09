@@ -46,4 +46,9 @@ function *(S1::SizedArrayLike, S2::SizedArrayLike)
     SZ = ndims(data) == 1 ? (size(S1, 1), ) : (size(S1, 1), size(S2, 2))
     SizedArray{SZ}(data)
 end
+
+# deliberately wide method definition to ensure that this doesn't lead to ambiguities with
+# structured matrices
+*(S1::SizedArrayLike, M::AbstractMatrix) = _data(S1) * M
+
 end

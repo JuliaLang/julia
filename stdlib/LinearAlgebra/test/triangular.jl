@@ -8,6 +8,10 @@ using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
     mul!, rdiv!, rmul!, lmul!
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 debug && println("Triangular matrices")
 
 n = 9
@@ -864,6 +868,14 @@ end
             @test A * A' == D * D'
         end
     end
+end
+
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    U = UpperTriangular(ones(2,2))
+    @test S * U == A * U
+    @test U * S == U * A
 end
 
 end # module TestTriangular

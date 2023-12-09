@@ -1471,12 +1471,6 @@ function *(A::AbstractTriangular, B::AbstractTriangular)
 end
 
 for mat in (:AbstractVector, :AbstractMatrix)
-    ### Multiplication with triangle to the left and hence rhs cannot be transposed.
-    @eval function *(A::AbstractTriangular, B::$mat)
-        require_one_based_indexing(B)
-        TAB = _init_eltype(*, eltype(A), eltype(B))
-        mul!(similar(B, TAB, size(B)), A, B)
-    end
     ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
     @eval function \(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
         require_one_based_indexing(B)
@@ -1501,13 +1495,6 @@ for mat in (:AbstractVector, :AbstractMatrix)
         TAB = _init_eltype(/, eltype(A), eltype(B))
         _rdiv!(similar(A, TAB, size(A)), A, B)
     end
-end
-### Multiplication with triangle to the right and hence lhs cannot be transposed.
-# Only for AbstractMatrix, hence outside the above loop.
-function *(A::AbstractMatrix, B::AbstractTriangular)
-    require_one_based_indexing(A)
-    TAB = _init_eltype(*, eltype(A), eltype(B))
-    mul!(similar(A, TAB, size(A)), A, B)
 end
 # ambiguity resolution with definitions in matmul.jl
 *(v::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) * v.parent)

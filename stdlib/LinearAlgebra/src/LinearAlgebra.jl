@@ -542,6 +542,14 @@ _init_eltype(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
 _initarray(op, ::Type{TA}, ::Type{TB}, C) where {TA,TB} =
     similar(C, _init_eltype(op, TA, TB), size(C))
 
+# destination type for matmul
+matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS) = similar(B, TS, size(B))
+matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
+matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
+matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
+matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
+matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
+
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
 # which is required by LAPACK but not SuiteSparse which allows real-complex solves in some cases. Hence,
