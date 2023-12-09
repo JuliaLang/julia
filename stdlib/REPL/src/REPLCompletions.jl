@@ -521,7 +521,12 @@ CC.code_cache(interp::REPLInterpreter) = CC.WorldView(interp.code_cache, CC.Worl
 CC.get(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
 CC.getindex(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
 CC.haskey(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
-CC.setindex!(wvc::CC.WorldView{REPLInterpreterCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
+function CC.setindex!(wvc::CC.WorldView{REPLInterpreterCache}, ci::CodeInstance, mi::MethodInstance)
+    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
+        delete!(wvc.cache.dict, replaced)
+    end
+    return setindex!(wvc.cache.dict, ci, mi)
+end
 
 # REPLInterpreter is only used for type analysis, so it should disable optimization entirely
 CC.may_optimize(::REPLInterpreter) = false
