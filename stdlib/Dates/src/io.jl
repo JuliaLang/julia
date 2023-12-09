@@ -527,16 +527,16 @@ const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 @noinline function _check_year(d, format)
     y = year(d)
     1800 <= y <= 2099 && return d # always allowed, note sometimes more; restrictive to prevent typos
-    if !contains(lowercase(format), "yyyy")  # yy format or other shorter than yyyy, used for ISO (typo) format
+    # if !contains(lowercase(format), "yyyy")  # yy format or other shorter than yyyy, used for ISO (typo) format
     # TODO: There is no legal yy-mm-dd format, so not sure what to do about it, for now allow as proleptic, but arguably it should add 19 or 20
     # elseif contains(lowercase(format), "yy") # is 2-digit (or 3-digit...) year format, allows only 1- or 2-digit year
     #     0 <= year(d) <= 99 || throw("Year is outside the 0 to 99 year-range, asked for.")
         0 <= y <= 99 && return d  # The ISO standard doesn't allow this, but allowing as exception in Julia; the new default typo format doesn't allow this
-    else
-    # if contains(lowercase(format), "yyyy")  # && !contains(lowercase(format), "yyyyy") # is 4-digit year format, allows strictly 4-digit
-        1583 <= y <= 9999 && return d   
+    # else
+    if contains(lowercase(format), "yyyy")  # && !contains(lowercase(format), "yyyyy") # is 4-digit year format, allows strictly 4-digit
+        1583 <= y <= 9999 && return d
     end
-    throw("Year is outside the legal ISO 8601 year-range. To support such, use an explicit constructor.")
+    !contains(lowercase(format), "yy") && throw("Year is outside the legal ISO 8601 year-range. To support such, use an explicit constructor.") # still allow one y for proleptic
 end
 
 ### API
