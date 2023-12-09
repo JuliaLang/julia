@@ -31,51 +31,57 @@ static bool hasObjref(Type *ty)
 std::pair<const uint32_t,Field>&
 AllocUseInfo::getField(uint32_t offset, uint32_t size, Type *elty)
 {
-    auto it = findLowerField(offset);
-    auto end = memops.end();
-    auto lb = end; // first overlap
-    auto ub = end; // last overlap
-    if (it != end) {
-        // The slot found contains the current location
-        if (it->first + it->second.size >= offset + size) {
-            if (it->second.elty != elty)
-                it->second.elty = nullptr;
-            assert(it->second.elty == nullptr || (it->first == offset && it->second.size == size));
-            return *it;
-        }
-        if (it->first + it->second.size > offset) {
-            lb = it;
-            ub = it;
-        }
-    }
-    else {
-        it = memops.begin();
-    }
-    // Now find the last slot that overlaps with the current memory location.
-    // Also set `lb` if we didn't find any above.
-    for (; it != end && it->first < offset + size; ++it) {
-        if (lb == end)
-            lb = it;
-        ub = it;
-    }
-    // no overlap found just create a new one.
-    if (lb == end)
+    // get next slot beyond containing slots (-1 to ignore slot starting at offset + size)
+    auto ub = memops.upper_bound(offset + size - 1);
+    if (ub == memops.begin()) {
+        // We need to create a new slot, since there is no slot containing offset + size
         return *memops.emplace(offset, Field(size, elty)).first;
-    // We find overlapping but not containing slot we need to merge slot/create new one
-    uint32_t new_offset = std::min(offset, lb->first);
-    uint32_t new_addrub = std::max(offset + uint32_t(size), ub->first + ub->second.size);
-    uint32_t new_size = new_addrub - new_offset;
-    Field field(new_size, nullptr);
+    }
+    assert(!memops.empty());
+    auto lb = memops.upper_bound(offset);
+    if (lb == memops.begin()) {
+        // must create an entry that contains lb
+        if (size <= lb->first - offset) {
+            // create entry for entire range
+            return *memops.emplace(offset, Field(size, elty)).first;
+        }
+        lb = memops.emplace(offset, Field(lb->first - offset, elty)).first;
+    } else {
+        --lb;
+        // lb is dereferenceable since we know memops is not empty
+        if (lb->first + lb->second.size <= offset) {
+            // lb does not actually contain offset
+            ++lb;
+            if (lb == memops.end()) {
+                // create entry for entire range
+                return *memops.emplace(offset, Field(size, elty)).first;
+            } else {
+                // create entry for range between offset and lb
+                if (size <= lb->first - offset) {
+                    return *memops.emplace(offset, Field(size, elty)).first;
+                }
+                lb = memops.emplace(offset, Field(lb->first - offset, elty)).first;
+            }
+        }
+    }
+    // lb must definitely contain offset at this point
+    assert(lb->first <= offset && lb->first + lb->second.size > offset);
+    assert(lb != ub);
+    if (lb->first + lb->second.size >= offset + size) {
+        // lb contains entire range
+        return *lb;
+    }
+    size_t off = lb->first;
+    Field field(offset - lb->first + size, elty);
     field.multiloc = true;
-    ++ub;
-    for (it = lb; it != ub; ++it) {
+    for (auto it = lb; it != ub; ++it) {
         field.hasobjref |= it->second.hasobjref;
         field.hasload |= it->second.hasload;
         field.hasaggr |= it->second.hasaggr;
         field.accesses.append(it->second.accesses.begin(), it->second.accesses.end());
     }
     memops.erase(lb, ub);
-    return *memops.emplace(new_offset, std::move(field)).first;
+    return *memops.emplace(off, std::move(field)).first;
 }
 
 bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,

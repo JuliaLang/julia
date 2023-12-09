@@ -119,14 +119,6 @@ namespace jl_alloc {
         bool addMemOp(llvm::Instruction *inst, unsigned opno, uint32_t offset, llvm::Type *elty,
                       bool isstore, const llvm::DataLayout &DL);
         std::pair<const uint32_t,Field> &getField(uint32_t offset, uint32_t size, llvm::Type *elty);
-        std::map<uint32_t,Field>::iterator findLowerField(uint32_t offset)
-        {
-            // Find the last field that starts no higher than `offset`.
-            auto it = memops.upper_bound(offset);
-            if (it != memops.begin())
-                return --it;
-            return memops.end();
-        }
     };
 
     struct EscapeAnalysisRequiredArgs {
