@@ -219,6 +219,8 @@ void Optimizer::pushInstruction(Instruction *I)
 void Optimizer::initialize()
 {
     for (auto &bb: F) {
+        if (isa<UnreachableInst>(bb.getTerminator()))
+            continue;
         for (auto &I: bb) {
             pushInstruction(&I);
         }
@@ -236,17 +238,17 @@ void Optimizer::optimizeObject(CallInst *orig, size_t sz) {
             optimizeTag(orig);
         return;
     }
-    if (use_info.haserror || use_info.returned) {
+    if (use_info.returned) {
         REMARK([&]() {
             return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                << "GC allocation has error or was returned " << ore::NV("GC Allocation", orig);
+                << "GC allocation was returned " << ore::NV("GC Allocation", orig);
         });
         if (use_info.hastypeof)
             optimizeTag(orig);
         return;
     }
-    if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
-                                                        !use_info.refstore)) {
+    if (!use_info.addrescaped && !use_info.hasload && use_info.errorbbs.empty()
+        && (!use_info.haspreserve || !use_info.refstore)) {
         REMARK([&]() {
             return OptimizationRemark(DEBUG_TYPE, "Dead Allocation", orig)
                 << "GC allocation removed " << ore::NV("GC Allocation", orig);
@@ -287,6 +289,15 @@ void Optimizer::optimizeObject(CallInst *orig, size_t sz) {
         });
         // No one actually care about the memory layout of this object, split it.
         splitOnStack(orig);
+        return;
+    }
+    if (!use_info.errorbbs.empty()) {
+        REMARK([&](){
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC allocation has error " << ore::NV("GC Allocation", orig);
+        });
+        if (use_info.hastypeof)
+            optimizeTag(orig);
         return;
     }
     REMARK([&](){
@@ -471,7 +482,6 @@ void Optimizer::replaceBitsArrayUses(CallInst *alloc, Value *root, function_ref<
 }
 
 void Optimizer::optimizeArray(CallInst *orig, jl_genericmemory_info_t info) {
-    return;
     checkInst(orig);
     dbgs() << "checking array allocation\n";
     if (use_info.escaped) {
@@ -481,7 +491,7 @@ void Optimizer::optimizeArray(CallInst *orig, jl_genericmemory_info_t info) {
         });
         return;
     }
-    if (use_info.haserror || use_info.returned) {
+    if (!use_info.errorbbs.empty() || use_info.returned) {
         REMARK([&]() {
             return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
                 << "GC allocation has error or was returned " << ore::NV("GC GenericMemory Allocation", orig);
@@ -1090,7 +1100,8 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
             // The stored value might be an gc pointer in which case deleting the object
             // might open more optimization opportunities.
             if (auto stored_inst = dyn_cast<Instruction>(store->getValueOperand()))
-                pushInstruction(stored_inst);
+                if (!isa<UnreachableInst>(stored_inst->getParent()->getTerminator()))
+                    pushInstruction(stored_inst);
             user->eraseFromParent();
             return;
         }
@@ -1184,6 +1195,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         uint32_t size;
     };
     SmallVector<SplitSlot,8> slots;
+    auto align = orig_inst->getRetAlign().valueOrOne();
     for (auto memop: use_info.memops) {
         auto offset = memop.first;
         auto &field = memop.second;
@@ -1205,11 +1217,98 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             allocty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), field.size);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
+        slot.slot->setAlignment(Align(MinAlign(align.value(), slot.offset)));
         IRBuilder<> builder(orig_inst);
         insertLifetime(prolog_builder.CreateBitCast(slot.slot, Type::getInt8PtrTy(prolog_builder.getContext())),
                        ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), field.size), orig_inst);
         initializeAlloca(builder, slot.slot, use_info.allockind);
         slots.push_back(std::move(slot));
+    }
+    struct ErrorBBInfo {
+        CallInst *sunk;
+        Instruction *insertpt;
+        Instruction *p11i8;
+        DenseMap<uint32_t, Instruction *> p11i8_offsets;
+
+        ErrorBBInfo(CallInst *sunk) : sunk(sunk), insertpt(sunk->getNextNonDebugInstruction()), p11i8(nullptr) {}
+
+        Instruction *gep(uint32_t offset, Type *elty, IRBuilder<> &builder) {
+            builder.SetInsertPoint(insertpt);
+            if (!p11i8) {
+                auto p11jlvalue = builder.CreateAddrSpaceCast(sunk, PointerType::getWithSamePointeeType(cast<PointerType>(sunk->getType()), AddressSpace::Derived));
+                p11i8 = cast<Instruction>(builder.CreateBitCast(p11jlvalue, Type::getInt8PtrTy(builder.getContext(), AddressSpace::Derived)));
+            }
+            auto it = p11i8_offsets.find(offset);
+            if (it == p11i8_offsets.end()) {
+                auto gep = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), p11i8, offset);
+                it = p11i8_offsets.insert(std::make_pair(offset, cast<Instruction>(gep))).first;
+            }
+            return cast<Instruction>(builder.CreateBitCast(it->second, elty->getPointerTo(AddressSpace::Derived)));
+        }
+    };
+    auto slot_gep = [&] (SplitSlot &slot, uint32_t offset, Type *elty, IRBuilder<> &builder) {
+        assert(slot.offset <= offset);
+        offset -= slot.offset;
+        auto size = pass.DL->getTypeAllocSize(elty);
+        Value *addr;
+        if (offset % size == 0) {
+            addr = builder.CreateBitCast(slot.slot, elty->getPointerTo());
+            if (offset != 0) {
+                addr = builder.CreateConstInBoundsGEP1_32(elty, addr, offset / size);
+            }
+        }
+        else {
+            addr = builder.CreateBitCast(slot.slot, Type::getInt8PtrTy(builder.getContext()));
+            addr = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), addr, offset);
+            addr = builder.CreateBitCast(addr, elty->getPointerTo());
+        }
+        return addr;
+    };
+    DenseMap<BasicBlock*, ErrorBBInfo> partial_escapes;
+    IRBuilder<> errbuilder(orig_inst->getContext());
+    // sink allocation into error blocks, copy fields
+    for (auto errbb : use_info.errorbbs) {
+        auto sunk = cast<CallInst>(orig_inst->clone());
+        sunk->insertBefore(&*errbb->getFirstInsertionPt());
+        auto &info = partial_escapes.insert(std::make_pair(errbb, ErrorBBInfo(sunk))).first->second;
+        // note that this also sets the insert point of errbuilder
+        auto p11i8 = info.gep(0, Type::getInt8Ty(errbuilder.getContext()), errbuilder);
+        // conservatively just clear the whole thing
+        errbuilder.CreateMemSet(p11i8, ConstantInt::get(Type::getInt8Ty(errbuilder.getContext()), 0), orig_inst->getArgOperand(1), align);
+        for (auto &slot : slots) {
+            auto psize = pass.DL->getPointerSize();
+            if (slot.isref) {
+                auto copyt = pass.T_prjlvalue;
+                assert(slot.size % psize == 0);
+                for (uint32_t offset = 0; offset < slot.size; offset += psize) {
+                    auto dest = info.gep(slot.offset + offset, copyt, errbuilder);
+                    auto src = slot_gep(slot, slot.offset + offset, copyt, errbuilder);
+                    auto load = errbuilder.CreateAlignedLoad(copyt, src, Align(MinAlign(slot.slot->getAlign().value(), offset)));
+                    errbuilder.CreateAlignedStore(load, dest, Align(MinAlign(align.value(), slot.offset + offset)));
+                }
+            } else {
+                auto copyt = pass.DL->getIntPtrType(errbuilder.getContext());
+                for (uint32_t offset = 0; offset < slot.size; offset += psize) {
+                    auto dest = info.gep(slot.offset + offset, copyt, errbuilder);
+                    auto src = slot_gep(slot, slot.offset + offset, copyt, errbuilder);
+                    auto load = errbuilder.CreateAlignedLoad(copyt, src, Align(MinAlign(slot.slot->getAlign().value(), offset)));
+                    errbuilder.CreateAlignedStore(load, dest, Align(MinAlign(align.value(), slot.offset + offset)));
+                }
+                auto remainder = slot.size % psize;
+                if (remainder != 0) {
+                    copyt = cast<IntegerType>(pass.DL->getSmallestLegalIntType(errbuilder.getContext(), 8));
+                    assert(copyt->getBitWidth() % 8 == 0);
+                    auto copysize = copyt->getBitWidth() / 8;
+                    assert(remainder % copysize == 0);
+                    for (size_t offset = slot.size - remainder; offset < slot.size; offset += copysize) {
+                        auto dest = info.gep(slot.offset + offset, copyt, errbuilder);
+                        auto src = slot_gep(slot, slot.offset + offset, copyt, errbuilder);
+                        auto load = errbuilder.CreateAlignedLoad(copyt, src, Align(MinAlign(slot.slot->getAlign().value(), offset)));
+                        errbuilder.CreateAlignedStore(load, dest, Align(MinAlign(align.value(), slot.offset + offset)));
+                    }
+                }
+            }
+        }
     }
     const auto nslots = slots.size();
     auto find_slot = [&] (uint32_t offset) {
@@ -1254,29 +1353,18 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         replace_stack.push_back(cur);
         cur = {orig_i, offset};
     };
-    auto slot_gep = [&] (SplitSlot &slot, uint32_t offset, Type *elty, IRBuilder<> &builder) {
-        assert(slot.offset <= offset);
-        offset -= slot.offset;
-        auto size = pass.DL->getTypeAllocSize(elty);
-        Value *addr;
-        if (offset % size == 0) {
-            addr = builder.CreateBitCast(slot.slot, elty->getPointerTo());
-            if (offset != 0) {
-                addr = builder.CreateConstInBoundsGEP1_32(elty, addr, offset / size);
-            }
-        }
-        else {
-            addr = builder.CreateBitCast(slot.slot, Type::getInt8PtrTy(builder.getContext()));
-            addr = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), addr, offset);
-            addr = builder.CreateBitCast(addr, elty->getPointerTo());
-        }
-        return addr;
-    };
     auto replace_inst = [&] (Use *use) {
         Instruction *user = cast<Instruction>(use->getUser());
         Instruction *orig_i = cur.orig_i;
         uint32_t offset = cur.offset;
+        auto errit = partial_escapes.find(user->getParent());
+        ErrorBBInfo *errinfo = errit == partial_escapes.end() ? nullptr : &errit->second;
         if (auto load = dyn_cast<LoadInst>(user)) {
+            if (errinfo) {
+                auto gep = errinfo->gep(offset, load->getType(), errbuilder);
+                use->set(gep);
+                return;
+            }
             auto slot_idx = find_slot(offset);
             auto &slot = slots[slot_idx];
             assert(slot.offset <= offset && slot.offset + slot.size >= offset);
@@ -1304,7 +1392,13 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         }
         else if (auto store = dyn_cast<StoreInst>(user)) {
             if (auto stored_inst = dyn_cast<Instruction>(store->getValueOperand()))
-                pushInstruction(stored_inst);
+                if (!isa<UnreachableInst>(stored_inst->getParent()->getTerminator()))
+                    pushInstruction(stored_inst); // may be able to stack allocate this object too
+            if (errinfo) {
+                auto gep = errinfo->gep(offset, store->getValueOperand()->getType(), errbuilder);
+                use->set(gep);
+                return;
+            }
             auto slot_idx = find_slot(offset);
             auto &slot = slots[slot_idx];
             if (slot.offset > offset || slot.offset + slot.size <= offset) {
@@ -1342,6 +1436,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             return;
         }
         else if (isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            if (errinfo) {
+                auto gep = errinfo->gep(offset, user->getType(), errbuilder);
+                use->set(gep);
+                return;
+            }
             auto slot_idx = find_slot(offset);
             auto &slot = slots[slot_idx];
             assert(slot.offset <= offset && slot.offset + slot.size >= offset);
@@ -1358,6 +1457,19 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             *use = newptr;
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
+            if (errinfo) {
+                auto pt = cast<PointerType>(use->get()->getType());
+                if (pt->getAddressSpace() == AddressSpace::Tracked) {
+                    assert(offset == 0); // can't have tracked gep
+                    auto bc = errbuilder.CreateBitCast(errinfo->sunk, pt);
+                    use->set(bc);
+                } else {
+                    auto eltype = pt->isOpaque() ? Type::getInt8Ty(pt->getContext()) : pt->getNonOpaquePointerElementType();
+                    auto gep = errinfo->gep(offset, eltype, errbuilder);
+                    use->set(gep);
+                }
+                return;
+            }
             auto callee = call->getCalledOperand();
             assert(callee); // makes it clear for clang analyser that `callee` is not NULL
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
@@ -1479,7 +1591,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             push_frame(user, offset);
         }
         else if (auto gep = dyn_cast<GetElementPtrInst>(user)) {
-            APInt apoffset(sizeof(void*) * 8, offset, true);
+            APInt apoffset(pass.DL->getPointerSizeInBits(), offset, true);
             gep->accumulateConstantOffset(*pass.DL, apoffset);
             push_frame(gep, apoffset.getLimitedValue());
         }

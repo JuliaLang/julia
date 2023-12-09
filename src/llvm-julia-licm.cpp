@@ -146,6 +146,7 @@ struct JuliaLICM : public JuliaPassContext {
         BasicBlock *header = L->getHeader();
         const llvm::DataLayout &DL = header->getModule()->getDataLayout();
         initFunctions(*header->getModule());
+        Function *except_enter_func = header->getModule()->getFunction("julia.except_enter");
         // Also require `gc_preserve_begin_func` whereas
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
@@ -182,6 +183,8 @@ struct JuliaLICM : public JuliaPassContext {
         LoopBlocksRPO worklist(L);
         worklist.perform(LI);
         for (auto *bb : worklist) {
+            if (isa<UnreachableInst>(bb->getTerminator()))
+                continue;
             for (BasicBlock::iterator II = bb->begin(), E = bb->end(); II != E;) {
                 auto call = dyn_cast<CallInst>(&*II++);
                 if (!call)
@@ -319,6 +322,15 @@ struct JuliaLICM : public JuliaPassContext {
                             return OptimizationRemarkMissed(DEBUG_TYPE, "Escape", call)
                                 << "not hoisting gc allocation " << ore::NV("GC Allocation", call)
                                 << " because it may have an object stored to it";
+                        });
+                        continue;
+                    }
+                    if (!use_info.errorbbs.empty() && except_enter_func) {
+                        // If we escape via error handling, we don't want to catch the error inside the loop
+                        REMARK([&](){
+                            return OptimizationRemarkMissed(DEBUG_TYPE, "Escape", call)
+                                << "not hoisting gc allocation " << ore::NV("GC Allocation", call)
+                                << " because it may escape via error handling";
                         });
                         continue;
                     }

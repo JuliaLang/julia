@@ -94,7 +94,7 @@ bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
     memop.isaggr = isa<StructType>(elty) || isa<ArrayType>(elty) || isa<VectorType>(elty);
     memop.isobjref = hasObjref(elty);
     auto &field = getField(offset, size, elty);
-    if (field.second.hasobjref != memop.isobjref)
+    if (field.second.hasobjref != memop.isobjref && !field.second.accesses.empty())
         field.second.multiloc = true; // can't split this field, since it contains a mix of references and bits
     if (!isstore)
         field.second.hasload = true;
@@ -124,7 +124,6 @@ JL_USED_FUNC void AllocUseInfo::dump(llvm::raw_ostream &OS)
     OS << "escaped: " << escaped << '\n';
     OS << "addrescaped: " << addrescaped << '\n';
     OS << "returned: " << returned << '\n';
-    OS << "haserror: " << haserror << '\n';
     OS << "hasload: " << hasload << '\n';
     OS << "haspreserve: " << haspreserve << '\n';
     OS << "hasunknownmem: " << hasunknownmem << '\n';
@@ -140,10 +139,19 @@ JL_USED_FUNC void AllocUseInfo::dump(llvm::raw_ostream &OS)
     OS << "Uses: " << uses.size() << '\n';
     for (auto inst: uses)
         inst->print(OS);
+    OS << '\n';
     if (!preserves.empty()) {
         OS << "Preserves: " << preserves.size() << '\n';
         for (auto inst: preserves)
             inst->print(OS);
+        OS << '\n';
+    }
+    if (!errorbbs.empty()) {
+        OS << "ErrorBBs: " << errorbbs.size() << '\n';
+        for (auto bb: errorbbs) {
+            bb->printAsOperand(OS);
+            OS << '\n';
+        }
     }
     OS << "MemOps: " << memops.size() << '\n';
     for (auto &field: memops) {
@@ -152,6 +160,7 @@ JL_USED_FUNC void AllocUseInfo::dump(llvm::raw_ostream &OS)
         OS << "  hasobjref: " << field.second.hasobjref << '\n';
         OS << "  hasload: " << field.second.hasload << '\n';
         OS << "  hasaggr: " << field.second.hasaggr << '\n';
+        OS << "  multiloc: " << field.second.multiloc << '\n';
         OS << "  accesses: " << field.second.accesses.size() << '\n';
         for (auto &memop: field.second.accesses) {
             OS << "    ";
@@ -263,7 +272,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                 call->getOperandBundleForOperand(opno).getTagName() != "jl_roots") {
                 if (isa<UnreachableInst>(call->getParent()->getTerminator())) {
                     LLVM_DEBUG(dbgs() << "Detected use of allocation in block terminating with unreachable, likely error function\n");
-                    required.use_info.haserror = true;
+                    required.use_info.errorbbs.insert(call->getParent());
                     return true;
                 }
                 LLVM_DEBUG(dbgs() << "Unknown call, marking escape\n");
@@ -282,6 +291,11 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
         if (auto store = dyn_cast<StoreInst>(inst)) {
             // Only store value count
             if (use->getOperandNo() != StoreInst::getPointerOperandIndex()) {
+                if (isa<UnreachableInst>(store->getParent()->getTerminator())) {
+                    LLVM_DEBUG(dbgs() << "Detected use of allocation in block terminating with unreachable, likely error function\n");
+                    required.use_info.errorbbs.insert(store->getParent());
+                    return true;
+                }
                 LLVM_DEBUG(dbgs() << "Object address is stored somewhere, marking escape\n");
                 REMARK([&]() {
                     return OptimizationRemarkMissed(DEBUG_TYPE, "StoreObjAddr",
