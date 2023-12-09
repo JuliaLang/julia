@@ -23,10 +23,10 @@ allow_tabs(path) =
     endswith(path, "Makefile") ||
     endswith(path, ".make") ||
     endswith(path, ".mk") ||
-    startswith(path, joinpath("src", "support")) ||
-    startswith(path, joinpath("src", "flisp")) ||
-    endswith(path, joinpath("test", "syntax.jl")) ||
-    endswith(path, joinpath("test", "triplequote.jl"))
+    startswith(path, "src/support") ||
+    startswith(path, "src/flisp") ||
+    endswith(path, "test/syntax.jl") ||
+    endswith(path, "test/triplequote.jl")
 
 const errors = Set{Tuple{String,Int,String}}()
 
