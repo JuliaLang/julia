@@ -1135,8 +1135,9 @@ function setup_interface(
                     Pkg = Base.require(pkgid)
                     # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
                     pkg_mode = nothing
+                    PkgREPLMode = Base.get_extension(Pkg, :PkgREPLMode)
                     for mode in repl.interface.modes
-                        if mode isa LineEdit.Prompt && mode.complete isa Pkg.REPLMode.PkgCompletionProvider
+                        if mode isa LineEdit.Prompt && mode.complete isa PkgREPLMode.PkgCompletionProvider
                             pkg_mode = mode
                             break
                         end
