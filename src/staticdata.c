@@ -69,6 +69,7 @@ External links:
 - loc/0 in relocs_list
 
 */
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h> // printf
@@ -1277,6 +1278,9 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             skip_header_pos += sizeof(size_t);
         write_padding(f, LLT_ALIGN(skip_header_pos, 16) - skip_header_pos);
 
+        size_t s_start_pos = ios_pos(s->s);
+        size_t const_data_start_pos = ios_pos(s->const_data);
+
         // write header
         if (object_id_expected)
             write_uint(f, jl_object_id(v));
@@ -1738,6 +1742,14 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             else {
                 write_padding(f, jl_datatype_size(t) - tot);
             }
+        }
+
+        size_t delta = ios_pos(s->s) - s_start_pos;
+        delta += ios_pos(s->const_data) - const_data_start_pos;
+
+        if (delta > 512ull * 1024ull) { // Print all objects > 512 kB
+            fprintf(stderr, "Wrote object of size %zu kB and type: ", delta / 1024);
+            jl_(jl_typeof(v));
         }
     }
 }
@@ -2520,11 +2532,14 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
 }
 
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
-static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
+static void  jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *worklist, jl_array_t *extext_methods,
                                            jl_array_t *new_specializations, jl_array_t *method_roots_list,
-                                           jl_array_t *ext_targets, jl_array_t *edges) JL_GC_DISABLED
+                                           jl_array_t *ext_targets, jl_array_t *edges, int small_image) JL_GC_DISABLED
 {
+    int incremental = jl_options.incremental;
+    jl_(mod_array);
+
     htable_new(&field_replace, 0);
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir)
@@ -2551,7 +2566,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     ios_mem(&gvar_record, 0);
     ios_mem(&fptr_record, 0);
     jl_serializer_state s = {0};
-    s.incremental = !(worklist == NULL);
+    s.incremental = incremental;
     s.s = &sysimg;
     s.const_data = &const_data;
     s.symbols = &symbols;
@@ -2585,7 +2600,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_get_llvm_external_fns(native_functions, &external_fns);
     }
 
-    if (worklist == NULL) {
+    if (incremental == 0) {
         // empty!(Core.ARGS)
         if (jl_core_module != NULL) {
             jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
@@ -2617,12 +2632,20 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, s.ptls->root_task->tls);
         }
         else {
-            // To ensure we don't have to manually update the list, go through all tags and queue any that are not otherwise
-            // judged to be externally-linked
-            htable_new(&external_objects, NUM_TAGS);
-            for (size_t i = 0; tags[i] != NULL; i++) {
-                jl_value_t *tag = *tags[i];
-                ptrhash_put(&external_objects, tag, tag);
+            if (small_image) {
+                for (i = 0; tags[i] != NULL; i++) {
+                    jl_value_t *tag = *tags[i];
+                    jl_queue_for_serialization(&s, tag);
+                }
+                jl_queue_for_serialization(&s, s.ptls->root_task->tls);
+            } else {
+                // To ensure we don't have to manually update the list, go through all tags and queue any that are not otherwise
+                // judged to be externally-linked
+                htable_new(&external_objects, NUM_TAGS);
+                for (size_t i = 0; tags[i] != NULL; i++) {
+                    jl_value_t *tag = *tags[i];
+                    ptrhash_put(&external_objects, tag, tag);
+                }
             }
             // Queue the worklist itself as the first item we serialize
             jl_queue_for_serialization(&s, worklist);
@@ -2650,7 +2673,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         record_external_fns(&s, &external_fns);
         jl_serialize_reachable(&s);
         // step 1.3: prune (garbage collect) special weak references from the jl_global_roots_list
-        if (worklist == NULL) {
+        if (incremental == 0) {
             global_roots_list = jl_alloc_memory_any(0);
             for (size_t i = 0; i < jl_global_roots_list->length; i++) {
                 jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_list, i);
@@ -2714,10 +2737,12 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     ios_seek(&sysimg, sizeof(uintptr_t));
     ios_copyall(f, &sysimg);
     size_t sysimg_size = s.s->size;
+    jl_safe_printf("sysimg_size = %zu\n", sysimg_size/1024);
     assert(ios_pos(f) - sysimg_offset == sysimg_size);
     ios_close(&sysimg);
 
     write_uint(f, const_data.size);
+    jl_safe_printf("const_data.size = %lld\n", const_data.size/1024);
     // realign stream to max-alignment for data
     write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
     ios_seek(&const_data, 0);
@@ -2725,6 +2750,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     ios_close(&const_data);
 
     write_uint(f, symbols.size);
+    jl_safe_printf("symbos.size = %lld\n", symbols.size/1024);
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&symbols, 0);
     ios_copyall(f, &symbols);
@@ -2745,18 +2771,21 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     }
     jl_write_arraylist(s.relocs, &s.fixup_objs);
     write_uint(f, relocs.size);
+    jl_safe_printf("relocs.size = %lld\n", relocs.size);
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&relocs, 0);
     ios_copyall(f, &relocs);
     ios_close(&relocs);
 
     write_uint(f, gvar_record.size);
+    jl_safe_printf("gvar_record.size = %lld\n", gvar_record.size);
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&gvar_record, 0);
     ios_copyall(f, &gvar_record);
     ios_close(&gvar_record);
 
     write_uint(f, fptr_record.size);
+    jl_safe_printf("fptr_record.size = %lld\n", fptr_record.size);
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&fptr_record, 0);
     ios_copyall(f, &fptr_record);
@@ -2765,7 +2794,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     { // step 4: record locations of special roots
         write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
         s.s = f;
-        if (worklist == NULL) {
+        if (incremental == 0) {
             size_t i;
             for (i = 0; tags[i] != NULL; i++) {
                 jl_value_t *tag = *tags[i];
@@ -2852,7 +2881,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
 }
 
 JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
-                                         ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos)
+                                         ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos, int small_image)
 {
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
@@ -2872,7 +2901,10 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     } else {
         ff = f;
     }
-
+    int incremental = jl_options.incremental;
+    if (small_image == 0 && !incremental)
+        worklist = NULL;
+    // assert(small_image && !(incremental));
     jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_specializations = NULL;
     jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
     int64_t checksumpos = 0;
@@ -2892,14 +2924,16 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
             extext_methods = NULL;
             new_specializations = NULL;
         }
-        jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos, &checksumpos);
-        if (emit_split) {
-            checksumpos_ff = write_header(ff, 1);
-            write_uint8(ff, jl_cache_flags());
-            write_mod_list(ff, mod_array);
-        }
-        else {
-            checksumpos_ff = checksumpos;
+        if (incremental) {
+            jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos, &checksumpos);
+                if (emit_split) {
+                    checksumpos_ff = write_header(ff, 1);
+                    write_uint8(ff, jl_cache_flags());
+                    write_mod_list(ff, mod_array);
+                }
+                else {
+                    checksumpos_ff = checksumpos;
+                }
         }
     }
     else if (_native_data != NULL) {
@@ -2911,7 +2945,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     jl_gc_enable_finalizers(ct, 0);
     assert((ct->reentrant_timing & 0b1110) == 0);
     ct->reentrant_timing |= 0b1000;
-    if (worklist) {
+    if (worklist && incremental) {
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
                                       &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
         if (!emit_split) {
@@ -2925,7 +2959,8 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
-    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
+
+    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges, small_image);
     if (_native_data != NULL)
         native_functions = NULL;
     // make sure we don't run any Julia code concurrently before this point
@@ -2934,7 +2969,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     ct->reentrant_timing &= ~0b1000u;
     jl_precompile_toplevel_module = NULL;
 
-    if (worklist) {
+    if (worklist && incremental) {
         // Go back and update the checksum in the header
         int64_t dataendpos = ios_pos(ff);
         uint32_t checksum = jl_crc32c(0, &ff->buf[datastartpos], dataendpos - datastartpos);

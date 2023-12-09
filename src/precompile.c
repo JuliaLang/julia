@@ -101,6 +101,15 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     }
 
     jl_array_t *worklist = jl_module_init_order;
+
+    int small_image = 0;
+    if (getenv("JULIA_SMALL_IMAGE")) {
+        small_image = 1; // Image built like the base sysimg, but with a worklist/non-incremental package image
+        worklist = jl_alloc_vec_any(1);
+        jl_array_ptr_set(worklist, 0, jl_array_ptr_ref(jl_module_init_order, jl_array_len(jl_module_init_order) - 1));
+        jl_(worklist);
+    }
+
     jl_array_t *udeps = NULL;
     JL_GC_PUSH2(&worklist, &udeps);
     jl_module_init_order = jl_alloc_vec_any(0);
@@ -136,9 +145,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     ios_t *s = NULL;
     ios_t *z = NULL;
     int64_t srctextpos = 0 ;
-    jl_create_system_image(emit_native ? &native_code : NULL,
-                           jl_options.incremental ? worklist : NULL,
-                           emit_split, &s, &z, &udeps, &srctextpos);
+    jl_create_system_image(emit_native ? &native_code : NULL, worklist,
+                           emit_split, &s, &z, &udeps, &srctextpos, small_image);
 
     if (!emit_split)
         z = s;

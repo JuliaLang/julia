@@ -315,6 +315,7 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
         jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_specializations, i);
         precompile_enq_specialization_(ci->def, m);
     }
+    jl_(m);
     void *native_code = jl_precompile_(m, 1);
     JL_GC_POP();
     return native_code;

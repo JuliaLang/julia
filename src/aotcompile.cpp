@@ -267,6 +267,7 @@ extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage, size_t _world)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Create);
+    jl_(methods);
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_nrows(methods));
     if (cgparams == NULL)
@@ -468,7 +469,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             }
         }
     }
-
     data->M = std::move(clone);
     if (timed) {
         if (measure_compile_time_enabled) {
