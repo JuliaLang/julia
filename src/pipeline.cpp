@@ -480,30 +480,20 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
         FPM.addPass(IRCEPass());
         FPM.addPass(InstCombinePass());
         FPM.addPass(JumpThreadingPass());
-        // TODO we traded gvn later for this gvn and replaced it with earlycse,
-        // is this a good trade? it really helps with eliding array allocations
+    }
+    if (O.getSpeedupLevel() >= 3) {
         FPM.addPass(GVNPass());
+    }
+    if (O.getSpeedupLevel() >= 2) {
         FPM.addPass(DSEPass());
         invokePeepholeEPCallbacks(FPM, PB, O);
         FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
-        // TODO is it worth updating memoryssa in alloc-opt? it would mean at O3 we don't have a
-        // guaranteed recompute of mssa for LICM
         JULIA_PASS(FPM.addPass(AllocOptPass()));
         {
-            // last-chance loop optimizations
-            // most array allocations that are elided end up wanting these
             LoopPassManager LPM;
-            // TODO reenable the O3 guard if this is too expensive
-            // if (O.getSpeedupLevel() >= 3) {
-                LPM.addPass(LICMPass(LICMOptions()));
-                LPM.addPass(JuliaLICMPass());
-                LPM.addPass(IndVarSimplifyPass());
-                LPM.addPass(LoopIdiomRecognizePass());
-                // LPM.addPass(LoopFullUnrollPass()); // doesn't support memoryssa preservation in LLVM 15
-            // }
             LPM.addPass(LoopDeletionPass());
             LPM.addPass(LoopInstSimplifyPass());
-            FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), true));
+            FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM)));
         }
         FPM.addPass(LoopDistributePass());
     }
@@ -582,7 +572,7 @@ static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimi
         FunctionPassManager FPM;
         JULIA_PASS(FPM.addPass(DemoteFloat16Pass()));
         if (O.getSpeedupLevel() >= 2) {
-            FPM.addPass(EarlyCSEPass());
+            FPM.addPass(GVNPass());
         }
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
