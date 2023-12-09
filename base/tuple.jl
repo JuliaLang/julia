@@ -630,19 +630,42 @@ julia> x = (1, 2, 3, 4, 5)
 julia> circshift(x, 4)
 (2, 3, 4, 5, 1)
 
-julia> circshift(x, 7)
-(4, 5, 1, 2, 3)
-
-julia> circshift(x, -1)
-(2, 3, 4, 5, 1)
-
 julia> y = ((1, 2), (3, 4), (5, 6))
 ((1, 2), (3, 4), (5, 6))
 
-julia> circshift(y, 1)
-((5, 6), (1, 2), (3, 4))
+julia> circshift(y, 5)
+((3, 4), (5, 6), (1, 2))
+
+julia> z = (1, 'a', -7.0, 3)
+(1, 'a', -7.0, 3)
+
+julia> circshift(z, -1)
+('a', -7.0, 3, 1)
 ```
 """
 circshift(x::Tuple, shift::Integer) = ntuple(j -> x[mod1(j-shift, length(x))], Val(length(x)))
-circshift(x::NTuple{N}, shift::Integer) where {N} = ntuple(j -> x[mod1(j-shift, N)], Val(N))
+
+"""
+    circshift(x::Tuple, ::Val(shift))
+
+Circularly shift, i.e. rotate, the data in a tuple. The second argument specifies
+the shift amount. By using a `Val(shift)` argument, i.e. `circshift(x, Val(shift))`, the generated code
+can be made more efficient when 'shift' is a compile time constant. However, when 'shift' is
+an ordinary variable, `circshift(x, shift)` is preferable to this version.
+
+# Examples
+```jldoctest
+julia> x = (1, 2, 3, 4, 5)
+(1, 2, 3, 4, 5)
+
+julia> circshift(x, Val(4))
+(2, 3, 4, 5, 1)
+
+julia> z = (1, 'a', -7.0, 3)
+(1, 'a', -7.0, 3)
+
+julia> circshift(z, Val(-1))
+('a', -7.0, 3, 1)
+```
+"""
 circshift(x::Tuple, ::Val{shift}) where {shift} = ntuple(j -> x[mod1(j-shift, length(x))], Val(length(x)))
