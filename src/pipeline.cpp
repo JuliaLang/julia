@@ -371,6 +371,8 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
         invokeCGSCCCallbacks(CGPM, PB, O);
         if (O.getSpeedupLevel() >= 2) {
             FunctionPassManager FPM;
+            // get rid of random FCAs that confuse alloc-opt
+            FPM.addPass(InstCombinePass());
             JULIA_PASS(FPM.addPass(AllocOptPass()));
             FPM.addPass(Float2IntPass());
             FPM.addPass(LowerConstantIntrinsicsPass());
