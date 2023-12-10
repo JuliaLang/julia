@@ -346,6 +346,7 @@ bool Optimizer::canDeoptimizeErrorBlocks(CallInst *orig) {
     for (auto &field : use_info.memops) {
         for (auto &acc : field.second.accesses) {
             assert(isa<LoadInst>(acc.inst) && "Should only have loads of array length/data");
+            (void) acc;
         }
         if (field.first == 0) {
             if (field.second.size > pass.DL->getPointerSize()) {
@@ -549,6 +550,7 @@ void Optimizer::sinkArrayDataPointer(CallInst *orig, DenseMap<BasicBlock *, Sunk
                 bool success = gep->collectOffset(*pass.DL, BitWidth, frame.variables, frame.constant);
                 assert(success); // TODO this may not work on ARM with scalable vectors,
                 // but for now let's just start with this
+                (void) success;
                 frame.offset_frame = stack.size();
                 break;
             }
@@ -816,6 +818,13 @@ void Optimizer::optimizeArray(CallInst *orig, jl_genericmemory_info_t info) {
             REMARK([&]() {
                 return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
                     << "GC genericmemory allocation size is too large " << ore::NV("GC GenericMemory Allocation", orig);
+            });
+            return;
+        }
+        if (bytes == 0) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC genericmemory allocation size was 0 " << ore::NV("GC GenericMemory Allocation", orig);
             });
             return;
         }
