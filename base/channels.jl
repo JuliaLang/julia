@@ -538,6 +538,37 @@ true
 """
 isready(c::Channel) = n_avail(c) > 0
 isempty(c::Channel) = n_avail(c) == 0
+
+"""
+    isfull(c::Channel)
+
+Determines whether a buffered [`Channel`](@ref) is full. Unbuffered channels are never full.
+Returns immediately, does not block.
+
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(1);
+
+julia> isfull(c)
+false
+
+julia> put!(c, 1);
+
+julia> isfull(c)
+true
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel();
+
+julia> isfull(c)
+false
+```
+"""
+isfull(c::Channel) = isbuffered(c) && n_avail(c) >= c.sz_max
 function n_avail(c::Channel)
     # Lock-free equivalent to `length(c.data) + length(c.cond_put.waitq)`
     @atomic :monotonic c.n_avail_items

@@ -196,6 +196,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     hold up to 64 objects of `MyType` at any time.
   * If a [`Channel`](@ref) is empty, readers (on a [`take!`](@ref) call) will block until data is available.
   * If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available.
+  * [`isfull`](@ref) can be used to check if a buffered channel is full.
   * [`isready`](@ref) tests for the presence of any object in the channel, while [`wait`](@ref)
     waits for an object to become available.
   * A [`Channel`](@ref) is in an open state initially. This means that it can be read from and written to
