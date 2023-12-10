@@ -587,10 +587,10 @@ function DateTime(dt::AbstractString, df::DateFormat=_typo_ISODateTimeFormat)
     d = parse(DateTime, dt, df)
     if df == _typo_ISODateTimeFormat
         return _check_year(d, "yy") # dummy format
-    elseif df == ISODateTimeFormat || df == RFC1123Format
-        return _check_year(d, "yyyy") # dummy format that's ok for both
+    # elseif df == ISODateTimeFormat || df == RFC1123Format
+    #     return _check_year(d, "yyyy") # dummy format that's ok for both
     else
-        return d
+        return _check_year(d, "yyyy")  # too restrictive for some formats(?) though likely ok
     end
 end
 """
