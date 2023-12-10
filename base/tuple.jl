@@ -646,7 +646,7 @@ julia> circshift(z, -1)
 circshift(x::Tuple, shift::Integer) = ntuple(j -> x[mod1(j-shift, length(x))], Val(length(x)))
 
 """
-    circshift(x::Tuple, ::Val(shift))
+    circshift(x::Tuple, ::Val{shift})
 
 Circularly shift, i.e. rotate, the data in a tuple. The second argument specifies
 the shift amount. By using a `Val(shift)` argument, i.e. `circshift(x, Val(shift))`, the generated code
@@ -668,7 +668,4 @@ julia> circshift(z, Val(-1))
 ('a', -7.0, 3, 1)
 ```
 """
-@inline function circshift(x::Tuple, ::Val{shift}) where {shift}
-    shift::Integer
-    return ntuple(j -> x[mod1(j-shift, length(x))], Val(length(x)))
-end
+circshift(x::Tuple, ::Val{shift}) where {shift} = ntuple(j -> x[mod1(j-shift::Integer, length(x))], Val(length(x)))
