@@ -262,7 +262,7 @@ function circshift(a::AbstractArray, shiftamt::Real)
 end
 circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, shiftamt)
 """
-    circshift(A, shifts)
+    circshift(A::AbstractArray, shifts)
 
 Circularly shift, i.e. rotate, the data in an array. The second argument is a tuple or
 vector giving the amount to shift in each dimension, or an integer to shift only in the

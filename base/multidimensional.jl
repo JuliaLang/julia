@@ -1178,9 +1178,9 @@ copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices
 # circshift!
 circshift!(dest::AbstractArray, src, ::Tuple{}) = copyto!(dest, src)
 """
-    circshift!(dest, src, shifts)
+    circshift!(dest::AbstractArray, src, shifts)
 
-Circularly shift, i.e. rotate, the data in `src`, storing the result in
+Circularly shift, i.e. rotate, the data in array `src`, storing the result in
 `dest`. `shifts` specifies the amount to shift in each dimension.
 
 $(_DOCS_ALIASING_WARNING)
