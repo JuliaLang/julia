@@ -74,7 +74,7 @@ function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
     e = convert(AbstractVector{T}, ev)::AbstractVector{T}
     typeof(d) == typeof(e) ?
         SymTridiagonal{T}(d, e) :
-        throw(ArgumentError("diagonal vectors needed to be convertable to same type"))
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
 SymTridiagonal(d::AbstractVector{T}, e::AbstractVector{S}) where {T,S} =
     SymTridiagonal{promote_type(T, S)}(d, e)
@@ -526,13 +526,13 @@ function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVecto
     l, d, u = map(x->convert(AbstractVector{T}, x), (dl, d, du))
     typeof(l) == typeof(d) == typeof(u) ?
         Tridiagonal(l, d, u) :
-        throw(ArgumentError("diagonal vectors needed to be convertable to same type"))
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector) where {T}
     l, d, u, u2 = map(x->convert(AbstractVector{T}, x), (dl, d, du, du2))
     typeof(l) == typeof(d) == typeof(u) == typeof(u2) ?
         Tridiagonal(l, d, u, u2) :
-        throw(ArgumentError("diagonal vectors needed to be convertable to same type"))
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
 
 """
