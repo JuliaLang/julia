@@ -38,7 +38,9 @@ julia> sval[]
     implementation is available from the package ScopedValues.jl.
 """
 mutable struct ScopedValue{T}
-    const has_default::Bool
+    # NOTE this struct must be defined as mutable one since it's used as a key of
+    #      `ScopeStorage` dictionary and thus needs object identity
+    const has_default::Bool # this field is necessary since isbitstype `default` field may be initialized with undefined value
     const default::T
     ScopedValue{T}() where T = new(false)
     ScopedValue{T}(val) where T = new{T}(true, val)
@@ -68,11 +70,14 @@ function Scope(parent::Union{Nothing, Scope}, key::ScopedValue{T}, value) where 
     return Scope(ScopeStorage(parent.values, key=>val))
 end
 
-function Scope(scope, pairs::Pair{<:ScopedValue}...)
-    for pair in pairs
-        scope = Scope(scope, pair...)
-    end
-    return scope::Scope
+function Scope(scope, pair::Pair{<:ScopedValue})
+    return Scope(scope, pair...)
+end
+
+function Scope(scope, pair1::Pair{<:ScopedValue}, pair2::Pair{<:ScopedValue}, pairs::Pair{<:ScopedValue}...)
+    # Unroll this loop through recursion to make sure that
+    # our compiler optimization support works
+    return Scope(Scope(scope, pair1...), pair2, pairs...)
 end
 Scope(::Nothing) = nothing
 
