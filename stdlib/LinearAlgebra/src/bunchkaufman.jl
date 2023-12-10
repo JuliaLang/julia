@@ -461,7 +461,7 @@ part is updated. The values `'U'` or `'L'` can only be used when A is
 square (`N==M`).
 
 `syhe` is a character, either `'S'` or `'H'`, indicating whether the
-symmetric adjoint (`syhe=='S'`, and `y'==tranpose(y)`) or the hermitian
+symmetric adjoint (`syhe=='S'`, and `y'==transpose(y)`) or the hermitian
 adjoint (`syhe=='H'`, and `y'==adjoint(y)`) must be used.
 """
 function generic_adr1!(uplo::AbstractChar,
@@ -681,7 +681,7 @@ then `U'` and `L'` denote the unconjugated transposes, i.e.
 stored in-place in `A`, LAPACK style. `LD` is just a reference to `A`
 (that is, `LD===A`). `ipiv` stores the permutation information of the
 algorithm in LAPACK format. `info` indicates whether the factorization
-was sucessful and non-singular when `info==0`, or else `info` takes a
+was successful and non-singular when `info==0`, or else `info` takes a
 different value. The outputs `LD`, `ipiv`, `info` follow the format of
 the LAPACK functions of the Bunch-Kaufman factorization (`dsytrf`,
 `csytrf`, `chetrf`, etc.), so this function can (ideally) be used
@@ -701,7 +701,7 @@ performed).
 If `rook` is `true`, rook pivoting is used (also called bounded
 Bunch-Kaufman factorization). If `rook` is `false`, rook pivoting is
 not used (standard Bunch-Kaufman factorization). Rook pivoting can
-require up to `~N^3/6` extra comparisons in adition to the `~N^3/3`
+require up to `~N^3/6` extra comparisons in addition to the `~N^3/3`
 additions and `~N^3/3` multiplications of the standard Bunch-Kaufman
 factorization. However, rook pivoting guarantees that the entries of
 `U` or `L` are bounded.
@@ -724,7 +724,7 @@ function generic_bunchkaufman!(
     info = 0::BlasInt
     # Get size of matrix
     N, N2 = size(A)
-    # Intialize permutation vector
+    # Initialize permutation vector
     ipiv = Vector{BlasInt}(undef, N)
 
     # Check input correctness
@@ -758,7 +758,7 @@ function generic_bunchkaufman!(
 
     # Check if the matrix is symmetric of hermitian
     if syhe == 'S' || (syhe == 'H' && TS <: Real)
-        # Use symmetric variant if matrix is real, regardles of 'syhe' value
+        # Use symmetric variant if matrix is real, regardless of 'syhe' value
         syhe = 'S'
         diag_abs_fun = abs1_fun
     else
@@ -779,7 +779,7 @@ function generic_bunchkaufman!(
                 sfmin = nextfloat(small * (1 + eps(TR(1))), 2)
             end
         else
-            # We're wroking with rationals in this case, so the all results are exact.
+            # We're working with rationals in this case, so the all results are exact.
             sfmin = TR(0)
         end
     end
@@ -794,7 +794,7 @@ function generic_bunchkaufman!(
     @inline diagreal_op = herm ? (j -> A[j,j] = TS(real(A[j,j]))) : _ -> ()
     k = upper ? N : 1
     # Main loop, comments refer to the upper triangular version of the factorization.
-    # The lower traingular version is analogous.
+    # The lower triangular version is analogous.
     while k_cond(k); @inbounds begin
         kstep = 1
         knext = upper ? k - 1 : k + 1
@@ -1068,7 +1068,7 @@ function generic_syconv(
     # Get size of matrix
     N = size(A)[1]
 
-    # Intialize off-diagonal and diagonal vector
+    # Initialize off-diagonal and diagonal vector
     e = Vector{TS}(undef, N)
     d = gettri ? nothing : diag(A, 0)
 
