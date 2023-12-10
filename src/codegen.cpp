@@ -603,16 +603,6 @@ static inline void add_named_global(StringRef name, T *addr)
     add_named_global(name, (void*)(uintptr_t)addr);
 }
 
-AttributeSet Attributes(LLVMContext &C, std::initializer_list<Attribute::AttrKind> attrkinds, std::initializer_list<Attribute> extra={})
-{
-    SmallVector<Attribute, 8> attrs(attrkinds.size() + extra.size());
-    for (size_t i = 0; i < attrkinds.size(); i++)
-        attrs[i] = Attribute::get(C, attrkinds.begin()[i]);
-    for (size_t i = 0; i < extra.size(); i++)
-        attrs[attrkinds.size() + i] = extra.begin()[i];
-    return AttributeSet::get(C, ArrayRef<Attribute>(attrs));
-}
-
 static Type *get_pjlvalue(LLVMContext &C) { return JuliaType::get_pjlvalue_ty(C); }
 
 static FunctionType *get_func_sig(LLVMContext &C) { return JuliaType::get_jlfunc_ty(C); }
@@ -1428,14 +1418,8 @@ static const auto gc_loaded_func = new JuliaFunction<>{
     //  top:
     //   %metadata GC base pointer is ptr(Tracked)
     //   ret addrspacecast ptr to ptr(Loaded)
-    [](LLVMContext &C) { return FunctionType::get(PointerType::get(JuliaType::get_prjlvalue_ty(C), AddressSpace::Loaded),
-            {JuliaType::get_prjlvalue_ty(C), PointerType::get(JuliaType::get_prjlvalue_ty(C), 0)}, false); },
-    [](LLVMContext &C) {
-        AttributeSet FnAttrs = Attributes(C, {Attribute::ReadNone, Attribute::NoSync, Attribute::NoUnwind, Attribute::Speculatable, Attribute::WillReturn, Attribute::NoRecurse});
-        AttributeSet RetAttrs = Attributes(C, {Attribute::NonNull, Attribute::NoUndef});
-        return AttributeList::get(C, FnAttrs, RetAttrs,
-                { Attributes(C, {Attribute::NoUndef, Attribute::ReadNone, Attribute::NoCapture}),
-                  Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}) }); },
+    [](LLVMContext &C) { return get_gc_loaded_decl(C).first; },
+    [](LLVMContext &C) { return get_gc_loaded_decl(C).second; },
 };
 
 // julia.call represents a call with julia calling convention, it is used as

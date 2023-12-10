@@ -185,11 +185,13 @@ JL_USED_FUNC void AllocUseInfo::dump()
 #define REMARK(remark)
 #endif
 
-void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options) {
+void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options) {
     required.use_info.reset();
-    Attribute allockind = I->getFnAttr(Attribute::AllocKind);
-    if (allockind.isValid())
-        required.use_info.allockind = allockind.getAllocKind();
+    if (auto CI = dyn_cast<CallInst>(I)) {
+        Attribute allockind = CI->getFnAttr(Attribute::AllocKind);
+        if (allockind.isValid())
+            required.use_info.allockind = allockind.getAllocKind();
+    }
     if (I->use_empty())
         return;
     CheckInst::Frame cur{I, 0, I->use_begin(), I->use_end()};

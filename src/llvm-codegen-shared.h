@@ -343,6 +343,27 @@ static inline llvm::Value *emit_gc_safe_leave(llvm::IRBuilder<> &builder, llvm::
     return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
 }
 
+static inline llvm::AttributeSet Attributes(llvm::LLVMContext &C, std::initializer_list<llvm::Attribute::AttrKind> attrkinds, std::initializer_list<llvm::Attribute> extra={})
+{
+    llvm::SmallVector<llvm::Attribute, 8> attrs(attrkinds.size() + extra.size());
+    for (size_t i = 0; i < attrkinds.size(); i++)
+        attrs[i] = llvm::Attribute::get(C, attrkinds.begin()[i]);
+    for (size_t i = 0; i < extra.size(); i++)
+        attrs[attrkinds.size() + i] = extra.begin()[i];
+    return llvm::AttributeSet::get(C, llvm::ArrayRef<llvm::Attribute>(attrs));
+}
+
+static inline std::pair<llvm::FunctionType*, llvm::AttributeList> get_gc_loaded_decl(llvm::LLVMContext &C) {
+    auto FnAttrs = Attributes(C, {llvm::Attribute::ReadNone, llvm::Attribute::NoSync, llvm::Attribute::NoUnwind, llvm::Attribute::Speculatable, llvm::Attribute::WillReturn, llvm::Attribute::NoRecurse});
+    auto RetAttrs = Attributes(C, {llvm::Attribute::NonNull, llvm::Attribute::NoUndef});
+    auto AL = llvm::AttributeList::get(C, FnAttrs, RetAttrs,
+            { Attributes(C, {llvm::Attribute::NoUndef, llvm::Attribute::ReadNone, llvm::Attribute::NoCapture}),
+                Attributes(C, {llvm::Attribute::NonNull, llvm::Attribute::NoUndef, llvm::Attribute::ReadNone}) });
+    auto FT = llvm::FunctionType::get(llvm::PointerType::get(JuliaType::get_prjlvalue_ty(C), AddressSpace::Loaded),
+            {JuliaType::get_prjlvalue_ty(C), llvm::PointerType::get(JuliaType::get_prjlvalue_ty(C), 0)}, false);
+    return std::make_pair(FT, AL);
+}
+
 // Compatibility shims for LLVM attribute APIs that were renamed in LLVM 14.
 //
 // Once we no longer support LLVM < 14, these can be mechanically removed by
