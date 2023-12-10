@@ -372,6 +372,35 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
             required.use_info.returned = true;
             return true;
         }
+        if (isa<PHINode>(inst)) {
+            // PHI nodes are immediate, always escapes
+            // many parts of alloc-opt and julia-licm assume no phis exist,
+            // so the whole infrastructure would have to be rewritten for it
+            LLVM_DEBUG(dbgs() << "PHI node, marking escape\n");
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "PhiNode",
+                                                inst)
+                       << "PHI node, marking escape (" << ore::NV("Phi", inst) << ")";
+            });
+            required.use_info.escaped = true;
+            return false;
+        }
+        switch (inst->getOpcode()) {
+        case Instruction::Select:
+        case Instruction::PtrToInt:
+        case Instruction::Freeze:
+        // These are safe ops that just don't have handling yet in alloc opt, they're fine in error blocks
+        {
+            if (isa<UnreachableInst>(inst->getParent()->getTerminator())) {
+                LLVM_DEBUG(dbgs() << "Detected use of allocation in block terminating with unreachable, likely error function\n");
+                required.use_info.errorbbs.insert(inst->getParent());
+                return true;
+            }
+            break;
+        }
+        default:
+            break;
+        }
         LLVM_DEBUG(dbgs() << "Unknown instruction, marking escape\n");
         REMARK([&]() {
             return OptimizationRemarkMissed(DEBUG_TYPE, "UnknownInst",

@@ -166,10 +166,10 @@ private:
             Instruction *orig_i;
             Value::use_iterator next;
             size_t offset_frame; // index of frame with offset data in stack
+            bool loaded;
             // dynamic offset of orig_i from data
             MapVector<Value *, APInt> variables;
             APInt constant;
-            bool loaded;
         };
     };
     bool canDeoptimizeErrorBlocks(CallInst *orig);
@@ -180,6 +180,7 @@ private:
     AllocOpt &pass;
     DominatorTree *_DT = nullptr;
     FunctionAnalysisManager &AM;
+    Function *except_enter_func = nullptr;
 
     DominatorTree &getDomTree()
     {
@@ -247,6 +248,7 @@ void Optimizer::initialize()
             pushInstruction(&I);
         }
     }
+    except_enter_func = F.getParent()->getFunction("julia.except_enter");
 }
 
 void Optimizer::optimizeObject(CallInst *orig, size_t sz) {
@@ -264,6 +266,15 @@ void Optimizer::optimizeObject(CallInst *orig, size_t sz) {
         REMARK([&]() {
             return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
                 << "GC allocation was returned " << ore::NV("GC Allocation", orig);
+        });
+        if (use_info.hastypeof)
+            optimizeTag(orig);
+        return;
+    }
+    if (except_enter_func && !use_info.errorbbs.empty()) {
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC allocation has error " << ore::NV("GC Allocation", orig);
         });
         if (use_info.hastypeof)
             optimizeTag(orig);
@@ -558,6 +569,10 @@ void Optimizer::sinkArrayDataPointer(CallInst *orig, DenseMap<BasicBlock *, Sunk
             }
             default:
             {
+                for (auto &s : sunken) {
+                    s.first->printAsOperand(dbgs(), true);
+                    dbgs() << "\n";
+                }
                 llvm_dump(inst);
                 llvm_unreachable("Unexpected instruction");
             }
@@ -569,19 +584,23 @@ void Optimizer::sinkArrayDataPointer(CallInst *orig, DenseMap<BasicBlock *, Sunk
         load->eraseFromParent();
         return;
     }
+    stack.push_back(SunkenArray::Frame{load, load->use_begin(), 0, false, {}, APInt(BitWidth, 0)});
     while (true) {
-        auto &cur = stack.back();
-        auto use = &*cur.next;
-        ++cur.next;
+        auto cur = &stack.back();
+        auto use = &*cur->next;
+        ++cur->next;
         replace_use(use);
-        while (cur.next == cur.orig_i->use_end()) {
+        while (cur->next == cur->orig_i->use_end()) {
             stack.pop_back();
-            if (stack.empty())
+            if (stack.empty()) {
+                builder.SetInsertPoint(load);
+                load->replaceAllUsesWith(builder.CreateBitCast(data, load->getType()));
+                load->eraseFromParent();
                 return;
+            }
+            cur = &stack.back();
         }
     }
-    load->replaceAllUsesWith(data);
-    load->eraseFromParent();
 }
 
 void Optimizer::replaceBitsArrayUses(CallInst *alloc, Value *conditional, Value *root, function_ref<Instruction *()>shell, Instruction *data) {
@@ -597,7 +616,7 @@ void Optimizer::replaceBitsArrayUses(CallInst *alloc, Value *conditional, Value 
             pass.gc_loaded_func = cast<Function>(FC.getCallee());
         }
         IRBuilder<> builder(data->getNextNode());
-        auto loaded = builder.CreateCall(pass.gc_loaded_func, {root, data});
+        auto loaded = builder.CreateCall(pass.gc_loaded_func, {root, builder.CreateBitCast(data, JuliaType::get_pprjlvalue_ty(builder.getContext()))});
         for (auto bb : use_info.errorbbs) {
             auto sunk = alloc->clone();
             auto insertpt = &*bb->getFirstInsertionPt();
@@ -612,7 +631,7 @@ void Optimizer::replaceBitsArrayUses(CallInst *alloc, Value *conditional, Value 
                 auto gep = builder.CreateConstGEP1_64(Type::getInt8PtrTy(builder.getContext()), bc, 1);
                 datasunk = builder.CreateAlignedLoad(Type::getInt8PtrTy(builder.getContext()), gep, Align(MinAlign(align.value(), pass.DL->getPointerSize())));
                 rootsunk = sunk;
-                loadedsunk = builder.CreateCall(pass.gc_loaded_func, {rootsunk, datasunk});
+                loadedsunk = builder.CreateCall(pass.gc_loaded_func, {rootsunk, builder.CreateBitCast(datasunk, JuliaType::get_pprjlvalue_ty(builder.getContext()))});
                 // length must dominate here, since the alloc is not in a phi node,
                 // length must dominate the allocation for obvious reasons,
                 // and the allocation must dominate its uses (including those in this bb)
@@ -634,7 +653,7 @@ void Optimizer::replaceBitsArrayUses(CallInst *alloc, Value *conditional, Value 
                 sunkdata = builder.CreateConstGEP1_64(Type::getInt8PtrTy(builder.getContext()), sunkdata, 1);
                 sunkdata = builder.CreateAlignedLoad(Type::getInt8PtrTy(builder.getContext()), sunkdata, Align(MinAlign(align.value(), pass.DL->getPointerSize())));
                 // we have to do this a second time because we need to do the memcpy inside the conditional
-                auto sunkloaded = builder.CreateCall(pass.gc_loaded_func, {sunk, sunkdata});
+                auto sunkloaded = builder.CreateCall(pass.gc_loaded_func, {sunk, builder.CreateBitCast(sunkdata, JuliaType::get_pprjlvalue_ty(builder.getContext()))});
                 // length must dominate here, since the alloc is not in a phi node,
                 // length must dominate the allocation for obvious reasons,
                 // and the allocation must dominate its uses (including those in this bb)
@@ -650,9 +669,10 @@ void Optimizer::replaceBitsArrayUses(CallInst *alloc, Value *conditional, Value 
                 rootphi->addIncoming(sunk, term->getParent());
                 dataphi->addIncoming(data, bb);
                 dataphi->addIncoming(sunkdata, term->getParent());
-                loadedsunk = builder.CreateCall(pass.gc_loaded_func, {rootsunk, datasunk});
+                loadedsunk = builder.CreateCall(pass.gc_loaded_func, {rootsunk, builder.CreateBitCast(datasunk, JuliaType::get_pprjlvalue_ty(builder.getContext()))});
             }
-            sunken[bb] = {rootsunk, datasunk, loadedsunk, insertpt};
+            // note that bb != insertpt->getParent() in the unsized case
+            sunken[insertpt->getParent()] = {rootsunk, datasunk, loadedsunk, insertpt};
         }
     }
     // we need to replace all of the length/data accesses upfront, because in the case of an unsized array alloc
@@ -727,7 +747,6 @@ void Optimizer::replaceBitsArrayUses(CallInst *alloc, Value *conditional, Value 
 
 void Optimizer::optimizeArray(CallInst *orig, jl_genericmemory_info_t info) {
     checkInst(orig);
-    dbgs() << "checking array allocation\n";
     if (use_info.escaped) {
         REMARK([&]() {
             return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
@@ -740,6 +759,15 @@ void Optimizer::optimizeArray(CallInst *orig, jl_genericmemory_info_t info) {
             return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
                 << "GC allocation was returned " << ore::NV("GC GenericMemory Allocation", orig);
         });
+        return;
+    }
+    if (except_enter_func && !use_info.errorbbs.empty()) {
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC allocation has error " << ore::NV("GC Allocation", orig);
+        });
+        if (use_info.hastypeof)
+            optimizeTag(orig);
         return;
     }
     if (use_info.hasunknownmem) {
@@ -779,7 +807,6 @@ void Optimizer::optimizeArray(CallInst *orig, jl_genericmemory_info_t info) {
 
     // since we are here, we're free to turn the whole thing into a stack allocation
     // and remove the original allocation.
-    dbgs() << "Moving array allocation to stack\n";
     if (isa<ConstantInt>(orig->getArgOperand(1))) {
         size_t maxSizedStackBytes = 4096; // TODO parameterize by module flag/ctor param
         auto length = orig->getArgOperand(1);
@@ -1865,6 +1892,15 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             push_frame(gep, apoffset.getLimitedValue());
         }
         else {
+            // We don't know what this is
+            // but some instructions might just occur in paths that are leading to errors,
+            // so we can just replace the use with a gep'ed pointer.
+            if (errinfo) {
+                auto gep = errinfo->gep(offset, Type::getInt8Ty(errbuilder.getContext()), errbuilder);
+                use->set(errbuilder.CreateBitCast(gep, use->get()->getType()));
+                return;
+            }
+            llvm_dump(user);
             abort();
         }
     };

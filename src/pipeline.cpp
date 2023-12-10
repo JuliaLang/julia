@@ -430,6 +430,11 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
     }
     if (O.getSpeedupLevel() >= 2) {
         LoopPassManager LPM;
+        LPM.addPass(LoopFullUnrollPass());
+        FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM)));
+    }
+    if (O.getSpeedupLevel() >= 2) {
+        LoopPassManager LPM;
         LPM.addPass(BeforeLICMMarkerPass());
         LPM.addPass(LICMPass(LICMOptions()));
         LPM.addPass(JuliaLICMPass());
