@@ -1439,14 +1439,14 @@ you expect that you're going to have to push a lot of values onto `s`, you can a
 the cost of incremental reallocation by doing it once up front; this can improve
 performance.
 
-If the collection is ordered and `first` is `true`, then any additional space is reserved
+If `first` is `true`, then any additional space is reserved before the start of the collection. This way, subsequent calls to `pushfirst!` (instead of `push!`) may become faster.
 before the start of the collection rather than after the end. This way, subsequent calls
 to `pushfirst!` (instead of `push!`) may become faster.
 Supplying this keyword may result in an error if the collection is not ordered
 or if `pushfirst!` is not supported for this collection.
 
 If `shrink=true` (the default), the collection's capacity may be reduced if its current
-capacity is greater than `n`
+capacity is greater than `n`.
 
 See also [`resize!`](@ref).
 
