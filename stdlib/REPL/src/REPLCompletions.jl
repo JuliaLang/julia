@@ -475,26 +475,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     return (startind:lastindex(s), method_name_end)
 end
 
-const REPLCacheOwner = :REPL # For now symbol (or even type is fine)
-struct REPLInterpreterCache
-    dict::IdDict{MethodInstance,CodeInstance}
-end
-REPLInterpreterCache() = REPLInterpreterCache(IdDict{MethodInstance,CodeInstance}())
-const REPL_INTERPRETER_CACHE = REPLInterpreterCache()
-
-function get_code_cache()
-    # XXX Avoid storing analysis results into the cache that persists across precompilation,
-    #     as [sys|pkg]image currently doesn't support serializing externally created `CodeInstance`.
-    #     Otherwise, `CodeInstance`s created by `REPLInterpreter`, that are much less optimized
-    #     that those produced by `NativeInterpreter`, will leak into the native code cache,
-    #     potentially causing runtime slowdown.
-    #     (see https://github.com/JuliaLang/julia/issues/48453).
-    if Base.generating_output()
-        return REPLInterpreterCache()
-    else
-        return REPL_INTERPRETER_CACHE
-    end
-end
+struct REPLCacheToken end
 
 struct REPLInterpreter <: CC.AbstractInterpreter
     limit_aggressive_inference::Bool
@@ -502,7 +483,7 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
-    code_cache::REPLInterpreterCache
+    code_cache::CC.InternalCodeCache
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
@@ -510,7 +491,7 @@ struct REPLInterpreter <: CC.AbstractInterpreter
                                  unoptimize_throw_blocks=false),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                              inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
-                             code_cache::REPLInterpreterCache = get_code_cache())
+                             code_cache::CC.InternalCodeCache = CC.InternalCodeCache(REPLCacheToken()))
         return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache, code_cache)
     end
 end
@@ -518,17 +499,8 @@ CC.InferenceParams(interp::REPLInterpreter) = interp.inf_params
 CC.OptimizationParams(interp::REPLInterpreter) = interp.opt_params
 CC.get_world_counter(interp::REPLInterpreter) = interp.world
 CC.get_inference_cache(interp::REPLInterpreter) = interp.inf_cache
-CC.cache_owner(::REPLInterpreter) = REPLCacheOwner
+CC.cache_owner(::REPLInterpreter) = REPLCacheToken()
 CC.code_cache(interp::REPLInterpreter) = CC.WorldView(interp.code_cache, CC.WorldRange(interp.world))
-CC.get(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
-CC.getindex(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
-CC.haskey(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
-function CC.setindex!(wvc::CC.WorldView{REPLInterpreterCache}, ci::CodeInstance, mi::MethodInstance)
-    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
-        delete!(wvc.cache.dict, replaced)
-    end
-    return setindex!(wvc.cache.dict, ci, mi)
-end
 
 # REPLInterpreter is only used for type analysis, so it should disable optimization entirely
 CC.may_optimize(::REPLInterpreter) = false
