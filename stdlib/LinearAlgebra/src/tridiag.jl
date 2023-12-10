@@ -72,7 +72,9 @@ SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{
 function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
     d = convert(AbstractVector{T}, dv)::AbstractVector{T}
     e = convert(AbstractVector{T}, ev)::AbstractVector{T}
-    typeof(d) == typeof(e) ? SymTridiagonal{T}(d, e) : throw(ArgumentError("diagonal vectors needed to be promotable to same type"))
+    typeof(d) == typeof(e) ?
+        SymTridiagonal{T}(d, e) :
+        throw(ArgumentError("diagonal vectors needed to be convertable to same type"))
 end
 SymTridiagonal(d::AbstractVector{T}, e::AbstractVector{S}) where {T,S} =
     SymTridiagonal{promote_type(T, S)}(d, e)
@@ -520,10 +522,18 @@ Tridiagonal(dl::AbstractVector{T}, d::AbstractVector{S}, du::AbstractVector{U}) 
     Tridiagonal{promote_type(T, S, U)}(dl, d, du)
 Tridiagonal(dl::AbstractVector{T}, d::AbstractVector{S}, du::AbstractVector{U}, du2::AbstractVector{V}) where {T,S,U,V} =
     Tridiagonal{promote_type(T, S, U, V)}(dl, d, du, du2)
-Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T} =
-    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
-Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector) where {T} =
-    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du, du2))...)
+function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
+    l, d, u = map(x->convert(AbstractVector{T}, x), (dl, d, du))
+    typeof(l) == typeof(d) == typeof(u) ?
+        Tridiagonal(l, d, u) :
+        throw(ArgumentError("diagonal vectors needed to be convertable to same type"))
+end
+function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector) where {T}
+    l, d, u, u2 = map(x->convert(AbstractVector{T}, x), (dl, d, du, du2))
+    typeof(l) == typeof(d) == typeof(u) == typeof(u2) ?
+        Tridiagonal(l, d, u, u2) :
+        throw(ArgumentError("diagonal vectors needed to be convertable to same type"))
+end
 
 """
     Tridiagonal(A)
