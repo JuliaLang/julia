@@ -90,12 +90,9 @@ f() = 1
 g() = 2
 end
 
-# Error for undocumented names.
-@test_throws ErrorException Docs.check_documented(_ModuleWithUndocumentedNames)
-# Pass for documented exported names.
-@test Docs.check_documented(_ModuleWithSomeDocumentedNames)
-# Error for undocumented unexported names when `all=true`.
-@test_throws ErrorException Docs.check_documented(_ModuleWithSomeDocumentedNames; all=true)
+@test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [:f]
+@test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; all=true) == [:g]
 
 
 # issue #11548
