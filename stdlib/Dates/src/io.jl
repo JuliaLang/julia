@@ -533,11 +533,11 @@ const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
     #     0 <= year(d) <= 99 || throw("Year is outside the 0 to 99 year-range, asked for.")
     0 <= y <= 99 && return d  # The ISO standard doesn't allow this, but allowing as exception in Julia; the new default typo format doesn't allow this
     # else
-    if (1583 <= y <= 9999 && contains(lowercase(format), "yyyy")) && !contains(lowercase(format), "yyyyy") # is 4-digit year format, allows strictly 4-digit
-    || !contains(lowercase(format), "yy")  # anything goes for single y format too
+    if (1583 <= y <= 9999 && contains(lowercase(format), "yyyy")) && !contains(lowercase(format), "yyyyy") ||  # is 4-digit year format, allows strictly 4-digit
+    !contains(lowercase(format), "yy")  # anything goes for single y format too
         return d
     else
-        throw("Year is outside the legal ISO 8601 year-range. To support such, use an explicit constructor.") # still allow one y for proleptic
+        throw("Year is outside the legal ISO 8601 year-range. To support such, use an explicit constructor.")  # still allow one y for proleptic
     end
 end
 
