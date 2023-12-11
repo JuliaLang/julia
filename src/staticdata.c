@@ -643,7 +643,7 @@ static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTS
     else if (jl_typetagis(v, jl_uint8_tag << 4)) {
         return 0;
     }
-    else if (jl_typetagis(v, jl_task_tag << 4)) {
+    else if (v == (jl_value_t*)s->ptls->root_task) {
         return 0;
     }
 

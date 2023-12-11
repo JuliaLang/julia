@@ -1635,7 +1635,7 @@ JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, c
 
 struct _jl_image_fptrs_t;
 
-void jl_write_coverage_data(const char*);
+JL_DLLEXPORT void jl_write_coverage_data(const char*);
 void jl_write_malloc_log(void);
 
 #if jl_has_builtin(__builtin_unreachable) || defined(_COMPILER_GCC_) || defined(_COMPILER_INTEL_)

@@ -254,7 +254,6 @@ function showerror(io::IO, ex::MethodError)
         return showerror_ambiguous(io, meth, f, arg_types)
     end
     arg_types_param::SimpleVector = arg_types.parameters
-    show_candidates = true
     print(io, "MethodError: ")
     ft = typeof(f)
     f_is_function = false
@@ -270,9 +269,6 @@ function showerror(io::IO, ex::MethodError)
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
-    elseif f === mapreduce_empty || f === reduce_empty
-        print(io, "reducing over an empty collection is not allowed; consider supplying `init` to the reducer")
-        show_candidates = false
     elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
@@ -346,11 +342,12 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
-    show_candidates && try
+    try
         show_method_candidates(io, ex, kwargs)
     catch ex
         @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
     end
+    nothing
 end
 
 striptype(::Type{T}) where {T} = T
