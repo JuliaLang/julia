@@ -46,8 +46,5 @@ Base.size(r::OneToInf) = (Infinity(),)
 Base.first(r::OneToInf{T}) where {T} = oneunit(T)
 Base.length(r::OneToInf) = Infinity()
 Base.last(r::OneToInf) = Infinity()
-Base.unitrange(r::OneToInf) = r
-Base.oneto(::Infinity) = OneToInf()
-Base.unchecked_oneto(::Infinity) = OneToInf()
 
 end
