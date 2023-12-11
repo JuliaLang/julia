@@ -1441,9 +1441,13 @@ you expect that you're going to have to push a lot of values onto `s`, you can a
 the cost of incremental reallocation by doing it once up front; this can improve
 performance.
 
-If `first` is true, then the reserved space is from the start of the collection, for ordered
-collections. Supplying this keyword may result in an error if the collection is nor ordered
+If `first` is `true`, then any additional space is reserved before the start of the collection.
+This way, subsequent calls to `pushfirst!` (instead of `push!`) may become faster.
+Supplying this keyword may result in an error if the collection is not ordered
 or if `pushfirst!` is not supported for this collection.
+
+If `shrink=true` (the default), the collection's capacity may be reduced if its current
+capacity is greater than `n`.
 
 See also [`resize!`](@ref).
 
@@ -1459,8 +1463,6 @@ For types that support `sizehint!`,
    `Base`.
 
 3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
-
-4. `shrink` controls if the collection can be shrunk.
 
 !!! compat "Julia 1.11"
     The `shrink` and `first` arguments were added in Julia 1.11.
