@@ -660,8 +660,21 @@ end
 @testset "unaliascopy trimming; Issue #26263" begin
     A = rand(5,5,5,5)
     V = view(A, 2:5, :, 2:5, 1:2:5)
-    @test @inferred(Base.unaliascopy(V)) == V == A[2:5, :, 2:5, 1:2:5]
-    @test @inferred(sum(Base.unaliascopy(V))) ≈ sum(V) ≈ sum(A[2:5, :, 2:5, 1:2:5])
+    V′ = @inferred(Base.unaliascopy(V))
+    @test size(V′.parent) == size(V)
+    @test V′::typeof(V) == V == A[2:5, :, 2:5, 1:2:5]
+    @test @inferred(sum(V′)) ≈ sum(V) ≈ sum(A[2:5, :, 2:5, 1:2:5])
+    V = view(A, Base.IdentityUnitRange(2:4), :, Base.StepRangeLen(1,1,3), 1:2:5)
+    V′ = @inferred(Base.unaliascopy(V))
+    @test size(V.parent) != size(V′.parent)
+    @test V′ == V && V′ isa typeof(V)
+    i1 = collect(CartesianIndices((2:5)))
+    i2 = [CartesianIndex(), CartesianIndex()]
+    i3 = collect(CartesianIndices((2:5, 1:2:5)))
+    V = view(A, i1, 1:5, i2, i3)
+    @test @inferred(Base.unaliascopy(V))::typeof(V) == V == A[i1, 1:5, i2, i3]
+    V = view(A, i1, 1:5, i3, i2)
+    @test @inferred(Base.unaliascopy(V))::typeof(V) == V == A[i1, 1:5, i3, i2]
 end
 
 @testset "issue #27632" begin
