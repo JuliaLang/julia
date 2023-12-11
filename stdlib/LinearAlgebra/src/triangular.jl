@@ -35,6 +35,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         AbstractMatrix{T}(A::$t{T}) where {T} = copy(A)
 
         size(A::$t) = size(A.data)
+        axes(A::$t) = axes(A.data)
 
         # For A<:AbstractTriangular, similar(A[, neweltype]) should yield a matrix with the same
         # triangular type and underlying storage type as A. The following method covers these cases.

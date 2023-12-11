@@ -8,6 +8,11 @@ using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
     mul!, rdiv!, rmul!, lmul!
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 debug && println("Triangular matrices")
 
 n = 9
@@ -863,6 +868,15 @@ end
             A = dty(D)
             @test A * A' == D * D'
         end
+    end
+end
+
+@testset "custom axes" begin
+    SZA = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+    for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        S = T(SZA)
+        r = SizedArrays.SOneTo(2)
+        @test axes(S) === (r,r)
     end
 end
 

@@ -13,6 +13,15 @@ using LinearAlgebra
 
 export SizedArray
 
+struct SOneTo{N} <: AbstractUnitRange{Int} end
+SOneTo(N) = SOneTo{N}()
+Base.length(s::SOneTo{N}) where {N} = N
+Base.size(S::SOneTo{N}) where {N} = (length(S),)
+Base.axes(S::SOneTo) = (s,)
+Base.first(s::SOneTo) = 1
+Base.last(s::SOneTo) = length(s)
+Base.show(io::IO, s::SOneTo) = print(io, "SOneTo(", length(s), ")")
+
 struct SizedArray{SZ,T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
     function SizedArray{SZ}(data::AbstractArray{T,N}) where {SZ,T,N}
@@ -29,6 +38,7 @@ Base.convert(::Type{SizedArray{SZ,T,N,A}}, data::AbstractArray) where {SZ,T,N,A}
 # Minimal AbstractArray interface
 Base.size(a::SizedArray) = size(typeof(a))
 Base.size(::Type{<:SizedArray{SZ}}) where {SZ} = SZ
+Base.axes(a::SizedArray{SZ}) where {SZ} = map(SOneTo, SZ)
 Base.getindex(A::SizedArray, i...) = getindex(A.data, i...)
 Base.zero(::Type{T}) where T <: SizedArray = SizedArray{size(T)}(zeros(eltype(T), size(T)))
 +(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = SizedArray{SZ}(S1.data + S2.data)

@@ -143,6 +143,7 @@ Matrix(M::SymTridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))
 Array(M::SymTridiagonal) = Matrix(M)
 
 size(A::SymTridiagonal) = (n = length(A.dv); (n, n))
+axes(M::SymTridiagonal) = (ax = axes(M.dv, 1); (ax, ax))
 
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(S.dv, T, dims)
@@ -566,6 +567,7 @@ function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
 end
 
 size(M::Tridiagonal) = (n = length(M.d); (n, n))
+axes(M::Tridiagonal) = (ax = axes(M.d,1); (ax, ax))
 
 function Matrix{T}(M::Tridiagonal) where {T}
     A = Matrix{T}(undef, size(M))
