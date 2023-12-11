@@ -53,10 +53,10 @@
 @test !=(Some(nothing), nothing)
 @test !=(nothing, Some(nothing))
 
-# Two Somes forward to their wrapped things
+# Two `Some`s forward to their wrapped things
 @test ==(Some([0x1]), Some([1]))
 
-# Don't propagate wrapped missings
+# Don't propagate wrapped `missing`s
 @test !=(Some(1), Some(missing))
 @test !=(Some(missing), Some(1))
 @test ==(Some(missing), Some(missing))
