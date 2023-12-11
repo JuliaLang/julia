@@ -2031,6 +2031,7 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
 JL_DLLEXPORT const char *jl_get_interactive_sysimg_path(void);
 JL_DLLEXPORT int jl_is_initialized(void);
+JL_DLLEXPORT int jl_is_interactive(void);
 JL_DLLEXPORT void jl_atexit_hook(int status);
 JL_DLLEXPORT void jl_task_wait_empty(void);
 JL_DLLEXPORT void jl_postoutput_hook(void);

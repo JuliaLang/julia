@@ -742,6 +742,29 @@ static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
 }
 
+JL_DLLEXPORT int jl_is_interactive(void)
+{
+    if (jl_options.isinteractive)
+        return 1;
+
+    //based on the Julia function unsafe_load_commands
+    //not interactive if -e or -E is provided as a command
+    if (jl_options.cmds) {
+        int i = 0;
+        const char *s;
+        while (1) {
+            s = jl_options.cmds[i];
+            if (!s)
+                break;
+            if (s[0] == 'e' || s[0] == 'E')
+                return 0;
+            i++;
+        }
+    }
+
+    return JL_STDIN && JL_STDIN->type == UV_TTY;
+}
+
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
     // initialize many things, in no particular order
@@ -846,15 +869,21 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
 {
     JL_TIMING(JULIA_INIT, JULIA_INIT);
+    int is_interactive = jl_is_interactive();
+    if (is_interactive && !jl_options.image_file_specified)
+        jl_options.image_file = jl_get_interactive_sysimg_path();
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
     if (rel == JL_IMAGE_IN_MEMORY)
         jl_set_sysimg_so(jl_exe_handle);
     else if (jl_options.image_file) {
         jl_preload_sysimg_so(jl_options.image_file);
-        if (jl_options.isinteractive && !jl_options.image_file_specified && !jl_preload_successful()) {
+        if (is_interactive &&
+            !jl_options.image_file_specified &&
+            !jl_preload_successful()
+        ) {
+            // failed to load interactive sysimg, fallback to default sysimg
             jl_options.image_file = jl_get_default_sysimg_path();
-            //jl_resolve_sysimg_location(JL_IMAGE_JULIA_HOME);
             jl_resolve_sysimg_location(rel);
             jl_preload_sysimg_so(jl_options.image_file);
         }

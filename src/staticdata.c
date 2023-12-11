@@ -2975,8 +2975,10 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
     // Get handle to sys.so
     if (!is_ji) { // .ji extension => load .ji file only
         // if the interactive sysimg fails to load, fail to preload. See jl_preload_successful and _finish_julia_init.
-        int fallback_to_default_sysimg = jl_options.isinteractive && !jl_options.image_file_specified;
-        void *handle = jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW, !fallback_to_default_sysimg);
+        int fallback_to_default_sysimg = jl_is_interactive() &&
+            !jl_options.image_file_specified;
+        void *handle = jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW,
+                !fallback_to_default_sysimg);
         if (!handle)
             return; // failed to set jl_sysimg_handle
         jl_set_sysimg_so(handle);

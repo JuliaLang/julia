@@ -285,6 +285,7 @@
     XX(jl_is_imported) \
     XX(jl_is_initialized) \
     XX(jl_is_in_pure_context) \
+    XX(jl_is_interactive) \
     XX(jl_is_memdebug) \
     XX(jl_is_not_broken_subtype) \
     XX(jl_is_operator) \
