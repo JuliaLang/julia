@@ -146,10 +146,14 @@ macro something(args...)
     return :($something($expr))
 end
 
-==(a::Some, b::Some) = a.value == b.value
+==(a::Some, b::Some)::Bool = a.value == b.value
 ==(::Some{Missing}, ::Some) = false
 ==(::Some, ::Some{Missing}) = false
 ==(::Some{Missing}, ::Some{Missing}) = true
 
-isequal(a::Some, b::Some) = isequal(a.value, b.value)
+isequal(a::Some, b::Some)::Bool = isequal(a.value, b.value)
+isequal(::Some{Missing}, ::Some) = false
+isequal(::Some, ::Some{Missing}) = false
+isequal(::Some{Missing}, ::Some{Missing}) = true
+
 hash(s::Some, h::UInt) = hash(s.value, hash(Some, h))
