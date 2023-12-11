@@ -747,6 +747,9 @@ JL_DLLEXPORT int jl_is_interactive(void)
     if (jl_options.isinteractive)
         return 1;
 
+    if (jl_options.argc > 0)
+        return 0;
+
     //based on the Julia function unsafe_load_commands
     //not interactive if -e or -E is provided as a command
     if (jl_options.cmds) {

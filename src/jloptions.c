@@ -96,6 +96,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // strip-ir
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
+                        0, // argc
     };
     jl_options_initialized = 1;
 }
@@ -872,6 +873,7 @@ restart_switch:
     int proc_args = *argcp < optind ? *argcp : optind;
     *argvp += proc_args;
     *argcp -= proc_args;
+    jl_options.argc = *argcp;
 }
 
 JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void)

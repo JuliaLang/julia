@@ -61,6 +61,7 @@ typedef struct {
     int8_t strip_ir;
     int8_t permalloc_pkgimg;
     uint64_t heap_size_hint;
+    int32_t argc;
 } jl_options_t;
 
 #endif
