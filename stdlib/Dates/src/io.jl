@@ -569,10 +569,8 @@ julia> [DateTime(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
  2020-01-02T00:00:00
 ```
 """
-function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    f = DateFormat(format, locale)
-    return _check_year(parse(DateTime, dt, f), format)
-end
+DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH) = _check_year(parse(DateTime, dt, DateFormat(format, locale)), format)
+
 """
     DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) -> DateTime
 
@@ -584,15 +582,10 @@ repeatedly parsing similarly formatted date time strings with a pre-created
 `DateFormat` object.
 """
 function DateTime(dt::AbstractString, df::DateFormat=_typo_ISODateTimeFormat)
-    d = parse(DateTime, dt, df)
-    if df == _typo_ISODateTimeFormat
-        return _check_year(d, "yy") # dummy format
-    # elseif df == ISODateTimeFormat || df == RFC1123Format
-    #     return _check_year(d, "yyyy") # dummy format that's ok for both
-    else
-        return _check_year(d, "yyyy")  # too restrictive for some formats(?) though likely ok
-    end
+    format = df == _typo_ISODateTimeFormat ? "yy" : "yyyy"  # dummy formats
+    _check_year(d, parse(Date, dt, df), format)
 end
+
 """
     Date(d::AbstractString, format::AbstractString; locale="english") -> Date
 
@@ -617,10 +610,8 @@ julia> [Date(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
  2020-01-02
 ```
 """
-function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    return _check_year(parse(Date, d, DateFormat(format, locale)), format)
-    # return Date(d, DateFormat(format, locale))
-end
+Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH) = _check_year(parse(Date, d, DateFormat(format, locale)), format)
+
 """
     Date(d::AbstractString, df::DateFormat=ISODateFormat) -> Date
 
@@ -632,15 +623,10 @@ repeatedly parsing similarly formatted date strings with a pre-created
 `DateFormat` object.
 """
 function Date(dt::AbstractString, df::DateFormat=_typo_ISODateFormat)
-    d = parse(Date, dt, df)
-    if df == _typo_ISODateFormat
-        return _check_year(d, "yy") # dummy format
-    elseif df == ISODateFormat
-        return _check_year(d, "yyyy") # dummy format
-    else
-        return d
-    end
+    format = df == _typo_ISODateFormat ? "yy" : "yyyy"  # dummy formats
+    _check_year(d, parse(Date, dt, df), format)
 end
+
 """
     Time(t::AbstractString, format::AbstractString; locale="english") -> Time
 
@@ -665,9 +651,7 @@ julia> [Time(d, dateformat"HH:MMp") for d ∈ a] # preferred
  02:34:00
 ```
 """
-function Time(t::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
-    parse(Time, t, DateFormat(format, locale))
-end
+Time(t::AbstractString, format::AbstractString; locale::Locale=ENGLISH) = parse(Time, t, DateFormat(format, locale))
 
 """
     Time(t::AbstractString, df::DateFormat=ISOTimeFormat) -> Time
