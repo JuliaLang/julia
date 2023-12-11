@@ -66,21 +66,21 @@ mutable struct HAMT{K, V}
     HAMT{K, V}() where {K, V} = new{K,V}(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 0), zero(BITMAP))
 end
 
-@Base.assume_effects :nothrow function init_hamt(K, V, k, v)
-    # For a single element we can't have a hash-collision
+Base.@assume_effects :nothrow :effect_free function init_hamt(K, V, k, v)
+    # For a single element we can't have a 'hash-collision
     trie = HAMT{K,V}(Vector{Union{Leaf{K, V}, HAMT{K, V}}}(undef, 1), zero(BITMAP))
     trie.data[1] = Leaf{K,V}(k,v)
     return trie
 end
 
-function HAMT{K,V}((k,v)::Pair) where {K, V}
-    k = convert(K, k)
-    v = convert(V, v)
+Base.@assume_effects :effect_free function HAMT{K,V}((k,v)::Pair{K,V}) where {K, V}
     trie = init_hamt(K, V, k, v)
     bi = BitmapIndex(HashState(k))
     set!(trie, bi)
     return trie
 end
+HAMT{K,V}(kv::Pair) where {K, V} = HAMT{K,V}(convert(Pair{K,V}, kv))
+
 HAMT(pair::Pair{K,V}) where {K, V} = HAMT{K,V}(pair)
 
 # TODO: Parameterize by hash function

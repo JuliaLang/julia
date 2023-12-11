@@ -727,7 +727,7 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
                     end
                 end
             catch ex
-                ex isa EOFError() || rethrow()
+                ex isa EOFError || rethrow()
                 return FDEvent()
             end
         else

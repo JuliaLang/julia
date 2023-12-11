@@ -211,7 +211,7 @@ void setNameWithField(jl_codegen_params_t &params, Value *V, std::function<Strin
         } else {
             auto flds = jl_field_names(jt);
             if (idx < jl_svec_len(flds)) {
-                auto name = jl_svec_ref(flds, idx);
+                auto name = jl_svecref(flds, idx);
                 assert(jl_is_symbol(name));
                 V->setName(Twine(GetObjName()) + "." + Twine(jl_symbol_name((jl_sym_t*)name)) + suffix);
                 return;
@@ -3521,7 +3521,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 }
                 else if (jl_field_isconst(uty, idx)) {
                     std::string msg = fname + ": const field ."
-                        + std::string(jl_symbol_name((jl_sym_t*)jl_svec_ref(jl_field_names(uty), idx)))
+                        + std::string(jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(uty), idx)))
                         + " of type "
                         + std::string(jl_symbol_name(uty->name->name))
                         + " cannot be changed";

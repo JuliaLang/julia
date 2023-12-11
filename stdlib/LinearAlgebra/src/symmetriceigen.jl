@@ -184,6 +184,49 @@ function eigen!(A::AbstractMatrix, C::Cholesky; sortby::Union{Function,Nothing}=
     GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
 end
 
+# Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues and eigenvectors
+function eigen(A::StridedMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
+    eigen!(copy(A), copy(B); sortby)
+end
+function eigen!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
+    M, TD, p = getproperties!(B)
+    # Compute generalized eigenvalues of equivalent matrix:
+    #    A' = inv(Tridiagonal(dl,d,du))*inv(M)*P*A*P'*inv(M')
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
+    permutecols!(A, p)
+    permuterows!(A, p)
+    ldiv!(M, A)
+    rdiv!(A, M')
+    ldiv!(TD, A)
+    vals, vecs = eigen!(A; sortby)
+    # Compute generalized eigenvectors from 'vecs':
+    #   vecs = P'*inv(M')*vecs
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
+    M = B.uplo == 'U' ? UnitUpperTriangular{eltype(vecs)}(M) : UnitLowerTriangular{eltype(vecs)}(M) ;
+    ldiv!(M', vecs)
+    invpermuterows!(vecs, p)
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
+end
+
+# LU based solution for generalized eigenvalues and eigenvectors
+function eigen(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    return eigen!(copy(A), copy(F); sortby)
+end
+function eigen!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    L = UnitLowerTriangular(F.L)
+    U = UpperTriangular(F.U)
+    permuterows!(A, F.p)
+    ldiv!(L, A)
+    rdiv!(A, U)
+    vals, vecs = eigen!(A; sortby)
+    # Compute generalized eigenvectors from 'vecs':
+    #   vecs = P'*inv(M')*vecs
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
+    U = UpperTriangular{eltype(vecs)}(U)
+    ldiv!(U, vecs)
+    GeneralizedEigen(sorteig!(vals, vecs, sortby)...)
+end
+
 # Perform U' \ A / U in-place, where U::Union{UpperTriangular,Diagonal}
 UtiAUi!(A, U) = _UtiAUi!(A, U)
 UtiAUi!(A::Symmetric, U) = Symmetric(_UtiAUi!(copytri!(parent(A), A.uplo), U), sym_uplo(A.uplo))
@@ -217,4 +260,37 @@ end
 function eigvals!(A::AbstractMatrix{T}, C::Cholesky{T, <:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     # Cholesky decomposition based eigenvalues
     return eigvals!(UtiAUi!(A, C.U); sortby)
+end
+
+# Bunch-Kaufmann (LDLT) based solution for generalized eigenvalues
+function eigvals(A::StridedMatrix{T}, B::BunchKaufman{T,<:AbstractMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
+    eigvals!(copy(A), copy(B); sortby)
+end
+function eigvals!(A::StridedMatrix{T}, B::BunchKaufman{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T<:BlasFloat}
+    M, TD, p = getproperties!(B)
+    # Compute generalized eigenvalues of equivalent matrix:
+    #    A' = inv(Tridiagonal(dl,d,du))*inv(M)*P*A*P'*inv(M')
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
+    permutecols!(A, p)
+    permuterows!(A, p)
+    ldiv!(M, A)
+    rdiv!(A, M')
+    ldiv!(TD, A)
+    return eigvals!(A; sortby)
+end
+
+# LU based solution for generalized eigenvalues
+function eigvals(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    return eigvals!(copy(A), copy(F); sortby)
+end
+function eigvals!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) where {T}
+    L = UnitLowerTriangular(F.L)
+    U = UpperTriangular(F.U)
+    # Compute generalized eigenvalues of equivalent matrix:
+    #    A' = inv(L)*(P*A)*inv(U)
+    # See: https://github.com/JuliaLang/julia/pull/50471#issuecomment-1627836781
+    permuterows!(A, F.p)
+    ldiv!(L, A)
+    rdiv!(A, U)
+    return eigvals!(A; sortby)
 end
