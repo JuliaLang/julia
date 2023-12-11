@@ -166,8 +166,12 @@ export
 
 # not exported, but public names
 public AbstractTriangular,
+        Givens,
+        checksquare,
         hermitian,
         hermitian_type,
+        isbanded,
+        peakflops,
         symmetric,
         symmetric_type
 
