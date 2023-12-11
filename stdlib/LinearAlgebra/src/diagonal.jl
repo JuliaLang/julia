@@ -10,7 +10,7 @@ struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         new{T,V}(diag)
     end
 end
-Diagonal{T,V}(d::Diagonal) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(d.diag)
+Diagonal{T,V}(M::AbstractMatrix) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(diag(M))
 Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
 
