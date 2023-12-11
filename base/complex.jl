@@ -1077,19 +1077,22 @@ end
 #Rounding complex numbers
 #Requires two different RoundingModes for the real and imaginary components
 """
-    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]])
-    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; digits=0, base=10)
-    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; sigdigits, base=10)
+    round(z::Complex[, RoundingMode])
+    round(z::Complex[, RoundingMode]; digits=0, base=10)
+    round(z::Complex[, RoundingMode]; sigdigits=0, base=10)
+    round(z::Complex, RoundingModeReal, RoundingModeImaginary;)
+    round(z::Complex, RoundingModeReal, RoundingModeImaginary; digits=0, base=10)
+    round(z::Complex, RoundingModeReal, RoundingModeImaginary; sigdigits, base=10)
 
 Return the nearest integral value of the same type as the complex-valued `z` to `z`,
-breaking ties using the specified [`RoundingMode`](@ref)s. The first
-[`RoundingMode`](@ref) is used for rounding the real components while the
-second is used for rounding the imaginary components.
+breaking ties using the specified [`RoundingMode`](@ref)s. When provided a single
+[`RoundingMode`](@ref), the mode must be one of `RoundNearest`, `RoundFromZero`, `RoundToZero`, 
+or `RoundNearestTiesAway`, since these are the modes which do not rely on a total ordering which
+the complex numbers lack.
 
-
-`RoundingModeReal` and `RoundingModeImaginary` default to [`RoundNearest`](@ref),
-which rounds to the nearest integer, with ties (fractional values of 0.5)
-being rounded to the nearest even integer.
+Complex numbers can also be passed two rounding modes, one for the real part and another for 
+the imaginary part. In this case, the Complex number's components will be rounded seperately
+using the provided rounding modes, and combined back into a Complex number.
 
 # Example
 ```jldoctest
@@ -1106,7 +1109,13 @@ julia> round(3.14159 + 4.512im; sigdigits = 3)
 3.14 + 4.51im
 ```
 """
-function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; kwargs...)
+function round(z::Complex, rr::RoundingMode; kwargs...)
+    if rr in (RoundNearest, RoundFromZero, RoundToZero, RoundNearestTiesAway)
+        return round(z, rr, rr; kwargs...)
+    end
+    error("Rounding Mode $rr not supported for Complex numbers. Use round(z, $rr, $rr)")
+end
+function round(z::Complex, rr::RoundingMode, ri::RoundingMode; kwargs...)
     Complex(round(real(z), rr; kwargs...),
             round(imag(z), ri; kwargs...))
 end
