@@ -196,7 +196,7 @@ end
     end
 end
 
-function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeFormat))
+function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(_typo_ISODateTimeFormat))
     i, end_pos = firstindex(s), lastindex(s)
     i > end_pos && throw(ArgumentError("Cannot parse an empty string as a DateTime"))
 
