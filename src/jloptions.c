@@ -24,6 +24,12 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
     return &system_image_path[1];
 }
 
+static const char interactive_system_image_path[256] = "\0" JL_ISYSTEM_IMAGE_PATH;
+JL_DLLEXPORT const char *jl_get_interactive_sysimg_path(void)
+{
+    return &interactive_system_image_path[1];
+}
+
 static int jl_options_initialized = 0;
 
 JL_DLLEXPORT void jl_init_options(void)
@@ -664,6 +670,9 @@ restart_switch:
             break;
         case 'i': // isinteractive
             jl_options.isinteractive = 1;
+            if (!jl_options.image_file_specified) {
+                jl_options.image_file = jl_get_interactive_sysimg_path();
+            }
             break;
         case opt_check_bounds:
             if (!strcmp(optarg,"yes"))

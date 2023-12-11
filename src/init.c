@@ -850,8 +850,15 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
     if (rel == JL_IMAGE_IN_MEMORY)
         jl_set_sysimg_so(jl_exe_handle);
-    else if (jl_options.image_file)
+    else if (jl_options.image_file) {
         jl_preload_sysimg_so(jl_options.image_file);
+        if (jl_options.isinteractive && !jl_options.image_file_specified && !jl_preload_successful()) {
+            jl_options.image_file = jl_get_default_sysimg_path();
+            //jl_resolve_sysimg_location(JL_IMAGE_JULIA_HOME);
+            jl_resolve_sysimg_location(rel);
+            jl_preload_sysimg_so(jl_options.image_file);
+        }
+    }
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
     jl_init_codegen();

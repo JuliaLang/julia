@@ -206,6 +206,7 @@
     XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
+    XX(jl_get_interactive_sysimg_path) \
     XX(jl_get_excstack) \
     XX(jl_get_fenv_consts) \
     XX(jl_get_field) \
@@ -366,6 +367,7 @@
     XX(jl_pointerref) \
     XX(jl_pointerset) \
     XX(jl_pop_handler) \
+    XX(jl_preload_successful) \
     XX(jl_preload_sysimg_so) \
     XX(jl_prepend_cwd) \
     XX(jl_printf) \

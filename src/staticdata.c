@@ -2973,8 +2973,19 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
     int is_ji = (dot && !strcmp(dot, ".ji"));
 
     // Get handle to sys.so
-    if (!is_ji) // .ji extension => load .ji file only
-        jl_set_sysimg_so(jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW, 1));
+    if (!is_ji) { // .ji extension => load .ji file only
+        // if the interactive sysimg fails to load, fail to preload. See jl_preload_successful and _finish_julia_init.
+        int fallback_to_default_sysimg = jl_options.isinteractive && !jl_options.image_file_specified;
+        void *handle = jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW, !fallback_to_default_sysimg);
+        if (!handle)
+            return; // failed to set jl_sysimg_handle
+        jl_set_sysimg_so(handle);
+    }
+}
+
+JL_DLLEXPORT int jl_preload_successful(void)
+{
+    return jl_sysimg_handle != NULL;
 }
 
 // Allow passing in a module handle directly, rather than a path
