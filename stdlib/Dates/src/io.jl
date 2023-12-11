@@ -583,7 +583,7 @@ repeatedly parsing similarly formatted date time strings with a pre-created
 """
 function DateTime(dt::AbstractString, df::DateFormat=_typo_ISODateTimeFormat)
     format = df == _typo_ISODateTimeFormat ? "yy" : "yyyy"  # dummy formats
-    _check_year(d, parse(Date, dt, df), format)
+    return _check_year(d, parse(Date, dt, df), format)
 end
 
 """
@@ -624,7 +624,7 @@ repeatedly parsing similarly formatted date strings with a pre-created
 """
 function Date(dt::AbstractString, df::DateFormat=_typo_ISODateFormat)
     format = df == _typo_ISODateFormat ? "yy" : "yyyy"  # dummy formats
-    _check_year(d, parse(Date, dt, df), format)
+    return _check_year(d, parse(Date, dt, df), format)
 end
 
 """
