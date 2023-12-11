@@ -15,12 +15,12 @@ export SizedArray
 
 struct SOneTo{N} <: AbstractUnitRange{Int} end
 SOneTo(N) = SOneTo{N}()
-Base.length(s::SOneTo{N}) where {N} = N
-Base.size(S::SOneTo{N}) where {N} = (length(S),)
-Base.axes(S::SOneTo) = (s,)
-Base.first(s::SOneTo) = 1
-Base.last(s::SOneTo) = length(s)
-Base.show(io::IO, s::SOneTo) = print(io, "SOneTo(", length(s), ")")
+Base.length(::SOneTo{N}) where {N} = N
+Base.size(r::SOneTo) = (length(r),)
+Base.axes(r::SOneTo) = (r,)
+Base.first(::SOneTo) = 1
+Base.last(r::SOneTo) = length(r)
+Base.show(io::IO, r::SOneTo) = print(io, "SOneTo(", length(r), ")")
 
 struct SizedArray{SZ,T,N,A<:AbstractArray} <: AbstractArray{T,N}
     data::A
@@ -38,7 +38,7 @@ Base.convert(::Type{SizedArray{SZ,T,N,A}}, data::AbstractArray) where {SZ,T,N,A}
 # Minimal AbstractArray interface
 Base.size(a::SizedArray) = size(typeof(a))
 Base.size(::Type{<:SizedArray{SZ}}) where {SZ} = SZ
-Base.axes(a::SizedArray{SZ}) where {SZ} = map(SOneTo, SZ)
+Base.axes(a::SizedArray) = map(SOneTo, size(a))
 Base.getindex(A::SizedArray, i...) = getindex(A.data, i...)
 Base.zero(::Type{T}) where T <: SizedArray = SizedArray{size(T)}(zeros(eltype(T), size(T)))
 +(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = SizedArray{SZ}(S1.data + S2.data)
