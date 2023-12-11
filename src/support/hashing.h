@@ -25,18 +25,25 @@ JL_DLLEXPORT uint64_t memhash_seed(const char *buf, size_t n, uint32_t seed) JL_
 JL_DLLEXPORT uint32_t memhash32(const char *buf, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint32_t memhash32_seed(const char *buf, size_t n, uint32_t seed) JL_NOTSAFEPOINT;
 
+// FxHasher
 #ifdef _P64
-STATIC_INLINE uint64_t bitmix(uint64_t a, uint64_t b) JL_NOTSAFEPOINT
+STATIC_INLINE uint64_t bitmix(uint64_t h, uint64_t a) JL_NOTSAFEPOINT
 {
-    return int64hash(a^bswap_64(b));
+    h = (h << 5) | (h >> (sizeof(h) * 8 - 5)); // rotate 5 bits to the left
+    h ^= a;
+    h *= 0x517cc1b727220a95;
+    return h;
 }
 #else
-STATIC_INLINE uint32_t bitmix(uint32_t a, uint32_t b) JL_NOTSAFEPOINT
+STATIC_INLINE uint32_t bitmix(uint32_t h, uint32_t a) JL_NOTSAFEPOINT
 {
-    return int64to32hash((((uint64_t)a) << 32) | (uint64_t)b);
+    h = (h << 5) | (h >> (sizeof(h) * 8 - 5)); // rotate 5 bits to the left
+    h ^= a;
+    h *= 0x9e3779b9;
+    return h;
 }
 #endif
-#define bitmix(a, b) (bitmix)((uintptr_t)(a), (uintptr_t)(b))
+#define bitmix(h, a) (bitmix)((uintptr_t)(h), (uintptr_t)(a))
 
 #ifdef __cplusplus
 }
