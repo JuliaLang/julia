@@ -581,9 +581,10 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
-    if (jl_atomic_exchange_relaxed(&ptls->sleep_check_state, sleeping_like_the_dead) != sleeping) {
-        int wasrunning = jl_atomic_fetch_add_relaxed(&nrunning, -1);
-        if (wasrunning == 1) {
+    int notsleeping = jl_atomic_exchange_relaxed(&ptls->sleep_check_state, sleeping_like_the_dead) == not_sleeping;
+    jl_fence();
+    if (notsleeping) {
+        if (jl_atomic_load_relaxed(&nrunning) == 1) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
             // This was the last running thread, and there is no thread with !may_sleep
             // so make sure tid 0 is notified to check wait_empty
@@ -592,8 +593,11 @@ void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT
             uv_mutex_unlock(&ptls2->sleep_lock);
         }
     }
-    jl_fence();
+    else {
+        jl_atomic_fetch_add_relaxed(&nrunning, 1);
+    }
     jl_wakeup_thread(0); // force thread 0 to see that we do not have the IO lock (and am dead)
+    jl_atomic_fetch_add_relaxed(&nrunning, -1);
 }
 
 #ifdef __cplusplus
