@@ -2230,8 +2230,9 @@ static void jl_root_new_gvars(jl_serializer_state *s, jl_image_t *image, uint32_
         uintptr_t v = *gv;
         if (i < external_fns_begin) {
             if (!jl_is_binding(v))
-                v = (uintptr_t)jl_as_global_root((jl_value_t*)v);
-        } else {
+                v = (uintptr_t)jl_as_global_root((jl_value_t*)v, 1);
+        }
+        else {
             jl_code_instance_t *codeinst = (jl_code_instance_t*) v;
             assert(codeinst && (jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b01) && jl_atomic_load_relaxed(&codeinst->specptr.fptr));
             v = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
@@ -2430,7 +2431,13 @@ jl_mutex_t global_roots_lock;
 
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
-    if (jl_is_concrete_type(val) || jl_is_bool(val) || jl_is_symbol(val) ||
+    if (jl_is_datatype(val)) {
+        jl_datatype_t *dt = (jl_datatype_t*)val;
+        if (jl_unwrap_unionall(dt->name->wrapper) == val)
+            return 1;
+        return (jl_is_tuple_type(val) ? dt->isconcretetype : !dt->hasfreetypevars); // aka is_cacheable from jltypes.c
+    }
+    if (jl_is_bool(val) || jl_is_symbol(val) ||
             val == (jl_value_t*)jl_any_type || val == (jl_value_t*)jl_bottom_type || val == (jl_value_t*)jl_core_module)
         return 1;
     if (val == ((jl_datatype_t*)jl_typeof(val))->instance)
@@ -2438,10 +2445,21 @@ JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOT
     return 0;
 }
 
-JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
+static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED
+{
+    t = jl_unwrap_unionall(t);
+    if (jl_is_datatype(t))
+        return ((jl_datatype_t*)t)->name->wrapper;
+    return NULL;
+}
+
+JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert)
 {
     if (jl_is_globally_rooted(val))
         return val;
+    jl_value_t *tw = extract_wrapper(val);
+    if (tw && (val == tw || jl_types_egal(val, tw)))
+        return tw;
     if (jl_is_uint8(val))
         return jl_box_uint8(jl_unbox_uint8(val));
     if (jl_is_int32(val)) {
@@ -2454,20 +2472,24 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
         if ((uint64_t)(n+512) < 1024)
             return jl_box_int64(n);
     }
-    // TODO: check table before acquiring lock to reduce writer contention
-    JL_GC_PUSH1(&val);
-    JL_LOCK(&global_roots_lock);
+    // check table before acquiring lock to reduce writer contention
     jl_value_t *rval = jl_idset_get(jl_global_roots_list, jl_global_roots_keyset, val);
+    if (rval)
+        return rval;
+    JL_LOCK(&global_roots_lock);
+    rval = jl_idset_get(jl_global_roots_list, jl_global_roots_keyset, val);
     if (rval) {
         val = rval;
     }
-    else {
+    else if (insert) {
         ssize_t idx;
         jl_global_roots_list = jl_idset_put_key(jl_global_roots_list, val, &idx);
         jl_global_roots_keyset = jl_idset_put_idx(jl_global_roots_list, jl_global_roots_keyset, idx);
     }
+    else {
+        val = NULL;
+    }
     JL_UNLOCK(&global_roots_lock);
-    JL_GC_POP();
     return val;
 }
 
@@ -2606,6 +2628,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         }
     }
     jl_genericmemory_t *global_roots_list = NULL;
+    jl_genericmemory_t *global_roots_keyset = NULL;
 
     { // step 1: record values (recursively) that need to go in the image
         size_t i;
@@ -2652,14 +2675,17 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         // step 1.3: prune (garbage collect) special weak references from the jl_global_roots_list
         if (worklist == NULL) {
             global_roots_list = jl_alloc_memory_any(0);
+            global_roots_keyset = jl_alloc_memory_any(0);
             for (size_t i = 0; i < jl_global_roots_list->length; i++) {
                 jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_list, i);
                 if (val && ptrhash_get(&serialization_order, val) != HT_NOTFOUND) {
                     ssize_t idx;
                     global_roots_list = jl_idset_put_key(global_roots_list, val, &idx);
+                    global_roots_keyset = jl_idset_put_idx(global_roots_list, global_roots_keyset, idx);
                 }
             }
             jl_queue_for_serialization(&s, global_roots_list);
+            jl_queue_for_serialization(&s, global_roots_keyset);
             jl_serialize_reachable(&s);
         }
         // step 1.4: prune (garbage collect) some special weak references from
@@ -2772,6 +2798,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                 jl_write_value(&s, tag);
             }
             jl_write_value(&s, global_roots_list);
+            jl_write_value(&s, global_roots_keyset);
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
             write_uint(f, jl_atomic_load_acquire(&jl_world_counter));
@@ -3083,6 +3110,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
 #undef XX
         export_jl_small_typeof();
         jl_global_roots_list = (jl_genericmemory_t*)jl_read_value(&s);
+        jl_global_roots_keyset = (jl_genericmemory_t*)jl_read_value(&s);
         // set typeof extra-special values now that we have the type set by tags above
         jl_astaggedvalue(jl_nothing)->header = (uintptr_t)jl_nothing_type | jl_astaggedvalue(jl_nothing)->header;
         s.ptls->root_task->tls = jl_read_value(&s);
@@ -3380,8 +3408,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
-    if (!s.incremental && jl_global_roots_list->length > 0)
-        jl_global_roots_keyset = jl_idset_put_idx(jl_global_roots_list, (jl_genericmemory_t*)jl_an_empty_memory_any, -jl_global_roots_list->length);
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);

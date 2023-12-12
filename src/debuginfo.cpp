@@ -374,12 +374,13 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         }
         jl_method_instance_t *mi = NULL;
         if (codeinst) {
+            JL_GC_PROMISE_ROOTED(codeinst);
             mi = codeinst->def;
             // Non-opaque-closure MethodInstances are considered globally rooted
             // through their methods, but for OC, we need to create a global root
             // here.
             if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
-                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi);
+                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi, 1);
         }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (mi)
