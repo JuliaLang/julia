@@ -237,10 +237,48 @@ function _duplicate(x::BigFloat)
     return z
 end
 
+function is_bigfloat_special(x::Real)
+    # x is special if it is a zero, an Inf, or a NaN
+    return iszero(x) || !isfinite(x)
+end
+
+function BigFloat_with_special_values(x::Real, precision::Integer=DEFAULT_PRECISION[])
+    z = BigFloat(; precision=precision)
+    z.sign = 1-2*signbit(x)
+
+    if iszero(x)
+        z.exp = mpfr_special_exponent_zero
+    elseif isinf(x)
+        z.exp = mpfr_special_exponent_inf
+    else
+        z.exp = mpfr_special_exponent_nan
+    end
+
+    return z
+end
+
+function store_significand_in_limbs!(z::BigFloat, significand::UInt64)
+    nlimbs = (z.prec + 8*Core.sizeof(Limb) - 1) ÷ (8*Core.sizeof(Limb))
+
+    # Limb is a CLong which is a UInt32 on Windows which makes this more complicated and slower.
+    if Limb === UInt64
+        for i in 1:nlimbs-1
+            unsafe_store!(z.d, 0x0, i)
+        end
+        unsafe_store!(z.d, significand, nlimbs)
+    else
+        for i in 1:nlimbs-2
+            unsafe_store!(z.d, 0x0, i)
+        end
+        unsafe_store!(z.d, significand % UInt32, nlimbs-1)
+        unsafe_store!(z.d, (significand >> 32) % UInt32, nlimbs)
+    end
+end
+
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
     @eval begin
-        function BigFloat(x::($fC), r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
+        function BigFloat_mpfr_fallback(x::($fC), r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
             z = BigFloat(;precision=precision)
             ccall(($(string(:mpfr_set_,fJ)), libmpfr), Int32, (Ref{BigFloat}, $fC, MPFRRoundingMode), z, x, r)
             return z
@@ -248,47 +286,61 @@ for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
     end
 end
 
-function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
-    z = BigFloat(;precision)
+function BigFloat(x::Base.BitInteger64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
+    if is_bigfloat_special(x)
+        return BigFloat_with_special_values(x, precision)::BigFloat
+    end
+
+    unsigned_x = unsigned(abs(x))
+    exp_x = (sizeof(x) << 3) - leading_zeros(unsigned_x)
+
+    requiredprecision = exp_x - 1
+
+    if requiredprecision < precision
+        z = BigFloat(; precision=precision)::BigFloat
+        z.exp = exp_x
+        z.sign = 1 - 2*signbit(x)
+        significand = UInt64(unsigned_x) << leading_zeros(UInt64(unsigned_x))
+        store_significand_in_limbs!(z, significand)
+
+        return z
+    else
+        return BigFloat_mpfr_fallback(x, r; precision=precision)::BigFloat
+    end
+end
+
+function BigFloat_mpfr_fallback(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
+    z = BigFloat(;precision=precision)
+    ccall((:mpfr_set_d, libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
+    return z
+end
+
+function BigFloat_mpfr_fallback(x::Union{Float16, Float32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
+    BigFloat_mpfr_fallback(Float64(x), r; precision=precision)
+end
+
+function BigFloat(x::Base.IEEEFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
+    if is_bigfloat_special(x)
+        return BigFloat_with_special_values(x, precision)::BigFloat
+    end
+
     # punt on the hard case where we might have to deal with rounding
     # we could use this path in all cases, but mpfr_set_d has a lot of overhead.
-    if precision <= Base.significand_bits(Float64)
-        ccall((:mpfr_set_d, libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
-        if isnan(x) && signbit(x) != signbit(z)
-            z.sign = -z.sign
-        end
-        return z
+    if precision <= Base.significand_bits(typeof(x))
+        return BigFloat_mpfr_fallback(x, r; precision=precision)
     end
-    z.sign = 1-2*signbit(x)
-    if iszero(x) || !isfinite(x)
-        if isinf(x)
-            z.exp = mpfr_special_exponent_inf
-        elseif isnan(x)
-            z.exp = mpfr_special_exponent_nan
-        else
-            z.exp = mpfr_special_exponent_zero
-        end
-        return z
-    end
-    z.exp = 1 + exponent(x)
-    # BigFloat doesn't have an implicit bit
-    val = reinterpret(UInt64, significand(x))<<11 | typemin(Int64)
-    nlimbs = (precision + 8*Core.sizeof(Limb) - 1) ÷ (8*Core.sizeof(Limb))
 
-    # Limb is a CLong which is a UInt32 on windows (thank M$) which makes this more complicated and slower.
-    if Limb === UInt64
-        for i in 1:nlimbs-1
-            unsafe_store!(z.d, 0x0, i)
-        end
-        unsafe_store!(z.d, val, nlimbs)
-    else
-        for i in 1:nlimbs-2
-            unsafe_store!(z.d, 0x0, i)
-        end
-        unsafe_store!(z.d, val % UInt32, nlimbs-1)
-        unsafe_store!(z.d, (val >> 32) % UInt32, nlimbs)
-    end
-    z
+    z = BigFloat(;precision)
+    z.sign = 1-2*signbit(x)
+    z.exp = 1 + exponent(x)
+
+    # BigFloat doesn't have an implicit bit
+    val = UInt64(reinterpret(Base.uinttype(typeof(x)), significand(x)))
+    val <<= (sizeof(UInt64) << 3 - sizeof(x) << 3) + Base.exponent_bits(typeof(x))
+    val |= typemin(Int64)
+
+    store_significand_in_limbs!(z, val)
+    return z
 end
 
 function BigFloat(x::BigInt, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
@@ -302,18 +354,21 @@ BigFloat(x::Integer; precision::Integer=DEFAULT_PRECISION[]) =
 BigFloat(x::Integer, r::MPFRRoundingMode; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(BigInt(x)::BigInt, r; precision=precision)
 
-BigFloat(x::Union{Bool,Int8,Int16,Int32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(convert(Clong, x), r; precision=precision)
-BigFloat(x::Union{UInt8,UInt16,UInt32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(convert(Culong, x), r; precision=precision)
-
-BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(Float64(x), r; precision=precision)
+BigFloat(x::Bool, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
+     BigFloat(convert(Clong, x), r; precision=precision)
 
 function BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
-    setprecision(BigFloat, precision) do
-        setrounding_raw(BigFloat, r) do
-            BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x))::BigFloat
+    if is_bigfloat_special(x)
+        BigFloat_with_special_values(x, precision)::BigFloat
+    elseif ispow2(denominator(x))
+        z = BigFloat(numerator(x), r; precision)::BigFloat
+        z.exp -= trailing_zeros(denominator(x))
+        z
+    else
+        setprecision(BigFloat, precision) do
+            setrounding_raw(BigFloat, r) do
+                BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x))::BigFloat
+            end
         end
     end
 end

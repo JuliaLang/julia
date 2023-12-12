@@ -27,6 +27,7 @@ import Base.MPFR
     @test typeof(BigFloat(typemax(UInt64))) == BigFloat
     @test typeof(BigFloat(typemax(UInt128))) == BigFloat
 
+    @test typeof(BigFloat(floatmax(Float16))) == BigFloat
     @test typeof(BigFloat(floatmax(Float32))) == BigFloat
     @test typeof(BigFloat(floatmax(Float64))) == BigFloat
 
