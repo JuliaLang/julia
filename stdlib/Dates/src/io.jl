@@ -480,7 +480,7 @@ julia> Dates.format(DateTime(2018, 8, 8, 12, 0, 43, 1), ISODateTimeFormat)
 """
 const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
 const _typo_ISODateTimeFormat = DateFormat("yy-mm-dd\\THH:MM:SS.s")
-default_format(::Type{DateTime}) = ISODateTimeFormat
+default_format(::Type{DateTime}) = _typo_ISODateTimeFormat
 
 """
     Dates.ISODateFormat
@@ -495,7 +495,7 @@ julia> Dates.format(Date(2018, 8, 8), ISODateFormat)
 """
 const ISODateFormat = DateFormat("yyyy-mm-dd")
 const _typo_ISODateFormat = DateFormat("yy-mm-dd")
-default_format(::Type{Date}) = ISODateFormat
+default_format(::Type{Date}) = _typo_ISODateFormat
 
 """
     Dates.ISOTimeFormat
