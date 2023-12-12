@@ -1529,6 +1529,6 @@ end
         end
 
         file = joinpath(depot, "dev", "non-existent.jl")
-        @test_throws SystemError("opening file \"$file\"") include(file)
+        @test_throws SystemError("opening file $(repr(file))") include(file)
     end
 end
