@@ -1598,7 +1598,7 @@ static unsigned typekey_hash(jl_typename_t *tn, jl_value_t **key, size_t n, int 
     if (tn == jl_type_typename && key[0] == jl_bottom_type)
         return jl_typeofbottom_type->hash;
     size_t j;
-    unsigned hash = 0;
+    unsigned hash = 3;
     int failed = nofail;
     for (j = 0; j < n; j++) {
         jl_value_t *p = key[j];
@@ -1608,16 +1608,16 @@ static unsigned typekey_hash(jl_typename_t *tn, jl_value_t **key, size_t n, int 
             if (vm->N && jl_is_long(vm->N))
                 repeats = jl_unbox_long(vm->N);
             else
-                hash = bitmix(hash, 0x064eeaab); // 0x064eeaab is just a randomly chosen constant
+                hash = bitmix(0x064eeaab, hash); // 0x064eeaab is just a randomly chosen constant
             p = vm->T ? vm->T : (jl_value_t*)jl_any_type;
         }
         unsigned hashp = type_hash(p, &failed);
         if (failed && !nofail)
             return 0;
         while (repeats--)
-            hash = bitmix(hash, hashp);
+            hash = bitmix(hashp, hash);
     }
-    hash = bitmix(hash, ~tn->hash);
+    hash = bitmix(~tn->hash, hash);
     return hash ? hash : 1;
 }
 
@@ -1636,9 +1636,9 @@ static unsigned typekeyvalue_hash(jl_typename_t *tn, jl_value_t *key1, jl_value_
         else {
             hj = ((jl_datatype_t*)jl_typeof(kj))->hash;
         }
-        hash = bitmix(hash, hj);
+        hash = bitmix(hj, hash);
     }
-    hash = bitmix(hash, ~tn->hash);
+    hash = bitmix(~tn->hash, hash);
     return hash ? hash : 1;
 }
 
