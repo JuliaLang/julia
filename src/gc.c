@@ -3343,22 +3343,22 @@ uint64_t jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor)
 // grows very fast initially, then much slower at large heaps
 static uint64_t overallocation(uint64_t old_val, uint64_t val, uint64_t max_val)
 {
-    // compute maxsize = maxsize + 8*maxsize^(7/8) + maxsize/4
+    // compute maxsize = maxsize + 4*maxsize^(7/8) + maxsize/8
     // for small n, we grow much faster than O(n)
-    // for large n, we grow at O(n/4)
+    // for large n, we grow at O(n/8)
     // and as we reach O(memory) for memory>>1MB,
-    // this means we end by adding about 20% of memory each time at most
+    // this means we end by adding about 10% of memory each time at most
     int exp2 = sizeof(old_val) * 8 -
 #ifdef _P64
         __builtin_clzll(old_val);
 #else
         __builtin_clz(old_val);
 #endif
-    uint64_t inc = (uint64_t)((size_t)1 << (exp2 * 7 / 8)) * 8 + old_val / 4;
-    // once overallocation would exceed max_val, grow by no more than 10% of max_val
+    uint64_t inc = (uint64_t)((size_t)1 << (exp2 * 7 / 8)) * 4 + old_val / 8;
+    // once overallocation would exceed max_val, grow by no more than 5% of max_val
     if (inc + val > max_val)
-        if (inc > max_val / 10)
-            return max_val / 10;
+        if (inc > max_val / 20)
+            return max_val / 20;
     return inc;
 }
 
@@ -3566,7 +3566,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         uint64_t target_allocs = 0.0;
         double alloc_smooth_factor = 0.95;
         double collect_smooth_factor = 0.5;
-        double tuning_factor = 1e5;
+        double tuning_factor = 2e4;
         uint64_t alloc_mem = jl_gc_smooth(old_alloc_diff, alloc_diff, alloc_smooth_factor);
         uint64_t alloc_time = jl_gc_smooth(old_mut_time, mutator_time, alloc_smooth_factor); // TODO: subtract estimated finalizer time?
         uint64_t gc_mem = jl_gc_smooth(old_freed_diff, freed_diff, collect_smooth_factor);
@@ -3601,7 +3601,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         //   target_heap = jl_gc_smooth(jl_atomic_load_relaxed(&gc_heap_stats.heap_target), target_heap, alloc_smooth_factor);
 
         // compute some guardrails values
-        uint64_t min_target_allocs = heap_size / 10; // minimum 10% of current heap
+        uint64_t min_target_allocs = heap_size / 20; // minimum 5% of current heap
         if (min_target_allocs < default_collect_interval / 8) // unless the heap is small
             min_target_allocs = default_collect_interval / 8;
         uint64_t max_target_allocs = overallocation(before_free_heap_size, heap_size, user_max);
