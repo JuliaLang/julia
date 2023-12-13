@@ -305,7 +305,10 @@ function BigFloat(x::Base.BitInteger64, r::MPFRRoundingMode=ROUNDING_MODE[]; pre
 
         return z
     else
-        return BigFloat_mpfr_fallback(x, r; precision=precision)::BigFloat
+        # If Clong is 32 bit, MPFR does not have a method for (U)Int64 on Windows
+        return sizeof(x) <= sizeof(Clong) ? 
+            BigFloat_mpfr_fallback(x, r; precision)::BigFloat :
+            BigFloat(BigInt(x), r; precision)
     end
 end
 
