@@ -606,7 +606,11 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         else if (sym == jl_enter_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = jl_new_struct_uninit(jl_enternode_type);
+            jl_enternode_scope(temp) = NULL;
             jl_enternode_catch_dest(temp) = jl_unbox_long(ex);
+            if (n == 2) {
+                jl_enternode_scope(temp) = scm_to_julia(fl_ctx, car_(cdr_(e)), mod);
+            }
         }
         else if (sym == jl_newvar_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
