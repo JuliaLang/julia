@@ -434,6 +434,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 }
 
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
+void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
@@ -444,9 +445,7 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
     // safepoint until GC exit, in case GC was running concurrently while in
     // prior unsafe-region (before we let it release the stack memory)
     (void)jl_gc_unsafe_enter(ptls);
-    jl_atomic_store_relaxed(&ptls->sleep_check_state, 2); // dead, interpreted as sleeping and unwakeable
-    jl_fence();
-    jl_wakeup_thread(0); // force thread 0 to see that we do not have the IO lock (and am dead)
+    scheduler_delete_thread(ptls);
     // try to free some state we do not need anymore
 #ifndef _OS_WINDOWS_
     void *signal_stack = ptls->signal_stack;

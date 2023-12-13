@@ -15,35 +15,39 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 # NOTE make sure to sync the flag definitions below with julia.h and `jl_code_info_set_ir` in method.c
 
-const IR_FLAG_NULL        = UInt32(0)
+const IR_FLAG_NULL        = zero(UInt32)
 # This statement is marked as @inbounds by user.
 # Ff replaced by inlining, any contained boundschecks may be removed.
-const IR_FLAG_INBOUNDS    = UInt32(1) << 0
+const IR_FLAG_INBOUNDS    = one(UInt32) << 0
 # This statement is marked as @inline by user
-const IR_FLAG_INLINE      = UInt32(1) << 1
+const IR_FLAG_INLINE      = one(UInt32) << 1
 # This statement is marked as @noinline by user
-const IR_FLAG_NOINLINE    = UInt32(1) << 2
-const IR_FLAG_THROW_BLOCK = UInt32(1) << 3
+const IR_FLAG_NOINLINE    = one(UInt32) << 2
+const IR_FLAG_THROW_BLOCK = one(UInt32) << 3
 # This statement was proven :effect_free
-const IR_FLAG_EFFECT_FREE = UInt32(1) << 4
+const IR_FLAG_EFFECT_FREE = one(UInt32) << 4
 # This statement was proven not to throw
-const IR_FLAG_NOTHROW     = UInt32(1) << 5
+const IR_FLAG_NOTHROW     = one(UInt32) << 5
 # This is :consistent
-const IR_FLAG_CONSISTENT  = UInt32(1) << 6
+const IR_FLAG_CONSISTENT  = one(UInt32) << 6
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
-const IR_FLAG_REFINED     = UInt32(1) << 7
+const IR_FLAG_REFINED     = one(UInt32) << 7
 # This is :noub == ALWAYS_TRUE
-const IR_FLAG_NOUB        = UInt32(1) << 8
+const IR_FLAG_NOUB        = one(UInt32) << 8
 
 # TODO: Both of these should eventually go away once
 # This is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
-const IR_FLAG_EFIIMO      = UInt32(1) << 9
+const IR_FLAG_EFIIMO      = one(UInt32) << 9
 # This is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
-const IR_FLAG_INACCESSIBLE_OR_ARGMEM = UInt32(1) << 10
+const IR_FLAG_INACCESSIBLE_OR_ARGMEM = one(UInt32) << 10
+
+const NUM_IR_FLAGS = 11 # sync with julia.h
 
 const IR_FLAGS_EFFECTS = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_CONSISTENT | IR_FLAG_NOUB
+
+has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
@@ -218,9 +222,9 @@ end
 
 _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
-is_stmt_inline(stmt_flag::UInt32)      = stmt_flag & IR_FLAG_INLINE      ≠ 0
-is_stmt_noinline(stmt_flag::UInt32)    = stmt_flag & IR_FLAG_NOINLINE    ≠ 0
-is_stmt_throw_block(stmt_flag::UInt32) = stmt_flag & IR_FLAG_THROW_BLOCK ≠ 0
+is_stmt_inline(stmt_flag::UInt32)      = has_flag(stmt_flag, IR_FLAG_INLINE)
+is_stmt_noinline(stmt_flag::UInt32)    = has_flag(stmt_flag, IR_FLAG_NOINLINE)
+is_stmt_throw_block(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_THROW_BLOCK)
 
 function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
     Targ = args[1]
@@ -268,6 +272,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     isa(stmt, PiNode) && return (true, true, true)
     isa(stmt, PhiNode) && return (true, true, true)
     isa(stmt, ReturnNode) && return (true, false, true)
+    isa(stmt, EnterNode) && return (true, false, true)
     isa(stmt, GotoNode) && return (true, false, true)
     isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     if isa(stmt, GlobalRef)
@@ -468,7 +473,7 @@ end
 
 function any_stmt_may_throw(ir::IRCode, bb::Int)
     for stmt in ir.cfg.blocks[bb].stmts
-        if (ir[SSAValue(stmt)][:flag] & IR_FLAG_NOTHROW) != 0
+        if has_flag(ir[SSAValue(stmt)], IR_FLAG_NOTHROW)
             return true
         end
     end
@@ -695,14 +700,14 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
     # If we can prove that the argmem does not escape the current function, we can
     # refine this to :effect_free.
-    needs_ea_validation = (flag & IR_FLAGS_NEEDS_EA) == IR_FLAGS_NEEDS_EA
+    needs_ea_validation = has_flag(flag, IR_FLAGS_NEEDS_EA)
     stmt = inst[:stmt]
     if !needs_ea_validation
         if !isterminator(stmt) && stmt !== nothing
             # ignore control flow node – they are not removable on their own and thus not
             # have `IR_FLAG_EFFECT_FREE` but still do not taint `:effect_free`-ness of
             # the whole method invocation
-            sv.all_effect_free &= !iszero(flag & IR_FLAG_EFFECT_FREE)
+            sv.all_effect_free &= has_flag(flag, IR_FLAG_EFFECT_FREE)
         end
     elseif sv.all_effect_free
         if (isexpr(stmt, :invoke) || isexpr(stmt, :new) ||
@@ -714,8 +719,8 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
             sv.all_effect_free = false
         end
     end
-    sv.all_nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
-    if iszero(flag & IR_FLAG_NOUB)
+    sv.all_nothrow &= has_flag(flag, IR_FLAG_NOTHROW)
+    if !has_flag(flag, IR_FLAG_NOUB)
         # Special case: `:boundscheck` into `getfield` or memory operations is `:noub_if_noinbounds`
         if is_conditional_noub(inst, sv)
             sv.any_conditional_ub = true
@@ -727,7 +732,7 @@ end
 
 function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
-    stmt_inconsistent = iszero(flag & IR_FLAG_CONSISTENT)
+    stmt_inconsistent = !has_flag(flag, IR_FLAG_CONSISTENT)
     stmt = inst[:stmt]
     # Special case: For `getfield` and memory operations, we allow inconsistency of the :boundscheck argument
     (; inconsistent, tpdum) = sv
@@ -759,7 +764,7 @@ end
 function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
     stmt = inst[:stmt]
 
-    if isexpr(stmt, :enter)
+    if isa(stmt, EnterNode)
         # try/catch not yet modeled
         give_up_refinements!(sv)
         return nothing
@@ -960,17 +965,17 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                     ((block + 1) != destblock) && cfg_delete_edge!(sv.cfg, block, destblock)
                     expr = Expr(:call, Core.typeassert, expr.cond, Bool)
                 elseif i + 1 in sv.unreachable
-                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    @assert has_flag(ci.ssaflags[i], IR_FLAG_NOTHROW)
                     cfg_delete_edge!(sv.cfg, block, block + 1)
                     expr = GotoNode(expr.dest)
                 elseif expr.dest in sv.unreachable
-                    @assert (ci.ssaflags[i] & IR_FLAG_NOTHROW) != 0
+                    @assert has_flag(ci.ssaflags[i], IR_FLAG_NOTHROW)
                     cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
                     expr = nothing
                 end
                 code[i] = expr
-            elseif isexpr(expr, :enter)
-                catchdest = expr.args[1]::Int
+            elseif isa(expr, EnterNode)
+                catchdest = expr.catch_dest
                 if catchdest in sv.unreachable
                     cfg_delete_edge!(sv.cfg, block_for_inst(sv.cfg, i), block_for_inst(sv.cfg, catchdest))
                     code[i] = nothing
@@ -1237,12 +1242,6 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         return cost
     elseif head === :copyast
         return 100
-    elseif head === :enter
-        # try/catch is a couple function calls,
-        # but don't inline functions with try/catch
-        # since these aren't usually performance-sensitive functions,
-        # and llvm is more likely to miscompile them when these functions get large
-        return typemax(Int)
     end
     return 0
 end
@@ -1261,6 +1260,12 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
         thiscost = dst(stmt.label) < line ? 40 : 0
     elseif stmt isa GotoIfNot
         thiscost = dst(stmt.dest) < line ? 40 : 0
+    elseif stmt isa EnterNode
+        # try/catch is a couple function calls,
+        # but don't inline functions with try/catch
+        # since these aren't usually performance-sensitive functions,
+        # and llvm is more likely to miscompile them when these functions get large
+        thiscost = typemax(Int)
     end
     return thiscost
 end
@@ -1357,19 +1362,19 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                     i += 1
                 end
             end
+        elseif isa(el, EnterNode)
+            tgt = el.catch_dest
+            was_deleted = labelchangemap[tgt] == typemin(Int)
+            if was_deleted
+                body[i] = nothing
+            else
+                body[i] = EnterNode(el, tgt + labelchangemap[tgt])
+            end
         elseif isa(el, Expr)
             if el.head === :(=) && el.args[2] isa Expr
                 el = el.args[2]::Expr
             end
-            if el.head === :enter
-                tgt = el.args[1]::Int
-                was_deleted = labelchangemap[tgt] == typemin(Int)
-                if was_deleted
-                    body[i] = nothing
-                else
-                    el.args[1] = tgt + labelchangemap[tgt]
-                end
-            elseif !is_meta_expr_head(el.head)
+            if !is_meta_expr_head(el.head)
                 args = el.args
                 for i = 1:length(args)
                     el = args[i]

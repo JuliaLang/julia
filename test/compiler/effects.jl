@@ -1290,3 +1290,53 @@ end |> !Core.Compiler.is_noub
 @test Base.infer_effects((Vector{Any},Int)) do xs, i
     @inbounds getindex_dont_propagate(xs, i)
 end |> Core.Compiler.is_noub
+
+# refine `:nothrow` when `exct` is known to be `Bottom`
+@test Base.infer_exception_type(getindex, (Vector{Int},Int)) == BoundsError
+function getindex_nothrow(xs::Vector{Int}, i::Int)
+    try
+        return xs[i]
+    catch err
+        err isa BoundsError && return nothing
+        rethrow(err)
+    end
+end
+@test Core.Compiler.is_nothrow(Base.infer_effects(getindex_nothrow, (Vector{Int}, Int)))
+
+# callsite `@assume_effects` annotation
+let ast = code_lowered((Int,)) do x
+        Base.@assume_effects :total identity(x)
+    end |> only
+    ssaflag = ast.ssaflags[findfirst(!iszero, ast.ssaflags)::Int]
+    override = Core.Compiler.decode_statement_effects_override(ssaflag)
+    # if this gets broken, check if this is synced with expr.jl
+    @test override.consistent && override.effect_free && override.nothrow &&
+          override.terminates_globally && !override.terminates_locally &&
+          override.notaskstate && override.inaccessiblememonly &&
+          override.noub && !override.noub_if_noinbounds
+end
+@test Base.infer_effects((Float64,)) do x
+    isinf(x) && return 0.0
+    return Base.@assume_effects :nothrow sin(x)
+end |> Core.Compiler.is_nothrow
+let effects = Base.infer_effects((Vector{Float64},)) do xs
+        isempty(xs) && return 0.0
+        Base.@assume_effects :nothrow begin
+            x = Base.@assume_effects :noub @inbounds xs[1]
+            isinf(x) && return 0.0
+            return sin(x)
+        end
+    end
+    # all nested overrides should be applied
+    @test Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_noub(effects)
+end
+@test Base.infer_effects((Int,)) do x
+    res = 1
+    0 ≤ x < 20 || error("bad fact")
+    Base.@assume_effects :terminates_locally while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end |> Core.Compiler.is_terminates

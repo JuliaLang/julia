@@ -75,21 +75,26 @@ static void wait_empty_func(uv_timer_t *t)
 void jl_wait_empty_begin(void)
 {
     JL_UV_LOCK();
-    if (wait_empty_worker.type != UV_TIMER && jl_io_loop) {
-        // try to purge anything that is just waiting for cleanup
-        jl_io_loop->stop_flag = 0;
-        uv_run(jl_io_loop, UV_RUN_NOWAIT);
-        uv_timer_init(jl_io_loop, &wait_empty_worker);
+    if (jl_io_loop) {
+        if (wait_empty_worker.type != UV_TIMER) {
+            // try to purge anything that is just waiting for cleanup
+            jl_io_loop->stop_flag = 0;
+            uv_run(jl_io_loop, UV_RUN_NOWAIT);
+            uv_timer_init(jl_io_loop, &wait_empty_worker);
+            uv_unref((uv_handle_t*)&wait_empty_worker);
+        }
+        // make sure this is running
         uv_update_time(jl_io_loop);
         uv_timer_start(&wait_empty_worker, wait_empty_func, 10, 15000);
-        uv_unref((uv_handle_t*)&wait_empty_worker);
     }
     JL_UV_UNLOCK();
 }
 void jl_wait_empty_end(void)
 {
     // n.b. caller must be holding jl_uv_mutex
-    uv_close((uv_handle_t*)&wait_empty_worker, NULL);
+    if (wait_empty_worker.type == UV_TIMER)
+        // make sure this timer is stopped, but not destroyed in case the user calls jl_wait_empty_begin again
+        uv_timer_stop(&wait_empty_worker);
 }
 
 
@@ -174,9 +179,12 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
         ct->world_age = last_age;
         return;
     }
-    if (handle == (uv_handle_t*)&signal_async || handle == (uv_handle_t*)&wait_empty_worker)
+    if (handle == (uv_handle_t*)&wait_empty_worker)
+        handle->type = UV_UNKNOWN_HANDLE;
+    else if (handle == (uv_handle_t*)&signal_async)
         return;
-    free(handle);
+    else
+        free(handle);
 }
 
 static void jl_uv_flush_close_callback(uv_write_t *req, int status)

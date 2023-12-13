@@ -521,7 +521,12 @@ CC.code_cache(interp::REPLInterpreter) = CC.WorldView(interp.code_cache, CC.Worl
 CC.get(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
 CC.getindex(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
 CC.haskey(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
-CC.setindex!(wvc::CC.WorldView{REPLInterpreterCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
+function CC.setindex!(wvc::CC.WorldView{REPLInterpreterCache}, ci::CodeInstance, mi::MethodInstance)
+    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
+        delete!(wvc.cache.dict, replaced)
+    end
+    return setindex!(wvc.cache.dict, ci, mi)
+end
 
 # REPLInterpreter is only used for type analysis, so it should disable optimization entirely
 CC.may_optimize(::REPLInterpreter) = false
@@ -1409,7 +1414,9 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
             else
                 owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), scope, var)
                 if C_NULL == owner
-                    print(io, "\nSuggestion: check for spelling errors or missing imports. No global of this name exists in this module.")
+                    # No global of this name exists in this module.
+                    # This is the common case, so do not print that information.
+                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
                     owner = bnd
                 else
                     owner = unsafe_pointer_to_objref(owner)::Core.Binding
@@ -1427,7 +1434,7 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     else
         scope = undef
     end
-    warnfor(m, var) = Base.isbindingresolved(m, var) && isdefined(m, var) && (print(io, "\nHint: a global variable of this name also exists in $m."); true)
+    warnfor(m, var) = Base.isbindingresolved(m, var) && (Base.isexported(m, var) || Base.ispublic(m, var)) && (print(io, "\nHint: a global variable of this name also exists in $m."); true)
     if scope !== Base && !warnfor(Base, var)
         warned = false
         for m in Base.loaded_modules_order

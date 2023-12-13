@@ -2,7 +2,7 @@
 
 function maybe_show_ir(ir::IRCode)
     if isdefined(Core, :Main)
-        Core.Main.Base.display(ir)
+        invokelatest(Core.Main.Base.display, ir)
     end
 end
 
@@ -198,9 +198,9 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot terminator"
                 error("")
             end
-        elseif isexpr(terminator, :enter)
+        elseif isa(terminator, EnterNode)
             @label enter_check
-            if length(block.succs) != 2 || (block.succs != Int[terminator.args[1], idx+1] && block.succs != Int[idx+1, terminator.args[1]])
+            if length(block.succs) != 2 || (block.succs != Int[terminator.catch_dest, idx+1] && block.succs != Int[idx+1, terminator.catch_dest])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 error("")
             end
@@ -210,7 +210,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 # statement, until we can do proper CFG manipulations during compaction.
                 for stmt_idx in first(block.stmts):last(block.stmts)
                     stmt = ir[SSAValue(stmt_idx)][:stmt]
-                    if isexpr(stmt, :enter)
+                    if isa(stmt, EnterNode)
                         terminator = stmt
                         @goto enter_check
                     end
@@ -319,7 +319,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     error("")
                 end
             end
-        elseif (isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isexpr(stmt, :enter)) && idx != last(ir.cfg.blocks[bb].stmts)
+        elseif (isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, EnterNode)) && idx != last(ir.cfg.blocks[bb].stmts)
             @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
             error("")
         else
@@ -373,7 +373,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                             error()
                         elseif isa(arg, SSAValue)
                             enter_stmt = ir[arg::SSAValue][:stmt]
-                            if !isa(enter_stmt, Nothing) && !isexpr(enter_stmt, :enter)
+                            if !isa(enter_stmt, Nothing) && !isa(enter_stmt, EnterNode)
                                 @verify_error "Malformed :leave - argument ssavalue should point to `nothing` or :enter"
                                 error()
                             end

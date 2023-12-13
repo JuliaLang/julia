@@ -96,7 +96,7 @@ function kill_terminator_edges!(irsv::IRInterpretationState, term_idx::Int, bb::
     elseif isa(stmt, ReturnNode)
         # Nothing to do
     else
-        @assert !isexpr(stmt, :enter)
+        @assert !isa(stmt, EnterNode)
         kill_edge!(irsv, bb, bb+1)
     end
 end
@@ -138,7 +138,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             if bb === nothing
                 bb = block_for_inst(ir, idx)
             end
-            inst[:flag] |= IR_FLAG_NOTHROW
+            add_flag!(inst, IR_FLAG_NOTHROW)
             if condval
                 inst[:stmt] = nothing
                 inst[:type] = Any
@@ -156,14 +156,14 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         head = stmt.head
         if head === :call || head === :foreigncall || head === :new || head === :splatnew || head === :static_parameter || head === :isdefined || head === :boundscheck
             (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
-            inst[:flag] |= flags_for_effects(effects)
+            add_flag!(inst, flags_for_effects(effects))
         elseif head === :invoke
             rt, (nothrow, noub) = concrete_eval_invoke(interp, stmt, stmt.args[1]::MethodInstance, irsv)
             if nothrow
-                inst[:flag] |= IR_FLAG_NOTHROW
+                add_flag!(inst, IR_FLAG_NOTHROW)
             end
             if noub
-                inst[:flag] |= IR_FLAG_NOUB
+                add_flag!(inst, IR_FLAG_NOUB)
             end
         elseif head === :throw_undef_if_not
             condval = maybe_extract_const_bool(argextype(stmt.args[2], ir))
@@ -197,7 +197,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     if rt !== nothing
         if isa(rt, Const)
             inst[:type] = rt
-            if is_inlineable_constant(rt.val) && (inst[:flag] & (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)) == IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+            if is_inlineable_constant(rt.val) && has_flag(inst, (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
                 inst[:stmt] = quoted(rt.val)
             end
             return true
@@ -222,8 +222,8 @@ function process_terminator!(@nospecialize(stmt), bb::Int, bb_ip::BitSetBoundedM
         backedge || push!(bb_ip, stmt.dest)
         push!(bb_ip, bb+1)
         return backedge
-    elseif isexpr(stmt, :enter)
-        dest = stmt.args[1]::Int
+    elseif isa(stmt, EnterNode)
+        dest = stmt.catch_dest
         @assert dest > bb
         push!(bb_ip, dest)
         push!(bb_ip, bb+1)
@@ -278,6 +278,15 @@ end
 populate_def_use_map!(tpdum::TwoPhaseDefUseMap, ir::IRCode) =
     populate_def_use_map!(tpdum, BBScanner(ir))
 
+function is_all_const_call(@nospecialize(stmt), interp::AbstractInterpreter, irsv::IRInterpretationState)
+    isexpr(stmt, :call) || return false
+    @inbounds for i = 2:length(stmt.args)
+        argtype = abstract_eval_value(interp, stmt.args[i], nothing, irsv)
+        is_const_argtype(argtype) || return false
+    end
+    return true
+end
+
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
         externally_refined::Union{Nothing,BitSet} = nothing)
     (; ir, tpdum, ssa_refined) = irsv
@@ -299,9 +308,12 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         typ = inst[:type]
         flag = inst[:flag]
         any_refined = false
-        if (flag & IR_FLAG_REFINED) != 0
+        if has_flag(flag, IR_FLAG_REFINED)
             any_refined = true
-            inst[:flag] &= ~IR_FLAG_REFINED
+            sub_flag!(inst, IR_FLAG_REFINED)
+        elseif is_all_const_call(stmt, interp, irsv)
+            # force reinference on calls with all constant arguments
+            any_refined = true
         end
         for ur in userefs(stmt)
             val = ur[]
@@ -317,8 +329,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             delete!(ssa_refined, idx)
         end
         check_ret!(stmt, idx)
-        is_terminator_or_phi = (isa(stmt, PhiNode) || isa(stmt, GotoNode) ||
-            isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isexpr(stmt, :enter))
+        is_terminator_or_phi = (isa(stmt, PhiNode) || isterminator(stmt))
         if typ === Bottom && !(idx == lstmt && is_terminator_or_phi)
             return true
         end
@@ -351,8 +362,8 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
             irsv.curridx = idx
             stmt = inst[:stmt]
             flag = inst[:flag]
-            if (flag & IR_FLAG_REFINED) != 0
-                inst[:flag] &= ~IR_FLAG_REFINED
+            if has_flag(flag, IR_FLAG_REFINED)
+                sub_flag!(inst, IR_FLAG_REFINED)
                 push!(stmt_ip, idx)
             end
             check_ret!(stmt, idx)
@@ -407,9 +418,14 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
 
     nothrow = noub = true
     for idx = 1:length(ir.stmts)
+        if ir[SSAValue(idx)][:stmt] === nothing
+            # skip `nothing` statement, which might be inserted as a dummy node,
+            # e.g. by `finish_current_bb!` without explicitly marking it as `:nothrow`
+            continue
+        end
         flag = ir[SSAValue(idx)][:flag]
-        nothrow &= !iszero(flag & IR_FLAG_NOTHROW)
-        noub &= !iszero(flag & IR_FLAG_NOUB)
+        nothrow &= has_flag(flag, IR_FLAG_NOTHROW)
+        noub &= has_flag(flag, IR_FLAG_NOUB)
         (nothrow | noub) || break
     end
 

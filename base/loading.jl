@@ -668,7 +668,20 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
         return explicit_manifest_uuid_path(project_file, pkg)
     elseif project_file
         # if env names a directory, search it
-        return implicit_manifest_uuid_path(env, pkg)
+        proj = implicit_manifest_uuid_path(env, pkg)
+        proj === nothing || return proj
+        # if not found
+        parentid = get(EXT_PRIMED, pkg, nothing)
+        if parentid !== nothing
+            _, parent_project_file = entry_point_and_project_file(env, parentid.name)
+            if parent_project_file !== nothing
+                parentproj = project_file_name_uuid(parent_project_file, parentid.name)
+                if parentproj == parentid
+                    mby_ext = project_file_ext_path(parent_project_file, pkg.name)
+                    mby_ext === nothing || return mby_ext
+                end
+            end
+        end
     end
     return nothing
 end
@@ -1221,11 +1234,19 @@ end
 
 function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
     project_file = env_project_file(env)
-    if project_file isa String
+    if project_file isa String || project_file
+        implicit_project_file = project_file
+        if !(implicit_project_file isa String)
+            # if env names a directory, search it for an implicit project file (for stdlibs)
+            path, implicit_project_file = entry_point_and_project_file(env, pkg.name)
+            if !(implicit_project_file isa String)
+                return nothing
+            end
+        end
         # Look in project for extensions to insert
-        proj_pkg = project_file_name_uuid(project_file, pkg.name)
+        proj_pkg = project_file_name_uuid(implicit_project_file, pkg.name)
         if pkg == proj_pkg
-            d_proj = parsed_toml(project_file)
+            d_proj = parsed_toml(implicit_project_file)
             weakdeps = get(d_proj, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
             extensions = get(d_proj, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             extensions === nothing && return
@@ -1236,6 +1257,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         end
 
         # Now look in manifest
+        project_file isa String || return nothing
         manifest_file = project_file_manifest_path(project_file)
         manifest_file === nothing && return
         d = get_deps(parsed_toml(manifest_file))
@@ -1745,7 +1767,7 @@ function include_dependency(path::AbstractString)
 end
 
 # we throw PrecompilableError when a module doesn't want to be precompiled
-struct PrecompilableError <: Exception end
+import Core: PrecompilableError
 function show(io::IO, ex::PrecompilableError)
     print(io, "Error when precompiling module, potentially caused by a __precompile__(false) declaration in the module.")
 end
@@ -2371,6 +2393,22 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     depot_path = map(abspath, DEPOT_PATH)
     dl_load_path = map(abspath, DL_LOAD_PATH)
     load_path = map(abspath, Base.load_path())
+    # if pkg is a stdlib, append its parent Project.toml to the load path
+    parentid = get(EXT_PRIMED, pkg, nothing)
+    if parentid !== nothing
+        for env in load_path
+            project_file = env_project_file(env)
+            if project_file === true
+                _, parent_project_file = entry_point_and_project_file(env, parentid.name)
+                if parent_project_file !== nothing
+                    parentproj = project_file_name_uuid(parent_project_file, parentid.name)
+                    if parentproj == parentid
+                        push!(load_path, parent_project_file)
+                    end
+                end
+            end
+        end
+    end
     path_sep = Sys.iswindows() ? ';' : ':'
     any(path -> path_sep in path, load_path) &&
         error("LOAD_PATH entries cannot contain $(repr(path_sep))")
@@ -2660,13 +2698,15 @@ end
 # Find depot in DEPOT_PATH for which all @depot tags from the `includes`
 # can be replaced so that they point to a file on disk each.
 function resolve_depot(includes::Union{AbstractVector,AbstractSet})
-    if any(includes) do inc
+    # `all` because it's possible to have a mixture of includes inside and outside of the depot
+    if all(includes) do inc
             !startswith(inc, "@depot")
         end
-        return :missing_depot_tag
+        return :fully_outside_depot
     end
     for depot in DEPOT_PATH
-        if all(includes) do inc
+        # `any` because it's possible to have a mixture of includes inside and outside of the depot
+        if any(includes) do inc
                 isfile(restore_depot_path(inc, depot))
             end
             return depot
@@ -2767,8 +2807,8 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     end
     if depot === :no_depot_found
         @debug("Unable to resolve @depot tag in cache file $cachefile", srcfiles)
-    elseif depot === :missing_depot_tag
-        @debug("Missing @depot tag for include dependencies in cache file $cachefile.", srcfiles)
+    elseif depot === :fully_outside_depot
+        @debug("All include dependencies in cache file $cachefile are outside of a depot.", srcfiles)
     else
         for inc in includes
             inc.filename = restore_depot_path(inc.filename, depot)

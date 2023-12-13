@@ -95,7 +95,7 @@ add_tfunc(throw, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
 # if isexact is false, the actual runtime type may (will) be a subtype of t
 # if isconcrete is true, the actual runtime type is definitely concrete (unreachable if not valid as a typeof)
 # if istype is true, the actual runtime value will definitely be a type (e.g. this is false for Union{Type{Int}, Int})
-function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
+function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot) = t)
     if isa(t, Const)
         if isa(t.val, Type) && valid_as_lattice(t.val, astag)
             return t.val, true, isconcretetype(t.val), true
@@ -103,6 +103,7 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
         return Bottom, true, false, false # runtime throws on non-Type
     end
     t = widenconst(t)
+    troot = widenconst(troot)
     if t === Bottom
         return Bottom, true, true, false # runtime unreachable
     elseif t === typeof(Bottom) || !hasintersect(t, Type)
@@ -110,10 +111,15 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
     elseif isType(t)
         tp = t.parameters[1]
         valid_as_lattice(tp, astag) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
+        if troot isa UnionAll
+            # Free `TypeVar`s inside `Type` has violated the "diagonal" rule.
+            # Widen them before `UnionAll` rewraping to relax concrete constraint.
+            tp = widen_diagonal(tp, troot)
+        end
         return tp, !has_free_typevars(tp), isconcretetype(tp), true
     elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
-        t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, astag)
+        t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, astag, rewrap_unionall(t, troot))
         tr = rewrap_unionall(t′′, t)
         if t′′ isa DataType && t′′.name !== Tuple.name && !has_free_typevars(tr)
             # a real instance must be within the declared bounds of the type,
@@ -128,8 +134,8 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
         end
         return tr, isexact, isconcrete, istype
     elseif isa(t, Union)
-        ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(t.a, astag)
-        tb, isexact_b, isconcrete_b, istype_b = instanceof_tfunc(t.b, astag)
+        ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(t.a, astag, troot)
+        tb, isexact_b, isconcrete_b, istype_b = instanceof_tfunc(t.b, astag, troot)
         isconcrete = isconcrete_a && isconcrete_b
         istype = istype_a && istype_b
         # most users already handle the Union case, so here we assume that
@@ -2482,6 +2488,19 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return Effects(EFFECTS_TOTAL;
             consistent = (isa(setting, Const) && setting.val === :conditional) ? ALWAYS_TRUE : ALWAYS_FALSE,
             nothrow = compilerbarrier_nothrow(setting, nothing))
+    elseif f === Core.current_scope
+        nothrow = true
+        if length(argtypes) != 0
+            if length(argtypes) != 1 || !isvarargtype(argtypes[1])
+                return EFFECTS_THROWS
+            end
+            nothrow = false
+        end
+        return Effects(EFFECTS_TOTAL;
+            consistent = ALWAYS_FALSE,
+            notaskstate = false,
+            nothrow
+        )
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
@@ -2548,6 +2567,32 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     return false
 end
 
+function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
+    pc = sv.currpc
+    while true
+        handleridx = sv.handler_at[pc][1]
+        if handleridx == 0
+            # No local scope available - inherited from the outside
+            return Any
+        end
+        pchandler = sv.handlers[handleridx]
+        # Remember that we looked at this handler, so we get re-scheduled
+        # if the scope information changes
+        isdefined(pchandler, :scope_uses) || (pchandler.scope_uses = Int[])
+        pcbb = block_for_inst(sv.cfg, pc)
+        if findfirst(==(pcbb), pchandler.scope_uses) === nothing
+            push!(pchandler.scope_uses, pcbb)
+        end
+        scope = pchandler.scopet
+        if scope !== nothing
+            # Found the scope - forward it
+            return scope
+        end
+        pc = pchandler.enter_idx
+    end
+end
+current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
+
 """
     builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Bool
 
@@ -2562,9 +2607,6 @@ end
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
                            sv::Union{AbsIntState, Nothing})
     𝕃ᵢ = typeinf_lattice(interp)
-    if f === tuple
-        return tuple_tfunc(𝕃ᵢ, argtypes)
-    end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && all(@nospecialize(a) -> isa(a, Const), argtypes)
             argvals = anymap(@nospecialize(a) -> (a::Const).val, argtypes)
@@ -2590,6 +2632,16 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         end
         tf = T_IFUNC[iidx]
     else
+        if f === tuple
+            return tuple_tfunc(𝕃ᵢ, argtypes)
+        elseif f === Core.current_scope
+            if length(argtypes) != 0
+                if length(argtypes) != 1 || !isvarargtype(argtypes[1])
+                    return Bottom
+                end
+            end
+            return current_scope_tfunc(interp, sv)
+        end
         fidx = find_tfunc(f)
         if fidx === nothing
             # unknown/unhandled builtin function
