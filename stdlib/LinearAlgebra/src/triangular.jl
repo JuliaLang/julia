@@ -332,7 +332,15 @@ function tril!(A::UpperTriangular{T}, k::Integer=0) where {T}
         return UpperTriangular(tril!(A.data,k))
     end
 end
-triu!(A::UpperTriangular, k::Integer=0) = UpperTriangular(triu!(A.data, k))
+function triu!(A::UpperTriangular, k::Integer=0)
+    n = size(A,1)
+    if k > 0
+        for j in 1:n, i in max(1,j-k+1):j
+            A.data[i,j] = zero(eltype(A))
+        end
+    end
+    return A
+end
 
 function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where {T}
     n = size(A,1)
@@ -375,7 +383,15 @@ function triu!(A::LowerTriangular{T}, k::Integer=0) where {T}
     end
 end
 
-tril!(A::LowerTriangular, k::Integer=0) = LowerTriangular(tril!(A.data, k))
+function tril!(A::LowerTriangular, k::Integer=0)
+    n = size(A,1)
+    if k < 0
+        for j in 1:n, i in j:min(j-k-1,n)
+            A.data[i, j] = zero(eltype(A))
+        end
+    end
+    A
+end
 
 function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
     n = size(A,1)
