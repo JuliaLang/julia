@@ -239,16 +239,16 @@ Base.isstored(A::UnitUpperTriangular, i::Int, j::Int) =
 Base.isstored(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? Base.isstored(A.data, i, j) : false
 
-getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
+@propagate_inbounds getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-getindex(A::LowerTriangular, i::Integer, j::Integer) =
+@propagate_inbounds getindex(A::LowerTriangular, i::Integer, j::Integer) =
     i >= j ? A.data[i,j] : zero(A.data[j,i])
-getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
+@propagate_inbounds getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
     i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-getindex(A::UpperTriangular, i::Integer, j::Integer) =
+@propagate_inbounds getindex(A::UpperTriangular, i::Integer, j::Integer) =
     i <= j ? A.data[i,j] : zero(A.data[j,i])
 
-function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
         iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
             "($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
@@ -258,7 +258,7 @@ function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     return A
 end
 
-function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
     if i > j
         iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
             "($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
@@ -271,7 +271,7 @@ function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
     return A
 end
 
-function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
         iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
             "($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
@@ -281,7 +281,7 @@ function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     return A
 end
 
-function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
     if i < j
         iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
             "($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
@@ -451,6 +451,7 @@ tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
 
 # copy and scale
 function copyto!(A::T, B::T) where {T<:Union{UpperTriangular,UnitUpperTriangular}}
+    checkbounds(A, axes(B)...)
     n = size(B,1)
     for j = 1:n
         for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
@@ -460,6 +461,7 @@ function copyto!(A::T, B::T) where {T<:Union{UpperTriangular,UnitUpperTriangular
     return A
 end
 function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular}}
+    checkbounds(A, axes(B)...)
     n = size(B,1)
     for j = 1:n
         for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
