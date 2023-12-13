@@ -872,7 +872,7 @@ end
 end
 
 @testset "arithmetic with an immutable parent" begin
-    F = Fill(2, (4,4))
+    F = FillArrays.Fill(2, (4,4))
     for UT in (UnitUpperTriangular, UnitLowerTriangular)
         U = UT(F)
         @test -U == -Array(U)
