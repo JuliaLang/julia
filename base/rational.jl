@@ -151,6 +151,8 @@ Float16(x::Rational{<:Union{Int16,Int32,Int64,UInt16,UInt32,UInt64}}) =
     Float16(Float32(x))
 Float16(x::Rational{<:Union{Int128,UInt128}}) =
     Float16(Float64(x)) # UInt128 overflows Float32, include Int128 for consistency
+Float32(x::Rational{<:Union{Int128,UInt128}}) =
+    Float32(Float64(x)) # UInt128 overflows Float32, include Int128 for consistency
 
 function Rational{T}(x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
