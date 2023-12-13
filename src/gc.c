@@ -40,6 +40,7 @@ static jl_gc_callback_list_t *gc_cblist_pre_gc;
 static jl_gc_callback_list_t *gc_cblist_post_gc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_free;
+static jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
 
 #define gc_invoke_callbacks(ty, list, args) \
     do { \
@@ -125,6 +126,14 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_external_free(jl_gc_cb_notify_external_fre
     else
         jl_gc_deregister_callback(&gc_cblist_notify_external_free, (jl_gc_cb_func_t)cb);
 }
+
+JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t cb, int enable)
+ {
+     if (enable)
+         jl_gc_register_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
+     else
+         jl_gc_deregister_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
+ }
 
 // Protect all access to `finalizer_list_marked` and `to_finalize`.
 // For accessing `ptls->finalizers`, the lock is needed if a thread
@@ -767,6 +776,7 @@ static void gc_sweep_foreign_objs(void)
 }
 
 // GC knobs and self-measurement variables
+static int under_memory_pressure;
 static int64_t last_gc_total_bytes = 0;
 
 // max_total_memory is a suggestion.  We try very hard to stay
@@ -3544,6 +3554,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         else {
             // We can't stay under our goal so let's go back to
             // the minimum interval and hope things get better
+            under_memory_pressure = 1;
             gc_num.interval = default_collect_interval;
         }
     }
@@ -3647,6 +3658,12 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     gc_invoke_callbacks(jl_gc_cb_post_gc_t,
         gc_cblist_post_gc, (collection));
+
+    if (under_memory_pressure) {
+        gc_invoke_callbacks(jl_gc_cb_notify_gc_pressure_t,
+            gc_cblist_notify_gc_pressure, ());
+    }
+    under_memory_pressure = 0;
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
