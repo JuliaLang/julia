@@ -1,4 +1,4 @@
-//===- Optional.h - Simple variant for passing optional values --*- C++ -*-===//
+//===- optional.h - Simple variant for passing optional values --*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-///  This file provides Optional, a template class modeled in the spirit of
+///  This file provides optional, a template class modeled in the spirit of
 ///  OCaml's 'opt' variant.  The idea is to strongly type whether or not
 ///  a value can be optional.
 ///
@@ -16,84 +16,22 @@
 #ifndef JL_OPTIONAL_H
 #define JL_OPTIONAL_H
 
-//#include "llvm/ADT/Hashing.h"
-//#include "llvm/ADT/None.h"
 //#include "llvm/ADT/STLForwardCompat.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/type_traits.h"
 #include <cassert>
 #include <new>
 #include <utility>
-
-namespace llvmx {
-
-//#include "llvm/ADT/None.h"
-/// A simple null object to allow implicit construction of Optional<T>
-/// and similar types without having to spell out the specialization's name.
-// (constant value 1 in an attempt to workaround MSVC build issue... )
-enum class NoneType { None = 1 };
-const NoneType None = NoneType::None;
-
-//#include "llvm/ADT/STLForwardCompat.h"
 #include <type_traits>
 
-//===----------------------------------------------------------------------===//
-//     Features from C++17
-//===----------------------------------------------------------------------===//
+namespace std {
 
-template <typename T>
-struct negation // NOLINT(readability-identifier-naming)
-    : std::integral_constant<bool, !bool(T::value)> {};
-
-template <typename...>
-struct conjunction // NOLINT(readability-identifier-naming)
-    : std::true_type {};
-template <typename B1> struct conjunction<B1> : B1 {};
-template <typename B1, typename... Bn>
-struct conjunction<B1, Bn...>
-    : std::conditional<bool(B1::value), conjunction<Bn...>, B1>::type {};
-
-template <typename...>
-struct disjunction // NOLINT(readability-identifier-naming)
-    : std::false_type {};
-template <typename B1> struct disjunction<B1> : B1 {};
-template <typename B1, typename... Bn>
-struct disjunction<B1, Bn...>
-    : std::conditional<bool(B1::value), B1, disjunction<Bn...>>::type {};
-
-struct in_place_t // NOLINT(readability-identifier-naming)
-{
-  explicit in_place_t() = default;
-};
-/// \warning This must not be odr-used, as it cannot be made \c inline in C++14.
-constexpr in_place_t in_place; // NOLINT(readability-identifier-naming)
-
-template <typename T>
-struct in_place_type_t // NOLINT(readability-identifier-naming)
-{
-  explicit in_place_type_t() = default;
-};
-
-template <std::size_t I>
-struct in_place_index_t // NOLINT(readability-identifier-naming)
-{
-  explicit in_place_index_t() = default;
-};
-
-//===----------------------------------------------------------------------===//
-//     Features from C++20
-//===----------------------------------------------------------------------===//
-
-//template <typename T>
-//struct remove_cvref // NOLINT(readability-identifier-naming)
-//{
-//  using type = std::remove_cv_t<std::remove_reference_t<T>>;
-//};
-//
-//template <typename T>
-//using remove_cvref_t // NOLINT(readability-identifier-naming)
-//    = typename llvmx::remove_cvref<T>::type;
-//
+//#include "llvm/ADT/None.h"
+/// A simple null object to allow implicit construction of optional<T>
+/// and similar types without having to spell out the specialization's name.
+// (constant value 1 in an attempt to workaround MSVC build issue... )
+enum class nullopt_t { nullopt = 1 };
+const nullopt_t nullopt = nullopt_t::nullopt;
 
 class raw_ostream;
 
@@ -326,45 +264,45 @@ public:
 
 } // namespace optional_detail
 
-template <typename T> class Optional {
+template <typename T> class optional {
   optional_detail::OptionalStorage<T> Storage;
 
 public:
   using value_type = T;
 
-  constexpr Optional() = default;
-  constexpr Optional(NoneType) {}
+  constexpr optional() = default;
+  constexpr optional(nullopt_t) {}
 
-  constexpr Optional(const T &y) : Storage(in_place, y) {}
-  constexpr Optional(const Optional &O) = default;
+  constexpr optional(const T &y) : Storage(in_place, y) {}
+  constexpr optional(const optional &O) = default;
 
-  constexpr Optional(T &&y) : Storage(in_place, std::move(y)) {}
-  constexpr Optional(Optional &&O) = default;
+  constexpr optional(T &&y) : Storage(in_place, std::move(y)) {}
+  constexpr optional(optional &&O) = default;
 
   template <typename... ArgTypes>
-  constexpr Optional(in_place_t, ArgTypes &&...Args)
+  constexpr optional(in_place_t, ArgTypes &&...Args)
       : Storage(in_place, std::forward<ArgTypes>(Args)...) {}
 
-  Optional &operator=(T &&y) {
+  optional &operator=(T &&y) {
     Storage = std::move(y);
     return *this;
   }
-  Optional &operator=(Optional &&O) = default;
+  optional &operator=(optional &&O) = default;
 
   /// Create a new object by constructing it in place with the given arguments.
   template <typename... ArgTypes> void emplace(ArgTypes &&... Args) {
     Storage.emplace(std::forward<ArgTypes>(Args)...);
   }
 
-  static constexpr Optional create(const T *y) {
-    return y ? Optional(*y) : Optional();
+  static constexpr optional create(const T *y) {
+    return y ? optional(*y) : optional();
   }
 
-  Optional &operator=(const T &y) {
+  optional &operator=(const T &y) {
     Storage = y;
     return *this;
   }
-  Optional &operator=(const Optional &O) = default;
+  optional &operator=(const optional &O) = default;
 
   void reset() { Storage.reset(); }
 
@@ -392,12 +330,12 @@ public:
     return has_value() ? value() : std::forward<U>(alt);
   }
 
-  /// Apply a function to the value if present; otherwise return None.
+  /// Apply a function to the value if present; otherwise return nullopt.
   template <class Function>
-  auto map(const Function &F) const & -> Optional<decltype(F(value()))> {
+  auto map(const Function &F) const & -> optional<decltype(F(value()))> {
     if (*this)
       return F(value());
-    return None;
+    return nullopt;
   }
 
   T &&value() && { return std::move(Storage.value()); }
@@ -412,190 +350,182 @@ public:
     return has_value() ? std::move(value()) : std::forward<U>(alt);
   }
 
-  /// Apply a function to the value if present; otherwise return None.
+  /// Apply a function to the value if present; otherwise return nullopt.
   template <class Function>
   auto map(const Function &F)
-      && -> Optional<decltype(F(std::move(*this).value()))> {
+      && -> optional<decltype(F(std::move(*this).value()))> {
     if (*this)
       return F(std::move(*this).value());
-    return None;
+    return nullopt;
   }
 };
 
-//template <class T> llvm::hash_code hash_value(const Optional<T> &O) {
+//template <class T> llvm::hash_code hash_value(const optional<T> &O) {
 //  return O ? hash_combine(true, *O) : hash_value(false);
 //}
 
 template <typename T, typename U>
-constexpr bool operator==(const Optional<T> &X, const Optional<U> &Y) {
+constexpr bool operator==(const optional<T> &X, const optional<U> &Y) {
   if (X && Y)
     return *X == *Y;
   return X.has_value() == Y.has_value();
 }
 
 template <typename T, typename U>
-constexpr bool operator!=(const Optional<T> &X, const Optional<U> &Y) {
+constexpr bool operator!=(const optional<T> &X, const optional<U> &Y) {
   return !(X == Y);
 }
 
 template <typename T, typename U>
-constexpr bool operator<(const Optional<T> &X, const Optional<U> &Y) {
+constexpr bool operator<(const optional<T> &X, const optional<U> &Y) {
   if (X && Y)
     return *X < *Y;
   return X.has_value() < Y.has_value();
 }
 
 template <typename T, typename U>
-constexpr bool operator<=(const Optional<T> &X, const Optional<U> &Y) {
+constexpr bool operator<=(const optional<T> &X, const optional<U> &Y) {
   return !(Y < X);
 }
 
 template <typename T, typename U>
-constexpr bool operator>(const Optional<T> &X, const Optional<U> &Y) {
+constexpr bool operator>(const optional<T> &X, const optional<U> &Y) {
   return Y < X;
 }
 
 template <typename T, typename U>
-constexpr bool operator>=(const Optional<T> &X, const Optional<U> &Y) {
+constexpr bool operator>=(const optional<T> &X, const optional<U> &Y) {
   return !(X < Y);
 }
 
 template <typename T>
-constexpr bool operator==(const Optional<T> &X, NoneType) {
+constexpr bool operator==(const optional<T> &X, nullopt_t) {
   return !X;
 }
 
 template <typename T>
-constexpr bool operator==(NoneType, const Optional<T> &X) {
-  return X == None;
+constexpr bool operator==(nullopt_t, const optional<T> &X) {
+  return X == nullopt;
 }
 
 template <typename T>
-constexpr bool operator!=(const Optional<T> &X, NoneType) {
-  return !(X == None);
+constexpr bool operator!=(const optional<T> &X, nullopt_t) {
+  return !(X == nullopt);
 }
 
 template <typename T>
-constexpr bool operator!=(NoneType, const Optional<T> &X) {
-  return X != None;
+constexpr bool operator!=(nullopt_t, const optional<T> &X) {
+  return X != nullopt;
 }
 
-template <typename T> constexpr bool operator<(const Optional<T> &, NoneType) {
+template <typename T> constexpr bool operator<(const optional<T> &, nullopt_t) {
   return false;
 }
 
-template <typename T> constexpr bool operator<(NoneType, const Optional<T> &X) {
+template <typename T> constexpr bool operator<(nullopt_t, const optional<T> &X) {
   return X.has_value();
 }
 
 template <typename T>
-constexpr bool operator<=(const Optional<T> &X, NoneType) {
-  return !(None < X);
+constexpr bool operator<=(const optional<T> &X, nullopt_t) {
+  return !(nullopt < X);
 }
 
 template <typename T>
-constexpr bool operator<=(NoneType, const Optional<T> &X) {
-  return !(X < None);
+constexpr bool operator<=(nullopt_t, const optional<T> &X) {
+  return !(X < nullopt);
 }
 
-template <typename T> constexpr bool operator>(const Optional<T> &X, NoneType) {
-  return None < X;
+template <typename T> constexpr bool operator>(const optional<T> &X, nullopt_t) {
+  return nullopt < X;
 }
 
-template <typename T> constexpr bool operator>(NoneType, const Optional<T> &X) {
-  return X < None;
-}
-
-template <typename T>
-constexpr bool operator>=(const Optional<T> &X, NoneType) {
-  return None <= X;
+template <typename T> constexpr bool operator>(nullopt_t, const optional<T> &X) {
+  return X < nullopt;
 }
 
 template <typename T>
-constexpr bool operator>=(NoneType, const Optional<T> &X) {
-  return X <= None;
+constexpr bool operator>=(const optional<T> &X, nullopt_t) {
+  return nullopt <= X;
 }
 
 template <typename T>
-constexpr bool operator==(const Optional<T> &X, const T &Y) {
+constexpr bool operator>=(nullopt_t, const optional<T> &X) {
+  return X <= nullopt;
+}
+
+template <typename T>
+constexpr bool operator==(const optional<T> &X, const T &Y) {
   return X && *X == Y;
 }
 
 template <typename T>
-constexpr bool operator==(const T &X, const Optional<T> &Y) {
+constexpr bool operator==(const T &X, const optional<T> &Y) {
   return Y && X == *Y;
 }
 
 template <typename T>
-constexpr bool operator!=(const Optional<T> &X, const T &Y) {
+constexpr bool operator!=(const optional<T> &X, const T &Y) {
   return !(X == Y);
 }
 
 template <typename T>
-constexpr bool operator!=(const T &X, const Optional<T> &Y) {
+constexpr bool operator!=(const T &X, const optional<T> &Y) {
   return !(X == Y);
 }
 
 template <typename T>
-constexpr bool operator<(const Optional<T> &X, const T &Y) {
+constexpr bool operator<(const optional<T> &X, const T &Y) {
   return !X || *X < Y;
 }
 
 template <typename T>
-constexpr bool operator<(const T &X, const Optional<T> &Y) {
+constexpr bool operator<(const T &X, const optional<T> &Y) {
   return Y && X < *Y;
 }
 
 template <typename T>
-constexpr bool operator<=(const Optional<T> &X, const T &Y) {
+constexpr bool operator<=(const optional<T> &X, const T &Y) {
   return !(Y < X);
 }
 
 template <typename T>
-constexpr bool operator<=(const T &X, const Optional<T> &Y) {
+constexpr bool operator<=(const T &X, const optional<T> &Y) {
   return !(Y < X);
 }
 
 template <typename T>
-constexpr bool operator>(const Optional<T> &X, const T &Y) {
+constexpr bool operator>(const optional<T> &X, const T &Y) {
   return Y < X;
 }
 
 template <typename T>
-constexpr bool operator>(const T &X, const Optional<T> &Y) {
+constexpr bool operator>(const T &X, const optional<T> &Y) {
   return Y < X;
 }
 
 template <typename T>
-constexpr bool operator>=(const Optional<T> &X, const T &Y) {
+constexpr bool operator>=(const optional<T> &X, const T &Y) {
   return !(X < Y);
 }
 
 template <typename T>
-constexpr bool operator>=(const T &X, const Optional<T> &Y) {
+constexpr bool operator>=(const T &X, const optional<T> &Y) {
   return !(X < Y);
 }
 
-raw_ostream &operator<<(raw_ostream &OS, NoneType);
+raw_ostream &operator<<(raw_ostream &OS, nullopt_t);
 
 template <typename T, typename = decltype(std::declval<raw_ostream &>()
                                           << std::declval<const T &>())>
-raw_ostream &operator<<(raw_ostream &OS, const Optional<T> &O) {
+raw_ostream &operator<<(raw_ostream &OS, const optional<T> &O) {
   if (O)
     OS << *O;
   else
-    OS << None;
+    OS << nullopt;
   return OS;
 }
 
-} // end namespace llvmx
-
-namespace std {
-template <class T> using optional = llvmx::Optional<T>;
-using nullopt_t = llvmx::NoneType;
-inline constexpr nullopt_t nullopt = llvmx::None;
-}
-
-#include "llvm/ADT/Hashing.h"
+} // end namespace
 
 #endif // JL_OPTIONAL_H

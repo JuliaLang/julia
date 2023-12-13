@@ -114,6 +114,10 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 LLVM_LDFLAGS := $(shell $(LLVM_CONFIG_HOST) --ldflags)
 LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG_HOST) --cxxflags)
 
+ifeq ($(OS)_$(BINARY),WINNT_32)
+LLVM_CXXFLAGS += -I$(SRCDIR)/support/win32-clang-ABI-bug
+endif
+
 # llvm-config --cxxflags does not return -DNDEBUG
 ifeq ($(shell $(LLVM_CONFIG_HOST) --assertion-mode),OFF)
 LLVM_CXXFLAGS += -DNDEBUG
