@@ -828,7 +828,6 @@ end
 end
 
 @testset "Manifest name preferential loading" begin
-    exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no --color=no`
     mktempdir() do tmp
         proj = joinpath(tmp, "Project.toml")
         touch(proj)
@@ -839,13 +838,19 @@ end
             "JuliaManifest-v$(VERSION.major).$(VERSION.minor).toml"
             )
             touch(joinpath(tmp, man_name))
-            man = readchomp(`$exename -E "Base.project_file_manifest_path($(repr(proj)))"`)
-            @test occursin(man_name, man)
+            man = basename(Base.project_file_manifest_path(proj))
+            @test man == man_name
         end
+    end
+    mktempdir() do tmp
         # check that another version isn't preferred
-        touch(joinpath(tmp, "JuliaManifest-v1.5.toml"))
-        man = readchomp(`$exename -E "Base.project_file_manifest_path($(repr(proj)))"`)
-        @test occursin("JuliaManifest-v$(VERSION.major).$(VERSION.minor).toml", man)
+        proj = joinpath(tmp, "Project.toml")
+        touch(proj)
+        touch(joinpath(tmp, "Manifest-v1.5.toml"))
+        @test Base.project_file_manifest_path(proj) == nothing
+        touch(joinpath(tmp, "Manifest.toml"))
+        man = basename(Base.project_file_manifest_path(proj))
+        @test man == "Manifest.toml"
     end
 end
 
