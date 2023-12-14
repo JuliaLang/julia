@@ -1340,3 +1340,20 @@ end
     end
     return res
 end |> Core.Compiler.is_terminates
+
+const a52531 = Core.Ref(1)
+
+@eval getref52531() = $(QuoteNode(a52531)).x
+
+@test !Core.Compiler.is_consistent(Base.infer_effects(getref52531, ()))
+
+let
+    global set_a52531!, get_a52531
+    _a::Int       = -1
+    set_a52531!(a::Int) = (_a = a; return get_a52531())
+    get_a52531()       = _a
+end
+
+@test get_a52531() == -1
+@test set_a52531!(1) == 1
+@test get_a52531() == 1

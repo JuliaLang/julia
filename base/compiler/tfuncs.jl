@@ -2429,7 +2429,7 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     elseif is_mutation_free_argtype(obj)
         inaccessiblememonly = ALWAYS_TRUE
     else
-        inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
+        inaccessiblememonly = ALWAYS_FALSE
     end
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly, noub)
 end

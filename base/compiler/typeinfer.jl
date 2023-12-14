@@ -484,7 +484,6 @@ function adjust_effects(sv::InferenceState)
         if is_inaccessiblememonly(ipo_effects)
             consistent = ipo_effects.consistent & ~CONSISTENT_IF_INACCESSIBLEMEMONLY
             ipo_effects = Effects(ipo_effects; consistent)
-        elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
         else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
             ipo_effects = Effects(ipo_effects; consistent=ALWAYS_FALSE)
         end
@@ -493,7 +492,6 @@ function adjust_effects(sv::InferenceState)
         if is_inaccessiblememonly(ipo_effects)
             effect_free = ipo_effects.effect_free & ~EFFECT_FREE_IF_INACCESSIBLEMEMONLY
             ipo_effects = Effects(ipo_effects; effect_free)
-        elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
         else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
             ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_FALSE)
         end
