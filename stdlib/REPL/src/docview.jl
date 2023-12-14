@@ -9,7 +9,7 @@ using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, 
 
 import Base.Docs: doc, formatdoc, parsedoc, apropos
 
-using Base: with_output_color, mapany
+using Base: with_output_color, mapany, isdeprecated, isexported
 
 import REPL
 
@@ -818,12 +818,15 @@ print_correction(word, mod::Module) = print_correction(stdout, word, mod)
 
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
-
-accessible(mod::Module) =
-    Symbol[filter!(s -> !Base.isdeprecated(mod, s), names(mod, all=true, imported=true));
-           map(names, moduleusings(mod))...;
-           collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
+function accessible(mod::Module)
+    symbols = filter!(s -> !isdeprecated(mod, s), names(mod; all=true, imported=true))
+    for used in moduleusings(mod)
+        append!(symbols, filter!(s -> !isdeprecated(used, s) && isexported(used, s), names(used)))
+    end
+    append!(symbols, keys(Base.Docs.keywords))
+    unique!(symbols)
+    return [String(x) for x in symbols if !occursin('#', String(x))]
+end
 
 function doc_completions(name, mod::Module=Main)
     res = fuzzysort(name, accessible(mod))
