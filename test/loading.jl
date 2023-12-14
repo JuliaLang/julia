@@ -827,6 +827,28 @@ end
     end
 end
 
+@testset "Manifest name preferential loading" begin
+    exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no --color=no`
+    mktempdir() do tmp
+        proj = joinpath(tmp, "Project.toml")
+        touch(proj)
+        for man_name in (
+            "Manifest.toml",
+            "JuliaManifest.toml",
+            "Manifest-v$(VERSION.major).$(VERSION.minor).toml",
+            "JuliaManifest-v$(VERSION.major).$(VERSION.minor).toml"
+            )
+            touch(joinpath(tmp, man_name))
+            man = readchomp(`$exename -E "Base.project_file_manifest_path($(repr(proj)))"`)
+            @test occursin(man_name, man)
+        end
+        # check that another version isn't preferred
+        touch(joinpath(tmp, "JuliaManifest-v1.5.toml"))
+        man = readchomp(`$exename -E "Base.project_file_manifest_path($(repr(proj)))"`)
+        @test occursin("JuliaManifest-v$(VERSION.major).$(VERSION.minor).toml", man)
+    end
+end
+
 @testset "error message loading pkg bad module name" begin
     mktempdir() do tmp
         old_loadpath = copy(LOAD_PATH)
