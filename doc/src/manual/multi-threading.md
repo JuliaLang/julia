@@ -385,8 +385,9 @@ julia> acc[]
 #### [Per-field atomics](@id man-atomics)
 
 We can also use atomics on a more granular level using the [`@atomic`](@ref
-Base.@atomic), [`@atomicswap`](@ref Base.@atomicswap), and
-[`@atomicreplace`](@ref Base.@atomicreplace) macros.
+Base.@atomic), [`@atomicswap`](@ref Base.@atomicswap),
+[`@atomicreplace`](@ref Base.@atomicreplace) macros, and
+[`@atomiconce`](@ref Base.@atomiconce) macros.
 
 Specific details of the memory model and other details of the design are written
 in the [Julia Atomics

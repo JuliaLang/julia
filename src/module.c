@@ -669,10 +669,10 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
     b->exportp |= exported;
 }
 
-JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
+JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var) // unlike most queries here, this is currently seq_cst
 {
     jl_binding_t *b = jl_get_binding(m, var);
-    return b && (jl_atomic_load_relaxed(&b->value) != NULL);
+    return b && (jl_atomic_load(&b->value) != NULL);
 }
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
@@ -875,7 +875,7 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_sym_t *s, jl_binding_t *b
     }
 }
 
-JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
+jl_value_t *jl_check_binding_wr(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED, int reassign)
 {
     jl_value_t *old_ty = NULL;
     if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type)) {
@@ -887,24 +887,73 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
             JL_GC_POP();
         }
     }
+    else {
+        old_ty = (jl_value_t*)jl_any_type;
+    }
     if (b->constp) {
-        jl_value_t *old = NULL;
-        if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
-            jl_gc_wb(b, rhs);
-            return;
+        if (reassign) {
+            jl_value_t *old = NULL;
+            if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
+                jl_gc_wb(b, rhs);
+                return NULL;
+            }
+            if (jl_egal(rhs, old))
+                return NULL;
+            if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs))
+                reassign = 0;
+            else
+                jl_safe_printf("WARNING: redefinition of constant %s.%s. This may fail, cause incorrect answers, or produce other errors.\n",
+                               jl_symbol_name(mod->name), jl_symbol_name(var));
         }
-        if (jl_egal(rhs, old))
-            return;
-        if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs)) {
+        if (!reassign)
             jl_errorf("invalid redefinition of constant %s.%s",
                       jl_symbol_name(mod->name), jl_symbol_name(var));
-
-        }
-        jl_safe_printf("WARNING: redefinition of constant %s.%s. This may fail, cause incorrect answers, or produce other errors.\n",
-                       jl_symbol_name(mod->name), jl_symbol_name(var));
     }
-    jl_atomic_store_release(&b->value, rhs);
+    return old_ty;
+}
+
+JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
+{
+    if (jl_check_binding_wr(b, mod, var, rhs, 1) != NULL) {
+        jl_atomic_store_release(&b->value, rhs);
+        jl_gc_wb(b, rhs);
+    }
+}
+
+JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
+{
+    jl_check_binding_wr(b, mod, var, rhs, 0);
+    jl_value_t *old = jl_atomic_exchange(&b->value, rhs);
     jl_gc_wb(b, rhs);
+    if (__unlikely(old == NULL))
+        jl_undefined_var_error(var, (jl_value_t*)mod);
+    return old;
+}
+
+JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs)
+{
+    jl_value_t *ty = jl_check_binding_wr(b, mod, var, rhs, 0);
+    return replace_value(ty, &b->value, (jl_value_t*)b, expected, rhs, 1, mod, var);
+}
+
+JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs)
+{
+    jl_value_t *ty = NULL;
+    if (jl_atomic_cmpswap_relaxed(&b->ty, &ty, (jl_value_t*)jl_any_type))
+        ty = (jl_value_t*)jl_any_type;
+    if (b->constp)
+        jl_errorf("invalid redefinition of constant %s.%s",
+                  jl_symbol_name(mod->name), jl_symbol_name(var));
+    return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, mod, var);
+}
+
+JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs )
+{
+    jl_check_binding_wr(b, mod, var, rhs, 0);
+    jl_value_t *old = NULL;
+    if (jl_atomic_cmpswap(&b->value, &old, rhs))
+        jl_gc_wb(b, rhs);
+    return old;
 }
 
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var)
