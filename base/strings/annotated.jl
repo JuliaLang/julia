@@ -397,14 +397,27 @@ end
 AnnotatedIOBuffer(io::IOBuffer) = AnnotatedIOBuffer(io, Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}())
 AnnotatedIOBuffer() = AnnotatedIOBuffer(IOBuffer())
 
-function show(io::IO, annio::AnnotatedIOBuffer)
+function show(io::IO, aio::AnnotatedIOBuffer)
     show(io, AnnotatedIOBuffer)
-    print(io, '(', annio.io.size, " bytes)")
+    print(io, '(', aio.io.size, " byte", ifelse(aio.io.size == 1, "", "s"), ", ",
+          length(aio.annotations), " annotation", ifelse(length(aio.annotations) == 1, "", "s"), ")")
 end
 
+isopen(io::AnnotatedIOBuffer) = isopen(io.io)
+close(io::AnnotatedIOBuffer) = close(io.io)
+closewrite(io::AnnotatedIOBuffer) = closewrite(io.io)
+eof(io::AnnotatedIOBuffer) = eof(io.io)
+peek(io::AnnotatedIOBuffer) = peek(io.io)
 position(io::AnnotatedIOBuffer) = position(io.io)
-lock(io::AnnotatedIOBuffer) = lock(io.io)
-unlock(io::AnnotatedIOBuffer) = unlock(io.io)
+seek(io::AnnotatedIOBuffer, n::Integer) = (seek(io.io, n); io)
+skip(io::AnnotatedIOBuffer, n::Integer) = (skip(io.io, n); io)
+mark(io::AnnotatedIOBuffer) = mark(io.io)
+reset(io::AnnotatedIOBuffer) = reset(io.io)
+unmark(io::AnnotatedIOBuffer) = unmark(io.io)
+ismarked(io::AnnotatedIOBuffer) = ismarked(io.io)
+copy(io::AnnotatedIOBuffer) = AnnotatedIOBuffer(copy(io.io), copy(io.annotations))
+unsafe_write(io::AnnotatedIOBuffer, b::Ptr{UInt8}, len::UInt) = unsafe_write(io.io, b, len)
+unsafe_read(io::AnnotatedIOBuffer, b::Ptr{UInt8}, len::UInt) = unsafe_read(io.io, b, len)
 
 function write(io::AnnotatedIOBuffer, astr::Union{AnnotatedString, SubString{<:AnnotatedString}})
     astr = AnnotatedString(astr)
@@ -418,21 +431,38 @@ end
 write(io::AnnotatedIOBuffer, c::AnnotatedChar) = write(io, AnnotatedString(c))
 write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)
 write(io::AnnotatedIOBuffer, s::Union{SubString{String}, String}) = write(io.io, s)
-write(io::AnnotatedIOBuffer, x::UInt8) = write(io.io, x)
+write(io::AnnotatedIOBuffer, b::UInt8) = write(io.io, b)
 
 """
     read(io::AnnotatedIOBuffer, AnnotatedString)
 
-Read the entirety of `io`, as an `AnnotatedString`. This preserves the
-annotations of any `AnnotatedString`s written to `io` and otherwise acts like
-`read(io::IO, String)`.
+Read `io` as an `AnnotatedString`, jumping to the start if `eof(io)` holds.
+This preserves the annotations of any `AnnotatedString`s written to `io` and
+otherwise acts like `read(io::IO, String)`.
 """
 function read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{String}})
-    str = String(take!(io.io))
-    annots = copy(io.annotations)
-    empty!(io.annotations)
-    seekstart(io.io)
-    AnnotatedString(str, annots)
+    if eof(io)
+        seekstart(io.io)
+        AnnotatedString(read(io.io, String), copy(io.annotations))
+    else
+        start = position(io.io)
+        annots = map(((range, val),) -> (max(1, first(range) - start):last(range)-start, val),
+                     filter(((range, _),) -> last(range) > start,
+                            io.annotations))
+        AnnotatedString(read(io.io, String), annots)
+    end
 end
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{AbstractString}}) = read(io, AnnotatedString{String})
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedString}) = read(io, AnnotatedString{String})
+read(io::AnnotatedIOBuffer, x) = read(io.io, x)
+# Avoid method ambiguity
+read(io::AnnotatedIOBuffer, s::Type{String}) = read(io.io, s)
+read(io::AnnotatedIOBuffer, b::Type{UInt8}) = read(io.io, b)
+
+function truncate(io::AnnotatedIOBuffer, size::Integer)
+    truncate(io.io, size)
+    filter!(((range, _),) -> first(range) <= size, io.annotations)
+    map!(((range, val),) -> (first(range):min(size, last(range)), val),
+         io.annotations, io.annotations)
+    io
+end
