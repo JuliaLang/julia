@@ -83,7 +83,6 @@ void add_lostval_parent(jl_value_t *parent)
  innocent looking functions which allocate (and thus trigger marking) only on special cases.
 
  If you can't find it, you can try the following :
- - Ensure that should_timeout() is deterministic instead of clock based.
  - Once you have a completely deterministic program which crashes on gc_verify, the addresses
    should stay constant between different runs (with same binary, same environment ...).
    Do not forget to turn off ASLR (linux: echo 0 > /proc/sys/kernel/randomize_va_space).

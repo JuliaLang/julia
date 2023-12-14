@@ -281,7 +281,6 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     // This function should **NOT** have any safepoint before the ones at the
     // end.
     sig_atomic_t old_defer_signal = ct->ptls->defer_signal;
-    int8_t old_gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
     small_arraylist_t *locks = &ct->ptls->locks;
@@ -293,9 +292,10 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     }
     ct->world_age = eh->world_age;
     ct->ptls->defer_signal = eh->defer_signal;
+    int8_t old_gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     if (old_gc_state != eh->gc_state)
         jl_atomic_store_release(&ct->ptls->gc_state, eh->gc_state);
-    if (!eh->gc_state)
+    if (!old_gc_state || !eh->gc_state) // it was or is unsafe now
         jl_gc_safepoint_(ct->ptls);
     if (old_defer_signal && !eh->defer_signal)
         jl_sigint_safepoint(ct->ptls);
