@@ -137,10 +137,9 @@ function triu!(M::AbstractMatrix, k::Integer)
 end
 function _triu!(M::AbstractMatrix{<:Number}, k::Integer)
     m, n = size(M)
-    z = zero(eltype(M))
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
-            @inbounds M[i,j] = z
+            @inbounds M[i,j] = zero(eltype(M))
         end
     end
     return M
@@ -188,10 +187,9 @@ function tril!(M::AbstractMatrix, k::Integer)
 end
 function _tril!(M::AbstractMatrix{<:Number}, k)
     m, n = size(M)
-    z = zero(eltype(M))
     for j in max(1, k + 1):n
         for i in 1:min(j - k - 1, m)
-            @inbounds M[i,j] = z
+            @inbounds M[i,j] = zero(eltype(M))
         end
     end
     return M
