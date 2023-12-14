@@ -133,13 +133,26 @@ julia> triu!(M, 1)
 """
 function triu!(M::AbstractMatrix, k::Integer)
     require_one_based_indexing(M)
+    _triu!(M, k)
+end
+function _triu!(M::AbstractMatrix{<:Number}, k::Integer)
+    m, n = size(M)
+    z = zero(eltype(M))
+    for j in 1:min(n, m + k)
+        for i in max(1, j - k + 1):m
+            @inbounds M[i,j] = z
+        end
+    end
+    return M
+end
+function _triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
             @inbounds M[i,j] = zero(M[i,j])
         end
     end
-    M
+    return M
 end
 
 triu(M::Matrix, k::Integer) = triu!(copy(M), k)
@@ -171,14 +184,28 @@ julia> tril!(M, 2)
 """
 function tril!(M::AbstractMatrix, k::Integer)
     require_one_based_indexing(M)
+    _tril!(M, k)
+end
+function _tril!(M::AbstractMatrix{<:Number}, k)
     m, n = size(M)
+    z = zero(eltype(M))
     for j in max(1, k + 1):n
-        @inbounds for i in 1:min(j - k - 1, m)
-            M[i,j] = zero(M[i,j])
+        for i in 1:min(j - k - 1, m)
+            @inbounds M[i,j] = z
         end
     end
-    M
+    return M
 end
+function _tril!(M::AbstractMatrix, k)
+    m, n = size(M)
+    for j in max(1, k + 1):n
+        for i in 1:min(j - k - 1, m)
+            @inbounds M[i,j] = zero(M[i,j])
+        end
+    end
+    return M
+end
+
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 """

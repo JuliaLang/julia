@@ -1903,7 +1903,7 @@ normalize(x, p::Real) = x / norm(x, p)
 
 Copies a triangular part of a matrix `A` to another matrix `B`.
 `uplo` specifies the part of the matrix `A` to be copied to `B`.
-Set `uplo = 'L'` for the lower triangular part or `uplo = 'U'
+Set `uplo = 'L'` for the lower triangular part or `uplo = 'U'`
 for the upper triangular part.
 
 !!! compat "Julia 1.11"
