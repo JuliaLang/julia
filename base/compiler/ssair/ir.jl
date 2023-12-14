@@ -65,7 +65,9 @@ block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
             push!(jump_dests, idx)
             push!(jump_dests, idx+1)
             # The catch block is a jump dest
-            push!(jump_dests, stmt.catch_dest)
+            if stmt.catch_dest != 0
+                push!(jump_dests, stmt.catch_dest)
+            end
         elseif isa(stmt, Expr)
             if stmt.head === :leave
                 # :leave terminates a BB
@@ -129,10 +131,12 @@ function compute_basic_blocks(stmts::Vector{Any})
             # :enter gets a virtual edge to the exception handler and
             # the exception handler gets a virtual edge from outside
             # the function.
-            block′ = block_for_inst(basic_block_index, terminator.catch_dest)
-            push!(blocks[block′].preds, num)
-            push!(blocks[block′].preds, 0)
-            push!(b.succs, block′)
+            if terminator.catch_dest != 0
+                block′ = block_for_inst(basic_block_index, terminator.catch_dest)
+                push!(blocks[block′].preds, num)
+                push!(blocks[block′].preds, 0)
+                push!(b.succs, block′)
+            end
         end
         # statement fall-through
         if num + 1 <= length(blocks)
@@ -1415,10 +1419,14 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         end
     elseif cfg_transforms_enabled && isa(stmt, EnterNode)
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::EnterNode
-        label = bb_rename_succ[stmt.catch_dest]
-        @assert label > 0
-        ssa_rename[idx] = SSAValue(result_idx)
-        result[result_idx][:stmt] = EnterNode(stmt, label)
+        if stmt.catch_dest != 0
+            label = bb_rename_succ[stmt.catch_dest]
+            @assert label > 0
+            ssa_rename[idx] = SSAValue(result_idx)
+            result[result_idx][:stmt] = EnterNode(stmt, label)
+        else
+            result[result_idx][:stmt] = stmt
+        end
         result_idx += 1
     elseif isa(stmt, Expr)
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::Expr
