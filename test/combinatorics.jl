@@ -2,6 +2,9 @@
 
 using Random: randcycle
 
+isdefined(Main, :ImmutableArrays) || @eval Main include("testhelpers/ImmutableArrays.jl")
+using .Main.ImmutableArrays
+
 @testset "binomial" begin
     @test binomial(5,-1) == 0
     @test binomial(5,10) == 0
@@ -67,6 +70,10 @@ end
         @test isperm(T) == true
         @test isperm(K) == false
     end
+
+    # issue #47847
+    p = ImmutableArrays.ImmutableArray([2,3,1])
+    @test invperm(p) == invperm([2,3,1])
 end
 
 @testset "factorial" begin
