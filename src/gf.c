@@ -1446,7 +1446,13 @@ static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT
 
 static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_datatype_t *tt, size_t world)
 {
-    JL_GC_PUSH1(&tt);
+    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
+    jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
+    if (entry)
+        return entry->func.linfo;
+    JL_TIMING(METHOD_LOOKUP_SLOW, METHOD_LOOKUP_SLOW);
+    jl_method_match_t *matc = NULL;
+    JL_GC_PUSH2(&tt, &matc);
     JL_LOCK(&mt->writelock);
     assert(tt->isdispatchtuple || tt->hasfreetypevars);
     jl_method_instance_t *mi = NULL;
@@ -1467,13 +1473,11 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATE
     if (!mi) {
         size_t min_valid = 0;
         size_t max_valid = ~(size_t)0;
-        jl_method_match_t *matc = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
+        matc = _gf_invoke_lookup((jl_value_t*)tt, jl_nothing, world, &min_valid, &max_valid);
         if (matc) {
-            JL_GC_PUSH1(&matc);
             jl_method_t *m = matc->method;
             jl_svec_t *env = matc->sparams;
             mi = cache_method(mt, &mt->cache, (jl_value_t*)mt, tt, m, world, min_valid, max_valid, env);
-            JL_GC_POP();
         }
     }
     JL_UNLOCK(&mt->writelock);
@@ -2249,12 +2253,6 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, si
         assert(jl_isa(_mt, (jl_value_t*)jl_methtable_type));
         mt = (jl_methtable_t*) _mt;
     }
-
-    // TODO: The fast path is heavily optimized for args and avoids forming the signature type
-    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
-    jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
-    if (entry)
-        return entry->func.linfo;
     return jl_mt_assoc_by_type(mt, tt, world);
 }
 
@@ -2267,10 +2265,6 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t na
     if (entry)
         return entry->func.linfo;
     jl_tupletype_t *tt = arg_type_tuple(args[0], &args[1], nargs);
-    jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
-    entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
-    if (entry)
-        return entry->func.linfo;
     return jl_mt_assoc_by_type(mt, tt, world);
 }
 
@@ -3073,7 +3067,6 @@ have_entry:
     else {
         assert(tt);
         // cache miss case
-        JL_TIMING(METHOD_LOOKUP_SLOW, METHOD_LOOKUP_SLOW);
         mfunc = jl_mt_assoc_by_type(mt, tt, world);
         if (jl_options.malloc_log)
             jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
