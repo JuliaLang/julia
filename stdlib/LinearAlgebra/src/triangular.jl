@@ -478,8 +478,14 @@ end
 @inline mul!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
 
+function checksize1(A, B)
+    szA, szB = size(A), size(B)
+    szA == szB || throw(DimensionMismatch("size of A, $szA, does not match size of B, $szB"))
+    checksquare(B)
+end
+
 function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
@@ -489,7 +495,7 @@ function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
     return A
 end
 function _triscale!(A::UpperTriangular, c::Number, B::UpperTriangular, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
@@ -499,7 +505,7 @@ function _triscale!(A::UpperTriangular, c::Number, B::UpperTriangular, _add)
     return A
 end
 function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Number, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
@@ -510,7 +516,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Nu
     return A
 end
 function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriangular, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
@@ -521,7 +527,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriang
     return A
 end
 function _triscale!(A::LowerTriangular, B::LowerTriangular, c::Number, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
@@ -531,7 +537,7 @@ function _triscale!(A::LowerTriangular, B::LowerTriangular, c::Number, _add)
     return A
 end
 function _triscale!(A::LowerTriangular, c::Number, B::LowerTriangular, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
@@ -541,7 +547,7 @@ function _triscale!(A::LowerTriangular, c::Number, B::LowerTriangular, _add)
     return A
 end
 function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Number, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
@@ -552,7 +558,7 @@ function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Nu
     return A
 end
 function _triscale!(A::LowerOrUnitLowerTriangular, c::Number, B::UnitLowerTriangular, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
