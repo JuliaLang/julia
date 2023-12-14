@@ -789,6 +789,11 @@ end
                    sprint(show, MIME"text/plain"(), UpperTriangular(2ones(Int64,3,3))))
     @test occursin(r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64, Matrix{Int64}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1",
                    sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))))
+
+    # don't access non-structural elements while displaying
+    M = Matrix{BigFloat}(undef, 2, 2)
+    @test sprint(show, UpperTriangular(M)) == "BigFloat[#undef #undef; 0.0 #undef]"
+    @test sprint(show, LowerTriangular(M)) == "BigFloat[#undef 0.0; #undef #undef]"
 end
 
 @testset "adjoint/transpose triangular/vector multiplication" begin
