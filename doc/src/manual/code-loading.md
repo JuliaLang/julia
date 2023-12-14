@@ -14,7 +14,7 @@ Code inclusion is quite straightforward and simple: it evaluates the given sourc
 
 A *package* is a source tree with a standard layout providing functionality that can be reused by other Julia projects. A package is loaded by `import X` or  `using X` statements. These statements also make the module named `X`—which results from loading the package code—available within the module where the import statement occurs. The meaning of `X` in `import X` is context-dependent: which `X` package is loaded depends on what code the statement occurs in. Thus, handling of `import X` happens in two stages: first, it determines **what** package is defined to be `X` in this context; second, it determines **where** that particular `X` package is found.
 
-These questions are answered by searching through the project environments listed in [`LOAD_PATH`](@ref) for project files (`Project.toml` or `JuliaProject.toml`), manifest files (`Manifest.toml` or `JuliaManifest.toml`), or folders of source files.
+These questions are answered by searching through the project environments listed in [`LOAD_PATH`](@ref) for project files (`Project.toml` or `JuliaProject.toml`), manifest files (`Manifest.toml` or `JuliaManifest.toml`, or the same names suffixed by `-v{major}.{minor}.toml` for specific versions), or folders of source files.
 
 
 ## Federation of packages
@@ -63,7 +63,7 @@ Each kind of environment defines these three maps differently, as detailed in th
 
 ### Project environments
 
-A project environment is determined by a directory containing a project file called `Project.toml`, and optionally a manifest file called `Manifest.toml`. These files may also be called `JuliaProject.toml` and `JuliaManifest.toml`, in which case `Project.toml` and `Manifest.toml` are ignored. This allows for coexistence with other tools that might consider files called `Project.toml` and `Manifest.toml` significant. For pure Julia projects, however, the names `Project.toml` and `Manifest.toml` are preferred.
+A project environment is determined by a directory containing a project file called `Project.toml`, and optionally a manifest file called `Manifest.toml`. These files may also be called `JuliaProject.toml` and `JuliaManifest.toml`, in which case `Project.toml` and `Manifest.toml` are ignored. This allows for coexistence with other tools that might consider files called `Project.toml` and `Manifest.toml` significant. For pure Julia projects, however, the names `Project.toml` and `Manifest.toml` are preferred. However, from Julia v1.11 onwards, `(Julia)Manifest-v{major}.{minor}.toml` is recognized as a format to make a given julia version use a specific manifest file i.e. in the same folder, a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by any other julia version.
 
 The roots, graph and paths maps of a project environment are defined as follows:
 
