@@ -11,30 +11,36 @@
 
 
 ########################################################################
+
+export set_display_digits, unset_display_digits
+
 # we define global defaults for float display, so that they can be set
 # independent of the interactive display (REPL, IJulia, etc.)
-
-export get_display_digits, set_display_digits, unset_display_digits
-
 const DISPLAY_DIGITS = Dict{Type,Int}()
 const DISPLAY_COMPACT_DIGITS = Dict{Type,Int}()
 
-function get_display_digits(::Type{T}; compact::Bool=true) where {T<:AbstractFloat}
-    if compact # compact_digits overrides digits if present
-        d = _numdigits(DISPLAY_COMPACT_DIGITS, T)
-        d > 0 && return d
+function set_display_digits(::Type{T}, digits::Integer; compact::Bool=true) where {T<:AbstractFloat}
+    foreach(Base.Multimedia.displays) do d
+        if has_display_digits(d)
+            set_display_digits(d, T, digits; compact)
+        end
     end
-    d = _numdigits(DISPLAY_DIGITS, T)
-    return d > 0 ? d : nothing
+    (compact ? DISPLAY_COMPACT_DIGITS : DISPLAY_DIGITS)[T] = digits
 end
 
-set_display_digits(::Type{T}, digits::Integer; compact::Bool=true) where {T<:AbstractFloat} =
-    (compact ? DISPLAY_COMPACT_DIGITS : DISPLAY_DIGITS)[T] = digits
-
-function unset_display_digits(::Type{T}; compact::Bool=true) where {T<:AbstractFloat} =
+function unset_display_digits(::Type{T}; compact::Bool=true) where {T<:AbstractFloat}
+    foreach(Base.Multimedia.displays) do d
+        if has_display_digits(d)
+            unset_display_digits(d, T; compact)
+        end
+    end
     delete!(compact ? DISPLAY_COMPACT_DIGITS : DISPLAY_DIGITS, T)
     return
 end
+
+# display subtypes should override this to return `true` if they store their
+# own digits settings and implement set_display_digits / unset_display_digits:
+has_display_digits(::AbstractDisplay) = false
 
 ########################################################################
 
