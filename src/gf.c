@@ -1444,7 +1444,7 @@ static jl_method_instance_t *cache_method(
 
 static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT, jl_value_t *mt, size_t world, size_t *min_valid, size_t *max_valid);
 
-static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_datatype_t *tt JL_ROOTS_TEMPORARILY, size_t world)
+static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_datatype_t *tt JL_MAYBE_UNROOTED, size_t world)
 {
     jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
     jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
