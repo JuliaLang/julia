@@ -215,7 +215,7 @@ end
 An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
 Optionally, an index style may be specified which determines the type of the range returned.
 If `indstyle isa IndexLinear` (default), this returns an `AbstractRange{Integer}`.
-On the other hand, if `indstyle isa IndexCartesian`, this returns a `AbstractRange{CartesianIndex{2}}`.
+On the other hand, if `indstyle isa IndexCartesian`, this returns an `AbstractRange{CartesianIndex{2}}`.
 
 See also: [`diag`](@ref), [`diagm`](@ref), [`Diagonal`](@ref).
 
