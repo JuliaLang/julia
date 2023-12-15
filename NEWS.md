@@ -56,7 +56,8 @@ difference between defining a `main` function and executing the code directly at
 * The `--compiled-modules` and `--pkgimages` flags can now be set to `existing`, which will
   cause Julia to consider loading existing cache files, but not to create new ones ([#50586]
   and [#52573]).
-* The `-m/--module` flag can be passed to run the `@main` function inside a package with a set of arguments.
+* The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
+  This `main` function should be declared using `@main` to indicate that it is an entry point.
 
 Multi-threading changes
 -----------------------
