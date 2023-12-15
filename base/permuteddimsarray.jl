@@ -89,8 +89,8 @@ end
     permutedims(A::AbstractArray, perm)
     permutedims(A::AbstractMatrix)
 
-Permute the dimensions (axes) of array `A`. `perm` is a tuple or vector of length `ndims(A)`
-integers specifying the permutation.
+Permute the dimensions (axes) of array `A`. `perm` is a tuple or vector containing `ndims(A)` integers
+specifying the permutation.
 
 If `A` is a 2d array ([`AbstractMatrix`](@ref)), then
 `perm` defaults to `(2,1)`, swapping the two axes of `A` (the rows and columns
