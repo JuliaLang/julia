@@ -47,7 +47,7 @@ set_display_digits!(d::AbstractDisplay, digits::Integer; compact::Bool=false) =
 unset_display_digits!(d::AbstractDisplay, compact::Bool=false) =
     unset_display_digits!(d, AbstractFloat; compact)
 
-# display subtypes should override theses if they store their own digits settings:
+# display subtypes should override these if they store their own digits settings:
 set_display_digits!(d::AbstractDisplay, ::Type, digits::Integer; compact::Bool=false) = nothing
 unset_display_digits!(d::AbstractDisplay, ::Type; compact::Bool=false) = nothing
 
