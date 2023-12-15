@@ -713,6 +713,21 @@ function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool
 end
 
 MAX_ANY_METHOD_COMPLETIONS::Int = 10
+function recursive_explore_names!(seen::Base.IdSet, exploredmodules, callee_module::Module, initial_module::Module)
+    push!(exploredmodules, Symbol(callee_module))
+    for name in names(callee_module; all=true, imported=true)
+        if !Base.isdeprecated(callee_module, name) && !startswith(string(name), '#') && isdefined(initial_module, name)
+            func = getfield(callee_module, name)
+            if !isa(func, Module)
+                funct = Core.Typeof(func)
+                push!(seen, funct)
+            elseif isa(func, Module) && Symbol(func) ∉ exploredmodules
+                recursive_explore_names!(seen, exploredmodules, func, initial_module)
+            end
+        end
+    end
+end
+
 function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool, shift::Bool)
     out = Completion[]
     args_ex, kwargs_ex, kwargs_flag = try
@@ -729,31 +744,10 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
     moreargs && push!(args_ex, Vararg{Any})
 
     seen = Base.IdSet()
-    for name in names(callee_module; all=true)
-        if !Base.isdeprecated(callee_module, name) && isdefined(callee_module, name) && !startswith(string(name), '#')
-            func = getfield(callee_module, name)
-            if !isa(func, Module)
-                funct = Core.Typeof(func)
-                if !in(funct, seen)
-                    push!(seen, funct)
-                    complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
-                end
-            elseif callee_module === Main && isa(func, Module)
-                callee_module2 = func
-                for name in names(callee_module2)
-                    if !Base.isdeprecated(callee_module2, name) && isdefined(callee_module2, name) && !startswith(string(name), '#')
-                        func = getfield(callee_module, name)
-                        if !isa(func, Module)
-                            funct = Core.Typeof(func)
-                            if !in(funct, seen)
-                                push!(seen, funct)
-                                complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
-                            end
-                        end
-                    end
-                end
-            end
-        end
+    exploredmodules = Base.IdSet{Symbol}()
+    recursive_explore_names!(seen, exploredmodules, callee_module, callee_module)
+    for seen_name in seen
+        complete_methods!(out, seen_name, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
     end
 
     if !shift
