@@ -10,6 +10,8 @@ Clang.v16.0.6+3.aarch64-linux-gnu-cxx11-llvm_version+16.asserts.tar.gz/md5/4e5cb
 Clang.v16.0.6+3.aarch64-linux-gnu-cxx11-llvm_version+16.asserts.tar.gz/sha512/6a724195e8fba5e0c93f2e632abac53e05275e844ed81f349d812f2db8ca61a61ff95ab252ab70b5f7c277cde78a6f2e78c7a930b2c5646daf916734ba20592f
 Clang.v16.0.6+3.aarch64-linux-gnu-cxx11-llvm_version+16.tar.gz/md5/3f823d697b2493792a1db2133e0d45cb
 Clang.v16.0.6+3.aarch64-linux-gnu-cxx11-llvm_version+16.tar.gz/sha512/1371140e74b3d78653ab0493b4a2333f5db34fc0ee133b1f162480fca043d90d44b73ec72c7c49549a6b78fdc2ebae300b0e2b09e0a511085ecb7fc08a13e0c8
+Clang.v16.0.6+3.aarch64-linux-musl-cxx03-llvm_version+16.asserts.tar.gz/md5/c2b68898a98e3e36af32800667bf6514
+Clang.v16.0.6+3.aarch64-linux-musl-cxx03-llvm_version+16.asserts.tar.gz/sha512/78efac6a7a1f9931a0986e27e73ff12e8bf8333b8bdf5b20dfe1f7468e3cc05ba1161e535a457287f24fa75a91afe172f41226bc6521d12768b71c7dbcfaf43c
 Clang.v16.0.6+3.aarch64-linux-musl-cxx03-llvm_version+16.tar.gz/md5/f23fa130c02da99396dc8c48f72872f2
 Clang.v16.0.6+3.aarch64-linux-musl-cxx03-llvm_version+16.tar.gz/sha512/73f59d59d4a1eb4d5d5d46db34fd9828633b66a45a0c192169c0516d510a561c01b95f5e752d1177325297b111a5d924080e6233c6459759d27f267c80f2bfa4
 Clang.v16.0.6+3.aarch64-linux-musl-cxx11-llvm_version+16.asserts.tar.gz/md5/5fc6579ee98075b4098251ff64e20962
@@ -96,6 +98,8 @@ Clang.v16.0.6+3.x86_64-unknown-freebsd-llvm_version+16.asserts.tar.gz/md5/770093
 Clang.v16.0.6+3.x86_64-unknown-freebsd-llvm_version+16.asserts.tar.gz/sha512/a5a223386962523f43235dcde3fa359509573475c0f3b2234e2f8f28b0b1f1a47682fa5593546d38cadaac99aa9b283cffc8f8fc8fb43b257e9eafa0d81297c8
 Clang.v16.0.6+3.x86_64-unknown-freebsd-llvm_version+16.tar.gz/md5/6cd4d351d8d9d9f4e967e7cd915f1ca9
 Clang.v16.0.6+3.x86_64-unknown-freebsd-llvm_version+16.tar.gz/sha512/d76e0daaca853d718c6a633a4e28606d70168504e9055b06ef98ccaa150753e43cba12c57304ba0b45b2a103d717274e2cc31fb5b869395e0e0eda32fb0d03cc
+Clang.v16.0.6+3.x86_64-w64-mingw32-cxx03-llvm_version+16.asserts.tar.gz/md5/722c5ce1ae12dde7b2b2f1f9e38ded6d
+Clang.v16.0.6+3.x86_64-w64-mingw32-cxx03-llvm_version+16.asserts.tar.gz/sha512/0c6224662e09ac9ab104320f4e93b8e3a9b9ce5b55eb51894efad5aae707604b57e5eb8691cd6b39f10199a5b393353e3042f87a2e0a04344f2bdeae75e17464
 Clang.v16.0.6+3.x86_64-w64-mingw32-cxx03-llvm_version+16.tar.gz/md5/cd1dec35e0ddb3fa344e96dc36dc0936
 Clang.v16.0.6+3.x86_64-w64-mingw32-cxx03-llvm_version+16.tar.gz/sha512/df10fd021961ce9e9e7b7b5408cf7c96a869030e4290a9bfbfac3fae03343005ed33eceb82fa0d5ccb36e53382838261d4c6d148208739608036825b83166cc8
 Clang.v16.0.6+3.x86_64-w64-mingw32-cxx11-llvm_version+16.asserts.tar.gz/md5/f5ab229d661d2d70988ffee4302c8700
