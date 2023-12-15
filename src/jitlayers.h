@@ -90,13 +90,15 @@ struct OptimizationOptions {
     bool dump_native;
     bool external_use;
     bool llvm_only;
+    bool enable_vector_pipeline;
 
     static constexpr OptimizationOptions defaults(
         bool lower_intrinsics=true,
         bool dump_native=false,
         bool external_use=false,
-        bool llvm_only=false) {
-        return {lower_intrinsics, dump_native, external_use, llvm_only};
+        bool llvm_only=false,
+        bool enable_vector_pipeline=true) {
+        return {lower_intrinsics, dump_native, external_use, llvm_only, enable_vector_pipeline};
     }
 };
 

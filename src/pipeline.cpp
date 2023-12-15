@@ -594,7 +594,7 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
         FunctionPassManager FPM;
         buildLoopOptimizerPipeline(FPM, PB, O, options);
         buildScalarOptimizerPipeline(FPM, PB, O, options);
-        if (O.getSpeedupLevel() >= 2) {
+        if (O.getSpeedupLevel() >= 2 && options.enable_vector_pipeline) {
             buildVectorPipeline(FPM, PB, O, options);
         }
         FPM.addPass(WarnMissedTransformationsPass());
