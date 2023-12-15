@@ -807,3 +807,14 @@ namedtup = (;a=1, b=2, c=3)
 @test Val{Tuple{Vararg{T,4}} where T} === Val{Tuple{T,T,T,T} where T}
 @test Val{Tuple{Int64, Vararg{Int32,N}} where N} === Val{Tuple{Int64, Vararg{Int32}}}
 @test Val{Tuple{Int32, Vararg{Int64}}} === Val{Tuple{Int32, Vararg{Int64,N}} where N}
+
+@testset "circshift" begin
+    t1 = (1, 2, 3, 4, 5)
+    t2 = (1, 'a', -7.0, 3)
+    @test Base.circshift(t1, 2) == (4, 5, 1, 2, 3)
+    @test Base.circshift(t1, Val(2)) == (4, 5, 1, 2, 3)
+    @test Base.circshift(t2, 3) == ('a', -7.0, 3, 1)
+    @test Base.circshift(t2, Val(3)) == ('a', -7.0, 3, 1)
+    @test_throws MethodError circshift(t1, 'a')
+    @test_throws TypeError circshift(t1, Val('a'))
+end
