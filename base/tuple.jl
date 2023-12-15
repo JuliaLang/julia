@@ -644,7 +644,7 @@ julia> circshift(z, -1)
 ```
 """
 function circshift(x::Tuple, shift::Integer)
-    j = mod1(shift::Integer, length(x))
+    j = mod1(shift, length(x))
     ntuple(k -> __safe_getindex(x, k-j+ifelse(k>j,0,length(x))), Val(length(x)))
 end
 
