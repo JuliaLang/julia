@@ -9,42 +9,51 @@
 # show(::InteractiveUtils.DigitsIO, ::SomeFloatType) method
 # similar to the ones below.
 
+using Printf
 
 ########################################################################
 
-export set_display_digits, unset_display_digits
+export set_display_digits!, unset_display_digits!
 
 # we define global defaults for float display, so that they can be set
 # independent of the interactive display (REPL, IJulia, etc.)
 const DISPLAY_DIGITS = Dict{Type,Int}()
 const DISPLAY_COMPACT_DIGITS = Dict{Type,Int}()
 
-function set_display_digits(::Type{T}, digits::Integer; compact::Bool=true) where {T<:AbstractFloat}
+function set_display_digits!(::Type{T}, digits::Integer; compact::Bool=false) where {T<:AbstractFloat}
+    digits > 0 || throw(ArgumentError("significant digits = $digits must be positive"))
     foreach(Base.Multimedia.displays) do d
-        if has_display_digits(d)
-            set_display_digits(d, T, digits; compact)
-        end
+        set_display_digits!(d, T, digits; compact)
     end
     (compact ? DISPLAY_COMPACT_DIGITS : DISPLAY_DIGITS)[T] = digits
+    return
 end
 
-function unset_display_digits(::Type{T}; compact::Bool=true) where {T<:AbstractFloat}
+function unset_display_digits!(::Type{T}; compact::Bool=false) where {T<:AbstractFloat}
     foreach(Base.Multimedia.displays) do d
-        if has_display_digits(d)
-            unset_display_digits(d, T; compact)
-        end
+        unset_display_digits!(d, T; compact)
     end
     delete!(compact ? DISPLAY_COMPACT_DIGITS : DISPLAY_DIGITS, T)
     return
 end
 
-# display subtypes should override this to return `true` if they store their
-# own digits settings and implement set_display_digits / unset_display_digits:
-has_display_digits(::AbstractDisplay) = false
+# type defaults to AbstractFloat:
+set_display_digits!(digits::Integer; compact::Bool=false) =
+    set_display_digits!(AbstractFloat, digits; compact)
+unset_display_digits!(; compact::Bool=false) =
+    unset_display_digits!(AbstractFloat; compact)
+set_display_digits!(d::AbstractDisplay, digits::Integer; compact::Bool=false) =
+    set_display_digits!(d, AbstractFloat, digits; compact)
+unset_display_digits!(d::AbstractDisplay, compact::Bool=false) =
+    unset_display_digits!(d, AbstractFloat; compact)
+
+# display subtypes should override theses if they store their own digits settings:
+set_display_digits!(d::AbstractDisplay, ::Type, digits::Integer; compact::Bool=false) = nothing
+unset_display_digits!(d::AbstractDisplay, ::Type; compact::Bool=false) = nothing
 
 ########################################################################
 
-struct DigitsIO{IO_T<:IO} <: IO
+struct DigitsIO{IO_T<:IO} <: Base.AbstractPipe
     io::IO_T # an underlying IO stream
 
     digits::Dict{Type,Int} # map from float types to # of sig. digits
@@ -56,7 +65,7 @@ end
 
 # extract default digits dict for an IO object
 for d in (:digits, :compact_digits)
-    DD = Symbol(uppercase(string("default_", d)))
+    DD = Symbol(uppercase(string("DISPLAY_", d)))
     _dd = Symbol("_default_", d)
     @eval begin
         $_dd(io::IO) = $DD
@@ -66,8 +75,8 @@ for d in (:digits, :compact_digits)
 end
 
 # canonicalized DigitsIO constructor
-digitsio(io::IO, digits::AbstractDict=_display_digits(io),
-         compact_digits::AbstractDict=_display_compact_digits(io)) =
+digitsio(io::IO, digits::AbstractDict=_default_digits(io),
+         compact_digits::AbstractDict=_default_compact_digits(io)) =
     DigitsIO(io, digits, compact_digits)
 
 # combine nested DigitsIO wrappers
@@ -78,13 +87,13 @@ digitsio(io::DigitsIO, digits::AbstractDict=io.digits,
              merge(io.compact_digits, compact_digits))
 
 # canonicalize digitsio(::IOContext) to IOContext{DigitsIO}
-digitsio(io::IOContext, digits::AbstractDict=_display_digits(io),
-         compact_digits::AbstractDict=_display_compact_digits(io)) =
+digitsio(io::IOContext, digits::AbstractDict=_default_digits(io),
+         compact_digits::AbstractDict=_default_compact_digits(io)) =
     IOContext(digitsio(io.io, digits, compact_digits), io.dict)
 
 # delegate most calls to the underlying I/O stream, like IOContext:
-Base.pipe_reader(io::DigitsIO) = Base.pipe_reader(io.io)
-Base.pipe_writer(io::DigitsIO) = Base.pipe_writer(io.io)
+Base.pipe_reader(io::DigitsIO) = io.io
+Base.pipe_writer(io::DigitsIO) = io.io
 Base.lock(io::DigitsIO) = lock(io.io)
 Base.unlock(io::DigitsIO) = unlock(io.io)
 Base.in(key_value::Pair, io::DigitsIO) = in(key_value, io.io)
@@ -102,7 +111,7 @@ Base.unwrapcontext(io::DigitsIO) = io, Base.unwrapcontext(io.io)[2]
 # when a context is copied to a new io stream,
 # the presence of a DigitsIO wrapper should be copied too.
 Base.IOContext(io::IO, context::DIO) =
-    IOContext(digitsio(unwrapcontext(io)[1]), unwrapcontext(context)[2])
+    IOContext(digitsio(Base.unwrapcontext(io)[1]), Base.unwrapcontext(context)[2])
 
 ########################################################################
 
@@ -143,7 +152,8 @@ function _show(io::DIO, x::T, forceuntyped::Bool=false, fromprint::Bool=false) w
                 print(io.io, replace(s, 'e'=>'f'))
             elseif typed
                 print(io.io, s, "f0")
-                s = s * "f0"
+            else
+                print(io.io, s)
             end
         elseif x isa Float16 && typed
             print(io.io, "Float16(", s, ')')

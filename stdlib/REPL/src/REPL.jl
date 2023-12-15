@@ -272,14 +272,13 @@ struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     compact_digits::Dict{Type,Int} # overrides for :compact=>true contexts
 
     REPLDisplay(repl::R, digits::AbstractDict=copy(InteractiveUtils.DISPLAY_DIGITS),
-                compact_digits::AbstractDict=copy(InteractiveUtils.DISPLAY_COMPACT_DIGITS) where {R<:AbstractREPL} =
+                compact_digits::AbstractDict=copy(InteractiveUtils.DISPLAY_COMPACT_DIGITS)) where {R<:AbstractREPL} =
             new{R}(repl, digits, compact_digits)
 end
 
-InteractiveUtils.has_display_digits(::REPLDisplay) = true
-InteractiveUtils.set_display_digits(d::REPLDisplay, ::Type{T}, digits::Integer; compact::Bool=true) where {T<:AbstractFloat} =
+InteractiveUtils.set_display_digits!(d::REPLDisplay, ::Type{T}, digits::Integer; compact::Bool=false) where {T<:AbstractFloat} =
     (compact ? d.compact_digits : d.digits)[T] = digits
-InteractiveUtils.unset_display_digits(d::REPLDisplay, ::Type{T}; compact::Bool=true) where {T<:AbstractFloat} =
+InteractiveUtils.unset_display_digits!(d::REPLDisplay, ::Type{T}; compact::Bool=false) where {T<:AbstractFloat} =
     (delete!(compact ? d.compact_digits : d.digits, T); nothing)
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
