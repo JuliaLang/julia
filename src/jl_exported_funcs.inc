@@ -28,7 +28,11 @@
     XX(jl_array_ptr) \
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
+    XX(jl_genericmemory_isassigned) \
     XX(jl_genericmemory_owner) \
+    XX(jl_genericmemoryref) \
+    XX(jl_genericmemoryset) \
+    XX(jl_genericmemoryunset) \
     XX(jl_array_rank) \
     XX(jl_array_to_string) \
     XX(jl_atexit_hook) \

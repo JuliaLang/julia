@@ -104,6 +104,8 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
 {
     rle_reference rr;
 
+    if (jl_is_string(v))
+        v = jl_as_global_root(v, 1);
     literal_val_id(&rr, s, v);
     int id = rr.index;
     assert(id >= 0);

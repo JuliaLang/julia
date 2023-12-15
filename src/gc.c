@@ -222,32 +222,7 @@ NOINLINE uintptr_t gc_get_stack_ptr(void)
     return (uintptr_t)jl_get_frame_addr();
 }
 
-#define should_timeout() 0
-
-void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
-{
-    JL_TIMING(GC, GC_Stop);
-#ifdef USE_TRACY
-    TracyCZoneCtx ctx = JL_TIMING_DEFAULT_BLOCK->tracy_ctx;
-    TracyCZoneColor(ctx, 0x696969);
-#endif
-    assert(gc_n_threads);
-    if (gc_n_threads > 1)
-        jl_wake_libuv();
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        if (ptls2 != NULL) {
-            // This acquire load pairs with the release stores
-            // in the signal handler of safepoint so we are sure that
-            // all the stores on those threads are visible.
-            // We're currently also using atomic store release in mutator threads
-            // (in jl_gc_state_set), but we may want to use signals to flush the
-            // memory operations on those threads lazily instead.
-            while (!jl_atomic_load_relaxed(&ptls2->gc_state) || !jl_atomic_load_acquire(&ptls2->gc_state))
-                jl_cpu_pause(); // yield?
-        }
-    }
-}
+void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads);
 
 // malloc wrappers, aligned allocation
 
@@ -1788,13 +1763,17 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_taggedvalue_t *o = jl_astaggedvalue(ptr);
-    // The modification of the `gc_bits` is not atomic but it
-    // should be safe here since GC is not allowed to run here and we only
-    // write GC_OLD to the GC bits outside GC. This could cause
-    // duplicated objects in the remset but that shouldn't be a problem.
-    o->bits.gc = GC_MARKED;
-    arraylist_push(ptls->heap.remset, (jl_value_t*)ptr);
-    ptls->heap.remset_nptr++; // conservative
+    // The modification of the `gc_bits` needs to be atomic.
+    // We need to ensure that objects are in the remset at
+    // most once, since the mark phase may update page metadata,
+    // which is not idempotent. See comments in https://github.com/JuliaLang/julia/issues/50419
+    uintptr_t header = jl_atomic_load_relaxed((_Atomic(uintptr_t) *)&o->header);
+    header &= ~GC_OLD; // clear the age bit
+    header = jl_atomic_exchange_relaxed((_Atomic(uintptr_t) *)&o->header, header);
+    if (header & GC_OLD) { // write barrier has not been triggered in this object yet
+        arraylist_push(ptls->heap.remset, (jl_value_t*)ptr);
+        ptls->heap.remset_nptr++; // conservative
+    }
 }
 
 void jl_gc_queue_multiroot(const jl_value_t *parent, const void *ptr, jl_datatype_t *dt) JL_NOTSAFEPOINT
@@ -1911,6 +1890,10 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
 // Push a work item to the queue
 STATIC_INLINE void gc_ptr_queue_push(jl_gc_markqueue_t *mq, jl_value_t *obj) JL_NOTSAFEPOINT
 {
+#ifdef JL_DEBUG_BUILD
+    if (obj == gc_findval)
+        jl_raise_debugger();
+#endif
     ws_array_t *old_a = ws_queue_push(&mq->ptr_queue, &obj, sizeof(jl_value_t*));
     // Put `old_a` in `reclaim_set` to be freed after the mark phase
     if (__unlikely(old_a != NULL))
@@ -2527,10 +2510,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
 {
     jl_value_t *new_obj = (jl_value_t *)_new_obj;
     mark_obj: {
-    #ifdef JL_DEBUG_BUILD
-        if (new_obj == gc_findval)
-            jl_raise_debugger();
-    #endif
         jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
         uintptr_t vtag = o->header & ~(uintptr_t)0xf;
         uint8_t bits = (gc_old(o->header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;

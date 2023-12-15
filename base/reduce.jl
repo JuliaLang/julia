@@ -316,10 +316,11 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 
 # handling empty arrays
-_empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
-_empty_reduce_error(@nospecialize(f), @nospecialize(T::Type)) = throw(ArgumentError("""
-    reducing with $f over an empty collection of element type $T is not allowed.
-    You may be able to prevent this error by supplying an `init` value to the reducer."""))
+_empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed; consider supplying `init` to the reducer"))
+reduce_empty(f, T) = _empty_reduce_error()
+mapreduce_empty(f, op, T) = _empty_reduce_error()
+reduce_empty(f, ::Type{Union{}}, splat...) = _empty_reduce_error()
+mapreduce_empty(f, op, ::Type{Union{}}, splat...) = _empty_reduce_error()
 
 """
     Base.reduce_empty(op, T)
@@ -339,20 +340,16 @@ is generally ambiguous, and especially so when the element type is unknown).
 
 As an alternative, consider supplying an `init` value to the reducer.
 """
-reduce_empty(::typeof(+), ::Type{Union{}}) = _empty_reduce_error(+, Union{})
 reduce_empty(::typeof(+), ::Type{T}) where {T} = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
-reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error(*, Union{})
 reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
-reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error(add_sum, Union{})
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
-reduce_empty(::typeof(mul_prod), ::Type{Union{}}) = _empty_reduce_error(mul_prod, Union{})
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T} = reduce_empty(*, T)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
@@ -753,7 +750,7 @@ julia> maximum([1,2,3])
 3
 
 julia> maximum(())
-ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
+ERROR: ArgumentError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
 Stacktrace:
 [...]
 
@@ -785,7 +782,7 @@ julia> minimum([1,2,3])
 1
 
 julia> minimum([])
-ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
+ERROR: ArgumentError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
 Stacktrace:
 [...]
 

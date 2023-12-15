@@ -43,6 +43,8 @@ const IR_FLAG_EFIIMO      = one(UInt32) << 9
 # This is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
 const IR_FLAG_INACCESSIBLE_OR_ARGMEM = one(UInt32) << 10
 
+const NUM_IR_FLAGS = 11 # sync with julia.h
+
 const IR_FLAGS_EFFECTS = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_CONSISTENT | IR_FLAG_NOUB
 
 has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag

@@ -93,7 +93,12 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         return;
     }
 
-    jl_task_wait_empty();
+    jl_task_wait_empty(); // wait for most work to finish (except possibly finalizers)
+    jl_gc_collect(JL_GC_FULL);
+    jl_gc_collect(JL_GC_INCREMENTAL); // sweep finalizers
+    jl_task_t *ct = jl_current_task;
+    jl_gc_enable_finalizers(ct, 0); // now disable finalizers, as they could schedule more work or make other unexpected changes to reachability
+    jl_task_wait_empty(); // then make sure we are the only thread alive that could be running user code past here
 
     if (!jl_module_init_order) {
         jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");
@@ -184,6 +189,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         }
     }
     JL_GC_POP();
+    jl_gc_enable_finalizers(ct, 1);
 }
 
 #ifdef __cplusplus

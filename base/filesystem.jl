@@ -143,6 +143,8 @@ function close(f::File)
     nothing
 end
 
+closewrite(f::File) = nothing
+
 # sendfile is the most efficient way to copy from a file descriptor
 function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)

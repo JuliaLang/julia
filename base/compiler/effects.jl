@@ -345,3 +345,6 @@ function decode_effects_override(e::UInt16)
         !iszero(e & (0x0001 << 7)),
         !iszero(e & (0x0001 << 8)))
 end
+
+decode_statement_effects_override(ssaflag::UInt32) =
+    decode_effects_override(UInt16((ssaflag >> NUM_IR_FLAGS) & (1 << NUM_EFFECTS_OVERRIDES - 1)))
