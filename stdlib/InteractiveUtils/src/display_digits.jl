@@ -84,7 +84,7 @@ _merge(d1, d2) = d1 === d2 ? d1 : merge(d1, d2)
 digitsio(io::DigitsIO, digits::AbstractDict=io.digits,
          compact_digits::AbstractDict=io.compact_digits) =
     digitsio(io.io, _merge(io.digits, digits),
-             merge(io.compact_digits, compact_digits))
+             _merge(io.compact_digits, compact_digits))
 
 # canonicalize digitsio(::IOContext) to IOContext{DigitsIO}
 digitsio(io::IOContext, digits::AbstractDict=_default_digits(io),
