@@ -1023,3 +1023,19 @@ end
     isinf(y) && return zero(y)
     irinterp_nothrow_override(true, y)
 end |> Core.Compiler.is_nothrow
+
+# https://github.com/JuliaLang/julia/issues/52531
+const a52531 = Core.Ref(1)
+@eval getref52531() = $(QuoteNode(a52531)).x
+@test !Core.Compiler.is_consistent(Base.infer_effects(getref52531))
+let
+    global set_a52531!, get_a52531
+    _a::Int       = -1
+    set_a52531!(a::Int) = (_a = a; return get_a52531())
+    get_a52531()       = _a
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(set_a52531!, (Int,)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(get_a52531, ()))
+@test get_a52531() == -1
+@test set_a52531!(1) == 1
+@test get_a52531() == 1
