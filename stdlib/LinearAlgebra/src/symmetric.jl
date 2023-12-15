@@ -202,7 +202,7 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
         function $S(A::$H, uplo::Symbol)
             if A.uplo == char_uplo(uplo)
                 if $H === Hermitian && !(eltype(A) <: Real) &&
-                    any(!isreal, A.data[i] for i in diagind(A.data))
+                    any(!isreal, A.data[i] for i in diagind(A.data, IndexStyle(A.data)))
 
                     throw(ArgumentError("Cannot construct $($S)($($H))); diagonal contains complex values"))
                 end
