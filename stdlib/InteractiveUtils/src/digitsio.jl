@@ -132,7 +132,7 @@ function _show(io::DIO, x::T, forceuntyped::Bool=false, fromprint::Bool=false) w
     if digits > 0
         typed = !forceuntyped && !compact && get(io, :typeinfo, Any) != typeof(x)
         s = _string(x, digits)
-        if x isa Float32
+        if x isa Float32 && !fromprint
             if contains(s, 'e')
                 print(io.io, replace(s, 'e'=>'f'))
             elseif typed
