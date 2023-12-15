@@ -267,12 +267,26 @@ end
 
 struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     repl::Repl
+
+    digits::Dict{Type,Int} # map from float types to # of sig. digits
+    compact_digits::Dict{Type,Int} # overrides for :compact=>true contexts
+
+    REPLDisplay(repl::R, digits::AbstractDict=copy(InteractiveUtils.DISPLAY_DIGITS),
+                compact_digits::AbstractDict=copy(InteractiveUtils.DISPLAY_COMPACT_DIGITS) where {R<:AbstractREPL} =
+            new{R}(repl, digits, compact_digits)
 end
+
+InteractiveUtils.has_display_digits(::REPLDisplay) = true
+InteractiveUtils.set_display_digits(d::REPLDisplay, ::Type{T}, digits::Integer; compact::Bool=true) where {T<:AbstractFloat} =
+    (compact ? d.compact_digits : d.digits)[T] = digits
+InteractiveUtils.unset_display_digits(d::REPLDisplay, ::Type{T}; compact::Bool=true) where {T<:AbstractFloat} =
+    (delete!(compact ? d.compact_digits : d.digits, T); nothing)
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
-        io = IOContext(io, :limit => true, :module => active_module(d)::Module)
+        io = IOContext(InteractiveUtils.digitsio(io, d.digits, d.compact_digits),
+                       :limit => true, :module => active_module(d)::Module)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
             mode = LineEdit.mode(mistate)
