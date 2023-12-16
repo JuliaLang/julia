@@ -684,7 +684,9 @@ Return the undocumented names in `module`. `all=false` returns only public names
 See also: [`names`](@ref), [`Docs.hasdoc`](@ref).
 """
 function undocumented_names(mod::Module; all=false)
-    filter(!hasdoc, names(mod; all))
+    filter(names(mod; all)) do sym
+        !hasdoc(mod, sym)
+    end
 end
 
 end
