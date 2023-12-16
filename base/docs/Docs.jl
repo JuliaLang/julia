@@ -678,8 +678,9 @@ end
 """
     undocumented_names(mod::Module; all=false)
 
-Return the undocumented names in `module`. `all=false` returns only public names;
-`all=true` also includes nonpublic names, following the behavior of [`names`](@ref).
+Return an array of undocumented symbols in `module` (that is, lacking docstrings).
+`all=false` returns only exported symbols; whereas `all=true` also includes
+non-exported symbols, following the behavior of [`names`](@ref).
 
 See also: [`names`](@ref), [`Docs.hasdoc`](@ref).
 """
