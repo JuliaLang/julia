@@ -811,10 +811,14 @@ namedtup = (;a=1, b=2, c=3)
 @testset "circshift" begin
     t1 = (1, 2, 3, 4, 5)
     t2 = (1, 'a', -7.0, 3)
-    @test Base.circshift(t1, 2) == (4, 5, 1, 2, 3)
-    @test Base.circshift(t1, Val(2)) == (4, 5, 1, 2, 3)
+    t3 = ('a', 'b', 'c', 'd')
+    @test @inferred(Base.circshift(t1, 2)) == (4, 5, 1, 2, 3)
+    @test @inferred(Base.circshift(t1, Val(2))) == (4, 5, 1, 2, 3)
+    # The return type of mixed tuples with runtime shift cannot be inferred.
     @test Base.circshift(t2, 3) == ('a', -7.0, 3, 1)
-    @test Base.circshift(t2, Val(3)) == ('a', -7.0, 3, 1)
+    @test @inferred(Base.circshift(t2, Val(3))) == ('a', -7.0, 3, 1)
+    @test @inferred(Base.circshift(t3, 7)) == ('b', 'c', 'd', 'a')
+    @test @inferred(Base.circshift(t3, Val(7))) == ('b', 'c', 'd', 'a')
     @test_throws MethodError circshift(t1, 'a')
     @test_throws TypeError circshift(t1, Val('a'))
 end
