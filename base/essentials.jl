@@ -589,9 +589,11 @@ Neither `convert` nor `cconvert` should take a Julia object and turn it into a `
 """
 function cconvert end
 
-cconvert(T::Type, x) = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
-cconvert(::Type{Union{}}, x...) = convert(Union{}, x...)
-cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
+cconvert(T::Type, x) = _cconvert(T, x)
+# Specialize on the types in _cconvert to avoid ambiguities if packages define cconvert(T::Type, ::MyType)
+_cconvert(T::Type, x) = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
+_cconvert(::Type{Union{}}, x...) = convert(Union{}, x...)
+_cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
