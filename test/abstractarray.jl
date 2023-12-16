@@ -1900,3 +1900,15 @@ f45952(x) = [x;;]
     @test_throws "invalid index: true of type Bool" isassigned(A, 1, true)
     @test_throws "invalid index: true of type Bool" isassigned(A, true)
 end
+
+@testset "cconvert(::Ptr, ::MyArray) ambiguity" begin
+    struct MyArray <: AbstractVector{Float64}
+       x :: Vector{Float64}
+    end
+    Base.size(M::MyArray) = size(M.x)
+    Base.getindex(M::MyArray, i::Int) = getindex(M.x, i::Int)
+    Base.cconvert(T::Type, M::MyArray) = Base.cconvert(T, M.x)
+    a = Float64[1,2]
+    ma = MyArray(a)
+    @test pointer(ma) === pointer(a)
+end
