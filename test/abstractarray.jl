@@ -1910,5 +1910,5 @@ end
     Base.cconvert(T::Type, M::MyArray) = Base.cconvert(T, M.x)
     a = Float64[1,2]
     ma = MyArray(a)
-    @test pointer(ma) === pointer(a)
+    @test Base.cconvert(Ptr{Float64}, ma) === Base.cconvert(Ptr{Float64}, a)
 end
