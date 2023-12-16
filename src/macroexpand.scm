@@ -385,7 +385,7 @@
                                ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))
                            (unescape-global-lhs arg env m parent-scope inarg)))
                       (cdr e))))
-           ((using import export meta line inbounds boundscheck loopinfo inline noinline) (map unescape e))
+           ((using import export meta line inbounds boundscheck loopinfo inline noinline purity) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)

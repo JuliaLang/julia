@@ -1227,4 +1227,12 @@ end
     @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
 end
 
+@testset "diagind" begin
+    D = Diagonal(1:4)
+    M = Matrix(D)
+    @testset for k in -4:4
+        @test D[diagind(D,k)] == M[diagind(M,k)]
+    end
+end
+
 end # module TestDiagonal

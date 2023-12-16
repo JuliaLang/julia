@@ -338,7 +338,7 @@ julia> triu(a)
  0.0  0.0  0.0  1.0
 ```
 """
-triu(M::AbstractMatrix) = triu!(copy(M))
+triu(M::AbstractMatrix) = triu!(copymutable(M))
 
 """
     tril(M)
@@ -362,7 +362,7 @@ julia> tril(a)
  1.0  1.0  1.0  1.0
 ```
 """
-tril(M::AbstractMatrix) = tril!(copy(M))
+tril(M::AbstractMatrix) = tril!(copymutable(M))
 
 """
     triu(M, k::Integer)
@@ -393,7 +393,7 @@ julia> triu(a,-3)
  1.0  1.0  1.0  1.0
 ```
 """
-triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
+triu(M::AbstractMatrix,k::Integer) = triu!(copymutable(M),k)
 
 """
     tril(M, k::Integer)
@@ -424,7 +424,7 @@ julia> tril(a,-3)
  1.0  0.0  0.0  0.0
 ```
 """
-tril(M::AbstractMatrix,k::Integer) = tril!(copy(M),k)
+tril(M::AbstractMatrix,k::Integer) = tril!(copymutable(M),k)
 
 """
     triu!(M)
@@ -1760,7 +1760,7 @@ Calculates the determinant of a matrix using the
 [Bareiss Algorithm](https://en.wikipedia.org/wiki/Bareiss_algorithm).
 Also refer to [`det_bareiss!`](@ref).
 """
-det_bareiss(M) = det_bareiss!(copy(M))
+det_bareiss(M) = det_bareiss!(copymutable(M))
 
 
 

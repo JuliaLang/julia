@@ -251,6 +251,15 @@ If set to `true`, Pkg operations which use the git protocol will use an external
 
 The accuracy of the package resolver. This should be a positive integer, the default is `1`.
 
+### [`JULIA_PKG_PRESERVE_TIERED_INSTALLED`](@id JULIA_PKG_PRESERVE_TIERED_INSTALLED)
+
+Change the default package installation strategy to `Pkg.PRESERVE_TIERED_INSTALLED`
+to let the package manager try to install versions of packages while keeping as many
+versions of packages already installed as possible.
+
+!!! compat "Julia 1.9"
+    This only affects Julia 1.9 and above.
+
 ## Network transport
 
 ### [`JULIA_NO_VERIFY_HOSTS`](@id JULIA_NO_VERIFY_HOSTS)

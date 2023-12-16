@@ -88,7 +88,7 @@ Base.iterate(S::BunchKaufman) = (S.D, Val(:UL))
 Base.iterate(S::BunchKaufman, ::Val{:UL}) = (S.uplo == 'L' ? S.L : S.U, Val(:p))
 Base.iterate(S::BunchKaufman, ::Val{:p}) = (S.p, Val(:done))
 Base.iterate(S::BunchKaufman, ::Val{:done}) = nothing
-
+copy(S::BunchKaufman) = BunchKaufman(copy(S.LD), copy(S.ipiv), S.uplo, S.symmetric, S.rook, S.info)
 
 """
     bunchkaufman!(A, rook::Bool=false; check = true) -> BunchKaufman
@@ -277,6 +277,27 @@ end
 
 Base.propertynames(B::BunchKaufman, private::Bool=false) =
     (:p, :P, :L, :U, :D, (private ? fieldnames(typeof(B)) : ())...)
+
+function getproperties!(B::BunchKaufman{T,<:StridedMatrix}) where {T<:BlasFloat}
+    # NOTE: Unlike in the 'getproperty' function, in this function L/U and D are computed in place.
+    if B.rook
+        LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', B.LD, B.ipiv)
+    else
+        LUD, od = LAPACK.syconv!(B.uplo, B.LD, B.ipiv)
+    end
+    if B.uplo == 'U'
+        M = UnitUpperTriangular(LUD)
+        du = od[2:end]
+        # Avoid aliasing dl and du.
+        dl = B.symmetric ? du : conj.(du)
+    else
+        M = UnitLowerTriangular(LUD)
+        dl = od[1:end-1]
+        # Avoid aliasing dl and du.
+        du = B.symmetric ? dl : conj.(dl)
+    end
+    return (M, Tridiagonal(dl, diag(LUD), du), B.p)
+end
 
 issuccess(B::BunchKaufman) = B.info == 0
 

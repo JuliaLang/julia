@@ -211,7 +211,12 @@ function close(c::Channel, @nospecialize(excp::Exception))
     end
     nothing
 end
-isopen(c::Channel) = ((@atomic :monotonic c.state) === :open)
+
+# Use acquire here to pair with release store in `close`, so that subsequent `isready` calls
+# are forced to see `isready == true` if they see `isopen == false`. This means users must
+# call `isopen` before `isready` if you are using the race-y APIs (or call `iterate`, which
+# does this right for you).
+isopen(c::Channel) = ((@atomic :acquire c.state) === :open)
 
 """
     bind(chnl::Channel, task::Task)

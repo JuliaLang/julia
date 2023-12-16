@@ -245,7 +245,7 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
     end
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)
-rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
+rationalize(x::Real; kvs...) = rationalize(Int, x; kvs...)
 rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...), rationalize(T, x.im; kvs...))
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
 rationalize(::Type{T}, x::Rational; tol::Real = 0) where {T<:Integer} = rationalize(T, x, tol)

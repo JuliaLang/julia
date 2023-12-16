@@ -25,6 +25,14 @@ end
 
 lock(::IO) = nothing
 unlock(::IO) = nothing
+
+"""
+    reseteof(io)
+
+Clear the EOF flag from IO so that further reads (and possibly writes) are
+again allowed. Note that it may immediately get re-set, if the underlying
+stream object is at EOF and cannot be resumed.
+"""
 reseteof(x::IO) = nothing
 
 const SZ_UNBUFFERED_IO = 65536
@@ -67,6 +75,10 @@ function close end
 Shutdown the write half of a full-duplex I/O stream. Performs a [`flush`](@ref)
 first. Notify the other end that no more data will be written to the underlying
 file. This is not supported by all IO types.
+
+If implemented, `closewrite` causes subsequent `read` or `eof` calls that would
+block to instead throw EOF or return true, respectively. If the stream is
+already closed, this is idempotent.
 
 # Examples
 ```jldoctest

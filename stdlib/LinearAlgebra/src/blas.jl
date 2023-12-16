@@ -52,6 +52,7 @@ export
     # xTBSV
     # xTPSV
     ger!,
+    geru!,
     # xGERU
     # xGERC
     her!,
@@ -1414,6 +1415,41 @@ for (fname, elty) in ((:dger_,:Float64),
                  m, n, α, px, stx, py, sty, A, max(1,stride(A,2)))
             A
         end
+    end
+end
+
+### geru
+
+"""
+    geru!(alpha, x, y, A)
+
+Rank-1 update of the matrix `A` with vectors `x` and `y` as `alpha*x*transpose(y) + A`.
+"""
+function geru! end
+
+for (fname, elty) in ((:zgeru_,:ComplexF64), (:cgeru_,:ComplexF32))
+    @eval begin
+        function geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A, x, y)
+            m, n = size(A)
+            if m != length(x) || n != length(y)
+                throw(DimensionMismatch(lazy"A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
+            end
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            py, sty = vec_pointer_stride(y, ArgumentError("input vector with 0 stride is not allowed"))
+            GC.@preserve x y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+                (Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
+                 Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                 Ref{BlasInt}),
+                 m, n, α, px, stx, py, sty, A, max(1,stride(A,2)))
+            A
+        end
+    end
+end
+for elty in (:Float64, :Float32)
+    @eval begin
+        geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty}) =
+            ger!(α, x, y, A)
     end
 end
 
