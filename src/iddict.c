@@ -15,10 +15,11 @@ JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t
     size_t sz = a->length;
     size_t i;
     jl_value_t **ol = (jl_value_t **) a->ptr;
-    jl_genericmemory_t *newa = jl_alloc_memory_any(newsz);
+    jl_genericmemory_t *newa = NULL;
     // keep the original memory in the original slot since we need `ol`
     // to be valid in the loop below.
     JL_GC_PUSH2(&newa, &a);
+    newa = jl_alloc_memory_any(newsz);
     for (i = 0; i < sz; i += 2) {
         if (ol[i + 1] != NULL) {
             jl_table_assign_bp(&newa, ol[i], ol[i + 1]);
