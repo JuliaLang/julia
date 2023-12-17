@@ -172,7 +172,7 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
     partialsort!(copymutable(v), k; kws...)
 
 # reference on sorted binary search:
-#   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
+#   https://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
 
 # index of the first value of vector a that is greater than or equivalent to x;
 # returns lastindex(v)+1 if x is greater than all values in v.
