@@ -259,7 +259,7 @@ julia> diag(A,1)
  6
 ```
 """
-diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k,IndexStyle(A))]
+diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A, k, IndexStyle(A))]
 
 """
     diagm(kv::Pair{<:Integer,<:AbstractVector}...)
