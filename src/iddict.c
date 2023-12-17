@@ -23,8 +23,6 @@ JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t
     for (i = 0; i < sz; i += 2) {
         if (ol[i + 1] != NULL) {
             jl_table_assign_bp(&newa, ol[i], ol[i + 1]);
-            // it is however necessary here because allocation
-            // can (and will) occur in a recursive call inside table_lookup_bp
         }
     }
     JL_GC_POP();
