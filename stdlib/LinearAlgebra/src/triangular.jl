@@ -460,6 +460,11 @@ function -(A::UnitUpperTriangular)
     UpperTriangular(Anew)
 end
 
+# use broadcasting if the parents are strided, where we loop only over the triangular part
+for TM in (:LowerTriangular, :UpperTriangular)
+    @eval -(A::$TM{<:Any, <:StridedMatrix}) = broadcast(-, A)
+end
+
 tr(A::LowerTriangular) = tr(A.data)
 tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
 tr(A::UpperTriangular) = tr(A.data)
@@ -697,6 +702,16 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 -(A::UnitUpperTriangular, B::UnitUpperTriangular) = UpperTriangular(triu(A.data, 1) - triu(B.data, 1))
 -(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
 -(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) - copyto!(similar(parent(B)), B)
+
+# use broadcasting if the parents are strided, where we loop only over the triangular part
+for op in (:+, :-)
+    for TM1 in (:LowerTriangular, :UnitLowerTriangular), TM2 in (:LowerTriangular, :UnitLowerTriangular)
+        @eval $op(A::$TM1{<:Any, <:StridedMatrix}, B::$TM2{<:Any, <:StridedMatrix}) = broadcast($op, A, B)
+    end
+    for TM1 in (:UpperTriangular, :UnitUpperTriangular), TM2 in (:UpperTriangular, :UnitUpperTriangular)
+        @eval $op(A::$TM1{<:Any, <:StridedMatrix}, B::$TM2{<:Any, <:StridedMatrix}) = broadcast($op, A, B)
+    end
+end
 
 ######################
 # BlasFloat routines #

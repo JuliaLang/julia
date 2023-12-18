@@ -513,6 +513,23 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
     end
 end
 
+@testset "non-strided arithmetic" begin
+        for (T,T1) in ((UpperTriangular, UnitUpperTriangular), (LowerTriangular, UnitLowerTriangular))
+            U = T(reshape(1:16, 4, 4))
+            M = Matrix(U)
+            @test -U == -M
+            U1 = T1(reshape(1:16, 4, 4))
+            M1 = Matrix(U1)
+            @test -U1 == -M1
+            for op in (+, -)
+                for (A, MA) in ((U, M), (U1, M1)), (B, MB) in ((U, M), (U1, M1))
+                    @test op(A, B) ≈ op(MA, MB)
+                end
+            end
+        end
+    end
+end
+
 # Matrix square root
 Atn = UpperTriangular([-1 1 2; 0 -2 2; 0 0 -3])
 Atp = UpperTriangular([1 1 2; 0 2 2; 0 0 3])
