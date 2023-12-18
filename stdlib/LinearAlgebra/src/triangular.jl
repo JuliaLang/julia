@@ -295,16 +295,16 @@ end
 end
 
 @propagate_inbounds function fill!(A::UpperTriangular, x)
-    iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
-            "($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
+    iszero(x) || throw(ArgumentError("cannot set indices in the lower triangular part " *
+            "of an UpperTriangular matrix to a nonzero value ($x)"))
     for col in axes(A,2), row in firstindex(A,1):col
         A.data[row, col] = x
     end
     A
 end
 @propagate_inbounds function fill!(A::LowerTriangular, x)
-    iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
-            "($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
+    iszero(x) || throw(ArgumentError("cannot set indices in the upper triangular part " *
+            "of a LowerTriangular matrix to a nonzero value ($x)"))
     for col in axes(A,2), row in col:lastindex(A,1)
         A.data[row, col] = x
     end
