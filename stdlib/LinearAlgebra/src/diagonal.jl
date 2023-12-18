@@ -203,6 +203,8 @@ end
 
 parent(D::Diagonal) = D.diag
 
+copy(D::Diagonal) = Diagonal(copy(D.diag))
+
 ishermitian(D::Diagonal{<:Real}) = true
 ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
 ishermitian(D::Diagonal) = all(ishermitian, D.diag)
