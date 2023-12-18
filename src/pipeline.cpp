@@ -165,7 +165,7 @@ namespace {
     #else // LLVM 16+
             // MPM.addPass(AddressSanitizerPass(
             //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
-            MPM.addPass(AddressSanitizerPass(AddressSanitizerOptions()));
+            MPM.addPass(AddressSanitizerPass(AddressSanitizerOptions(), true, false));
     #endif
         //   }
         };
