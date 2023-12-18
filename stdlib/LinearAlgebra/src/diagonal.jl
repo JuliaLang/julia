@@ -890,7 +890,7 @@ dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x,
 dot(A::Diagonal, B::Diagonal) = dot(A.diag, B.diag)
 function dot(D::Diagonal, B::AbstractMatrix)
     size(D) == size(B) || throw(DimensionMismatch("Matrix sizes $(size(D)) and $(size(B)) differ"))
-    return dot(D.diag, view(B, diagind(B)))
+    return dot(D.diag, view(B, diagind(B, IndexStyle(B))))
 end
 
 dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
