@@ -239,16 +239,16 @@ Base.isstored(A::UnitUpperTriangular, i::Int, j::Int) =
 Base.isstored(A::UpperTriangular, i::Int, j::Int) =
     i <= j ? Base.isstored(A.data, i, j) : false
 
-getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
+@propagate_inbounds getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-getindex(A::LowerTriangular, i::Integer, j::Integer) =
+@propagate_inbounds getindex(A::LowerTriangular, i::Integer, j::Integer) =
     i >= j ? A.data[i,j] : zero(A.data[j,i])
-getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
+@propagate_inbounds getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
     i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
-getindex(A::UpperTriangular, i::Integer, j::Integer) =
+@propagate_inbounds getindex(A::UpperTriangular, i::Integer, j::Integer) =
     i <= j ? A.data[i,j] : zero(A.data[j,i])
 
-function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
         iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
             "($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
@@ -258,7 +258,7 @@ function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     return A
 end
 
-function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
     if i > j
         iszero(x) || throw(ArgumentError("cannot set index in the lower triangular part " *
             "($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
@@ -271,7 +271,7 @@ function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
     return A
 end
 
-function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
         iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
             "($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
@@ -281,7 +281,7 @@ function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     return A
 end
 
-function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
     if i < j
         iszero(x) || throw(ArgumentError("cannot set index in the upper triangular part " *
             "($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
@@ -332,7 +332,15 @@ function tril!(A::UpperTriangular{T}, k::Integer=0) where {T}
         return UpperTriangular(tril!(A.data,k))
     end
 end
-triu!(A::UpperTriangular, k::Integer=0) = UpperTriangular(triu!(A.data, k))
+function triu!(A::UpperTriangular, k::Integer=0)
+    n = size(A,1)
+    if k > 0
+        for j in 1:n, i in max(1,j-k+1):j
+            A.data[i,j] = zero(eltype(A))
+        end
+    end
+    return A
+end
 
 function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where {T}
     n = size(A,1)
@@ -375,7 +383,15 @@ function triu!(A::LowerTriangular{T}, k::Integer=0) where {T}
     end
 end
 
-tril!(A::LowerTriangular, k::Integer=0) = LowerTriangular(tril!(A.data, k))
+function tril!(A::LowerTriangular, k::Integer=0)
+    n = size(A,1)
+    if k < 0
+        for j in 1:n, i in j:min(j-k-1,n)
+            A.data[i, j] = zero(eltype(A))
+        end
+    end
+    A
+end
 
 function triu!(A::UnitLowerTriangular{T}, k::Integer=0) where T
     n = size(A,1)
@@ -455,6 +471,7 @@ tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
 
 # copy and scale
 function copyto!(A::T, B::T) where {T<:Union{UpperTriangular,UnitUpperTriangular}}
+    checkbounds(A, axes(B)...)
     n = size(B,1)
     for j = 1:n
         for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
@@ -464,6 +481,7 @@ function copyto!(A::T, B::T) where {T<:Union{UpperTriangular,UnitUpperTriangular
     return A
 end
 function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular}}
+    checkbounds(A, axes(B)...)
     n = size(B,1)
     for j = 1:n
         for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
@@ -480,8 +498,14 @@ end
 @inline mul!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
 
+function checksize1(A, B)
+    szA, szB = size(A), size(B)
+    szA == szB || throw(DimensionMismatch("size of A, $szA, does not match size of B, $szB"))
+    checksquare(B)
+end
+
 function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
@@ -491,7 +515,7 @@ function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
     return A
 end
 function _triscale!(A::UpperTriangular, c::Number, B::UpperTriangular, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = 1:j
@@ -501,7 +525,7 @@ function _triscale!(A::UpperTriangular, c::Number, B::UpperTriangular, _add)
     return A
 end
 function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Number, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
@@ -512,7 +536,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Nu
     return A
 end
 function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriangular, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
@@ -523,7 +547,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriang
     return A
 end
 function _triscale!(A::LowerTriangular, B::LowerTriangular, c::Number, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
@@ -533,7 +557,7 @@ function _triscale!(A::LowerTriangular, B::LowerTriangular, c::Number, _add)
     return A
 end
 function _triscale!(A::LowerTriangular, c::Number, B::LowerTriangular, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         for i = j:n
@@ -543,7 +567,7 @@ function _triscale!(A::LowerTriangular, c::Number, B::LowerTriangular, _add)
     return A
 end
 function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Number, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
@@ -554,7 +578,7 @@ function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Nu
     return A
 end
 function _triscale!(A::LowerOrUnitLowerTriangular, c::Number, B::UnitLowerTriangular, _add)
-    n = checksquare(B)
+    n = checksize1(A, B)
     iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
