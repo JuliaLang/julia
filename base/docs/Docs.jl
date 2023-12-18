@@ -684,9 +684,9 @@ non-exported symbols, following the behavior of [`names`](@ref).
 
 See also: [`names`](@ref), [`Docs.hasdoc`](@ref).
 """
-function undocumented_names(mod::Module; all=false)
-    filter(names(mod; all)) do sym
-        !hasdoc(mod, sym)
+function undocumented_names(mod::Module; all::Bool=false, identifiers::Bool=true)
+    filter!(names(mod; all)) do sym
+        !hasdoc(mod, sym) && (!identifiers || Base.isidentifier(sym))
     end
 end
 
