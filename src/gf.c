@@ -2244,7 +2244,7 @@ static jl_tupletype_t *lookup_arg_type_tuple(jl_value_t *arg1 JL_PROPAGATES_ROOT
     return jl_lookup_arg_tuple_type(arg1, args, nargs, 1);
 }
 
-JL_DLLEXPORT jl_method_instance_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, size_t world, jl_value_t *_mt)
+JL_DLLEXPORT jl_value_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, size_t world, jl_value_t *_mt)
 {
     jl_methtable_t *mt = NULL;
     if (_mt == jl_nothing)
@@ -2253,7 +2253,10 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, si
         assert(jl_isa(_mt, (jl_value_t*)jl_methtable_type));
         mt = (jl_methtable_t*) _mt;
     }
-    return jl_mt_assoc_by_type(mt, tt, world);
+    jl_method_instance_t* mi = jl_mt_assoc_by_type(mt, tt, world);
+    if (!mi)
+        return jl_nothing;
+    return (jl_value_t*) mi;
 }
 
 JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world)

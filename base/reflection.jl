@@ -1315,6 +1315,15 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     return results
 end
 
+function method_instance(@nospecialize(f), @nospecialize(t);
+                         world=Base.get_world_counter(), method_table=nothing)
+    tt = signature_type(f, t)
+    mi = ccall(:jl_method_lookup_by_tt, Any,
+                (Any, Csize_t, Any),
+                tt, world, method_table)
+    return mi::Union{Nothing, MethodInstance}
+end
+
 default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cint))
 
 # this type mirrors jl_cgparams_t (documented in julia.h)

@@ -1006,8 +1006,9 @@ end
 
 @testset "lookup mi" begin
     @test 1+1 == 2
-    mi1 = @ccall jl_method_lookup_by_tt(Tuple{typeof(+), Int, Int}::Any, Base.get_world_counter()::Csize_t, nothing::Any)::Ref{Core.MethodInstance}
+    mi1 = Base.method_instance(+, (Int, Int))
     @test mi1.def.name == :+
+    # Note `jl_method_lookup` doesn't returns CNull if not found
     mi2 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
     @test mi1 == mi2
 end
