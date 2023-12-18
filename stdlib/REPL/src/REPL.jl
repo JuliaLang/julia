@@ -268,23 +268,23 @@ end
 struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
     repl::Repl
 
-    digits::Dict{Type,Int} # map from float types to # of sig. digits
-    compact_digits::Dict{Type,Int} # overrides for :compact=>true contexts
+    precision::Dict{Type,Union{Int,String}} # map from float types to # of sig. precision / format string
+    compact_precision::Dict{Type,Union{Int,String}} # overrides for :compact=>true contexts
 
-    REPLDisplay(repl::R, digits::AbstractDict=copy(InteractiveUtils.DISPLAY_DIGITS),
-                compact_digits::AbstractDict=copy(InteractiveUtils.DISPLAY_COMPACT_DIGITS)) where {R<:AbstractREPL} =
-            new{R}(repl, digits, compact_digits)
+    REPLDisplay(repl::R, precision::AbstractDict=copy(InteractiveUtils.DISPLAY_PRECISION),
+                compact_precision::AbstractDict=copy(InteractiveUtils.DISPLAY_COMPACT_PRECISION)) where {R<:AbstractREPL} =
+            new{R}(repl, precision, compact_precision)
 end
 
-InteractiveUtils.set_display_digits!(d::REPLDisplay, ::Type{T}, digits::Integer; compact::Bool=false) where {T<:AbstractFloat} =
-    (compact ? d.compact_digits : d.digits)[T] = digits
-InteractiveUtils.unset_display_digits!(d::REPLDisplay, ::Type{T}; compact::Bool=false) where {T<:AbstractFloat} =
-    (delete!(compact ? d.compact_digits : d.digits, T); nothing)
+InteractiveUtils.set_display_precision!(d::REPLDisplay, ::Type{T}, precision::Union{Integer,AbstractString}; compact::Bool=false) where {T<:AbstractFloat} =
+    (compact ? d.compact_precision : d.precision)[T] = precision
+InteractiveUtils.unset_display_precision!(d::REPLDisplay, ::Type{T}; compact::Bool=false) where {T<:AbstractFloat} =
+    (delete!(compact ? d.compact_precision : d.precision, T); nothing)
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
-        io = IOContext(InteractiveUtils.digitsio(io, d.digits, d.compact_digits),
+        io = IOContext(InteractiveUtils.precisionio(io, d.precision, d.compact_precision),
                        :limit => true, :module => active_module(d)::Module)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
