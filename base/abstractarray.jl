@@ -890,9 +890,8 @@ String[]
 """
 empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = similar(a, U, 0)
 
-# like empty, but should return a mutable collection
-emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = similar(a, U, 0)
-# return a Vector by default for non-array types
+# like empty, but should return a mutable collection, a Vector by default
+emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
 emptymutable(itr, ::Type{U}) where {U} = Vector{U}()
 
 """
