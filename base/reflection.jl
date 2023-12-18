@@ -393,8 +393,8 @@ julia> let x = 1, y = 2
            Base.@locals
        end
 Dict{Symbol, Any} with 2 entries:
-  :y => 2
   :x => 1
+  :y => 2
 
 julia> function f(x)
            local y
@@ -409,8 +409,8 @@ julia> function f(x)
 
 julia> f(42)
 Dict{Symbol, Any}(:x => 42)
-Dict{Symbol, Any}(:i => 1, :x => 42)
-Dict{Symbol, Any}(:y => 2, :x => 42)
+Dict{Symbol, Any}(:x => 42, :i => 1)
+Dict{Symbol, Any}(:x => 42, :y => 2)
 ```
 """
 macro locals()

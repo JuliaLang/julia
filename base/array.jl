@@ -2593,8 +2593,8 @@ julia> findall(!iszero, A)
 julia> d = Dict(:A => 10, :B => -1, :C => 0)
 Dict{Symbol, Int64} with 3 entries:
   :A => 10
-  :B => -1
   :C => 0
+  :B => -1
 
 julia> findall(x -> x >= 0, d)
 2-element Vector{Symbol}:
