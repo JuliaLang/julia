@@ -92,7 +92,7 @@ end
 
 @test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [:f]
 @test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
-@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; all=true) == [:g]
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; all=true) == [:eval, :g, :include]
 
 
 # issue #11548

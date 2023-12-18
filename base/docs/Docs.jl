@@ -680,11 +680,12 @@ end
 
 Return an array of undocumented symbols in `module` (that is, lacking docstrings).
 `all=false` returns only exported symbols; whereas `all=true` also includes
-non-exported symbols, following the behavior of [`names`](@ref).
+non-exported symbols, following the behavior of [`names`](@ref). Only valid identifiers
+are included.
 
-See also: [`names`](@ref), [`Docs.hasdoc`](@ref).
+See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.isidentifier`](@ref).
 """
-function undocumented_names(mod::Module; all::Bool=false, identifiers::Bool=true)
+function undocumented_names(mod::Module; all::Bool=false)
     filter!(names(mod; all)) do sym
         !hasdoc(mod, sym) && (!identifiers || Base.isidentifier(sym))
     end
