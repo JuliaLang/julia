@@ -377,6 +377,9 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
             x.dest + statement_offset,
         )
     end
+    if isa(x, Core.EnterNode)
+        return Core.EnterNode(x, x.catch_dest + statement_offset)
+    end
     if isa(x, Expr)
         head = x.head
         if head === :static_parameter
@@ -424,8 +427,6 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                                            static_param_values, slot_offset,
                                            statement_offset, boundscheck)
             x.args[2] += statement_offset
-        elseif head === :enter
-            x.args[1] += statement_offset
         elseif head === :isdefined
             arg = x.args[1]
             # inlining a QuoteNode or literal into `Expr(:isdefined, x)` is invalid, replace with true

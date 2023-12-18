@@ -807,8 +807,9 @@ let text = "input-test-text"
     out = Base.BufferStream()
     proc = run(catcmd, IOBuffer(text), out, wait=false)
     @test proc.out === out
-    @test read(out, String) == text
     @test success(proc)
+    closewrite(out)
+    @test read(out, String) == text
 
     out = PipeBuffer()
     proc = run(catcmd, IOBuffer(SubString(text)), out)

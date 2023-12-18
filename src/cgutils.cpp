@@ -2911,7 +2911,8 @@ static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t& v,
 {
     // newv should already be tagged
     if (v.ispointer()) {
-        emit_memcpy(ctx, newv, jl_aliasinfo_t::fromTBAA(ctx, tbaa), v, jl_datatype_size(v.typ), sizeof(void*), julia_alignment(v.typ));
+        unsigned align = std::max(julia_alignment(v.typ), (unsigned)sizeof(void*));
+        emit_memcpy(ctx, newv, jl_aliasinfo_t::fromTBAA(ctx, tbaa), v, jl_datatype_size(v.typ), align, julia_alignment(v.typ));
     }
     else {
         init_bits_value(ctx, newv, v.V, tbaa);
@@ -3733,7 +3734,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 strct = emit_static_alloca(ctx, lt);
                 setName(ctx.emission_context, strct, arg_typename);
                 if (nargs < nf)
-                    ctx.builder.CreateStore(ctx.builder.CreateFreeze(UndefValue::get(lt)), strct);
+                    promotion_point = ctx.builder.CreateStore(ctx.builder.CreateFreeze(UndefValue::get(lt)), strct);
                 if (tracked.count)
                     undef_derived_strct(ctx, strct, sty, ctx.tbaa().tbaa_stack);
             }

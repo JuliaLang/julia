@@ -24,6 +24,11 @@ following meanings:
   * `EFFECT_FREE_IF_INACCESSIBLEMEMONLY`: the `:effect-free`-ness of this method can later be
     refined to `ALWAYS_TRUE` in a case when `:inaccessiblememonly` is proven.
 - `nothrow::Bool`: this method is guaranteed to not throw an exception.
+  If the execution of this method may raise `MethodError`s and similar exceptions, then
+  the method is not considered as `:nothrow`.
+  However, note that environment-dependent errors like `StackOverflowError` or `InterruptException`
+  are not modeled by this effect and thus a method that may result in `StackOverflowError`
+  does not necessarily need to taint `:nothrow` (although it should usually taint `:terminates` too).
 - `terminates::Bool`: this method is guaranteed to terminate.
 - `notaskstate::Bool`: this method does not access any state bound to the current
   task and may thus be moved to a different task without changing observable
@@ -314,18 +319,6 @@ function decode_effects(e::UInt32)
         _Bool((e >> 12) & 0x01))
 end
 
-struct EffectsOverride
-    consistent::Bool
-    effect_free::Bool
-    nothrow::Bool
-    terminates_globally::Bool
-    terminates_locally::Bool
-    notaskstate::Bool
-    inaccessiblememonly::Bool
-    noub::Bool
-    noub_if_noinbounds::Bool
-end
-
 function encode_effects_override(eo::EffectsOverride)
     e = 0x0000
     eo.consistent          && (e |= (0x0001 << 0))
@@ -352,3 +345,6 @@ function decode_effects_override(e::UInt16)
         !iszero(e & (0x0001 << 7)),
         !iszero(e & (0x0001 << 8)))
 end
+
+decode_statement_effects_override(ssaflag::UInt32) =
+    decode_effects_override(UInt16((ssaflag >> NUM_IR_FLAGS) & (1 << NUM_EFFECTS_OVERRIDES - 1)))

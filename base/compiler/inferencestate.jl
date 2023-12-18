@@ -205,8 +205,10 @@ const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization allowed
 
 mutable struct TryCatchFrame
     exct
+    scopet
     const enter_idx::Int
-    TryCatchFrame(@nospecialize(exct), enter_idx::Int) = new(exct, enter_idx)
+    scope_uses::Vector{Int}
+    TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) = new(exct, scopet, enter_idx)
 end
 
 mutable struct InferenceState
@@ -362,13 +364,13 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
     # start from all :enter statements and record the location of the try
     for pc = 1:n
         stmt = code[pc]
-        if isexpr(stmt, :enter)
-            l = stmt.args[1]::Int
-            push!(handlers, TryCatchFrame(Bottom, pc))
+        if isa(stmt, EnterNode)
+            l = stmt.catch_dest
+            push!(handlers, TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc))
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
             push!(ip, pc + 1)
-            handler_at[l] = (handler_id, handler_id)
+            handler_at[l] = (0, handler_id)
             push!(ip, l)
         end
     end
@@ -396,12 +398,15 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
             elseif isa(stmt, ReturnNode)
                 @assert !isdefined(stmt, :val) || cur_stacks[1] == 0 "unbalanced try/catch"
                 break
+            elseif isa(stmt, EnterNode)
+                l = stmt.catch_dest
+                # We assigned a handler number above. Here we just merge that
+                # with out current handler information.
+                handler_at[l] = (cur_stacks[1], handler_at[l][2])
+                cur_stacks = (handler_at[pc´][1], cur_stacks[2])
             elseif isa(stmt, Expr)
                 head = stmt.head
-                if head === :enter
-                    # Already set above
-                    cur_stacks = (handler_at[pc´][1], cur_stacks[2])
-                elseif head === :leave
+                if head === :leave
                     l = 0
                     for j = 1:length(stmt.args)
                         arg = stmt.args[j]
@@ -412,7 +417,7 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                             if enter_stmt === nothing
                                 continue
                             end
-                            @assert isexpr(enter_stmt, :enter) "malformed :leave"
+                            @assert isa(enter_stmt, EnterNode) "malformed :leave"
                         end
                         l += 1
                     end
@@ -815,7 +820,14 @@ frame_world(sv::IRInterpretationState) = sv.world
 callers_in_cycle(sv::InferenceState) = sv.callers_in_cycle
 callers_in_cycle(sv::IRInterpretationState) = ()
 
-is_effect_overridden(sv::AbsIntState, effect::Symbol) = is_effect_overridden(frame_instance(sv), effect)
+function is_effect_overridden(sv::AbsIntState, effect::Symbol)
+    if is_effect_overridden(frame_instance(sv), effect)
+        return true
+    elseif is_effect_overridden(decode_statement_effects_override(sv), effect)
+        return true
+    end
+    return false
+end
 function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
     def = linfo.def
     return isa(def, Method) && is_effect_overridden(def, effect)
@@ -888,6 +900,9 @@ end
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
 get_curr_ssaflag(sv::IRInterpretationState) = sv.ir.stmts[sv.curridx][:flag]
 
+has_curr_ssaflag(sv::InferenceState, flag::UInt32) = has_flag(sv.src.ssaflags[sv.currpc], flag)
+has_curr_ssaflag(sv::IRInterpretationState, flag::UInt32) = has_flag(sv.ir.stmts[sv.curridx][:flag], flag)
+
 function set_curr_ssaflag!(sv::InferenceState, flag::UInt32, mask::UInt32=typemax(UInt32))
     curr_flag = sv.src.ssaflags[sv.currpc]
     sv.src.ssaflags[sv.currpc] = (curr_flag & ~mask) | flag
@@ -898,10 +913,10 @@ function set_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32, mask::UInt32
 end
 
 add_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] |= flag
-add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] |= flag
+add_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = add_flag!(sv.ir.stmts[sv.curridx], flag)
 
 sub_curr_ssaflag!(sv::InferenceState, flag::UInt32) = sv.src.ssaflags[sv.currpc] &= ~flag
-sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sv.ir.stmts[sv.curridx][:flag] &= ~flag
+sub_curr_ssaflag!(sv::IRInterpretationState, flag::UInt32) = sub_flag!(sv.ir.stmts[sv.curridx], flag)
 
 function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
     if effects.effect_free === EFFECT_FREE_GLOBALLY
@@ -911,6 +926,9 @@ function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
 end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
+
+decode_statement_effects_override(sv::AbsIntState) =
+    decode_statement_effects_override(get_curr_ssaflag(sv))
 
 struct InferenceLoopState
     sig

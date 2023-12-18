@@ -1363,7 +1363,13 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
                 LLVMContext ctx;
                 // Lazily deserialize the entire module
                 timers[i].deserialize.startTimer();
-                auto M = cantFail(getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx), "Error loading module");
+                auto EM = getLazyBitcodeModule(MemoryBufferRef(StringRef(serialized.data(), serialized.size()), "Optimized"), ctx);
+                // Make sure this also fails with only julia, but not LLVM assertions enabled,
+                // otherwise, the first error we hit is the LLVM module verification failure,
+                // which will look very confusing, because the module was partially deserialized.
+                bool deser_succeeded = (bool)EM;
+                auto M = cantFail(std::move(EM), "Error loading module");
+                assert(deser_succeeded); (void)deser_succeeded;
                 timers[i].deserialize.stopTimer();
 
                 timers[i].materialize.startTimer();
@@ -1414,12 +1420,15 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
     return outputs;
 }
 
+extern int jl_is_timing_passes;
 static unsigned compute_image_thread_count(const ModuleInfo &info) {
     // 32-bit systems are very memory-constrained
 #ifdef _P32
     LLVM_DEBUG(dbgs() << "32-bit systems are restricted to a single thread\n");
     return 1;
 #endif
+    if (jl_is_timing_passes) // LLVM isn't thread safe when timing the passes https://github.com/llvm/llvm-project/issues/44417
+        return 1;
     // COFF has limits on external symbols (even hidden) up to 65536. We reserve the last few
     // for any of our other symbols that we insert during compilation.
     if (info.triple.isOSBinFormatCOFF() && info.globals > 64000) {
@@ -1809,6 +1818,58 @@ void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIR
 {
     PM->add(new TargetLibraryInfoWrapperPass(triple));
     PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
+}
+
+// sometimes in GDB you want to find out what code was created from a mi
+extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instance_t *mi)
+{
+    jl_llvmf_dump_t llvmf_dump;
+    size_t world = jl_current_task->world_age;
+    JL_STREAM *stream = (JL_STREAM*)STDERR_FILENO;
+
+    jl_printf(stream, "---- dumping IR for ----\n");
+    jl_static_show(stream, (jl_value_t*)mi);
+    jl_printf(stream, "\n----\n");
+
+    jl_printf(stream, "\n---- unoptimized IR ----");
+    jl_get_llvmf_defn(&llvmf_dump, mi, world, 0, false, jl_default_cgparams);
+    if (llvmf_dump.F) {
+        jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
+        jl_static_show(stream, ir);
+    }
+    jl_printf(stream, "----\n");
+
+    jl_printf(stream, "\n---- optimized IR ----");
+    jl_get_llvmf_defn(&llvmf_dump, mi, world, 0, true, jl_default_cgparams);
+    if (llvmf_dump.F) {
+        jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
+        jl_static_show(stream, ir);
+    }
+    jl_printf(stream, "----\n");
+
+    jl_printf(stream, "\n---- assembly ----");
+    jl_get_llvmf_defn(&llvmf_dump, mi, world, 0, true, jl_default_cgparams);
+    if (llvmf_dump.F) {
+        jl_value_t *ir = jl_dump_function_asm(&llvmf_dump, 0, "", "source", 0, true);
+        jl_static_show(stream, ir);
+    }
+    jl_printf(stream, "----\n");
+
+    jl_code_info_t *src = NULL;
+    jl_value_t *ci = jl_default_cgparams.lookup(mi, world, world);
+    if (ci != jl_nothing) {
+        jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+        src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
+        if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method)) {
+            JL_GC_PUSH2(&codeinst, &src);
+            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_value_t*)src);
+            JL_GC_POP();
+        }
+    }
+    if (!src || (jl_value_t*)src == jl_nothing) {
+        src = jl_type_infer(mi, world, 0);
+    }
+    return src;
 }
 
 // --- native code info, and dump function to IR and ASM ---

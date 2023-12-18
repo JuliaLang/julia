@@ -316,6 +316,7 @@ int jl_all_tls_states_size;
 static uv_cond_t cond;
 // concurrent reads are permitted, using the same pattern as mtsmall_arraylist
 // it is implemented separately because the API of direct jl_all_tls_states use is already widely prevalent
+void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 // return calling thread's ID
 JL_DLLEXPORT int16_t jl_threadid(void)
@@ -379,9 +380,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     ptls->bt_data = bt_data;
     small_arraylist_new(&ptls->locks, 0);
     jl_init_thread_heap(ptls);
-
-    uv_mutex_init(&ptls->sleep_lock);
-    uv_cond_init(&ptls->wake_signal);
+    jl_init_thread_scheduler(ptls);
 
     uv_mutex_lock(&tls_lock);
     if (tid == -1)
@@ -434,6 +433,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 }
 
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
+void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
@@ -444,9 +444,7 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
     // safepoint until GC exit, in case GC was running concurrently while in
     // prior unsafe-region (before we let it release the stack memory)
     (void)jl_gc_unsafe_enter(ptls);
-    jl_atomic_store_relaxed(&ptls->sleep_check_state, 2); // dead, interpreted as sleeping and unwakeable
-    jl_fence();
-    jl_wakeup_thread(0); // force thread 0 to see that we do not have the IO lock (and am dead)
+    scheduler_delete_thread(ptls);
     // try to free some state we do not need anymore
 #ifndef _OS_WINDOWS_
     void *signal_stack = ptls->signal_stack;

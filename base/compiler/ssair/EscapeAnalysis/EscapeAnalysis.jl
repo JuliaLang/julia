@@ -25,9 +25,9 @@ using ._TOP_MOD:     # Base definitions
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using Core.Compiler: # Core.Compiler specific definitions
     Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
-    argextype, check_effect_free!, fieldcount_noerror, hasintersect, intrinsic_nothrow,
-    is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow, singleton_type,
-    try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
+    argextype, check_effect_free!, fieldcount_noerror, hasintersect, has_flag,
+    intrinsic_nothrow, is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow,
+    singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -652,7 +652,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_e
                 elseif is_meta_expr_head(head)
                     # meta expressions doesn't account for any usages
                     continue
-                elseif head === :enter || head === :leave || head === :the_exception || head === :pop_exception
+                elseif head === :leave || head === :the_exception || head === :pop_exception
                     # ignore these expressions since escapes via exceptions are handled by `escape_exception!`
                     # `escape_exception!` conservatively propagates `AllEscape` anyway,
                     # and so escape information imposed on `:the_exception` isn't computed
@@ -666,6 +666,9 @@ function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_e
                 else
                     add_conservative_changes!(astate, pc, stmt.args)
                 end
+            elseif isa(stmt, EnterNode)
+                # Handled via escape_exception!
+                continue
             elseif isa(stmt, ReturnNode)
                 if isdefined(stmt, :val)
                     add_escape_change!(astate, stmt.val, ReturnEscape(pc))
@@ -728,10 +731,10 @@ function compute_frameinfo(ir::IRCode)
     for idx in 1:nstmts+nnewnodes
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
-        if isexpr(stmt, :enter)
+        if isa(stmt, EnterNode)
             @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
             tryregions === nothing && (tryregions = UnitRange{Int}[])
-            leave_block = stmt.args[1]::Int
+            leave_block = stmt.catch_dest
             leave_pc = first(ir.cfg.blocks[leave_block].stmts)
             push!(tryregions, idx:leave_pc)
         elseif arrayinfo !== nothing
@@ -975,7 +978,7 @@ end
     error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
 end
 
-is_nothrow(ir::IRCode, pc::Int) = ir[SSAValue(pc)][:flag] & IR_FLAG_NOTHROW ≠ 0
+is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 
 # NOTE if we don't maintain the alias set that is separated from the lattice state, we can do
 # something like below: it essentially incorporates forward escape propagation in our default

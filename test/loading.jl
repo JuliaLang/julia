@@ -795,8 +795,10 @@ end
 @testset "`Base.project_names` and friends" begin
     # Some functions in Pkg assumes that these tuples have the same length
     n = length(Base.project_names)
-    @test length(Base.manifest_names) == n
     @test length(Base.preferences_names) == n
+
+    # there are two manifest names per project name
+    @test length(Base.manifest_names) == 2n
 end
 
 @testset "Manifest formats" begin
@@ -822,6 +824,33 @@ end
         raw_manifest = Base.parsed_toml(manifest_file)
         @test Base.is_v1_format_manifest(raw_manifest) == false
         @test Base.get_deps(raw_manifest) == deps
+    end
+end
+
+@testset "Manifest name preferential loading" begin
+    mktempdir() do tmp
+        proj = joinpath(tmp, "Project.toml")
+        touch(proj)
+        for man_name in (
+            "Manifest.toml",
+            "JuliaManifest.toml",
+            "Manifest-v$(VERSION.major).$(VERSION.minor).toml",
+            "JuliaManifest-v$(VERSION.major).$(VERSION.minor).toml"
+            )
+            touch(joinpath(tmp, man_name))
+            man = basename(Base.project_file_manifest_path(proj))
+            @test man == man_name
+        end
+    end
+    mktempdir() do tmp
+        # check that another version isn't preferred
+        proj = joinpath(tmp, "Project.toml")
+        touch(proj)
+        touch(joinpath(tmp, "Manifest-v1.5.toml"))
+        @test Base.project_file_manifest_path(proj) == nothing
+        touch(joinpath(tmp, "Manifest.toml"))
+        man = basename(Base.project_file_manifest_path(proj))
+        @test man == "Manifest.toml"
     end
 end
 
