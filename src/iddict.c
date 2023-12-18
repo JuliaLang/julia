@@ -15,15 +15,14 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
     size_t sz = jl_array_len(a);
     size_t i;
     jl_value_t **ol = (jl_value_t **)a->data;
-    jl_array_t *newa = jl_alloc_vec_any(newsz);
+    jl_array_t *newa = NULL;
     // keep the original array in the original slot since we need `ol`
     // to be valid in the loop below.
     JL_GC_PUSH2(&newa, &a);
+    newa = jl_alloc_vec_any(newsz);
     for (i = 0; i < sz; i += 2) {
         if (ol[i + 1] != NULL) {
             jl_table_assign_bp(&newa, ol[i], ol[i + 1]);
-            // it is however necessary here because allocation
-            // can (and will) occur in a recursive call inside table_lookup_bp
         }
     }
     JL_GC_POP();
