@@ -191,7 +191,7 @@ end
     if field === :scope
         istaskstarted(t) && error("Setting scope on a started task directly is disallowed.")
     end
-    return @invoke setproperty!(t::Any, field, v)
+    return @invoke setproperty!(t::Any, field::Symbol, v::Any)
 end
 
 """

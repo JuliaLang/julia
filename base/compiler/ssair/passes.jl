@@ -2345,7 +2345,7 @@ function cfg_simplify!(ir::IRCode)
         @assert length(new_bb.succs) <= 2
         length(new_bb.succs) <= 1 && continue
         if new_bb.succs[1] == new_bb.succs[2]
-            old_bb2 = findfirst(x::Int->x==bbidx, bb_rename_pred)
+            old_bb2 = findfirst(x::Int->x==bbidx, bb_rename_pred)::Int
             terminator = ir[SSAValue(last(bbs[old_bb2].stmts))]
             @assert terminator[:stmt] isa GotoIfNot
             # N.B.: The dest will be renamed in process_node! below

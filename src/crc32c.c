@@ -56,14 +56,9 @@
 #define POLY 0x82f63b78
 
 /* Block sizes for three-way parallel crc computation.  LONG and SHORT must
-   both be powers of two.  The associated string constants must be set
-   accordingly, for use in constructing the assembler instructions. */
+   both be powers of two. */
 #define LONG 8192
-#define LONGx1 "8192"
-#define LONGx2 "16384"
 #define SHORT 256
-#define SHORTx1 "256"
-#define SHORTx2 "512"
 
 #ifndef GEN_CRC32C_TABLES
 #include "crc32c-tables.c"
@@ -100,9 +95,9 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
     /* compute the crc for up to seven leading bytes to bring the data pointer
        to an eight-byte boundary */
     while (len && ((uintptr_t)buf & 7) != 0) {
-        __asm__("crc32b\t" "(%1), %0"
+        __asm__("crc32b\t" "%1, %0"
                 : "+r"(crc0)
-                : "r"(buf), "m"(*buf));
+                : "m"(*buf));
         buf++;
         len--;
     }
@@ -114,14 +109,13 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
         uintptr_t crc2 = 0;
         const char *end = buf + LONG;
         do {
-            __asm__(CRC32_PTR "\t" "(%3), %0\n\t"
-                    CRC32_PTR "\t" LONGx1 "(%3), %1\n\t"
-                    CRC32_PTR "\t" LONGx2 "(%3), %2"
+            __asm__(CRC32_PTR "\t%3, %0\n\t"
+                    CRC32_PTR "\t%4, %1\n\t"
+                    CRC32_PTR "\t%5, %2"
                     : "+r"(crc0), "+r"(crc1), "+r"(crc2)
-                    : "r"(buf),
-                      "m"(* (const char (*)[sizeof(void*)]) &buf[0]),
-                      "m"(* (const char (*)[sizeof(void*)]) &buf[LONG]),
-                      "m"(* (const char (*)[sizeof(void*)]) &buf[LONG*2]));
+                    : "m"(* (const uintptr_t *) &buf[0]),
+                      "m"(* (const uintptr_t *) &buf[LONG]),
+                      "m"(* (const uintptr_t *) &buf[LONG*2]));
             buf += sizeof(void*);
         } while (buf < end);
         crc0 = crc32c_shift(crc32c_long, crc0) ^ crc1;
@@ -137,14 +131,13 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
         uintptr_t crc2 = 0;
         const char *end = buf + SHORT;
         do {
-            __asm__(CRC32_PTR "\t" "(%3), %0\n\t"
-                    CRC32_PTR "\t" SHORTx1 "(%3), %1\n\t"
-                    CRC32_PTR "\t" SHORTx2 "(%3), %2"
+            __asm__(CRC32_PTR "\t%3, %0\n\t"
+                    CRC32_PTR "\t%4, %1\n\t"
+                    CRC32_PTR "\t%5, %2"
                     : "+r"(crc0), "+r"(crc1), "+r"(crc2)
-                    : "r"(buf),
-                      "m"(* (const char (*)[sizeof(void*)]) &buf[0]),
-                      "m"(* (const char (*)[sizeof(void*)]) &buf[SHORT]),
-                      "m"(* (const char (*)[sizeof(void*)]) &buf[SHORT*2]));
+                    : "m"(* (const uintptr_t *) &buf[0]),
+                      "m"(* (const uintptr_t *) &buf[SHORT]),
+                      "m"(* (const uintptr_t *) &buf[SHORT*2]));
             buf += sizeof(void*);
         } while (buf < end);
         crc0 = crc32c_shift(crc32c_short, crc0) ^ crc1;
@@ -157,18 +150,18 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
        block */
     const char *end = buf + (len - (len & 7));
     while (buf < end) {
-        __asm__(CRC32_PTR "\t" "(%1), %0"
+        __asm__(CRC32_PTR "\t" "%1, %0"
                 : "+r"(crc0)
-                : "r"(buf), "m"(* (const char (*)[sizeof(void*)]) buf));
+                : "m"(* (const uintptr_t *) buf));
         buf += sizeof(void*);
     }
     len &= 7;
 
     /* compute the crc for up to seven trailing bytes */
     while (len) {
-        __asm__("crc32b\t" "(%1), %0"
+        __asm__("crc32b\t" "%1, %0"
                 : "+r"(crc0)
-                : "r"(buf), "m"(*buf));
+                : "m"(*buf));
         buf++;
         len--;
     }
