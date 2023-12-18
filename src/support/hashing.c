@@ -14,12 +14,12 @@
 extern "C" {
 #endif
 
+// FxHasher
 uint32_t int32hash(uint32_t a)
 {
     return a * 0x9e3779b9;
 }
 
-// FxHasher
 uint64_t int64hash(uint64_t key)
 {
     return key * 0x517cc1b727220a95;
@@ -27,13 +27,10 @@ uint64_t int64hash(uint64_t key)
 
 uint32_t int64to32hash(uint64_t key)
 {
-    key = (~key) + (key << 18); // key = (key << 18) - key - 1;
-    key =   key  ^ (key >> 31);
-    key = key * 21;             // key = (key + (key << 2)) + (key << 4);
-    key = key ^ (key >> 11);
-    key = key + (key << 6);
-    key = key ^ (key >> 22);
-    return (uint32_t)key;
+    uint32_t h = 0;
+    h = bitmix(h, (uint32_t)key);
+    h = bitmix(h, (uint32_t)(key >> 32));
+    return h;
 }
 
 #include "MurmurHash3.c"
