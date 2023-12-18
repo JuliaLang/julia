@@ -9543,6 +9543,8 @@ char jl_using_perf_jitevents = 0;
 
 int jl_is_timing_passes = 0;
 
+int jl_opaque_ptrs_set = 0;
+
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
@@ -9600,6 +9602,8 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("opaque-pointers");
     if (clopt && clopt->getNumOccurrences() == 0) {
         clopt->addOccurrence(1, clopt->ArgStr, "false", true);
+    } else {
+        jl_opaque_ptrs_set = 1;
     }
 
     clopt = llvmopts.lookup("time-passes");

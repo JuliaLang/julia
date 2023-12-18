@@ -1665,7 +1665,10 @@ void fixupTM(TargetMachine &TM) {
     }
 }
 
+extern int jl_opaque_ptrs_set;
 void SetOpaquePointer(LLVMContext &ctx) {
+    if (jl_opaque_ptrs_set)
+        return;
 #ifndef JL_LLVM_OPAQUE_POINTERS
     ctx.setOpaquePointers(false);
 #else
