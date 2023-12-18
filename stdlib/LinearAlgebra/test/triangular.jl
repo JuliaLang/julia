@@ -523,7 +523,7 @@ end
         @test -U1 == -M1
         for op in (+, -)
             for (A, MA) in ((U, M), (U1, M1)), (B, MB) in ((U, M), (U1, M1))
-                @test op(A, B) ≈ op(MA, MB)
+                @test op(A, B) == op(MA, MB)
             end
         end
     end
