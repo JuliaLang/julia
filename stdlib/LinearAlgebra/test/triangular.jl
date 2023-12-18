@@ -880,4 +880,19 @@ end
     end
 end
 
+@testset "error paths" begin
+    A = zeros(1,1); B = zeros(2,2)
+    @testset "inplace mul scaling with incompatible sizes" begin
+        for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+            @test_throws DimensionMismatch mul!(T(A), T(B), 3)
+            @test_throws DimensionMismatch mul!(T(A), 3, T(B))
+        end
+    end
+    @testset "copyto with incompatible sizes" begin
+        for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+            @test_throws BoundsError copyto!(T(A), T(B))
+        end
+    end
+end
+
 end # module TestTriangular

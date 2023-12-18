@@ -1156,6 +1156,16 @@ public
     @locals,
     @propagate_inbounds,
 
+# IO
+    # types
+    BufferStream,
+    IOServer,
+    OS_HANDLE,
+    PipeEndpoint,
+    TTY,
+    # functions
+    reseteof,
+
 # misc
     notnothing,
     runtests,

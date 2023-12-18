@@ -177,6 +177,8 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         elseif head === :gc_preserve_begin ||
                head === :gc_preserve_end
             return false
+        elseif head === :leave
+            return false
         else
             error("reprocess_instruction!: unhandled expression found")
         end

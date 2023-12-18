@@ -202,7 +202,7 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
         function $S(A::$H, uplo::Symbol)
             if A.uplo == char_uplo(uplo)
                 if $H === Hermitian && !(eltype(A) <: Real) &&
-                    any(!isreal, A.data[i] for i in diagind(A.data))
+                    any(!isreal, A.data[i] for i in diagind(A.data, IndexStyle(A.data)))
 
                     throw(ArgumentError("Cannot construct $($S)($($H))); diagonal contains complex values"))
                 end
@@ -254,12 +254,12 @@ end
     end
 end
 
-function setindex!(A::Symmetric, v, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::Symmetric, v, i::Integer, j::Integer)
     i == j || throw(ArgumentError("Cannot set a non-diagonal index in a symmetric matrix"))
     setindex!(A.data, v, i, j)
 end
 
-function setindex!(A::Hermitian, v, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::Hermitian, v, i::Integer, j::Integer)
     if i != j
         throw(ArgumentError("Cannot set a non-diagonal index in a Hermitian matrix"))
     elseif !isreal(v)
