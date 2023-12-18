@@ -777,7 +777,8 @@ JL_DLLEXPORT int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT;
 jl_value_t *jl_call_scm_on_ast_and_loc(const char *funcname, jl_value_t *expr,
                                        jl_module_t *inmodule, const char *file, int line);
 
-jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world);
+JL_DLLEXPORT jl_method_instance_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, size_t world, jl_value_t *_mt);
+JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world);
 
 jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value_t **args, size_t nargs);
 jl_value_t *jl_gf_invoke(jl_value_t *types, jl_value_t *f, jl_value_t **args, size_t nargs);
@@ -966,17 +967,7 @@ JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t
 extern pthread_mutex_t in_signal_lock;
 #endif
 
-static inline void jl_set_gc_and_wait(void) // n.b. not used on _OS_DARWIN_
-{
-    jl_task_t *ct = jl_current_task;
-    // reading own gc state doesn't need atomic ops since no one else
-    // should store to it.
-    int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
-    jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_WAITING);
-    jl_safepoint_wait_gc();
-    jl_atomic_store_release(&ct->ptls->gc_state, state);
-    jl_safepoint_wait_thread_resume(); // block in thread-suspend now if requested, after clearing the gc_state
-}
+void jl_set_gc_and_wait(void); // n.b. not used on _OS_DARWIN_
 
 // Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
 STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT

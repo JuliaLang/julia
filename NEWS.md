@@ -16,6 +16,11 @@ New language features
   particularly useful for holding styling information, and is used extensively
   in the new `StyledStrings` standard library. There is also a new `AnnotatedChar`
   type, that is the equivalent new `AbstractChar` type.
+* `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
+  to be preferentially picked up by the given julia version. i.e. in the same folder,
+  a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
+  version. This makes managing environments for multiple julia versions at the same time
+  easier ([#43845]).
 
 Language changes
 ----------------

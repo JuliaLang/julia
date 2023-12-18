@@ -2306,7 +2306,9 @@ end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if isa(e, QuoteNode)
-        return RTEffects(Const(e.value), Union{}, EFFECTS_TOTAL)
+        effects = Effects(EFFECTS_TOTAL;
+            inaccessiblememonly = is_mutation_free_argtype(typeof(e.value)) ? ALWAYS_TRUE : ALWAYS_FALSE)
+        return RTEffects(Const(e.value), Union{}, effects)
     elseif isa(e, SSAValue)
         return RTEffects(abstract_eval_ssavalue(e, sv), Union{}, EFFECTS_TOTAL)
     elseif isa(e, SlotNumber)
