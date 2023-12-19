@@ -684,17 +684,15 @@ using .IteratorsMD
 
 ## Bounds-checking with CartesianIndex
 # Disallow linear indexing with CartesianIndex
-function checkbounds(::Type{Bool}, A::AbstractArray, i::Union{CartesianIndex, AbstractArray{<:CartesianIndex}})
-    @inline
+@inline checkbounds(::Type{Bool}, A::AbstractArray, i::CartesianIndex) =
     checkbounds_indices(Bool, axes(A), (i,))
+# Here we try to consume N of the indices (if there are that many available)
+@inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{CartesianIndex,Vararg})
+    inds1, rest = IteratorsMD.split(inds, Val(length(I[1])))
+    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
 end
-
-@inline checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple{CartesianIndex,Vararg{Any}}) =
-    checkbounds_indices(Bool, (), (I[1].I..., tail(I)...))
-@inline checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) =
-    checkbounds_indices(Bool, IA, (I[1].I..., tail(I)...))
-@inline checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) =
-    checkbounds_indices(Bool, IA, (I[1].I..., tail(I)...))
+@inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndex) =
+    checkbounds_indices(Bool, inds, I.I)
 
 # Indexing into Array with mixtures of Integers and CartesianIndices is
 # extremely performance-sensitive. While the abstract fallbacks support this,
@@ -704,45 +702,17 @@ end
 @propagate_inbounds setindex!(A::Array, v, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...) =
     (A[to_indices(A, (i1, I...))...] = v; A)
 
-# Support indexing with an array of CartesianIndex{N}s
+## Bounds-checking with arrays of CartesianIndex{N}
+# Disallow linear indexing with an array of CartesianIndex{N}
+@inline checkbounds(::Type{Bool}, A::AbstractArray, i::AbstractArray{CartesianIndex{N}}) where {N} =
+    checkbounds_indices(Bool, axes(A), (i,))
 # Here we try to consume N of the indices (if there are that many available)
-# The first two simply handle ambiguities
-@inline function checkbounds_indices(::Type{Bool}, ::Tuple{},
-        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}}) where N
-    checkindex(Bool, (), I[1]) & checkbounds_indices(Bool, (), tail(I))
+@inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg}) where N
+    inds1, rest = IteratorsMD.split(inds, Val(N))
+    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
 end
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any},
-        I::Tuple{AbstractArray{CartesianIndex{0}},Vararg{Any}})
-    checkbounds_indices(Bool, IA, tail(I))
-end
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any},
-        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}}) where N
-    checkindex(Bool, IA, I[1]) & checkbounds_indices(Bool, (), tail(I))
-end
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple,
-        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}}) where N
-    IA1, IArest = IteratorsMD.split(IA, Val(N))
-    checkindex(Bool, IA1, I[1]) & checkbounds_indices(Bool, IArest, tail(I))
-end
-
-
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{},
-    I::Tuple{AbstractArray{Bool,N},Vararg{Any}}) where N
-    return checkbounds_indices(Bool, IA, (LogicalIndex(I[1]), tail(I)...))
-end
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple,
-    I::Tuple{AbstractArray{Bool,N},Vararg{Any}}) where N
-    return checkbounds_indices(Bool, IA, (LogicalIndex(I[1]), tail(I)...))
-end
-
-function checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{<:CartesianIndex})
-    b = true
-    for i in I
-        b &= checkbounds_indices(Bool, inds, (i,))
-    end
-    b
-end
-checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) = all(checkindex.(Bool, inds, I.indices))
+@inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) =
+    checkbounds_indices(Bool, inds, I.indices)
 
 # combined count of all indices, including CartesianIndex and
 # AbstractArray{CartesianIndex}
@@ -850,11 +820,29 @@ end
     return eltype(L)(i1, irest...), (i1 - tz, Bi, irest, c)
 end
 
-@inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
-    eachindex(IndexLinear(), A) == eachindex(IndexLinear(), I.mask)
-@inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = axes(A) == axes(I.mask)
-@inline checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = (indx,) == axes(I.mask)
-checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = checkbounds_indices(Bool, inds, axes(I.mask))
+## Boundscheck for Logicalindex
+# LogicalIndex: map all calls to mask
+checkbounds(::Type{Bool}, A::AbstractArray, i::LogicalIndex) = checkbounds(Bool, A, i.mask)
+# `checkbounds_indices` has been handled via `I::AbstractArray` fallback
+checkindex(::Type{Bool}, inds::AbstractUnitRange, i::LogicalIndex) = checkindex(Bool, inds, i.mask)
+checkindex(::Type{Bool}, inds::Tuple, i::LogicalIndex) = checkindex(Bool, inds, i.mask)
+
+## Boundscheck for AbstractArray{Bool}
+# Disallow linear indexing with AbstractArray{Bool}
+checkbounds(::Type{Bool}, A::AbstractArray, i::AbstractArray{Bool}) =
+    checkbounds_indices(Bool, axes(A), (i,))
+# But allow linear indexing with AbstractVector{Bool}
+checkbounds(::Type{Bool}, A::AbstractArray, i::AbstractVector{Bool}) =
+    checkindex(Bool, eachindex(IndexLinear(), A), i)
+@inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{AbstractArray{Bool},Vararg})
+    inds1, rest = IteratorsMD.split(inds, Val(ndims(I[1])))
+    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
+end
+checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractVector{Bool}) = axes1(I) == inds
+checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractRange{Bool}) = axes1(I) == inds
+checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{Bool}) = _check_boolen_axes(inds, axes(I))
+_check_boolen_axes(inds::Tuple, axes::Tuple) = (inds[1] == axes[1]) & _check_boolen_axes(tail(inds), tail(axes))
+_check_boolen_axes(::Tuple{}, axes::Tuple) = all(==(OneTo(1)), axes)
 
 ensure_indexable(I::Tuple{}) = ()
 @inline ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)

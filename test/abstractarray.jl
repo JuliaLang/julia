@@ -84,6 +84,7 @@ end
     @test checkbounds(Bool, A, 1:60) == true
     @test checkbounds(Bool, A, 1:61) == false
     @test checkbounds(Bool, A, 2, 2, 2, 1:1) == true  # extra indices
+    @test checkbounds(Bool, A, 2, 2, 2, 10:9) == true
     @test checkbounds(Bool, A, 2, 2, 2, 1:2) == false
     @test checkbounds(Bool, A, 1:5, 1:4) == false
     @test checkbounds(Bool, A, 1:5, 1:12) == false
@@ -104,6 +105,7 @@ end
     @test checkbounds(Bool, A, trues(5), trues(13)) == false
     @test checkbounds(Bool, A, trues(6), trues(12)) == false
     @test checkbounds(Bool, A, trues(5, 4, 3)) == true
+    @test checkbounds(Bool, A, trues(5, 4, 3, 1)) == true # issue 45867
     @test checkbounds(Bool, A, trues(5, 4, 2)) == false
     @test checkbounds(Bool, A, trues(5, 12)) == false
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 3)) == false
@@ -111,7 +113,9 @@ end
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
     @test checkbounds(Bool, A, trues(1, 5), :, 2) == false
     @test checkbounds(Bool, A, trues(5, 4), trues(3)) == true
-    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(5), trues(4, 3, 1)) == true
+    @test checkbounds(Bool, A, trues(5, 4), trues(3, 2)) == false
+    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == false
     @test checkbounds(Bool, A, trues(5, 4), trues(2)) == false
     @test checkbounds(Bool, A, trues(6, 4), trues(3)) == false
     @test checkbounds(Bool, A, trues(5, 4), trues(4)) == false
@@ -134,6 +138,10 @@ end
     @test checkbounds(Bool, A, [CartesianIndex((6, 4))], 3) == false
     @test checkbounds(Bool, A, [CartesianIndex((5, 5))], 3) == false
     @test checkbounds(Bool, A, [CartesianIndex((5, 4))], 4) == false
+    @test checkbounds(Bool, A, 5, [CartesianIndex((4, 3, 1))]) == true
+    @test checkbounds(Bool, A, 5, [CartesianIndex((4, 3, 2))]) == false
+    @test_throws ArgumentError checkbounds(Bool, A, [CartesianIndex((4, 3)), CartesianIndex((4,))])
+    @test_throws ArgumentError checkbounds(Bool, A, [CartesianIndex((1,)), 1])
 end
 
 @testset "index conversion" begin
