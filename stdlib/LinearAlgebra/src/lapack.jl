@@ -613,7 +613,9 @@ Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
 reflectors. The arguments `jpvt` and `tau` are optional and allow
 for passing preallocated arrays. When passed, `jpvt` must have length greater
 than or equal to `n` if `A` is an `(m x n)` matrix and `tau` must have length
-greater than or equal to the smallest dimension of `A`.
+greater than or equal to the smallest dimension of `A`. On entry, if `jpvt[j]`
+does not equal zero then the `j`th column of `A` is permuted to the front of
+`AP`.
 
 `A`, `jpvt`, and `tau` are modified in-place.
 """
@@ -2524,17 +2526,17 @@ for (laic1, elty) in
             if j != length(w)
                 throw(DimensionMismatch("vectors must have same length, but length of x is $j and length of w is $(length(w))"))
             end
-            sestpr = Vector{$elty}(undef, 1)
-            s = Vector{$elty}(undef, 1)
-            c = Vector{$elty}(undef, 1)
+            sestpr = Ref{$elty}()
+            s = Ref{$elty}()
+            c = Ref{$elty}()
             ccall((@blasfunc($laic1), libblastrampoline), Cvoid,
                 (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{$elty},
-                 Ptr{$elty}, Ref{$elty}, Ptr{$elty}, Ptr{$elty},
-                 Ptr{$elty}),
+                 Ptr{$elty}, Ref{$elty}, Ref{$elty}, Ref{$elty},
+                 Ref{$elty}),
                 job, j, x, sest,
                 w, gamma, sestpr, s,
                 c)
-            sestpr[1], s[1], c[1]
+            sestpr[], s[], c[]
         end
     end
 end
@@ -2558,17 +2560,17 @@ for (laic1, elty, relty) in
             if j != length(w)
                 throw(DimensionMismatch("vectors must have same length, but length of x is $j and length of w is $(length(w))"))
             end
-            sestpr = Vector{$relty}(undef, 1)
-            s = Vector{$elty}(undef, 1)
-            c = Vector{$elty}(undef, 1)
+            sestpr = Ref{$relty}()
+            s = Ref{$elty}()
+            c = Ref{$elty}()
             ccall((@blasfunc($laic1), libblastrampoline), Cvoid,
                 (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{$relty},
-                 Ptr{$elty}, Ref{$elty}, Ptr{$relty}, Ptr{$elty},
-                 Ptr{$elty}),
+                 Ptr{$elty}, Ref{$elty}, Ref{$relty}, Ref{$elty},
+                 Ref{$elty}),
                 job, j, x, sest,
                 w, gamma, sestpr, s,
                 c)
-            sestpr[1], s[1], c[1]
+            sestpr[], s[], c[]
         end
     end
 end

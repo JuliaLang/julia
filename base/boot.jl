@@ -460,6 +460,7 @@ eval(Core, quote
     ReturnNode() = $(Expr(:new, :ReturnNode)) # unassigned val indicates unreachable
     GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))
     EnterNode(dest::Int) = $(Expr(:new, :EnterNode, :dest))
+    EnterNode(dest::Int, @nospecialize(scope)) = $(Expr(:new, :EnterNode, :dest, :scope))
     LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))
     function LineNumberNode(l::Int, @nospecialize(f))
         isa(f, String) && (f = Symbol(f))
@@ -966,7 +967,8 @@ arraysize(a::Array, i::Int) = sle_int(i, nfields(a.size)) ? getfield(a.size, i) 
 export arrayref, arrayset, arraysize, const_arrayref
 
 # For convenience
-EnterNode(old::EnterNode, new_dest::Int) = EnterNode(new_dest)
+EnterNode(old::EnterNode, new_dest::Int) = isdefined(old, :scope) ?
+    EnterNode(new_dest, old.scope) : EnterNode(new_dest)
 
 include(Core, "optimized_generics.jl")
 

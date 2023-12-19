@@ -271,14 +271,10 @@ getindex(match::Core.MethodMatch, field::Int) =
 # these were internal functions, but some packages seem to be relying on them
 tuple_type_head(T::Type) = fieldtype(T, 1)
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
-function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
-    @_foldable_meta
+@assume_effects :foldable tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S =
     Tuple{S, T.parameters...}
-end
-function parameter_upper_bound(t::UnionAll, idx)
-    @_foldable_meta
-    return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
-end
+@assume_effects :foldable parameter_upper_bound(t::UnionAll, idx) =
+    rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
 
 # these were internal functions, but some packages seem to be relying on them
 @deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes) false
