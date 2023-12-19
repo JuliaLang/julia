@@ -687,7 +687,7 @@ See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.isidentifier`](@ref).
 """
 function undocumented_names(mod::Module; all::Bool=false)
     filter!(names(mod; all)) do sym
-        !hasdoc(mod, sym) && (!identifiers || Base.isidentifier(sym))
+        !hasdoc(mod, sym) && Base.isidentifier(sym)
     end
 end
 
