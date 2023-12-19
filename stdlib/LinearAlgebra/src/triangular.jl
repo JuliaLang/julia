@@ -446,14 +446,18 @@ diag(A::UnitUpperTriangular) = fill(oneunit(eltype(A)), size(A,1))
 -(A::LowerTriangular) = LowerTriangular(-A.data)
 -(A::UpperTriangular) = UpperTriangular(-A.data)
 function -(A::UnitLowerTriangular)
-    Anew = -A.data
+    Adata = A.data
+    Anew = similar(Adata) # must be mutable, even if Adata is not
+    @. Anew = -Adata
     for i = 1:size(A, 1)
         Anew[i, i] = -A[i, i]
     end
     LowerTriangular(Anew)
 end
 function -(A::UnitUpperTriangular)
-    Anew = -A.data
+    Adata = A.data
+    Anew = similar(Adata) # must be mutable, even if Adata is not
+    @. Anew = -Adata
     for i = 1:size(A, 1)
         Anew[i, i] = -A[i, i]
     end
