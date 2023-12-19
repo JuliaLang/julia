@@ -1618,7 +1618,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
         end
         copyto!(Stmp, S)
         mul!(S, A, c)
-        ldiv!(Stmp, S.data)
+        ldiv!(Stmp, S)
 
         c = (p - j) / (j4 - 2)
         for i = 1:n
@@ -1626,14 +1626,14 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
         end
         copyto!(Stmp, S)
         mul!(S, A, c)
-        ldiv!(Stmp, S.data)
+        ldiv!(Stmp, S)
     end
     for i = 1:n
         S[i, i] = S[i, i] + 1
     end
     copyto!(Stmp, S)
     mul!(S, A, -p)
-    ldiv!(Stmp, S.data)
+    ldiv!(Stmp, S)
     for i = 1:n
         @inbounds S[i, i] = S[i, i] + 1
     end
