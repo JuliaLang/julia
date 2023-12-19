@@ -1663,3 +1663,25 @@ let code = Any[
     ir = Core.Compiler.compact!(ir)
     Core.Compiler.verify_ir(ir)
 end
+
+# Test correctness of current_scope folding
+@eval function scope_folding()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), 2),
+            :(return Core.current_scope())),
+    :(), 1))
+end
+
+@eval function scope_folding_opt()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), :(Base.inferencebarrier(2))),
+            :(return Core.current_scope())),
+    :(), :(Base.inferencebarrier(1))))
+end
+
+@test scope_folding() == 1
+@test scope_folding_opt() == 1
+@test_broken fully_eliminated(scope_folding)
+@test_broken fully_eliminated(scope_folding_opt)

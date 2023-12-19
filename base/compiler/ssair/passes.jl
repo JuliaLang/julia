@@ -1077,6 +1077,7 @@ function fold_current_scope!(compact::IncrementalCompact, idx::Int, stmt::Expr, 
     dombb = block_for_inst(compact, SSAValue(idx))
 
     local bbterminator
+    prevdombb = dombb
     while true
         dombb = domtree.idoms_bb[dombb]
 
@@ -1084,8 +1085,20 @@ function fold_current_scope!(compact::IncrementalCompact, idx::Int, stmt::Expr, 
         dombb == 0 && return nothing
 
         bbterminator = compact[SSAValue(last(compact.cfg_transform.result_bbs[dombb].stmts))][:stmt]
-        isa(bbterminator, EnterNode) || continue
-        isdefined(bbterminator, :scope) || continue
+        if !isa(bbterminator, EnterNode) || !isdefined(bbterminator, :scope)
+            prevdombb = dombb
+            continue
+        end
+        if bbterminator.catch_dest == 0
+            # TODO: dominance alone is not enough here, we need to actually find the :leaves
+            return nothing
+        end
+        # Check that we are inside the :enter region, i.e. are dominated by the first block in the
+        # enter region - otherwise we've already left this :enter and should keep going
+        if prevdombb != dombb + 1
+            prevdombb = dombb
+            continue
+        end
         compact[idx] = bbterminator.scope
         return nothing
     end
