@@ -920,6 +920,7 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
         return;
 
     jl_value_t *t = jl_typeof(v);
+    // jl_(v);
     // Items that require postorder traversal must visit their children prior to insertion into
     // the worklist/serialization_order (and also before their first use)
     if (s->incremental && !immediate) {
@@ -960,6 +961,14 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
 static void jl_serialize_reachable(jl_serializer_state *s) JL_GC_DISABLED
 {
     size_t i, prevlen = 0;
+    jl_safe_printf("worklist length: %zu\n", object_worklist.len);
+    for (int j = 0; j < object_worklist.len; j++){
+        jl_value_t *v = (jl_value_t*)object_worklist.items[j];
+        jl_safe_printf("value of type: ");
+        jl_((jl_value_t*)jl_typeof(v));
+        // jl_(v);
+    }
+
     while (object_worklist.len) {
         // reverse!(object_worklist.items, prevlen:end);
         // prevlen is the index of the first new object
@@ -1747,10 +1756,11 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         size_t delta = ios_pos(s->s) - s_start_pos;
         delta += ios_pos(s->const_data) - const_data_start_pos;
 
-        if (delta > 512ull * 1024ull) { // Print all objects > 512 kB
-            fprintf(stderr, "Wrote object of size %zu kB and type: ", delta / 1024);
-            jl_(jl_typeof(v));
-        }
+        // if (delta > 512) { // Print all objects > 512 kB
+        //     fprintf(stderr, "Wrote object of size %zu kB and type: ", delta / 1024);
+        //     jl_(jl_typeof(v));
+        //     jl_(v);
+        // }
     }
 }
 
@@ -2631,21 +2641,23 @@ static void  jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
             jl_queue_for_serialization(&s, s.ptls->root_task->tls);
         }
+        else if (small_image) {
+
+            // for (i = 0; tags[i] != NULL; i++) {
+            //     jl_value_t *tag = *tags[i];
+            //     jl_queue_for_serialization(&s, tag);
+            // }
+            jl_queue_for_serialization(&s, s.ptls->root_task->tls);
+            jl_queue_for_serialization(&s, worklist);
+            jl_safe_printf("sysimg_size %zu\n", sysimg.size);
+        }
         else {
-            if (small_image) {
-                for (i = 0; tags[i] != NULL; i++) {
-                    jl_value_t *tag = *tags[i];
-                    jl_queue_for_serialization(&s, tag);
-                }
-                jl_queue_for_serialization(&s, s.ptls->root_task->tls);
-            } else {
-                // To ensure we don't have to manually update the list, go through all tags and queue any that are not otherwise
-                // judged to be externally-linked
-                htable_new(&external_objects, NUM_TAGS);
-                for (size_t i = 0; tags[i] != NULL; i++) {
-                    jl_value_t *tag = *tags[i];
-                    ptrhash_put(&external_objects, tag, tag);
-                }
+            // To ensure we don't have to manually update the list, go through all tags and queue any that are not otherwise
+            // judged to be externally-linked
+            htable_new(&external_objects, NUM_TAGS);
+            for (size_t i = 0; tags[i] != NULL; i++) {
+                jl_value_t *tag = *tags[i];
+                ptrhash_put(&external_objects, tag, tag);
             }
             // Queue the worklist itself as the first item we serialize
             jl_queue_for_serialization(&s, worklist);
@@ -2654,7 +2666,7 @@ static void  jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             classify_callers(&s.callers_with_edges, edges);
         }
         // step 1.1: as needed, serialize the data needed for insertion into the running system
-        if (extext_methods) {
+        if (extext_methods && incremental) {
             assert(ext_targets);
             assert(edges);
             // Queue method extensions
@@ -2668,13 +2680,17 @@ static void  jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, edges);
         }
         jl_serialize_reachable(&s);
+        jl_safe_printf("sysimg_size1 %zu\n", sysimg.size);
         // step 1.2: ensure all gvars are part of the sysimage too
         record_gvars(&s, &gvars);
         record_external_fns(&s, &external_fns);
         jl_serialize_reachable(&s);
+        jl_safe_printf("sysimg_size2 %zu\n", sysimg.size);
         // step 1.3: prune (garbage collect) special weak references from the jl_global_roots_list
-        if (incremental == 0) {
+        if (worklist == NULL) {
             global_roots_list = jl_alloc_memory_any(0);
+            jl_safe_printf("global_roots_list\n");
+            // jl_(jl_global_roots_list);
             for (size_t i = 0; i < jl_global_roots_list->length; i++) {
                 jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_list, i);
                 if (val && ptrhash_get(&serialization_order, val) != HT_NOTFOUND) {
@@ -2685,6 +2701,7 @@ static void  jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, global_roots_list);
             jl_serialize_reachable(&s);
         }
+        jl_safe_printf("sysimg_size3 %zu\n", sysimg.size);
         // step 1.4: prune (garbage collect) some special weak references from
         // built-in type caches too
         for (i = 0; i < serialization_queue.len; i++) {
@@ -2697,19 +2714,19 @@ static void  jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             }
         }
     }
-
+    jl_safe_printf("sysimg_size4 %zu\n", sysimg.size);
     uint32_t external_fns_begin = 0;
     { // step 2: build all the sysimg sections
         write_padding(&sysimg, sizeof(uintptr_t));
         jl_write_values(&s);
         external_fns_begin = write_gvars(&s, &gvars, &external_fns);
     }
-
+    jl_safe_printf("sysimg_size5 %zu\n", sysimg.size);
     // This ensures that we can use the low bit of addresses for
     // identifying end pointers in gc's eytzinger search.
     write_padding(&sysimg, 4 - (sysimg.size % 4));
     write_padding(&const_data, 4 - (const_data.size % 4));
-
+    jl_safe_printf("sysimg_size10 %zu\n", sysimg.size);
     if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)) {
         jl_printf(
             JL_STDERR,
@@ -2771,21 +2788,21 @@ static void  jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     }
     jl_write_arraylist(s.relocs, &s.fixup_objs);
     write_uint(f, relocs.size);
-    jl_safe_printf("relocs.size = %lld\n", relocs.size);
+    jl_safe_printf("relocs.size = %lld\n", relocs.size/1024);
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&relocs, 0);
     ios_copyall(f, &relocs);
     ios_close(&relocs);
 
     write_uint(f, gvar_record.size);
-    jl_safe_printf("gvar_record.size = %lld\n", gvar_record.size);
+    jl_safe_printf("gvar_record.size = %lld\n", gvar_record.size/1024);
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&gvar_record, 0);
     ios_copyall(f, &gvar_record);
     ios_close(&gvar_record);
 
     write_uint(f, fptr_record.size);
-    jl_safe_printf("fptr_record.size = %lld\n", fptr_record.size);
+    jl_safe_printf("fptr_record.size = %lld\n", fptr_record.size/1024);
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&fptr_record, 0);
     ios_copyall(f, &fptr_record);
