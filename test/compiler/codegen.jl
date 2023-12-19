@@ -487,12 +487,16 @@ function f37262(x)
     catch
         GC.safepoint()
     end
+    local a
     try
         GC.gc()
-        return g37262(x)
+        a = g37262(x)
+        Base.inferencebarrier(false) && error()
+        return a
     catch ex
         GC.gc()
     finally
+        @isdefined(a) && Base.donotdelete(a)
         GC.gc()
     end
 end
@@ -856,3 +860,16 @@ foo50964(1) # Shouldn't assert!
 # https://github.com/JuliaLang/julia/issues/51233
 obj51233 = (1,)
 @test_throws ErrorException obj51233.x
+
+# Very specific test for multiversioning
+if Sys.ARCH === :x86_64
+    foo52079() = Core.Intrinsics.have_fma(Float64)
+    if foo52079() == true
+        let io = IOBuffer()
+            code_native(io,^,(Float64,Float64), dump_module=false)
+            str = String(take!(io))
+            @test !occursin("fma_emulated", str)
+            @test occursin("vfmadd", str)
+        end
+    end
+end

@@ -15,6 +15,13 @@ function run_gctest(file)
     end
 end
 
+function run_nonzero_page_utilization_test()
+    GC.gc()
+    page_utilization = Base.gc_page_utilization_data()
+    # at least one of the pools should have nonzero page_utilization
+    @test any(page_utilization .> 0)
+end
+
 # !!! note:
 #     Since we run our tests on 32bit OS as well we confine ourselves
 #     to parameters that allocate about 512MB of objects. Max RSS is lower
@@ -24,4 +31,5 @@ end
     run_gctest("gc/linkedlist.jl")
     run_gctest("gc/objarray.jl")
     run_gctest("gc/chunks.jl")
+    run_nonzero_page_utilization_test()
 end

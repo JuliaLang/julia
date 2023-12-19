@@ -338,6 +338,14 @@ static inline float bfloat_to_float(uint16_t param) JL_NOTSAFEPOINT
 
 // bfloat16 conversion API
 
+// for use in APInt (without the ABI shenanigans from below)
+uint16_t julia_float_to_bfloat(float param) {
+    return float_to_bfloat(param);
+}
+float julia_bfloat_to_float(uint16_t param) {
+    return bfloat_to_float(param);
+}
+
 // starting with GCC 13 and Clang 17, we have __bf16 on most platforms
 // (but not on Windows; this may be a bug in the MSYS2 GCC compilers)
 #if ((defined(__GNUC__) && __GNUC__ > 12) || \
@@ -1012,7 +1020,7 @@ static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsign
 
 // conversion operator
 
-typedef void (*intrinsic_cvt_t)(unsigned, void*, unsigned, void*);
+typedef void (*intrinsic_cvt_t)(jl_datatype_t*, void*, jl_datatype_t*, void*);
 typedef unsigned (*intrinsic_cvt_check_t)(unsigned, unsigned, void*);
 #define cvt_iintrinsic(LLVMOP, name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
@@ -1029,12 +1037,9 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
     if (!jl_is_primitivetype(aty))
         jl_errorf("%s: value is not a primitive type", name);
     void *pa = jl_data_ptr(a);
-    unsigned isize = jl_datatype_size(aty);
     unsigned osize = jl_datatype_size(ty);
     void *pr = alloca(osize);
-    unsigned isize_bits = isize * host_char_bit;
-    unsigned osize_bits = osize * host_char_bit;
-    op(isize_bits, pa, osize_bits, pr);
+    op((jl_datatype_t*)aty, pa, (jl_datatype_t*)ty, pr);
     return jl_new_bits(ty, pr);
 }
 
@@ -1666,10 +1671,15 @@ un_fintrinsic(trunc_float,trunc_llvm)
 un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm_fast)
+jl_value_t *jl_cpu_has_fma(int bits);
 
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
 {
-    JL_TYPECHK(have_fma, datatype, typ);
-    // TODO: run-time feature check?
-    return jl_false;
+    JL_TYPECHK(have_fma, datatype, typ); // TODO what about float16/bfloat16?
+    if (typ == (jl_value_t*)jl_float32_type)
+        return jl_cpu_has_fma(32);
+    else if (typ == (jl_value_t*)jl_float64_type)
+        return jl_cpu_has_fma(64);
+    else
+        return jl_false;
 }

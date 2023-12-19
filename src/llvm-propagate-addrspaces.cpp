@@ -105,7 +105,6 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
             }
             else if (auto *GEP = dyn_cast<GetElementPtrInst>(CurrentV)) {
                 if (LiftingMap.count(GEP)) {
-                    CurrentV = LiftingMap[GEP];
                     break;
                 } else if (Visited.count(GEP)) {
                     return nullptr;

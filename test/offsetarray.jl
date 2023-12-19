@@ -403,7 +403,8 @@ v2 = copy(v)
 v = OffsetArray(v0, (-3,))
 @test lastindex(v) == 1
 @test v ≈ v
-@test axes(v') === (Base.OneTo(1), OffsetArrays.IdOffsetRange(Base.OneTo(4), -3))
+@test (@inferred axes(v')[1]) === OffsetArrays.IdOffsetRange(Base.OneTo(1))
+@test (@inferred axes(v')[2]) === OffsetArrays.IdOffsetRange(Base.OneTo(4), -3)
 @test parent(v) == collect(v)
 rv = reverse(v)
 @test axes(rv) == axes(v)

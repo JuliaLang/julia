@@ -123,10 +123,11 @@ function IOBuffer(;
     return buf
 end
 
-# PipeBuffers behave like Unix Pipes. They are typically readable and writable, they act appendable, and are not seekable.
+# PipeBuffers behave somewhat more like Unix Pipes (than Files). They are typically readable and writable, they act appendable, and are not seekable.
+# However, they do not support stream notification, so for that there is the BufferStream wrapper around this.
 
 """
-    PipeBuffer(data::Vector{UInt8}=UInt8[]; maxsize::Integer = typemax(Int))
+    PipeBuffer(data::AbstractVector{UInt8}=UInt8[]; maxsize::Integer = typemax(Int))
 
 An [`IOBuffer`](@ref) that allows reading and performs writes by appending.
 Seeking and truncating are not supported.
@@ -134,8 +135,8 @@ See [`IOBuffer`](@ref) for the available constructors.
 If `data` is given, creates a `PipeBuffer` to operate on a data vector,
 optionally specifying a size beyond which the underlying `Array` may not be grown.
 """
-PipeBuffer(data::Vector{UInt8}=UInt8[]; maxsize::Int = typemax(Int)) =
-    GenericIOBuffer(data,true,true,false,true,maxsize)
+PipeBuffer(data::AbstractVector{UInt8}=UInt8[]; maxsize::Int = typemax(Int)) =
+    GenericIOBuffer(data, true, true, false, true, maxsize)
 PipeBuffer(maxsize::Integer) = (x = PipeBuffer(StringVector(maxsize), maxsize = maxsize); x.size=0; x)
 
 _similar_data(b::GenericIOBuffer, len::Int) = similar(b.data, len)
@@ -349,7 +350,6 @@ eof(io::GenericIOBuffer) = (io.ptr-1 == io.size)
 
 function closewrite(io::GenericIOBuffer)
     io.writable = false
-    # OR throw(_UVError("closewrite", UV_ENOTSOCK))
     nothing
 end
 

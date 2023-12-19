@@ -241,6 +241,29 @@ end
     @test F.vectors isa Matrix{ComplexF16}
     @test F.values ≈ F32.values
     @test F.vectors ≈ F32.vectors
+
+    for T in (Float16, ComplexF16)
+        D = Diagonal(T[1,2,4])
+        A = Array(D)
+        B = eigen(A)
+        @test B isa Eigen{Float16, Float16, Matrix{Float16}, Vector{Float16}}
+        @test B.values isa Vector{Float16}
+        @test B.vectors isa Matrix{Float16}
+    end
+    D = Diagonal(ComplexF16[im,2,4])
+    A = Array(D)
+    B = eigen(A)
+    @test B isa Eigen{Float16, ComplexF16, Matrix{Float16}, Vector{ComplexF16}}
+    @test B.values isa Vector{ComplexF16}
+    @test B.vectors isa Matrix{Float16}
+end
+
+@testset "complex eigen inference (#52289)" begin
+    A = ComplexF64[1.0 0.0; 0.0 8.0]
+    TC = Eigen{ComplexF64, ComplexF64, Matrix{ComplexF64}, Vector{ComplexF64}}
+    TR = Eigen{ComplexF64, Float64, Matrix{ComplexF64}, Vector{Float64}}
+    λ, v = @inferred Union{TR,TC} eigen(A)
+    @test λ == [1.0, 8.0]
 end
 
 end # module TestEigen

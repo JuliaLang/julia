@@ -359,6 +359,10 @@ USE_MLIR := 0
 # Options to use RegionVectorizer
 USE_RV := 0
 
+# Use `ccache` for speeding up recompilation of the C/C++ part of Julia.
+# Requires the `ccache` executable to be in the `PATH` environment variable.
+USECCACHE := 0
+
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
 #XC_HOST := x86_64-w64-mingw32
@@ -595,10 +599,13 @@ CPP_STDOUT := $(CPP) -P
 # file extensions
 ifeq ($(OS), WINNT)
   SHLIB_EXT := dll
+  PATHSEP := ;
 else ifeq ($(OS), Darwin)
   SHLIB_EXT := dylib
+  PATHSEP := :
 else
   SHLIB_EXT := so
+  PATHSEP := :
 endif
 
 ifeq ($(OS),WINNT)

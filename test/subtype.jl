@@ -1520,7 +1520,7 @@ f26453(x::T,y::T) where {S,T>:S} = 0
 @test f26453(1,2) == 0
 @test f26453(1,"") == 0
 g26453(x::T,y::T) where {S,T>:S} = T
-@test_throws UndefVarError(:T) g26453(1,1)
+@test_throws UndefVarError(:T, :static_parameter) g26453(1,1)
 @test issub_strict((Tuple{T,T} where T), (Tuple{T,T} where {S,T>:S}))
 
 # issue #27632
@@ -2210,13 +2210,19 @@ let A = Tuple{NTuple{N, Int}, NTuple{N, Int}} where N,
     Bs = (Tuple{Tuple{Int, Vararg{Any}}, Tuple{Int, Int, Vararg{Any}}},
           Tuple{Tuple{Int, Vararg{Any,N1}}, Tuple{Int, Int, Vararg{Any,N2}}} where {N1,N2},
           Tuple{Tuple{Int, Vararg{Any,N}} where {N}, Tuple{Int, Int, Vararg{Any,N}} where {N}})
-    Cerr = Tuple{Tuple{Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    C = Tuple{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
     for B in Bs
-        C = typeintersect(A, B)
-        @test C == typeintersect(B, A) != Union{}
-        @test C != Cerr
-        # TODO: The ideal result is Tuple{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
-        @test_broken C != Tuple{Tuple{Int, Vararg{Int}}, Tuple{Int, Int, Vararg{Int}}}
+        @testintersect(A, B, C)
+    end
+    A = Tuple{NTuple{N, Int}, Tuple{Int, Vararg{Int, N}}} where N
+    C = Tuple{Tuple{Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    for B in Bs
+        @testintersect(A, B, C)
+    end
+    A = Tuple{Tuple{Int, Vararg{Int, N}}, NTuple{N, Int}} where N
+    C = Tuple{Tuple{Int, Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    for B in Bs
+        @testintersect(A, B, C)
     end
 end
 
@@ -2229,9 +2235,8 @@ let A = Pair{NTuple{N, Int}, NTuple{N, Int}} where N,
     Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Tuple{Int, Int, Vararg{Int}}},
           Pair{Tuple{Int, Vararg{Int,N1}}, Tuple{Int, Int, Vararg{Int,N2}}} where {N1,N2},
           Pair{<:Tuple{Int, Vararg{Int,N}} where {N}, <:Tuple{Int, Int, Vararg{Int,N}} where {N}})
-    Cs = (Bs[2], Bs[2], Bs[3])
-    for (B, C) in zip(Bs, Cs)
-        # TODO: The ideal result is Pair{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    C = Pair{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    for B in Bs
         @testintersect(A, B, C)
     end
 end

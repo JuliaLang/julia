@@ -1314,6 +1314,9 @@ let a = Vector{Any}(undef, 10000)
 end
 @test occursin("NamedTuple", sprint(dump, NamedTuple))
 
+# issue 36495, dumping a partial NamedTupled shouldn't error
+@test occursin("NamedTuple", sprint(dump, NamedTuple{(:foo,:bar)}))
+
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
 
@@ -2049,6 +2052,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             r = 1
             s = try
                 r = 2
+                Base.inferencebarrier(false) && error()
                 "BYE"
             catch
                 r = 3
@@ -2085,16 +2089,16 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     end
     @test popfirst!(lines2) == "   │          $(QuoteNode(2))"
     @test pop!(lines2) == "   └───       \$(QuoteNode(4))"
-    @test pop!(lines1) == "17 └───       return %18"
-    @test pop!(lines2) == "   │          return %18"
-    @test pop!(lines2) == "17 │          \$(QuoteNode(3))"
+    @test pop!(lines1) == "18 └───       return %21"
+    @test pop!(lines2) == "   │          return %21"
+    @test pop!(lines2) == "18 │          \$(QuoteNode(3))"
     @test lines1 == lines2
 
     # verbose linetable
     io = IOBuffer()
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
-    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
+    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 11
 
     # Test that a bad :invoke doesn't cause an error during printing
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(Expr(:invoke, nothing, sin), Any), false)

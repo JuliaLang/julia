@@ -446,7 +446,7 @@ julia> firstindex(rand(3,4,5), 2)
 firstindex(a::AbstractArray) = (@inline; first(eachindex(IndexLinear(), a)))
 firstindex(a, d) = (@inline; first(axes(a, d)))
 
-first(a::AbstractArray) = a[first(eachindex(a))]
+@propagate_inbounds first(a::AbstractArray) = a[first(eachindex(a))]
 
 """
     first(coll)
@@ -1033,6 +1033,8 @@ or equal to the length `n` of `src`. The first `n` elements of `dest` are overwr
 the other elements are left untouched.
 
 See also [`copy!`](@ref Base.copy!), [`copy`](@ref).
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest

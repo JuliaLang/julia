@@ -701,21 +701,6 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         PIC.addClassToPassName("AfterOptimizationMarkerPass", "AfterOptimization");
     }
 
-#if JL_LLVM_VERSION >= 160000
-    auto createPIC() JL_NOTSAFEPOINT {
-        auto PIC = std::make_unique<PassInstrumentationCallbacks>();
-        adjustPIC(*PIC);
-        return PIC;
-    }
-#else
-    auto createPIC(StandardInstrumentations &SI) JL_NOTSAFEPOINT {
-        auto PIC = std::make_unique<PassInstrumentationCallbacks>();
-        adjustPIC(*PIC);
-        SI.registerCallbacks(*PIC);
-        return PIC;
-    }
-#endif
-
     FunctionAnalysisManager createFAM(OptimizationLevel O, TargetMachine &TM) JL_NOTSAFEPOINT {
 
         FunctionAnalysisManager FAM;
@@ -744,15 +729,8 @@ PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 }
 
 NewPM::NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options) :
-    TM(std::move(TM)),
-#if JL_LLVM_VERSION < 160000
-    SI(false),
-    PIC(createPIC(SI)),
-#else
-    PIC(createPIC()),
-#endif
-    PB(this->TM.get(), PipelineTuningOptions(), None, PIC.get()),
-    MPM(createMPM(PB, O, options)), O(O) {}
+    TM(std::move(TM)), O(O), options(options), TimePasses() {}
+
 
 NewPM::~NewPM() = default;
 
@@ -778,17 +756,34 @@ void NewPM::run(Module &M) {
     //We must recreate the analysis managers every time
     //so that analyses from previous runs of the pass manager
     //do not hang around for the next run
-    AnalysisManagers AM{*TM, PB, O};
-
+#if JL_LLVM_VERSION >= 160000
+    StandardInstrumentations SI(M.getContext(),false);
+#else
+    StandardInstrumentations SI(false);
+#endif
+    FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
+    PassInstrumentationCallbacks PIC;
+    adjustPIC(PIC);
+    TimePasses.registerCallbacks(PIC);
+    SI.registerCallbacks(PIC, &FAM);
+    SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
+    LoopAnalysisManager LAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+    PassBuilder PB(TM.get(), PipelineTuningOptions(), None, &PIC);
+    PB.registerLoopAnalyses(LAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerModuleAnalyses(MAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+    ModulePassManager MPM = createMPM(PB, O, options);
 #ifndef __clang_gcanalyzer__ /* the analyzer cannot prove we have not added instrumentation callbacks with safepoints */
-    MPM.run(M, AM.MAM);
+    MPM.run(M, MAM);
 #endif
 }
 
 void NewPM::printTimers() {
-#if JL_LLVM_VERSION < 160000
-    SI.getTimePasses().print();
-#endif
+    TimePasses.print();
 }
 
 OptimizationLevel getOptLevel(int optlevel) {

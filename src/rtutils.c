@@ -127,11 +127,29 @@ JL_DLLEXPORT void JL_NORETURN jl_type_error(const char *fname,
     jl_type_error_rt(fname, "", expected, got);
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var)
+JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *scope)
 {
-    if (!jl_undefvarerror_type)
-        jl_errorf("UndefVarError(%s)", jl_symbol_name(var));
-    jl_throw(jl_new_struct(jl_undefvarerror_type, var));
+    if (!jl_undefvarerror_type) {
+        const char *s1 = "";
+        const char *s2 = "";
+        if (scope) {
+            if (jl_is_symbol(scope)) {
+                s1 = ", :";
+                s2 = jl_symbol_name((jl_sym_t*)scope);
+            }
+            else if (jl_is_module(scope)) {
+                s1 = ", module ";
+                s2 = jl_symbol_name(((jl_module_t*)scope)->name);
+            }
+            else {
+                s1 = ", ";
+                s2 = "unknown scope";
+            }
+        }
+        jl_errorf("UndefVarError(%s%s%s)", jl_symbol_name(var), s1, s2);
+    }
+    JL_GC_PUSH1(&scope);
+    jl_throw(jl_new_struct(jl_undefvarerror_type, var, scope));
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_sym_t *type_name, jl_sym_t *var)
@@ -263,7 +281,6 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     // This function should **NOT** have any safepoint before the ones at the
     // end.
     sig_atomic_t old_defer_signal = ct->ptls->defer_signal;
-    int8_t old_gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
     small_arraylist_t *locks = &ct->ptls->locks;
@@ -275,9 +292,10 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     }
     ct->world_age = eh->world_age;
     ct->ptls->defer_signal = eh->defer_signal;
+    int8_t old_gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     if (old_gc_state != eh->gc_state)
         jl_atomic_store_release(&ct->ptls->gc_state, eh->gc_state);
-    if (!eh->gc_state)
+    if (!old_gc_state || !eh->gc_state) // it was or is unsafe now
         jl_gc_safepoint_(ct->ptls);
     if (old_defer_signal && !eh->defer_signal)
         jl_sigint_safepoint(ct->ptls);

@@ -338,7 +338,7 @@ julia> triu(a)
  0.0  0.0  0.0  1.0
 ```
 """
-triu(M::AbstractMatrix) = triu!(copy(M))
+triu(M::AbstractMatrix) = triu!(copymutable(M))
 
 """
     tril(M)
@@ -362,7 +362,7 @@ julia> tril(a)
  1.0  1.0  1.0  1.0
 ```
 """
-tril(M::AbstractMatrix) = tril!(copy(M))
+tril(M::AbstractMatrix) = tril!(copymutable(M))
 
 """
     triu(M, k::Integer)
@@ -393,7 +393,7 @@ julia> triu(a,-3)
  1.0  1.0  1.0  1.0
 ```
 """
-triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
+triu(M::AbstractMatrix,k::Integer) = triu!(copymutable(M),k)
 
 """
     tril(M, k::Integer)
@@ -424,7 +424,7 @@ julia> tril(a,-3)
  1.0  0.0  0.0  0.0
 ```
 """
-tril(M::AbstractMatrix,k::Integer) = tril!(copy(M),k)
+tril(M::AbstractMatrix,k::Integer) = tril!(copymutable(M),k)
 
 """
     triu!(M)
@@ -1760,7 +1760,7 @@ Calculates the determinant of a matrix using the
 [Bareiss Algorithm](https://en.wikipedia.org/wiki/Bareiss_algorithm).
 Also refer to [`det_bareiss!`](@ref).
 """
-det_bareiss(M) = det_bareiss!(copy(M))
+det_bareiss(M) = det_bareiss!(copymutable(M))
 
 
 
@@ -1897,3 +1897,48 @@ end
 
 normalize(x) = x / norm(x)
 normalize(x, p::Real) = x / norm(x, p)
+
+"""
+    copytrito!(B, A, uplo) -> B
+
+Copies a triangular part of a matrix `A` to another matrix `B`.
+`uplo` specifies the part of the matrix `A` to be copied to `B`.
+Set `uplo = 'L'` for the lower triangular part or `uplo = 'U'
+for the upper triangular part.
+
+!!! compat "Julia 1.11"
+    `copytrito!` requires at least Julia 1.11.
+
+# Examples
+```jldoctest
+julia> A = [1 2 ; 3 4];
+
+julia> B = [0 0 ; 0 0];
+
+julia> copytrito!(B, A, 'L')
+2×2 Matrix{Int64}:
+ 1  0
+ 3  4
+```
+"""
+function copytrito!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
+    require_one_based_indexing(A, B)
+    BLAS.chkuplo(uplo)
+    m,n = size(A)
+    m1,n1 = size(B)
+    (m1 < m || n1 < n) && throw(DimensionMismatch("B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+    if uplo == 'U'
+        for j=1:n
+            for i=1:min(j,m)
+                @inbounds B[i,j] = A[i,j]
+            end
+        end
+    else  # uplo == 'L'
+        for j=1:n
+            for i=j:m
+                @inbounds B[i,j] = A[i,j]
+            end
+        end
+    end
+    return B
+end
