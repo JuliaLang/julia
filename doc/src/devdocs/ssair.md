@@ -83,7 +83,8 @@ may assume that any use of a Phi node will have an assigned value in the corresp
 for the mapping to be incomplete, i.e. for a Phi node to have missing incoming edges. In that case, it must
 be dynamically guaranteed that the corresponding value will not be used.
 
-If multiple Phi nodes appear at the start of a basic block, they are run simultaneously.
+Note that SSA uses semantically occur after the terminator of the corresponding predecessor ("on the edge").
+Consequently, if multiple Phi nodes appear at the start of a basic block, they are run simultaneously.
 This means that in the following IR snippet, if we came from block `23`, `%46` will take the value associated to
 `%45` _before_ we entered this block.
 ```julia
