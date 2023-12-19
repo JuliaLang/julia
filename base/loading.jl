@@ -2457,10 +2457,12 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     end
 
     if output_o !== nothing
+        @debug "Generating object cache file for $pkg"
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         opt_level = Base.JLOptions().opt_level
         opts = `-O$(opt_level) --output-o $(output_o) --output-ji $(output) --output-incremental=yes`
     else
+        @debug "Generating cache file for $pkg"
         cpu_target = nothing
         opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
