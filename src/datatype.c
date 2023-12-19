@@ -411,6 +411,11 @@ JL_DLLEXPORT int jl_stored_inline(jl_value_t *eltype)
     return jl_islayout_inline(eltype, &fsz, &al);
 }
 
+JL_DLLEXPORT int jl_field_stored_ptr(jl_datatype_t *st, int i)
+{
+    return jl_field_isptr(st, i) != 0;
+}
+
 // whether instances of this type can use pointer comparison for `===`
 int jl_pointer_egal(jl_value_t *t)
 {
