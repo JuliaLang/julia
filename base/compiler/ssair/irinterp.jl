@@ -177,6 +177,8 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         elseif head === :gc_preserve_begin ||
                head === :gc_preserve_end
             return false
+        elseif head === :leave
+            return false
         else
             error("reprocess_instruction!: unhandled expression found")
         end
@@ -418,6 +420,11 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
 
     nothrow = noub = true
     for idx = 1:length(ir.stmts)
+        if ir[SSAValue(idx)][:stmt] === nothing
+            # skip `nothing` statement, which might be inserted as a dummy node,
+            # e.g. by `finish_current_bb!` without explicitly marking it as `:nothrow`
+            continue
+        end
         flag = ir[SSAValue(idx)][:flag]
         nothrow &= has_flag(flag, IR_FLAG_NOTHROW)
         noub &= has_flag(flag, IR_FLAG_NOUB)

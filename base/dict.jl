@@ -271,7 +271,7 @@ function empty!(h::Dict{K,V}) where V where K
 end
 
 # get the index where a key is stored, or -1 if not present
-@assume_effects :terminates_locally function ht_keyindex(h::Dict{K,V}, key) where V where K
+function ht_keyindex(h::Dict{K,V}, key) where V where K
     isempty(h) && return -1
     sz = length(h.keys)
     iter = 0
@@ -280,9 +280,9 @@ end
     index, sh = hashindex(key, sz)
     keys = h.keys
 
-    @inbounds while true
+    @assume_effects :terminates_locally :noub @inbounds while true
         isslotempty(h,index) && return -1
-        if h.slots[index] == sh
+        if sh == h.slots[index]
             k = keys[index]
             if (key ===  k || isequal(key, k))
                 return index
@@ -507,7 +507,7 @@ end
 
 function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
-    @inbounds return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V
+    return index < 0 ? throw(KeyError(key)) : @assume_effects :noub @inbounds h.vals[index]::V
 end
 
 """
@@ -738,6 +738,8 @@ end
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
+@propagate_inbounds Iterators.only(t::Dict) = Iterators._only(t, first)
+
 @propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
     i == 0 && return nothing
     i = skip_deleted(v.dict, i)
@@ -927,11 +929,12 @@ returns a new dictionary separate from the previous one, but the underlying
 implementation is space-efficient and may share storage across multiple
 separate dictionaries.
 
-!!!note
+!!! note
     It behaves like an IdDict.
 
-
-    PersistentDict(KV::Pair)
+```julia
+PersistentDict(KV::Pair)
+```
 
 # Examples
 
@@ -1049,3 +1052,5 @@ iterate(dict::PersistentDict, state=nothing) = HAMT.iterate(dict.trie, state)
 length(dict::PersistentDict) = HAMT.length(dict.trie)
 isempty(dict::PersistentDict) = HAMT.isempty(dict.trie)
 empty(::PersistentDict, ::Type{K}, ::Type{V}) where {K, V} = PersistentDict{K, V}()
+
+@propagate_inbounds Iterators.only(dict::PersistentDict) = Iterators._only(dict, first)

@@ -1542,23 +1542,13 @@ end
 end
 
 @testset "constant-foldability of core math functions" begin
-    for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt, :fourthroot,
-            :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
-            :exp, :exp2, :exp10, :expm1
-            )
-        for T in (Float16, Float32, Float64)
-            @testset let f = getfield(@__MODULE__, fn), T = T
-                @test Core.Compiler.is_foldable(Base.infer_effects(f, (T,)))
-            end
-        end
-    end
-end;
-@testset "removability of core math functions" begin
-    for T in (Float16, Float32, Float64)
+    for T = Any[Float16, Float32, Float64]
         @testset let T = T
-            for f in (exp, exp2, exp10)
+            for f = Any[sin, cos, tan, log, log2, log10, log1p, exponent, sqrt, cbrt, fourthroot,
+                        asin, atan, acos, sinh, cosh, tanh, asinh, acosh, atanh, exp, exp2, exp10, expm1]
                 @testset let f = f
-                    @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+                    @test Base.infer_return_type(f, (T,)) != Union{}
+                    @test Core.Compiler.is_foldable(Base.infer_effects(f, (T,)))
                 end
             end
             @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
@@ -1566,6 +1556,43 @@ end;
         end
     end
 end;
+@testset "removability of core math functions" begin
+    for T = Any[Float16, Float32, Float64]
+        @testset let T = T
+            for f = Any[exp, exp2, exp10, expm1]
+                @testset let f = f
+                    @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+                end
+            end
+        end
+    end
+end;
+@testset "exception type inference of core math functions" begin
+    MathErrorT = Union{DomainError, InexactError}
+    for T = (Float16, Float32, Float64)
+        @testset let T = T
+            for f = Any[sin, cos, tan, log, log2, log10, log1p, exponent, sqrt, cbrt, fourthroot,
+                        asin, atan, acos, sinh, cosh, tanh, asinh, acosh, atanh, exp, exp2, exp10, expm1]
+                @testset let f = f
+                    @test Base.infer_exception_type(f, (T,)) <: MathErrorT
+                end
+            end
+            @test Base.infer_exception_type(^, (T,Int)) <: MathErrorT
+            @test Base.infer_exception_type(^, (T,T)) <: MathErrorT
+        end
+    end
+end;
+@test Base.infer_return_type((Int,)) do x
+    local r = nothing
+    try
+        r = sin(x)
+    catch err
+        if err isa DomainError
+            r = 0.0
+        end
+    end
+    return r
+end === Float64
 
 @testset "BigInt Rationals with special funcs" begin
     @test sinpi(big(1//1)) == big(0.0)

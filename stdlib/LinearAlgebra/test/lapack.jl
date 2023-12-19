@@ -685,6 +685,19 @@ end
     end
 end
 
+@testset "lacpy!" begin
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        n = 10
+        A = rand(elty, n, n)
+        for uplo in ('L', 'U', 'N')
+            B = zeros(elty, n, n)
+            LinearAlgebra.LAPACK.lacpy!(B, A, uplo)
+            C = uplo == 'L' ? tril(A) : (uplo == 'U' ? triu(A) : A)
+            @test B ≈ C
+        end
+    end
+end
+
 @testset "Julia vs LAPACK" begin
     # Test our own linear algebra functionality against LAPACK
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)

@@ -179,6 +179,8 @@ firstindex(s::AbstractString) = 1
 lastindex(s::AbstractString) = thisind(s, ncodeunits(s)::Int)
 isempty(s::AbstractString) = iszero(ncodeunits(s)::Int)
 
+@propagate_inbounds first(s::AbstractString) = s[firstindex(s)]
+
 @propagate_inbounds function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds return isvalid(s, i) ? (iterate(s, i)::NTuple{2,Any})[1] : string_index_err(s, i)
