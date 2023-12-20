@@ -22,19 +22,20 @@ mutable struct Refxy{T}
     Refxy{T}() where {T} = new() # unused, but sets ninitialized to 0
 end
 
-@test_throws ErrorException("invalid redefinition of constant ARefxy") @eval mutable struct ARefxy{T}
+modname = String(nameof(@__MODULE__))
+@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
     @atomic x::T
     @atomic y::T
 end
-@test_throws ErrorException("invalid redefinition of constant ARefxy") @eval mutable struct ARefxy{T}
+@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
     x::T
     y::T
 end
-@test_throws ErrorException("invalid redefinition of constant ARefxy") @eval mutable struct ARefxy{T}
+@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
     x::T
     @atomic y::T
 end
-@test_throws ErrorException("invalid redefinition of constant Refxy") @eval mutable struct Refxy{T}
+@test_throws ErrorException("invalid redefinition of constant $modname.Refxy") @eval mutable struct Refxy{T}
     x::T
     @atomic y::T
 end
@@ -266,8 +267,10 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     nothing
 end
 @noinline function test_field_orderings(r, x, y)
-    _test_field_orderings(Ref(copy(r)), x, y)
-    _test_field_orderings(Ref{Any}(copy(r)), x, y)
+    @testset "$r" begin
+        _test_field_orderings(Ref(copy(r)), x, y)
+        _test_field_orderings(Ref{Any}(copy(r)), x, y)
+    end
     nothing
 end
 @noinline test_field_orderings(x, y) = (@nospecialize; test_field_orderings(ARefxy(x, y), x, y))

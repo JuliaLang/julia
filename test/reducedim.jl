@@ -6,7 +6,16 @@ using Random
 
 # issue #35800
 # tested very early since it can be state-dependent
-@test @inferred(mapreduce(x->count(!iszero,x), +, [rand(1)]; init = 0.)) == 1.0
+
+function my_simple_count(pred, g::Vector{T}) where {T}
+    n::T = zero(T)
+    for x in g
+        n += pred(x)
+    end
+    return n
+end
+
+@test @inferred(mapreduce(x->my_simple_count(!iszero,x), +, [rand(1)]; init = 0.)) == 1.0
 
 function safe_mapslices(op, A, region)
     newregion = intersect(region, 1:ndims(A))
@@ -599,7 +608,7 @@ end
 end
 @testset "NaN/missing test for extrema with dims #43599" begin
     for sz = (3, 10, 100)
-        for T in (Int, Float64, BigFloat)
+        for T in (Int, Float64, BigFloat, BigInt)
             Aₘ = Matrix{Union{T, Missing}}(rand(-sz:sz, sz, sz))
             Aₘ[rand(1:sz*sz, sz)] .= missing
             unordered_test_for_extrema(Aₘ)
@@ -613,9 +622,16 @@ end
         end
     end
 end
-@test_broken minimum([missing;BigInt(1)], dims = 1)
-@test_broken maximum([missing;BigInt(1)], dims = 1)
-@test_broken extrema([missing;BigInt(1)], dims = 1)
+
+@testset "minimum/maximum over dims with missing (#35308)" begin
+    for T in (Int, Float64, BigInt, BigFloat)
+        x = Union{T, Missing}[1 missing; 2 missing]
+        @test isequal(minimum(x, dims=1), reshape([1, missing], 1, :))
+        @test isequal(maximum(x, dims=1), reshape([2, missing], 1, :))
+        @test isequal(minimum(x, dims=2), reshape([missing, missing], :, 1))
+        @test isequal(maximum(x, dims=2), reshape([missing, missing], :, 1))
+    end
+end
 
 # issue #26709
 @testset "dimensional reduce with custom non-bitstype types" begin

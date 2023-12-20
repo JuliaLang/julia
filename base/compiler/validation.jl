@@ -13,13 +13,13 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :new => 1:typemax(Int),
     :splatnew => 2:2,
     :the_exception => 0:0,
-    :enter => 1:1,
-    :leave => 1:1,
+    :enter => 1:2,
+    :leave => 1:typemax(Int),
     :pop_exception => 1:1,
     :inbounds => 1:1,
     :inline => 1:1,
     :noinline => 1:1,
-    :boundscheck => 0:0,
+    :boundscheck => 0:1,
     :copyast => 1:1,
     :meta => 0:typemax(Int),
     :global => 1:1,
@@ -103,11 +103,11 @@ function _validate_val!(@nospecialize(x), errors, ssavals::BitSet)
 end
 
 """
-    validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
+    validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo)
 
 Validate `c`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 """
-function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_level::Bool = false)
+function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_level::Bool = false)
     ssavals = BitSet()
     lhs_slotnums = BitSet()
 
@@ -160,6 +160,13 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
                 push!(errors, InvalidCodeError(INVALID_CALL_ARG, x.cond))
             end
             validate_val!(x.cond)
+        elseif isa(x, EnterNode)
+            if isdefined(x, :scope)
+                if !is_valid_argument(x.scope)
+                    push!(errors, InvalidCodeError(INVALID_CALL_ARG, x.scope))
+                end
+                validate_val!(x.scope)
+            end
         elseif isa(x, ReturnNode)
             if isdefined(x, :val)
                 if !is_valid_return(x.val)
@@ -199,16 +206,15 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo, is_top_
 end
 
 """
-    validate_code!(errors::Vector{>:InvalidCodeError}, mi::MethodInstance,
-                   c::Union{Nothing,CodeInfo} = Core.Compiler.retrieve_code_info(mi))
+    validate_code!(errors::Vector{InvalidCodeError}, mi::MethodInstance,
+                   c::Union{Nothing,CodeInfo})
 
 Validate `mi`, logging any violation by pushing an `InvalidCodeError` into `errors`.
 
 If `isa(c, CodeInfo)`, also call `validate_code!(errors, c)`. It is assumed that `c` is
-the `CodeInfo` instance associated with `mi`.
+a `CodeInfo` instance associated with `mi`.
 """
-function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInstance,
-                        c::Union{Nothing,CodeInfo} = Core.Compiler.retrieve_code_info(mi))
+function validate_code!(errors::Vector{InvalidCodeError}, mi::Core.MethodInstance, c::Union{Nothing,CodeInfo})
     is_top_level = mi.def isa Module
     if is_top_level
         mnargs = 0
@@ -231,13 +237,13 @@ end
 
 validate_code(args...) = validate_code!(Vector{InvalidCodeError}(), args...)
 
-is_valid_lvalue(@nospecialize(x)) = isa(x, Slot) || isa(x, GlobalRef)
+is_valid_lvalue(@nospecialize(x)) = isa(x, SlotNumber) || isa(x, GlobalRef)
 
 function is_valid_argument(@nospecialize(x))
-    if isa(x, Slot) || isa(x, Argument) || isa(x, SSAValue) || isa(x, GlobalRef) || isa(x, QuoteNode) ||
-        (isa(x,Expr) && (x.head in (:static_parameter, :boundscheck))) ||
-        isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
-        isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
+    if isa(x, SlotNumber) || isa(x, Argument) || isa(x, SSAValue) ||
+       isa(x, GlobalRef) || isa(x, QuoteNode) || (isa(x, Expr) && is_value_pos_expr_head(x.head))  ||
+       isa(x, Number) || isa(x, AbstractString) || isa(x, AbstractChar) || isa(x, Tuple) ||
+       isa(x, Type) || isa(x, Core.Box) || isa(x, Module) || x === nothing
         return true
     end
     # TODO: consider being stricter about what needs to be wrapped with QuoteNode
@@ -254,5 +260,3 @@ function is_valid_rvalue(@nospecialize(x))
 end
 
 is_valid_return(@nospecialize(x)) = is_valid_argument(x) || (isa(x, Expr) && x.head === :lambda)
-
-is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag

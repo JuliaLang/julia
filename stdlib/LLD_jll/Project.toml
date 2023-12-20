@@ -1,0 +1,19 @@
+name = "LLD_jll"
+uuid = "d55e3150-da41-5e91-b323-ecfd1eec6109"
+version = "15.0.7+10"
+
+[deps]
+Zlib_jll = "83775a58-1f1d-513f-b197-d71354ab007a"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+libLLVM_jll = "8f36deef-c2a5-5394-99ed-8e07531fb29a"
+Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+
+[compat]
+julia = "1.9"
+libLLVM_jll = "15.0.7"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]

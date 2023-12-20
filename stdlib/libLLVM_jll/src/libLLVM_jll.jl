@@ -14,16 +14,16 @@ export libLLVM
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libLLVM_handle = C_NULL
-libLLVM_path = ""
+artifact_dir::String = ""
+libLLVM_handle::Ptr{Cvoid} = C_NULL
+libLLVM_path::String = ""
 
 if Sys.iswindows()
-    const libLLVM = "libLLVM-14jl.dll"
+    const libLLVM = "$(Base.libllvm_name).dll"
 elseif Sys.isapple()
     const libLLVM = "@rpath/libLLVM.dylib"
 else
-    const libLLVM = "libLLVM-14jl.so"
+    const libLLVM = "$(Base.libllvm_name).so"
 end
 
 function __init__()

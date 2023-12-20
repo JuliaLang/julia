@@ -6,7 +6,8 @@ calling Julia functions from C code. This can be used to integrate Julia code in
 C/C++ project, without the need to rewrite everything in C/C++. Julia has a C API to make
 this possible. As almost all programming languages have some way to call C functions, the
 Julia C API can also be used to build further language bridges (e.g. calling Julia from
-Python or C#).
+Python, Rust or C#). Even though Rust and C++ can use the C embedding API directly, both
+have packages helping with it, for C++ [Jluna](https://github.com/Clemapfel/jluna) is useful.
 
 ## High-Level Embedding
 
@@ -406,8 +407,10 @@ As an alternative for very simple cases, it is possible to just create a global 
 per pointer using
 
 ```c
-jl_binding_t *bp = jl_get_binding_wr(jl_main_module, jl_symbol("var"), 1);
-jl_checked_assignment(bp, val);
+jl_module_t *mod = jl_main_module;
+jl_sym_t *var = jl_symbol("var");
+jl_binding_t *bp = jl_get_binding_wr(mod, var);
+jl_checked_assignment(bp, mod, var, val);
 ```
 
 ### Updating fields of GC-managed objects
@@ -429,14 +432,14 @@ object has just been allocated and no garbage collection has run since then. Not
 `jl_...` functions can sometimes invoke garbage collection.
 
 The write barrier is also necessary for arrays of pointers when updating their data directly.
-For example:
+Calling `jl_array_ptr_set` is usually much preferred. But direct updates can be done. For example:
 
 ```c
 jl_array_t *some_array = ...; // e.g. a Vector{Any}
-void **data = (void**)jl_array_data(some_array);
+void **data = jl_array_data(some_array, void*);
 jl_value_t *some_value = ...;
 data[0] = some_value;
-jl_gc_wb(some_array, some_value);
+jl_gc_wb(jl_array_owner(some_array), some_value);
 ```
 
 ### Controlling the Garbage Collector
@@ -484,13 +487,13 @@ referenced.
 In order to access the data of `x`, we can use `jl_array_data`:
 
 ```c
-double *xData = (double*)jl_array_data(x);
+double *xData = jl_array_data(x, double);
 ```
 
 Now we can fill the array:
 
 ```c
-for(size_t i=0; i<jl_array_len(x); i++)
+for (size_t i = 0; i < jl_array_nrows(x); i++)
     xData[i] = i;
 ```
 
@@ -524,10 +527,11 @@ that creates a 2D array and accesses its properties:
 ```c
 // Create 2D array of float64 type
 jl_value_t *array_type = jl_apply_array_type((jl_value_t*)jl_float64_type, 2);
-jl_array_t *x  = jl_alloc_array_2d(array_type, 10, 5);
+int dims[] = {10,5};
+jl_array_t *x  = jl_alloc_array_nd(array_type, dims, 2);
 
 // Get array pointer
-double *p = (double*)jl_array_data(x);
+double *p = jl_array_data(x, double);
 // Get number of dimensions
 int ndims = jl_array_ndims(x);
 // Get the size of the i-th dim
@@ -604,7 +608,7 @@ The second condition above implies that you can not safely call `jl_...()` funct
 void *func(void*)
 {
     // Wrong, jl_eval_string() called from thread that was not started by Julia
-    jl_eval_string("println(Threads.nthreads())");
+    jl_eval_string("println(Threads.threadid())");
     return NULL;
 }
 
@@ -630,7 +634,7 @@ void *func(void*)
     // Okay, all jl_...() calls from the same thread,
     // even though it is not the main application thread
     jl_init();
-    jl_eval_string("println(Threads.nthreads())");
+    jl_eval_string("println(Threads.threadid())");
     jl_atexit_hook(0);
     return NULL;
 }
@@ -670,7 +674,7 @@ int main()
     jl_eval_string("func(i) = ccall(:c_func, Float64, (Int32,), i)");
 
     // Call func() multiple times, using multiple threads to do so
-    jl_eval_string("println(Threads.nthreads())");
+    jl_eval_string("println(Threads.threadpoolsize())");
     jl_eval_string("use(i) = println(\"[J $(Threads.threadid())] i = $(i) -> $(func(i))\")");
     jl_eval_string("Threads.@threads for i in 1:5 use(i) end");
 

@@ -249,14 +249,11 @@ types exist in lowered form:
     While almost every part of a surface AST is represented by an `Expr`, the IR uses only a
     limited number of `Expr`s, mostly for calls and some top-level-only forms.
 
-  * `Slot`
+  * `SlotNumber`
 
-    Identifies arguments and local variables by consecutive numbering. `Slot` is an abstract type
-    with subtypes `SlotNumber` and `TypedSlot`. Both types have an integer-valued `id` field giving
-    the slot index. Most slots have the same type at all uses, and so are represented with `SlotNumber`.
-    The types of these slots are found in the `slottypes` field of their `CodeInfo` object.
-    Slots that require per-use type annotations are represented with `TypedSlot`, which has a `typ`
-    field.
+    Identifies arguments and local variables by consecutive numbering. It has an
+    integer-valued `id` field giving the slot index.
+    The types of these slots can be found in the `slottypes` field of their `CodeInfo` object.
 
   * `Argument`
 
@@ -322,7 +319,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `=`
 
-    Assignment. In the IR, the first argument is always a Slot or a GlobalRef.
+    Assignment. In the IR, the first argument is always a `SlotNumber` or a `GlobalRef`.
 
   * `method`
 
@@ -425,7 +422,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `splatnew`
 
     Similar to `new`, except field values are passed as a single tuple. Works similarly to
-    `Base.Splat(new)` if `new` were a first-class function, hence the name.
+    `splat(new)` if `new` were a first-class function, hence the name.
 
   * `isdefined`
 
@@ -435,10 +432,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `the_exception`
 
     Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
-
-  * `undefcheck`
-
-    Temporary node inserted by the compiler and will be processed in `type_lift_pass!`.
 
   * `enter`
 
@@ -581,7 +574,7 @@ A unique'd container describing the shared metadata for a single method.
     Pointers to non-AST things that have been interpolated into the AST, required by
     compression of the AST, type-inference, or the generation of native code.
 
-  * `nargs`, `isva`, `called`, `isstaged`, `pure`
+  * `nargs`, `isva`, `called`, `is_for_opaque_closure`,
 
     Descriptive bit-fields for the source code of this Method.
 
@@ -608,10 +601,9 @@ for important details on how to modify these fields safely.
 
   * `sparam_vals`
 
-    The values of the static parameters in `specTypes` indexed by `def.sparam_syms`. For the
-    `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`. But for a
-    runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and
-    indexable.
+    The values of the static parameters in `specTypes`.
+    For the `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`.
+    But for a runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and indexable.
 
   * `uninferred`
 
@@ -655,7 +647,7 @@ for important details on how to modify these fields safely.
     The ABI to use when calling `fptr`. Some significant ones include:
 
       * 0 - Not compiled yet
-      * 1 - JL_CALLABLE `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
+      * 1 - `JL_CALLABLE` `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 2 - Constant (value stored in `rettype_const`)
       * 3 - With Static-parameters forwarded `jl_value_t *(*)(jl_svec_t *sparams, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 4 - Run in interpreter `jl_value_t *(*)(jl_method_instance_t *meth, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
@@ -683,10 +675,10 @@ A (usually temporary) container for holding lowered source code.
 
     A `UInt8` array of slot properties, represented as bit flags:
 
-      * 2  - assigned (only false if there are *no* assignment statements with this var on the left)
-      * 8  - const (currently unused for local variables)
-      * 16 - statically assigned once
-      * 32 - might be used before assigned. This flag is only valid after type inference.
+      * 0x02 - assigned (only false if there are *no* assignment statements with this var on the left)
+      * 0x08 - used (if there is any read or write of the slot)
+      * 0x10 - statically assigned once
+      * 0x20 - might be used before assigned. This flag is only valid after type inference.
 
   * `ssavaluetypes`
 
@@ -697,15 +689,8 @@ A (usually temporary) container for holding lowered source code.
 
   * `ssaflags`
 
-    Statement-level flags for each expression in the function. Many of these are reserved, but not yet implemented:
-
-    * 0x01 << 0 = statement is marked as `@inbounds`
-    * 0x01 << 1 = statement is marked as `@inline`
-    * 0x01 << 2 = statement is marked as `@noinline`
-    * 0x01 << 3 = statement is within a block that leads to `throw` call
-    * 0x01 << 4 = statement may be removed if its result is unused, in particular it is thus be both pure and effect free
-    * 0x01 << 5-6 = <unused>
-    * 0x01 << 7 = <reserved> has out-of-band info
+    Statement-level 32 bits flags for each expression in the function.
+    See the definition of `jl_code_info_t` in julia.h for more details.
 
   * `linetable`
 
@@ -758,11 +743,6 @@ Boolean properties:
 
     Whether this should propagate `@inbounds` when inlined for the purpose of eliding
     `@boundscheck` blocks.
-
-  * `pure`
-
-    Whether this is known to be a pure function of its arguments, without respect to the
-    state of the method caches or other mutable global state.
 
 
 `UInt8` settings:
