@@ -840,9 +840,9 @@ checkbounds(::Type{Bool}, A::AbstractArray, i::AbstractVector{Bool}) =
 end
 checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractVector{Bool}) = axes1(I) == inds
 checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractRange{Bool}) = axes1(I) == inds
-checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{Bool}) = _check_boolen_axes(inds, axes(I))
-_check_boolen_axes(inds::Tuple, axes::Tuple) = (inds[1] == axes[1]) & _check_boolen_axes(tail(inds), tail(axes))
-_check_boolen_axes(::Tuple{}, axes::Tuple) = all(==(OneTo(1)), axes)
+checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{Bool}) = _check_boolean_axes(inds, axes(I))
+_check_boolean_axes(inds::Tuple, axes::Tuple) = (inds[1] == axes[1]) & _check_boolean_axes(tail(inds), tail(axes))
+_check_boolean_axes(::Tuple{}, axes::Tuple) = all(==(OneTo(1)), axes)
 
 ensure_indexable(I::Tuple{}) = ()
 @inline ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)
