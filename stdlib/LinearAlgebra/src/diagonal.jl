@@ -10,7 +10,6 @@ struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         new{T,V}(diag)
     end
 end
-Diagonal{T,V}(M::AbstractMatrix) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(diag(M))
 Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
 
@@ -102,6 +101,7 @@ julia> Diagonal(A)
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
 Diagonal{T}(A::AbstractMatrix) where T = Diagonal{T}(diag(A))
+Diagonal{T,V}(M::AbstractMatrix) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(diag(M))
 function convert(::Type{T}, A::AbstractMatrix) where T<:Diagonal
     checksquare(A)
     isdiag(A) ? T(A) : throw(InexactError(:convert, T, A))
