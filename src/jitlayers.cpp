@@ -1808,15 +1808,20 @@ JuliaOJIT::JuliaOJIT()
 
     orc::SymbolAliasMap jl_crt = {
         // Float16 conversion routines
+#if defined(_CPU_X86_64_) && defined(_OS_DARWIN_) && JL_LLVM_VERSION >= 160000
+// soft-float versions because LLVM changed its mind
+        { mangle("__gnu_h2f_ieee"), { mangle("julia_half_to_float"), JITSymbolFlags::Exported } },
+        { mangle("__extendhfsf2"),  { mangle("julia_half_to_float"), JITSymbolFlags::Exported } },
+        { mangle("__gnu_f2h_ieee"), { mangle("julia_float_to_half"), JITSymbolFlags::Exported } },
+        { mangle("__truncsfhf2"),   { mangle("julia_float_to_half"), JITSymbolFlags::Exported } },
+        { mangle("__truncdfhf2"),   { mangle("julia_double_to_half"),   JITSymbolFlags::Exported } },
+#else
         { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
         { mangle("__extendhfsf2"),  { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
         { mangle("__gnu_f2h_ieee"), { mangle("julia__gnu_f2h_ieee"), JITSymbolFlags::Exported } },
         { mangle("__truncsfhf2"),   { mangle("julia__gnu_f2h_ieee"), JITSymbolFlags::Exported } },
         { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),   JITSymbolFlags::Exported } },
-
-        // BFloat16 conversion routines
-        { mangle("__truncsfbf2"),   { mangle("julia__truncsfbf2"),   JITSymbolFlags::Exported } },
-        { mangle("__truncdfbf2"),   { mangle("julia__truncdfbf2"),   JITSymbolFlags::Exported } },
+#endif
     };
     cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
 

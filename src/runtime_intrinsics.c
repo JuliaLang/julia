@@ -239,11 +239,14 @@ static inline uint16_t take_from_xmm(__m128 xmm_input) JL_NOTSAFEPOINT {
 
 // float16 conversion API
 
-// for use in APInt (without the ABI shenanigans from below)
-uint16_t julia_float_to_half(float param) {
+// for use in APInt and darwin (without the ABI shenanigans from below)
+JL_DLLEXPORT uint16_t julia_float_to_half(float param) {
     return float_to_half(param);
 }
-float julia_half_to_float(uint16_t param) {
+JL_DLLEXPORT uint16_t julia_double_to_float(double param) {
+    return double_to_half(param);
+}
+JL_DLLEXPORT float julia_half_to_float(uint16_t param) {
     return half_to_float(param);
 }
 

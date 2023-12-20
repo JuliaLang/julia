@@ -1051,6 +1051,18 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
             // functions. We do so after optimization to avoid cloning these functions.
 
             // Float16 conversion routines
+#if defined(_CPU_X86_64_) && defined(_OS_DARWIN_) && JL_LLVM_VERSION >= 160000
+            injectCRTAlias(M, "__gnu_h2f_ieee", "julia_half_to_float",
+                    FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
+            injectCRTAlias(M, "__extendhfsf2", "julia_half_to_float",
+                    FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
+            injectCRTAlias(M, "__gnu_f2h_ieee", "julia_float_to_half",
+                    FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
+            injectCRTAlias(M, "__truncsfhf2", "julia_float_to_half",
+                    FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
+            injectCRTAlias(M, "__truncdfhf2", "julia_double_to_half",
+                    FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
+#else
             injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
                     FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
             injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
@@ -1061,6 +1073,7 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
                     FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
             injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
                     FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
+#endif
 
             // BFloat16 conversion routines
             injectCRTAlias(M, "__truncsfbf2", "julia__truncsfbf2",
