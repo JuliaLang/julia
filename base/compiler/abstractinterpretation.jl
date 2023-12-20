@@ -3099,7 +3099,8 @@ function update_bestguess!(interp::AbstractInterpreter, frame::InferenceState,
     end
 end
 
-function update_exc_bestguess!(@nospecialize(exct), frame::InferenceState, 𝕃ₚ::AbstractLattice)
+function update_exc_bestguess!(interp::AbstractInterpreter, @nospecialize(exct), frame::InferenceState)
+    𝕃ₚ = ipo_lattice(interp)
     cur_hand = frame.handler_at[frame.currpc][1]
     if cur_hand == 0
         if !⊑(𝕃ₚ, exct, frame.exc_bestguess)
@@ -3200,7 +3201,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     if nothrow
                         add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
                     else
-                        update_exc_bestguess!(TypeError, frame, ipo_lattice(interp))
+                        update_exc_bestguess!(interp, TypeError, frame)
                         propagate_to_error_handler!(currstate, frame, 𝕃ᵢ)
                         merge_effects!(interp, frame, EFFECTS_THROWS)
                     end
@@ -3296,7 +3297,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             (; changes, rt, exct) = abstract_eval_basic_statement(interp,
                 stmt, currstate, frame)
             if exct !== Union{}
-                update_exc_bestguess!(exct, frame, ipo_lattice(interp))
+                update_exc_bestguess!(interp, exct, frame)
             end
             if !has_curr_ssaflag(frame, IR_FLAG_NOTHROW)
                 propagate_to_error_handler!(currstate, frame, 𝕃ᵢ)
