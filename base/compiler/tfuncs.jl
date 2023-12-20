@@ -2799,10 +2799,7 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
 
     if f === Intrinsics.have_fma
         ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
-        if !isconcrete
-            return Union{ErrorException, TypeError}
-        end
-        if !isprimitivetype(ty)
+        if !(isconcrete && isprimitivetype(ty))
             return TypeError
         end
         return Union{}
