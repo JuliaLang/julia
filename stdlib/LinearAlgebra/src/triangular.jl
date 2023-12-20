@@ -155,6 +155,8 @@ const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, Lower
 
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
+imag(A::UpperTriangular{<:Any,<:StridedMatrix}) = imag.(A)
+imag(A::LowerTriangular{<:Any,<:StridedMatrix}) = imag.(A)
 imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
 imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
 

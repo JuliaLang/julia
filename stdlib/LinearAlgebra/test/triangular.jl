@@ -536,6 +536,7 @@ end
                 @test op(A, B) == op(MA, MB)
             end
         end
+        @test imag(U) == zero(U)
     end
 end
 
