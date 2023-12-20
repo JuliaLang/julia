@@ -184,6 +184,11 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         end
     elseif isa(stmt, PhiNode)
         rt = abstract_eval_phi_stmt(interp, stmt, idx, irsv)
+    elseif isa(stmt, UpsilonNode)
+        rt = argextype(stmt.val, irsv.ir)
+    elseif isa(stmt, PhiCNode)
+        # Currently not modeled
+        return false
     elseif isa(stmt, ReturnNode)
         # Handled at the very end
         return false
