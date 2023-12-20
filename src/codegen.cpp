@@ -2946,6 +2946,8 @@ static void mark_volatile_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> 
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
         if (jl_is_enternode(st)) {
             int last = jl_enternode_catch_dest(st);
+            if (last == 0)
+                continue;
             std::set<int> as = assigned_in_try(stmts, i + 1, last - 1);
             for (int j = 0; j < (int)slength; j++) {
                 if (j < i || j > last) {
@@ -5615,7 +5617,11 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
                 continue;
             if (ctx.scope_restore.count(enter_idx))
                 std::tie(scope_to_restore, scope_ptr) = ctx.scope_restore[enter_idx];
-            hand_n_leave += 1;
+            if (jl_enternode_catch_dest(enter_stmt)) {
+                // We're not actually setting up the exception frames for these, so
+                // we don't need to exit them.
+                hand_n_leave += 1;
+            }
         }
         ctx.builder.CreateCall(prepare_call(jlleave_func),
                            ConstantInt::get(getInt32Ty(ctx.builder.getContext()), hand_n_leave));
@@ -8551,7 +8557,9 @@ static jl_llvm_functions_t
                 branch_targets.insert(i + 1);
                 if (i + 2 <= stmtslen)
                     branch_targets.insert(i + 2);
-                branch_targets.insert(jl_enternode_catch_dest(stmt));
+                size_t catch_dest = jl_enternode_catch_dest(stmt);
+                if (catch_dest)
+                    branch_targets.insert(catch_dest);
             } else if (jl_is_gotonode(stmt)) {
                 int dest = jl_gotonode_label(stmt);
                 branch_targets.insert(dest);
@@ -8766,35 +8774,37 @@ static jl_llvm_functions_t
                 ctx.scope_restore[cursor] = std::make_pair(old_scope, scope_ptr);
             }
             int lname = jl_enternode_catch_dest(stmt);
-            // Save exception stack depth at enter for use in pop_exception
-            Value *excstack_state =
-                ctx.builder.CreateCall(prepare_call(jl_excstack_state_func));
-            assert(!ctx.ssavalue_assigned[cursor]);
-            ctx.SAvalues[cursor] = jl_cgval_t(excstack_state, (jl_value_t*)jl_ulong_type, NULL);
-            ctx.ssavalue_assigned[cursor] = true;
-            // Actually enter the exception frame
-            CallInst *sj = ctx.builder.CreateCall(prepare_call(except_enter_func));
-            // We need to mark this on the call site as well. See issue #6757
-            sj->setCanReturnTwice();
-            Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
-            BasicBlock *tryblk = BasicBlock::Create(ctx.builder.getContext(), "try", f);
-            BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_pop", f);
-            BasicBlock *handlr = NULL;
-            handlr = BB[lname];
-            workstack.push_back(lname - 1);
-            come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
-            ctx.builder.CreateCondBr(isz, tryblk, catchpop);
-            ctx.builder.SetInsertPoint(catchpop);
-            {
-                ctx.builder.CreateCall(prepare_call(jlleave_func),
-                                ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1));
-                if (old_scope) {
-                    scope_ai.decorateInst(
-                        ctx.builder.CreateAlignedStore(old_scope, scope_ptr, ctx.types().alignof_ptr));
+            if (lname) {
+                // Save exception stack depth at enter for use in pop_exception
+                Value *excstack_state =
+                    ctx.builder.CreateCall(prepare_call(jl_excstack_state_func));
+                assert(!ctx.ssavalue_assigned[cursor]);
+                ctx.SAvalues[cursor] = jl_cgval_t(excstack_state, (jl_value_t*)jl_ulong_type, NULL);
+                ctx.ssavalue_assigned[cursor] = true;
+                // Actually enter the exception frame
+                CallInst *sj = ctx.builder.CreateCall(prepare_call(except_enter_func));
+                // We need to mark this on the call site as well. See issue #6757
+                sj->setCanReturnTwice();
+                Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
+                BasicBlock *tryblk = BasicBlock::Create(ctx.builder.getContext(), "try", f);
+                BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_pop", f);
+                BasicBlock *handlr = NULL;
+                handlr = BB[lname];
+                workstack.push_back(lname - 1);
+                come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
+                ctx.builder.CreateCondBr(isz, tryblk, catchpop);
+                ctx.builder.SetInsertPoint(catchpop);
+                {
+                    ctx.builder.CreateCall(prepare_call(jlleave_func),
+                                    ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1));
+                    if (old_scope) {
+                        scope_ai.decorateInst(
+                            ctx.builder.CreateAlignedStore(old_scope, scope_ptr, ctx.types().alignof_ptr));
+                    }
+                    ctx.builder.CreateBr(handlr);
                 }
-                ctx.builder.CreateBr(handlr);
+                ctx.builder.SetInsertPoint(tryblk);
             }
-            ctx.builder.SetInsertPoint(tryblk);
         }
         else {
             emit_stmtpos(ctx, stmt, cursor);

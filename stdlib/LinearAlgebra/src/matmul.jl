@@ -217,18 +217,24 @@ end
 """
     mul!(Y, A, B) -> Y
 
-Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`,
+Calculates the matrix-matrix or matrix-vector product ``A B`` and stores the result in `Y`,
 overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
 `B`.
 
 # Examples
 ```jldoctest
-julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); mul!(Y, A, B);
+julia> A = [1.0 2.0; 3.0 4.0]; B = [1.0 1.0; 1.0 1.0]; Y = similar(B);
+
+julia> mul!(Y, A, B) === Y
+true
 
 julia> Y
 2×2 Matrix{Float64}:
  3.0  3.0
  7.0  7.0
+
+julia> Y == A * B
+true
 ```
 
 # Implementation
@@ -250,15 +256,22 @@ aliased with either `A` or `B`.
 
 # Examples
 ```jldoctest
-julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; C=[1.0 2.0; 3.0 4.0];
+julia> A = [1.0 2.0; 3.0 4.0]; B = [1.0 1.0; 1.0 1.0]; C = [1.0 2.0; 3.0 4.0];
 
-julia> mul!(C, A, B, 100.0, 10.0) === C
+julia> α, β = 100.0, 10.0;
+
+julia> mul!(C, A, B, α, β) === C
 true
 
 julia> C
 2×2 Matrix{Float64}:
  310.0  320.0
  730.0  740.0
+
+julia> C_original = [1.0 2.0; 3.0 4.0]; # A copy of the original value of C
+
+julia> C == A * B * α + C_original * β
+true
 ```
 """
 @inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
