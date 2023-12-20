@@ -1731,7 +1731,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
         end
         return allconst ? Const(ty) : Type{ty}
     end
-    istuple = isa(headtype, Type) && (headtype == Tuple)
+    istuple = headtype === Tuple
     if !istuple && !isa(headtype, UnionAll) && !isvarargtype(headtype)
         return Union{}
     end
