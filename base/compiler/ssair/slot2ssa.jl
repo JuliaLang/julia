@@ -469,7 +469,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
             if isa(terminator, EnterNode)
-                result[inst_range[end]][:stmt] = EnterNode(terminator, bb_rename[terminator.catch_dest])
+                result[inst_range[end]][:stmt] = EnterNode(terminator, terminator.catch_dest == 0 ? 0 : bb_rename[terminator.catch_dest])
             end
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node
@@ -878,7 +878,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end
         elseif isa(stmt, EnterNode)
-            except_bb = block_for_inst(cfg, stmt.catch_dest)
+            except_bb = stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest)
             new_code[idx] = EnterNode(stmt, except_bb)
             ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||

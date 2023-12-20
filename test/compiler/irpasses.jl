@@ -1563,6 +1563,18 @@ end
 @test_broken fully_eliminated(persistent_dict_elim_multiple)
 @test code_typed(persistent_dict_elim_multiple)[1][1].code[end] == Core.ReturnNode(1)
 
+function persistent_dict_elim_multiple_phi(c::Bool)
+    if c
+        a = Base.PersistentDict(:a => 1)
+    else
+        a = Base.PersistentDict(:a => 1)
+    end
+    b = Base.PersistentDict(a, :b => 2)
+    return b[:a]
+end
+@test_broken fully_eliminated(persistent_dict_elim_multiple_phi)
+@test code_typed(persistent_dict_elim_multiple_phi)[1][1].code[end] == Core.ReturnNode(1)
+
 # Test CFG simplify with try/catch blocks
 let code = Any[
         # Block 1
@@ -1663,3 +1675,25 @@ let code = Any[
     ir = Core.Compiler.compact!(ir)
     Core.Compiler.verify_ir(ir)
 end
+
+# Test correctness of current_scope folding
+@eval function scope_folding()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), 2),
+            :(return Core.current_scope())),
+    :(), 1))
+end
+
+@eval function scope_folding_opt()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), :(Base.inferencebarrier(2))),
+            :(return Core.current_scope())),
+    :(), :(Base.inferencebarrier(1))))
+end
+
+@test scope_folding() == 1
+@test scope_folding_opt() == 1
+@test_broken fully_eliminated(scope_folding)
+@test_broken fully_eliminated(scope_folding_opt)

@@ -8,6 +8,11 @@ using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
     mul!, rdiv!, rmul!, lmul!
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
 debug && println("Triangular matrices")
 
 n = 9
@@ -186,6 +191,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test real(A1) == real(Matrix(A1))
         @test imag(A1) == imag(Matrix(A1))
         @test abs.(A1) == abs.(Matrix(A1))
+
+        # zero
+        if A1 isa UpperTriangular || A1 isa LowerTriangular
+            @test zero(A1) == zero(parent(A1))
+        end
 
         # Unary operations
         @test -A1 == -Matrix(A1)
@@ -863,6 +873,14 @@ end
             A = dty(D)
             @test A * A' == D * D'
         end
+    end
+end
+
+@testset "arithmetic with an immutable parent" begin
+    F = FillArrays.Fill(2, (4,4))
+    for UT in (UnitUpperTriangular, UnitLowerTriangular)
+        U = UT(F)
+        @test -U == -Array(U)
     end
 end
 

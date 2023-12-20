@@ -273,7 +273,9 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
         def = compact[defssa][:stmt]
         values = predecessors(def, compact)
         if values !== nothing
-            push!(visited_philikes, defssa)
+            if isa(def, PhiNode) || length(values) > 1
+                push!(visited_philikes, defssa)
+            end
             possible_predecessors = Int[]
 
             for n in 1:length(values)
@@ -857,38 +859,32 @@ function lift_leaves_keyvalue(compact::IncrementalCompact, @nospecialize(key),
     for i = 1:length(leaves)
         leaf = leaves[i]
         cache_key = leaf
-        while true
-            if isa(leaf, AnySSAValue)
-                (def, leaf) = walk_to_def(compact, leaf)
-                if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
-                    @assert isexpr(def, :invoke)
-                    if length(def.args) in (5, 6)
-                        collection = def.args[end-2]
-                        set_key = def.args[end-1]
-                        set_val_idx = length(def.args)
-                    elseif length(def.args) == 4
-                        collection = def.args[end-1]
-                        # Key is deleted
-                        # TODO: Model this
-                        return nothing
-                    elseif length(def.args) == 3
-                        collection = def.args[end]
-                        # The whole collection is deleted
-                        # TODO: Model this
-                        return nothing
-                    else
-                        return nothing
-                    end
-                    if set_key === key || (egal_tfunc(𝕃ₒ, argextype(key, compact), argextype(set_key, compact)) == Const(true))
-                        lift_arg!(compact, leaf, cache_key, def, set_val_idx, lifted_leaves)
-                        break
-                    end
-                    leaf = collection
-                    continue
+        if isa(leaf, AnySSAValue)
+            (def, leaf) = walk_to_def(compact, leaf)
+            if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
+                @assert isexpr(def, :invoke)
+                if length(def.args) in (5, 6)
+                    set_key = def.args[end-1]
+                    set_val_idx = length(def.args)
+                elseif length(def.args) == 4
+                    # Key is deleted
+                    # TODO: Model this
+                    return nothing
+                elseif length(def.args) == 3
+                    # The whole collection is deleted
+                    # TODO: Model this
+                    return nothing
+                else
+                    return nothing
                 end
+                if set_key === key || (egal_tfunc(𝕃ₒ, argextype(key, compact), argextype(set_key, compact)) == Const(true))
+                    lift_arg!(compact, leaf, cache_key, def, set_val_idx, lifted_leaves)
+                    break
+                end
+                continue
             end
-            return nothing
         end
+        return nothing
     end
     return lifted_leaves
 end
@@ -897,7 +893,36 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
     collection = stmt.args[end-1]
     key = stmt.args[end]
 
-    leaves, visited_philikes = collect_leaves(compact, collection, Any, 𝕃ₒ, phi_or_ifelse_predecessors)
+    function keyvalue_predecessors(@nospecialize(def), compact::IncrementalCompact)
+        if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
+            @assert isexpr(def, :invoke)
+            if length(def.args) in (5, 6)
+                collection = def.args[end-2]
+                set_key = def.args[end-1]
+                set_val_idx = length(def.args)
+            elseif length(def.args) == 4
+                collection = def.args[end-1]
+                # Key is deleted
+                # TODO: Model this
+                return nothing
+            elseif length(def.args) == 3
+                collection = def.args[end]
+                # The whole collection is deleted
+                # TODO: Model this
+                return nothing
+            else
+                return nothing
+            end
+            if set_key === key || (egal_tfunc(𝕃ₒ, argextype(key, compact), argextype(set_key, compact)) == Const(true))
+                # This is an actual def
+                return nothing
+            end
+            return Any[collection]
+        end
+        return phi_or_ifelse_predecessors(def, compact)
+    end
+
+    leaves, visited_philikes = collect_leaves(compact, collection, Any, 𝕃ₒ, keyvalue_predecessors)
     isempty(leaves) && return
 
     lifted_leaves = lift_leaves_keyvalue(compact, key, leaves, 𝕃ₒ)
@@ -1077,6 +1102,7 @@ function fold_current_scope!(compact::IncrementalCompact, idx::Int, stmt::Expr, 
     dombb = block_for_inst(compact, SSAValue(idx))
 
     local bbterminator
+    prevdombb = dombb
     while true
         dombb = domtree.idoms_bb[dombb]
 
@@ -1084,8 +1110,20 @@ function fold_current_scope!(compact::IncrementalCompact, idx::Int, stmt::Expr, 
         dombb == 0 && return nothing
 
         bbterminator = compact[SSAValue(last(compact.cfg_transform.result_bbs[dombb].stmts))][:stmt]
-        isa(bbterminator, EnterNode) || continue
-        isdefined(bbterminator, :scope) || continue
+        if !isa(bbterminator, EnterNode) || !isdefined(bbterminator, :scope)
+            prevdombb = dombb
+            continue
+        end
+        if bbterminator.catch_dest == 0
+            # TODO: dominance alone is not enough here, we need to actually find the :leaves
+            return nothing
+        end
+        # Check that we are inside the :enter region, i.e. are dominated by the first block in the
+        # enter region - otherwise we've already left this :enter and should keep going
+        if prevdombb != dombb + 1
+            prevdombb = dombb
+            continue
+        end
         compact[idx] = bbterminator.scope
         return nothing
     end
