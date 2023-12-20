@@ -70,9 +70,14 @@ julia> A[2,1]
 SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
 SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T,V}(dv, ev)
 function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
-    SymTridiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, ev)::AbstractVector{T})
+    d = convert(AbstractVector{T}, dv)::AbstractVector{T}
+    e = convert(AbstractVector{T}, ev)::AbstractVector{T}
+    typeof(d) == typeof(e) ?
+        SymTridiagonal{T}(d, e) :
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
+SymTridiagonal(d::AbstractVector{T}, e::AbstractVector{S}) where {T,S} =
+    SymTridiagonal{promote_type(T, S)}(d, e)
 
 """
     SymTridiagonal(A::AbstractMatrix)
@@ -514,11 +519,21 @@ julia> Tridiagonal(dl, d, du)
 """
 Tridiagonal(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du)
 Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du, du2)
+Tridiagonal(dl::AbstractVector{T}, d::AbstractVector{S}, du::AbstractVector{U}) where {T,S,U} =
+    Tridiagonal{promote_type(T, S, U)}(dl, d, du)
+Tridiagonal(dl::AbstractVector{T}, d::AbstractVector{S}, du::AbstractVector{U}, du2::AbstractVector{V}) where {T,S,U,V} =
+    Tridiagonal{promote_type(T, S, U, V)}(dl, d, du, du2)
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
-    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
+    l, d, u = map(x->convert(AbstractVector{T}, x), (dl, d, du))
+    typeof(l) == typeof(d) == typeof(u) ?
+        Tridiagonal(l, d, u) :
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector) where {T}
-    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du, du2))...)
+    l, d, u, u2 = map(x->convert(AbstractVector{T}, x), (dl, d, du, du2))
+    typeof(l) == typeof(d) == typeof(u) == typeof(u2) ?
+        Tridiagonal(l, d, u, u2) :
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
 
 """

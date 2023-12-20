@@ -619,6 +619,11 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
         return 1;
     }
 
+    // If package images are optional, ignore that bit (it will be unset in current_flags)
+    if (jl_options.use_pkgimages == JL_OPTIONS_USE_PKGIMAGES_EXISTING) {
+        flags &= ~1;
+    }
+
     // 2. Check all flags, execept opt level must be exact
     uint8_t mask = (1 << OPT_LEVEL)-1;
     if ((flags & mask) != (current_flags & mask))

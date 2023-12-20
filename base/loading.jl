@@ -1043,9 +1043,35 @@ function find_all_in_cache_path(pkg::PkgId)
         end
     end
     if length(paths) > 1
-        # allocating the sort vector is less expensive than using sort!(.. by=mtime), which would
-        # call the relatively slow mtime multiple times per path
-        p = sortperm(mtime.(paths), rev = true)
+        function sort_by(path)
+            # when using pkgimages, consider those cache files first
+            pkgimage = if JLOptions().use_pkgimages != 0
+                io = open(path, "r")
+                try
+                    if iszero(isvalid_cache_header(io))
+                        false
+                    else
+                        _, _, _, _, _, _, _, flags = parse_cache_header(io, path)
+                        CacheFlags(flags).use_pkgimages
+                    end
+                finally
+                    close(io)
+                end
+            else
+                false
+            end
+            (; pkgimage, mtime=mtime(path))
+        end
+        function sort_lt(a, b)
+            if a.pkgimage != b.pkgimage
+                return a.pkgimage < b.pkgimage
+            end
+            return a.mtime < b.mtime
+        end
+
+        # allocating the sort vector is less expensive than using sort!(.. by=sort_by),
+        # which would call the relatively slow mtime multiple times per path
+        p = sortperm(sort_by.(paths), lt=sort_lt, rev=true)
         return paths[p]
     else
         return paths
@@ -2431,10 +2457,12 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     end
 
     if output_o !== nothing
+        @debug "Generating object cache file for $pkg"
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         opt_level = Base.JLOptions().opt_level
         opts = `-O$(opt_level) --output-o $(output_o) --output-ji $(output) --output-incremental=yes`
     else
+        @debug "Generating cache file for $pkg"
         cpu_target = nothing
         opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
@@ -2531,7 +2559,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
     mkpath(cachepath)
-    cache_objects = JLOptions().use_pkgimages != 0
+    cache_objects = JLOptions().use_pkgimages == 1
     tmppath, tmpio = mktemp(cachepath)
 
     if cache_objects

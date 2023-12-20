@@ -98,12 +98,12 @@ end
         @test isa(ST, SymTridiagonal{elty,Vector{elty}})
         TT = Tridiagonal{elty,Vector{elty}}(GenericArray(dl), d, GenericArray(dl))
         @test isa(TT, Tridiagonal{elty,Vector{elty}})
-        @test_throws MethodError SymTridiagonal(d, GenericArray(dl))
-        @test_throws MethodError SymTridiagonal(GenericArray(d), dl)
-        @test_throws MethodError Tridiagonal(GenericArray(dl), d, GenericArray(dl))
-        @test_throws MethodError Tridiagonal(dl, GenericArray(d), dl)
-        @test_throws MethodError SymTridiagonal{elty}(d, GenericArray(dl))
-        @test_throws MethodError Tridiagonal{elty}(GenericArray(dl), d,GenericArray(dl))
+        @test_throws ArgumentError SymTridiagonal(d, GenericArray(dl))
+        @test_throws ArgumentError SymTridiagonal(GenericArray(d), dl)
+        @test_throws ArgumentError Tridiagonal(GenericArray(dl), d, GenericArray(dl))
+        @test_throws ArgumentError Tridiagonal(dl, GenericArray(d), dl)
+        @test_throws ArgumentError SymTridiagonal{elty}(d, GenericArray(dl))
+        @test_throws ArgumentError Tridiagonal{elty}(GenericArray(dl), d,GenericArray(dl))
         STI = SymTridiagonal([1,2,3,4], [1,2,3])
         TTI = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3])
         TTI2 = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3], [1,2])
@@ -506,6 +506,11 @@ end
 
 @testset "Issue 12068" begin
     @test SymTridiagonal([1, 2], [0])^3 == [1 0; 0 8]
+end
+
+@testset "Issue #48505" begin
+    @test SymTridiagonal([1,2,3],[4,5.0]) == [1.0 4.0 0.0; 4.0 2.0 5.0; 0.0 5.0 3.0]
+    @test Tridiagonal([1, 2], [4, 5, 1], [6.0, 7]) == [4.0 6.0 0.0; 1.0 5.0 7.0; 0.0 2.0 1.0]
 end
 
 @testset "convert for SymTridiagonal" begin
