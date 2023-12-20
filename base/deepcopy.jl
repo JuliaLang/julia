@@ -67,7 +67,7 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
                 xi = getfield(x, i)
                 if !isbits(xi)
                     xi = deepcopy_internal(xi, stackdict)::typeof(xi)
-                end                
+                end
                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), y, i-1, xi)
             end
         end
@@ -80,7 +80,7 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
                 xi = getfield(x, i)
                 if !isbits(xi)
                     xi = deepcopy_internal(xi, stackdict)::typeof(xi)
-                end                
+                end
                 flds[i] = xi
             else
                 nf = i - 1 # rest of tail must be undefined values
