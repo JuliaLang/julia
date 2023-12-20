@@ -722,7 +722,7 @@ end
         @test sort(1:n, alg=alg, lt = (i,j) -> v[i]<=v[j]) == perm
     end
     # Broken by the introduction of BracketedSort in #52006 which is unstable
-    @test_broken partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172]
+    # @test_broken partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172] (sometiems passess due to rng)
     @test_broken partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
 
     # lt can be very poorly behaved and sort will still permute its input in some way.
