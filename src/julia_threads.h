@@ -347,9 +347,9 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
                                      int8_t old_state)
 {
     jl_atomic_store_release(&ptls->gc_state, state);
-    // A safe point is required if we transition from GC-safe region to
-    // non GC-safe region.
-    if (old_state && !state)
+    if (state == JL_GC_STATE_SAFE && old_state == 0)
+        jl_gc_safepoint_(ptls);
+    if (state == 0 && old_state == JL_GC_STATE_SAFE)
         jl_gc_safepoint_(ptls);
     return old_state;
 }
@@ -371,11 +371,11 @@ void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE; // th
 #endif
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
-JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);
+JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
 extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
-JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void);
+JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
 

@@ -1243,4 +1243,8 @@ end
     @test D * S == D * A
 end
 
+@testset "copy" begin
+    @test copy(Diagonal(1:5)) === Diagonal(1:5)
+end
+
 end # module TestDiagonal

@@ -1457,7 +1457,7 @@ JL_EXTENSION struct _jl_typestack_t {
 };
 
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t *stack, int check);
-static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack);
+static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack, int cacheable);
 
 JL_DLLEXPORT jl_value_t *jl_instantiate_unionall(jl_unionall_t *u, jl_value_t *p)
 {
@@ -1729,7 +1729,7 @@ static void check_datatype_parameters(jl_typename_t *tn, jl_value_t **params, si
     JL_GC_POP();
 }
 
-jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED
+static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED
 {
     t = jl_unwrap_unionall(t);
     if (jl_is_datatype(t))
@@ -1744,7 +1744,7 @@ jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT JL
     return NULL;
 }
 
-int _may_substitute_ub(jl_value_t *v, jl_tvar_t *var, int inside_inv, int *cov_count) JL_NOTSAFEPOINT
+static int _may_substitute_ub(jl_value_t *v, jl_tvar_t *var, int inside_inv, int *cov_count) JL_NOTSAFEPOINT
 {
     while (1) {
         if (v == (jl_value_t*)var) {
@@ -2008,24 +2008,18 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         }
     }
 
-    // move array of instantiated parameters to heap; we need to keep it
-    if (p == NULL) {
-        p = jl_alloc_svec_uninit(ntp);
-        for (size_t i = 0; i < ntp; i++)
-            jl_svecset(p, i, iparams[i]);
-    }
-
     // try to simplify some type parameters
     if (check && tn != jl_type_typename) {
-        size_t i;
         int changed = 0;
         if (istuple) // normalization might change Tuple's, but not other types's, cacheable status
             cacheable = 1;
+        size_t i;
         for (i = 0; i < ntp; i++) {
-            jl_value_t *newp = normalize_unionalls(iparams[i]);
-            if (newp != iparams[i]) {
+            jl_value_t *pi = iparams[i];
+            jl_value_t *newp = normalize_unionalls(pi);
+            if (newp != pi) {
                 iparams[i] = newp;
-                jl_svecset(p, i, newp);
+                if (p) jl_gc_wb(p, newp);
                 changed = 1;
             }
             if (istuple && cacheable && !jl_is_concrete_type(newp))
@@ -2051,12 +2045,39 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         }
     }
 
+    // try to reduce duplication in objects (if the caller didn't already check) by
+    // comparing them against a list of objects already known to be globally rooted and
+    // swapping them as possible
+    if (check && jl_global_roots_list != NULL) {
+        for (size_t i = 0; i < ntp; i++) {
+            jl_value_t *pi = iparams[i];
+            if (cacheable || !jl_has_free_typevars(pi)) {
+                pi = jl_as_global_root(pi, cacheable);
+                if (pi != NULL) {
+                    iparams[i] = pi;
+                    if (p) jl_gc_wb(p, pi);
+                }
+            }
+        }
+    }
+
+    // move array of instantiated parameters to heap; we need to keep it
+    if (p == NULL) {
+        p = jl_alloc_svec_uninit(ntp);
+        for (size_t i = 0; i < ntp; i++) {
+            jl_svecset(p, i, iparams[i]);
+        }
+    }
+
+    ndt = jl_new_uninitialized_datatype();
+
+    // now that most allocations are done
     // acquire the write lock now that we know we need a new object
     // since we're going to immediately leak it globally via the instantiation stack
     if (cacheable) {
         JL_LOCK(&typecache_lock); // Might GC
         jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
-        if (lkup != NULL) {
+        if (lkup) {
             JL_UNLOCK(&typecache_lock); // Might GC
             JL_GC_POP();
             return lkup;
@@ -2064,7 +2085,6 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     }
 
     // create and initialize new type
-    ndt = jl_new_uninitialized_datatype();
     ndt->isprimitivetype = dt->isprimitivetype;
     // Usually dt won't have ismutationfree set at this point, but it is
     // overridden for `Type`, which we handle here.
@@ -2152,9 +2172,9 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         else if (cacheable) {
             // recursively instantiate the types of the fields
             if (dt->types == NULL)
-                ndt->types = jl_compute_fieldtypes(ndt, stack);
+                ndt->types = jl_compute_fieldtypes(ndt, stack, cacheable);
             else
-                ndt->types = inst_ftypes(ftypes, env, stack);
+                ndt->types = inst_ftypes(ftypes, env, stack, cacheable);
             jl_gc_wb(ndt, ndt->types);
         }
     }
@@ -2221,14 +2241,15 @@ jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size
     return tt;
 }
 
-static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack)
+static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *stack, int cacheable)
 {
     size_t i;
     size_t lp = jl_svec_len(p);
     jl_svec_t *np = jl_alloc_svec(lp);
-    JL_GC_PUSH1(&np);
+    jl_value_t *pi = NULL;
+    JL_GC_PUSH2(&np, &pi);
     for (i = 0; i < lp; i++) {
-        jl_value_t *pi = jl_svecref(p, i);
+        pi = jl_svecref(p, i);
         JL_TRY {
             pi = inst_type_w_(pi, env, stack, 1);
             if (!jl_is_type(pi) && !jl_is_typevar(pi)) {
@@ -2238,7 +2259,8 @@ static jl_svec_t *inst_ftypes(jl_svec_t *p, jl_typeenv_t *env, jl_typestack_t *s
         JL_CATCH {
             pi = jl_bottom_type;
         }
-        jl_svecset(np, i, pi);
+        jl_value_t *globalpi = jl_as_global_root(pi, cacheable);
+        jl_svecset(np, i, globalpi ? globalpi : pi);
     }
     JL_GC_POP();
     return np;
@@ -2485,7 +2507,7 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check)
     return vm;
 }
 
-JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack)
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable)
 {
     assert(st->name != jl_namedtuple_typename && st->name != jl_tuple_typename);
     jl_datatype_t *wt = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);
@@ -2505,7 +2527,7 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
     jl_typestack_t top;
     top.tt = st;
     top.prev = (jl_typestack_t*)stack;
-    st->types = inst_ftypes(wt->types, &env[n - 1], &top);
+    st->types = inst_ftypes(wt->types, &env[n - 1], &top, cacheable);
     jl_gc_wb(st, st->types);
     return st->types;
 }
@@ -2553,7 +2575,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             for (i = 0; i < n; i++)
                 env[i].val = jl_svecref(ndt->parameters, i);
             assert(ndt->types == NULL);
-            ndt->types = inst_ftypes(t->types, &env[n - 1], &top);
+            ndt->types = inst_ftypes(t->types, &env[n - 1], &top, 1);
             jl_gc_wb(ndt, ndt->types);
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
@@ -3048,8 +3070,8 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_enternode_type =
         jl_new_datatype(jl_symbol("EnterNode"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(1, "catch_dest"),
-                        jl_svec(1, jl_long_type),
+                        jl_perm_symsvec(2, "catch_dest", "scope"),
+                        jl_svec(2, jl_long_type, jl_any_type),
                         jl_emptysvec, 0, 0, 1);
 
     jl_returnnode_type =

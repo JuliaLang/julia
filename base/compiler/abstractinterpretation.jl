@@ -2046,13 +2046,30 @@ function abstract_finalizer(interp::AbstractInterpreter, argtypes::Vector{Any}, 
     return CallMeta(Nothing, Any, Effects(), NoCallInfo())
 end
 
+function abstract_throw(interp::AbstractInterpreter, argtypes::Vector{Any}, ::AbsIntState)
+    na = length(argtypes)
+    𝕃ᵢ = typeinf_lattice(interp)
+    if na == 2
+        argtype2 = argtypes[2]
+        if isvarargtype(argtype2)
+            exct = tmerge(𝕃ᵢ, unwrapva(argtype2), ArgumentError)
+        else
+            exct = argtype2
+        end
+    elseif na == 3 && isvarargtype(argtypes[3])
+        exct = tmerge(𝕃ᵢ, argtypes[2], ArgumentError)
+    else
+        exct = ArgumentError
+    end
+    return CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo())
+end
+
 # call where the function is known exactly
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState,
         max_methods::Int = get_max_methods(interp, f, sv))
     (; fargs, argtypes) = arginfo
     la = length(argtypes)
-
     𝕃ᵢ = typeinf_lattice(interp)
     if isa(f, Builtin)
         if f === _apply_iterate
@@ -2066,19 +2083,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif f === applicable
             return abstract_applicable(interp, argtypes, sv, max_methods)
         elseif f === throw
-            if la == 2
-                arg2 = argtypes[2]
-                if isvarargtype(arg2)
-                    exct = tmerge(𝕃ᵢ, unwrapva(argtypes[2]), ArgumentError)
-                else
-                    exct = arg2
-                end
-            elseif la == 3 && isvarargtype(argtypes[3])
-                exct = tmerge(𝕃ᵢ, argtypes[2], ArgumentError)
-            else
-                exct = ArgumentError
-            end
-            return CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo())
+            return abstract_throw(interp, argtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv)
         ft = popfirst!(argtypes)
@@ -2301,7 +2306,9 @@ end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if isa(e, QuoteNode)
-        return RTEffects(Const(e.value), Union{}, EFFECTS_TOTAL)
+        effects = Effects(EFFECTS_TOTAL;
+            inaccessiblememonly = is_mutation_free_argtype(typeof(e.value)) ? ALWAYS_TRUE : ALWAYS_FALSE)
+        return RTEffects(Const(e.value), Union{}, effects)
     elseif isa(e, SSAValue)
         return RTEffects(abstract_eval_ssavalue(e, sv), Union{}, EFFECTS_TOTAL)
     elseif isa(e, SlotNumber)
@@ -3265,6 +3272,19 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                 elseif isa(stmt, EnterNode)
                     ssavaluetypes[currpc] = Any
                     add_curr_ssaflag!(frame, IR_FLAG_NOTHROW)
+                    if isdefined(stmt, :scope)
+                        scopet = abstract_eval_value(interp, stmt.scope, currstate, frame)
+                        handler = frame.handlers[frame.handler_at[frame.currpc+1][1]]
+                        @assert handler.scopet !== nothing
+                        if !⊑(𝕃ᵢ, scopet, handler.scopet)
+                            handler.scopet = tmerge(𝕃ᵢ, scopet, handler.scopet)
+                            if isdefined(handler, :scope_uses)
+                                for bb in handler.scope_uses
+                                    push!(W, bb)
+                                end
+                            end
+                        end
+                    end
                     @goto fallthrough
                 elseif isexpr(stmt, :leave)
                     ssavaluetypes[currpc] = Any

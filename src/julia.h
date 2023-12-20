@@ -1282,6 +1282,7 @@ STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint32_t x) JL_NOTSAFE
 #define jl_gotoifnot_cond(x) (((jl_value_t**)(x))[0])
 #define jl_gotoifnot_label(x) (((intptr_t*)(x))[1])
 #define jl_enternode_catch_dest(x) (((intptr_t*)(x))[0])
+#define jl_enternode_scope(x) (((jl_value_t**)(x))[1])
 #define jl_globalref_mod(s) (*(jl_module_t**)(s))
 #define jl_globalref_name(s) (((jl_sym_t**)(s))[1])
 #define jl_quotenode_value(x) (((jl_value_t**)x)[0])
@@ -1293,12 +1294,13 @@ STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint32_t x) JL_NOTSAFE
 #define jl_string_data(s) ((char*)s + sizeof(void*))
 #define jl_string_len(s)  (*(size_t*)s)
 
-#define jl_gf_mtable(f) (((jl_datatype_t*)jl_typeof(f))->name->mt)
+#define jl_gf_ft_mtable(ft) (((jl_datatype_t*)ft)->name->mt)
+#define jl_gf_mtable(f) (jl_gf_ft_mtable(jl_typeof(f)))
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
 
 // struct type info
-JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack);
-#define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st), NULL))
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable);
+#define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st), NULL, 0))
 STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st) JL_NOTSAFEPOINT
 {
     return st->name->names;
@@ -2482,6 +2484,7 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_OPTIONS_USE_COMPILED_MODULES_YES 1
 #define JL_OPTIONS_USE_COMPILED_MODULES_NO 0
 
+#define JL_OPTIONS_USE_PKGIMAGES_EXISTING 2
 #define JL_OPTIONS_USE_PKGIMAGES_YES 1
 #define JL_OPTIONS_USE_PKGIMAGES_NO 0
 

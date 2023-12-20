@@ -4718,7 +4718,9 @@ f(x) = yt(x)
                #f))
 
             ;; exception handlers are lowered using
-            ;; (= tok (enter L)) - push handler with catch block at label L, yielding token
+            ;; (= tok (enter L scope))
+            ;;      push handler with catch block at label L and scope `scope`, yielding token
+            ;;      `scope` is only recognized for tryfinally and may be omitted in the lowering
             ;; (leave n) - pop N exception handlers
             ;; (pop_exception tok) - pop exception stack back to state of associated enter
             ((trycatch tryfinally trycatchelse)
@@ -4728,9 +4730,10 @@ f(x) = yt(x)
                    (endl  (make-label))
                    (last-finally-handler finally-handler)
                    (finally           (if (eq? (car e) 'tryfinally) (new-mutable-var) #f))
+                   (scope             (if (eq? (car e) 'tryfinally) (cdddr e) '()))
                    (my-finally-handler #f))
                ;; handler block entry
-               (emit `(= ,handler-token (enter ,catch)))
+               (emit `(= ,handler-token (enter ,catch ,@(compile-args scope break-labels))))
                (set! handler-token-stack (cons handler-token handler-token-stack))
                (if finally (begin (set! my-finally-handler (list finally endl '() handler-token-stack catch-token-stack))
                                   (set! finally-handler my-finally-handler)
@@ -5104,8 +5107,10 @@ f(x) = yt(x)
              (let ((idx (get ssavalue-table (cadr e) #f)))
                (if (not idx) (begin (prn e) (prn lam) (error "ssavalue with no def")))
                `(ssavalue ,idx)))
-            ((memq (car e) '(goto enter))
-             (list* (car e) (get label-table (cadr e)) (cddr e)))
+            ((eq? (car e) 'goto)
+             `(goto ,(get label-table (cadr e))))
+            ((eq? (car e) 'enter)
+             `(enter ,(get label-table (cadr e)) ,@(map renumber-stuff (cddr e))))
             ((eq? (car e) 'gotoifnot)
              `(gotoifnot ,(renumber-stuff (cadr e)) ,(get label-table (caddr e))))
             ((eq? (car e) 'lambda)
