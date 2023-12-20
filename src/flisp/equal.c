@@ -277,10 +277,11 @@ value_t fl_equal(fl_context_t *fl_ctx, value_t a, value_t b)
   * less redundant tag checking, 3-bit tags
 */
 
-#define MIX(a, b) bitmix(a, b)
 #ifdef _P64
+#define MIX(a, b) int64hash((int64_t)(a) ^ (int64_t)(b));
 #define doublehash(a) int64hash(a)
 #else
+#define MIX(a, b) int64to32hash(((int64_t)(a))<<32 | ((int64_t)(b)))
 #define doublehash(a) int64to32hash(a)
 #endif
 
