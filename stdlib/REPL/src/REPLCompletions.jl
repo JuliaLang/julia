@@ -7,7 +7,7 @@ export completions, shell_completions, bslash_completions, completion_text
 using Core: CodeInfo, MethodInstance, CodeInstance, Const
 const CC = Core.Compiler
 using Base.Meta
-using Base: propertynames, something
+using Base: propertynames, something, IdSet
 
 abstract type Completion end
 
@@ -713,19 +713,24 @@ function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool
 end
 
 MAX_ANY_METHOD_COMPLETIONS::Int = 10
-function recursive_explore_names!(seen::Base.IdSet, exploredmodules, callee_module::Module, initial_module::Module)
-    push!(exploredmodules, Symbol(callee_module))
+function recursive_explore_names!(seen::IdSet, callee_module::Module, initial_module::Module, exploredmodules::IdSet{Module}=IdSet{Module}())
+    push!(exploredmodules, callee_module)
     for name in names(callee_module; all=true, imported=true)
         if !Base.isdeprecated(callee_module, name) && !startswith(string(name), '#') && isdefined(initial_module, name)
             func = getfield(callee_module, name)
             if !isa(func, Module)
                 funct = Core.Typeof(func)
                 push!(seen, funct)
-            elseif isa(func, Module) && Symbol(func) ∉ exploredmodules
-                recursive_explore_names!(seen, exploredmodules, func, initial_module)
+            elseif isa(func, Module) && func ∉ exploredmodules
+                recursive_explore_names!(seen, func, initial_module, exploredmodules)
             end
         end
     end
+end
+function recursive_explore_names(callee_module::Module, initial_module::Module)
+    seen = IdSet{Any}()
+    recursive_explore_names!(seen, callee_module, initial_module)
+    seen
 end
 
 function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool, shift::Bool)
@@ -743,10 +748,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
     # semicolon for the ".?(" syntax
     moreargs && push!(args_ex, Vararg{Any})
 
-    seen = Base.IdSet()
-    exploredmodules = Base.IdSet{Symbol}()
-    recursive_explore_names!(seen, exploredmodules, callee_module, callee_module)
-    for seen_name in seen
+    for seen_name in recursive_explore_names(callee_module, callee_module)
         complete_methods!(out, seen_name, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
     end
 
