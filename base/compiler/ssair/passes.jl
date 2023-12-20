@@ -190,8 +190,18 @@ function collect_leaves(compact::IncrementalCompact, @nospecialize(val), @nospec
     return walk_to_defs(compact, val, typeconstraint, predecessors, 𝕃ₒ)
 end
 
-function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#),
-                     callback = (@nospecialize(pi), @nospecialize(idx)) -> false)
+function trivial_walker(@nospecialize(pi), @nospecialize(idx))
+    return nothing
+end
+
+function pi_walker(@nospecialize(pi), @nospecialize(idx))
+    if isa(pi, PiNode)
+        return LiftedValue(pi.val)
+    end
+    return nothing
+end
+
+function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#), callback=trivial_walker)
     while true
         if isa(defssa, OldSSAValue)
             if already_inserted(compact, defssa)
@@ -207,27 +217,26 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
             end
         end
         def = compact[defssa][:stmt]
-        if isa(def, PiNode)
-            if callback(def, defssa)
-                return defssa
-            end
-            def = def.val
-            if isa(def, SSAValue)
-                is_old(compact, defssa) && (def = OldSSAValue(def.id))
-            else
-                return def
-            end
-            defssa = def
-        elseif isa(def, AnySSAValue)
+        if isa(def, AnySSAValue)
             callback(def, defssa)
             if isa(def, SSAValue)
                 is_old(compact, defssa) && (def = OldSSAValue(def.id))
             end
             defssa = def
-        elseif isa(def, Union{PhiNode, PhiCNode, Expr, GlobalRef})
+        elseif isa(def, Union{PhiNode, PhiCNode, GlobalRef})
             return defssa
         else
-            return def
+            new_def = callback(def, defssa)
+            if new_def === nothing
+                return defssa
+            end
+            new_def = new_def.val
+            if !isa(new_def, AnySSAValue)
+                return new_def
+            elseif isa(new_def, SSAValue)
+                is_old(compact, defssa) && (new_def = OldSSAValue(new_def.id))
+            end
+            defssa = new_def
         end
     end
 end
@@ -237,8 +246,9 @@ function simple_walk_constraint(compact::IncrementalCompact, @nospecialize(defss
     callback = function (@nospecialize(pi), @nospecialize(idx))
         if isa(pi, PiNode)
             typeconstraint = typeintersect(typeconstraint, widenconst(pi.typ))
+            return LiftedValue(pi.val)
         end
-        return false
+        return nothing
     end
     def = simple_walk(compact, defssa, callback)
     return Pair{Any, Any}(def, typeconstraint)
@@ -623,13 +633,14 @@ end
 struct SkipToken end; const SKIP_TOKEN = SkipToken()
 
 function lifted_value(compact::IncrementalCompact, @nospecialize(old_node_ssa#=::AnySSAValue=#), @nospecialize(old_value),
-                      lifted_philikes::Vector{LiftedPhilike}, lifted_leaves::Union{LiftedLeaves, LiftedDefs}, reverse_mapping::IdDict{AnySSAValue, Int})
+                      lifted_philikes::Vector{LiftedPhilike}, lifted_leaves::Union{LiftedLeaves, LiftedDefs}, reverse_mapping::IdDict{AnySSAValue, Int},
+                      walker_callback)
     val = old_value
     if is_old(compact, old_node_ssa) && isa(val, SSAValue)
         val = OldSSAValue(val.id)
     end
     if isa(val, AnySSAValue)
-        val = simple_walk(compact, val)
+        val = simple_walk(compact, val, def_walker(lifted_leaves, reverse_mapping, walker_callback))
     end
     if val in keys(lifted_leaves)
         lifted_val = lifted_leaves[val]
@@ -639,8 +650,7 @@ function lifted_value(compact::IncrementalCompact, @nospecialize(old_node_ssa#=:
         lifted_val === nothing && return UNDEF_TOKEN
         val = lifted_val.val
         if isa(val, AnySSAValue)
-            callback = (@nospecialize(pi), @nospecialize(idx)) -> true
-            val = simple_walk(compact, val, callback)
+            val = simple_walk(compact, val, pi_walker)
         end
         return val
     elseif isa(val, AnySSAValue) && val in keys(reverse_mapping)
@@ -657,15 +667,16 @@ function is_old(compact, @nospecialize(old_node_ssa))
     return true
 end
 
-struct PhiNest
+struct PhiNest{C}
     visited_philikes::Vector{AnySSAValue}
     lifted_philikes::Vector{LiftedPhilike}
     lifted_leaves::Union{LiftedLeaves, LiftedDefs}
     reverse_mapping::IdDict{AnySSAValue, Int}
+    walker_callback::C
 end
 
 function finish_phi_nest!(compact::IncrementalCompact, nest::PhiNest)
-    (;visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping) = nest
+    (;visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping, walker_callback) = nest
     nphilikes = length(lifted_philikes)
     # Fix up arguments
     for i = 1:nphilikes
@@ -680,7 +691,7 @@ function finish_phi_nest!(compact::IncrementalCompact, nest::PhiNest)
             for i = 1:length(old_node.values)
                 isassigned(old_node.values, i) || continue
                 val = lifted_value(compact, old_node_ssa, old_node.values[i],
-                                   lifted_philikes, lifted_leaves, reverse_mapping)
+                                   lifted_philikes, lifted_leaves, reverse_mapping, walker_callback)
                 val !== SKIP_TOKEN && push!(new_node.edges, old_node.edges[i])
                 if val === UNDEF_TOKEN
                     resize!(new_node.values, length(new_node.values)+1)
@@ -694,9 +705,9 @@ function finish_phi_nest!(compact::IncrementalCompact, nest::PhiNest)
             then_result, else_result = old_node.args[3], old_node.args[4]
 
             then_result = lifted_value(compact, old_node_ssa, then_result,
-                                       lifted_philikes, lifted_leaves, reverse_mapping)
+                                       lifted_philikes, lifted_leaves, reverse_mapping, walker_callback)
             else_result = lifted_value(compact, old_node_ssa, else_result,
-                                       lifted_philikes, lifted_leaves, reverse_mapping)
+                                       lifted_philikes, lifted_leaves, reverse_mapping, walker_callback)
 
             # In cases where the Core.ifelse condition is statically-known, e.g., thanks
             # to a PiNode from a guarding conditional, replace with the remaining branch.
@@ -726,10 +737,20 @@ function finish_phi_nest!(compact::IncrementalCompact, nest::PhiNest)
     end
 end
 
+function def_walker(lifted_leaves::Union{LiftedLeaves, LiftedDefs}, reverse_mapping::IdDict{AnySSAValue, Int}, walker_callback)
+    function (@nospecialize(walk_def), @nospecialize(defssa))
+        if (defssa in keys(lifted_leaves)) || (isa(defssa, AnySSAValue) && defssa in keys(reverse_mapping))
+            return nothing
+        end
+        isa(walk_def, PiNode) && return LiftedValue(walk_def.val)
+        return walker_callback(walk_def, defssa)
+    end
+end
+
 function perform_lifting!(compact::IncrementalCompact,
         visited_philikes::Vector{AnySSAValue}, @nospecialize(cache_key),
         @nospecialize(result_t), lifted_leaves::Union{LiftedLeaves, LiftedDefs}, @nospecialize(stmt_val),
-        lazydomtree::Union{LazyDomtree,Nothing})
+        lazydomtree::Union{LazyDomtree,Nothing}, walker_callback = trivial_walker)
     reverse_mapping = IdDict{AnySSAValue, Int}()
     for id in 1:length(visited_philikes)
         reverse_mapping[visited_philikes[id]] = id
@@ -777,10 +798,10 @@ function perform_lifting!(compact::IncrementalCompact,
             end
         end
         if dominates_all
-            if isa(the_leaf, OldSSAValue)
-                the_leaf = simple_walk(compact, the_leaf)
+            if isa(the_leaf_val, OldSSAValue)
+                the_leaf = LiftedValue(simple_walk(compact, the_leaf_val))
             end
-            return Pair{Any, PhiNest}(the_leaf, PhiNest(visited_philikes, Vector{LiftedPhilike}(undef, 0), lifted_leaves, reverse_mapping))
+            return Pair{Any, PhiNest}(the_leaf, PhiNest(visited_philikes, Vector{LiftedPhilike}(undef, 0), lifted_leaves, reverse_mapping, walker_callback))
         end
     end
 
@@ -812,16 +833,18 @@ function perform_lifting!(compact::IncrementalCompact,
 
     # Fixup the stmt itself
     if isa(stmt_val, Union{SSAValue, OldSSAValue})
-        stmt_val = simple_walk(compact, stmt_val)
+        stmt_val = simple_walk(compact, stmt_val, def_walker(lifted_leaves, reverse_mapping, walker_callback))
     end
 
     if stmt_val in keys(lifted_leaves)
         stmt_val = lifted_leaves[stmt_val]
     elseif isa(stmt_val, AnySSAValue) && stmt_val in keys(reverse_mapping)
         stmt_val = LiftedValue(lifted_philikes[reverse_mapping[stmt_val]].ssa)
+    else
+        error()
     end
 
-    return Pair{Any, PhiNest}(stmt_val, PhiNest(visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping))
+    return Pair{Any, PhiNest}(stmt_val, PhiNest(visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping, walker_callback))
 end
 
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
@@ -879,9 +902,8 @@ function lift_leaves_keyvalue(compact::IncrementalCompact, @nospecialize(key),
                 end
                 if set_key === key || (egal_tfunc(𝕃ₒ, argextype(key, compact), argextype(set_key, compact)) == Const(true))
                     lift_arg!(compact, leaf, cache_key, def, set_val_idx, lifted_leaves)
-                    break
+                    continue
                 end
-                continue
             end
         end
         return nothing
@@ -889,11 +911,8 @@ function lift_leaves_keyvalue(compact::IncrementalCompact, @nospecialize(key),
     return lifted_leaves
 end
 
-function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
-    collection = stmt.args[end-1]
-    key = stmt.args[end]
-
-    function keyvalue_predecessors(@nospecialize(def), compact::IncrementalCompact)
+function keyvalue_predecessors(@nospecialize(key), 𝕃ₒ::AbstractLattice)
+    function(@nospecialize(def), compact::IncrementalCompact)
         if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
             @assert isexpr(def, :invoke)
             if length(def.args) in (5, 6)
@@ -921,8 +940,13 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
         end
         return phi_or_ifelse_predecessors(def, compact)
     end
+end
 
-    leaves, visited_philikes = collect_leaves(compact, collection, Any, 𝕃ₒ, keyvalue_predecessors)
+function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
+    collection = stmt.args[end-1]
+    key = stmt.args[end]
+
+    leaves, visited_philikes = collect_leaves(compact, collection, Any, 𝕃ₒ, keyvalue_predecessors(key, 𝕃ₒ))
     isempty(leaves) && return
 
     lifted_leaves = lift_leaves_keyvalue(compact, key, leaves, 𝕃ₒ)
@@ -934,8 +958,16 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
         result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
     end
 
+    function keyvalue_walker(@nospecialize(def), _)
+        if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
+            @assert length(def.args) in (5, 6)
+            return LiftedValue(def.args[end-2])
+        end
+        return nothing
+    end
     (lifted_val, nest) = perform_lifting!(compact,
-        visited_philikes, key, result_t, lifted_leaves, collection, nothing)
+        visited_philikes, key, result_t, lifted_leaves, collection, nothing,
+        keyvalue_walker)
 
     compact[idx] = lifted_val === nothing ? nothing : Expr(:call, GlobalRef(Core, :tuple), lifted_val.val)
     finish_phi_nest!(compact, nest)
@@ -1138,8 +1170,10 @@ struct IntermediaryCollector
     intermediaries::SPCSet
 end
 function (this::IntermediaryCollector)(@nospecialize(pi), @nospecialize(ssa))
-    push!(this.intermediaries, ssa.id)
-    return false
+    if !isa(pi, Expr)
+        push!(this.intermediaries, ssa.id)
+    end
+    return nothing
 end
 
 """
@@ -1212,11 +1246,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 preserved_arg = stmt.args[pidx]
                 isa(preserved_arg, SSAValue) || continue
                 let intermediaries = SPCSet()
-                    callback = function (@nospecialize(pi), @nospecialize(ssa))
-                        push!(intermediaries, ssa.id)
-                        return false
-                    end
-                    def = simple_walk(compact, preserved_arg, callback)
+                    def = simple_walk(compact, preserved_arg, IntermediaryCollector(intermediaries))
                     isa(def, SSAValue) || continue
                     defidx = def.id
                     def = compact[def][:stmt]
@@ -2302,10 +2332,10 @@ function cfg_simplify!(ir::IRCode)
     bb_rename_pred = zeros(Int, length(bbs))
     for i = 1:length(bbs)
         if bb_rename_succ[i] == 0
-            bb_rename_succ[i] = -1
+            bb_rename_succ[i] = -2
             bb_rename_pred[i] = -2
         elseif bb_rename_succ[i] == typemin(Int)
-            bb_rename_succ[i] = -1
+            bb_rename_succ[i] = -2
         end
     end
 
