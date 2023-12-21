@@ -1357,9 +1357,24 @@ end
 @test set_a52531!(1) == 1
 @test get_a52531() == 1
 
+let
+    global is_initialized52531, set_initialized52531
+    _is_initialized = false
+    set_initialized52531(flag::Bool) = (_is_initialized = flag)
+    is_initialized52531()            = _is_initialized
+end
+@test !is_initialized52531()
+@test set_initialized52531(true)
+@test is_initialized52531()
+@test !set_initialized52531(false)
+@test !is_initialized52531()
+foo52531(4)
+@test is_initialized52531()
+
 @test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(identity∘identity, Tuple{Any}))
 @test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(()->Vararg, Tuple{}))
 
 # pointerref nothrow for invalid pointer
 @test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{Vector{Int64}}}, Int, Int])
 @test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{T}} where T, Int, Int])
+foo52531(x) = (set_initialized52531(true); nothing)
