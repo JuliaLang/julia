@@ -3864,7 +3864,8 @@ void jl_gc_init(void)
     t_start = jl_hrtime();
 }
 
-void jl_gc_set_max_memory(uint64_t max_mem) {
+JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
+{
     if (max_mem > 0
         && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
         max_total_memory = max_mem;
