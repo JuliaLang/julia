@@ -42,6 +42,7 @@ jobs:
           old = set()
           with open(sys.argv[1]) as old_file:
             for line in old_file:
+              j = json.loads(line)
               if j["type"] == "typo":
                 old.add(j["typo"])
           clean = True
