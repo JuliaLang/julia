@@ -1052,16 +1052,18 @@ static AOTOutputs add_output_impl(Module &M, TargetMachine &SourceTM, ShardTimer
 
             // Float16 conversion routines
 #if defined(_CPU_X86_64_) && defined(_OS_DARWIN_) && JL_LLVM_VERSION >= 160000
+            // LLVM 16 reverted to soft-float ABI for passing half on x86_64 Darwin
+            // https://github.com/llvm/llvm-project/commit/2bcf51c7f82ca7752d1bba390a2e0cb5fdd05ca9
             injectCRTAlias(M, "__gnu_h2f_ieee", "julia_half_to_float",
-                    FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
+                    FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getInt16Ty(M.getContext()) }, false));
             injectCRTAlias(M, "__extendhfsf2", "julia_half_to_float",
-                    FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
+                    FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getInt16Ty(M.getContext()) }, false));
             injectCRTAlias(M, "__gnu_f2h_ieee", "julia_float_to_half",
-                    FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
+                    FunctionType::get(Type::getInt16Ty(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
             injectCRTAlias(M, "__truncsfhf2", "julia_float_to_half",
-                    FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
+                    FunctionType::get(Type::getInt16Ty(M.getContext()), { Type::getFloatTy(M.getContext()) }, false));
             injectCRTAlias(M, "__truncdfhf2", "julia_double_to_half",
-                    FunctionType::get(Type::getHalfTy(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
+                    FunctionType::get(Type::getInt16Ty(M.getContext()), { Type::getDoubleTy(M.getContext()) }, false));
 #else
             injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
                     FunctionType::get(Type::getFloatTy(M.getContext()), { Type::getHalfTy(M.getContext()) }, false));
