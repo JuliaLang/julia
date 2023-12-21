@@ -294,6 +294,22 @@ end
     return A
 end
 
+@inline function fill!(A::UpperTriangular, x)
+    iszero(x) || throw(ArgumentError("cannot set indices in the lower triangular part " *
+            "of an UpperTriangular matrix to a nonzero value ($x)"))
+    for col in axes(A,2), row in firstindex(A,1):col
+        @inbounds A.data[row, col] = x
+    end
+    A
+end
+@inline function fill!(A::LowerTriangular, x)
+    iszero(x) || throw(ArgumentError("cannot set indices in the upper triangular part " *
+            "of a LowerTriangular matrix to a nonzero value ($x)"))
+    for col in axes(A,2), row in col:lastindex(A,1)
+        @inbounds A.data[row, col] = x
+    end
+    A
+end
 
 ## structured matrix methods ##
 function Base.replace_in_print_matrix(A::Union{UpperTriangular,UnitUpperTriangular},

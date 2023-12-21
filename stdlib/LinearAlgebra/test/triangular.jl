@@ -192,6 +192,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test imag(A1) == imag(Matrix(A1))
         @test abs.(A1) == abs.(Matrix(A1))
 
+        # zero
+        if A1 isa UpperTriangular || A1 isa LowerTriangular
+            @test zero(A1) == zero(parent(A1))
+        end
+
         # Unary operations
         @test -A1 == -Matrix(A1)
 
