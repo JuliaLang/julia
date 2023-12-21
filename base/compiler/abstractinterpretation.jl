@@ -2088,8 +2088,13 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         rt = abstract_call_builtin(interp, f, arginfo, sv)
         ft = popfirst!(argtypes)
         effects = builtin_effects(𝕃ᵢ, f, argtypes, rt)
+        if effects.nothrow
+            exct = Union{}
+        else
+            exct = builtin_exct(𝕃ᵢ, f, argtypes, rt)
+        end
         pushfirst!(argtypes, ft)
-        return CallMeta(rt, effects.nothrow ? Union{} : Any, effects, NoCallInfo())
+        return CallMeta(rt, exct, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
         return CallMeta(typeof(f).parameters[2], Any, Effects(), NoCallInfo())
