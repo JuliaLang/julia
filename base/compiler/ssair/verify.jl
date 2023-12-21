@@ -319,7 +319,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     error("")
                 end
             end
-        elseif (isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, EnterNode)) && idx != last(ir.cfg.blocks[bb].stmts)
+        elseif isterminator(stmt) && idx != last(ir.cfg.blocks[bb].stmts)
             @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
             error("")
         else

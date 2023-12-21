@@ -2,7 +2,7 @@
 
 Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
-isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, EnterNode)
+isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, EnterNode) || isexpr(stmt, :leave)
 
 struct CFG
     blocks::Vector{BasicBlock}
@@ -953,11 +953,15 @@ function insert_node!(compact::IncrementalCompact, @nospecialize(before), newins
     end
 end
 
-function maybe_reopen_bb!(compact)
+function did_just_finish_bb(compact)
     result_idx = compact.result_idx
     result_bbs = compact.cfg_transform.result_bbs
-    if (compact.active_result_bb == length(result_bbs) + 1) ||
-        result_idx == first(result_bbs[compact.active_result_bb].stmts)
+    (compact.active_result_bb == length(result_bbs) + 1) ||
+    result_idx == first(result_bbs[compact.active_result_bb].stmts)
+end
+
+function maybe_reopen_bb!(compact)
+    if did_just_finish_bb(compact)
         compact.active_result_bb -= 1
         return true
     end
