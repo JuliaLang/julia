@@ -1359,3 +1359,7 @@ end
 
 @test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(identity∘identity, Tuple{Any}))
 @test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(()->Vararg, Tuple{}))
+
+# pointerref nothrow for invalid pointer
+@test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{Vector{Int64}}}, Int, Int])
+@test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{T}} where T, Int, Int])
