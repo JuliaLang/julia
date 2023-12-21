@@ -33,6 +33,9 @@ jobs:
             | tar -xz -C "${{ runner.temp }}/typos" ./typos
           "${{ runner.temp }}/typos/typos" --version
 
+          echo $NEW_FILES
+          echo $OLD_FILES
+
           echo -n $NEW_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/new_typos.jsonl || true
           git checkout FETCH_HEAD -- $OLD_FILES
           echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/old_typos.jsonl  || true
