@@ -41,6 +41,7 @@ jobs:
           import sys, json
           old = set()
           with open(sys.argv[1]) as old_file:
+            print(line)
             for line in old_file:
               old.add(json.loads(line)["typo"])
           clean = True
