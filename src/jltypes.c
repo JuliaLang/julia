@@ -2785,6 +2785,7 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(vararg);
     // It seems like we probably usually end up needing the box for kinds (often used in an Any context), so force it to exist
     jl_vararg_type->name->mayinlinealloc = 0;
+    jl_vararg_type->ismutationfree = 1;
 
     jl_svec_t *anytuple_params = jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL, 0));
     jl_anytuple_type = jl_new_datatype(jl_symbol("Tuple"), core, jl_any_type, anytuple_params,

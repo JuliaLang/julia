@@ -501,23 +501,26 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             // can possibly encounter. Then, we remember which slot they store to (we abuse the
             // SSA value result array for this purpose). TODO: We could do this only the first
             // time we encounter a given enter.
-            size_t catch_ip = jl_enternode_catch_dest(stmt) - 1;
-            while (catch_ip < ns) {
-                jl_value_t *phicnode = jl_array_ptr_ref(stmts, catch_ip);
-                if (!jl_is_phicnode(phicnode))
-                    break;
-                jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(phicnode, 0);
-                for (size_t i = 0; i < jl_array_nrows(values); ++i) {
-                    jl_value_t *val = jl_array_ptr_ref(values, i);
-                    assert(jl_is_ssavalue(val));
-                    size_t upsilon = ((jl_ssavalue_t*)val)->id - 1;
-                    assert(jl_is_upsilonnode(jl_array_ptr_ref(stmts, upsilon)));
-                    s->locals[jl_source_nslots(s->src) + upsilon] = jl_box_ssavalue(catch_ip + 1);
+            size_t catch_ip = jl_enternode_catch_dest(stmt);
+            if (catch_ip) {
+                catch_ip -= 1;
+                while (catch_ip < ns) {
+                    jl_value_t *phicnode = jl_array_ptr_ref(stmts, catch_ip);
+                    if (!jl_is_phicnode(phicnode))
+                        break;
+                    jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(phicnode, 0);
+                    for (size_t i = 0; i < jl_array_nrows(values); ++i) {
+                        jl_value_t *val = jl_array_ptr_ref(values, i);
+                        assert(jl_is_ssavalue(val));
+                        size_t upsilon = ((jl_ssavalue_t*)val)->id - 1;
+                        assert(jl_is_upsilonnode(jl_array_ptr_ref(stmts, upsilon)));
+                        s->locals[jl_source_nslots(s->src) + upsilon] = jl_box_ssavalue(catch_ip + 1);
+                    }
+                    s->locals[jl_source_nslots(s->src) + catch_ip] = NULL;
+                    catch_ip += 1;
                 }
-                s->locals[jl_source_nslots(s->src) + catch_ip] = NULL;
-                catch_ip += 1;
+                // store current top of exception stack for restore in pop_exception.
             }
-            // store current top of exception stack for restore in pop_exception.
             s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state());
             if (jl_enternode_scope(stmt)) {
                 jl_value_t *old_scope = ct->scope;
@@ -545,6 +548,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             else { // a real exception
                 ip = catch_ip;
+                assert(jl_enternode_catch_dest(stmt) != 0);
                 continue;
             }
         }
