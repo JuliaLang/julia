@@ -23,8 +23,10 @@ jobs:
           OLD_FILES=$(git diff-index --name-only --diff-filter=ad FETCH_HEAD)
           NEW_FILES=$(git diff-index --name-only --diff-filter=d FETCH_HEAD)
 
+          # This is necessary because the typos command interprets the
+          # empty string as "check all files" rather than "check no files".
           if [ -z "$OLD_FILES" ]; then
-            echo "No files were niether added nor removed. Skipping typos check."
+            echo "All eddited files were either added or removed. Skipping typos check."
             exit 0
           fi
 
@@ -38,9 +40,6 @@ jobs:
             | tar -xz -C "${{ runner.temp }}/typos" ./typos
           "${{ runner.temp }}/typos/typos" --version
 
-          echo $NEW_FILES
-          echo $OLD_FILES
-
           echo -n $NEW_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/new_typos.jsonl || true
           git checkout FETCH_HEAD -- $OLD_FILES
           echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/old_typos.jsonl || true
@@ -50,21 +49,15 @@ jobs:
           old = set()
           with open(sys.argv[1]) as old_file:
             for line in old_file:
-              j = json.loads(line)
-              if j["type"] == "typo":
-                old.add(j["typo"])
-              else:
-                print("Ignored old:", line, end="")
+              old.add(json.loads(line)["typo"])
           clean = True
           with open(sys.argv[2]) as new_file:
             for line in new_file:
               new = json.loads(line)
-              if new["type"] == "typo" and new["typo"] not in old:
+              if new["typo"] not in old:
                 if len(new["typo"]) > 6: # Short typos might be false positives. Long are probably real.
                   clean = False
                 print("::warning file={},line={},col={}::perhaps \"{}\" should be \"{}\".".format(
                   new["path"], new["line_num"], new["byte_offset"],
                   new["typo"], " or ".join(new["corrections"])))
-              else:
-                print("Ignored new:", line, end="")
           sys.exit(1 if not clean else 0)' "${{ runner.temp }}/old_typos.jsonl" "${{ runner.temp }}/new_typos.jsonl"
