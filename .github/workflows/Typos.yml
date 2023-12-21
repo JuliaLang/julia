@@ -45,6 +45,8 @@ jobs:
               j = json.loads(line)
               if j["type"] == "typo":
                 old.add(j["typo"])
+              else:
+                print("Ignored old:", line)
           clean = True
           with open(sys.argv[2]) as new_file:
             for line in new_file:
@@ -56,5 +58,5 @@ jobs:
                   new["path"], new["line_num"], new["byte_offset"],
                   new["typo"], " or ".join(new["corrections"])))
               else:
-                print("Ignored:", line)
+                print("Ignored new:", line)
           sys.exit(1 if not clean else 0)' "${{ runner.temp }}/old_typos.jsonl" "${{ runner.temp }}/new_typos.jsonl"
