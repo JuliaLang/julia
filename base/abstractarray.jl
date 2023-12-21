@@ -678,7 +678,9 @@ function checkbounds(::Type{Bool}, A::AbstractArray, I...)
     checkbounds_indices(Bool, axes(A), I)
 end
 
-# Linear indexing is explicitly allowed when there is only one (non-cartesian) index
+# Linear indexing is explicitly allowed when there is only one (non-cartesian) index;
+# indices that do not allow linear indexing (e.g., logical arrays, cartesian indices, etc)
+# must add specialized methods to implement their restrictions
 function checkbounds(::Type{Bool}, A::AbstractArray, i)
     @inline
     return checkindex(Bool, eachindex(IndexLinear(), A), i)
