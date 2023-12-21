@@ -1226,7 +1226,6 @@ static void jl_gc_free_memory(jl_value_t *v, int isaligned) JL_NOTSAFEPOINT
         jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - jl_genericmemory_nbytes(m));
     gc_num.freed += jl_genericmemory_nbytes(m);
     gc_num.freecall++;
-    gc_num.freecall++;
 }
 
 static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
