@@ -26,7 +26,7 @@ jobs:
           # This is necessary because the typos command interprets the
           # empty string as "check all files" rather than "check no files".
           if [ -z "$NEW_FILES" ]; then
-            echo "All eddited files were deleted. Skipping typos check."
+            echo "All edited files were deleted. Skipping typos check."
             exit 0
           fi
 
