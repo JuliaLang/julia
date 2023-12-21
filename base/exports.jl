@@ -458,6 +458,7 @@ export
     vcat,
     vec,
     view,
+    wrap,
     zeros,
 
 # search, find, match and related functions
@@ -1154,6 +1155,16 @@ public
     @constprop,
     @locals,
     @propagate_inbounds,
+
+# IO
+    # types
+    BufferStream,
+    IOServer,
+    OS_HANDLE,
+    PipeEndpoint,
+    TTY,
+    # functions
+    reseteof,
 
 # misc
     notnothing,

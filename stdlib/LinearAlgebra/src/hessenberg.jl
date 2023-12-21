@@ -83,10 +83,10 @@ end
 Base.isassigned(H::UpperHessenberg, i::Int, j::Int) =
     i <= j+1 ? isassigned(H.data, i, j) : true
 
-getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
+Base.@propagate_inbounds getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)
 
-function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
+Base.@propagate_inbounds function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
     if i > j+1
         x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
             "($i, $j) of an UpperHessenberg matrix to a nonzero value ($x)"))

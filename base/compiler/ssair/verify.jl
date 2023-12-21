@@ -2,7 +2,7 @@
 
 function maybe_show_ir(ir::IRCode)
     if isdefined(Core, :Main)
-        Core.Main.Base.display(ir)
+        invokelatest(Core.Main.Base.display, ir)
     end
 end
 
@@ -200,7 +200,12 @@ function verify_ir(ir::IRCode, print::Bool=true,
             end
         elseif isa(terminator, EnterNode)
             @label enter_check
-            if length(block.succs) != 2 || (block.succs != Int[terminator.catch_dest, idx+1] && block.succs != Int[idx+1, terminator.catch_dest])
+            if length(block.succs) == 1
+                if terminator.catch_dest != 0
+                    @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
+                    error("")
+                end
+            elseif (block.succs != Int[terminator.catch_dest, idx+1] && block.succs != Int[idx+1, terminator.catch_dest])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 error("")
             end

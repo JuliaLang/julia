@@ -28,7 +28,11 @@
     XX(jl_array_ptr) \
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
+    XX(jl_genericmemory_isassigned) \
     XX(jl_genericmemory_owner) \
+    XX(jl_genericmemoryref) \
+    XX(jl_genericmemoryset) \
+    XX(jl_genericmemoryunset) \
     XX(jl_array_rank) \
     XX(jl_array_to_string) \
     XX(jl_atexit_hook) \
@@ -234,6 +238,8 @@
     XX(jl_get_world_counter) \
     XX(jl_get_zero_subnormals) \
     XX(jl_gf_invoke_lookup) \
+    XX(jl_method_lookup_by_tt) \
+    XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
     XX(jl_git_branch) \
     XX(jl_git_commit) \

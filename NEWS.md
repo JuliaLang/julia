@@ -16,6 +16,11 @@ New language features
   particularly useful for holding styling information, and is used extensively
   in the new `StyledStrings` standard library. There is also a new `AnnotatedChar`
   type, that is the equivalent new `AbstractChar` type.
+* `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
+  to be preferentially picked up by the given julia version. i.e. in the same folder,
+  a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
+  version. This makes managing environments for multiple julia versions at the same time
+  easier ([#43845]).
 
 Language changes
 ----------------
@@ -45,6 +50,9 @@ Command-line option changes
 This is intended to unify script and compilation workflows, where code loading may happen
 in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
 difference between defining a `main` function and executing the code directly at the end of the script ([50974]).
+* The `--compiled-modules` and `--pkgimages` flags can now be set to `existing`, which will
+  cause Julia to consider loading existing cache files, but not to create new ones ([#50586]
+  and [#52573]).
 
 Multi-threading changes
 -----------------------
@@ -62,6 +70,7 @@ New library functions
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 * `eachrsplit(string, pattern)` iterates split substrings right to left.
 * `Sys.username()` can be used to return the current user's username ([#51897]).
+* `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` which is the safe counterpart to `unsafe_wrap` ([#52049]).
 
 New library features
 --------------------
@@ -72,6 +81,14 @@ New library features
   write the output to a stream rather than returning a string ([#48625]).
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
 * New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
+* Passing an IOBuffer as a stdout argument for Process spawn now works as
+  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
+  no longer required there for correctness to avoid data-races ([#TBD]).
+* After a process exits, `closewrite` will no longer be automatically called on
+  the stream passed to it. Call `wait` on the process instead to ensure the
+  content is fully written, then call `closewrite` manually to avoid
+  data-races. Or use the callback form of `open` to have all that handled
+  automatically.
 
 Standard library changes
 ------------------------

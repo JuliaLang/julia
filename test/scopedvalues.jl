@@ -69,11 +69,11 @@ end
 @testset "show" begin
     @test sprint(show, ScopedValue{Int}()) == "ScopedValue{$Int}(undefined)"
     @test sprint(show, sval) == "ScopedValue{$Int}(1)"
-    @test sprint(show, ScopedValues.current_scope()) == "nothing"
+    @test sprint(show, Core.current_scope()) == "nothing"
     with(sval => 2.0) do
         @test sprint(show, sval) == "ScopedValue{$Int}(2)"
         objid = sprint(show, Base.objectid(sval))
-        @test sprint(show, ScopedValues.current_scope()) == "Base.ScopedValues.Scope(ScopedValue{$Int}@$objid => 2)"
+        @test sprint(show, Core.current_scope()) == "Base.ScopedValues.Scope(ScopedValue{$Int}@$objid => 2)"
     end
 end
 

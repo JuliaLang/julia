@@ -566,7 +566,12 @@ end
 ## generic project & manifest API ##
 
 const project_names = ("JuliaProject.toml", "Project.toml")
-const manifest_names = ("JuliaManifest.toml", "Manifest.toml")
+const manifest_names = (
+    "JuliaManifest-v$(VERSION.major).$(VERSION.minor).toml",
+    "Manifest-v$(VERSION.major).$(VERSION.minor).toml",
+    "JuliaManifest.toml",
+    "Manifest.toml",
+)
 const preferences_names = ("JuliaLocalPreferences.toml", "LocalPreferences.toml")
 
 function locate_project_file(env::String)
@@ -668,7 +673,20 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
         return explicit_manifest_uuid_path(project_file, pkg)
     elseif project_file
         # if env names a directory, search it
-        return implicit_manifest_uuid_path(env, pkg)
+        proj = implicit_manifest_uuid_path(env, pkg)
+        proj === nothing || return proj
+        # if not found
+        parentid = get(EXT_PRIMED, pkg, nothing)
+        if parentid !== nothing
+            _, parent_project_file = entry_point_and_project_file(env, parentid.name)
+            if parent_project_file !== nothing
+                parentproj = project_file_name_uuid(parent_project_file, parentid.name)
+                if parentproj == parentid
+                    mby_ext = project_file_ext_path(parent_project_file, pkg.name)
+                    mby_ext === nothing || return mby_ext
+                end
+            end
+        end
     end
     return nothing
 end
@@ -1025,9 +1043,35 @@ function find_all_in_cache_path(pkg::PkgId)
         end
     end
     if length(paths) > 1
-        # allocating the sort vector is less expensive than using sort!(.. by=mtime), which would
-        # call the relatively slow mtime multiple times per path
-        p = sortperm(mtime.(paths), rev = true)
+        function sort_by(path)
+            # when using pkgimages, consider those cache files first
+            pkgimage = if JLOptions().use_pkgimages != 0
+                io = open(path, "r")
+                try
+                    if iszero(isvalid_cache_header(io))
+                        false
+                    else
+                        _, _, _, _, _, _, _, flags = parse_cache_header(io, path)
+                        CacheFlags(flags).use_pkgimages
+                    end
+                finally
+                    close(io)
+                end
+            else
+                false
+            end
+            (; pkgimage, mtime=mtime(path))
+        end
+        function sort_lt(a, b)
+            if a.pkgimage != b.pkgimage
+                return a.pkgimage < b.pkgimage
+            end
+            return a.mtime < b.mtime
+        end
+
+        # allocating the sort vector is less expensive than using sort!(.. by=sort_by),
+        # which would call the relatively slow mtime multiple times per path
+        p = sortperm(sort_by.(paths), lt=sort_lt, rev=true)
         return paths[p]
     else
         return paths
@@ -1221,11 +1265,19 @@ end
 
 function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
     project_file = env_project_file(env)
-    if project_file isa String
+    if project_file isa String || project_file
+        implicit_project_file = project_file
+        if !(implicit_project_file isa String)
+            # if env names a directory, search it for an implicit project file (for stdlibs)
+            path, implicit_project_file = entry_point_and_project_file(env, pkg.name)
+            if !(implicit_project_file isa String)
+                return nothing
+            end
+        end
         # Look in project for extensions to insert
-        proj_pkg = project_file_name_uuid(project_file, pkg.name)
+        proj_pkg = project_file_name_uuid(implicit_project_file, pkg.name)
         if pkg == proj_pkg
-            d_proj = parsed_toml(project_file)
+            d_proj = parsed_toml(implicit_project_file)
             weakdeps = get(d_proj, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
             extensions = get(d_proj, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
             extensions === nothing && return
@@ -1236,6 +1288,7 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
         end
 
         # Now look in manifest
+        project_file isa String || return nothing
         manifest_file = project_file_manifest_path(project_file)
         manifest_file === nothing && return
         d = get_deps(parsed_toml(manifest_file))
@@ -2371,6 +2424,22 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     depot_path = map(abspath, DEPOT_PATH)
     dl_load_path = map(abspath, DL_LOAD_PATH)
     load_path = map(abspath, Base.load_path())
+    # if pkg is a stdlib, append its parent Project.toml to the load path
+    parentid = get(EXT_PRIMED, pkg, nothing)
+    if parentid !== nothing
+        for env in load_path
+            project_file = env_project_file(env)
+            if project_file === true
+                _, parent_project_file = entry_point_and_project_file(env, parentid.name)
+                if parent_project_file !== nothing
+                    parentproj = project_file_name_uuid(parent_project_file, parentid.name)
+                    if parentproj == parentid
+                        push!(load_path, parent_project_file)
+                    end
+                end
+            end
+        end
+    end
     path_sep = Sys.iswindows() ? ';' : ':'
     any(path -> path_sep in path, load_path) &&
         error("LOAD_PATH entries cannot contain $(repr(path_sep))")
@@ -2388,10 +2457,12 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     end
 
     if output_o !== nothing
+        @debug "Generating object cache file for $pkg"
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         opt_level = Base.JLOptions().opt_level
         opts = `-O$(opt_level) --output-o $(output_o) --output-ji $(output) --output-incremental=yes`
     else
+        @debug "Generating cache file for $pkg"
         cpu_target = nothing
         opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
@@ -2488,7 +2559,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
     mkpath(cachepath)
-    cache_objects = JLOptions().use_pkgimages != 0
+    cache_objects = JLOptions().use_pkgimages == 1
     tmppath, tmpio = mktemp(cachepath)
 
     if cache_objects
@@ -2660,13 +2731,15 @@ end
 # Find depot in DEPOT_PATH for which all @depot tags from the `includes`
 # can be replaced so that they point to a file on disk each.
 function resolve_depot(includes::Union{AbstractVector,AbstractSet})
-    if any(includes) do inc
+    # `all` because it's possible to have a mixture of includes inside and outside of the depot
+    if all(includes) do inc
             !startswith(inc, "@depot")
         end
-        return :missing_depot_tag
+        return :fully_outside_depot
     end
     for depot in DEPOT_PATH
-        if all(includes) do inc
+        # `any` because it's possible to have a mixture of includes inside and outside of the depot
+        if any(includes) do inc
                 isfile(restore_depot_path(inc, depot))
             end
             return depot
@@ -2767,8 +2840,8 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     end
     if depot === :no_depot_found
         @debug("Unable to resolve @depot tag in cache file $cachefile", srcfiles)
-    elseif depot === :missing_depot_tag
-        @debug("Missing @depot tag for include dependencies in cache file $cachefile.", srcfiles)
+    elseif depot === :fully_outside_depot
+        @debug("All include dependencies in cache file $cachefile are outside of a depot.", srcfiles)
     else
         for inc in includes
             inc.filename = restore_depot_path(inc.filename, depot)

@@ -1262,7 +1262,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     k = cbrt(ln)
     k2 = round(Int, k^2)
     k2ln = k2/ln
-    offset = .15k2*top_set_bit(k2) # TODO for further optimization: tune this
+    offset = .15k*top_set_bit(k2) # TODO for further optimization: tune this
     lo_signpost_i, hi_signpost_i =
         (floor(Int, (tar - lo) * k2ln + lo + off) for (tar, off) in
             ((minimum(target), -offset), (maximum(target), offset)))
@@ -2093,24 +2093,37 @@ function sort!(A::AbstractArray{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward, # TODO stop eagerly over-allocating.
-               scratch::Union{Vector{T}, Nothing}=Vector{T}(undef, size(A, dims))) where T
-    __sort!(A, Val(dims), maybe_apply_initial_optimizations(alg), ord(lt, by, rev, order), scratch)
-end
-function __sort!(A::AbstractArray{T}, ::Val{K},
-                alg::Algorithm,
-                order::Ordering,
-                scratch::Union{Vector{T}, Nothing}) where {K,T}
+               scratch::Union{Vector{T}, Nothing}=size(A, dims) < 10 ? nothing : Vector{T}(undef, size(A, dims))) where T
     nd = ndims(A)
+    1 <= dims <= nd || throw(ArgumentError("dimension out of range"))
+    alg2 = maybe_apply_initial_optimizations(alg)
+    order2 = ord(lt, by, rev, order)
+    foreach(ntuple(Val, nd)) do d
+        get_value(d) == dims || return
+        # We assume that an Integer between 1 and nd must be equal to one of the
+        # values 1:nd. If this assumption is false, then what's an integer? and
+        # also sort! will silently do nothing.
 
-    1 <= K <= nd || throw(ArgumentError("dimension out of range"))
-
-    remdims = ntuple(i -> i == K ? 1 : axes(A, i), nd)
-    for idx in CartesianIndices(remdims)
-        Av = view(A, ntuple(i -> i == K ? Colon() : idx[i], nd)...)
-        sort!(Av; alg, order, scratch)
+        idxs = CartesianIndices(ntuple(i -> i == get_value(d) ? 1 : axes(A, i), ndims(A)))
+        get_view(idx) = view(A, ntuple(i -> i == get_value(d) ? Colon() : idx[i], ndims(A))...)
+        if d == Val(1) || size(A, get_value(d)) < 30
+            for idx in idxs
+                sort!(get_view(idx); alg=alg2, order=order2, scratch)
+            end
+        else
+            v = similar(get_view(first(idxs)))
+            for idx in idxs
+                vw = get_view(idx)
+                v .= vw
+                sort!(v; alg=alg2, order=order2, scratch)
+                vw .= v
+            end
+        end
+        A
     end
     A
 end
+get_value(::Val{x}) where x = x
 
 
 ## uint mapping to allow radix sorting primitives other than UInts ##
