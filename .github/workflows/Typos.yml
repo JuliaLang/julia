@@ -23,6 +23,13 @@ jobs:
           OLD_FILES=$(git diff-index --name-only --diff-filter=ad FETCH_HEAD)
           NEW_FILES=$(git diff-index --name-only --diff-filter=d FETCH_HEAD)
 
+          # This is necessary because the typos command interprets the
+          # empty string as "check all files" rather than "check no files".
+          if [ -z "$OLD_FILES" ]; then
+            echo "All eddited files were either added or removed. Skipping typos check."
+            exit 0
+          fi
+
           mkdir -p "${{ runner.temp }}/typos"
           RELEASE_ASSET_URL="$(
             gh api /repos/crate-ci/typos/releases/latest \
@@ -35,7 +42,7 @@ jobs:
 
           echo -n $NEW_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/new_typos.jsonl || true
           git checkout FETCH_HEAD -- $OLD_FILES
-          echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/old_typos.jsonl  || true
+          echo -n $OLD_FILES | xargs "${{ runner.temp }}/typos/typos" --format json >> ${{ runner.temp }}/old_typos.jsonl || true
 
           python -c '
           import sys, json
