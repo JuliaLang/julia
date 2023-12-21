@@ -316,10 +316,11 @@ pairwise_blocksize(::typeof(abs2), ::typeof(+)) = 4096
 
 
 # handling empty arrays
-_empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed"))
-_empty_reduce_error(@nospecialize(f), @nospecialize(T::Type)) = throw(ArgumentError("""
-    reducing with $f over an empty collection of element type $T is not allowed.
-    You may be able to prevent this error by supplying an `init` value to the reducer."""))
+_empty_reduce_error() = throw(ArgumentError("reducing over an empty collection is not allowed; consider supplying `init` to the reducer"))
+reduce_empty(f, T) = _empty_reduce_error()
+mapreduce_empty(f, op, T) = _empty_reduce_error()
+reduce_empty(f, ::Type{Union{}}, splat...) = _empty_reduce_error()
+mapreduce_empty(f, op, ::Type{Union{}}, splat...) = _empty_reduce_error()
 
 """
     Base.reduce_empty(op, T)
@@ -339,20 +340,16 @@ is generally ambiguous, and especially so when the element type is unknown).
 
 As an alternative, consider supplying an `init` value to the reducer.
 """
-reduce_empty(::typeof(+), ::Type{Union{}}) = _empty_reduce_error(+, Union{})
 reduce_empty(::typeof(+), ::Type{T}) where {T} = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
-reduce_empty(::typeof(*), ::Type{Union{}}) = _empty_reduce_error(*, Union{})
 reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
 
-reduce_empty(::typeof(add_sum), ::Type{Union{}}) = _empty_reduce_error(add_sum, Union{})
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallSigned}  = zero(Int)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:SmallUnsigned} = zero(UInt)
-reduce_empty(::typeof(mul_prod), ::Type{Union{}}) = _empty_reduce_error(mul_prod, Union{})
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T} = reduce_empty(*, T)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallSigned}  = one(Int)
 reduce_empty(::typeof(mul_prod), ::Type{T}) where {T<:SmallUnsigned} = one(UInt)
@@ -753,7 +750,7 @@ julia> maximum([1,2,3])
 3
 
 julia> maximum(())
-ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
+ERROR: ArgumentError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
 Stacktrace:
 [...]
 
@@ -785,7 +782,7 @@ julia> minimum([1,2,3])
 1
 
 julia> minimum([])
-ERROR: MethodError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
+ERROR: ArgumentError: reducing over an empty collection is not allowed; consider supplying `init` to the reducer
 Stacktrace:
 [...]
 
@@ -877,11 +874,12 @@ end
 """
     findmax(f, domain) -> (f(x), index)
 
-Return a pair of a value in the codomain (outputs of `f`) and the index of
+Return a pair of a value in the codomain (outputs of `f`) and the index or key of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is maximised.
 If there are multiple maximal points, then the first one will be returned.
 
-`domain` must be a non-empty iterable.
+`domain` must be a non-empty iterable supporting [`keys`](@ref). Indices
+are of the same type as those returned by [`keys(domain)`](@ref).
 
 Values are compared with `isless`.
 
@@ -915,6 +913,9 @@ Return the maximal element of the collection `itr` and its index or key.
 If there are multiple maximal elements, then the first one will be returned.
 Values are compared with `isless`.
 
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
+
 See also: [`findmin`](@ref), [`argmax`](@ref), [`maximum`](@ref).
 
 # Examples
@@ -936,11 +937,14 @@ _findmax(a, ::Colon) = findmax(identity, a)
 """
     findmin(f, domain) -> (f(x), index)
 
-Return a pair of a value in the codomain (outputs of `f`) and the index of
+Return a pair of a value in the codomain (outputs of `f`) and the index or key of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is minimised.
 If there are multiple minimal points, then the first one will be returned.
 
 `domain` must be a non-empty iterable.
+
+Indices are of the same type as those returned by [`keys(domain)`](@ref)
+and [`pairs(domain)`](@ref).
 
 `NaN` is treated as less than all other values except `missing`.
 
@@ -974,6 +978,9 @@ _rf_findmin((fm, im), (fx, ix)) = isgreater(fm, fx) ? (fx, ix) : (fm, im)
 Return the minimal element of the collection `itr` and its index or key.
 If there are multiple minimal elements, then the first one will be returned.
 `NaN` is treated as less than all other values except `missing`.
+
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
 
 See also: [`findmax`](@ref), [`argmin`](@ref), [`minimum`](@ref).
 
@@ -1026,6 +1033,9 @@ Return the index or key of the maximal element in a collection.
 If there are multiple maximal elements, then the first one will be returned.
 
 The collection must not be empty.
+
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
 
 Values are compared with `isless`.
 
@@ -1081,6 +1091,9 @@ Return the index or key of the minimal element in a collection.
 If there are multiple minimal elements, then the first one will be returned.
 
 The collection must not be empty.
+
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
 
 `NaN` is treated as less than all other values except `missing`.
 

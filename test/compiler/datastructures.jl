@@ -16,6 +16,19 @@ end
     bsbmp = Core.Compiler.BitSetBoundedMinPrioritySet(5)
     Core.Compiler.push!(bsbmp, 2)
     Core.Compiler.push!(bsbmp, 2)
+    iterateok = true
+    cnt = 0
+    @eval Core.Compiler for v in $bsbmp
+        if cnt == 0
+            iterateok &= v == 2
+        elseif cnt == 1
+            iterateok &= v == 5
+        else
+            iterateok = false
+        end
+        cnt += 1
+    end
+    @test iterateok
     @test Core.Compiler.popfirst!(bsbmp) == 2
     Core.Compiler.push!(bsbmp, 1)
     @test Core.Compiler.popfirst!(bsbmp) == 1

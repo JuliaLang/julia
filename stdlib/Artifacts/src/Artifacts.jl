@@ -18,7 +18,7 @@ function parse_toml(path::String)
     Base.parsed_toml(path)
 end
 
-# keep in sync with Base.project_names and Base.manifest_names
+# keep in sync with Base.project_names
 const artifact_names = ("JuliaArtifacts.toml", "Artifacts.toml")
 
 const ARTIFACTS_DIR_OVERRIDE = Ref{Union{String,Nothing}}(nothing)
@@ -548,7 +548,7 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
             if nameof(lazyartifacts) in (:Pkg, :Artifacts)
                 Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
             end
-            return jointail(lazyartifacts.ensure_artifact_installed(string(name), artifacts_toml; platform), path_tail)
+            return jointail(lazyartifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform), path_tail)
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
     end

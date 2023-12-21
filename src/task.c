@@ -42,6 +42,13 @@ extern "C" {
 #endif
 
 #if defined(_COMPILER_ASAN_ENABLED_)
+#if __GLIBC__
+#include <dlfcn.h>
+// Bypass the ASAN longjmp wrapper - we are unpoisoning the stack ourselves,
+// since ASAN normally unpoisons far too much.
+// c.f. interceptor in jl_dlopen as well
+void (*real_siglongjmp)(jmp_buf _Buf, int _Value) = NULL;
+#endif
 static inline void sanitizer_start_switch_fiber(jl_ptls_t ptls, jl_task_t *from, jl_task_t *to) {
     if (to->copy_stack)
         __sanitizer_start_switch_fiber(&from->ctx.asan_fake_stack, (char*)ptls->stackbase-ptls->stacksize, ptls->stacksize);
@@ -855,12 +862,13 @@ The jl_rng_split function forks a task's RNG state in a way that is essentially
 guaranteed to avoid collisions between the RNG streams of all tasks. The main
 RNG is the xoshiro256++ RNG whose state is stored in rngState[0..3]. There is
 also a small internal RNG used for task forking stored in rngState[4]. This
-state is used to iterate a LCG (linear congruential generator), which is then
+state is used to iterate a linear congruential generator (LCG), which is then
 put through four different variations of the strongest PCG output function,
 referred to as PCG-RXS-M-XS-64 [1]. This output function is invertible: it maps
-a 64-bit state to 64-bit output; which is one of the reasons it's not
-recommended for general purpose RNGs unless space is at a premium, but in our
-usage invertibility is actually a benefit, as is explained below.
+a 64-bit state to 64-bit output. This is one of the reasons it's not recommended
+for general purpose RNGs unless space is at an absolute premium, but in our
+usage invertibility is actually a benefit (as is explained below) and adding as
+little additional memory overhead to each task object as possible is preferred.
 
 The goal of jl_rng_split is to perturb the state of each child task's RNG in
 such a way each that for an entire tree of tasks spawned starting with a given
@@ -870,50 +878,93 @@ task's seed, (2) how many random numbers are generated, and (3) the task tree
 structure. The RNG state of a parent task is allowed to affect the initial RNG
 state of a child task, but the mere fact that a child was spawned should not
 alter the RNG output of the parent. This second requirement rules out using the
-main RNG to seed children -- some separate state must be maintained and changed
-upon forking a child task while leaving the main RNG state unchanged.
+main RNG to seed children: if we use the main RNG, we either advance it, which
+affects the parent's RNG stream or, if we don't advance it, then every child
+would have an identical RNG stream. Therefore some separate state must be
+maintained and changed upon forking a child task while leaving the main RNG
+state unchanged.
 
 The basic approach is that used by the DotMix [2] and SplitMix [3] RNG systems:
 each task is uniquely identified by a sequence of "pedigree" numbers, indicating
 where in the task tree it was spawned. This vector of pedigree coordinates is
-then reduced to a single value by computing a dot product with a common vector
-of random weights. The DotMix paper provides a proof that this dot product hash
-value (referred to as a "compression function") is collision resistant in the
-sense the the pairwise collision probability of two distinct tasks is 1/N where
-N is the number of possible weight values. Both DotMix and SplitMix use a prime
-value of N because the proof requires that the difference between two distinct
-pedigree coordinates must be invertible, which is guaranteed by N being prime.
-We take a different approach: we instead limit pedigree coordinates to being
-binary instead -- when a task spawns a child, both tasks share the same pedigree
-prefix, with the parent appending a zero and the child appending a one. This way
-a binary pedigree vector uniquely identifies each task. Moreover, since the
-coordinates are binary, the difference between coordinates is always one which
-is its own inverse regardless of whether N is prime or not. This allows us to
-compute the dot product modulo 2^64 using native machine arithmetic, which is
-considerably more efficient and simpler to implement than arithmetic in a prime
+then reduced to a single value by computing a dot product with a shared vector
+of random weights. The weights are common but each pedigree of each task is
+distinct, so the dot product of each task is unlikely to be the same. The DotMix
+paper provides a proof that this dot product hash value (referred to as a
+"compression function") is collision resistant in the sense the the pairwise
+collision probability of two distinct tasks is 1/N where N is the number of
+possible weight values. Both DotMix and SplitMix use a prime value of N because
+the proof requires that the difference between two distinct pedigree coordinates
+have a multiplicative inverse, which is guaranteed by N being prime since all
+values are invertible then. We take a somewhat different approach: instead of
+assigning n-ary pedigree coordinates, we assign binary tree coordinates to
+tasks, which means that our pedigree vectors have only 0/1 and differences
+between them can only be -1, 0 or 1. Since the only possible non-zero coordinate
+differences are ±1 which are invertible regardless of the modulus, we can use a
+modulus of 2^64, which is far easier and more efficient then using a prime
 modulus. It also means that when accumulating the dot product incrementally, as
 described in SplitMix, we don't need to multiply weights by anything, we simply
 add the random weight for the current task tree depth to the parent's dot
 product to derive the child's dot product.
 
-We use the LCG in rngState[4] to derive generate pseudorandom weights for the
-dot product. Each time a child is forked, we update the LCG in both parent and
-child tasks. In the parent, that's all we have to do -- the main RNG state
-remains unchanged (recall that spawning a child should *not* affect subsequence
-RNG draws in the parent). The next time the parent forks a child, the dot
-product weight used will be different, corresponding to being a level deeper in
-the binary task tree. In the child, we use the LCG state to generate four
-pseudorandom 64-bit weights (more below) and add each weight to one of the
-xoshiro256 state registers, rngState[0..3]. If we assume the main RNG remains
-unused in all tasks, then each register rngState[0..3] accumulates a different
-Dot/SplitMix dot product hash as additional child tasks are spawned. Each one is
-collision resistant with a pairwise collision chance of only 1/2^64. Assuming
-that the four pseudorandom 64-bit weight streams are sufficiently independent,
-the pairwise collision probability for distinct tasks is 1/2^256. If we somehow
-managed to spawn a trillion tasks, the probability of a collision would be on
-the order of 1/10^54. Practically impossible. Put another way, this is the same
-as the probability of two SHA256 hash values accidentally colliding, which we
-generally consider so unlikely as not to be worth worrying about.
+we instead limit pedigree coordinates to being binary, guaranteeing
+invertibility regardless of modulus. When a task spawns a child, the parent and
+child share the parent's previous pedigree prefix and the parent appends a zero
+to its coordinates, which doesn't affect the task's dot product value, while the
+child appends a one, which does produce a new dot product. In this manner a
+binary pedigree vector uniquely identifies each task and since the coordinates
+are binary, the difference between coordinates is always invertible: 1 and -1
+are their own multiplicative inverses regardless of the modulus.
+
+How does our assignment of pedigree coordinates to tasks differ from DotMix and
+SplitMix? In DotMix and SplitMix, each task has a fixed pedigree vector that
+never changes. The root tasks's pedigree is `()`, its first child's pedigree is
+`(0,)`, its second child's pedigree is `(2,)` and so on. The length of a task's
+pedigree tuple corresponds to how many ancestors tasks it has. Our approach
+instead appends 0 to the parent's pedigree when it forks a child and appends 1
+to the child's pedigree at the same time. The root task starts with a pedigree
+of `()` as before, but when it spawns a child, we update its pedigree to `(0,)`
+and give its child a pedigree of `(1,)`. When the root task then spawns a second
+child, we update its pedigree to `(0,0)` and give it's second child a pedigree
+of `(0,1)`. If the first child spawns a grandchild, the child's pedigree is
+changed from `(1,)` to `(1,0)` and the grandchild is assigned a pedigree of
+`(1,1)`. In other words, DotMix and SplitMix build an n-ary tree where every
+node is a task: parent nodes are higher up the tree and child tasks are children
+in the pedigree tree. Our approach is to build a binary tree where only leaves
+are tasks and each task spawn replaces a leaf in the tree with two leaves: the
+parent moves to the left/zero leaf while the child is the right/one leaf. Since
+the tree is binary, the pedigree coordinates are binary.
+
+It may seem odd for a task's pedigree coordinates to change, but note that we
+only ever append zeros to a task's pedigree, which does not change its dot
+product. So while the pedigree changes, the dot product is fixed. What purpose
+does appending zeros like this serve if the task's dot product doesn't change?
+Changing the pedigree length (which is also the binary tree depth) ensures that
+the next child spawned by that task will have new and different dot product from
+the previous child since it will have a different pseudo-random weight added to
+the parent's dot product value. Whereas the pedigree length in DotMix and
+SplitMix is unchanging and corresponds to how many ancestors a task has, in our
+scheme the pedigree length corresponds to the number of ancestors *plus*
+children a task has, which increases every time it spawns another child.
+
+We use the LCG in rngState[4] to generate pseudorandom weights for the dot
+product. Each time a child is forked, we update the LCG in both parent and child
+tasks. In the parent, that's all we have to do -- the main RNG state remains
+unchanged. (Recall that spawning a child should *not* affect subsequent RNG
+draws in the parent). The next time the parent forks a child, the dot product
+weight used will be different, corresponding to being a level deeper in the
+pedigree tree. In the child, we use the LCG state to generate four pseudorandom
+64-bit weights (more below) and add each weight to one of the xoshiro256 state
+registers, rngState[0..3]. If we assume the main RNG remains unused in all
+tasks, then each register rngState[0..3] accumulates a different dot product
+hash as additional child tasks are spawned. Each one is collision resistant with
+a pairwise collision chance of only 1/2^64. Assuming that the four pseudorandom
+64-bit weight streams are sufficiently independent, the pairwise collision
+probability for distinct tasks is 1/2^256. If we somehow managed to spawn a
+trillion tasks, the probability of a collision would be on the order of 1/10^54.
+In other words, practically impossible. Put another way, this is the same as the
+probability of two SHA256 hash values accidentally colliding, which we generally
+consider so unlikely as not to be worth worrying about.
 
 What about the random "junk" that's in the xoshiro256 state registers from
 normal use of the RNG? For a tree of tasks spawned with no intervening samples
@@ -934,8 +985,11 @@ completely randomly. Then there would also be a 1/2^256 chance of collision,
 just as the DotMix proof gives. Essentially what the proof is telling us is that
 if the weights are chosen uniformly and uncorrelated with the rest of the
 compression function, then the dot product construction is a good enough way to
-pseudorandomly seed each task. From that perspective, it's easier to believe
-that adding an arbitrary constant to each seed doesn't worsen its randomness.
+pseudorandomly seed each task based on its parent's RNG state and where in the
+task tree it lives. From that perspective, all we need to believe is that the
+dot product construction is random enough (assuming the weights are), and it
+becomes easier to believe that adding an arbitrary constant to each dot product
+value doesn't make its randomness any worse.
 
 This leaves us with the question of how to generate four pseudorandom weights to
 add to the rngState[0..3] registers at each depth of the task tree. The scheme
@@ -949,12 +1003,12 @@ four output variants instead:
 1. Advancing four times per fork reduces the set of possible weights that each
    register can be perturbed by from 2^64 to 2^60. Since collision resistance is
    proportional to the number of possible weight values, that would reduce
-   collision resistance.
+   collision resistance. While it would still be strong engough, why reduce it?
 
 2. It's easier to compute four PCG output variants in parallel. Iterating the
-   LCG is inherently sequential. Each PCG variant can be computed independently
-   from the LCG state. All four can even be computed at once with SIMD vector
-   instructions, but the compiler doesn't currently choose to do that.
+   LCG is inherently sequential. PCG variants can be computed independently. All
+   four can even be computed at once with SIMD vector instructions. The C
+   compiler doesn't currently choose to do that transformation, but it could.
 
 A key question is whether the approach of using four variations of PCG-RXS-M-XS
 is sufficiently random both within and between streams to provide the collision
@@ -962,12 +1016,15 @@ resistance we expect. We obviously can't test that with 256 bits, but we have
 tested it with a reduced state analogue using four PCG-RXS-M-XS-8 output
 variations applied to a common 8-bit LCG. Test results do indicate sufficient
 independence: a single register has collisions at 2^5 while four registers only
-start having collisions at 2^20, which is actually better scaling of collision
-resistance than we expect in theory. In theory, with one byte of resistance we
-have a 50% chance of some collision at 20, which matches, but four bytes gives a
-50% chance of collision at 2^17 and our (reduced size analogue) construction is
-still collision free at 2^19. This may be due to the next observation, which guarantees collision avoidance for certain shapes of task trees as a result of using an
-invertible RNG to generate weights.
+start having collisions at 2^20. This is actually better scaling of collision
+resistance than we theoretically expect. In theory, with one byte of resistance
+we have a 50% chance of some collision at 20 tasks, which matches what we see,
+but four bytes should give a 50% chance of collision at 2^17 tasks and our
+reduced size analogue construction remains collision free at 2^19 tasks. This
+may be due to the next observation, which is that the way we generate
+pseudorandom weights actually guarantees collision avoidance in many common
+situations rather than merely providing collision resistance and thus is better
+than true randomness.
 
 In the specific case where a parent task spawns a sequence of child tasks with
 no intervening usage of its main RNG, the parent and child tasks are actually
@@ -978,7 +1035,7 @@ when used as a general purpose RNG, but is quite beneficial in this application.
 Since each of up to 2^64 children will be perturbed by different weights, they
 cannot have hash collisions. What about parent colliding with child? That can
 only happen if all four main RNG registers are perturbed by exactly zero. This
-seems unlikely, but could it occur? Consider this part of each output function:
+seems unlikely, but could it occur? Consider the core of the output function:
 
     p ^= p >> ((p >> 59) + 5);
     p *= m[i];
@@ -1023,7 +1080,7 @@ void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSA
         0x6677f9b93ab0c04d
     };
 
-    // PCG-RXS-M-XS output with four variants
+    // PCG-RXS-M-XS-64 output with four variants
     for (int i = 0; i < 4; i++) {
         uint64_t p = x + a[i];
         p ^= p >> ((p >> 59) + 5);
@@ -1068,8 +1125,8 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->result = jl_nothing;
     t->donenotify = completion_future;
     jl_atomic_store_relaxed(&t->_isexception, 0);
-    // Inherit logger state from parent task
-    t->logstate = ct->logstate;
+    // Inherit scope from parent task
+    t->scope = ct->scope;
     // Fork task-local random state from parent
     jl_rng_split(t->rngState, ct->rngState);
     // there is no active exception handler available on this stack yet
@@ -1173,6 +1230,17 @@ void jl_init_tasks(void) JL_GC_DISABLED
 #ifndef COPY_STACKS
     if (always_copy_stacks) {
         jl_safe_printf("Julia built without COPY_STACKS support");
+        exit(1);
+    }
+#endif
+#if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
+    void *libc_handle = dlopen("libc.so.6", RTLD_NOW | RTLD_NOLOAD);
+    if (libc_handle) {
+        *(void**)&real_siglongjmp = dlsym(libc_handle, "siglongjmp");
+        dlclose(libc_handle);
+    }
+    if (real_siglongjmp == NULL) {
+        jl_safe_printf("failed to get real siglongjmp\n");
         exit(1);
     }
 #endif
@@ -1670,7 +1738,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
-    ct->logstate = jl_nothing;
+    ct->scope = jl_nothing;
     ct->eh = NULL;
     ct->gcstack = NULL;
     ct->excstack = NULL;

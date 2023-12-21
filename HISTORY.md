@@ -37,6 +37,9 @@ Compiler/Runtime improvements
 * The mark phase of the garbage collector is now multi-threaded ([#48600]).
 * [JITLink](https://llvm.org/docs/JITLink.html) is enabled by default on Linux aarch64 when Julia is linked to LLVM 15 or later versions ([#49745]).
   This should resolve many segmentation faults previously observed on this platform.
+* The precompilation process now uses pidfile locks and orchestrates multiple julia processes to only have one process
+  spend effort precompiling while the others wait. Previously all would do the work and race to overwrite the cache files.
+  ([#49052])
 
 Command-line option changes
 ---------------------------
@@ -95,7 +98,7 @@ Standard library changes
   ([#46196]).
 * Adjoints and transposes of `Factorization` objects are no longer wrapped in `Adjoint`
   and `Transpose` wrappers, respectively. Instead, they are wrapped in
-  `AdjointFactorization` and `TranposeFactorization` types, which themselves subtype
+  `AdjointFactorization` and `TransposeFactorization` types, which themselves subtype
   `Factorization` ([#46874]).
 * New functions `hermitianpart` and `hermitianpart!` for extracting the Hermitian
   (real symmetric) part of a matrix ([#31836]).

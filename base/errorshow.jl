@@ -70,6 +70,8 @@ function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
     if ex.expected === Bool
         print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
+    elseif ex.func === :var"dict key"
+        print(io, "$(limitrepr(ex.got)) is not a valid key for type $(ex.expected)")
     else
         if isvarargtype(ex.got)
             targs = (ex.got,)
@@ -80,7 +82,7 @@ function showerror(io::IO, ex::TypeError)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
-        elseif ex.func === Symbol("keyword argument")
+        elseif ex.func === :var"keyword argument"
             ctx = "in keyword argument $(ex.context)"
         else
             ctx = "in $(ex.func), in $(ex.context)"
@@ -168,13 +170,25 @@ showerror(io::IO, ex::UndefKeywordError) =
 
 function showerror(io::IO, ex::UndefVarError)
     print(io, "UndefVarError: `$(ex.var)` not defined")
+    if isdefined(ex, :scope)
+        scope = ex.scope
+        if scope isa Module
+            print(io, " in `$scope`")
+        elseif scope === :static_parameter
+            print(io, " in static parameter matching")
+        else
+            print(io, " in $scope scope")
+        end
+    end
     Experimental.show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
-    nameof(ex.T) === ex.func || print(io, ex.T, ", ")
-    print(io, ex.val, ')')
+    T = first(ex.args)
+    nameof(T) === ex.func || print(io, T, ", ")
+    join(io, ex.args[2:end], ", ")
+    print(io, ")")
     Experimental.show_error_hints(io, ex)
 end
 
@@ -240,7 +254,6 @@ function showerror(io::IO, ex::MethodError)
         return showerror_ambiguous(io, meth, f, arg_types)
     end
     arg_types_param::SimpleVector = arg_types.parameters
-    show_candidates = true
     print(io, "MethodError: ")
     ft = typeof(f)
     f_is_function = false
@@ -256,9 +269,6 @@ function showerror(io::IO, ex::MethodError)
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
-    elseif f === mapreduce_empty || f === reduce_empty
-        print(io, "reducing over an empty collection is not allowed; consider supplying `init` to the reducer")
-        show_candidates = false
     elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
@@ -332,11 +342,12 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
-    show_candidates && try
+    try
         show_method_candidates(io, ex, kwargs)
     catch ex
         @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
     end
+    nothing
 end
 
 striptype(::Type{T}) where {T} = T
@@ -785,7 +796,7 @@ function show_backtrace(io::IO, t::Vector)
 
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
         f = filtered[1][1]::StackFrame
-        if f.line == 0 && f.file === Symbol("")
+        if f.line == 0 && f.file === :var""
             # don't show a single top-level frame with no location info
             return
         end

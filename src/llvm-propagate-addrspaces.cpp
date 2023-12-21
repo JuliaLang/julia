@@ -11,7 +11,6 @@
 #include <llvm/IR/ValueMap.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Dominators.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -43,8 +42,8 @@ using namespace llvm;
 struct PropagateJuliaAddrspacesVisitor : public InstVisitor<PropagateJuliaAddrspacesVisitor> {
     DenseMap<Value *, Value *> LiftingMap;
     SmallPtrSet<Value *, 4> Visited;
-    std::vector<Instruction *> ToDelete;
-    std::vector<std::pair<Instruction *, Instruction *>> ToInsert;
+    SmallVector<Instruction *, 0> ToDelete;
+    SmallVector<std::pair<Instruction *, Instruction *>, 0> ToInsert;
 
 public:
     Value *LiftPointer(Module *M, Value *V, Instruction *InsertPt=nullptr);
@@ -57,7 +56,7 @@ public:
     void visitMemTransferInst(MemTransferInst &MTI);
 
 private:
-    void PoisonValues(std::vector<Value *> &Worklist);
+    void PoisonValues(SmallVectorImpl<Value *> &Worklist);
 };
 
 static unsigned getValueAddrSpace(Value *V) {
@@ -68,7 +67,7 @@ static bool isSpecialAS(unsigned AS) {
     return AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial;
 }
 
-void PropagateJuliaAddrspacesVisitor::PoisonValues(std::vector<Value *> &Worklist) {
+void PropagateJuliaAddrspacesVisitor::PoisonValues(SmallVectorImpl<Value *> &Worklist) {
     while (!Worklist.empty()) {
         Value *CurrentV = Worklist.back();
         Worklist.pop_back();
@@ -83,7 +82,7 @@ void PropagateJuliaAddrspacesVisitor::PoisonValues(std::vector<Value *> &Worklis
 
 Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruction *InsertPt) {
     SmallVector<Value *, 4> Stack;
-    std::vector<Value *> Worklist;
+    SmallVector<Value *, 0> Worklist;
     std::set<Value *> LocalVisited;
     unsigned allocaAddressSpace = M->getDataLayout().getAllocaAddrSpace();
     Worklist.push_back(V);
@@ -106,7 +105,6 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
             }
             else if (auto *GEP = dyn_cast<GetElementPtrInst>(CurrentV)) {
                 if (LiftingMap.count(GEP)) {
-                    CurrentV = LiftingMap[GEP];
                     break;
                 } else if (Visited.count(GEP)) {
                     return nullptr;
@@ -157,7 +155,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
     }
 
     // Go through and insert lifted versions of all instructions on the list.
-    std::vector<Value *> ToRevisit;
+    SmallVector<Value *, 0> ToRevisit;
     for (Value *V : Stack) {
         if (LiftingMap.count(V))
             continue;
@@ -298,27 +296,6 @@ bool propagateJuliaAddrspaces(Function &F) {
     visitor.Visited.clear();
     return true;
 }
-
-struct PropagateJuliaAddrspacesLegacy : FunctionPass {
-    static char ID;
-
-    PropagateJuliaAddrspacesLegacy() : FunctionPass(ID) {}
-    bool runOnFunction(Function &F) override {
-        bool modified = propagateJuliaAddrspaces(F);
-#ifdef JL_VERIFY_PASSES
-        assert(!verifyLLVMIR(F));
-#endif
-        return modified;
-    }
-};
-
-char PropagateJuliaAddrspacesLegacy::ID = 0;
-static RegisterPass<PropagateJuliaAddrspacesLegacy> X("PropagateJuliaAddrspaces", "Propagate (non-)rootedness information", false, false);
-
-Pass *createPropagateJuliaAddrspaces() {
-    return new PropagateJuliaAddrspacesLegacy();
-}
-
 PreservedAnalyses PropagateJuliaAddrspacesPass::run(Function &F, FunctionAnalysisManager &AM) {
     bool modified = propagateJuliaAddrspaces(F);
 
@@ -330,10 +307,4 @@ PreservedAnalyses PropagateJuliaAddrspacesPass::run(Function &F, FunctionAnalysi
     } else {
         return PreservedAnalyses::all();
     }
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddPropagateJuliaAddrspaces_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createPropagateJuliaAddrspaces());
 }

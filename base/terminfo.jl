@@ -95,8 +95,8 @@ function read(data::IO, ::Type{TermInfoRaw})
             throw(ArgumentError("Terminfo did not contain a null byte after the flag section, expected to position the start of the numbers section on an even byte"))
     end
     # Numbers, Strings, Table
-    numbers = reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))) .|> ltoh
-    string_indices = reinterpret(UInt16, read(data, string_count * sizeof(UInt16))) .|> ltoh
+    numbers = map(ltoh, reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))))
+    string_indices = map(ltoh, reinterpret(UInt16, read(data, string_count * sizeof(UInt16))))
     strings_table = read(data, table_bytes)
     strings = map(string_indices) do idx
         if idx ∉ (0xffff, 0xfffe)
@@ -107,7 +107,7 @@ function read(data::IO, ::Type{TermInfoRaw})
         end
     end
     TermInfoRaw(term_names, flags, numbers, strings,
-                if !eof(data) extendedterminfo(data; NumInt) end)
+                if !eof(data) extendedterminfo(data, NumInt) end)
 end
 
 """
@@ -119,7 +119,7 @@ This will accept any terminfo content that conforms with `term(5)`.
 
 See also: `read(::IO, ::Type{TermInfoRaw})`
 """
-function extendedterminfo(data::IO; NumInt::Union{Type{UInt16}, Type{UInt32}})
+function extendedterminfo(data::IO, NumInt::Union{Type{UInt16}, Type{UInt32}})
     # Extended info
     if position(data) % 2 != 0
         0x00 == read(data, UInt8) ||
@@ -137,13 +137,16 @@ function extendedterminfo(data::IO; NumInt::Union{Type{UInt16}, Type{UInt32}})
         0x00 == read(data, UInt8) ||
             throw(ArgumentError("Terminfo did not contain a null byte after the extended flag section, expected to position the start of the numbers section on an even byte"))
     end
-    numbers = reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))) .|> ltoh
-    table_indices = reinterpret(UInt16, read(data, table_count * sizeof(UInt16))) .|> ltoh
+    numbers = map(n -> Int(ltoh(n)), reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))))
+    table_indices = map(ltoh, reinterpret(UInt16, read(data, table_count * sizeof(UInt16))))
     table_strings = [String(readuntil(data, 0x00)) for _ in 1:length(table_indices)]
+    info = Dict{Symbol, Union{Bool, Int, String}}()
     strings = table_strings[1:string_count]
-    labels = Symbol.(table_strings[string_count+1:end])
-    Dict{Symbol, Union{Bool, Int, String}}(
-        labels .=> vcat(flags, numbers, strings))
+    labels = table_strings[string_count+1:end]
+    for (label, val) in zip(labels, vcat(flags, numbers, strings))
+        info[Symbol(label)] = val
+    end
+    return info
 end
 
 """
@@ -178,7 +181,7 @@ function TermInfo(raw::TermInfoRaw)
         Symbol[]
     end
     TermInfo(raw.names, length(raw.flags),
-             raw.numbers .!= typemax(eltype(raw.numbers)),
+             map(n-> n != typemax(typeof(n)), raw.numbers),
              map(!isnothing, raw.strings),
              extensions, capabilities)
 end

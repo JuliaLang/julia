@@ -2,14 +2,14 @@
 
 ## jll artifact
 LLVM_JLL_NAME := libLLVM
-LLVM_ASSERT_JLL_VER := 15.0.7+8
+LLVM_ASSERT_JLL_VER := 15.0.7+10
 ## source build
 # Version number of LLVM
 LLVM_VER := 15.0.7
 # Git branch name in `LLVM_GIT_URL` repository
-LLVM_BRANCH=julia-15.0.7-7
+LLVM_BRANCH=julia-15.0.7-10
 # Git ref in `LLVM_GIT_URL` repository
-LLVM_SHA1=julia-15.0.7-7
+LLVM_SHA1=julia-15.0.7-10
 
 ## Following options are used to automatically fetch patchset from Julia's fork.  This is
 ## useful if you want to build an external LLVM while still applying Julia's patches.
@@ -20,4 +20,4 @@ LLVM_JULIA_DIFF_GITHUB_REPO := https://github.com/llvm/llvm-project
 # Base GitHub ref for generating the diff.
 LLVM_BASE_REF := llvm:llvmorg-15.0.7
 # Julia fork's GitHub ref for generating the diff.
-LLVM_JULIA_REF := JuliaLang:julia-15.0.7-7
+LLVM_JULIA_REF := JuliaLang:julia-15.0.7-9

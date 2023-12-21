@@ -23,12 +23,12 @@ include("clipboard.jl")
 """
     varinfo(m::Module=Main, pattern::Regex=r""; all=false, imported=false, recursive=false, sortby::Symbol=:name, minsize::Int=0)
 
-Return a markdown table giving information about exported global variables in a module, optionally restricted
+Return a markdown table giving information about public global variables in a module, optionally restricted
 to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 
-- `all` : also list non-exported objects defined in the module, deprecated objects, and compiler-generated objects.
+- `all` : also list non-public objects defined in the module, deprecated objects, and compiler-generated objects.
 - `imported` : also list objects explicitly imported from other modules.
 - `recursive` : recursively include objects in sub-modules, observing the same settings in each.
 - `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
@@ -201,6 +201,8 @@ The optional second argument restricts the search to a particular module or func
 
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
+
+See also: [`methods`](@ref).
 """
 function methodswith(@nospecialize(t::Type), @nospecialize(f::Base.Callable), meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
@@ -352,7 +354,8 @@ function report_bug(kind)
                 push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
                 old_active_project = Base.ACTIVE_PROJECT[]
                 Base.ACTIVE_PROJECT[] = nothing
-                Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
+                pkgspec = @invokelatest Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid)
+                @invokelatest Pkg.add(pkgspec)
                 BugReporting = Base.require(BugReportingId)
                 append!(empty!(LOAD_PATH), old_load_path)
                 Base.ACTIVE_PROJECT[] = old_active_project
@@ -361,7 +364,7 @@ function report_bug(kind)
     else
         BugReporting = Base.require(BugReportingId)
     end
-    return Base.invokelatest(BugReporting.make_interactive_report, kind, ARGS)
+    return @invokelatest BugReporting.make_interactive_report(kind, ARGS)
 end
 
 end

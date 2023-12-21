@@ -4,21 +4,17 @@ using Test
 import REPL, REPL.REPLCompletions
 import Markdown
 
+function get_help_io(input)
+    buf = IOBuffer()
+    eval(REPL.helpmode(buf, input))
+    String(take!(buf))
+end
+get_help_standard(input) = string(eval(REPL.helpmode(IOBuffer(), input)))
+
 @testset "symbol completion" begin
-    @test startswith(let buf = IOBuffer()
-            Core.eval(Main, REPL.helpmode(buf, "α"))
-            String(take!(buf))
-        end, "\"α\" can be typed by \\alpha<tab>\n")
-
-    @test startswith(let buf = IOBuffer()
-            Core.eval(Main, REPL.helpmode(buf, "🐨"))
-            String(take!(buf))
-        end, "\"🐨\" can be typed by \\:koala:<tab>\n")
-
-    @test startswith(let buf = IOBuffer()
-            Core.eval(Main, REPL.helpmode(buf, "ᵞ₁₂₃¹²³α"))
-            String(take!(buf))
-        end, "\"ᵞ₁₂₃¹²³α\" can be typed by \\^gamma<tab>\\_123<tab>\\^123<tab>\\alpha<tab>\n")
+    @test startswith(get_help_io("α"), "\"α\" can be typed by \\alpha<tab>\n")
+    @test startswith(get_help_io("🐨"), "\"🐨\" can be typed by \\:koala:<tab>\n")
+    @test startswith(get_help_io("ᵞ₁₂₃¹²³α"), "\"ᵞ₁₂₃¹²³α\" can be typed by \\^gamma<tab>\\_123<tab>\\^123<tab>\\alpha<tab>\n")
 
     # Check that all symbols with several completions have a canonical mapping (#39148)
     symbols = values(REPLCompletions.latex_symbols)
@@ -27,19 +23,16 @@ import Markdown
 end
 
 @testset "quoting in doc search" begin
-    str = let buf = IOBuffer()
-        Core.eval(Main, REPL.helpmode(buf, "mutable s"))
-        String(take!(buf))
-    end
+    str = get_help_io("mutable s")
     @test occursin("'mutable struct'", str)
     @test occursin("Couldn't find 'mutable s'", str)
 end
 
 @testset "Non-Markdown" begin
     # https://github.com/JuliaLang/julia/issues/37765
-    @test isa(REPL.insert_hlines(IOBuffer(), Markdown.Text("foo")), Markdown.Text)
+    @test isa(REPL.insert_hlines(Markdown.Text("foo")), Markdown.Text)
     # https://github.com/JuliaLang/julia/issues/37757
-    @test REPL.insert_hlines(IOBuffer(), nothing) === nothing
+    @test REPL.insert_hlines(nothing) === nothing
 end
 
 @testset "Check @var_str also completes to var\"\" in REPL.doc_completions()" begin
@@ -74,3 +67,71 @@ end
     b = REPL.Binding(@__MODULE__, :R)
     @test REPL.summarize(b, Tuple{}) isa Markdown.MD
 end
+
+@testset "Struct field help (#51178)" begin
+    struct StructWithNoFields end
+    struct StructWithOneField
+        field1
+    end
+    struct StructWithTwoFields
+        field1
+        field2
+    end
+    struct StructWithThreeFields
+        field1
+        field2
+        field3
+    end
+
+    @test endswith(get_help_standard("StructWithNoFields.not_a_field"), "StructWithNoFields` has no fields.\n")
+    @test endswith(get_help_standard("StructWithOneField.not_a_field"), "StructWithOneField` has field `field1`.\n")
+    @test endswith(get_help_standard("StructWithTwoFields.not_a_field"), "StructWithTwoFields` has fields `field1`, and `field2`.\n")
+    @test endswith(get_help_standard("StructWithThreeFields.not_a_field"), "StructWithThreeFields` has fields `field1`, `field2`, and `field3`.\n")
+end
+
+module InternalWarningsTests
+
+    module A
+        public B, B3
+        module B
+            public e
+            c = 4
+            "d is 5"
+            d = 5
+            "e is 6"
+            e = 6
+        end
+
+        module B2
+            module C
+                public e
+                d = 1
+                "e is 2"
+                e = 2
+            end
+        end
+
+        module B3 end
+    end
+
+    using Test, REPL
+    @testset "internal warnings" begin
+        header = "!!! warning\n    The following bindings may be internal; they may change or be removed in future versions:\n\n"
+        prefix(warnings) = header * join("      * `$(@__MODULE__).$w`\n" for w in warnings) * "\n\n"
+        docstring(input) = string(eval(REPL.helpmode(IOBuffer(), input, @__MODULE__)))
+
+        @test docstring("A") == "No docstring or readme file found for internal module `$(@__MODULE__).A`.\n\n# Public names\n\n`B`, `B3`\n"
+        @test docstring("A.B") == "No docstring or readme file found for public module `$(@__MODULE__).A.B`.\n\n# Public names\n\n`e`\n"
+        @test startswith(docstring("A.B.c"), prefix(["A.B.c"]))
+        @test startswith(docstring("A.B.d"), prefix(["A.B.d"]))
+        @test docstring("A.B.e") == "e is 6\n"
+        @test startswith(docstring("A.B2"), prefix(["A.B2"]))
+        @test startswith(docstring("A.B2.C"), prefix(["A.B2", "A.B2.C"]))
+        @test startswith(docstring("A.B2.C.d"), prefix(["A.B2", "A.B2.C", "A.B2.C.d"]))
+        @test startswith(docstring("A.B2.C.e"), prefix(["A.B2", "A.B2.C"]))
+        @test docstring("A.B3") == "No docstring or readme file found for public module `$(@__MODULE__).A.B3`.\n\nModule does not have any public names.\n"
+    end
+end
+
+# Issue #51344, don't print "internal binding" warning for non-existent bindings.
+@test string(eval(REPL.helpmode("Base.no_such_symbol"))) == "No documentation found.\n\nBinding `Base.no_such_symbol` does not exist.\n"

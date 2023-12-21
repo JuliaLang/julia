@@ -436,21 +436,15 @@ unsafe_trunc(::Type{UInt128}, x::Float16) = unsafe_trunc(UInt128, Float32(x))
 unsafe_trunc(::Type{Int128}, x::Float16) = unsafe_trunc(Int128, Float32(x))
 
 # matches convert methods
-# also determines floor, ceil, round
-trunc(::Type{Signed}, x::IEEEFloat) = trunc(Int,x)
-trunc(::Type{Unsigned}, x::IEEEFloat) = trunc(UInt,x)
-trunc(::Type{Integer}, x::IEEEFloat) = trunc(Int,x)
+# also determines trunc, floor, ceil
+round(::Type{Signed},   x::IEEEFloat, r::RoundingMode) = round(Int, x, r)
+round(::Type{Unsigned}, x::IEEEFloat, r::RoundingMode) = round(UInt, x, r)
+round(::Type{Integer},  x::IEEEFloat, r::RoundingMode) = round(Int, x, r)
 
-# Bool
-trunc(::Type{Bool}, x::AbstractFloat) = (-1 < x < 2) ? 1 <= x : throw(InexactError(:trunc, Bool, x))
-floor(::Type{Bool}, x::AbstractFloat) = (0 <= x < 2) ? 1 <= x : throw(InexactError(:floor, Bool, x))
-ceil(::Type{Bool}, x::AbstractFloat)  = (-1 < x <= 1) ? 0 < x : throw(InexactError(:ceil, Bool, x))
-round(::Type{Bool}, x::AbstractFloat) = (-0.5 <= x < 1.5) ? 0.5 < x : throw(InexactError(:round, Bool, x))
-
-round(x::IEEEFloat, r::RoundingMode{:ToZero})  = trunc_llvm(x)
-round(x::IEEEFloat, r::RoundingMode{:Down})    = floor_llvm(x)
-round(x::IEEEFloat, r::RoundingMode{:Up})      = ceil_llvm(x)
-round(x::IEEEFloat, r::RoundingMode{:Nearest}) = rint_llvm(x)
+round(x::IEEEFloat, ::RoundingMode{:ToZero})  = trunc_llvm(x)
+round(x::IEEEFloat, ::RoundingMode{:Down})    = floor_llvm(x)
+round(x::IEEEFloat, ::RoundingMode{:Up})      = ceil_llvm(x)
+round(x::IEEEFloat, ::RoundingMode{:Nearest}) = rint_llvm(x)
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
@@ -931,15 +925,18 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
             # directly. `Tf(typemax(Ti))+1` is either always exactly representable, or
             # rounded to `Inf` (e.g. when `Ti==UInt128 && Tf==Float32`).
             @eval begin
-                function trunc(::Type{$Ti},x::$Tf)
+                function round(::Type{$Ti},x::$Tf,::RoundingMode{:ToZero})
                     if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError(:trunc, $Ti, x))
+                        throw(InexactError(:round, $Ti, x, RoundToZero))
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && isinteger(x)
+                    # When typemax(Ti) is not representable by Tf but typemax(Ti) + 1 is,
+                    # then < Tf(typemax(Ti) + 1) is stricter than <= Tf(typemax(Ti)). Using
+                    # the former causes us to throw on UInt64(Float64(typemax(UInt64))+1)
+                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti))+one(Tf))) && isinteger(x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))
@@ -952,11 +949,11 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
             # be rounded up. This assumes that `Tf(typemin(Ti)) > -Inf`, which is true for
             # these types, but not for `Float16` or larger integer types.
             @eval begin
-                function trunc(::Type{$Ti},x::$Tf)
+                function round(::Type{$Ti},x::$Tf,::RoundingMode{:ToZero})
                     if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError(:trunc, $Ti, x))
+                        throw(InexactError(:round, $Ti, x, RoundToZero))
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
@@ -1017,11 +1014,22 @@ isodd(x::AbstractFloat) = isinteger(x) && abs(x) ≤ maxintfloat(x) && isodd(Int
     floatmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
     floatmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
 
-    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= floatmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
     eps(::Type{Float16}) = $(bitcast(Float16, 0x1400))
     eps(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
     eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
     eps() = eps(Float64)
+end
+
+eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= floatmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
+
+function eps(x::T) where T<:IEEEFloat
+    # For isfinite(x), toggling the LSB will produce either prevfloat(x) or
+    # nextfloat(x) but will never change the sign or exponent.
+    # For !isfinite(x), this will map Inf to NaN and NaN to NaN or Inf.
+    y = reinterpret(T, reinterpret(Unsigned, x) ⊻ true)
+    # The absolute difference between these values is eps(x). This is true even
+    # for Inf/NaN values.
+    return abs(x - y)
 end
 
 """

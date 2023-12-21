@@ -8,6 +8,11 @@ using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
     UnitUpperTriangular, UnitLowerTriangular,
     mul!, rdiv!, rmul!, lmul!
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
 debug && println("Triangular matrices")
 
 n = 9
@@ -186,6 +191,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test real(A1) == real(Matrix(A1))
         @test imag(A1) == imag(Matrix(A1))
         @test abs.(A1) == abs.(Matrix(A1))
+
+        # zero
+        if A1 isa UpperTriangular || A1 isa LowerTriangular
+            @test zero(A1) == zero(parent(A1))
+        end
 
         # Unary operations
         @test -A1 == -Matrix(A1)
@@ -564,7 +574,7 @@ end
     end
 end
 
-@testset "check matrix logarithm type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
+@testset "check matrix logarithm type-inferable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
     A = UpperTriangular(exp(triu(randn(elty, n, n))))
     @inferred Union{typeof(A),typeof(complex(A))} log(A)
     @test exp(Matrix(log(A))) ≈ A
@@ -862,6 +872,29 @@ end
         for dty in (UpperTriangular, LowerTriangular)
             A = dty(D)
             @test A * A' == D * D'
+        end
+    end
+end
+
+@testset "arithmetic with an immutable parent" begin
+    F = FillArrays.Fill(2, (4,4))
+    for UT in (UnitUpperTriangular, UnitLowerTriangular)
+        U = UT(F)
+        @test -U == -Array(U)
+    end
+end
+
+@testset "error paths" begin
+    A = zeros(1,1); B = zeros(2,2)
+    @testset "inplace mul scaling with incompatible sizes" begin
+        for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+            @test_throws DimensionMismatch mul!(T(A), T(B), 3)
+            @test_throws DimensionMismatch mul!(T(A), 3, T(B))
+        end
+    end
+    @testset "copyto with incompatible sizes" begin
+        for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+            @test_throws BoundsError copyto!(T(A), T(B))
         end
     end
 end

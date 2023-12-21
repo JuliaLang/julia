@@ -204,6 +204,7 @@ Base.Dict
 Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
+Base.PersistentDict
 Base.haskey
 Base.get
 Base.get!
@@ -236,6 +237,7 @@ Partially implemented by:
   * [`Array`](@ref)
   * [`BitArray`](@ref)
   * [`ImmutableDict`](@ref Base.ImmutableDict)
+  * [`PersistentDict`](@ref Base.PersistentDict)
   * [`Iterators.Pairs`](@ref)
 
 ## Set-Like Collections
@@ -253,6 +255,7 @@ Base.symdiff
 Base.symdiff!
 Base.intersect!
 Base.issubset
+Base.in!
 Base.:⊈
 Base.:⊊
 Base.issetequal

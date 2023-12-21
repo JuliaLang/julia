@@ -20,7 +20,7 @@ The `Test` module provides simple *unit testing* functionality. Unit testing is 
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
 of specifying the behaviors your code should have when complete. You may also want to look at the
-documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
+documentation for [adding tests to your Julia Package](@ref adding-tests-to-packages).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
@@ -420,7 +420,7 @@ end
 We will need to create those two included files, `math_tests.jl` and `greeting_tests.jl`, and add some tests to them.
 
 > **Note:** Notice how we did not have to specify add `Example` into the `test` environment's `Project.toml`.
-> This is a benefit of Julia's testing system that you could [read about more here](https://pkgdocs.julialang.org/dev/creating-packages/).
+> This is a benefit of Julia's testing system that you could [read about more here](@ref adding-tests-to-packages).
 
 #### Writing Tests for `math_tests.jl`
 
@@ -443,7 +443,7 @@ end
 
 #### Writing Tests for `greeting_tests.jl`
 
-Using our knowledge of `Test.jl`, here are some example tests we could add to `math_tests.jl`:
+Using our knowledge of `Test.jl`, here are some example tests we could add to `greeting_tests.jl`:
 
 ```julia
 @testset "Testset 3" begin
@@ -491,3 +491,15 @@ Using `Test.jl`, more complicated tests can be added for packages but this shoul
 ```@meta
 DocTestSetup = nothing
 ```
+
+### Code Coverage
+
+Code coverage tracking during tests can be enabled using the `pkg> test --coverage` flag (or at a lower level using the
+[`--code-coverage`](@ref command-line-interface) julia arg). This is on by default in the
+[julia-runtest](https://github.com/julia-actions/julia-runtest) GitHub action.
+
+To evaluate coverage either manually inspect the `.cov` files that are generated beside the source files locally,
+or in CI use the [julia-processcoverage](https://github.com/julia-actions/julia-processcoverage) GitHub action.
+
+!!! compat "Julia 1.11"
+    Since Julia 1.11, coverage is not collected during the package precompilation phase.
