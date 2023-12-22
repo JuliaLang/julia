@@ -316,7 +316,7 @@ function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
         end
         B = SymTridiagonal(real.(d), Er)
         Λ, Φ = eigen(B; kwargs...)
-        return Eigen(Λ, mul!(Φ, Diagonal(S), Φ))
+        return Eigen(Λ, Diagonal(S) * Φ)
     end
 end
 
