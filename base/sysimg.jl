@@ -51,8 +51,8 @@ eval(x) = Core.eval(Main, x)
 pushfirst!(Base._included_files, (@__MODULE__, abspath(@__FILE__)))
 
 # set up depot & load paths to be able to find stdlib packages
-Base.init_depot_path()
-Base.init_load_path()
+Base.init_depot_path(; only_bundled=true)
+push!(empty!(LOAD_PATH), "@stdlib")
 
 if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main

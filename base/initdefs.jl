@@ -94,9 +94,11 @@ See also [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
 """
 const DEPOT_PATH = String[]
 
-function append_default_depot_path!(DEPOT_PATH)
-    path = joinpath(homedir(), ".julia")
-    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+function append_default_depot_path!(DEPOT_PATH; only_bundled::Bool=false)
+    if !only_bundled
+        path = joinpath(homedir(), ".julia")
+        path in DEPOT_PATH || push!(DEPOT_PATH, path)
+    end
     path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     path = abspath(Sys.BINDIR, "..", "share", "julia")
@@ -104,21 +106,21 @@ function append_default_depot_path!(DEPOT_PATH)
     return DEPOT_PATH
 end
 
-function init_depot_path()
+function init_depot_path(; only_bundled::Bool=false)
     empty!(DEPOT_PATH)
     if haskey(ENV, "JULIA_DEPOT_PATH")
         str = ENV["JULIA_DEPOT_PATH"]
         isempty(str) && return
         for path in eachsplit(str, Sys.iswindows() ? ';' : ':')
             if isempty(path)
-                append_default_depot_path!(DEPOT_PATH)
+                append_default_depot_path!(DEPOT_PATH; only_bundled)
             else
                 path = expanduser(path)
                 path in DEPOT_PATH || push!(DEPOT_PATH, path)
             end
         end
     else
-        append_default_depot_path!(DEPOT_PATH)
+        append_default_depot_path!(DEPOT_PATH; only_bundled)
     end
     nothing
 end
