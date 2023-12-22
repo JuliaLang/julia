@@ -312,7 +312,7 @@ function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
         S = Vector{Complex{T}}(undef, N)
         S[1] = 1
         for i ∈ 1:N-1
-            S[i+1] = Er[i] == 0 ? one(T) : S[i] * sign(E[i]])
+            S[i+1] = Er[i] == 0 ? one(T) : S[i] * sign(E[i])
         end
         B = SymTridiagonal(real.(d), Er)
         Λ, Φ = eigen(B; kwargs...)
