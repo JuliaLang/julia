@@ -40,6 +40,18 @@ function docexpr(source::LineNumberNode, mod::Module, s, flavor = :julia)
     :($doc_str($(mdexpr(s, flavor)), $(QuoteNode(source)), $mod))
 end
 
+"""
+    macro md_str(s)
+
+Parse the given string as Markdown text and return a corresponding `Markdown.MD` object.
+
+# Example
+```jldoctest
+julia> html(md"# Hello, world!")
+"<h1>Hello, world&#33;</h1>\\n"
+
+```
+"""
 macro md_str(s, t...)
     mdexpr(s, t...)
 end
