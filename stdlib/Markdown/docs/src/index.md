@@ -388,7 +388,7 @@ If no title text is specified after the admonition type, then the type name will
 
 Admonitions, like most other toplevel elements, can contain other toplevel elements (e.g. lists, images).
 
-### Markdown String Macro 
+### Markdown String Macro
 
 The `md""` macro allows you to embed Markdown strings directly into your Julia code. This macro is designed to simplify the inclusion of Markdown-formatted text within your Julia source files.
 
