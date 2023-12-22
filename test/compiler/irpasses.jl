@@ -1575,6 +1575,18 @@ end
 @test_broken fully_eliminated(persistent_dict_elim_multiple_phi)
 @test code_typed(persistent_dict_elim_multiple_phi)[1][1].code[end] == Core.ReturnNode(1)
 
+function persistent_dict_elim_multiple_phi2(c::Bool)
+    z = Base.inferencebarrier(1)::Int
+    if c
+        a = Base.PersistentDict(:a => z)
+    else
+        a = Base.PersistentDict(:a => z)
+    end
+    b = Base.PersistentDict(a, :b => 2)
+    return b[:a]
+end
+@test persistent_dict_elim_multiple_phi2(true) == 1
+
 # Test CFG simplify with try/catch blocks
 let code = Any[
         # Block 1

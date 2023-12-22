@@ -34,6 +34,9 @@ Language changes
   pkgimage caches for all other packages than the package being tested, likely meaning faster test
   execution. ([#52123])
 
+* Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
+  omit the default user depot ([#51448]).
+
 Compiler/Runtime improvements
 -----------------------------
 * Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
