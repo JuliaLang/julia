@@ -51,6 +51,7 @@ aimg  = randn(n,n)/2
                 for i in 1:size(a,2)
                     @test T*v[:,i] ≈ d[i]*v[:,i]
                 end
+                @test eigvals(T) ≈ d 
                 @test det(T) ≈ det(f)
                 @test inv(T) ≈ inv(f)
             end
