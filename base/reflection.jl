@@ -2507,7 +2507,11 @@ function delete_method(m::Method)
 end
 
 function get_methodtable(m::Method)
-    return ccall(:jl_method_get_table, Any, (Any,), m)::Core.MethodTable
+    mt = ccall(:jl_method_get_table, Any, (Any,), m)
+    if mt === nothing
+        return nothing
+    end
+    return mt::Core.MethodTable
 end
 
 """
