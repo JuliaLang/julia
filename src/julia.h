@@ -2674,6 +2674,8 @@ typedef struct {
 
     int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
     int trim; // can we emit dynamic dispatches?
+    // Cache access. Default: NativeCompiler()
+    jl_value_t *compiler;
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;

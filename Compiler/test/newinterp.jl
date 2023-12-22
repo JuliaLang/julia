@@ -16,7 +16,7 @@ sessions. However it is an usual Julia object of the type `code_cache::IdDict{Me
 making it easier for debugging and inspecting the compiler behavior.
 """
 macro newinterp(InterpName, ephemeral_cache::Bool=false)
-    cache_token = QuoteNode(gensym(string(InterpName, "CacheToken")))
+    InterpCompilerName = esc(Symbol(string(InterpName, "Compiler")))
     InterpCacheName = esc(Symbol(string(InterpName, "Cache")))
     InterpName = esc(InterpName)
     C = Core
@@ -27,6 +27,9 @@ macro newinterp(InterpName, ephemeral_cache::Bool=false)
         end
         $InterpCacheName() = $InterpCacheName(IdDict{$C.MethodInstance,$C.CodeInstance}())
         end)
+        struct $InterpCompilerName <: $CC.AbstractCompiler end
+        $CC.abstract_interpreter(compiler::$InterpCompilerName, world::UInt) =
+            $InterpName(;world, compiler)
         struct $InterpName <: $Compiler.AbstractInterpreter
             meta # additional information
             world::UInt
@@ -34,8 +37,10 @@ macro newinterp(InterpName, ephemeral_cache::Bool=false)
             opt_params::$Compiler.OptimizationParams
             inf_cache::Vector{$Compiler.InferenceResult}
             $(ephemeral_cache && :(code_cache::$InterpCacheName))
+            compiler::$InterpCompilerName
             function $InterpName(meta = nothing;
                                  world::UInt = Base.get_world_counter(),
+                                 compiler::$InterpCompilerName = $InterpCompilerName(),
                                  inf_params::$Compiler.InferenceParams = $Compiler.InferenceParams(),
                                  opt_params::$Compiler.OptimizationParams = $Compiler.OptimizationParams(),
                                  inf_cache::Vector{$Compiler.InferenceResult} = $Compiler.InferenceResult[],
@@ -43,15 +48,15 @@ macro newinterp(InterpName, ephemeral_cache::Bool=false)
                                     Expr(:kw, :(code_cache::$InterpCacheName), :($InterpCacheName())) :
                                     Expr(:kw, :_, :nothing)))
                 return $(ephemeral_cache ?
-                    :(new(meta, world, inf_params, opt_params, inf_cache, code_cache)) :
-                    :(new(meta, world, inf_params, opt_params, inf_cache)))
+                    :(new(meta, world, inf_params, opt_params, inf_cache, code_cache, compiler)) :
+                    :(new(meta, world, inf_params, opt_params, inf_cache, compiler)))
             end
         end
         $Compiler.InferenceParams(interp::$InterpName) = interp.inf_params
         $Compiler.OptimizationParams(interp::$InterpName) = interp.opt_params
         $Compiler.get_inference_world(interp::$InterpName) = interp.world
         $Compiler.get_inference_cache(interp::$InterpName) = interp.inf_cache
-        $Compiler.cache_owner(::$InterpName) = $cache_token
+        $Compiler.cache_owner(interp::$InterpName) = interp.compiler
         $(ephemeral_cache && quote
         $Compiler.code_cache(interp::$InterpName) = $Compiler.WorldView(interp.code_cache, $Compiler.WorldRange(interp.world))
         $Compiler.get(wvc::$Compiler.WorldView{$InterpCacheName}, mi::$C.MethodInstance, default) = get(wvc.cache.dict, mi, default)

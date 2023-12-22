@@ -174,13 +174,20 @@ void run_finalizer(jl_task_t *ct, void *o, void *ff)
         ((void (*)(void*))ff)((void*)o);
         return;
     }
+
+    size_t last_age = ct->world_age;
+    jl_value_t *last_compiler = ct->compiler;
     JL_TRY {
-        size_t last_age = ct->world_age;
+        // TODO: Should we capture the compiler for the thunk?
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        ct->compiler = jl_nothing;
         jl_apply_generic((jl_value_t*)ff, (jl_value_t**)&o, 1);
         ct->world_age = last_age;
+        ct->compiler = last_compiler;
     }
     JL_CATCH {
+        ct->world_age = last_age;
+        ct->compiler = last_compiler;
         jl_printf((JL_STREAM*)STDERR_FILENO, "error in running finalizer: ");
         jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");

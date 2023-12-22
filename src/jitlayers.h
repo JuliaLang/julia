@@ -270,6 +270,7 @@ struct jl_codegen_params_t {
     bool external_linkage = false;
     bool imaging_mode;
     bool use_swiftcc = true;
+    jl_value_t *compiler = nullptr;
     jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple) JL_NOTSAFEPOINT  JL_NOTSAFEPOINT_ENTER
       : tsctx(std::move(ctx)),
         tsctx_lock(tsctx.getLock()),

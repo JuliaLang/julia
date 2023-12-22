@@ -1018,7 +1018,8 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
         char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary)
 {
     // printing via disassembly
-    jl_code_instance_t *codeinst = jl_compile_method_internal(mi, world);
+    jl_value_t *compiler = jl_nothing; // FIXME
+    jl_code_instance_t *codeinst = jl_compile_method_internal(compiler, mi, world);
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)jl_atomic_load_acquire(&codeinst->invoke);
         uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);

@@ -237,6 +237,7 @@ typedef struct _jl_task_t {
     jl_value_t *donenotify;
     jl_value_t *result;
     jl_value_t *scope;
+    jl_value_t *compiler;
     jl_function_t *start;
     _Atomic(uint8_t) _state;
     uint8_t sticky; // record whether this Task can be migrated to a new thread
