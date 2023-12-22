@@ -1359,7 +1359,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     (; result, ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
     (; cfg_transforms_enabled, fold_constant_branches, bb_rename_succ, bb_rename_pred, result_bbs) = compact.cfg_transform
     mark_refined! = Refiner(result.flag, result_idx)
-    already_inserted = (::Int, ssa::OldSSAValue)->ssa.id <= processed_idx
+    already_inserted_phi_arg = already_inserted_ssa(compact, processed_idx)
     if stmt === nothing
         ssa_rename[idx] = stmt
     elseif isa(stmt, OldSSAValue)
@@ -1535,7 +1535,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             values = stmt.values
         end
 
-        values = process_phinode_values(values, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
+        values = process_phinode_values(values, late_fixup, already_inserted_phi_arg, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
         # Don't remove the phi node if it is before the definition of its value
         # because doing so can create forward references. This should only
         # happen with dead loops, but can cause problems when optimization
@@ -1574,7 +1574,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 push!(values, value)
             end
         end
-        result[result_idx][:stmt] = PhiCNode(process_phinode_values(values, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
+        result[result_idx][:stmt] = PhiCNode(process_phinode_values(values, late_fixup, already_inserted_phi_arg, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
         result_idx += 1
     else
         if isa(stmt, SSAValue)
@@ -1883,6 +1883,8 @@ function fixup_node(compact::IncrementalCompact, @nospecialize(stmt), reify_new_
             compact.used_ssas[node.id] += 1
         elseif isa(node, NewSSAValue)
             compact.new_new_used_ssas[-node.id] += 1
+        elseif isa(node, OldSSAValue)
+            return fixup_node(compact, node, reify_new_nodes)
         end
         return FixedNode(node, needs_fixup)
     else

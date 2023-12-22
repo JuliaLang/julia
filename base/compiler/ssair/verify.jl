@@ -72,7 +72,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             end
         end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
-        @verify_error "Left over SSA marker"
+        @verify_error "At statement %$use_idx: Left over SSA marker ($op)"
         error("")
     elseif isa(op, SlotNumber)
         @verify_error "Left over slot detected in converted IR"
