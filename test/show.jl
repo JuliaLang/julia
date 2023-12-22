@@ -2630,3 +2630,10 @@ end
     ir = Core.Compiler.complete(compact)
     verify_display(ir)
 end
+
+module Issue49382
+    abstract type Type49382 end
+end
+using .Issue49382
+(::Type{Issue49382.Type49382})() = 1
+@test sprint(show, methods(Issue49382.Type49382)) isa String
