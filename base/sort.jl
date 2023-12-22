@@ -4,6 +4,8 @@ module Sort
 
 using Base.Order
 
+using Base.Order: prepare, lt_prepared, lt_prepared_1, lt_prepared_2
+
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
     sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
 
@@ -51,11 +53,13 @@ function issorted(itr, order::Ordering)
     y = iterate(itr)
     y === nothing && return true
     prev, state = y
+    prev_p = prepare(order, prev)
     y = iterate(itr, state)
     while y !== nothing
         this, state = y
-        lt(order, this, prev) && return false
-        prev = this
+        this_p = prepare(order, this)
+        lt_prepared(order, this_p, prev_p) && return false
+        prev_p = this_p
         y = iterate(itr, state)
     end
     return true
@@ -179,10 +183,11 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     hi = hi + T(1)
     len = hi - lo
+    x_p = prepare(o, x)
     @inbounds while len != 0
         half_len = len >>> 0x01
         m = lo + half_len
-        if lt(o, v[m], x)
+        if lt_prepared_2(o, v[m], x_p)
             lo = m + 1
             len -= half_len + 1
         else
@@ -199,9 +204,10 @@ function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keyt
     u = T(1)
     lo = lo - u
     hi = hi + u
+    x_p = prepare(o, x)
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if lt(o, x, v[m])
+        if lt_prepared_1(o, x_p, v[m])
             hi = m
         else
             lo = m
@@ -217,13 +223,15 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     u = T(1)
     lo = ilo - u
     hi = ihi + u
+    x_p = prepare(o, x)
     @inbounds while lo < hi - u
         m = midpoint(lo, hi)
-        if lt(o, v[m], x)
+        if lt_prepared_2(o, v[m], x_p)
             lo = m
-        elseif lt(o, x, v[m])
+        elseif lt_prepared_1(o, x_p, v[m])
             hi = m
         else
+            # TODO for further optimization: perform recursive calls with prepared inputs
             a = searchsortedfirst(v, x, max(lo,ilo), m, o)
             b = searchsortedlast(v, x, m, min(hi,ihi), o)
             return a : b
@@ -820,9 +828,10 @@ function _sort!(v::AbstractVector, ::InsertionSortAlg, o::Ordering, kw)
     @inbounds for i = lo_plus_1:hi
         j = i
         x = v[i]
+        x_p = prepare(o, x)
         while j > lo
             y = v[j-1]
-            if !(lt(o, x, y)::Bool)
+            if !(lt_prepared_1(o, x_p, y)::Bool)
                 break
             end
             v[j] = y
@@ -1074,16 +1083,17 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer
     pivot_index = mod(hash(lo), lo:hi)
     @inbounds begin
         pivot = v[pivot_index]
+        pivot_p = prepare(o, pivot)
         while lo < pivot_index
             x = v[lo]
-            fx = rev ? !lt(o, x, pivot) : lt(o, pivot, x)
+            fx = rev ? !lt_prepared_2(o, x, pivot_p) : lt_prepared_1(o, pivot_p, x)
             t[(fx ? hi : lo) - offset] = x
             offset += fx
             lo += 1
         end
         while lo < hi
             x = v[lo+1]
-            fx = rev ? lt(o, pivot, x) : !lt(o, x, pivot)
+            fx = rev ? lt_prepared_1(o, pivot_p, x) : !lt_prepared_2(o, x, pivot_p)
             t[(fx ? hi : lo) - offset] = x
             offset += fx
             lo += 1
@@ -1425,6 +1435,7 @@ end
 maybe_unsigned(x::Integer) = x # this is necessary to avoid calling unsigned on BigInt
 maybe_unsigned(x::BitSigned) = unsigned(x)
 function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
+    # TODO: replace this with `issorted(view(v, lo:hi), order=o)` once views are fast.
     @boundscheck checkbounds(v, lo:hi)
     @inbounds for i in (lo+1):hi
         lt(o, v[i], v[i-1]) && return false
@@ -2336,12 +2347,13 @@ end
 
 function partition!(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     pivot = selectpivot!(v, lo, hi, o)
+    pivot_p = prepare(o, pivot)
     # pivot == v[lo], v[hi] > pivot
     i, j = lo, hi
     @inbounds while true
         i += 1; j -= 1
-        while lt(o, v[i], pivot); i += 1; end;
-        while lt(o, pivot, v[j]); j -= 1; end;
+        while lt_prepared_2(o, v[i], pivot_p); i += 1; end;
+        while lt_prepared_1(o, pivot_p, v[j]); j -= 1; end;
         i >= j && break
         v[i], v[j] = v[j], v[i]
     end

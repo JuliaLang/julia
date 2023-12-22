@@ -1036,6 +1036,50 @@ end
     @test issorted(sort!(rand(100), Base.Sort.InitialOptimizations(DispatchLoopTestAlg()), Base.Order.Forward))
 end
 
+@testset "Performance (how many timems By is called)" begin
+    # Intentional regressions are acceptable, accedental regressions are not.
+    cnt = Ref(0)
+    incr_identity = x -> (cnt[] += 1; x)
+    x = 1:50
+
+    cnt[] = 0
+    @test issorted(x; by=incr_identity)
+    @test cnt[] == 50 # Any less would be buggy.
+
+    cnt[] = 0
+    @test !issorted(x; by=incr_identity, rev=true)
+    @test cnt[] == 2 # Any less would be buggy.
+
+    cnt[] = 0
+    @test searchsortedfirst(x, 1; by=incr_identity) == 1
+    @test cnt[] <= 7
+
+    cnt[] = 0
+    @test searchsorted(repeat(1:10, inner=10), 3; by=incr_identity) == 21:30
+    @test cnt[] <= 16
+
+    cnt[] = 0
+    @test sort(x; by=incr_identity) == x
+    @test cnt[] <= 98
+
+    cnt[] = 0
+    @test sort(1:1000; by=incr_identity) == 1:1000
+    @test cnt[] <= 1998
+
+    cnt[] = 0
+    Random.seed!(1729)
+    x = randperm(1000)
+    @test sort!(x; by=incr_identity) == 1:1000
+    # This should succeed at least 99.99% of the time on random inputs
+    # and therefore should not be broken by changes to the rng
+    @test cnt[] <= 17203
+
+    cnt[] = 0
+    x = hash.(1:1000)
+    @test sort(x; by=incr_identity) == sort(x)
+    @test cnt[] <= 12999
+end
+
 @testset "partialsort tests added for BracketedSort #52006" begin
     x = rand(Int, 1000)
     @test partialsort(x, 1) == minimum(x)
