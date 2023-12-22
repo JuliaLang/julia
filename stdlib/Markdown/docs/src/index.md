@@ -26,7 +26,7 @@ A paragraph containing an *italicized* word.
 
 ### Literals
 
-Surround text that should be displayed exactly as written with single backticks, `` ` `` .
+Surround text that should be displayed exactly as written with single backticks, ``` ` ``` .
 
 ```
 A paragraph containing a `literal` word.
@@ -36,8 +36,8 @@ Literals should be used when writing text that refers to names of variables, fun
 parts of a Julia program.
 
 !!! tip
-To include a backtick character within literal text use three backticks rather than one to enclose
-the text.
+    To include a backtick character within literal text use three backticks rather than one to enclose
+    the text.
 
     ```
     A paragraph containing ``` `backtick` characters ```.
@@ -45,27 +45,28 @@ the text.
 
     By extension any odd number of backticks may be used to enclose a lesser number of backticks.
 
-### `\LaTeX`
+### ``\LaTeX``
 
-Surround text that should be displayed as mathematics using `\LaTeX` syntax with double backticks,
-` `` ` .
+Surround text that should be displayed as mathematics using ``\LaTeX`` syntax with double backticks,
+``` `` ``` .
 
 ```
 A paragraph containing some ``\LaTeX`` markup.
 ```
 
 !!! tip
-As with literals in the previous section, if literal backticks need to be written within double
-backticks use an even number greater than two. Note that if a single literal backtick needs to
-be included within `\LaTeX` markup then two enclosing backticks is sufficient.
+    As with literals in the previous section, if literal backticks need to be written within double
+    backticks use an even number greater than two. Note that if a single literal backtick needs to
+    be included within ``\LaTeX`` markup then two enclosing backticks is sufficient.
 
 !!! note
-The `\` character should be escaped appropriately if the text is embedded in a Julia source code,
-for example, ` "``\\LaTeX`` syntax in a docstring." `, since it is interpreted as a string
-literal. Alternatively, in order to avoid escaping, it is possible to use the `raw` string macro
-together with the `@doc` macro:
-`    @doc raw"``\LaTeX`` syntax in a docstring." functionname
-   `
+    The `\` character should be escaped appropriately if the text is embedded in a Julia source code,
+    for example, ``` "``\\LaTeX`` syntax in a docstring." ```, since it is interpreted as a string
+    literal. Alternatively, in order to avoid escaping, it is possible to use the `raw` string macro
+    together with the `@doc` macro:
+    ```
+    @doc raw"``\LaTeX`` syntax in a docstring." functionname
+    ```
 
 ### Links
 
@@ -95,9 +96,9 @@ This will create a link in the generated docs to the [`parse`](@ref) documentati
 versions of a function, or to highlight a difference between two similar-seeming functions.
 
 !!! note
-The above cross referencing is _not_ a Markdown feature, and relies on
-[Documenter.jl](https://github.com/JuliaDocs/Documenter.jl), which is
-used to build base Julia's documentation.
+    The above cross referencing is *not* a Markdown feature, and relies on
+    [Documenter.jl](https://github.com/JuliaDocs/Documenter.jl), which is
+    used to build base Julia's documentation.
 
 ### Footnote references
 
@@ -109,9 +110,9 @@ A paragraph containing a numbered footnote [^1] and a named one [^named].
 ```
 
 !!! note
-The text associated with a footnote can be written anywhere within the same page as the footnote
-reference. The syntax used to define the footnote text is discussed in the [Footnotes](@ref) section
-below.
+    The text associated with a footnote can be written anywhere within the same page as the footnote
+    reference. The syntax used to define the footnote text is discussed in the [Footnotes](@ref) section
+    below.
 
 ## Toplevel elements
 
@@ -146,9 +147,9 @@ A document can be split up into different sections using headers. Headers use th
 A header line can contain any inline syntax in the same way as a paragraph can.
 
 !!! tip
-Try to avoid using too many levels of header within a single document. A heavily nested document
-may be indicative of a need to restructure it or split it into several pages covering separate
-topics.
+    Try to avoid using too many levels of header within a single document. A heavily nested document
+    may be indicative of a need to restructure it or split it into several pages covering separate
+    topics.
 
 ### Code blocks
 
@@ -187,8 +188,8 @@ end
 ````
 
 !!! note
-"Fenced" code blocks, as shown in the last example, should be preferred over indented code blocks
-since there is no way to specify what language an indented code block is written in.
+    "Fenced" code blocks, as shown in the last example, should be preferred over indented code blocks
+    since there is no way to specify what language an indented code block is written in.
 
 ### Block quotes
 
@@ -233,7 +234,7 @@ Lists can contain other nested toplevel elements such as lists, code blocks, or 
 blank line should be left between each list item when including any toplevel elements within a
 list.
 
-````
+```
 Another list:
 
   * item one
@@ -248,11 +249,11 @@ Another list:
 
       + sub-item one
       + sub-item two
-````
+```
 
 !!! note
-The contents of each item in the list must line up with the first line of the item. In the above
-example the fenced code block must be indented by four spaces to align with the `i` in `item two`.
+    The contents of each item in the list must line up with the first line of the item. In the above
+    example the fenced code block must be indented by four spaces to align with the `i` in `item two`.
 
 Ordered lists are written by replacing the "bullet" character, either `*`, `+`, or `-`, with a
 positive integer followed by either `.` or `)`.
@@ -275,7 +276,7 @@ elements.
 
 ### Display equations
 
-Large `\LaTeX` equations that do not fit inline within a paragraph may be written as display
+Large ``\LaTeX`` equations that do not fit inline within a paragraph may be written as display
 equations using a fenced code block with the "language" `math` as in the example below.
 
 ````julia
@@ -292,7 +293,7 @@ that section as well.
 Footnote text is defined using the following syntax, which is similar to footnote reference syntax,
 aside from the `:` character that is appended to the footnote label.
 
-````
+```
 [^1]: Numbered footnote text.
 
 [^note]:
@@ -309,10 +310,10 @@ aside from the `:` character that is appended to the footnote label.
         # ...
     end
     ```
-````
+```
 
 !!! note
-No checks are done during parsing to make sure that all footnote references have matching footnotes.
+    No checks are done during parsing to make sure that all footnote references have matching footnotes.
 
 ### Horizontal rules
 
@@ -342,7 +343,7 @@ cannot span multiple rows or columns of the table.
 ```
 
 !!! note
-As illustrated in the above example each column of `|` characters must be aligned vertically.
+    As illustrated in the above example each column of `|` characters must be aligned vertically.
 
     A `:` character on either end of a column's header separator (the row containing `-` characters)
     specifies whether the row is left-aligned, right-aligned, or (when `:` appears on both ends) center-aligned.
@@ -387,7 +388,7 @@ If no title text is specified after the admonition type, then the type name will
 
 Admonitions, like most other toplevel elements, can contain other toplevel elements (e.g. lists, images).
 
-### Markdown String Macro
+### Markdown String Macro 
 
 The `md""` macro allows you to embed Markdown strings directly into your Julia code. This macro is designed to simplify the inclusion of Markdown-formatted text within your Julia source files.
 
@@ -396,7 +397,6 @@ The `md""` macro allows you to embed Markdown strings directly into your Julia c
 ```julia
 result = md"This is a **custom** Markdown string with [a link](http://example.com)."
 ```
-
 ## Markdown Syntax Extensions
 
 Julia's markdown supports interpolation in a very similar way to basic string literals, with the
