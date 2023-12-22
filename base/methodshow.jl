@@ -289,7 +289,7 @@ end
 # Determine the `modulecolor` value to pass to `show_method`
 function _modulecolor(method::Method)
     mmt = get_methodtable(method)
-    if mmt.module === parentmodule(method)
+    if mmt === nothing || mmt.module === parentmodule(method)
         return nothing
     end
     # `mmt` is only particularly relevant for external method tables. Since the primary
