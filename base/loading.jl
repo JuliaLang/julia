@@ -1984,25 +1984,34 @@ end
 const already_warned_path_change_pkgs = Set{UUID}()
 # warns if the loaded version of a module is different to the one that locate_package wants to load
 function warn_if_already_loaded_different(uuidkey::PkgId)
+    uuidkey.uuid ∈ already_warned_path_change_pkgs && return
     pkgorig = get(pkgorigins, uuidkey, nothing)
-    new_path = locate_package(uuidkey)
-    if pkgorig !== nothing && pkgorig.path !== nothing &&
-            !samefile(fixup_stdlib_path(pkgorig.path), new_path) && uuidkey.uuid ∉ already_warned_path_change_pkgs
-        cur_vstr = isnothing(pkgorig.version) ? "" : string(" (", pkgorig.version, ")")
-        new_v = get_pkgversion_from_path(new_path)
-        new_vstr = isnothing(new_v) ? "" : string(" (", new_v, ")")
-        warnstr = "Package $(uuidkey.name)$cur_vstr already loaded from path $(repr(pkgorig.path)), \
-            now attempted to be loaded from $(repr(new_path))$new_vstr. This might indicate a \
-            change of environment between package loads and can mean that incompatible \
-            packages have been loaded"
-        if JLOptions().startupfile == 1
-            warnstr *= ", perhaps from a startup.jl. Consider starting directly in the project \
-                via the `--project` arg."
-        else
-            warnstr *= "."
+    if pkgorig !== nothing && pkgorig.path !== nothing
+        new_path = locate_package(uuidkey)
+        if !samefile(fixup_stdlib_path(pkgorig.path), new_path)
+            if isnothing(pkgorig.version)
+                v = get_pkgversion_from_path(dirname(dirname(pkgorig.path)))
+                cur_vstr = isnothing(v) ? "" : "v$v "
+            else
+                cur_vstr = "v$v "
+            end
+            new_v = get_pkgversion_from_path(dirname(dirname(new_path)))
+            new_vstr = isnothing(new_v) ? "" : "v$new_v "
+            warnstr = """
+            $uuidkey is already loaded from a different path:
+              loaded:    $cur_vstr$(repr(pkgorig.path))
+              requested: $new_vstr$(repr(new_path))
+            This might indicate a change of environment has happened between package loads and can mean that
+            incompatible packages have been loaded"""
+            if JLOptions().startupfile < 2 #(0 = auto, 1 = yes)
+                warnstr *= """. If this happened due to a startup.jl consider starting julia
+                directly in the project via the `--project` arg."""
+            else
+                warnstr *= "."
+            end
+            @warn warnstr
+            push!(already_warned_path_change_pkgs, uuidkey.uuid)
         end
-        @warn warnstr
-        push!(already_warned_path_change_pkgs, uuidkey.uuid)
     end
 end
 
