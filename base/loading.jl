@@ -1502,6 +1502,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     assert_havelock(require_lock)
     loaded = nothing
     if root_module_exists(modkey)
+        warn_if_already_loaded_different(modkey)
         loaded = root_module(modkey)
     else
         loaded = start_loading(modkey)
@@ -1532,6 +1533,7 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Un
     assert_havelock(require_lock)
     loaded = nothing
     if root_module_exists(modkey)
+        warn_if_already_loaded_different(modkey)
         loaded = root_module(modkey)
     else
         loaded = start_loading(modkey)
