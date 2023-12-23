@@ -1622,17 +1622,17 @@ for (V, PT, BT) in Any[((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArra
 
             #calculates all the strides
             native_strides = size_to_strides(1, size(B)...)
-            strides_1 = 0
-            @nexprs $N d->(strides_{d+1} = native_strides[perm[d]])
+            strides = @ntuple $N d->native_strides[perm[d]]
+            strides::NTuple{$N,Integer}
 
             #Creates offset, because indexing starts at 1
-            offset = 1 - sum(@ntuple $N d->strides_{d+1})
+            offset = 1 - reduce(+, strides, init = 0)
 
             sumc = 0
             ind = 1
             @nloops($N, i, P,
-                    d->(sumc += i_d*strides_{d+1}), # PRE
-                    d->(sumc -= i_d*strides_{d+1}), # POST
+                    d->(sumc += i_d*strides[d]), # PRE
+                    d->(sumc -= i_d*strides[d]), # POST
                     begin # BODY
                         @inbounds P[ind] = B[sumc+offset]
                         ind += 1
