@@ -1709,3 +1709,19 @@ end
 @test scope_folding_opt() == 1
 @test_broken fully_eliminated(scope_folding)
 @test_broken fully_eliminated(scope_folding_opt)
+
+# Function that happened to have lots of sroa that
+# happened to trigger a bad case in the renamer. We
+# just want to check this doesn't crash in inference.
+function f52610()
+    slots_dict = IdDict()
+    for () in Base.inferencebarrier(1)
+       for x in 1
+           if Base.inferencebarrier(true)
+               slots_dict[x] = 0
+           end
+       end
+    end
+    return nothing
+end
+@test code_typed(f52610)[1][2] === Nothing
