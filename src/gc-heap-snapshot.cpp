@@ -3,6 +3,7 @@
 #include "gc-heap-snapshot.h"
 
 #include "julia_internal.h"
+#include "julia_assert.h"
 #include "gc.h"
 
 #include "llvm/ADT/SmallVector.h"
@@ -527,28 +528,6 @@ void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx,
     g_snapshot->num_edges += 1;
 }
 
-template <typename T>
-std::string to_json(const std::set<T>& set) {
-  std::stringstream ss;
-  ss << "[";
-
-  bool first_element = true;
-  for (const auto& element : set) {
-    if (!first_element) {
-      ss << ",";
-    }
-    first_element = false;
-
-    ss << "\"" << element << "\"";
-  }
-  ss << "]";
-  return ss.str();
-}
-
-std::string get_string(StringTable &table, size_t id) {
-    return table.strings[id].str();
-}
-
 void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one)
 {
     // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2567-L2567
@@ -632,26 +611,5 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
 
     // remove the uber node from the orphans
     orphans.erase(0);
-    // print out the orphans in case that we have any
-    std::cout << "node count: " << snapshot.nodes.size() << "\n";
-    std::cout << "edge count: " << snapshot.num_edges << "\n";
-    std::cout << "orphan node count: " << orphans.size() << "\n";
-    std::cout << "orphan nodes: " << to_json(orphans) << "\n";
-    for (const auto &from_node : snapshot.nodes) {
-        size_t n_id = from_node.id;
-        if (from_node.id != snapshot._gc_root_idx && from_node.id != snapshot._gc_finlist_root_idx) {
-            void * ptr = (void*)from_node.id;
-            n_id = snapshot.node_ptr_to_index_map[ptr];
-        }
-        if (orphans.find(n_id) != orphans.end()) {
-            std::cout << "orphan node: {type:(" << from_node.type << "," << get_string(snapshot.node_types, from_node.type) << ")"
-            << ", name:(" << from_node.name << "," << get_string(snapshot.names, from_node.name) << ")"
-            << ", id:(" << std::showbase << std::hex << from_node.id << "," << std::dec << n_id << ")"
-            << ", self_size:" << (all_one ? (size_t)1 : from_node.self_size)
-            << ", edge_count:" << from_node.edges.size()
-            << ", trace_node_id:" << from_node.trace_node_id
-            << ", detachedness:" << from_node.detachedness
-            << "}\n";
-        }
-    }
+    assert(orphans.size() == 0 && "all nodes except the uber node should have at least one incoming edge");
 }
