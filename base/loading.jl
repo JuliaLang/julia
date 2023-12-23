@@ -2003,13 +2003,17 @@ function warn_if_already_loaded_different(uuidkey::PkgId)
             $uuidkey is already loaded from a different path:
               loaded:    $cur_vstr$(repr(pkgorig.path))
               requested: $new_vstr$(repr(new_path))
-            This might indicate a change of environment has happened between package loads and can mean that
-            incompatible packages have been loaded"""
-            if JLOptions().startupfile < 2 #(0 = auto, 1 = yes)
-                warnstr *= """. If this happened due to a startup.jl consider starting julia
-                directly in the project via the `--project` arg."""
-            else
-                warnstr *= "."
+            """
+            if isempty(already_warned_path_change_pkgs)
+                warnstr *= """
+                This might indicate a change of environment has happened between package loads and can mean that
+                incompatible packages have been loaded"""
+                if JLOptions().startupfile < 2 #(0 = auto, 1 = yes)
+                    warnstr *= """. If this happened due to a startup.jl consider starting julia
+                    directly in the project via the `--project` arg."""
+                else
+                    warnstr *= "."
+                end
             end
             @warn warnstr
             push!(already_warned_path_change_pkgs, uuidkey.uuid)
