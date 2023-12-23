@@ -2140,10 +2140,10 @@ function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vec
         end
         ir[last_fallthrough_term_ssa] = nothing
         kill_edge!(bbs, last_fallthrough, terminator.dest)
-    elseif isa(terminator, EnterNode)
-        return false
     elseif isa(terminator, GotoNode)
         return true
+    elseif isterminator(terminator)
+        return false
     end
     # Hack, but effective. If we have a predecessor with a fall-through terminator, change the
     # instruction numbering to merge the blocks now such that below processing will properly
