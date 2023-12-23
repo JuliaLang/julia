@@ -348,17 +348,23 @@ function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compa
 end
 
 function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
-    id = old.id
-    if id < length(compact.ir.stmts)
-        return id < compact.idx
+    already_inserted_ssa(compact, compact.idx-1)(0, old)
+end
+
+function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
+    return function did_already_insert(phi_arg::Int, old::OldSSAValue)
+        id = old.id
+        if id <= length(compact.ir.stmts)
+            return id <= processed_idx
+        end
+        id -= length(compact.ir.stmts)
+        if id <= length(compact.ir.new_nodes)
+            return did_already_insert(phi_arg, OldSSAValue(compact.ir.new_nodes.info[id].pos))
+        end
+        id -= length(compact.ir.new_nodes)
+        @assert id <= length(compact.pending_nodes)
+        return !(id in compact.pending_perm)
     end
-    id -= length(compact.ir.stmts)
-    if id < length(compact.ir.new_nodes)
-        return already_inserted(compact, OldSSAValue(compact.ir.new_nodes.info[id].pos))
-    end
-    id -= length(compact.ir.new_nodes)
-    @assert id <= length(compact.pending_nodes)
-    return !(id in compact.pending_perm)
 end
 
 function is_pending(compact::IncrementalCompact, old::OldSSAValue)
@@ -2079,6 +2085,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             end
         end
     end
+
     return Pair{IRCode, Bool}(complete(compact), made_changes)
 end
 
