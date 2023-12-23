@@ -2,6 +2,9 @@
 
 # matmul.jl: Everything to do with dense matrix multiplication
 
+# unused internal constant, here for legacy reasons
+const tilebufsize = 10800  # Approximately 32k/3
+
 # Matrix-matrix multiplication
 
 AdjOrTransStridedMat{T} = Union{Adjoint{<:Any, <:StridedMatrix{T}}, Transpose{<:Any, <:StridedMatrix{T}}}
@@ -214,18 +217,24 @@ end
 """
     mul!(Y, A, B) -> Y
 
-Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`,
+Calculates the matrix-matrix or matrix-vector product ``A B`` and stores the result in `Y`,
 overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
 `B`.
 
 # Examples
 ```jldoctest
-julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); mul!(Y, A, B);
+julia> A = [1.0 2.0; 3.0 4.0]; B = [1.0 1.0; 1.0 1.0]; Y = similar(B);
+
+julia> mul!(Y, A, B) === Y
+true
 
 julia> Y
 2×2 Matrix{Float64}:
  3.0  3.0
  7.0  7.0
+
+julia> Y == A * B
+true
 ```
 
 # Implementation
@@ -233,9 +242,7 @@ For custom matrix and vector types, it is recommended to implement
 5-argument `mul!` rather than implementing 3-argument `mul!` directly
 if possible.
 """
-@inline function mul!(C, A, B)
-    return mul!(C, A, B, true, false)
-end
+mul!(C, A, B) = mul!(C, A, B, true, false)
 
 """
     mul!(C, A, B, α, β) -> C
@@ -249,15 +256,22 @@ aliased with either `A` or `B`.
 
 # Examples
 ```jldoctest
-julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; C=[1.0 2.0; 3.0 4.0];
+julia> A = [1.0 2.0; 3.0 4.0]; B = [1.0 1.0; 1.0 1.0]; C = [1.0 2.0; 3.0 4.0];
 
-julia> mul!(C, A, B, 100.0, 10.0) === C
+julia> α, β = 100.0, 10.0;
+
+julia> mul!(C, A, B, α, β) === C
 true
 
 julia> C
 2×2 Matrix{Float64}:
  310.0  320.0
  730.0  740.0
+
+julia> C_original = [1.0 2.0; 3.0 4.0]; # A copy of the original value of C
+
+julia> C == A * B * α + C_original * β
+true
 ```
 """
 @inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
@@ -337,6 +351,7 @@ julia> lmul!(F.Q, B)
 lmul!(A, B)
 
 # THE one big BLAS dispatch
+# aggressive constant propagation makes mul!(C, A, B) invoke gemm_wrapper! directly
 Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
                                     _add::MulAddMul=MulAddMul()) where {T<:BlasFloat}
     if all(in(('N', 'T', 'C')), (tA, tB))
@@ -398,7 +413,8 @@ end
     A
 end
 
-function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{T},
+Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar,
+                A::StridedVecOrMat{T}, x::StridedVector{T},
                α::Number=true, β::Number=false) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     nA != length(x) &&
@@ -428,7 +444,7 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
     end
 end
 
-function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
+Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
     α::Number = true, β::Number = false) where {T<:BlasReal}
     mA, nA = lapack_size(tA, A)
     nA != length(x) &&
@@ -450,8 +466,9 @@ function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMa
     end
 end
 
-function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
-    α::Number = true, β::Number = false) where {T<:BlasFloat}
+Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar,
+        A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
+        α::Number = true, β::Number = false) where {T<:BlasReal}
     mA, nA = lapack_size(tA, A)
     nA != length(x) &&
         throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match length of x, $(length(x))"))
@@ -567,7 +584,7 @@ function gemm_wrapper(tA::AbstractChar, tB::AbstractChar,
     end
 end
 
-Base.@constprop :aggressive function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
+function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
                        A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
                        _add = MulAddMul()) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
@@ -607,7 +624,7 @@ Base.@constprop :aggressive function gemm_wrapper!(C::StridedVecOrMat{T}, tA::Ab
     _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add)
 end
 
-Base.@constprop :aggressive function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
+function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
                        A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
                        _add = MulAddMul()) where {T<:BlasReal}
     mA, nA = lapack_size(tA, A)
@@ -762,8 +779,7 @@ function generic_matmatmul(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatrix{S})
     generic_matmatmul!(C, tA, tB, A, B)
 end
 
-const tilebufsize = 10800  # Approximately 32k/3
-
+# aggressive const prop makes mixed eltype mul!(C, A, B) invoke _generic_matmatmul! directly
 Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul) =
     _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add)
 
@@ -831,7 +847,7 @@ function matmul2x2(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
     matmul2x2!(similar(B, promote_op(matprod, T, S), 2, 2), tA, tB, A, B)
 end
 
-Base.@constprop :aggressive function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+function matmul2x2!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (2,2))
@@ -898,7 +914,7 @@ function matmul3x3(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S}) where {T,
     matmul3x3!(similar(B, promote_op(matprod, T, S), 3, 3), tA, tB, A, B)
 end
 
-Base.@constprop :aggressive function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
+function matmul3x3!(C::AbstractMatrix, tA, tB, A::AbstractMatrix, B::AbstractMatrix,
                     _add::MulAddMul = MulAddMul())
     require_one_based_indexing(C, A, B)
     if !(size(A) == size(B) == size(C) == (3,3))

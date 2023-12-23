@@ -190,25 +190,12 @@ extern jl_gc_page_stack_t global_page_pool_lazily_freed;
 extern jl_gc_page_stack_t global_page_pool_clean;
 extern jl_gc_page_stack_t global_page_pool_freed;
 
-#define GC_BACKOFF_MIN 4
-#define GC_BACKOFF_MAX 12
-
-STATIC_INLINE void gc_backoff(int *i) JL_NOTSAFEPOINT
-{
-    if (*i < GC_BACKOFF_MAX) {
-        (*i)++;
-    }
-    for (int j = 0; j < (1 << *i); j++) {
-        jl_cpu_pause();
-    }
-}
-
 // Lock-free stack implementation taken
 // from Herlihy's "The Art of Multiprocessor Programming"
 // XXX: this is not a general-purpose lock-free stack. We can
 // get away with just using a CAS and not implementing some ABA
 // prevention mechanism since once a node is popped from the
-// `jl_gc_global_page_pool_t`, it may only be pushed back to them
+// `jl_gc_page_stack_t`, it may only be pushed back to them
 // in the sweeping phase, which also doesn't push a node into the
 // same stack after it's popped
 
@@ -237,9 +224,6 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFE
         jl_cpu_pause();
     }
 }
-
-// data structures for tracking fragmentation in the pool allocator
-// #define GC_MEASURE_PAGE_FRAGMENTATION
 
 typedef struct {
     _Atomic(size_t) n_freed_objs;
@@ -541,6 +525,13 @@ void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
                      uint64_t freed, uint64_t live, uint64_t interval,
                      uint64_t pause, uint64_t ttsp, uint64_t mark,
                      uint64_t sweep);
+void gc_heuristics_summary(
+        uint64_t old_alloc_diff, uint64_t alloc_mem,
+        uint64_t old_mut_time, uint64_t alloc_time,
+        uint64_t old_freed_diff, uint64_t gc_mem,
+        uint64_t old_pause_time, uint64_t gc_time,
+        int thrash_counter, const char *reason,
+        uint64_t current_heap, uint64_t target_heap);
 #else
 #define gc_time_pool_start()
 STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT
@@ -568,6 +559,13 @@ STATIC_INLINE void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT
                             estimate_freed, sweep_full)
 #define  gc_time_summary(sweep_full, start, end, freed, live,           \
                          interval, pause, ttsp, mark, sweep)
+#define gc_heuristics_summary( \
+        old_alloc_diff, alloc_mem, \
+        old_mut_time, alloc_time, \
+        old_freed_diff, gc_mem, \
+        old_pause_time, gc_time, \
+        thrash_counter, reason, \
+        current_heap, target_heap)
 #endif
 
 #ifdef MEMFENCE

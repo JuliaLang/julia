@@ -537,6 +537,14 @@ end
     @test (@macroexpand1 @nest2b 42) == _macroexpand1(:(@nest2b 42))
 end
 
+module TwoargMacroExpand
+macro modulecontext(); return __module__; end
+end
+@test (@__MODULE__) == @macroexpand TwoargMacroExpand.@modulecontext
+@test TwoargMacroExpand == @macroexpand TwoargMacroExpand @modulecontext
+@test (@__MODULE__) == @macroexpand1 TwoargMacroExpand.@modulecontext
+@test TwoargMacroExpand == @macroexpand1 TwoargMacroExpand @modulecontext
+
 foo_9965(x::Float64; w=false) = x
 foo_9965(x::Int) = 2x
 

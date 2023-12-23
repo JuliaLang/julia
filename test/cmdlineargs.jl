@@ -71,6 +71,7 @@ end
             @error "cmd failed" cmd read(io, String)
             rethrow()
         end
+        closewrite(io)
         return read(io, String)
     end
 

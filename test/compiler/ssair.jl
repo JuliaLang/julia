@@ -337,7 +337,7 @@ let # https://github.com/JuliaLang/julia/issues/42258
         code_typed(Core.Compiler.setindex!, (Core.Compiler.UseRef,Core.Compiler.NewSSAValue); optimize=true)
         """
     cmd = `$(Base.julia_cmd()) -g 2 -e $code`
-    stderr = Base.BufferStream()
+    stderr = IOBuffer()
     @test success(pipeline(Cmd(cmd); stdout, stderr))
     @test readchomp(stderr) == ""
 end

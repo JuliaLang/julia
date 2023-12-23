@@ -2911,7 +2911,8 @@ static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t& v,
 {
     // newv should already be tagged
     if (v.ispointer()) {
-        emit_memcpy(ctx, newv, jl_aliasinfo_t::fromTBAA(ctx, tbaa), v, jl_datatype_size(v.typ), sizeof(void*), julia_alignment(v.typ));
+        unsigned align = std::max(julia_alignment(v.typ), (unsigned)sizeof(void*));
+        emit_memcpy(ctx, newv, jl_aliasinfo_t::fromTBAA(ctx, tbaa), v, jl_datatype_size(v.typ), align, julia_alignment(v.typ));
     }
     else {
         init_bits_value(ctx, newv, v.V, tbaa);
