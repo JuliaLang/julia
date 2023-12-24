@@ -332,6 +332,8 @@ IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 @propagate_inbounds Base.isassigned(v::AdjOrTransAbsMat, i::Int, j::Int) = isassigned(v.parent, j, i)
 @propagate_inbounds getindex(v::AdjOrTransAbsVec{T}, i::Int) where {T} = wrapperop(v)(v.parent[i-1+first(axes(v.parent)[1])])::T
 @propagate_inbounds getindex(A::AdjOrTransAbsMat{T}, i::Int, j::Int) where {T} = wrapperop(A)(A.parent[j, i])::T
+@propagate_inbounds getindex(A::AdjOrTransAbsMat{T}, ::Colon, j::Int) where {T} = A.parent[j, :] # avoid scalar indexing on gpu
+@propagate_inbounds getindex(A::AdjOrTransAbsMat{T}, i::Int, ::Colon) where {T} = A.parent[:, i] # avoid scalar indexing on gpu
 @propagate_inbounds setindex!(v::AdjOrTransAbsVec, x, i::Int) = (setindex!(v.parent, wrapperop(v)(x), i-1+first(axes(v.parent)[1])); v)
 @propagate_inbounds setindex!(A::AdjOrTransAbsMat, x, i::Int, j::Int) = (setindex!(A.parent, wrapperop(A)(x), j, i); A)
 # AbstractArray interface, additional definitions to retain wrapper over vectors where appropriate
