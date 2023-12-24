@@ -32,8 +32,6 @@ Language changes
 Compiler/Runtime improvements
 -----------------------------
 
-* Updated GC heuristics to count allocated pages instead of object sizes ([#50144]). This should help
-  some programs that consumed excessive memory before.
 * The mark phase of the garbage collector is now multi-threaded ([#48600]).
 * [JITLink](https://llvm.org/docs/JITLink.html) is enabled by default on Linux aarch64 when Julia is linked to LLVM 15 or later versions ([#49745]).
   This should resolve many segmentation faults previously observed on this platform.
@@ -158,6 +156,7 @@ Deprecated or removed
 [#48899]: https://github.com/JuliaLang/julia/issues/48899
 [#48979]: https://github.com/JuliaLang/julia/issues/48979
 [#49020]: https://github.com/JuliaLang/julia/issues/49020
+[#49052]: https://github.com/JuliaLang/julia/issues/49052
 [#49110]: https://github.com/JuliaLang/julia/issues/49110
 [#49266]: https://github.com/JuliaLang/julia/issues/49266
 [#49405]: https://github.com/JuliaLang/julia/issues/49405
@@ -167,5 +166,4 @@ Deprecated or removed
 [#49745]: https://github.com/JuliaLang/julia/issues/49745
 [#49795]: https://github.com/JuliaLang/julia/issues/49795
 [#49959]: https://github.com/JuliaLang/julia/issues/49959
-[#50144]: https://github.com/JuliaLang/julia/issues/50144
 [#50218]: https://github.com/JuliaLang/julia/issues/50218

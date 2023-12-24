@@ -140,6 +140,10 @@ let ex = quote
         struct WeirdNames end
         Base.propertynames(::WeirdNames) = (Symbol("oh no!"), Symbol("oh yes!"))
 
+        # https://github.com/JuliaLang/julia/issues/52551#issuecomment-1858543413
+        export exported_symbol
+        exported_symbol(::WeirdNames) = nothing
+
         end # module CompletionFoo
         test_repl_comp_dict = CompletionFoo.test_dict
         test_repl_comp_customdict = CompletionFoo.test_customdict
@@ -739,6 +743,9 @@ end
 @test test_complete("CompletionFoo.?()") == test_complete("CompletionFoo.?(;)")
 
 #TODO: @test_nocompletion("CompletionFoo.?(3; len2=5; ")
+
+# https://github.com/JuliaLang/julia/issues/52551
+@test !isempty(test_complete("?("))
 
 #################################################################
 
