@@ -3,42 +3,6 @@
 # Base.require is the implementation for the `import` statement
 const require_lock = ReentrantLock()
 
-mutable struct StaleReasons
-    invalid_header::Int
-    empty_file::Int
-    mismatched_flags::Int
-    requires_pkgimages::Int
-    target_mismatch::Int
-    missing_ocachefile::Int
-    for_different_id::Int
-    for_different_buildid::Int
-    loaded_incompatible::Int
-    missing_source::Int
-    wrong_buildid::Int
-    different_source::Int
-    uuid_change::Int
-    unresolvable_depot::Int
-    missing_sourcefile::Int
-    include_dependency_mtime_change::Int
-    include_dependency_fsize_change::Int
-    include_dependency_fhash_change::Int
-    invalid_checksum::Int
-    ocachefile_invalid_checksum::Int
-    prefs_hash_mismatch::Int
-    StaleReasons() = new(zeros(21)...)
-end
-
-function show(io::IO, reasons::StaleReasons)
-    first = true
-    for n in fieldnames(StaleReasons)
-        f = getfield(reasons, n)
-        if f > 0
-            first ? print(io, "$f $n") : print(io, ", $f $n")
-            first = false
-        end
-    end
-end
-
 # Cross-platform case-sensitive path canonicalization
 
 if Sys.isunix() && !Sys.isapple()
@@ -2162,7 +2126,7 @@ function _require(pkg::PkgId, env=nothing)
         set_pkgorigin_version_path(pkg, path)
 
         pkg_precompile_attempted = false # being safe to avoid getting stuck in a Pkg.precompile loop
-        reasons = StaleReasons()
+        reasons = Dict{String,Int}()
         # attempt to load the module file via the precompile cache locations
         if JLOptions().use_compiled_modules != 0
             @label load_from_cache
@@ -2604,7 +2568,7 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; reasons::Union{StaleReasons,Nothing}=nothing)
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; reasons::Union{Dict{String,Int},Nothing}=nothing)
     @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
@@ -2614,7 +2578,7 @@ end
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
-                      keep_loaded_modules::Bool = true; reasons::Union{StaleReasons,Nothing}=nothing)
+                      keep_loaded_modules::Bool = true; reasons::Union{Dict{String,Int},Nothing}=nothing)
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -2631,7 +2595,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     end
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-    @logmsg verbosity "Precompiling $pkg (cache misses: $reasons)"
+    @logmsg verbosity "Precompiling $pkg $(list_reasons(reasons))"
 
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
@@ -3348,24 +3312,32 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilec
     end
 end
 
+function record_reason(reasons::Dict{String,Int}, reason::String)
+    reasons[reason] = get(reasons, reason, 0) + 1
+end
+record_reason(::Nothing, ::String) = nothing
+function list_reasons(reasons::Dict{String,Int})
+    isempty(reasons) && return
+    return "(cache misses: $(join(("$k ($v)" for (k,v) in reasons), ", ")))"
+end
+
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false, reasons=nothing)
     return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded)
 end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String;
-                                            ignore_loaded::Bool = false, reasons::Union{StaleReasons,Nothing}=nothing)
+                                            ignore_loaded::Bool = false, reasons::Union{Dict{String,Int},Nothing}=nothing)
     io = open(cachefile, "r")
     try
         checksum = isvalid_cache_header(io)
         if iszero(checksum)
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
-            isnothing(reasons) || (reasons.invalid_header += 1)
+            record_reason(reasons, "invalid header")
             return true # invalid cache file
         end
         modules, (includes, _, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags = parse_cache_header(io, cachefile)
         if isempty(modules)
-            isnothing(reasons) || (reasons.empty_file += 1)
             return true # ignore empty file
         end
         if ccall(:jl_match_cache_flags, UInt8, (UInt8,), flags) == 0
@@ -3374,7 +3346,7 @@ end
               current session: $(CacheFlags())
               cache file:      $(CacheFlags(flags))
             """
-            isnothing(reasons) || (reasons.mismatched_flags += 1)
+            record_reason(reasons, "mismatched flags")
             return true
         end
         pkgimage = !isempty(clone_targets)
@@ -3383,7 +3355,7 @@ end
             if JLOptions().use_pkgimages == 0
                 # presence of clone_targets means native code cache
                 @debug "Rejecting cache file $cachefile for $modkey since it would require usage of pkgimage"
-                isnothing(reasons) || (reasons.requires_pkgimages += 1)
+                record_reason(reasons, "requires pkgimages")
                 return true
             end
             rejection_reasons = check_clone_targets(clone_targets)
@@ -3392,12 +3364,12 @@ end
                     Reasons=rejection_reasons,
                     var"Image Targets"=parse_image_targets(clone_targets),
                     var"Current Targets"=current_image_targets())
-                isnothing(reasons) || (reasons.target_mismatch += 1)
+                record_reason(reasons, "target mismatch")
                 return true
             end
             if !isfile(ocachefile)
                 @debug "Rejecting cache file $cachefile for $modkey since pkgimage $ocachefile was not found"
-                isnothing(reasons) || (reasons.missing_ocachefile += 1)
+                record_reason(reasons, "missing ocachefile")
                 return true
             end
         else
@@ -3406,14 +3378,14 @@ end
         id = first(modules)
         if id.first != modkey && modkey != PkgId("")
             @debug "Rejecting cache file $cachefile for $modkey since it is for $id instead"
-            isnothing(reasons) || (reasons.for_different_id += 1)
+            record_reason(reasons, "for different pkgid")
             return true
         end
         if build_id != UInt128(0)
             id_build = (UInt128(checksum) << 64) | id.second
             if id_build != build_id
                 @debug "Ignoring cache file $cachefile for $modkey ($((UUID(id_build)))) since it does not provide desired build_id ($((UUID(build_id))))"
-                isnothing(reasons) || (reasons.for_different_buildid += 1)
+                record_reason(reasons, "for different buildid")
                 return true
             end
         end
@@ -3435,7 +3407,7 @@ end
                     @goto locate_branch
                 else
                     @debug "Rejecting cache file $cachefile because module $req_key is already loaded and incompatible."
-                    isnothing(reasons) || (reasons.loaded_incompatible += 1)
+                    record_reason(reasons, req_key == PkgId(Core) ? "wrong julia version" : "wrong dep loaded")
                     return true # Won't be able to fulfill dependency
                 end
             else
@@ -3443,7 +3415,7 @@ end
                 path = locate_package(req_key)
                 if path === nothing
                     @debug "Rejecting cache file $cachefile because dependency $req_key not found."
-                    isnothing(reasons) || (reasons.missing_source += 1)
+                    record_reason(reasons, "missing source")
                     return true # Won't be able to fulfill dependency
                 end
                 depmods[i] = (path, req_key, req_build_id)
@@ -3463,7 +3435,7 @@ end
                     break
                 end
                 @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
-                isnothing(reasons) || (reasons.wrong_buildid += 1)
+                record_reason(reasons, "wrong buildid")
                 return true # cachefile doesn't provide the required version of the dependency
             end
         end
@@ -3472,7 +3444,7 @@ end
         if !skip_check
             if !samefile(includes[1].filename, modpath) && !samefile(fixup_stdlib_path(includes[1].filename), modpath)
                 @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
-                isnothing(reasons) || (reasons.different_source += 1)
+                record_reason(reasons, "wrong source")
                 return true # cache file was compiled from a different path
             end
             for (modkey, req_modkey) in requires
@@ -3480,7 +3452,7 @@ end
                 pkg = identify_package(modkey, req_modkey.name)
                 if pkg != req_modkey
                     @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed, expected $modkey => $pkg"
-                    isnothing(reasons) || (reasons.uuid_change += 1)
+                    record_reason(reasons, "uuid changed")
                     return true
                 end
             end
@@ -3488,7 +3460,7 @@ end
                 f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
                 if startswith(f, "@depot/")
                     @debug("Rejecting stale cache file $cachefile because its depot could not be resolved")
-                    isnothing(reasons) || (reasons.unresolvable_depot += 1)
+                    record_reason(reasons, "nonresolveable depot")
                     return true
                 end
                 if !ispath(f)
@@ -3496,8 +3468,8 @@ end
                     if isfile(_f) && startswith(_f, Sys.STDLIB)
                         continue
                     end
-                    isnothing(reasons) || (reasons.missing_sourcefile += 1)
                     @debug "Rejecting stale cache file $cachefile because file $f does not exist"
+                    record_reason(reasons, "missing sourcefile")
                     return true
                 end
                 if ftime_req >= 0.0
@@ -3511,20 +3483,20 @@ end
                                !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond
                     if is_stale
                         @debug "Rejecting stale cache file $cachefile because mtime of include_dependency $f has changed (mtime $ftime, before $ftime_req)"
-                        isnothing(reasons) || (reasons.include_dependency_mtime_change += 1)
+                        record_reason(reasons, "include_dependency mtime change")
                         return true
                     end
                 else
                     fsize = filesize(f)
                     if fsize != fsize_req
                         @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
-                        isnothing(reasons) || (reasons.include_dependency_fsize_change += 1)
+                        record_reason(reasons, "include_dependency fsize change")
                         return true
                     end
                     hash = open(_crc32c, f, "r")
                     if hash != hash_req
                         @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
-                        isnothing(reasons) || (reasons.include_dependency_fhash_change += 1)
+                        record_reason(reasons, "include_dependency fhash change")
                         return true
                     end
                 end
@@ -3533,14 +3505,14 @@ end
 
         if !isvalid_file_crc(io)
             @debug "Rejecting cache file $cachefile because it has an invalid checksum"
-            isnothing(reasons) || (reasons.invalid_checksum += 1)
+            record_reason(reasons, "invalid checksum")
             return true
         end
 
         if pkgimage
             if !isvalid_pkgimage_crc(io, ocachefile::String)
                 @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
-                isnothing(reasons) || (reasons.ocachefile_invalid_checksum += 1)
+                record_reason(reasons, "ocachefile invalid checksum")
                 return true
             end
         end
@@ -3548,7 +3520,7 @@ end
         curr_prefs_hash = get_preferences_hash(id.uuid, prefs)
         if prefs_hash != curr_prefs_hash
             @debug "Rejecting cache file $cachefile because preferences hash does not match 0x$(string(prefs_hash, base=16)) != 0x$(string(curr_prefs_hash, base=16))"
-            isnothing(reasons) || (reasons.prefs_hash_mismatch += 1)
+            record_reason(reasons, "preferences hash mismatch")
             return true
         end
 
