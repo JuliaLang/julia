@@ -3317,7 +3317,7 @@ function record_reason(reasons::Dict{String,Int}, reason::String)
 end
 record_reason(::Nothing, ::String) = nothing
 function list_reasons(reasons::Dict{String,Int})
-    isempty(reasons) && return
+    isempty(reasons) && return ""
     return "(cache misses: $(join(("$k ($v)" for (k,v) in reasons), ", ")))"
 end
 
@@ -3407,7 +3407,7 @@ end
                     @goto locate_branch
                 else
                     @debug "Rejecting cache file $cachefile because module $req_key is already loaded and incompatible."
-                    record_reason(reasons, req_key == PkgId(Core) ? "wrong julia version" : "wrong dep loaded")
+                    record_reason(reasons, req_key == PkgId(Core) ? "wrong julia version" : "wrong dep version loaded")
                     return true # Won't be able to fulfill dependency
                 end
             else
@@ -3415,7 +3415,7 @@ end
                 path = locate_package(req_key)
                 if path === nothing
                     @debug "Rejecting cache file $cachefile because dependency $req_key not found."
-                    record_reason(reasons, "missing source")
+                    record_reason(reasons, "dep missing source")
                     return true # Won't be able to fulfill dependency
                 end
                 depmods[i] = (path, req_key, req_build_id)
@@ -3435,7 +3435,7 @@ end
                     break
                 end
                 @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
-                record_reason(reasons, "wrong buildid")
+                record_reason(reasons, "wrong dep buildid")
                 return true # cachefile doesn't provide the required version of the dependency
             end
         end
@@ -3452,7 +3452,7 @@ end
                 pkg = identify_package(modkey, req_modkey.name)
                 if pkg != req_modkey
                     @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed, expected $modkey => $pkg"
-                    record_reason(reasons, "uuid changed")
+                    record_reason(reasons, "dep uuid changed")
                     return true
                 end
             end
