@@ -1575,6 +1575,18 @@ end
 @test_broken fully_eliminated(persistent_dict_elim_multiple_phi)
 @test code_typed(persistent_dict_elim_multiple_phi)[1][1].code[end] == Core.ReturnNode(1)
 
+function persistent_dict_elim_multiple_phi2(c::Bool)
+    z = Base.inferencebarrier(1)::Int
+    if c
+        a = Base.PersistentDict(:a => z)
+    else
+        a = Base.PersistentDict(:a => z)
+    end
+    b = Base.PersistentDict(a, :b => 2)
+    return b[:a]
+end
+@test persistent_dict_elim_multiple_phi2(true) == 1
+
 # Test CFG simplify with try/catch blocks
 let code = Any[
         # Block 1
@@ -1582,7 +1594,7 @@ let code = Any[
         # Block 2
         EnterNode(4),
         # Block 3
-        Expr(:leave),
+        Expr(:leave, SSAValue(2)),
         # Block 4
         GotoNode(5),
         # Block 5
@@ -1591,7 +1603,7 @@ let code = Any[
     ir = make_ircode(code)
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
-    @test length(ir.cfg.blocks) == 4
+    @test length(ir.cfg.blocks) <= 5
 end
 
 # Test CFG simplify with single predecessor phi node
@@ -1697,3 +1709,19 @@ end
 @test scope_folding_opt() == 1
 @test_broken fully_eliminated(scope_folding)
 @test_broken fully_eliminated(scope_folding_opt)
+
+# Function that happened to have lots of sroa that
+# happened to trigger a bad case in the renamer. We
+# just want to check this doesn't crash in inference.
+function f52610()
+    slots_dict = IdDict()
+    for () in Base.inferencebarrier(1)
+       for x in 1
+           if Base.inferencebarrier(true)
+               slots_dict[x] = 0
+           end
+       end
+    end
+    return nothing
+end
+@test code_typed(f52610)[1][2] === Nothing

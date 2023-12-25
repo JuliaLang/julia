@@ -8083,3 +8083,6 @@ function test_try_catch_else()
     end
 end
 @test test_try_catch_else() == 1
+
+# #52433
+@test_throws ErrorException Core.Intrinsics.pointerref(Ptr{Vector{Int64}}(C_NULL), 1, 0)

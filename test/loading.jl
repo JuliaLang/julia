@@ -721,16 +721,17 @@ end
 @testset "expansion of JULIA_DEPOT_PATH" begin
     s = Sys.iswindows() ? ';' : ':'
     tmp = "/this/does/not/exist"
-    DEFAULT = Base.append_default_depot_path!(String[])
+    default = joinpath(homedir(), ".julia")
+    bundled = Base.append_bundled_depot_path!(String[])
     cases = Dict{Any,Vector{String}}(
-        nothing => DEFAULT,
+        nothing => [default; bundled],
         "" => [],
-        "$s" => DEFAULT,
-        "$tmp$s" => [tmp; DEFAULT],
-        "$s$tmp" => [DEFAULT; tmp],
+        "$s" => [default; bundled],
+        "$tmp$s" => [tmp; bundled],
+        "$s$tmp" => [bundled; tmp],
         )
     for (env, result) in pairs(cases)
-        script = "DEPOT_PATH == $(repr(result)) || error()"
+        script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
         cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
         cmd = addenv(cmd, "JULIA_DEPOT_PATH" => env)
         cmd = pipeline(cmd; stdout, stderr)
