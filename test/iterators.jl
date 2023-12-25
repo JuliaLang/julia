@@ -1010,6 +1010,15 @@ end
     @test collect(Iterators.partition(lstrip("01111", '0'), 2)) == ["11", "11"]
 end
 
+@testset "no single-argument map methods" begin
+    maps = (tuple, Returns(nothing), (() -> nothing))
+    mappers = (Iterators.map, map, foreach)
+    for f ∈ maps, m ∈ mappers
+        @test !applicable(m, f)
+        @test !hasmethod(m, Tuple{typeof(f)})
+    end
+end
+
 @testset "Iterators docstrings" begin
     @test isempty(Docs.undocumented_names(Iterators))
 end
