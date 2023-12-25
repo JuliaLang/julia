@@ -273,6 +273,7 @@ function show(io::IO, M::Bidiagonal)
 end
 
 size(M::Bidiagonal) = (n = length(M.dv); (n, n))
+axes(M::Bidiagonal) = (ax = axes(M.dv, 1); (ax, ax))
 
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
