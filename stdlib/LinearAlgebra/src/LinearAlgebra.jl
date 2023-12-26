@@ -528,7 +528,7 @@ _droplast!(A) = deleteat!(A, lastindex(A))
 # but we are actually asking for oneunit(T), that is, however, defined for generic T as
 # `T(one(T))`, so the question is equivalent for whether one(T) is defined
 onedefined(::Type) = false
-onedefined(::Type{<:Number}) = true
+onedefined(::Type{T}) where {T<:Number} = isconcretetype(T)
 
 # initialize return array for op(A, B)
 _init_eltype(::typeof(*), ::Type{TA}, ::Type{TB}) where {TA,TB} =

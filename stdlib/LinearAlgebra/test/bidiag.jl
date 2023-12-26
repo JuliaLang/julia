@@ -861,4 +861,11 @@ end
     @test axes(B) === (ax, ax)
 end
 
+@testset "abstract eltype" begin
+    A = Bidiagonal{Number}(ones(4), ones(3)*im, :U);
+    B = Bidiagonal{ComplexF64}(ones(4), ones(3)*im, :U);
+    v = ones(4)
+    @test A \ v == B \ v
+end
+
 end # module TestBidiagonal
