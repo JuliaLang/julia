@@ -911,6 +911,11 @@ end
         U = UT(F)
         @test -U == -Array(U)
     end
+
+    F = FillArrays.Fill(3im, (4,4))
+    for U in (UnitUpperTriangular(F), UnitLowerTriangular(F))
+        @test imag(F) == imag(collect(F))
+    end
 end
 
 @testset "error paths" begin
