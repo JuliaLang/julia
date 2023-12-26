@@ -47,6 +47,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
 
         real(A::$t{<:Real}) = A
         real(A::$t{<:Complex}) = (B = real(A.data); $t(B))
+        real(A::$t{<:Complex, <:StridedMaybeAdjOrTransMat}) = $t(real.(A))
     end
 end
 
@@ -155,8 +156,8 @@ const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, Lower
 
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
-imag(A::UpperTriangular{<:Any,<:StridedMatrix}) = imag.(A)
-imag(A::LowerTriangular{<:Any,<:StridedMatrix}) = imag.(A)
+imag(A::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat}) = imag.(A)
+imag(A::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat}) = imag.(A)
 imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
 imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
 
@@ -484,7 +485,7 @@ end
 
 # use broadcasting if the parents are strided, where we loop only over the triangular part
 for TM in (:LowerTriangular, :UpperTriangular)
-    @eval -(A::$TM{<:Any, <:StridedMatrix}) = broadcast(-, A)
+    @eval -(A::$TM{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast(-, A)
 end
 
 tr(A::LowerTriangular) = tr(A.data)
@@ -728,10 +729,10 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 # use broadcasting if the parents are strided, where we loop only over the triangular part
 for op in (:+, :-)
     for TM1 in (:LowerTriangular, :UnitLowerTriangular), TM2 in (:LowerTriangular, :UnitLowerTriangular)
-        @eval $op(A::$TM1{<:Any, <:StridedMatrix}, B::$TM2{<:Any, <:StridedMatrix}) = broadcast($op, A, B)
+        @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
     end
     for TM1 in (:UpperTriangular, :UnitUpperTriangular), TM2 in (:UpperTriangular, :UnitUpperTriangular)
-        @eval $op(A::$TM1{<:Any, <:StridedMatrix}, B::$TM2{<:Any, <:StridedMatrix}) = broadcast($op, A, B)
+        @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
     end
 end
 
@@ -934,7 +935,7 @@ end
 
 for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
                    (LowerTriangular, UnitLowerTriangular))
-    tstrided = t{<:Any, <:StridedMatrix}
+    tstrided = t{<:Any, <:StridedMaybeAdjOrTransMat}
     @eval begin
         (*)(A::$t, x::Number) = $t(A.data*x)
         (*)(A::$tstrided, x::Number) = A .* x

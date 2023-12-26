@@ -916,25 +916,45 @@ end
     end
 end
 
-@testset "arithmetic with partly unitialized matrices" begin
-    A = Matrix{BigFloat}(undef,2,2)
-    A[1,1] = A[2,2] = A[2,1] = 4
-    for MT in (LowerTriangular, UnitLowerTriangular)
-        L = MT(A)
-        B = copyto!(zeros(size(L)), L)
-        @test L * 2 == 2 * L == 2B
-        @test L/2 == B/2
-        @test 2\L == 2\B
+@testset "arithmetic with partly uninitialized matrices" begin
+    @testset "$(typeof(A))" for A in (Matrix{BigFloat}(undef,2,2), Matrix{Complex{BigFloat}}(undef,2,2)')
+        A[1,1] = A[2,2] = A[2,1] = 4
+        B = Matrix{eltype(A)}(undef, size(A))
+        for MT in (LowerTriangular, UnitLowerTriangular)
+            L = MT(A)
+            B .= 0
+            copyto!(B, L)
+            @test L * 2 == 2 * L == 2B
+            @test L/2 == B/2
+            @test 2\L == 2\B
+            @test real(L) == real(B)
+            if L isa UnitLowerTriangular && eltype(L) <: Complex
+                # triu! and tril! are currently broken if the parent contains undef elements
+                @test_broken imag(L) == imag(B)
+            else
+                @test imag(L) == imag(B)
+            end
+        end
     end
 
-    A = Matrix{BigFloat}(undef,2,2)
-    A[1,1] = A[2,2] = A[1,2] = 4
-    for MT in (UpperTriangular, UnitUpperTriangular)
-        U = MT(A)
-        B = copyto!(zeros(size(U)), U)
-        @test U * 2 == 2 * U == 2B
-        @test U/2 == B/2
-        @test 2\U == 2\B
+    @testset "$(typeof(A))" for A in (Matrix{BigFloat}(undef,2,2), Matrix{Complex{BigFloat}}(undef,2,2)')
+        A[1,1] = A[2,2] = A[1,2] = 4
+        B = Matrix{eltype(A)}(undef, size(A))
+        for MT in (UpperTriangular, UnitUpperTriangular)
+            U = MT(A)
+            B .= 0
+            copyto!(B, U)
+            @test U * 2 == 2 * U == 2B
+            @test U/2 == B/2
+            @test 2\U == 2\B
+            @test real(U) == real(B)
+            if U isa UnitUpperTriangular && eltype(U) <: Complex
+                # triu! and tril! are currently broken if the parent contains undef elements
+                @test_broken imag(U) == imag(B)
+            else
+                @test imag(U) == imag(B)
+            end
+        end
     end
 end
 
