@@ -76,10 +76,10 @@ Base.iterate(S::LU, ::Val{:done}) = nothing
 adjoint(F::LU{<:Real}) = TransposeFactorization(F)
 transpose(F::LU{<:Real}) = TransposeFactorization(F)
 
-# the following method is meant to catch calls to lu!(A::LAPACKArray) without a pivoting stategy
+# the following method is meant to catch calls to lu!(A::LAPACKArray) without a pivoting strategy
 lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
 function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
-    lpt = LAPACK.getrf!(A)
+    lpt = LAPACK.getrf!(A; check)
     check && checknonsingular(lpt[3])
     return LU{T,typeof(lpt[1]),typeof(lpt[2])}(lpt[1], lpt[2], lpt[3])
 end
@@ -133,7 +133,7 @@ lu!(A::AbstractMatrix, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype
     generic_lufact!(A, pivot; check = check)
 function generic_lufact!(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T);
                          check::Bool = true) where {T}
-    LAPACK.chkfinite(A)
+    check && LAPACK.chkfinite(A)
     # Extract values
     m, n = size(A)
     minmn = min(m,n)
@@ -296,12 +296,13 @@ julia> l == F.L && u == F.U && p == F.p
 true
 ```
 """
-function lu(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T); check::Bool = true) where {T}
-    lu!(_lucopy(A, lutype(T)), pivot; check = check)
-end
+lu(A::AbstractMatrix{T}, args...; kwargs...) where {T} =
+    _lu(_lucopy(A, lutype(T)), args...; kwargs...)
 # TODO: remove for Julia v2.0
 @deprecate lu(A::AbstractMatrix, ::Val{true}; check::Bool = true) lu(A, RowMaximum(); check=check)
 @deprecate lu(A::AbstractMatrix, ::Val{false}; check::Bool = true) lu(A, NoPivot(); check=check)
+# allow packages like SparseArrays.jl to interfere here and call their own `lu`
+_lu(A::AbstractMatrix, args...; kwargs...) = lu!(A, args...; kwargs...)
 
 _lucopy(A::AbstractMatrix, T) = copy_similar(A, T)
 _lucopy(A::HermOrSym, T)      = copymutable_oftype(A, T)
@@ -493,28 +494,32 @@ inv!(A::LU{T,<:StridedMatrix}) where {T} =
 inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 
 # Tridiagonal
-
-# See dgttrf.f
 function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T,V}
-    # Extract values
     n = size(A, 1)
-
-    # Initialize variables
-    info = 0
-    ipiv = Vector{BlasInt}(undef, n)
-    dl = A.dl
-    d = A.d
-    du = A.du
-    if dl === du
-        throw(ArgumentError("off-diagonals of `A` must not alias"))
-    end
-    # Check if Tridiagonal matrix already has du2 for pivoting
     has_du2_defined = isdefined(A, :du2) && length(A.du2) == max(0, n-2)
     if has_du2_defined
         du2 = A.du2::V
     else
-        du2 = similar(d, max(0, n-2))::V
+        du2 = similar(A.d, max(0, n-2))::V
     end
+    _lu_tridiag!(A.dl, A.d, A.du, du2, Vector{BlasInt}(undef, n), pivot, check)
+end
+function lu!(F::LU{<:Any,<:Tridiagonal}, A::Tridiagonal, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true)
+    B = F.factors
+    size(B) == size(A) || throw(DimensionMismatch())
+    copyto!(B, A)
+    _lu_tridiag!(B.dl, B.d, B.du, B.du2, F.ipiv, pivot, check)
+end
+# See dgttrf.f
+@inline function _lu_tridiag!(dl, d, du, du2, ipiv, pivot, check)
+    T = eltype(d)
+    V = typeof(d)
+
+    # Extract values
+    n = length(d)
+
+    # Initialize variables
+    info = 0
     fill!(du2, 0)
 
     @inbounds begin
@@ -570,9 +575,8 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(
             end
         end
     end
-    B = has_du2_defined ? A : Tridiagonal{T,V}(dl, d, du, du2)
     check && checknonsingular(info, pivot)
-    return LU{T,Tridiagonal{T,V},typeof(ipiv)}(B, ipiv, convert(BlasInt, info))
+    return LU{T,Tridiagonal{T,V},typeof(ipiv)}(Tridiagonal{T,V}(dl, d, du, du2), ipiv, convert(BlasInt, info))
 end
 
 factorize(A::Tridiagonal) = lu(A)
@@ -709,8 +713,6 @@ function ldiv!(adjA::AdjointFactorization{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::Ab
 end
 
 rdiv!(B::AbstractMatrix, A::LU) = transpose(ldiv!(transpose(A), transpose(B)))
-rdiv!(B::AbstractMatrix, A::TransposeFactorization{<:Any,<:LU}) = transpose(ldiv!(A.parent, transpose(B)))
-rdiv!(B::AbstractMatrix, A::AdjointFactorization{<:Any,<:LU}) = adjoint(ldiv!(A.parent, adjoint(B)))
 
 # Conversions
 AbstractMatrix(F::LU) = (F.L * F.U)[invperm(F.p),:]

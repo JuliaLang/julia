@@ -249,7 +249,7 @@
            ;; misc syntax forms
            ((import using)
             (string (car e) " " (string.join (map deparse-import-path (cdr e)) ", ")))
-           ((global local export) (string (car e) " " (string.join (map deparse (cdr e)) ", ")))
+           ((global local export public) (string (car e) " " (string.join (map deparse (cdr e)) ", ")))
            ((const)        (string "const " (deparse (cadr e))))
            ((top)          (deparse (cadr e)))
            ((core)         (string "Core." (deparse (cadr e))))
@@ -479,12 +479,13 @@
 (define (eq-sym? a b)
   (or (eq? a b) (and (ssavalue? a) (ssavalue? b) (eqv? (cdr a) (cdr b)))))
 
-(define (blockify e)
+(define (blockify e (lno #f))
+  (set! lno (if lno (list lno) '()))
   (if (and (pair? e) (eq? (car e) 'block))
       (if (null? (cdr e))
-          `(block (null))
-          e)
-      `(block ,e)))
+          `(block ,@lno (null))
+          (if (null? lno) e `(block ,@lno ,@(cdr e))))
+      `(block ,@lno ,e)))
 
 (define (make-var-info name) (list name '(core Any) 0))
 (define vinfo:name car)

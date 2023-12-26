@@ -1,107 +1,154 @@
-Julia v1.10 Release Notes
+Julia v1.11 Release Notes
 ========================
 
 New language features
 ---------------------
+* `public` is a new keyword. Symbols marked with `public` are considered public
+  API. Symbols marked with `export` are now also treated as public API. The
+  difference between `public` and `export` is that `public` names do not become
+  available when `using` a package/module ([#50105]).
+* `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
+* The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
+  but allows to add keyword arguments to the function call ([#51501]).
+* Support for Unicode 15.1 ([#51799]).
+* A new `AbstractString` type, `AnnotatedString`, is introduced that allows for
+  regional annotations to be attached to an underlying string. This type is
+  particularly useful for holding styling information, and is used extensively
+  in the new `StyledStrings` standard library. There is also a new `AnnotatedChar`
+  type, that is the equivalent new `AbstractChar` type.
+* `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
+  to be preferentially picked up by the given julia version. i.e. in the same folder,
+  a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
+  version. This makes managing environments for multiple julia versions at the same time
+  easier ([#43845]).
 
 Language changes
 ----------------
+* During precompilation, the `atexit` hooks now run before saving the output file. This
+  allows users to safely tear down background state (such as closing Timers and sending
+  disconnect notifications to heartbeat tasks) and cleanup other resources when the program
+  wants to begin exiting.
+* Code coverage and malloc tracking is no longer generated during the package precompilation stage.
+  Further, during these modes pkgimage caches are now used for packages that are not being tracked.
+  Meaning that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
+  pkgimage caches for all other packages than the package being tested, likely meaning faster test
+  execution. ([#52123])
 
-* When a task forks a child, the parent task's task-local RNG (random number generator) is no longer affected. The seeding of child based on the parent task also takes a more disciplined approach to collision resistance, using a design based on the SplitMix and DotMix splittable RNG schemes ([#49110]).
+* Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
+  omit the default user depot ([#51448]).
 
 Compiler/Runtime improvements
 -----------------------------
-* The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
+* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
+* A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
+  loads, primarily to be used within JLLs ([#50074]).
+* Added a support for annotating `Base.@assume_effects` on code block ([#52400]).
 
 Command-line option changes
 ---------------------------
 
+* The entry point for Julia has been standardized to `Main.main(ARGS)`. This must be explicitly opted into using the `@main` macro
+(see the docstring for further details). When opted-in, and julia is invoked to run a script or expression
+(i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically.
+This is intended to unify script and compilation workflows, where code loading may happen
+in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
+difference between defining a `main` function and executing the code directly at the end of the script ([50974]).
+* The `--compiled-modules` and `--pkgimages` flags can now be set to `existing`, which will
+  cause Julia to consider loading existing cache files, but not to create new ones ([#50586]
+  and [#52573]).
 
 Multi-threading changes
 -----------------------
 
-
 Build system changes
 --------------------
 
-
 New library functions
 ---------------------
-* `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
-* `fourthroot(x)` is now defined in `Base.Math` and can be used to compute the fourth root of `x`.
-   It can also be accessed using the unicode character `∜`, which can be typed by `\fourthroot<tab>` ([#48899]).
+
+* `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not.
+* The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
+* `hardlink(src, dst)` can be used to create hard links ([#41639]).
+* `diskstat(path=pwd())` can be used to return statistics about the disk ([#42248]).
+* `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
+* `eachrsplit(string, pattern)` iterates split substrings right to left.
+* `Sys.username()` can be used to return the current user's username ([#51897]).
+* `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` which is the safe counterpart to `unsafe_wrap` ([#52049]).
 
 New library features
 --------------------
-* The `initialized=true` keyword assignment for `sortperm!` and `partialsortperm!`
-  is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
-* `binomial(x, k)` now supports non-integer `x` ([#48124]).
-* A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
-* `printstyled` now supports italic output ([#45164]).
+
+* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
+* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
+* `replace(string, pattern...)` now supports an optional `IO` argument to
+  write the output to a stream rather than returning a string ([#48625]).
+* `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
+* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
+* Passing an IOBuffer as a stdout argument for Process spawn now works as
+  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
+  no longer required there for correctness to avoid data-races ([#TBD]).
+* After a process exits, `closewrite` will no longer be automatically called on
+  the stream passed to it. Call `wait` on the process instead to ensure the
+  content is fully written, then call `closewrite` manually to avoid
+  data-races. Or use the callback form of `open` to have all that handled
+  automatically.
 
 Standard library changes
 ------------------------
 
-* `startswith` now supports seekable `IO` streams ([#43055])
-* printing integral `Rational`s will skip the denominator in `Rational`-typed IO context (e.g. in `Arrays`) ([#45396])
+#### StyledStrings
+
+* A new standard library for handling styling in a more comprehensive and structured way ([#49586]).
+* The new `Faces` struct serves as a container for text styling information
+  (think typeface, as well as color and decoration), and comes with a framework
+  to provide a convenient, extensible (via `addface!`), and customisable (with a
+  user's `Faces.toml` and `loadfaces!`) approach to
+  styled content ([#49586]).
+* The new `@styled_str` string macro provides a convenient way of creating a
+  `AnnotatedString` with various faces or other attributes applied ([#49586]).
 
 #### Package Manager
 
-* "Package Extensions": support for loading a piece of code based on other
-  packages being loaded in the Julia session.
-  This has similar applications as the Requires.jl package but also
-  supports precompilation and setting compatibility.
-* `Pkg.precompile` now accepts `timing` as a keyword argument which displays per package timing information for precompilation (e.g. `Pkg.precompile(timing=true)`)
-
 #### LinearAlgebra
-
-* `AbstractQ` no longer subtypes to `AbstractMatrix`. Moreover, `adjoint(Q::AbstractQ)`
-  no longer wraps `Q` in an `Adjoint` type, but instead in an `AdjointQ`, that itself
-  subtypes `AbstractQ`. This change accounts for the fact that typically `AbstractQ`
-  instances behave like function-based, matrix-backed linear operators, and hence don't
-  allow for efficient indexing. Also, many `AbstractQ` types can act on vectors/matrices
-  of different size, acting like a matrix with context-dependent size. With this change,
-  `AbstractQ` has a well-defined API that is described in detail in the
-  [Julia documentation](https://docs.julialang.org/en/v1/stdlib/LinearAlgebra/#man-linalg-abstractq)
-  ([#46196]).
-* Adjoints and transposes of `Factorization` objects are no longer wrapped in `Adjoint`
-  and `Transpose` wrappers, respectively. Instead, they are wrapped in
-  `AdjointFactorization` and `TranposeFactorization` types, which themselves subtype
-  `Factorization` ([#46874]).
-* New functions `hermitianpart` and `hermitianpart!` for extracting the Hermitian
-  (real symmetric) part of a matrix ([#31836]).
-* The `norm` of the adjoint or transpose of an `AbstractMatrix` now returns the norm of the
-  parent matrix by default, matching the current behaviour for `AbstractVector`s ([#49020]).
+* `cbrt(::AbstractMatrix{<:Real})` is now defined and returns real-valued matrix cube roots of real-valued matrices ([#50661]).
+* `eigvals/eigen(A, bunchkaufman(B))` and `eigvals/eigen(A, lu(B))`, which utilize the Bunchkaufman (LDL) and LU decomposition of `B`,
+   respectively, now efficiently compute the generalized eigenvalues (`eigen`: and eigenvectors) of `A` and `B`. Note: The second
+   argument is the output of `bunchkaufman` or `lu` ([#50471]).
+* Structured matrices now retain either the axes of the parent (for `Symmetric`/`Hermitian`/`AbstractTriangular`/`UpperHessenberg`), or that of the principal diagonal (for banded matrices) ([#52480]).
 
 #### Printf
-* Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).
 
 #### Profile
 
-
 #### Random
-
+* `rand` now supports sampling over `Tuple` types ([#35856], [#50251]).
+* `rand` now supports sampling over `Pair` types ([#28705]).
+* When seeding RNGs provided by `Random`, negative integer seeds can now be used ([#51416]).
+* Seedable random number generators from `Random` can now be seeded by a string, e.g.
+  `seed!(rng, "a random seed")` ([#51527]).
 
 #### REPL
 
+* Tab complete hints now show in lighter text while typing in the repl. To disable
+  set `Base.active_repl.options.hint_tab_completes = false` ([#51229]).
+* Meta-M with an empty prompt now returns the contextual module of the REPL to `Main`.
 
 #### SuiteSparse
 
 
 #### SparseArrays
 
-
 #### Test
-
-
-* The `@test_broken` macro (or `@test` with `broken=true`) now complains if the test expression returns a
-  non-boolean value in the same way as a non-broken test. ([#47804])
 
 #### Dates
 
+#### Statistics
+
+* Statistics is now an upgradeable standard library ([#46501]).
 
 #### Distributed
 
+* `pmap` now defaults to using a `CachingPool` ([#33892]).
 
 #### Unicode
 
@@ -111,18 +158,19 @@ Standard library changes
 
 #### InteractiveUtils
 
- * `code_native` and `@code_native` now default to intel syntax instead of AT&T.
-
 Deprecated or removed
 ---------------------
 
 
 External dependencies
 ---------------------
-
+* `tput` is no longer called to check terminal capabilities, it has been replaced with a pure-Julia terminfo parser ([#50797]).
 
 Tooling Improvements
 --------------------
 
+* CI now performs limited automatic typo detection on all PRs. If you merge a PR with a
+  failing typo CI check, then the reported typos will be automatically ignored in future CI
+  runs on PRs that edit those same files ([#51704]).
 
 <!--- generated by NEWS-update.jl: -->

@@ -143,6 +143,8 @@ function close(f::File)
     nothing
 end
 
+closewrite(f::File) = nothing
+
 # sendfile is the most efficient way to copy from a file descriptor
 function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
@@ -200,11 +202,12 @@ end
 
 function read(f::File, ::Type{Char})
     b0 = read(f, UInt8)
-    l = 8 * (4 - leading_ones(b0))
+    l = 0x08 * (0x04 - UInt8(leading_ones(b0)))
     c = UInt32(b0) << 24
-    if l < 24
+    if l ≤ 0x10
         s = 16
         while s ≥ l && !eof(f)
+            # this works around lack of peek(::File)
             p = position(f)
             b = read(f, UInt8)
             if b & 0xc0 != 0x80

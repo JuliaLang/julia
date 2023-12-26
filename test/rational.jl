@@ -28,20 +28,30 @@ using Test
     @test (1//typemax(Int)) / (1//typemax(Int)) == 1
     @test_throws OverflowError (1//2)^63
     @test inv((1+typemin(Int))//typemax(Int)) == -1
-    @test_throws ArgumentError inv(typemin(Int)//typemax(Int))
-    @test_throws ArgumentError Rational(0x1, typemin(Int32))
+    @test_throws OverflowError inv(typemin(Int)//typemax(Int))
+    @test_throws OverflowError Rational(0x1, typemin(Int32))
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
+    @test @inferred(rationalize(Int, 33//100; tol=0.1)) === 1//3 # because tol
+    @test @inferred(rationalize(Int, 3; tol=0.0)) === 3//1
+    @test @inferred(rationalize(Int8, 1000//333)) === Rational{Int8}(3//1)
+    @test @inferred(rationalize(Int8, 1000//3)) === Rational{Int8}(1//0)
+    @test @inferred(rationalize(Int8, 1000)) === Rational{Int8}(1//0)
     @test_throws OverflowError rationalize(UInt, -2.0)
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
     # issue 32569
-    @test_throws ArgumentError 1 // typemin(Int)
+    @test_throws OverflowError 1 // typemin(Int)
     @test_throws ArgumentError 0 // 0
     @test -2 // typemin(Int) == -1 // (typemin(Int) >> 1)
     @test 2 // typemin(Int) == 1 // (typemin(Int) >> 1)
+    # issue 32443
+    @test Int8(-128)//Int8(1) == -128
+    @test_throws OverflowError Int8(-128)//Int8(-1)
+    @test_throws OverflowError Int8(-1)//Int8(-128)
+    @test Int8(-128)//Int8(-2) == 64
 
     @test_throws InexactError Rational(UInt(1), typemin(Int32))
     @test iszero(Rational{Int}(UInt(0), 1))
@@ -532,6 +542,7 @@ end
              100798//32085
              103993//33102
              312689//99532 ]
+    @test rationalize(pi) === rationalize(BigFloat(pi))
 end
 
 @testset "issue #12536" begin
@@ -726,4 +737,11 @@ end
     @test rationalize(Int8, float(pi)im) == 0//1 + 22//7*im
     @test rationalize(1.192 + 2.233im) == 149//125 + 2233//1000*im
     @test rationalize(Int8, 1.192 + 2.233im) == 118//99 + 67//30*im
+end
+@testset "rationalize(Complex) with tol" begin
+    # test: rationalize(x::Complex; kvs...)
+    precise_next = 7205759403792795//72057594037927936
+    @assert Float64(precise_next) == nextfloat(0.1)
+    @test rationalize(Int64, nextfloat(0.1) * im; tol=0) == precise_next * im
+    @test rationalize(0.1im; tol=eps(0.1)) == rationalize(0.1im)
 end

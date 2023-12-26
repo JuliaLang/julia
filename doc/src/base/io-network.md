@@ -6,6 +6,8 @@
 Base.stdout
 Base.stderr
 Base.stdin
+Base.read(::AbstractString)
+Base.write(::AbstractString, ::Any)
 Base.open
 Base.IOStream
 Base.IOBuffer
@@ -71,6 +73,8 @@ Base.readline
 Base.readuntil
 Base.readlines
 Base.eachline
+Base.copyline
+Base.copyuntil
 Base.displaysize
 ```
 

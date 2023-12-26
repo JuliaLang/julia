@@ -51,9 +51,9 @@ static void walk_print_cb(uv_handle_t *h, void *arg)
     npad += strlen(type);
     pad += npad < strlen(pad) ? npad : strlen(pad);
     if (fd == -1)
-        jl_safe_printf(" %s   %s@%p->%p\n", type,             pad, (void*)h, (void*)h->data);
+        jl_safe_printf(" %s   %s%p->%p\n", type,             pad, (void*)h, (void*)h->data);
     else
-        jl_safe_printf(" %s[%zd] %s@%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
+        jl_safe_printf(" %s[%zd] %s%p->%p\n", type, (size_t)fd, pad, (void*)h, (void*)h->data);
 }
 
 static void wait_empty_func(uv_timer_t *t)
@@ -63,32 +63,38 @@ static void wait_empty_func(uv_timer_t *t)
     if (!uv_loop_alive(t->loop))
         return;
     jl_safe_printf("\n[pid %zd] waiting for IO to finish:\n"
-                   " TYPE[FD/PID]       @UV_HANDLE_T->DATA\n",
+                   " Handle type        uv_handle_t->data\n",
                    (size_t)uv_os_getpid());
     uv_walk(jl_io_loop, walk_print_cb, NULL);
+    if (jl_generating_output() && jl_options.incremental) {
+        jl_safe_printf("This means that a package has started a background task or event source that has not finished running. For precompilation to complete successfully, the event source needs to be closed explicitly. See the developer documentation on fixing precompilation hangs for more help.\n");
+    }
     jl_gc_collect(JL_GC_FULL);
 }
 
 void jl_wait_empty_begin(void)
 {
     JL_UV_LOCK();
-    if (wait_empty_worker.type != UV_TIMER && jl_io_loop) {
-        // try to purge anything that is just waiting for cleanup
-        jl_io_loop->stop_flag = 0;
-        uv_run(jl_io_loop, UV_RUN_NOWAIT);
-        uv_timer_init(jl_io_loop, &wait_empty_worker);
+    if (jl_io_loop) {
+        if (wait_empty_worker.type != UV_TIMER) {
+            // try to purge anything that is just waiting for cleanup
+            jl_io_loop->stop_flag = 0;
+            uv_run(jl_io_loop, UV_RUN_NOWAIT);
+            uv_timer_init(jl_io_loop, &wait_empty_worker);
+            uv_unref((uv_handle_t*)&wait_empty_worker);
+        }
+        // make sure this is running
         uv_update_time(jl_io_loop);
         uv_timer_start(&wait_empty_worker, wait_empty_func, 10, 15000);
-        uv_unref((uv_handle_t*)&wait_empty_worker);
     }
     JL_UV_UNLOCK();
 }
-
 void jl_wait_empty_end(void)
 {
-    JL_UV_LOCK();
-    uv_close((uv_handle_t*)&wait_empty_worker, NULL);
-    JL_UV_UNLOCK();
+    // n.b. caller must be holding jl_uv_mutex
+    if (wait_empty_worker.type == UV_TIMER)
+        // make sure this timer is stopped, but not destroyed in case the user calls jl_wait_empty_begin again
+        uv_timer_stop(&wait_empty_worker);
 }
 
 
@@ -112,7 +118,7 @@ void jl_init_uv(void)
 {
     uv_async_init(jl_io_loop, &signal_async, jl_signal_async_cb);
     uv_unref((uv_handle_t*)&signal_async);
-    JL_MUTEX_INIT(&jl_uv_mutex); // a file-scope initializer can be used instead
+    JL_MUTEX_INIT(&jl_uv_mutex, "jl_uv_mutex"); // a file-scope initializer can be used instead
 }
 
 _Atomic(int) jl_uv_n_waiters = 0;
@@ -173,9 +179,12 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
         ct->world_age = last_age;
         return;
     }
-    if (handle == (uv_handle_t*)&signal_async || handle == (uv_handle_t*)&wait_empty_worker)
+    if (handle == (uv_handle_t*)&wait_empty_worker)
+        handle->type = UV_UNKNOWN_HANDLE;
+    else if (handle == (uv_handle_t*)&signal_async)
         return;
-    free(handle);
+    else
+        free(handle);
 }
 
 static void jl_uv_flush_close_callback(uv_write_t *req, int status)

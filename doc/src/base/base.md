@@ -4,7 +4,8 @@
 
 Julia Base contains a range of functions and macros appropriate for performing
 scientific and numerical computing, but is also as broad as those of many general purpose programming
-languages.  Additional functionality is available from a growing collection of available packages.
+languages.  Additional functionality is available from a growing collection of
+[available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
 
 Some general notes:
@@ -29,7 +30,7 @@ Base.isinteractive
 Base.summarysize
 Base.__precompile__
 Base.include
-Base.MainInclude.include
+Main.include
 Base.include_string
 Base.include_dependency
 __init__
@@ -59,6 +60,7 @@ However, you can create variables with names:
 Finally:
 `where` is parsed as an infix operator for writing parametric method and type definitions;
 `in` and `isa` are parsed as infix operators;
+`public` is parsed as a keyword when beginning a toplevel statement;
 `outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop;
 and `as` is used as a keyword to rename an identifier brought into scope by `import` or `using`.
 Creation of variables named `where`, `in`, `isa`, `outer` and `as` is allowed, though.
@@ -66,6 +68,7 @@ Creation of variables named `where`, `in`, `isa`, `outer` and `as` is allowed, t
 ```@docs
 module
 export
+public
 import
 using
 as
@@ -128,6 +131,7 @@ Core.:(===)
 Core.isa
 Base.isequal
 Base.isless
+Base.isunordered
 Base.ifelse
 Core.typeassert
 Core.typeof
@@ -141,10 +145,16 @@ Base.copy
 Base.deepcopy
 Base.getproperty
 Base.setproperty!
+Base.replaceproperty!
+Base.swapproperty!
+Base.modifyproperty!
 Base.propertynames
 Base.hasproperty
 Core.getfield
 Core.setfield!
+Core.modifyfield!
+Core.replacefield!
+Core.swapfield!
 Core.isdefined
 Core.getglobal
 Core.setglobal!
@@ -234,6 +244,7 @@ Core.Tuple
 Core.NTuple
 Core.NamedTuple
 Base.@NamedTuple
+Base.@Kwargs
 Base.Val
 Core.Vararg
 Core.Nothing
@@ -274,7 +285,7 @@ Base.Fix2
 
 ```@docs
 Core.eval
-Base.MainInclude.eval
+Main.eval
 Base.@eval
 Base.evalfile
 Base.esc
@@ -285,6 +296,8 @@ Base.@inline
 Base.@noinline
 Base.@nospecialize
 Base.@specialize
+Base.@nospecializeinfer
+Base.@constprop
 Base.gensym
 Base.@gensym
 var"name"
@@ -360,6 +373,7 @@ Base.Sys.uptime
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
+Base.Sys.username
 Base.@static
 ```
 
@@ -440,6 +454,8 @@ Base.@__DIR__
 Base.@__LINE__
 Base.fullname
 Base.names
+Base.isexported
+Base.ispublic
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
@@ -453,6 +469,8 @@ Base.identify_package
 Base.locate_package
 Base.require
 Base.compilecache
+Base.isprecompiled
+Base.get_extension
 ```
 
 ## Internals

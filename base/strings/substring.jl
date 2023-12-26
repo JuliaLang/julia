@@ -36,9 +36,18 @@ struct SubString{T<:AbstractString} <: AbstractString
         end
         return new(s, i-1, nextind(s,j)-i)
     end
+    function SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where T<:AbstractString
+        @boundscheck begin
+            si, sj = i + 1, prevind(s, j + i + 1)
+            @inbounds isvalid(s, si) || string_index_err(s, si)
+            @inbounds isvalid(s, sj) || string_index_err(s, sj)
+        end
+        new(s, i, j)
+    end
 end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
+@propagate_inbounds SubString(s::T, i::Int, j::Int, v::Val{:noshift}) where {T<:AbstractString} = SubString{T}(s, i, j, v)
 @propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
 @propagate_inbounds SubString(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
@@ -102,6 +111,9 @@ end
 
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
+
+parent(s::SubString) = s.string
+parentindices(s::SubString) = (s.offset + 1 : thisind(s.string, s.offset + s.ncodeunits),)
 
 function ==(a::Union{String, SubString{String}}, b::Union{String, SubString{String}})
     sizeof(a) == sizeof(b) && _memcmp(a, b) == 0
@@ -264,7 +276,7 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
     out = _string_n(n*r)
     if n == 1 # common case: repeating a single-byte string
         @inbounds b = codeunit(s, 1)
-        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), out, b, r)
+        memset(unsafe_convert(Ptr{UInt8}, out), b, r)
     else
         for i = 0:r-1
             GC.@preserve s out unsafe_copyto!(pointer(out, i*n+1), pointer(s), n)

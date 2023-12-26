@@ -52,6 +52,11 @@ end
     @test get!(ENV, key, "default") == "default"
     @test haskey(ENV, key)
     @test ENV[key] == "default"
+
+    key = randstring(25)
+    @test !haskey(ENV, key)
+    @test get!(ENV, key, 0) == 0
+    @test ENV[key] == "0"
 end
 @testset "#17956" begin
     @test length(ENV) > 1
@@ -168,7 +173,7 @@ end
 end
 
 # Restore the original environment
-for k in keys(ENV)
+for k in collect(keys(ENV))
     if !haskey(original_env, k)
         delete!(ENV, k)
     end

@@ -14,9 +14,9 @@ export libcurl
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libcurl_handle = C_NULL
-libcurl_path = ""
+artifact_dir::String = ""
+libcurl_handle::Ptr{Cvoid} = C_NULL
+libcurl_path::String = ""
 
 if Sys.iswindows()
     const libcurl = "libcurl-4.dll"

@@ -78,8 +78,10 @@
 // OBJPROFILE counts objects by type
 // #define OBJPROFILE
 
-// Automatic Instrumenting Profiler
-//#define ENABLE_TIMINGS
+// pool allocator configuration options
+
+// GC_SMALL_PAGE allocates objects in 4k pages
+// #define GC_SMALL_PAGE
 
 
 // method dispatch profiling --------------------------------------------------
@@ -134,29 +136,12 @@
 // threadpools specification
 #define THREADPOOLS_NAME                "JULIA_THREADPOOLS"
 
+// GC threads
+#define NUM_GC_THREADS_NAME             "JULIA_NUM_GC_THREADS"
+
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0
-
-// partr -- parallel tasks runtime options ------------------------------------
-
-// multiq
-    // number of heaps = MULTIQ_HEAP_C * nthreads
-#define MULTIQ_HEAP_C                   4
-    // how many in each heap
-#define MULTIQ_TASKS_PER_HEAP           129
-
-// parfor
-    // tasks = niters / (GRAIN_K * nthreads)
-#define GRAIN_K                         4
-
-// synchronization
-    // narrivers = ((GRAIN_K * nthreads) ^ ARRIVERS_P) + 1
-    // limit for number of recursive parfors
-#define ARRIVERS_P                      2
-    // nreducers = narrivers * REDUCERS_FRAC
-#define REDUCERS_FRAC                   1
-
 
 // sanitizer defaults ---------------------------------------------------------
 
