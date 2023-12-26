@@ -158,8 +158,22 @@ imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
 imag(A::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat}) = imag.(A)
 imag(A::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat}) = imag.(A)
-imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
-imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
+function imag(A::UnitLowerTriangular)
+    L = LowerTriangular(A.data)
+    Lim = imag(L)
+    for i in 1:size(Lim,1)
+        Lim[i,i] = zero(Lim[i,i])
+    end
+    return Lim
+end
+function imag(A::UnitUpperTriangular)
+    U = UpperTriangular(A.data)
+    Uim = imag(U)
+    for i in 1:size(Uim,1)
+        Uim[i,i] = zero(Uim[i,i])
+    end
+    return Uim
+end
 
 Array(A::AbstractTriangular) = Matrix(A)
 parent(A::UpperOrLowerTriangular) = A.data

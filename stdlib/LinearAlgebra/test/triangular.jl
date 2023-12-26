@@ -928,12 +928,7 @@ end
             @test L/2 == B/2
             @test 2\L == 2\B
             @test real(L) == real(B)
-            if L isa UnitLowerTriangular && eltype(L) <: Complex
-                # triu! and tril! are currently broken if the parent contains undef elements
-                @test_broken imag(L) == imag(B)
-            else
-                @test imag(L) == imag(B)
-            end
+            @test imag(L) == imag(B)
         end
     end
 
@@ -948,12 +943,7 @@ end
             @test U/2 == B/2
             @test 2\U == 2\B
             @test real(U) == real(B)
-            if U isa UnitUpperTriangular && eltype(U) <: Complex
-                # triu! and tril! are currently broken if the parent contains undef elements
-                @test_broken imag(U) == imag(B)
-            else
-                @test imag(U) == imag(B)
-            end
+            @test imag(U) == imag(B)
         end
     end
 end
