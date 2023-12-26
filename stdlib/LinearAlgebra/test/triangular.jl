@@ -916,4 +916,26 @@ end
     end
 end
 
+@testset "arithmetic with partly unitialized matrices" begin
+    A = Matrix{BigFloat}(undef,2,2)
+    A[1,1] = A[2,2] = A[2,1] = 4
+    for MT in (LowerTriangular, UnitLowerTriangular)
+        L = MT(A)
+        B = copyto!(zeros(size(L)), L)
+        @test L * 2 == 2 * L == 2B
+        @test L/2 == B/2
+        @test 2\L == 2\B
+    end
+
+    A = Matrix{BigFloat}(undef,2,2)
+    A[1,1] = A[2,2] = A[1,2] = 4
+    for MT in (UpperTriangular, UnitUpperTriangular)
+        U = MT(A)
+        B = copyto!(zeros(size(U)), U)
+        @test U * 2 == 2 * U == 2B
+        @test U/2 == B/2
+        @test 2\U == 2\B
+    end
+end
+
 end # module TestTriangular

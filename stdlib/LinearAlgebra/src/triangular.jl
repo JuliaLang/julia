@@ -934,47 +934,52 @@ end
 
 for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
                    (LowerTriangular, UnitLowerTriangular))
+    tstrided = t{<:Any, <:StridedMatrix}
     @eval begin
         (*)(A::$t, x::Number) = $t(A.data*x)
+        (*)(A::$tstrided, x::Number) = A .* x
 
         function (*)(A::$unitt, x::Number)
-            B = A.data*x
+            B = $t(A.data)*x
             for i = 1:size(A, 1)
-                B[i,i] = x
+                B.data[i,i] = x
             end
-            $t(B)
+            return B
         end
 
         (*)(x::Number, A::$t) = $t(x*A.data)
+        (*)(x::Number, A::$tstrided) = x .* A
 
         function (*)(x::Number, A::$unitt)
-            B = x*A.data
+            B = x*$t(A.data)
             for i = 1:size(A, 1)
-                B[i,i] = x
+                B.data[i,i] = x
             end
-            $t(B)
+            return B
         end
 
         (/)(A::$t, x::Number) = $t(A.data/x)
+        (/)(A::$tstrided, x::Number) = A ./ x
 
         function (/)(A::$unitt, x::Number)
-            B = A.data/x
+            B = $t(A.data)/x
             invx = inv(x)
             for i = 1:size(A, 1)
-                B[i,i] = invx
+                B.data[i,i] = invx
             end
-            $t(B)
+            return B
         end
 
         (\)(x::Number, A::$t) = $t(x\A.data)
+        (\)(x::Number, A::$tstrided) = x .\ A
 
         function (\)(x::Number, A::$unitt)
-            B = x\A.data
+            B = x\$t(A.data)
             invx = inv(x)
             for i = 1:size(A, 1)
-                B[i,i] = invx
+                B.data[i,i] = invx
             end
-            $t(B)
+            return B
         end
     end
 end
