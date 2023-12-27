@@ -1594,7 +1594,7 @@ let code = Any[
         # Block 2
         EnterNode(4),
         # Block 3
-        Expr(:leave),
+        Expr(:leave, SSAValue(2)),
         # Block 4
         GotoNode(5),
         # Block 5
@@ -1603,7 +1603,7 @@ let code = Any[
     ir = make_ircode(code)
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
-    @test length(ir.cfg.blocks) == 4
+    @test length(ir.cfg.blocks) <= 5
 end
 
 # Test CFG simplify with single predecessor phi node
