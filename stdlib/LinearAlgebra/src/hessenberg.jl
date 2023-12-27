@@ -133,11 +133,11 @@ for T = (:Number, :UniformScaling, :Diagonal)
 end
 
 function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
-    HH = mul!(similar(H, promote_op(matprod, eltype(H), eltype(U)), size(H)), H, U)
+    HH = mul!(matprod_dest(H, U, promote_op(matprod, eltype(H), eltype(U))), H, U)
     UpperHessenberg(HH)
 end
 function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
-    HH = mul!(similar(H, promote_op(matprod, eltype(U), eltype(H)), size(H)), U, H)
+    HH = mul!(matprod_dest(U, H, promote_op(matprod, eltype(U), eltype(H))), U, H)
     UpperHessenberg(HH)
 end
 
