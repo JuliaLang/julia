@@ -14,10 +14,12 @@ Base.fma
 Base.muladd
 Base.inv(::Number)
 Base.div
+Base.div(::Any, ::Any, ::RoundingMode)
 Base.fld
 Base.cld
 Base.mod
 Base.rem
+Base.rem(::Any, ::Any, ::RoundingMode)
 Base.rem2pi
 Base.Math.mod2pi
 Base.divrem
