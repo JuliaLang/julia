@@ -132,29 +132,29 @@ for T = (:Number, :UniformScaling, :Diagonal)
 end
 
 function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
-    HH = mul!(_initarray(*, eltype(H), eltype(U), H), H, U)
+    HH = mul!(similar(H, promote_op(matprod, eltype(H), eltype(U)), size(H)), H, U)
     UpperHessenberg(HH)
 end
 function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
-    HH = mul!(_initarray(*, eltype(U), eltype(H), H), U, H)
+    HH = mul!(similar(H, promote_op(matprod, eltype(U), eltype(H)), size(H)), U, H)
     UpperHessenberg(HH)
 end
 
 function /(H::UpperHessenberg, U::UpperTriangular)
-    HH = _rdiv!(_initarray(/, eltype(H), eltype(U), H), H, U)
+    HH = _rdiv!(similar(H, promote_op(/, eltype(H), eltype(U)), size(H)), H, U)
     UpperHessenberg(HH)
 end
 function /(H::UpperHessenberg, U::UnitUpperTriangular)
-    HH = _rdiv!(_initarray(/, eltype(H), eltype(U), H), H, U)
+    HH = _rdiv!(similar(H, promote_op(/, eltype(H), eltype(U)), size(H)), H, U)
     UpperHessenberg(HH)
 end
 
 function \(U::UpperTriangular, H::UpperHessenberg)
-    HH = ldiv!(_initarray(\, eltype(U), eltype(H), H), U, H)
+    HH = ldiv!(similar(H, promote_op(\, eltype(U), eltype(H)), size(H)), U, H)
     UpperHessenberg(HH)
 end
 function \(U::UnitUpperTriangular, H::UpperHessenberg)
-    HH = ldiv!(_initarray(\, eltype(U), eltype(H), H), U, H)
+    HH = ldiv!(similar(H, promote_op(\, eltype(U), eltype(H)), size(H)), U, H)
     UpperHessenberg(HH)
 end
 
