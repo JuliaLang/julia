@@ -73,8 +73,8 @@ If a symmetric view of a matrix is to be constructed of which the elements are n
 matrices nor numbers, an appropriate method of `symmetric` has to be implemented. In that
 case, `symmetric_type` has to be implemented, too.
 """
-symmetric(A::AbstractMatrix, uplo::Symbol) = Symmetric(A, uplo)
-symmetric(A::Number, ::Symbol) = A
+symmetric(A::AbstractMatrix, uplo::Symbol=:U) = Symmetric(A, uplo)
+symmetric(A::Number, ::Symbol=:U) = A
 
 """
     symmetric_type(T::Type)
@@ -164,8 +164,8 @@ If a hermitian view of a matrix is to be constructed of which the elements are n
 matrices nor numbers, an appropriate method of `hermitian` has to be implemented. In that
 case, `hermitian_type` has to be implemented, too.
 """
-hermitian(A::AbstractMatrix, uplo::Symbol) = Hermitian(A, uplo)
-hermitian(A::Number, ::Symbol) = convert(typeof(A), real(A))
+hermitian(A::AbstractMatrix, uplo::Symbol=:U) = Hermitian(A, uplo)
+hermitian(A::Number, ::Symbol=:U) = convert(typeof(A), real(A))
 
 """
     hermitian_type(T::Type)
@@ -223,6 +223,7 @@ const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, 
 const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Symmetric{Complex{T},S}}
 
 size(A::HermOrSym) = size(A.data)
+axes(A::HermOrSym) = axes(A.data)
 @inline function Base.isassigned(A::HermOrSym, i::Int, j::Int)
     @boundscheck checkbounds(Bool, A, i, j) || return false
     @inbounds if i == j || ((A.uplo == 'U') == (i < j))
