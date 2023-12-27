@@ -1043,9 +1043,35 @@ function find_all_in_cache_path(pkg::PkgId)
         end
     end
     if length(paths) > 1
-        # allocating the sort vector is less expensive than using sort!(.. by=mtime), which would
-        # call the relatively slow mtime multiple times per path
-        p = sortperm(mtime.(paths), rev = true)
+        function sort_by(path)
+            # when using pkgimages, consider those cache files first
+            pkgimage = if JLOptions().use_pkgimages != 0
+                io = open(path, "r")
+                try
+                    if iszero(isvalid_cache_header(io))
+                        false
+                    else
+                        _, _, _, _, _, _, _, flags = parse_cache_header(io, path)
+                        CacheFlags(flags).use_pkgimages
+                    end
+                finally
+                    close(io)
+                end
+            else
+                false
+            end
+            (; pkgimage, mtime=mtime(path))
+        end
+        function sort_lt(a, b)
+            if a.pkgimage != b.pkgimage
+                return a.pkgimage < b.pkgimage
+            end
+            return a.mtime < b.mtime
+        end
+
+        # allocating the sort vector is less expensive than using sort!(.. by=sort_by),
+        # which would call the relatively slow mtime multiple times per path
+        p = sortperm(sort_by.(paths), lt=sort_lt, rev=true)
         return paths[p]
     else
         return paths
@@ -1476,6 +1502,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     assert_havelock(require_lock)
     loaded = nothing
     if root_module_exists(modkey)
+        warn_if_already_loaded_different(modkey)
         loaded = root_module(modkey)
     else
         loaded = start_loading(modkey)
@@ -1506,6 +1533,7 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Un
     assert_havelock(require_lock)
     loaded = nothing
     if root_module_exists(modkey)
+        warn_if_already_loaded_different(modkey)
         loaded = root_module(modkey)
     else
         loaded = start_loading(modkey)
@@ -1949,9 +1977,48 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
+        warn_if_already_loaded_different(uuidkey)
         newm = root_module(uuidkey)
     end
     return newm
+end
+
+const already_warned_path_change_pkgs = Set{UUID}()
+# warns if the loaded version of a module is different to the one that locate_package wants to load
+function warn_if_already_loaded_different(uuidkey::PkgId)
+    uuidkey.uuid ∈ already_warned_path_change_pkgs && return
+    pkgorig = get(pkgorigins, uuidkey, nothing)
+    if pkgorig !== nothing && pkgorig.path !== nothing
+        new_path = locate_package(uuidkey)
+        if !samefile(fixup_stdlib_path(pkgorig.path), new_path)
+            if isnothing(pkgorig.version)
+                v = get_pkgversion_from_path(dirname(dirname(pkgorig.path)))
+                cur_vstr = isnothing(v) ? "" : "v$v "
+            else
+                cur_vstr = "v$v "
+            end
+            new_v = get_pkgversion_from_path(dirname(dirname(new_path)))
+            new_vstr = isnothing(new_v) ? "" : "v$new_v "
+            warnstr = """
+            $uuidkey is already loaded from a different path:
+              loaded:    $cur_vstr$(repr(pkgorig.path))
+              requested: $new_vstr$(repr(new_path))
+            """
+            if isempty(already_warned_path_change_pkgs)
+                warnstr *= """
+                This might indicate a change of environment has happened between package loads and can mean that
+                incompatible packages have been loaded"""
+                if JLOptions().startupfile < 2 #(0 = auto, 1 = yes)
+                    warnstr *= """. If this happened due to a startup.jl consider starting julia
+                    directly in the project via the `--project` arg."""
+                else
+                    warnstr *= "."
+                end
+            end
+            @warn warnstr
+            push!(already_warned_path_change_pkgs, uuidkey.uuid)
+        end
+    end
 end
 
 mutable struct PkgOrigin
@@ -2431,10 +2498,12 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     end
 
     if output_o !== nothing
+        @debug "Generating object cache file for $pkg"
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         opt_level = Base.JLOptions().opt_level
         opts = `-O$(opt_level) --output-o $(output_o) --output-ji $(output) --output-incremental=yes`
     else
+        @debug "Generating cache file for $pkg"
         cpu_target = nothing
         opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
@@ -2531,7 +2600,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
     mkpath(cachepath)
-    cache_objects = JLOptions().use_pkgimages != 0
+    cache_objects = JLOptions().use_pkgimages == 1
     tmppath, tmpio = mktemp(cachepath)
 
     if cache_objects

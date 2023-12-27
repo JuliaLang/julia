@@ -570,7 +570,7 @@ end
 function statement_indices_to_labels(stmt, cfg::CFG)
     # convert statement index to labels, as expected by print_stmt
     if stmt isa EnterNode
-        stmt = EnterNode(stmt, block_for_inst(cfg, stmt.catch_dest))
+        stmt = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest))
     elseif isa(stmt, GotoIfNot)
         stmt = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
     elseif stmt isa GotoNode

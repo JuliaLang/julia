@@ -34,6 +34,9 @@ Language changes
   pkgimage caches for all other packages than the package being tested, likely meaning faster test
   execution. ([#52123])
 
+* Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
+  omit the default user depot ([#51448]).
+
 Compiler/Runtime improvements
 -----------------------------
 * Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
@@ -50,6 +53,9 @@ Command-line option changes
 This is intended to unify script and compilation workflows, where code loading may happen
 in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
 difference between defining a `main` function and executing the code directly at the end of the script ([50974]).
+* The `--compiled-modules` and `--pkgimages` flags can now be set to `existing`, which will
+  cause Julia to consider loading existing cache files, but not to create new ones ([#50586]
+  and [#52573]).
 
 Multi-threading changes
 -----------------------
@@ -109,6 +115,7 @@ Standard library changes
 * `eigvals/eigen(A, bunchkaufman(B))` and `eigvals/eigen(A, lu(B))`, which utilize the Bunchkaufman (LDL) and LU decomposition of `B`,
    respectively, now efficiently compute the generalized eigenvalues (`eigen`: and eigenvectors) of `A` and `B`. Note: The second
    argument is the output of `bunchkaufman` or `lu` ([#50471]).
+* Structured matrices now retain either the axes of the parent (for `Symmetric`/`Hermitian`/`AbstractTriangular`/`UpperHessenberg`), or that of the principal diagonal (for banded matrices) ([#52480]).
 
 #### Printf
 
