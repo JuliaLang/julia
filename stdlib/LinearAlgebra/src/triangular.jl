@@ -35,6 +35,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         AbstractMatrix{T}(A::$t{T}) where {T} = copy(A)
 
         size(A::$t) = size(A.data)
+        axes(A::$t) = axes(A.data)
 
         # For A<:AbstractTriangular, similar(A[, neweltype]) should yield a matrix with the same
         # triangular type and underlying storage type as A. The following method covers these cases.
@@ -1584,7 +1585,7 @@ end
 #   Higham and Lin, "An improved Schur-Padé algorithm for fractional powers of
 #     a matrix and their Fréchet derivatives", SIAM. J. Matrix Anal. & Appl.,
 #     34(3), (2013) 1341–1360.
-function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
+function powm!(A0::UpperTriangular, p::Real)
     if abs(p) >= 1
         throw(ArgumentError("p must be a real number in (-1,1), got $p"))
     end
@@ -1616,7 +1617,7 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
         end
         copyto!(Stmp, S)
         mul!(S, A, c)
-        ldiv!(Stmp, S.data)
+        ldiv!(Stmp, S)
 
         c = (p - j) / (j4 - 2)
         for i = 1:n
@@ -1624,14 +1625,14 @@ function powm!(A0::UpperTriangular{<:BlasFloat}, p::Real)
         end
         copyto!(Stmp, S)
         mul!(S, A, c)
-        ldiv!(Stmp, S.data)
+        ldiv!(Stmp, S)
     end
     for i = 1:n
         S[i, i] = S[i, i] + 1
     end
     copyto!(Stmp, S)
     mul!(S, A, -p)
-    ldiv!(Stmp, S.data)
+    ldiv!(Stmp, S)
     for i = 1:n
         @inbounds S[i, i] = S[i, i] + 1
     end

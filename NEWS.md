@@ -34,6 +34,9 @@ Language changes
   pkgimage caches for all other packages than the package being tested, likely meaning faster test
   execution. ([#52123])
 
+* Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
+  omit the default user depot ([#51448]).
+
 Compiler/Runtime improvements
 -----------------------------
 * Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
@@ -111,6 +114,7 @@ Standard library changes
 * `eigvals/eigen(A, bunchkaufman(B))` and `eigvals/eigen(A, lu(B))`, which utilize the Bunchkaufman (LDL) and LU decomposition of `B`,
    respectively, now efficiently compute the generalized eigenvalues (`eigen`: and eigenvectors) of `A` and `B`. Note: The second
    argument is the output of `bunchkaufman` or `lu` ([#50471]).
+* Structured matrices now retain either the axes of the parent (for `Symmetric`/`Hermitian`/`AbstractTriangular`/`UpperHessenberg`), or that of the principal diagonal (for banded matrices) ([#52480]).
 
 #### Printf
 
