@@ -1061,7 +1061,7 @@ end
     # it would be too much trouble to actually construct a valid pathological input, so we
     # construct an invalid pathological input.
     # This test is kind of sketchy because it passes invalid inputs to the function
-    # Temorarily removed due to flakey test failures. See #52642 for details.
+    # Temporarily removed due to flakey test failures. See #52642 for details.
     # for i in [1:6, 1:483, 1:957, 77:86, 118:478, 223:227, 231:970, 317:958, 500:501, 500:501, 500:501, 614:620, 632:635, 658:665, 933:940, 937:942, 997:1000, 999:1000]
     #     x = rand(1:5, 1000)
     #     @test partialsort(x, i, lt=(<=)) == sort(x)[i]
