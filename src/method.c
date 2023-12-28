@@ -64,6 +64,21 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         }
         return expr;
     }
+    else if (jl_is_enternode(expr)) {
+        jl_value_t *scope = jl_enternode_scope(expr);
+        if (scope) {
+            jl_value_t *val = resolve_globals(scope, module, sparam_vals, binding_effects, eager_resolve);
+            if (val != scope) {
+                intptr_t catch_dest = jl_enternode_catch_dest(expr);
+                JL_GC_PUSH1(&val);
+                expr = jl_new_struct_uninit(jl_enternode_type);
+                jl_enternode_catch_dest(expr) = catch_dest;
+                jl_enternode_scope(expr) = val;
+                JL_GC_POP();
+            }
+        }
+        return expr;
+    }
     else if (jl_is_gotoifnot(expr)) {
         jl_value_t *cond = resolve_globals(jl_gotoifnot_cond(expr), module, sparam_vals, binding_effects, eager_resolve);
         if (cond != jl_gotoifnot_cond(expr)) {

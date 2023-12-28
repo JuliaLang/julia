@@ -84,12 +84,14 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Shuffle LinearAlgebra tests to the front, because they take a while, so we might
+# Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
 # as well get them all started early.
-linalg_test_ids = findall(x->occursin("LinearAlgebra", x), tests)
-linalg_tests = tests[linalg_test_ids]
-deleteat!(tests, linalg_test_ids)
-prepend!(tests, linalg_tests)
+for prependme in ["LinearAlgebra", "Pkg"]
+    prependme_test_ids = findall(x->occursin(prependme, x), tests)
+    prependme_tests = tests[prependme_test_ids]
+    deleteat!(tests, prependme_test_ids)
+    prepend!(tests, prependme_tests)
+end
 
 import LinearAlgebra
 cd(@__DIR__) do
@@ -124,6 +126,7 @@ cd(@__DIR__) do
 
     println("""
         Running parallel tests with:
+          getpid() = $(getpid())
           nworkers() = $(nworkers())
           nthreads() = $(Threads.threadpoolsize())
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)

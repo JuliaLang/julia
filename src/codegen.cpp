@@ -1833,6 +1833,7 @@ public:
     // local var info. globals are not in here.
     SmallVector<jl_varinfo_t, 0> slots;
     std::map<int, jl_varinfo_t> phic_slots;
+    std::map<int, std::pair<Value*, Value*> > scope_restore;
     SmallVector<jl_cgval_t, 0> SAvalues;
     SmallVector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, jl_value_t *>, 0> PhiNodes;
     SmallVector<bool, 0> ssavalue_assigned;
@@ -2945,6 +2946,8 @@ static void mark_volatile_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> 
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
         if (jl_is_enternode(st)) {
             int last = jl_enternode_catch_dest(st);
+            if (last == 0)
+                continue;
             std::set<int> as = assigned_in_try(stmts, i + 1, last - 1);
             for (int j = 0; j < (int)slength; j++) {
                 if (j < i || j > last) {
@@ -3064,7 +3067,7 @@ static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
         }
         JL_UNLOCK(&m->writelock);
     }
-    return jl_as_global_root(val);
+    return jl_as_global_root(val, 1);
 }
 
 // --- generating function calls ---
@@ -4241,7 +4244,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             // don't bother codegen constant-folding for toplevel.
             jl_value_t *ty = static_apply_type(ctx, argv, nargs + 1);
             if (ty != NULL) {
+                JL_GC_PUSH1(&ty);
                 ty = jl_ensure_rooted(ctx, ty);
+                JL_GC_POP();
                 *ret = mark_julia_const(ctx, ty);
                 return true;
             }
@@ -5599,18 +5604,32 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     }
     else if (head == jl_leave_sym) {
         int hand_n_leave = 0;
+        Value *scope_to_restore = nullptr;
+        Value *scope_ptr = nullptr;
         for (size_t i = 0; i < jl_expr_nargs(ex); ++i) {
             jl_value_t *arg = args[i];
             if (arg == jl_nothing)
                 continue;
             assert(jl_is_ssavalue(arg));
-            jl_value_t *enter_stmt = jl_array_ptr_ref(ctx.code, ((jl_ssavalue_t*)arg)->id - 1);
+            size_t enter_idx = ((jl_ssavalue_t*)arg)->id - 1;
+            jl_value_t *enter_stmt = jl_array_ptr_ref(ctx.code, enter_idx);
             if (enter_stmt == jl_nothing)
                 continue;
-            hand_n_leave += 1;
+            if (ctx.scope_restore.count(enter_idx))
+                std::tie(scope_to_restore, scope_ptr) = ctx.scope_restore[enter_idx];
+            if (jl_enternode_catch_dest(enter_stmt)) {
+                // We're not actually setting up the exception frames for these, so
+                // we don't need to exit them.
+                hand_n_leave += 1;
+            }
         }
         ctx.builder.CreateCall(prepare_call(jlleave_func),
                            ConstantInt::get(getInt32Ty(ctx.builder.getContext()), hand_n_leave));
+        if (scope_to_restore) {
+            jl_aliasinfo_t scope_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+            scope_ai.decorateInst(
+                ctx.builder.CreateAlignedStore(scope_to_restore, scope_ptr, ctx.types().alignof_ptr));
+        }
     }
     else if (head == jl_pop_exception_sym) {
         jl_cgval_t excstack_state = emit_expr(ctx, jl_exprarg(expr, 0));
@@ -5848,7 +5867,9 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                 JL_CATCH {
                     jl_value_t *e = jl_current_exception();
                     // errors. boo. :(
-                    e = jl_as_global_root(e);
+                    JL_GC_PUSH1(&e);
+                    e = jl_as_global_root(e, 1);
+                    JL_GC_POP();
                     raise_exception(ctx, literal_pointer_val(ctx, e));
                     return ghostValue(ctx, jl_nothing_type);
                 }
@@ -6055,7 +6076,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         return jl_cgval_t();
     }
     else if (head == jl_leave_sym || head == jl_coverageeffect_sym
-            || head == jl_pop_exception_sym || head == jl_enter_sym || head == jl_inbounds_sym
+            || head == jl_pop_exception_sym || head == jl_inbounds_sym
             || head == jl_aliasscope_sym || head == jl_popaliasscope_sym || head == jl_inline_sym || head == jl_noinline_sym) {
         jl_errorf("Expr(:%s) in value position", jl_symbol_name(head));
     }
@@ -6144,6 +6165,16 @@ static Value *get_last_age_field(jl_codectx_t &ctx)
             ctx.builder.CreateBitCast(ct, ctx.types().T_size->getPointerTo()),
             ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, world_age) / ctx.types().sizeof_ptr),
             "world_age");
+}
+
+static Value *get_scope_field(jl_codectx_t &ctx)
+{
+    Value *ct = get_current_task(ctx);
+    return ctx.builder.CreateInBoundsGEP(
+            ctx.types().T_prjlvalue,
+            ctx.builder.CreateBitCast(ct, ctx.types().T_prjlvalue->getPointerTo()),
+            ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, scope) / ctx.types().sizeof_ptr),
+            "current_scope");
 }
 
 static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_codegen_params_t &params)
@@ -6994,7 +7025,9 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             for (size_t i = 0; i < n; i++) {
                 jl_svecset(fill_i, i, jl_array_ptr_ref(closure_types, i));
             }
+            JL_GC_PUSH1(&fill_i);
             fill = (jl_svec_t*)jl_ensure_rooted(ctx, (jl_value_t*)fill_i);
+            JL_GC_POP();
         }
         Type *T_htable = ArrayType::get(ctx.types().T_size, sizeof(htable_t) / sizeof(void*));
         Value *cache = new GlobalVariable(*jl_Module, T_htable, false,
@@ -8524,7 +8557,9 @@ static jl_llvm_functions_t
                 branch_targets.insert(i + 1);
                 if (i + 2 <= stmtslen)
                     branch_targets.insert(i + 2);
-                branch_targets.insert(jl_enternode_catch_dest(stmt));
+                size_t catch_dest = jl_enternode_catch_dest(stmt);
+                if (catch_dest)
+                    branch_targets.insert(catch_dest);
             } else if (jl_is_gotonode(stmt)) {
                 int dest = jl_gotonode_label(stmt);
                 branch_targets.insert(dest);
@@ -8724,29 +8759,52 @@ static jl_llvm_functions_t
             continue;
         }
         else if (jl_is_enternode(stmt)) {
+            // For the two-arg version of :enter, twiddle the scope
+            Value *scope_ptr = NULL;
+            Value *old_scope = NULL;
+            jl_aliasinfo_t scope_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+            if (jl_enternode_scope(stmt)) {
+                jl_cgval_t new_scope = emit_expr(ctx, jl_enternode_scope(stmt));
+                Value *new_scope_boxed = boxed(ctx, new_scope);
+                scope_ptr = get_scope_field(ctx);
+                old_scope = scope_ai.decorateInst(
+                        ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, scope_ptr, ctx.types().alignof_ptr));
+                scope_ai.decorateInst(
+                    ctx.builder.CreateAlignedStore(new_scope_boxed, scope_ptr, ctx.types().alignof_ptr));
+                ctx.scope_restore[cursor] = std::make_pair(old_scope, scope_ptr);
+            }
             int lname = jl_enternode_catch_dest(stmt);
-            // Save exception stack depth at enter for use in pop_exception
-            Value *excstack_state =
-                ctx.builder.CreateCall(prepare_call(jl_excstack_state_func));
-            assert(!ctx.ssavalue_assigned[cursor]);
-            ctx.SAvalues[cursor] = jl_cgval_t(excstack_state, (jl_value_t*)jl_ulong_type, NULL);
-            ctx.ssavalue_assigned[cursor] = true;
-            CallInst *sj = ctx.builder.CreateCall(prepare_call(except_enter_func));
-            // We need to mark this on the call site as well. See issue #6757
-            sj->setCanReturnTwice();
-            Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
-            BasicBlock *tryblk = BasicBlock::Create(ctx.builder.getContext(), "try", f);
-            BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_pop", f);
-            BasicBlock *handlr = NULL;
-            handlr = BB[lname];
-            workstack.push_back(lname - 1);
-            come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
-            ctx.builder.CreateCondBr(isz, tryblk, catchpop);
-            ctx.builder.SetInsertPoint(catchpop);
-            ctx.builder.CreateCall(prepare_call(jlleave_func),
-                            ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1));
-            ctx.builder.CreateBr(handlr);
-            ctx.builder.SetInsertPoint(tryblk);
+            if (lname) {
+                // Save exception stack depth at enter for use in pop_exception
+                Value *excstack_state =
+                    ctx.builder.CreateCall(prepare_call(jl_excstack_state_func));
+                assert(!ctx.ssavalue_assigned[cursor]);
+                ctx.SAvalues[cursor] = jl_cgval_t(excstack_state, (jl_value_t*)jl_ulong_type, NULL);
+                ctx.ssavalue_assigned[cursor] = true;
+                // Actually enter the exception frame
+                CallInst *sj = ctx.builder.CreateCall(prepare_call(except_enter_func));
+                // We need to mark this on the call site as well. See issue #6757
+                sj->setCanReturnTwice();
+                Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
+                BasicBlock *tryblk = BasicBlock::Create(ctx.builder.getContext(), "try", f);
+                BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_pop", f);
+                BasicBlock *handlr = NULL;
+                handlr = BB[lname];
+                workstack.push_back(lname - 1);
+                come_from_bb[cursor + 1] = ctx.builder.GetInsertBlock();
+                ctx.builder.CreateCondBr(isz, tryblk, catchpop);
+                ctx.builder.SetInsertPoint(catchpop);
+                {
+                    ctx.builder.CreateCall(prepare_call(jlleave_func),
+                                    ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1));
+                    if (old_scope) {
+                        scope_ai.decorateInst(
+                            ctx.builder.CreateAlignedStore(old_scope, scope_ptr, ctx.types().alignof_ptr));
+                    }
+                    ctx.builder.CreateBr(handlr);
+                }
+                ctx.builder.SetInsertPoint(tryblk);
+            }
         }
         else {
             emit_stmtpos(ctx, stmt, cursor);

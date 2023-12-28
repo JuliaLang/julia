@@ -587,6 +587,12 @@ JL_CALLABLE(jl_f_ifelse)
     return (args[0] == jl_false ? args[2] : args[1]);
 }
 
+JL_CALLABLE(jl_f_current_scope)
+{
+    JL_NARGS(current_scope, 0, 0);
+    return jl_current_task->scope;
+}
+
 // apply ----------------------------------------------------------------------
 
 static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_t oldalloc)
@@ -2158,6 +2164,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("finalizer", jl_f_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
+    add_builtin_func("current_scope", jl_f_current_scope);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

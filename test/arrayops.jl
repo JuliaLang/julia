@@ -741,6 +741,9 @@ end
     v = [1,2,3]
     @test permutedims(v) == [1 2 3]
 
+    zd = fill(0)
+    @test permutedims(zd, ()) == zd
+
     x = PermutedDimsArray([1 2; 3 4], (2, 1))
     @test size(x) == (2, 2)
     @test copy(x) == [1 3; 2 4]

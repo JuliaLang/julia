@@ -205,8 +205,10 @@ const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization allowed
 
 mutable struct TryCatchFrame
     exct
+    scopet
     const enter_idx::Int
-    TryCatchFrame(@nospecialize(exct), enter_idx::Int) = new(exct, enter_idx)
+    scope_uses::Vector{Int}
+    TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) = new(exct, scopet, enter_idx)
 end
 
 mutable struct InferenceState
@@ -364,12 +366,14 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
         stmt = code[pc]
         if isa(stmt, EnterNode)
             l = stmt.catch_dest
-            push!(handlers, TryCatchFrame(Bottom, pc))
+            push!(handlers, TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc))
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
             push!(ip, pc + 1)
-            handler_at[l] = (0, handler_id)
-            push!(ip, l)
+            if l != 0
+                handler_at[l] = (0, handler_id)
+                push!(ip, l)
+            end
         end
     end
 
@@ -400,7 +404,9 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 l = stmt.catch_dest
                 # We assigned a handler number above. Here we just merge that
                 # with out current handler information.
-                handler_at[l] = (cur_stacks[1], handler_at[l][2])
+                if l != 0
+                    handler_at[l] = (cur_stacks[1], handler_at[l][2])
+                end
                 cur_stacks = (handler_at[pc´][1], cur_stacks[2])
             elseif isa(stmt, Expr)
                 head = stmt.head

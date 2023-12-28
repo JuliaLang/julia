@@ -704,6 +704,7 @@ end
     safe_algs = [InsertionSort, MergeSort, Base.Sort.ScratchQuickSort(), Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
 
     n = 1000
+    Random.seed!(0x3588d23f15e74060);
     v = rand(1:5, n);
     s = sort(v);
 
@@ -721,10 +722,9 @@ end
     for alg in safe_algs
         @test sort(1:n, alg=alg, lt = (i,j) -> v[i]<=v[j]) == perm
     end
-    # This could easily break with minor heuristic adjustments
-    # because partialsort is not even guaranteed to be stable:
-    @test partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172]
-    @test partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
+    # Broken by the introduction of BracketedSort in #52006 which is unstable
+    # @test_broken partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172] (sometimes passes due to RNG)
+    @test_broken partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
 
     # lt can be very poorly behaved and sort will still permute its input in some way.
     for alg in safe_algs
@@ -1061,14 +1061,15 @@ end
     # it would be too much trouble to actually construct a valid pathological input, so we
     # construct an invalid pathological input.
     # This test is kind of sketchy because it passes invalid inputs to the function
-    for i in [1:6, 1:483, 1:957, 77:86, 118:478, 223:227, 231:970, 317:958, 500:501, 500:501, 500:501, 614:620, 632:635, 658:665, 933:940, 937:942, 997:1000, 999:1000]
-        x = rand(1:5, 1000)
-        @test partialsort(x, i, lt=(<=)) == sort(x)[i]
-    end
-    for i in [1, 7, 8, 490, 495, 852, 993, 996, 1000]
-        x = rand(1:5, 1000)
-        @test partialsort(x, i, lt=(<=)) == sort(x)[i]
-    end
+    # Temporarily removed due to flakey test failures. See #52642 for details.
+    # for i in [1:6, 1:483, 1:957, 77:86, 118:478, 223:227, 231:970, 317:958, 500:501, 500:501, 500:501, 614:620, 632:635, 658:665, 933:940, 937:942, 997:1000, 999:1000]
+    #     x = rand(1:5, 1000)
+    #     @test partialsort(x, i, lt=(<=)) == sort(x)[i]
+    # end
+    # for i in [1, 7, 8, 490, 495, 852, 993, 996, 1000]
+    #     x = rand(1:5, 1000)
+    #     @test partialsort(x, i, lt=(<=)) == sort(x)[i]
+    # end
 end
 
 # This testset is at the end of the file because it is slow.

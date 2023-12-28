@@ -850,6 +850,17 @@ function isabstracttype(@nospecialize(t))
     return isa(t, DataType) && (t.name.flags & 0x1) == 0x1
 end
 
+function is_datatype_layoutopaque(dt::DataType)
+    datatype_nfields(dt) == 0 && !datatype_pointerfree(dt)
+end
+
+function is_valid_intrinsic_elptr(@nospecialize(ety))
+    ety === Any && return true
+    isconcretetype(ety) || return false
+    ety <: Array && return false
+    return !is_datatype_layoutopaque(ety)
+end
+
 """
     Base.issingletontype(T)
 
@@ -2496,7 +2507,11 @@ function delete_method(m::Method)
 end
 
 function get_methodtable(m::Method)
-    return ccall(:jl_method_get_table, Any, (Any,), m)::Core.MethodTable
+    mt = ccall(:jl_method_get_table, Any, (Any,), m)
+    if mt === nothing
+        return nothing
+    end
+    return mt::Core.MethodTable
 end
 
 """

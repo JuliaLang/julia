@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "gc-page-profiler.h"
 #include "julia.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
@@ -222,32 +223,7 @@ NOINLINE uintptr_t gc_get_stack_ptr(void)
     return (uintptr_t)jl_get_frame_addr();
 }
 
-#define should_timeout() 0
-
-void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
-{
-    JL_TIMING(GC, GC_Stop);
-#ifdef USE_TRACY
-    TracyCZoneCtx ctx = JL_TIMING_DEFAULT_BLOCK->tracy_ctx;
-    TracyCZoneColor(ctx, 0x696969);
-#endif
-    assert(gc_n_threads);
-    if (gc_n_threads > 1)
-        jl_wake_libuv();
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        if (ptls2 != NULL) {
-            // This acquire load pairs with the release stores
-            // in the signal handler of safepoint so we are sure that
-            // all the stores on those threads are visible.
-            // We're currently also using atomic store release in mutator threads
-            // (in jl_gc_state_set), but we may want to use signals to flush the
-            // memory operations on those threads lazily instead.
-            while (!jl_atomic_load_relaxed(&ptls2->gc_state) || !jl_atomic_load_acquire(&ptls2->gc_state))
-                jl_cpu_pause(); // yield?
-        }
-    }
-}
+void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads);
 
 // malloc wrappers, aligned allocation
 
@@ -693,11 +669,12 @@ static const size_t default_collect_interval = 3200 * 1024 * sizeof(void*);
 static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 #endif
 // heuristic stuff for https://dl.acm.org/doi/10.1145/3563323
-static uint64_t old_pause_time = 0;
-static uint64_t old_mut_time = 0;
+// start with values that are in the target ranges to reduce transient hiccups at startup
+static uint64_t old_pause_time = 1e7; // 10 ms
+static uint64_t old_mut_time = 1e9; // 1 second
 static uint64_t old_heap_size = 0;
-static uint64_t old_alloc_diff = 0;
-static uint64_t old_freed_diff = 0;
+static uint64_t old_alloc_diff = default_collect_interval;
+static uint64_t old_freed_diff = default_collect_interval;
 static uint64_t gc_end_time = 0;
 static int thrash_counter = 0;
 static int thrashing = 0;
@@ -1250,7 +1227,6 @@ static void jl_gc_free_memory(jl_value_t *v, int isaligned) JL_NOTSAFEPOINT
         jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - jl_genericmemory_nbytes(m));
     gc_num.freed += jl_genericmemory_nbytes(m);
     gc_num.freecall++;
-    gc_num.freecall++;
 }
 
 static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
@@ -1451,11 +1427,11 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
 int64_t buffered_pages = 0;
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
-static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *buffered,
+static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *buffered,
                           jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
-    jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
+    jl_taggedvalue_t *v0 = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
     char *lim = data + GC_PAGE_SZ - osize;
     char *lim_newpages = data + GC_PAGE_SZ;
     if (gc_page_data((char*)p->newpages - 1) == data) {
@@ -1463,6 +1439,9 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
     }
     size_t old_nfree = pg->nfree;
     size_t nfree;
+    // avoid loading a global variable in the hot path
+    int page_profile_enabled = gc_page_profile_is_enabled();
+    gc_page_serializer_init(s, pg);
 
     int re_use_page = 1;
     int keep_as_local_buffer = 0;
@@ -1482,6 +1461,7 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
         }
     #endif
         nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
+        gc_page_profile_write_empty_page(s, page_profile_enabled);
         goto done;
     }
     // For quick sweep, we might be able to skip the page if the page doesn't
@@ -1491,12 +1471,13 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
         if (!prev_sweep_full || pg->prev_nold == pg->nold) {
             freedall = 0;
             nfree = pg->nfree;
+            gc_page_profile_write_empty_page(s, page_profile_enabled);
             goto done;
         }
     }
 
     pg_skpd = 0;
-    {  // scope to avoid clang goto errors
+    {   // scope to avoid clang goto errors
         int has_marked = 0;
         int has_young = 0;
         int16_t prev_nold = 0;
@@ -1504,6 +1485,22 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
         jl_taggedvalue_t *fl = NULL;
         jl_taggedvalue_t **pfl = &fl;
         jl_taggedvalue_t **pfl_begin = NULL;
+        // collect page profile
+        jl_taggedvalue_t *v = v0;
+        if (page_profile_enabled) {
+            while ((char*)v <= lim) {
+                int bits = v->bits.gc;
+                if (!gc_marked(bits) || (char*)v >= lim_newpages) {
+                    gc_page_profile_write_garbage(s, page_profile_enabled);
+                }
+                else {
+                    gc_page_profile_write_live_obj(s, v, page_profile_enabled);
+                }
+                v = (jl_taggedvalue_t*)((char*)v + osize);
+            }
+            v = v0;
+        }
+        // sweep the page
         while ((char*)v <= lim) {
             int bits = v->bits.gc;
             // if an object is past `lim_newpages` then we can guarantee it's garbage
@@ -1557,6 +1554,7 @@ done:
             push_lf_back(&global_page_pool_lazily_freed, pg);
         }
     }
+    gc_page_profile_write_to_file(s);
     gc_update_page_fragmentation_data(pg);
     gc_time_count_page(freedall, pg_skpd);
     jl_ptls_t ptls = gc_all_tls_states[pg->thread_n];
@@ -1565,7 +1563,7 @@ done:
 }
 
 // the actual sweeping over all allocated pages in a memory pool
-STATIC_INLINE void gc_sweep_pool_page(jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *lazily_freed,
+STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *lazily_freed,
                                       jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     int p_n = pg->pool_n;
@@ -1573,7 +1571,7 @@ STATIC_INLINE void gc_sweep_pool_page(jl_gc_page_stack_t *allocd, jl_gc_page_sta
     jl_ptls_t ptls2 = gc_all_tls_states[t_n];
     jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
     int osize = pg->osize;
-    gc_sweep_page(p, allocd, lazily_freed, pg, osize);
+    gc_sweep_page(s, p, allocd, lazily_freed, pg, osize);
 }
 
 // sweep over all memory that is being used and not in a pool
@@ -1610,11 +1608,20 @@ void gc_sweep_wake_all(void)
     uv_mutex_unlock(&gc_threads_lock);
 }
 
+void gc_sweep_wait_for_all(void)
+{
+    jl_atomic_store(&gc_allocd_scratch, NULL);
+    while (jl_atomic_load_relaxed(&gc_n_threads_sweeping) != 0) {
+        jl_cpu_pause();
+    }
+}
+
 void gc_sweep_pool_parallel(void)
 {
     jl_atomic_fetch_add(&gc_n_threads_sweeping, 1);
     jl_gc_page_stack_t *allocd_scratch = jl_atomic_load(&gc_allocd_scratch);
     if (allocd_scratch != NULL) {
+        gc_page_profiler_serializer_t serializer = gc_page_serializer_create();
         while (1) {
             int found_pg = 0;
             for (int t_i = 0; t_i < gc_n_threads; t_i++) {
@@ -1627,23 +1634,16 @@ void gc_sweep_pool_parallel(void)
                 if (pg == NULL) {
                     continue;
                 }
-                gc_sweep_pool_page(allocd, &ptls2->page_metadata_buffered, pg);
+                gc_sweep_pool_page(&serializer, allocd, &ptls2->page_metadata_buffered, pg);
                 found_pg = 1;
             }
             if (!found_pg) {
                 break;
             }
         }
+        gc_page_serializer_destroy(&serializer);
     }
     jl_atomic_fetch_add(&gc_n_threads_sweeping, -1);
-}
-
-void gc_sweep_wait_for_all(void)
-{
-    jl_atomic_store(&gc_allocd_scratch, NULL);
-    while (jl_atomic_load_relaxed(&gc_n_threads_sweeping) != 0) {
-        jl_cpu_pause();
-    }
 }
 
 void gc_free_pages(void)
@@ -1915,6 +1915,10 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
 // Push a work item to the queue
 STATIC_INLINE void gc_ptr_queue_push(jl_gc_markqueue_t *mq, jl_value_t *obj) JL_NOTSAFEPOINT
 {
+#ifdef JL_DEBUG_BUILD
+    if (obj == gc_findval)
+        jl_raise_debugger();
+#endif
     ws_array_t *old_a = ws_queue_push(&mq->ptr_queue, &obj, sizeof(jl_value_t*));
     // Put `old_a` in `reclaim_set` to be freed after the mark phase
     if (__unlikely(old_a != NULL))
@@ -2531,10 +2535,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
 {
     jl_value_t *new_obj = (jl_value_t *)_new_obj;
     mark_obj: {
-    #ifdef JL_DEBUG_BUILD
-        if (new_obj == gc_findval)
-            jl_raise_debugger();
-    #endif
         jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
         uintptr_t vtag = o->header & ~(uintptr_t)0xf;
         uint8_t bits = (gc_old(o->header) && !mark_reset_age) ? GC_OLD_MARKED : GC_MARKED;
@@ -3328,9 +3328,37 @@ JL_DLLEXPORT int64_t jl_gc_live_bytes(void)
     return live_bytes;
 }
 
-double jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor)
+uint64_t jl_gc_smooth(uint64_t old_val, uint64_t new_val, double factor)
 {
-    return factor * old_val + (1.0-factor) * new_val;
+    double est = factor * old_val + (1 - factor) * new_val;
+    if (est <= 1)
+        return 1; // avoid issues with <= 0
+    if (est > (uint64_t)2<<36)
+        return (uint64_t)2<<36; // avoid overflow
+    return est;
+}
+
+// an overallocation curve inspired by array allocations
+// grows very fast initially, then much slower at large heaps
+static uint64_t overallocation(uint64_t old_val, uint64_t val, uint64_t max_val)
+{
+    // compute maxsize = maxsize + 4*maxsize^(7/8) + maxsize/8
+    // for small n, we grow much faster than O(n)
+    // for large n, we grow at O(n/8)
+    // and as we reach O(memory) for memory>>1MB,
+    // this means we end by adding about 10% of memory each time at most
+    int exp2 = sizeof(old_val) * 8 -
+#ifdef _P64
+        __builtin_clzll(old_val);
+#else
+        __builtin_clz(old_val);
+#endif
+    uint64_t inc = (uint64_t)((size_t)1 << (exp2 * 7 / 8)) * 4 + old_val / 8;
+    // once overallocation would exceed max_val, grow by no more than 5% of max_val
+    if (inc + val > max_val)
+        if (inc > max_val / 20)
+            return max_val / 20;
+    return inc;
 }
 
 size_t jl_maxrss(void);
@@ -3347,7 +3375,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
 
     uint64_t gc_start_time = jl_hrtime();
-    uint64_t mutator_time = gc_start_time - gc_end_time;
+    uint64_t mutator_time = gc_end_time == 0 ? old_mut_time : gc_start_time - gc_end_time;
     uint64_t before_free_heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
     int64_t last_perm_scanned_bytes = perm_scanned_bytes;
     uint64_t start_mark_time = jl_hrtime();
@@ -3522,57 +3550,102 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_num.last_incremental_sweep = gc_end_time;
     }
 
-    jl_atomic_store_relaxed(&gc_heap_stats.heap_size, jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - freed_in_runtime);
+    size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - freed_in_runtime;
+    jl_atomic_store_relaxed(&gc_heap_stats.heap_size, heap_size);
     freed_in_runtime = 0;
-    size_t heap_size = jl_atomic_load_relaxed(&gc_heap_stats.heap_size);
-    double target_allocs = 0.0;
-    double min_interval = default_collect_interval;
+    uint64_t user_max = max_total_memory * 0.8;
+    uint64_t alloc_diff = before_free_heap_size - old_heap_size;
+    uint64_t freed_diff = before_free_heap_size - heap_size;
+    uint64_t target_heap;
+    const char *reason = ""; (void)reason; // for GC_TIME output stats
+    old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
     if (collection == JL_GC_AUTO) {
-        uint64_t alloc_diff = before_free_heap_size - old_heap_size;
-        uint64_t freed_diff = before_free_heap_size - heap_size;
+        // update any heuristics only when the user does not force the GC
+        // but still update the timings, since GC was run and reset, even if it was too early
+        uint64_t target_allocs = 0.0;
         double alloc_smooth_factor = 0.95;
         double collect_smooth_factor = 0.5;
-        double tuning_factor = 0.03;
-        double alloc_mem = jl_gc_smooth(old_alloc_diff, alloc_diff, alloc_smooth_factor);
-        double alloc_time = jl_gc_smooth(old_mut_time, mutator_time + sweep_time, alloc_smooth_factor); // Charge sweeping to the mutator
-        double gc_mem = jl_gc_smooth(old_freed_diff, freed_diff, collect_smooth_factor);
-        double gc_time = jl_gc_smooth(old_pause_time, pause - sweep_time, collect_smooth_factor);
-        old_alloc_diff = alloc_diff;
-        old_mut_time = mutator_time;
-        old_freed_diff = freed_diff;
-        old_pause_time = pause;
-        old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
-        if (gc_time > alloc_time * 95 && !(thrash_counter < 4))
+        double tuning_factor = 2e4;
+        uint64_t alloc_mem = jl_gc_smooth(old_alloc_diff, alloc_diff, alloc_smooth_factor);
+        uint64_t alloc_time = jl_gc_smooth(old_mut_time, mutator_time, alloc_smooth_factor); // TODO: subtract estimated finalizer time?
+        uint64_t gc_mem = jl_gc_smooth(old_freed_diff, freed_diff, collect_smooth_factor);
+        uint64_t gc_time = jl_gc_smooth(old_pause_time, pause - sweep_time, collect_smooth_factor);
+        old_alloc_diff = alloc_mem;
+        old_mut_time = alloc_time;
+        old_freed_diff = gc_mem;
+        old_pause_time = gc_time;
+        // thrashing estimator: if GC time more than 50% of the runtime
+        if (pause > mutator_time && !(thrash_counter < 4))
             thrash_counter += 1;
         else if (thrash_counter > 0)
             thrash_counter -= 1;
-        if (alloc_mem != 0 && alloc_time != 0 && gc_mem != 0 && gc_time != 0 ) {
-            double alloc_rate = alloc_mem/alloc_time;
-            double gc_rate = gc_mem/gc_time;
-            target_allocs = sqrt(((double)heap_size/min_interval * alloc_rate)/(gc_rate * tuning_factor)); // work on multiples of min interval
+        if (alloc_mem != 0 && alloc_time != 0 && gc_mem != 0 && gc_time != 0) {
+            double alloc_rate = (double)alloc_mem/alloc_time;
+            double gc_rate = (double)gc_mem/gc_time;
+            target_allocs = sqrt((double)heap_size * alloc_rate / gc_rate) * tuning_factor;
         }
-    }
-    if (thrashing == 0 && thrash_counter >= 3)
-        thrashing = 1;
-    else if (thrashing == 1 && thrash_counter <= 2)
-        thrashing = 0; // maybe we should report this to the user or error out?
 
-    int bad_result = (target_allocs*min_interval + heap_size) > 2 * jl_atomic_load_relaxed(&gc_heap_stats.heap_target); // Don't follow through on a bad decision
-    if (target_allocs == 0.0 || thrashing || bad_result) // If we are thrashing go back to default
-        target_allocs = 2*sqrt((double)heap_size/min_interval);
-    uint64_t target_heap = (uint64_t)target_allocs*min_interval + heap_size;
-    if (target_heap > max_total_memory && !thrashing) // Allow it to go over if we are thrashing if we die we die
-        target_heap = max_total_memory;
-    else if (target_heap < default_collect_interval)
-        target_heap = default_collect_interval;
-    jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
+        if (thrashing == 0 && thrash_counter >= 3) {
+            // require 3 consecutive thrashing cycles to force the default allocator rate
+            thrashing = 1;
+            // and require 4 default allocations to clear
+            thrash_counter = 6;
+        }
+        else if (thrashing == 1 && thrash_counter <= 2) {
+            thrashing = 0; // maybe we should report this to the user or error out?
+        }
+
+        target_heap = target_allocs + heap_size;
+        // optionally smooth this:
+        //   target_heap = jl_gc_smooth(jl_atomic_load_relaxed(&gc_heap_stats.heap_target), target_heap, alloc_smooth_factor);
+
+        // compute some guardrails values
+        uint64_t min_target_allocs = heap_size / 20; // minimum 5% of current heap
+        if (min_target_allocs < default_collect_interval / 8) // unless the heap is small
+            min_target_allocs = default_collect_interval / 8;
+        uint64_t max_target_allocs = overallocation(before_free_heap_size, heap_size, user_max);
+        if (max_target_allocs < min_target_allocs)
+            max_target_allocs = min_target_allocs;
+        // respect max_total_memory first
+        if (target_heap > user_max) {
+            target_allocs = heap_size < user_max ? user_max - heap_size : 1;
+            reason = " user limit";
+        }
+        // If we are thrashing use a default only (an average) for a couple collections
+        if (thrashing) {
+            uint64_t thrashing_allocs = sqrt((double)min_target_allocs * max_target_allocs);
+            if (target_allocs < thrashing_allocs) {
+                target_allocs = thrashing_allocs;
+                reason = " thrashing";
+            }
+        }
+        // then add the guardrails for transient issues
+        if (target_allocs > max_target_allocs) {
+            target_allocs = max_target_allocs;
+            reason = " rate limit max";
+        }
+        else if (target_allocs < min_target_allocs) {
+            target_allocs = min_target_allocs;
+            reason = " min limit";
+        }
+        // and set the heap detection threshold
+        target_heap = target_allocs + heap_size;
+        if (target_heap < default_collect_interval) {
+            target_heap = default_collect_interval;
+            reason = " min heap";
+        }
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
+    }
+    else {
+        target_heap = jl_atomic_load_relaxed(&gc_heap_stats.heap_target);
+    }
 
     double old_ratio = (double)promoted_bytes/(double)heap_size;
-    if (heap_size > max_total_memory * 0.8 || old_ratio > 0.15)
+    if (heap_size > user_max || old_ratio > 0.15)
         next_sweep_full = 1;
     else
         next_sweep_full = 0;
-    if (heap_size > max_total_memory * 0.8 || thrashing)
+    if (heap_size > user_max || thrashing)
         under_pressure = 1;
     // sweeping is over
     // 7. if it is a quick sweep, put back the remembered objects in queued state
@@ -3611,8 +3684,8 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         gc_num.max_memory = max_memory;
     }
     gc_final_pause_end(gc_start_time, gc_end_time);
-    gc_time_sweep_pause(gc_end_time, allocd, live_bytes,
-                        estimate_freed, sweep_full);
+    gc_time_sweep_pause(gc_end_time, gc_num.allocd, live_bytes,
+                        gc_num.freed, sweep_full);
     gc_num.full_sweep += sweep_full;
     last_live_bytes = live_bytes;
     live_bytes += -gc_num.freed + gc_num.allocd;
@@ -3622,6 +3695,15 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
                     live_bytes, gc_num.interval, pause,
                     gc_num.time_to_safepoint,
                     gc_num.mark_time, gc_num.sweep_time);
+    if (collection == JL_GC_AUTO) {
+        gc_heuristics_summary(
+            old_alloc_diff, alloc_diff,
+            old_mut_time, mutator_time,
+            old_freed_diff, freed_diff,
+            old_pause_time, pause - sweep_time,
+            thrash_counter, reason,
+            heap_size, target_heap);
+    }
 
     prev_sweep_full = sweep_full;
     gc_num.pause += !recollect;
@@ -3805,6 +3887,7 @@ void jl_gc_init(void)
 {
     JL_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
+    uv_mutex_init(&page_profile_lock);
     uv_mutex_init(&gc_cache_lock);
     uv_mutex_init(&gc_perm_lock);
     uv_mutex_init(&gc_threads_lock);
