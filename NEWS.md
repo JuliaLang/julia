@@ -11,11 +11,20 @@ New language features
 * The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
   but allows to add keyword arguments to the function call ([#51501]).
 * Support for Unicode 15.1 ([#51799]).
-* A new `AbstractString` type, `AnnotatedString`, is introduced that allows for
-  regional annotations to be attached to an underlying string. This type is
-  particularly useful for holding styling information, and is used extensively
-  in the new `StyledStrings` standard library. There is also a new `AnnotatedChar`
-  type, that is the equivalent new `AbstractChar` type.
+* Three new types around the idea of text with "annotations" (`Pair{Symbol, Any}`
+  entries, e.g. `:lang => "en"` or `:face => :magenta`). These annotations
+  are preserved across operations (e.g. string concatenation with `*`) when
+  possible.
+  * `AnnotatedString` is a new `AbstractString` type. It wraps an underlying
+    string and allows for annotations to be attached to regions of the string.
+    This type is used extensively in the new `StyledStrings` standard library to
+    hold styling information.
+  * `AnnotatedChar` is a new `AbstractChar` type. It wraps another char and
+    holds a list of annotations that apply to it.
+  * `AnnotatedIOBuffer` is a new `IO` type that mimics an `IOBuffer`, but has
+    specialised `read`/`write` methods for annotated content. This can be
+    thought of both as a "string builder" of sorts and also as glue between
+    annotated and unannotated content.
 * `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
   to be preferentially picked up by the given julia version. i.e. in the same folder,
   a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
