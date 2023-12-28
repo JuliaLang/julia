@@ -1676,15 +1676,6 @@ void SetOpaquePointer(LLVMContext &ctx) {
 #endif
 }
 
-extern "C" JL_DLLEXPORT_CODEGEN
-int JuliaUsesOpaquePtrs() {
-#ifndef JL_LLVM_OPAQUE_POINTERS
-    return 0;
-#else
-    return 1;
-#endif
-}
-
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     // Mark our address spaces as non-integral
     auto jl_data_layout = TM.createDataLayout();
