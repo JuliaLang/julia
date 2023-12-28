@@ -209,7 +209,44 @@ String
 """
 valtype(A::Type{<:AbstractArray}) = eltype(A)
 
+"""
+    prevind(::AbstractArray, i::Integer)
+
+Return the index before `i`, equivalent to `i - 1`.
+
+!!! warning
+    The returned index is not guaranteed to be a valid index of the passed
+    `AbstractArray`. See [`checkbounds`](@ref).
+
+# Examples
+```jldoctest
+julia> prevind([1, 2], 2) # valid result
+1
+
+julia> prevind([1, 2], 1) # invalid result
+0
+```
+"""
 prevind(::AbstractArray, i::Integer) = Int(i)-1
+
+"""
+    prevind(::AbstractArray, i::Integer)
+
+Return the index after `i`, equivalent to `i + 1`.
+
+!!! warning
+    The returned index is not guaranteed to be a valid index of the passed
+    `AbstractArray`. See [`checkbounds`](@ref).
+
+# Examples
+```jldoctest
+julia> nextind([1, 2], 1) # valid result
+2
+
+julia> nextind([1, 2], 2) # invalid result
+3
+```
+"""
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
 

@@ -146,13 +146,55 @@ module IteratorsMD
         return h
     end
 
-    # nextind and prevind with CartesianIndex
+    """
+        nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
+
+    Return the index after `i`. This will attempt to respect the shape of `a`
+    and roll over dimensions when appropriate, but the returned index is *not*
+    guaranteed to be a valid index of `a` (see [`checkbounds`](@ref)).
+
+    # Examples
+    ```jldoctest
+    julia> x = [1 2; 3 4]
+    2×2 Matrix{Int64}:
+     1  2
+     3  4
+
+    julia> nextind(x, CartesianIndex(1, 1)) # valid result
+    CartesianIndex(2, 1)
+
+    julia> nextind(x, CartesianIndex(2, 2)) # invalid result
+    CartesianIndex(1, 3)
+    ```
+    """
     function Base.nextind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
         iter = CartesianIndices(axes(a))
         # might overflow
         I = inc(i.I, iter.indices)
         return I
     end
+
+    """
+        prevind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
+
+    Return the index before `i`. This will attempt to respect the shape of `a`
+    and roll over dimensions when appropriate, but the returned index is *not*
+    guaranteed to be a valid index of `a` (see [`checkbounds`](@ref)).
+
+    # Examples
+    ```jldoctest
+    julia> x = [1 2; 3 4]
+    2×2 Matrix{Int64}:
+     1  2
+     3  4
+
+    julia> prevind(x, CartesianIndex(2, 2)) # valid result
+    CartesianIndex(1, 2)
+
+    julia> prevind(x, CartesianIndex(1, 1)) # invalid result
+    CartesianIndex(2, 0)
+    ```
+    """
     function Base.prevind(a::AbstractArray{<:Any,N}, i::CartesianIndex{N}) where {N}
         iter = CartesianIndices(axes(a))
         # might underflow
