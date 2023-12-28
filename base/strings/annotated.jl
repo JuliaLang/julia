@@ -477,6 +477,15 @@ end
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{AbstractString}}) = read(io, AnnotatedString{String})
 read(io::AnnotatedIOBuffer, ::Type{AnnotatedString}) = read(io, AnnotatedString{String})
 
+function read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar{T}}) where {T <: AbstractChar}
+    pos = position(io)
+    char = read(io.io, T)
+    annots = [annot for (range, annot) in io.annotations if pos+1 in range]
+    AnnotatedChar(char, annots)
+end
+read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar{AbstractChar}}) = read(io, AnnotatedChar{Char})
+read(io::AnnotatedIOBuffer, ::Type{AnnotatedChar}) = read(io, AnnotatedChar{Char})
+
 function truncate(io::AnnotatedIOBuffer, size::Integer)
     truncate(io.io, size)
     filter!(((range, _),) -> first(range) <= size, io.annotations)
