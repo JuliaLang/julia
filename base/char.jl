@@ -300,11 +300,11 @@ function show(io::IO, c::AbstractChar)
     end
     if isoverlong(c) || ismalformed(c)
         show_invalid(io, c)
-    elseif isprint(c)
+    elseif isprint(c) && textwidth(c) > 0
         write(io, 0x27)
         print(io, c) # use print, not write, to use UTF-8 for any AbstractChar
         write(io, 0x27)
-    else # unprintable, well-formed, non-overlong Unicode
+    else # unprintable / zero-width, well-formed, non-overlong Unicode
         u = codepoint(c)
         write(io, 0x27, 0x5c, u <= 0x7f ? 0x78 : u <= 0xffff ? 0x75 : 0x55)
         d = max(2, 8 - (leading_zeros(u) >> 2))
