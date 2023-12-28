@@ -807,3 +807,9 @@ namedtup = (;a=1, b=2, c=3)
 @test Val{Tuple{Vararg{T,4}} where T} === Val{Tuple{T,T,T,T} where T}
 @test Val{Tuple{Int64, Vararg{Int32,N}} where N} === Val{Tuple{Int64, Vararg{Int32}}}
 @test Val{Tuple{Int32, Vararg{Int64}}} === Val{Tuple{Int32, Vararg{Int64,N}} where N}
+
+@testset "from Pair, issue #52636" begin
+    pair = (1 => "2")
+    @test (1, "2") == @inferred Tuple(pair)
+    @test (1, "2") == @inferred Tuple{Int,String}(pair)
+end
