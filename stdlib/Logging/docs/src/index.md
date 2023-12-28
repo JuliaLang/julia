@@ -70,13 +70,15 @@ automatically extracted. Let's examine the user-defined data first:
     Often this log-level is unneeded as throwing an exception can convey
     all the required information.
 
-    You can also asign printing styles for custom log levels. For instance:
-    ```
-    MyLog = LogLevel(-500)
-    custom_log_levels[MyLog] = ("MyLog", :magenta)
-    macro mylog(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourceinfo)..., MyLog, exs...) end
+    You can also create logging macros for custom log levels. For instance:
+    ```julia-repl
+    julia> using Logging
 
-    @mylog "foo"
+    julia> @create_log_macro(:MyLog, 200, :magenta)
+    @mylog (macro with 1 method)
+
+    julia> @mylog "hello"
+    [ MyLog: hello
     ```
 
 * The *message*  is an object describing the event. By convention

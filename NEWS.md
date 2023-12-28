@@ -116,6 +116,11 @@ Standard library changes
    argument is the output of `bunchkaufman` or `lu` ([#50471]).
 * Structured matrices now retain either the axes of the parent (for `Symmetric`/`Hermitian`/`AbstractTriangular`/`UpperHessenberg`), or that of the principal diagonal (for banded matrices) ([#52480]).
 
+#### Logging
+* New `@create_log_macro` macro for creating new log macros like `@info`, `@warn` etc. For instance
+  `@create_log_macro MyLog 1500 :magenta` will create `@mylog` to be used like `@mylog "hello"` which
+  will show as `┌ MyLog: hello` etc. ([#52196])
+
 #### Printf
 
 #### Profile

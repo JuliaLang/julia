@@ -162,12 +162,10 @@ const AboveMaxLevel = LogLevel( 1000001)
 # Global log limiting mechanism for super fast but inflexible global log limiting.
 const _min_enabled_level = Ref{LogLevel}(Debug)
 
-# add to this to dict to introduce a log level for printing
-# i.e. custom_log_levels[LogLevel(-500)] = ("MyLog", :magenta)
-const custom_log_levels = Dict{LogLevel,Tuple{String,Symbol}}()
+const custom_log_levels = Dict{LogLevel,Tuple{Symbol,Union{Symbol,Int}}}()
 
 function show(io::IO, level::LogLevel)
-    if     level in keys(custom_log_levels) print(io, custom_log_levels[level][1]::String)
+    if     level in keys(custom_log_levels) print(io, custom_log_levels[level][1])
     elseif level == BelowMinLevel           print(io, "BelowMinLevel")
     elseif level == Debug                   print(io, "Debug")
     elseif level == Info                    print(io, "Info")
@@ -693,5 +691,34 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
 end
 
 _global_logstate = LogState(SimpleLogger())
+
+"""
+    @create_log_macro(name::Symbol, level::Int, color::Union{Int,Symbol})
+
+Creates a custom log macro like `@info`, `@warn` etc. with a given `name`, `level` and
+`color`. The macro created is named with the lowercase form of `name` but the given form
+is used for the printing.
+
+See `Base.text_colors` for recognized color values.
+
+```julia-repl
+julia> @create_log_macro(:MyLog, 200, :magenta)
+@mylog (macro with 1 method)
+
+julia> @mylog "hello"
+[ MyLog: hello
+```
+"""
+macro create_log_macro(name, level, color)
+    macro_name = Symbol(lowercase(string(name)))
+    macro_string = QuoteNode(name)
+    loglevel = LogLevel(level)
+    quote
+        custom_log_levels[$(esc(loglevel))] = ($(macro_string), $(esc(color)))
+        macro $(esc(macro_name))(exs...)
+            $logmsg_code(($@_sourceinfo)..., $(esc(loglevel)), exs...)
+        end
+    end
+end
 
 end # CoreLogging

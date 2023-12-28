@@ -6,10 +6,6 @@ import Logging: min_enabled_level, shouldlog, handle_message
 
 @noinline func1() = backtrace()
 
-# see "custom log macro" testset
-CustomLog = LogLevel(-500)
-macro customlog(exs...) Base.CoreLogging.logmsg_code((Base.CoreLogging.@_sourceinfo)..., esc(CustomLog), exs...) end
-
 @testset "Logging" begin
 
 @testset "Core" begin
@@ -280,17 +276,27 @@ end
 end
 
 @testset "custom log macro" begin
-    Logging.custom_log_levels[CustomLog] = ("CustomLog", :magenta)
-    @test_logs (CustomLog, "a") min_level=CustomLog @customlog "a"
+    @create_log_macro CustomLog -500 :magenta
+
+    llevel = LogLevel(-500)
+
+    @test_logs (llevel, "a") min_level=llevel @customlog "a"
 
     buf = IOBuffer()
     io = IOContext(buf, :displaysize=>(30,80), :color=>false)
-    logger = ConsoleLogger(io, CustomLog)
+    logger = ConsoleLogger(io, llevel)
 
     with_logger(logger) do
         @customlog "a"
     end
     @test occursin("CustomLog: a", String(take!(buf)))
+
+    @create_log_macro CustomLog2 1500 1
+
+    with_logger(logger) do
+        @customlog2 "hello"
+    end
+    @test occursin("CustomLog2: a", String(take!(buf)))
 end
 
 end
