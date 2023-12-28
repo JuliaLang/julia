@@ -189,7 +189,7 @@ end
     @test sprint(show, "text/plain", '$') == "'\$': ASCII/Unicode U+0024 (category Sc: Symbol, currency)"
     @test sprint(show, "text/plain", '$', context=:compact => true) == "'\$'"
     @test repr('$') == "'\$'"
-    @test repr('\u0307') == "'\u0307'" # zero-width combining char
+    @test repr('\u0307') == "'\\u307'" # zero-width combining char
 end
 
 @testset "read incomplete character at end of stream or file" begin
