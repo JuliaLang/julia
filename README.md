@@ -72,6 +72,8 @@ downloads page also provides details on the
 [different tiers of support](https://julialang.org/downloads/#supported_platforms)
 for OS and platform combinations.
 
+It's recommended to correct the perms ([perms.sh](https://github.com/JuliaLang/julia/blob/master/contrib/perms.sh), [perms.ps1](https://github.com/JuliaLang/julia/blob/master/contrib/perms.ps1)) for locally extracted pre-compiled binaries.
+
 If everything works correctly, you will see a Julia banner and an
 interactive prompt into which you can enter expressions for
 evaluation.  You can read about [getting
@@ -111,6 +113,8 @@ properly. From the julia
 directory, type `make testall`. You should see output that
 lists a series of running tests; if they complete without error, you
 should be in good shape to start using Julia.
+
+See the content from the previous section regarding perms.
 
 You can read about [getting
 started](https://docs.julialang.org/en/v1/manual/getting-started/)
