@@ -287,4 +287,14 @@ end
     rm(tmpdir, force = true, recursive = true)
 end
 
+@testset "PageProfile" begin
+    fname = "$(getpid())_$(time_ns())"
+    fpath = joinpath(tempdir(), fname)
+    Profile.take_page_profile(fpath)
+    open(fpath) do fs
+        @test readline(fs) != ""
+    end
+    rm(fpath)
+end
+
 include("allocs.jl")
