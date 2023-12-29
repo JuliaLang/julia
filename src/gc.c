@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "gc-page-profiler.h"
 #include "julia.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
@@ -1421,11 +1422,11 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
 int64_t buffered_pages = 0;
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
-static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *buffered,
+static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *buffered,
                           jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
-    jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
+    jl_taggedvalue_t *v0 = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
     char *lim = data + GC_PAGE_SZ - osize;
     char *lim_newpages = data + GC_PAGE_SZ;
     if (gc_page_data((char*)p->newpages - 1) == data) {
@@ -1433,6 +1434,9 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
     }
     size_t old_nfree = pg->nfree;
     size_t nfree;
+    // avoid loading a global variable in the hot path
+    int page_profile_enabled = gc_page_profile_is_enabled();
+    gc_page_serializer_init(s, pg);
 
     int re_use_page = 1;
     int keep_as_local_buffer = 0;
@@ -1452,6 +1456,7 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
         }
     #endif
         nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
+        gc_page_profile_write_empty_page(s, page_profile_enabled);
         goto done;
     }
     // For quick sweep, we might be able to skip the page if the page doesn't
@@ -1461,12 +1466,13 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
         if (!prev_sweep_full || pg->prev_nold == pg->nold) {
             freedall = 0;
             nfree = pg->nfree;
+            gc_page_profile_write_empty_page(s, page_profile_enabled);
             goto done;
         }
     }
 
     pg_skpd = 0;
-    {  // scope to avoid clang goto errors
+    {   // scope to avoid clang goto errors
         int has_marked = 0;
         int has_young = 0;
         int16_t prev_nold = 0;
@@ -1474,6 +1480,22 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
         jl_taggedvalue_t *fl = NULL;
         jl_taggedvalue_t **pfl = &fl;
         jl_taggedvalue_t **pfl_begin = NULL;
+        // collect page profile
+        jl_taggedvalue_t *v = v0;
+        if (page_profile_enabled) {
+            while ((char*)v <= lim) {
+                int bits = v->bits.gc;
+                if (!gc_marked(bits) || (char*)v >= lim_newpages) {
+                    gc_page_profile_write_garbage(s, page_profile_enabled);
+                }
+                else {
+                    gc_page_profile_write_live_obj(s, v, page_profile_enabled);
+                }
+                v = (jl_taggedvalue_t*)((char*)v + osize);
+            }
+            v = v0;
+        }
+        // sweep the page
         while ((char*)v <= lim) {
             int bits = v->bits.gc;
             // if an object is past `lim_newpages` then we can guarantee it's garbage
@@ -1526,6 +1548,7 @@ done:
             push_lf_back(&global_page_pool_lazily_freed, pg);
         }
     }
+    gc_page_profile_write_to_file(s);
     gc_update_page_fragmentation_data(pg);
     gc_time_count_page(freedall, pg_skpd);
     jl_ptls_t ptls = gc_all_tls_states[pg->thread_n];
@@ -1534,7 +1557,7 @@ done:
 }
 
 // the actual sweeping over all allocated pages in a memory pool
-STATIC_INLINE void gc_sweep_pool_page(jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *lazily_freed,
+STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *lazily_freed,
                                       jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     int p_n = pg->pool_n;
@@ -1542,7 +1565,7 @@ STATIC_INLINE void gc_sweep_pool_page(jl_gc_page_stack_t *allocd, jl_gc_page_sta
     jl_ptls_t ptls2 = gc_all_tls_states[t_n];
     jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
     int osize = pg->osize;
-    gc_sweep_page(p, allocd, lazily_freed, pg, osize);
+    gc_sweep_page(s, p, allocd, lazily_freed, pg, osize);
 }
 
 // sweep over all memory that is being used and not in a pool
@@ -1579,11 +1602,20 @@ void gc_sweep_wake_all(void)
     uv_mutex_unlock(&gc_threads_lock);
 }
 
+void gc_sweep_wait_for_all(void)
+{
+    jl_atomic_store(&gc_allocd_scratch, NULL);
+    while (jl_atomic_load_relaxed(&gc_n_threads_sweeping) != 0) {
+        jl_cpu_pause();
+    }
+}
+
 void gc_sweep_pool_parallel(void)
 {
     jl_atomic_fetch_add(&gc_n_threads_sweeping, 1);
     jl_gc_page_stack_t *allocd_scratch = jl_atomic_load(&gc_allocd_scratch);
     if (allocd_scratch != NULL) {
+        gc_page_profiler_serializer_t serializer = gc_page_serializer_create();
         while (1) {
             int found_pg = 0;
             for (int t_i = 0; t_i < gc_n_threads; t_i++) {
@@ -1596,23 +1628,16 @@ void gc_sweep_pool_parallel(void)
                 if (pg == NULL) {
                     continue;
                 }
-                gc_sweep_pool_page(allocd, &ptls2->page_metadata_buffered, pg);
+                gc_sweep_pool_page(&serializer, allocd, &ptls2->page_metadata_buffered, pg);
                 found_pg = 1;
             }
             if (!found_pg) {
                 break;
             }
         }
+        gc_page_serializer_destroy(&serializer);
     }
     jl_atomic_fetch_add(&gc_n_threads_sweeping, -1);
-}
-
-void gc_sweep_wait_for_all(void)
-{
-    jl_atomic_store(&gc_allocd_scratch, NULL);
-    while (jl_atomic_load_relaxed(&gc_n_threads_sweeping) != 0) {
-        jl_cpu_pause();
-    }
 }
 
 void gc_free_pages(void)
@@ -3792,6 +3817,7 @@ void jl_gc_init(void)
 {
     JL_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
+    uv_mutex_init(&page_profile_lock);
     uv_mutex_init(&gc_cache_lock);
     uv_mutex_init(&gc_perm_lock);
     uv_mutex_init(&gc_threads_lock);
