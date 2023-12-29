@@ -329,3 +329,107 @@ end
         @test isequal(parse(Float64, s), sign(v))
     end
 end
+
+@testset "parse types" begin
+    @testset "parse DataTypes" begin
+        @test parse(Type, "Int") === Int
+        @test parse(Type, "Main.Base.Vector{Base.Dict{Int, Base.Float64}}") === Vector{Dict{Int, Float64}}
+
+        @test parse(DataType, "Int") === Int
+        @test parse(DataType, "Main.Base.Vector{Base.Dict{Int, Base.Float64}}") === Vector{Dict{Int, Float64}}
+
+        @test parse(Type{Int}, "Int") === Int
+        @test parse(Type{<:Int}, "Int") === Int
+        @test parse(Type{<:Number}, "Int") === Int
+        @test parse(Type{<:Any}, "Int") === Int
+
+        @test_throws TypeError parse(Type{<:AbstractString}, "Int")
+        @test_throws TypeError parse(DataType, "Vector")
+        @test nothing === tryparse(Type{<:AbstractString}, "Int")
+        @test nothing === tryparse(DataType, "Vector")
+    end
+    @testset "error conditions" begin
+        @test nothing === tryparse(Type, "Vector{")
+        @test nothing === tryparse(Type, "dhgfdhgdf{}")
+        @test nothing === tryparse(Type, "Vector{1,2,3}")
+        @test nothing === tryparse(Type, "Vector{,,,}")
+    end
+    @testset "custom structs" begin
+        m = @eval Main module TestModule
+            module Inner
+                struct X{A,B,C} end
+            end
+            struct S2
+                a::Int
+                b::Float64
+            end
+        end
+        @test parse(DataType, "TestModule.Inner.X{TestModule.Inner.X{Int,Int,Int}, AbstractString, Dict{Int,Int}}") ===
+                               TestModule.Inner.X{TestModule.Inner.X{Int,Int,Int}, AbstractString, Dict{Int,Int}}
+
+        @test parse(Type, "TestModule.Inner.X{TestModule.Inner.X{Int,Int,Int}, AbstractString, Dict{Int,Int}}") ===
+                           TestModule.Inner.X{TestModule.Inner.X{Int,Int,Int}, AbstractString, Dict{Int,Int}}
+    end
+    @testset "loaded modules" begin
+        @test parse(Type, "Test.Result") === Test.Result
+        # Here, we know the Random module is loaded because it's an indirect dependency
+        # loaded through Test. However, `Random` is not imported here, so in order for this
+        # to parse, it has to look up the top-level module name in the loaded modules.
+        # TODO(PR): *Should* it do this? This is maybe a bit too fancy? Would it be better
+        # to just require that the module be imported to Main or the current module in order
+        # to parse this?
+        @assert !@isdefined(Random)
+        @test parse(Type, "Random.UInt10Raw") === Test.Random.UInt10Raw
+    end
+
+    @testset "UnionAlls" begin
+        @test parse(Type, "Vector") === Vector == Vector{<:Any}
+
+        @test parse(Type, "Vector{<:Number}") == Vector{<:Number}
+        @test parse(Type, "Vector{T} where T<:Number") == Vector{<:Number}
+        @test parse(Type, "Main.Vector{S} where {Int<:T<:Number, S<:T}") == Vector{S} where {Int64<:T<:Number, S<:T}
+
+        @test parse(Type{Vector}, "Vector") === Vector == Vector{<:Any}
+        @test_throws TypeError parse(Type{Vector}, "Vector{Int}")
+        @test parse(Type{<:Vector}, "Vector{Int}") === Vector{Int}
+
+        @test parse(Type, "Union{Int, Float64}") === Union{Int, Float64}
+
+        @test parse(Type, "typeof(+)") === typeof(+)
+        @test parse(Type, "typeof(Main.Base.:(+))") === typeof(+)
+
+        @eval var"##1#2#3##"() = 2+2
+        @test parse(Type, """typeof(var"##1#2#3##")""") === typeof(var"##1#2#3##")
+    end
+
+    @testset "Constant isbits constructors" begin
+        @test parse(Type, """Array{Val{2}(),1}""") === Vector{Val{2}()}
+        @test parse(Type, """Vector{Val{2}()}""") === Vector{Val{2}()}
+
+        @test parse(Type, "Val{TestModule.S2(1,2.0)}()") === Val{TestModule.S2(1,2)}()
+
+        @test parse(Type, """Array{<:Any,2}""") == Array{<:Any,2} == Matrix
+    end
+
+    types = [
+        Int, Float64, Vector{Int}, Dict{Vector{Int}, Dict},
+        Vector, Dict,
+        Dict{K, Vector{K}} where K, Dict{Vector{<:V}, V} where V,
+        Vector{D} where D<:Dict{K, Vector{V}} where {V<:Number, K},
+        Val{T} where {S, T<:(Dict{<:Val, Vector{<:S}})},
+        Union{Int,Float64},
+        Union{NTuple{<:Any, Union{Nothing, Int}}, Tuple{Int,Float64}},
+        Union{NTuple{N, Union{Nothing, Int}}, Tuple{Int,Val{N}}} where N,
+    ]
+    broken_types = [
+        Union{}, Tuple{},
+    ]
+    @testset for T in types
+        @test parse(Type, string(T)) == T
+        @test parse(Type{T}, string(T)) == T
+    end
+    @testset for T in broken_types
+        @test_broken parse(Type, string(T)) == T
+        @test_broken parse(Type{T}, string(T)) == T
+    end
+end
