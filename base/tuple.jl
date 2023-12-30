@@ -417,6 +417,7 @@ _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 _totuple(::Type{Tuple}, itr::Array) = (itr...,)
 _totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
 _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
+_totuple(::Type{Tuple}, p::Pair) = (p.first, p.second)
 _totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
 
 end
