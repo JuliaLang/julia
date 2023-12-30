@@ -171,7 +171,7 @@ end
 function imag(A::UnitUpperTriangular)
     U = UpperTriangular(A.data)
     Uim = similar(U) # must be mutable to set diagonals to zero
-    Uim .= imag.(L)
+    Uim .= imag.(U)
     for i in 1:size(Uim,1)
         Uim[i,i] = zero(Uim[i,i])
     end
