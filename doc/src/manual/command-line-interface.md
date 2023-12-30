@@ -174,7 +174,7 @@ The following is a complete list of command-line switches available when launchi
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
 |`-t`, `--threads {N\|auto}`            |Enable N threads; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future.  Currently, `auto` uses the number of CPUs assigned to this julia process based on the OS-specific affinity assignment interface, if supported (Linux and Windows). If this is not supported (macOS) or process affinity is not configured, it uses the number of CPU threads.|
-| `--gcthreads {N}`                     |Enable N GC threads; If unspecified is set to half of the compute worker threads.|
+| `--gcthreads=N[,M]`                   |Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC. N is set to half of the number of compute threads and M is set to 0 if unspecified.|
 |`-p`, `--procs {N\|auto}`              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`                                   |Interactive mode; REPL runs and `isinteractive()` is true|
