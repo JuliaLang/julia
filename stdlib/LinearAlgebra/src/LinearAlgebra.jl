@@ -530,6 +530,8 @@ matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
 matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
 matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
 matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
+matprod_dest(A::HermOrSym, B::Diagonal, TS) = similar(A, TS, size(A))
+matprod_dest(A::Diagonal, B::HermOrSym, TS) = similar(B, TS, size(B))
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs

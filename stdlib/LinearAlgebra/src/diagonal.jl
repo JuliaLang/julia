@@ -422,8 +422,8 @@ function (*)(Da::Diagonal, Db::Diagonal, Dc::Diagonal)
     return Diagonal(Da.diag .* Db.diag .* Dc.diag)
 end
 
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D))), A, D)
-/(A::HermOrSym, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D)), size(A)), A, D)
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(matprod_dest(A, D, promote_op(/, eltype(A), eltype(D))), A, D)
+/(A::HermOrSym, D::Diagonal) = _rdiv!(matprod_dest(A, D, promote_op(/, eltype(A), eltype(D))), A, D)
 
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
@@ -449,8 +449,8 @@ function \(D::Diagonal, B::AbstractVector)
     isnothing(j) || throw(SingularException(j))
     return D.diag .\ B
 end
-\(D::Diagonal, B::AbstractMatrix) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B))), D, B)
-\(D::Diagonal, B::HermOrSym) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B)), size(B)), D, B)
+\(D::Diagonal, B::AbstractMatrix) = ldiv!(matprod_dest(D, B, promote_op(\, eltype(D), eltype(B))), D, B)
+\(D::Diagonal, B::HermOrSym) = ldiv!(matprod_dest(D, B, promote_op(\, eltype(D), eltype(B))), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -470,8 +470,8 @@ function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
 end
 
 # Optimizations for \, / between Diagonals
-\(D::Diagonal, B::Diagonal) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B))), D, B)
-/(A::Diagonal, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D))), A, D)
+\(D::Diagonal, B::Diagonal) = ldiv!(matprod_dest(D, B, promote_op(\, eltype(D), eltype(B))), D, B)
+/(A::Diagonal, D::Diagonal) = _rdiv!(matprod_dest(A, D, promote_op(/, eltype(A), eltype(D))), A, D)
 function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
     n, k = length(Db.diag), length(Da.diag)
     n == k || throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
@@ -534,7 +534,7 @@ function (/)(S::SymTridiagonal, D::Diagonal)
     dl = similar(S.ev, T, max(length(S.dv)-1, 0))
     _rdiv!(Tridiagonal(dl, d, du), S, D)
 end
-(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(similar(T, promote_op(/, eltype(T), eltype(D))), T, D)
+(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(matprod_dest(T, D, promote_op(/, eltype(T), eltype(D))), T, D)
 function _rdiv!(T::Tridiagonal, S::Union{SymTridiagonal,Tridiagonal}, D::Diagonal)
     n = size(S, 2)
     dd = D.diag

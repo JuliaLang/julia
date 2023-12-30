@@ -142,20 +142,20 @@ function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
 end
 
 function /(H::UpperHessenberg, U::UpperTriangular)
-    HH = _rdiv!(similar(H, promote_op(/, eltype(H), eltype(U)), size(H)), H, U)
+    HH = _rdiv!(matprod_dest(H, U, promote_op(/, eltype(H), eltype(U))), H, U)
     UpperHessenberg(HH)
 end
 function /(H::UpperHessenberg, U::UnitUpperTriangular)
-    HH = _rdiv!(similar(H, promote_op(/, eltype(H), eltype(U)), size(H)), H, U)
+    HH = _rdiv!(matprod_dest(H, U, promote_op(/, eltype(H), eltype(U))), H, U)
     UpperHessenberg(HH)
 end
 
 function \(U::UpperTriangular, H::UpperHessenberg)
-    HH = ldiv!(similar(H, promote_op(\, eltype(U), eltype(H)), size(H)), U, H)
+    HH = ldiv!(matprod_dest(U, H, promote_op(\, eltype(U), eltype(H))), U, H)
     UpperHessenberg(HH)
 end
 function \(U::UnitUpperTriangular, H::UpperHessenberg)
-    HH = ldiv!(similar(H, promote_op(\, eltype(U), eltype(H)), size(H)), U, H)
+    HH = ldiv!(matprod_dest(U, H, promote_op(\, eltype(U), eltype(H))), U, H)
     UpperHessenberg(HH)
 end
 
