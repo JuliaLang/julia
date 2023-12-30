@@ -713,6 +713,12 @@ macro create_log_macro(name, level, color)
     macro_name = Symbol(lowercase(string(name)))
     macro_string = QuoteNode(name)
     loglevel = LogLevel(level)
+    if loglevel in (BelowMinLevel, Debug, Info, Warn, Error, AboveMaxLevel)
+        throw(ArgumentError("Cannot use the same log level as a built in log macro"))
+    end
+    if haskey(custom_log_levels, loglevel)
+        throw(ArgumentError("Custom log macro already exists for given log level"))
+    end
     quote
         custom_log_levels[$(esc(loglevel))] = ($(macro_string), $(esc(color)))
         macro $(esc(macro_name))(exs...)
