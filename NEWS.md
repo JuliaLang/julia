@@ -84,9 +84,9 @@ New library features
   write the output to a stream rather than returning a string ([#48625]).
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
 * New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
-* Passing an IOBuffer as a stdout argument for Process spawn now works as
+* Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
   expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
-  no longer required there for correctness to avoid data-races ([#TBD]).
+  no longer required there for correctness to avoid data races ([#52461]).
 * After a process exits, `closewrite` will no longer be automatically called on
   the stream passed to it. Call `wait` on the process instead to ensure the
   content is fully written, then call `closewrite` manually to avoid
@@ -114,6 +114,7 @@ Standard library changes
 * `eigvals/eigen(A, bunchkaufman(B))` and `eigvals/eigen(A, lu(B))`, which utilize the Bunchkaufman (LDL) and LU decomposition of `B`,
    respectively, now efficiently compute the generalized eigenvalues (`eigen`: and eigenvectors) of `A` and `B`. Note: The second
    argument is the output of `bunchkaufman` or `lu` ([#50471]).
+* Structured matrices now retain either the axes of the parent (for `Symmetric`/`Hermitian`/`AbstractTriangular`/`UpperHessenberg`), or that of the principal diagonal (for banded matrices) ([#52480]).
 
 #### Printf
 

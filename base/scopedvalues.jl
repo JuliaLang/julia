@@ -161,7 +161,7 @@ macro with(exprs...)
         error("@with expects at least one argument")
     end
     exprs = map(esc, exprs)
-    Expr(:tryfinally, esc(ex), :(), :(Scope(Core.current_scope()::Union{Nothing, Scope}, $(exprs...))))
+    Expr(:tryfinally, esc(ex), nothing, :(Scope(Core.current_scope()::Union{Nothing, Scope}, $(exprs...))))
 end
 
 """

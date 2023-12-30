@@ -348,17 +348,23 @@ function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compa
 end
 
 function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
-    id = old.id
-    if id < length(compact.ir.stmts)
-        return id < compact.idx
+    already_inserted_ssa(compact, compact.idx-1)(0, old)
+end
+
+function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
+    return function did_already_insert(phi_arg::Int, old::OldSSAValue)
+        id = old.id
+        if id <= length(compact.ir.stmts)
+            return id <= processed_idx
+        end
+        id -= length(compact.ir.stmts)
+        if id <= length(compact.ir.new_nodes)
+            return did_already_insert(phi_arg, OldSSAValue(compact.ir.new_nodes.info[id].pos))
+        end
+        id -= length(compact.ir.new_nodes)
+        @assert id <= length(compact.pending_nodes)
+        return !(id in compact.pending_perm)
     end
-    id -= length(compact.ir.stmts)
-    if id < length(compact.ir.new_nodes)
-        return already_inserted(compact, OldSSAValue(compact.ir.new_nodes.info[id].pos))
-    end
-    id -= length(compact.ir.new_nodes)
-    @assert id <= length(compact.pending_nodes)
-    return !(id in compact.pending_perm)
 end
 
 function is_pending(compact::IncrementalCompact, old::OldSSAValue)
@@ -1126,42 +1132,6 @@ function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr)
     return false
 end
 
-function fold_current_scope!(compact::IncrementalCompact, idx::Int, stmt::Expr, lazydomtree::LazyDomtree)
-    domtree = get!(lazydomtree)
-
-    # The frontend enforces the invariant that any :enter dominates its active
-    # region, so all we have to do here is walk the domtree to find it.
-    dombb = block_for_inst(compact, SSAValue(idx))
-
-    local bbterminator
-    prevdombb = dombb
-    while true
-        dombb = domtree.idoms_bb[dombb]
-
-        # Did not find any dominating :enter - scope is inherited from the outside
-        dombb == 0 && return nothing
-
-        bbterminator = compact[SSAValue(last(compact.cfg_transform.result_bbs[dombb].stmts))][:stmt]
-        if !isa(bbterminator, EnterNode) || !isdefined(bbterminator, :scope)
-            prevdombb = dombb
-            continue
-        end
-        if bbterminator.catch_dest == 0
-            # TODO: dominance alone is not enough here, we need to actually find the :leaves
-            return nothing
-        end
-        # Check that we are inside the :enter region, i.e. are dominated by the first block in the
-        # enter region - otherwise we've already left this :enter and should keep going
-        if prevdombb != dombb + 1
-            prevdombb = dombb
-            continue
-        end
-        compact[idx] = bbterminator.scope
-        return nothing
-    end
-end
-
-
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
 # which can be very large sometimes, and program counters in question are often very sparse
 const SPCSet = IdSet{Int}
@@ -1174,6 +1144,11 @@ function (this::IntermediaryCollector)(@nospecialize(pi), @nospecialize(ssa))
         push!(this.intermediaries, ssa.id)
     end
     return nothing
+end
+
+function update_scope_mapping!(scope_mapping, bb, val)
+    @assert (scope_mapping[bb] in (val, SSAValue(0)))
+    scope_mapping[bb] = val
 end
 
 """
@@ -1200,9 +1175,47 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     # initialization of domtree is delayed to avoid the expensive computation in many cases
     lazydomtree = LazyDomtree(ir)
+    scope_mapping::Union{Vector{SSAValue}, Nothing} = nothing
     for ((old_idx, idx), stmt) in compact
+        # If we encounter any EnterNode with set :scope, propagate the current scope for all basic blocks, so
+        # we have easy access for current_scope folding below.
+        if !isa(stmt, Expr)
+            bb = compact.active_result_bb - 1
+            if scope_mapping !== nothing && did_just_finish_bb(compact)
+                this_scope = scope_mapping[bb]
+                if isa(stmt, GotoIfNot)
+                    update_scope_mapping!(scope_mapping, stmt.dest, this_scope)
+                    update_scope_mapping!(scope_mapping, bb+1, this_scope)
+                elseif isa(stmt, GotoNode)
+                    update_scope_mapping!(scope_mapping, stmt.label, this_scope)
+                elseif isa(stmt, EnterNode)
+                    if stmt.catch_dest != 0
+                        update_scope_mapping!(scope_mapping, stmt.catch_dest, this_scope)
+                    end
+                    isdefined(stmt, :scope) || update_scope_mapping!(scope_mapping, bb+1, this_scope)
+                elseif !isa(stmt, ReturnNode)
+                    update_scope_mapping!(scope_mapping, bb+1, this_scope)
+                end
+            end
+            if isa(stmt, EnterNode)
+                if isdefined(stmt, :scope)
+                    if scope_mapping === nothing
+                        scope_mapping = SSAValue[SSAValue(0) for i = 1:length(compact.cfg_transform.result_bbs)]
+                    end
+                    update_scope_mapping!(scope_mapping, bb+1, SSAValue(idx))
+                end
+            end
+            continue
+        end
+        if scope_mapping !== nothing && did_just_finish_bb(compact)
+            bb = compact.active_result_bb - 1
+            if isexpr(stmt, :leave)
+                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[block_for_inst(compact, scope_mapping[bb])])
+            else
+                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[bb])
+            end
+        end
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
-        isa(stmt, Expr) || continue
         is_setfield = is_isdefined = is_finalizer = is_keyvalue_get = false
         field_ordering = :unspecified
         if is_known_call(stmt, setfield!, compact)
@@ -1293,7 +1306,13 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 2 == (length(stmt.args) - (isexpr(stmt, :invoke) ? 2 : 1)) || continue
                 lift_keyvalue_get!(compact, idx, stmt, 𝕃ₒ)
             elseif is_known_call(stmt, Core.current_scope, compact)
-                fold_current_scope!(compact, idx, stmt, lazydomtree)
+                length(stmt.args) == 1 || continue
+                scope_mapping !== nothing || continue
+                bb = compact.active_result_bb
+                did_just_finish_bb(compact) && (bb -= 1)
+                enter_ssa = scope_mapping[bb]
+                enter_ssa == SSAValue(0) && continue
+                compact[SSAValue(idx)] = (compact[enter_ssa][:stmt]::EnterNode).scope
             elseif isexpr(stmt, :new)
                 refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             end
@@ -2079,6 +2098,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             end
         end
     end
+
     return Pair{IRCode, Bool}(complete(compact), made_changes)
 end
 
@@ -2095,14 +2115,6 @@ end
 function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
     # For the time being, don't drop the first bb, because it has special predecessor semantics.
     bbidx == 1 && return false
-    # If the block we're going to is the same as the fallthrow, it's always legal to drop
-    # the block.
-    length(bb.stmts) == 0 && return true
-    if length(bb.stmts) == 1
-        stmt = ir[SSAValue(first(bb.stmts))][:stmt]
-        stmt === nothing && return true
-        ((stmt::GotoNode).label == bbidx + 1) && return true
-    end
     return true
 end
 
@@ -2128,10 +2140,10 @@ function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vec
         end
         ir[last_fallthrough_term_ssa] = nothing
         kill_edge!(bbs, last_fallthrough, terminator.dest)
-    elseif isa(terminator, EnterNode)
-        return false
     elseif isa(terminator, GotoNode)
         return true
+    elseif isterminator(terminator)
+        return false
     end
     # Hack, but effective. If we have a predecessor with a fall-through terminator, change the
     # instruction numbering to merge the blocks now such that below processing will properly
@@ -2210,9 +2222,11 @@ function cfg_simplify!(ir::IRCode)
         if length(bb.succs) == 1
             succ = bb.succs[1]
             if length(bbs[succ].preds) == 1 && succ != 1
-                # Can't merge blocks with :enter terminator even if they
-                # only have one successor.
-                if isa(ir[SSAValue(last(bb.stmts))][:stmt], EnterNode)
+                # Can't merge blocks with a non-GotoNode terminator, even if they
+                # only have one successor, because it would not be legal to have that
+                # terminator in the middle of a basic block.
+                terminator = ir[SSAValue(last(bb.stmts))][:stmt]
+                if !isa(terminator, GotoNode) && isterminator(terminator)
                     continue
                 end
                 # Prevent cycles by making sure we don't end up back at `idx`
