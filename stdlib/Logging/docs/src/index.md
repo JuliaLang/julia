@@ -74,7 +74,7 @@ automatically extracted. Let's examine the user-defined data first:
     ```julia-repl
     julia> using Logging
 
-    julia> @create_log_macro(:MyLog, 200, :magenta)
+    julia> @create_log_macro MyLog 200 :magenta
     @mylog (macro with 1 method)
 
     julia> @mylog "hello"
