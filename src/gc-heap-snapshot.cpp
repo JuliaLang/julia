@@ -202,7 +202,7 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot)
     snapshot->_gc_finlist_root_idx = snapshot->nodes.size();
     Node gc_finlist_roots{
         snapshot->node_types.find_or_create_string_id("synthetic"),
-        snapshot->names.find_or_create_string_id("GC finlist roots"), // name
+        snapshot->names.find_or_create_string_id("GC finalizer list roots"), // name
         snapshot->_gc_finlist_root_idx, // id
         0, // size
         0, // size_t trace_node_id (unused)
