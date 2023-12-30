@@ -867,9 +867,6 @@ function svd(D::Diagonal{T}) where {T<:Number}
     return SVD(U, S, Vt)
 end
 
-# disambiguation methods: * and / of Diagonal and Adj/Trans AbsVec
-*(u::AdjointAbsVec, D::Diagonal) = (D'u')'
-*(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) * transpose(u))
 *(x::AdjointAbsVec,   D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 *(x::TransposeAbsVec, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 /(u::AdjointAbsVec, D::Diagonal) = (D' \ u')'

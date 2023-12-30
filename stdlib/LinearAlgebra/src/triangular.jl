@@ -1536,9 +1536,6 @@ for mat in (:AbstractVector, :AbstractMatrix)
         _rdiv!(similar(A, TAB, size(A)), A, B)
     end
 end
-# ambiguity resolution with definitions in matmul.jl
-*(v::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) * v.parent)
-*(v::TransposeAbsVec, A::AbstractTriangular) = transpose(transpose(A) * v.parent)
 
 ## Some Triangular-Triangular cases. We might want to write tailored methods
 ## for these cases, but I'm not sure it is worth it.
