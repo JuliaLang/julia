@@ -130,9 +130,9 @@ to tell the compiler that indexing operations within the applied expression are 
 inbounds and do not need to taint `:consistent` and `:nothrow`.
 """
 macro _safeindex(ex)
-    return esc(_safeindex(__module__, ex))
+    return esc(_safeindex(ex))
 end
-function _safeindex(__module__, ex)
+function _safeindex(ex)
     isa(ex, Expr) || return ex
     if ex.head === :(=)
         lhs = ex.args[1]
@@ -141,16 +141,16 @@ function _safeindex(__module__, ex)
             xs = lhs.args[1]
             args = Vector{Any}(undef, length(lhs.args)-1)
             for i = 2:length(lhs.args)
-                args[i-1] = _safeindex(__module__, lhs.args[i])
+                args[i-1] = _safeindex(lhs.args[i])
             end
-            return Expr(:call, GlobalRef(__module__, :__safe_setindex!), xs, _safeindex(__module__, rhs), args...)
+            return Expr(:call, GlobalRef(@__MODULE__, :__safe_setindex!), xs, _safeindex(rhs), args...)
         end
     elseif ex.head === :ref # xs[i]
-        return Expr(:call, GlobalRef(__module__, :__safe_getindex), ex.args...)
+        return Expr(:call, GlobalRef(@__MODULE__, :__safe_getindex), ex.args...)
     end
     args = Vector{Any}(undef, length(ex.args))
     for i = 1:length(ex.args)
-        args[i] = _safeindex(__module__, ex.args[i])
+        args[i] = _safeindex(ex.args[i])
     end
     return Expr(ex.head, args...)
 end
@@ -977,6 +977,8 @@ function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
     return A
 end
 
+__safe_setindex!(A::Vector{Any}, @nospecialize(x), i::Int) = (@inline; @_nothrow_noub_meta;
+    memoryrefset!(memoryref(A.ref, i, false), x, :not_atomic, false); return A)
 __safe_setindex!(A::Vector{T}, x::T, i::Int) where {T} = (@inline; @_nothrow_noub_meta;
     memoryrefset!(memoryref(A.ref, i, false), x, :not_atomic, false); return A)
 __safe_setindex!(A::Vector{T}, x,    i::Int) where {T} = (@inline;
@@ -1439,9 +1441,13 @@ you expect that you're going to have to push a lot of values onto `s`, you can a
 the cost of incremental reallocation by doing it once up front; this can improve
 performance.
 
-If `first` is true, then the reserved space is from the start of the collection, for ordered
-collections. Supplying this keyword may result in an error if the collection is nor ordered
+If `first` is `true`, then any additional space is reserved before the start of the collection.
+This way, subsequent calls to `pushfirst!` (instead of `push!`) may become faster.
+Supplying this keyword may result in an error if the collection is not ordered
 or if `pushfirst!` is not supported for this collection.
+
+If `shrink=true` (the default), the collection's capacity may be reduced if its current
+capacity is greater than `n`.
 
 See also [`resize!`](@ref).
 
@@ -1457,8 +1463,6 @@ For types that support `sizehint!`,
    `Base`.
 
 3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
-
-4. `shrink` controls if the collection can be shrunk.
 
 !!! compat "Julia 1.11"
     The `shrink` and `first` arguments were added in Julia 1.11.
@@ -3036,4 +3040,37 @@ intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
     else
         _getindex(v, i)
     end
+end
+
+"""
+    wrap(Array, m::Union{Memory{T}, MemoryRef{T}}, dims)
+
+Create an array of size `dims` using `m` as the underlying memory. This can be thought of as a safe version
+of [`unsafe_wrap`](@ref) utilizing `Memory` or `MemoryRef` instead of raw pointers.
+"""
+function wrap end
+
+@eval @propagate_inbounds function wrap(::Type{Array}, ref::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
+    mem = ref.mem
+    mem_len = length(mem) + 1 - memoryrefoffset(ref)
+    len = Core.checked_dims(dims...)
+    @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
+    if N != 1 && !(ref === GenericMemoryRef(mem) && len === mem_len)
+        mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
+        ref = MemoryRef(mem)
+    end
+    $(Expr(:new, :(Array{T, N}), :ref, :dims))
+end
+
+@noinline invalid_wrap_err(len, dims, proddims) = throw(DimensionMismatch(
+    "Attempted to wrap a MemoryRef of length $len with an Array of size dims=$dims, which is invalid because prod(dims) = $proddims > $len, so that the array would have more elements than the underlying memory can store."))
+
+function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
+    wrap(Array, MemoryRef(m), dims)
+end
+function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
+    wrap(Array, m, (l,))
+end
+function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
+    wrap(Array, MemoryRef(m), (l,))
 end

@@ -64,6 +64,21 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         }
         return expr;
     }
+    else if (jl_is_enternode(expr)) {
+        jl_value_t *scope = jl_enternode_scope(expr);
+        if (scope) {
+            jl_value_t *val = resolve_globals(scope, module, sparam_vals, binding_effects, eager_resolve);
+            if (val != scope) {
+                intptr_t catch_dest = jl_enternode_catch_dest(expr);
+                JL_GC_PUSH1(&val);
+                expr = jl_new_struct_uninit(jl_enternode_type);
+                jl_enternode_catch_dest(expr) = catch_dest;
+                jl_enternode_scope(expr) = val;
+                JL_GC_POP();
+            }
+        }
+        return expr;
+    }
     else if (jl_is_gotoifnot(expr)) {
         jl_value_t *cond = resolve_globals(jl_gotoifnot_cond(expr), module, sparam_vals, binding_effects, eager_resolve);
         if (cond != jl_gotoifnot_cond(expr)) {
@@ -301,10 +316,11 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
     li->ssaflags = jl_alloc_array_1d(jl_array_uint32_type, n);
     jl_gc_wb(li, li->ssaflags);
     int inbounds_depth = 0; // number of stacked inbounds
-    // isempty(inline_flags): no user annotation
-    // last(inline_flags) == 1: inline region
-    // last(inline_flags) == 0: noinline region
+    // isempty(inline_flags): no user callsite inline annotation
+    // last(inline_flags) == 1: callsite inline region
+    // last(inline_flags) == 0: callsite noinline region
     arraylist_t *inline_flags = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
+    arraylist_t *purity_exprs = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
     for (j = 0; j < n; j++) {
         jl_value_t *st = bd[j];
         int is_flag_stmt = 0;
@@ -327,7 +343,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
-                    if (jl_expr_nargs(ma) == 9) {
+                    if (jl_expr_nargs(ma) == NUM_EFFECTS_OVERRIDES) {
                         li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
                         li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
                         li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
@@ -381,32 +397,50 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
             }
             bd[j] = jl_nothing;
         }
-        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_boundscheck_sym) {
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_purity_sym) {
+            is_flag_stmt = 1;
+            size_t na = jl_expr_nargs(st);
+            if (na == NUM_EFFECTS_OVERRIDES)
+                arraylist_push(purity_exprs, (void*)st);
+            else {
+                assert(na == 0);
+                arraylist_pop(purity_exprs);
+            }
+            bd[j] = jl_nothing;
+        }
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_boundscheck_sym)
             // Don't set IR_FLAG_INBOUNDS on boundscheck at the same level
             is_flag_stmt = 1;
-        }
-        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym) {
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym)
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
-        }
-        else if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym)) {
+        else if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym))
             li->has_fcall = 1;
-        }
         if (is_flag_stmt)
             jl_array_uint32_set(li->ssaflags, j, 0);
         else {
-            uint8_t flag = 0;
+            uint32_t flag = 0;
             if (inbounds_depth > 0)
                 flag |= IR_FLAG_INBOUNDS;
             if (inline_flags->len > 0) {
-                void* inline_flag = inline_flags->items[inline_flags->len - 1];
+                void* inline_flag = inline_flags->items[inline_flags->len-1];
                 flag |= 1 << (inline_flag ? 1 : 2);
+            }
+            int n_purity_exprs = purity_exprs->len;
+            if (n_purity_exprs > 0) {
+                // apply all purity overrides
+                for (int i = 0; i < n_purity_exprs; i++) {
+                    void* purity_expr = purity_exprs->items[i];
+                    for (int j = 0; j < NUM_EFFECTS_OVERRIDES; j++) {
+                        flag |= jl_unbox_bool(jl_exprarg((jl_value_t*)purity_expr, j)) ? (1 << (NUM_IR_FLAGS+j)) : 0;
+                    }
+                }
             }
             jl_array_uint32_set(li->ssaflags, j, flag);
         }
     }
-    assert(inline_flags->len == 0); // malformed otherwise
-    arraylist_free(inline_flags);
-    free(inline_flags);
+    assert(inline_flags->len == 0 && purity_exprs->len == 0); // malformed otherwise
+    arraylist_free(inline_flags); arraylist_free(purity_exprs);
+    free(inline_flags); free(purity_exprs);
     jl_array_t *vinfo = (jl_array_t*)jl_exprarg(ir, 1);
     jl_array_t *vis = (jl_array_t*)jl_array_ptr_ref(vinfo, 0);
     size_t nslots = jl_array_nrows(vis);
@@ -795,7 +829,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     jl_method_t *m =
         (jl_method_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_t), jl_method_type);
     jl_atomic_store_relaxed(&m->specializations, (jl_value_t*)jl_emptysvec);
-    jl_atomic_store_relaxed(&m->speckeyset, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&m->speckeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
     m->sig = NULL;
     m->slot_syms = NULL;
     m->roots = NULL;

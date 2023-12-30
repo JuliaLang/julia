@@ -23,6 +23,13 @@ mul_wrappers = [
     @test @inferred(f(A)) === A
     g(A) = LinearAlgebra.wrap(A, 'T')
     @test @inferred(g(A)) === transpose(A)
+    # https://github.com/JuliaLang/julia/issues/52202
+    @test Base.infer_return_type((Vector{Float64},)) do v
+        LinearAlgebra.wrap(v, 'N')
+    end == Vector{Float64}
+    h(A) = LinearAlgebra.wrap(LinearAlgebra._unwrap(A), LinearAlgebra.wrapper_char(A))
+    @test @inferred(h(transpose(A))) === transpose(A)
+    @test @inferred(h(adjoint(A))) === transpose(A)
 end
 
 @testset "matrices with zero dimensions" begin
@@ -127,7 +134,7 @@ end
         @test mul!(C, transpose(A), B) == A' * B
         @test mul!(C, A, transpose(B)) == A * B'
         @test mul!(C, transpose(A), transpose(B)) == A' * B'
-        @test LinearAlgebra.mul!(C, adjoint(A), transpose(B)) == A' * transpose(B)
+        @test mul!(C, adjoint(A), transpose(B)) == A' * transpose(B)
 
         # Inplace multiply-add
         α = rand(-10:10)
@@ -143,8 +150,8 @@ end
         @test mul!(C0(), adjoint(A), transpose(B), α, β) == α * A' * transpose(B) .+ βC
 
         #test DimensionMismatch for generic_matmatmul
-        @test_throws DimensionMismatch LinearAlgebra.mul!(C, adjoint(A), transpose(fill(1, 4, 4)))
-        @test_throws DimensionMismatch LinearAlgebra.mul!(C, adjoint(fill(1, 4, 4)), transpose(B))
+        @test_throws DimensionMismatch mul!(C, adjoint(A), transpose(fill(1, 4, 4)))
+        @test_throws DimensionMismatch mul!(C, adjoint(fill(1, 4, 4)), transpose(B))
     end
     vv = [1, 2]
     CC = Matrix{Int}(undef, 2, 2)
@@ -236,9 +243,9 @@ end
     BB = rand(Float64, 6, 6)
     CC = zeros(Float64, 6, 6)
     for A in (copy(AA), view(AA, 1:6, 1:6)), B in (copy(BB), view(BB, 1:6, 1:6)), C in (copy(CC), view(CC, 1:6, 1:6))
-        @test LinearAlgebra.mul!(C, transpose(A), transpose(B)) == transpose(A) * transpose(B)
-        @test LinearAlgebra.mul!(C, A, adjoint(B)) == A * transpose(B)
-        @test LinearAlgebra.mul!(C, adjoint(A), B) == transpose(A) * B
+        @test mul!(C, transpose(A), transpose(B)) == transpose(A) * transpose(B)
+        @test mul!(C, A, adjoint(B)) == A * transpose(B)
+        @test mul!(C, adjoint(A), B) == transpose(A) * B
 
         # Inplace multiply-add
         α = rand(Float64)
@@ -253,15 +260,57 @@ end
     end
 end
 
+@testset "allocations in BLAS-mul" begin
+    for n in (2, 3, 6)
+        A = rand(Float64, n, n)
+        B = rand(Float64, n, n)
+        C = zeros(Float64, n, n)
+        # gemm
+        for t in (identity, adjoint, transpose)
+            At = t(A)
+            Bt = t(B)
+            mul!(C, At, B)
+            @test 0 == @allocations mul!(C, At, B)
+            mul!(C, A, Bt)
+            @test 0 == @allocations mul!(C, A, Bt)
+            mul!(C, At, Bt)
+            @test 0 == @allocations mul!(C, At, Bt)
+        end
+        # syrk/herk
+        @test 0 == @allocations mul!(C, transpose(A), A)
+        @test 0 == @allocations mul!(C, adjoint(A), A)
+        @test 0 == @allocations mul!(C, A, transpose(A))
+        @test 0 == @allocations mul!(C, A, adjoint(A))
+        # complex times real
+        Cc = complex(C)
+        Ac = complex(A)
+        for t in (identity, adjoint, transpose)
+            Bt = t(B)
+            @test 0 == @allocations mul!(Cc, Ac, Bt)
+        end
+    end
+end
+
 @testset "mixed Blas-non-Blas matmul" begin
     AA = rand(-10:10, 6, 6)
     BB = ones(Float64, 6, 6)
     CC = zeros(Float64, 6, 6)
     for A in (copy(AA), view(AA, 1:6, 1:6)), B in (copy(BB), view(BB, 1:6, 1:6)), C in (copy(CC), view(CC, 1:6, 1:6))
-        @test LinearAlgebra.mul!(C, A, B) == A * B
-        @test LinearAlgebra.mul!(C, transpose(A), transpose(B)) == transpose(A) * transpose(B)
-        @test LinearAlgebra.mul!(C, A, adjoint(B)) == A * transpose(B)
-        @test LinearAlgebra.mul!(C, adjoint(A), B) == transpose(A) * B
+        @test mul!(C, A, B) == A * B
+        @test mul!(C, transpose(A), transpose(B)) == transpose(A) * transpose(B)
+        @test mul!(C, A, adjoint(B)) == A * transpose(B)
+        @test mul!(C, adjoint(A), B) == transpose(A) * B
+    end
+end
+
+@testset "allocations in mixed Blas-non-Blas matmul" begin
+    for n in (2, 3, 6)
+        A = rand(-10:10, n, n)
+        B = ones(Float64, n, n)
+        C = zeros(Float64, n, n)
+        @test 0 == @allocations mul!(C, A, B)
+        @test 0 == @allocations mul!(C, A, transpose(B))
+        @test 0 == @allocations mul!(C, adjoint(A), B)
     end
 end
 

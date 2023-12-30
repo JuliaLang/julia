@@ -382,22 +382,26 @@ function check_for_hint(s::MIState)
         return clear_hint(st)
     end
     completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module)::Tuple{Vector{String},String,Bool}
+    isempty(completions) && return clear_hint(st)
     # Don't complete for single chars, given e.g. `x` completes to `xor`
     if length(partial) > 1 && should_complete
-        if length(completions) == 1
-            hint = only(completions)[sizeof(partial)+1:end]
-            if !isempty(hint) # completion on a complete name returns itself so check that there's something to hint
+        singlecompletion = length(completions) == 1
+        p = singlecompletion ? completions[1] : common_prefix(completions)
+        if singlecompletion || p in completions # i.e. complete `@time` even though `@time_imports` etc. exists
+            # The completion `p` and the input `partial` may not share the same initial
+            # characters, for instance when completing to subscripts or superscripts.
+            # So, in general, make sure that the hint starts at the correct position by
+            # incrementing its starting position by as many characters as the input.
+            startind = 1 # index of p from which to start providing the hint
+            maxind = ncodeunits(p)
+            for _ in partial
+                startind = nextind(p, startind)
+                startind > maxind && break
+            end
+            if startind ≤ maxind # completion on a complete name returns itself so check that there's something to hint
+                hint = p[startind:end]
                 st.hint = hint
                 return true
-            end
-        elseif length(completions) > 1
-            p = common_prefix(completions)
-            if p in completions # i.e. complete `@time` even though `@time_imports` etc. exists
-                hint = p[sizeof(partial)+1:end]
-                if !isempty(hint)
-                    st.hint = hint
-                    return true
-                end
             end
         end
     end

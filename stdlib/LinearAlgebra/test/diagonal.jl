@@ -18,6 +18,9 @@ using .Main.InfiniteArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
@@ -47,6 +50,13 @@ Random.seed!(1)
         DI = Diagonal([1,2,3,4])
         @test Diagonal(DI) === DI
         @test isa(Diagonal{elty}(DI), Diagonal{elty})
+
+        # diagonal matrices may be converted to Diagonal
+        local A = [1 0; 0 2]
+        local DA = convert(Diagonal{Float32,Vector{Float32}}, A)
+        @test DA isa Diagonal{Float32,Vector{Float32}}
+        @test DA == A
+
         # issue #26178
         @test_throws MethodError convert(Diagonal, [1,2,3,4])
         @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
@@ -778,6 +788,11 @@ end
         D = Diagonal(fill(M, n))
         @test D == Matrix{eltype(D)}(D)
     end
+
+    S = SizedArray{(2,3)}(reshape([1:6;],2,3))
+    D = Diagonal(fill(S,3))
+    @test D * fill(S,2,3)' == fill(S * S', 3, 2)
+    @test fill(S,3,2)' * D == fill(S' * S, 2, 3)
 end
 
 @testset "Eigensystem for block diagonal (issue #30681)" begin
@@ -1217,6 +1232,18 @@ end
 
     # currently falls back to two-term *
     @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
+end
+
+@testset "diagind" begin
+    D = Diagonal(1:4)
+    M = Matrix(D)
+    @testset for k in -4:4
+        @test D[diagind(D,k)] == M[diagind(M,k)]
+    end
+end
+
+@testset "copy" begin
+    @test copy(Diagonal(1:5)) === Diagonal(1:5)
 end
 
 end # module TestDiagonal

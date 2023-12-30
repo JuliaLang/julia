@@ -704,6 +704,7 @@ end
     safe_algs = [InsertionSort, MergeSort, Base.Sort.ScratchQuickSort(), Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
 
     n = 1000
+    Random.seed!(0x3588d23f15e74060);
     v = rand(1:5, n);
     s = sort(v);
 
@@ -721,8 +722,9 @@ end
     for alg in safe_algs
         @test sort(1:n, alg=alg, lt = (i,j) -> v[i]<=v[j]) == perm
     end
-    @test partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172]
-    @test partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
+    # Broken by the introduction of BracketedSort in #52006 which is unstable
+    # @test_broken partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172] (sometimes passes due to RNG)
+    @test_broken partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
 
     # lt can be very poorly behaved and sort will still permute its input in some way.
     for alg in safe_algs
@@ -791,9 +793,9 @@ end
     let
         requires_uint_mappable = Union{Base.Sort.RadixSort, Base.Sort.ConsiderRadixSort,
             Base.Sort.CountingSort, Base.Sort.ConsiderCountingSort,
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes.big),
-            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes.big.next)}
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes),
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes.big),
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.next.big.next.yes.big.next)}
 
         function test_alg(kw, alg, float=true)
             for order in [Base.Forward, Base.Reverse, Base.By(x -> x^2)]
@@ -1032,6 +1034,42 @@ function Base.sort!(v::AbstractVector, lo::Integer, hi::Integer, ::DispatchLoopT
 end
 @testset "Support dispatch from the old style to the new style and back" begin
     @test issorted(sort!(rand(100), Base.Sort.InitialOptimizations(DispatchLoopTestAlg()), Base.Order.Forward))
+end
+
+@testset "partialsort tests added for BracketedSort #52006" begin
+    x = rand(Int, 1000)
+    @test partialsort(x, 1) == minimum(x)
+    @test partialsort(x, 1000) == maximum(x)
+    sx = sort(x)
+    for i in [1, 2, 4, 10, 11, 425, 500, 845, 991, 997, 999, 1000]
+        @test partialsort(x, i) == sx[i]
+    end
+    for i in [1:1, 1:2, 1:5, 1:8, 1:9, 1:11, 1:108, 135:812, 220:586, 363:368, 450:574, 458:597, 469:638, 487:488, 500:501, 584:594, 1000:1000]
+        @test partialsort(x, i) == sx[i]
+    end
+
+    # Semi-pathological input
+    seed = hash(1000, Int === Int64 ? 0x85eb830e0216012d : 0xae6c4e15)
+    seed = hash(1, seed)
+    for i in 1:100
+        j = mod(hash(i, seed), i:1000)
+        x[j] = typemax(Int)
+    end
+    @test partialsort(x, 500) == sort(x)[500]
+
+    # Fully pathological input
+    # it would be too much trouble to actually construct a valid pathological input, so we
+    # construct an invalid pathological input.
+    # This test is kind of sketchy because it passes invalid inputs to the function
+    # Temporarily removed due to flakey test failures. See #52642 for details.
+    # for i in [1:6, 1:483, 1:957, 77:86, 118:478, 223:227, 231:970, 317:958, 500:501, 500:501, 500:501, 614:620, 632:635, 658:665, 933:940, 937:942, 997:1000, 999:1000]
+    #     x = rand(1:5, 1000)
+    #     @test partialsort(x, i, lt=(<=)) == sort(x)[i]
+    # end
+    # for i in [1, 7, 8, 490, 495, 852, 993, 996, 1000]
+    #     x = rand(1:5, 1000)
+    #     @test partialsort(x, i, lt=(<=)) == sort(x)[i]
+    # end
 end
 
 # This testset is at the end of the file because it is slow.

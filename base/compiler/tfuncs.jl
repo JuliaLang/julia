@@ -95,7 +95,7 @@ add_tfunc(throw, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bottom), 0)
 # if isexact is false, the actual runtime type may (will) be a subtype of t
 # if isconcrete is true, the actual runtime type is definitely concrete (unreachable if not valid as a typeof)
 # if istype is true, the actual runtime value will definitely be a type (e.g. this is false for Union{Type{Int}, Int})
-function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
+function instanceof_tfunc(@nospecialize(t), astag::Bool=false, @nospecialize(troot) = t)
     if isa(t, Const)
         if isa(t.val, Type) && valid_as_lattice(t.val, astag)
             return t.val, true, isconcretetype(t.val), true
@@ -103,6 +103,7 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
         return Bottom, true, false, false # runtime throws on non-Type
     end
     t = widenconst(t)
+    troot = widenconst(troot)
     if t === Bottom
         return Bottom, true, true, false # runtime unreachable
     elseif t === typeof(Bottom) || !hasintersect(t, Type)
@@ -110,10 +111,15 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
     elseif isType(t)
         tp = t.parameters[1]
         valid_as_lattice(tp, astag) || return Bottom, true, false, false # runtime unreachable / throws on non-Type
+        if troot isa UnionAll
+            # Free `TypeVar`s inside `Type` has violated the "diagonal" rule.
+            # Widen them before `UnionAll` rewraping to relax concrete constraint.
+            tp = widen_diagonal(tp, troot)
+        end
         return tp, !has_free_typevars(tp), isconcretetype(tp), true
     elseif isa(t, UnionAll)
         t′ = unwrap_unionall(t)
-        t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, astag)
+        t′′, isexact, isconcrete, istype = instanceof_tfunc(t′, astag, rewrap_unionall(t, troot))
         tr = rewrap_unionall(t′′, t)
         if t′′ isa DataType && t′′.name !== Tuple.name && !has_free_typevars(tr)
             # a real instance must be within the declared bounds of the type,
@@ -128,8 +134,8 @@ function instanceof_tfunc(@nospecialize(t), astag::Bool=false)
         end
         return tr, isexact, isconcrete, istype
     elseif isa(t, Union)
-        ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(t.a, astag)
-        tb, isexact_b, isconcrete_b, istype_b = instanceof_tfunc(t.b, astag)
+        ta, isexact_a, isconcrete_a, istype_a = instanceof_tfunc(t.a, astag, troot)
+        tb, isexact_b, isconcrete_b, istype_b = instanceof_tfunc(t.b, astag, troot)
         isconcrete = isconcrete_a && isconcrete_b
         istype = istype_a && istype_b
         # most users already handle the Union case, so here we assume that
@@ -1737,7 +1743,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
         end
         return allconst ? Const(ty) : Type{ty}
     end
-    istuple = isa(headtype, Type) && (headtype == Tuple)
+    istuple = headtype === Tuple
     if !istuple && !isa(headtype, UnionAll) && !isvarargtype(headtype)
         return Union{}
     end
@@ -2482,6 +2488,19 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return Effects(EFFECTS_TOTAL;
             consistent = (isa(setting, Const) && setting.val === :conditional) ? ALWAYS_TRUE : ALWAYS_FALSE,
             nothrow = compilerbarrier_nothrow(setting, nothing))
+    elseif f === Core.current_scope
+        nothrow = true
+        if length(argtypes) != 0
+            if length(argtypes) != 1 || !isvarargtype(argtypes[1])
+                return EFFECTS_THROWS
+            end
+            nothrow = false
+        end
+        return Effects(EFFECTS_TOTAL;
+            consistent = ALWAYS_FALSE,
+            notaskstate = false,
+            nothrow
+        )
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
@@ -2518,6 +2537,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     end
 end
 
+
 function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     nargs = length(argtypes)
     nargs == 0 && return true # must throw and noub
@@ -2548,6 +2568,32 @@ function memoryop_noub(@nospecialize(f), argtypes::Vector{Any})
     return false
 end
 
+function current_scope_tfunc(interp::AbstractInterpreter, sv::InferenceState)
+    pc = sv.currpc
+    while true
+        handleridx = sv.handler_at[pc][1]
+        if handleridx == 0
+            # No local scope available - inherited from the outside
+            return Any
+        end
+        pchandler = sv.handlers[handleridx]
+        # Remember that we looked at this handler, so we get re-scheduled
+        # if the scope information changes
+        isdefined(pchandler, :scope_uses) || (pchandler.scope_uses = Int[])
+        pcbb = block_for_inst(sv.cfg, pc)
+        if findfirst(==(pcbb), pchandler.scope_uses) === nothing
+            push!(pchandler.scope_uses, pcbb)
+        end
+        scope = pchandler.scopet
+        if scope !== nothing
+            # Found the scope - forward it
+            return scope
+        end
+        pc = pchandler.enter_idx
+    end
+end
+current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
+
 """
     builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Bool
 
@@ -2562,9 +2608,6 @@ end
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
                            sv::Union{AbsIntState, Nothing})
     𝕃ᵢ = typeinf_lattice(interp)
-    if f === tuple
-        return tuple_tfunc(𝕃ᵢ, argtypes)
-    end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && all(@nospecialize(a) -> isa(a, Const), argtypes)
             argvals = anymap(@nospecialize(a) -> (a::Const).val, argtypes)
@@ -2590,6 +2633,16 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         end
         tf = T_IFUNC[iidx]
     else
+        if f === tuple
+            return tuple_tfunc(𝕃ᵢ, argtypes)
+        elseif f === Core.current_scope
+            if length(argtypes) != 0
+                if length(argtypes) != 1 || !isvarargtype(argtypes[1])
+                    return Bottom
+                end
+            end
+            return current_scope_tfunc(interp, sv)
+        end
         fidx = find_tfunc(f)
         if fidx === nothing
             # unknown/unhandled builtin function
@@ -2628,80 +2681,146 @@ _iszero(@nospecialize x) = x === Intrinsics.xor_int(x, x)
 _isneg1(@nospecialize x) = _iszero(Intrinsics.not_int(x))
 _istypemin(@nospecialize x) = !_iszero(x) && Intrinsics.neg_int(x) === x
 
-function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{Any})
+
+
+function builtin_exct(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any}, @nospecialize(rt))
+    if isa(f, IntrinsicFunction)
+        return intrinsic_exct(𝕃, f, argtypes)
+    end
+    return Any
+end
+
+function div_nothrow(f::IntrinsicFunction, @nospecialize(arg1), @nospecialize(arg2))
+    isa(arg2, Const) || return false
+
+    den_val = arg2.val
+    _iszero(den_val) && return false
+    f !== Intrinsics.checked_sdiv_int && return true
+    # Nothrow as long as we additionally don't do typemin(T)/-1
+    return !_isneg1(den_val) || (isa(arg1, Const) && !_istypemin(arg1.val))
+end
+
+function known_is_valid_intrinsic_elptr(𝕃::AbstractLattice, @nospecialize(ptr))
+    ptrT = typeof_tfunc(𝕃, ptr)
+    isa(ptrT, Const) || return false
+    return is_valid_intrinsic_elptr(ptrT.val)
+end
+
+function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::Vector{Any})
+    if !isempty(argtypes) && isvarargtype(argtypes[end])
+        return Any
+    end
+
     # First check that we have the correct number of arguments
     iidx = Int(reinterpret(Int32, f::IntrinsicFunction)) + 1
     if iidx < 1 || iidx > length(T_IFUNC)
-        # invalid intrinsic
-        return false
+        # invalid intrinsic (system will crash)
+        return Any
     end
     tf = T_IFUNC[iidx]
     tf = tf::Tuple{Int, Int, Any}
     if !(tf[1] <= length(argtypes) <= tf[2])
         # wrong # of args
-        return false
+        return ArgumentError
     end
+
     # TODO: We could do better for cglobal
-    f === Intrinsics.cglobal && return false
+    f === Intrinsics.cglobal && return Any
     # TODO: We can't know for sure, but the user should have a way to assert
     # that it won't
-    f === Intrinsics.llvmcall && return false
+    f === Intrinsics.llvmcall && return Any
+
     if f === Intrinsics.checked_udiv_int || f === Intrinsics.checked_urem_int || f === Intrinsics.checked_srem_int || f === Intrinsics.checked_sdiv_int
         # Nothrow as long as the second argument is guaranteed not to be zero
-        arg2 = argtypes[2]
-        isa(arg2, Const) || return false
         arg1 = argtypes[1]
+        arg2 = argtypes[2]
         warg1 = widenconst(arg1)
         warg2 = widenconst(arg2)
-        (warg1 === warg2 && isprimitivetype(warg1)) || return false
-        den_val = arg2.val
-        _iszero(den_val) && return false
-        f !== Intrinsics.checked_sdiv_int && return true
-        # Nothrow as long as we additionally don't do typemin(T)/-1
-        return !_isneg1(den_val) || (isa(arg1, Const) && !_istypemin(arg1.val))
+        if !(warg1 === warg2 && isprimitivetype(warg1))
+            return Union{TypeError, DivideError}
+        end
+        if !div_nothrow(f, arg1, arg2)
+            return DivideError
+        end
+        return Union{}
     end
+
     if f === Intrinsics.pointerref
         # Nothrow as long as the types are ok. N.B.: dereferencability is not
         # modeled here, but can cause errors (e.g. ReadOnlyMemoryError). We follow LLVM here
         # in that it is legal to remove unused non-volatile loads.
-        length(argtypes) == 3 || return false
-        return argtypes[1] ⊑ Ptr && argtypes[2] ⊑ Int && argtypes[3] ⊑ Int
+        if !(argtypes[1] ⊑ Ptr && argtypes[2] ⊑ Int && argtypes[3] ⊑ Int)
+            return Union{TypeError, ErrorException}
+        end
+        if !known_is_valid_intrinsic_elptr(𝕃, argtypes[1])
+            return ErrorException
+        end
+        return Union{}
     end
+
     if f === Intrinsics.pointerset
         eT = pointer_eltype(argtypes[1])
-        isprimitivetype(eT) || return false
-        return argtypes[2] ⊑ eT && argtypes[3] ⊑ Int && argtypes[4] ⊑ Int
+        if !known_is_valid_intrinsic_elptr(𝕃, argtypes[1])
+            return Union{TypeError, ErrorException}
+        end
+        if !(argtypes[2] ⊑ eT && argtypes[3] ⊑ Int && argtypes[4] ⊑ Int)
+            return TypeError
+        end
+        return Union{}
     end
+
     if f === Intrinsics.bitcast
         ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
         xty = widenconst(argtypes[2])
-        return isconcrete && isprimitivetype(ty) && isprimitivetype(xty) && Core.sizeof(ty) === Core.sizeof(xty)
+        if !isconcrete
+            return Union{ErrorException, TypeError}
+        end
+        if !(isprimitivetype(ty) && isprimitivetype(xty) && Core.sizeof(ty) === Core.sizeof(xty))
+            return ErrorException
+        end
+        return Union{}
     end
+
     if f in (Intrinsics.sext_int, Intrinsics.zext_int, Intrinsics.trunc_int,
-             Intrinsics.fptoui, Intrinsics.fptosi, Intrinsics.uitofp,
-             Intrinsics.sitofp, Intrinsics.fptrunc, Intrinsics.fpext)
+        Intrinsics.fptoui, Intrinsics.fptosi, Intrinsics.uitofp,
+        Intrinsics.sitofp, Intrinsics.fptrunc, Intrinsics.fpext)
         # If !isconcrete, `ty` may be Union{} at runtime even if we have
         # isprimitivetype(ty).
         ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
+        if !isconcrete
+            return Union{ErrorException, TypeError}
+        end
         xty = widenconst(argtypes[2])
-        return isconcrete && isprimitivetype(ty) && isprimitivetype(xty)
+        if !(isprimitivetype(ty) && isprimitivetype(xty))
+            return ErrorException
+        end
+        return Union{}
     end
+
     if f === Intrinsics.have_fma
         ty, isexact, isconcrete = instanceof_tfunc(argtypes[1], true)
-        return isconcrete && isprimitivetype(ty)
+        if !(isconcrete && isprimitivetype(ty))
+            return TypeError
+        end
+        return Union{}
     end
+
     # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
     # primitive types of the same type.
     isshift = f === shl_int || f === lshr_int || f === ashr_int
     argtype1 = widenconst(argtypes[1])
-    isprimitivetype(argtype1) || return false
+    isprimitivetype(argtype1) || return ErrorException
     for i = 2:length(argtypes)
         argtype = widenconst(argtypes[i])
         if isshift ? !isprimitivetype(argtype) : argtype !== argtype1
-            return false
+            return ErrorException
         end
     end
-    return true
+    return Union{}
+end
+
+function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{Any})
+    return intrinsic_exct(SimpleInferenceLattice.instance, f, argtypes) === Union{}
 end
 
 # whether `f` is pure for inference

@@ -1280,3 +1280,99 @@ end |> !Core.Compiler.is_noub
 @test Base.infer_effects((Vector{Any},Int)) do xs, i
     @inbounds xs[i]
 end |> !Core.Compiler.is_noub
+Base.@propagate_inbounds getindex_propagate(xs, i) = xs[i]
+getindex_dont_propagate(xs, i) = xs[i]
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex_propagate, (Vector{Any},Int)))
+@test Core.Compiler.is_noub(Base.infer_effects(getindex_dont_propagate, (Vector{Any},Int)))
+@test Base.infer_effects((Vector{Any},Int)) do xs, i
+    @inbounds getindex_propagate(xs, i)
+end |> !Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Any},Int)) do xs, i
+    @inbounds getindex_dont_propagate(xs, i)
+end |> Core.Compiler.is_noub
+
+# refine `:nothrow` when `exct` is known to be `Bottom`
+@test Base.infer_exception_type(getindex, (Vector{Int},Int)) == BoundsError
+function getindex_nothrow(xs::Vector{Int}, i::Int)
+    try
+        return xs[i]
+    catch err
+        err isa BoundsError && return nothing
+        rethrow(err)
+    end
+end
+@test Core.Compiler.is_nothrow(Base.infer_effects(getindex_nothrow, (Vector{Int}, Int)))
+
+# callsite `@assume_effects` annotation
+let ast = code_lowered((Int,)) do x
+        Base.@assume_effects :total identity(x)
+    end |> only
+    ssaflag = ast.ssaflags[findfirst(!iszero, ast.ssaflags)::Int]
+    override = Core.Compiler.decode_statement_effects_override(ssaflag)
+    # if this gets broken, check if this is synced with expr.jl
+    @test override.consistent && override.effect_free && override.nothrow &&
+          override.terminates_globally && !override.terminates_locally &&
+          override.notaskstate && override.inaccessiblememonly &&
+          override.noub && !override.noub_if_noinbounds
+end
+@test Base.infer_effects((Float64,)) do x
+    isinf(x) && return 0.0
+    return Base.@assume_effects :nothrow sin(x)
+end |> Core.Compiler.is_nothrow
+let effects = Base.infer_effects((Vector{Float64},)) do xs
+        isempty(xs) && return 0.0
+        Base.@assume_effects :nothrow begin
+            x = Base.@assume_effects :noub @inbounds xs[1]
+            isinf(x) && return 0.0
+            return sin(x)
+        end
+    end
+    # all nested overrides should be applied
+    @test Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_noub(effects)
+end
+@test Base.infer_effects((Int,)) do x
+    res = 1
+    0 ≤ x < 20 || error("bad fact")
+    Base.@assume_effects :terminates_locally while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end |> Core.Compiler.is_terminates
+
+# https://github.com/JuliaLang/julia/issues/52531
+const a52531 = Core.Ref(1)
+@eval getref52531() = $(QuoteNode(a52531)).x
+@test !Core.Compiler.is_consistent(Base.infer_effects(getref52531))
+let
+    global set_a52531!, get_a52531
+    _a::Int             = -1
+    set_a52531!(a::Int) = (_a = a; return get_a52531())
+    get_a52531()        = _a
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(set_a52531!, (Int,)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(get_a52531, ()))
+@test get_a52531() == -1
+@test set_a52531!(1) == 1
+@test get_a52531() == 1
+
+let
+    global is_initialized52531, set_initialized52531!
+    _is_initialized                   = false
+    set_initialized52531!(flag::Bool) = (_is_initialized = flag)
+    is_initialized52531()             = _is_initialized
+end
+top_52531(_) = (set_initialized52531!(true); nothing)
+@test !Core.Compiler.is_consistent(Base.infer_effects(is_initialized52531))
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(set_initialized52531!, (Bool,)))
+@test !is_initialized52531()
+top_52531(0)
+@test is_initialized52531()
+
+@test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(identity∘identity, Tuple{Any}))
+@test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(()->Vararg, Tuple{}))
+
+# pointerref nothrow for invalid pointer
+@test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{Vector{Int64}}}, Int, Int])
+@test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{T}} where T, Int, Int])

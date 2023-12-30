@@ -458,6 +458,7 @@ export
     vcat,
     vec,
     view,
+    wrap,
     zeros,
 
 # search, find, match and related functions
@@ -532,6 +533,7 @@ export
     getkey,
     haskey,
     in,
+    in!,
     intersect!,
     intersect,
     isdisjoint,
@@ -1153,6 +1155,16 @@ public
     @constprop,
     @locals,
     @propagate_inbounds,
+
+# IO
+    # types
+    BufferStream,
+    IOServer,
+    OS_HANDLE,
+    PipeEndpoint,
+    TTY,
+    # functions
+    reseteof,
 
 # misc
     notnothing,

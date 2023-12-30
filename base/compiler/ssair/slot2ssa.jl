@@ -468,10 +468,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             end
             result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
-            if isa(terminator, Expr)
-                if terminator.head === :enter
-                    terminator.args[1] = bb_rename[terminator.args[1]]
-                end
+            if isa(terminator, EnterNode)
+                result[inst_range[end]][:stmt] = EnterNode(terminator, terminator.catch_dest == 0 ? 0 : bb_rename[terminator.catch_dest])
             end
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node
@@ -576,10 +574,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     catch_entry_blocks = TryCatchRegion[]
     for idx in 1:length(code)
         stmt = code[idx]
-        if isexpr(stmt, :enter)
+        if isa(stmt, EnterNode)
             push!(catch_entry_blocks, TryCatchRegion(
                 block_for_inst(cfg, idx),
-                block_for_inst(cfg, stmt.args[1]::Int)))
+                block_for_inst(cfg, stmt.catch_dest)))
         end
     end
 
@@ -817,7 +815,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                         enter_idx = idx
                         while handler_at[enter_idx][1] != 0
                             (; enter_idx) = handlers[handler_at[enter_idx][1]]
-                            leave_block = block_for_inst(cfg, code[enter_idx].args[1]::Int)
+                            leave_block = block_for_inst(cfg, (code[enter_idx]::EnterNode).catch_dest)
                             cidx = findfirst((; slot)::NewPhiCNode2->slot_id(slot)==id, new_phic_nodes[leave_block])
                             if cidx !== nothing
                                 node = thisdef ? UpsilonNode(thisval) : UpsilonNode()
@@ -879,9 +877,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             else
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end
-        elseif isexpr(stmt, :enter)
-            except_bb = block_for_inst(cfg, stmt.args[1]::Int)
-            new_code[idx] = Expr(:enter, except_bb)
+        elseif isa(stmt, EnterNode)
+            except_bb = stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest)
+            new_code[idx] = EnterNode(stmt, except_bb)
             ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)

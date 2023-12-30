@@ -490,6 +490,7 @@ JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
 // eq hash table --------------------------------------------------------------
 
 #include "iddict.c"
+#include "idset.c"
 
 // object model and type primitives -------------------------------------------
 
@@ -584,6 +585,12 @@ JL_CALLABLE(jl_f_ifelse)
     JL_NARGS(ifelse, 3, 3);
     JL_TYPECHK(ifelse, bool, args[0]);
     return (args[0] == jl_false ? args[2] : args[1]);
+}
+
+JL_CALLABLE(jl_f_current_scope)
+{
+    JL_NARGS(current_scope, 0, 0);
+    return jl_current_task->scope;
 }
 
 // apply ----------------------------------------------------------------------
@@ -997,7 +1004,7 @@ static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st,
     }
     if (mutabl && jl_field_isconst(st, idx)) {
         jl_errorf("%s: const field .%s of type %s cannot be changed", name,
-                jl_symbol_name((jl_sym_t*)jl_svec_ref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
+                jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
     }
     return idx;
 }
@@ -1766,7 +1773,7 @@ JL_CALLABLE(jl_f__svec_ref)
     if (idx < 1 || idx > len) {
         jl_bounds_error_int((jl_value_t*)s, idx);
     }
-    return jl_svec_ref(s, idx-1);
+    return jl_svecref(s, idx-1);
 }
 
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
@@ -2157,6 +2164,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("finalizer", jl_f_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
+    add_builtin_func("current_scope", jl_f_current_scope);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
@@ -2213,6 +2221,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("LineInfoNode", (jl_value_t*)jl_lineinfonode_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
     add_builtin("GotoIfNot", (jl_value_t*)jl_gotoifnot_type);
+    add_builtin("EnterNode", (jl_value_t*)jl_enternode_type);
     add_builtin("ReturnNode", (jl_value_t*)jl_returnnode_type);
     add_builtin("PiNode", (jl_value_t*)jl_pinode_type);
     add_builtin("PhiNode", (jl_value_t*)jl_phinode_type);

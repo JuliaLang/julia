@@ -15,15 +15,14 @@ JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t
     size_t sz = a->length;
     size_t i;
     jl_value_t **ol = (jl_value_t **) a->ptr;
-    jl_genericmemory_t *newa = jl_alloc_memory_any(newsz);
+    jl_genericmemory_t *newa = NULL;
     // keep the original memory in the original slot since we need `ol`
     // to be valid in the loop below.
     JL_GC_PUSH2(&newa, &a);
+    newa = jl_alloc_memory_any(newsz);
     for (i = 0; i < sz; i += 2) {
         if (ol[i + 1] != NULL) {
             jl_table_assign_bp(&newa, ol[i], ol[i + 1]);
-            // it is however necessary here because allocation
-            // can (and will) occur in a recursive call inside table_lookup_bp
         }
     }
     JL_GC_POP();
@@ -194,3 +193,4 @@ size_t jl_eqtable_nextind(jl_genericmemory_t *t, size_t i)
 
 #undef hash_size
 #undef max_probe
+#undef h2index

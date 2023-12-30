@@ -7,7 +7,7 @@ export completions, shell_completions, bslash_completions, completion_text
 using Core: CodeInfo, MethodInstance, CodeInstance, Const
 const CC = Core.Compiler
 using Base.Meta
-using Base: propertynames, something
+using Base: propertynames, something, IdSet
 
 abstract type Completion end
 
@@ -521,7 +521,12 @@ CC.code_cache(interp::REPLInterpreter) = CC.WorldView(interp.code_cache, CC.Worl
 CC.get(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
 CC.getindex(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
 CC.haskey(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
-CC.setindex!(wvc::CC.WorldView{REPLInterpreterCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
+function CC.setindex!(wvc::CC.WorldView{REPLInterpreterCache}, ci::CodeInstance, mi::MethodInstance)
+    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
+        delete!(wvc.cache.dict, replaced)
+    end
+    return setindex!(wvc.cache.dict, ci, mi)
+end
 
 # REPLInterpreter is only used for type analysis, so it should disable optimization entirely
 CC.may_optimize(::REPLInterpreter) = false
@@ -713,6 +718,26 @@ function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool
 end
 
 MAX_ANY_METHOD_COMPLETIONS::Int = 10
+function recursive_explore_names!(seen::IdSet, callee_module::Module, initial_module::Module, exploredmodules::IdSet{Module}=IdSet{Module}())
+    push!(exploredmodules, callee_module)
+    for name in names(callee_module; all=true, imported=true)
+        if !Base.isdeprecated(callee_module, name) && !startswith(string(name), '#') && isdefined(initial_module, name)
+            func = getfield(callee_module, name)
+            if !isa(func, Module)
+                funct = Core.Typeof(func)
+                push!(seen, funct)
+            elseif isa(func, Module) && func ∉ exploredmodules
+                recursive_explore_names!(seen, func, initial_module, exploredmodules)
+            end
+        end
+    end
+end
+function recursive_explore_names(callee_module::Module, initial_module::Module)
+    seen = IdSet{Any}()
+    recursive_explore_names!(seen, callee_module, initial_module)
+    seen
+end
+
 function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool, shift::Bool)
     out = Completion[]
     args_ex, kwargs_ex, kwargs_flag = try
@@ -728,32 +753,8 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
     # semicolon for the ".?(" syntax
     moreargs && push!(args_ex, Vararg{Any})
 
-    seen = Base.IdSet()
-    for name in names(callee_module; all=true)
-        if !Base.isdeprecated(callee_module, name) && isdefined(callee_module, name) && !startswith(string(name), '#')
-            func = getfield(callee_module, name)
-            if !isa(func, Module)
-                funct = Core.Typeof(func)
-                if !in(funct, seen)
-                    push!(seen, funct)
-                    complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
-                end
-            elseif callee_module === Main && isa(func, Module)
-                callee_module2 = func
-                for name in names(callee_module2)
-                    if !Base.isdeprecated(callee_module2, name) && isdefined(callee_module2, name) && !startswith(string(name), '#')
-                        func = getfield(callee_module, name)
-                        if !isa(func, Module)
-                            funct = Core.Typeof(func)
-                            if !in(funct, seen)
-                                push!(seen, funct)
-                                complete_methods!(out, funct, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
-                            end
-                        end
-                    end
-                end
-            end
-        end
+    for seen_name in recursive_explore_names(callee_module, callee_module)
+        complete_methods!(out, seen_name, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
     end
 
     if !shift
@@ -1409,7 +1410,9 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
             else
                 owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), scope, var)
                 if C_NULL == owner
-                    print(io, "\nSuggestion: check for spelling errors or missing imports. No global of this name exists in this module.")
+                    # No global of this name exists in this module.
+                    # This is the common case, so do not print that information.
+                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
                     owner = bnd
                 else
                     owner = unsafe_pointer_to_objref(owner)::Core.Binding
@@ -1427,7 +1430,7 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     else
         scope = undef
     end
-    warnfor(m, var) = Base.isbindingresolved(m, var) && isdefined(m, var) && (print(io, "\nHint: a global variable of this name also exists in $m."); true)
+    warnfor(m, var) = Base.isbindingresolved(m, var) && (Base.isexported(m, var) || Base.ispublic(m, var)) && (print(io, "\nHint: a global variable of this name also exists in $m."); true)
     if scope !== Base && !warnfor(Base, var)
         warned = false
         for m in Base.loaded_modules_order

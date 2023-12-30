@@ -112,7 +112,7 @@ static const char opts[]  =
     "                            Use native code from system image if available\n"
     " --compiled-modules={yes*|no|existing}\n"
     "                            Enable or disable incremental precompilation of modules\n"
-    " --pkgimages={yes*|no}\n"
+    " --pkgimages={yes*|no|existing}\n"
     "                            Enable or disable usage of native code caching in the form of pkgimages ($)\n\n"
 
     // actions
@@ -472,6 +472,8 @@ restart_switch:
                 jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_YES;
             else if (!strcmp(optarg,"no"))
                 jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_NO;
+            else if (!strcmp(optarg,"existing"))
+                jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_EXISTING;
             else
                 jl_errorf("julia: invalid argument to --pkgimages={yes|no} (%s)", optarg);
             break;
