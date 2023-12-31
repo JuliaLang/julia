@@ -84,6 +84,7 @@ New library features
   write the output to a stream rather than returning a string ([#48625]).
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
 * New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
+* New function `Docs.undocumented_names(module; all)` returns a module's undocumented names ([#52413]).
 * Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
   expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
   no longer required there for correctness to avoid data races ([#52461]).
