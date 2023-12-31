@@ -1,13 +1,13 @@
 # Interrogate the fortran compiler (which is always GCC based) on where it is keeping its libraries
 STD_LIB_PATH := $(shell LANG=C $(FC) -print-search-dirs 2>/dev/null | grep '^programs: =' | sed -e "s/^programs: =//")
-STD_LIB_PATH += :$(shell LANG=C $(FC) -print-search-dirs 2>/dev/null | grep '^libraries: =' | sed -e "s/^libraries: =//")
 ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies about it search directory paths
+STD_LIB_PATH += $(PATHSEP)$(shell LANG=C $(FC) -print-search-dirs 2>/dev/null | grep '^libraries: =' | sed -e "s/^libraries: =//")
 STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
 endif
 
 # Given a colon-separated list of paths in $(2), find the location of the library given in $(1)
 define pathsearch
-$(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
+$(firstword $(wildcard $(addsuffix /$(1),$(subst $(PATHSEP), ,$(2)))))
 endef
 
 # CSL bundles lots of system compiler libraries, and while it is quite bleeding-edge
