@@ -21,6 +21,7 @@ for sym in [
     Symbol("@warn"),
     Symbol("@error"),
     Symbol("@logmsg"),
+    :custom_log_levels,
     :with_logger,
     :current_logger,
     :global_logger,
@@ -57,7 +58,7 @@ macro create_log_macro(name, level, color)
         throw(ArgumentError("Custom log macro already exists for given log level"))
     end
     quote
-        $(Base.CoreLogging.custom_log_levels)[$(esc(loglevel))] = ($(macro_string), $(esc(color)))
+        $(custom_log_levels)[$(esc(loglevel))] = ($(macro_string), $(esc(color)))
         macro $(esc(macro_name))(exs...)
             $(Base.CoreLogging.logmsg_code)(($(Base.CoreLogging.@_sourceinfo))..., $(esc(loglevel)), exs...)
         end

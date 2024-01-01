@@ -309,7 +309,7 @@ Logging.Debug
 Logging.Info
 Logging.Warn
 Logging.Error
-Logging.custom_log_levels
+Logging.@create_log_macro
 ```
 
 ### [Processing events with AbstractLogger](@id AbstractLogger-interface)
