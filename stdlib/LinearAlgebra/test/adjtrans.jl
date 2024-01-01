@@ -128,21 +128,33 @@ end
         @test Adjoint(intmat) == tintmat
         @test Transpose(intvec) == tintvec
         @test Transpose(intmat) == tintmat
+        # test slicing for correctness and type stability, for arrays with concrete real scalar eltype
+        @test @inferred Adjoint(intmat)[:, 1] == tintmat[:,1]
+        @test @inferred Transpose(intmat)[:,1] == tintmat[:,1]
         # implicitly test elementary definitions, for arrays with concrete complex scalar eltype
         @test Adjoint(complexintvec) == acomplexintvec
         @test Adjoint(complexintmat) == acomplexintmat
         @test Transpose(complexintvec) == tcomplexintvec
         @test Transpose(complexintmat) == tcomplexintmat
+        # test slicing for correctness and type stability, for arrays with concrete complex scalar eltype
+        @test @inferred Adjoint(complexintmat)[:,1] == acomplexintmat[:,1]
+        @test @inferred Transpose(complexintmat)[:,1] == tcomplexintmat[:,1]
         # implicitly test elementary definitions, for arrays with concrete real-array eltype
         @test Adjoint(intvecvec) == tintvecvec
         @test Adjoint(intmatmat) == tintmatmat
         @test Transpose(intvecvec) == tintvecvec
         @test Transpose(intmatmat) == tintmatmat
+        # test slicing for correctness and type stability, for arrays with concrete real-array eltype
+        @test @inferred Adjoint(intmatmat)[:,1] == tintmatmat[:,1]
+        @test @inferred Transpose(intmatmat)[:,1] == tintmatmat[:,1]
         # implicitly test elementary definitions, for arrays with concrete complex-array type
         @test Adjoint(complexintvecvec) == acomplexintvecvec
         @test Adjoint(complexintmatmat) == acomplexintmatmat
         @test Transpose(complexintvecvec) == tcomplexintvecvec
         @test Transpose(complexintmatmat) == tcomplexintmatmat
+        # test slicing for correctness and type stability, for arrays with concrete complex-array eltype
+        @test @inferred Adjoint(complexintmatmat)[:,1] == acomplexintmatmat[:,1]
+        @test @inferred Transpose(complexintmatmat)[:,1] == tcomplexintmatmat[:,1]
     end
     @testset "getindex(::AdjOrTransVec, ::Colon, ::AbstractArray{Int}) methods that preserve wrapper type" begin
         # for arrays with concrete scalar eltype
