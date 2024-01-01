@@ -527,6 +527,19 @@ for f in (:+, :-)
 end
 
 *(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
+# catch a few potential BLAS-cases
+function *(A::HermOrSym{<:BlasFloat,<:StridedMatrix}, B::AdjOrTrans{<:BlasFloat,<:StridedMatrix})
+    T = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, T, (size(A, 1), size(B, 2))),
+            convert(AbstractMatrix{T}, A),
+            copy_oftype(B, T)) # make sure the AdjOrTrans wrapper is resolved
+end
+function *(A::AdjOrTrans{<:BlasFloat,<:StridedMatrix}, B::HermOrSym{<:BlasFloat,<:StridedMatrix})
+    T = promote_type(eltype(A), eltype(B))
+    mul!(similar(B, T, (size(A, 1), size(B, 2))),
+            copy_oftype(A, T), # make sure the AdjOrTrans wrapper is resolved
+            convert(AbstractMatrix{T}, B))
+end
 
 function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
     require_one_based_indexing(x, y)

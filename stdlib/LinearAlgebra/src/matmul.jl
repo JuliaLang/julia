@@ -111,28 +111,34 @@ end
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
 # which is better handled by reinterpreting rather than promotion
-function (*)(A::StridedMaybeAdjOrTransMat{<:BlasReal}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
+# include Bool in those cases
+const BoolBlasReal = Union{Bool, BlasReal}
+const BoolBlasComplex = Union{Bool, BlasComplex, Complex{Bool}}
+function (*)(A::StridedMaybeAdjOrTransMat{<:BoolBlasReal}, B::StridedMaybeAdjOrTransMat{<:BoolBlasReal})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))),
          wrapperop(A)(convert(AbstractArray{TS}, _unwrap(A))),
          wrapperop(B)(convert(AbstractArray{TS}, _unwrap(B))))
 end
-function (*)(A::StridedMaybeAdjOrTransMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasComplex})
+function (*)(A::StridedMaybeAdjOrTransMat{<:BoolBlasComplex}, B::StridedMaybeAdjOrTransMat{<:BoolBlasComplex})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))),
          wrapperop(A)(convert(AbstractArray{TS}, _unwrap(A))),
          wrapperop(B)(convert(AbstractArray{TS}, _unwrap(B))))
 end
+# disambiguation
+(*)(A::StridedMaybeAdjOrTransMat{Bool}, B::StridedMaybeAdjOrTransMat{Bool}) =
+    mul!(similar(B, Int, (size(A, 1), size(B, 2))), A, B)
 
 # Complex Matrix times real matrix: We use that it is generally faster to reinterpret the
 # first matrix as a real matrix and carry out real matrix matrix multiply
-function (*)(A::StridedMatrix{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
+function (*)(A::StridedMatrix{<:BoolBlasComplex}, B::StridedMaybeAdjOrTransMat{<:BoolBlasReal})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))),
          convert(AbstractArray{TS}, A),
          wrapperop(B)(convert(AbstractArray{real(TS)}, _unwrap(B))))
 end
-function (*)(A::AdjOrTransStridedMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
+function (*)(A::AdjOrTransStridedMat{<:BoolBlasComplex}, B::StridedMaybeAdjOrTransMat{<:BoolBlasReal})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))),
          copymutable_oftype(A, TS), # remove AdjOrTrans to use reinterpret trick below
