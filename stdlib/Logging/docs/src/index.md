@@ -58,7 +58,7 @@ automatically extracted. Let's examine the user-defined data first:
 * The *log level* is a broad category for the message that is used for early
   filtering. There are several standard levels of type [`LogLevel`](@ref);
   user-defined levels are also possible.
-  Each built-in is distinct in purpose:
+  Each built-in log level is distinct in purpose:
   - [`Logging.Debug`](@ref) (log level -1000) is information intended for the developer of
     the program. These events are disabled by default.
   - [`Logging.Info`](@ref) (log level 0) is for general information to the user.
@@ -70,7 +70,7 @@ automatically extracted. Let's examine the user-defined data first:
     Often this log-level is unneeded as throwing an exception can convey
     all the required information.
 
-    You can also create logging macros for custom log levels. For instance:
+    You can create logging macros for custom log levels. For instance:
     ```julia-repl
     julia> using Logging
 

@@ -162,6 +162,7 @@ const AboveMaxLevel = LogLevel( 1000001)
 # Global log limiting mechanism for super fast but inflexible global log limiting.
 const _min_enabled_level = Ref{LogLevel}(Debug)
 
+# stored as LogLevel => (name, color)
 const custom_log_levels = Dict{LogLevel,Tuple{Symbol,Union{Symbol,Int}}}()
 
 function show(io::IO, level::LogLevel)
