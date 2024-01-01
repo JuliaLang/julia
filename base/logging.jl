@@ -166,7 +166,7 @@ const _min_enabled_level = Ref{LogLevel}(Debug)
 const custom_log_levels = Dict{LogLevel,Tuple{Symbol,Union{Symbol,Int}}}()
 
 function show(io::IO, level::LogLevel)
-    if     level in keys(custom_log_levels) print(io, custom_log_levels[level][1])
+    if     haskey(custom_log_levels, level) print(io, custom_log_levels[level][1])
     elseif level == BelowMinLevel           print(io, "BelowMinLevel")
     elseif level == Debug                   print(io, "Debug")
     elseif level == Info                    print(io, "Info")
