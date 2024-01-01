@@ -36,7 +36,7 @@ Creates a custom log macro like `@info`, `@warn` etc. with a given `name`, `leve
 `color`. The macro created is named with the lowercase form of `name` but the given form
 is used for the printing.
 
-See `Base.text_colors` for recognized color values.
+The available color keys can be seen by typing `Base.text_colors` in the help mode of the REPL
 
 ```julia-repl
 julia> @create_log_macro(:MyLog, 200, :magenta)
