@@ -3325,7 +3325,7 @@ list_reasons(::Nothing) = ""
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false, reasons=nothing)
-    return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded)
+    return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded, reasons)
 end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String;
                                             ignore_loaded::Bool = false, reasons::Union{Dict{String,Int},Nothing}=nothing)
