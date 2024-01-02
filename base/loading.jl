@@ -2568,7 +2568,7 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; reasons::Union{Dict{String,Int},Nothing}=nothing)
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
     @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
@@ -2578,7 +2578,7 @@ end
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
-                      keep_loaded_modules::Bool = true; reasons::Union{Dict{String,Int},Nothing}=nothing)
+                      keep_loaded_modules::Bool = true; reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -3320,11 +3320,12 @@ function list_reasons(reasons::Dict{String,Int})
     isempty(reasons) && return ""
     return "(cache misses: $(join(("$k ($v)" for (k,v) in reasons), ", ")))"
 end
+list_reasons(::Nothing) = ""
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false, reasons=nothing)
-    return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded)
+    return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded, reasons)
 end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String;
                                             ignore_loaded::Bool = false, reasons::Union{Dict{String,Int},Nothing}=nothing)
