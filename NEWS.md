@@ -118,6 +118,11 @@ Standard library changes
 * Structured matrices now retain either the axes of the parent (for `Symmetric`/`Hermitian`/`AbstractTriangular`/`UpperHessenberg`), or that of the principal diagonal (for banded matrices) ([#52480]).
 * `bunchkaufman` and `bunchkaufman!` now work for any `AbstractFloat`, `Rational` and their complex variants. `bunchkaufman` now supports `Integer` types, by making an internal conversion to `Rational{BigInt}`. Added new function `inertia` that computes the inertia of the diagonal factor given by the `BunchKaufman` factorization object of a real symmetric or Hermitian matrix. For complex symmetric matrices, `inertia` only computes the number of zero eigenvalues of the diagonal factor ([#51487]).
 
+#### Logging
+* New `@create_log_macro` macro for creating new log macros like `@info`, `@warn` etc. For instance
+  `@create_log_macro MyLog 1500 :magenta` will create `@mylog` to be used like `@mylog "hello"` which
+  will show as `┌ MyLog: hello` etc. ([#52196])
+
 #### Printf
 
 #### Profile
