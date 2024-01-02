@@ -56,22 +56,19 @@
 # Two `Some`s forward to their wrapped things
 @test ==(Some([0x1]), Some([1]))
 
-# Don't propagate wrapped `missing`s
-@test !=(Some(1), Some(missing))
-@test !=(Some(missing), Some(1))
-@test ==(Some(missing), Some(missing))
+# propagate wrapped missings
+@test !=(Some(1), Some(missing)) isa Missing
+@test !=(Some(missing), Some(1)) isa Missing
+@test ==(Some(missing), Some(missing)) isa Missing
 
 # Make sure to still propagate non-wrapped Missing
 @test ==(Some(1), missing) isa Missing
 @test ==(missing, Some(1)) isa Missing
 
 @test isequal(Some([0x1]), Some([1]))
-@test !isequal(Some(missing), Some([1]))
-@test !isequal(Some(1), Some(missing))
-@test isequal(Some(missing), Some(missing))
-
 @test !isequal(missing, Some(missing))
 @test !isequal(Some(missing), missing)
+@test isequal(Some(missing), Some(missing))
 
 # hashing implications
 @test hash(Some(0x1)) != hash(0x1)

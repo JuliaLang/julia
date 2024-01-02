@@ -147,13 +147,10 @@ macro something(args...)
 end
 
 ==(a::Some, b::Some)::Bool = a.value == b.value
-==(::Some{Missing}, ::Some) = false
-==(::Some, ::Some{Missing}) = false
-==(::Some{Missing}, ::Some{Missing}) = true
+# seperated out to ensure the above assertion works
+==(::Some{Missing}, ::Some) = missing
+==(::Some, ::Some{Missing}) = missing
+==(::Some{Missing}, ::Some{Missing}) = missing
 
 isequal(a::Some, b::Some)::Bool = isequal(a.value, b.value)
-isequal(::Some{Missing}, ::Some) = false
-isequal(::Some, ::Some{Missing}) = false
-isequal(::Some{Missing}, ::Some{Missing}) = true
-
 hash(s::Some, h::UInt) = hash(s.value, hash(Some, h))
