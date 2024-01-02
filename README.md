@@ -132,12 +132,12 @@ The Julia source code is organized as follows:
 | Directory         | Contents                                                           |
 | -                 | -                                                                  |
 | `base/`           | source code for the Base module (part of Julia's standard library) |
-| `stdlib/`         | source code for other standard library packages                    |
 | `cli/`            | source for the command line interface/REPL                         |
 | `contrib/`        | miscellaneous scripts                                              |
 | `deps/`           | external dependencies                                              |
 | `doc/src/`        | source for the user manual                                         |
 | `src/`            | source for Julia language core                                     |
+| `stdlib/`         | source code for other standard library packages                    |
 | `test/`           | test suites                                                        |
 | `usr/`            | binaries and shared libraries loaded by Julia's standard libraries |
 
