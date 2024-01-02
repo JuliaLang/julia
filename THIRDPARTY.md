@@ -48,8 +48,8 @@ Julia's `stdlib` uses the following external libraries, which have their own lic
 
 Julia's build process uses the following external tools:
 
-- [PATCHELF](https://nixos.org/patchelf.html)
-- [OBJCONV](https://www.agner.org/optimize/#objconv)
+- [PATCHELF](https://github.com/NixOS/patchelf/blob/master/COPYING) [GPL3]
+- [OBJCONV](https://www.agner.org/optimize/#objconv) [GPL3]
 - [LIBWHICH](https://github.com/vtjnash/libwhich/blob/master/LICENSE) [MIT]
 
 Julia bundles the following external programs and libraries:
