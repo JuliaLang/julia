@@ -136,10 +136,10 @@ The Julia source code is organized as follows:
 | `contrib/`        | miscellaneous scripts                                              |
 | `deps/`           | external dependencies                                              |
 | `doc/src/`        | source for the user manual                                         |
+| `etc/`            | contain `startup.jl`                                               |
 | `src/`            | source for Julia language core                                     |
 | `stdlib/`         | source code for other standard library packages                    |
 | `test/`           | test suites                                                        |
-| `usr/`            | binaries and shared libraries loaded by Julia's standard libraries |
 
 ## Terminal, Editors and IDEs
 
