@@ -37,7 +37,7 @@ struct SubString{T<:AbstractString} <: AbstractString
         return new(s, i-1, nextind(s,j)-i)
     end
     function SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where T<:AbstractString
-        @boundscheck begin
+        @boundscheck if !(i == j == 0)
             si, sj = i + 1, prevind(s, j + i + 1)
             @inbounds isvalid(s, si) || string_index_err(s, si)
             @inbounds isvalid(s, sj) || string_index_err(s, sj)

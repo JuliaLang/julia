@@ -729,9 +729,9 @@ end
 end
 
 @testset "symmetric()/hermitian() for Numbers" begin
-    @test LinearAlgebra.symmetric(1, :U) == 1
+    @test LinearAlgebra.symmetric(1) == LinearAlgebra.symmetric(1, :U) == 1
     @test LinearAlgebra.symmetric_type(Int) == Int
-    @test LinearAlgebra.hermitian(1, :U) == 1
+    @test LinearAlgebra.hermitian(1) == LinearAlgebra.hermitian(1, :U) == 1
     @test LinearAlgebra.hermitian_type(Int) == Int
 end
 
@@ -900,6 +900,14 @@ end
             @test sprint(Base.print_matrix, H) == sprint(Base.print_matrix, T)
         end
     end
+end
+
+@testset "symmetric/hermitian for matrices" begin
+    A = [1 2; 3 4]
+    @test LinearAlgebra.symmetric(A) === Symmetric(A)
+    @test LinearAlgebra.symmetric(A, :L) === Symmetric(A, :L)
+    @test LinearAlgebra.hermitian(A) === Hermitian(A)
+    @test LinearAlgebra.hermitian(A, :L) === Hermitian(A, :L)
 end
 
 @testset "custom axes" begin
