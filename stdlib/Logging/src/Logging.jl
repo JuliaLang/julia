@@ -21,7 +21,7 @@ for sym in [
     Symbol("@warn"),
     Symbol("@error"),
     Symbol("@logmsg"),
-    :custom_log_levels,
+    :_log_levels,
     :with_logger,
     :current_logger,
     :global_logger,
@@ -31,12 +31,14 @@ for sym in [
 end
 
 """
-    @create_log_macro(name::Symbol, level::Int, color::Union{Int,Symbol})
+    @create_log_macro(name::Symbol, level::Int, [color::Union{Int,Symbol,Nothing}])
 
 Creates a custom log macro like `@info`, `@warn` etc. with a given `name`, `level` and
 `color`. The macro created is named with the lowercase form of `name` but the given form
 is used for the printing.
 
+The color argument is optional, if not present will default to the nearest debug/info/warn/error
+color based on the severity.
 The available color keys can be seen by typing `Base.text_colors` in the help mode of the REPL
 
 ```julia-repl
@@ -47,18 +49,15 @@ julia> @mylog "hello"
 [ MyLog: hello
 ```
 """
-macro create_log_macro(name, level, color)
+macro create_log_macro(name, level, color=nothing)
     macro_name = Symbol(lowercase(string(name)))
     macro_string = QuoteNode(name)
     loglevel = LogLevel(level)
-    if loglevel in (BelowMinLevel, Debug, Info, Warn, Error, AboveMaxLevel)
-        throw(ArgumentError("Cannot use the same log level as a built in log macro"))
-    end
-    if haskey(custom_log_levels, loglevel)
-        throw(ArgumentError("Custom log macro already exists for given log level"))
+    if haskey(_log_levels, loglevel)
+        throw(ArgumentError("Cannot use the same log level as an existing log level"))
     end
     quote
-        $(custom_log_levels)[$(esc(loglevel))] = ($(macro_string), $(esc(color)))
+        $(_log_levels)[$(esc(loglevel))] = ($(macro_string), $(esc(color)))
         macro $(esc(macro_name))(exs...)
             $(Base.CoreLogging.logmsg_code)(($(Base.CoreLogging.@_sourceinfo))..., $(esc(loglevel)), exs...)
         end

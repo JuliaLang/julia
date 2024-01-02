@@ -58,11 +58,16 @@ end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
 function default_logcolor(level::LogLevel)
-    level in keys(custom_log_levels) ? custom_log_levels[level][2] :
-    level < Info  ? Base.debug_color() :
-    level < Warn  ? Base.info_color()  :
-    level < Error ? Base.warn_color()  :
-                    Base.error_color()
+    color = get(_log_levels, level, nothing)
+    if isnothing(color)
+        # default colors: based such that colors for standard log levels (Info etc) are in middle of color range
+        level = level.level
+        color = level < -500 ? Base.debug_color() :
+                level <  500 ? Base.info_color()  :
+                level < 1500 ? Base.warn_color()  :
+                               Base.error_color()
+    end
+    return color
 end
 
 function default_metafmt(level::LogLevel, _module, group, id, file, line)

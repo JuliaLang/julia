@@ -132,6 +132,9 @@ isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
 -(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
 convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
+# stored as LogLevel => (name, color)
+const _log_levels = Dict{LogLevel,Tuple{Symbol,Union{Symbol,Int,Nothing}}}()
+
 const BelowMinLevel = LogLevel(-1000001)
 """
     Debug
@@ -139,41 +142,44 @@ const BelowMinLevel = LogLevel(-1000001)
 Alias for [`LogLevel(-1000)`](@ref LogLevel).
 """
 const Debug         = LogLevel(   -1000)
+_log_levels[Debug] = (:Debug, nothing)
+
 """
     Info
 
 Alias for [`LogLevel(0)`](@ref LogLevel).
 """
 const Info          = LogLevel(       0)
+_log_levels[Info] = (:Info, nothing)
+
 """
     Warn
 
 Alias for [`LogLevel(1000)`](@ref LogLevel).
 """
 const Warn          = LogLevel(    1000)
+_log_levels[Warn] = (:Warn, nothing)
+
 """
     Error
 
 Alias for [`LogLevel(2000)`](@ref LogLevel).
 """
 const Error         = LogLevel(    2000)
+_log_levels[Error] = (:Error, nothing)
+
 const AboveMaxLevel = LogLevel( 1000001)
+_log_levels[AboveMaxLevel] = (:AboveMaxLevel, nothing)
 
 # Global log limiting mechanism for super fast but inflexible global log limiting.
 const _min_enabled_level = Ref{LogLevel}(Debug)
 
-# stored as LogLevel => (name, color)
-const custom_log_levels = Dict{LogLevel,Tuple{Symbol,Union{Symbol,Int}}}()
 
 function show(io::IO, level::LogLevel)
-    if     haskey(custom_log_levels, level) print(io, custom_log_levels[level][1])
-    elseif level == BelowMinLevel           print(io, "BelowMinLevel")
-    elseif level == Debug                   print(io, "Debug")
-    elseif level == Info                    print(io, "Info")
-    elseif level == Warn                    print(io, "Warn")
-    elseif level == Error                   print(io, "Error")
-    elseif level == AboveMaxLevel           print(io, "AboveMaxLevel")
-    else                                    print(io, "LogLevel($(level.level))")
+    if haskey(_log_levels, level)
+        print(io, _log_levels[level][1])
+    else
+        print(io, "LogLevel($(level.level))")
     end
 end
 
