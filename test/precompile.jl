@@ -579,7 +579,7 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    @test Base.compilecache(Base.PkgId("OverwriteMethodError")) == Base.PrecompilableError() # due to piracy
+    @test (@test_warn "overwritten in module OverwriteMethodError" Base.compilecache(Base.PkgId("OverwriteMethodError"))) == Base.PrecompilableError() # due to piracy
 
     UseBaz_file = joinpath(dir, "UseBaz.jl")
     write(UseBaz_file,
