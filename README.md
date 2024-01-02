@@ -117,7 +117,7 @@ started](https://docs.julialang.org/en/v1/manual/getting-started/)
 in the manual.
 
 Detailed build instructions, should they be necessary,
-are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/).
+are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/build.md).
 
 ### Uninstalling Julia
 
