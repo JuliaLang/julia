@@ -27,7 +27,7 @@ own licenses:
 and optionally:
 
 - [LibTracyClient](https://github.com/wolfpld/tracy/blob/master/LICENSE) [BSD-3]
-- [ITTAPI](https://github.com/intel/ittapi/blob/master/LICENSES/BSD-3-Clause.txt) [BSD-3]
+- [ITTAPI](https://github.com/intel/ittapi/tree/master/LICENSES) [BSD-3 AND GPL2]
 
 Julia's `stdlib` uses the following external libraries, which have their own licenses:
 
