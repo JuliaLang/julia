@@ -3320,6 +3320,7 @@ function list_reasons(reasons::Dict{String,Int})
     isempty(reasons) && return ""
     return "(cache misses: $(join(("$k ($v)" for (k,v) in reasons), ", ")))"
 end
+list_reasons(::Nothing) = ""
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
