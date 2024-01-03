@@ -30,6 +30,7 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 >   * jl_in_stackwalk (Win32)
 >   * ResourcePool<?>::mutex
 >   * RLST_mutex
+>   * llvm_printing_mutex
 >   * jl_locked_stream::mutex
 >   * debuginfo_asyncsafe
 >   * inference_timing_mutex
@@ -40,7 +41,7 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 
 The following is a leaf lock (level 2), and only acquires level 1 locks (safepoint) internally:
 
->   * typecache
+>   * global_roots_lock
 >   * Module->lock
 >   * JLDebuginfoPlugin::PluginMutex
 >   * newly_inferred_mutex
@@ -48,6 +49,7 @@ The following is a leaf lock (level 2), and only acquires level 1 locks (safepoi
 The following is a level 3 lock, which can only acquire level 1 or level 2 locks internally:
 
 >   * Method->writelock
+>   * typecache
 
 The following is a level 4 lock, which can only recurse to acquire level 1, 2, or 3 locks:
 
@@ -91,6 +93,8 @@ may result in pernicious and hard-to-find deadlocks. BE VERY CAREFUL!
 >
 >     > this may continue to be held after releasing the iolock, or acquired without it,
 >     > but be very careful to never attempt to acquire the iolock while holding it
+>
+>   * Libdl.LazyLibrary lock
 
 
 The following is the root lock, meaning no other lock shall be held when trying to acquire it:

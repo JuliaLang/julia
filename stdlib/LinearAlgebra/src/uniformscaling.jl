@@ -179,7 +179,7 @@ for (t1, t2) in ((:UnitUpperTriangular, :UpperTriangular),
                  (:UnitLowerTriangular, :LowerTriangular))
     @eval begin
         function (+)(UL::$t1, J::UniformScaling)
-            ULnew = copymutable_oftype(UL.data, Base._return_type(+, Tuple{eltype(UL), typeof(J)}))
+            ULnew = copymutable_oftype(UL.data, Base.promote_op(+, eltype(UL), typeof(J)))
             for i in axes(ULnew, 1)
                 ULnew[i,i] = one(ULnew[i,i]) + J
             end
@@ -193,7 +193,7 @@ end
 # However, to preserve type stability, we do not special-case a
 # UniformScaling{<:Complex} that happens to be real.
 function (+)(A::Hermitian, J::UniformScaling{<:Complex})
-    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
+    TS = Base.promote_op(+, eltype(A), typeof(J))
     B = copytri!(copymutable_oftype(parent(A), TS), A.uplo, true)
     for i in diagind(B)
         B[i] = A[i] + J
@@ -202,7 +202,7 @@ function (+)(A::Hermitian, J::UniformScaling{<:Complex})
 end
 
 function (-)(J::UniformScaling{<:Complex}, A::Hermitian)
-    TS = Base._return_type(+, Tuple{eltype(A), typeof(J)})
+    TS = Base.promote_op(+, eltype(A), typeof(J))
     B = copytri!(copymutable_oftype(parent(A), TS), A.uplo, true)
     B .= .-B
     for i in diagind(B)
@@ -213,7 +213,7 @@ end
 
 function (+)(A::AbstractMatrix, J::UniformScaling)
     checksquare(A)
-    B = copymutable_oftype(A, Base._return_type(+, Tuple{eltype(A), typeof(J)}))
+    B = copymutable_oftype(A, Base.promote_op(+, eltype(A), typeof(J)))
     for i in intersect(axes(A,1), axes(A,2))
         @inbounds B[i,i] += J
     end
@@ -222,7 +222,7 @@ end
 
 function (-)(J::UniformScaling, A::AbstractMatrix)
     checksquare(A)
-    B = convert(AbstractMatrix{Base._return_type(+, Tuple{eltype(A), typeof(J)})}, -A)
+    B = convert(AbstractMatrix{Base.promote_op(+, eltype(A), typeof(J))}, -A)
     for i in intersect(axes(A,1), axes(A,2))
         @inbounds B[i,i] += J
     end
@@ -293,7 +293,7 @@ function mul!(out::AbstractMatrix{T}, a::Number, B::UniformScaling, α::Number, 
     end
     s = convert(T, a*B.λ*α)
     if !iszero(s)
-        @inbounds for i in diagind(out)
+        @inbounds for i in diagind(out, IndexStyle(out))
             out[i] += s
         end
     end
@@ -381,115 +381,25 @@ function copyto!(A::AbstractMatrix, J::UniformScaling)
     return A
 end
 
+function copyto!(A::Diagonal, J::UniformScaling)
+    A.diag .= J.λ
+    return A
+end
+function copyto!(A::Union{Bidiagonal, SymTridiagonal}, J::UniformScaling)
+    A.ev .= 0
+    A.dv .= J.λ
+    return A
+end
+function copyto!(A::Tridiagonal, J::UniformScaling)
+    A.dl .= 0
+    A.du .= 0
+    A.d .= J.λ
+    return A
+end
+
 function cond(J::UniformScaling{T}) where T
     onereal = inv(one(real(J.λ)))
     return J.λ ≠ zero(T) ? onereal : oftype(onereal, Inf)
-end
-
-# promote_to_arrays(n,k, T, A...) promotes any UniformScaling matrices
-# in A to matrices of type T and sizes given by n[k:end].  n is an array
-# so that the same promotion code can be used for hvcat.  We pass the type T
-# so that we can re-use this code for sparse-matrix hcat etcetera.
-promote_to_arrays_(n::Int, ::Type, a::Number) = a
-promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = Matrix(J, n, n)
-promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
-promote_to_arrays(n,k, ::Type) = ()
-promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)
-promote_to_arrays(n,k, ::Type{T}, A, B) where {T} =
-    (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B))
-promote_to_arrays(n,k, ::Type{T}, A, B, C) where {T} =
-    (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays_(n[k+2], T, C))
-promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
-    (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
-promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling,Number}}}) = Matrix
-
-for (f, _f, dim, name) in ((:hcat, :_hcat, 1, "rows"), (:vcat, :_vcat, 2, "cols"))
-    @eval begin
-        @inline $f(A::Union{AbstractVecOrMat,UniformScaling}...) = $_f(A...)
-        @inline $f(A::Union{AbstractVecOrMat,UniformScaling,Number}...) = $_f(A...)
-        function $_f(A::Union{AbstractVecOrMat,UniformScaling,Number}...; array_type = promote_to_array_type(A))
-            n = -1
-            for a in A
-                if !isa(a, UniformScaling)
-                    require_one_based_indexing(a)
-                    na = size(a,$dim)
-                    n >= 0 && n != na &&
-                        throw(DimensionMismatch(string("number of ", $name,
-                            " of each array must match (got ", n, " and ", na, ")")))
-                    n = na
-                end
-            end
-            n == -1 && throw(ArgumentError($("$f of only UniformScaling objects cannot determine the matrix size")))
-            return cat(promote_to_arrays(fill(n, length(A)), 1, array_type, A...)..., dims=Val(3-$dim))
-        end
-    end
-end
-
-hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling}...) = _hvcat(rows, A...)
-hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling,Number}...) = _hvcat(rows, A...)
-function _hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractVecOrMat,UniformScaling,Number}...; array_type = promote_to_array_type(A))
-    require_one_based_indexing(A...)
-    nr = length(rows)
-    sum(rows) == length(A) || throw(ArgumentError("mismatch between row sizes and number of arguments"))
-    n = fill(-1, length(A))
-    needcols = false # whether we also need to infer some sizes from the column count
-    j = 0
-    for i = 1:nr # infer UniformScaling sizes from row counts, if possible:
-        ni = -1 # number of rows in this block-row, -1 indicates unknown
-        for k = 1:rows[i]
-            if !isa(A[j+k], UniformScaling)
-                na = size(A[j+k], 1)
-                ni >= 0 && ni != na &&
-                    throw(DimensionMismatch("mismatch in number of rows"))
-                ni = na
-            end
-        end
-        if ni >= 0
-            for k = 1:rows[i]
-                n[j+k] = ni
-            end
-        else # row consisted only of UniformScaling objects
-            needcols = true
-        end
-        j += rows[i]
-    end
-    if needcols # some sizes still unknown, try to infer from column count
-        nc = -1
-        j = 0
-        for i = 1:nr
-            nci = 0
-            rows[i] > 0 && n[j+1] == -1 && (j += rows[i]; continue)
-            for k = 1:rows[i]
-                nci += isa(A[j+k], UniformScaling) ? n[j+k] : size(A[j+k], 2)
-            end
-            nc >= 0 && nc != nci && throw(DimensionMismatch("mismatch in number of columns"))
-            nc = nci
-            j += rows[i]
-        end
-        nc == -1 && throw(ArgumentError("sizes of UniformScalings could not be inferred"))
-        j = 0
-        for i = 1:nr
-            if rows[i] > 0 && n[j+1] == -1 # this row consists entirely of UniformScalings
-                nci, r = divrem(nc, rows[i])
-                r != 0 && throw(DimensionMismatch("indivisible UniformScaling sizes"))
-                for k = 1:rows[i]
-                    n[j+k] = nci
-                end
-            end
-            j += rows[i]
-        end
-    end
-    Amat = promote_to_arrays(n, 1, array_type, A...)
-    # We have two methods for promote_to_array_type, one returning Matrix and
-    # another one returning SparseMatrixCSC (in SparseArrays.jl). In the dense
-    # case, we cannot call hvcat for the promoted UniformScalings because this
-    # causes a stack overflow. In the sparse case, however, we cannot call
-    # typed_hvcat because we need a sparse output.
-    if array_type == Matrix
-        return typed_hvcat(promote_eltype(Amat...), rows, Amat...)
-    else
-        return hvcat(rows, Amat...)
-    end
 end
 
 ## Matrix construction from UniformScaling
@@ -509,10 +419,6 @@ Array{T}(s::UniformScaling, m::Integer, n::Integer) where {T} = Matrix{T}(s, m, 
 Array(s::UniformScaling, m::Integer, n::Integer) = Matrix(s, m, n)
 Array(s::UniformScaling, dims::Dims{2}) = Matrix(s, dims)
 
-## Diagonal construction from UniformScaling
-Diagonal{T}(s::UniformScaling, m::Integer) where {T} = Diagonal{T}(fill(T(s.λ), m))
-Diagonal(s::UniformScaling, m::Integer) = Diagonal{eltype(s)}(s, m)
-
 dot(A::AbstractMatrix, J::UniformScaling) = dot(tr(A), J.λ)
 dot(J::UniformScaling, A::AbstractMatrix) = dot(J.λ, tr(A))
 
@@ -523,8 +429,3 @@ dot(x::AbstractVector, a::Union{Real,Complex}, y::AbstractVector) = a*dot(x, y)
 # muladd
 Base.muladd(A::UniformScaling, B::UniformScaling, z::UniformScaling) =
     UniformScaling(A.λ * B.λ + z.λ)
-Base.muladd(A::Union{Diagonal, UniformScaling}, B::Union{Diagonal, UniformScaling}, z::Union{Diagonal, UniformScaling}) =
-    Diagonal(_diag_or_value(A) .* _diag_or_value(B) .+ _diag_or_value(z))
-
-_diag_or_value(A::Diagonal) = A.diag
-_diag_or_value(A::UniformScaling) = A.λ

@@ -19,17 +19,31 @@ const TESTNAMES = [
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
-        "euler", "show", "client",
+        "euler", "show", "client", "terminfo",
         "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
-        "some", "meta", "stacktraces", "docs",
+        "some", "meta", "stacktraces", "docs", "gc",
         "misc", "threads", "stress", "binaryplatforms", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
-        "checked", "bitset", "floatfuncs", "precompile",
+        "checked", "bitset", "floatfuncs", "precompile", "relocatedepot",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
+        "scopedvalues",
 ]
+
+const INTERNET_REQUIRED_LIST = [
+    "Artifacts",
+    "Downloads",
+    "LazyArtifacts",
+    "LibCURL",
+    "LibGit2",
+    "Pkg",
+    "TOML",
+    "download",
+]
+
+const NETWORK_REQUIRED_LIST = vcat(INTERNET_REQUIRED_LIST, ["Sockets"])
 
 """
 `(; tests, net_on, exit_on_error, seed) = choosetests(choices)` selects a set of tests to be
@@ -137,18 +151,19 @@ function choosetests(choices = [])
 
     filtertests!(tests, "unicode", ["unicode/utf8"])
     filtertests!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
-                   "strings/io", "strings/types"])
+                   "strings/io", "strings/types", "strings/annotated"])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
     filtertests!(tests, "compiler", [
         "compiler/datastructures", "compiler/inference", "compiler/effects",
         "compiler/validation", "compiler/ssair", "compiler/irpasses",
         "compiler/codegen", "compiler/inline", "compiler/contextual",
-        "compiler/AbstractInterpreter", "compiler/EscapeAnalysis/local",
-        "compiler/EscapeAnalysis/interprocedural"])
+        "compiler/invalidation", "compiler/AbstractInterpreter",
+        "compiler/EscapeAnalysis/EscapeAnalysis"])
     filtertests!(tests, "compiler/EscapeAnalysis", [
-        "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])
+        "compiler/EscapeAnalysis/EscapeAnalysis"])
     filtertests!(tests, "stdlib", STDLIBS)
+    filtertests!(tests, "internet_required", INTERNET_REQUIRED_LIST)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     filtertests!(tests, "ambiguous")
 
@@ -164,22 +179,9 @@ function choosetests(choices = [])
         filter!(x -> x != "rounding", tests)
     end
 
-    net_required_for = filter!(in(tests), [
-        "Artifacts",
-        "Downloads",
-        "LazyArtifacts",
-        "LibCURL",
-        "LibGit2",
-        "Sockets",
-        "download",
-        "TOML",
-    ])
+    net_required_for = filter!(in(tests), NETWORK_REQUIRED_LIST)
     net_on = true
-    JULIA_TEST_NETWORKING_AVAILABLE = get(ENV, "JULIA_TEST_NETWORKING_AVAILABLE", "") |>
-                                      strip |>
-                                      lowercase |>
-                                      s -> tryparse(Bool, s) |>
-                                      x -> x === true
+    JULIA_TEST_NETWORKING_AVAILABLE = Base.get_bool_env("JULIA_TEST_NETWORKING_AVAILABLE", false) === true
     # If the `JULIA_TEST_NETWORKING_AVAILABLE` environment variable is set to `true`, we
     # always set `net_on` to `true`.
     # Otherwise, we set `net_on` to true if and only if networking is actually available.

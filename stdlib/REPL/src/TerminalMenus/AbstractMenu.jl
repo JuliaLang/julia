@@ -216,7 +216,7 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
                 m.pageoffset = 0
             elseif c == Int(END_KEY)
                 cursor[] = lastoption
-                m.pageoffset = lastoption - m.pagesize
+                m.pageoffset = max(0, lastoption - m.pagesize)
             elseif c == 13 # <enter>
                 # will break if pick returns true
                 pick(m, cursor[]) && break
@@ -269,7 +269,7 @@ function move_up!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
     elseif scroll_wrap(m)
         # wrap to bottom
         cursor = lastoption
-        m.pageoffset = lastoption - m.pagesize
+        m.pageoffset = max(0, lastoption - m.pagesize)
     end
     return cursor
 end
@@ -299,7 +299,7 @@ end
 
 function page_down!(m::AbstractMenu, cursor::Int, lastoption::Int=numoptions(m))
     m.pageoffset += m.pagesize - (cursor == 1 ? 1 : 0)
-    m.pageoffset = min(m.pageoffset, lastoption - m.pagesize)
+    m.pageoffset = max(0, min(m.pageoffset, lastoption - m.pagesize))
     return min(cursor + m.pagesize, lastoption)
 end
 

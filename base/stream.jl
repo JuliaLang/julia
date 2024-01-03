@@ -436,7 +436,10 @@ end
 
 function closewrite(s::LibuvStream)
     iolock_begin()
-    check_open(s)
+    if !iswritable(s)
+        iolock_end()
+        return
+    end
     req = Libc.malloc(_sizeof_uv_shutdown)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     err = ccall(:uv_shutdown, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -457,7 +460,7 @@ function closewrite(s::LibuvStream)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we won't get spurious notifications later
@@ -565,7 +568,6 @@ displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
 
 function displaysize(io::TTY)
-    # A workaround for #34620 and #26687 (this still has the TOCTOU problem).
     check_open(io)
 
     local h::Int, w::Int
@@ -588,6 +590,7 @@ function displaysize(io::TTY)
     s1 = Ref{Int32}(0)
     s2 = Ref{Int32}(0)
     iolock_begin()
+    check_open(io)
     Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
                                       Int32, (Ptr{Cvoid}, Ptr{Int32}, Ptr{Int32}),
                                       io, s1, s2) != 0)
@@ -1050,7 +1053,7 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
@@ -1489,7 +1492,7 @@ closewrite(s::BufferStream) = close(s)
 function close(s::BufferStream)
     lock(s.cond) do
         s.status = StatusClosed
-        notify(s.cond)
+        notify(s.cond) # aka flush
         nothing
     end
 end
@@ -1549,6 +1552,7 @@ stop_reading(s::BufferStream) = nothing
 write(s::BufferStream, b::UInt8) = write(s, Ref{UInt8}(b))
 function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt)
     nwrite = lock(s.cond) do
+        check_open(s)
         rv = unsafe_write(s.buffer, p, nb)
         s.buffer_writes || notify(s.cond)
         rv
@@ -1569,9 +1573,18 @@ end
 buffer_writes(s::BufferStream, bufsize=0) = (s.buffer_writes = true; s)
 function flush(s::BufferStream)
     lock(s.cond) do
+        check_open(s)
         notify(s.cond)
         nothing
     end
 end
 
 skip(s::BufferStream, n) = skip(s.buffer, n)
+
+function reseteof(x::BufferStream)
+    lock(s.cond) do
+        s.status = StatusOpen
+        nothing
+    end
+    nothing
+end

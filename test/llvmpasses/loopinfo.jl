@@ -2,8 +2,7 @@
 
 # RUN: julia --startup-file=no %s %t && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | FileCheck %s
-# RUN: cat %t/module.ll | opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LowerSIMDLoop -S - | FileCheck %s -check-prefix=LOWER
-# RUN: cat %t/module.ll | opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='LowerSIMDLoop' -S - | FileCheck %s -check-prefix=LOWER
+# RUN: cat %t/module.ll | opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='loop(LowerSIMDLoop)' -S - | FileCheck %s -check-prefix=LOWER
 # RUN: julia --startup-file=no %s %t -O && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | FileCheck %s -check-prefix=FINAL
 
@@ -27,12 +26,11 @@ function simdf(X)
     acc = zero(eltype(X))
     @simd for x in X
         acc += x
-# CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO:![0-9]+]]
+# CHECK: br {{.*}}, !llvm.loop [[LOOPID:![0-9]+]]
 # LOWER-NOT: llvm.mem.parallel_loop_access
-# LOWER: fadd fast double
-# LOWER-NOT: call void @julia.loopinfo_marker()
+# LOWER: fadd reassoc contract double
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID:![0-9]+]]
-# FINAL: fadd fast <{{[0-9]+}} x double>
+# FINAL: fadd reassoc contract <{{(vscale x )?}}{{[0-9]+}} x double>
     end
     acc
 end
@@ -43,10 +41,9 @@ function simdf2(X)
     acc = zero(eltype(X))
     @simd ivdep for x in X
         acc += x
-# CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO2:![0-9]+]]
+# CHECK: br {{.*}}, !llvm.loop [[LOOPID2:![0-9]+]]
 # LOWER: llvm.mem.parallel_loop_access
-# LOWER-NOT: call void @julia.loopinfo_marker()
-# LOWER: fadd fast double
+# LOWER: fadd reassoc contract double
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID2:![0-9]+]]
     end
     acc
@@ -61,13 +58,12 @@ end
     for i in 1:N
         iteration(i)
         $(Expr(:loopinfo, (Symbol("llvm.loop.unroll.count"), 3)))
-# CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO3:![0-9]+]]
-# LOWER-NOT: call void @julia.loopinfo_marker()
+# CHECK: br {{.*}}, !llvm.loop [[LOOPID3:![0-9]+]]
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID3:![0-9]+]]
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL-NOT: call void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
 # FINAL: br
     end
 end
@@ -87,20 +83,19 @@ end
             iteration(i)
         end
         $(Expr(:loopinfo, (Symbol("llvm.loop.unroll.full"),)))
-# CHECK: call void @julia.loopinfo_marker(), {{.*}}, !julia.loopinfo [[LOOPINFO4:![0-9]+]]
-# LOWER-NOT: call void @julia.loopinfo_marker()
+# CHECK: br {{.*}}, !llvm.loop [[LOOPID4:![0-9]+]]
 # LOWER: br {{.*}}, !llvm.loop [[LOOPID4:![0-9]+]]
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL: call void @j_iteration
-# FINAL-NOT: call void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
     end
 end
 
@@ -111,19 +106,19 @@ end
             1 <= j <= I && continue
             @show (i,j)
             iteration(i)
-# FINAL: call void @j_iteration
-# FINAL-NOT: call void @j_iteration
+# FINAL: call {{(swiftcc )?}}void @j_iteration
+# FINAL-NOT: call {{(swiftcc )?}}void @j_iteration
         end
         $(Expr(:loopinfo, (Symbol("llvm.loop.unroll.disable"),)))
     end
 end
 
 ## Check all the MD nodes
-# CHECK: [[LOOPINFO]] = !{!"julia.simdloop"}
-# CHECK: [[LOOPINFO2]] = !{!"julia.simdloop", !"julia.ivdep"}
-# CHECK: [[LOOPINFO3]] = !{[[LOOPUNROLL:![0-9]+]]}
+# CHECK: [[LOOPID]] = distinct !{[[LOOPID]], !"julia.simdloop"}
+# CHECK: [[LOOPID2]] = distinct !{[[LOOPID2]], !"julia.simdloop", !"julia.ivdep"}
+# CHECK: [[LOOPID3]] = distinct !{[[LOOPID3]], [[LOOPUNROLL:![0-9]+]]}
 # CHECK: [[LOOPUNROLL]] = !{!"llvm.loop.unroll.count", i64 3}
-# CHECK: [[LOOPINFO4]] = !{[[LOOPUNROLL2:![0-9]+]]}
+# CHECK: [[LOOPID4]] = distinct !{[[LOOPID4]], [[LOOPUNROLL2:![0-9]+]]}
 # CHECK: [[LOOPUNROLL2]] = !{!"llvm.loop.unroll.full"}
 # LOWER: [[LOOPID]] = distinct !{[[LOOPID]]}
 # LOWER: [[LOOPID2]] = distinct !{[[LOOPID2]]}

@@ -69,6 +69,32 @@ $$latex literal$$
 """
 function break_me_docs end
 
+
+# `hasdoc` returns `true` on a name with a docstring.
+@test Docs.hasdoc(Base, :map)
+# `hasdoc` returns `false` on a name without a docstring.
+@test !isdefined(Base, :_this_name_doesnt_exist_) && !Docs.hasdoc(Base, :_this_name_doesnt_exist_)
+@test isdefined(Base, :_typed_vcat) && !Docs.hasdoc(Base, :_typed_vcat)
+
+"This module has names without documentation."
+module _ModuleWithUndocumentedNames
+export f
+f() = 1
+end
+
+"This module has some documentation."
+module _ModuleWithSomeDocumentedNames
+export f
+"f() is 1."
+f() = 1
+g() = 2
+end
+
+@test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [:f]
+@test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; all=true) == [:eval, :g, :include]
+
+
 # issue #11548
 
 module ModuleMacroDoc
@@ -623,6 +649,7 @@ end
 
 let d = @doc(I15424.LazyHelp)
     @test repr("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
+    # (no internal warning is inserted for non-markdown content)
 end
 
 # Issue #13385.
@@ -642,7 +669,7 @@ macro m1_11993()
 end
 
 macro m2_11993()
-    Symbol("@m1_11993")
+    esc(Symbol("@m1_11993"))
 end
 
 @doc "This should document @m1... since its the result of expansion" @m2_11993
@@ -650,7 +677,7 @@ end
 let d = (@doc :@m2_11993),
     macro_doc = Markdown.parse("`$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993` is a macro.")
     @test docstring_startswith(d, doc"""
-    No documentation found.
+    No documentation found for private symbol.
 
     $macro_doc""")
 end
@@ -849,9 +876,9 @@ undocumented(x,y) = 3
 end # module
 
 doc_str = Markdown.parse("""
-No docstring or readme file found for module `$(curmod_prefix)Undocumented`.
+No docstring or readme file found for internal module `$(curmod_prefix)Undocumented`.
 
-# Exported names
+# Public names
 
 `A`, `B`, `C`, `at0`, `pt2`
 """)
@@ -865,7 +892,7 @@ Binding `$(curmod_prefix)Undocumented.bindingdoesnotexist` does not exist.
 @test docstrings_equal(@doc(Undocumented.bindingdoesnotexist), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
 # Summary
 ```
@@ -881,7 +908,7 @@ $(curmod_prefix)Undocumented.C
 @test docstrings_equal(@doc(Undocumented.A), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
 # Summary
 ```
@@ -901,7 +928,7 @@ $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 @test docstrings_equal(@doc(Undocumented.B), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
 # Summary
 ```
@@ -916,7 +943,7 @@ $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
 @test docstrings_equal(@doc(Undocumented.C), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 ```
@@ -938,7 +965,7 @@ $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_pre
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
 # Summary
 
@@ -958,7 +985,7 @@ $(curmod_prefix)Undocumented.st4{T<:Number, N}
 @test docstrings_equal(@doc(Undocumented.at0), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -981,7 +1008,7 @@ $(curmod_prefix)Undocumented.at1{T>:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.at1), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1000,7 +1027,7 @@ $(curmod_prefix)Undocumented.st4{Int64, N}
 @test docstrings_equal(@doc(Undocumented.at_), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
 # Summary
 
@@ -1017,7 +1044,7 @@ $(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer} <: $(curmod_prefix)Un
 @test docstrings_equal(@doc(Undocumented.pt2), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1027,7 +1054,7 @@ struct $(curmod_prefix)Undocumented.st3{T<:Integer, N}
 
 # Fields
 ```
-a :: Tuple{Vararg{T<:Integer, N}}
+a :: NTuple{N, T<:Integer}
 b :: Array{Int64, N}
 c :: Int64
 ```
@@ -1040,7 +1067,7 @@ $(curmod_prefix)Undocumented.st3{T<:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.st3), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1051,7 +1078,7 @@ struct $(curmod_prefix)Undocumented.st4{T, N}
 # Fields
 ```
 a :: T
-b :: Tuple{Vararg{T, N}}
+b :: NTuple{N, T}
 ```
 
 # Supertype Hierarchy
@@ -1062,7 +1089,7 @@ $(curmod_prefix)Undocumented.st4{T, N} <: $(curmod_prefix)Undocumented.at0{T, N}
 @test docstrings_equal(@doc(Undocumented.st4), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1083,7 +1110,7 @@ $(curmod_prefix)Undocumented.st5{T>:Int64, N} <: $(curmod_prefix)Undocumented.at
 @test docstrings_equal(@doc(Undocumented.st5), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1104,7 +1131,7 @@ $(curmod_prefix)Undocumented.mt6{T<:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.mt6), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1118,7 +1145,7 @@ No documentation found.
 @test docstrings_equal(@doc(Undocumented.ut7), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1134,7 +1161,7 @@ No documentation found.
 @test docstrings_equal(@doc(Undocumented.ut8), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
 # Summary
 
@@ -1153,7 +1180,7 @@ let d = @doc(Undocumented.f)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)),"""
-    No documentation found.
+    No documentation found for private symbol.
 
     `$(curmod_prefix)Undocumented.f` is a `Function`.
     """)
@@ -1163,7 +1190,7 @@ let d = @doc(Undocumented.undocumented)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)), """
-    No documentation found.
+    No documentation found for private symbol.
 
     `$(curmod_prefix)Undocumented.undocumented` is a `Function`.
     """)
@@ -1309,30 +1336,30 @@ end
 let dt1 = striptrimdocs(_repl(:(dynamic_test(1.0))))
     @test dt1 isa Expr
     @test dt1.args[1] isa Expr
-    @test dt1.args[1].head === :macrocall
-    @test dt1.args[1].args[1] === Symbol("@doc")
-    @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
+    @test dt1.args[1].head === :call
+    @test dt1.args[1].args[1] === Base.Docs.doc
+    @test dt1.args[1].args[3] == :(Union{Tuple{typeof(1.0)}})
 end
 let dt2 = striptrimdocs(_repl(:(dynamic_test(::String))))
     @test dt2 isa Expr
     @test dt2.args[1] isa Expr
-    @test dt2.args[1].head === :macrocall
-    @test dt2.args[1].args[1] === Symbol("@doc")
-    @test dt2.args[1].args[3] == :(dynamic_test(::String))
+    @test dt2.args[1].head === :call
+    @test dt2.args[1].args[1] === Base.Docs.doc
+    @test dt2.args[1].args[3] == :(Union{Tuple{String}})
 end
 let dt3 = striptrimdocs(_repl(:(dynamic_test(a))))
     @test dt3 isa Expr
     @test dt3.args[1] isa Expr
-    @test dt3.args[1].head === :macrocall
-    @test dt3.args[1].args[1] === Symbol("@doc")
-    @test dt3.args[1].args[3].args[2].head === :(::) # can't test equality due to line numbers
+    @test dt3.args[1].head === :call
+    @test dt3.args[1].args[1] === Base.Docs.doc
+    @test dt3.args[1].args[3].args[2].head === :curly # can't test equality due to line numbers
 end
 let dt4 = striptrimdocs(_repl(:(dynamic_test(1.0,u=2.0))))
     @test dt4 isa Expr
     @test dt4.args[1] isa Expr
-    @test dt4.args[1].head === :macrocall
-    @test dt4.args[1].args[1] === Symbol("@doc")
-    @test dt4.args[1].args[3] == :(dynamic_test(::typeof(1.0); u::typeof(2.0)=2.0))
+    @test dt4.args[1].head === :call
+    @test dt4.args[1].args[1] === Base.Docs.doc
+    @test dt4.args[1].args[3] == :(Union{Tuple{typeof(1.0)}})
 end
 
 # Equality testing
@@ -1516,3 +1543,11 @@ struct S41727
 end
 @test S41727(1) isa S41727
 @test string(@repl S41727.x) == "x is 4\n"
+
+"ensure we can document ccallable functions"
+Base.@ccallable c51586_short()::Int = 2
+"ensure we can document ccallable functions"
+Base.@ccallable c51586_long()::Int = 3
+
+@test docstrings_equal(@doc(c51586_short()), doc"ensure we can document ccallable functions")
+@test docstrings_equal(@doc(c51586_long()), doc"ensure we can document ccallable functions")

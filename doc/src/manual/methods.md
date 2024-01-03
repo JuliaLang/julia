@@ -265,8 +265,40 @@ julia> methods(+)
 ```
 
 Multiple dispatch together with the flexible parametric type system give Julia its ability to
-abstractly express high-level algorithms decoupled from implementation details, yet generate efficient,
-specialized code to handle each case at run time.
+abstractly express high-level algorithms decoupled from implementation details.
+
+## [Method specializations](@id man-method-specializations)
+
+When you create multiple methods of the same function, this is sometimes called
+"specialization." In this case, you're specializing the *function* by adding additional
+methods to it: each new method is a new specialization of the function.
+As shown above, these specializations are returned by `methods`.
+
+There's another kind of specialization that occurs without programmer intervention:
+Julia's compiler can automatically specialize the *method* for the specific argument types used.
+Such specializations are *not* listed by `methods`, as this doesn't create new `Method`s, but tools like [`@code_typed`](@ref) allow you to inspect such specializations.
+
+For example, if you create a method
+
+```
+mysum(x::Real, y::Real) = x + y
+```
+
+you've given the function `mysum` one new method (possibly its only method), and that method takes any pair of `Real` number inputs. But if you then execute
+
+```julia-repl
+julia> mysum(1, 2)
+3
+
+julia> mysum(1.0, 2.0)
+3.0
+```
+
+Julia will compile `mysum` twice, once for `x::Int, y::Int` and again for `x::Float64, y::Float64`.
+The point of compiling twice is performance: the methods that get called for `+` (which `mysum` uses) vary depending on the specific types of `x` and `y`, and by compiling different specializations Julia can do all the method lookup ahead of time. This allows the program to run much more quickly, since it does not have to bother with method lookup while it is running.
+Julia's automatic specialization allows you to write generic algorithms and expect that the compiler will generate efficient, specialized code to handle each case you need.
+
+In cases where the number of potential specializations might be effectively unlimited, Julia may avoid this default specialization. See [Be aware of when Julia avoids specializing](@ref) for more information.
 
 ## [Method Ambiguities](@id man-ambiguities)
 
@@ -290,9 +322,9 @@ julia> g(2.0, 3.0)
 ERROR: MethodError: g(::Float64, ::Float64) is ambiguous.
 
 Candidates:
-  g(x::Float64, y)
-    @ Main none:1
   g(x, y::Float64)
+    @ Main none:1
+  g(x::Float64, y)
     @ Main none:1
 
 Possible fix, define
@@ -302,10 +334,11 @@ Stacktrace:
 [...]
 ```
 
-Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
-method, and neither is more specific than the other. In such cases, Julia raises a [`MethodError`](@ref)
-rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate
-method for the intersection case:
+Here the call `g(2.0, 3.0)` could be handled by either the `g(::Float64, ::Any)` or the
+`g(::Any, ::Float64)` method. The order in which the methods are defined does not matter and
+neither is more specific than the other. In such cases, Julia raises a
+[`MethodError`](@ref) rather than arbitrarily picking a method. You can avoid method
+ambiguities by specifying an appropriate method for the intersection case:
 
 ```jldoctest gofxy
 julia> g(x::Float64, y::Float64) = 2x + 2y
@@ -374,7 +407,20 @@ Here's an example where the method type parameter `T` is used as the type parame
 type `Vector{T}` in the method signature:
 
 ```jldoctest
-julia> myappend(v::Vector{T}, x::T) where {T} = [v..., x]
+julia> function myappend(v::Vector{T}, x::T) where {T}
+           return [v..., x]
+       end
+myappend (generic function with 1 method)
+```
+
+The type parameter `T` in this example ensures that the added element `x` is a subtype of the
+existing eltype of the vector `v`.
+The `where` keyword introduces a list of those constraints after the method signature definition.
+This works the same for one-line definitions, as seen above, and must appear _before_ the [return
+type declaration](@ref man-functions-return-type), if present, as illustrated below:
+
+```jldoctest
+julia> (myappend(v::Vector{T}, x::T)::Vector) where {T} = [v..., x]
 myappend (generic function with 1 method)
 
 julia> myappend([1,2,3],4)
@@ -412,9 +458,9 @@ Stacktrace:
 [...]
 ```
 
-As you can see, the type of the appended element must match the element type of the vector it
-is appended to, or else a [`MethodError`](@ref) is raised. In the following example, the method type parameter
-`T` is used as the return value:
+If the type of the appended element does not match the element type of the vector it is appended to,
+a [`MethodError`](@ref) is raised.
+In the following example, the method's type parameter `T` is used as the return value:
 
 ```jldoctest
 julia> mytypeof(x::T) where {T} = T
@@ -1215,5 +1261,6 @@ function f2(inc)
         x -> x - 1
     end
 end
+```
 
 [^Clarke61]: Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.

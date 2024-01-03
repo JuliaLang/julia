@@ -165,11 +165,13 @@ end
 round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
 """
-    @irrational sym val def
-    @irrational(sym, val, def)
+    @irrational sym [val] def
 
-Define a new `Irrational` value, `sym`, with pre-computed `Float64` value `val`,
-and arbitrary-precision definition in terms of `BigFloat`s given by the expression `def`.
+Define a new `Irrational` value, `sym`, with arbitrary-precision definition in terms
+of `BigFloat`s given by the expression `def`.
+
+Optionally provide a pre-computed `Float64` value `val` which must equal `Float64(def)`.
+`val` will be computed automatically if omitted.
 
 An `AssertionError` is thrown when either `big(def) isa BigFloat` or `Float64(val) == Float64(def)`
 returns `false`.
@@ -184,24 +186,30 @@ returns `false`.
 
 # Examples
 ```jldoctest
-julia> Base.@irrational(twoπ, 6.2831853071795864769, 2*big(π))
+julia> Base.@irrational twoπ 2*big(π)
 
 julia> twoπ
 twoπ = 6.2831853071795...
 
-julia> Base.@irrational sqrt2  1.4142135623730950488  √big(2)
+julia> Base.@irrational sqrt2 1.4142135623730950488 √big(2)
 
 julia> sqrt2
 sqrt2 = 1.4142135623730...
 
-julia> Base.@irrational sqrt2  1.4142135623730950488  big(2)
+julia> Base.@irrational sqrt2 1.4142135623730950488 big(2)
 ERROR: AssertionError: big($(Expr(:escape, :sqrt2))) isa BigFloat
 
-julia> Base.@irrational sqrt2  1.41421356237309  √big(2)
+julia> Base.@irrational sqrt2 1.41421356237309 √big(2)
 ERROR: AssertionError: Float64($(Expr(:escape, :sqrt2))) == Float64(big($(Expr(:escape, :sqrt2))))
 ```
 """
 macro irrational(sym, val, def)
+    irrational(sym, val, def)
+end
+macro irrational(sym, def)
+    irrational(sym, :(big($(esc(sym)))), def)
+end
+function irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
     bigconvert = isa(def,Symbol) ? quote
@@ -221,8 +229,10 @@ macro irrational(sym, val, def)
     quote
         const $esym = Irrational{$qsym}()
         $bigconvert
-        Base.Float64(::Irrational{$qsym}) = $val
-        Base.Float32(::Irrational{$qsym}) = $(Float32(val))
+        let v = $val, v64 = Float64(v), v32 = Float32(v)
+            Base.Float64(::Irrational{$qsym}) = v64
+            Base.Float32(::Irrational{$qsym}) = v32
+        end
         @assert isa(big($esym), BigFloat)
         @assert Float64($esym) == Float64(big($esym))
         @assert Float32($esym) == Float32(big($esym))

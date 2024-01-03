@@ -14,7 +14,7 @@ Code inclusion is quite straightforward and simple: it evaluates the given sourc
 
 A *package* is a source tree with a standard layout providing functionality that can be reused by other Julia projects. A package is loaded by `import X` or  `using X` statements. These statements also make the module named `X`—which results from loading the package code—available within the module where the import statement occurs. The meaning of `X` in `import X` is context-dependent: which `X` package is loaded depends on what code the statement occurs in. Thus, handling of `import X` happens in two stages: first, it determines **what** package is defined to be `X` in this context; second, it determines **where** that particular `X` package is found.
 
-These questions are answered by searching through the project environments listed in [`LOAD_PATH`](@ref) for project files (`Project.toml` or `JuliaProject.toml`), manifest files (`Manifest.toml` or `JuliaManifest.toml`), or folders of source files.
+These questions are answered by searching through the project environments listed in [`LOAD_PATH`](@ref) for project files (`Project.toml` or `JuliaProject.toml`), manifest files (`Manifest.toml` or `JuliaManifest.toml`, or the same names suffixed by `-v{major}.{minor}.toml` for specific versions), or folders of source files.
 
 
 ## Federation of packages
@@ -63,7 +63,7 @@ Each kind of environment defines these three maps differently, as detailed in th
 
 ### Project environments
 
-A project environment is determined by a directory containing a project file called `Project.toml`, and optionally a manifest file called `Manifest.toml`. These files may also be called `JuliaProject.toml` and `JuliaManifest.toml`, in which case `Project.toml` and `Manifest.toml` are ignored. This allows for coexistence with other tools that might consider files called `Project.toml` and `Manifest.toml` significant. For pure Julia projects, however, the names `Project.toml` and `Manifest.toml` are preferred.
+A project environment is determined by a directory containing a project file called `Project.toml`, and optionally a manifest file called `Manifest.toml`. These files may also be called `JuliaProject.toml` and `JuliaManifest.toml`, in which case `Project.toml` and `Manifest.toml` are ignored. This allows for coexistence with other tools that might consider files called `Project.toml` and `Manifest.toml` significant. For pure Julia projects, however, the names `Project.toml` and `Manifest.toml` are preferred. However, from Julia v1.11 onwards, `(Julia)Manifest-v{major}.{minor}.toml` is recognized as a format to make a given julia version use a specific manifest file i.e. in the same folder, a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by any other julia version.
 
 The roots, graph and paths maps of a project environment are defined as follows:
 
@@ -351,10 +351,14 @@ Since the primary environment is typically the environment of a project you're w
 
 ### [Package Extensions](@id man-extensions)
 
-A package "extension" is a module that is automatically loaded when a specified set of other packages (its "extension dependencies") are loaded in the current Julia session. The extension dependencies of an extension are a subset of those packages listed under the `[weakdeps]` section of a Project file. Extensions are defined under the `[extensions]` section in the project file:
+A package "extension" is a module that is automatically loaded when a specified set of other packages (its "extension dependencies") are loaded in the current Julia session. Extensions are defined under the `[extensions]` section in the project file. The extension dependencies of an extension are a subset of those packages listed under the `[weakdeps]` section of the project file. Those packages can have compat entries like other packages.
 
 ```toml
 name = "MyPackage"
+
+[compat]
+ExtDep = "1.0"
+OtherExtDep = "1.0"
 
 [weakdeps]
 ExtDep = "c9a23..." # uuid
@@ -366,7 +370,7 @@ FooExt = "ExtDep"
 ...
 ```
 
-The keys under `extensions` are the name of the extensions.
+The keys under `extensions` are the names of the extensions.
 They are loaded when all the packages on the right hand side (the extension dependencies) of that extension are loaded.
 If an extension only has one extension dependency the list of extension dependencies can be written as just a string for brevity.
 The location for the entry point of the extension is either in `ext/FooExt.jl` or `ext/FooExt/FooExt.jl` for
@@ -389,17 +393,18 @@ When a package with extensions is added to an environment, the `weakdeps` and `e
 are stored in the manifest file in the section for that package. The dependency lookup rules for
 a package are the same as for its "parent" except that the listed extension dependencies are also considered as
 dependencies.
-### Package/Environment Preferences
+
+### [Package/Environment Preferences](@id preferences)
 
 Preferences are dictionaries of metadata that influence package behavior within an environment.
-The preferences system supports reading preferences at compile-time, which means that at code-loading time, we must ensure that a particular `.ji` file was built with the same preferences as the current environment before loading it.
+The preferences system supports reading preferences at compile-time, which means that at code-loading time, we must ensure that the precompilation files selected by Julia were built with the same preferences as the current environment before loading them.
 The public API for modifying Preferences is contained within the [Preferences.jl](https://github.com/JuliaPackaging/Preferences.jl) package.
 Preferences are stored as TOML dictionaries within a `(Julia)LocalPreferences.toml` file next to the currently-active project.
 If a preference is "exported", it is instead stored within the `(Julia)Project.toml` instead.
 The intention is to allow shared projects to contain shared preferences, while allowing for users themselves to override those preferences with their own settings in the LocalPreferences.toml file, which should be .gitignored as the name implies.
 
-Preferences that are accessed during compilation are automatically marked as compile-time preferences, and any change recorded to these preferences will cause the Julia compiler to recompile any cached precompilation `.ji` files for that module.
-This is done by serializing the hash of all compile-time preferences during compilation, then checking that hash against the current environment when searching for the proper `.ji` file to load.
+Preferences that are accessed during compilation are automatically marked as compile-time preferences, and any change recorded to these preferences will cause the Julia compiler to recompile any cached precompilation file(s) (`.ji` and corresponding `.so`, `.dll`, or `.dylib` files) for that module.
+This is done by serializing the hash of all compile-time preferences during compilation, then checking that hash against the current environment when searching for the proper file(s) to load.
 
 Preferences can be set with depot-wide defaults; if package Foo is installed within your global environment and it has preferences set, these preferences will apply as long as your global environment is part of your `LOAD_PATH`.
 Preferences in environments higher up in the environment stack get overridden by the more proximal entries in the load path, ending with the currently active project.

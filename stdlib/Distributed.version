@@ -1,0 +1,4 @@
+DISTRIBUTED_BRANCH = master
+DISTRIBUTED_SHA1 = 41c01069533e22a6ce6b794746e4b3aa9f5a25cd
+DISTRIBUTED_GIT_URL := https://github.com/JuliaLang/Distributed.jl
+DISTRIBUTED_TAR_URL = https://api.github.com/repos/JuliaLang/Distributed.jl/tarball/$1

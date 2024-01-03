@@ -860,12 +860,14 @@ uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
                                                     StringRef SectionName)
 {
     // allocating more than one code section can confuse libunwind.
-#if !defined(_COMPILER_MSAN_ENABLED_)
-    // TODO: Figure out why msan needs this.
+#if !defined(_COMPILER_MSAN_ENABLED_) && !defined(_COMPILER_ASAN_ENABLED_)
+    // TODO: Figure out why msan and now asan too need this.
     assert(!code_allocated);
     code_allocated = true;
 #endif
     total_allocated += Size;
+    jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, Size);
+    jl_timing_counter_inc(JL_TIMING_COUNTER_JITCodeSize, Size);
     if (exe_alloc)
         return (uint8_t*)exe_alloc->alloc(Size, Alignment);
     return SectionMemoryManager::allocateCodeSection(Size, Alignment, SectionID,
@@ -879,6 +881,8 @@ uint8_t *RTDyldMemoryManagerJL::allocateDataSection(uintptr_t Size,
                                                     bool isReadOnly)
 {
     total_allocated += Size;
+    jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, Size);
+    jl_timing_counter_inc(JL_TIMING_COUNTER_JITDataSize, Size);
     if (!isReadOnly)
         return (uint8_t*)rw_alloc.alloc(Size, Alignment);
     if (ro_alloc)
