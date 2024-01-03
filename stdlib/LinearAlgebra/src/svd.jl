@@ -302,8 +302,8 @@ Iterating the decomposition produces the components `U`, `V`, `Q`, `D1`, `D2`, a
 
 The entries of `F.D1` and `F.D2` are related, as explained in the LAPACK
 documentation for the
-[generalized SVD](http://www.netlib.org/lapack/lug/node36.html) and the
-[xGGSVD3](http://www.netlib.org/lapack/explore-html/d6/db3/dggsvd3_8f.html)
+[generalized SVD](https://www.netlib.org/lapack/lug/node36.html) and the
+[xGGSVD3](https://www.netlib.org/lapack/explore-html/d6/db3/dggsvd3_8f.html)
 routine which is called underneath (in LAPACK 3.6.0 and newer).
 
 # Examples

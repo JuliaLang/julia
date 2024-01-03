@@ -4,7 +4,7 @@
 # This is used for tab substitution in the REPL.
 
 # The initial symbol listing was generated from the W3C symbol mapping file:
-#         http://www.w3.org/Math/characters/unicode.xml
+#         https://www.w3.org/Math/characters/unicode.xml
 # by the following Julia script:
 #=
 import REPL
