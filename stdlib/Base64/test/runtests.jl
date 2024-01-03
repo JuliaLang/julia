@@ -142,3 +142,7 @@ end
         @test String(base64decode(splace(longEncodedText))) == longDecodedText
     end
 end
+
+@testset "Docstrings" begin
+    @test Docs.undocumented_names(Base64) == []
+end

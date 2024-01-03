@@ -1009,3 +1009,9 @@ end
 @testset "collect partition substring" begin
     @test collect(Iterators.partition(lstrip("01111", '0'), 2)) == ["11", "11"]
 end
+
+@testset "Iterators docstrings" begin
+    undoc = Docs.undocumented_names(Iterators)
+    @test_broken undoc == []
+    @test undoc == []
+end

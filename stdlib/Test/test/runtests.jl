@@ -1582,3 +1582,7 @@ let
         end
     end
 end
+
+@testset "Docstrings" begin
+    @test Docs.undocumented_names(Test) == []
+end

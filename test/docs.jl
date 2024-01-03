@@ -1551,3 +1551,9 @@ Base.@ccallable c51586_long()::Int = 3
 
 @test docstrings_equal(@doc(c51586_short()), doc"ensure we can document ccallable functions")
 @test docstrings_equal(@doc(c51586_long()), doc"ensure we can document ccallable functions")
+
+@testset "Docs docstrings" begin
+    undoc = Docs.undocumented_names(Docs)
+    @test_broken undoc == []
+    @test undoc == []
+end

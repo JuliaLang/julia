@@ -1232,3 +1232,7 @@ end
     @test xs isa Vector{Pair{Bool, Char}}
     @test length(xs) == 3
 end
+
+@testset "Docstrings" begin
+    @test Docs.undocumented_names(Random) == []
+end

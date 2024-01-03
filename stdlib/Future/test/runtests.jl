@@ -2,3 +2,7 @@
 
 using Test
 using Future
+
+@testset "Docstrings" begin
+    @test Docs.undocumented_names(Future) == []
+end

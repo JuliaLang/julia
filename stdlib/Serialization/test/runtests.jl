@@ -655,3 +655,9 @@ end
     @test l2 == l1
     @test l2.parts === ()
 end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Serialization)
+    @test_broken undoc == []
+    @test undoc == [:AbstractSerializer, :Serializer]
+end

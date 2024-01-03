@@ -1145,4 +1145,10 @@ end
     @test_throws Printf.InvalidFormatStringError Printf.Format("%z")
 end
 
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Printf)
+    @test_broken undoc == []
+    @test undoc == [:Printf]
+end
+
 end # @testset "Printf"

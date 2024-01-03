@@ -33,3 +33,7 @@ end
     run_gctest("gc/chunks.jl")
     run_nonzero_page_utilization_test()
 end
+
+@testset "Base.GC docstrings" begin
+    @test Docs.undocumented_names(GC) == []
+end

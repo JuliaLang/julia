@@ -77,3 +77,7 @@ end
 crc32c_sw(io::IO, crc::UInt32=0x00000000) = crc32c_sw(io, typemax(Int64), crc)
 test_crc32c(crc32c)
 test_crc32c(crc32c_sw)
+
+@testset "Docstrings" begin
+    @test Docs.undocumented_names(CRC32c) == []
+end
