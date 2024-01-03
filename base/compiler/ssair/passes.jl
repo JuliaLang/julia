@@ -1209,10 +1209,11 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
         if scope_mapping !== nothing && did_just_finish_bb(compact)
             bb = compact.active_result_bb - 1
-            if isexpr(stmt, :leave)
-                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[block_for_inst(compact, scope_mapping[bb])])
+            bbs = scope_mapping[bb]
+            if isexpr(stmt, :leave) && bbs != SSAValue(0)
+                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[block_for_inst(compact, bbs)])
             else
-                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[bb])
+                update_scope_mapping!(scope_mapping, bb+1, bbs)
             end
         end
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
