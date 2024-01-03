@@ -65,7 +65,7 @@ import .Base: Callable, with_output_color
 using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 
-export doc, hasdoc
+export doc, hasdoc, undocumented_names
 
 # Basic API / Storage
 
