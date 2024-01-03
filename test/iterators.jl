@@ -1011,7 +1011,5 @@ end
 end
 
 @testset "Iterators docstrings" begin
-    undoc = Docs.undocumented_names(Iterators)
-    @test_broken undoc == []
-    @test undoc == []
+    @test Docs.undocumented_names(Iterators) == []
 end
