@@ -1014,6 +1014,17 @@ end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
 
+
+# Display a hint in case the user tries to use the min or max function on an array
+function min_max_on_array(io, ex, arg_types, kwargs)
+    @nospecialize
+    if (ex.f === max || ex.f === min) && length(arg_types) == 1 && only(arg_types) <: AbstractArray
+        print(io, "\nFinding the minimum or maximum element of an array is performed with `minimum` and `maximum` respectively.")
+    end
+end
+
+Experimental.register_error_hint(min_max_on_array, MethodError)
+
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)
 getindex(s::ExceptionStack, i::Int) = s.stack[i]
