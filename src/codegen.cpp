@@ -3234,7 +3234,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
     if (at->isAggregateType()) { // Struct or Array
         jl_datatype_t *sty = (jl_datatype_t*)arg1.typ;
         size_t sz = jl_datatype_size(sty);
-        if (sz > 512 && !sty->layout->flags.haspadding) {
+        if (!sty->layout->flags.haspadding) {
             Value *varg1 = arg1.ispointer() ? data_pointer(ctx, arg1) :
                 value_to_pointer(ctx, arg1).V;
             Value *varg2 = arg2.ispointer() ? data_pointer(ctx, arg2) :
