@@ -77,7 +77,7 @@ interactive prompt into which you can enter expressions for
 evaluation.  You can read about [getting
 started](https://docs.julialang.org/en/v1/manual/getting-started/) in the manual.
 
-**Note**: Although some systems package managers provide Julia, such
+**Note**: Although some OS package managers provide Julia, such
 installations are neither maintained nor endorsed by the Julia
 project. They may be outdated, broken and/or unmaintained. We
 recommend you use the official Julia binaries instead.
