@@ -657,12 +657,12 @@ function doc end
 
 
 """
-    Docs.hasdoc(mod::Module, sym::Symbol)::Bool
+    Docs.hasdocstring(mod::Module, sym::Symbol)::Bool
 
 Return `true` if `sym` in `mod` has a docstring and `false` otherwise.
 """
-hasdoc(mod::Module, sym::Symbol) = hasdoc(Docs.Binding(mod, sym))
-function hasdoc(binding::Docs.Binding, sig::Type = Union{})
+hasdocstring(mod::Module, sym::Symbol) = hasdocstring(Docs.Binding(mod, sym))
+function hasdocstring(binding::Docs.Binding, sig::Type = Union{})
     # this function is based on the Base.Docs.doc method implemented
     # in REPL/src/docview.jl.  TODO: refactor and unify these methods.
     defined(binding) && !isnothing(getdoc(resolve(binding), sig)) && return true
@@ -671,7 +671,7 @@ function hasdoc(binding::Docs.Binding, sig::Type = Union{})
         !isnothing(dict) && haskey(dict, binding) && return true
     end
     alias = aliasof(binding)
-    return alias == binding ? false : hasdoc(alias, sig)
+    return alias == binding ? false : hasdocstring(alias, sig)
 end
 
 
@@ -683,11 +683,11 @@ Return an array of undocumented symbols in `module` (that is, lacking docstrings
 non-exported symbols, following the behavior of [`names`](@ref). Only valid identifiers
 are included. Names are returned in sorted order.
 
-See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.isidentifier`](@ref).
+See also: [`names`](@ref), [`Docs.hasdocstring`](@ref), [`Base.isidentifier`](@ref).
 """
 function undocumented_names(mod::Module; all::Bool=false)
     filter!(names(mod; all)) do sym
-        !hasdoc(mod, sym) && Base.isidentifier(sym)
+        !hasdocstring(mod, sym) && Base.isidentifier(sym)
     end
 end
 

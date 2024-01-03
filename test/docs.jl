@@ -70,11 +70,11 @@ $$latex literal$$
 function break_me_docs end
 
 
-# `hasdoc` returns `true` on a name with a docstring.
-@test Docs.hasdoc(Base, :map)
-# `hasdoc` returns `false` on a name without a docstring.
-@test !isdefined(Base, :_this_name_doesnt_exist_) && !Docs.hasdoc(Base, :_this_name_doesnt_exist_)
-@test isdefined(Base, :_typed_vcat) && !Docs.hasdoc(Base, :_typed_vcat)
+# `hasdocstring` returns `true` on a name with a docstring.
+@test Docs.hasdocstring(Base, :map)
+# `hasdocstring` returns `false` on a name without a docstring.
+@test !isdefined(Base, :_this_name_doesnt_exist_) && !Docs.hasdocstring(Base, :_this_name_doesnt_exist_)
+@test isdefined(Base, :_typed_vcat) && !Docs.hasdocstring(Base, :_typed_vcat)
 
 "This module has names without documentation."
 module _ModuleWithUndocumentedNames

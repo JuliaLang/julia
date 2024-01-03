@@ -468,7 +468,7 @@ Base.@locals
 Base.@doc
 Docs.HTML
 Docs.Text
-Docs.hasdoc
+Docs.hasdocstring
 Docs.undocumented_names
 ```
 
