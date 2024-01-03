@@ -10,6 +10,9 @@ using LinearAlgebra: BlasFloat, errorbounds, full!, transpose!,
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
@@ -523,6 +526,23 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
     end
 end
 
+@testset "non-strided arithmetic" begin
+    for (T,T1) in ((UpperTriangular, UnitUpperTriangular), (LowerTriangular, UnitLowerTriangular))
+        U = T(reshape(1:16, 4, 4))
+        M = Matrix(U)
+        @test -U == -M
+        U1 = T1(reshape(1:16, 4, 4))
+        M1 = Matrix(U1)
+        @test -U1 == -M1
+        for op in (+, -)
+            for (A, MA) in ((U, M), (U1, M1)), (B, MB) in ((U, M), (U1, M1))
+                @test op(A, B) == op(MA, MB)
+            end
+        end
+        @test imag(U) == zero(U)
+    end
+end
+
 # Matrix square root
 Atn = UpperTriangular([-1 1 2; 0 -2 2; 0 0 -3])
 Atp = UpperTriangular([1 1 2; 0 2 2; 0 0 3])
@@ -876,11 +896,25 @@ end
     end
 end
 
+@testset "custom axes" begin
+    SZA = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+    for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        S = T(SZA)
+        r = SizedArrays.SOneTo(2)
+        @test axes(S) === (r,r)
+    end
+end
+
 @testset "arithmetic with an immutable parent" begin
     F = FillArrays.Fill(2, (4,4))
     for UT in (UnitUpperTriangular, UnitLowerTriangular)
         U = UT(F)
         @test -U == -Array(U)
+    end
+
+    F = FillArrays.Fill(3im, (4,4))
+    for U in (UnitUpperTriangular(F), UnitLowerTriangular(F))
+        @test imag(F) == imag(collect(F))
     end
 end
 
@@ -895,6 +929,38 @@ end
     @testset "copyto with incompatible sizes" begin
         for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
             @test_throws BoundsError copyto!(T(A), T(B))
+        end
+    end
+end
+
+@testset "arithmetic with partly uninitialized matrices" begin
+    @testset "$(typeof(A))" for A in (Matrix{BigFloat}(undef,2,2), Matrix{Complex{BigFloat}}(undef,2,2)')
+        A[1,1] = A[2,2] = A[2,1] = 4
+        B = Matrix{eltype(A)}(undef, size(A))
+        for MT in (LowerTriangular, UnitLowerTriangular)
+            L = MT(A)
+            B .= 0
+            copyto!(B, L)
+            @test L * 2 == 2 * L == 2B
+            @test L/2 == B/2
+            @test 2\L == 2\B
+            @test real(L) == real(B)
+            @test imag(L) == imag(B)
+        end
+    end
+
+    @testset "$(typeof(A))" for A in (Matrix{BigFloat}(undef,2,2), Matrix{Complex{BigFloat}}(undef,2,2)')
+        A[1,1] = A[2,2] = A[1,2] = 4
+        B = Matrix{eltype(A)}(undef, size(A))
+        for MT in (UpperTriangular, UnitUpperTriangular)
+            U = MT(A)
+            B .= 0
+            copyto!(B, U)
+            @test U * 2 == 2 * U == 2B
+            @test U/2 == B/2
+            @test 2\U == 2\B
+            @test real(U) == real(B)
+            @test imag(U) == imag(B)
         end
     end
 end

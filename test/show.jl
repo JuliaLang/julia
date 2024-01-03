@@ -2666,3 +2666,10 @@ let buf = IOBuffer()
     Base.show_tuple_as_call(buf, Symbol(""), Tuple{Function,Any})
     @test String(take!(buf)) == "(::Function)(::Any)"
 end
+
+module Issue49382
+    abstract type Type49382 end
+end
+using .Issue49382
+(::Type{Issue49382.Type49382})() = 1
+@test sprint(show, methods(Issue49382.Type49382)) isa String

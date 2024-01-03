@@ -3,7 +3,7 @@
 original_depot_path = copy(Base.DEPOT_PATH)
 original_load_path = copy(Base.LOAD_PATH)
 
-using Test, Distributed, Random
+using Test, Distributed, Random, Logging
 using REPL # doc lookup function
 
 Foo_module = :Foo4b3a94a1a081a8cb
@@ -579,7 +579,7 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    @test Base.compilecache(Base.PkgId("OverwriteMethodError")) == Base.PrecompilableError() # due to piracy
+    @test (@test_warn "overwritten in module OverwriteMethodError" Base.compilecache(Base.PkgId("OverwriteMethodError"))) == Base.PrecompilableError() # due to piracy
 
     UseBaz_file = joinpath(dir, "UseBaz.jl")
     write(UseBaz_file,
@@ -624,7 +624,7 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    cachefile, _ = Base.compilecache(Base.PkgId("FooBar"))
+    cachefile, _ = @test_logs (:debug, r"Precompiling FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))

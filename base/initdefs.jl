@@ -94,9 +94,7 @@ See also [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
 """
 const DEPOT_PATH = String[]
 
-function append_default_depot_path!(DEPOT_PATH)
-    path = joinpath(homedir(), ".julia")
-    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+function append_bundled_depot_path!(DEPOT_PATH)
     path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     path = abspath(Sys.BINDIR, "..", "share", "julia")
@@ -108,17 +106,31 @@ function init_depot_path()
     empty!(DEPOT_PATH)
     if haskey(ENV, "JULIA_DEPOT_PATH")
         str = ENV["JULIA_DEPOT_PATH"]
+
+        # explicitly setting JULIA_DEPOT_PATH to the empty string means using no depot
         isempty(str) && return
+
+        # otherwise, populate the depot path with the entries in JULIA_DEPOT_PATH,
+        # expanding empty strings to the bundled depot
+        populated = false
         for path in eachsplit(str, Sys.iswindows() ? ';' : ':')
             if isempty(path)
-                append_default_depot_path!(DEPOT_PATH)
+                append_bundled_depot_path!(DEPOT_PATH)
             else
                 path = expanduser(path)
                 path in DEPOT_PATH || push!(DEPOT_PATH, path)
+                populated = true
             end
         end
+
+        # backwards compatibility: if JULIA_DEPOT_PATH only contains empty entries
+        # (e.g., JULIA_DEPOT_PATH=':'), make sure to use the default depot
+        if !populated
+            pushfirst!(DEPOT_PATH, joinpath(homedir(), ".julia"))
+        end
     else
-        append_default_depot_path!(DEPOT_PATH)
+        push!(DEPOT_PATH, joinpath(homedir(), ".julia"))
+        append_bundled_depot_path!(DEPOT_PATH)
     end
     nothing
 end

@@ -1,7 +1,24 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Profiling support, main entry point is the [`@profile`](@ref) macro.
+    Profile
+
+Profiling support.
+
+## CPU profiling
+- `@profile foo()` to profile a specific call.
+- `Profile.print()` to print the report.
+- `Profile.clear()` to clear the buffer.
+- Send a $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") signal to the process to automatically trigger a profile and print.
+
+## Memory profiling
+- `Profile.Allocs.@profile [sample_rate=0.1] foo()` to sample allocations within a specific call. A sample rate of 1.0 will record everything; 0.0 will record nothing.
+- `Profile.Allocs.print()` to print the report.
+- `Profile.Allocs.clear()` to clear the buffer.
+
+## Heap profiling
+- `Profile.take_heap_snapshot()` to record a `.heapsnapshot` record of the heap.
+- Set `JULIA_PROFILE_PEEK_HEAP_SNAPSHOT=true` to capture a heap snapshot when signal $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") is sent.
 """
 module Profile
 
@@ -16,6 +33,7 @@ public @profile,
     callers,
     init,
     take_heap_snapshot,
+    take_page_profile,
     clear_malloc_data,
     Allocs
 
@@ -1267,6 +1285,21 @@ function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) 
     return take_heap_snapshot(fpath, all_one)
 end
 
+"""
+    Profile.take_page_profile(io::IOStream)
+    Profile.take_page_profile(filepath::String)
+
+Write a JSON snapshot of the pages from Julia's pool allocator, printing for every pool allocated object, whether it's garbage, or its type.
+"""
+function take_page_profile(io::IOStream)
+    Base.@_lock_ios(io, ccall(:jl_gc_take_page_profile, Cvoid, (Ptr{Cvoid},), io.handle))
+end
+function take_page_profile(filepath::String)
+    open(filepath, "w") do io
+        take_page_profile(io)
+    end
+    return filepath
+end
 
 include("Allocs.jl")
 include("precompile.jl")

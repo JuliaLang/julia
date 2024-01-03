@@ -15,6 +15,9 @@ using .Main.InfiniteArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -816,6 +819,15 @@ end
         @test all(iszero, diag(ST, 1))
         @test all(iszero, diag(ST, -1))
     end
+end
+
+@testset "custom axes" begin
+    dv, uv = OffsetArray(1:4), OffsetArray(1:3)
+    B = Tridiagonal(uv, dv, uv)
+    ax = axes(dv, 1)
+    @test axes(B) === (ax, ax)
+    B = SymTridiagonal(dv, uv)
+    @test axes(B) === (ax, ax)
 end
 
 end # module TestTridiagonal
