@@ -136,7 +136,7 @@ The Julia source code is organized as follows:
 | `contrib/`        | miscellaneous scripts                                              |
 | `deps/`           | external dependencies                                              |
 | `doc/src/`        | source for the user manual                                         |
-| `etc/`            | contains `startup.jl`                                               |
+| `etc/`            | contains `startup.jl`                                              |
 | `src/`            | source for Julia language core                                     |
 | `stdlib/`         | source code for other standard library packages                    |
 | `test/`           | test suites                                                        |
@@ -158,7 +158,7 @@ Support for editing Julia is available for many
 others.
 
 For users who prefer IDEs, we recommend using VS Code with the
-[julia-vscode](https://www.julia-vscode.org/) plugin.  
+[julia-vscode](https://www.julia-vscode.org/) plugin.\
 For notebook users, [Jupyter](https://jupyter.org/) notebook support is available through the
 [IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
 the [Pluto.jl](https://github.com/fonsp/Pluto.jl) package provides Pluto notebooks.
