@@ -66,6 +66,7 @@ using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 
 export doc
+public hasdoc
 
 # Basic API / Storage
 
