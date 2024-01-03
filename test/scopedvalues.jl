@@ -126,3 +126,17 @@ end
         @test sval_float[] == 1.0
     end
 end
+
+# Test that the `@with` macro doesn't introduce unnecessary PhiC nodes
+# (which can be hard for the optimizer to remove).
+function with_macro_slot_cross()
+    a = 1
+    @with sval=>1 begin
+        a = sval_float[]
+    end
+    return a
+end
+
+let code = code_typed(with_macro_slot_cross)[1][1].code
+    @test !any(x->isa(x, Core.PhiCNode), code)
+end

@@ -721,16 +721,17 @@ end
 @testset "expansion of JULIA_DEPOT_PATH" begin
     s = Sys.iswindows() ? ';' : ':'
     tmp = "/this/does/not/exist"
-    DEFAULT = Base.append_default_depot_path!(String[])
+    default = joinpath(homedir(), ".julia")
+    bundled = Base.append_bundled_depot_path!(String[])
     cases = Dict{Any,Vector{String}}(
-        nothing => DEFAULT,
+        nothing => [default; bundled],
         "" => [],
-        "$s" => DEFAULT,
-        "$tmp$s" => [tmp; DEFAULT],
-        "$s$tmp" => [DEFAULT; tmp],
+        "$s" => [default; bundled],
+        "$tmp$s" => [tmp; bundled],
+        "$s$tmp" => [bundled; tmp],
         )
     for (env, result) in pairs(cases)
-        script = "DEPOT_PATH == $(repr(result)) || error()"
+        script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
         cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
         cmd = addenv(cmd, "JULIA_DEPOT_PATH" => env)
         cmd = pipeline(cmd; stdout, stderr)
@@ -1404,5 +1405,84 @@ end
             @test cov_exists()
             rm_cov_files()
         end
+    end
+end
+
+@testset "command-line flags" begin
+    mktempdir() do dir
+        # generate a Parent.jl and Child.jl package, with Parent depending on Child
+        open(joinpath(dir, "Child.jl"), "w") do io
+            println(io, """
+                module Child
+                end""")
+        end
+        open(joinpath(dir, "Parent.jl"), "w") do io
+            println(io, """
+                module Parent
+                using Child
+                end""")
+        end
+
+        # helper function to load a package and return the output
+        function load_package(name, args=``)
+            code = "using $name"
+            cmd = addenv(`$(Base.julia_cmd()) -e $code $args`,
+                        "JULIA_LOAD_PATH" => dir,
+                        "JULIA_DEBUG" => "loading")
+
+            out = Pipe()
+            proc = run(pipeline(cmd, stdout=out, stderr=out))
+            close(out.in)
+
+            log = @async String(read(out))
+            @test success(proc)
+            fetch(log)
+        end
+
+        log = load_package("Parent", `--compiled-modules=no --pkgimages=no`)
+        @test !occursin(r"Generating (cache|object cache) file", log)
+        @test !occursin(r"Loading (cache|object cache) file", log)
+
+
+        ## tests for `--compiled-modules`, which generates cache files
+
+        log = load_package("Child", `--compiled-modules=yes --pkgimages=no`)
+        @test occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+
+        # with `--compiled-modules=existing` we should only precompile Child
+        log = load_package("Parent", `--compiled-modules=existing --pkgimages=no`)
+        @test !occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+        @test !occursin(r"Generating cache file for Parent", log)
+        @test !occursin(r"Loading cache file .+ for Parent", log)
+
+        # the default is `--compiled-modules=yes`, which should now precompile Parent
+        log = load_package("Parent", `--pkgimages=no`)
+        @test !occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+        @test occursin(r"Generating cache file for Parent", log)
+        @test occursin(r"Loading cache file .+ for Parent", log)
+
+
+        ## tests for `--pkgimages`, which generates object cache files
+
+        log = load_package("Child", `--compiled-modules=yes --pkgimages=yes`)
+        @test occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+
+        # with `--pkgimages=existing` we should only generate code for Child
+        log = load_package("Parent", `--compiled-modules=yes --pkgimages=existing`)
+        @test !occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+        @test !occursin(r"Generating object cache file for Parent", log)
+        @test !occursin(r"Loading object cache file .+ for Parent", log)
+
+        # the default is `--pkgimages=yes`, which should now generate code for Parent
+        log = load_package("Parent")
+        @test !occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+        @test occursin(r"Generating object cache file for Parent", log)
+        @test occursin(r"Loading object cache file .+ for Parent", log)
     end
 end

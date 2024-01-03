@@ -293,7 +293,7 @@ function mul!(out::AbstractMatrix{T}, a::Number, B::UniformScaling, α::Number, 
     end
     s = convert(T, a*B.λ*α)
     if !iszero(s)
-        @inbounds for i in diagind(out)
+        @inbounds for i in diagind(out, IndexStyle(out))
             out[i] += s
         end
     end

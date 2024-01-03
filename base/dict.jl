@@ -929,11 +929,12 @@ returns a new dictionary separate from the previous one, but the underlying
 implementation is space-efficient and may share storage across multiple
 separate dictionaries.
 
-!!!note
+!!! note
     It behaves like an IdDict.
 
-
-    PersistentDict(KV::Pair)
+```julia
+PersistentDict(KV::Pair)
+```
 
 # Examples
 
