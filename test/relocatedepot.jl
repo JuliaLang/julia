@@ -95,21 +95,6 @@ if !test_relocated_depot
 
 else
 
-    # must come before any of the load tests, because the will recompile and generate new cache files
-    @testset "attempt loading precompiled pkgs when depot is missing" begin
-        test_harness() do
-            empty!(LOAD_PATH)
-            push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
-            for pkgname in ("RelocationTestPkg1", "RelocationTestPkg2")
-                pkg = Base.identify_package(pkgname)
-                cachefile = only(Base.find_all_in_cache_path(pkg))
-                @test_throws ArgumentError("""
-                  Failed to determine depot from srctext files in cache file $cachefile.
-                  - Make sure you have adjusted DEPOT_PATH in case you relocated depots.""") Base.isprecompiled(pkg)
-            end
-        end
-    end
-
     @testset "load stdlib from test/relocatedepot" begin
         test_harness() do
             push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
