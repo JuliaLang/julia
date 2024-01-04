@@ -40,6 +40,28 @@ function docexpr(source::LineNumberNode, mod::Module, s, flavor = :julia)
     :($doc_str($(mdexpr(s, flavor)), $(QuoteNode(source)), $mod))
 end
 
+"""
+   @md_str -> Markdown.MD
+
+Construct a `Markdown.MD` object by parsing a piece of Markdown code. Some interpolation
+with `$` is supported.
+
+# Example
+```jldoctest
+julia> prose = md"""
+       # Hello!
+
+       My favourite number is $(1 + 1).
+       """
+  Hello!
+  ≡≡≡≡≡≡
+
+  My favourite number is 2.
+
+julia> typeof(prose)
+Markdown.MD
+```
+"""
 macro md_str(s, t...)
     mdexpr(s, t...)
 end
