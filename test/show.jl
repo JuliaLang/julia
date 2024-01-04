@@ -2673,3 +2673,6 @@ end
 using .Issue49382
 (::Type{Issue49382.Type49382})() = 1
 @test sprint(show, methods(Issue49382.Type49382)) isa String
+
+#issue #52641
+@test Base.isidentifier(Symbol("e\u0301")) == false

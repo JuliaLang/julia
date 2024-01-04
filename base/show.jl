@@ -1522,6 +1522,11 @@ recognize a variable, it uses a limited set of characters (greatly extended by
 Unicode). `isidentifier()` makes it possible to query the parser directly
 whether a symbol contains valid characters.
 
+The isidentifier function for symbols has been extended to include
+a normalization check. It ensures that the provided symbol is normalized
+using Unicode normalization with stability and composition enabled. This
+ensures consistent and standardized representation of the symbol.
+
 # Examples
 ```jldoctest
 julia> Meta.isidentifier(:x), Meta.isidentifier("1x")
@@ -1536,7 +1541,11 @@ function isidentifier(s::AbstractString)
     is_id_start_char(c) || return false
     return all(is_id_char, rest)
 end
-isidentifier(s::Symbol) = isidentifier(string(s))
+
+function isidentifier(s::Symbol)
+    str = string(s)
+    return !isidentifier(str) ? false : str == Unicode.normalize(str; stable=true, compose=true)
+end
 
 is_op_suffix_char(c::AbstractChar) = ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
 
