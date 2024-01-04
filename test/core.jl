@@ -111,6 +111,21 @@ let abcd = ABCDconst(1, 2, 3, 4)
         abcd.d = nothing)
     @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
 end
+@test begin
+    # Issue #52686
+    mktemp() do f, io
+        write(io, """
+            struct A{T} end
+            struct B{T, S}
+              a::A{<:T}
+            end
+            """)
+        close(io)
+        include(f)
+        include(f)
+    end
+    true
+end
 
 # test `===` handling null pointer in struct #44712
 struct N44712
