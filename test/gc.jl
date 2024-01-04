@@ -35,5 +35,5 @@ end
 end
 
 @testset "Base.GC docstrings" begin
-    @test Docs.undocumented_names(GC) == []
+    @test isempty(Docs.undocumented_names(GC))
 end

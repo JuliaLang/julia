@@ -684,5 +684,5 @@ end
 close(sockets_watchdog_timer)
 
 @testset "Docstrings" begin
-    @test Docs.undocumented_names(Sockets) == []
+    @test isempty(Docs.undocumented_names(Sockets))
 end

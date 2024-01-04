@@ -1410,5 +1410,5 @@ end
 end
 
 @testset "Base.Libc docstrings" begin
-    @test Docs.undocumented_names(Libc) == []
+    @test isempty(Docs.undocumented_names(Libc))
 end

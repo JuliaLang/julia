@@ -341,5 +341,5 @@ end
 rm(file)
 
 @testset "Docstrings" begin
-    @test Docs.undocumented_names(Mmap) == []
+    @test isempty(Docs.undocumented_names(Mmap))
 end

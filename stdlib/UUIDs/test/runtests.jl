@@ -75,5 +75,5 @@ for r in rand(UInt128, 10^3)
 end
 
 @testset "Docstrings" begin
-    @test Docs.undocumented_names(UUIDs) == []
+    @test isempty(Docs.undocumented_names(UUIDs))
 end
