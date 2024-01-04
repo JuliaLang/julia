@@ -194,7 +194,7 @@ differ in that they wrap the output in a `<div class="markdown"> ... </div>` ele
 # Example
 ```jldoctest
 julia> html(md"hello _world_")
-"<p>hello <em>world</em></p>\n"
+"<p>hello <em>world</em></p>\\n"
 ```
 """
 html(md) = sprint(html, md)

@@ -178,7 +178,7 @@ One can alternatively use `show(io, "text/latex", md)` or `repr("text/latex", md
 # Example
 ```jldoctest
 julia> latex(md"hello _world_")
-"hello \\emph{world}\n\n"
+"hello \\\\emph{world}\\n\\n"
 ```
 """
 latex(md) = sprint(latex, md)
