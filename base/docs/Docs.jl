@@ -676,18 +676,19 @@ end
 
 
 """
-    undocumented_names(mod::Module; all=false)
+    undocumented_names(mod::Module; private=false)
 
-Return an array of undocumented symbols in `module` (that is, lacking docstrings).
-`all=false` returns only exported symbols; whereas `all=true` also includes
-non-exported symbols, following the behavior of [`names`](@ref). Only valid identifiers
-are included. Names are returned in sorted order.
+Return a sorted array of undocumented symbols in `module` (that is, lacking docstrings).
+`private=false` (the default) returns only identifiers declared with `public` and/or
+`export`, whereas `private=true` returns all symbols in the module (excluding
+compiler-generated hidden symbols starting with `#`).
 
-See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.isidentifier`](@ref).
+See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.ispublic`](@ref).
 """
-function undocumented_names(mod::Module; all::Bool=false)
+function undocumented_names(mod::Module; private::Bool=false)
     filter!(names(mod; all)) do sym
-        !hasdoc(mod, sym) && Base.isidentifier(sym)
+        !hasdoc(mod, sym) && !startswith(string(sym), '#') &&
+            (private || Base.ispublic(mod.sym))
     end
 end
 
