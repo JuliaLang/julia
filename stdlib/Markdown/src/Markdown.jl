@@ -4,7 +4,7 @@
     Markdown
 
 Tools for working with the Markdown file format. Mainly for documentation.
-The `Markdown` module provides the (internal) [`MD`](@ref) type as well as the string 
+The `Markdown` module provides the (internal) [`MD`](@ref) type as well as the string
 literals `md"..."` and `doc"..."`.
 """
 module Markdown
@@ -74,7 +74,7 @@ doc_str(md::AbstractString, source::LineNumberNode, mod::Module) = doc_str(parse
 """
     @doc_str -> MD
 
-Parse the given string as Markdown text, add line and module information and return a 
+Parse the given string as Markdown text, add line and module information and return a
 corresponding [`MD`](@ref) object.
 
 `@doc_str` can be used in conjunction with the [`Base.Docs`](@ref) module. Please also refer to
