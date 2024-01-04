@@ -78,8 +78,9 @@ function break_me_docs end
 
 "This module has names without documentation."
 module _ModuleWithUndocumentedNames
-export f
+export f, @foo
 f() = 1
+macro foo(); end
 end
 
 "This module has some documentation."
@@ -90,7 +91,7 @@ f() = 1
 g() = 2
 end
 
-@test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [:f]
+@test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [Symbol("@foo"), :f]
 @test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
 @test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; all=true) == [:eval, :g, :include]
 

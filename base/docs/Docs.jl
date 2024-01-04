@@ -681,13 +681,16 @@ end
 Return an array of undocumented symbols in `module` (that is, lacking docstrings).
 `all=false` returns only exported symbols; whereas `all=true` also includes
 non-exported symbols, following the behavior of [`names`](@ref). Only valid identifiers
-are included. Names are returned in sorted order.
+and `@macro` symbols are included. Names are returned in sorted order.
 
 See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.isidentifier`](@ref).
 """
 function undocumented_names(mod::Module; all::Bool=false)
     filter!(names(mod; all)) do sym
-        !hasdoc(mod, sym) && Base.isidentifier(sym)
+        !hasdoc(mod, sym) && (Base.isidentifier(sym) ||
+            let str = string(sym)
+                startswith(str, "@") && Base.isidentifier(str[2:end])
+            end)
     end
 end
 
