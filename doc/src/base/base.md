@@ -30,7 +30,7 @@ Base.isinteractive
 Base.summarysize
 Base.__precompile__
 Base.include
-Base.MainInclude.include
+Main.include
 Base.include_string
 Base.include_dependency
 __init__
@@ -285,7 +285,7 @@ Base.Fix2
 
 ```@docs
 Core.eval
-Base.MainInclude.eval
+Main.eval
 Base.@eval
 Base.evalfile
 Base.esc
@@ -373,6 +373,7 @@ Base.Sys.uptime
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
+Base.Sys.username
 Base.@static
 ```
 
@@ -459,6 +460,16 @@ Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@locals
+```
+
+## Documentation
+(See also the [documentation](@ref man-documentation) chapter.)
+```@docs
+Base.@doc
+Docs.HTML
+Docs.Text
+Docs.hasdoc
+Docs.undocumented_names
 ```
 
 ## Code loading

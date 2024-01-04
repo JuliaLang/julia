@@ -6,7 +6,7 @@
 # strict IEEE semantics.
 
 # This allows the following transformations. For more information see
-# http://llvm.org/docs/LangRef.html#fast-math-flags:
+# https://llvm.org/docs/LangRef.html#fast-math-flags:
 # nnan: No NaNs - Allow optimizations to assume the arguments and
 #       result are not NaN. Such optimizations are required to retain
 #       defined behavior over NaNs, but the value of the result is
@@ -136,7 +136,7 @@ may violate strict IEEE semantics. This allows the fastest possible operation,
 but results are undefined -- be careful when doing this, as it may change numerical
 results.
 
-This sets the [LLVM Fast-Math flags](http://llvm.org/docs/LangRef.html#fast-math-flags),
+This sets the [LLVM Fast-Math flags](https://llvm.org/docs/LangRef.html#fast-math-flags),
 and corresponds to the `-ffast-math` option in clang. See [the notes on performance
 annotations](@ref man-performance-annotations) for more details.
 
@@ -309,7 +309,7 @@ end
         Complex{T}(c, s)
     end
 
-    # See <http://en.cppreference.com/w/cpp/numeric/complex>
+    # See <https://en.cppreference.com/w/cpp/numeric/complex>
     pow_fast(x::T, y::T) where {T<:ComplexTypes} = exp(y*log(x))
     pow_fast(x::T, y::Complex{T}) where {T<:FloatTypes} = exp(y*log(x))
     pow_fast(x::Complex{T}, y::T) where {T<:FloatTypes} = exp(y*log(x))

@@ -148,13 +148,14 @@ if is_primary_base_module
     Ref(x::Ptr{T}, i::Integer) where {T} = x + (i - 1) * Core.sizeof(T)
 
     # convert Arrays to pointer arrays for ccall
-    function Ref{P}(a::Array{<:Union{Ptr,Cwstring,Cstring}}) where P<:Union{Ptr,Cwstring,Cstring}
-        return RefArray(a) # effectively a no-op
-    end
+    # For example `["a", "b"]` to Ptr{Cstring} for `char **argv`
     function Ref{P}(a::Array{T}) where P<:Union{Ptr,Cwstring,Cstring} where T
-        if (!isbitstype(T) && T <: eltype(P))
+        if P == T
+            return getfield(a, :ref)
+        elseif (isbitstype(T) ? T <: Ptr || T <: Union{Cwstring,Cstring} : T <: eltype(P))
             # this Array already has the right memory layout for the requested Ref
-            return RefArray(a,1,false) # root something, so that this function is type-stable
+            # but the wrong eltype for the constructor
+            return RefArray{P,typeof(a),Nothing}(a, 1, nothing) # effectively a no-op
         else
             ptrs = Vector{P}(undef, length(a)+1)
             roots = Vector{Any}(undef, length(a))
@@ -164,14 +165,14 @@ if is_primary_base_module
                 roots[i] = root
             end
             ptrs[length(a)+1] = C_NULL
-            return RefArray(ptrs,1,roots)
+            return RefArray{P,typeof(ptrs),typeof(roots)}(ptrs, 1, roots)
         end
     end
     Ref(x::AbstractArray, i::Integer) = RefArray(x, i)
 end
 
-cconvert(::Type{Ptr{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
-cconvert(::Type{Ref{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
+cconvert(::Type{Ptr{P}}, a::Array{P}) where {P<:Union{Ptr,Cwstring,Cstring}} = getfield(a, :ref)
+cconvert(::Type{Ref{P}}, a::Array{P}) where {P<:Union{Ptr,Cwstring,Cstring}} = getfield(a, :ref)
 cconvert(::Type{Ptr{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 cconvert(::Type{Ref{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 

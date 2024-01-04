@@ -1314,6 +1314,9 @@ let a = Vector{Any}(undef, 10000)
 end
 @test occursin("NamedTuple", sprint(dump, NamedTuple))
 
+# issue 36495, dumping a partial NamedTupled shouldn't error
+@test occursin("NamedTuple", sprint(dump, NamedTuple{(:foo,:bar)}))
+
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
 
@@ -1969,12 +1972,12 @@ end
 end
 
 @testset "Intrinsic printing" begin
-    @test sprint(show, Core.Intrinsics.arraylen) == "Core.Intrinsics.arraylen"
-    @test repr(Core.Intrinsics.arraylen) == "Core.Intrinsics.arraylen"
+    @test sprint(show, Core.Intrinsics.cglobal) == "Core.Intrinsics.cglobal"
+    @test repr(Core.Intrinsics.cglobal) == "Core.Intrinsics.cglobal"
     let io = IOBuffer()
-        show(io, MIME"text/plain"(), Core.Intrinsics.arraylen)
+        show(io, MIME"text/plain"(), Core.Intrinsics.cglobal)
         str = String(take!(io))
-        @test occursin("arraylen", str)
+        @test occursin("cglobal", str)
         @test occursin("(intrinsic function", str)
     end
     @test string(Core.Intrinsics.add_int) == "add_int"
@@ -2049,6 +2052,7 @@ eval(Meta._parse_string("""function my_fun28173(x)
             r = 1
             s = try
                 r = 2
+                Base.inferencebarrier(false) && error()
                 "BYE"
             catch
                 r = 3
@@ -2085,16 +2089,16 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     end
     @test popfirst!(lines2) == "   │          $(QuoteNode(2))"
     @test pop!(lines2) == "   └───       \$(QuoteNode(4))"
-    @test pop!(lines1) == "17 └───       return %18"
-    @test pop!(lines2) == "   │          return %18"
-    @test pop!(lines2) == "17 │          \$(QuoteNode(3))"
+    @test pop!(lines1) == "18 └───       return %21"
+    @test pop!(lines2) == "   │          return %21"
+    @test pop!(lines2) == "18 │          \$(QuoteNode(3))"
     @test lines1 == lines2
 
     # verbose linetable
     io = IOBuffer()
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
-    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
+    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 11
 
     # Test that a bad :invoke doesn't cause an error during printing
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(Expr(:invoke, nothing, sin), Any), false)
@@ -2165,6 +2169,20 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
     @test repr([true, false]) == "Bool[1, 0]" == repr(BitVector([true, false]))
     @test_repr "Bool[1, 0]"
 end
+
+@testset "Unions with Bool (#39590)" begin
+    @test repr([missing, false]) == "Union{Missing, Bool}[missing, 0]"
+    @test_repr "Union{Bool, Nothing}[1, 0, nothing]"
+end
+
+# issue #26847
+@test_repr "Union{Missing, Float32}[1.0]"
+
+# intersection of #45396 and #48822
+@test_repr "Union{Missing, Rational{Int64}}[missing, 1//2, 2]"
+
+# Don't go too far with #48822
+@test_repr "Union{String, Bool}[true]"
 
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char, Char}}[('a', 'b')]"
@@ -2648,3 +2666,10 @@ let buf = IOBuffer()
     Base.show_tuple_as_call(buf, Symbol(""), Tuple{Function,Any})
     @test String(take!(buf)) == "(::Function)(::Any)"
 end
+
+module Issue49382
+    abstract type Type49382 end
+end
+using .Issue49382
+(::Type{Issue49382.Type49382})() = 1
+@test sprint(show, methods(Issue49382.Type49382)) isa String

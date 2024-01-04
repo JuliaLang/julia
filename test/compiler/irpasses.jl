@@ -10,10 +10,7 @@ include("irutils.jl")
 # =======
 
 ## Test that domsort doesn't mangle single-argument phis (#29262)
-let m = Meta.@lower 1 + 1
-    @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::CodeInfo
-    src.code = Any[
+let code = Any[
         # block 1
         Expr(:call, :opaque),
         GotoIfNot(Core.SSAValue(1), 10),
@@ -31,12 +28,7 @@ let m = Meta.@lower 1 + 1
         Core.PhiNode(Int32[2, 8], Any[0, Core.SSAValue(7)]),
         ReturnNode(Core.SSAValue(10)),
     ]
-    nstmts = length(src.code)
-    src.ssavaluetypes = nstmts
-    src.codelocs = fill(Int32(1), nstmts)
-    src.ssaflags = fill(Int32(0), nstmts)
-    ir = Core.Compiler.inflate_ir(src)
-    Core.Compiler.verify_ir(ir)
+    ir = make_ircode(code)
     domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
@@ -45,10 +37,7 @@ let m = Meta.@lower 1 + 1
 end
 
 # test that we don't stack-overflow in SNCA with large functions.
-let m = Meta.@lower 1 + 1
-    @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::CodeInfo
-    code = Any[]
+let code = Any[]
     N = 2^15
     for i in 1:2:N
         push!(code, Expr(:call, :opaque))
@@ -57,14 +46,7 @@ let m = Meta.@lower 1 + 1
     # all goto here
     push!(code, Expr(:call, :opaque))
     push!(code, ReturnNode(nothing))
-    src.code = code
-
-    nstmts = length(src.code)
-    src.ssavaluetypes = nstmts
-    src.codelocs = fill(Int32(1), nstmts)
-    src.ssaflags = fill(Int32(0), nstmts)
-    ir = Core.Compiler.inflate_ir(src)
-    Core.Compiler.verify_ir(ir)
+    ir = make_ircode(code)
     domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
@@ -73,7 +55,7 @@ end
 # SROA
 # ====
 
-import Core.Compiler: widenconst
+using Core.Compiler: widenconst
 
 is_load_forwarded(src::CodeInfo) = !any(iscall((src, getfield)), src.code)
 is_scalar_replaced(src::CodeInfo) =
@@ -503,7 +485,7 @@ function isdefined_elim()
     return arr
 end
 let src = code_typed1(isdefined_elim)
-    @test is_scalar_replaced(src)
+    @test count(isisdefined, src.code) == 0
 end
 @test isdefined_elim() == Any[]
 
@@ -695,10 +677,7 @@ end
 @test fully_eliminated(f_partial, Tuple{Float64})
 
 # A SSAValue after the compaction line
-let m = Meta.@lower 1 + 1
-    @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::CodeInfo
-    src.code = Any[
+let code = Any[
         # block 1
         nothing,
         # block 2
@@ -717,7 +696,7 @@ let m = Meta.@lower 1 + 1
         # block 5
         ReturnNode(Core.SSAValue(2)),
     ]
-    src.ssavaluetypes = Any[
+    ssavaluetypes = Any[
         Nothing,
         Any,
         Bool,
@@ -730,21 +709,14 @@ let m = Meta.@lower 1 + 1
         Any,
         Any
     ]
-    nstmts = length(src.code)
-    src.codelocs = fill(one(Int32), nstmts)
-    src.ssaflags = fill(one(Int32), nstmts)
-    src.slotflags = fill(zero(UInt8), 3)
-    ir = Core.Compiler.inflate_ir(src)
-    @test Core.Compiler.verify_ir(ir) === nothing
+    slottypes = Any[Any, Any, Any]
+    ir = make_ircode(code; ssavaluetypes, slottypes)
     ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # A lifted Core.ifelse with an eliminated branch (#50276)
-let m = Meta.@lower 1 + 1
-    @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::CodeInfo
-    src.code = Any[
+let code = Any[
         # block 1
         #=  %1: =# Core.Argument(2),
         # block 2
@@ -768,7 +740,7 @@ let m = Meta.@lower 1 + 1
         # block 5
         #= %11: =# ReturnNode(false),
     ]
-    src.ssavaluetypes = Any[
+    ssavaluetypes = Any[
         Any,
         Union{Missing, Bool},
         Any,
@@ -781,12 +753,8 @@ let m = Meta.@lower 1 + 1
         Any,
         Any
     ]
-    nstmts = length(src.code)
-    src.codelocs = fill(one(Int32), nstmts)
-    src.ssaflags = fill(one(Int32), nstmts)
-    src.slotflags = fill(zero(UInt8), 3)
-    ir = Core.Compiler.inflate_ir(src)
-    @test Core.Compiler.verify_ir(ir) === nothing
+    slottypes = Any[Any, Any, Any]
+    ir = make_ircode(code; ssavaluetypes, slottypes)
     ir = @test_nowarn Core.Compiler.sroa_pass!(ir)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
@@ -809,11 +777,8 @@ let src = code_typed(gcd, Tuple{Int, Int})[1].first
     Core.Compiler.verify_ir(ir)
 end
 
-let m = Meta.@lower 1 + 1
-    # Test that CFG simplify combines redundant basic blocks
-    @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::CodeInfo
-    src.code = Any[
+let # Test that CFG simplify combines redundant basic blocks
+    code = Any[
         Core.Compiler.GotoNode(2),
         Core.Compiler.GotoNode(3),
         Core.Compiler.GotoNode(4),
@@ -822,12 +787,7 @@ let m = Meta.@lower 1 + 1
         Core.Compiler.GotoNode(7),
         ReturnNode(2)
     ]
-    nstmts = length(src.code)
-    src.ssavaluetypes = nstmts
-    src.codelocs = fill(Int32(1), nstmts)
-    src.ssaflags = fill(Int32(0), nstmts)
-    ir = Core.Compiler.inflate_ir(src)
-    Core.Compiler.verify_ir(ir)
+    ir = make_ircode(code)
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     ir = Core.Compiler.compact!(ir)
@@ -923,11 +883,8 @@ let stmts = [
     @test Set(term.val for term in terms if isa(term, ReturnNode)) == Set([1,2])
 end
 
-let m = Meta.@lower 1 + 1
-    # Test that CFG simplify doesn't mess up when chaining past return blocks
-    @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::CodeInfo
-    src.code = Any[
+let # Test that CFG simplify doesn't mess up when chaining past return blocks
+    code = Any[
         Core.Compiler.GotoIfNot(Core.Compiler.Argument(2), 3),
         Core.Compiler.GotoNode(4),
         ReturnNode(1),
@@ -939,12 +896,7 @@ let m = Meta.@lower 1 + 1
         ReturnNode(2),
         ReturnNode(3)
     ]
-    nstmts = length(src.code)
-    src.ssavaluetypes = nstmts
-    src.codelocs = fill(Int32(1), nstmts)
-    src.ssaflags = fill(Int32(0), nstmts)
-    ir = Core.Compiler.inflate_ir(src)
-    Core.Compiler.verify_ir(ir)
+    ir = make_ircode(code)
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 5
@@ -952,12 +904,9 @@ let m = Meta.@lower 1 + 1
     @test isa(ret_2, Core.Compiler.ReturnNode) && ret_2.val == 2
 end
 
-let m = Meta.@lower 1 + 1
-    # Test that CFG simplify doesn't try to merge every block in a loop into
+let # Test that CFG simplify doesn't try to merge every block in a loop into
     # its predecessor
-    @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::CodeInfo
-    src.code = Any[
+    code = Any[
         # Block 1
         Core.Compiler.GotoNode(2),
         # Block 2
@@ -965,12 +914,7 @@ let m = Meta.@lower 1 + 1
         # Block 3
         Core.Compiler.GotoNode(1)
     ]
-    nstmts = length(src.code)
-    src.ssavaluetypes = nstmts
-    src.codelocs = fill(Int32(1), nstmts)
-    src.ssaflags = fill(Int32(0), nstmts)
-    ir = Core.Compiler.inflate_ir(src)
-    Core.Compiler.verify_ir(ir)
+    ir = make_ircode(code)
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 1
@@ -1145,9 +1089,10 @@ end
 let # effect-freeness computation for array allocation
 
     # should eliminate dead allocations
-    good_dims = @static Int === Int64 ? (1:10) : (1:8)
-    Ns = @static Int === Int64 ? (1:10) : (1:8)
+    good_dims = [1, 2, 3, 4, 10]
+    Ns = [1, 2, 3, 4, 10]
     for dim = good_dims, N = Ns
+        Int64(dim)^N > typemax(Int) && continue
         dims = ntuple(i->dim, N)
         @test @eval fully_eliminated() do
             Array{Int,$N}(undef, $(dims...))
@@ -1157,14 +1102,14 @@ let # effect-freeness computation for array allocation
 
     # shouldn't eliminate erroneous dead allocations
     bad_dims = [-1, typemax(Int)]
-    for dim in bad_dims, N in 1:10
+    for dim in bad_dims, N in [1, 2, 3, 4, 10], T in Any[Int, Union{Missing,Nothing}, Nothing, Any]
         dims = ntuple(i->dim, N)
         @test @eval !fully_eliminated() do
-            Array{Int,$N}(undef, $(dims...))
+            Array{$T,$N}(undef, $(dims...))
             nothing
         end
-        @test_throws "invalid Array" @eval let
-            Array{Int,$N}(undef, $(dims...))
+        @test_throws "invalid " @eval let
+            Array{$T,$N}(undef, $(dims...))
             nothing
         end
     end
@@ -1521,10 +1466,7 @@ end
 @test isnothing(f_with_early_try_catch_exit())
 
 # Issue #51144 - UndefRefError during compaction
-let m = Meta.@lower 1 + 1
-    @assert Meta.isexpr(m, :thunk)
-    src = m.args[1]::CodeInfo
-    src.code = Any[
+let code = Any[
         # block 1  → 2, 3
         #=  %1: =# Expr(:(=), Core.SlotNumber(4), Core.Argument(2)),
         #=  %2: =# Expr(:call, :(===), Core.SlotNumber(4), nothing),
@@ -1539,14 +1481,8 @@ let m = Meta.@lower 1 + 1
         # block 5
         #=  %8: =# ReturnNode(nothing), # Must not insert a π-node here
     ]
-    nstmts = length(src.code)
-    nslots = 4
-    src.ssavaluetypes = nstmts
-    src.codelocs = fill(Int32(1), nstmts)
-    src.ssaflags = fill(Int32(0), nstmts)
-    src.slotflags = fill(0, nslots)
-    src.slottypes = Any[Any, Union{Bool, Nothing}, Bool, Union{Bool, Nothing}]
-    ir = Core.Compiler.inflate_ir(src)
+    slottypes = Any[Any, Union{Bool, Nothing}, Bool, Union{Bool, Nothing}]
+    src = make_codeinfo(code; slottypes)
 
     mi = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ());
     mi.specTypes = Tuple{}
@@ -1567,3 +1503,240 @@ let m = Meta.@lower 1 + 1
 
     Core.Compiler.verify_ir(ir)
 end
+
+function f_with_merge_to_entry_block()
+    while true
+        i = @noinline rand(Int)
+        if @noinline isodd(i)
+            return i
+        end
+    end
+end
+
+let (ir, _) = only(Base.code_ircode(f_with_merge_to_entry_block))
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+end
+
+# Test that CFG simplify doesn't leave an un-renamed SSA Value
+let # Test that CFG simplify doesn't try to merge every block in a loop into
+    # its predecessor
+    code = Any[
+        # Block 1
+        GotoIfNot(Argument(1), 3),
+        # Block 2
+        GotoNode(5),
+        # Block 3
+        Expr(:call, Base.inferencebarrier, 1),
+        GotoNode(6),
+        # Block 4
+        Expr(:call, Base.inferencebarrier, 2), # fallthrough
+        # Block 5
+        PhiNode(Int32[4, 5], Any[SSAValue(3), SSAValue(5)]),
+        ReturnNode(1)
+    ]
+    ir = make_ircode(code)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 4
+end
+
+# JET.test_opt(Core.Compiler.cfg_simplify!, (Core.Compiler.IRCode,))
+
+# Test support for Core.OptimizedGenerics.KeyValue protocol
+function persistent_dict_elim()
+    a = Base.PersistentDict(:a => 1)
+    return a[:a]
+end
+
+# Ideally we would be able to fully eliminate this,
+# but currently this would require an extra round of constprop
+@test_broken fully_eliminated(persistent_dict_elim)
+@test code_typed(persistent_dict_elim)[1][1].code[end] == Core.ReturnNode(1)
+
+function persistent_dict_elim_multiple()
+    a = Base.PersistentDict(:a => 1)
+    b = Base.PersistentDict(a, :b => 2)
+    return b[:a]
+end
+@test_broken fully_eliminated(persistent_dict_elim_multiple)
+@test code_typed(persistent_dict_elim_multiple)[1][1].code[end] == Core.ReturnNode(1)
+
+function persistent_dict_elim_multiple_phi(c::Bool)
+    if c
+        a = Base.PersistentDict(:a => 1)
+    else
+        a = Base.PersistentDict(:a => 1)
+    end
+    b = Base.PersistentDict(a, :b => 2)
+    return b[:a]
+end
+@test_broken fully_eliminated(persistent_dict_elim_multiple_phi)
+@test code_typed(persistent_dict_elim_multiple_phi)[1][1].code[end] == Core.ReturnNode(1)
+
+function persistent_dict_elim_multiple_phi2(c::Bool)
+    z = Base.inferencebarrier(1)::Int
+    if c
+        a = Base.PersistentDict(:a => z)
+    else
+        a = Base.PersistentDict(:a => z)
+    end
+    b = Base.PersistentDict(a, :b => 2)
+    return b[:a]
+end
+@test persistent_dict_elim_multiple_phi2(true) == 1
+
+# Test CFG simplify with try/catch blocks
+let code = Any[
+        # Block 1
+        GotoIfNot(Argument(1), 5),
+        # Block 2
+        EnterNode(4),
+        # Block 3
+        Expr(:leave, SSAValue(2)),
+        # Block 4
+        GotoNode(5),
+        # Block 5
+        ReturnNode(1)
+    ]
+    ir = make_ircode(code)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) <= 5
+end
+
+# Test CFG simplify with single predecessor phi node
+let code = Any[
+        # Block 1
+        GotoNode(3),
+        # Block 2
+        nothing,
+        # Block 3
+        Expr(:call, Base.inferencebarrier, 1),
+        GotoNode(5),
+        # Block 4
+        PhiNode(Int32[4], Any[SSAValue(3)]),
+        ReturnNode(SSAValue(5))
+    ]
+    ir = make_ircode(code)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) <= 2
+    ir = Core.Compiler.compact!(ir)
+    @test length(ir.stmts) <= 3
+    @test (ir[SSAValue(length(ir.stmts))][:stmt]::ReturnNode).val !== nothing
+end
+
+let code = Any[
+    Expr(:call, Base.inferencebarrier, Argument(1)), # ::Bool
+    Expr(:call, Core.tuple, 1), # ::Tuple{Int}
+    Expr(:call, Core.tuple, 1.0), # ::Tuple{Float64}
+    Expr(:call, Core.ifelse, SSAValue(1), SSAValue(2), SSAValue(3)), # ::Tuple{Int} (e.g. from inlining)
+    Expr(:call, Core.getfield, SSAValue(4), 1), # ::Int
+    ReturnNode(SSAValue(5))
+]
+    try
+        argtypes = Any[Bool]
+        ssavaluetypes = Any[Bool, Tuple{Int}, Tuple{Float64}, Tuple{Int}, Int, Any]
+        ir = make_ircode(code; slottypes=argtypes, ssavaluetypes)
+        Core.Compiler.verify_ir(ir)
+        Core.Compiler.__set_check_ssa_counts(true)
+        ir = Core.Compiler.sroa_pass!(ir)
+        Core.Compiler.verify_ir(ir)
+    finally
+        Core.Compiler.__set_check_ssa_counts(false)
+    end
+end
+
+# Test SROA all_same on NewNode
+let code = Any[
+    # Block 1
+    Expr(:call, tuple, Argument(1)),
+    GotoIfNot(Argument(4), 5),
+    # Block 2
+    Expr(:call, tuple, Argument(2)),
+    GotoIfNot(Argument(4), 9),
+    # Block 3
+    PhiNode(Int32[2, 4], Any[SSAValue(1), SSAValue(3)]),
+    Expr(:call, getfield, SSAValue(5), 1),
+    Expr(:call, tuple, SSAValue(6), Argument(2)), # ::Tuple{Int, Int}
+    Expr(:call, tuple, SSAValue(7), Argument(3)), # ::Tuple{Tuple{Int, Int}, Int}
+    # Block 4
+    PhiNode(Int32[4, 8], Any[nothing, SSAValue(8)]),
+    Expr(:call, Core.Intrinsics.not_int, Argument(4)),
+    GotoIfNot(SSAValue(10), 13),
+    # Block 5
+    ReturnNode(1),
+    # Block 6
+    PiNode(SSAValue(9), Tuple{Tuple{Int, Int}, Int}),
+    Expr(:call, getfield, SSAValue(13), 1),
+    Expr(:call, getfield, SSAValue(14), 1),
+    ReturnNode(SSAValue(15))
+]
+
+    argtypes = Any[Int, Int, Int, Bool]
+    ssavaluetypes = Any[Tuple{Int}, Any, Tuple{Int}, Any, Tuple{Int}, Int, Tuple{Int, Int}, Tuple{Tuple{Int, Int}, Int},
+                        Union{Nothing, Tuple{Tuple{Int, Int}, Int}}, Bool, Any, Any,
+                        Tuple{Tuple{Int, Int}, Int},
+                        Tuple{Int, Int}, Int, Any]
+    ir = make_ircode(code; slottypes=argtypes, ssavaluetypes)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.sroa_pass!(ir)
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.compact!(ir)
+    Core.Compiler.verify_ir(ir)
+end
+
+# Test correctness of current_scope folding
+@eval function scope_folding()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), 2),
+            :(return Core.current_scope())),
+    :(), 1))
+end
+
+@eval function scope_folding_opt()
+    $(Expr(:tryfinally,
+        Expr(:block,
+            Expr(:tryfinally, :(), :(), :(Base.inferencebarrier(2))),
+            :(return Core.current_scope())),
+    :(), :(Base.inferencebarrier(1))))
+end
+
+@test scope_folding() == 1
+@test scope_folding_opt() == 1
+@test_broken fully_eliminated(scope_folding)
+@test_broken fully_eliminated(scope_folding_opt)
+
+# Function that happened to have lots of sroa that
+# happened to trigger a bad case in the renamer. We
+# just want to check this doesn't crash in inference.
+function f52610()
+    slots_dict = IdDict()
+    for () in Base.inferencebarrier(1)
+       for x in 1
+           if Base.inferencebarrier(true)
+               slots_dict[x] = 0
+           end
+       end
+    end
+    return nothing
+end
+@test code_typed(f52610)[1][2] === Nothing
+
+# Issue #52703
+@eval function f52703()
+    try
+        $(Expr(:tryfinally,
+            Expr(:block,
+                Expr(:tryfinally, :(), :(), 2),
+                :(return Base.inferencebarrier(Core.current_scope)()::Int)),
+        :(), 1))
+    catch
+        return 1
+    end
+    return 0
+end
+@test code_typed(f52703)[1][2] === Int

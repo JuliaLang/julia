@@ -8,6 +8,9 @@ const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
 using .Main.Furlongs
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 # for tuple tests below
 ≅(x,y) = all(p -> p[1] ≈ p[2], zip(x,y))
 
@@ -238,6 +241,13 @@ using .Main.ImmutableArrays
 
     @test convert(AbstractArray{Float64}, H)::UpperHessenberg{Float64,ImmutableArray{Float64,2,Array{Float64,2}}} == H
     @test convert(AbstractMatrix{Float64}, H)::UpperHessenberg{Float64,ImmutableArray{Float64,2,Array{Float64,2}}} == H
+end
+
+@testset "custom axes" begin
+    SZA = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
+    S = UpperHessenberg(SZA)
+    r = SizedArrays.SOneTo(2)
+    @test axes(S) === (r,r)
 end
 
 end # module TestHessenberg

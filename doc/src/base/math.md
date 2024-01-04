@@ -14,10 +14,12 @@ Base.fma
 Base.muladd
 Base.inv(::Number)
 Base.div
+Base.div(::Any, ::Any, ::RoundingMode)
 Base.fld
 Base.cld
 Base.mod
 Base.rem
+Base.rem(::Any, ::Any, ::RoundingMode)
 Base.rem2pi
 Base.Math.mod2pi
 Base.divrem
@@ -138,6 +140,7 @@ Base.minmax
 Base.Math.clamp
 Base.Math.clamp!
 Base.abs
+Base.Checked
 Base.Checked.checked_abs
 Base.Checked.checked_neg
 Base.Checked.checked_add
@@ -158,7 +161,7 @@ Base.signbit
 Base.flipsign
 Base.sqrt(::Number)
 Base.isqrt
-Base.Math.cbrt
+Base.Math.cbrt(::AbstractFloat)
 Base.real
 Base.imag
 Base.reim

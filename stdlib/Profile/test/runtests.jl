@@ -38,28 +38,18 @@ let r = Profile.retrieve()
     end
 end
 
-let iobuf = IOBuffer()
-    Profile.print(iobuf, format=:tree, C=true)
+# test printing options
+for options in ((format=:tree, C=true),
+                (format=:tree, maxdepth=2),
+                (format=:flat, C=true),
+                (),
+                (format=:flat, sortedby=:count),
+                (format=:tree, recur=:flat),
+               )
+    iobuf = IOBuffer()
+    Profile.print(iobuf; options...)
     str = String(take!(iobuf))
     @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:tree, maxdepth=2)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:flat, C=true)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf)
-    @test !isempty(String(take!(iobuf)))
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:flat, sortedby=:count)
-    @test !isempty(String(take!(iobuf)))
-    Profile.print(iobuf, format=:tree, recur=:flat)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
 end
 
 @testset "Profile.print() groupby options" begin
@@ -181,7 +171,7 @@ let cmd = Base.julia_cmd()
     p = open(`$cmd -e $script`)
     t = Timer(120) do t
         # should be under 10 seconds, so give it 2 minutes then report failure
-        println("KILLING BY PROFILE TEST WATCHDOG\n")
+        println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
         kill(p, Base.SIGTERM)
         sleep(10)
         kill(p, Base.SIGKILL)
@@ -201,16 +191,21 @@ if Sys.isbsd() || Sys.islinux()
                 print(stderr, "started\n")
                 eof(stdin)
                 """
-            iob = Base.BufferStream()
+            iob = Base.BufferStream() # make an unbounded buffer, so we can just read after waiting for exit
             notify_exit = Base.PipeEndpoint()
-            p = run(pipeline(`$cmd -e $script`, stdin=notify_exit, stderr=iob, stdout=devnull), wait=false)
+            p = run(`$cmd -e $script`, notify_exit, devnull, iob, wait=false)
+            eof = @async try # set up a monitor task to set EOF on iob after p exits
+                wait(p)
+            finally
+                closewrite(iob)
+            end
             t = Timer(120) do t
                 # should be under 10 seconds, so give it 2 minutes then report failure
-                println("KILLING BY PROFILE TEST WATCHDOG\n")
+                println("KILLING siginfo/sigusr1 test BY PROFILE TEST WATCHDOG\n")
                 kill(p, Base.SIGTERM)
                 sleep(10)
                 kill(p, Base.SIGKILL)
-                close(p)
+                close(notify_exit)
             end
             try
                 s = readuntil(iob, "started", keep=true)
@@ -229,18 +224,18 @@ if Sys.isbsd() || Sys.islinux()
                     @test occursin("Overhead ╎", s)
                 end
                 close(notify_exit) # notify test finished
-                s = read(iob, String) # consume test output
-                wait(p) # wait for test completion
-                @test success(p)
+                wait(eof) # wait for test completion
+                s = read(iob, String) # consume test output from buffer
                 close(t)
             catch
                 close(notify_exit)
+                wait(eof) # wait for test completion
                 errs = read(iob, String) # consume test output
                 isempty(errs) || println("CHILD STDERR after test failure: ", errs)
-                wait(p) # wait for test completion
                 close(t)
                 rethrow()
             end
+            @test success(p)
         end
     end
 end
@@ -292,6 +287,16 @@ end
 
     rm(fname)
     rm(tmpdir, force = true, recursive = true)
+end
+
+@testset "PageProfile" begin
+    fname = "$(getpid())_$(time_ns())"
+    fpath = joinpath(tempdir(), fname)
+    Profile.take_page_profile(fpath)
+    open(fpath) do fs
+        @test readline(fs) != ""
+    end
+    rm(fpath)
 end
 
 include("allocs.jl")

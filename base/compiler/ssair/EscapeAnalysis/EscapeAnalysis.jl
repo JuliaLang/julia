@@ -15,9 +15,7 @@ const _TOP_MOD = ccall(:jl_base_relative_to, Any, (Any,), EscapeAnalysis)::Modul
 # imports
 import ._TOP_MOD: ==, getindex, setindex!
 # usings
-using Core:
-    MethodMatch, SimpleVector,
-    arrayref, arrayset, arraysize, ifelse, sizeof
+using Core: MethodMatch, SimpleVector, ifelse, sizeof
 using Core.IR
 using ._TOP_MOD:     # Base definitions
     @__MODULE__, @assert, @eval, @goto, @inbounds, @inline, @label, @noinline,
@@ -27,10 +25,9 @@ using ._TOP_MOD:     # Base definitions
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using Core.Compiler: # Core.Compiler specific definitions
     Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
-    alloc_array_ndims, argextype, array_builtin_common_typecheck, arrayset_typecheck,
-    check_effect_free!, fieldcount_noerror, hasintersect, intrinsic_nothrow,
-    is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow, singleton_type,
-    try_compute_field, try_compute_fieldidx, widenconst, ⊑
+    argextype, check_effect_free!, fieldcount_noerror, hasintersect, has_flag,
+    intrinsic_nothrow, is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow,
+    singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -40,7 +37,6 @@ else
 end
 
 const AInfo = IdSet{Any}
-const 𝕃ₒ = SimpleInferenceLattice.instance
 
 """
     x::EscapeInfo
@@ -601,10 +597,11 @@ struct LivenessChange <: Change
 end
 const Changes = Vector{Change}
 
-struct AnalysisState{T}
+struct AnalysisState{T, L <: AbstractLattice}
     ir::IRCode
     estate::EscapeState
     changes::Changes
+    𝕃ₒ::L
     get_escape_cache::T
 end
 
@@ -613,17 +610,17 @@ end
 
 Analyzes escape information in `ir`:
 - `nargs`: the number of actual arguments of the analyzed call
-- `get_escape_cache(::MethodInstance) -> Union{Nothing,ArgEscapeCache}`:
+- `get_escape_cache(::MethodInstance) -> Union{Bool,ArgEscapeCache}`:
   retrieves cached argument escape information
 """
-function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
+function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_escape_cache)
     stmts = ir.stmts
     nstmts = length(stmts) + length(ir.new_nodes.stmts)
 
     tryregions, arrayinfo = compute_frameinfo(ir)
     estate = EscapeState(nargs, nstmts, arrayinfo)
     changes = Changes() # keeps changes that happen at current statement
-    astate = AnalysisState(ir, estate, changes, get_escape_cache)
+    astate = AnalysisState(ir, estate, changes, 𝕃ₒ, get_escape_cache)
 
     local debug_itr_counter = 0
     while true
@@ -655,7 +652,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                 elseif is_meta_expr_head(head)
                     # meta expressions doesn't account for any usages
                     continue
-                elseif head === :enter || head === :leave || head === :the_exception || head === :pop_exception
+                elseif head === :leave || head === :the_exception || head === :pop_exception
                     # ignore these expressions since escapes via exceptions are handled by `escape_exception!`
                     # `escape_exception!` conservatively propagates `AllEscape` anyway,
                     # and so escape information imposed on `:the_exception` isn't computed
@@ -669,6 +666,9 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                 else
                     add_conservative_changes!(astate, pc, stmt.args)
                 end
+            elseif isa(stmt, EnterNode)
+                # Handled via escape_exception!
+                continue
             elseif isa(stmt, ReturnNode)
                 if isdefined(stmt, :val)
                     add_escape_change!(astate, stmt.val, ReturnEscape(pc))
@@ -731,45 +731,12 @@ function compute_frameinfo(ir::IRCode)
     for idx in 1:nstmts+nnewnodes
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
-        if isexpr(stmt, :enter)
+        if isa(stmt, EnterNode)
             @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
             tryregions === nothing && (tryregions = UnitRange{Int}[])
-            leave_block = stmt.args[1]::Int
+            leave_block = stmt.catch_dest
             leave_pc = first(ir.cfg.blocks[leave_block].stmts)
             push!(tryregions, idx:leave_pc)
-        elseif isexpr(stmt, :foreigncall)
-            args = stmt.args
-            name = args[1]
-            nn = normalize(name)
-            isa(nn, Symbol) || @goto next_stmt
-            ndims = alloc_array_ndims(nn)
-            ndims === nothing && @goto next_stmt
-            if ndims ≠ 0
-                length(args) ≥ ndims+6 || @goto next_stmt
-                dims = Int[]
-                for i in 1:ndims
-                    dim = argextype(args[i+6], ir)
-                    isa(dim, Const) || @goto next_stmt
-                    dim = dim.val
-                    isa(dim, Int) || @goto next_stmt
-                    push!(dims, dim)
-                end
-            else
-                length(args) ≥ 7 || @goto next_stmt
-                dims = argextype(args[7], ir)
-                if isa(dims, Const)
-                    dims = dims.val
-                    isa(dims, Tuple{Vararg{Int}}) || @goto next_stmt
-                    dims = collect(Int, dims)
-                else
-                    dims === Tuple{} || @goto next_stmt
-                    dims = Int[]
-                end
-            end
-            if arrayinfo === nothing
-                arrayinfo = ArrayInfo()
-            end
-            arrayinfo[idx] = dims
         elseif arrayinfo !== nothing
             # TODO this super limited alias analysis is able to handle only very simple cases
             # this should be replaced with a proper forward dimension analysis
@@ -1011,7 +978,7 @@ end
     error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
 end
 
-is_nothrow(ir::IRCode, pc::Int) = ir[SSAValue(pc)][:flag] & IR_FLAG_NOTHROW ≠ 0
+is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 
 # NOTE if we don't maintain the alias set that is separated from the lattice state, we can do
 # something like below: it essentially incorporates forward escape propagation in our default
@@ -1097,11 +1064,14 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     first_idx, last_idx = 2, length(args)
     # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available
     cache = astate.get_escape_cache(mi)
-    if cache === nothing
-        return add_conservative_changes!(astate, pc, args, 2)
-    else
-        cache = cache::ArgEscapeCache
+    if cache isa Bool
+        if cache
+            return nothing # guaranteed to have no escape
+        else
+            return add_conservative_changes!(astate, pc, args, 2)
+        end
     end
+    cache = cache::ArgEscapeCache
     ret = SSAValue(pc)
     retinfo = astate.estate[ret] # escape information imposed on the call statement
     method = mi.def::Method
@@ -1163,19 +1133,6 @@ function escape_foreigncall!(astate::AnalysisState, pc::Int, args::Vector{Any})
     name = args[1]
     nn = normalize(name)
     if isa(nn, Symbol)
-        boundserror_ninds = array_resize_info(nn)
-        if boundserror_ninds !== nothing
-            boundserror, ninds = boundserror_ninds
-            escape_array_resize!(boundserror, ninds, astate, pc, args)
-            return
-        end
-        if is_array_copy(nn)
-            escape_array_copy!(astate, pc, args)
-            return
-        elseif is_array_isassigned(nn)
-            escape_array_isassigned!(astate, pc, args)
-            return
-        end
         # if nn === :jl_gc_add_finalizer_th
         #     # TODO add `FinalizerEscape` ?
         # end
@@ -1498,149 +1455,16 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     add_escape_change!(astate, val, ssainfo)
     # compute the throwness of this setfield! call here since builtin_nothrow doesn't account for that
     @label add_thrown_escapes
-    if length(args) == 4 && setfield!_nothrow(𝕃ₒ,
+    if length(args) == 4 && setfield!_nothrow(astate.𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir))
         return true
-    elseif length(args) == 3 && setfield!_nothrow(𝕃ₒ,
+    elseif length(args) == 3 && setfield!_nothrow(astate.𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir))
         return true
     else
         add_thrown_escapes!(astate, pc, args, 2)
         return true
     end
-end
-
-function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, args::Vector{Any})
-    length(args) ≥ 4 || return false
-    # check potential thrown escapes from this arrayref call
-    argtypes = Any[argextype(args[i], astate.ir) for i in 2:length(args)]
-    boundcheckt = argtypes[1]
-    aryt = argtypes[2]
-    if !array_builtin_common_typecheck(boundcheckt, aryt, argtypes, 3)
-        add_thrown_escapes!(astate, pc, args, 2)
-    end
-    ary = args[3]
-    inbounds = isa(boundcheckt, Const) && !boundcheckt.val::Bool
-    inbounds || add_escape_change!(astate, ary, ThrownEscape(pc))
-    # we don't track precise index information about this array and thus don't know what values
-    # can be referenced here: directly propagate the escape information imposed on the return
-    # value of this `arrayref` call to the array itself as the most conservative propagation
-    # but also with updated index information
-    estate = astate.estate
-    if isa(ary, SSAValue) || isa(ary, Argument)
-        aryinfo = estate[ary]
-    else
-        # unanalyzable object, so the return value is also unanalyzable
-        add_escape_change!(astate, SSAValue(pc), ⊤)
-        return true
-    end
-    AliasInfo = aryinfo.AliasInfo
-    if isa(AliasInfo, Bool)
-        AliasInfo && @goto conservative_propagation
-        # AliasInfo of this array hasn't been analyzed yet: set AliasInfo now
-        idx = array_nd_index(astate, ary, args[4:end])
-        if isa(idx, Int)
-            AliasInfo = IndexableElements(IdDict{Int,AInfo}())
-            @goto record_indexable_use
-        end
-        AliasInfo = Unindexable()
-        @goto record_unindexable_use
-    elseif isa(AliasInfo, IndexableElements)
-        idx = array_nd_index(astate, ary, args[4:end])
-        if !isa(idx, Int)
-            AliasInfo = merge_to_unindexable(AliasInfo)
-            @goto record_unindexable_use
-        end
-        @label record_indexable_use
-        info = get!(()->AInfo(), AliasInfo.infos, idx)
-        push!(info, LocalUse(pc))
-        add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo)) # update with new AliasInfo
-    elseif isa(AliasInfo, Unindexable)
-        @label record_unindexable_use
-        push!(AliasInfo.info, LocalUse(pc))
-        add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo)) # update with new AliasInfo
-    else
-        # this object has been used as struct, but it is used as array here (thus should throw)
-        # update ary's element information and just handle this case conservatively
-        aryinfo = escape_unanalyzable_obj!(astate, ary, aryinfo)
-        @label conservative_propagation
-        # at the extreme case, an element of `ary` may point to `ary` itself
-        # so add the alias change here as the most conservative propagation
-        add_alias_change!(astate, ary, SSAValue(pc))
-    end
-    return true
-end
-
-function escape_builtin!(::typeof(arrayset), astate::AnalysisState, pc::Int, args::Vector{Any})
-    length(args) ≥ 5 || return false
-    # check potential escapes from this arrayset call
-    # NOTE here we essentially only need to account for TypeError, assuming that
-    # UndefRefError or BoundsError don't capture any of the arguments here
-    argtypes = Any[argextype(args[i], astate.ir) for i in 2:length(args)]
-    boundcheckt = argtypes[1]
-    aryt = argtypes[2]
-    valt = argtypes[3]
-    if !(array_builtin_common_typecheck(boundcheckt, aryt, argtypes, 4) &&
-         arrayset_typecheck(aryt, valt))
-        add_thrown_escapes!(astate, pc, args, 2)
-    end
-    ary = args[3]
-    val = args[4]
-    inbounds = isa(boundcheckt, Const) && !boundcheckt.val::Bool
-    inbounds || add_escape_change!(astate, ary, ThrownEscape(pc))
-    # we don't track precise index information about this array and won't record what value
-    # is being assigned here: directly propagate the escape information of this array to
-    # the value being assigned as the most conservative propagation
-    estate = astate.estate
-    if isa(ary, SSAValue) || isa(ary, Argument)
-        aryinfo = estate[ary]
-    else
-        # unanalyzable object (e.g. obj::GlobalRef): escape field value conservatively
-        add_escape_change!(astate, val, ⊤)
-        return true
-    end
-    AliasInfo = aryinfo.AliasInfo
-    if isa(AliasInfo, Bool)
-        AliasInfo && @goto conservative_propagation
-        # AliasInfo of this array hasn't been analyzed yet: set AliasInfo now
-        idx = array_nd_index(astate, ary, args[5:end])
-        if isa(idx, Int)
-            AliasInfo = IndexableElements(IdDict{Int,AInfo}())
-            @goto escape_indexable_def
-        end
-        AliasInfo = Unindexable()
-        @goto escape_unindexable_def
-    elseif isa(AliasInfo, IndexableElements)
-        idx = array_nd_index(astate, ary, args[5:end])
-        if !isa(idx, Int)
-            AliasInfo = merge_to_unindexable(AliasInfo)
-            @goto escape_unindexable_def
-        end
-        @label escape_indexable_def
-        info = get!(()->AInfo(), AliasInfo.infos, idx)
-        add_alias_escapes!(astate, val, info)
-        push!(info, LocalDef(pc))
-        add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo)) # update with new AliasInfo
-        # propagate the escape information of this array ignoring elements information
-        add_escape_change!(astate, val, ignore_aliasinfo(aryinfo))
-    elseif isa(AliasInfo, Unindexable)
-        @label escape_unindexable_def
-        add_alias_escapes!(astate, val, AliasInfo.info)
-        push!(AliasInfo.info, LocalDef(pc))
-        add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo)) # update with new AliasInfo
-        # propagate the escape information of this array ignoring elements information
-        add_escape_change!(astate, val, ignore_aliasinfo(aryinfo))
-    else
-        # this object has been used as struct, but it is used as array here (thus should throw)
-        # update ary's element information and just handle this case conservatively
-        aryinfo = escape_unanalyzable_obj!(astate, ary, aryinfo)
-        @label conservative_propagation
-        add_alias_change!(astate, val, ary)
-    end
-    # also propagate escape information imposed on the return value of this `arrayset`
-    ssainfo = estate[SSAValue(pc)]
-    add_escape_change!(astate, ary, ssainfo)
-    return true
 end
 
 # NOTE this function models and thus should be synced with the implementation of:
@@ -1676,63 +1500,6 @@ function array_nd_index(astate::AnalysisState, @nospecialize(ary), args::Vector{
     return i
 end
 
-function escape_builtin!(::typeof(arraysize), astate::AnalysisState, pc::Int, args::Vector{Any})
-    length(args) == 3 || return false
-    ary = args[2]
-    dim = args[3]
-    if !arraysize_typecheck(ary, dim, astate.ir)
-        add_escape_change!(astate, ary, ThrownEscape(pc))
-        add_escape_change!(astate, dim, ThrownEscape(pc))
-    end
-    # NOTE we may still see "arraysize: dimension out of range", but it doesn't capture anything
-    return true
-end
-
-function arraysize_typecheck(@nospecialize(ary), @nospecialize(dim), ir::IRCode)
-    aryt = argextype(ary, ir)
-    aryt ⊑ Array || return false
-    dimt = argextype(dim, ir)
-    dimt ⊑ Int || return false
-    return true
-end
-
-# returns nothing if this isn't array resizing operation,
-# otherwise returns true if it can throw BoundsError and false if not
-function array_resize_info(name::Symbol)
-    if name === :jl_array_grow_beg || name === :jl_array_grow_end
-        return false, 1
-    elseif name === :jl_array_del_beg || name === :jl_array_del_end
-        return true, 1
-    elseif name === :jl_array_grow_at || name === :jl_array_del_at
-        return true, 2
-    else
-        return nothing
-    end
-end
-
-# NOTE may potentially throw "cannot resize array with shared data" error,
-# but just ignore it since it doesn't capture anything
-function escape_array_resize!(boundserror::Bool, ninds::Int,
-    astate::AnalysisState, pc::Int, args::Vector{Any})
-    length(args) ≥ 6+ninds || return add_fallback_changes!(astate, pc, args)
-    ary = args[6]
-    aryt = argextype(ary, astate.ir)
-    aryt ⊑ Array || return add_fallback_changes!(astate, pc, args)
-    for i in 1:ninds
-        ind = args[i+6]
-        indt = argextype(ind, astate.ir)
-        indt ⊑ Integer || return add_fallback_changes!(astate, pc, args)
-    end
-    if boundserror
-        # this array resizing can potentially throw `BoundsError`, impose it now
-        add_escape_change!(astate, ary, ThrownEscape(pc))
-    end
-    # give up indexing analysis whenever we see array resizing
-    # (since we track array dimensions only globally)
-    mark_unindexable!(astate, ary)
-    add_liveness_changes!(astate, pc, args, 6)
-end
-
 function mark_unindexable!(astate::AnalysisState, @nospecialize(ary))
     isa(ary, SSAValue) || return
     aryinfo = astate.estate[ary]
@@ -1741,8 +1508,6 @@ function mark_unindexable!(astate::AnalysisState, @nospecialize(ary))
     AliasInfo = merge_to_unindexable(AliasInfo)
     add_escape_change!(astate, ary, EscapeInfo(aryinfo, AliasInfo))
 end
-
-is_array_copy(name::Symbol) = name === :jl_array_copy
 
 # FIXME this implementation is very conservative, improve the accuracy and solve broken test cases
 function escape_array_copy!(astate::AnalysisState, pc::Int, args::Vector{Any})
@@ -1759,54 +1524,5 @@ function escape_array_copy!(astate::AnalysisState, pc::Int, args::Vector{Any})
     end
     add_liveness_changes!(astate, pc, args, 6)
 end
-
-is_array_isassigned(name::Symbol) = name === :jl_array_isassigned
-
-function escape_array_isassigned!(astate::AnalysisState, pc::Int, args::Vector{Any})
-    if !array_isassigned_nothrow(args, astate.ir)
-        add_thrown_escapes!(astate, pc, args)
-    end
-    add_liveness_changes!(astate, pc, args, 6)
-end
-
-function array_isassigned_nothrow(args::Vector{Any}, src::IRCode)
-    # if !validate_foreigncall_args(args,
-    #     :jl_array_isassigned, Cint, svec(Any,Csize_t), 0, :ccall)
-    #     return false
-    # end
-    length(args) ≥ 7 || return false
-    arytype = argextype(args[6], src)
-    arytype ⊑ Array || return false
-    idxtype = argextype(args[7], src)
-    idxtype ⊑ Csize_t || return false
-    return true
-end
-
-# # COMBAK do we want to enable this (and also backport this to Base for array allocations?)
-# using Core.Compiler: Cint, svec
-# function validate_foreigncall_args(args::Vector{Any},
-#     name::Symbol, @nospecialize(rt), argtypes::SimpleVector, nreq::Int, convention::Symbol)
-#     length(args) ≥ 5 || return false
-#     normalize(args[1]) === name || return false
-#     args[2] === rt || return false
-#     args[3] === argtypes || return false
-#     args[4] === vararg || return false
-#     normalize(args[5]) === convention || return false
-#     return true
-# end
-#
-# using Core: ImmutableArray, arrayfreeze, mutating_arrayfreeze, arraythaw
-#
-# escape_builtin!(::typeof(arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-#     is_safe_immutable_array_op(Array, astate, args)
-# escape_builtin!(::typeof(mutating_arrayfreeze), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-#     is_safe_immutable_array_op(Array, astate, args)
-# escape_builtin!(::typeof(arraythaw), astate::AnalysisState, pc::Int, args::Vector{Any}) =
-#     is_safe_immutable_array_op(ImmutableArray, astate, args)
-# function is_safe_immutable_array_op(@nospecialize(arytype), astate::AnalysisState, args::Vector{Any})
-#     length(args) == 2 || return false
-#     argextype(args[2], astate.ir) ⊑ arytype || return false
-#     return true
-# end
 
 end # baremodule EscapeAnalysis

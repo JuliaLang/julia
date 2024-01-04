@@ -11,6 +11,7 @@ struct DevNull <: IO end
 const devnull = DevNull()
 write(::DevNull, ::UInt8) = 1
 unsafe_write(::DevNull, ::Ptr{UInt8}, n::UInt)::Int = n
+closewrite(::DevNull) = nothing
 close(::DevNull) = nothing
 wait_close(::DevNull) = wait()
 bytesavailable(io::DevNull) = 0

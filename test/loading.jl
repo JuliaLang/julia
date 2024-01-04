@@ -721,16 +721,17 @@ end
 @testset "expansion of JULIA_DEPOT_PATH" begin
     s = Sys.iswindows() ? ';' : ':'
     tmp = "/this/does/not/exist"
-    DEFAULT = Base.append_default_depot_path!(String[])
+    default = joinpath(homedir(), ".julia")
+    bundled = Base.append_bundled_depot_path!(String[])
     cases = Dict{Any,Vector{String}}(
-        nothing => DEFAULT,
+        nothing => [default; bundled],
         "" => [],
-        "$s" => DEFAULT,
-        "$tmp$s" => [tmp; DEFAULT],
-        "$s$tmp" => [DEFAULT; tmp],
+        "$s" => [default; bundled],
+        "$tmp$s" => [tmp; bundled],
+        "$s$tmp" => [bundled; tmp],
         )
     for (env, result) in pairs(cases)
-        script = "DEPOT_PATH == $(repr(result)) || error()"
+        script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
         cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
         cmd = addenv(cmd, "JULIA_DEPOT_PATH" => env)
         cmd = pipeline(cmd; stdout, stderr)
@@ -795,8 +796,10 @@ end
 @testset "`Base.project_names` and friends" begin
     # Some functions in Pkg assumes that these tuples have the same length
     n = length(Base.project_names)
-    @test length(Base.manifest_names) == n
     @test length(Base.preferences_names) == n
+
+    # there are two manifest names per project name
+    @test length(Base.manifest_names) == 2n
 end
 
 @testset "Manifest formats" begin
@@ -822,6 +825,33 @@ end
         raw_manifest = Base.parsed_toml(manifest_file)
         @test Base.is_v1_format_manifest(raw_manifest) == false
         @test Base.get_deps(raw_manifest) == deps
+    end
+end
+
+@testset "Manifest name preferential loading" begin
+    mktempdir() do tmp
+        proj = joinpath(tmp, "Project.toml")
+        touch(proj)
+        for man_name in (
+            "Manifest.toml",
+            "JuliaManifest.toml",
+            "Manifest-v$(VERSION.major).$(VERSION.minor).toml",
+            "JuliaManifest-v$(VERSION.major).$(VERSION.minor).toml"
+            )
+            touch(joinpath(tmp, man_name))
+            man = basename(Base.project_file_manifest_path(proj))
+            @test man == man_name
+        end
+    end
+    mktempdir() do tmp
+        # check that another version isn't preferred
+        proj = joinpath(tmp, "Project.toml")
+        touch(proj)
+        touch(joinpath(tmp, "Manifest-v1.5.toml"))
+        @test Base.project_file_manifest_path(proj) == nothing
+        touch(joinpath(tmp, "Manifest.toml"))
+        man = basename(Base.project_file_manifest_path(proj))
+        @test man == "Manifest.toml"
     end
 end
 
@@ -1092,7 +1122,7 @@ end
     end
 end
 
-pkgimage(val) = val == 1 ? `--pkgimage=yes` : `--pkgimage=no`
+pkgimage(val) = val == 1 ? `--pkgimages=yes` : `--pkgimages=no`
 opt_level(val) = `-O$val`
 debug_level(val) = `-g$val`
 inline(val) = val == 1 ? `--inline=yes` : `--inline=no`
@@ -1183,4 +1213,276 @@ end
 @testset "Upgradable stdlibs" begin
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
     @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using Statistics'`)
+end
+
+@testset "checking srcpath modules" begin
+    p = Base.PkgId("Dummy")
+    fpath, _ = mktemp()
+    @testset "valid" begin
+        write(fpath, """
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        baremodule Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        \"\"\"
+        Foo
+        using Foo
+        \"\"\"
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        \"\"\" Foo \"\"\"
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        \"\"\"
+        Foo
+        \"\"\" module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        @doc let x = 1
+            x
+        end module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        # using foo
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+    end
+    @testset "invalid" begin
+        write(fpath, """
+        # module Foo
+        using Bar
+        # end
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        using Bar
+        module Foo
+        end
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        using Bar
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        x = 1
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+    end
+end
+
+@testset "relocatable upgrades #51989" begin
+    mktempdir() do depot
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+
+        # Create fake `Foo.jl` package with two files:
+        foo_path = joinpath(depot, "dev", "Foo")
+        mkpath(joinpath(foo_path, "src"))
+        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+            println(io, """
+            module Foo
+            include("internal.jl")
+            end
+            """)
+        end
+        open(joinpath(foo_path, "src", "internal.jl"); write=true) do io
+            println(io, "const a = \"asd\"")
+        end
+        open(joinpath(foo_path, "Project.toml"); write=true) do io
+            println(io, """
+            name = "Foo"
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+        end
+
+        # In our depot, `dev` and then `precompile` this `Foo` package.
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo"); Pkg.precompile(); exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot))
+
+        # Get the size of the generated `.ji` file so that we can ensure that it gets altered
+        foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo")
+        cache_path = joinpath(foo_compiled_path, only(filter(endswith(".ji"), readdir(foo_compiled_path))))
+        cache_size = filesize(cache_path)
+
+        # Next, remove the dependence on `internal.jl` and delete it:
+        rm(joinpath(foo_path, "src", "internal.jl"))
+        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+            truncate(io, 0)
+            println(io, """
+            module Foo
+            end
+            """)
+        end
+
+        # Try to load `Foo`; this should trigger recompilation, not an error!
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo; exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+
+        # Ensure that there is still only one `.ji` file (it got replaced
+        # and the file size changed).
+        @test length(filter(endswith(".ji"), readdir(foo_compiled_path))) == 1
+        @test filesize(cache_path) != cache_size
+    end
+end
+
+@testset "code coverage disabled during precompilation" begin
+    mktempdir() do depot
+        cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
+        cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
+        function rm_cov_files()
+            for cov_file in filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
+                rm(cov_file)
+            end
+            @test !cov_exists()
+        end
+        cov_exists() = !isempty(filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"))))
+
+        rm_cov_files() # clear out any coverage files first
+        @test !cov_exists()
+
+        cd(cov_test_dir) do
+            # In our depot, precompile CovTest.jl with coverage on
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test !isempty(filter(!endswith(".ji"), readdir(cov_cache_dir))) # check that object cache file(s) exists
+            @test !cov_exists()
+            rm_cov_files()
+
+            # same again but call foo(), which is in the pkgimage, and should generate coverage
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test cov_exists()
+            rm_cov_files()
+
+            # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test cov_exists()
+            rm_cov_files()
+        end
+    end
+end
+
+@testset "command-line flags" begin
+    mktempdir() do dir
+        # generate a Parent.jl and Child.jl package, with Parent depending on Child
+        open(joinpath(dir, "Child.jl"), "w") do io
+            println(io, """
+                module Child
+                end""")
+        end
+        open(joinpath(dir, "Parent.jl"), "w") do io
+            println(io, """
+                module Parent
+                using Child
+                end""")
+        end
+
+        # helper function to load a package and return the output
+        function load_package(name, args=``)
+            code = "using $name"
+            cmd = addenv(`$(Base.julia_cmd()) -e $code $args`,
+                        "JULIA_LOAD_PATH" => dir,
+                        "JULIA_DEBUG" => "loading")
+
+            out = Pipe()
+            proc = run(pipeline(cmd, stdout=out, stderr=out))
+            close(out.in)
+
+            log = @async String(read(out))
+            @test success(proc)
+            fetch(log)
+        end
+
+        log = load_package("Parent", `--compiled-modules=no --pkgimages=no`)
+        @test !occursin(r"Generating (cache|object cache) file", log)
+        @test !occursin(r"Loading (cache|object cache) file", log)
+
+
+        ## tests for `--compiled-modules`, which generates cache files
+
+        log = load_package("Child", `--compiled-modules=yes --pkgimages=no`)
+        @test occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+
+        # with `--compiled-modules=existing` we should only precompile Child
+        log = load_package("Parent", `--compiled-modules=existing --pkgimages=no`)
+        @test !occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+        @test !occursin(r"Generating cache file for Parent", log)
+        @test !occursin(r"Loading cache file .+ for Parent", log)
+
+        # the default is `--compiled-modules=yes`, which should now precompile Parent
+        log = load_package("Parent", `--pkgimages=no`)
+        @test !occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+        @test occursin(r"Generating cache file for Parent", log)
+        @test occursin(r"Loading cache file .+ for Parent", log)
+
+
+        ## tests for `--pkgimages`, which generates object cache files
+
+        log = load_package("Child", `--compiled-modules=yes --pkgimages=yes`)
+        @test occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+
+        # with `--pkgimages=existing` we should only generate code for Child
+        log = load_package("Parent", `--compiled-modules=yes --pkgimages=existing`)
+        @test !occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+        @test !occursin(r"Generating object cache file for Parent", log)
+        @test !occursin(r"Loading object cache file .+ for Parent", log)
+
+        # the default is `--pkgimages=yes`, which should now generate code for Parent
+        log = load_package("Parent")
+        @test !occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+        @test occursin(r"Generating object cache file for Parent", log)
+        @test occursin(r"Loading object cache file .+ for Parent", log)
+    end
 end

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Prevent this from putting anyting into the Main namespace
+# Prevent this from putting anything into the Main namespace
 @eval Module() begin
 
 if Threads.maxthreadid() != 1
@@ -45,6 +45,11 @@ precompile(isequal, (String, String))
 precompile(Base.check_open, (Base.TTY,))
 precompile(Base.getproperty, (Base.TTY, Symbol))
 precompile(write, (Base.TTY, String))
+precompile(Tuple{typeof(Base.get), Base.TTY, Symbol, Bool})
+precompile(Tuple{typeof(Base.hashindex), String, Int64})
+precompile(Tuple{typeof(Base.write), Base.GenericIOBuffer{Array{UInt8, 1}}, String})
+precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Nothing, Int64}, Int64})
+precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Nothing, Int64}, Int64, Int64})
 
 # used by Revise.jl
 precompile(Tuple{typeof(Base.parse_cache_header), String})
@@ -57,6 +62,7 @@ precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId}
 precompile(Tuple{typeof(push!), Vector{Function}, Function})
 
 # miscellaneous
+precompile(Tuple{typeof(Base.exit)})
 precompile(Tuple{typeof(Base.require), Base.PkgId})
 precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}, Base.Dict{String, Any}, Vararg{Base.Dict{String, Any}}})
@@ -302,6 +308,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             yield() # Make clock spinning
             print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
         catch ex
+            @show backtrace()
             # See #28808
             @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
         end
@@ -326,10 +333,6 @@ finally
 end
 
 generate_precompile_statements()
-
-# As a last step in system image generation,
-# remove some references to build time environment for a more reproducible build.
-Base.Filesystem.temp_cleanup_purge(force=true)
 
 let stdout = Ref{IO}(stdout)
     Base.PROGRAM_FILE = ""

@@ -349,15 +349,8 @@ to_indices(A, I::Tuple{}) = ()
 to_indices(A, I::Tuple{Vararg{Int}}) = I
 to_indices(A, I::Tuple{Vararg{Integer}}) = (@inline; to_indices(A, (), I))
 to_indices(A, inds, ::Tuple{}) = ()
-function to_indices(A, inds, I::Tuple{Any, Vararg{Any}})
-    @inline
-    head = _to_indices1(A, inds, I[1])
-    rest = to_indices(A, _cutdim(inds, I[1]), tail(I))
-    (head..., rest...)
-end
-
-_to_indices1(A, inds, I1) = (to_index(A, I1),)
-_cutdim(inds, I1) = safe_tail(inds)
+to_indices(A, inds, I::Tuple{Any, Vararg}) =
+    (@inline; (to_index(A, I[1]), to_indices(A, safe_tail(inds), tail(I))...))
 
 """
     Slice(indices)
@@ -485,7 +478,7 @@ LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) whe
     LinearIndices(map(_convert2ind, inds))
 LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
-_convert2ind(i::Integer) = Base.OneTo(i)
+_convert2ind(i::Integer) = oneto(i)
 _convert2ind(ind::AbstractUnitRange) = first(ind):last(ind)
 
 function indices_promote_type(::Type{Tuple{R1,Vararg{R1,N}}}, ::Type{Tuple{R2,Vararg{R2,N}}}) where {R1,R2,N}

@@ -1195,7 +1195,7 @@ static bool check_cpu_arch_ver(uint32_t cpu, arm_arch arch)
     return true;
 }
 
-static void shrink_big_little(std::vector<std::pair<uint32_t,CPUID>> &list,
+static void shrink_big_little(llvm::SmallVectorImpl<std::pair<uint32_t,CPUID>> &list,
                               const CPU *cpus, uint32_t ncpu)
 {
     auto find = [&] (uint32_t name) {
@@ -1260,7 +1260,7 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 #endif
 
     std::set<uint32_t> cpus;
-    std::vector<std::pair<uint32_t,CPUID>> list;
+    llvm::SmallVector<std::pair<uint32_t,CPUID>, 0> list;
     // Ideally the feature detection above should be enough.
     // However depending on the kernel version not all features are available
     // and it's also impossible to detect the ISA version which contains
@@ -1481,7 +1481,7 @@ static inline void disable_depends(FeatureList<n> &features)
     ::disable_depends(features, Feature::deps, sizeof(Feature::deps) / sizeof(FeatureDep));
 }
 
-static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
+static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(void)
 {
     auto feature_cb = [] (const char *str, size_t len, FeatureList<feature_sz> &list) {
 #ifdef _CPU_AARCH64_
@@ -1507,7 +1507,7 @@ static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
     return targets;
 }
 
-static std::vector<TargetData<feature_sz>> jit_targets;
+static llvm::SmallVector<TargetData<feature_sz>, 0> jit_targets;
 
 static TargetData<feature_sz> arg_target_data(const TargetData<feature_sz> &arg, bool require_host)
 {
@@ -1648,7 +1648,7 @@ static void ensure_jit_target(bool imaging)
     }
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_noext(const TargetData<feature_sz> &data)
 {
     std::string name = data.name;
@@ -1671,7 +1671,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     if (name == "apple-a7")
         name = "cyclone";
 #endif
-    std::vector<std::string> feature_strs;
+    llvm::SmallVector<std::string, 0> feature_strs;
     for (auto &fename: feature_names) {
         if (fename.llvmver > JL_LLVM_VERSION)
             continue;
@@ -1739,7 +1739,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     return std::make_pair(std::move(name), std::move(feature_strs));
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_vec(const TargetData<feature_sz> &data)
 {
     auto res0 = get_llvm_target_noext(data);
@@ -1808,6 +1808,22 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
     return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
 }
 
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
+{
+#ifdef _CPU_AARCH64_
+    return jl_true;
+#else
+    TargetData<feature_sz> target = jit_targets.front();
+    FeatureList<feature_sz> features = target.en.features;
+    if (bits == 32 && test_nbit(features, Feature::vfp4sp))
+        return jl_true;
+    else if ((bits == 64 || bits == 32) && test_nbit(features, Feature::vfp4))
+        return jl_true;
+    else
+        return jl_false;
+#endif
+}
+
 jl_image_t jl_init_processor_sysimg(void *hdl)
 {
     if (!jit_targets.empty())
@@ -1835,7 +1851,7 @@ JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
     return jl_nothing;
 }
 
-std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags)
 {
     ensure_jit_target(imaging);
     flags = jit_targets[0].en.flags;
@@ -1855,11 +1871,11 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
     return res;
 }
 
-std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
-    std::vector<jl_target_spec_t> res;
+    llvm::SmallVector<jl_target_spec_t, 0> res;
     for (auto &target: jit_targets) {
         auto features_en = target.en.features;
         auto features_dis = target.dis.features;

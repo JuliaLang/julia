@@ -76,7 +76,7 @@ Base.iterate(S::LU, ::Val{:done}) = nothing
 adjoint(F::LU{<:Real}) = TransposeFactorization(F)
 transpose(F::LU{<:Real}) = TransposeFactorization(F)
 
-# the following method is meant to catch calls to lu!(A::LAPACKArray) without a pivoting stategy
+# the following method is meant to catch calls to lu!(A::LAPACKArray) without a pivoting strategy
 lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
 function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
     lpt = LAPACK.getrf!(A; check)
@@ -520,9 +520,6 @@ end
 
     # Initialize variables
     info = 0
-    if dl === du
-        throw(ArgumentError("off-diagonals must not alias"))
-    end
     fill!(du2, 0)
 
     @inbounds begin

@@ -340,8 +340,22 @@
 
 (define (reescape ux x)
   (if (and (pair? x) (eq? (car x) 'escape))
-    (reescape '(escape ,ux) (cadr x)))
-    ux)
+    (reescape `(escape ,ux) (cadr x))
+    ux))
+
+;; type has special behavior: identifiers inside are
+;; field names, not expressions.
+(define (resolve-struct-field-expansion x env m parent-scope inarg)
+  (let ((ux (unescape x)))
+    (cond
+        ((atom? ux) ux)
+        ((and (pair? ux) (eq? (car ux) '|::|))
+         `(|::| ,(unescape (cadr ux))
+           ,(resolve-expansion-vars- (reescape (caddr ux) x) env m parent-scope inarg)))
+        ((and (pair? ux) (memq (car ux) '(const atomic)))
+         `(,(car ux) ,(resolve-struct-field-expansion (reescape (cadr ux) x) env m parent-scope inarg)))
+        (else
+         (resolve-expansion-vars-with-new-env x env m parent-scope inarg)))))
 
 (define (resolve-expansion-vars- e env m parent-scope inarg)
   (cond ((or (eq? e 'begin) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal) (underscore-symbol? e))
@@ -371,22 +385,14 @@
                                ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))
                            (unescape-global-lhs arg env m parent-scope inarg)))
                       (cdr e))))
-           ((using import export meta line inbounds boundscheck loopinfo inline noinline) (map unescape e))
+           ((using import export meta line inbounds boundscheck loopinfo inline noinline purity) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
            ((struct)
             `(struct ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)
-                     ;; type has special behavior: identifiers inside are
-                     ;; field names, not expressions.
                      ,(map (lambda (x)
-                             (let ((ux (unescape x)))
-                                  (cond ((atom? ux) ux)
-                                        ((and (pair? ux) (eq? (car ux) '|::|))
-                                         `(|::| ,(unescape (cadr ux))
-                                           ,(resolve-expansion-vars- (reescape (caddr ux) x) env m parent-scope inarg)))
-                                        (else
-                                         (resolve-expansion-vars-with-new-env x env m parent-scope inarg)))))
+                            (resolve-struct-field-expansion x env m parent-scope inarg))
                            (cadddr e))))
 
            ((parameters)

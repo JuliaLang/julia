@@ -39,6 +39,73 @@ $ julia --color=yes -O -- script.jl arg1 arg2..
 
 See also [Scripting](@ref man-scripting) for more information on writing Julia scripts.
 
+## The `Main.main` entry point
+
+As of Julia, 1.11, Base export a special macro `@main`. This macro simply expands to the symbol `main`,
+but at the conclusion of executing a script or expression, `julia` will attempt to execute the function
+`Main.main(ARGS)` if such a function has been defined and this behavior was opted into
+using the `@main macro`. This feature is intended to aid in the unification
+of compiled and interactive workflows. In compiled workflows, loading the code that defines the `main`
+function may be spatially and temporally separated from the invocation. However, for interactive workflows,
+the behavior is equivalent to explicitly calling `exit(main(ARGS))` at the end of the evaluated script or
+expression.
+
+!!! compat "Julia 1.11"
+    The special entry point `Main.main` was added in Julia 1.11. For compatibility with prior julia versions,
+    add an explicit `@isdefined(var"@main") ? (@main) : exit(main(ARGS))` at the end of your scripts.
+
+To see this feature in action, consider the following definition, which will execute the print function despite there being no explicit call to `main`:
+
+```
+$ julia -e '(@main)(ARGS) = println("Hello World!")'
+Hello World!
+$
+```
+
+Only the `main` binding in the `Main`, module has this special behavior and only if
+the macro `@main` was used within the defining module.
+
+For example, using `hello` instead of `main` will result not result in the `hello` function executing:
+
+```
+$ julia -e 'hello(ARGS) = println("Hello World!")'
+$
+```
+
+and neither will a plain definition of `main`:
+```
+$ julia -e 'main(ARGS) = println("Hello World!")'
+$
+```
+
+However, the opt-in need not occur at definition time:
+$ julia -e 'main(ARGS) = println("Hello World!"); @main'
+Hello World!
+$
+
+The `main` binding may be imported from a package. A hello package defined as
+
+```
+module Hello
+
+export main
+(@main)(ARGS) = println("Hello from the package!")
+
+end
+```
+
+may be used as:
+
+```
+$ julia -e 'using Hello'
+Hello from the package!
+$ julia -e 'import Hello' # N.B.: Execution depends on the binding not whether the package is loaded
+$
+```
+
+However, note that the current best practice recommendation is to not mix application and reusable library
+code in the same package. Helper applications may be distributed as separate packages or as scripts with
+separate `main` entry points in a package's `bin` folder.
 
 ## Parallel mode
 
@@ -107,7 +174,7 @@ The following is a complete list of command-line switches available when launchi
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
 |`-t`, `--threads {N\|auto}`            |Enable N threads; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future.  Currently, `auto` uses the number of CPUs assigned to this julia process based on the OS-specific affinity assignment interface, if supported (Linux and Windows). If this is not supported (macOS) or process affinity is not configured, it uses the number of CPU threads.|
-| `--gcthreads {N}`                     |Enable N GC threads; If unspecified is set to half of the compute worker threads.|
+| `--gcthreads=N[,M]`                   |Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC. N is set to half of the number of compute threads and M is set to 0 if unspecified.|
 |`-p`, `--procs {N\|auto}`              |Integer value N launches N additional local worker processes; `auto` launches as many workers as the number of local CPU threads (logical cores)|
 |`--machine-file <file>`                |Run processes on hosts listed in `<file>`|
 |`-i`                                   |Interactive mode; REPL runs and `isinteractive()` is true|

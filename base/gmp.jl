@@ -320,11 +320,6 @@ function BigInt(x::Float64)
     unsafe_trunc(BigInt,x)
 end
 
-function round(::Type{BigInt}, x::Union{Float16,Float32,Float64}, r::RoundingMode{:ToZero})
-    isfinite(x) || throw(InexactError(:trunc, BigInt, x))
-    unsafe_trunc(BigInt,x)
-end
-
 BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 
@@ -705,7 +700,7 @@ function prod(arr::AbstractArray{BigInt})
     foldl(MPZ.mul!, arr; init)
 end
 
-factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
+factorial(n::BigInt) = !isneg(n) ? MPZ.fac_ui(n) : throw(DomainError(n, "`n` must not be negative."))
 
 function binomial(n::BigInt, k::Integer)
     k < 0 && return BigInt(0)

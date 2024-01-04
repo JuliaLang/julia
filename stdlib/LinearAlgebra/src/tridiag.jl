@@ -70,9 +70,14 @@ julia> A[2,1]
 SymTridiagonal(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T}(dv, ev)
 SymTridiagonal{T}(dv::V, ev::V) where {T,V<:AbstractVector{T}} = SymTridiagonal{T,V}(dv, ev)
 function SymTridiagonal{T}(dv::AbstractVector, ev::AbstractVector) where {T}
-    SymTridiagonal(convert(AbstractVector{T}, dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, ev)::AbstractVector{T})
+    d = convert(AbstractVector{T}, dv)::AbstractVector{T}
+    e = convert(AbstractVector{T}, ev)::AbstractVector{T}
+    typeof(d) == typeof(e) ?
+        SymTridiagonal{T}(d, e) :
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
+SymTridiagonal(d::AbstractVector{T}, e::AbstractVector{S}) where {T,S} =
+    SymTridiagonal{promote_type(T, S)}(d, e)
 
 """
     SymTridiagonal(A::AbstractMatrix)
@@ -103,8 +108,12 @@ julia> SymTridiagonal(B)
 ```
 """
 function SymTridiagonal(A::AbstractMatrix)
-    if (diag(A, 1) == transpose.(diag(A, -1))) && all(issymmetric.(diag(A, 0)))
-        SymTridiagonal(diag(A, 0), diag(A, 1))
+    checksquare(A)
+    du = diag(A, 1)
+    d  = diag(A)
+    dl = diag(A, -1)
+    if all(((x, y),) -> x == transpose(y), zip(du, dl)) && all(issymmetric, d)
+        SymTridiagonal(d, du)
     else
         throw(ArgumentError("matrix is not symmetric; cannot convert to SymTridiagonal"))
     end
@@ -116,12 +125,12 @@ SymTridiagonal{T,V}(S::SymTridiagonal) where {T,V<:AbstractVector{T}} =
 SymTridiagonal{T}(S::SymTridiagonal{T}) where {T} = S
 SymTridiagonal{T}(S::SymTridiagonal) where {T} =
     SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+                    convert(AbstractVector{T}, S.ev)::AbstractVector{T})
 SymTridiagonal(S::SymTridiagonal) = S
 
-AbstractMatrix{T}(S::SymTridiagonal) where {T} =
-    SymTridiagonal(convert(AbstractVector{T}, S.dv)::AbstractVector{T},
-                   convert(AbstractVector{T}, S.ev)::AbstractVector{T})
+AbstractMatrix{T}(S::SymTridiagonal) where {T} = SymTridiagonal{T}(S)
+AbstractMatrix{T}(S::SymTridiagonal{T}) where {T} = copy(S)
+
 function Matrix{T}(M::SymTridiagonal) where T
     n = size(M, 1)
     Mf = Matrix{T}(undef, n, n)
@@ -139,6 +148,7 @@ Matrix(M::SymTridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))
 Array(M::SymTridiagonal) = Matrix(M)
 
 size(A::SymTridiagonal) = (n = length(A.dv); (n, n))
+axes(M::SymTridiagonal) = (ax = axes(M.dv, 1); (ax, ax))
 
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
 similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(S.dv, T, dims)
@@ -468,13 +478,13 @@ struct Tridiagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
                 "lengths of subdiagonal, diagonal and superdiagonal: ",
                 "($(length(dl)), $(length(d)), $(length(du)))")))
         end
-        new{T,V}(dl, d, du)
+        new{T,V}(dl, d, Base.unalias(dl, du))
     end
     # constructor used in lu!
     function Tridiagonal{T,V}(dl, d, du, du2) where {T,V<:AbstractVector{T}}
         require_one_based_indexing(dl, d, du, du2)
         # length checks?
-        new{T,V}(dl, d, du, du2)
+        new{T,V}(dl, d, Base.unalias(dl, du), du2)
     end
 end
 
@@ -486,6 +496,10 @@ respectively. The result is of type `Tridiagonal` and provides efficient special
 solvers, but may be converted into a regular matrix with
 [`convert(Array, _)`](@ref) (or `Array(_)` for short).
 The lengths of `dl` and `du` must be one less than the length of `d`.
+
+!!! note
+    The subdiagonal `dl` and the superdiagonal `du` must not be aliased to each other.
+    If aliasing is detected, the constructor will use a copy of `du` as its argument.
 
 # Examples
 ```jldoctest
@@ -505,11 +519,21 @@ julia> Tridiagonal(dl, d, du)
 """
 Tridiagonal(dl::V, d::V, du::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du)
 Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiagonal{T,V}(dl, d, du, du2)
+Tridiagonal(dl::AbstractVector{T}, d::AbstractVector{S}, du::AbstractVector{U}) where {T,S,U} =
+    Tridiagonal{promote_type(T, S, U)}(dl, d, du)
+Tridiagonal(dl::AbstractVector{T}, d::AbstractVector{S}, du::AbstractVector{U}, du2::AbstractVector{V}) where {T,S,U,V} =
+    Tridiagonal{promote_type(T, S, U, V)}(dl, d, du, du2)
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
-    Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
+    l, d, u = map(x->convert(AbstractVector{T}, x), (dl, d, du))
+    typeof(l) == typeof(d) == typeof(u) ?
+        Tridiagonal(l, d, u) :
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
-function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
-    Tridiagonal{T,V}(A.dl, A.d, A.du)
+function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector, du2::AbstractVector) where {T}
+    l, d, u, u2 = map(x->convert(AbstractVector{T}, x), (dl, d, du, du2))
+    typeof(l) == typeof(d) == typeof(u) == typeof(u2) ?
+        Tridiagonal(l, d, u, u2) :
+        throw(ArgumentError("diagonal vectors needed to be convertible to same type"))
 end
 
 """
@@ -540,16 +564,25 @@ Tridiagonal(A::AbstractMatrix) = Tridiagonal(diag(A,-1), diag(A,0), diag(A,1))
 Tridiagonal(A::Tridiagonal) = A
 Tridiagonal{T}(A::Tridiagonal{T}) where {T} = A
 function Tridiagonal{T}(A::Tridiagonal) where {T}
-    dl, d, du = map(x->convert(AbstractVector{T}, x)::AbstractVector{T},
-                    (A.dl, A.d, A.du))
+    dl, d, du = map(x -> convert(AbstractVector{T}, x)::AbstractVector{T}, (A.dl, A.d, A.du))
     if isdefined(A, :du2)
-        Tridiagonal(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
+        Tridiagonal{T}(dl, d, du, convert(AbstractVector{T}, A.du2)::AbstractVector{T})
     else
-        Tridiagonal(dl, d, du)
+        Tridiagonal{T}(dl, d, du)
+    end
+end
+Tridiagonal{T,V}(A::Tridiagonal{T,V}) where {T,V<:AbstractVector{T}} = A
+function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
+    dl, d, du = map(x -> convert(V, x)::V, (A.dl, A.d, A.du))
+    if isdefined(A, :du2)
+        Tridiagonal{T,V}(dl, d, du, convert(V, A.du2)::V)
+    else
+        Tridiagonal{T,V}(dl, d, du)
     end
 end
 
 size(M::Tridiagonal) = (n = length(M.d); (n, n))
+axes(M::Tridiagonal) = (ax = axes(M.d,1); (ax, ax))
 
 function Matrix{T}(M::Tridiagonal) where {T}
     A = Matrix{T}(undef, size(M))
@@ -763,6 +796,7 @@ end
 det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
 AbstractMatrix{T}(M::Tridiagonal) where {T} = Tridiagonal{T}(M)
+AbstractMatrix{T}(M::Tridiagonal{T}) where {T} = copy(M)
 Tridiagonal{T}(M::SymTridiagonal{T}) where {T} = Tridiagonal(M)
 function SymTridiagonal{T}(M::Tridiagonal) where T
     if issymmetric(M)
@@ -899,9 +933,6 @@ function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
     dl = A.dl
     d = A.d
     du = A.du
-    if dl === du
-        throw(ArgumentError("off-diagonals of `A` must not alias"))
-    end
 
     @inbounds begin
         for i in 1:n-1

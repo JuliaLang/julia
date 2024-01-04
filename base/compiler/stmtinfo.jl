@@ -10,6 +10,7 @@ and any additional information (`call.info`) for a given generic call.
 """
 struct CallMeta
     rt::Any
+    exct::Any
     effects::Effects
     info::CallInfo
 end
@@ -74,6 +75,14 @@ struct SemiConcreteResult <: ConstResult
     mi::MethodInstance
     ir::IRCode
     effects::Effects
+end
+
+# XXX Technically this does not represent a result of constant inference, but rather that of
+#     regular edge inference. It might be more appropriate to rename `ConstResult` and
+#     `ConstCallInfo` to better reflect the fact that they represent either of local or
+#     volatile inference result.
+struct VolatileInferenceResult <: ConstResult
+    inf_result::InferenceResult
 end
 
 """

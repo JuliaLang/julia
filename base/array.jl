@@ -120,39 +120,37 @@ const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 ## Basic functions ##
 
-using Core: arraysize, arrayset, const_arrayref
-
 """
     @_safeindex
 
 This internal macro converts:
-- `getindex(xs::Tuple, )` -> `__inbounds_getindex(args...)`
-- `setindex!(xs::Vector, args...)` -> `__inbounds_setindex!(xs, args...)`
+- `getindex(xs::Tuple, i::Int)` -> `__safe_getindex(xs, i)`
+- `setindex!(xs::Vector{T}, x, i::Int)` -> `__safe_setindex!(xs, x, i)`
 to tell the compiler that indexing operations within the applied expression are always
 inbounds and do not need to taint `:consistent` and `:nothrow`.
 """
 macro _safeindex(ex)
-    return esc(_safeindex(__module__, ex))
+    return esc(_safeindex(ex))
 end
-function _safeindex(__module__, ex)
+function _safeindex(ex)
     isa(ex, Expr) || return ex
     if ex.head === :(=)
-        lhs = arrayref(true, ex.args, 1)
+        lhs = ex.args[1]
         if isa(lhs, Expr) && lhs.head === :ref # xs[i] = x
-            rhs = arrayref(true, ex.args, 2)
-            xs = arrayref(true, lhs.args, 1)
+            rhs = ex.args[2]
+            xs = lhs.args[1]
             args = Vector{Any}(undef, length(lhs.args)-1)
             for i = 2:length(lhs.args)
-                arrayset(true, args, _safeindex(__module__, arrayref(true, lhs.args, i)), i-1)
+                args[i-1] = _safeindex(lhs.args[i])
             end
-            return Expr(:call, GlobalRef(__module__, :__inbounds_setindex!), xs, _safeindex(__module__, rhs), args...)
+            return Expr(:call, GlobalRef(@__MODULE__, :__safe_setindex!), xs, _safeindex(rhs), args...)
         end
     elseif ex.head === :ref # xs[i]
-        return Expr(:call, GlobalRef(__module__, :__inbounds_getindex), ex.args...)
+        return Expr(:call, GlobalRef(@__MODULE__, :__safe_getindex), ex.args...)
     end
     args = Vector{Any}(undef, length(ex.args))
     for i = 1:length(ex.args)
-        arrayset(true, args, _safeindex(__module__, arrayref(true, ex.args, i)), i)
+        args[i] = _safeindex(ex.args[i])
     end
     return Expr(ex.head, args...)
 end
@@ -187,12 +185,15 @@ function vect(X...)
     return T[X...]
 end
 
-size(a::Array, d::Integer) = arraysize(a, d isa Int ? d : convert(Int, d))
-size(a::Vector) = (arraysize(a,1),)
-size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size(a::Array{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::Dims)
+size(a::Array, d::Integer) = size(a, Int(d)::Int)
+function size(a::Array, d::Int)
+    d < 1 && error("arraysize: dimension out of range")
+    sz = getfield(a, :size)
+    return d > length(sz) ? 1 : getfield(sz, d, false) # @inbounds
+end
+size(a::Array) = getfield(a, :size)
 
-asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
+asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
 allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
@@ -210,49 +211,18 @@ julia> Base.isbitsunion(Union{Float64, String})
 false
 ```
 """
-isbitsunion(u::Union) = allocatedinline(u)
-isbitsunion(x) = false
+isbitsunion(u::Type) = u isa Union && allocatedinline(u)
 
-function _unsetindex!(A::Array{T}, i::Int) where {T}
+function _unsetindex!(A::Array, i::Int)
     @inline
     @boundscheck checkbounds(A, i)
-    t = @_gc_preserve_begin A
-    p = Ptr{Ptr{Cvoid}}(pointer(A, i))
-    if !allocatedinline(T)
-        Intrinsics.atomic_pointerset(p, C_NULL, :monotonic)
-    elseif T isa DataType
-        if !datatype_pointerfree(T)
-            for j = 1:Core.sizeof(Ptr{Cvoid}):Core.sizeof(T)
-                Intrinsics.atomic_pointerset(p + j - 1, C_NULL, :monotonic)
-            end
-        end
-    end
-    @_gc_preserve_end t
+    @inbounds _unsetindex!(GenericMemoryRef(A.ref, i))
     return A
 end
 
 
-"""
-    Base.bitsunionsize(U::Union) -> Int
-
-For a `Union` of [`isbitstype`](@ref) types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`.
-
-# Examples
-```jldoctest
-julia> Base.bitsunionsize(Union{Float64, UInt8})
-8
-
-julia> Base.bitsunionsize(Union{Float64, UInt8, Int128})
-16
-```
-"""
-function bitsunionsize(u::Union)
-    isinline, sz, _ = uniontype_layout(u)
-    @assert isinline
-    return sz
-end
-
-elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
+# TODO: deprecate this (aligned_sizeof and/or elsize and/or sizeof(Some{T}) are more correct)
+elsize(::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
 function elsize(::Type{Ptr{T}}) where T
     # this only must return something valid for values which satisfy is_valid_intrinsic_elptr(T),
     # which includes Any and most concrete datatypes
@@ -261,14 +231,24 @@ function elsize(::Type{Ptr{T}}) where T
     return LLT_ALIGN(Core.sizeof(T), datatype_alignment(T))
 end
 elsize(::Type{Union{}}, slurp...) = 0
-sizeof(a::Array) = Core.sizeof(a)
+
+sizeof(a::Array) = length(a) * elsize(typeof(a)) # n.b. this ignores bitsunion bytes, as a historical fact
 
 function isassigned(a::Array, i::Int...)
     @inline
+    @_noub_if_noinbounds_meta
     @boundscheck checkbounds(Bool, a, i...) || return false
-    ii = (_sub2ind(size(a), i...) % UInt) - 1
-    ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
+    ii = _sub2ind(size(a), i...)
+    return @inbounds isassigned(memoryref(a.ref, ii, false))
 end
+
+function isassigned(a::Vector, i::Int) # slight compiler simplification for the most common case
+    @inline
+    @_noub_if_noinbounds_meta
+    @boundscheck checkbounds(Bool, a, i) || return false
+    return @inbounds isassigned(memoryref(a.ref, i, false))
+end
+
 
 ## copy ##
 
@@ -289,30 +269,6 @@ function unsafe_copyto!(dest::Ptr{T}, src::Ptr{T}, n) where T
     return dest
 end
 
-
-function _unsafe_copyto!(dest, doffs, src, soffs, n)
-    destp = pointer(dest, doffs)
-    srcp = pointer(src, soffs)
-    @inbounds if destp < srcp || destp > srcp + n
-        for i = 1:n
-            if isassigned(src, soffs + i - 1)
-                dest[doffs + i - 1] = src[soffs + i - 1]
-            else
-                _unsetindex!(dest, doffs + i - 1)
-            end
-        end
-    else
-        for i = n:-1:1
-            if isassigned(src, soffs + i - 1)
-                dest[doffs + i - 1] = src[soffs + i - 1]
-            else
-                _unsetindex!(dest, doffs + i - 1)
-            end
-        end
-    end
-    return dest
-end
-
 """
     unsafe_copyto!(dest::Array, do, src::Array, so, N)
 
@@ -323,33 +279,11 @@ The `unsafe` prefix on this function indicates that no validation is performed t
 that N is inbounds on either array. Incorrect usage may corrupt or segfault your program, in
 the same manner as C.
 """
-function unsafe_copyto!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
-    t1 = @_gc_preserve_begin dest
-    t2 = @_gc_preserve_begin src
-    destp = pointer(dest, doffs)
-    srcp = pointer(src, soffs)
-    if !allocatedinline(T)
-        ccall(:jl_array_ptr_copy, Cvoid, (Any, Ptr{Cvoid}, Any, Ptr{Cvoid}, Int),
-              dest, destp, src, srcp, n)
-    elseif isbitstype(T)
-        memmove(destp, srcp, n * aligned_sizeof(T))
-    elseif isbitsunion(T)
-        memmove(destp, srcp, n * aligned_sizeof(T))
-        # copy selector bytes
-        memmove(
-              ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), dest) + doffs - 1,
-              ccall(:jl_array_typetagdata, Ptr{UInt8}, (Any,), src) + soffs - 1,
-              n)
-    else
-        _unsafe_copyto!(dest, doffs, src, soffs, n)
-    end
-    @_gc_preserve_end t2
-    @_gc_preserve_end t1
+function unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n)
+    n == 0 && return dest
+    unsafe_copyto!(GenericMemoryRef(dest.ref, doffs), GenericMemoryRef(src.ref, soffs), n)
     return dest
 end
-
-unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n) =
-    _unsafe_copyto!(dest, doffs, src, soffs, n)
 
 """
     copyto!(dest, do, src, so, N)
@@ -357,23 +291,25 @@ unsafe_copyto!(dest::Array, doffs, src::Array, soffs, n) =
 Copy `N` elements from collection `src` starting at the linear index `so`, to array `dest` starting at
 the index `do`. Return `dest`.
 """
-function copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
-    return _copyto_impl!(dest, doffs, src, soffs, n)
-end
+copyto!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
+copyto!(dest::Array, doffs::Integer, src::Memory, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
+copyto!(dest::Memory, doffs::Integer, src::Array, soffs::Integer, n::Integer) = _copyto_impl!(dest, doffs, src, soffs, n)
 
 # this is only needed to avoid possible ambiguities with methods added in some packages
-function copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
-    return _copyto_impl!(dest, doffs, src, soffs, n)
-end
+copyto!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where {T} = _copyto_impl!(dest, doffs, src, soffs, n)
 
-function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
+function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Array,Memory}, soffs::Integer, n::Integer)
     n == 0 && return dest
     n > 0 || _throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:doffs+n-1)
     @boundscheck checkbounds(src, soffs:soffs+n-1)
-    unsafe_copyto!(dest, doffs, src, soffs, n)
+    @inbounds let dest = GenericMemoryRef(dest isa Array ? getfield(dest, :ref) : dest, doffs)
+                  src = GenericMemoryRef(src isa Array ? getfield(src, :ref) : src, soffs)
+        unsafe_copyto!(dest, src, n)
+    end
     return dest
 end
+
 
 # Outlining this because otherwise a catastrophic inference slowdown
 # occurs, see discussion in #27874.
@@ -406,7 +342,11 @@ See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 """
 copy
 
-copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
+@eval function copy(a::Array{T}) where {T}
+    ref = a.ref
+    newmem = ccall(:jl_genericmemory_copy_slice, Ref{Memory{T}}, (Any, Ptr{Cvoid}, Int), ref.mem, ref.ptr_or_offset, length(a))
+    return $(Expr(:new, :(typeof(a)), :(Core.memoryref(newmem)), :(a.size)))
+end
 
 ## Constructors ##
 
@@ -469,8 +409,9 @@ end
 getindex(::Type{Any}) = Vector{Any}()
 
 function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
-    t = @_gc_preserve_begin a
-    p = unsafe_convert(Ptr{Cvoid}, a)
+    ref = a.ref
+    t = @_gc_preserve_begin ref
+    p = unsafe_convert(Ptr{Cvoid}, ref)
     memset(p, x isa eltype(a) ? x : convert(eltype(a), x), length(a))
     @_gc_preserve_end t
     return a
@@ -940,7 +881,7 @@ end
 
 ## Iteration ##
 
-iterate(A::Array, i=1) = (@inline; (i % UInt) - 1 < length(A) ? (@inbounds A[i], i + 1) : nothing)
+iterate(A::Array, i=1) = (@inline; (i - 1)%UInt < length(A)%UInt ? (@inbounds A[i], i + 1) : nothing)
 
 ## Indexing: getindex ##
 
@@ -964,6 +905,12 @@ julia> getindex(A, "a")
 ```
 """
 function getindex end
+
+function getindex(A::Array, i1::Int, i2::Int, I::Int...)
+    @inline
+    @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
+    return @inbounds A[_to_linear_index(A, i1, i2, I...)]
+end
 
 # Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})
@@ -1016,15 +963,26 @@ Dict{String, Int64} with 2 entries:
 """
 function setindex! end
 
-@eval setindex!(A::Array{T}, x, i1::Int) where {T} =
-    arrayset($(Expr(:boundscheck)), A, x isa T ? x : convert(T,x)::T, i1)
-@eval setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
-    (@inline; arrayset($(Expr(:boundscheck)), A, x isa T ? x : convert(T,x)::T, i1, i2, I...))
+function setindex!(A::Array{T}, x, i::Int) where {T}
+    @_noub_if_noinbounds_meta
+    @boundscheck (i - 1)%UInt < length(A)%UInt || throw_boundserror(A, (i,))
+    memoryrefset!(memoryref(A.ref, i, false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
+    return A
+end
+function setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T}
+    @inline
+    @_noub_if_noinbounds_meta
+    @boundscheck checkbounds(A, i1, i2, I...) # generally _to_linear_index requires bounds checking
+    memoryrefset!(memoryref(A.ref, _to_linear_index(A, i1, i2, I...), false), x isa T ? x : convert(T,x)::T, :not_atomic, false)
+    return A
+end
 
-__inbounds_setindex!(A::Array{T}, x, i1::Int) where {T} =
-    arrayset(false, A, convert(T,x)::T, i1)
-__inbounds_setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} =
-    (@inline; arrayset(false, A, convert(T,x)::T, i1, i2, I...))
+__safe_setindex!(A::Vector{Any}, @nospecialize(x), i::Int) = (@inline; @_nothrow_noub_meta;
+    memoryrefset!(memoryref(A.ref, i, false), x, :not_atomic, false); return A)
+__safe_setindex!(A::Vector{T}, x::T, i::Int) where {T} = (@inline; @_nothrow_noub_meta;
+    memoryrefset!(memoryref(A.ref, i, false), x, :not_atomic, false); return A)
+__safe_setindex!(A::Vector{T}, x,    i::Int) where {T} = (@inline;
+    __safe_setindex!(A, convert(T, x)::T, i))
 
 # This is redundant with the abstract fallbacks but needed and helpful for bootstrap
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
@@ -1063,24 +1021,184 @@ function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
     return A
 end
 
-# efficiently grow an array
+# Pick new memory size for efficiently growing an array
+# TODO: This should know about the size of our GC pools
+# Specifically we are wasting ~10% of memory for small arrays
+# by not picking memory sizes that max out a GC pool
+function overallocation(maxsize)
+    maxsize < 8 && return 8;
+    # compute maxsize = maxsize + 4*maxsize^(7/8) + maxsize/8
+    # for small n, we grow faster than O(n)
+    # for large n, we grow at O(n/8)
+    # and as we reach O(memory) for memory>>1MB,
+    # this means we end by adding about 10% of memory each time
+    exp2 = sizeof(maxsize) * 8 - Core.Intrinsics.ctlz_int(maxsize)
+    maxsize += (1 << div(exp2 * 7, 8)) * 4 + div(maxsize, 8)
+    return maxsize
+end
 
-_growbeg!(a::Vector, delta::Integer) =
-    ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), a, delta)
-_growend!(a::Vector, delta::Integer) =
-    ccall(:jl_array_grow_end, Cvoid, (Any, UInt), a, delta)
-_growat!(a::Vector, i::Integer, delta::Integer) =
-    ccall(:jl_array_grow_at, Cvoid, (Any, Int, UInt), a, i - 1, delta)
+array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when implemented, this should attempt to first expand mem
+
+function _growbeg!(a::Vector, delta::Integer)
+    delta = Int(delta)
+    delta == 0 && return # avoid attempting to index off the end
+    delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
+    ref = a.ref
+    mem = ref.mem
+    len = length(a)
+    offset = memoryrefoffset(ref)
+    newlen = len + delta
+    setfield!(a, :size, (newlen,))
+    # if offset is far enough advanced to fit data in existing memory without copying
+    if delta <= offset - 1
+        setfield!(a, :ref, @inbounds GenericMemoryRef(ref, 1 - delta))
+    else
+        @noinline (function()
+        memlen = length(mem)
+        # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
+        # the +1 is because I didn't want to have an off by 1 error.
+        newmemlen = max(overallocation(memlen), len + 2 * delta + 1)
+        newoffset = div(newmemlen - newlen, 2) + 1
+        # If there is extra data after the end of the array we can use that space so long as there is enough
+        # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
+        # Specifically, we want to ensure that we will only do this operation once before
+        # increasing the size of the array, and that we leave enough space at both the beginning and the end.
+        if newoffset + newlen < memlen
+            newoffset = div(memlen - newlen, 2) + 1
+            newmem = mem
+        else
+            newmem = array_new_memory(mem, newmemlen)
+        end
+        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+        setfield!(a, :ref, @inbounds GenericMemoryRef(newmem, newoffset))
+        end)()
+    end
+    return
+end
+
+function _growend!(a::Vector, delta::Integer)
+    delta = Int(delta)
+    delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
+    ref = a.ref
+    mem = ref.mem
+    memlen = length(mem)
+    len = length(a)
+    newlen = len + delta
+    offset = memoryrefoffset(ref)
+    setfield!(a, :size, (newlen,))
+    newmemlen = offset + newlen - 1
+    if memlen < newmemlen
+        @noinline (function()
+        if offset - 1 > div(5 * newlen, 4)
+            # If the offset is far enough that we can copy without resizing
+            # while maintaining proportional spacing on both ends of the array
+            # note that this branch prevents infinite growth when doing combinations
+            # of push! and popfirst! (i.e. when using a Vector as a queue)
+            newmem = mem
+            newoffset = div(newlen, 8) + 1
+        else
+            # grow either by our computed overallocation factor
+            # or exactly the requested size, whichever is larger
+            # TODO we should possibly increase the offset if the current offset is nonzero.
+            newmemlen2 = max(overallocation(memlen), newmemlen)
+            newmem = array_new_memory(mem, newmemlen2)
+            newoffset = offset
+        end
+        newref = @inbounds GenericMemoryRef(newmem, newoffset)
+        unsafe_copyto!(newref, ref, len)
+        setfield!(a, :ref, newref)
+        end)()
+    end
+    return
+end
+
+function _growat!(a::Vector, i::Integer, delta::Integer)
+    delta = Int(delta)
+    i = Int(i)
+    i == 1 && return _growbeg!(a, delta)
+    len = length(a)
+    i == len + 1 && return _growend!(a, delta)
+    delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
+    1 < i <= len || throw(BoundsError(a, i))
+    ref = a.ref
+    mem = ref.mem
+    memlen = length(mem)
+    newlen = len + delta
+    offset = memoryrefoffset(ref)
+    setfield!(a, :size, (newlen,))
+    newmemlen = offset + newlen - 1
+
+    # which side would we rather grow into?
+    prefer_start = i <= div(len, 2)
+    # if offset is far enough advanced to fit data in beginning of the memory
+    if prefer_start && delta <= offset - 1
+        newref = @inbounds GenericMemoryRef(mem, offset - delta)
+        unsafe_copyto!(newref, ref, i)
+        setfield!(a, :ref, newref)
+        for j in i:i+delta-1
+            @inbounds _unsetindex!(a, j)
+        end
+    elseif !prefer_start && memlen >= newmemlen
+        unsafe_copyto!(mem, offset - 1 + delta + i, mem, offset - 1 + i, len - i + 1)
+        for j in i:i+delta-1
+            @inbounds _unsetindex!(a, j)
+        end
+    else
+        # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
+        # the +1 is because I didn't want to have an off by 1 error.
+        newmemlen = max(overallocation(memlen), len+2*delta+1)
+        newoffset = (newmemlen - newlen) ÷ 2 + 1
+        newmem = array_new_memory(mem, newmemlen)
+        newref = @inbounds GenericMemoryRef(newmem, newoffset)
+        unsafe_copyto!(newref, ref, i-1)
+        unsafe_copyto!(newmem, newoffset + delta + i - 1, mem, offset + i - 1, len - i + 1)
+        setfield!(a, :ref, newref)
+    end
+end
 
 # efficiently delete part of an array
-
-_deletebeg!(a::Vector, delta::Integer) =
-    ccall(:jl_array_del_beg, Cvoid, (Any, UInt), a, delta)
-_deleteend!(a::Vector, delta::Integer) =
-    ccall(:jl_array_del_end, Cvoid, (Any, UInt), a, delta)
-_deleteat!(a::Vector, i::Integer, delta::Integer) =
-    ccall(:jl_array_del_at, Cvoid, (Any, Int, UInt), a, i - 1, delta)
-
+function _deletebeg!(a::Vector, delta::Integer)
+    delta = Int(delta)
+    len = length(a)
+    0 <= delta <= len || throw(ArgumentError("_deletebeg! requires delta in 0:length(a)"))
+    for i in 1:delta
+        @inbounds _unsetindex!(a, i)
+    end
+    newlen = len - delta
+    if newlen != 0 # if newlen==0 we could accidentally index past the memory
+        newref = @inbounds GenericMemoryRef(a.ref, delta + 1)
+        setfield!(a, :ref, newref)
+    end
+    setfield!(a, :size, (newlen,))
+    return
+end
+function _deleteend!(a::Vector, delta::Integer)
+    delta = Int(delta)
+    len = length(a)
+    0 <= delta <= len || throw(ArgumentError("_deleteend! requires delta in 0:length(a)"))
+    newlen = len - delta
+    for i in newlen+1:len
+        @inbounds _unsetindex!(a, i)
+    end
+    setfield!(a, :size, (newlen,))
+    return
+end
+function _deleteat!(a::Vector, i::Integer, delta::Integer)
+    i = Int(i)
+    len = length(a)
+    0 <= delta || throw(ArgumentError("_deleteat! requires delta >= 0"))
+    1 <= i <= len || throw(BoundsError(a, i))
+    i + delta <= len + 1 || throw(BoundsError(a, i + delta - 1))
+    newa = a
+    if 2*i + delta <= len
+        unsafe_copyto!(newa, 1 + delta, a, 1, i - 1)
+        _deletebeg!(a, delta)
+    else
+        unsafe_copyto!(newa, i, a, i + delta, len + 1 - delta - i)
+        _deleteend!(a, delta)
+    end
+    return
+end
 ## Dequeue functionality ##
 
 """
@@ -1174,11 +1292,11 @@ and [`prepend!`](@ref) and [`pushfirst!`](@ref) for the opposite order.
 """
 function append! end
 
-function append!(a::Vector, items::AbstractVector)
-    itemindices = eachindex(items)
-    n = length(itemindices)
+function append!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
+    items isa Tuple && (items = map(x -> convert(T, x), items))
+    n = length(items)
     _growend!(a, n)
-    copyto!(a, length(a)-n+1, items, first(itemindices), n)
+    copyto!(a, length(a)-n+1, items, firstindex(items), n)
     return a
 end
 
@@ -1188,16 +1306,11 @@ push!(a::AbstractVector, iter...) = append!(a, iter)
 append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
-    @_terminates_locally_meta
-    n = length(a)
+    n = Int(length(iter))::Int
     i = lastindex(a)
-    resize!(a, n+Int(length(iter))::Int)
-    for (i, item) in zip(i+1:lastindex(a), iter)
-        if isa(a, Vector) # give better effects for builtin vectors
-            @_safeindex a[i] = item
-        else
-            a[i] = item
-        end
+    sizehint!(a, length(a) + n; shrink=false)
+    for item in iter
+        push!(a, item)
     end
     a
 end
@@ -1239,15 +1352,13 @@ julia> prepend!([6], [1, 2], [3, 4, 5])
 """
 function prepend! end
 
-function prepend!(a::Vector, items::AbstractVector)
-    itemindices = eachindex(items)
-    n = length(itemindices)
+function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
+    items isa Tuple && (items = map(x -> convert(T, x), items))
+    n = length(items)
     _growbeg!(a, n)
-    if a === items
-        copyto!(a, 1, items, n+1, n)
-    else
-        copyto!(a, 1, items, first(itemindices), n)
-    end
+    # in case of aliasing, the _growbeg might have shifted our data, so copy
+    # just the last n elements instead of all of them from the first
+    copyto!(a, 1, items, lastindex(items)-n+1, n)
     return a
 end
 
@@ -1259,12 +1370,14 @@ prepend!(a::AbstractVector, iter...) = foldr((v, a) -> prepend!(a, v), iter, ini
 function _prepend!(a::Vector, ::Union{HasLength,HasShape}, iter)
     @_terminates_locally_meta
     require_one_based_indexing(a)
-    n = length(iter)
-    _growbeg!(a, n)
-    i = 0
+    n = Int(length(iter))::Int
+    sizehint!(a, length(a) + n; first=true, shrink=false)
+    n = 0
     for item in iter
-        @_safeindex a[i += 1] = item
+        n += 1
+        pushfirst!(a, item)
     end
+    reverse!(a, 1, n)
     a
 end
 function _prepend!(a::Vector, ::IteratorSize, iter)
@@ -1321,12 +1434,20 @@ function resize!(a::Vector, nl::Integer)
 end
 
 """
-    sizehint!(s, n) -> s
+    sizehint!(s, n; first::Bool=false, shrink::Bool=true) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
 you expect that you're going to have to push a lot of values onto `s`, you can avoid
 the cost of incremental reallocation by doing it once up front; this can improve
 performance.
+
+If `first` is `true`, then any additional space is reserved before the start of the collection.
+This way, subsequent calls to `pushfirst!` (instead of `push!`) may become faster.
+Supplying this keyword may result in an error if the collection is not ordered
+or if `pushfirst!` is not supported for this collection.
+
+If `shrink=true` (the default), the collection's capacity may be reduced if its current
+capacity is greater than `n`.
 
 See also [`resize!`](@ref).
 
@@ -1342,12 +1463,52 @@ For types that support `sizehint!`,
    `Base`.
 
 3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
+
+!!! compat "Julia 1.11"
+    The `shrink` and `first` arguments were added in Julia 1.11.
 """
 function sizehint! end
 
-function sizehint!(a::Vector, sz::Integer)
-    ccall(:jl_array_sizehint, Cvoid, (Any, UInt), a, sz)
+function sizehint!(a::Vector, sz::Integer; first::Bool=false, shrink::Bool=true)
+    len = length(a)
+    ref = a.ref
+    mem = ref.mem
+    memlen = length(mem)
+    sz = max(Int(sz), len)
+    inc = sz - len
+    if sz <= memlen
+        # if we don't save at least 1/8th memlen then its not worth it to shrink
+        if !shrink || memlen - sz <= div(memlen, 8)
+            return a
+        end
+        newmem = array_new_memory(mem, sz)
+        if first
+            newref = GenericMemoryRef(newmem, inc + 1)
+        else
+            newref = GenericMemoryRef(newmem)
+        end
+        unsafe_copyto!(newref, ref, len)
+        setfield!(a, :ref, newref)
+    elseif first
+        _growbeg!(a, inc)
+        newref = getfield(a, :ref)
+        newref = GenericMemoryRef(newref, inc + 1)
+        setfield!(a, :size, (len,)) # undo the size change from _growbeg!
+        setfield!(a, :ref, newref) # undo the offset change from _growbeg!
+    else # last
+        _growend!(a, inc)
+        setfield!(a, :size, (len,)) # undo the size change from _growend!
+    end
     a
+end
+
+# Fall-back implementation for non-shrinkable collections
+# avoid defining this the normal way to avoid avoid infinite recursion
+function Core.kwcall(kwargs::NamedTuple{names}, ::typeof(sizehint!), a, sz) where names
+    get(kwargs, :first, false)::Bool
+    get(kwargs, :shrink, true)::Bool
+    isempty(diff_names(names, (:first, :shrink))) || kwerr(kwargs, sizehint!, a, sz)
+    sizehint!(a, sz)
 end
 
 """
@@ -1635,17 +1796,19 @@ struct Nowhere; end
 push!(::Nowhere, _) = nothing
 _growend!(::Nowhere, _) = nothing
 
-@inline function _push_deleted!(dltd, a::Vector, ind)
-    if @inbounds isassigned(a, ind)
-        push!(dltd, @inbounds a[ind])
+function _push_deleted!(dltd, a::Vector, ind)
+    @_propagate_inbounds_meta
+    if isassigned(a, ind)
+        push!(dltd, a[ind])
     else
         _growend!(dltd, 1)
     end
 end
 
-@inline function _copy_item!(a::Vector, p, q)
-    if @inbounds isassigned(a, q)
-        @inbounds a[p] = a[q]
+function _copy_item!(a::Vector, p, q)
+    @_propagate_inbounds_meta
+    if isassigned(a, q)
+        a[p] = a[q]
     else
         _unsetindex!(a, p)
     end
@@ -1657,7 +1820,7 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
     y === nothing && return a
     (p, s) = y
     checkbounds(a, p)
-    _push_deleted!(dltd, a, p)
+    @inbounds _push_deleted!(dltd, a, p)
     q = p+1
     while true
         y = iterate(inds, s)
@@ -1671,14 +1834,14 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
             end
         end
         while q < i
-            _copy_item!(a, p, q)
+            @inbounds _copy_item!(a, p, q)
             p += 1; q += 1
         end
-        _push_deleted!(dltd, a, i)
+        @inbounds _push_deleted!(dltd, a, i)
         q = i+1
     end
     while q <= n
-        _copy_item!(a, p, q)
+        @inbounds _copy_item!(a, p, q)
         p += 1; q += 1
     end
     _deleteend!(a, n-p+1)
@@ -1691,7 +1854,7 @@ function deleteat!(a::Vector, inds::AbstractVector{Bool})
     length(inds) == n || throw(BoundsError(a, inds))
     p = 1
     for (q, i) in enumerate(inds)
-        _copy_item!(a, p, q)
+        @inbounds _copy_item!(a, p, q)
         p += !i
     end
     _deleteend!(a, n-p+1)
@@ -1781,6 +1944,8 @@ place of the removed items; in this case, `indices` must be a `AbstractUnitRange
 To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
+$(_DOCS_ALIASING_WARNING)
+
 !!! compat "Julia 1.5"
     Prior to Julia 1.5, `indices` must always be a `UnitRange`.
 
@@ -1841,10 +2006,12 @@ end
 
 # use memcmp for cmp on byte arrays
 function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
-    ta = @_gc_preserve_begin a
-    tb = @_gc_preserve_begin b
-    pa = unsafe_convert(Ptr{Cvoid}, a)
-    pb = unsafe_convert(Ptr{Cvoid}, b)
+    aref = a.ref
+    bref = b.ref
+    ta = @_gc_preserve_begin aref
+    tb = @_gc_preserve_begin bref
+    pa = unsafe_convert(Ptr{Cvoid}, aref)
+    pb = unsafe_convert(Ptr{Cvoid}, bref)
     c = memcmp(pa, pb, min(length(a),length(b)))
     @_gc_preserve_end ta
     @_gc_preserve_end tb
@@ -1855,10 +2022,12 @@ const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where 
 # use memcmp for == on bit integer types
 function ==(a::Arr, b::Arr) where {Arr <: BitIntegerArray}
     if size(a) == size(b)
-        ta = @_gc_preserve_begin a
-        tb = @_gc_preserve_begin b
-        pa = unsafe_convert(Ptr{Cvoid}, a)
-        pb = unsafe_convert(Ptr{Cvoid}, b)
+        aref = a.ref
+        bref = b.ref
+        ta = @_gc_preserve_begin aref
+        tb = @_gc_preserve_begin bref
+        pa = unsafe_convert(Ptr{Cvoid}, aref)
+        pb = unsafe_convert(Ptr{Cvoid}, bref)
         c = memcmp(pa, pb, sizeof(eltype(Arr)) * length(a))
         @_gc_preserve_end ta
         @_gc_preserve_end tb
@@ -1871,11 +2040,13 @@ end
 function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
     len = length(a)
     if len == length(b)
-        ta = @_gc_preserve_begin a
-        tb = @_gc_preserve_begin b
+        aref = a.ref
+        bref = b.ref
+        ta = @_gc_preserve_begin aref
+        tb = @_gc_preserve_begin bref
         T = eltype(Arr)
-        pa = unsafe_convert(Ptr{T}, a)
-        pb = unsafe_convert(Ptr{T}, b)
+        pa = unsafe_convert(Ptr{T}, aref)
+        pb = unsafe_convert(Ptr{T}, bref)
         c = memcmp(pa, pb, sizeof(T) * len)
         @_gc_preserve_end ta
         @_gc_preserve_end tb
@@ -2759,6 +2930,8 @@ Remove the items at all the indices which are not given by `inds`,
 and return the modified `a`.
 Items which are kept are shifted to fill the resulting gaps.
 
+$(_DOCS_ALIASING_WARNING)
+
 `inds` must be an iterator of sorted and unique integer indices.
 See also [`deleteat!`](@ref).
 
@@ -2867,4 +3040,37 @@ intersect(r::AbstractRange, v::AbstractVector) = intersect(v, r)
     else
         _getindex(v, i)
     end
+end
+
+"""
+    wrap(Array, m::Union{Memory{T}, MemoryRef{T}}, dims)
+
+Create an array of size `dims` using `m` as the underlying memory. This can be thought of as a safe version
+of [`unsafe_wrap`](@ref) utilizing `Memory` or `MemoryRef` instead of raw pointers.
+"""
+function wrap end
+
+@eval @propagate_inbounds function wrap(::Type{Array}, ref::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
+    mem = ref.mem
+    mem_len = length(mem) + 1 - memoryrefoffset(ref)
+    len = Core.checked_dims(dims...)
+    @boundscheck mem_len >= len || invalid_wrap_err(mem_len, dims, len)
+    if N != 1 && !(ref === GenericMemoryRef(mem) && len === mem_len)
+        mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
+        ref = MemoryRef(mem)
+    end
+    $(Expr(:new, :(Array{T, N}), :ref, :dims))
+end
+
+@noinline invalid_wrap_err(len, dims, proddims) = throw(DimensionMismatch(
+    "Attempted to wrap a MemoryRef of length $len with an Array of size dims=$dims, which is invalid because prod(dims) = $proddims > $len, so that the array would have more elements than the underlying memory can store."))
+
+function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
+    wrap(Array, MemoryRef(m), dims)
+end
+function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
+    wrap(Array, m, (l,))
+end
+function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
+    wrap(Array, MemoryRef(m), (l,))
 end

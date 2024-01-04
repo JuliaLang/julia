@@ -2,7 +2,7 @@
 
 function maybe_show_ir(ir::IRCode)
     if isdefined(Core, :Main)
-        Core.Main.Base.display(ir)
+        invokelatest(Core.Main.Base.display, ir)
     end
 end
 
@@ -47,7 +47,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         end
 
         use_inst = ir[op]
-        if isa(use_inst[:stmt], Union{GotoIfNot, GotoNode, ReturnNode})
+        if isa(use_inst[:stmt], Union{GotoIfNot, GotoNode, ReturnNode}) && !(isa(use_inst[:stmt], ReturnNode) && !isdefined(use_inst[:stmt], :val))
+            # Allow uses of `unreachable`, which may have been inserted when
+            # an earlier block got deleted, but for some reason we didn't figure
+            # out yet that this entire block is dead also.
             @verify_error "At statement %$use_idx: Invalid use of value statement or terminator %$(op.id)"
             error("")
         end
@@ -69,7 +72,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             end
         end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
-        @verify_error "Left over SSA marker"
+        @verify_error "At statement %$use_idx: Left over SSA marker ($op)"
         error("")
     elseif isa(op, SlotNumber)
         @verify_error "Left over slot detected in converted IR"
@@ -195,9 +198,14 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 @verify_error "Block $idx successors ($(block.succs)), does not match GotoIfNot terminator"
                 error("")
             end
-        elseif isexpr(terminator, :enter)
+        elseif isa(terminator, EnterNode)
             @label enter_check
-            if length(block.succs) != 2 || (block.succs != Int[terminator.args[1], idx+1] && block.succs != Int[idx+1, terminator.args[1]])
+            if length(block.succs) == 1
+                if terminator.catch_dest != 0
+                    @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
+                    error("")
+                end
+            elseif (block.succs != Int[terminator.catch_dest, idx+1] && block.succs != Int[idx+1, terminator.catch_dest])
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 error("")
             end
@@ -207,7 +215,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 # statement, until we can do proper CFG manipulations during compaction.
                 for stmt_idx in first(block.stmts):last(block.stmts)
                     stmt = ir[SSAValue(stmt_idx)][:stmt]
-                    if isexpr(stmt, :enter)
+                    if isa(stmt, EnterNode)
                         terminator = stmt
                         @goto enter_check
                     end
@@ -316,7 +324,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     error("")
                 end
             end
-        elseif (isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isexpr(stmt, :enter)) && idx != last(ir.cfg.blocks[bb].stmts)
+        elseif isterminator(stmt) && idx != last(ir.cfg.blocks[bb].stmts)
             @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
             error("")
         else
@@ -361,6 +369,20 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     if f isa GlobalRef && f.name === :cglobal
                         # TODO: these are not yet linearized
                         continue
+                    end
+                elseif stmt.head === :leave
+                    for i in 1:length(stmt.args)
+                        arg = stmt.args[i]
+                        if !isa(arg, Union{Nothing, SSAValue})
+                            @verify_error "Malformed :leave - Expected `Nothing` or SSAValue"
+                            error()
+                        elseif isa(arg, SSAValue)
+                            enter_stmt = ir[arg::SSAValue][:stmt]
+                            if !isa(enter_stmt, Nothing) && !isa(enter_stmt, EnterNode)
+                                @verify_error "Malformed :leave - argument ssavalue should point to `nothing` or :enter"
+                                error()
+                            end
+                        end
                     end
                 end
             end

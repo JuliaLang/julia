@@ -639,13 +639,13 @@ end
     @test d == IdDict(1=>1, 2=>2, 3=>3)
     @test eltype(d) == Pair{Int,Int}
     @test_throws KeyError d[:a]
-    @test_throws ArgumentError d[:a] = 1
+    @test_throws TypeError d[:a] = 1
     @test_throws MethodError d[1] = :a
 
     # copy constructor
     d = IdDict(Pair(1,1), Pair(2,2), Pair(3,3))
     @test collect(values(IdDict{Int,Float64}(d))) == collect(values(d))
-    @test_throws ArgumentError IdDict{Float64,Int}(d)
+    @test_throws TypeError IdDict{Float64,Int}(d)
 
     # misc constructors
     @test typeof(IdDict(1=>1, :a=>2)) == IdDict{Any,Int}
@@ -672,7 +672,7 @@ end
     @test_throws MethodError get!(d, "b", "b")
     @test delete!(d, "a") === d
     @test !haskey(d, "a")
-    @test_throws ArgumentError get!(IdDict{Symbol,Any}(), 2, "b")
+    @test_throws TypeError get!(IdDict{Symbol,Any}(), 2, "b")
     @test get!(IdDict{Int,Int}(), 1, 2.0) === 2
     @test get!(()->2.0, IdDict{Int,Int}(), 1) === 2
 
@@ -1084,17 +1084,33 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     GC.@preserve A B C D nothing
 end
 
-mutable struct CollidingHash
-end
-Base.hash(::CollidingHash, h::UInt) = hash(UInt(0), h)
-
-struct PredictableHash
-    x::UInt
-end
-Base.hash(x::PredictableHash, h::UInt) = x.x
-
 import Base.PersistentDict
 @testset "PersistentDict" begin
+    @testset "HAMT HashState" begin
+        key = :key
+        h = Base.HAMT.HashState(key)
+        h1 = Base.HAMT.HashState(key, objectid(key), 0, 0)
+        h2 = Base.HAMT.HashState(h, key) # reconstruct
+        @test h.hash == h1.hash
+        @test h.hash == h2.hash
+
+        hs = Base.HAMT.next(h1)
+        @test hs.depth == 1
+        recompute_depth = (Base.HAMT.MAX_SHIFT ÷ Base.HAMT.BITS_PER_LEVEL) + 1
+        for i in 2:recompute_depth
+            hs = Base.HAMT.next(hs)
+            @test hs.depth == i
+        end
+        @test hs.depth == recompute_depth
+        @test hs.shift == 0
+        hsr = Base.HAMT.HashState(hs, key)
+        @test hs.hash == hsr.hash
+        @test hs.depth == hsr.depth
+        @test hs.shift == hsr.shift
+
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(Base.HAMT.init_hamt, (Type{Vector{Any}},Type{Int},Vector{Any},Int)))
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(Base.HAMT.HAMT{Vector{Any},Int}, (Pair{Vector{Any},Int},)))
+    end
     @testset "basics" begin
         dict = PersistentDict{Int, Int}()
         @test_throws KeyError dict[1]
@@ -1145,6 +1161,21 @@ import Base.PersistentDict
         @test dict[4] == 1
     end
 
+    @testset "objectid" begin
+        c = [0]
+        dict = PersistentDict{Any, Int}(c => 1, [1] => 2)
+        @test dict[c] == 1
+        c[1] = 1
+        @test dict[c] == 1
+
+        c[1] = 0
+        dict = PersistentDict{Any, Int}((c,) => 1, ([1],) => 2)
+        @test dict[(c,)] == 1
+
+        c[1] = 1
+        @test dict[(c,)] == 1
+    end
+
     @testset "stress" begin
         N = 2^14
         dict = PersistentDict{Int, Int}()
@@ -1163,53 +1194,6 @@ import Base.PersistentDict
             dict = Base.delete(dict, i)
         end
         @test isempty(dict)
-    end
-
-    @testset "CollidingHash" begin
-        dict = PersistentDict{CollidingHash, Nothing}()
-        dict = PersistentDict(dict, CollidingHash(), nothing)
-        @test_throws ErrorException PersistentDict(dict, CollidingHash(), nothing)
-    end
-
-    # Test the internal implementation
-    @testset "PredictableHash" begin
-        dict = PersistentDict{PredictableHash, Nothing}()
-        for i in 1:Base.HashArrayMappedTries.ENTRY_COUNT
-            key = PredictableHash(UInt(i-1)) # Level 0
-            dict = PersistentDict(dict, key, nothing)
-        end
-        @test length(dict.trie.data) == Base.HashArrayMappedTries.ENTRY_COUNT
-        @test dict.trie.bitmap == typemax(Base.HashArrayMappedTries.BITMAP)
-        for entry in dict.trie.data
-            @test entry isa Base.HashArrayMappedTries.Leaf
-        end
-
-        dict = PersistentDict{PredictableHash, Nothing}()
-        for i in 1:Base.HashArrayMappedTries.ENTRY_COUNT
-            key = PredictableHash(UInt(i-1) << Base.HashArrayMappedTries.BITS_PER_LEVEL) # Level 1
-            dict = PersistentDict(dict, key, nothing)
-        end
-        @test length(dict.trie.data) == 1
-        @test length(dict.trie.data[1].data) == 32
-
-        max_level = (Base.HashArrayMappedTries.NBITS ÷ Base.HashArrayMappedTries.BITS_PER_LEVEL)
-        dict = PersistentDict{PredictableHash, Nothing}()
-        for i in 1:Base.Base.HashArrayMappedTries.ENTRY_COUNT
-            key = PredictableHash(UInt(i-1) << (max_level * Base.HashArrayMappedTries.BITS_PER_LEVEL)) # Level 12
-            dict = PersistentDict(dict, key, nothing)
-        end
-        data = dict.trie.data
-        for level in 1:max_level
-            @test length(data) == 1
-            data = only(data).data
-        end
-        last_level_nbits = Base.HashArrayMappedTries.NBITS - (max_level * Base.HashArrayMappedTries.BITS_PER_LEVEL)
-        if Base.HashArrayMappedTries.NBITS == 64
-            @test last_level_nbits == 4
-        elseif Base.HashArrayMappedTries.NBITS == 32
-            @test last_level_nbits == 2
-        end
-        @test length(data) == 2^last_level_nbits
     end
 end
 
@@ -1491,6 +1475,11 @@ end
     filter!(x -> x.first < 10, d)
     sizehint!(d, 10)
     @test length(d.slots) < 100
+    sizehint!(d, 1000)
+    sizehint!(d, 1; shrink = false)
+    @test length(d.slots) >= 1000
+    sizehint!(d, 1; shrink = true)
+    @test length(d.slots) < 1000
 end
 
 # getindex is :effect_free and :terminates but not :consistent
@@ -1501,4 +1490,32 @@ for T in (Int, Float64, String, Symbol)
         @test !Core.Compiler.is_nothrow(Base.infer_effects(getindex, (Dict{T,Any}, T)))
         @test_broken Core.Compiler.is_terminates(Base.infer_effects(getindex, (Dict{T,Any}, T)))
     end
+end
+
+struct BadHash
+    i::Int
+end
+Base.hash(::BadHash, ::UInt)=UInt(1)
+@testset "maxprobe reset #51595" begin
+    d = Dict(BadHash(i)=>nothing for i in 1:20)
+    empty!(d)
+    sizehint!(d, 0)
+    @test d.maxprobe < length(d.keys)
+    d[BadHash(1)]=nothing
+    @test !(BadHash(2) in keys(d))
+    d = Dict(BadHash(i)=>nothing for i in 1:20)
+    for _ in 1:20
+        pop!(d)
+    end
+    sizehint!(d, 0)
+    @test d.maxprobe < length(d.keys)
+    d[BadHash(1)]=nothing
+    @test !(BadHash(2) in keys(d))
+end
+
+# Issue #52066
+let d = Dict()
+    d[1] = 'a'
+    d[1.0] = 'b'
+    @test only(d) === Pair{Any,Any}(1.0, 'b')
 end

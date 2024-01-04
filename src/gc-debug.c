@@ -83,7 +83,6 @@ void add_lostval_parent(jl_value_t *parent)
  innocent looking functions which allocate (and thus trigger marking) only on special cases.
 
  If you can't find it, you can try the following :
- - Ensure that should_timeout() is deterministic instead of clock based.
  - Once you have a completely deterministic program which crashes on gc_verify, the addresses
    should stay constant between different runs (with same binary, same environment ...).
    Do not forget to turn off ASLR (linux: echo 0 > /proc/sys/kernel/randomize_va_space).
@@ -616,8 +615,7 @@ void objprofile_count(void *ty, int old, int sz)
         ty = (void*)jl_buff_tag;
     }
     else if (ty != (void*)jl_buff_tag && ty != jl_malloc_tag &&
-             jl_typeof(ty) == (jl_value_t*)jl_datatype_type &&
-             ((jl_datatype_t*)ty)->instance) {
+             jl_is_datatype(ty) && jl_is_datatype_singleton((jl_datatype_t*)ty)) {
         ty = jl_singleton_tag;
     }
     void **bp = ptrhash_bp(&obj_counts[old], ty);
@@ -851,11 +849,11 @@ void gc_time_pool_end(int sweep_full)
     double sweep_speed = sweep_gb / sweep_pool_sec;
     jl_safe_printf("GC sweep pools end %.2f ms at %.1f GB/s "
                    "(skipped %.2f %% of %" PRId64 ", swept %" PRId64 " pgs, "
-                   "%" PRId64 " freed with %" PRId64 " lazily) %s\n",
+                   "%" PRId64 " freed) %s\n",
                    sweep_pool_sec * 1000, sweep_speed,
                    (total_pages ? ((double)skipped_pages * 100) / total_pages : 0),
                    total_pages, total_pages - skipped_pages,
-                   freed_pages, lazy_freed_pages,
+                   freed_pages,
                    sweep_full ? "full" : "quick");
 }
 
@@ -894,29 +892,29 @@ void gc_time_big_end(void)
                    t_ms, big_freed, big_total, big_reset);
 }
 
-static int64_t mallocd_array_total;
-static int64_t mallocd_array_freed;
-static int64_t mallocd_array_sweep_start;
+static int64_t mallocd_memory_total;
+static int64_t mallocd_memory_freed;
+static int64_t mallocd_memory_sweep_start;
 
-void gc_time_mallocd_array_start(void)
+void gc_time_mallocd_memory_start(void)
 {
-    mallocd_array_total = 0;
-    mallocd_array_freed = 0;
-    mallocd_array_sweep_start = jl_hrtime();
+    mallocd_memory_total = 0;
+    mallocd_memory_freed = 0;
+    mallocd_memory_sweep_start = jl_hrtime();
 }
 
-void gc_time_count_mallocd_array(int bits)
+void gc_time_count_mallocd_memory(int bits)
 {
-    mallocd_array_total++;
-    mallocd_array_freed += !gc_marked(bits);
+    mallocd_memory_total++;
+    mallocd_memory_freed += !gc_marked(bits);
 }
 
-void gc_time_mallocd_array_end(void)
+void gc_time_mallocd_memory_end(void)
 {
-    double t_ms = jl_ns2ms(jl_hrtime() - mallocd_array_sweep_start);
+    double t_ms = jl_ns2ms(jl_hrtime() - mallocd_memory_sweep_start);
     jl_safe_printf("GC sweep arrays %.2f ms "
                    "(freed %" PRId64 " / %" PRId64 ")\n",
-                   t_ms, mallocd_array_freed, mallocd_array_total);
+                   t_ms, mallocd_memory_freed, mallocd_memory_total);
 }
 
 void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
@@ -947,12 +945,12 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
     jl_safe_printf("GC sweep pause %.2f ms live %" PRId64 " kB "
                    "(freed %" PRId64 " kB EST %" PRId64 " kB "
                    "[error %" PRId64 "] = %d%% of allocd b %" PRIu64 ") "
-                   "(%.2f ms in post_mark) %s | next in %" PRId64 " kB\n",
+                   "(%.2f ms in post_mark) %s\n",
                    jl_ns2ms(sweep_pause), live_bytes / 1024,
                    gc_num.freed / 1024, estimate_freed / 1024,
                    gc_num.freed - estimate_freed, pct, gc_num.allocd / 1024,
                    jl_ns2ms(gc_postmark_end - gc_premark_end),
-                   sweep_full ? "full" : "quick", -gc_num.allocd / 1024);
+                   sweep_full ? "full" : "quick");
 }
 
 void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
@@ -972,10 +970,34 @@ void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
         jl_safe_printf("TS: %" PRIu64 " Minor collection: estimate freed = %" PRIu64
                        " live = %" PRIu64 "m new interval = %" PRIu64 "m pause time = %"
                        PRIu64 "ms ttsp = %" PRIu64 "us mark time = %" PRIu64
-                       "ms sweep time = %" PRIu64 "ms \n",
+                       "ms sweep time = %" PRIu64 "ms\n",
                        end, freed, live/1024/1024,
                        interval/1024/1024, pause/1000000, ttsp,
                        mark/1000000,sweep/1000000);
+}
+
+void gc_heuristics_summary(
+        uint64_t old_alloc_diff, uint64_t alloc_mem,
+        uint64_t old_mut_time, uint64_t alloc_time,
+        uint64_t old_freed_diff, uint64_t gc_mem,
+        uint64_t old_pause_time, uint64_t gc_time,
+        int thrash_counter, const char *reason,
+        uint64_t current_heap, uint64_t target_heap)
+{
+    jl_safe_printf("Estimates: alloc_diff=%" PRIu64 "kB (%" PRIu64 ")"
+                            //"  nongc_time=%" PRIu64 "ns (%" PRIu64 ")"
+                            "  mut_time=%" PRIu64 "ns (%" PRIu64 ")"
+                            "  freed_diff=%" PRIu64 "kB (%" PRIu64 ")"
+                            "  pause_time=%" PRIu64 "ns (%" PRIu64 ")"
+                            "  thrash_counter=%d%s"
+                            "  current_heap=%" PRIu64 " MB"
+                            "  target_heap=%" PRIu64 " MB\n",
+                   old_alloc_diff/1024, alloc_mem/1024,
+                   old_mut_time/1000, alloc_time/1000,
+                   old_freed_diff/1024, gc_mem/1024,
+                   old_pause_time/1000, gc_time/1000,
+                   thrash_counter, reason,
+                   current_heap/1024/1024, target_heap/1024/1024);
 }
 #endif
 
@@ -1111,7 +1133,7 @@ void gc_stats_big_obj(void)
         while (ma != NULL) {
             if (gc_marked(jl_astaggedvalue(ma->a)->bits.gc)) {
                 nused++;
-                nbytes += jl_array_nbytes(ma->a);
+                nbytes += jl_genericmemory_nbytes((jl_genericmemory_t*)ma->a);
             }
             ma = ma->next;
         }
@@ -1202,12 +1224,6 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
     else if (vt == jl_simplevector_type) {
         start = (char*)jl_svec_data(obj);
         len = jl_svec_len(obj);
-    }
-    else if (vt->name == jl_array_typename) {
-        jl_array_t *a = (jl_array_t*)obj;
-        start = (char*)a->data;
-        len = jl_array_len(a);
-        elsize = a->elsize;
     }
     if (slot < start || slot >= start + elsize * len)
         return -1;
