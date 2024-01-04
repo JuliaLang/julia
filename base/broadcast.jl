@@ -979,7 +979,7 @@ end
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
-    ndims(dest) == 0 && return Base.@invoke copyto!(dest::AbstractArray, bc)
+    ndims(dest) == 0 && (dest[] = bc[]; return dest)
     bc′ = preprocess(dest, bc)
     ax = axes(bc′)
     ax1, out = ax[1], CartesianIndices(tail(ax))
