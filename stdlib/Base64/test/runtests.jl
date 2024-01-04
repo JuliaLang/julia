@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-import Base64:
+using Base64:
+    Base64,
     Base64EncodePipe,
     base64encode,
     Base64DecodePipe,
