@@ -4,7 +4,7 @@
     MD
 
 `MD` represents a Markdown document. However, `MD` objects should only be constructed using 
-the exported macros `@md_str` and `@doc_str`.
+the exported macros [`@md_str`](@ref) and [`@doc_str`](@ref).
 """
 mutable struct MD
     content::Vector{Any}

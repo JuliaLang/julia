@@ -409,4 +409,6 @@ Markdown strings can be constructed using the string literal syntax `md"..."`.
 Markdown.MD
 Markdown.@md_str
 Markdown.@doc_str
+Markdown.html
+Markdown.latex
 ```
