@@ -5,6 +5,9 @@
 
 An alias type for a either single character or a tuple/vector/set of characters, used to describe arguments
 of several string-matching functions such as [`startswith`](@ref).
+
+!!! compat "Julia 1.11"
+    Julia versions prior to 1.11 only included `Set`, not `AbstractSet`, in `Base.Chars` types.
 """
 const Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},AbstractSet{<:AbstractChar}}
 
