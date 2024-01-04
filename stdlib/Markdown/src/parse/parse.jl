@@ -14,6 +14,8 @@ mutable struct MD
         new(content, meta)
 end
 
+public MD
+
 MD(xs...) = MD(vcat(xs...))
 
 function MD(cfg::Config, xs...)
