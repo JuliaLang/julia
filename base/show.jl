@@ -1522,10 +1522,10 @@ recognize a variable, it uses a limited set of characters (greatly extended by
 Unicode). `isidentifier()` makes it possible to query the parser directly
 whether a symbol contains valid characters.
 
-The isidentifier function for symbols has been extended to include
-a normalization check. It ensures that the provided symbol is normalized
-using Unicode normalization with stability and composition enabled. This
-ensures consistent and standardized representation of the symbol.
+!!! compat "Julia 1.11"
+    In Julia 1.11 or later, `isidentifier` for `Symbol` arguments also requires the symbol to be
+    Unicode-normalized so that it is equivalent to the result of parsing a valid identifier string
+    into a `Symbol`.
 
 # Examples
 ```jldoctest
