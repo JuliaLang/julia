@@ -113,16 +113,13 @@ let abcd = ABCDconst(1, 2, 3, 4)
 end
 @test begin
     # Issue #52686
-    mktemp() do f, io
-        write(io, """
+    for i in 1:2
+        @eval begin
             struct A{T} end
             struct B{T, S}
               a::A{<:T}
             end
-            """)
-        close(io)
-        include(f)
-        include(f)
+        end
     end
     true
 end
