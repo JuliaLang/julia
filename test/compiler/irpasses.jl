@@ -1725,3 +1725,18 @@ function f52610()
     return nothing
 end
 @test code_typed(f52610)[1][2] === Nothing
+
+# Issue #52703
+@eval function f52703()
+    try
+        $(Expr(:tryfinally,
+            Expr(:block,
+                Expr(:tryfinally, :(), :(), 2),
+                :(return Base.inferencebarrier(Core.current_scope)()::Int)),
+        :(), 1))
+    catch
+        return 1
+    end
+    return 0
+end
+@test code_typed(f52703)[1][2] === Int

@@ -412,7 +412,7 @@ kern_return_t catch_mach_exception_raise_state_identity(
 static void attach_exception_port(thread_port_t thread, int segv_only)
 {
     kern_return_t ret;
-    // http://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
+    // https://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
     exception_mask_t mask = EXC_MASK_BAD_ACCESS;
     if (!segv_only)
         mask |= EXC_MASK_ARITHMETIC;
