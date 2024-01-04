@@ -4,7 +4,7 @@
     Markdown
 
 Tools for working with the Markdown file format. Mainly for documentation.
-The `Markdown` module provides the (internal) `MD` struct (type?) as well as the string 
+The `Markdown` module provides the (internal) `MD`(@ref) type as well as the string 
 literals `md"..."` and `doc"..."`.
 """
 module Markdown
@@ -45,14 +45,18 @@ function docexpr(source::LineNumberNode, mod::Module, s, flavor = :julia)
 end
 
 """
-    macro md_str(s)
+    @md_str -> MD
 
-Parse the given string as Markdown text and return a corresponding `Markdown.MD` object.
+Parse the given string as Markdown text and return a corresponding [`MD`](@ref) object.
 
-# Example
+# Examples
 ```jldoctest
-julia> html(md"# Hello, world!")
-"<h1>Hello, world&#33;</h1>\\n"
+julia> s = md"# Hello, world!"
+  Hello, world!
+  ≡≡≡≡≡≡≡≡≡≡≡≡≡
+
+julia> typeof(s)
+Markdown.MD
 
 ```
 """
@@ -68,10 +72,13 @@ end
 doc_str(md::AbstractString, source::LineNumberNode, mod::Module) = doc_str(parse(md), source, mod)
 
 """
-    macro doc_str(s)
+    @doc_str -> MD
 
 Parse the given string as Markdown text, add line and module information and return a 
-corresponding `Markdown.MD` object.
+corresponding [`MD`](@ref) object.
+
+`@doc_str`` can be used in conjunction with the [`Base.Docs`](@ref) module. Please also refer to
+the manual section on [documentation](@ref man-documentation) for more information.
 """
 macro doc_str(s::AbstractString, t...)
     docexpr(__source__, __module__, s, t...)
