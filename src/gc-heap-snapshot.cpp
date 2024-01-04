@@ -3,6 +3,7 @@
 #include "gc-heap-snapshot.h"
 
 #include "julia_internal.h"
+#include "julia_assert.h"
 #include "gc.h"
 
 #include "llvm/ADT/StringMap.h"
@@ -11,9 +12,12 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include <iostream>
+#include <set>
 
 using std::vector;
 using std::string;
+using std::set;
 using std::ostringstream;
 using std::pair;
 using std::make_pair;
@@ -70,7 +74,7 @@ struct Node {
     size_t id; // This should be a globally-unique counter, but we use the memory address
     size_t self_size;
     size_t trace_node_id;  // This is ALWAYS 0 in Javascript heap-snapshots.
-    // whether the from_node is attached or dettached from the main application state
+    // whether the from_node is attached or detached from the main application state
     // https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/include/v8-profiler.h#L739-L745
     int detachedness;  // 0 - unknown, 1 - attached, 2 - detached
     vector<Edge> edges;
@@ -115,6 +119,8 @@ struct HeapSnapshot {
     DenseMap<void *, size_t> node_ptr_to_index_map;
 
     size_t num_edges = 0; // For metadata, updated as you add each edge. Needed because edges owned by nodes.
+    size_t _gc_root_idx = 1; // node index of the GC roots node
+    size_t _gc_finlist_root_idx = 2; // node index of the GC finlist roots node
 };
 
 // global heap snapshot, mutated by garbage collector
@@ -127,13 +133,13 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
 static inline void _record_gc_edge(const char *edge_type,
                                    jl_value_t *a, jl_value_t *b, size_t name_or_index) JL_NOTSAFEPOINT;
 void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT;
-void _add_internal_root(HeapSnapshot *snapshot);
+void _add_synthetic_root_entries(HeapSnapshot *snapshot);
 
 
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream, char all_one)
 {
     HeapSnapshot snapshot;
-    _add_internal_root(&snapshot);
+    _add_synthetic_root_entries(&snapshot);
 
     jl_mutex_lock(&heapsnapshot_lock);
 
@@ -155,10 +161,12 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream, char all_one)
     serialize_heap_snapshot((ios_t*)stream, snapshot, all_one);
 }
 
-// adds a node at id 0 which is the "uber root":
-// a synthetic node which points to all the GC roots.
-void _add_internal_root(HeapSnapshot *snapshot)
+// mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L212
+// add synthetic nodes for the uber root, the GC roots, and the GC finalizer list roots
+void _add_synthetic_root_entries(HeapSnapshot *snapshot)
 {
+    // adds a node at id 0 which is the "uber root":
+    // a synthetic node which points to all the GC roots.
     Node internal_root{
         snapshot->node_types.find_or_create_string_id("synthetic"),
         snapshot->names.find_or_create_string_id(""), // name
@@ -169,6 +177,44 @@ void _add_internal_root(HeapSnapshot *snapshot)
         vector<Edge>() // outgoing edges
     };
     snapshot->nodes.push_back(internal_root);
+
+    // Add a node for the GC roots
+    snapshot->_gc_root_idx = snapshot->nodes.size();
+    Node gc_roots{
+        snapshot->node_types.find_or_create_string_id("synthetic"),
+        snapshot->names.find_or_create_string_id("GC roots"), // name
+        snapshot->_gc_root_idx, // id
+        0, // size
+        0, // size_t trace_node_id (unused)
+        0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+        vector<Edge>() // outgoing edges
+    };
+    snapshot->nodes.push_back(gc_roots);
+    snapshot->nodes.front().edges.push_back(Edge{
+        snapshot->edge_types.find_or_create_string_id("internal"),
+        snapshot->names.find_or_create_string_id("GC roots"), // edge label
+        snapshot->_gc_root_idx // to
+    });
+    snapshot->num_edges += 1;
+
+    // add a node for the gc finalizer list roots
+    snapshot->_gc_finlist_root_idx = snapshot->nodes.size();
+    Node gc_finlist_roots{
+        snapshot->node_types.find_or_create_string_id("synthetic"),
+        snapshot->names.find_or_create_string_id("GC finalizer list roots"), // name
+        snapshot->_gc_finlist_root_idx, // id
+        0, // size
+        0, // size_t trace_node_id (unused)
+        0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+        vector<Edge>() // outgoing edges
+    };
+    snapshot->nodes.push_back(gc_finlist_roots);
+    snapshot->nodes.front().edges.push_back(Edge{
+        snapshot->edge_types.find_or_create_string_id("internal"),
+        snapshot->names.find_or_create_string_id("GC finlist roots"), // edge label
+        snapshot->_gc_finlist_root_idx // to
+    });
+    snapshot->num_edges += 1;
 }
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
@@ -324,6 +370,26 @@ void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) JL_NOTSAFEPOINT
     auto edge_label = g_snapshot->names.find_or_create_string_id(name);
 
     _record_gc_just_edge("internal", internal_root, to_node_idx, edge_label);
+}
+
+void _gc_heap_snapshot_record_gc_roots(jl_value_t *root, char *name) JL_NOTSAFEPOINT
+{
+    record_node_to_gc_snapshot(root);
+
+    auto from_node_idx = g_snapshot->_gc_root_idx;
+    auto to_node_idx = record_node_to_gc_snapshot(root);
+    auto edge_label = g_snapshot->names.find_or_create_string_id(name);
+    _record_gc_just_edge("internal", g_snapshot->nodes[from_node_idx], to_node_idx, edge_label);
+}
+
+void _gc_heap_snapshot_record_finlist(jl_value_t *obj, size_t index) JL_NOTSAFEPOINT
+{
+    auto from_node_idx = g_snapshot->_gc_finlist_root_idx;
+    auto to_node_idx = record_node_to_gc_snapshot(obj);
+    ostringstream ss;
+    ss << "finlist-" << index;
+    auto edge_label = g_snapshot->names.find_or_create_string_id(ss.str());
+    _record_gc_just_edge("internal", g_snapshot->nodes[from_node_idx], to_node_idx, edge_label);
 }
 
 // Add a node to the heap snapshot representing a Julia stack frame.
@@ -490,6 +556,8 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
 
     ios_printf(stream, "\"nodes\":[");
     bool first_node = true;
+    // use a set to track the nodes that do not have parents
+    set<size_t> orphans;
     for (const auto &from_node : snapshot.nodes) {
         if (first_node) {
             first_node = false;
@@ -506,6 +574,14 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
                             from_node.edges.size(),
                             from_node.trace_node_id,
                             from_node.detachedness);
+        if (from_node.id != snapshot._gc_root_idx && from_node.id != snapshot._gc_finlist_root_idx) {
+            // find the node index from the node object pointer
+            void * ptr = (void*)from_node.id;
+            size_t n_id = snapshot.node_ptr_to_index_map[ptr];
+            orphans.insert(n_id);
+        } else {
+            orphans.insert(from_node.id);
+        }
     }
     ios_printf(stream, "],\n");
 
@@ -523,6 +599,12 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
                                 edge.type,
                                 edge.name_or_index,
                                 edge.to_node * k_node_number_of_fields);
+            auto n_id = edge.to_node;
+            auto it = orphans.find(n_id);
+            if (it != orphans.end()) {
+                // remove the node from the orphans if it has at least one incoming edge
+                orphans.erase(it);
+            }
         }
     }
     ios_printf(stream, "],\n"); // end "edges"
@@ -532,4 +614,8 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
     snapshot.names.print_json_array(stream, true);
 
     ios_printf(stream, "}");
+
+    // remove the uber node from the orphans
+    orphans.erase(0);
+    assert(orphans.size() == 0 && "all nodes except the uber node should have at least one incoming edge");
 }
