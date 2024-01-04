@@ -2675,4 +2675,9 @@ using .Issue49382
 @test sprint(show, methods(Issue49382.Type49382)) isa String
 
 #issue #52641
-@test Base.isidentifier(Symbol("e\u0301")) == false
+@testset "isidentifier normalization" begin
+    @test !Base.isidentifier(Symbol("e\u0301")) # not NFC-normalized
+    @test Base.isidentifier(Symbol("\u00E9"))   # NFC-normalized
+    @test !Base.isidentifier(Symbol("\u00B5))   # U+00B5 = µ normalized to U+03BC = μ by parser
+    @test Base.isidentifier(Symbol("\u03BC"))   # U+03BC = μ is the normalized form
+end
