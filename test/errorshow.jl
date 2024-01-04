@@ -986,6 +986,15 @@ let err_str
     @test occursin("String concatenation is performed with *", err_str)
 end
 
+let err_str
+    err_str = @except_str min([1,2,3]) MethodError
+    @test occursin("Finding the minimum of an iterable is performed with `minimum`.", err_str)
+    err_str = @except_str min((i for i in 1:3)) MethodError
+    @test occursin("Finding the minimum of an iterable is performed with `minimum`.", err_str)
+    err_str = @except_str max([1,2,3]) MethodError
+    @test occursin("Finding the maximum of an iterable is performed with `maximum`.", err_str)
+end
+
 @testset "unused argument names" begin
     g(::Int) = backtrace()
     bt = g(1)
