@@ -2778,22 +2778,10 @@ function restore_depot_path(path::AbstractString, depot::AbstractString)
     replace(path, r"^@depot" => depot; count=1)
 end
 
-# Find depot in DEPOT_PATH for which all @depot tags from the `includes`
-# can be replaced so that they point to a file on disk each.
-function resolve_depot(includes::Union{AbstractVector,AbstractSet})
-    # `all` because it's possible to have a mixture of includes inside and outside of the depot
-    if all(includes) do inc
-            !startswith(inc, "@depot")
-        end
-        return :fully_outside_depot
-    end
+function resolve_depot(inc::AbstractString)
+    startswith(inc, "@depot") || return :not_relocatable
     for depot in DEPOT_PATH
-        # `any` because it's possible to have a mixture of includes inside and outside of the depot
-        if any(includes) do inc
-                isfile(restore_depot_path(inc, depot))
-            end
-            return depot
-        end
+        isfile(restore_depot_path(inc, depot)) && return depot
     end
     return :no_depot_found
 end
@@ -2881,25 +2869,41 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     l = read(f, Int32)
     clone_targets = read(f, l)
 
-    # determine path for @depot replacement from srctext files only, e.g. ignore any include_dependency files
     srcfiles = srctext_files(f, srctextpos, includes)
-    depot = resolve_depot(srcfiles)
-    keepidx = Int[]
-    for (i, chi) in enumerate(includes)
-        chi.filename ∈ srcfiles && push!(keepidx, i)
+
+    includes_srcfiles = CacheHeaderIncludes[]
+    includes_depfiles = CacheHeaderIncludes[]
+    for (i, inc) in enumerate(includes)
+        if inc.filename ∈ srcfiles
+            push!(includes_srcfiles, inc)
+        else
+            push!(includes_depfiles, inc)
+        end
     end
-    if depot === :no_depot_found
-        @debug("Unable to resolve @depot tag in cache file $cachefile", srcfiles)
-    elseif depot === :fully_outside_depot
-        @debug("All include dependencies in cache file $cachefile are outside of a depot.", srcfiles)
+
+    # determine depot for @depot replacement for include() files and include_dependency() files separately
+    srcfiles_depot = resolve_depot(first(srcfiles))
+    if srcfiles_depot === :no_depot_found
+        @debug("Unable to resolve @depot tag include() files from cache file $cachefile", srcfiles)
+    elseif srcfiles_depot === :not_relocatable
+        @debug("include() files from $cachefile are not relocatable", srcfiles)
     else
-        for inc in includes
+        for inc in includes_srcfiles
+            inc.filename = restore_depot_path(inc.filename, srcfiles_depot)
+        end
+    end
+    for inc in includes_depfiles
+        depot = resolve_depot(inc.filename)
+        if depot === :no_depot_found
+            @debug("Unable to resolve @depot tag for include_dependency() file $(inc.filename) from cache file $cachefile", srcfiles)
+        elseif depot === :not_relocatable
+            @debug("include_dependency() file $(inc.filename) from $cachefile is not relocatable", srcfiles)
+        else
             inc.filename = restore_depot_path(inc.filename, depot)
         end
     end
-    includes_srcfiles_only = includes[keepidx]
 
-    return modules, (includes, includes_srcfiles_only, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags
+    return modules, (includes, includes_srcfiles, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags
 end
 
 function parse_cache_header(cachefile::String)
