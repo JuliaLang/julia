@@ -169,7 +169,11 @@ end
 
 """
     latex([io::IO], md)
-Convert a Markdown object to a LaTeX expression. If no `io` is provided, the result will be returned as a `String`.
+
+Output the contents of the Markdown object `md` in LaTeX format, either
+writing to an (optional) `io` stream or returning a string.
+
+One can alternatively use `show(io, "text/latex", md)` or `repr("text/latex", md)`.
 
 # Example
 ```jldoctest
