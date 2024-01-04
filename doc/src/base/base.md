@@ -469,7 +469,7 @@ Base.@doc
 Docs.HTML
 Docs.Text
 Docs.hasdoc
-Docs.undocumented_names
+Docs.names_without_docstring
 ```
 
 ## Code loading

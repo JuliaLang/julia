@@ -76,23 +76,23 @@ function break_me_docs end
 @test !isdefined(Base, :_this_name_doesnt_exist_) && !Docs.hasdoc(Base, :_this_name_doesnt_exist_)
 @test isdefined(Base, :_typed_vcat) && !Docs.hasdoc(Base, :_typed_vcat)
 
-"This module has names without documentation."
-module _ModuleWithUndocumentedNames
+"This module has names without docstrings."
+module _ModuleWithNamesWithoutDocstring
 export f
 f() = 1
 end
 
-"This module has some documentation."
-module _ModuleWithSomeDocumentedNames
+"This module has some docstrings."
+module _ModuleWithSomeDocstrings
 export f
 "f() is 1."
 f() = 1
 g() = 2
 end
 
-@test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [:f]
-@test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
-@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; all=true) == [:eval, :g, :include]
+@test Docs.names_without_docstring(_ModuleWithNamesWithoutDocstring) == [:f]
+@test isempty(Docs.names_without_docstring(_ModuleWithSomeDocstrings))
+@test Docs.names_without_docstring(_ModuleWithSomeDocstrings; all=true) == [:eval, :g, :include]
 
 
 # issue #11548
