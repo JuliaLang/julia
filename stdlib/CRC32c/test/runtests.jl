@@ -79,5 +79,5 @@ test_crc32c(crc32c)
 test_crc32c(crc32c_sw)
 
 @testset "Docstrings" begin
-    @test Docs.undocumented_names(CRC32c) == []
+    @test isempty(Docs.undocumented_names(CRC32c))
 end
