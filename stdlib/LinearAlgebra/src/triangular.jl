@@ -176,44 +176,12 @@ function imag(A::UnitUpperTriangular)
     return Uim
 end
 
-Array(A::AbstractTriangular) = Matrix(A)
 parent(A::UpperOrLowerTriangular) = A.data
 
 # For strided matrices, we may only loop over the filled triangle
 copy(A::UpperOrLowerTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = copyto!(similar(A), A)
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
-
-function Matrix{T}(A::LowerTriangular) where T
-    B = Matrix{T}(undef, size(A, 1), size(A, 1))
-    copyto!(B, A.data)
-    tril!(B)
-    B
-end
-function Matrix{T}(A::UnitLowerTriangular) where T
-    B = Matrix{T}(undef, size(A, 1), size(A, 1))
-    copyto!(B, A.data)
-    tril!(B)
-    for i = 1:size(B,1)
-        B[i,i] = oneunit(T)
-    end
-    B
-end
-function Matrix{T}(A::UpperTriangular) where T
-    B = Matrix{T}(undef, size(A, 1), size(A, 1))
-    copyto!(B, A.data)
-    triu!(B)
-    B
-end
-function Matrix{T}(A::UnitUpperTriangular) where T
-    B = Matrix{T}(undef, size(A, 1), size(A, 1))
-    copyto!(B, A.data)
-    triu!(B)
-    for i = 1:size(B,1)
-        B[i,i] = oneunit(T)
-    end
-    B
-end
 
 function full!(A::LowerTriangular)
     B = A.data
@@ -531,6 +499,52 @@ function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular
         end
     end
     return A
+end
+function copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
+    if axes(dest) != axes(U)
+        @invoke copyto!(dest::StridedMatrix, U::AbstractArray)
+    else
+        U2 = Base.unalias(dest, U)
+        copyto_unaliased!(dest, U2)
+    end
+    return dest
+end
+_triangularize!(A, ::UpperOrUnitUpperTriangular) = triu!(A)
+_triangularize!(A, ::LowerOrUnitLowerTriangular) = tril!(A)
+function copyto_unaliased!(dest::StridedMatrix, U::UpperOrLowerTriangular)
+    copytrito!(dest, parent(U), U isa UpperOrUnitUpperTriangular ? 'U' : 'L')
+    _triangularize!(dest, U)
+    if U isa Union{UnitUpperTriangular, UnitLowerTriangular}
+        for i in 1:size(dest,1)
+            dest[i,i] = U[i,i]
+        end
+    end
+    return dest
+end
+# for strided matrices, we explicitly loop over the arrays to improve cache locality
+function copyto_unaliased!(dest::StridedMatrix, U::UpperOrUnitUpperTriangular{<:Any, <:StridedMatrix})
+    isunit = U isa UnitUpperTriangular
+    for col in axes(dest,2)
+        for row in 1:col-isunit
+            @inbounds dest[row,col] = U.data[row,col]
+        end
+        for row in col+!isunit:size(U,1)
+            @inbounds dest[row,col] = U[row,col]
+        end
+    end
+    return dest
+end
+function copyto_unaliased!(dest::StridedMatrix, L::LowerOrUnitLowerTriangular{<:Any, <:StridedMatrix})
+    isunit = L isa UnitLowerTriangular
+    for col in axes(dest,2)
+        for row in 1:col-!isunit
+            @inbounds dest[row,col] = L[row,col]
+        end
+        for row in col+isunit:size(L,1)
+            @inbounds dest[row,col] = L.data[row,col]
+        end
+    end
+    return dest
 end
 
 @inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =

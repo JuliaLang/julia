@@ -968,7 +968,7 @@ end
     end
 end
 
-@testset "arithmetic with an immutable parent" begin
+@testset "immutable and non-strided parent" begin
     F = FillArrays.Fill(2, (4,4))
     for UT in (UnitUpperTriangular, UnitLowerTriangular)
         U = UT(F)
@@ -978,6 +978,13 @@ end
     F = FillArrays.Fill(3im, (4,4))
     for U in (UnitUpperTriangular(F), UnitLowerTriangular(F))
         @test imag(F) == imag(collect(F))
+    end
+
+    @testset "copyto!" begin
+        for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+            @test Matrix(T(F)) == T(F)
+        end
+        @test copyto!(zeros(eltype(F), length(F)), UpperTriangular(F)) == vec(UpperTriangular(F))
     end
 end
 
