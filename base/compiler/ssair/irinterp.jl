@@ -288,7 +288,7 @@ populate_def_use_map!(tpdum::TwoPhaseDefUseMap, ir::IRCode) =
 function is_all_const_call(@nospecialize(stmt), interp::AbstractInterpreter, irsv::IRInterpretationState)
     isexpr(stmt, :call) || return false
     @inbounds for i = 2:length(stmt.args)
-        argtype = abstract_eval_value(interp, stmt.args[i], nothing, irsv)
+        argtype = abstract_eval_value(interp, stmt.args[i], irsv)
         is_const_argtype(argtype) || return false
     end
     return true

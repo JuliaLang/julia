@@ -2339,21 +2339,8 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     return RTEffects(Const(e), Union{}, EFFECTS_TOTAL)
 end
 
-function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
-    head = e.head
-    if head === :static_parameter
-        n = e.args[1]::Int
-        nothrow = false
-        if 1 <= n <= length(sv.sptypes)
-            sp = sv.sptypes[n]
-            rt = sp.typ
-            nothrow = !sp.undef
-        else
-            rt = Any
-        end
-        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow))
-        return rt
-    elseif head === :call
+function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
+    if e.head === :call
         # TODO: We still have non-linearized cglobal
         @assert e.args[1] === Core.tuple ||
                 e.args[1] === GlobalRef(Core, :tuple)
@@ -2368,7 +2355,7 @@ end
 
 function abstract_eval_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     if isa(e, Expr)
-        return abstract_eval_value_expr(interp, e, vtypes, sv)
+        return abstract_eval_value_expr(interp, e, sv)
     else
         (;rt, effects) = abstract_eval_special_value(interp, e, vtypes, sv)
         merge_effects!(interp, sv, effects)
@@ -2668,7 +2655,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         t = Bottom
         effects = EFFECTS_THROWS
     else
-        t = abstract_eval_value_expr(interp, e, vtypes, sv)
+        t = abstract_eval_value_expr(interp, e, sv)
         # N.B.: abstract_eval_value_expr can modify the global effects, but
         # we move out any arguments with effects during SSA construction later
         # and recompute the effects.
