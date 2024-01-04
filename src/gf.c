@@ -388,7 +388,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     }
     JL_CATCH {
         jl_value_t *e = jl_current_exception();
-        jl_printf((JL_STREAM*)STDERR_FILENO, "Internal error during type inference of\n");
+        jl_printf((JL_STREAM*)STDERR_FILENO, "Internal error: during type inference of\n");
         jl_static_show_func_sig((JL_STREAM*)STDERR_FILENO, (jl_value_t*)mi->specTypes);
         jl_printf((JL_STREAM*)STDERR_FILENO, "\nEncountered ");
         if (e == jl_stackovf_exception) {
