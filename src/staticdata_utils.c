@@ -1,11 +1,6 @@
 // inverse of backedges graph (caller=>callees hash)
 jl_array_t *edges_map JL_GLOBALLY_ROOTED = NULL; // rooted for the duration of our uses of this
 
-static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
-{
-    write_uint64(s, *((uint64_t*)&x));
-}
-
 // Decide if `t` must be new, because it points to something new.
 // If it is new, the object (in particular, the super field) might not be entirely
 // valid for the cache, so we want to finish transforming it before attempting
@@ -717,7 +712,8 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         size_t slen = jl_string_len(dep);
         write_int32(s, slen);
         ios_write(s, jl_string_data(dep), slen);
-        write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 2)));  // mtime
+        write_uint64(s, jl_unbox_uint64(jl_fieldref(deptuple, 2)));  // fsize
+        write_uint32(s, jl_unbox_uint32(jl_fieldref(deptuple, 3)));  // hash
         jl_module_t *depmod = (jl_module_t*)jl_fieldref(deptuple, 0);  // evaluating module
         jl_module_t *depmod_top = depmod;
         while (depmod_top->parent != jl_main_module && depmod_top->parent != depmod_top)

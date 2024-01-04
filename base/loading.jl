@@ -1653,7 +1653,7 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
-const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
+const _require_dependencies = Any[] # a list of (mod, path, fsize, hash) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(mod::Module, _path::AbstractString)
     prev = source_path(nothing)
@@ -1664,7 +1664,12 @@ function _include_dependency(mod::Module, _path::AbstractString)
     end
     if _track_dependencies[]
         @lock require_lock begin
-        push!(_require_dependencies, (mod, path, mtime(path)))
+            fsize, hash = if isfile(path)
+                UInt64(filesize(path)), open(_crc32c, path, "r")
+            else
+                UInt64(0), UInt32(0)
+            end
+            push!(_require_dependencies, (mod, path, fsize, hash))
         end
     end
     return path, prev
@@ -1779,7 +1784,7 @@ function __require(into::Module, mod::Symbol)
         end
         uuidkey, env = uuidkey_env
         if _track_dependencies[]
-            push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
+            push!(_require_dependencies, (into, binpack(uuidkey), UInt64(0), UInt32(0)))
         end
         return _require_prelocked(uuidkey, env)
     finally
@@ -2491,7 +2496,8 @@ end
 struct CacheHeaderIncludes
     id::PkgId
     filename::String
-    mtime::Float64
+    fsize::UInt64
+    hash::UInt32
     modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
@@ -2519,8 +2525,10 @@ function parse_cache_header(f::IO)
         end
         depname = String(read(f, n2))
         totbytes -= n2
-        mtime = read(f, Float64)
+        fsize = read(f, UInt64)
         totbytes -= 8
+        hash = read(f, UInt32)
+        totbytes -= 4
         n1 = read(f, Int32)
         totbytes -= 4
         # map ids to keys
@@ -2541,7 +2549,7 @@ function parse_cache_header(f::IO)
         if depname[1] == '\0'
             push!(requires, modkey => binunpack(depname))
         else
-            push!(includes, CacheHeaderIncludes(modkey, depname, mtime, modpath))
+            push!(includes, CacheHeaderIncludes(modkey, depname, fsize, hash, modpath))
         end
     end
     prefs = String[]
@@ -2610,7 +2618,7 @@ end
 
 function cache_dependencies(f::IO)
     _, (includes, _), modules, _... = parse_cache_header(f)
-    return modules, map(chi -> (chi.filename, chi.mtime), includes)  # return just filename and mtime
+    return modules, map(chi -> chi.filename, includes)  # return just filename
 end
 
 function cache_dependencies(cachefile::String)
@@ -3049,7 +3057,7 @@ end
         if build_id != UInt128(0)
             id_build = (UInt128(checksum) << 64) | id.second
             if id_build != build_id
-                @debug "Ignoring cache file $cachefile for $modkey ($((UUID(id_build)))) since it is does not provide desired build_id ($((UUID(build_id))))"
+                @debug "Ignoring cache file $cachefile for $modkey ($((UUID(id_build)))) since it does not provide desired build_id ($((UUID(build_id))))"
                 return true
             end
         end
@@ -3087,13 +3095,13 @@ end
         # check if this file is going to provide one of our concrete dependencies
         # or if it provides a version that conflicts with our concrete dependencies
         # or neither
-        skip_timecheck = false
+        skip_hashcheck = false
         for (req_key, req_build_id) in _concrete_dependencies
             build_id = get(modules, req_key, UInt64(0))
             if build_id !== UInt64(0)
                 build_id |= UInt128(checksum) << 64
                 if build_id === req_build_id
-                    skip_timecheck = true
+                    skip_hashcheck = true
                     break
                 end
                 @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
@@ -3101,40 +3109,37 @@ end
             end
         end
 
-        # now check if this file is fresh relative to its source files
-        if !skip_timecheck
+        # now check if this file's content hash has changed relative to its source files
+        if !skip_hashcheck
             if !samefile(includes[1].filename, modpath) && !samefile(fixup_stdlib_path(includes[1].filename), modpath)
                 @debug "Rejecting cache file $cachefile because it is for file $(includes[1].filename) not file $modpath"
                 return true # cache file was compiled from a different path
             end
             for (modkey, req_modkey) in requires
                 # verify that `require(modkey, name(req_modkey))` ==> `req_modkey`
-                if identify_package(modkey, req_modkey.name) != req_modkey
-                    @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed"
+                pkg = identify_package(modkey, req_modkey.name)
+                if pkg != req_modkey
+                    @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed, expected $modkey => $pkg"
                     return true
                 end
             end
             for chi in includes
-                f, ftime_req = chi.filename, chi.mtime
+                f, fsize_req, hash_req = chi.filename, chi.fsize, chi.hash
                 if !ispath(f)
-                    _f = fixup_stdlib_path(f)
-                    if isfile(_f) && startswith(_f, Sys.STDLIB)
-                        # mtime is changed by extraction
-                        @debug "Skipping mtime check for file $f used by $cachefile, since it is a stdlib"
-                        continue
+                    f = fixup_stdlib_path(f)
+                    if !isfile(f)
+                        @debug "Rejecting stale cache file $cachefile because file $f does not exist"
+                        return true
                     end
-                    @debug "Rejecting stale cache file $cachefile because file $f does not exist"
+                end
+                fsize = filesize(f)
+                if fsize != fsize_req
+                    @debug "Rejecting stale cache file $cachefile (file size $fsize_req) because file $f (file size $fsize) has changed"
                     return true
                 end
-                ftime = mtime(f)
-                is_stale = ( ftime != ftime_req ) &&
-                           ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
-                           ( ftime != ceil(ftime_req) ) &&            # PR: #47433 Compensate for CirceCI's truncating of timestamps in its caching
-                           ( ftime != trunc(ftime_req, digits=6) ) && # Issue #20837, PR #20840: compensate for GlusterFS truncating mtimes to microseconds
-                           ( ftime != 1.0 )  &&                       # PR #43090: provide compatibility with Nix mtime.
-                           !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond
-                if is_stale
-                    @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
+                hash = open(_crc32c, f, "r")
+                if hash != hash_req
+                    @debug "Rejecting stale cache file $cachefile (hash $hash_req) because file $f (hash $hash) has changed"
                     return true
                 end
             end

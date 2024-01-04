@@ -374,7 +374,7 @@ precompile_test_harness(false) do dir
         @test string(Base.Docs.doc(Foo.Bar)) == "Bar module\n"
 
         modules, (deps, requires), required_modules, _... = Base.parse_cache_header(cachefile)
-        discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
+        discard_module = mod_fl_mt -> mod_fl_mt.filename
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
         @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
@@ -552,12 +552,12 @@ precompile_test_harness(false) do dir
     fb_uuid = Base.module_build_id(FooBar)
     sleep(2); touch(FooBar_file)
     insert!(DEPOT_PATH, 1, dir2)
-    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @eval using FooBar1
     @test !isfile(joinpath(cachedir2, "FooBar.ji"))
     @test !isfile(joinpath(cachedir, "FooBar1.ji"))
     @test isfile(joinpath(cachedir2, "FooBar1.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Tsc
     @test fb_uuid == Base.module_build_id(FooBar)
     fb_uuid1 = Base.module_build_id(FooBar1)
