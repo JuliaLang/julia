@@ -403,6 +403,10 @@ custom flavour of Markdown can be used, but this should generally be unnecessary
 
 Markdown strings can be constructed using the string literal syntax `md"..."`.
 
+## [API reference](@id stdlib-markdown-api)
+
 ```@docs
+Markdown.MD
 Markdown.@md_str
+Markdown.@doc_str
 ```

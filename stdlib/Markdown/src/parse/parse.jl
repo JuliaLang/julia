@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    MD
+
+`MD` represents a Markdown document. However, `MD` objects should only be constructed using 
+the exported macros `@md_str` and `@doc_str`.
+"""
 mutable struct MD
     content::Vector{Any}
     meta::Dict{Symbol, Any}

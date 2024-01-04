@@ -1,7 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
+    Markdown
+
 Tools for working with the Markdown file format. Mainly for documentation.
+The `Markdown` module provides the (internal) `MD` struct (type?) as well as the string 
+literals `md"..."` and `doc"..."`.
 """
 module Markdown
 
@@ -63,6 +67,12 @@ function doc_str(md, source::LineNumberNode, mod::Module)
 end
 doc_str(md::AbstractString, source::LineNumberNode, mod::Module) = doc_str(parse(md), source, mod)
 
+"""
+    macro doc_str(s)
+
+Parse the given string as Markdown text, add line and module information and return a 
+corresponding `Markdown.MD` object.
+"""
 macro doc_str(s::AbstractString, t...)
     docexpr(__source__, __module__, s, t...)
 end
