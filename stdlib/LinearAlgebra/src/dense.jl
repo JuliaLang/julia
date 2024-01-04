@@ -235,9 +235,12 @@ function diagind(::IndexCartesian, m::Integer, n::Integer, k::Integer=0)
 end
 
 """
-    diagind(M, k::Integer=0)
+    diagind(M::AbstractMatrix, [k::Integer=0,] indstyle::IndexStyle = IndexLinear())
 
 An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
+Optionally, an index style may be specified which determines the type of the range returned.
+If `indstyle isa IndexLinear` (default), this returns an `AbstractRange{Integer}`.
+On the other hand, if `indstyle isa IndexCartesian`, this returns an `AbstractRange{CartesianIndex{2}}`.
 
 See also: [`diag`](@ref), [`diagm`](@ref), [`Diagonal`](@ref).
 
@@ -253,10 +256,12 @@ julia> diagind(A,-1)
 2:4:6
 ```
 """
-function diagind(A::AbstractMatrix, k::Integer=0)
+function diagind(A::AbstractMatrix, k::Integer=0, indexstyle::IndexStyle = IndexLinear())
     require_one_based_indexing(A)
-    diagind(IndexStyle(A), size(A,1), size(A,2), k)
+    diagind(indexstyle, size(A,1), size(A,2), k)
 end
+
+diagind(A::AbstractMatrix, indexstyle::IndexStyle) = diagind(A, 0, indexstyle)
 
 """
     diag(M, k::Integer=0)
@@ -279,7 +284,7 @@ julia> diag(A,1)
  6
 ```
 """
-diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
+diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A, k, IndexStyle(A))]
 
 """
     diagm(kv::Pair{<:Integer,<:AbstractVector}...)

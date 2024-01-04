@@ -1364,7 +1364,7 @@ enum DW_EH_PE : uint8_t {
 // Parse the CIE and return the type of encoding used by FDE
 static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
 {
-    // http://www.airs.com/blog/archives/460
+    // https://www.airs.com/blog/archives/460
     // Length (4 bytes)
     uint32_t cie_size = *(const uint32_t*)Addr;
     const uint8_t *cie_addr = Addr + 4;

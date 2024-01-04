@@ -177,11 +177,18 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         elseif head === :gc_preserve_begin ||
                head === :gc_preserve_end
             return false
+        elseif head === :leave
+            return false
         else
             error("reprocess_instruction!: unhandled expression found")
         end
     elseif isa(stmt, PhiNode)
         rt = abstract_eval_phi_stmt(interp, stmt, idx, irsv)
+    elseif isa(stmt, UpsilonNode)
+        rt = argextype(stmt.val, irsv.ir)
+    elseif isa(stmt, PhiCNode)
+        # Currently not modeled
+        return false
     elseif isa(stmt, ReturnNode)
         # Handled at the very end
         return false

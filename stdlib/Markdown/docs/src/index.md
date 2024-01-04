@@ -75,7 +75,7 @@ the text enclosed in square brackets, `[ ]`, is the name of the link and the tex
 parentheses, `( )`, is the URL.
 
 ```
-A paragraph containing a link to [Julia](http://www.julialang.org).
+A paragraph containing a link to [Julia](https://www.julialang.org).
 ```
 
 It's also possible to add cross-references to other documented functions/methods/variables within

@@ -199,7 +199,7 @@ if Sys.isbsd() || Sys.islinux()
             finally
                 closewrite(iob)
             end
-            t = Timer(10) do t
+            t = Timer(120) do t
                 # should be under 10 seconds, so give it 2 minutes then report failure
                 println("KILLING siginfo/sigusr1 test BY PROFILE TEST WATCHDOG\n")
                 kill(p, Base.SIGTERM)
@@ -287,6 +287,16 @@ end
 
     rm(fname)
     rm(tmpdir, force = true, recursive = true)
+end
+
+@testset "PageProfile" begin
+    fname = "$(getpid())_$(time_ns())"
+    fpath = joinpath(tempdir(), fname)
+    Profile.take_page_profile(fpath)
+    open(fpath) do fs
+        @test readline(fs) != ""
+    end
+    rm(fpath)
 end
 
 include("allocs.jl")

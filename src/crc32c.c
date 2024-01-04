@@ -3,7 +3,7 @@
  * Version 1.1  1 Aug 2013  Mark Adler, updates from Version 1.2 5 June 2021
  *
  * Code retrieved in August 2016 from August 2013 post by Mark Adler on
- *    http://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software
+ *    https://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software
  * Modified for use in libjulia:
  *    - exported function renamed to jl_crc32c, DLL exports added.
  *    - removed main() function

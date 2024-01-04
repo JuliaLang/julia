@@ -126,6 +126,7 @@ cd(@__DIR__) do
 
     println("""
         Running parallel tests with:
+          getpid() = $(getpid())
           nworkers() = $(nworkers())
           nthreads() = $(Threads.threadpoolsize())
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
