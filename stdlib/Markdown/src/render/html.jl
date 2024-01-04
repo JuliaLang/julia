@@ -182,6 +182,17 @@ htmlinline(io::IO, x) = tohtml(io, x)
 
 export html
 
+"""
+    html([io::IO], md)
+
+Render a Markdown object to its HTML representation. If no `io` is provided, the result will be returned as a `String`.
+
+# Example
+```jldoctest
+julia> html(md"hello _world_")
+"<p>hello <em>world</em></p>\n"
+```
+"""
 html(md) = sprint(html, md)
 
 function show(io::IO, ::MIME"text/html", md::MD)
