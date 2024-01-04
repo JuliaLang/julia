@@ -689,7 +689,7 @@ function undocumented_names(mod::Module; all::Bool=false)
     filter!(names(mod; all)) do sym
         !hasdoc(mod, sym) && (Base.isidentifier(sym) ||
             let str = string(sym)
-                startswith(str, "@") && Base.isidentifier(str[2:end])
+                startswith(str, '@') && Base.isidentifier(str[2:end])
             end)
     end
 end
