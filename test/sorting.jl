@@ -1036,38 +1036,29 @@ end
     @test issorted(sort!(rand(100), Base.Sort.InitialOptimizations(DispatchLoopTestAlg()), Base.Order.Forward))
 end
 
+# Pathologize 0 is a noop, pathologize 3 is fully pathological
+function pathologize!(x, level)
+    Base.require_one_based_indexing(x)
+    k2 = Int(cbrt(length(x))^2)
+    seed = hash(length(x), Int === Int64 ? 0x85eb830e0216012d : 0xae6c4e15)
+    for a in 1:level
+        seed = hash(a, seed)
+        x[mod.(hash.(1:k2, seed), range.(1:k2,lastindex(x)))] .= a
+    end
+    x
+end
+
 @testset "partialsort tests added for BracketedSort #52006" begin
-    x = rand(Int, 1000)
-    @test partialsort(x, 1) == minimum(x)
-    @test partialsort(x, 1000) == maximum(x)
-    sx = sort(x)
-    for i in [1, 2, 4, 10, 11, 425, 500, 845, 991, 997, 999, 1000]
-        @test partialsort(x, i) == sx[i]
-    end
-    for i in [1:1, 1:2, 1:5, 1:8, 1:9, 1:11, 1:108, 135:812, 220:586, 363:368, 450:574, 458:597, 469:638, 487:488, 500:501, 584:594, 1000:1000]
-        @test partialsort(x, i) == sx[i]
-    end
-
-    # Semi-pathological input
-    seed = hash(1000, Int === Int64 ? 0x85eb830e0216012d : 0xae6c4e15)
-    seed = hash(1, seed)
-    for i in 1:100
-        j = mod(hash(i, seed), i:1000)
-        x[j] = typemax(Int)
-    end
-    @test partialsort(x, 500) == sort(x)[500]
-
-    # Fully pathological input
-    # it would be too much trouble to actually construct a valid pathological input, so we
-    # construct an invalid pathological input.
-    # This test is kind of sketchy because it passes invalid inputs to the function
-    for i in [1:6, 1:483, 1:957, 77:86, 118:478, 223:227, 231:970, 317:958, 500:501, 500:501, 500:501, 614:620, 632:635, 658:665, 933:940, 937:942, 997:1000, 999:1000]
-        x = rand(1:5, 1000)
-        @test partialsort(x, i, lt=(<=)) == sort(x)[i]
-    end
-    for i in [1, 7, 8, 490, 495, 852, 993, 996, 1000]
-        x = rand(1:5, 1000)
-        @test partialsort(x, i, lt=(<=)) == sort(x)[i]
+    for x in [pathologize!.(Ref(rand(Int, 1000)), 0:3); pathologize!.(Ref(rand(1000)), 0:3); [pathologize!(rand(Int, 1_000_000), 3)]]
+        @test partialsort(x, 1) == minimum(x)
+        @test partialsort(x, lastindex(x)) == maximum(x)
+        sx = sort(x)
+        for i in [1, 2, 4, 10, 11, 425, 500, 845, 991, 997, 999, 1000]
+            @test partialsort(x, i) == sx[i]
+        end
+        for i in [1:1, 1:2, 1:5, 1:8, 1:9, 1:11, 1:108, 135:812, 220:586, 363:368, 450:574, 458:597, 469:638, 487:488, 500:501, 584:594, 1000:1000]
+            @test partialsort(x, i) == sx[i]
+        end
     end
 end
 

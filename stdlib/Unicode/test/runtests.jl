@@ -37,7 +37,7 @@ end
 
 @testset "unicode sa#15" begin
     #Tests from Unicode SA#15, "Unicode normalization forms"
-    #http://www.unicode.org/reports/tr15/
+    #https://www.unicode.org/reports/tr15/
 
     @testset "canonical equivalence" begin
         let ==(a::Array{Char},b::Array{Char}) = normalize(string(a...), :NFC)==normalize(string(b...), :NFC)

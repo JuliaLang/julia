@@ -2170,6 +2170,20 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
     @test_repr "Bool[1, 0]"
 end
 
+@testset "Unions with Bool (#39590)" begin
+    @test repr([missing, false]) == "Union{Missing, Bool}[missing, 0]"
+    @test_repr "Union{Bool, Nothing}[1, 0, nothing]"
+end
+
+# issue #26847
+@test_repr "Union{Missing, Float32}[1.0]"
+
+# intersection of #45396 and #48822
+@test_repr "Union{Missing, Rational{Int64}}[missing, 1//2, 2]"
+
+# Don't go too far with #48822
+@test_repr "Union{String, Bool}[true]"
+
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char, Char}}[('a', 'b')]"
 

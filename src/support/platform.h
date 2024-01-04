@@ -8,7 +8,7 @@
  * based of compiler-specific pre-defined macros. It is based on the
  * information that can be found at the following address:
  *
- *     http://sourceforge.net/p/predef/wiki/Home/
+ *     https://sourceforge.net/p/predef/wiki/Home/
  *
  * Possible values include:
  *      Compiler:

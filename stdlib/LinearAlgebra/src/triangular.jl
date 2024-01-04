@@ -48,6 +48,7 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
 
         real(A::$t{<:Real}) = A
         real(A::$t{<:Complex}) = (B = real(A.data); $t(B))
+        real(A::$t{<:Complex, <:StridedMaybeAdjOrTransMat}) = $t(real.(A))
     end
 end
 
@@ -156,8 +157,26 @@ const UpperOrLowerTriangular{T,S} = Union{UpperOrUnitUpperTriangular{T,S}, Lower
 
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
-imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
-imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
+imag(A::UpperTriangular{<:Any,<:StridedMaybeAdjOrTransMat}) = imag.(A)
+imag(A::LowerTriangular{<:Any,<:StridedMaybeAdjOrTransMat}) = imag.(A)
+function imag(A::UnitLowerTriangular)
+    L = LowerTriangular(A.data)
+    Lim = similar(L) # must be mutable to set diagonals to zero
+    Lim .= imag.(L)
+    for i in 1:size(Lim,1)
+        Lim[i,i] = zero(Lim[i,i])
+    end
+    return Lim
+end
+function imag(A::UnitUpperTriangular)
+    U = UpperTriangular(A.data)
+    Uim = similar(U) # must be mutable to set diagonals to zero
+    Uim .= imag.(U)
+    for i in 1:size(Uim,1)
+        Uim[i,i] = zero(Uim[i,i])
+    end
+    return Uim
+end
 
 Array(A::AbstractTriangular) = Matrix(A)
 parent(A::UpperOrLowerTriangular) = A.data
@@ -481,6 +500,11 @@ function -(A::UnitUpperTriangular)
     UpperTriangular(Anew)
 end
 
+# use broadcasting if the parents are strided, where we loop only over the triangular part
+for TM in (:LowerTriangular, :UpperTriangular)
+    @eval -(A::$TM{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast(-, A)
+end
+
 tr(A::LowerTriangular) = tr(A.data)
 tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
 tr(A::UpperTriangular) = tr(A.data)
@@ -719,6 +743,16 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 -(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
 -(A::AbstractTriangular, B::AbstractTriangular) = copyto!(similar(parent(A)), A) - copyto!(similar(parent(B)), B)
 
+# use broadcasting if the parents are strided, where we loop only over the triangular part
+for op in (:+, :-)
+    for TM1 in (:LowerTriangular, :UnitLowerTriangular), TM2 in (:LowerTriangular, :UnitLowerTriangular)
+        @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
+    end
+    for TM1 in (:UpperTriangular, :UnitUpperTriangular), TM2 in (:UpperTriangular, :UnitUpperTriangular)
+        @eval $op(A::$TM1{<:Any, <:StridedMaybeAdjOrTransMat}, B::$TM2{<:Any, <:StridedMaybeAdjOrTransMat}) = broadcast($op, A, B)
+    end
+end
+
 ######################
 # BlasFloat routines #
 ######################
@@ -918,47 +952,52 @@ end
 
 for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
                    (LowerTriangular, UnitLowerTriangular))
+    tstrided = t{<:Any, <:StridedMaybeAdjOrTransMat}
     @eval begin
         (*)(A::$t, x::Number) = $t(A.data*x)
+        (*)(A::$tstrided, x::Number) = A .* x
 
         function (*)(A::$unitt, x::Number)
-            B = A.data*x
+            B = $t(A.data)*x
             for i = 1:size(A, 1)
-                B[i,i] = x
+                B.data[i,i] = x
             end
-            $t(B)
+            return B
         end
 
         (*)(x::Number, A::$t) = $t(x*A.data)
+        (*)(x::Number, A::$tstrided) = x .* A
 
         function (*)(x::Number, A::$unitt)
-            B = x*A.data
+            B = x*$t(A.data)
             for i = 1:size(A, 1)
-                B[i,i] = x
+                B.data[i,i] = x
             end
-            $t(B)
+            return B
         end
 
         (/)(A::$t, x::Number) = $t(A.data/x)
+        (/)(A::$tstrided, x::Number) = A ./ x
 
         function (/)(A::$unitt, x::Number)
-            B = A.data/x
+            B = $t(A.data)/x
             invx = inv(x)
             for i = 1:size(A, 1)
-                B[i,i] = invx
+                B.data[i,i] = invx
             end
-            $t(B)
+            return B
         end
 
         (\)(x::Number, A::$t) = $t(x\A.data)
+        (\)(x::Number, A::$tstrided) = x .\ A
 
         function (\)(x::Number, A::$unitt)
-            B = x\A.data
+            B = x\$t(A.data)
             invx = inv(x)
             for i = 1:size(A, 1)
-                B[i,i] = invx
+                B.data[i,i] = invx
             end
-            $t(B)
+            return B
         end
     end
 end
