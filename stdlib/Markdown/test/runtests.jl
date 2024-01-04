@@ -1297,5 +1297,5 @@ end
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(Markdown)
     @test_broken isempty(undoc)
-    @test undoc == [:html, :latex]
+    @test undoc == [Symbol("@doc_str"), Symbol("@md_str"), :html, :latex]
 end
