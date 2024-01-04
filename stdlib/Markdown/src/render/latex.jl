@@ -167,6 +167,16 @@ function latexesc(io, s::AbstractString)
     end
 end
 
+"""
+    latex([io::IO], md)
+Convert a Markdown object to a LaTeX expression. If no `io` is provided, the result will be returned as a `String`.
+
+# Example
+```jldoctest
+julia> latex(md"hello _world_")
+"hello \\emph{world}\n\n"
+```
+"""
 latex(md) = sprint(latex, md)
 latexinline(md) = sprint(latexinline, md)
 latexesc(s) = sprint(latexesc, s)
