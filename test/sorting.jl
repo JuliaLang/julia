@@ -9,6 +9,12 @@ using Test
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+@testset "Base.Sort docstrings" begin
+    undoc = Docs.undocumented_names(Base.Sort)
+    @test_broken isempty(undoc)
+    @test undoc == [:Algorithm, :SMALL_ALGORITHM, :SMALL_THRESHOLD, :Sort]
+end
+
 @testset "Order" begin
     @test Forward == ForwardOrdering()
     @test ReverseOrdering(Forward) == ReverseOrdering() == Reverse
