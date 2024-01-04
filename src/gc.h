@@ -9,8 +9,6 @@
 #ifndef JL_GC_H
 #define JL_GC_H
 
-#include <stddef.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
