@@ -2393,6 +2393,10 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
             jl_gc_wb(m, m->source);
         }
     }
+    if (jl_options.strip_metadata) {
+        record_field_change((jl_value_t**)&m->file, (jl_value_t*)jl_empty_sym);
+        m->line = 0;
+    }
     jl_value_t *specializations = jl_atomic_load_relaxed(&m->specializations);
     if (!jl_is_svec(specializations)) {
         strip_specializations_((jl_method_instance_t*)specializations);
