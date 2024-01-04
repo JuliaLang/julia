@@ -187,6 +187,8 @@ function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
     T = first(ex.args)
     nameof(T) === ex.func || print(io, T, ", ")
+    # `join` calls `string` on its arguments, which shadows the size of e.g. Inf16
+    # as `string(Inf16) == "Inf"` instead of "Inf16". Thus we cannot use `join` here.
     for arg in ex.args[2:end-1]
         show(io, arg)
         print(io, ", ")
