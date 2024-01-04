@@ -1584,5 +1584,5 @@ let
 end
 
 @testset "Docstrings" begin
-    @test Docs.undocumented_names(Test) == []
+    @test isempty(Docs.undocumented_names(Test))
 end

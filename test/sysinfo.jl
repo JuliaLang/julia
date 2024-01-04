@@ -57,6 +57,6 @@ end
 
 @testset "Base.Sys docstrings" begin
     undoc = Docs.undocumented_names(Sys)
-    @test_broken undoc == []
+    @test_broken isempty(undoc)
     @test undoc == [:CPU_NAME, :JIT, :cpu_info, :cpu_summary]
 end

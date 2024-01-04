@@ -1011,5 +1011,5 @@ end
 end
 
 @testset "Iterators docstrings" begin
-    @test Docs.undocumented_names(Iterators) == []
+    @test isempty(Docs.undocumented_names(Iterators))
 end

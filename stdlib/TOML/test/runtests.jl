@@ -28,6 +28,6 @@ include("parse.jl")
 
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(TOML)
-    @test_broken undoc == []
+    @test_broken isempty(undoc)
     @test undoc == [:TOML]
 end

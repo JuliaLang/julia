@@ -537,6 +537,6 @@ end
 
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(Unicode)
-    @test_broken undoc == []
+    @test_broken isempty(undoc)
     @test undoc == [:Unicode]
 end

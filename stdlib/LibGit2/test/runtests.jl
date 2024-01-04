@@ -7,5 +7,5 @@ using Test, LibGit2
 end
 
 @testset "Docstrings" begin
-    @test Docs.undocumented_names(LibGit2) == []
+    @test isempty(Docs.undocumented_names(LibGit2))
 end

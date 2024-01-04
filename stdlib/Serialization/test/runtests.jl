@@ -658,6 +658,6 @@ end
 
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(Serialization)
-    @test_broken undoc == []
+    @test_broken isempty(undoc)
     @test undoc == [:AbstractSerializer, :Serializer]
 end

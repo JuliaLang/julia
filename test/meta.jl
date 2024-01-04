@@ -279,5 +279,5 @@ ci = code_lowered(g, Tuple{Val{true}})[1]
 end
 
 @testset "Base.Meta docstrings" begin
-    @test Docs.undocumented_names(Meta) == []
+    @test isempty(Docs.undocumented_names(Meta))
 end

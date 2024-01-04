@@ -270,5 +270,5 @@ struct F49231{a,b,c,d,e,f,g} end
 end
 
 @testset "Base.StackTraces docstrings" begin
-    @test Docs.undocumented_names(StackTraces) == []
+    @test isempty(Docs.undocumented_names(StackTraces))
 end

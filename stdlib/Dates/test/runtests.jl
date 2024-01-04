@@ -10,7 +10,7 @@ end
 
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(Dates)
-    @test_broken undoc == []
+    @test_broken isempty(undoc)
     @test undoc == [:adjust]
 end
 

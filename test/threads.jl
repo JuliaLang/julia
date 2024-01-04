@@ -339,5 +339,5 @@ end
 end
 
 @testset "Base.Threads docstrings" begin
-    @test Docs.undocumented_names(Threads) == []
+    @test isempty(Docs.undocumented_names(Threads))
 end

@@ -1296,6 +1296,6 @@ end
 
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(Markdown)
-    @test_broken undoc == []
+    @test_broken isempty(undoc)
     @test undoc == [:html, :latex]
 end

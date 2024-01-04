@@ -1234,5 +1234,5 @@ end
 end
 
 @testset "Docstrings" begin
-    @test Docs.undocumented_names(Random) == []
+    @test isempty(Docs.undocumented_names(Random))
 end

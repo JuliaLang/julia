@@ -326,5 +326,5 @@ end
 @test_throws MethodError SharedMatrix(rand(4))
 
 @testset "Docstrings" begin
-    @test Docs.undocumented_names(SharedArrays) == []
+    @test isempty(Docs.undocumented_names(SharedArrays))
 end
