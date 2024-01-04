@@ -77,7 +77,7 @@ doc_str(md::AbstractString, source::LineNumberNode, mod::Module) = doc_str(parse
 Parse the given string as Markdown text, add line and module information and return a 
 corresponding [`MD`](@ref) object.
 
-`@doc_str`` can be used in conjunction with the [`Base.Docs`](@ref) module. Please also refer to
+`@doc_str` can be used in conjunction with the [`Base.Docs`](@ref) module. Please also refer to
 the manual section on [documentation](@ref man-documentation) for more information.
 """
 macro doc_str(s::AbstractString, t...)
