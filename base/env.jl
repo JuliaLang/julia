@@ -11,10 +11,10 @@ if Sys.iswindows()
         # incurred allocations because we had to convert a String to a Vector{Cwchar_t} each time
         # an environment variable was looked up. This function memoizes that lookup process, storing
         # the String => Vector{Cwchar_t} pairs in env_dict
-        var = get(env_dict, str, nothing)
-        if isnothing(var)
-            var = @lock env_lock begin
-                env_dict[str] = cwstring(str)
+        @lock env_lock begin
+            var = get(env_dict, str, nothing)
+            if isnothing(var)
+                var = env_dict[str] = cwstring(str)
             end
         end
         var
