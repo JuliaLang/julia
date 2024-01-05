@@ -2,6 +2,11 @@
 
 # Various Unicode functionality from the utf8proc library
 module Unicode
+@doc """
+The `Unicode` module provides essential functionality for managing `Unicode` characters and strings.
+It includes validation, category determination, normalization, case transformation, and grapheme segmentation, enabling effective `Unicode` data handling.
+""" Unicode
+
 
 import Base: show, ==, hash, string, Symbol, isless, length, eltype,
              convert, isvalid, ismalformed, isoverlong, iterate
