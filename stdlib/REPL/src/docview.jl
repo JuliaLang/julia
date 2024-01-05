@@ -920,18 +920,6 @@ stripmd(x::Markdown.Footnote) = "$(stripmd(x.id)) $(stripmd(x.text))"
 stripmd(x::Markdown.Table) =
     join([join(map(stripmd, r), " ") for r in x.rows], " ")
 
-"""
-    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
-
-Search available docstrings for entries containing `pattern`.
-
-When `pattern` is a string, case is ignored. Results are printed to `io`.
-
-`apropos` can be called from the help mode in the REPL by wrapping the query in double quotes:
-```
-help?> "pattern"
-```
-"""
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
 
