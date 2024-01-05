@@ -650,7 +650,7 @@ function loaddocs(docs::Vector{Core.SimpleVector})
     nothing
 end
 
-# FIXME: formatdoc, parsedoc, apropos, and doc are defined here (but not exported)
+# FIXME: formatdoc, parsedoc, apropos, and doc are defined here (but only doc is exported)
 # for historical reasons (#25738), but are *implemented* in REPL/src/docview.jl, while
 # apropos is *exported* by InteractiveUtils and doc is exported by Docs.  Seems
 # like a more sensible refactoring should be possible.
