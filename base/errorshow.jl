@@ -149,13 +149,7 @@ showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division erro
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
 showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
-function showerror(io::IO, ex::ErrorException)
-    print(io, ex.msg)
-    if ex.msg == "type String has no field data"
-        println(io)
-        print(io, "Use `codeunits(str)` instead.")
-    end
-end
+showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
 showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
                                    show(io, ex.key);
                                    print(io, " not found"))
@@ -187,7 +181,13 @@ function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
     T = first(ex.args)
     nameof(T) === ex.func || print(io, T, ", ")
-    join(io, ex.args[2:end], ", ")
+    # `join` calls `string` on its arguments, which shadows the size of e.g. Inf16
+    # as `string(Inf16) == "Inf"` instead of "Inf16". Thus we cannot use `join` here.
+    for arg in ex.args[2:end-1]
+        show(io, arg)
+        print(io, ", ")
+    end
+    show(io, ex.args[end])
     print(io, ")")
     Experimental.show_error_hints(io, ex)
 end
