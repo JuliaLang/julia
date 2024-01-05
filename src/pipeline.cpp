@@ -339,33 +339,33 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
     addVerificationPasses(MPM, options.llvm_only);
 #endif
     if (options.enable_early_simplifications) {
-    // Place after verification in case we want to force it anyways
-    MPM.addPass(ForceFunctionAttrsPass());
-    invokePipelineStartCallbacks(MPM, PB, O);
-    MPM.addPass(Annotation2MetadataPass());
-    MPM.addPass(ConstantMergePass());
-    {
-        FunctionPassManager FPM;
-        FPM.addPass(LowerExpectIntrinsicPass());
-        if (O.getSpeedupLevel() >= 2) {
-            JULIA_PASS(FPM.addPass(PropagateJuliaAddrspacesPass()));
-        }
-        // DCE must come before simplifycfg
-        // codegen can generate unused statements when generating builtin calls,
-        // and those dead statements can alter how simplifycfg optimizes the CFG
-        FPM.addPass(DCEPass());
-        FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
-        if (O.getSpeedupLevel() >= 1) {
+      // Place after verification in case we want to force it anyways
+      MPM.addPass(ForceFunctionAttrsPass());
+      invokePipelineStartCallbacks(MPM, PB, O);
+      MPM.addPass(Annotation2MetadataPass());
+      MPM.addPass(ConstantMergePass());
+      {
+          FunctionPassManager FPM;
+          FPM.addPass(LowerExpectIntrinsicPass());
+          if (O.getSpeedupLevel() >= 2) {
+              JULIA_PASS(FPM.addPass(PropagateJuliaAddrspacesPass()));
+          }
+          // DCE must come before simplifycfg
+          // codegen can generate unused statements when generating builtin calls,
+          // and those dead statements can alter how simplifycfg optimizes the CFG
+          FPM.addPass(DCEPass());
+          FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
+          if (O.getSpeedupLevel() >= 1) {
 #if JL_LLVM_VERSION >= 160000
-            // TODO check the LLVM 15 default.
-            FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+              // TODO check the LLVM 15 default.
+              FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
 #else
-            FPM.addPass(SROAPass());
+              FPM.addPass(SROAPass());
 #endif
-        }
-        MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
-    }
-    invokeEarlySimplificationCallbacks(MPM, PB, O);
+          }
+          MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+      }
+      invokeEarlySimplificationCallbacks(MPM, PB, O);
     }
     MPM.addPass(AfterEarlySimplificationMarkerPass());
 }
@@ -373,52 +373,52 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
 static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
     MPM.addPass(BeforeEarlyOptimizationMarkerPass());
     if (options.enable_early_optimizations) {
-    invokeOptimizerEarlyCallbacks(MPM, PB, O);
-    {
-        CGSCCPassManager CGPM;
-        invokeCGSCCCallbacks(CGPM, PB, O);
-        if (O.getSpeedupLevel() >= 2) {
-            FunctionPassManager FPM;
-            JULIA_PASS(FPM.addPass(AllocOptPass()));
-            FPM.addPass(Float2IntPass());
-            FPM.addPass(LowerConstantIntrinsicsPass());
-            CGPM.addPass(createCGSCCToFunctionPassAdaptor(std::move(FPM)));
-        }
-        MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
-    }
-    if (O.getSpeedupLevel() >= 2) {
-        MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
-    }
-    // MPM.addPass(createModuleToFunctionPassAdaptor(InvalidateAnalysisPass<AAManager>()));
-    if (options.dump_native) {
-        MPM.addPass(StripDeadPrototypesPass());
-        JULIA_PASS(MPM.addPass(MultiVersioningPass(options.external_use)));
-    }
-    JULIA_PASS(MPM.addPass(CPUFeaturesPass()));
-    if (O.getSpeedupLevel() >= 1) {
-        FunctionPassManager FPM;
-        if (O.getSpeedupLevel() >= 2) {
+      invokeOptimizerEarlyCallbacks(MPM, PB, O);
+      {
+          CGSCCPassManager CGPM;
+          invokeCGSCCCallbacks(CGPM, PB, O);
+          if (O.getSpeedupLevel() >= 2) {
+              FunctionPassManager FPM;
+              JULIA_PASS(FPM.addPass(AllocOptPass()));
+              FPM.addPass(Float2IntPass());
+              FPM.addPass(LowerConstantIntrinsicsPass());
+              CGPM.addPass(createCGSCCToFunctionPassAdaptor(std::move(FPM)));
+          }
+          MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
+      }
+      if (O.getSpeedupLevel() >= 2) {
+          MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
+      }
+      // MPM.addPass(createModuleToFunctionPassAdaptor(InvalidateAnalysisPass<AAManager>()));
+      if (options.dump_native) {
+          MPM.addPass(StripDeadPrototypesPass());
+          JULIA_PASS(MPM.addPass(MultiVersioningPass(options.external_use)));
+      }
+      JULIA_PASS(MPM.addPass(CPUFeaturesPass()));
+      if (O.getSpeedupLevel() >= 1) {
+          FunctionPassManager FPM;
+          if (O.getSpeedupLevel() >= 2) {
 #if JL_LLVM_VERSION >= 160000
-            // TODO check the LLVM 15 default.
-            FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+              // TODO check the LLVM 15 default.
+              FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
 #else
-            FPM.addPass(SROAPass());
+              FPM.addPass(SROAPass());
 #endif
-            // SROA can duplicate PHI nodes which can block LowerSIMD
-            FPM.addPass(InstCombinePass());
-            FPM.addPass(JumpThreadingPass());
-            FPM.addPass(CorrelatedValuePropagationPass());
-            FPM.addPass(ReassociatePass());
-            FPM.addPass(EarlyCSEPass());
-            JULIA_PASS(FPM.addPass(AllocOptPass()));
-        } else { // if (O.getSpeedupLevel() >= 1) (exactly)
-            FPM.addPass(InstCombinePass());
-            FPM.addPass(EarlyCSEPass());
-        }
-        invokePeepholeEPCallbacks(FPM, PB, O);
-        MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
-    }
-    MPM.addPass(GlobalDCEPass());
+              // SROA can duplicate PHI nodes which can block LowerSIMD
+              FPM.addPass(InstCombinePass());
+              FPM.addPass(JumpThreadingPass());
+              FPM.addPass(CorrelatedValuePropagationPass());
+              FPM.addPass(ReassociatePass());
+              FPM.addPass(EarlyCSEPass());
+              JULIA_PASS(FPM.addPass(AllocOptPass()));
+          } else { // if (O.getSpeedupLevel() >= 1) (exactly)
+              FPM.addPass(InstCombinePass());
+              FPM.addPass(EarlyCSEPass());
+          }
+          invokePeepholeEPCallbacks(FPM, PB, O);
+          MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+      }
+      MPM.addPass(GlobalDCEPass());
     }
     MPM.addPass(AfterEarlyOptimizationMarkerPass());
 }
