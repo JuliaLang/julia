@@ -8765,6 +8765,14 @@ static jl_llvm_functions_t
             jl_aliasinfo_t scope_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
             if (jl_enternode_scope(stmt)) {
                 jl_cgval_t new_scope = emit_expr(ctx, jl_enternode_scope(stmt));
+                if (new_scope.typ == jl_bottom_type) {
+                    // Probably dead code, but let's be loud about it in case it isn't, so we fail
+                    // at the point of the miscompile, rather than later when something attempts to
+                    // read the scope.
+                    emit_error(ctx, "(INTERNAL ERROR): Attempted to execute EnterNode with bad scope");
+                    find_next_stmt(-1);
+                    continue;
+                }
                 Value *new_scope_boxed = boxed(ctx, new_scope);
                 scope_ptr = get_scope_field(ctx);
                 old_scope = scope_ai.decorateInst(
