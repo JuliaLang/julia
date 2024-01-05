@@ -6,7 +6,7 @@ if Sys.iswindows()
     const env_dict = IdDict{String, Vector{Cwchar_t}}()
     const env_lock = ReentrantLock()
 
-    function memoized_env_lookup(str::AbstractString)
+    function _memoized_env_lookup(str::AbstractString)
         # Windows environment variables have a different format from Linux / MacOS, and previously
         # incurred allocations because we had to convert a String to a Vector{Cwchar_t} each time
         # an environment variable was looked up. This function memoizes that lookup process, storing
@@ -19,6 +19,12 @@ if Sys.iswindows()
         end
         var
     end
+
+    # The `@nospecialize`d `setindex!` in `iddict` called in `_memoized_env_lookup` unfortunately
+    # sets up a situation where adding a method `convert(::Type{Array}, ::SomeType)` invalidates
+    # the memoization method causing a cascade of upstream methods to be invalidated. Therefore,
+    # break the inference chain here with an `inferencebarrier`.
+    memoized_env_lookup(str::AbstractString) = inferencebarrier(_memoized_env_lookup(str))::Vector{Cwchar_t}
 
     _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
     _hasenv(s::Vector{UInt16}) = _getenvlen(s) != 0 || Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND
