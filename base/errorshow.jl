@@ -149,13 +149,7 @@ showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division erro
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
 showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
-function showerror(io::IO, ex::ErrorException)
-    print(io, ex.msg)
-    if ex.msg == "type String has no field data"
-        println(io)
-        print(io, "Use `codeunits(str)` instead.")
-    end
-end
+showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
 showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
                                    show(io, ex.key);
                                    print(io, " not found"))
