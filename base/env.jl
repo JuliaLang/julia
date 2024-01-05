@@ -14,7 +14,8 @@ if Sys.iswindows()
         @lock env_lock begin
             var = get(env_dict, str, nothing)
             if isnothing(var)
-                var = env_dict[str] = cwstring(str)
+                var = cwstring(str)
+                env_dict[str] = var
             end
             return var
         end
