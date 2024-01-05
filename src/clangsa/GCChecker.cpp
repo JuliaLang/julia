@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "clang/AST/Type.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/StaticAnalyzer/Checkers/SValExplainer.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
@@ -14,6 +15,7 @@
 #include "clang/Tooling/Tooling.h"
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
 
+#include "llvm/Support/Debug.h"
 #include <iostream>
 #include <memory>
 
@@ -894,9 +896,11 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
     if (!Decl || !FD) {
       if (Callee == nullptr) {
         isCalleeSafepoint = true;
-      } else if (const TypedefType *TDT = dyn_cast<TypedefType>(Callee->getType())) {
-        isCalleeSafepoint =
-            !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
+      } else if (const ElaboratedType *ET = dyn_cast<ElaboratedType>(Callee->getType())){
+        if (const TypedefType *TDT = dyn_cast<TypedefType>(ET->getNamedType())) {
+          isCalleeSafepoint =
+              !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
+        }
       } else if (const CXXPseudoDestructorExpr *PDE =
                      dyn_cast<CXXPseudoDestructorExpr>(Callee)) {
         // A pseudo-destructor is an expression that looks like a member
