@@ -3,7 +3,7 @@
 if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
-    const env_dict = IdDict{String, Vector{Cwchar_t}}()
+    const env_dict = Dict{String, Vector{Cwchar_t}}()
     const env_lock = ReentrantLock()
 
     function memoized_env_lookup(str::AbstractString)
