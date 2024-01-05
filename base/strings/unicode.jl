@@ -3,7 +3,6 @@
 # Various Unicode functionality from the utf8proc library
 module Unicode
 
-
 import Base: show, ==, hash, string, Symbol, isless, length, eltype,
              convert, isvalid, ismalformed, isoverlong, iterate
 
