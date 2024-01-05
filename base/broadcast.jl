@@ -985,26 +985,25 @@ end
     ax1, out = ax[1], CartesianIndices(tail(ax))
     destc, indc = dest.chunks, 0
     bitst, remain = 0, UInt64(0)
-    @inbounds for I in out
+    for I in out
         i = first(ax1) - 1
         if ndims(bc) == 1 || bitst >= 64 - length(ax1)
             if ndims(bc) > 1 && bitst != 0
-                z = remain
-                @simd for j = bitst:63
-                    z |= UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
+                @inbounds @simd for j = bitst:63
+                    remain |= UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
                 end
-                destc[indc+=1] = z
+                @inbounds destc[indc+=1] = remain
+                bitst, remain = 0, UInt64(0)
             end
             while i <= last(ax1) - 64
                 z = UInt64(0)
-                @simd for j = 0:63
+                @inbounds @simd for j = 0:63
                     z |= UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
                 end
-                destc[indc+=1] = z
+                @inbounds destc[indc+=1] = z
             end
-            bitst, remain = 0, UInt64(0)
         end
-        @simd for j = i+1:last(ax1)
+        @inbounds @simd for j = i+1:last(ax1)
             remain |= UInt64(convert(Bool, bc′[j, I])) << (bitst & 63)
             bitst += 1
         end
