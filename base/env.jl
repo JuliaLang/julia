@@ -16,8 +16,8 @@ if Sys.iswindows()
             if isnothing(var)
                 var = env_dict[str] = cwstring(str)
             end
+            return var
         end
-        var
     end
 
     _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
