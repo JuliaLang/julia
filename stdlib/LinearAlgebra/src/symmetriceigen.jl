@@ -294,3 +294,34 @@ function eigvals!(A::StridedMatrix{T}, F::LU{T,<:StridedMatrix}; sortby::Union{F
     rdiv!(A, U)
     return eigvals!(A; sortby)
 end
+
+
+function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
+    (; dl, d, du) = parent(A)
+    N = length(d)
+    if N <= 1
+        eigen(parent(A); kwargs...)
+    else
+        if A.uplo == 'U'
+            E = du'
+            Er = abs.(du)
+        else
+            E = dl
+            Er = abs.(E)
+        end
+        S = Vector{Complex{T}}(undef, N)
+        S[1] = 1
+        for i ∈ 1:N-1
+            S[i+1] = iszero(Er[i]) ? one(Complex{T}) : S[i] * sign(E[i])
+        end
+        B = SymTridiagonal(real(d), Er)
+        Λ, Φ = eigen(B; kwargs...)
+        return Eigen(Λ, Diagonal(S) * Φ)
+    end
+end
+
+function eigvals(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
+    (; dl, d, du) = parent(A)
+    E = A.uplo == 'U' ? abs.(du) : abs.(dl)
+    eigvals(SymTridiagonal(real.(d), E); kwargs...)
+end
