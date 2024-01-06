@@ -224,7 +224,7 @@ function writeexp(buf, pos, v::T,
         pos += 1
     end
     if e >= 100
-        c = UInt8(e % 10)
+        c = (e % 10) % UInt8
         @inbounds d100 = DIGIT_TABLE16[div(e, 10) + 1]
         @inbounds buf[pos] = d100 % UInt8
         @inbounds buf[pos + 1] = (d100 >> 0x8) % UInt8
