@@ -2001,7 +2001,7 @@ function warn_if_already_loaded_different(uuidkey::PkgId)
                 v = get_pkgversion_from_path(dirname(dirname(pkgorig.path)))
                 cur_vstr = isnothing(v) ? "" : "v$v "
             else
-                cur_vstr = "v$v "
+                cur_vstr = "v$(pkgorig.version) "
             end
             new_v = get_pkgversion_from_path(dirname(dirname(new_path)))
             new_vstr = isnothing(new_v) ? "" : "v$new_v "
