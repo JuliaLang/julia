@@ -7,7 +7,7 @@ functionality.
 """
 module LinearAlgebra
 
-import Base: \, /, *, ^, +, -, ==
+import Base: \, /, //, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
     asin, asinh, atan, atanh, axes, big, broadcast, cbrt, ceil, cis, collect, conj, convert,
     copy, copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
