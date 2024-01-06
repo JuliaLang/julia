@@ -42,7 +42,7 @@ const AInfo = IdSet{Any}
     x::EscapeInfo
 
 A lattice for escape information, which holds the following properties:
-- `x.Analyzed::Bool`: not formally part of the lattice, only indicates `x` has not been analyzed or not
+- `x.Analyzed::Bool`: not formally part of the lattice, only indicates whether `x` has been analyzed
 - `x.ReturnEscape::Bool`: indicates `x` can escape to the caller via return
 - `x.ThrownEscape::BitSet`: records SSA statement numbers where `x` can be thrown as exception:
   * `isempty(x.ThrownEscape)`: `x` will never be thrown in this call frame (the bottom)

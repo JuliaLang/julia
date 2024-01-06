@@ -986,7 +986,7 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, ð
     return
 end
 
-# TODO: We could do the whole lifing machinery here, but really all
+# TODO: We could do the whole lifting machinery here, but really all
 # we want to do is clean this up when it got inserted by inlining,
 # which always targets simple `svec` call or `_compute_sparams`,
 # so this specialized lifting would be enough
@@ -1617,7 +1617,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     end
 
     # Ok, legality check complete. Figure out the exact statement where we're
-    # gonna inline the finalizer.
+    # going to inline the finalizer.
     loc = bb_insert_idx === nothing ? first(ir.cfg.blocks[bb_insert_block].stmts) : bb_insert_idx::Int
     attach_after = bb_insert_idx !== nothing
 
