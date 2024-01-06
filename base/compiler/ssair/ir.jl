@@ -82,7 +82,7 @@ block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
             end
         end
     end
-    # and add add one more basic block start after the last statement
+    # and add one more basic block start after the last statement
     for i = length(stmts):-1:1
         if stmts[i] !== nothing
             push!(jump_dests, i+1)
