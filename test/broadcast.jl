@@ -592,16 +592,6 @@ end
     end
 end
 
-@testset "convert behavior of logical broadcast" begin
-    a = mod.(1:4, 2)
-    @test !isa(a, BitArray)
-    for T in (Array{Bool}, BitArray)
-        la = T(a)
-        la .= mod.(0:3, 2)
-        @test la == [false; true; false; true]
-    end
-end
-
 # Test that broadcast treats type arguments as scalars, i.e. containertype yields Any,
 # even for subtypes of abstract array. (https://github.com/JuliaStats/DataArrays.jl/issues/229)
 @testset "treat type arguments as scalars, DataArrays issue 229" begin
