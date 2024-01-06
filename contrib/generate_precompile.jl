@@ -50,6 +50,12 @@ precompile(Tuple{typeof(Base.hashindex), String, Int64})
 precompile(Tuple{typeof(Base.write), Base.GenericIOBuffer{Array{UInt8, 1}}, String})
 precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Nothing, Int64}, Int64})
 precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Nothing, Int64}, Int64, Int64})
+precompile(Tuple{typeof(Base._typeddict), Base.Dict{String, Any}, Base.Dict{String, Any}, Vararg{Base.Dict{String, Any}}})
+precompile(Tuple{typeof(Base.promoteK), Type, Base.Dict{String, Any}, Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.promoteK), Type, Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.promoteV), Type, Base.Dict{String, Any}, Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.eval_user_input), Base.PipeEndpoint, Any, Bool})
+precompile(Tuple{typeof(Base.get), Base.PipeEndpoint, Symbol, Bool})
 
 # used by Revise.jl
 precompile(Tuple{typeof(Base.parse_cache_header), String})
