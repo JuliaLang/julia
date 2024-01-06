@@ -98,7 +98,19 @@ Standard word size on the current machine, in bits.
 """
 const WORD_SIZE = Core.sizeof(Int) * 8
 
-global SC_CLK_TCK::Clong, CPU_NAME::String, JIT::String
+global SC_CLK_TCK::Clong
+"""
+    Sys.CPU_NAME::String
+
+A string representing the name of CPU.
+"""
+global CPU_NAME::String
+"""
+    Sys.JIT::String
+
+A string representing the specific Just-In-Time (JIT) compiler being utilized in the current runtime.
+"""
+global JIT::String
 
 function __init__()
     env_threads = nothing
@@ -201,6 +213,20 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     println(io)
 end
 
+"""
+    Sys.cpu_summary()
+
+Prints a summary of CPU information, organizing and displaying aggregated data for CPUs with the same model.
+
+# Arguments
+- `io::IO`: Output stream where the summary will be printed (default is `stdout`).
+- `cpu::AbstractVector{CPUinfo}`: Vector of `CPUinfo` objects containing detailed information about each CPU (default is obtained from `cpu_info()`).
+
+# Output
+The summary includes aggregated information for each distinct CPU model,
+providing details such as average CPU speed and total time spent in different modes (user, nice, sys, idle, irq) across all cores with the same model.
+
+"""
 function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
     first = 1
@@ -213,6 +239,27 @@ function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     _cpu_summary(io, cpu, first, length(cpu))
 end
 
+"""
+    Sys.cpu_info()
+
+Retrieves detailed information about the CPUs on the current system.
+
+The function provides information about each CPU, including model, speed, and usage statistics such as user time, nice time, system time, idle time, and interrupt time.
+
+# Returns
+- A vector of `CPUinfo` objects, where each object represents information about a CPU core.
+
+# CPUinfo Type
+The `CPUinfo` type is a mutable struct with the following fields:
+- `model::String`: CPU model information.
+- `speed::Int32`: CPU speed.
+- `cpu_times!user::UInt64`: Time spent in user mode. CPU state shows CPU time used by user space processes.
+- `cpu_times!nice::UInt64`: Time spent in nice mode. CPU state is a subset of the "user" state and shows the CPU time used by processes that have a positive niceness, meaning a lower priority than other tasks. 
+- `cpu_times!sys::UInt64`: Time spent in system mode. CPU state shows the amount of CPU time used by the kernel.
+- `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
+- `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
+
+"""
 function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
     count = Ref{Int32}()

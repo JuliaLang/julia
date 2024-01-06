@@ -355,6 +355,10 @@ Base.@allocations
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
+Base.Sys.CPU_NAME
+Base.Sys.JIT
+Base.Sys.cpu_info
+Base.Sys.cpu_summary
 Base.Sys.isunix
 Base.Sys.isapple
 Base.Sys.islinux
