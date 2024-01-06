@@ -1678,7 +1678,7 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
         jl_value_t *ta = jl_svecref(old, i);
         jl_value_t *tb = jl_svecref(ft, i);
         if (jl_has_free_typevars(ta)) {
-            if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
+            if (!jl_has_free_typevars(tb) || !jl_types_egal(ta, tb))
                 return 0;
         }
         else if (jl_has_free_typevars(tb) || jl_typetagof(ta) != jl_typetagof(tb) ||
