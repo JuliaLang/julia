@@ -3087,6 +3087,17 @@ void gc_mark_clean_reclaim_sets(void)
             free(a);
         }
     }
+    // Reset queue indices
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL) {
+            continue;
+        }
+        jl_atomic_store_relaxed(&ptls2->mark_queue.ptr_queue.bottom, 0);
+        jl_atomic_store_relaxed(&ptls2->mark_queue.ptr_queue.top, 0);
+        jl_atomic_store_relaxed(&ptls2->mark_queue.chunk_queue.bottom, 0);
+        jl_atomic_store_relaxed(&ptls2->mark_queue.chunk_queue.top, 0);
+    }
 }
 
 static void gc_premark(jl_ptls_t ptls2)
