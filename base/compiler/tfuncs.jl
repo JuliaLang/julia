@@ -2084,12 +2084,13 @@ function array_type_undefable(@nospecialize(arytype))
     return true
 end
 
-@nospecs function memoryset_typecheck(memtype, elemtype)
+@nospecs function memoryset_typecheck(𝕃::AbstractLattice, memtype, elemtype)
     # Check that we can determine the element type
     isa(memtype, DataType) || return false
     elemtype_expected = memoryref_elemtype(memtype)
     elemtype_expected === Union{} && return false
     # Check that the element type is compatible with the element we're assigning
+    ⊑ = Core.Compiler.:⊑(𝕃)
     elemtype ⊑ elemtype_expected || return false
     return true
 end
@@ -2122,17 +2123,17 @@ function memoryref_builtin_common_nothrow(argtypes::Vector{Any})
     end
 end
 
-function memoryrefop_builtin_common_nothrow(argtypes::Vector{Any}, @nospecialize f)
+function memoryrefop_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize f)
     ismemoryset = f === memoryrefset!
     nargs = ismemoryset ? 4 : 3
     length(argtypes) == nargs || return false
     order = argtypes[2 + ismemoryset]
     boundscheck = argtypes[3 + ismemoryset]
     memtype = widenconst(argtypes[1])
-    memoryref_builtin_common_typecheck(boundscheck, memtype, order) || return false
+    memoryref_builtin_common_typecheck(𝕃, boundscheck, memtype, order) || return false
     if ismemoryset
         # Additionally check element type compatibility
-        memoryset_typecheck(memtype, argtypes[2]) || return false
+        memoryset_typecheck(𝕃, memtype, argtypes[2]) || return false
     elseif f === memoryrefget
         # If we could potentially throw undef ref errors, bail out now.
         array_type_undefable(memtype) && return false
@@ -2147,7 +2148,8 @@ function memoryrefop_builtin_common_nothrow(argtypes::Vector{Any}, @nospecialize
     return false
 end
 
-@nospecs function memoryref_builtin_common_typecheck(boundscheck, memtype, order)
+@nospecs function memoryref_builtin_common_typecheck(𝕃::AbstractLattice, boundscheck, memtype, order)
+    ⊑ = Core.Compiler.:⊑(𝕃)
     return boundscheck ⊑ Bool && memtype ⊑ GenericMemoryRef && order ⊑ Symbol
 end
 
@@ -2161,11 +2163,11 @@ end
         memtype = widenconst(argtypes[1])
         return memtype ⊑ GenericMemoryRef
     elseif f === memoryrefset!
-        return memoryrefop_builtin_common_nothrow(argtypes, f)
+        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryrefget
-        return memoryrefop_builtin_common_nothrow(argtypes, f)
+        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryref_isassigned
-        return memoryrefop_builtin_common_nothrow(argtypes, f)
+        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
