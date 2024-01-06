@@ -3,7 +3,7 @@
 """
     Docs
 
-The `Docs` module provides the `@doc` macro which can be used to set and retrieve
+The `Docs` module provides the [`@doc`](@ref) macro which can be used to set and retrieve
 documentation metadata for Julia objects.
 
 Please see the manual section on [documentation](@ref man-documentation) for more
@@ -654,5 +654,42 @@ function formatdoc end
 function parsedoc end
 function apropos end
 function doc end
+
+
+"""
+    Docs.hasdoc(mod::Module, sym::Symbol)::Bool
+
+Return `true` if `sym` in `mod` has a docstring and `false` otherwise.
+"""
+hasdoc(mod::Module, sym::Symbol) = hasdoc(Docs.Binding(mod, sym))
+function hasdoc(binding::Docs.Binding, sig::Type = Union{})
+    # this function is based on the Base.Docs.doc method implemented
+    # in REPL/src/docview.jl.  TODO: refactor and unify these methods.
+    defined(binding) && !isnothing(getdoc(resolve(binding), sig)) && return true
+    for mod in modules
+        dict = meta(mod; autoinit=false)
+        !isnothing(dict) && haskey(dict, binding) && return true
+    end
+    alias = aliasof(binding)
+    return alias == binding ? false : hasdoc(alias, sig)
+end
+
+
+"""
+    undocumented_names(mod::Module; private=false)
+
+Return a sorted vector of undocumented symbols in `module` (that is, lacking docstrings).
+`private=false` (the default) returns only identifiers declared with `public` and/or
+`export`, whereas `private=true` returns all symbols in the module (excluding
+compiler-generated hidden symbols starting with `#`).
+
+See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.ispublic`](@ref).
+"""
+function undocumented_names(mod::Module; private::Bool=false)
+    filter!(names(mod; all=true)) do sym
+        !hasdoc(mod, sym) && !startswith(string(sym), '#') &&
+            (private || Base.ispublic(mod, sym))
+    end
+end
 
 end

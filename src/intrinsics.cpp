@@ -173,12 +173,7 @@ static Type *INTT(Type *t, const DataLayout &DL)
 
 static Value *uint_cnvt(jl_codectx_t &ctx, Type *to, Value *x)
 {
-    Type *t = x->getType();
-    if (t == to)
-        return x;
-    if (to->getPrimitiveSizeInBits() < x->getType()->getPrimitiveSizeInBits())
-        return ctx.builder.CreateTrunc(x, to);
-    return ctx.builder.CreateZExt(x, to);
+    return ctx.builder.CreateZExtOrTrunc(x, to);
 }
 
 static Constant *julia_const_to_llvm(jl_codectx_t &ctx, const void *ptr, jl_datatype_t *bt)
@@ -317,25 +312,90 @@ static Constant *julia_const_to_llvm(jl_codectx_t &ctx, jl_value_t *e)
     return julia_const_to_llvm(ctx, e, (jl_datatype_t*)bt);
 }
 
+static Constant *undef_value_for_type(Type *T) {
+    auto tracked = CountTrackedPointers(T);
+    Constant *undef;
+    if (tracked.count)
+        // make sure gc pointers (including ptr_phi of union-split) are initialized to NULL
+        undef = Constant::getNullValue(T);
+    else
+        undef = UndefValue::get(T);
+    return undef;
+}
+
+// rebuild a struct type with any i1 Bool (e.g. the llvmcall type) widened to i8 (the native size for memcpy)
+static Type *zext_struct_type(Type *T)
+{
+    if (auto *AT = dyn_cast<ArrayType>(T)) {
+        return ArrayType::get(AT->getElementType(), AT->getNumElements());
+    }
+    else if (auto *ST = dyn_cast<StructType>(T)) {
+        SmallVector<Type*> Elements(ST->element_begin(), ST->element_end());
+        for (size_t i = 0; i < Elements.size(); i++) {
+            Elements[i] = zext_struct_type(Elements[i]);
+        }
+        return StructType::get(ST->getContext(), Elements, ST->isPacked());
+    }
+    else if (auto *VT = dyn_cast<VectorType>(T)) {
+        return VectorType::get(zext_struct_type(VT->getElementType()), VT);
+    }
+    else if (auto *IT = dyn_cast<IntegerType>(T)) {
+        unsigned BitWidth = IT->getBitWidth();
+        if (alignTo(BitWidth, 8) != BitWidth)
+            return IntegerType::get(IT->getContext(), alignTo(BitWidth, 8));
+    }
+    return T;
+}
+
+// rebuild a struct with any i1 Bool (e.g. the llvmcall type) widened to i8 (the native size for memcpy)
+static Value *zext_struct_helper(jl_codectx_t &ctx, Value *V, Type *T2)
+{
+    Type *T = V->getType();
+    if (T == T2)
+        return V;
+    if (auto *AT = dyn_cast<ArrayType>(T2)) {
+        Value *V2 = undef_value_for_type(AT);
+        for (size_t i = 0; i < AT->getNumElements(); i++) {
+            Value *E = zext_struct_helper(ctx, ctx.builder.CreateExtractValue(V, i), AT->getElementType());
+            V2 = ctx.builder.CreateInsertValue(V2, E, i);
+        }
+        return V2;
+    }
+    else if (auto *ST = dyn_cast<StructType>(T2)) {
+        Value *V2 = undef_value_for_type(ST);
+        for (size_t i = 0; i < ST->getNumElements(); i++) {
+            Value *E = zext_struct_helper(ctx, ctx.builder.CreateExtractValue(V, i), ST->getElementType(i));
+            V2 = ctx.builder.CreateInsertValue(V2, E, i);
+        }
+        return V2;
+    }
+    else if (T2->isIntegerTy() || T2->isVectorTy()) {
+        return ctx.builder.CreateZExt(V, T2);
+    }
+    return V;
+}
+
+static Value *zext_struct(jl_codectx_t &ctx, Value *V)
+{
+    return zext_struct_helper(ctx, V, zext_struct_type(V->getType()));
+}
+
 static Value *emit_unboxed_coercion(jl_codectx_t &ctx, Type *to, Value *unboxed)
 {
+    if (unboxed->getType() == to)
+        return unboxed;
+    if (CastInst::castIsValid(Instruction::Trunc, unboxed, to))
+        return ctx.builder.CreateTrunc(unboxed, to);
+    unboxed = zext_struct(ctx, unboxed);
     Type *ty = unboxed->getType();
     if (ty == to)
         return unboxed;
     bool frompointer = ty->isPointerTy();
     bool topointer = to->isPointerTy();
     const DataLayout &DL = jl_Module->getDataLayout();
-    if (ty->isIntegerTy(1) && to->isIntegerTy(8)) {
-        // bools may be stored internally as int8
-        unboxed = ctx.builder.CreateZExt(unboxed, to);
-    }
-    else if (ty->isIntegerTy(8) && to->isIntegerTy(1)) {
-        // bools may be stored internally as int8
-        unboxed = ctx.builder.CreateTrunc(unboxed, to);
-    }
-    else if (ty->isVoidTy() || DL.getTypeSizeInBits(ty) != DL.getTypeSizeInBits(to)) {
+    if (ty->isVoidTy() || DL.getTypeSizeInBits(ty) != DL.getTypeSizeInBits(to)) {
         // this can happen in dead code
-        //emit_unreachable(ctx);
+        CreateTrap(ctx.builder);
         return UndefValue::get(to);
     }
     if (frompointer && topointer) {
@@ -380,7 +440,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         if (type_is_ghost(to)) {
             return NULL;
         }
-        //emit_unreachable(ctx);
+        CreateTrap(ctx.builder);
         return UndefValue::get(to); // type mismatch error
     }
 
@@ -446,17 +506,9 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
         return;
     }
 
-    Value *unboxed = nullptr;
-    if (!x.ispointer()) { // already unboxed, but sometimes need conversion
-        unboxed = x.V;
-        assert(unboxed);
-    }
-
-    // bools stored as int8, but can be narrowed to int1 often
-    if (x.typ == (jl_value_t*)jl_bool_type)
-        unboxed = emit_unbox(ctx, getInt8Ty(ctx.builder.getContext()), x, (jl_value_t*)jl_bool_type);
-
-    if (unboxed) {
+    if (!x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
+        assert(x.V);
+        Value *unboxed = zext_struct(ctx, x.V);
         Type *dest_ty = unboxed->getType()->getPointerTo();
         if (dest->getType() != dest_ty)
             dest = emit_bitcast(ctx, dest, dest_ty);
@@ -468,7 +520,7 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
     }
 
     Value *src = data_pointer(ctx, x);
-    emit_memcpy(ctx, dest, jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest), src, jl_aliasinfo_t::fromTBAA(ctx, x.tbaa), jl_datatype_size(x.typ), alignment, alignment, isVolatile);
+    emit_memcpy(ctx, dest, jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest), src, jl_aliasinfo_t::fromTBAA(ctx, x.tbaa), jl_datatype_size(x.typ), alignment, julia_alignment(x.typ), isVolatile);
 }
 
 static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
@@ -587,7 +639,8 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         return mark_julia_type(ctx, vx, false, bt);
     }
     else {
-        Value *box = emit_allocobj(ctx, nb, bt_value_rt);
+        unsigned align = sizeof(void*); // Allocations are at least pointer aligned
+        Value *box = emit_allocobj(ctx, nb, bt_value_rt, true, align);
         setName(ctx.emission_context, box, "bitcast_box");
         init_bits_value(ctx, box, vx, ctx.tbaa().tbaa_immut);
         return mark_julia_type(ctx, box, true, bt->name->wrapper);
@@ -646,7 +699,8 @@ static jl_cgval_t generic_cast(
     else {
         Value *targ_rt = boxed(ctx, targ);
         emit_concretecheck(ctx, targ_rt, std::string(jl_intrinsic_name(f)) + ": target type not a leaf primitive type");
-        Value *box = emit_allocobj(ctx, nb, targ_rt);
+        unsigned align = sizeof(void*); // Allocations are at least pointer aligned
+        Value *box = emit_allocobj(ctx, nb, targ_rt, true, align);
         setName(ctx.emission_context, box, "cast_box");
         init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut);
         return mark_julia_type(ctx, box, true, jlto->name->wrapper);
@@ -697,7 +751,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
     else if (!deserves_stack(ety)) {
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
-        Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety);
+        Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety, true);
         setName(ctx.emission_context, strct, "pointerref_box");
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
@@ -853,7 +907,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
 
     if (!deserves_stack(ety)) {
         assert(jl_is_datatype(ety));
-        Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety);
+        Value *strct = emit_allocobj(ctx, (jl_datatype_t*)ety, true);
         setName(ctx.emission_context, strct, "atomic_pointerref_box");
         Value *thePtr = emit_unbox(ctx, getInt8PtrTy(ctx.builder.getContext()), e, e.typ);
         Type *loadT = Type::getIntNTy(ctx.builder.getContext(), nb * 8);
@@ -1445,12 +1499,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
                  Intrinsic::smul_with_overflow :
                  Intrinsic::umul_with_overflow)))));
         FunctionCallee intr = Intrinsic::getDeclaration(jl_Module, intr_id, ArrayRef<Type*>(t));
-        Value *res = ctx.builder.CreateCall(intr, {x, y});
-        Value *val = ctx.builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
-        setName(ctx.emission_context, val, "checked");
-        Value *obit = ctx.builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
-        setName(ctx.emission_context, obit, "overflow");
-        Value *obyte = ctx.builder.CreateZExt(obit, getInt8Ty(ctx.builder.getContext()));
+        Value *tupval = ctx.builder.CreateCall(intr, {x, y});
 
         jl_value_t *params[2];
         params[0] = xtyp;
@@ -1458,10 +1507,6 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         jl_datatype_t *tuptyp = (jl_datatype_t*)jl_apply_tuple_type_v(params, 2);
         *newtyp = tuptyp;
 
-        Value *tupval;
-        tupval = UndefValue::get(julia_type_to_llvm(ctx, (jl_value_t*)tuptyp));
-        tupval = ctx.builder.CreateInsertValue(tupval, val, ArrayRef<unsigned>(0));
-        tupval = ctx.builder.CreateInsertValue(tupval, obyte, ArrayRef<unsigned>(1));
         return tupval;
     }
 

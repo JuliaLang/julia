@@ -144,7 +144,7 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
     printstyled(stdout, msg...; bold=bold, italic=italic, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
-    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()); cpu_target)
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String}=nothing)
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
@@ -153,6 +153,8 @@ Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-nat
 command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
+
+Unless set to `nothing`, the `cpu_target` keyword argument can be used to override the CPU target set for the running process.
 
 To get the julia command without propagated command line arguments, `julia_cmd()[1]` can be used.
 
@@ -163,8 +165,7 @@ To get the julia command without propagated command line arguments, `julia_cmd()
     The flags `--color` and `--startup-file` were added in Julia 1.5.
 
 !!! compat "Julia 1.9"
-    The keyword argument `cpu_target` was added.
-
+    The keyword argument `cpu_target` was added in 1.9.
     The flag `--pkgimages` was added in Julia 1.9.
 """
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String} = nothing)
@@ -206,6 +207,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     opts.can_inline == 0 && push!(addflags, "--inline=no")
     opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
     opts.use_compiled_modules == 2 && push!(addflags, "--compiled-modules=existing")
+    opts.use_pkgimages == 0 && push!(addflags, "--pkgimages=no")
+    opts.use_pkgimages == 2 && push!(addflags, "--pkgimages=existing")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
     opts.opt_level_min == 0 || push!(addflags, "--min-optlevel=$(opts.opt_level_min)")
     push!(addflags, "-g$(opts.debug_level)")
@@ -241,13 +244,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
     end
-    if opts.use_pkgimages == 0
-        push!(addflags, "--pkgimages=no")
-    else
-        # If pkgimage is set, malloc_log and code_coverage should not
-        @assert opts.malloc_log == 0 && opts.code_coverage == 0
-    end
-    return `$julia -C$cpu_target -J$image_file $addflags`
+    return `$julia -C $cpu_target -J$image_file $addflags`
 end
 
 function julia_exename()
@@ -691,7 +688,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
     pathsep = Sys.iswindows() ? ";" : ":"
     ENV2["JULIA_DEPOT_PATH"] = string(mktempdir(; cleanup = true), pathsep) # make sure the default depots can be loaded
-    delete!(ENV2, "JULIA_LOAD_PATH")
+    ENV2["JULIA_LOAD_PATH"] = string("@", pathsep, "@stdlib")
     delete!(ENV2, "JULIA_PROJECT")
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,

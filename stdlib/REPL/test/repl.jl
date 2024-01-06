@@ -6,6 +6,8 @@ using Random
 import REPL.LineEdit
 using Markdown
 
+empty!(Base.Experimental._hint_handlers) # unregister error hints so they can be tested separately
+
 @test isassigned(Base.REPL_MODULE_REF)
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
@@ -1491,7 +1493,7 @@ fake_repl() do stdin_write, stdout_read, repl
     # generate top-level error
     write(stdin_write, "foobar\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined"
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined in `Main`"
     @test readline(stdout_read) == ""
     readuntil(stdout_read, "julia> ", keep=true)
     # check that top-level error did not change `err`
@@ -1506,13 +1508,13 @@ fake_repl() do stdin_write, stdout_read, repl
     readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "foo()\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined"
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined in `Main`"
     readuntil(stdout_read, "julia> ", keep=true)
     # check that deeper error did set `err`
     write(stdin_write, "err\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0m1-element ExceptionStack:"
-    @test readline(stdout_read) == "UndefVarError: `foobar` not defined"
+    @test readline(stdout_read) == "UndefVarError: `foobar` not defined in `Main`"
     @test readline(stdout_read) == "Stacktrace:"
     readuntil(stdout_read, "\n\n", keep=true)
     readuntil(stdout_read, "julia> ", keep=true)
@@ -1708,6 +1710,17 @@ fake_repl() do stdin_write, stdout_read, repl
         sleep(0.1)
     end
     @test LineEdit.state(repl.mistate).hint === nothing
+
+    # issue #52376
+    write(stdin_write, "\x15")
+    write(stdin_write, "\\_ailuj")
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+    s5 = readuntil(stdout_read, "\\_ailuj")
+    write(stdin_write, "\t")
+    s6 = readuntil(stdout_read, "ₐᵢₗᵤⱼ")
 
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)

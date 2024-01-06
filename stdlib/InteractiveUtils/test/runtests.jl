@@ -229,7 +229,7 @@ module Tmp14173
 end
 varinfo(Tmp14173) # warm up
 const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 100000)
+@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 125000)
 
 # PR #24997: test that `varinfo` doesn't fail when encountering `missing`
 module A

@@ -73,8 +73,8 @@ If a symmetric view of a matrix is to be constructed of which the elements are n
 matrices nor numbers, an appropriate method of `symmetric` has to be implemented. In that
 case, `symmetric_type` has to be implemented, too.
 """
-symmetric(A::AbstractMatrix, uplo::Symbol) = Symmetric(A, uplo)
-symmetric(A::Number, ::Symbol) = A
+symmetric(A::AbstractMatrix, uplo::Symbol=:U) = Symmetric(A, uplo)
+symmetric(A::Number, ::Symbol=:U) = A
 
 """
     symmetric_type(T::Type)
@@ -164,8 +164,8 @@ If a hermitian view of a matrix is to be constructed of which the elements are n
 matrices nor numbers, an appropriate method of `hermitian` has to be implemented. In that
 case, `hermitian_type` has to be implemented, too.
 """
-hermitian(A::AbstractMatrix, uplo::Symbol) = Hermitian(A, uplo)
-hermitian(A::Number, ::Symbol) = convert(typeof(A), real(A))
+hermitian(A::AbstractMatrix, uplo::Symbol=:U) = Hermitian(A, uplo)
+hermitian(A::Number, ::Symbol=:U) = convert(typeof(A), real(A))
 
 """
     hermitian_type(T::Type)
@@ -202,7 +202,7 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
         function $S(A::$H, uplo::Symbol)
             if A.uplo == char_uplo(uplo)
                 if $H === Hermitian && !(eltype(A) <: Real) &&
-                    any(!isreal, A.data[i] for i in diagind(A.data))
+                    any(!isreal, A.data[i] for i in diagind(A.data, IndexStyle(A.data)))
 
                     throw(ArgumentError("Cannot construct $($S)($($H))); diagonal contains complex values"))
                 end
@@ -223,6 +223,7 @@ const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, 
 const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Symmetric{Complex{T},S}}
 
 size(A::HermOrSym) = size(A.data)
+axes(A::HermOrSym) = axes(A.data)
 @inline function Base.isassigned(A::HermOrSym, i::Int, j::Int)
     @boundscheck checkbounds(Bool, A, i, j) || return false
     @inbounds if i == j || ((A.uplo == 'U') == (i < j))
@@ -253,12 +254,12 @@ end
     end
 end
 
-function setindex!(A::Symmetric, v, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::Symmetric, v, i::Integer, j::Integer)
     i == j || throw(ArgumentError("Cannot set a non-diagonal index in a symmetric matrix"))
     setindex!(A.data, v, i, j)
 end
 
-function setindex!(A::Hermitian, v, i::Integer, j::Integer)
+@propagate_inbounds function setindex!(A::Hermitian, v, i::Integer, j::Integer)
     if i != j
         throw(ArgumentError("Cannot set a non-diagonal index in a Hermitian matrix"))
     elseif !isreal(v)
@@ -453,7 +454,7 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
-for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:Hermitian, :adjoint, :real)]
+for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Union{Real,Complex}}), :adjoint, :real)]
     @eval begin
         function dot(A::$T, B::$T)
             n = size(A, 2)
@@ -574,6 +575,12 @@ function _factorize(A::HermOrSym{T}; check::Bool=true) where T
     end
 end
 
+logabsdet(A::RealHermSymComplexHerm) = ((l, s) = logabsdet(_factorize(A; check=false)); return real(l), s)
+logabsdet(A::Symmetric{<:Real}) = logabsdet(_factorize(A; check=false))
+logabsdet(A::Symmetric) = logabsdet(_factorize(A; check=false))
+logdet(A::RealHermSymComplexHerm) = real(logdet(_factorize(A; check=false)))
+logdet(A::Symmetric{<:Real}) = logdet(_factorize(A; check=false))
+logdet(A::Symmetric) = logdet(_factorize(A; check=false))
 det(A::RealHermSymComplexHerm) = real(det(_factorize(A; check=false)))
 det(A::Symmetric{<:Real}) = det(_factorize(A; check=false))
 det(A::Symmetric) = det(_factorize(A; check=false))
@@ -810,6 +817,13 @@ for func in (:log, :sqrt)
             end
         end
     end
+end
+
+# Cube root of a real-valued symmetric matrix
+function cbrt(A::HermOrSym{<:Real})
+    F = eigen(A)
+    A = F.vectors * Diagonal(cbrt.(F.values)) * F.vectors'
+    return A
 end
 
 """

@@ -222,7 +222,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     size_t i;
     jl_svec_t *table = jl_atomic_load_relaxed(&newm->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b != jl_nothing) {
             // remove non-exported macros
             if (jl_symbol_name(b->name)[0]=='@' &&
@@ -352,7 +352,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static void expr_attributes(jl_value_t *v, int *has_ccall, int *has_defs, int *has_opaque)
+static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int *has_defs, int *has_opaque)
 {
     if (!jl_is_expr(v))
         return;
@@ -390,6 +390,9 @@ static void expr_attributes(jl_value_t *v, int *has_ccall, int *has_defs, int *h
     else if (head == jl_call_sym && jl_expr_nargs(e) > 0) {
         jl_value_t *called = NULL;
         jl_value_t *f = jl_exprarg(e, 0);
+        if (jl_is_ssavalue(f)) {
+            f = jl_array_ptr_ref(body, ((jl_ssavalue_t*)f)->id - 1);
+        }
         if (jl_is_globalref(f)) {
             jl_module_t *mod = jl_globalref_mod(f);
             jl_sym_t *name = jl_globalref_name(f);
@@ -417,7 +420,7 @@ static void expr_attributes(jl_value_t *v, int *has_ccall, int *has_defs, int *h
     for (i = 0; i < jl_array_nrows(e->args); i++) {
         jl_value_t *a = jl_exprarg(e, i);
         if (jl_is_expr(a))
-            expr_attributes(a, has_ccall, has_defs, has_opaque);
+            expr_attributes(a, body, has_ccall, has_defs, has_opaque);
     }
 }
 
@@ -431,7 +434,7 @@ int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile)
         return 1;
     for(i=0; i < jl_array_nrows(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        expr_attributes(stmt, &has_ccall, &has_defs, &has_opaque);
+        expr_attributes(stmt, body, &has_ccall, &has_defs, &has_opaque);
         if (has_ccall)
             return 1;
     }
@@ -454,7 +457,7 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
                     *has_loops = 1;
             }
         }
-        expr_attributes(stmt, has_ccall, has_defs, has_opaque);
+        expr_attributes(stmt, body, has_ccall, has_defs, has_opaque);
     }
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
 }

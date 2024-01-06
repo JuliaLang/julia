@@ -571,10 +571,10 @@ CXX_BASE := ccache
 FC_BASE  := ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
-# http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
+# https://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
 CC += -Qunused-arguments
 CXX += -Qunused-arguments
-# http://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
+# https://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
 export CCACHE_CPP2 := yes
 endif
 else #USECCACHE
@@ -599,10 +599,13 @@ CPP_STDOUT := $(CPP) -P
 # file extensions
 ifeq ($(OS), WINNT)
   SHLIB_EXT := dll
+  PATHSEP := ;
 else ifeq ($(OS), Darwin)
   SHLIB_EXT := dylib
+  PATHSEP := :
 else
   SHLIB_EXT := so
+  PATHSEP := :
 endif
 
 ifeq ($(OS),WINNT)

@@ -45,6 +45,7 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
 extern uv_mutex_t safepoint_lock;
+extern uv_cond_t safepoint_cond_begin;
 
 // see jl_safepoint_wait_thread_resume
 void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2)
@@ -122,6 +123,7 @@ static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
     }
     if (relaxed_suspend_count)
         uv_mutex_unlock(&ptls2->sleep_lock);
+    uv_cond_broadcast(&safepoint_cond_begin);
     uv_mutex_unlock(&safepoint_lock);
 }
 
@@ -213,13 +215,14 @@ static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
 #else
 #error "julia: throw-in-context not supported on this platform"
 #endif
-    if (ptls2 == NULL || ptls2->signal_stack == NULL || is_addr_on_sigstack(ptls2, (void*)rsp)) {
+    if (ptls2 == NULL || is_addr_on_sigstack(ptls2, (void*)rsp)) {
         rsp = (rsp - 256) & ~(uintptr_t)15; // redzone and re-alignment
     }
     else {
-        rsp = (uintptr_t)ptls2->signal_stack + sig_stack_size;
+        rsp = (uintptr_t)ptls2->signal_stack + (ptls2->signal_stack_size ? ptls2->signal_stack_size : sig_stack_size);
     }
     assert(rsp % 16 == 0);
+    rsp -= 16;
 
 #ifdef _CPU_X86_64_
     rsp -= sizeof(void*);
@@ -409,7 +412,7 @@ kern_return_t catch_mach_exception_raise_state_identity(
 static void attach_exception_port(thread_port_t thread, int segv_only)
 {
     kern_return_t ret;
-    // http://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
+    // https://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
     exception_mask_t mask = EXC_MASK_BAD_ACCESS;
     if (!segv_only)
         mask |= EXC_MASK_ARITHMETIC;

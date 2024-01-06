@@ -45,16 +45,15 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
         jl_datatype_t *dt = (jl_datatype_t*)t;
         assert(jl_object_in_image((jl_value_t*)dt->name) && "type_in_worklist mistake?");
         jl_datatype_t *super = dt->super;
-        // check if super is news, since then we must be new also
-        // (it is also possible that super is indeterminate now, wait for `t`
-        // to be resolved, then will be determined later and fixed up by the
-        // delay_list, for this and any other references to it).
-        while (super != jl_any_type) {
-            assert(super);
+        // fast-path: check if super is in news, since then we must be new also
+        // (it is also possible that super is indeterminate or NULL right now,
+        // waiting for `t` to be resolved, then will be determined later as
+        // soon as possible afterwards).
+        while (super != NULL && super != jl_any_type) {
             if (ptrhash_has(news, (void*)super))
                 return 1;
             if (!(image_base < (char*)super && (char*)super <= image_base + sizeof_sysimg))
-               break; // fast-path for rejection of super
+               break; // the rest must all be non-new
             // otherwise super might be something that was not cached even though a later supertype might be
             // for example while handling `Type{Mask{4, U} where U}`, if we have `Mask{4, U} <: AbstractSIMDVector{4}`
             super = super->super;
@@ -619,6 +618,11 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
         return 1;
     }
 
+    // If package images are optional, ignore that bit (it will be unset in current_flags)
+    if (jl_options.use_pkgimages == JL_OPTIONS_USE_PKGIMAGES_EXISTING) {
+        flags &= ~1;
+    }
+
     // 2. Check all flags, execept opt level must be exact
     uint8_t mask = (1 << OPT_LEVEL)-1;
     if ((flags & mask) != (current_flags & mask))
@@ -717,22 +721,24 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     size_t i, l = udeps ? jl_array_nrows(udeps) : 0;
     for (i = 0; i < l; i++) {
         jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
-        jl_value_t *abspath = jl_fieldref(deptuple, 1);
+        jl_value_t *deppath = jl_fieldref(deptuple, 1);
 
-        jl_value_t **replace_depot_args;
-        JL_GC_PUSHARGS(replace_depot_args, 2);
-        replace_depot_args[0] = replace_depot_func;
-        replace_depot_args[1] = abspath;
-        ct = jl_current_task;
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 2);
-        ct->world_age = last_age;
-        JL_GC_POP();
+        if (replace_depot_func) {
+            jl_value_t **replace_depot_args;
+            JL_GC_PUSHARGS(replace_depot_args, 2);
+            replace_depot_args[0] = replace_depot_func;
+            replace_depot_args[1] = deppath;
+            ct = jl_current_task;
+            size_t last_age = ct->world_age;
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+            deppath = (jl_value_t*)jl_apply(replace_depot_args, 2);
+            ct->world_age = last_age;
+            JL_GC_POP();
+        }
 
-        size_t slen = jl_string_len(depalias);
+        size_t slen = jl_string_len(deppath);
         write_int32(s, slen);
-        ios_write(s, jl_string_data(depalias), slen);
+        ios_write(s, jl_string_data(deppath), slen);
         write_uint64(s, jl_unbox_uint64(jl_fieldref(deptuple, 2)));    // fsize
         write_uint32(s, jl_unbox_uint32(jl_fieldref(deptuple, 3)));    // hash
         write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 4)));  // mtime

@@ -5,6 +5,9 @@ using Random, LinearAlgebra
 # For curmod_*
 include("testenv.jl")
 
+# re-register only the error hints that are being tested here (
+Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
+Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
 
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
@@ -350,7 +353,7 @@ let undefvar
     err_str = @except_str Vector{Any}(undef, 1)[1] UndefRefError
     @test err_str == "UndefRefError: access to undefined reference"
     err_str = @except_str undefvar UndefVarError
-    @test err_str == "UndefVarError: `undefvar` not defined"
+    @test err_str == "UndefVarError: `undefvar` not defined in local scope"
     err_str = @except_str read(IOBuffer(), UInt8) EOFError
     @test err_str == "EOFError: read end of file"
     err_str = @except_str Dict()[:doesnotexist] KeyError
@@ -501,7 +504,7 @@ let
     @test (@macroexpand @fastmath +      ) == :(Base.FastMath.add_fast)
     @test (@macroexpand @fastmath min(1) ) == :(Base.FastMath.min_fast(1))
     let err = try; @macroexpand @doc "" f() = @x; catch ex; ex; end
-        @test err == UndefVarError(Symbol("@x"))
+        @test err == UndefVarError(Symbol("@x"), @__MODULE__)
     end
     @test (@macroexpand @seven_dollar $bar) == 7
     x = 2
@@ -533,6 +536,14 @@ end
     @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M, ex)
     @test (@macroexpand1 @nest2b 42) == _macroexpand1(:(@nest2b 42))
 end
+
+module TwoargMacroExpand
+macro modulecontext(); return __module__; end
+end
+@test (@__MODULE__) == @macroexpand TwoargMacroExpand.@modulecontext
+@test TwoargMacroExpand == @macroexpand TwoargMacroExpand @modulecontext
+@test (@__MODULE__) == @macroexpand1 TwoargMacroExpand.@modulecontext
+@test TwoargMacroExpand == @macroexpand1 TwoargMacroExpand @modulecontext
 
 foo_9965(x::Float64; w=false) = x
 foo_9965(x::Int) = 2x
@@ -1078,4 +1089,18 @@ let e = @test_throws MethodError convert(TypeCompareError{Float64,1}, TypeCompar
     @test  occursin("TypeCompareError{Float64,2}", str)
     @test  occursin("TypeCompareError{Float64,1}", str)
     @test !occursin("TypeCompareError{Float64{},2}", str) # No {...} for types without params
+end
+
+@testset "InexactError for Inf16 should print '16' (#51087)" begin
+    @test sprint(showerror, InexactError(:UInt128, UInt128, Inf16)) == "InexactError: UInt128(Inf16)"
+
+    for IntType in [Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128]
+        IntStr = string(IntType)
+        for InfVal in Any[Inf, Inf16, Inf32, Inf64]
+            InfStr = repr(InfVal)
+            e = @test_throws InexactError IntType(InfVal)
+            str = sprint(Base.showerror, e.value)
+            @test occursin("InexactError: $IntStr($InfStr)", str)
+        end
+    end
 end

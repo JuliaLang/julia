@@ -255,6 +255,7 @@ Base.symdiff
 Base.symdiff!
 Base.intersect!
 Base.issubset
+Base.in!
 Base.:⊈
 Base.:⊊
 Base.issetequal

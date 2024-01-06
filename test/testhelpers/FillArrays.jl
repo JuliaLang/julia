@@ -9,6 +9,8 @@ Fill(v, size::Vararg{Integer}) = Fill(v, size)
 
 Base.size(F::Fill) = F.size
 
+Base.copy(F::Fill) = F
+
 @inline getindex_value(F::Fill) = F.value
 
 @inline function Base.getindex(F::Fill{<:Any,N}, i::Vararg{Int,N}) where {N}
