@@ -2034,12 +2034,12 @@ function array_type_undefable(@nospecialize(arytype))
     end
 end
 
-function array_builtin_common_nothrow(argtypes::Vector{Any}, isarrayref::Bool)
+function array_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, isarrayref::Bool)
     first_idx_idx = isarrayref ? 3 : 4
     length(argtypes) ≥ first_idx_idx || return false
     boundscheck = argtypes[1]
     arytype = argtypes[2]
-    array_builtin_common_typecheck(boundscheck, arytype, argtypes, first_idx_idx) || return false
+    array_builtin_common_typecheck(𝕃, boundscheck, arytype, argtypes, first_idx_idx) || return false
     if isarrayref
         # If we could potentially throw undef ref errors, bail out now.
         arytype = widenconst(arytype)
@@ -2056,8 +2056,9 @@ function array_builtin_common_nothrow(argtypes::Vector{Any}, isarrayref::Bool)
     return false
 end
 
-@nospecs function array_builtin_common_typecheck(boundscheck, arytype,
-    argtypes::Vector{Any}, first_idx_idx::Int)
+@nospecs function array_builtin_common_typecheck(𝕃::AbstractLattice,
+    boundscheck, arytype, argtypes::Vector{Any}, first_idx_idx::Int)
+    ⊑ = Core.Compiler.:⊑(𝕃)
     (boundscheck ⊑ Bool && arytype ⊑ Array) || return false
     for i = first_idx_idx:length(argtypes)
         argtypes[i] ⊑ Int || return false
@@ -2080,11 +2081,11 @@ end
 @nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
     ⊑ = Core.Compiler.:⊑(𝕃)
     if f === arrayset
-        array_builtin_common_nothrow(argtypes, #=isarrayref=#false) || return false
+        array_builtin_common_nothrow(𝕃, argtypes, #=isarrayref=#false) || return false
         # Additionally check element type compatibility
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
-        return array_builtin_common_nothrow(argtypes, #=isarrayref=#true)
+        return array_builtin_common_nothrow(𝕃, argtypes, #=isarrayref=#true)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
