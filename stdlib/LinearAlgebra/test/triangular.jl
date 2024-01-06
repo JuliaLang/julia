@@ -896,6 +896,14 @@ end
     end
 end
 
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    U = UpperTriangular(ones(2,2))
+    @test S * U == A * U
+    @test U * S == U * A
+end
+
 @testset "custom axes" begin
     SZA = SizedArrays.SizedArray{(2,2)}([1 2; 3 4])
     for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
