@@ -38,8 +38,8 @@ a comparison of the accuracy and performance of different algorithms.
 
 The default `alg` used may change in the future.
 
-!!! compat "Julia 1.10"
-    The `alg` keyword argument requires Julia 1.10 or later.
+!!! compat "Julia 1.11"
+    The `alg` keyword argument requires Julia 1.11 or later.
 
 The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`](@ref), and [`isposdef`](@ref).
 """
