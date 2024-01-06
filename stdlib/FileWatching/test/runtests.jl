@@ -24,10 +24,11 @@ for i in 1:n
         uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
     end
     Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
+    Itype = Sys.iswindows() ? UInt : Int
     FDmax = Sys.iswindows() ? 0xfffffffe : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
     fd_in_limits =
-        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
-        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+        0 <= Itype(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
+        0 <= Itype(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
     # Dump out what file descriptors are open for easier debugging of failure modes
     if !fd_in_limits && Sys.islinux()
         run(`ls -la /proc/$(getpid())/fd`)
