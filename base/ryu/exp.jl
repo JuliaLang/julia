@@ -197,7 +197,7 @@ function writeexp(buf, pos, v::T,
                 roundUp = 1
                 continue
             else
-                if roundUp == 2 && iseven(UInt8(c))
+                if roundUp == 2 && iseven(c)
                     break
                 end
                 @inbounds buf[roundPos] = c + 1
