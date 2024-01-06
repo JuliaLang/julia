@@ -212,7 +212,6 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     end
     println(io)
 end
-
 """
     Sys.cpu_summary()
 
@@ -225,7 +224,6 @@ Prints a summary of CPU information, organizing and displaying aggregated data f
 # Output
 The summary includes aggregated information for each distinct CPU model,
 providing details such as average CPU speed and total time spent in different modes (user, nice, sys, idle, irq) across all cores with the same model.
-
 """
 function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
@@ -238,7 +236,6 @@ function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     end
     _cpu_summary(io, cpu, first, length(cpu))
 end
-
 """
     Sys.cpu_info()
 
@@ -258,7 +255,6 @@ The `CPUinfo` type is a mutable struct with the following fields:
 - `cpu_times!sys::UInt64`: Time spent in system mode. CPU state shows the amount of CPU time used by the kernel.
 - `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
 - `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
-
 """
 function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
