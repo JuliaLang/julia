@@ -1090,3 +1090,17 @@ let e = @test_throws MethodError convert(TypeCompareError{Float64,1}, TypeCompar
     @test  occursin("TypeCompareError{Float64,1}", str)
     @test !occursin("TypeCompareError{Float64{},2}", str) # No {...} for types without params
 end
+
+@testset "InexactError for Inf16 should print '16' (#51087)" begin
+    @test sprint(showerror, InexactError(:UInt128, UInt128, Inf16)) == "InexactError: UInt128(Inf16)"
+
+    for IntType in [Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128]
+        IntStr = string(IntType)
+        for InfVal in Any[Inf, Inf16, Inf32, Inf64]
+            InfStr = repr(InfVal)
+            e = @test_throws InexactError IntType(InfVal)
+            str = sprint(Base.showerror, e.value)
+            @test occursin("InexactError: $IntStr($InfStr)", str)
+        end
+    end
+end

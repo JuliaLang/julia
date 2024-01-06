@@ -1379,7 +1379,11 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                     @assert !isdefined(el, :scope)
                     body[i] = nothing
                 else
-                    body[i] = EnterNode(el, tgt + labelchangemap[tgt])
+                    if isdefined(el, :scope) && isa(el.scope, SSAValue)
+                        body[i] = EnterNode(tgt + labelchangemap[tgt], SSAValue(el.scope.id + ssachangemap[el.scope.id]))
+                    else
+                        body[i] = EnterNode(el, tgt + labelchangemap[tgt])
+                    end
                 end
             end
         elseif isa(el, Expr)
