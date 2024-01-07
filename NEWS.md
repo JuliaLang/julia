@@ -139,7 +139,8 @@ Standard library changes
 
 * Tab complete hints now show in lighter text while typing in the repl. To disable
   set `Base.active_repl.options.hint_tab_completes = false` ([#51229]).
-* Meta-M with an empty prompt now returns the contextual module of the REPL to `Main`.
+* Meta-M with an empty prompt now toggles the contextual module between the previous non-Main
+  contextual module and Main so that switching back and forth is simple. ([#51616], [#52670])
 
 #### SuiteSparse
 
