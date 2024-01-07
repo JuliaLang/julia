@@ -94,50 +94,80 @@ if !test_relocated_depot
     end
 
     @testset "#52161" begin
-        # Take the src files from two RelocationTestPkg1 and RelocationTestPkg2,
+        # Take the src files from two pkgs Example1 and Example2,
         # which are each located in depot1 and depot2, respectively, and
         # add them as include_dependency()s to a new pkg Foo, which will be precompiled into depot3.
         # After loading the include_dependency()s of Foo should refer to depot1 depot2 each.
         test_harness() do
             mktempdir() do depot1
-                # precompile RelocationTestPkg1 in depot1
-                cp(joinpath(@__DIR__,"RelocationTestPkg1"),joinpath(depot1,"RelocationTestPkg1"))
-                pushfirst!(LOAD_PATH, depot1)
-                pushfirst!(DEPOT_PATH, depot1)
-                pkg = Base.identify_package("RelocationTestPkg1")
-                Base.require(pkg)
+                # precompile Example in depot1
+                example1_root = joinpath(depot1, "Example1")
+                mkpath(joinpath(example1_root, "src"))
+                open(joinpath(example1_root, "src", "Example1.jl"); write=true) do io
+                    println(io, """
+                    module Example1
+                    greet() = println("Hello from Example1!")
+                    end
+                    """)
+                end
+                open(joinpath(example1_root, "Project.toml"); write=true) do io
+                    println(io, """
+                    name = "Example1"
+                    uuid = "00000000-0000-0000-0000-000000000001"
+                    version = "1.0.0"
+                    """)
+                end
+                pushfirst!(LOAD_PATH, depot1); pushfirst!(DEPOT_PATH, depot1)
+                pkg = Base.identify_package("Example1"); Base.require(pkg)
                 mktempdir() do depot2
-                    cp(joinpath(@__DIR__,"RelocationTestPkg2"),joinpath(depot2,"RelocationTestPkg2"))
-                    # precompile RelocationTestPkg2 in depot2
+                    # precompile Example in depot2
+                    example2_root = joinpath(depot2, "Example2")
+                    mkpath(joinpath(example2_root, "src"))
+                    open(joinpath(example2_root, "src", "Example2.jl"); write=true) do io
+                        println(io, """
+                        module Example2
+                        greet() = println("Hello from Example2!")
+                        end
+                        """)
+                    end
+                    open(joinpath(example2_root, "Project.toml"); write=true) do io
+                        println(io, """
+                        name = "Example2"
+                        uuid = "00000000-0000-0000-0000-000000000002"
+                        version = "1.0.0"
+                        """)
+                    end
                     pushfirst!(LOAD_PATH, depot2)
                     pushfirst!(DEPOT_PATH, depot2)
-                    pkg = Base.identify_package("RelocationTestPkg2")
+                    pkg = Base.identify_package("Example2")
                     Base.require(pkg)
-                    # precompile Foo into in depot3
                     mktempdir() do depot3
-                        pushfirst!(LOAD_PATH, depot3)
-                        pushfirst!(DEPOT_PATH, depot3)
-                        foofile = joinpath(depot3, "Foo.jl")
-                        write(foofile, """
+                        # precompile Foo in depot3
+                        open(joinpath(depot3, "Foo.jl"), write=true) do io
+                            println(io, """
                             module Foo
-                            using RelocationTestPkg1
-                            using RelocationTestPkg2
-                            srcfile1 = joinpath(pkgdir(RelocationTestPkg1), "src", "RelocationTestPkg1.jl")
-                            srcfile2 = joinpath(pkgdir(RelocationTestPkg2), "src", "RelocationTestPkg2.jl")
+                            using Example1
+                            using Example2
+                            srcfile1 = joinpath(pkgdir(Example1), "src", "Example1.jl")
+                            srcfile2 = joinpath(pkgdir(Example2), "src", "Example2.jl")
                             @show srcfile1
                             @show srcfile2
                             include_dependency(srcfile1)
                             include_dependency(srcfile2)
                             end
-                        """)
+                            """)
+                        end
+                        pushfirst!(LOAD_PATH, depot3)
+                        pushfirst!(DEPOT_PATH, depot3)
                         pkg = Base.identify_package("Foo")
                         Base.require(pkg)
-                        cachefile = joinpath(depot3, "compiled", "v1.11", "Foo.ji")
+                        cachefile = joinpath(depot3, "compiled",
+                                             "v$(VERSION.major).$(VERSION.minor)", "Foo.ji")
                         _, (deps, _, _), _... = Base.parse_cache_header(cachefile)
                         @test map(x -> x.filename, deps) ==
                             [ joinpath(depot3, "Foo.jl"),
-                              joinpath(depot1, "RelocationTestPkg1", "src", "RelocationTestPkg1.jl"),
-                              joinpath(depot2, "RelocationTestPkg2", "src", "RelocationTestPkg2.jl") ]
+                              joinpath(depot1, "Example1", "src", "Example1.jl"),
+                              joinpath(depot2, "Example2", "src", "Example2.jl") ]
                     end
                 end
             end
