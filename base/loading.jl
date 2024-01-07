@@ -1989,19 +1989,13 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
     return newm
 end
 
-const already_warned_path_change_pkgs = Set{PkgId}()
+const already_warned_path_change_pkgs = Set{UUID}()
 # warns if the loaded version of a module is different to the one that locate_package wants to load
 function warn_if_already_loaded_different(uuidkey::PkgId)
-    uuidkey ∈ already_warned_path_change_pkgs && return
+    uuidkey.uuid ∈ already_warned_path_change_pkgs && return
     pkgorig = get(pkgorigins, uuidkey, nothing)
     if pkgorig !== nothing && pkgorig.path !== nothing
-        # `locate_package()` can throw an error; if that happens just skip
-        local new_path
-        try
-            new_path = locate_package(uuidkey)
-        catch
-            return
-        end
+        new_path = locate_package(uuidkey)
 
         # new_path can be `nothing` if `uuidkey` is not loadable in this environment
         if new_path === nothing
@@ -2033,7 +2027,10 @@ function warn_if_already_loaded_different(uuidkey::PkgId)
                 end
             end
             @warn warnstr
-            push!(already_warned_path_change_pkgs, uuidkey)
+            # Toplevel modules have a `uuid` of `Nothing`
+            if uuidkey.uuid !== nothing
+                push!(already_warned_path_change_pkgs, uuidkey.uuid)
+            end
         end
     end
 end
