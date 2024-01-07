@@ -523,6 +523,17 @@ _makevector(x::AbstractVector) = Vector(x)
 _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
 
+# destination type for matmul
+matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS) = similar(B, TS, size(B))
+matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
+matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
+matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
+matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
+matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
+matprod_dest(A::HermOrSym, B::Diagonal, TS) = similar(A, TS, size(A))
+matprod_dest(A::Diagonal, B::HermOrSym, TS) = similar(B, TS, size(B))
+
+# TODO: remove once not used anymore in SparseArrays.jl
 # some trait like this would be cool
 # onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
 # but we are actually asking for oneunit(T), that is, however, defined for generic T as

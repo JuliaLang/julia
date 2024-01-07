@@ -157,7 +157,7 @@ the performance of your code:
   * [Profiling](@ref) allows you to measure the performance of your running code and identify lines
     that serve as bottlenecks. For complex projects, the [ProfileView](https://github.com/timholy/ProfileView.jl)
     package can help you visualize your profiling results.
-  * The [Traceur](https://github.com/JunoLab/Traceur.jl) package can help you find common performance problems in your code.
+  * The [JET](https://github.com/aviatesk/JET.jl) package can help you find common performance problems in your code.
   * Unexpectedly-large memory allocations--as reported by [`@time`](@ref), [`@allocated`](@ref), or
     the profiler (through calls to the garbage-collection routines)--hint that there might be issues
     with your code. If you don't see another reason for the allocations, suspect a type problem.

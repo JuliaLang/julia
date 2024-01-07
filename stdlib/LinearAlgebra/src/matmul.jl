@@ -106,8 +106,11 @@ julia> [1 1; 0 1] * [1 0; 1 1]
 """
 function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A, 1), size(B, 2))), A, B)
+    mul!(matprod_dest(A, B, TS), A, B)
 end
+
+matprod_dest(A, B, TS) = similar(B, TS, (size(A, 1), size(B, 2)))
+
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
 # which is better handled by reinterpreting rather than promotion

@@ -1996,12 +1996,17 @@ function warn_if_already_loaded_different(uuidkey::PkgId)
     pkgorig = get(pkgorigins, uuidkey, nothing)
     if pkgorig !== nothing && pkgorig.path !== nothing
         new_path = locate_package(uuidkey)
+
+        # new_path can be `nothing` if `uuidkey` is not loadable in this environment
+        if new_path === nothing
+            return
+        end
         if !samefile(fixup_stdlib_path(pkgorig.path), new_path)
             if isnothing(pkgorig.version)
                 v = get_pkgversion_from_path(dirname(dirname(pkgorig.path)))
                 cur_vstr = isnothing(v) ? "" : "v$v "
             else
-                cur_vstr = "v$v "
+                cur_vstr = "v$(pkgorig.version) "
             end
             new_v = get_pkgversion_from_path(dirname(dirname(new_path)))
             new_vstr = isnothing(new_v) ? "" : "v$new_v "
@@ -2022,7 +2027,10 @@ function warn_if_already_loaded_different(uuidkey::PkgId)
                 end
             end
             @warn warnstr
-            push!(already_warned_path_change_pkgs, uuidkey.uuid)
+            # Toplevel modules have a `uuid` of `Nothing`
+            if uuidkey.uuid !== nothing
+                push!(already_warned_path_change_pkgs, uuidkey.uuid)
+            end
         end
     end
 end
