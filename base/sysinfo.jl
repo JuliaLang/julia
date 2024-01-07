@@ -106,7 +106,7 @@ global SC_CLK_TCK::Clong
 A string representing the name of CPU.
 
 # Examples
-```jldoctest
+```
 julia> Sys.CPU_NAME
 "tigerlake"
 ```
@@ -119,7 +119,7 @@ global CPU_NAME::String
 A string representing the specific Just-In-Time (JIT) compiler being utilized in the current runtime.
 
 # Examples
-```jldoctest
+```
 julia> Sys.JIT
 "ORCJIT"
 ```
