@@ -5,10 +5,12 @@ using Logging
 include("testenv.jl")
 
 
-function test_harness(@nospecialize(fn))
+function test_harness(@nospecialize(fn); empty_load_path=true, empty_depot_path=true)
     load_path = copy(LOAD_PATH)
     depot_path = copy(DEPOT_PATH)
     try
+        empty_load_path && empty!(LOAD_PATH)
+        empty_depot_path && empty!(DEPOT_PATH)
         fn()
     finally
         copy!(LOAD_PATH, load_path)
@@ -66,9 +68,9 @@ if !test_relocated_depot
 
     @testset "precompile RelocationTestPkg1" begin
         pkgname = "RelocationTestPkg1"
-        test_harness() do
+        test_harness(empty_depot_path=false) do
             push!(LOAD_PATH, @__DIR__)
-            push!(DEPOT_PATH, @__DIR__)
+            push!(DEPOT_PATH, @__DIR__) # required to make relocatable, but cache is written to DEPOT_PATH[1]
             pkg = Base.identify_package(pkgname)
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
@@ -80,9 +82,9 @@ if !test_relocated_depot
 
     @testset "precompile RelocationTestPkg2 (contains include_dependency)" begin
         pkgname = "RelocationTestPkg2"
-        test_harness() do
+        test_harness(empty_depot_path=false) do
             push!(LOAD_PATH, @__DIR__)
-            push!(DEPOT_PATH, string(@__DIR__, "/"))
+            push!(DEPOT_PATH, @__DIR__) # required to make relocatable, but cache is written to DEPOT_PATH[1]
             pkg = Base.identify_package(pkgname)
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
@@ -179,8 +181,8 @@ else
 
     @testset "load stdlib from test/relocatedepot" begin
         test_harness() do
-            push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
-            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot"))
+            push!(LOAD_PATH, "@stdlib")
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia"))
             # stdlib should be already precompiled
             pkg = Base.identify_package("DelimitedFiles")
             @test Base.isprecompiled(pkg) == true
@@ -191,7 +193,8 @@ else
         pkgname = "RelocationTestPkg1"
         test_harness() do
             push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
-            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot"))
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot")) # required to find src files
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
             pkg = Base.identify_package(pkgname)
             @test Base.isprecompiled(pkg) == true
             Base.require(pkg) # re-precompile
@@ -203,7 +206,8 @@ else
         pkgname = "RelocationTestPkg2"
         test_harness() do
             push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
-            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot"))
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot")) # required to find src files
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
             pkg = Base.identify_package(pkgname)
             @test Base.isprecompiled(pkg) == false # moving depot changes mtime of include_dependency
             Base.require(pkg) # re-precompile
