@@ -1996,6 +1996,7 @@ function warn_if_already_loaded_different(uuidkey::PkgId)
     pkgorig = get(pkgorigins, uuidkey, nothing)
     if pkgorig !== nothing && pkgorig.path !== nothing
         # `locate_package()` can throw an error; if that happens just skip
+        local new_path
         try
             new_path = locate_package(uuidkey)
         catch
