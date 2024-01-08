@@ -141,7 +141,9 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
             (; rt, effects) = abstract_eval_statement_expr(interp, stmt, nothing, irsv)
             add_flag!(inst, flags_for_effects(effects))
         elseif head === :invoke
-            rt, (nothrow, noub) = concrete_eval_invoke(interp, stmt, stmt.args[1]::MethodInstance, irsv)
+            arg1 = stmt.args[1]
+            mi = isa(arg1, CodeInstance) ? arg1.def : arg1::MethodInstance
+            rt, (nothrow, noub) = concrete_eval_invoke(interp, stmt, mi, irsv)
             if nothrow
                 add_flag!(inst, IR_FLAG_NOTHROW)
             end

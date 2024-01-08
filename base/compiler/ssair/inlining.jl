@@ -33,7 +33,7 @@ struct SomeCase
 end
 
 struct InvokeCase
-    invoke::MethodInstance
+    invoke::Union{MethodInstance, CodeInstance}
     effects::Effects
     info::CallInfo
 end
@@ -831,6 +831,17 @@ function compileable_specialization(mi::MethodInstance, effects::Effects,
     return InvokeCase(mi_invoke, effects, info)
 end
 
+function compileable_specialization(ci::CodeInstance, effects::Effects,
+        et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
+    if compilesig_invokes ? !isa_compileable_sig(ci.def.specTypes, ci.def.sparam_vals, ci.def.def) :
+            any(@nospecialize(t)->isa(t, TypeVar), ci.def.sparam_vals)
+        return compileable_specialization(ci.def, effects, et, info; compilesig_invokes)
+    end
+    add_inlining_backedge!(et, ci.def) # to the dispatch lookup
+    push!(et.edges, ci.def.def.sig, ci.def) # add_inlining_backedge to the invoke call
+    return InvokeCase(ci, effects, info)
+end
+
 function compileable_specialization(match::MethodMatch, effects::Effects,
         et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
     mi = specialize_method(match)
@@ -838,22 +849,26 @@ function compileable_specialization(match::MethodMatch, effects::Effects,
 end
 
 struct InferredResult
+    ci::Union{Nothing, CodeInstance}
     src::Any
     effects::Effects
-    InferredResult(@nospecialize(src), effects::Effects) = new(src, effects)
+    InferredResult(ci::Union{Nothing, CodeInstance}, @nospecialize(src), effects::Effects) = new(ci, src, effects)
+end
+@inline function get_cached_result(code::CodeInstance)
+    if use_const_api(code)
+        # in this case function can be inlined to a constant
+        return ConstantCase(quoted(code.rettype_const))
+    end
+    src = @atomic :monotonic code.inferred
+    effects = decode_effects(code.ipo_purity_bits)
+    return InferredResult(code, src, effects)
 end
 @inline function get_cached_result(state::InliningState, mi::MethodInstance)
     code = get(code_cache(state), mi, nothing)
     if code isa CodeInstance
-        if use_const_api(code)
-            # in this case function can be inlined to a constant
-            return ConstantCase(quoted(code.rettype_const))
-        end
-        src = @atomic :monotonic code.inferred
-        effects = decode_effects(code.ipo_purity_bits)
-        return InferredResult(src, effects)
+        return get_cached_result(code)
     end
-    return InferredResult(nothing, Effects())
+    return InferredResult(nothing, nothing, Effects())
 end
 @inline function get_local_result(inf_result::InferenceResult)
     effects = inf_result.ipo_effects
@@ -864,11 +879,11 @@ end
             return ConstantCase(quoted(res.val))
         end
     end
-    return InferredResult(inf_result.src, effects)
+    return InferredResult(nothing, inf_result.src, effects)
 end
 
 # the general resolver for usual and const-prop'ed calls
-function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,VolatileInferenceResult},
+function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,VolatileInferenceResult,CodeInstance},
     @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
     invokesig::Union{Nothing,Vector{Any}}=nothing)
     et = InliningEdgeTracker(state, invokesig)
@@ -887,17 +902,18 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
         add_inlining_backedge!(et, mi)
         return inferred_result
     end
-    (; src, effects) = inferred_result
+    (; src, ci, effects) = inferred_result
+    invoke_target = mi
 
     # the duplicated check might have been done already within `analyze_method!`, but still
     # we need it here too since we may come here directly using a constant-prop' result
     if !OptimizationParams(state.interp).inlining || is_stmt_noinline(flag)
-        return compileable_specialization(mi, effects, et, info;
+        return compileable_specialization(invoke_target, effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     end
 
     src = inlining_policy(state.interp, src, info, flag)
-    src === nothing && return compileable_specialization(mi, effects, et, info;
+    src === nothing && return compileable_specialization(invoke_target, effects, et, info;
         compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
 
     add_inlining_backedge!(et, mi)
@@ -906,7 +922,7 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
 end
 
 # the special resolver for :invoke-d call
-function resolve_todo(mi::MethodInstance, @nospecialize(info::CallInfo), flag::UInt32,
+function resolve_todo(mici::Union{MethodInstance, CodeInstance}, @nospecialize(info::CallInfo), flag::UInt32,
                       state::InliningState)
     if !OptimizationParams(state.interp).inlining || is_stmt_noinline(flag)
         return nothing
@@ -914,7 +930,13 @@ function resolve_todo(mi::MethodInstance, @nospecialize(info::CallInfo), flag::U
 
     et = InliningEdgeTracker(state)
 
-    cached_result = get_cached_result(state, mi)
+    if isa(mici, CodeInstance)
+        cached_result = get_cached_result(mici)
+        mi = mici.def
+    else
+        cached_result = get_cached_result(state, mici)
+        mi = mici
+    end
     if cached_result isa ConstantCase
         add_inlining_backedge!(et, mi)
         return cached_result
@@ -1640,8 +1662,7 @@ end
 
 function handle_invoke_expr!(todo::Vector{Pair{Int,Any}}, ir::IRCode,
     idx::Int, stmt::Expr, @nospecialize(info::CallInfo), flag::UInt32, sig::Signature, state::InliningState)
-    mi = stmt.args[1]::MethodInstance
-    case = resolve_todo(mi, info, flag, state)
+    case = resolve_todo(stmt.args[1], info, flag, state)
     handle_single_case!(todo, ir, idx, stmt, case, false)
     return nothing
 end

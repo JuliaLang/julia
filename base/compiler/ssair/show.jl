@@ -52,7 +52,8 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
         print(io, "invoke ")
-        linfo = stmt.args[1]::Core.MethodInstance
+        arg1 = stmt.args[1]
+        linfo = isa(arg1, Core.CodeInstance) ? arg1.def : arg1::Core.MethodInstance
         show_unquoted(io, stmt.args[2], indent)
         print(io, "(")
         # XXX: this is wrong if `sig` is not a concretetype method
