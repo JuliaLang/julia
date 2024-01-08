@@ -9,16 +9,44 @@ For a given period, return the value associated with that period.  For example,
 """
 value(x::Period) = x.value
 
+abbr(::Type{Nanosecond}) = "ns"
+abbr(::Type{Microsecond}) = "us"
+abbr(::Type{Millisecond}) = "ms"
+abbr(::Type{Second}) = "s"
+abbr(::Type{Minute}) = "m"
+abbr(::Type{Hour}) = "h"
+abbr(::Type{Day}) = "d"
+abbr(::Type{Week}) = "w"
+abbr(::Type{Month}) = "mo"
+abbr(::Type{Quarter}) = "q"
+abbr(::Type{Year}) = "y"
+abbr(x::Period) = abbr(typeof(x))
+
 # The default constructors for Periods work well in almost all cases
 # P(x) = new((convert(Int64,x))
 # The following definitions are for Period-specific safety
 for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond)
     period_str = string(period)
     accessor_str = lowercase(period_str)
-    # Convenience method for show()
-    @eval _units(x::$period) = " " * $accessor_str * (abs(value(x)) == 1 ? "" : "s")
+    @eval _isabbr(::Type{$period}, x) = (x == abbr($period) || x == accessor_str)
     # AbstractString parsing (mainly for IO code)
-    @eval $period(x::AbstractString) = $period(Base.parse(Int64, x))
+    @eval begin
+        function Base.tryparse(::Type{$period}, x::AbstractString)
+            xint = tryparse(Int64, x)
+            isnothing(xint) || return $period(xint)
+            unitindex = findfirst(!isdigit, x)
+            isnothing(unitindex) && return nothing
+            xint = tryparse(Int64, first(x, unitindex - 1))
+            isnothing(xint) || return $period(xint)
+            nothing
+        end
+        function Base.parse(::Type{$period}, x::AbstractString)
+            p = tryparse($period, x)
+            isnothing(p) && error("cannot parse as $period_str")
+            p
+        end
+    end
+    @eval $period(x::AbstractString) = parse($period, x)
     # The period type is printed when output, thus it already implies its own typeinfo
     @eval Base.typeinfo_implicit(::Type{$period}) = true
     # Period accessors
@@ -44,8 +72,32 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
     end
 end
 
+function Base.tryparse(::Type{Period}, x::AbstractString)
+    unitindex = findfirst(!isdigit, x)
+    isnothing(unitindex) && return nothing
+    xint = tryparse(Int64, first(x, unitindex - 1))
+    isnothing(xint) && return nothing
+    units = x[unitindex:end]
+    _isabbr(Nanosecond, units) && return Nanosecond(xint)
+    _isabbr(Microsecond, units) && return Microsecond(xint)
+    _isabbr(Millisecond, units) && return Millisecond(xint)
+    _isabbr(Second, units) && return Second(xint)
+    _isabbr(Minute, units) && return Minute(xint)
+    _isabbr(Hour, units) && return Hour(xint)
+    _isabbr(Day, units) && return Day(xint)
+    _isabbr(Quarter, units) && return Quarter(xint)
+    _isabbr(Year, units) && return Year(xint)
+    nothing
+end
+
+function Base.parse(::Type{Period}, x::AbstractString)
+    p = tryparse(Period, x)
+    isnothing(p) && error("cannot parse as Period")
+    p
+end
+
 #Print/show/traits
-Base.print(io::IO, x::Period) = print(io, value(x), _units(x))
+Base.print(io::IO, x::Period) = print(io, value(x), abbr(x))
 Base.show(io::IO, ::MIME"text/plain", x::Period) = print(io, x)
 Base.show(io::IO, p::P) where {P<:Period} = print(io, P, '(', value(p), ')')
 Base.zero(::Union{Type{P},P}) where {P<:Period} = P(0)

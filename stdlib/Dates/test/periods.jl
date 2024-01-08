@@ -548,4 +548,36 @@ end
     @test_throws MethodError convert(Dates.FixedPeriod, Minute(1) + Second(30))
 end
 
+@testset "Printing" begin
+    @test string(Nanosecond(1)) == "1ns"
+    @test string(Microsecond(1)) == "1us"
+    @test string(Millisecond(1)) == "1ms"
+    @test string(Second(1)) == "1s"
+    @test string(Hour(1)) == "1h"
+    @test string(Day(1)) == "1d"
+    @test string(Quarter(1)) == "1q"
+    @test string(Year(1)) == "1y"
+end
+
+@testset "Parsing" begin
+    @test parse(Nanosecond, "1") == Nanosecond(1)
+    @test parse(Nanosecond, "1ns") == Nanosecond(1)
+    @test parse(Period, "1ns") == Nanosecond(1)
+    @test parse(Period, "1nanosecond") == Nanosecond(1)
+    @test parse(Microsecond, "1") == Microsecond(1)
+    @test parse(Microsecond, "1us") == Microsecond(1)
+    @test parse(Period, "1us") == Microsecond(1)
+    @test parse(Period, "1microsecond") == Microsecond(1)
+    @test parse(Milliseocnd, "1") == Millisecond(1)
+    @test parse(Millisecond, "1ms") == Millisecond(1)
+    @test parse(Period, "1ms") == Millisecond(1)
+    @test parse(Period, "1millisecond") == Millisecond(1)
+    @test parse(Second, "1") == Second(1)
+    @test parse(Second, "1s") == Second(1)
+    @test parse(Period, "1s") == Second(1)
+    @test parse(Period, "1second") == Second(1)
+    @test_throws parse(Period, "1decade")
+    @test_throws parse(Period, "1d2h")
+end
+
 end
