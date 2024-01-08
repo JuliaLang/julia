@@ -110,7 +110,7 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc_s.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libmsvcrt.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_libdir)/
 endif
 endif
 ifeq ($(OS),WINNT)
@@ -119,5 +119,5 @@ uninstall-gcc-libraries:
 	-rm -f $(build_private_libdir)/libgcc_s.a
 	-rm -f $(build_private_libdir)/libgcc.a
 	-rm -f $(build_private_libdir)/libmsvcrt.a
-	-rm -f $(build_private_libdir)/libssp.dll.a
+	-rm -f $(build_libdir)/libssp.dll.a
 endif
