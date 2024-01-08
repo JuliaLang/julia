@@ -122,7 +122,8 @@ A string representing the specific Just-In-Time (JIT) compiler being utilized in
 ```
 julia> Sys.JIT
 "ORCJIT"
-```
+Currently, this returns `"ORCJIT"` for the LLVM "ORC" ("On-Request Compilation") JIT library:
+```jldoctest
 """
 global JIT::String
 
