@@ -782,16 +782,17 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                     jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
                     name = NULL;
                     jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)path)->args, &name, "using");
-                    check_macro_rename(name, asname, "using");
                     if (from) {
                         // `using A: B as C` and `using A: B.C as D` syntax
                         assert(name);
+                        check_macro_rename(name, asname, "using");
                         jl_module_use_as(m, import, name, asname);
                         continue;
                     }
                     else {
                         // `using A as B` and `using A.B as C syntax
                         assert(name == NULL);
+                        check_macro_rename(import->name, asname, "using");
                         jl_module_using(m, import);
                         import_module(m, import, asname);
                         continue;
