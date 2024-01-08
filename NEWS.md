@@ -7,6 +7,7 @@ New language features
   API. Symbols marked with `export` are now also treated as public API. The
   difference between `public` and `export` is that `public` names do not become
   available when `using` a package/module ([#50105]).
+* The syntax `using LongPackageName as LPN` is now supported ([#52821]).
 * `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
 * The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
   but allows to add keyword arguments to the function call ([#51501]).
@@ -33,6 +34,8 @@ Language changes
   Meaning that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
   pkgimage caches for all other packages than the package being tested, likely meaning faster test
   execution. ([#52123])
+* Module names are no longer considered "exported" by default. Nevertheless they are still
+  made available with `using`.
 
 * Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
   omit the default user depot ([#51448]).
