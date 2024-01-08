@@ -324,5 +324,5 @@ end
 function eigvals(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
     (; dl, d, du) = parent(A)
     E = A.uplo == 'U' ? abs.(du) : abs.(dl)
-    eigvals(SymTridiagonal(real.(d), E); kwargs...)
+    eigvals(SymTridiagonal(float.(real.(d)), E); kwargs...)
 end
