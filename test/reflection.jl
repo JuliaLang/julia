@@ -217,6 +217,7 @@ public this_is_public
 @test isexported(@__MODULE__, :this_is_not_defined)
 @test !isexported(@__MODULE__, :this_is_not_exported)
 @test !isexported(@__MODULE__, :this_is_public)
+@test !isexported(@__MODULE__, :TestingExported)
 const a_value = 1
 @test which(@__MODULE__, :a_value) === @__MODULE__
 @test_throws ErrorException("\"a_value\" is not defined in module Main") which(Main, :a_value)
@@ -226,6 +227,7 @@ const a_value = 1
 @test Base.ispublic(@__MODULE__, :this_is_not_defined)
 @test Base.ispublic(@__MODULE__, :this_is_public)
 @test !Base.ispublic(@__MODULE__, :this_is_not_exported)
+@test !Base.ispublic(@__MODULE__, :TestingExported)
 end
 
 # PR 13825
@@ -1179,4 +1181,35 @@ let (src, rt) = only(code_typed(sub2ind_gen, (NTuple,Int,Int,); optimize=false))
     @test rt == Int
     @test any(iscall((src,sub2ind_gen_fallback)), src.code)
     @test any(iscall((src,error)), src.code)
+end
+
+# `using Mod as M`
+module Mod52821
+
+using Test
+
+module M1
+    module M2
+        export f52821
+        f52821() = 7
+        g52821() = 8
+    end
+end
+
+@test_throws UndefVarError f52821()
+using .M1.M2 as Mod
+@test f52821() === 7 # Export mechanism works    <----------- BROKEN!!!
+@test_throws UndefVarError f52821() # Unexported things don't get loaded
+@test !isdefined(@__MODULE__, :M2) # Does not load the name M2 into Main
+@test Mod === M1.M2 === Mod.M2 # Does load M2 under the aliased name    <----------- BROKEN!!!
+const M2 = 4 # We can still use the name M2
+@test M2 == 4
+
+@test_throws UndefVarError mean([0])
+using Statistics as Stats
+@test mean([0]) == 0
+@test Stats.mean === mean
+@test Stats === Stats.Statistics
+@test_throws UndefVarError Statistics.mean([0])
+
 end
