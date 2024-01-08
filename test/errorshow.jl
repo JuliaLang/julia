@@ -8,6 +8,7 @@ include("testenv.jl")
 # re-register only the error hints that are being tested here (
 Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
+Base.Experimental.register_error_hint(Base.min_max_on_iterable, MethodError)
 
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
