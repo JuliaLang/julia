@@ -1210,10 +1210,10 @@ end
 
 @test_throws UndefVarError f52821()
 using .M1.M2 as Mod
-@test f52821() === 7 # Export mechanism works    <----------- BROKEN!!!
+@test f52821() === 7 # Export mechanism works
 @test_throws UndefVarError f52821() # Unexported things don't get loaded
 @test !isdefined(@__MODULE__, :M2) # Does not load the name M2 into Main
-@test Mod === M1.M2 === Mod.M2 # Does load M2 under the aliased name    <----------- BROKEN!!!
+@test Mod === M1.M2 === Mod.M2 # Does load M2 under the aliased name
 const M2 = 4 # We can still use the name M2
 @test M2 == 4
 

@@ -791,7 +791,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                     }
                     else {
                         // `using A as B` and `using A.B as C syntax
-                        assert(name == NULL);
+                        if (name != NULL)
+                            import = (jl_module_t*)jl_eval_global_var(import, name);
                         check_macro_rename(import->name, asname, "using");
                         jl_module_using(m, import);
                         import_module(m, import, asname);
