@@ -106,10 +106,10 @@ global SC_CLK_TCK::Clong
 A string representing the name of CPU.
 
 # Examples
-```
-julia> Sys.CPU_NAME
-"tigerlake"
-```
+For example, `Sys.CPU_NAME` might equal `"tigerlake"` on an 
+[Intel Core "Tiger Lake" CPU](https://en.wikipedia.org/wiki/Tiger_Lake),
+or `"apple-m1"` on an [Apple M1 CPU](https://en.wikipedia.org/wiki/Apple_M1).
+
 """
 global CPU_NAME::String
 
@@ -232,7 +232,7 @@ end
     Sys.cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo}=cpu_info())
 
 Print a summary of CPU information to the `io` stream (defaulting to [`stdout`](@ref)), organizing and displaying aggregated data for CPUs with the same model, for a given array of `CPUinfo` data structures
-describing a set of CPUs (which defaults to the return value of the [`Sys.cpuinfo`](@ref) function).
+describing a set of CPUs (which defaults to the return value of the [`Sys.cpu_info`](@ref) function).
 
 The summary includes aggregated information for each distinct CPU model,
 providing details such as average CPU speed and total time spent in different modes (user, nice, sys, idle, irq) across all cores with the same model.
