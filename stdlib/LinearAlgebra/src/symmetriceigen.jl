@@ -297,6 +297,7 @@ end
 
 
 function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
+    fT = float(T)
     (; dl, d, du) = parent(A)
     N = length(d)
     if N <= 1
@@ -304,15 +305,15 @@ function eigen(A::Hermitian{Complex{T}, <:Tridiagonal}; kwargs...) where {T}
     else
         if A.uplo == 'U'
             E = du'
-            Er = abs.(du)
+            Er = abs.(float.(du))
         else
             E = dl
-            Er = abs.(E)
+            Er = abs.(float.(E))
         end
-        S = Vector{Complex{T}}(undef, N)
+        S = Vector{Complex{fT}}(undef, N)
         S[1] = 1
         for i ∈ 1:N-1
-            S[i+1] = iszero(Er[i]) ? one(Complex{T}) : S[i] * sign(E[i])
+            S[i+1] = iszero(Er[i]) ? one(Complex{fT}) : S[i] * sign(E[i])
         end
         B = SymTridiagonal(real(d), Er)
         Λ, Φ = eigen(B; kwargs...)
