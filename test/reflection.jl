@@ -1182,6 +1182,7 @@ let (src, rt) = only(code_typed(sub2ind_gen, (NTuple,Int,Int,); optimize=false))
 end
 
 # marking a symbol as public should not "unexport" it
+# https://github.com/JuliaLang/julia/issues/52812
 module Mod52812
 export a, b
 public a
