@@ -278,7 +278,8 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
         end
         print(io, "no method matching ")
-        iob = IOContext(IOBuffer(), io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
+        buf = IOBuffer()
+        iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
         show_signature_function(iob, isa(f, Type) ? Type{f} : typeof(f))
         print(iob, "(")
         for (i, typ) in enumerate(arg_types_param)
@@ -293,7 +294,7 @@ function showerror(io::IO, ex::MethodError)
             end
         end
         print(iob, ")")
-        str = String(take!(unwrapcontext(iob)[1]))
+        str = String(take!(buf))
         str = type_limited_string_from_context(io, str)
         print(io, str)
     end
