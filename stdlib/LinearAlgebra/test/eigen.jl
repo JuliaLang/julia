@@ -16,6 +16,9 @@ Random.seed!(12343219)
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
 
+iround(x::Real) = round(Int, x)
+iround(x::Complex) = round(Int, real(x)) + im*round(Int, imag(x))
+
 @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
     aa = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     asym = aa' + aa                  # symmetric indefinite
@@ -45,7 +48,8 @@ aimg  = randn(n,n)/2
             @test eigvecs(f) === f.vectors
             @test Array(f) ≈ a
 
-            for T in (Tridiagonal(a), Hermitian(Tridiagonal(a), :U), Hermitian(Tridiagonal(a), :L), Hermitian(Tridiagonal(round.(Int, a))))
+            for T in (Tridiagonal(a), Hermitian(Tridiagonal(a), :U), Hermitian(Tridiagonal(a), :L), 
+                      Hermitian(Tridiagonal(iround.(10 .* a))))
                 f = eigen(T)
                 d, v = f
                 for i in 1:size(a,2)
