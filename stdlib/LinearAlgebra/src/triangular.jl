@@ -1545,22 +1545,11 @@ rmul!(A::LowerTriangular, B::UnitLowerTriangular) = LowerTriangular(rmul!(tril!(
 ## necessary in the general triangular solve problem.
 
 _inner_type_promotion(op, ::Type{TA}, ::Type{TB}) where {TA<:Integer,TB<:Integer} =
-    _init_eltype(*, TA, TB)
+    promote_op(matprod, TA, TB)
 _inner_type_promotion(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
-    _init_eltype(op, TA, TB)
+    promote_op(op, TA, TB)
 ## The general promotion methods
-function *(A::AbstractTriangular, B::AbstractTriangular)
-    TAB = _init_eltype(*, eltype(A), eltype(B))
-    mul!(similar(B, TAB, size(B)), A, B)
-end
-
 for mat in (:AbstractVector, :AbstractMatrix)
-    ### Multiplication with triangle to the left and hence rhs cannot be transposed.
-    @eval function *(A::AbstractTriangular, B::$mat)
-        require_one_based_indexing(B)
-        TAB = _init_eltype(*, eltype(A), eltype(B))
-        mul!(similar(B, TAB, size(B)), A, B)
-    end
     ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
     @eval function \(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
         require_one_based_indexing(B)
@@ -1570,7 +1559,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
     @eval function \(A::Union{UpperTriangular,LowerTriangular}, B::$mat)
         require_one_based_indexing(B)
-        TAB = _init_eltype(\, eltype(A), eltype(B))
+        TAB = promote_op(\, eltype(A), eltype(B))
         ldiv!(similar(B, TAB, size(B)), A, B)
     end
     ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
@@ -1582,20 +1571,10 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
     @eval function /(A::$mat, B::Union{UpperTriangular,LowerTriangular})
         require_one_based_indexing(A)
-        TAB = _init_eltype(/, eltype(A), eltype(B))
+        TAB = promote_op(/, eltype(A), eltype(B))
         _rdiv!(similar(A, TAB, size(A)), A, B)
     end
 end
-### Multiplication with triangle to the right and hence lhs cannot be transposed.
-# Only for AbstractMatrix, hence outside the above loop.
-function *(A::AbstractMatrix, B::AbstractTriangular)
-    require_one_based_indexing(A)
-    TAB = _init_eltype(*, eltype(A), eltype(B))
-    mul!(similar(A, TAB, size(A)), A, B)
-end
-# ambiguity resolution with definitions in matmul.jl
-*(v::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) * v.parent)
-*(v::TransposeAbsVec, A::AbstractTriangular) = transpose(transpose(A) * v.parent)
 
 ## Some Triangular-Triangular cases. We might want to write tailored methods
 ## for these cases, but I'm not sure it is worth it.

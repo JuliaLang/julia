@@ -289,21 +289,20 @@ end
 similar(A::Union{Symmetric,Hermitian}, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(A), T, dims)
 
 # Conversion
-function Matrix(A::Symmetric)
-    B = copytri!(convert(Matrix, copy(A.data)), A.uplo)
+function Matrix{T}(A::Symmetric) where {T}
+    B = copytri!(convert(Matrix{T}, copy(A.data)), A.uplo)
     for i = 1:size(A, 1)
         B[i,i] = symmetric(A[i,i], sym_uplo(A.uplo))::symmetric_type(eltype(A.data))
     end
     return B
 end
-function Matrix(A::Hermitian)
-    B = copytri!(convert(Matrix, copy(A.data)), A.uplo, true)
+function Matrix{T}(A::Hermitian) where {T}
+    B = copytri!(convert(Matrix{T}, copy(A.data)), A.uplo, true)
     for i = 1:size(A, 1)
         B[i,i] = hermitian(A[i,i], sym_uplo(A.uplo))::hermitian_type(eltype(A.data))
     end
     return B
 end
-Array(A::Union{Symmetric,Hermitian}) = convert(Matrix, A)
 
 parent(A::HermOrSym) = A.data
 Symmetric{T,S}(A::Symmetric{T,S}) where {T,S<:AbstractMatrix{T}} = A
