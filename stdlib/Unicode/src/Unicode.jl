@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 """
-The Unicode module provides essential functionality for managing Unicode characters and strings.
+The `Unicode` module provides essential functionality for managing Unicode characters and strings.
 It includes validation, category determination, normalization, case transformation, and grapheme segmentation,
 enabling effective Unicode data handling.
 """

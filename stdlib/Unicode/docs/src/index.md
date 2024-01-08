@@ -1,7 +1,7 @@
 # Unicode
 
-The `Unicode` module provides essential functionality for managing `Unicode` characters and strings.
-It includes validation, category determination, normalization, case transformation, and grapheme segmentation, enabling effective `Unicode` data handling.
+The `Unicode` module provides essential functionality for managing Unicode characters and strings.
+It includes validation, category determination, normalization, case transformation, and grapheme segmentation, enabling effective Unicode data handling.
 
 ```@docs
 Unicode
