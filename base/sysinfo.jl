@@ -251,6 +251,8 @@ end
     Sys.cpu_info()
 
 Return a vector of `CPUinfo` objects, where each object represent information about a CPU core.
+This is displayed in a tabular format by the REPL, so most users will not need to access the `CPUinfo`
+data structures directly.
 
 The function provides information about each CPU, including model, speed, and usage statistics such as user time, nice time, system time, idle time, and interrupt time.
 The `CPUinfo` type is a mutable struct with the following fields:
