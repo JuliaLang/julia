@@ -2677,6 +2677,10 @@ import .Mod.@mac as @m
 @test_throws ErrorException eval(:(using .Mod: @mac as notmacro))
 @test_throws ErrorException eval(:(using .Mod: func as @notmacro))
 
+@test_throws ErrorException eval(:(using .Mod as @M))
+e = @test_throws ErrorException eval(:(using .Mod.Mod2 as @M))
+@test occursin("Mod2", e.value.msg)
+
 import .Mod2.x_from_mod
 
 @test @isdefined(x_from_mod)
