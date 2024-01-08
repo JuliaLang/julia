@@ -241,7 +241,7 @@ Random.seed!(1)
         # type-stable division for pseudo-diagonal matrices
         @test (@inferred Matrix(D) \ Matrix(D2)) ≈ D \ D2
         @test (@inferred Matrix(D) / Matrix(D2)) ≈ D / D2
-        
+
         #division of two Diagonals
         @test D/D2 ≈ Diagonal(D.diag./D2.diag)
         @test D\D2 ≈ Diagonal(D2.diag./D.diag)
