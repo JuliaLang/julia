@@ -1111,17 +1111,18 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if m == n
+        dest = similar(B, promote_op(\, eltype(A), eltype(B)), size(B))
         if istril(A)
             if istriu(A)
-                return Diagonal(A) \ B
+                return ldiv!(dest, Diagonal(A), B)
             else
-                return LowerTriangular(A) \ B
+                return ldiv!(dest, LowerTriangular(A), B)
             end
         end
         if istriu(A)
-            return UpperTriangular(A) \ B
+            return ldiv!(dest, UpperTriangular(A), B)
         end
-        return lu(A) \ B
+        return ldiv!(lu(A), copyto!(dest, B))
     end
     return qr(A, ColumnNorm()) \ B
 end
