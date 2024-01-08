@@ -36,12 +36,15 @@ jl_mutex_t jl_modules_mutex;
 // During incremental compilation, the following gets set
 JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module = NULL;   // the toplevel module currently being defined
 
+static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym_t *asname);
+
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
     jl_module_t *base_module = jl_base_relative_to(m);
     assert(base_module != NULL);
     // using Base
     jl_module_using(m, base_module);
+    import_module(m, base_module, NULL);
 }
 
 // create a new top-level module
@@ -759,35 +762,40 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 if (name != NULL)
                     u = (jl_module_t*)jl_eval_global_var(import, name);
                 if (from) {
-                    // `using A: B` syntax
+                    // `using A: B` and `using A: B.c` syntax
                     jl_module_use(m, import, name);
                 }
                 else {
                     if (!jl_is_module(u))
                         jl_eval_errorf(m, "invalid using path: \"%s\" does not name a module",
                                        jl_symbol_name(name));
-                    // `using A.B` syntax
+                    // `using A` and `using A.B` syntax
                     jl_module_using(m, u);
-                    if (m == jl_main_module && name == NULL) {
-                        // TODO: for now, `using A` in Main also creates an explicit binding for `A`
-                        // This will possibly be extended to all modules.
-                        import_module(m, u, NULL);
-                    }
+                    import_module(m, u, name);
                 }
                 continue;
             }
-            else if (from && jl_is_expr(a) && ((jl_expr_t*)a)->head == jl_as_sym && jl_expr_nargs(a) == 2 &&
+            else if (jl_is_expr(a) && ((jl_expr_t*)a)->head == jl_as_sym && jl_expr_nargs(a) == 2 &&
                      jl_is_expr(jl_exprarg(a, 0)) && ((jl_expr_t*)jl_exprarg(a, 0))->head == jl_dot_sym) {
                 jl_sym_t *asname = (jl_sym_t*)jl_exprarg(a, 1);
                 if (jl_is_symbol(asname)) {
                     jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
                     name = NULL;
                     jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)path)->args, &name, "using");
-                    assert(name);
                     check_macro_rename(name, asname, "using");
-                    // `using A: B as C` syntax
-                    jl_module_use_as(m, import, name, asname);
-                    continue;
+                    if (from) {
+                        // `using A: B as C` and `using A: B.C as D` syntax
+                        assert(name);
+                        jl_module_use_as(m, import, name, asname);
+                        continue;
+                    }
+                    else {
+                        // `using A as B` and `using A.B as C syntax
+                        assert(name == NULL);
+                        jl_module_using(m, import);
+                        import_module(m, import, asname);
+                        continue;
+                    }
                 }
             }
             jl_eval_errorf(m, "syntax: malformed \"using\" statement");
