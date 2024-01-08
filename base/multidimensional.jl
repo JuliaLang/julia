@@ -972,11 +972,12 @@ function _generate_unsafe_setindex!_body(N::Int)
         @nexprs $N d->(I_d = unalias(A, I[d]))
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check x′ (d->idxlens[d])
-        Xy = _checked_iterate(x′)
+        X = eachindex(x′)
+        Xy = _checked_iterate(X)
         @inbounds @nloops $N i d->I_d begin
-            (val, state) = Xy::NTuple{2,Any}
-            @ncall $N setindex! A val i
-            Xy = _checked_iterate(x′, state)
+            (idx, state) = Xy::NTuple{2,Any}
+            @ncall $N setindex! A x′[idx] i
+            Xy = _checked_iterate(X, state)
         end
         A
     end
