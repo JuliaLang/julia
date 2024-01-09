@@ -661,11 +661,11 @@ const libstdcxx_version_mapping = Dict{String,String}(
     "libstdcxx" => "-libstdcxx\\d+",
 )
 
-const triplet_regex = let 
+const triplet_regex = let
     # Helper function to collapse dictionary of mappings down into a regex of
     # named capture groups joined by "|" operators
     c(mapping) = string("(",join(["(?<$k>$v)" for (k, v) in mapping], "|"), ")")
-    
+
     Regex(string(
         "^",
         # First, the core triplet; arch/os/libc/call_abi
