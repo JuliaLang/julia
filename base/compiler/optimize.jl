@@ -934,7 +934,7 @@ function run_passes_ipo_safe(
     if made_changes
         @pass "compact 3" ir = compact!(ir, true)
     end
-    if JLOptions().debug_level == 2
+    if ccall(:jl_is_assertsbuild, Cint, ()) == 1
         @timeit "verify 3" (verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp)); verify_linetable(ir.linetable))
     end
     @label __done__  # used by @pass
