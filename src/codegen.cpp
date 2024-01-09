@@ -9187,6 +9187,9 @@ jl_llvm_functions_t jl_emit_code(
         jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
+#ifndef JL_NDEBUG
+        abort();
+#endif
     }
 
     return decls;
