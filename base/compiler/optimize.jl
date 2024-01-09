@@ -74,8 +74,6 @@ is_declared_inline(@nospecialize src::MaybeCompressed) =
 is_declared_noinline(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 2
 
-is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
-
 #####################
 # OptimizationState #
 #####################
@@ -188,7 +186,7 @@ function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
     src = ir_to_codeinf!(src, opt.ir::IRCode)
     opt.ir = nothing
-    validate_code_in_debug_mode(linfo, src, "optimized")
+    maybe_validate_code(linfo, src, "optimized")
     return src
 end
 
@@ -937,7 +935,10 @@ function run_passes_ipo_safe(
         @pass "compact 3" ir = compact!(ir, true)
     end
     if is_asserts()
-        @timeit "verify 3" (verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp)); verify_linetable(ir.linetable))
+        @timeit "verify 3" begin
+            verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp))
+            verify_linetable(ir.linetable)
+        end
     end
     @label __done__  # used by @pass
     return ir
