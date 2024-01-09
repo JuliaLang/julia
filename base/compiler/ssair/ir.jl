@@ -1117,7 +1117,7 @@ function find_ssavalue_uses1(compact::IncrementalCompact)
 end
 
 function _oracle_check(compact::IncrementalCompact)
-    (observed_used_ssas, observed_used_newssas) = Core.Compiler.find_ssavalue_uses1(compact)
+    (observed_used_ssas, observed_used_newssas) = find_ssavalue_uses1(compact)
     for i = 1:length(observed_used_ssas)
         if observed_used_ssas[i] != compact.used_ssas[i]
             return (observed_used_ssas, observed_used_newssas, SSAValue(i))
