@@ -1180,3 +1180,15 @@ let (src, rt) = only(code_typed(sub2ind_gen, (NTuple,Int,Int,); optimize=false))
     @test any(iscall((src,sub2ind_gen_fallback)), src.code)
     @test any(iscall((src,error)), src.code)
 end
+
+# marking a symbol as public should not "unexport" it
+# https://github.com/JuliaLang/julia/issues/52812
+module Mod52812
+export a, b
+public a
+end
+
+@test Base.isexported(Mod52812, :a)
+@test Base.isexported(Mod52812, :b)
+@test Base.ispublic(Mod52812, :a)
+@test Base.ispublic(Mod52812, :b)
