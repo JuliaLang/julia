@@ -74,6 +74,8 @@ is_declared_inline(@nospecialize src::MaybeCompressed) =
 is_declared_noinline(@nospecialize src::MaybeCompressed) =
     ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 2
 
+is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+
 #####################
 # OptimizationState #
 #####################
@@ -934,7 +936,7 @@ function run_passes_ipo_safe(
     if made_changes
         @pass "compact 3" ir = compact!(ir, true)
     end
-    if ccall(:jl_is_assertsbuild, Cint, ()) == 1
+    if is_asserts()
         @timeit "verify 3" (verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp)); verify_linetable(ir.linetable))
     end
     @label __done__  # used by @pass
@@ -1056,7 +1058,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                     ssaflags[block_end] = IR_FLAG_NOTHROW
 
                     # Verify that type-inference did its job
-                    if JLOptions().debug_level == 2
+                    if is_asserts()
                         for i = (oldidx + 1):last(sv.cfg.blocks[block].stmts)
                             @assert i in sv.unreachable
                         end
