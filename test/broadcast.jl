@@ -1180,6 +1180,7 @@ f51129(v, x) = (1 .- (v ./ x) .^ 2)
     undoc = Docs.undocumented_names(Broadcast)
     @test_broken isempty(undoc)
     @test undoc == [:dotview]
+end
 
 @testset "broadcast for `AbstractArray` without `CartesianIndex` support" begin
     struct BVec52775 <: AbstractVector{Int}
