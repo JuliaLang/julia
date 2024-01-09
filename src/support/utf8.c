@@ -410,7 +410,7 @@ int u8_escape_wchar(char *buf, size_t sz, uint32_t ch)
 }
 
 size_t u8_escape(char *buf, size_t sz, const char *src, size_t *pi, size_t end,
-                 int escape_quotes, int ascii)
+                 const char *escapes, int ascii)
 {
     size_t i = *pi, i0;
     uint32_t ch;
@@ -420,12 +420,9 @@ size_t u8_escape(char *buf, size_t sz, const char *src, size_t *pi, size_t end,
 
     while (i<end && buf<blim) {
         // sz-11: leaves room for longest escape sequence
-        if (escape_quotes && src[i] == '"') {
-            buf += buf_put2c(buf, "\\\"");
-            i++;
-        }
-        else if (src[i] == '\\') {
-            buf += buf_put2c(buf, "\\\\");
+        if ((src[i] == '\\') || (escapes && strchr(escapes, src[i]))) {
+            *buf++ = '\\';
+            *buf++ = src[i];
             i++;
         }
         else {
@@ -571,8 +568,8 @@ chkutf8:
             return 0;
         // Check for surrogate chars
         if (byt == 0xed && *pnt > 0x9f) return 0;
-	// Check for overlong encoding
-	if (byt == 0xe0 && *pnt < 0xa0) return 0;
+        // Check for overlong encoding
+        if (byt == 0xe0 && *pnt < 0xa0) return 0;
         pnt += 2;
     } else {                        // 4-byte sequence
         // Must have 3 valid continuation characters

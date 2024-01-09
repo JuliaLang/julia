@@ -1744,7 +1744,7 @@ function show_sym(io::IO, sym::Symbol; allow_macroname=false)
         print(io, '@')
         show_sym(io, Symbol(sym_str[2:end]))
     else
-        print(io, "var", repr(string(sym)))
+        print(io, "var", repr(string(sym))) # TODO: this is not quite right, since repr uses String escaping rules, and Symbol uses raw string rules
     end
 end
 
