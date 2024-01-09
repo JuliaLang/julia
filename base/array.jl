@@ -668,7 +668,7 @@ _array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(it
 """
     collect(collection)
 
-Return an `Array` of all items in a collection or iterator. For dictionaries, returns 
+Return an `Array` of all items in a collection or iterator. For dictionaries, returns
 a `Vector` of `key=>value` [pairs](@ref Pair). If the argument is array-like or is an iterator
 with the [`HasShape`](@ref IteratorSize) trait, the result will have the same shape
 and number of dimensions as the argument.
