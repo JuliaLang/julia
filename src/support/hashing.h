@@ -37,7 +37,7 @@ STATIC_INLINE uint64_t bitmix(uint64_t h, uint64_t a) JL_NOTSAFEPOINT
 #else
 STATIC_INLINE uint32_t bitmix(uint32_t h, uint32_t a) JL_NOTSAFEPOINT
 {
-    h = (h << 5) | (h >> (sizeof(h) * 8 - 5)); // rotate 5 bits to the left
+    h = (h << 5) | (h >> (8*sizeof(h) - 5)); // rotate 5 bits to the left
     h ^= a;
     h *= 0x9e3779b9;
     return h;
