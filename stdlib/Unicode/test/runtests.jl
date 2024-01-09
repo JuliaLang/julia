@@ -536,7 +536,5 @@ isequal_normalized_naive(s1, s2; kws...) = normalize(s1; kws...) == normalize(s2
 end
 
 @testset "Docstrings" begin
-    undoc = Docs.undocumented_names(Unicode)
-    @test_broken isempty(undoc)
-    @test undoc == [:Unicode]
+    @test isempty(Docs.undocumented_names(Unicode))
 end
