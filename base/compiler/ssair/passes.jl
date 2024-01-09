@@ -190,8 +190,18 @@ function collect_leaves(compact::IncrementalCompact, @nospecialize(val), @nospec
     return walk_to_defs(compact, val, typeconstraint, predecessors, 𝕃ₒ)
 end
 
-function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#),
-                     callback = (@nospecialize(pi), @nospecialize(idx)) -> false)
+function trivial_walker(@nospecialize(pi), @nospecialize(idx))
+    return nothing
+end
+
+function pi_walker(@nospecialize(pi), @nospecialize(idx))
+    if isa(pi, PiNode)
+        return LiftedValue(pi.val)
+    end
+    return nothing
+end
+
+function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#), callback=trivial_walker)
     while true
         if isa(defssa, OldSSAValue)
             if already_inserted(compact, defssa)
@@ -207,27 +217,26 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
             end
         end
         def = compact[defssa][:stmt]
-        if isa(def, PiNode)
-            if callback(def, defssa)
-                return defssa
-            end
-            def = def.val
-            if isa(def, SSAValue)
-                is_old(compact, defssa) && (def = OldSSAValue(def.id))
-            else
-                return def
-            end
-            defssa = def
-        elseif isa(def, AnySSAValue)
+        if isa(def, AnySSAValue)
             callback(def, defssa)
             if isa(def, SSAValue)
                 is_old(compact, defssa) && (def = OldSSAValue(def.id))
             end
             defssa = def
-        elseif isa(def, Union{PhiNode, PhiCNode, Expr, GlobalRef})
+        elseif isa(def, Union{PhiNode, PhiCNode, GlobalRef})
             return defssa
         else
-            return def
+            new_def = callback(def, defssa)
+            if new_def === nothing
+                return defssa
+            end
+            new_def = new_def.val
+            if !isa(new_def, AnySSAValue)
+                return new_def
+            elseif isa(new_def, SSAValue)
+                is_old(compact, defssa) && (new_def = OldSSAValue(new_def.id))
+            end
+            defssa = new_def
         end
     end
 end
@@ -237,8 +246,9 @@ function simple_walk_constraint(compact::IncrementalCompact, @nospecialize(defss
     callback = function (@nospecialize(pi), @nospecialize(idx))
         if isa(pi, PiNode)
             typeconstraint = typeintersect(typeconstraint, widenconst(pi.typ))
+            return LiftedValue(pi.val)
         end
-        return false
+        return nothing
     end
     def = simple_walk(compact, defssa, callback)
     return Pair{Any, Any}(def, typeconstraint)
@@ -273,7 +283,9 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
         def = compact[defssa][:stmt]
         values = predecessors(def, compact)
         if values !== nothing
-            push!(visited_philikes, defssa)
+            if isa(def, PhiNode) || length(values) > 1
+                push!(visited_philikes, defssa)
+            end
             possible_predecessors = Int[]
 
             for n in 1:length(values)
@@ -336,17 +348,23 @@ function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compa
 end
 
 function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
-    id = old.id
-    if id < length(compact.ir.stmts)
-        return id < compact.idx
+    already_inserted_ssa(compact, compact.idx-1)(0, old)
+end
+
+function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
+    return function did_already_insert(phi_arg::Int, old::OldSSAValue)
+        id = old.id
+        if id <= length(compact.ir.stmts)
+            return id <= processed_idx
+        end
+        id -= length(compact.ir.stmts)
+        if id <= length(compact.ir.new_nodes)
+            return did_already_insert(phi_arg, OldSSAValue(compact.ir.new_nodes.info[id].pos))
+        end
+        id -= length(compact.ir.new_nodes)
+        @assert id <= length(compact.pending_nodes)
+        return !(id in compact.pending_perm)
     end
-    id -= length(compact.ir.stmts)
-    if id < length(compact.ir.new_nodes)
-        return already_inserted(compact, OldSSAValue(compact.ir.new_nodes.info[id].pos))
-    end
-    id -= length(compact.ir.new_nodes)
-    @assert id <= length(compact.pending_nodes)
-    return !(id in compact.pending_perm)
 end
 
 function is_pending(compact::IncrementalCompact, old::OldSSAValue)
@@ -473,19 +491,15 @@ function lift_arg!(
     if is_old(compact, leaf) && isa(lifted, SSAValue)
         lifted = OldSSAValue(lifted.id)
         if already_inserted(compact, lifted)
-            lifted = compact.ssa_rename[lifted.id]
-            if isa(lifted, Refined)
-                lifted = lifted.val
+            new_lifted = compact.ssa_rename[lifted.id]
+            if isa(new_lifted, Refined)
+                new_lifted = new_lifted.val
             end
-        end
-    end
-    if isa(lifted, GlobalRef) || isa(lifted, Expr)
-        lifted = insert_node!(compact, leaf, effect_free_and_nothrow(NewInstruction(lifted, argextype(lifted, compact))))
-        compact[leaf] = nothing
-        stmt.args[argidx] = lifted
-        compact[leaf] = stmt
-        if isa(leaf, SSAValue) && leaf.id < compact.result_idx
-            push!(compact.late_fixup, leaf.id)
+            # Special case: If lifted happens to be the statement we're currently processing,
+            # leave it as old SSAValue in case we decide to handle this in the renamer
+            if !isa(new_lifted, SSAValue) || new_lifted != SSAValue(compact.result_idx-1)
+                lifted = new_lifted
+            end
         end
     end
     lifted_leaves[cache_key] = LiftedValue(lifted)
@@ -602,10 +616,12 @@ function lift_comparison_leaves!(@specialize(tfunc),
     end
 
     # perform lifting
-    lifted_val = perform_lifting!(compact,
-        visited_philikes, cmp, Bool, lifted_leaves::LiftedLeaves, val, nothing)::LiftedValue
+    (lifted_val, nest) = perform_lifting!(compact,
+        visited_philikes, cmp, Bool, lifted_leaves::LiftedLeaves, val, nothing)
 
-    compact[idx] = lifted_val.val
+    compact[idx] = (lifted_val::LiftedValue).val
+
+    finish_phi_nest!(compact, nest)
 end
 
 struct IfElseCall
@@ -623,13 +639,14 @@ end
 struct SkipToken end; const SKIP_TOKEN = SkipToken()
 
 function lifted_value(compact::IncrementalCompact, @nospecialize(old_node_ssa#=::AnySSAValue=#), @nospecialize(old_value),
-                      lifted_philikes::Vector{LiftedPhilike}, lifted_leaves::Union{LiftedLeaves, LiftedDefs}, reverse_mapping::IdDict{AnySSAValue, Int})
+                      lifted_philikes::Vector{LiftedPhilike}, lifted_leaves::Union{LiftedLeaves, LiftedDefs}, reverse_mapping::IdDict{AnySSAValue, Int},
+                      walker_callback)
     val = old_value
     if is_old(compact, old_node_ssa) && isa(val, SSAValue)
         val = OldSSAValue(val.id)
     end
     if isa(val, AnySSAValue)
-        val = simple_walk(compact, val)
+        val = simple_walk(compact, val, def_walker(lifted_leaves, reverse_mapping, walker_callback))
     end
     if val in keys(lifted_leaves)
         lifted_val = lifted_leaves[val]
@@ -639,8 +656,7 @@ function lifted_value(compact::IncrementalCompact, @nospecialize(old_node_ssa#=:
         lifted_val === nothing && return UNDEF_TOKEN
         val = lifted_val.val
         if isa(val, AnySSAValue)
-            callback = (@nospecialize(pi), @nospecialize(idx)) -> true
-            val = simple_walk(compact, val, callback)
+            val = simple_walk(compact, val, pi_walker)
         end
         return val
     elseif isa(val, AnySSAValue) && val in keys(reverse_mapping)
@@ -651,15 +667,96 @@ function lifted_value(compact::IncrementalCompact, @nospecialize(old_node_ssa#=:
 end
 
 function is_old(compact, @nospecialize(old_node_ssa))
-    isa(old_node_ssa, OldSSAValue) &&
-        !is_pending(compact, old_node_ssa) &&
-        !already_inserted(compact, old_node_ssa)
+    isa(old_node_ssa, OldSSAValue) || return false
+    is_pending(compact, old_node_ssa) && return false
+    already_inserted(compact, old_node_ssa) && return false
+    return true
+end
+
+struct PhiNest{C}
+    visited_philikes::Vector{AnySSAValue}
+    lifted_philikes::Vector{LiftedPhilike}
+    lifted_leaves::Union{LiftedLeaves, LiftedDefs}
+    reverse_mapping::IdDict{AnySSAValue, Int}
+    walker_callback::C
+end
+
+function finish_phi_nest!(compact::IncrementalCompact, nest::PhiNest)
+    (;visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping, walker_callback) = nest
+    nphilikes = length(lifted_philikes)
+    # Fix up arguments
+    for i = 1:nphilikes
+        (old_node_ssa, lf) = visited_philikes[i], lifted_philikes[i]
+        lf.need_argupdate || continue
+        should_count = !isa(lf.ssa, OldSSAValue) || already_inserted(compact, lf.ssa)
+
+        lfnode = lf.node
+        if isa(lfnode, PhiNode)
+            old_node = compact[old_node_ssa][:stmt]::PhiNode
+            new_node = lfnode
+            for i = 1:length(old_node.values)
+                isassigned(old_node.values, i) || continue
+                val = lifted_value(compact, old_node_ssa, old_node.values[i],
+                                   lifted_philikes, lifted_leaves, reverse_mapping, walker_callback)
+                val !== SKIP_TOKEN && push!(new_node.edges, old_node.edges[i])
+                if val === UNDEF_TOKEN
+                    resize!(new_node.values, length(new_node.values)+1)
+                elseif val !== SKIP_TOKEN
+                    should_count && _count_added_node!(compact, val)
+                    push!(new_node.values, val)
+                end
+            end
+        elseif isa(lfnode, IfElseCall)
+            old_node = compact[old_node_ssa][:stmt]::Expr
+            then_result, else_result = old_node.args[3], old_node.args[4]
+
+            then_result = lifted_value(compact, old_node_ssa, then_result,
+                                       lifted_philikes, lifted_leaves, reverse_mapping, walker_callback)
+            else_result = lifted_value(compact, old_node_ssa, else_result,
+                                       lifted_philikes, lifted_leaves, reverse_mapping, walker_callback)
+
+            # In cases where the Core.ifelse condition is statically-known, e.g., thanks
+            # to a PiNode from a guarding conditional, replace with the remaining branch.
+            if then_result === SKIP_TOKEN || else_result === SKIP_TOKEN
+                only_result = (then_result === SKIP_TOKEN) ? else_result : then_result
+
+                # Replace Core.ifelse(%cond, %a, %b) with %a
+                compact[lf.ssa] = only_result
+
+                # Note: Core.ifelse(%cond, %a, %b) has observable effects (!nothrow), but since
+                # we have not deleted the preceding statement that this was derived from, this
+                # replacement is safe, i.e. it will not affect the effects observed.
+                continue
+            end
+
+            @assert then_result !== SKIP_TOKEN && then_result !== UNDEF_TOKEN
+            @assert else_result !== SKIP_TOKEN && else_result !== UNDEF_TOKEN
+
+            if should_count
+                _count_added_node!(compact, then_result)
+                _count_added_node!(compact, else_result)
+            end
+
+            push!(lfnode.call.args, then_result)
+            push!(lfnode.call.args, else_result)
+        end
+    end
+end
+
+function def_walker(lifted_leaves::Union{LiftedLeaves, LiftedDefs}, reverse_mapping::IdDict{AnySSAValue, Int}, walker_callback)
+    function (@nospecialize(walk_def), @nospecialize(defssa))
+        if (defssa in keys(lifted_leaves)) || (isa(defssa, AnySSAValue) && defssa in keys(reverse_mapping))
+            return nothing
+        end
+        isa(walk_def, PiNode) && return LiftedValue(walk_def.val)
+        return walker_callback(walk_def, defssa)
+    end
 end
 
 function perform_lifting!(compact::IncrementalCompact,
         visited_philikes::Vector{AnySSAValue}, @nospecialize(cache_key),
         @nospecialize(result_t), lifted_leaves::Union{LiftedLeaves, LiftedDefs}, @nospecialize(stmt_val),
-        lazydomtree::Union{LazyDomtree,Nothing})
+        lazydomtree::Union{LazyDomtree,Nothing}, walker_callback = trivial_walker)
     reverse_mapping = IdDict{AnySSAValue, Int}()
     for id in 1:length(visited_philikes)
         reverse_mapping[visited_philikes[id]] = id
@@ -678,24 +775,39 @@ function perform_lifting!(compact::IncrementalCompact,
         end
     end
 
-    the_leaf_val = isa(the_leaf, LiftedValue) ? the_leaf.val : nothing
-    if !isa(the_leaf_val, SSAValue)
-        all_same = false
-    end
-
-    if all_same
+    if all_same && isa(the_leaf, LiftedValue)
         dominates_all = true
-        if lazydomtree !== nothing
-            domtree = get!(lazydomtree)
-            for item in visited_philikes
-                if !dominates_ssa(compact, domtree, the_leaf_val, item)
-                    dominates_all = false
-                    break
+        the_leaf_val = the_leaf.val
+        if isa(the_leaf_val, AnySSAValue)
+            if lazydomtree === nothing
+                # Must conservatively assume this
+                dominates_all = false
+            else
+                # This code guards against the possibility of accidentally forwarding a value from a
+                # previous iteration. Consider for example:
+                #
+                # %p = phi(%arg, %t)
+                # %b = <...>
+                # %c = getfield(%p, 1)
+                # %t = tuple(%b)
+                #
+                # It would be incorrect to replace `%c` by `%b`, because that would read the value of
+                # `%b` in the *current* iteration, while the value of `%b` that comes in via `%p` is
+                # that of the previous iteration.
+                domtree = get!(lazydomtree)
+                for item in visited_philikes
+                    if !dominates_ssa(compact, domtree, the_leaf_val, item)
+                        dominates_all = false
+                        break
+                    end
                 end
             end
-            if dominates_all
-                return the_leaf
+        end
+        if dominates_all
+            if isa(the_leaf_val, OldSSAValue)
+                the_leaf = LiftedValue(simple_walk(compact, the_leaf_val))
             end
+            return Pair{Any, PhiNest}(the_leaf, PhiNest(visited_philikes, Vector{LiftedPhilike}(undef, 0), lifted_leaves, reverse_mapping, walker_callback))
         end
     end
 
@@ -725,76 +837,20 @@ function perform_lifting!(compact::IncrementalCompact,
         end
     end
 
-    # Fix up arguments
-    for i = 1:nphilikes
-        (old_node_ssa, lf) = visited_philikes[i], lifted_philikes[i]
-        lf.need_argupdate || continue
-        should_count = !isa(lf.ssa, OldSSAValue) || already_inserted(compact, lf.ssa)
-
-        lfnode = lf.node
-        if isa(lfnode, PhiNode)
-            old_node = compact[old_node_ssa][:stmt]::PhiNode
-            new_node = lfnode
-            for i = 1:length(old_node.values)
-                isassigned(old_node.values, i) || continue
-                val = lifted_value(compact, old_node_ssa, old_node.values[i],
-                                   lifted_philikes, lifted_leaves, reverse_mapping)
-                val !== SKIP_TOKEN && push!(new_node.edges, old_node.edges[i])
-                if val === UNDEF_TOKEN
-                    resize!(new_node.values, length(new_node.values)+1)
-                elseif val !== SKIP_TOKEN
-                    should_count && _count_added_node!(compact, val)
-                    push!(new_node.values, val)
-                end
-            end
-        elseif isa(lfnode, IfElseCall)
-            old_node = compact[old_node_ssa][:stmt]::Expr
-            then_result, else_result = old_node.args[3], old_node.args[4]
-
-            then_result = lifted_value(compact, old_node_ssa, then_result,
-                                       lifted_philikes, lifted_leaves, reverse_mapping)
-            else_result = lifted_value(compact, old_node_ssa, else_result,
-                                       lifted_philikes, lifted_leaves, reverse_mapping)
-
-            # In cases where the Core.ifelse condition is statically-known, e.g., thanks
-            # to a PiNode from a guarding conditional, replace with the remaining branch.
-            if then_result === SKIP_TOKEN || else_result === SKIP_TOKEN
-                only_result = (then_result === SKIP_TOKEN) ? else_result : then_result
-
-                # Replace Core.ifelse(%cond, %a, %b) with %a
-                compact[lf.ssa] = only_result
-
-                # Note: Core.ifelse(%cond, %a, %b) has observable effects (!nothrow), but since
-                # we have not deleted the preceding statement that this was derived from, this
-                # replacement is safe, i.e. it will not affect the effects observed.
-                continue
-            end
-
-            @assert then_result !== SKIP_TOKEN && then_result !== UNDEF_TOKEN
-            @assert else_result !== SKIP_TOKEN && else_result !== UNDEF_TOKEN
-
-            if should_count
-                _count_added_node!(compact, then_result)
-                _count_added_node!(compact, else_result)
-            end
-
-            push!(lfnode.call.args, then_result)
-            push!(lfnode.call.args, else_result)
-        end
-    end
-
     # Fixup the stmt itself
     if isa(stmt_val, Union{SSAValue, OldSSAValue})
-        stmt_val = simple_walk(compact, stmt_val)
+        stmt_val = simple_walk(compact, stmt_val, def_walker(lifted_leaves, reverse_mapping, walker_callback))
     end
 
     if stmt_val in keys(lifted_leaves)
-        return lifted_leaves[stmt_val]
+        stmt_val = lifted_leaves[stmt_val]
     elseif isa(stmt_val, AnySSAValue) && stmt_val in keys(reverse_mapping)
-        return LiftedValue(lifted_philikes[reverse_mapping[stmt_val]].ssa)
+        stmt_val = LiftedValue(lifted_philikes[reverse_mapping[stmt_val]].ssa)
+    else
+        error()
     end
 
-    return stmt_val # N.B. should never happen
+    return Pair{Any, PhiNest}(stmt_val, PhiNest(visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping, walker_callback))
 end
 
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
@@ -837,16 +893,13 @@ function lift_leaves_keyvalue(compact::IncrementalCompact, @nospecialize(key),
             if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
                 @assert isexpr(def, :invoke)
                 if length(def.args) in (5, 6)
-                    collection = def.args[end-2]
                     set_key = def.args[end-1]
                     set_val_idx = length(def.args)
                 elseif length(def.args) == 4
-                    collection = def.args[end-1]
                     # Key is deleted
                     # TODO: Model this
                     return nothing
                 elseif length(def.args) == 3
-                    collection = def.args[end]
                     # The whole collection is deleted
                     # TODO: Model this
                     return nothing
@@ -857,8 +910,6 @@ function lift_leaves_keyvalue(compact::IncrementalCompact, @nospecialize(key),
                     lift_arg!(compact, leaf, cache_key, def, set_val_idx, lifted_leaves)
                     continue
                 end
-                # TODO: Continue walking the chain
-                return nothing
             end
         end
         return nothing
@@ -866,11 +917,42 @@ function lift_leaves_keyvalue(compact::IncrementalCompact, @nospecialize(key),
     return lifted_leaves
 end
 
+function keyvalue_predecessors(@nospecialize(key), 𝕃ₒ::AbstractLattice)
+    function(@nospecialize(def), compact::IncrementalCompact)
+        if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
+            @assert isexpr(def, :invoke)
+            if length(def.args) in (5, 6)
+                collection = def.args[end-2]
+                set_key = def.args[end-1]
+                set_val_idx = length(def.args)
+            elseif length(def.args) == 4
+                collection = def.args[end-1]
+                # Key is deleted
+                # TODO: Model this
+                return nothing
+            elseif length(def.args) == 3
+                collection = def.args[end]
+                # The whole collection is deleted
+                # TODO: Model this
+                return nothing
+            else
+                return nothing
+            end
+            if set_key === key || (egal_tfunc(𝕃ₒ, argextype(key, compact), argextype(set_key, compact)) == Const(true))
+                # This is an actual def
+                return nothing
+            end
+            return Any[collection]
+        end
+        return phi_or_ifelse_predecessors(def, compact)
+    end
+end
+
 function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
     collection = stmt.args[end-1]
     key = stmt.args[end]
 
-    leaves, visited_philikes = collect_leaves(compact, collection, Any, 𝕃ₒ, phi_or_ifelse_predecessors)
+    leaves, visited_philikes = collect_leaves(compact, collection, Any, 𝕃ₒ, keyvalue_predecessors(key, 𝕃ₒ))
     isempty(leaves) && return
 
     lifted_leaves = lift_leaves_keyvalue(compact, key, leaves, 𝕃ₒ)
@@ -882,20 +964,29 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
         result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
     end
 
-    lifted_val = perform_lifting!(compact,
-        visited_philikes, key, result_t, lifted_leaves, collection, nothing)
+    function keyvalue_walker(@nospecialize(def), _)
+        if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
+            @assert length(def.args) in (5, 6)
+            return LiftedValue(def.args[end-2])
+        end
+        return nothing
+    end
+    (lifted_val, nest) = perform_lifting!(compact,
+        visited_philikes, key, result_t, lifted_leaves, collection, nothing,
+        keyvalue_walker)
 
-    compact[idx] = lifted_val === nothing ? nothing : Expr(:call, Core.tuple, lifted_val.val)
+    compact[idx] = lifted_val === nothing ? nothing : Expr(:call, GlobalRef(Core, :tuple), lifted_val.val)
+    finish_phi_nest!(compact, nest)
     if lifted_val !== nothing
-        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
-            compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], tuple_tfunc(𝕃ₒ, Any[result_t]))
+            add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
         end
     end
 
     return
 end
 
-# TODO: We could do the whole lifing machinery here, but really all
+# TODO: We could do the whole lifting machinery here, but really all
 # we want to do is clean this up when it got inserted by inlining,
 # which always targets simple `svec` call or `_compute_sparams`,
 # so this specialized lifting would be enough
@@ -1049,8 +1140,15 @@ struct IntermediaryCollector
     intermediaries::SPCSet
 end
 function (this::IntermediaryCollector)(@nospecialize(pi), @nospecialize(ssa))
-    push!(this.intermediaries, ssa.id)
-    return false
+    if !isa(pi, Expr)
+        push!(this.intermediaries, ssa.id)
+    end
+    return nothing
+end
+
+function update_scope_mapping!(scope_mapping, bb, val)
+    @assert (scope_mapping[bb] in (val, SSAValue(0)))
+    scope_mapping[bb] = val
 end
 
 """
@@ -1077,9 +1175,48 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     # initialization of domtree is delayed to avoid the expensive computation in many cases
     lazydomtree = LazyDomtree(ir)
-    for ((_, idx), stmt) in compact
+    scope_mapping::Union{Vector{SSAValue}, Nothing} = nothing
+    for ((old_idx, idx), stmt) in compact
+        # If we encounter any EnterNode with set :scope, propagate the current scope for all basic blocks, so
+        # we have easy access for current_scope folding below.
+        if !isa(stmt, Expr)
+            bb = compact.active_result_bb - 1
+            if scope_mapping !== nothing && did_just_finish_bb(compact)
+                this_scope = scope_mapping[bb]
+                if isa(stmt, GotoIfNot)
+                    update_scope_mapping!(scope_mapping, stmt.dest, this_scope)
+                    update_scope_mapping!(scope_mapping, bb+1, this_scope)
+                elseif isa(stmt, GotoNode)
+                    update_scope_mapping!(scope_mapping, stmt.label, this_scope)
+                elseif isa(stmt, EnterNode)
+                    if stmt.catch_dest != 0
+                        update_scope_mapping!(scope_mapping, stmt.catch_dest, this_scope)
+                    end
+                    isdefined(stmt, :scope) || update_scope_mapping!(scope_mapping, bb+1, this_scope)
+                elseif !isa(stmt, ReturnNode)
+                    update_scope_mapping!(scope_mapping, bb+1, this_scope)
+                end
+            end
+            if isa(stmt, EnterNode)
+                if isdefined(stmt, :scope)
+                    if scope_mapping === nothing
+                        scope_mapping = SSAValue[SSAValue(0) for i = 1:length(compact.cfg_transform.result_bbs)]
+                    end
+                    update_scope_mapping!(scope_mapping, bb+1, SSAValue(idx))
+                end
+            end
+            continue
+        end
+        if scope_mapping !== nothing && did_just_finish_bb(compact)
+            bb = compact.active_result_bb - 1
+            bbs = scope_mapping[bb]
+            if isexpr(stmt, :leave) && bbs != SSAValue(0)
+                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[block_for_inst(compact, bbs)])
+            else
+                update_scope_mapping!(scope_mapping, bb+1, bbs)
+            end
+        end
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
-        isa(stmt, Expr) || continue
         is_setfield = is_isdefined = is_finalizer = is_keyvalue_get = false
         field_ordering = :unspecified
         if is_known_call(stmt, setfield!, compact)
@@ -1123,11 +1260,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 preserved_arg = stmt.args[pidx]
                 isa(preserved_arg, SSAValue) || continue
                 let intermediaries = SPCSet()
-                    callback = function (@nospecialize(pi), @nospecialize(ssa))
-                        push!(intermediaries, ssa.id)
-                        return false
-                    end
-                    def = simple_walk(compact, preserved_arg, callback)
+                    def = simple_walk(compact, preserved_arg, IntermediaryCollector(intermediaries))
                     isa(def, SSAValue) || continue
                     defidx = def.id
                     def = compact[def][:stmt]
@@ -1173,6 +1306,14 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             elseif is_known_invoke_or_call(stmt, Core.OptimizedGenerics.KeyValue.get, compact)
                 2 == (length(stmt.args) - (isexpr(stmt, :invoke) ? 2 : 1)) || continue
                 lift_keyvalue_get!(compact, idx, stmt, 𝕃ₒ)
+            elseif is_known_call(stmt, Core.current_scope, compact)
+                length(stmt.args) == 1 || continue
+                scope_mapping !== nothing || continue
+                bb = compact.active_result_bb
+                did_just_finish_bb(compact) && (bb -= 1)
+                enter_ssa = scope_mapping[bb]
+                enter_ssa == SSAValue(0) && continue
+                compact[SSAValue(idx)] = (compact[enter_ssa][:stmt]::EnterNode).scope
             elseif isexpr(stmt, :new)
                 refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             end
@@ -1248,8 +1389,26 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
         end
 
-        lifted_val = perform_lifting!(compact,
+        (lifted_val, nest) = perform_lifting!(compact,
             visited_philikes, field, result_t, lifted_leaves, val, lazydomtree)
+
+        node_was_deleted = false
+        line = compact[SSAValue(idx)][:line]
+        if lifted_val !== nothing && !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
+            compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
+            add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
+        elseif lifted_val === nothing || isa(lifted_val.val, AnySSAValue)
+            # Save some work in a later compaction, by inserting this into the renamer now,
+            # but only do this if we didn't set the REFINED flag, to save work for irinterp
+            # in revisiting only the renamings that came through *this* idx.
+            delete_inst_here!(compact)
+            compact.ssa_rename[old_idx] = lifted_val === nothing ? nothing : lifted_val.val
+            node_was_deleted = true
+        else
+            compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
+        end
+
+        finish_phi_nest!(compact, nest)
 
         # Insert the undef check if necessary
         if any_undef
@@ -1260,22 +1419,21 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 for (k, v) in pairs(lifted_leaves)
                     lifted_leaves_def[k] = v === nothing ? false : true
                 end
-                def_val = perform_lifting!(compact,
-                    visited_philikes, field, Bool, lifted_leaves_def, val, lazydomtree).val
+                (def_val, nest) = perform_lifting!(compact,
+                    visited_philikes, field, Bool, lifted_leaves_def, val, lazydomtree)
+                def_val = (def_val::LiftedValue).val
+                finish_phi_nest!(compact, nest)
             end
-            insert_node!(compact, SSAValue(idx), NewInstruction(
-                Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val), Nothing))
-
+            ni = NewInstruction(
+                Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val), Nothing, line)
+            if node_was_deleted
+                insert_node_here!(compact, ni, true)
+            else
+                insert_node!(compact, SSAValue(idx), ni)
+            end
         else
             # val must be defined
             @assert lifted_val !== nothing
-        end
-
-        compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
-        if lifted_val !== nothing
-            if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
-                add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
-            end
         end
     end
 
@@ -1459,7 +1617,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     end
 
     # Ok, legality check complete. Figure out the exact statement where we're
-    # gonna inline the finalizer.
+    # going to inline the finalizer.
     loc = bb_insert_idx === nothing ? first(ir.cfg.blocks[bb_insert_block].stmts) : bb_insert_idx::Int
     attach_after = bb_insert_idx !== nothing
 
@@ -1941,6 +2099,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             end
         end
     end
+
     return Pair{IRCode, Bool}(complete(compact), made_changes)
 end
 
@@ -1957,14 +2116,6 @@ end
 function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
     # For the time being, don't drop the first bb, because it has special predecessor semantics.
     bbidx == 1 && return false
-    # If the block we're going to is the same as the fallthrow, it's always legal to drop
-    # the block.
-    length(bb.stmts) == 0 && return true
-    if length(bb.stmts) == 1
-        stmt = ir[SSAValue(first(bb.stmts))][:stmt]
-        stmt === nothing && return true
-        ((stmt::GotoNode).label == bbidx + 1) && return true
-    end
     return true
 end
 
@@ -1990,10 +2141,10 @@ function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vec
         end
         ir[last_fallthrough_term_ssa] = nothing
         kill_edge!(bbs, last_fallthrough, terminator.dest)
-    elseif isa(terminator, EnterNode)
-        return false
     elseif isa(terminator, GotoNode)
         return true
+    elseif isterminator(terminator)
+        return false
     end
     # Hack, but effective. If we have a predecessor with a fall-through terminator, change the
     # instruction numbering to merge the blocks now such that below processing will properly
@@ -2072,9 +2223,11 @@ function cfg_simplify!(ir::IRCode)
         if length(bb.succs) == 1
             succ = bb.succs[1]
             if length(bbs[succ].preds) == 1 && succ != 1
-                # Can't merge blocks with :enter terminator even if they
-                # only have one successor.
-                if isa(ir[SSAValue(last(bb.stmts))][:stmt], EnterNode)
+                # Can't merge blocks with a non-GotoNode terminator, even if they
+                # only have one successor, because it would not be legal to have that
+                # terminator in the middle of a basic block.
+                terminator = ir[SSAValue(last(bb.stmts))][:stmt]
+                if !isa(terminator, GotoNode) && isterminator(terminator)
                     continue
                 end
                 # Prevent cycles by making sure we don't end up back at `idx`
@@ -2194,10 +2347,10 @@ function cfg_simplify!(ir::IRCode)
     bb_rename_pred = zeros(Int, length(bbs))
     for i = 1:length(bbs)
         if bb_rename_succ[i] == 0
-            bb_rename_succ[i] = -1
+            bb_rename_succ[i] = -2
             bb_rename_pred[i] = -2
         elseif bb_rename_succ[i] == typemin(Int)
-            bb_rename_succ[i] = -1
+            bb_rename_succ[i] = -2
         end
     end
 
@@ -2275,7 +2428,7 @@ function cfg_simplify!(ir::IRCode)
         @assert length(new_bb.succs) <= 2
         length(new_bb.succs) <= 1 && continue
         if new_bb.succs[1] == new_bb.succs[2]
-            old_bb2 = findfirst(x::Int->x==bbidx, bb_rename_pred)
+            old_bb2 = findfirst(x::Int->x==bbidx, bb_rename_pred)::Int
             terminator = ir[SSAValue(last(bbs[old_bb2].stmts))]
             @assert terminator[:stmt] isa GotoIfNot
             # N.B.: The dest will be renamed in process_node! below

@@ -5609,3 +5609,11 @@ let x = 1, _Any = Any
     foo27031() = bar27031((x, 1.0), Val{_Any})
     @test foo27031() == "OK"
 end
+
+# Issue #51927
+let 𝕃 = Core.Compiler.fallback_lattice
+    @test apply_type_tfunc(𝕃, Const(Tuple{Vararg{Any,N}} where N), Int) == Type{NTuple{_A, Any}} where _A
+end
+
+# Issue #52613
+@test (code_typed((Any,)) do x; TypeVar(x...); end)[1][2] === TypeVar

@@ -273,6 +273,7 @@ function show(io::IO, M::Bidiagonal)
 end
 
 size(M::Bidiagonal) = (n = length(M.dv); (n, n))
+axes(M::Bidiagonal) = (ax = axes(M.dv, 1); (ax, ax))
 
 #Elementary operations
 for func in (:conj, :copy, :real, :imag)
@@ -801,34 +802,35 @@ ldiv!(c::AbstractVecOrMat, A::AdjOrTrans{<:Any,<:Bidiagonal}, b::AbstractVecOrMa
     (t = wrapperop(A); _rdiv!(t(c), t(b), t(A)); return c)
 
 ### Generic promotion methods and fallbacks
-\(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(_initarray(\, eltype(A), eltype(B), B), A, B)
+\(A::Bidiagonal, B::AbstractVecOrMat) =
+    ldiv!(matprod_dest(A, B, promote_op(\, eltype(A), eltype(B))), A, B)
 \(xA::AdjOrTrans{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(xA) \ B
 
 ### Triangular specializations
 for tri in (:UpperTriangular, :UnitUpperTriangular)
     @eval function \(B::Bidiagonal, U::$tri)
-        A = ldiv!(_initarray(\, eltype(B), eltype(U), U), B, U)
+        A = ldiv!(matprod_dest(B, U, promote_op(\, eltype(B), eltype(U))), B, U)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
     @eval function \(U::$tri, B::Bidiagonal)
-        A = ldiv!(_initarray(\, eltype(U), eltype(B), U), U, B)
+        A = ldiv!(matprod_dest(U, B, promote_op(\, eltype(U), eltype(B))), U, B)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
 end
 for tri in (:LowerTriangular, :UnitLowerTriangular)
     @eval function \(B::Bidiagonal, L::$tri)
-        A = ldiv!(_initarray(\, eltype(B), eltype(L), L), B, L)
+        A = ldiv!(matprod_dest(B, L, promote_op(\, eltype(B), eltype(L))), B, L)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
     @eval function \(L::$tri, B::Bidiagonal)
-        A = ldiv!(_initarray(\, eltype(L), eltype(B), L), L, B)
+        A = ldiv!(matprod_dest(L, B, promote_op(\, eltype(L), eltype(B))), L, B)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
 end
 
 ### Diagonal specialization
 function \(B::Bidiagonal, D::Diagonal)
-    A = ldiv!(_initarray(\, eltype(B), eltype(D), D), B, D)
+    A = ldiv!(similar(D, promote_op(\, eltype(B), eltype(D)), size(D)), B, D)
     return B.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
 end
 
@@ -878,33 +880,34 @@ rdiv!(A::AbstractMatrix, B::AdjOrTrans{<:Any,<:Bidiagonal}) = @inline _rdiv!(A, 
 _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::AdjOrTrans{<:Any,<:Bidiagonal}) =
     (t = wrapperop(B); ldiv!(t(C), t(B), t(A)); return C)
 
-/(A::AbstractMatrix, B::Bidiagonal) = _rdiv!(_initarray(/, eltype(A), eltype(B), A), A, B)
+/(A::AbstractMatrix, B::Bidiagonal) =
+    _rdiv!(similar(A, promote_op(/, eltype(A), eltype(B)), size(A)), A, B)
 
 ### Triangular specializations
 for tri in (:UpperTriangular, :UnitUpperTriangular)
     @eval function /(U::$tri, B::Bidiagonal)
-        A = _rdiv!(_initarray(/, eltype(U), eltype(B), U), U, B)
+        A = _rdiv!(matprod_dest(U, B, promote_op(/, eltype(U), eltype(B))), U, B)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
     @eval function /(B::Bidiagonal, U::$tri)
-        A = _rdiv!(_initarray(/, eltype(B), eltype(U), U), B, U)
+        A = _rdiv!(matprod_dest(B, U, promote_op(/, eltype(B), eltype(U))), B, U)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
 end
 for tri in (:LowerTriangular, :UnitLowerTriangular)
     @eval function /(L::$tri, B::Bidiagonal)
-        A = _rdiv!(_initarray(/, eltype(L), eltype(B), L), L, B)
+        A = _rdiv!(matprod_dest(L, B, promote_op(/, eltype(L), eltype(B))), L, B)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
     @eval function /(B::Bidiagonal, L::$tri)
-        A = _rdiv!(_initarray(/, eltype(B), eltype(L), L), B, L)
+        A = _rdiv!(matprod_dest(B, L, promote_op(/, eltype(B), eltype(L))), B, L)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
 end
 
 ### Diagonal specialization
 function /(D::Diagonal, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(D), eltype(B), D), D, B)
+    A = _rdiv!(similar(D, promote_op(/, eltype(D), eltype(B)), size(D)), D, B)
     return B.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
 end
 

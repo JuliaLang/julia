@@ -19,6 +19,9 @@ using .Main.InfiniteArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
@@ -841,6 +844,21 @@ end
     copyto!(B, I)
     @test all(isone, diag(B))
     @test all(iszero, diag(B, 1))
+end
+
+@testset "diagind" begin
+    B = Bidiagonal(1:4, 1:3, :U)
+    M = Matrix(B)
+    @testset for k in -4:4
+        @test B[diagind(B,k)] == M[diagind(M,k)]
+    end
+end
+
+@testset "custom axes" begin
+    dv, uv = OffsetArray(1:4), OffsetArray(1:3)
+    B = Bidiagonal(dv, uv, :U)
+    ax = axes(dv, 1)
+    @test axes(B) === (ax, ax)
 end
 
 end # module TestBidiagonal

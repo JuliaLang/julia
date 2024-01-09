@@ -205,8 +205,10 @@ const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization allowed
 
 mutable struct TryCatchFrame
     exct
+    scopet
     const enter_idx::Int
-    TryCatchFrame(@nospecialize(exct), enter_idx::Int) = new(exct, enter_idx)
+    scope_uses::Vector{Int}
+    TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) = new(exct, scopet, enter_idx)
 end
 
 mutable struct InferenceState
@@ -364,12 +366,14 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
         stmt = code[pc]
         if isa(stmt, EnterNode)
             l = stmt.catch_dest
-            push!(handlers, TryCatchFrame(Bottom, pc))
+            push!(handlers, TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc))
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
             push!(ip, pc + 1)
-            handler_at[l] = (0, handler_id)
-            push!(ip, l)
+            if l != 0
+                handler_at[l] = (0, handler_id)
+                push!(ip, l)
+            end
         end
     end
 
@@ -400,7 +404,9 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 l = stmt.catch_dest
                 # We assigned a handler number above. Here we just merge that
                 # with out current handler information.
-                handler_at[l] = (cur_stacks[1], handler_at[l][2])
+                if l != 0
+                    handler_at[l] = (cur_stacks[1], handler_at[l][2])
+                end
                 cur_stacks = (handler_at[pc´][1], cur_stacks[2])
             elseif isa(stmt, Expr)
                 head = stmt.head
@@ -818,7 +824,14 @@ frame_world(sv::IRInterpretationState) = sv.world
 callers_in_cycle(sv::InferenceState) = sv.callers_in_cycle
 callers_in_cycle(sv::IRInterpretationState) = ()
 
-is_effect_overridden(sv::AbsIntState, effect::Symbol) = is_effect_overridden(frame_instance(sv), effect)
+function is_effect_overridden(sv::AbsIntState, effect::Symbol)
+    if is_effect_overridden(frame_instance(sv), effect)
+        return true
+    elseif is_effect_overridden(decode_statement_effects_override(sv), effect)
+        return true
+    end
+    return false
+end
 function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
     def = linfo.def
     return isa(def, Method) && is_effect_overridden(def, effect)
@@ -917,6 +930,9 @@ function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
 end
 merge_effects!(::AbstractInterpreter, ::IRInterpretationState, ::Effects) = return
+
+decode_statement_effects_override(sv::AbsIntState) =
+    decode_statement_effects_override(get_curr_ssaflag(sv))
 
 struct InferenceLoopState
     sig

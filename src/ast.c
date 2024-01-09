@@ -606,7 +606,11 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
         else if (sym == jl_enter_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
             temp = jl_new_struct_uninit(jl_enternode_type);
+            jl_enternode_scope(temp) = NULL;
             jl_enternode_catch_dest(temp) = jl_unbox_long(ex);
+            if (n == 2) {
+                jl_enternode_scope(temp) = scm_to_julia(fl_ctx, car_(cdr_(e)), mod);
+            }
         }
         else if (sym == jl_newvar_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
@@ -986,7 +990,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
     return expr;
 }
 
-JL_DLLEXPORT int jl_is_operator(char *sym)
+JL_DLLEXPORT int jl_is_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -995,7 +999,7 @@ JL_DLLEXPORT int jl_is_operator(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_unary_operator(char *sym)
+JL_DLLEXPORT int jl_is_unary_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -1004,7 +1008,7 @@ JL_DLLEXPORT int jl_is_unary_operator(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym)
+JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -1013,7 +1017,7 @@ JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_syntactic_operator(char *sym)
+JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -1022,7 +1026,7 @@ JL_DLLEXPORT int jl_is_syntactic_operator(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_operator_precedence(char *sym)
+JL_DLLEXPORT int jl_operator_precedence(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;

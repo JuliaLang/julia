@@ -142,6 +142,10 @@ let ex = quote
         struct WeirdNames end
         Base.propertynames(::WeirdNames) = (Symbol("oh no!"), Symbol("oh yes!"))
 
+        # https://github.com/JuliaLang/julia/issues/52551#issuecomment-1858543413
+        export exported_symbol
+        exported_symbol(::WeirdNames) = nothing
+
         end # module CompletionFoo
         test_repl_comp_dict = CompletionFoo.test_dict
         test_repl_comp_customdict = CompletionFoo.test_customdict
@@ -741,6 +745,9 @@ end
 @test test_complete("CompletionFoo.?()") == test_complete("CompletionFoo.?(;)")
 
 #TODO: @test_nocompletion("CompletionFoo.?(3; len2=5; ")
+
+# https://github.com/JuliaLang/julia/issues/52551
+@test !isempty(test_complete("?("))
 
 #################################################################
 
@@ -2156,3 +2163,28 @@ let t = REPLCompletions.repl_eval_ex(:(Base.PersistentDict(issue52099 => 3)), @_
         @test length(t.val) == 1
     end
 end
+
+# test REPLInterpreter effects for `getindex(::Dict, key)`
+for (DictT, KeyT) = Any[(Dict{Symbol,Any}, Symbol),
+                        (Dict{Int,Any}, Int),
+                        (Dict{String,Any}, String)]
+    @testset let DictT=DictT, KeyT=KeyT
+        effects = Base.infer_effects(getindex, (DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter())
+        @test Core.Compiler.is_effect_free(effects)
+        @test Core.Compiler.is_terminates(effects)
+        @test Core.Compiler.is_noub(effects)
+        effects = Base.infer_effects((DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter()) do d, key
+            key in keys(d)
+        end
+        @test Core.Compiler.is_effect_free(effects)
+        @test Core.Compiler.is_terminates(effects)
+        @test Core.Compiler.is_noub(effects)
+    end
+end
+
+# test invalidation support
+replinterp_invalidation_callee(c::Bool=rand(Bool)) = Some(c ? r"foo" : r"bar")
+replinterp_invalidation_caller() = replinterp_invalidation_callee().value
+@test REPLCompletions.repl_eval_ex(:(replinterp_invalidation_caller()), @__MODULE__) == Regex
+replinterp_invalidation_callee(c::Bool=rand(Bool)) = Some(c ? "foo" : "bar")
+@test REPLCompletions.repl_eval_ex(:(replinterp_invalidation_caller()), @__MODULE__) == String

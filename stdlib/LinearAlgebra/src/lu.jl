@@ -520,9 +520,6 @@ end
 
     # Initialize variables
     info = 0
-    if dl === du
-        throw(ArgumentError("off-diagonals must not alias"))
-    end
     fill!(du2, 0)
 
     @inbounds begin

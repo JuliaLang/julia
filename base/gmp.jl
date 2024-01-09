@@ -320,11 +320,6 @@ function BigInt(x::Float64)
     unsafe_trunc(BigInt,x)
 end
 
-function round(::Type{BigInt}, x::Union{Float16,Float32,Float64}, r::RoundingMode{:ToZero})
-    isfinite(x) || throw(InexactError(:trunc, BigInt, x))
-    unsafe_trunc(BigInt,x)
-end
-
 BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 

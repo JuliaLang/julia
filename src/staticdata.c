@@ -314,7 +314,6 @@ static arraylist_t deser_sym;
 static htable_t external_objects;
 
 static htable_t serialization_order; // to break cycles, mark all objects that are serialized
-static htable_t unique_ready; // as we serialize types, we need to know if all reachable objects are also already serialized. This tracks whether `immediate` has been set for all of them.
 static htable_t nullptrs;
 // FIFO queue for objects to be serialized. Anything requiring fixup upon deserialization
 // must be "toplevel" in this queue. For types, parameters and field types must appear
@@ -470,6 +469,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
     &jl_f_set_binding_type, &jl_f_opaque_closure_call, &jl_f_donotdelete, &jl_f_compilerbarrier,
     &jl_f_getglobal, &jl_f_setglobal, &jl_f_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref,
+    &jl_f_current_scope,
     NULL };
 
 typedef struct {
@@ -484,6 +484,7 @@ typedef struct {
     arraylist_t relocs_list;    // a list of (location, target) pairs, see description at top
     arraylist_t gctags_list;    //      "
     arraylist_t uniquing_types; // a list of locations that reference types that must be de-duplicated
+    arraylist_t uniquing_super; // a list of datatypes, used in super fields, that need to be marked in uniquing_types once they are reached, for handling unique-ing of them on deserialization
     arraylist_t uniquing_objs;  // a list of locations that reference non-types that must be de-duplicated
     arraylist_t fixup_types;    // a list of locations of types requiring (re)caching
     arraylist_t fixup_objs;     // a list of locations of objects requiring (re)caching
@@ -643,7 +644,7 @@ static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTS
     else if (jl_typetagis(v, jl_uint8_tag << 4)) {
         return 0;
     }
-    else if (jl_typetagis(v, jl_task_tag << 4)) {
+    else if (v == (jl_value_t*)s->ptls->root_task) {
         return 0;
     }
 
@@ -730,7 +731,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
     if (jl_options.strip_metadata) {
         jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
         for (size_t i = 0; i < jl_svec_len(table); i++) {
-            jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+            jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
             if ((void*)b == jl_nothing)
                 break;
             jl_sym_t *name = b->globalref->name;
@@ -756,14 +757,13 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     jl_queue_for_serialization_(s, (jl_value_t*)t, 1, immediate);
+    const jl_datatype_layout_t *layout = t->layout;
 
     if (!recursive)
         goto done_fields;
 
     if (s->incremental && jl_is_datatype(v) && immediate) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
-        // ensure super is queued (though possibly not yet handled, since it may have cycles)
-        jl_queue_for_serialization_(s, (jl_value_t*)dt->super, 1, 1);
         // ensure all type parameters are recached
         jl_queue_for_serialization_(s, (jl_value_t*)dt->parameters, 1, 1);
         if (jl_is_datatype_singleton(dt) && needs_uniquing(dt->instance)) {
@@ -772,7 +772,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // (it may get serialized from elsewhere though)
             record_field_change(&dt->instance, jl_nothing);
         }
-        immediate = 0; // do not handle remaining fields immediately (just field types remains)
+        goto done_fields; // for now
     }
     if (s->incremental && jl_is_method_instance(v)) {
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
@@ -828,11 +828,9 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         }
     }
 
-
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
         assert(jl_is_immutable(t) || jl_is_typevar(v) || jl_is_symbol(v) || jl_is_svec(v));
 
-    const jl_datatype_layout_t *layout = t->layout;
     if (layout->npointers == 0) {
         // bitstypes do not require recursion
     }
@@ -895,22 +893,35 @@ done_fields: ;
 
     // We've encountered an item we need to cache
     void **bp = ptrhash_bp(&serialization_order, v);
-    assert(*bp != (void*)(uintptr_t)-1);
-    if (s->incremental) {
-        void **bp2 = ptrhash_bp(&unique_ready, v);
-        if (*bp2 == HT_NOTFOUND)
-            assert(*bp == (void*)(uintptr_t)-2);
-        else if (*bp != (void*)(uintptr_t)-2)
-            return;
-    }
-    else {
-        assert(*bp == (void*)(uintptr_t)-2);
-    }
+    assert(*bp == (void*)(uintptr_t)-2);
     arraylist_push(&serialization_queue, (void*) v);
     size_t idx = serialization_queue.len - 1;
     assert(serialization_queue.len < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many items to serialize");
-
     *bp = (void*)((char*)HT_NOTFOUND + 1 + idx);
+
+    // DataType is very unusual, in that some of the fields need to be pre-order, and some
+    // (notably super) must not be (even if `jl_queue_for_serialization_` would otherwise
+    // try to promote itself to be immediate)
+    if (s->incremental && jl_is_datatype(v) && immediate && recursive) {
+        jl_datatype_t *dt = (jl_datatype_t*)v;
+        void **bp = ptrhash_bp(&serialization_order, (void*)dt->super);
+        if (*bp != (void*)-2) {
+            // if super is already on the stack of things to handle when this returns, do
+            // not try to handle it now
+            jl_queue_for_serialization_(s, (jl_value_t*)dt->super, 1, immediate);
+        }
+        immediate = 0;
+        char *data = (char*)jl_data_ptr(v);
+        size_t i, np = layout->npointers;
+        for (i = 0; i < np; i++) {
+            uint32_t ptr = jl_ptr_offset(t, i);
+            if (ptr * sizeof(jl_value_t*) == offsetof(jl_datatype_t, super))
+                continue; // skip the super field, since it might not be quite validly ordered
+            int mutabl = 1;
+            jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
+            jl_queue_for_serialization_(s, fld, 1, immediate);
+        }
+    }
 }
 
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED
@@ -929,28 +940,19 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     }
 
     void **bp = ptrhash_bp(&serialization_order, v);
-    if (*bp == HT_NOTFOUND) {
-        *bp = (void*)(uintptr_t)(immediate ? -2 : -1);
+    assert(!immediate || *bp != (void*)(uintptr_t)-2);
+    if (*bp == HT_NOTFOUND)
+        *bp = (void*)(uintptr_t)-1; // now enqueued
+    else if (!s->incremental || !immediate || !recursive || *bp != (void*)(uintptr_t)-1)
+        return;
+
+    if (immediate) {
+        *bp = (void*)(uintptr_t)-2; // now immediate
+        jl_insert_into_serialization_queue(s, v, recursive, immediate);
     }
     else {
-        if (!s->incremental || !immediate || !recursive)
-            return;
-        void **bp2 = ptrhash_bp(&unique_ready, v);
-        if (*bp2 == HT_NOTFOUND)
-            *bp2 = v; // now is unique_ready
-        else {
-            assert(*bp != (void*)(uintptr_t)-1);
-            return; // already was unique_ready
-        }
-        assert(*bp != (void*)(uintptr_t)-2); // should be unique_ready then
-        if (*bp == (void*)(uintptr_t)-1)
-            *bp = (void*)(uintptr_t)-2; // now immediate
-    }
-
-    if (immediate)
-        jl_insert_into_serialization_queue(s, v, recursive, immediate);
-    else
         arraylist_push(&object_worklist, (void*)v);
+    }
 }
 
 // Do a pre-order traversal of the to-serialize worklist, in the identical order
@@ -1100,8 +1102,10 @@ static void record_uniquing(jl_serializer_state *s, jl_value_t *fld, uintptr_t o
     if (s->incremental && jl_needs_serialization(s, fld) && needs_uniquing(fld)) {
         if (jl_is_datatype(fld) || jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(fld)))
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)offset);
-        else
+        else if (jl_is_method_instance(fld))
             arraylist_push(&s->uniquing_objs, (void*)(uintptr_t)offset);
+        else
+            assert(0 && "unknown object type with needs_uniquing set");
     }
 }
 
@@ -1300,7 +1304,15 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     write_pointerfield(s, (jl_value_t*)mi->sparam_vals);
                     continue;
                 }
-                else if (!jl_is_datatype(v)) {
+                else if (jl_is_datatype(v)) {
+                    for (size_t i = 0; i < s->uniquing_super.len; i++) {
+                        if (s->uniquing_super.items[i] == (void*)v) {
+                            s->uniquing_super.items[i] = arraylist_pop(&s->uniquing_super);
+                            arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(reloc_offset|3));
+                        }
+                    }
+                }
+                else {
                     assert(jl_is_datatype_singleton(t) && "unreachable");
                 }
             }
@@ -1697,6 +1709,9 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                         ios_write(s->const_data, (char*)&dyn, sizeof(jl_fielddescdyn_t));
                     }
                 }
+                void *superidx = ptrhash_get(&serialization_order, dt->super);
+                if (s->incremental && superidx != HT_NOTFOUND && (char*)superidx - 1 - (char*)HT_NOTFOUND > item && needs_uniquing((jl_value_t*)dt->super))
+                    arraylist_push(&s->uniquing_super, dt->super);
             }
             else if (jl_is_typename(v)) {
                 assert(f == s->s);
@@ -1740,6 +1755,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             }
         }
     }
+    assert(s->uniquing_super.len == 0);
 }
 
 // In deserialization, create Symbols and set up the
@@ -2230,8 +2246,9 @@ static void jl_root_new_gvars(jl_serializer_state *s, jl_image_t *image, uint32_
         uintptr_t v = *gv;
         if (i < external_fns_begin) {
             if (!jl_is_binding(v))
-                v = (uintptr_t)jl_as_global_root((jl_value_t*)v);
-        } else {
+                v = (uintptr_t)jl_as_global_root((jl_value_t*)v, 1);
+        }
+        else {
             jl_code_instance_t *codeinst = (jl_code_instance_t*) v;
             assert(codeinst && (jl_atomic_load_relaxed(&codeinst->specsigflags) & 0b01) && jl_atomic_load_relaxed(&codeinst->specptr.fptr));
             v = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
@@ -2391,6 +2408,10 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
             jl_gc_wb(m, m->source);
         }
     }
+    if (jl_options.strip_metadata) {
+        record_field_change((jl_value_t**)&m->file, (jl_value_t*)jl_empty_sym);
+        m->line = 0;
+    }
     jl_value_t *specializations = jl_atomic_load_relaxed(&m->specializations);
     if (!jl_is_svec(specializations)) {
         strip_specializations_((jl_method_instance_t*)specializations);
@@ -2430,7 +2451,13 @@ jl_mutex_t global_roots_lock;
 
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
-    if (jl_is_concrete_type(val) || jl_is_bool(val) || jl_is_symbol(val) ||
+    if (jl_is_datatype(val)) {
+        jl_datatype_t *dt = (jl_datatype_t*)val;
+        if (jl_unwrap_unionall(dt->name->wrapper) == val)
+            return 1;
+        return (jl_is_tuple_type(val) ? dt->isconcretetype : !dt->hasfreetypevars); // aka is_cacheable from jltypes.c
+    }
+    if (jl_is_bool(val) || jl_is_symbol(val) ||
             val == (jl_value_t*)jl_any_type || val == (jl_value_t*)jl_bottom_type || val == (jl_value_t*)jl_core_module)
         return 1;
     if (val == ((jl_datatype_t*)jl_typeof(val))->instance)
@@ -2438,10 +2465,21 @@ JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOT
     return 0;
 }
 
-JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
+static jl_value_t *extract_wrapper(jl_value_t *t JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT JL_GLOBALLY_ROOTED
+{
+    t = jl_unwrap_unionall(t);
+    if (jl_is_datatype(t))
+        return ((jl_datatype_t*)t)->name->wrapper;
+    return NULL;
+}
+
+JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert)
 {
     if (jl_is_globally_rooted(val))
         return val;
+    jl_value_t *tw = extract_wrapper(val);
+    if (tw && (val == tw || jl_types_egal(val, tw)))
+        return tw;
     if (jl_is_uint8(val))
         return jl_box_uint8(jl_unbox_uint8(val));
     if (jl_is_int32(val)) {
@@ -2454,20 +2492,24 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
         if ((uint64_t)(n+512) < 1024)
             return jl_box_int64(n);
     }
-    // TODO: check table before acquiring lock to reduce writer contention
-    JL_GC_PUSH1(&val);
-    JL_LOCK(&global_roots_lock);
+    // check table before acquiring lock to reduce writer contention
     jl_value_t *rval = jl_idset_get(jl_global_roots_list, jl_global_roots_keyset, val);
+    if (rval)
+        return rval;
+    JL_LOCK(&global_roots_lock);
+    rval = jl_idset_get(jl_global_roots_list, jl_global_roots_keyset, val);
     if (rval) {
         val = rval;
     }
-    else {
+    else if (insert) {
         ssize_t idx;
         jl_global_roots_list = jl_idset_put_key(jl_global_roots_list, val, &idx);
         jl_global_roots_keyset = jl_idset_put_idx(jl_global_roots_list, jl_global_roots_keyset, idx);
     }
+    else {
+        val = NULL;
+    }
     JL_UNLOCK(&global_roots_lock);
-    JL_GC_POP();
     return val;
 }
 
@@ -2539,7 +2581,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         ptrhash_put(&fptr_to_id, (void*)(uintptr_t)id_to_fptrs[i], (void*)(i + 2));
     }
     htable_new(&serialization_order, 25000);
-    htable_new(&unique_ready, 0);
     htable_new(&nullptrs, 0);
     arraylist_new(&object_worklist, 0);
     arraylist_new(&serialization_queue, 0);
@@ -2564,6 +2605,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
     arraylist_new(&s.uniquing_types, 0);
+    arraylist_new(&s.uniquing_super, 0);
     arraylist_new(&s.uniquing_objs, 0);
     arraylist_new(&s.fixup_types, 0);
     arraylist_new(&s.fixup_objs, 0);
@@ -2606,6 +2648,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         }
     }
     jl_genericmemory_t *global_roots_list = NULL;
+    jl_genericmemory_t *global_roots_keyset = NULL;
 
     { // step 1: record values (recursively) that need to go in the image
         size_t i;
@@ -2652,14 +2695,17 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         // step 1.3: prune (garbage collect) special weak references from the jl_global_roots_list
         if (worklist == NULL) {
             global_roots_list = jl_alloc_memory_any(0);
+            global_roots_keyset = jl_alloc_memory_any(0);
             for (size_t i = 0; i < jl_global_roots_list->length; i++) {
                 jl_value_t *val = jl_genericmemory_ptr_ref(jl_global_roots_list, i);
                 if (val && ptrhash_get(&serialization_order, val) != HT_NOTFOUND) {
                     ssize_t idx;
                     global_roots_list = jl_idset_put_key(global_roots_list, val, &idx);
+                    global_roots_keyset = jl_idset_put_idx(global_roots_list, global_roots_keyset, idx);
                 }
             }
             jl_queue_for_serialization(&s, global_roots_list);
+            jl_queue_for_serialization(&s, global_roots_keyset);
             jl_serialize_reachable(&s);
         }
         // step 1.4: prune (garbage collect) some special weak references from
@@ -2772,6 +2818,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                 jl_write_value(&s, tag);
             }
             jl_write_value(&s, global_roots_list);
+            jl_write_value(&s, global_roots_keyset);
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
             write_uint(f, jl_atomic_load_acquire(&jl_world_counter));
@@ -2810,6 +2857,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_free(&object_worklist);
     arraylist_free(&serialization_queue);
     arraylist_free(&layout_table);
+    arraylist_free(&s.uniquing_types);
+    arraylist_free(&s.uniquing_super);
+    arraylist_free(&s.uniquing_objs);
+    arraylist_free(&s.fixup_types);
+    arraylist_free(&s.fixup_objs);
     arraylist_free(&s.ccallable_list);
     arraylist_free(&s.memowner_list);
     arraylist_free(&s.memref_list);
@@ -2821,7 +2873,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     if (worklist)
         htable_free(&external_objects);
     htable_free(&serialization_order);
-    htable_free(&unique_ready);
     htable_free(&nullptrs);
     htable_free(&symbol_table);
     htable_free(&fptr_to_id);
@@ -3083,6 +3134,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
 #undef XX
         export_jl_small_typeof();
         jl_global_roots_list = (jl_genericmemory_t*)jl_read_value(&s);
+        jl_global_roots_keyset = (jl_genericmemory_t*)jl_read_value(&s);
         // set typeof extra-special values now that we have the type set by tags above
         jl_astaggedvalue(jl_nothing)->header = (uintptr_t)jl_nothing_type | jl_astaggedvalue(jl_nothing)->header;
         s.ptls->root_task->tls = jl_read_value(&s);
@@ -3191,31 +3243,43 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         uintptr_t item = (uintptr_t)s.uniquing_types.items[i];
         // check whether we are operating on the typetag
         // (needing to ignore GC bits) or a regular field
-        int tag = (item & 1) == 1;
-        // check whether this is a gvar index
-        int gvar = (item & 2) == 2;
+        // and check whether this is a gvar index
+        int tag = (item & 3);
         item &= ~(uintptr_t)3;
         uintptr_t *pfld;
         jl_value_t **obj, *newobj;
-        if (gvar) {
+        if (tag == 3) {
+            obj = (jl_value_t**)(image_base + item);
+            pfld = NULL;
+            for (size_t i = 0; i < delay_list.len; i += 2) {
+                if (obj == (jl_value_t **)delay_list.items[i + 0]) {
+                    pfld = (uintptr_t*)delay_list.items[i + 1];
+                    delay_list.items[i + 1] = arraylist_pop(&delay_list);
+                    delay_list.items[i + 0] = arraylist_pop(&delay_list);
+                    break;
+                }
+            }
+            assert(pfld);
+        }
+        else if (tag == 2) {
             if (image->gvars_base == NULL)
                 continue;
             item >>= 2;
             assert(item < s.gvar_record->size / sizeof(reloc_t));
             pfld = sysimg_gvars(image->gvars_base, image->gvars_offsets, item);
             obj = *(jl_value_t***)pfld;
-            assert(tag == 0);
         }
         else {
             pfld = (uintptr_t*)(image_base + item);
-            if (tag)
+            if (tag == 1)
                 obj = (jl_value_t**)jl_typeof(jl_valueof(pfld));
             else
                 obj = *(jl_value_t***)pfld;
             if ((char*)obj > (char*)pfld) {
+                // this must be the super field
                 assert(tag == 0);
-                arraylist_push(&delay_list, pfld);
                 arraylist_push(&delay_list, obj);
+                arraylist_push(&delay_list, pfld);
                 ptrhash_put(&new_dt_objs, (void*)obj, obj); // mark obj as invalid
                 *pfld = (uintptr_t)NULL;
                 continue;
@@ -3265,25 +3329,14 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             assert(newobj && newobj != jl_nothing);
             arraylist_push(&cleanup_list, (void*)obj);
         }
-        if (tag)
+        if (tag == 1)
             *pfld = (uintptr_t)newobj | GC_OLD | GC_IN_IMAGE;
         else
             *pfld = (uintptr_t)newobj;
         assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));
         assert(jl_typetagis(obj, otyp));
     }
-    // A few fields (reached via super) might be self-recursive. This is rare, but handle them now.
-    // They cannot be instances though, since the type must fully exist before the singleton field can be allocated
-    for (size_t i = 0; i < delay_list.len; ) {
-        uintptr_t *pfld = (uintptr_t*)delay_list.items[i++];
-        jl_value_t **obj = (jl_value_t **)delay_list.items[i++];
-        assert(jl_is_datatype(obj));
-        jl_datatype_t *dt = (jl_datatype_t*)obj[0];
-        assert(jl_is_datatype(dt));
-        jl_value_t *newobj = (jl_value_t*)dt;
-        *pfld = (uintptr_t)newobj;
-        assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg));
-    }
+    assert(delay_list.len == 0);
     arraylist_free(&delay_list);
     // now that all the fields of dt are assigned and unique, copy them into
     // their final newdt memory location: this ensures we do not accidentally
@@ -3331,11 +3384,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     for (size_t i = 0; i < s.uniquing_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_objs.items[i];
         // check whether this is a gvar index
-        int gvar = (item & 2) == 2;
+        int tag = (item & 3);
+        assert(tag == 0 || tag == 2);
         item &= ~(uintptr_t)3;
         uintptr_t *pfld;
         jl_value_t **obj, *newobj;
-        if (gvar) {
+        if (tag == 2) {
             if (image->gvars_base == NULL)
                 continue;
             item >>= 2;
@@ -3380,8 +3434,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
-    if (!s.incremental && jl_global_roots_list->length > 0)
-        jl_global_roots_keyset = jl_idset_put_idx(jl_global_roots_list, (jl_genericmemory_t*)jl_an_empty_memory_any, -jl_global_roots_list->length);
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
