@@ -59,6 +59,16 @@ end
 
 abstract type ForwardableArgtypes end
 
+struct AnalysisResults
+    result
+    next::AnalysisResults
+    AnalysisResults(@nospecialize(result), next::AnalysisResults) = new(result, next)
+    AnalysisResults(@nospecialize(result)) = new(result)
+    # NullAnalysisResults() = new(nothing)
+    # global const NULL_ANALYSIS_RESULTS = NullAnalysisResults()
+end
+const NULL_ANALYSIS_RESULTS = AnalysisResults(nothing)
+
 """
     InferenceResult(linfo::MethodInstance, [argtypes::ForwardableArgtypes, 𝕃::AbstractLattice])
 
@@ -71,24 +81,40 @@ mutable struct InferenceResult
     const argtypes::Vector{Any}
     const overridden_by_const::BitVector
     result                   # extended lattice element if inferred, nothing otherwise
+    exc_result               # like `result`, but for the thrown value
     src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
     valid_worlds::WorldRange # if inference and optimization is finished
     ipo_effects::Effects     # if inference is finished
     effects::Effects         # if optimization is finished
-    argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
-    must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
+    analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
+    is_src_volatile::Bool    # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
     function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
         # def = linfo.def
         # nargs = def isa Method ? Int(def.nargs) : 0
         # @assert length(cache_argtypes) == nargs
-        return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing,
-            WorldRange(), Effects(), Effects(), nothing, true)
+        return new(linfo, cache_argtypes, overridden_by_const, nothing, nothing, nothing,
+            WorldRange(), Effects(), Effects(), NULL_ANALYSIS_RESULTS, false)
     end
 end
 InferenceResult(linfo::MethodInstance, 𝕃::AbstractLattice=fallback_lattice) =
     InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo)...)
 InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes, 𝕃::AbstractLattice=fallback_lattice) =
     InferenceResult(linfo, matching_cache_argtypes(𝕃, linfo, argtypes)...)
+
+function stack_analysis_result!(inf_result::InferenceResult, @nospecialize(result))
+    return inf_result.analysis_results = AnalysisResults(result, inf_result.analysis_results)
+end
+
+function traverse_analysis_results(callback, (;analysis_results)::Union{InferenceResult,CodeInstance})
+    analysis_results isa AnalysisResults || return nothing
+    while isdefined(analysis_results, :next)
+        if (result = callback(analysis_results.result)) !== nothing
+            return result
+        end
+        analysis_results = analysis_results.next
+    end
+    return nothing
+end
 
 """
     inf_params::InferenceParams
@@ -253,6 +279,11 @@ Parameters that control optimizer operation.
   optimizer license to move side effects (that are proven not observed within a particular
   code path) across a throwing call. Defaults to `false`.
 ---
+- `opt_params.preserve_local_sources::Bool = false`\\
+  If `true`, the inliner is restricted from modifying locally-cached sources that are
+  retained in `CallInfo` objects and always makes their copies before inlining them into
+  caller context. Defaults to `false`.
+---
 """
 struct OptimizationParams
     inlining::Bool
@@ -263,6 +294,7 @@ struct OptimizationParams
     max_tuple_splat::Int
     compilesig_invokes::Bool
     assume_fatal_throw::Bool
+    preserve_local_sources::Bool
 
     function OptimizationParams(
         inlining::Bool,
@@ -272,7 +304,8 @@ struct OptimizationParams
         inline_error_path_cost::Int,
         max_tuple_splat::Int,
         compilesig_invokes::Bool,
-        assume_fatal_throw::Bool)
+        assume_fatal_throw::Bool,
+        preserve_local_sources::Bool)
         return new(
             inlining,
             inline_cost_threshold,
@@ -281,7 +314,8 @@ struct OptimizationParams
             inline_error_path_cost,
             max_tuple_splat,
             compilesig_invokes,
-            assume_fatal_throw)
+            assume_fatal_throw,
+            preserve_local_sources)
     end
 end
 function OptimizationParams(
@@ -293,7 +327,8 @@ function OptimizationParams(
         #=inline_error_path_cost::Int=# 20,
         #=max_tuple_splat::Int=# 32,
         #=compilesig_invokes::Bool=# true,
-        #=assume_fatal_throw::Bool=# false);
+        #=assume_fatal_throw::Bool=# false,
+        #=preserve_local_sources::Bool=# false);
     inlining::Bool = params.inlining,
     inline_cost_threshold::Int = params.inline_cost_threshold,
     inline_nonleaf_penalty::Int = params.inline_nonleaf_penalty,
@@ -301,7 +336,8 @@ function OptimizationParams(
     inline_error_path_cost::Int = params.inline_error_path_cost,
     max_tuple_splat::Int = params.max_tuple_splat,
     compilesig_invokes::Bool = params.compilesig_invokes,
-    assume_fatal_throw::Bool = params.assume_fatal_throw)
+    assume_fatal_throw::Bool = params.assume_fatal_throw,
+    preserve_local_sources::Bool = params.preserve_local_sources)
     return OptimizationParams(
         inlining,
         inline_cost_threshold,
@@ -310,7 +346,8 @@ function OptimizationParams(
         inline_error_path_cost,
         max_tuple_splat,
         compilesig_invokes,
-        assume_fatal_throw)
+        assume_fatal_throw,
+        preserve_local_sources)
 end
 
 """
@@ -331,9 +368,6 @@ struct NativeInterpreter <: AbstractInterpreter
     # Parameters for inference and optimization
     inf_params::InferenceParams
     opt_params::OptimizationParams
-
-    # a boolean flag to indicate if this interpreter is performing semi concrete interpretation
-    irinterp::Bool
 end
 
 function NativeInterpreter(world::UInt = get_world_counter();
@@ -353,7 +387,7 @@ function NativeInterpreter(world::UInt = get_world_counter();
 
     inf_cache = Vector{InferenceResult}() # Initially empty cache
 
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params, #=irinterp=#false)
+    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
 end
 
 function NativeInterpreter(interp::NativeInterpreter;
@@ -361,9 +395,8 @@ function NativeInterpreter(interp::NativeInterpreter;
                            method_table::CachedMethodTable{InternalMethodTable} = interp.method_table,
                            inf_cache::Vector{InferenceResult} = interp.inf_cache,
                            inf_params::InferenceParams = interp.inf_params,
-                           opt_params::OptimizationParams = interp.opt_params,
-                           irinterp::Bool = interp.irinterp)
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params, irinterp)
+                           opt_params::OptimizationParams = interp.opt_params)
+    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
 end
 
 # Quickly and easily satisfy the AbstractInterpreter API contract
@@ -456,34 +489,6 @@ infer_compilation_signature(::NativeInterpreter) = true
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = SimpleInferenceLattice.instance
-
-typeinf_lattice(interp::NativeInterpreter) = interp.irinterp ?
-    InferenceLattice(SimpleInferenceLattice.instance) :
-    InferenceLattice(BaseInferenceLattice.instance)
-ipo_lattice(interp::NativeInterpreter) = interp.irinterp ?
-    InferenceLattice(SimpleInferenceLattice.instance) :
-    InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(interp::NativeInterpreter) = SimpleInferenceLattice.instance
-
-"""
-    switch_to_irinterp(interp::AbstractInterpreter) -> irinterp::AbstractInterpreter
-
-This interface allows `ir_abstract_constant_propagation` to convert `interp` to a new
-`irinterp::AbstractInterpreter` to perform semi-concrete interpretation.
-`NativeInterpreter` uses this interface to switch its lattice to `optimizer_lattice` during
-semi-concrete interpretation on `IRCode`.
-"""
-switch_to_irinterp(interp::AbstractInterpreter) = interp
-switch_to_irinterp(interp::NativeInterpreter) = NativeInterpreter(interp; irinterp=true)
-
-"""
-    switch_from_irinterp(irinterp::AbstractInterpreter) -> interp::AbstractInterpreter
-
-The inverse operation of `switch_to_irinterp`, allowing `typeinf` to convert `irinterp` back
-to a new `interp::AbstractInterpreter` to perform ordinary abstract interpretation.
-"""
-switch_from_irinterp(irinterp::AbstractInterpreter) = irinterp
-switch_from_irinterp(irinterp::NativeInterpreter) = NativeInterpreter(irinterp; irinterp=false)
 
 abstract type CallInfo end
 

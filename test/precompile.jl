@@ -3,7 +3,7 @@
 original_depot_path = copy(Base.DEPOT_PATH)
 original_load_path = copy(Base.LOAD_PATH)
 
-using Test, Distributed, Random
+using Test, Distributed, Random, Logging
 using REPL # doc lookup function
 
 Foo_module = :Foo4b3a94a1a081a8cb
@@ -115,6 +115,8 @@ precompile_test_harness(false) do dir
                   d = den(a)
                   return h
               end
+              abstract type AbstractAlgebraMap{A} end
+              struct GAPGroupHomomorphism{A, B} <: AbstractAlgebraMap{GAPGroupHomomorphism{B, A}} end
           end
           """)
     write(Foo2_file,
@@ -130,10 +132,11 @@ precompile_test_harness(false) do dir
     write(Foo_file,
           """
           module $Foo_module
-              import $FooBase_module, $FooBase_module.typeA
+              import $FooBase_module, $FooBase_module.typeA, $FooBase_module.GAPGroupHomomorphism
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
+              public foo, Bar
               module Inner
                   import $FooBase_module.hash
                   using ..$Foo_module
@@ -150,6 +153,7 @@ precompile_test_harness(false) do dir
               include_dependency("foo.jl")
               include_dependency("foo.jl")
               module Bar
+                  public bar
                   include_dependency("bar.jl")
               end
               @doc "Bar module" Bar # this needs to define the META dictionary via eval
@@ -211,6 +215,8 @@ precompile_test_harness(false) do dir
               Base.convert(::Type{Some{Value18343}}, ::Value18343{Some}) = 2
               Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
+              const GAPType1 = GAPGroupHomomorphism{Nothing, Nothing}
+              const GAPType2 = GAPGroupHomomorphism{1, 2}
 
               # issue #28297
               mutable struct Result
@@ -244,6 +250,9 @@ precompile_test_harness(false) do dir
               const abigint_f() = big"123"
               const abigint_x = big"124"
 
+              # issue #51111
+              abigfloat_to_f32() = Float32(big"1.5")
+
               # issue #31488
               _v31488 = Base.StringVector(2)
               resize!(_v31488, 0)
@@ -266,6 +275,26 @@ precompile_test_harness(false) do dir
               # check that Tasks work from serialized state
               ch1 = Channel(x -> nothing)
               ch2 = Channel(x -> (push!(x, 2); nothing), Inf)
+
+              # check that Memory aliasing is respected
+              a_vec_int = Int[]
+              push!(a_vec_int, 1, 2)
+              a_mat_int = reshape(a_vec_int, (1, 2))
+
+              a_vec_any = Any[]
+              push!(a_vec_any, 1, 2)
+              a_mat_any = reshape(a_vec_any, (1, 2))
+
+              a_vec_union = Union{Int,Nothing}[]
+              push!(a_vec_union, 1, 2)
+              a_mat_union = reshape(a_vec_union, (1, 2))
+
+              a_vec_inline = Pair{Int,Any}[]
+              push!(a_vec_inline, 1=>2, 3=>4)
+              a_mat_inline = reshape(a_vec_inline, (1, 2))
+
+              oid_vec_int = objectid(a_vec_int)
+              oid_mat_int = objectid(a_mat_int)
           end
           """)
     # Issue #12623
@@ -299,6 +328,9 @@ precompile_test_harness(false) do dir
         @test Foo.abigint_f()::BigInt == big"123"
         @test Foo.abigint_x::BigInt + 1 == big"125"
 
+        # Issue #51111
+        @test Foo.abigfloat_to_f32() == 1.5f0
+
         @test Foo.x28297.result === missing
 
         @test Foo.d29936a === Dict
@@ -322,6 +354,34 @@ precompile_test_harness(false) do dir
         @test isready(Foo.ch2)
         @test take!(Foo.ch2) === 2
         @test !isready(Foo.ch2)
+    end
+
+    let
+        @test Foo.a_vec_int == Int[1, 2]
+        @test Foo.a_mat_int == Int[1 2]
+        Foo.a_mat_int[1, 2] = 3
+        @test Foo.a_vec_int[2] === 3
+
+        @test Foo.a_vec_any == Int[1, 2]
+        @test Foo.a_mat_any == Int[1 2]
+        Foo.a_mat_any[1, 2] = 3
+        @test Foo.a_vec_any[2] === 3
+
+        @test Foo.a_vec_union == Union{Int,Nothing}[1, 2]
+        @test Foo.a_mat_union == Union{Int,Nothing}[1 2]
+        Foo.a_mat_union[1, 2] = 3
+        @test Foo.a_vec_union[2] === 3
+        Foo.a_mat_union[1, 2] = nothing
+        @test Foo.a_vec_union[2] === nothing
+
+        @test Foo.a_vec_inline == Pair{Int,Any}[1=>2, 3=>4]
+        @test Foo.a_mat_inline == Pair{Int,Any}[1=>2 3=>4]
+        Foo.a_mat_inline[1, 2] = 5=>6
+        @test Foo.a_vec_inline[2] === Pair{Int,Any}(5, 6)
+
+        @test objectid(Foo.a_vec_int) === Foo.oid_vec_int
+        @test objectid(Foo.a_mat_int) === Foo.oid_mat_int
+        @test Foo.oid_vec_int !== Foo.oid_mat_int
     end
 
     @eval begin function ccallable_test()
@@ -373,10 +433,11 @@ precompile_test_harness(false) do dir
         @test string(Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
         @test string(Base.Docs.doc(Foo.Bar)) == "Bar module\n"
 
-        modules, (deps, requires), required_modules, _... = Base.parse_cache_header(cachefile)
-        discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
+        modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
+        discard_module = mod_fl_mt -> mod_fl_mt.filename
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
-        @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
+        # foo.jl and bar.jl are never written to disk, so they are not relocatable
+        @test map(x -> x.filename, deps) == [ Foo_file, joinpath("@depot", "foo.jl"), joinpath("@depot", "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
                             Base.PkgId(Foo) => Base.PkgId(Test),
@@ -388,27 +449,33 @@ precompile_test_harness(false) do dir
         @test_throws ErrorException Base.read_dependency_src(cachefile, joinpath(dir, "foo.jl"))
 
         modules, deps1 = Base.cache_dependencies(cachefile)
-        @test Dict(modules) == merge(
+        modules_ok = merge(
             Dict(let m = Base.PkgId(s)
                     m => Base.module_build_id(Base.root_module(m))
                  end for s in
                  [ "Base", "Core", "Main",
-                   string(Foo2_module), string(FooBase_module) ]),
+                   string(Foo2_module), string(FooBase_module),]),
             # plus modules included in the system image
             Dict(let m = Base.root_module(Base, s)
                      Base.PkgId(m) => Base.module_build_id(m)
-                 end for s in
-                [:ArgTools, :Artifacts, :Base64, :CRC32c, :Dates,
-                 :Downloads, :FileWatching, :Future, :InteractiveUtils, :libblastrampoline_jll,
-                 :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
-                 :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
-                 :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :Sockets,
-                 :TOML, :Tar, :Test, :UUIDs, :Unicode,
-                 :nghttp2_jll]
-            ),
+                 end for s in [Symbol(x.name) for x in Base._sysimage_modules if !(x.name in ["Base", "Core", "Main"])]),
+            # plus test module,
+            Dict(Base.PkgId(Base.root_module(Base, :Test)) => Base.module_build_id(Base.root_module(Base, :Test))),
+            # plus dependencies of test module
+            Dict(Base.PkgId(Base.root_module(Base, :InteractiveUtils)) => Base.module_build_id(Base.root_module(Base, :InteractiveUtils))),
+            Dict(Base.PkgId(Base.root_module(Base, :Logging)) => Base.module_build_id(Base.root_module(Base, :Logging))),
+            Dict(Base.PkgId(Base.root_module(Base, :Random)) => Base.module_build_id(Base.root_module(Base, :Random))),
+            Dict(Base.PkgId(Base.root_module(Base, :Serialization)) => Base.module_build_id(Base.root_module(Base, :Serialization))),
+            # and their dependencies
+            Dict(Base.PkgId(Base.root_module(Base, :SHA)) => Base.module_build_id(Base.root_module(Base, :SHA))),
+            Dict(Base.PkgId(Base.root_module(Base, :Markdown)) => Base.module_build_id(Base.root_module(Base, :Markdown))),
+            # and their dependencies
+            Dict(Base.PkgId(Base.root_module(Base, :Base64)) => Base.module_build_id(Base.root_module(Base, :Base64))),
         )
+        @test Dict(modules) == modules_ok
+
         @test discard_module.(deps) == deps1
-        modules, (deps, requires), required_modules, _... = Base.parse_cache_header(cachefile; srcfiles_only=true)
+        modules, (_, deps, requires), required_modules, _... = Base.parse_cache_header(cachefile)
         @test map(x -> x.filename, deps) == [Foo_file]
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -471,7 +538,7 @@ precompile_test_harness(false) do dir
         """)
     Nest = Base.require(Main, Nest_module)
     cachefile = joinpath(cachedir, "$Nest_module.ji")
-    modules, (deps, requires), required_modules, _... = Base.parse_cache_header(cachefile)
+    modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
     @test last(deps).modpath == ["NestInner"]
 
     UsesB_module = :UsesB4b3a94a1a081a8cb
@@ -493,7 +560,7 @@ precompile_test_harness(false) do dir
         """)
     UsesB = Base.require(Main, UsesB_module)
     cachefile = joinpath(cachedir, "$UsesB_module.ji")
-    modules, (deps, requires), required_modules, _... = Base.parse_cache_header(cachefile)
+    modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
     id1, id2 = only(requires)
     @test Base.pkgorigins[id1].cachepath == cachefile
     @test Base.pkgorigins[id2].cachepath == joinpath(cachedir, "$B_module.ji")
@@ -501,15 +568,50 @@ precompile_test_harness(false) do dir
     Baz_file = joinpath(dir, "Baz.jl")
     write(Baz_file,
           """
-          true && __precompile__(false)
+          haskey(Base.loaded_modules, Base.PkgId("UseBaz")) || __precompile__(false)
           module Baz
           baz() = 1
           end
           """)
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
+
+    OverwriteMethodError_file = joinpath(dir, "OverwriteMethodError.jl")
+    write(OverwriteMethodError_file,
+          """
+          module OverwriteMethodError
+              Base.:(+)(x::Bool, y::Bool) = false
+          end
+          """)
+
+    @test (@test_warn "overwritten in module OverwriteMethodError" Base.compilecache(Base.PkgId("OverwriteMethodError"))) == Base.PrecompilableError() # due to piracy
+
+    UseBaz_file = joinpath(dir, "UseBaz.jl")
+    write(UseBaz_file,
+          """
+          module UseBaz
+          biz() = 1
+          @assert haskey(Base.loaded_modules, Base.PkgId("UseBaz"))
+          @assert !haskey(Base.loaded_modules, Base.PkgId("Baz"))
+          using Baz
+          @assert haskey(Base.loaded_modules, Base.PkgId("Baz"))
+          buz() = 2
+          const generating = ccall(:jl_generating_output, Cint, ())
+          const incremental = Base.JLOptions().incremental
+          end
+          """)
+
+    @test Base.compilecache(Base.PkgId("UseBaz")) == Base.PrecompilableError() # due to __precompile__(false)
+    @eval using UseBaz
+    @test haskey(Base.loaded_modules, Base.PkgId("UseBaz"))
+    @test haskey(Base.loaded_modules, Base.PkgId("Baz"))
+    @test Base.invokelatest(UseBaz.biz) === 1
+    @test Base.invokelatest(UseBaz.buz) === 2
+    @test UseBaz.generating == 0
+    @test UseBaz.incremental == 0
     @eval using Baz
-    @test Base.invokelatest(Baz.baz) == 1
+    @test Base.invokelatest(Baz.baz) === 1
+    @test Baz === UseBaz.Baz
 
     # Issue #12720
     FooBar1_file = joinpath(dir, "FooBar1.jl")
@@ -527,7 +629,7 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    cachefile, _ = Base.compilecache(Base.PkgId("FooBar"))
+    cachefile, _ = @test_logs (:debug, r"Precompiling FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
@@ -545,12 +647,12 @@ precompile_test_harness(false) do dir
     fb_uuid = Base.module_build_id(FooBar)
     sleep(2); touch(FooBar_file)
     insert!(DEPOT_PATH, 1, dir2)
-    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @eval using FooBar1
     @test !isfile(joinpath(cachedir2, "FooBar.ji"))
     @test !isfile(joinpath(cachedir, "FooBar1.ji"))
     @test isfile(joinpath(cachedir2, "FooBar1.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Tsc
     @test fb_uuid == Base.module_build_id(FooBar)
     fb_uuid1 = Base.module_build_id(FooBar1)
@@ -583,7 +685,11 @@ precompile_test_harness(false) do dir
     FooBar3_inc = joinpath(dir, "FooBar3_inc.jl")
     write(FooBar3_inc, "x=1\n")
     for code in ["Core.eval(Base, :(x=1))", "Base.include(Base, \"FooBar3_inc.jl\")"]
-        write(FooBar3_file, code)
+        write(FooBar3_file, """
+        module FooBar3
+        $code
+        end
+        """)
         @test_warn "Evaluation into the closed module `Base` breaks incremental compilation" try
                 Base.require(Main, :FooBar3)
             catch exc
@@ -684,15 +790,15 @@ precompile_test_harness("code caching") do dir
     @test hasspec
     # Test that compilation adds to method roots with appropriate provenance
     m = which(setindex!, (Dict{M.X,Any}, Any, M.X))
-    @test M.X ∈ m.roots
+    @test Memory{M.X} ∈ m.roots
     # Check that roots added outside of incremental builds get attributed to a moduleid of 0
     Base.invokelatest() do
         Dict{M.X2,Any}()[M.X2()] = nothing
     end
-    @test M.X2 ∈ m.roots
+    @test Memory{M.X2} ∈ m.roots
     groups = group_roots(m)
-    @test M.X ∈ groups[Mid]           # attributed to M
-    @test M.X2 ∈ groups[0]            # activate module is not known
+    @test Memory{M.X} ∈ groups[Mid]           # attributed to M
+    @test Memory{M.X2} ∈ groups[0]            # activate module is not known
     @test !isempty(groups[Bid])
     # Check that internal methods and their roots are accounted appropriately
     minternal = which(M.getelsize, (Vector,))
@@ -742,10 +848,10 @@ precompile_test_harness("code caching") do dir
     end
     mT = which(push!, (Vector{T} where T, Any))
     groups = group_roots(mT)
-    @test M2.Y ∈ groups[M2id]
-    @test M2.Z ∈ groups[M2id]
-    @test M.X ∈ groups[Mid]
-    @test M.X ∉ groups[M2id]
+    @test Memory{M2.Y} ∈ groups[M2id]
+    @test Memory{M2.Z} ∈ groups[M2id]
+    @test Memory{M.X} ∈ groups[Mid]
+    @test Memory{M.X} ∉ groups[M2id]
     # backedges of external MethodInstances
     # Root gets used by RootA and RootB, and both consumers end up inferring the same MethodInstance from Root
     # Do both callers get listed as backedges?
@@ -1593,7 +1699,7 @@ precompile_test_harness("issue #46296") do load_path
         module CodeInstancePrecompile
 
         mi = first(Base.specializations(first(methods(identity))))
-        ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
+        ci = Core.CodeInstance(mi, Any, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
         __init__() = @assert ci isa Core.CodeInstance
@@ -1669,7 +1775,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
         try
             # isvalid_cache_header returns checksum id or zero
             Base.isvalid_cache_header(io) == 0 && throw(ArgumentError("Invalid header in cache file $cachefile."))
-            depmodnames = Base.parse_cache_header(io)[3]
+            depmodnames = Base.parse_cache_header(io, cachefile)[3]
             Base.isvalid_file_crc(io) || throw(ArgumentError("Invalid checksum in cache file $cachefile."))
         finally
             close(io)
@@ -1687,7 +1793,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     if ocachefile !== nothing
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring), ocachefile, depmods, true, "PCI")
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachefile, depmods, true, "PCI", false)
     else
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
     end

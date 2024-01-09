@@ -1,11 +1,91 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+import Base: SHA1
 
 using Artifacts, Test, Base.BinaryPlatforms
-using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform
+using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform, load_overrides
+using TOML
 
 # prepare for the package tests by ensuring the required artifacts are downloaded now
 artifacts_dir = mktempdir()
 run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifacts.jl")) $(artifacts_dir)`, "TERM"=>"dumb"))
+
+@testset "Load Overrides" begin
+    """
+        create_test_overrides_toml(temp_dir::String)
+
+    Create "Overrides.toml" in the given `temp_dir`.
+    """
+    function create_test_overrides_toml(temp_dir::String)
+        # Define the overrides
+        overrides = Dict(
+            "78f35e74ff113f02274ce60dab6e92b4546ef806" => "/path/to/replacement",
+            "c76f8cda85f83a06d17de6c57aabf9e294eb2537" => "fb886e813a4aed4147d5979fcdf27457d20aa35d",
+            "d57dbccd-ca19-4d82-b9b8-9d660942965b" => Dict(
+                "c_simple" => "/path/to/c_simple_dir",
+                "libfoo" => "fb886e813a4aed4147d5979fcdf27457d20aa35d"
+            )
+        )
+
+        # Get the artifacts directory
+        artifacts_dir = joinpath(temp_dir, "artifacts")
+
+        # Ensure the artifacts directory exists
+        isdir(artifacts_dir) || mkdir(artifacts_dir)
+
+        # Get the path to the Overrides.toml file
+        overrides_path = joinpath(artifacts_dir, "Overrides.toml")
+
+        # Create the Overrides.toml file
+        open(overrides_path, "w") do io
+            TOML.print(io, overrides)
+        end
+    end
+
+    # Specify the expected test result when depot path does not exist or no overriding happened
+    empty_output = Dict{Symbol, Any}(
+        :UUID => Dict{Base.UUID, Dict{String, Union{SHA1, String}}}(),
+        :hash => Dict{SHA1, Union{SHA1, String}}()
+    )
+
+    # Specify the expected test result when overriding happened
+    expected_output = Dict{Symbol, Any}(
+        :UUID => Dict{Base.UUID, Dict{String, Union{SHA1, String}}}(Base.UUID("d57dbccd-ca19-4d82-b9b8-9d660942965b") => Dict("c_simple" => "/path/to/c_simple_dir", "libfoo" => SHA1("fb886e813a4aed4147d5979fcdf27457d20aa35d"))),
+        :hash => Dict{SHA1, Union{SHA1, String}}(SHA1("78f35e74ff113f02274ce60dab6e92b4546ef806") => "/path/to/replacement", SHA1("c76f8cda85f83a06d17de6c57aabf9e294eb2537") => SHA1("fb886e813a4aed4147d5979fcdf27457d20aa35d"))
+    )
+
+    # Test `load_overrides()` works with *no* "Overrides.toml" file
+    @test load_overrides() == empty_output
+
+    # Create a temporary directory
+    mktempdir() do temp_dir
+        # Back up the old `DEPOT_PATH``
+        old_depot_path = copy(Base.DEPOT_PATH)
+
+        # Set `DEPOT_PATH` to that directory
+        empty!(Base.DEPOT_PATH)
+        push!(Base.DEPOT_PATH, temp_dir)
+
+        try
+            # Create "Overrides.toml" for the test
+            create_test_overrides_toml(temp_dir)
+
+            # Test `load_overrides()` works *with* "Overrides.toml" file but non-nothing ARTIFACT_OVERRIDES[]
+            @test load_overrides() == empty_output
+
+            # Test `load_overrides()` works *with* "Overrides.toml" file with force parameter, which overrides even when `ARTIFACT_OVERRIDES[] !== nothing``
+            @test load_overrides(force=true) == expected_output
+        finally # Make sure `DEPOT_PATH` will be restored to the status quo in the event of a bug
+            # Restore the old `DEPOT_PATH` to avoid messing with any other code
+            empty!(Base.DEPOT_PATH)
+            append!(Base.DEPOT_PATH, old_depot_path)
+        end
+    end
+    # Temporary directory and test "Overrides.toml" file will be automatically deleted when out of scope
+    # This means after this block, the system *should* behave like this test never happened.
+
+    # Test the "Overrides.toml" file is cleared back to the status quo
+    @test load_overrides(force=true) == empty_output
+end
 
 @testset "Artifact Paths" begin
     mktempdir() do tempdir
@@ -120,6 +200,23 @@ end
     end
 end
 
+@testset "artifact_hash()" begin
+    # Use the Linus OS on an ARMv7L architecture for the tests to make tests reproducible
+    armv7l_linux = Platform("armv7l", "linux")
+
+    # Check the first key in Artifacts.toml is hashed correctly
+    @test artifact_hash("HelloWorldC", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
+            SHA1("5a8288c8a30578c0d0f24a9cded29579517ce7a8")
+
+    # Check the second key in Artifacts.toml is hashed correctly
+    @test artifact_hash("socrates", joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
+            SHA1("43563e7631a7eafae1f9f8d9d332e3de44ad7239")
+
+    # Check artifact_hash() works for any AbstractString
+    @test artifact_hash(SubString("HelloWorldC0", 1, 11), joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux) ==
+            SHA1("5a8288c8a30578c0d0f24a9cded29579517ce7a8")
+end
+
 @testset "select_downloadable_artifacts()" begin
     armv7l_linux = Platform("armv7l", "linux")
     artifacts = select_downloadable_artifacts(joinpath(@__DIR__, "Artifacts.toml"); platform=armv7l_linux)
@@ -161,6 +258,6 @@ end
 @testset "`Artifacts.artifact_names` and friends" begin
     n = length(Artifacts.artifact_names)
     @test length(Base.project_names) == n
-    @test length(Base.manifest_names) == n
+    @test length(Base.manifest_names) == 2n # there are two manifest names per project name
     @test length(Base.preferences_names) == n
 end

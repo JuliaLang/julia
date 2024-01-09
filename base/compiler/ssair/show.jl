@@ -67,18 +67,18 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
         join(io, (print_arg(i) for i = 3:length(stmt.args)), ", ")
         print(io, ")")
     # given control flow information, we prefer to print these with the basic block #, instead of the ssa %
-    elseif isexpr(stmt, :enter) && length((stmt::Expr).args) == 1 && (stmt::Expr).args[1] isa Int
-        print(io, "\$(Expr(:enter, #", (stmt::Expr).args[1]::Int, "))")
+    elseif isa(stmt, EnterNode)
+        print(io, "enter #", stmt.catch_dest, "")
+        if isdefined(stmt, :scope)
+            print(io, " with scope ")
+            show_unquoted(io, stmt.scope, indent)
+        end
     elseif stmt isa GotoNode
         print(io, "goto #", stmt.label)
     elseif stmt isa PhiNode
         show_unquoted_phinode(io, stmt, indent, "#")
     elseif stmt isa GotoIfNot
         show_unquoted_gotoifnot(io, stmt, indent, "#")
-    elseif stmt isa TypedSlot
-        # call `show` with the type set to Any so it will not be shown, since
-        # we will show the type ourselves.
-        show_unquoted(io, SlotNumber(stmt.id), indent, show_type ? prec_decl : 0)
     # everything else in the IR, defer to the generic AST printer
     else
         show_unquoted(io, stmt, indent, show_type ? prec_decl : 0)
@@ -158,11 +158,11 @@ end
 
 function should_print_ssa_type(@nospecialize node)
     if isa(node, Expr)
-        return !(node.head in (:gc_preserve_begin, :gc_preserve_end, :meta, :enter, :leave))
+        return !(node.head in (:gc_preserve_begin, :gc_preserve_end, :meta, :leave))
     end
     return !isa(node, PiNode)   && !isa(node, GotoIfNot) &&
            !isa(node, GotoNode) && !isa(node, ReturnNode) &&
-           !isa(node, QuoteNode)
+           !isa(node, QuoteNode) && !isa(node, EnterNode)
 end
 
 function default_expr_type_printer(io::IO; @nospecialize(type), used::Bool, show_type::Bool=true, _...)
@@ -254,7 +254,7 @@ We get:
   └──      return %3                      │
 ```
 
-Even though we were in the `f` scope since the first statement, it tooks us two statements
+Even though we were in the `f` scope since the first statement, it took us two statements
 to catch up and print the intermediate scopes. Which scope is printed is indicated both
 by the indentation of the method name and by an increased thickness of the appropriate
 line for the scope.
@@ -542,11 +542,11 @@ end
 
 function _stmt(code::IRCode, idx::Int)
     stmts = code.stmts
-    return isassigned(stmts.inst, idx) ? stmts[idx][:inst] : UNDEF
+    return isassigned(stmts.stmt, idx) ? stmts[idx][:stmt] : UNDEF
 end
 function _stmt(compact::IncrementalCompact, idx::Int)
     stmts = compact.result
-    return isassigned(stmts.inst, idx) ? stmts[idx][:inst] : UNDEF
+    return isassigned(stmts.stmt, idx) ? stmts[idx][:stmt] : UNDEF
 end
 function _stmt(code::CodeInfo, idx::Int)
     code = code.code
@@ -569,10 +569,8 @@ end
 
 function statement_indices_to_labels(stmt, cfg::CFG)
     # convert statement index to labels, as expected by print_stmt
-    if stmt isa Expr
-        if stmt.head === :enter && length(stmt.args) == 1 && stmt.args[1] isa Int
-            stmt = Expr(:enter, block_for_inst(cfg, stmt.args[1]::Int))
-        end
+    if stmt isa EnterNode
+        stmt = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest))
     elseif isa(stmt, GotoIfNot)
         stmt = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
     elseif stmt isa GotoNode
@@ -717,7 +715,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
 end
 
 function _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
-    new_nodes_perm = filter(i -> isassigned(new_nodes.inst, i), 1:length(new_nodes))
+    new_nodes_perm = filter(i -> isassigned(new_nodes.stmt, i), 1:length(new_nodes))
     sort!(new_nodes_perm, by = x -> (x = new_nodes_info[x]; (x.pos, x.attach_after)))
 
     # separate iterators for the nodes that are inserted before resp. after each statement
@@ -745,7 +743,7 @@ function _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
 
         iter[] += 1
         new_node = new_nodes[node_idx]
-        new_node_inst = isassigned(new_nodes.inst, node_idx) ? new_node[:inst] : UNDEF
+        new_node_inst = isassigned(new_nodes.stmt, node_idx) ? new_node[:stmt] : UNDEF
         new_node_type = isassigned(new_nodes.type, node_idx) ? new_node[:type] : UNDEF
         node_idx += length(stmts)
         return node_idx, new_node_inst, new_node_type
@@ -820,15 +818,15 @@ end
 statementidx_lineinfo_printer(code) = statementidx_lineinfo_printer(DILineInfoPrinter, code)
 
 function stmts_used(io::IO, code::IRCode, warn_unset_entry=true)
-    stmts = code.stmts
+    insts = code.stmts
     used = BitSet()
-    for stmt in stmts
-        scan_ssa_use!(push!, used, stmt[:inst])
+    for inst in insts
+        scan_ssa_use!(push!, used, inst[:stmt])
     end
     new_nodes = code.new_nodes.stmts
     for nn in 1:length(new_nodes)
-        if isassigned(new_nodes.inst, nn)
-            scan_ssa_use!(push!, used, new_nodes[nn][:inst])
+        if isassigned(new_nodes.stmt, nn)
+            scan_ssa_use!(push!, used, new_nodes[nn][:stmt])
         elseif warn_unset_entry
             printstyled(io, "ERROR: New node array has unset entry\n", color=:red)
             warn_unset_entry = false
@@ -1020,7 +1018,7 @@ function Base.show(io::IO, e::Effects)
     print(io, ',')
     printstyled(io, effectbits_letter(e, :inaccessiblememonly, 'm'); color=effectbits_color(e, :inaccessiblememonly))
     print(io, ',')
-    printstyled(io, effectbits_letter(e, :noinbounds, 'i'); color=effectbits_color(e, :noinbounds))
+    printstyled(io, effectbits_letter(e, :noub, 'u'); color=effectbits_color(e, :noub))
     print(io, ')')
     e.nonoverlayed || printstyled(io, '′'; color=:red)
 end

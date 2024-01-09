@@ -806,6 +806,8 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.endswith_lower("jl_expr_t") ||
                    Name.endswith_lower("jl_code_info_t") ||
                    Name.endswith_lower("jl_array_t") ||
+                   Name.endswith_lower("jl_genericmemory_t") ||
+                   //Name.endswith_lower("jl_genericmemoryref_t") ||
                    Name.endswith_lower("jl_method_t") ||
                    Name.endswith_lower("jl_method_instance_t") ||
                    Name.endswith_lower("jl_tupletype_t") ||

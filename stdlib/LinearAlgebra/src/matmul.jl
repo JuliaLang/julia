@@ -2,6 +2,9 @@
 
 # matmul.jl: Everything to do with dense matrix multiplication
 
+# unused internal constant, here for legacy reasons
+const tilebufsize = 10800  # Approximately 32k/3
+
 # Matrix-matrix multiplication
 
 AdjOrTransStridedMat{T} = Union{Adjoint{<:Any, <:StridedMatrix{T}}, Transpose{<:Any, <:StridedMatrix{T}}}
@@ -103,8 +106,11 @@ julia> [1 1; 0 1] * [1 0; 1 1]
 """
 function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A, 1), size(B, 2))), A, B)
+    mul!(matprod_dest(A, B, TS), A, B)
 end
+
+matprod_dest(A, B, TS) = similar(B, TS, (size(A, 1), size(B, 2)))
+
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
 # which is better handled by reinterpreting rather than promotion
@@ -214,18 +220,24 @@ end
 """
     mul!(Y, A, B) -> Y
 
-Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`,
+Calculates the matrix-matrix or matrix-vector product ``A B`` and stores the result in `Y`,
 overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
 `B`.
 
 # Examples
 ```jldoctest
-julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); mul!(Y, A, B);
+julia> A = [1.0 2.0; 3.0 4.0]; B = [1.0 1.0; 1.0 1.0]; Y = similar(B);
+
+julia> mul!(Y, A, B) === Y
+true
 
 julia> Y
 2×2 Matrix{Float64}:
  3.0  3.0
  7.0  7.0
+
+julia> Y == A * B
+true
 ```
 
 # Implementation
@@ -233,9 +245,7 @@ For custom matrix and vector types, it is recommended to implement
 5-argument `mul!` rather than implementing 3-argument `mul!` directly
 if possible.
 """
-@inline function mul!(C, A, B)
-    return mul!(C, A, B, true, false)
-end
+mul!(C, A, B) = mul!(C, A, B, true, false)
 
 """
     mul!(C, A, B, α, β) -> C
@@ -249,15 +259,22 @@ aliased with either `A` or `B`.
 
 # Examples
 ```jldoctest
-julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; C=[1.0 2.0; 3.0 4.0];
+julia> A = [1.0 2.0; 3.0 4.0]; B = [1.0 1.0; 1.0 1.0]; C = [1.0 2.0; 3.0 4.0];
 
-julia> mul!(C, A, B, 100.0, 10.0) === C
+julia> α, β = 100.0, 10.0;
+
+julia> mul!(C, A, B, α, β) === C
 true
 
 julia> C
 2×2 Matrix{Float64}:
  310.0  320.0
  730.0  740.0
+
+julia> C_original = [1.0 2.0; 3.0 4.0]; # A copy of the original value of C
+
+julia> C == A * B * α + C_original * β
+true
 ```
 """
 @inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
@@ -337,7 +354,8 @@ julia> lmul!(F.Q, B)
 lmul!(A, B)
 
 # THE one big BLAS dispatch
-@inline function generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
+# aggressive constant propagation makes mul!(C, A, B) invoke gemm_wrapper! directly
+Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
                                     _add::MulAddMul=MulAddMul()) where {T<:BlasFloat}
     if all(in(('N', 'T', 'C')), (tA, tB))
         if tA == 'T' && tB == 'N' && A === B
@@ -364,16 +382,16 @@ lmul!(A, B)
             return BLAS.hemm!('R', tB == 'H' ? 'U' : 'L', alpha, B, A, beta, C)
         end
     end
-    return _generic_matmatmul!(C, 'N', 'N', wrap(A, tA), wrap(B, tB), _add)
+    return _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add)
 end
 
 # Complex matrix times (transposed) real matrix. Reinterpret the first matrix to real for efficiency.
-@inline function generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
+Base.@constprop :aggressive function generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
                     _add::MulAddMul=MulAddMul()) where {T<:BlasReal}
     if all(in(('N', 'T', 'C')), (tA, tB))
         gemm_wrapper!(C, tA, tB, A, B, _add)
     else
-        _generic_matmatmul!(C, 'N', 'N', wrap(A, tA), wrap(B, tB), _add)
+        _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add)
     end
 end
 
@@ -398,7 +416,8 @@ end
     A
 end
 
-function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{T},
+Base.@constprop :aggressive function gemv!(y::StridedVector{T}, tA::AbstractChar,
+                A::StridedVecOrMat{T}, x::StridedVector{T},
                α::Number=true, β::Number=false) where {T<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     nA != length(x) &&
@@ -428,7 +447,7 @@ function gemv!(y::StridedVector{T}, tA::AbstractChar, A::StridedVecOrMat{T}, x::
     end
 end
 
-function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
+Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
     α::Number = true, β::Number = false) where {T<:BlasReal}
     mA, nA = lapack_size(tA, A)
     nA != length(x) &&
@@ -450,8 +469,9 @@ function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMa
     end
 end
 
-function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar, A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
-    α::Number = true, β::Number = false) where {T<:BlasFloat}
+Base.@constprop :aggressive function gemv!(y::StridedVector{Complex{T}}, tA::AbstractChar,
+        A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
+        α::Number = true, β::Number = false) where {T<:BlasReal}
     mA, nA = lapack_size(tA, A)
     nA != length(x) &&
         throw(DimensionMismatch(lazy"second dimension of A, $nA, does not match length of x, $(length(x))"))
@@ -563,7 +583,7 @@ function gemm_wrapper(tA::AbstractChar, tB::AbstractChar,
     if all(in(('N', 'T', 'C')), (tA, tB))
         gemm_wrapper!(C, tA, tB, A, B)
     else
-        _generic_matmatmul!(C, 'N', 'N', wrap(A, tA), wrap(B, tB), _add)
+        _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add)
     end
 end
 
@@ -604,7 +624,7 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
         stride(C, 2) >= size(C, 1))
         return BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
     end
-    _generic_matmatmul!(C, tA, tB, A, B, _add)
+    _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add)
 end
 
 function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
@@ -647,7 +667,7 @@ function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::Abs
         BLAS.gemm!(tA, tB, alpha, reinterpret(T, A), B, beta, reinterpret(T, C))
         return C
     end
-    _generic_matmatmul!(C, tA, tB, A, B, _add)
+    _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add)
 end
 
 # blas.jl defines matmul for floats; other integer and mixed precision
@@ -762,199 +782,66 @@ function generic_matmatmul(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatrix{S})
     generic_matmatmul!(C, tA, tB, A, B)
 end
 
-const tilebufsize = 10800  # Approximately 32k/3
+# aggressive const prop makes mixed eltype mul!(C, A, B) invoke _generic_matmatmul! directly
+Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul) =
+    _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add)
 
-function generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul)
-    mA, nA = lapack_size(tA, A)
-    mB, nB = lapack_size(tB, B)
-    mC, nC = size(C)
-
-    if iszero(_add.alpha)
-        return _rmul_or_fill!(C, _add.beta)
-    end
-    if mA == nA == mB == nB == mC == nC == 2
-        return matmul2x2!(C, tA, tB, A, B, _add)
-    end
-    if mA == nA == mB == nB == mC == nC == 3
-        return matmul3x3!(C, tA, tB, A, B, _add)
-    end
-    A, tA = tA in ('H', 'h', 'S', 's') ? (wrap(A, tA), 'N') : (A, tA)
-    B, tB = tB in ('H', 'h', 'S', 's') ? (wrap(B, tB), 'N') : (B, tB)
-    _generic_matmatmul!(C, tA, tB, A, B, _add)
-end
-
-function _generic_matmatmul!(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S},
+@noinline function _generic_matmatmul!(C::AbstractVecOrMat{R}, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S},
                              _add::MulAddMul) where {T,S,R}
-    @assert tA in ('N', 'T', 'C') && tB in ('N', 'T', 'C')
-    require_one_based_indexing(C, A, B)
-
-    mA, nA = lapack_size(tA, A)
-    mB, nB = lapack_size(tB, B)
-    if mB != nA
-        throw(DimensionMismatch(lazy"matrix A has dimensions ($mA,$nA), matrix B has dimensions ($mB,$nB)"))
+    AxM = axes(A, 1)
+    AxK = axes(A, 2) # we use two `axes` calls in case of `AbstractVector`
+    BxK = axes(B, 1)
+    BxN = axes(B, 2)
+    CxM = axes(C, 1)
+    CxN = axes(C, 2)
+    if AxM != CxM
+        throw(DimensionMismatch(lazy"matrix A has axes ($AxM,$AxK), matrix C has axes ($CxM,$CxN)"))
     end
-    if size(C,1) != mA || size(C,2) != nB
-        throw(DimensionMismatch(lazy"result C has dimensions $(size(C)), needs ($mA,$nB)"))
+    if AxK != BxK
+        throw(DimensionMismatch(lazy"matrix A has axes ($AxM,$AxK), matrix B has axes ($BxK,$CxN)"))
     end
-
-    if iszero(_add.alpha) || isempty(A) || isempty(B)
-        return _rmul_or_fill!(C, _add.beta)
+    if BxN != CxN
+        throw(DimensionMismatch(lazy"matrix B has axes ($BxK,$BxN), matrix C has axes ($CxM,$CxN)"))
     end
-
-    tile_size = 0
-    if isbitstype(R) && isbitstype(T) && isbitstype(S) && (tA == 'N' || tB != 'N')
-        tile_size = floor(Int, sqrt(tilebufsize / max(sizeof(R), sizeof(S), sizeof(T), 1)))
-    end
-    @inbounds begin
-    if tile_size > 0
-        sz = (tile_size, tile_size)
-        Atile = Array{T}(undef, sz)
-        Btile = Array{S}(undef, sz)
-
-        z1 = zero(A[1, 1]*B[1, 1] + A[1, 1]*B[1, 1])
-        z = convert(promote_type(typeof(z1), R), z1)
-
-        if mA < tile_size && nA < tile_size && nB < tile_size
-            copy_transpose!(Atile, 1:nA, 1:mA, tA, A, 1:mA, 1:nA)
-            copyto!(Btile, 1:mB, 1:nB, tB, B, 1:mB, 1:nB)
-            for j = 1:nB
-                boff = (j-1)*tile_size
-                for i = 1:mA
-                    aoff = (i-1)*tile_size
-                    s = z
-                    for k = 1:nA
-                        s += Atile[aoff+k] * Btile[boff+k]
-                    end
-                    _modify!(_add, s, C, (i,j))
-                end
+    if isbitstype(R) && sizeof(R) ≤ 16 && !(A isa Adjoint || A isa Transpose)
+        _rmul_or_fill!(C, _add.beta)
+        (iszero(_add.alpha) || isempty(A) || isempty(B)) && return C
+        @inbounds for n in BxN, k in BxK
+            Balpha = B[k,n]*_add.alpha
+            @simd for m in AxM
+                C[m,n] = muladd(A[m,k], Balpha, C[m,n])
             end
-        else
-            Ctile = Array{R}(undef, sz)
-            for jb = 1:tile_size:nB
-                jlim = min(jb+tile_size-1,nB)
-                jlen = jlim-jb+1
-                for ib = 1:tile_size:mA
-                    ilim = min(ib+tile_size-1,mA)
-                    ilen = ilim-ib+1
-                    fill!(Ctile, z)
-                    for kb = 1:tile_size:nA
-                        klim = min(kb+tile_size-1,mB)
-                        klen = klim-kb+1
-                        copy_transpose!(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
-                        copyto!(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
-                        for j=1:jlen
-                            bcoff = (j-1)*tile_size
-                            for i = 1:ilen
-                                aoff = (i-1)*tile_size
-                                s = z
-                                for k = 1:klen
-                                    s += Atile[aoff+k] * Btile[bcoff+k]
-                                end
-                                Ctile[bcoff+i] += s
-                            end
-                        end
-                    end
-                    if isone(_add.alpha) && iszero(_add.beta)
-                        copyto!(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
-                    else
-                        C[ib:ilim, jb:jlim] .= @views _add.(Ctile[1:ilen, 1:jlen], C[ib:ilim, jb:jlim])
-                    end
-                end
-            end
+        end
+    elseif isbitstype(R) && sizeof(R) ≤ 16 && ((A isa Adjoint && B isa Adjoint) || (A isa Transpose && B isa Transpose))
+        _rmul_or_fill!(C, _add.beta)
+        (iszero(_add.alpha) || isempty(A) || isempty(B)) && return C
+        t = wrapperop(A)
+        pB = parent(B)
+        pA = parent(A)
+        tmp = similar(C, CxN)
+        ci = first(CxM)
+        ta = t(_add.alpha)
+        for i in AxM
+            mul!(tmp, pB, view(pA, :, i))
+            C[ci,:] .+= t.(ta .* tmp)
+            ci += 1
         end
     else
-        # Multiplication for non-plain-data uses the naive algorithm
-        if tA == 'N'
-            if tB == 'N'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[i, 1]*B[1, j] + A[i, 1]*B[1, j])
-                    Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
-                        Ctmp += A[i, k]*B[k, j]
-                    end
-                    _modify!(_add, Ctmp, C, (i,j))
-                end
-            elseif tB == 'T'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[i, 1]*transpose(B[j, 1]) + A[i, 1]*transpose(B[j, 1]))
-                    Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
-                        Ctmp += A[i, k] * transpose(B[j, k])
-                    end
-                    _modify!(_add, Ctmp, C, (i,j))
-                end
-            else
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[i, 1]*B[j, 1]' + A[i, 1]*B[j, 1]')
-                    Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
-                        Ctmp += A[i, k]*B[j, k]'
-                    end
-                    _modify!(_add, Ctmp, C, (i,j))
-                end
+        if iszero(_add.alpha) || isempty(A) || isempty(B)
+            return _rmul_or_fill!(C, _add.beta)
+        end
+        a1 = first(AxK)
+        b1 = first(BxK)
+        @inbounds for i in AxM, j in BxN
+            z2 = zero(A[i, a1]*B[b1, j] + A[i, a1]*B[b1, j])
+            Ctmp = convert(promote_type(R, typeof(z2)), z2)
+            @simd for k in AxK
+                Ctmp = muladd(A[i, k], B[k, j], Ctmp)
             end
-        elseif tA == 'T'
-            if tB == 'N'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(transpose(A[1, i])*B[1, j] + transpose(A[1, i])*B[1, j])
-                    Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
-                        Ctmp += transpose(A[k, i]) * B[k, j]
-                    end
-                    _modify!(_add, Ctmp, C, (i,j))
-                end
-            elseif tB == 'T'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(transpose(A[1, i])*transpose(B[j, 1]) + transpose(A[1, i])*transpose(B[j, 1]))
-                    Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
-                        Ctmp += transpose(A[k, i]) * transpose(B[j, k])
-                    end
-                    _modify!(_add, Ctmp, C, (i,j))
-                end
-            else
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(transpose(A[1, i])*B[j, 1]' + transpose(A[1, i])*B[j, 1]')
-                    Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
-                        Ctmp += transpose(A[k, i]) * adjoint(B[j, k])
-                    end
-                    _modify!(_add, Ctmp, C, (i,j))
-                end
-            end
-        else
-            if tB == 'N'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[1, i]'*B[1, j] + A[1, i]'*B[1, j])
-                    Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
-                        Ctmp += A[k, i]'B[k, j]
-                    end
-                    _modify!(_add, Ctmp, C, (i,j))
-                end
-            elseif tB == 'T'
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[1, i]'*transpose(B[j, 1]) + A[1, i]'*transpose(B[j, 1]))
-                    Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
-                        Ctmp += adjoint(A[k, i]) * transpose(B[j, k])
-                    end
-                    _modify!(_add, Ctmp, C, (i,j))
-                end
-            else
-                for i = 1:mA, j = 1:nB
-                    z2 = zero(A[1, i]'*B[j, 1]' + A[1, i]'*B[j, 1]')
-                    Ctmp = convert(promote_type(R, typeof(z2)), z2)
-                    for k = 1:nA
-                        Ctmp += A[k, i]'B[j, k]'
-                    end
-                    _modify!(_add, Ctmp, C, (i,j))
-                end
-            end
+            _modify!(_add, Ctmp, C, (i,j))
         end
     end
-    end # @inbounds
-    C
+    return C
 end
 
 

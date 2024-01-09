@@ -7,14 +7,14 @@ STDLIBDIR := $(build_datarootdir)/julia/stdlib/$(VERSDIR)
 # TODO: this Makefile ignores BUILDDIR, except for computing JULIA_EXECUTABLE
 
 export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
-export JULIA_LOAD_PATH := @stdlib
+export JULIA_LOAD_PATH := @$(PATHSEP)@stdlib
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
 TESTGROUPS = unicode strings compiler
 TESTS = all default stdlib $(TESTGROUPS) \
 		$(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
-		$(filter-out runtests testdefs, \
+		$(filter-out runtests testdefs relocatedepot, \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/*.jl))) \
 		$(foreach group,$(TESTGROUPS), \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/$(group)/*.jl)))
@@ -34,6 +34,28 @@ $(addprefix revise-, $(TESTS)): revise-% :
 	@cd $(SRCDIR) && \
     $(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
 
+relocatedepot:
+	@rm -rf $(SRCDIR)/relocatedepot
+	@cd $(SRCDIR) && \
+	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
+	@mkdir $(SRCDIR)/relocatedepot
+	@cp -R $(build_datarootdir)/julia $(SRCDIR)/relocatedepot
+	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
+	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
+	@cd $(SRCDIR) && \
+	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading RELOCATEDEPOT="" $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
+
+revise-relocatedepot: revise-% :
+	@rm -rf $(SRCDIR)/relocatedepot
+	@cd $(SRCDIR) && \
+	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
+	@mkdir $(SRCDIR)/relocatedepot
+	@cp -R $(build_datarootdir)/julia $(SRCDIR)/relocatedepot
+	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
+	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
+	@cd $(SRCDIR) && \
+	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading RELOCATEDEPOT="" $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
+
 embedding:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(EMBEDDING_ARGS)
 
@@ -47,4 +69,4 @@ clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
 
-.PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) embedding gcext clangsa clean
+.PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) relocatedepot revise-relocatedepot embedding gcext clangsa clean
