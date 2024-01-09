@@ -668,25 +668,31 @@ _array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(it
 """
     collect(collection)
 
-Return an `Array` of all items in a collection or iterator. For dictionaries, returns
-`Vector{Pair{KeyType, ValType}}`. If the argument is array-like or is an iterator with the
-[`HasShape`](@ref IteratorSize) trait, the result will have the same shape
+Return an `Array` of all items in a collection or iterator. For dictionaries, returns 
+a `Vector` of `key=>value` [pairs](@ref Pair). If the argument is array-like or is an iterator
+with the [`HasShape`](@ref IteratorSize) trait, the result will have the same shape
 and number of dimensions as the argument.
 
-Used by comprehensions to turn a generator into an `Array`. Thus the bracket notation
-of comprehensions can be used instead calling `collect` *on a generator* (see 2nd example).
-However in the general case of collections, `collect` is not interchangeable
-with the bracket notation (see 1st example).
+Used by [comprehensions](@ref man-comprehensions) to turn a [generator expression](@ref man-generators)
+into an `Array`. Thus, *on generators*, the bracket notation can be used instead of calling `collect`,
+see 2nd example.
 
 # Examples
+
+Collect items from a `UnitRange{Int64}` collection:
+
 ```jldoctest
-julia> collect(1:3) # completely different from [1:3]
+julia> collect(1:3)
 3-element Vector{Int64}:
  1
  2
  3
+```
 
-julia> collect(x^2 for x in 1:3) # same output as [x^2 for x in 1:3]
+Collect items from a generator (same output as `[x^2 for x in 1:3]`):
+
+```jldoctest
+julia> collect(x^2 for x in 1:3)
 3-element Vector{Int64}:
  1
  4
