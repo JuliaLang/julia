@@ -220,9 +220,9 @@ end
         for T2 in Base.BitInteger_types
             for shift in 0:nbits-1
                 s = T2(shift)
-                @test >>>%(val, s) === val >>> s
-                @test <<%(val, s) === val << s
-                @test >>%(val, s) === val >> s
+                @test unsafe_lshr(val, s) === val >>> s
+                @test unsafe_ashr(val, s) === val >> s
+                @test unsafe_shl(val, s) === val << s
             end
         end
     end
