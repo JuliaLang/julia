@@ -755,9 +755,9 @@ end
 """
     >>%(x, n)
 
-Overflowing arithmetic right bit shift operator. If `n` is equal to or higher than
-the number of bits in `x`, this operation may overflow depending on the platform.
-When `n` is not known at compile time, `>>%` may be more efficient than `>>`.
+Native arithmetic right bit shift operator. If `n` is negative, or equal to or
+higher than the number of bits in `x`, the resulting value is platform-dependent,
+although the function is guaranteed to finish and return a value of the correct type.
 
 If `x` is nonnegative, the `n` top bits of the result will be unset, if `x` is negative,
 they will be set. This implies the sign of `x` will be preserved.
@@ -781,8 +781,9 @@ julia> Int32(-100) >>% 3
 """
     >>>%(x, n)
 
-Overflowing logical right bit shift operator. If `n` is equal to or higher than
-the number of bits in `x`, this operation may overflow depending on the platform.
+Native logical right bit shift operator. If `n` is negative, or equal to or
+higher than the number of bits in `x`, the resulting value is platform-dependent,
+although the function is guaranteed to finish and return a value of the correct type.
 Unlike `>>%`, the `n` top bits of the result are always unset.
 
 See also: [`>>>`](@ref), [`>>%`](@ref)
@@ -804,8 +805,9 @@ julia> Int32(-100) >>>% 3
 """
     <<%(x, n)
 
-Overflowing left bit shift operator. If `n` is equal to or higher than
-the number of bits in `x`, this operation may overflow depending on the platform.
+Native left bit shift operator. If `n` is negative, or equal to or
+higher than the number of bits in `x`, the resulting value is platform-dependent,
+although the function is guaranteed to finish and return a value of the correct type.
 The lowest `n` bits of the result are unset.
 
 See also: [`<<`](@ref), [`>>%`](@ref)
