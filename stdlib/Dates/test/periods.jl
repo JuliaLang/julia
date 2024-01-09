@@ -216,10 +216,10 @@ end
     @test Dates.Date(2014, 1, 29) + Dates.Month(1) + Dates.Day(1) == Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Month(1)
 end
 @testset "traits" begin
-    @test Dates.string(Dates.Year(0)) == "0yr"
-    @test Dates.string(Dates.Year(1)) == "1yr"
-    @test Dates.string(Dates.Year(-1)) == "-1yr"
-    @test Dates.string(Dates.Year(2)) == "2yr"
+    @test Dates.string(Dates.Year(0)) == "0 yr"
+    @test Dates.string(Dates.Year(1)) == "1 yr"
+    @test Dates.string(Dates.Year(-1)) == "-1 yr"
+    @test Dates.string(Dates.Year(2)) == "2 yr"
     @test isfinite(Dates.Year)
     @test isfinite(Dates.Year(0))
     @test zero(Dates.Year) == Dates.Year(0)
@@ -364,7 +364,7 @@ end
     @test emptyperiod == 2y + (m - d) + ms - ((m - d) + 2y + ms)
     @test emptyperiod == 0ms
     @test string(emptyperiod) == "empty period"
-    @test string(ms + mi + d + m + y + w + h + s + 2y + m) == "3 years, 2 months, 1 week, 1 day, 1 hour, 1 minute, 1 second, 1 millisecond"
+    @test string(ms + mi + d + m + y + w + h + s + 2y + m) == "3 yr, 2 mo, 1 w, 1 d, 1 h, 1 m, 1 s, 1 ms"
     @test 8d - s == 1w + 23h + 59mi + 59s
     @test h + 3mi == 63mi
     @test y - m == 11m
@@ -545,35 +545,35 @@ end
 end
 
 @testset "Printing" begin
-    @test string(Nanosecond(1)) == "1ns"
-    @test string(Microsecond(1)) == "1us"
-    @test string(Millisecond(1)) == "1ms"
-    @test string(Second(1)) == "1s"
-    @test string(Hour(1)) == "1h"
-    @test string(Day(1)) == "1d"
-    @test string(Quarter(1)) == "1q"
-    @test string(Year(1)) == "1y"
+    @test string(Nanosecond(1)) == "1 ns"
+    @test string(Microsecond(1)) == "1 μs"
+    @test string(Millisecond(1)) == "1 ms"
+    @test string(Second(1)) == "1 s"
+    @test string(Hour(1)) == "1 h"
+    @test string(Day(1)) == "1 d"
+    @test string(Quarter(1)) == "1 q"
+    @test string(Year(1)) == "1 yr"
 end
 
 @testset "Parsing" begin
     @test parse(Nanosecond, "1") == Nanosecond(1)
-    @test parse(Nanosecond, "1ns") == Nanosecond(1)
-    @test parse(Period, "1ns") == Nanosecond(1)
-    @test parse(Period, "1nanosecond") == Nanosecond(1)
+    @test parse(Nanosecond, "1 ns") == Nanosecond(1)
+    @test parse(Period, "1 ns") == Nanosecond(1)
+    @test parse(Period, "1 nanosecond") == Nanosecond(1)
     @test parse(Microsecond, "1") == Microsecond(1)
-    @test parse(Microsecond, "1us") == Microsecond(1)
-    @test parse(Period, "1us") == Microsecond(1)
-    @test parse(Period, "1microsecond") == Microsecond(1)
-    @test parse(Milliseocnd, "1") == Millisecond(1)
-    @test parse(Millisecond, "1ms") == Millisecond(1)
-    @test parse(Period, "1ms") == Millisecond(1)
-    @test parse(Period, "1millisecond") == Millisecond(1)
+    @test parse(Microsecond, "1 μs") == Microsecond(1)
+    @test parse(Period, "1 μs") == Microsecond(1)
+    @test parse(Period, "1 microsecond") == Microsecond(1)
+    @test parse(Millisecond, "1") == Millisecond(1)
+    @test parse(Millisecond, "1 ms") == Millisecond(1)
+    @test parse(Period, "1 ms") == Millisecond(1)
+    @test parse(Period, "1 millisecond") == Millisecond(1)
     @test parse(Second, "1") == Second(1)
-    @test parse(Second, "1s") == Second(1)
-    @test parse(Period, "1s") == Second(1)
-    @test parse(Period, "1second") == Second(1)
-    @test_throws ArgumentError parse(Period, "1decade")
-    @test_throws ArgumentError parse(Period, "1d2h")
+    @test parse(Second, "1 s") == Second(1)
+    @test parse(Period, "1 s") == Second(1)
+    @test parse(Period, "1 second") == Second(1)
+    @test_throws ArgumentError parse(Period, "1 decade")
+    @test_throws ArgumentError parse(Period, "1d 2h")
 end
 
 end

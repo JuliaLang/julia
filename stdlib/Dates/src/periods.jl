@@ -10,7 +10,7 @@ For a given period, return the value associated with that period.  For example,
 value(x::Period) = x.value
 
 abbr(::Type{Nanosecond}) = "ns"
-abbr(::Type{Microsecond}) = "us"
+abbr(::Type{Microsecond}) = "μs"
 abbr(::Type{Millisecond}) = "ms"
 abbr(::Type{Second}) = "s"
 abbr(::Type{Minute}) = "m"
@@ -34,7 +34,7 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
         function Base.tryparse(::Type{$period}, x::AbstractString)
             xint = tryparse(Int64, x)
             isnothing(xint) || return $period(xint)
-            unitindex = findfirst(!isdigit, x)
+            unitindex = findfirst(isletter, x)
             isnothing(unitindex) && return nothing
             xint = tryparse(Int64, first(x, unitindex - 1))
             isnothing(xint) || return $period(xint)
@@ -42,7 +42,7 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
         end
         function Base.parse(::Type{$period}, x::AbstractString)
             p = tryparse($period, x)
-            isnothing(p) && throw(ArgumentError("cannot parse as $period_str"))
+            isnothing(p) && throw(ArgumentError("cannot parse as $($period_str)"))
             p
         end
     end
@@ -73,7 +73,7 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
 end
 
 function Base.tryparse(::Type{Period}, x::AbstractString)
-    unitindex = findfirst(!isdigit, x)
+    unitindex = findfirst(isletter, x)
     isnothing(unitindex) && return nothing
     xint = tryparse(Int64, first(x, unitindex - 1))
     isnothing(xint) && return nothing
@@ -97,7 +97,7 @@ function Base.parse(::Type{Period}, x::AbstractString)
 end
 
 #Print/show/traits
-Base.print(io::IO, x::Period) = print(io, value(x), abbr(x))
+Base.print(io::IO, x::Period) = print(io, value(x), ' ', abbr(x))
 Base.show(io::IO, ::MIME"text/plain", x::Period) = print(io, x)
 Base.show(io::IO, p::P) where {P<:Period} = print(io, P, '(', value(p), ')')
 Base.zero(::Union{Type{P},P}) where {P<:Period} = P(0)
