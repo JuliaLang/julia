@@ -752,6 +752,78 @@ function >>>(x::Integer, c::Unsigned)
 end
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
+"""
+    >>%(x, n)
+
+Overflowing arithmetic right bit shift operator. If `n` is equal to or higher than
+the number of bits in `x`, this operation may overflow depending on the platform.
+When `n` is not known at compile time, `>>%` may be more efficient than `>>`.
+
+If `x` is nonnegative, the `n` top bits of the result will be unset, if `x` is negative,
+they will be set. This implies the sign of `x` will be preserved.
+
+See also: [`>>`](@ref), [`>>>%`](@ref)
+
+# Examples
+```jldoctest
+julia> 18 >>% 2
+4
+
+julia> Int32(5) >>% 4
+0
+
+julia> Int32(-100) >>% 3
+-13
+```
+"""
+(>>%)
+
+"""
+    >>>%(x, n)
+
+Overflowing logical right bit shift operator. If `n` is equal to or higher than
+the number of bits in `x`, this operation may overflow depending on the platform.
+Unlike `>>%`, the `n` top bits of the result are always unset.
+
+See also: [`>>>`](@ref), [`>>%`](@ref)
+
+# Examples
+```jldoctest
+julia> 18 >>>% 2
+4
+
+julia> Int32(5) >>>% 4
+0
+
+julia> Int32(-100) >>>% 3
+536870899
+```
+"""
+(>>>%)
+
+"""
+    <<%(x, n)
+
+Overflowing left bit shift operator. If `n` is equal to or higher than
+the number of bits in `x`, this operation may overflow depending on the platform.
+The lowest `n` bits of the result are unset.
+
+See also: [`<<`](@ref), [`>>%`](@ref)
+
+# Examples
+```jldoctest
+julia> 7 <<% 2
+28
+
+julia> Int32(1001) <<% 3
+8008
+
+julia> Int32(9) <<% 28
+-1879048192
+```
+"""
+(<<%)
+
 # operator alias
 
 """

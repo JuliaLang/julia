@@ -522,6 +522,40 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 <=(x::BitUnsigned, y::BitSigned  ) = (y >= 0) & (x <= unsigned(y))
 
 ## integer shifts ##
+function >>>%(x::Union{Int8, UInt8, Int16, UInt16}, y::BitInteger)
+    lshr_int(zext_int(UInt32, x), (y % UInt32) & 0x1f) % typeof(x)
+end
+
+function >>>%(x::T, y::BitInteger) where {T <: Union{Int32, UInt32, UInt64, Int64, UInt128, Int128}}
+    lshr_int(x, (y % UInt32) & (8*sizeof(T) - 1)) % T
+end
+
+function <<%(x::Union{Int8, UInt8, Int16, UInt16}, y::BitInteger)
+    shl_int(zext_int(UInt32, x), (y % UInt32) & 0x1f) % typeof(x)
+end
+
+function <<%(x::T, y::BitInteger) where {T <: Union{Int32, UInt32, UInt64, Int64, UInt128, Int128}}
+    shl_int(x, (y % UInt32) & (8*sizeof(T) - 1)) % T
+end
+
+function >>%(x::Union{Int8, Int16}, y::BitInteger)
+    ashr_int(sext_int(UInt32, x), (y % UInt32) & 0x1f) % typeof(x)
+end
+
+function >>%(x::T, y::BitInteger) where {T <: Union{Int32, Int64, Int128}}
+    ashr_int(x, (y % UInt32) & (8*sizeof(T) - 1)) % T
+end
+
+function >>%(x::Union{UInt8, UInt16}, y::BitInteger)
+    lshr_int(zext_int(UInt32, x), (y % UInt32) & 0x1f) % typeof(x)
+end
+
+function >>%(x::T, y::BitInteger) where {T <: Union{UInt32, UInt64, UInt128}}
+    lshr_int(x, (y % UInt32) & (8*sizeof(T) - 1)) % T
+end
+
+# For 8-32 bits x, trunc n to u32, & 0x1f, recast back to x
+# For 64
 
 # unsigned shift counts always shift in the same direction
 >>(x::BitSigned,   y::BitUnsigned) = ashr_int(x, y)

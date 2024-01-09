@@ -213,6 +213,21 @@ end
     end
 end
 
+@testset "Overflowing bitshifts" failfast=true begin
+    for T1 in Base.BitInteger_types
+        nbits = 8*sizeof(T1)
+        val = 0x1234567890abcdef1234567890abcdef % T1
+        for T2 in Base.BitInteger_types
+            for shift in 0:nbits-1
+                s = T2(shift)
+                @test >>>%(val, s) === val >>> s
+                @test <<%(val, s) === val << s
+                @test >>%(val, s) === val >> s
+            end
+        end
+    end
+end
+
 @testset "bit rotations" begin
     val1 = 0b01100011
     @test 0b00011011 === bitrotate(val1, 3)
