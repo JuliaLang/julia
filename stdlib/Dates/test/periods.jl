@@ -216,14 +216,10 @@ end
     @test Dates.Date(2014, 1, 29) + Dates.Month(1) + Dates.Day(1) == Dates.Date(2014, 1, 29) + Dates.Day(1) + Dates.Month(1)
 end
 @testset "traits" begin
-    @test Dates._units(Dates.Year(0)) == " years"
-    @test Dates._units(Dates.Year(1)) == " year"
-    @test Dates._units(Dates.Year(-1)) == " year"
-    @test Dates._units(Dates.Year(2)) == " years"
-    @test Dates.string(Dates.Year(0)) == "0 years"
-    @test Dates.string(Dates.Year(1)) == "1 year"
-    @test Dates.string(Dates.Year(-1)) == "-1 year"
-    @test Dates.string(Dates.Year(2)) == "2 years"
+    @test Dates.string(Dates.Year(0)) == "0yr"
+    @test Dates.string(Dates.Year(1)) == "1yr"
+    @test Dates.string(Dates.Year(-1)) == "-1yr"
+    @test Dates.string(Dates.Year(2)) == "2yr"
     @test isfinite(Dates.Year)
     @test isfinite(Dates.Year(0))
     @test zero(Dates.Year) == Dates.Year(0)
@@ -281,7 +277,7 @@ Beat(p::Period) = Beat(Dates.toms(p) ÷ 86400)
     # https://en.wikipedia.org/wiki/Swatch_Internet_Time
     Dates.value(b::Beat) = b.value
     Dates.toms(b::Beat) = Dates.value(b) * 86400
-    Dates._units(b::Beat) = " beat" * (abs(Dates.value(b)) == 1 ? "" : "s")
+    Dates.abbr(::Type{Beat}) = "beat"
     Base.promote_rule(::Type{Dates.Day}, ::Type{Beat}) = Dates.Millisecond
     Base.convert(::Type{T}, b::Beat) where {T<:Dates.Millisecond} = T(Dates.toms(b))::T
 
@@ -576,8 +572,8 @@ end
     @test parse(Second, "1s") == Second(1)
     @test parse(Period, "1s") == Second(1)
     @test parse(Period, "1second") == Second(1)
-    @test_throws parse(Period, "1decade")
-    @test_throws parse(Period, "1d2h")
+    @test_throws ArgumentError parse(Period, "1decade")
+    @test_throws ArgumentError parse(Period, "1d2h")
 end
 
 end

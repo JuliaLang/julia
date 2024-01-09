@@ -19,7 +19,7 @@ abbr(::Type{Day}) = "d"
 abbr(::Type{Week}) = "w"
 abbr(::Type{Month}) = "mo"
 abbr(::Type{Quarter}) = "q"
-abbr(::Type{Year}) = "y"
+abbr(::Type{Year}) = "yr"
 abbr(x::Period) = abbr(typeof(x))
 
 # The default constructors for Periods work well in almost all cases
@@ -28,7 +28,7 @@ abbr(x::Period) = abbr(typeof(x))
 for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond, :Microsecond, :Nanosecond)
     period_str = string(period)
     accessor_str = lowercase(period_str)
-    @eval _isabbr(::Type{$period}, x) = (x == abbr($period) || x == accessor_str)
+    @eval _isabbr(::Type{$period}, x) = (x == abbr($period) || x == $accessor_str)
     # AbstractString parsing (mainly for IO code)
     @eval begin
         function Base.tryparse(::Type{$period}, x::AbstractString)
@@ -42,7 +42,7 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
         end
         function Base.parse(::Type{$period}, x::AbstractString)
             p = tryparse($period, x)
-            isnothing(p) && error("cannot parse as $period_str")
+            isnothing(p) && throw(ArgumentError("cannot parse as $period_str"))
             p
         end
     end
@@ -92,7 +92,7 @@ end
 
 function Base.parse(::Type{Period}, x::AbstractString)
     p = tryparse(Period, x)
-    isnothing(p) && error("cannot parse as Period")
+    isnothing(p) && throw(ArgumentError("cannot parse as Period"))
     p
 end
 
