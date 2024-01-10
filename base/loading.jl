@@ -1333,6 +1333,9 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
     return nothing
 end
 
+# Modules that have been explicitly `require`d in the Julia session,
+const required_modules = Set{PkgId}()
+
 function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}, weakdeps::Dict{String, Any})
     for (ext, triggers) in extensions
         triggers = triggers::Union{String, Vector{String}}
@@ -1349,7 +1352,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             # TODO: Better error message if this lookup fails?
             uuid_trigger = UUID(weakdeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
-            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
+            if !(trigger_id in required_modules) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
@@ -1971,12 +1974,15 @@ end
 
 function __require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
+    first_require = !(uuidkey in required_modules)
+    push!(required_modules, uuidkey)
     if !root_module_exists(uuidkey)
         newm = _require(uuidkey, env)
         if newm === nothing
             error("package `$(uuidkey.name)` did not define the expected \
                   module `$(uuidkey.name)`, check for typos in package module name")
         end
+        first_require && run_package_callbacks(uuidkey)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
