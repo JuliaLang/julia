@@ -244,7 +244,7 @@ JL_DLLEXPORT int32_t jl_get_default_nans(void);
 #include <vector>
 
 extern JL_DLLEXPORT bool jl_processor_print_help;
-
+// NOLINTBEGIN(clang-diagnostic-return-type-c-linkage)
 /**
  * Returns the CPU name and feature string to be used by LLVM JIT.
  *
@@ -278,7 +278,7 @@ struct jl_target_spec_t {
 extern "C" JL_DLLEXPORT llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void) JL_NOTSAFEPOINT;
 std::string jl_get_cpu_name_llvm(void) JL_NOTSAFEPOINT;
 std::string jl_get_cpu_features_llvm(void) JL_NOTSAFEPOINT;
-
+// NOLINTEND(clang-diagnostic-return-type-c-linkage)
 struct FeatureName {
     const char *name;
     uint32_t bit; // bit index into a `uint32_t` array;
