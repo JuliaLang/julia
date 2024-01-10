@@ -213,7 +213,7 @@ end
     end
 end
 
-@testset "Overflowing bitshifts" failfast=true begin
+@testset "native bitshifts" failfast=true begin
     for T1 in Base.BitInteger_types
         nbits = 8*sizeof(T1)
         val = 0x1234567890abcdef1234567890abcdef % T1
@@ -224,6 +224,11 @@ end
                 @test unsafe_ashr(val, s) === val >> s
                 @test unsafe_shl(val, s) === val << s
             end
+
+            invalid = nbits + T2(10)
+            @test typeof(unsafe_lshr(val, invalid)) == typeof(val >>> T2(1))
+            @test typeof(unsafe_ashr(val, invalid)) == typeof(val >> T2(1))
+            @test typeof(unsafe_shl(val, invalid)) == typeof(val << T2(1))
         end
     end
 end
