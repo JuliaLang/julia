@@ -865,9 +865,10 @@ similar(::Type{T}, shape::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, One
 similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
 """
-    empty(v::AbstractVector, [eltype])
+    empty(a::AbstractArray, [eltype])
+    empty(a::Type{AbstractArray}, [eltype])
 
-Create an empty vector similar to `v`, optionally changing the `eltype`.
+Create an empty array similar to `a`, optionally changing the `eltype`.
 
 See also: [`empty!`](@ref), [`isempty`](@ref), [`isassigned`](@ref).
 
@@ -882,6 +883,10 @@ String[]
 ```
 """
 empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
+function empty(a::Type{<:AbstractArray{T,N}}, ::Type{U}=T) where {T,N,U}
+    convert(AbstractArray{U}, a(undef, Tuple(Iterators.repeated(0,N))))
+end
+empty(a::AbstractArray{T}, ::Type{U}=T) where {T,U} = empty(typeof(a), U)
 
 # like empty, but should return a mutable collection, a Vector by default
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
