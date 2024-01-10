@@ -381,7 +381,16 @@ function check_for_hint(s::MIState)
         # Requires making space for them earlier in refresh_multi_line
         return clear_hint(st)
     end
-    completions, partial, should_complete = complete_line(st.p.complete, st, s.active_module)::Tuple{Vector{String},String,Bool}
+    # spawn a new task for hint completion to avoid blocking the main thread
+    # if the completion task doesn't finish quickly, abandon hinting and return early
+    completion_task = Threads.@spawn :default complete_line(st.p.complete, st, s.active_module)
+    done_quickly = false
+    completion_timer = Timer(0.01) do _
+        done_quickly = istaskdone(completion_task)
+    end
+    wait(completion_timer); close(completion_timer)
+    done_quickly || return clear_hint(st) # TODO kill `completion_task`?
+    completions, partial, should_complete = fetch(completion_task)::Tuple{Vector{String},String,Bool}
     isempty(completions) && return clear_hint(st)
     # Don't complete for single chars, given e.g. `x` completes to `xor`
     if length(partial) > 1 && should_complete
@@ -2395,7 +2404,8 @@ end
 # jump_spaces: if cursor is on a ' ', move it to the first non-' ' char on the right
 # if `delete_trailing`, ignore trailing ' ' by deleting them
 function edit_tab(s::MIState, jump_spaces::Bool=false, delete_trailing::Bool=jump_spaces)
-    tab_should_complete(s) && return complete_line(s)
+    # tab complete on a separate thread (if available) to avoid blocking the main thread
+    tab_should_complete(s) && return Threads.@spawn :default complete_line(s)
     set_action!(s, :edit_insert_tab)
     push_undo(s)
     edit_insert_tab(buffer(s), jump_spaces, delete_trailing) || pop_undo(s)
@@ -2503,7 +2513,10 @@ AnyDict(
     "^_" => (s::MIState,o...)->edit_undo!(s),
     "\e_" => (s::MIState,o...)->edit_redo!(s),
     # Show hints at what tab complete would do by default
-    "*" => (s::MIState,data,c::StringLike)->(edit_insert(s, c); check_for_hint(s) && refresh_line(s)),
+    "*" => function (s::MIState,data,c::StringLike)
+        edit_insert(s, c)
+        check_for_hint(s) && refresh_line(s)
+    end,
     "^U" => (s::MIState,o...)->edit_kill_line_backwards(s),
     "^K" => (s::MIState,o...)->edit_kill_line_forwards(s),
     "^Y" => (s::MIState,o...)->edit_yank(s),

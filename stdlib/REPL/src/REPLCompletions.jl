@@ -646,6 +646,10 @@ function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
     return src
 end
 
+# the lock to avoid concurrent inference from multiple completion tasks, which could happen
+# if user types fast rapidly (otherwise end up with corrupt inference states)
+const REPL_INFERENCE_LOCK = ReentrantLock()
+
 # lower `ex` and run type inference on the resulting top-level expression
 function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressive_inference::Bool=false)
     if (isexpr(ex, :toplevel) || isexpr(ex, :tuple)) && !isempty(ex.args)
@@ -662,6 +666,17 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
     end
     lwr isa Expr || return Const(lwr) # `ex` is literal
     isexpr(lwr, :thunk) || return nothing # lowered to `Expr(:error, ...)` or similar
+    trylock(REPL_INFERENCE_LOCK) || return nothing
+    result = try
+        repl_infer_ex(lwr, context_module, limit_aggressive_inference)
+    finally
+        unlock(REPL_INFERENCE_LOCK)
+    end
+    result === Union{} && return nothing # for whatever reason, callers expect this as the Bottom and/or Top type instead
+    return result
+end
+
+function repl_infer_ex(lwr::Expr, context_module::Module, limit_aggressive_inference::Bool=false)
     src = lwr.args[1]::Core.CodeInfo
 
     # construct top-level `MethodInstance`
@@ -680,9 +695,7 @@ function repl_eval_ex(@nospecialize(ex), context_module::Module; limit_aggressiv
     #      potential invalidations of `Core.Compiler` methods.
     Base.invoke_in_world(COMPLETION_WORLD[], CC.typeinf, interp, frame)
 
-    result = frame.result.result
-    result === Union{} && return nothing # for whatever reason, callers expect this as the Bottom and/or Top type instead
-    return result
+    return frame.result.result
 end
 
 # `COMPLETION_WORLD[]` will be initialized within `__init__`
