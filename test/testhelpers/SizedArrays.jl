@@ -47,13 +47,13 @@ Base.zero(::Type{T}) where T <: SizedArray = SizedArray{size(T)}(zeros(eltype(T)
 +(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = SizedArray{SZ}(S1.data + S2.data)
 ==(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = S1.data == S2.data
 
-const SizedArrayLike = Union{SizedArray, Transpose{<:Any, <:SizedArray}, Adjoint{<:Any, <:SizedArray}}
+const SizedMatrixLike = Union{SizedMatrix, Transpose{<:Any, <:SizedMatrix}, Adjoint{<:Any, <:SizedMatrix}}
 
 _data(S::SizedArray) = S.data
 _data(T::Transpose{<:Any, <:SizedArray}) = transpose(_data(parent(T)))
 _data(T::Adjoint{<:Any, <:SizedArray}) = adjoint(_data(parent(T)))
 
-function *(S1::SizedArrayLike, S2::SizedArrayLike)
+function *(S1::SizedMatrixLike, S2::SizedMatrixLike)
     0 < ndims(S1) < 3 && 0 < ndims(S2) < 3 && size(S1, 2) == size(S2, 1) || throw(ArgumentError("size mismatch!"))
     data = _data(S1) * _data(S2)
     SZ = ndims(data) == 1 ? (size(S1, 1), ) : (size(S1, 1), size(S2, 2))
@@ -61,7 +61,7 @@ function *(S1::SizedArrayLike, S2::SizedArrayLike)
 end
 
 # deliberately wide method definitions to test for method ambiguties in LinearAlgebra
-*(S1::SizedArrayLike, M::AbstractMatrix) = _data(S1) * M
+*(S1::SizedMatrixLike, M::AbstractMatrix) = _data(S1) * M
 mul!(dest::AbstractMatrix, S1::SizedMatrix, M::AbstractMatrix, α::Number, β::Number) =
     mul!(dest, _data(S1), M, α, β)
 mul!(dest::AbstractMatrix, M::AbstractMatrix, S2::SizedMatrix, α::Number, β::Number) =
