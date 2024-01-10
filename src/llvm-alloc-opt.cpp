@@ -23,6 +23,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/PromoteMemToReg.h>
 
 #include <llvm/InitializePasses.h>
@@ -109,17 +110,18 @@ struct AllocOpt : public JuliaPassContext {
 
     Function *lifetime_start;
     Function *lifetime_end;
+    bool cfgChanged = false;
 
     bool doInitialization(Module &m);
-    bool runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT);
+    bool runOnFunction(Function &F, FunctionAnalysisManager &AM);
 };
 
 struct Optimizer {
-    Optimizer(Function &F, AllocOpt &pass, function_ref<DominatorTree&()> GetDT)
+    Optimizer(Function &F, AllocOpt &pass, FunctionAnalysisManager &AM)
         : F(F),
           ORE(&F),
           pass(pass),
-          GetDT(std::move(GetDT))
+          AM(AM)
     {}
 
     void initialize();
@@ -145,16 +147,45 @@ private:
     void splitOnStack(CallInst *orig_inst);
     void optimizeTag(CallInst *orig_inst);
 
+    void optimizeObject(CallInst *orig_inst, size_t sz);
+    void optimizeArray(CallInst *orig_inst, jl_genericmemory_info_t info);
+
+    void moveSizedBitsArrayToStack(CallInst *orig, jl_genericmemory_info_t info);
+    void moveUnsizedBitsArrayToStack(CallInst *orig, jl_genericmemory_info_t info);
+    void replaceBitsArrayUses(CallInst *orig, Value *conditional, Value *root, function_ref<Instruction*()> shell, Instruction *data);
+
+
+    // for deoptimizing array allocations in errors (usually BoundsErrors)
+    struct SunkenArray {
+        Instruction *root; // technically also shell at this point
+        Instruction *data;
+        Instruction *loaded;
+        Instruction *err_insertpt;
+
+        struct Frame {
+            Instruction *orig_i;
+            Value::use_iterator next;
+            size_t offset_frame; // index of frame with offset data in stack
+            bool loaded;
+            // dynamic offset of orig_i from data
+            MapVector<Value *, APInt> variables;
+            APInt constant;
+        };
+    };
+    bool canDeoptimizeErrorBlocks(CallInst *orig);
+    void sinkArrayDataPointer(CallInst *orig, DenseMap<BasicBlock *, SunkenArray> &sunken, Value *root, Instruction *data, LoadInst *load);
+
     Function &F;
     OptimizationRemarkEmitter ORE;
     AllocOpt &pass;
     DominatorTree *_DT = nullptr;
-    function_ref<DominatorTree &()> GetDT;
+    FunctionAnalysisManager &AM;
+    Function *except_enter_func = nullptr;
 
     DominatorTree &getDomTree()
     {
         if (!_DT)
-            _DT = &GetDT();
+            _DT = &AM.getResult<DominatorTreeAnalysis>(F);
         return *_DT;
     }
     struct Lifetime {
@@ -190,8 +221,10 @@ private:
     };
 
     SetVector<std::pair<CallInst*,size_t>> worklist;
+    DenseMap<CallInst*, jl_genericmemory_info_t> arrays;
     SmallVector<CallInst*,6> removed;
     AllocUseInfo use_info;
+    AllocUseInfo array_data_info;
     CheckInst::Stack check_stack;
     Lifetime::Stack lifetime_stack;
     ReplaceUses::Stack replace_stack;
@@ -209,9 +242,597 @@ void Optimizer::pushInstruction(Instruction *I)
 void Optimizer::initialize()
 {
     for (auto &bb: F) {
+        if (isa<UnreachableInst>(bb.getTerminator()))
+            continue;
         for (auto &I: bb) {
             pushInstruction(&I);
         }
+    }
+    except_enter_func = F.getParent()->getFunction("julia.except_enter");
+}
+
+void Optimizer::optimizeObject(CallInst *orig, size_t sz) {
+    checkInst(orig);
+    if (use_info.escaped) {
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC allocation escaped " << ore::NV("GC Allocation", orig);
+        });
+        if (use_info.hastypeof)
+            optimizeTag(orig);
+        return;
+    }
+    if (use_info.returned) {
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC allocation was returned " << ore::NV("GC Allocation", orig);
+        });
+        if (use_info.hastypeof)
+            optimizeTag(orig);
+        return;
+    }
+    if (except_enter_func && !use_info.errorbbs.empty()) {
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC allocation has error " << ore::NV("GC Allocation", orig);
+        });
+        if (use_info.hastypeof)
+            optimizeTag(orig);
+        return;
+    }
+    if (!use_info.addrescaped && !use_info.hasload && use_info.errorbbs.empty()
+        && (!use_info.haspreserve || !use_info.refstore)) {
+        REMARK([&]() {
+            return OptimizationRemark(DEBUG_TYPE, "Dead Allocation", orig)
+                << "GC allocation removed " << ore::NV("GC Allocation", orig);
+        });
+        // No one took the address, no one reads anything and there's no meaningful
+        // preserve of fields (either no preserve/ccall or no object reference fields)
+        // We can just delete all the uses.
+        removeAlloc(orig);
+        return;
+    }
+    bool has_ref = use_info.has_unknown_objref;
+    bool has_refaggr = use_info.has_unknown_objrefaggr;
+    for (auto memop: use_info.memops) {
+        auto &field = memop.second;
+        if (field.hasobjref) {
+            has_ref = true;
+            // This can be relaxed a little based on hasload
+            // TODO: add support for hasaggr load/store
+            if (field.hasaggr || field.multiloc || field.size != sizeof(void*)) {
+                has_refaggr = true;
+                break;
+            }
+        }
+    }
+    if (has_refaggr) {
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", orig);
+        });
+        if (use_info.hastypeof)
+            optimizeTag(orig);
+        return;
+    }
+    if (!use_info.hasunknownmem && !use_info.addrescaped) {
+        REMARK([&](){
+            return OptimizationRemark(DEBUG_TYPE, "Stack Split Allocation", orig)
+                << "GC allocation split on stack " << ore::NV("GC Allocation", orig);
+        });
+        // No one actually care about the memory layout of this object, split it.
+        splitOnStack(orig);
+        return;
+    }
+    if (!use_info.errorbbs.empty()) {
+        REMARK([&](){
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC allocation has error " << ore::NV("GC Allocation", orig);
+        });
+        if (use_info.hastypeof)
+            optimizeTag(orig);
+        return;
+    }
+    REMARK([&](){
+        return OptimizationRemark(DEBUG_TYPE, "Stack Move Allocation", orig)
+            << "GC allocation moved to stack " << ore::NV("GC Allocation", orig);
+    });
+    // The object has no fields with mix reference access
+    moveToStack(orig, sz, has_ref, use_info.allockind);
+}
+
+bool Optimizer::canDeoptimizeErrorBlocks(CallInst *orig) {
+    SmallSet<LoadInst *, 4> data_pointers;
+    for (auto &field : use_info.memops) {
+        for (auto &acc : field.second.accesses) {
+            assert(isa<LoadInst>(acc.inst) && "Should only have loads of array length/data");
+            (void) acc;
+        }
+        if (field.first == 0) {
+            if (field.second.size > pass.DL->getPointerSize()) {
+                dbgs() << "Can't deoptimize error blocks because of large field 0\n";
+                return false;
+            }
+        } else {
+            assert(field.first == pass.DL->getPointerSize() && "Got a nonzero/non-data load?");
+            assert(field.second.size == pass.DL->getPointerSize() && "Got a load of array data for less than pointer size?");
+            for (auto &acc : field.second.accesses) {
+                data_pointers.insert(cast<LoadInst>(acc.inst));
+            }
+        }
+    }
+    jl_alloc::EscapeAnalysisRequiredArgs required{array_data_info, check_stack, pass, *pass.DL};
+    for (auto I : data_pointers) {
+        LLVM_DEBUG(dbgs() << "Running escape analysis on " << *I << "\n");
+        jl_alloc::runEscapeAnalysis(I, required, jl_alloc::EscapeAnalysisOptionalArgs().with_optimization_remark_emitter(&ORE));
+        REMARK([&](){
+            std::string suse_info;
+            llvm::raw_string_ostream osuse_info(suse_info);
+            array_data_info.dump(osuse_info);
+            return OptimizationRemarkAnalysis(DEBUG_TYPE, "EscapeAnalysis", I) << "escape analysis for " << ore::NV("GC Allocation", I) << "\n" << ore::NV("UseInfo", osuse_info.str());
+        });
+        // This implicitly relies on PHI nodes of the data pointer escaping; if escape analysis every changes
+        // to not do that, we'll need to update GEP offset calculations (probably everywhere)
+        if (array_data_info.escaped) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC allocation escaped " << ore::NV("GC Allocation", orig);
+            });
+            return false;
+        }
+        assert(!array_data_info.returned);
+        assert(!array_data_info.hastypeof);
+    }
+    return true;
+}
+
+void Optimizer::moveSizedBitsArrayToStack(CallInst *orig, jl_genericmemory_info_t info) {
+    auto length = orig->getArgOperand(1);
+    auto align = orig->getRetAlign().valueOrOne();
+    IRBuilder<> builder(&*F.getEntryBlock().getFirstInsertionPt());
+    auto T_size = pass.DL->getIntPtrType(builder.getContext());
+    auto data = builder.CreateAlloca(Type::getInt8Ty(builder.getContext()), length);
+    data->setAlignment(align);
+    data->takeName(orig);
+    auto root = Constant::getNullValue(orig->getType()); // technically valid to root this
+    Instruction *shell0 = nullptr;
+
+    auto shell = [&]() -> Instruction * {
+        if (shell0)
+            return shell0;
+        auto shellData = builder.CreateAlloca(Type::getInt8PtrTy(builder.getContext()), ConstantInt::get(T_size, 2));
+        shellData->setAlignment(align);
+        shellData->setName(data->getName() + ".shell_data");
+        auto lenptr = builder.CreateBitCast(shellData, length->getType()->getPointerTo(shellData->getType()->getPointerAddressSpace()));
+        builder.CreateAlignedStore(length, lenptr, align);
+        auto dataptr = builder.CreateConstGEP1_64(Type::getInt8PtrTy(builder.getContext()), shellData, 1);
+        builder.CreateAlignedStore(data, dataptr, Align(std::min(align.value(), (uint64_t) pass.DL->getPointerSize())));
+        auto asc = builder.CreateAddrSpaceCast(shellData, Type::getInt8PtrTy(builder.getContext())->getPointerTo(0)); // pointer_to_objref always returns addrspace 0
+        shell0 = cast<Instruction>(builder.CreateBitCast(asc, JuliaType::get_pjlvalue_ty(builder.getContext())));
+        return shell0;
+    };
+
+    replaceBitsArrayUses(orig, nullptr, root, shell, data);
+    orig->eraseFromParent();
+}
+
+void Optimizer::moveUnsizedBitsArrayToStack(CallInst *orig, jl_genericmemory_info_t info) {
+    size_t maxStackAlloc = 512; // TODO parameterize by module flag/ctor param
+    IRBuilder<> builder(&*F.getEntryBlock().getFirstInsertionPt());
+    StringRef origName = orig->getName();
+    auto T_size = pass.DL->getIntPtrType(builder.getContext());
+    auto data = builder.CreateAlloca(Type::getInt8Ty(builder.getContext()), ConstantInt::get(T_size, maxStackAlloc));
+    auto align = orig->getRetAlign().valueOrOne();
+    data->setAlignment(align);
+    data->setName(origName + ".stack_data");
+    // don't store the length pointer yet, since it might not be computed here
+
+    // this makes sure we update domtree when splitting the bb, so we preserve the analysis
+    _DT = AM.getCachedResult<DominatorTreeAnalysis>(F);
+    auto origBB = orig->getParent();
+    builder.SetInsertPoint(orig);
+    auto length = orig->getArgOperand(1);
+    auto maxElements = ConstantInt::get(length->getType(), maxStackAlloc / info.elsize);
+    auto tooBig = builder.CreateICmpUGT(length, maxElements);
+    auto fallback = SplitBlockAndInsertIfThen(tooBig, orig, false, nullptr, _DT);
+    pass.cfgChanged = true;
+    fallback->getParent()->setName("stack_alloc_fallback");
+    builder.SetInsertPoint(orig);
+    auto ownerPhi = builder.CreatePHI(orig->getType(), 2);
+    auto dataPhi = builder.CreatePHI(Type::getInt8PtrTy(builder.getContext()), 2);
+    PHINode *shellPhi = nullptr;
+
+    auto shell = [&]() -> Instruction * {
+        if (shellPhi)
+            return shellPhi;
+        builder.SetInsertPoint(origBB->getTerminator());
+        auto shellData = builder.CreateAlloca(Type::getInt8PtrTy(builder.getContext()), ConstantInt::get(T_size, 2));
+        shellData->setAlignment(align);
+        shellData->setName(data->getName() + ".shell_data");
+        auto lenptr = builder.CreateBitCast(shellData, length->getType()->getPointerTo(shellData->getType()->getPointerAddressSpace()));
+        builder.CreateAlignedStore(length, lenptr, align);
+        auto dataptr = builder.CreateConstGEP1_64(Type::getInt8PtrTy(builder.getContext()), shellData, 1);
+        builder.CreateAlignedStore(data, dataptr, Align(std::min(align.value(), (uint64_t) pass.DL->getPointerSize())));
+        auto asc = builder.CreateAddrSpaceCast(shellData, Type::getInt8PtrTy(builder.getContext())->getPointerTo(0)); // pointer_to_objref always returns addrspace 0
+        auto bc = builder.CreateBitCast(asc, JuliaType::get_pjlvalue_ty(builder.getContext()));
+        builder.SetInsertPoint(ownerPhi);
+        shellPhi = builder.CreatePHI(bc->getType(), 2);
+        shellPhi->addIncoming(bc, origBB);
+        return shellPhi;
+    };
+
+    // Replace all the uses now, before we make the original instruction conditional on array size
+    replaceBitsArrayUses(orig, tooBig, ownerPhi, shell, dataPhi);
+
+    orig->moveBefore(fallback);
+    builder.SetInsertPoint(fallback);
+    auto casted = builder.CreateBitCast(orig, Type::getInt8PtrTy(builder.getContext())->getPointerTo(orig->getType()->getPointerAddressSpace()));
+    auto fallbackDataPtr = builder.CreateConstGEP1_64(Type::getInt8PtrTy(builder.getContext()), casted, 1, origName + ".fallback_data_ptr");
+    auto fallbackData = builder.CreateAlignedLoad(Type::getInt8PtrTy(builder.getContext()), fallbackDataPtr, Align(pass.DL->getPointerSize()), origName + ".fallback_data");
+    auto datacast = builder.CreateBitCast(data, Type::getInt8PtrTy(builder.getContext()));
+    ownerPhi->addIncoming(Constant::getNullValue(orig->getType()), origBB);
+    ownerPhi->addIncoming(orig, fallback->getParent());
+    dataPhi->addIncoming(datacast, origBB);
+    dataPhi->addIncoming(fallbackData, fallback->getParent());
+    if (shellPhi) {
+        assert(pass.pointer_from_objref_func);
+        auto shell = builder.CreateCall(pass.pointer_from_objref_func, {orig});
+        shellPhi->addIncoming(shell, fallback->getParent());
+    }
+
+    dataPhi->setName(origName + ".data");
+    ownerPhi->takeName(orig);
+    ownerPhi->getParent()->setName("allocated_array");
+}
+
+void Optimizer::sinkArrayDataPointer(CallInst *orig, DenseMap<BasicBlock *, SunkenArray> &sunken, Value *root, Instruction *data, LoadInst *load) {
+    SmallVector<SunkenArray::Frame, 4> stack;
+    auto BitWidth = pass.DL->getPointerSizeInBits();
+    IRBuilder<> builder(orig->getContext());
+    auto replace_error_use = [&](Use *use, Instruction *user, SunkenArray &sunk, SunkenArray::Frame &frame) {
+        auto src = frame.loaded ? sunk.loaded : sunk.data;
+        if (frame.constant.isZero() && frame.variables.empty()) {
+            use->set(src);
+            return;
+        }
+        auto addrspace = frame.loaded ? AddressSpace::Loaded : AddressSpace::Generic;
+        builder.SetInsertPoint(user);
+        // 0 or 13, both are legal to gep in directly
+        Value *offset = ConstantInt::get(Type::getIntNTy(builder.getContext(), BitWidth), frame.constant);
+        for (auto &var : stack[frame.offset_frame].variables) {
+            Value *idx = var.first;
+            auto multiplier = var.second;
+            if (!multiplier.isOne()) {
+                idx = builder.CreateMul(idx, ConstantInt::get(idx->getType(), multiplier), "", true, true); // geps implicitly have nuw nsw
+            }
+            offset = builder.CreateAdd(offset, idx, "", true, true); // geps implicitly have nuw nsw
+        }
+        auto bc = builder.CreateBitCast(src, Type::getInt8PtrTy(builder.getContext())->getPointerTo(addrspace));
+        auto gep = builder.CreateInBoundsGEP(Type::getInt8Ty(builder.getContext()), bc, {offset});
+        auto cast = builder.CreateBitCast(gep, use->get()->getType());
+        use->set(cast);
+    };
+    auto replace_use = [&](Use *use) {
+        auto &cur = stack.back();
+        auto inst = cast<Instruction>(use->getUser());
+        auto it = sunken.find(inst->getParent());
+        if (it != sunken.end()) {
+            replace_error_use(use, inst, it->second, cur);
+            return;
+        }
+        // we don't actually need to replace any other uses;
+        // we just need to follow them to see if they end up
+        // in an error block.
+        SunkenArray::Frame frame;
+        frame.orig_i = inst;
+        frame.loaded = cur.loaded;
+        switch (inst->getOpcode()) {
+            case Instruction::BitCast:
+            case Instruction::AddrSpaceCast:
+            {
+                frame.offset_frame = cur.offset_frame;
+                break;
+            }
+            // Nothing to do for these
+            case Instruction::Load:
+            case Instruction::Store:
+            case Instruction::AtomicCmpXchg:
+            case Instruction::AtomicRMW:
+            {
+                return;
+            }
+            case Instruction::GetElementPtr:
+            {
+                auto gep = cast<GetElementPtrInst>(inst);
+                // Copy the current offsets to the new frame
+                frame.variables = stack[cur.offset_frame].variables;
+                frame.constant = stack[cur.offset_frame].constant;
+                bool success = gep->collectOffset(*pass.DL, BitWidth, frame.variables, frame.constant);
+                assert(success); // TODO this may not work on ARM with scalable vectors,
+                // but for now let's just start with this
+                (void) success;
+                frame.offset_frame = stack.size();
+                break;
+            }
+            case Instruction::Call:
+            {
+                auto call = cast<CallInst>(inst);
+                auto callee = call->getCalledOperand();
+                // Pretty much the only function we'd care about is
+                // gc_loaded, since everything else only applies to the
+                // gc-tracked pointer (except for write barrier, which
+                // doesn't apply since we're not stack allocating
+                // arrays with gc-tracked pointers)
+                if (callee != pass.gc_loaded_func)
+                    return;
+                assert(!frame.loaded);
+                frame.loaded = true;
+                break;
+            }
+            default:
+            {
+                for (auto &s : sunken) {
+                    s.first->printAsOperand(dbgs(), true);
+                    dbgs() << "\n";
+                }
+                llvm_dump(inst);
+                llvm_unreachable("Unexpected instruction");
+            }
+        }
+        frame.next = inst->use_begin();
+        stack.push_back(frame);
+    };
+    if (load->use_empty()) {
+        load->eraseFromParent();
+        return;
+    }
+    stack.push_back(SunkenArray::Frame{load, load->use_begin(), 0, false, {}, APInt(BitWidth, 0)});
+    while (true) {
+        auto cur = &stack.back();
+        auto use = &*cur->next;
+        ++cur->next;
+        replace_use(use);
+        while (cur->next == cur->orig_i->use_end()) {
+            stack.pop_back();
+            if (stack.empty()) {
+                builder.SetInsertPoint(load);
+                load->replaceAllUsesWith(builder.CreateBitCast(data, load->getType()));
+                load->eraseFromParent();
+                return;
+            }
+            cur = &stack.back();
+        }
+    }
+}
+
+void Optimizer::replaceBitsArrayUses(CallInst *alloc, Value *conditional, Value *root, function_ref<Instruction *()>shell, Instruction *data) {
+    IRBuilder<> builder(alloc->getContext());
+    auto type = alloc->getArgOperand(0);
+    auto length = alloc->getArgOperand(1);
+    auto align = alloc->getRetAlign().valueOrOne();
+    DenseMap<BasicBlock *, SunkenArray> sunken;
+    if (!use_info.errorbbs.empty()) {
+        if (!pass.gc_loaded_func) {
+            auto decl = get_gc_loaded_decl(builder.getContext());
+            auto FC = alloc->getModule()->getOrInsertFunction("julia.gc_loaded", decl.first, decl.second);
+            pass.gc_loaded_func = cast<Function>(FC.getCallee());
+        }
+        IRBuilder<> builder(data->getNextNode());
+        auto loaded = builder.CreateCall(pass.gc_loaded_func, {root, builder.CreateBitCast(data, JuliaType::get_pprjlvalue_ty(builder.getContext()))});
+        for (auto bb : use_info.errorbbs) {
+            auto sunk = alloc->clone();
+            auto insertpt = &*bb->getFirstInsertionPt();
+            Instruction *rootsunk;
+            Instruction *datasunk;
+            Instruction *loadedsunk;
+            if (!conditional) {
+                sunk->insertBefore(insertpt);
+                builder.SetInsertPoint(insertpt);
+                auto asc = builder.CreateAddrSpaceCast(sunk, PointerType::getWithSamePointeeType(cast<PointerType>(sunk->getType()), AddressSpace::Derived));
+                auto bc = builder.CreateBitCast(asc, Type::getInt8PtrTy(builder.getContext())->getPointerTo(AddressSpace::Derived));
+                auto gep = builder.CreateConstGEP1_64(Type::getInt8PtrTy(builder.getContext()), bc, 1);
+                datasunk = builder.CreateAlignedLoad(Type::getInt8PtrTy(builder.getContext()), gep, Align(MinAlign(align.value(), pass.DL->getPointerSize())));
+                rootsunk = sunk;
+                loadedsunk = builder.CreateCall(pass.gc_loaded_func, {rootsunk, builder.CreateBitCast(datasunk, JuliaType::get_pprjlvalue_ty(builder.getContext()))});
+                // length must dominate here, since the alloc is not in a phi node,
+                // length must dominate the allocation for obvious reasons,
+                // and the allocation must dominate its uses (including those in this bb)
+                // also we know nuw nsw because original alloc would have thrown if not, and no exc handlers
+                auto memcpy_length = builder.CreateMul(length, alloc->getArgOperand(2), "", true, true); // 2 is elsize
+                // TODO can i get alignment guarantees for these?
+                builder.CreateMemCpy(loadedsunk, MaybeAlign(), loaded, MaybeAlign(), memcpy_length);
+                builder.SetInsertPoint(insertpt);
+            } else {
+                assert(pass.cfgChanged); // should have changed it above to get the runtime alloc branch anyways
+                _DT = AM.getCachedResult<DominatorTreeAnalysis>(F);
+                auto term = SplitBlockAndInsertIfThen(conditional, insertpt, false, nullptr, _DT);
+                term->getParent()->setName("sunk_alloc");
+                pass.cfgChanged = true; // should have already been set, but just being consistent
+                sunk->insertBefore(term);
+                builder.SetInsertPoint(term);
+                auto asc = builder.CreateAddrSpaceCast(sunk, PointerType::getWithSamePointeeType(cast<PointerType>(sunk->getType()), AddressSpace::Derived));
+                auto sunkdata = builder.CreateBitCast(asc, Type::getInt8PtrTy(builder.getContext())->getPointerTo(AddressSpace::Derived));
+                sunkdata = builder.CreateConstGEP1_64(Type::getInt8PtrTy(builder.getContext()), sunkdata, 1);
+                sunkdata = builder.CreateAlignedLoad(Type::getInt8PtrTy(builder.getContext()), sunkdata, Align(MinAlign(align.value(), pass.DL->getPointerSize())));
+                // we have to do this a second time because we need to do the memcpy inside the conditional
+                auto sunkloaded = builder.CreateCall(pass.gc_loaded_func, {sunk, builder.CreateBitCast(sunkdata, JuliaType::get_pprjlvalue_ty(builder.getContext()))});
+                // length must dominate here, since the alloc is not in a phi node,
+                // length must dominate the allocation for obvious reasons,
+                // and the allocation must dominate its uses (including those in this bb)
+                auto memcpy_length = builder.CreateMul(length, alloc->getArgOperand(2)); // 2 is elsize
+                // TODO can i get alignment guarantees for these?
+                builder.CreateMemCpy(sunkloaded, MaybeAlign(), loaded, MaybeAlign(), memcpy_length);
+                builder.SetInsertPoint(insertpt);
+                auto rootphi = builder.CreatePHI(alloc->getType(), 2);
+                auto dataphi = builder.CreatePHI(Type::getInt8PtrTy(builder.getContext()), 2);
+                rootsunk = rootphi;
+                datasunk = dataphi;
+                rootphi->addIncoming(root, bb);
+                rootphi->addIncoming(sunk, term->getParent());
+                dataphi->addIncoming(data, bb);
+                dataphi->addIncoming(sunkdata, term->getParent());
+                loadedsunk = builder.CreateCall(pass.gc_loaded_func, {rootsunk, builder.CreateBitCast(datasunk, JuliaType::get_pprjlvalue_ty(builder.getContext()))});
+            }
+            // note that bb != insertpt->getParent() in the unsized case
+            sunken[insertpt->getParent()] = {rootsunk, datasunk, loadedsunk, insertpt};
+        }
+    }
+    // we need to replace all of the length/data accesses upfront, because in the case of an unsized array alloc
+    // it's not legal to derive it from the phi node (may be nullptr)
+    for (auto &field : use_info.memops) {
+        for (auto &access : field.second.accesses) {
+            assert(isa<LoadInst>(access.inst) && "Should only have loads of array length/data");
+            auto load = cast<LoadInst>(access.inst);
+            auto offset = access.offset;
+            assert((offset == 0 || offset == pass.DL->getPointerSize()) && "Should only have loads of array length/data");
+            builder.SetInsertPoint(load);
+            if (offset == 0) {
+                assert(load->getType()->isIntegerTy() && "Should only have loads of array length from offset 0");
+                assert(load->getType()->getIntegerBitWidth() <= length->getType()->getIntegerBitWidth() && "Should only have loads of array length from offset 0");
+                auto len = builder.CreateTrunc(length, load->getType()); // llvm may load a smaller int, but hopefully shouldn't go larger
+                if (len != length) {
+                    len->takeName(length);
+                    if (auto I = dyn_cast<Instruction>(len))
+                        if (auto leni = dyn_cast<Instruction>(length))
+                            I->copyMetadata(*leni);
+                }
+                load->replaceAllUsesWith(len);
+                load->eraseFromParent();
+            } else {
+                if (load->getType()->isIntegerTy()) {
+                    assert(cast<IntegerType>(load->getType())->getBitWidth() == pass.DL->getPointerSizeInBits() && "Should only have loads of array data from offset 8");
+                    auto p2i = builder.CreatePtrToInt(data, load->getType());
+                    load->replaceAllUsesWith(p2i);
+                    load->eraseFromParent();
+                } else {
+                    assert(load->getType()->isPointerTy() && "Should only have loads of array data from offset 8");
+                    if (!sunken.empty()) {
+                        sinkArrayDataPointer(alloc, sunken, root, data, load);
+                        continue;
+                    }
+                    auto atype = PointerType::getWithSamePointeeType(cast<PointerType>(data->getType()), load->getType()->getPointerAddressSpace());
+                    auto acast = builder.CreateAddrSpaceCast(data, atype);
+                    auto bcast = builder.CreateBitCast(acast, load->getType());
+                    load->replaceAllUsesWith(bcast);
+                    load->eraseFromParent();
+                }
+            }
+        }
+    }
+
+    while (!alloc->use_empty()) {
+        auto &use = *alloc->use_begin();
+        auto user = cast<Instruction>(use.getUser());
+        auto it = sunken.find(user->getParent());
+        if (it != sunken.end()) {
+            auto &sunk = it->second;
+            use.set(sunk.root);
+            continue;
+        }
+        if (auto CI = dyn_cast<CallInst>(user)) {
+            auto callee = CI->getCalledFunction();
+            if (callee == pass.pointer_from_objref_func) {
+                use.set(shell());
+                continue;
+            } else if (callee == pass.typeof_func) {
+                use.set(type);
+                continue;
+            }
+            if (CI->isArgOperand(&use)) {
+                auto arg = CI->getArgOperandNo(&use);
+                CI->removeParamAttr(arg, Attribute::NonNull); // can actually be null now
+            }
+        }
+        use.set(root);
+    }
+}
+
+void Optimizer::optimizeArray(CallInst *orig, jl_genericmemory_info_t info) {
+    checkInst(orig);
+    if (use_info.escaped) {
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC genericmemory allocation escaped " << ore::NV("GC GenericMemory Allocation", orig);
+        });
+        return;
+    }
+    if (use_info.returned) {
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC allocation was returned " << ore::NV("GC GenericMemory Allocation", orig);
+        });
+        return;
+    }
+    if (except_enter_func && !use_info.errorbbs.empty()) {
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC allocation has error " << ore::NV("GC Allocation", orig);
+        });
+        if (use_info.hastypeof)
+            optimizeTag(orig);
+        return;
+    }
+    if (use_info.hasunknownmem) {
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC genericmemory allocation has weird IR uses " << ore::NV("GC GenericMemory Allocation", orig);
+        });
+        return;
+    }
+    if (info.zeroinit || info.isunion || info.isboxed) {
+        // This is a hack to detect arrays of possibly-pointers, which must always be zero initialized.
+        // TODO actually support this maybe?
+        // I think in the future we may be able to support arrays of pointers by hooking into
+        // the gc roots alloca and adding our own "roots" (stack-allocated pointer arrays)
+        // We can technically do exactly one pointer-isbits array as well since the flag
+        // bits are at the end of the array (so we pretend the roots array is shorter than
+        // it actually is in late-gc-lowering), but that won't scale to multiple of those.
+        REMARK([&]() {
+            return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                << "GC genericmemory allocation is probably a pointer array " << ore::NV("GC GenericMemory Allocation", orig);
+        });
+        return;
+    }
+    if (!use_info.errorbbs.empty()) {
+        if (!canDeoptimizeErrorBlocks(orig)) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC genericmemory allocation has error " << ore::NV("GC GenericMemory Allocation", orig);
+            });
+            return;
+        }
+    }
+    // at this point the only valid real operations on orig are loading the length,
+    // loading the data pointer, and getting a tracked pointer via gc_loaded.
+    // we will assume that if the data pointer or a tracked pointer escapes, then the
+    // original array must have also escaped, and therefore we would not have gotten here.
+
+    // since we are here, we're free to turn the whole thing into a stack allocation
+    // and remove the original allocation.
+    if (isa<ConstantInt>(orig->getArgOperand(1))) {
+        size_t maxSizedStackBytes = 4096; // TODO parameterize by module flag/ctor param
+        auto length = orig->getArgOperand(1);
+        auto ilen = cast<ConstantInt>(length)->getZExtValue();
+        size_t bytes = jl_genericmemory_bytesize(&info, ilen);
+        if (bytes > maxSizedStackBytes) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC genericmemory allocation size is too large " << ore::NV("GC GenericMemory Allocation", orig);
+            });
+            return;
+        }
+        if (bytes == 0) {
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
+                    << "GC genericmemory allocation size was 0 " << ore::NV("GC GenericMemory Allocation", orig);
+            });
+            return;
+        }
+        dbgs() << "allocation was sized\n";
+        moveSizedBitsArrayToStack(orig, info);
+    } else {
+        dbgs() << "allocation was unsized\n";
+        moveUnsizedBitsArrayToStack(orig, info);
     }
 }
 
@@ -221,75 +842,10 @@ void Optimizer::optimizeAll()
         auto item = worklist.pop_back_val();
         auto orig = item.first;
         size_t sz = item.second;
-        checkInst(orig);
-        if (use_info.escaped) {
-            REMARK([&]() {
-                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation escaped " << ore::NV("GC Allocation", orig);
-            });
-            if (use_info.hastypeof)
-                optimizeTag(orig);
-            continue;
-        }
-        if (use_info.haserror || use_info.returned) {
-            REMARK([&]() {
-                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation has error or was returned " << ore::NV("GC Allocation", orig);
-            });
-            if (use_info.hastypeof)
-                optimizeTag(orig);
-            continue;
-        }
-        if (!use_info.addrescaped && !use_info.hasload && (!use_info.haspreserve ||
-                                                           !use_info.refstore)) {
-            REMARK([&]() {
-                return OptimizationRemark(DEBUG_TYPE, "Dead Allocation", orig)
-                    << "GC allocation removed " << ore::NV("GC Allocation", orig);
-            });
-            // No one took the address, no one reads anything and there's no meaningful
-            // preserve of fields (either no preserve/ccall or no object reference fields)
-            // We can just delete all the uses.
-            removeAlloc(orig);
-            continue;
-        }
-        bool has_ref = use_info.has_unknown_objref;
-        bool has_refaggr = use_info.has_unknown_objrefaggr;
-        for (auto memop: use_info.memops) {
-            auto &field = memop.second;
-            if (field.hasobjref) {
-                has_ref = true;
-                // This can be relaxed a little based on hasload
-                // TODO: add support for hasaggr load/store
-                if (field.hasaggr || field.multiloc || field.size != sizeof(void*)) {
-                    has_refaggr = true;
-                    break;
-                }
-            }
-        }
-        if (has_refaggr) {
-            REMARK([&]() {
-                return OptimizationRemarkMissed(DEBUG_TYPE, "Escaped", orig)
-                    << "GC allocation has unusual object reference, unable to move to stack " << ore::NV("GC Allocation", orig);
-            });
-            if (use_info.hastypeof)
-                optimizeTag(orig);
-            continue;
-        }
-        if (!use_info.hasunknownmem && !use_info.addrescaped) {
-            REMARK([&](){
-                return OptimizationRemark(DEBUG_TYPE, "Stack Split Allocation", orig)
-                    << "GC allocation split on stack " << ore::NV("GC Allocation", orig);
-            });
-            // No one actually care about the memory layout of this object, split it.
-            splitOnStack(orig);
-            continue;
-        }
-        REMARK([&](){
-            return OptimizationRemark(DEBUG_TYPE, "Stack Move Allocation", orig)
-                << "GC allocation moved to stack " << ore::NV("GC Allocation", orig);
-        });
-        // The object has no fields with mix reference access
-        moveToStack(orig, sz, has_ref, use_info.allockind);
+        optimizeObject(orig, sz);
+    }
+    for (auto &item: arrays) {
+        optimizeArray(item.first, item.second);
     }
 }
 
@@ -344,15 +900,33 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     auto call = dyn_cast<CallInst>(I);
     if (!call)
         return -1;
-    if (call->getCalledOperand() != pass.alloc_obj_func)
+    if (!call->getCalledOperand())
         return -1;
-    assert(call->arg_size() == 3);
-    auto CI = dyn_cast<ConstantInt>(call->getArgOperand(1));
-    if (!CI)
-        return -1;
-    size_t sz = (size_t)CI->getZExtValue();
-    if (sz < IntegerType::MAX_INT_BITS / 8 && sz < INT32_MAX)
-        return sz;
+    if (call->getCalledOperand() == pass.alloc_obj_func) {
+        assert(call->arg_size() == 3);
+        if (auto CI = dyn_cast<ConstantInt>(call->getArgOperand(1))) {
+            size_t sz = (size_t)CI->getZExtValue();
+            if (sz < IntegerType::MAX_INT_BITS / 8 && sz < INT32_MAX)
+                return sz;
+        }
+    }
+    if (call->getCalledOperand() == pass.alloc_genericmemory_func) {
+        assert(call->arg_size() == 6);
+        if (auto CI = dyn_cast<ConstantInt>(call->getArgOperand(2))) {
+            size_t elsz = (size_t)CI->getZExtValue();
+            if (elsz != 0) {
+                auto isunion = dyn_cast<ConstantInt>(call->getArgOperand(3));
+                auto zeroinit = dyn_cast<ConstantInt>(call->getArgOperand(4));
+                auto isboxed = dyn_cast<ConstantInt>(call->getArgOperand(5));
+                if (isunion && zeroinit && isboxed) {
+                    jl_genericmemory_info_t info{elsz, (uint8_t)isunion->getZExtValue(),
+                                                 (uint8_t)zeroinit->getZExtValue(),
+                                                 (uint8_t)isboxed->getZExtValue()};
+                    arrays[call] = info;
+                }
+            }
+        }
+    }
     return -1;
 }
 
@@ -833,7 +1407,8 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
             // The stored value might be an gc pointer in which case deleting the object
             // might open more optimization opportunities.
             if (auto stored_inst = dyn_cast<Instruction>(store->getValueOperand()))
-                pushInstruction(stored_inst);
+                if (!isa<UnreachableInst>(stored_inst->getParent()->getTerminator()))
+                    pushInstruction(stored_inst);
             user->eraseFromParent();
             return;
         }
@@ -927,6 +1502,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         uint32_t size;
     };
     SmallVector<SplitSlot,8> slots;
+    auto align = orig_inst->getRetAlign().valueOrOne();
     for (auto memop: use_info.memops) {
         auto offset = memop.first;
         auto &field = memop.second;
@@ -948,11 +1524,96 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             allocty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), field.size);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
+        slot.slot->setAlignment(Align(MinAlign(align.value(), slot.offset)));
         IRBuilder<> builder(orig_inst);
         insertLifetime(prolog_builder.CreateBitCast(slot.slot, Type::getInt8PtrTy(prolog_builder.getContext())),
                        ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), field.size), orig_inst);
         initializeAlloca(builder, slot.slot, use_info.allockind);
         slots.push_back(std::move(slot));
+    }
+    struct ErrorBBInfo {
+        CallInst *sunk;
+        Instruction *insertpt;
+        Instruction *p11i8;
+        DenseMap<uint32_t, Instruction *> p11i8_offsets;
+
+        ErrorBBInfo(CallInst *sunk) : sunk(sunk), insertpt(sunk->getNextNonDebugInstruction()), p11i8(nullptr) {}
+
+        Instruction *gep(uint32_t offset, Type *elty, IRBuilder<> &builder) {
+            builder.SetInsertPoint(insertpt);
+            if (!p11i8) {
+                auto p11jlvalue = builder.CreateAddrSpaceCast(sunk, PointerType::getWithSamePointeeType(cast<PointerType>(sunk->getType()), AddressSpace::Derived));
+                p11i8 = cast<Instruction>(builder.CreateBitCast(p11jlvalue, Type::getInt8PtrTy(builder.getContext(), AddressSpace::Derived)));
+            }
+            auto it = p11i8_offsets.find(offset);
+            if (it == p11i8_offsets.end()) {
+                auto gep = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), p11i8, offset);
+                it = p11i8_offsets.insert(std::make_pair(offset, cast<Instruction>(gep))).first;
+            }
+            return cast<Instruction>(builder.CreateBitCast(it->second, elty->getPointerTo(AddressSpace::Derived)));
+        }
+    };
+    auto slot_gep = [&] (SplitSlot &slot, uint32_t offset, Type *elty, IRBuilder<> &builder) {
+        assert(slot.offset <= offset);
+        offset -= slot.offset;
+        auto size = pass.DL->getTypeAllocSize(elty);
+        Value *addr;
+        if (offset % size == 0) {
+            addr = builder.CreateBitCast(slot.slot, elty->getPointerTo());
+            if (offset != 0) {
+                addr = builder.CreateConstInBoundsGEP1_32(elty, addr, offset / size);
+            }
+        }
+        else {
+            addr = builder.CreateBitCast(slot.slot, Type::getInt8PtrTy(builder.getContext()));
+            addr = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), addr, offset);
+            addr = builder.CreateBitCast(addr, elty->getPointerTo());
+        }
+        return addr;
+    };
+    DenseMap<BasicBlock*, ErrorBBInfo> partial_escapes;
+    IRBuilder<> errbuilder(orig_inst->getContext());
+    // sink allocation into error blocks, copy fields
+    for (auto errbb : use_info.errorbbs) {
+        auto sunk = cast<CallInst>(orig_inst->clone());
+        sunk->insertBefore(&*errbb->getFirstInsertionPt());
+        auto &info = partial_escapes.insert(std::make_pair(errbb, ErrorBBInfo(sunk))).first->second;
+        errbuilder.SetInsertPoint(info.insertpt);
+        // copy every slot into the final object
+        for (auto &slot : slots) {
+            auto psize = pass.DL->getPointerSize();
+            if (slot.isref) {
+                auto copyt = pass.T_prjlvalue;
+                assert(slot.size % psize == 0);
+                for (uint32_t offset = 0; offset < slot.size; offset += psize) {
+                    auto dest = info.gep(slot.offset + offset, copyt, errbuilder);
+                    auto src = slot_gep(slot, slot.offset + offset, copyt, errbuilder);
+                    auto load = errbuilder.CreateAlignedLoad(copyt, src, Align(MinAlign(slot.slot->getAlign().value(), offset)));
+                    errbuilder.CreateAlignedStore(load, dest, Align(MinAlign(align.value(), slot.offset + offset)));
+                }
+            } else {
+                auto copyt = pass.DL->getIntPtrType(errbuilder.getContext());
+                for (uint32_t offset = 0; offset < slot.size; offset += psize) {
+                    auto dest = info.gep(slot.offset + offset, copyt, errbuilder);
+                    auto src = slot_gep(slot, slot.offset + offset, copyt, errbuilder);
+                    auto load = errbuilder.CreateAlignedLoad(copyt, src, Align(MinAlign(slot.slot->getAlign().value(), offset)));
+                    errbuilder.CreateAlignedStore(load, dest, Align(MinAlign(align.value(), slot.offset + offset)));
+                }
+                auto remainder = slot.size % psize;
+                if (remainder != 0) {
+                    copyt = cast<IntegerType>(pass.DL->getSmallestLegalIntType(errbuilder.getContext(), 8));
+                    assert(copyt->getBitWidth() % 8 == 0);
+                    auto copysize = copyt->getBitWidth() / 8;
+                    assert(remainder % copysize == 0);
+                    for (size_t offset = slot.size - remainder; offset < slot.size; offset += copysize) {
+                        auto dest = info.gep(slot.offset + offset, copyt, errbuilder);
+                        auto src = slot_gep(slot, slot.offset + offset, copyt, errbuilder);
+                        auto load = errbuilder.CreateAlignedLoad(copyt, src, Align(MinAlign(slot.slot->getAlign().value(), offset)));
+                        errbuilder.CreateAlignedStore(load, dest, Align(MinAlign(align.value(), slot.offset + offset)));
+                    }
+                }
+            }
+        }
     }
     const auto nslots = slots.size();
     auto find_slot = [&] (uint32_t offset) {
@@ -997,29 +1658,18 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         replace_stack.push_back(cur);
         cur = {orig_i, offset};
     };
-    auto slot_gep = [&] (SplitSlot &slot, uint32_t offset, Type *elty, IRBuilder<> &builder) {
-        assert(slot.offset <= offset);
-        offset -= slot.offset;
-        auto size = pass.DL->getTypeAllocSize(elty);
-        Value *addr;
-        if (offset % size == 0) {
-            addr = builder.CreateBitCast(slot.slot, elty->getPointerTo());
-            if (offset != 0) {
-                addr = builder.CreateConstInBoundsGEP1_32(elty, addr, offset / size);
-            }
-        }
-        else {
-            addr = builder.CreateBitCast(slot.slot, Type::getInt8PtrTy(builder.getContext()));
-            addr = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), addr, offset);
-            addr = builder.CreateBitCast(addr, elty->getPointerTo());
-        }
-        return addr;
-    };
     auto replace_inst = [&] (Use *use) {
         Instruction *user = cast<Instruction>(use->getUser());
         Instruction *orig_i = cur.orig_i;
         uint32_t offset = cur.offset;
+        auto errit = partial_escapes.find(user->getParent());
+        ErrorBBInfo *errinfo = errit == partial_escapes.end() ? nullptr : &errit->second;
         if (auto load = dyn_cast<LoadInst>(user)) {
+            if (errinfo) {
+                auto gep = errinfo->gep(offset, load->getType(), errbuilder);
+                use->set(gep);
+                return;
+            }
             auto slot_idx = find_slot(offset);
             auto &slot = slots[slot_idx];
             assert(slot.offset <= offset && slot.offset + slot.size >= offset);
@@ -1047,7 +1697,13 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
         }
         else if (auto store = dyn_cast<StoreInst>(user)) {
             if (auto stored_inst = dyn_cast<Instruction>(store->getValueOperand()))
-                pushInstruction(stored_inst);
+                if (!isa<UnreachableInst>(stored_inst->getParent()->getTerminator()))
+                    pushInstruction(stored_inst); // may be able to stack allocate this object too
+            if (errinfo) {
+                auto gep = errinfo->gep(offset, store->getValueOperand()->getType(), errbuilder);
+                use->set(gep);
+                return;
+            }
             auto slot_idx = find_slot(offset);
             auto &slot = slots[slot_idx];
             if (slot.offset > offset || slot.offset + slot.size <= offset) {
@@ -1085,6 +1741,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             return;
         }
         else if (isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            if (errinfo) {
+                auto gep = errinfo->gep(offset, user->getType(), errbuilder);
+                use->set(gep);
+                return;
+            }
             auto slot_idx = find_slot(offset);
             auto &slot = slots[slot_idx];
             assert(slot.offset <= offset && slot.offset + slot.size >= offset);
@@ -1101,6 +1762,19 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             *use = newptr;
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
+            if (errinfo) {
+                auto pt = cast<PointerType>(use->get()->getType());
+                if (pt->getAddressSpace() == AddressSpace::Tracked) {
+                    assert(offset == 0); // can't have tracked gep
+                    auto bc = errbuilder.CreateBitCast(errinfo->sunk, pt);
+                    use->set(bc);
+                } else {
+                    auto eltype = pt->isOpaque() ? Type::getInt8Ty(pt->getContext()) : pt->getNonOpaquePointerElementType();
+                    auto gep = errinfo->gep(offset, eltype, errbuilder);
+                    use->set(gep);
+                }
+                return;
+            }
             auto callee = call->getCalledOperand();
             assert(callee); // makes it clear for clang analyser that `callee` is not NULL
             if (auto intrinsic = dyn_cast<IntrinsicInst>(call)) {
@@ -1222,11 +1896,20 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             push_frame(user, offset);
         }
         else if (auto gep = dyn_cast<GetElementPtrInst>(user)) {
-            APInt apoffset(sizeof(void*) * 8, offset, true);
+            APInt apoffset(pass.DL->getPointerSizeInBits(), offset, true);
             gep->accumulateConstantOffset(*pass.DL, apoffset);
             push_frame(gep, apoffset.getLimitedValue());
         }
         else {
+            // We don't know what this is
+            // but some instructions might just occur in paths that are leading to errors,
+            // so we can just replace the use with a gep'ed pointer.
+            if (errinfo) {
+                auto gep = errinfo->gep(offset, Type::getInt8Ty(errbuilder.getContext()), errbuilder);
+                use->set(errbuilder.CreateBitCast(gep, use->get()->getType()));
+                return;
+            }
+            llvm_dump(user);
             abort();
         }
     };
@@ -1252,7 +1935,7 @@ cleanup:
 bool AllocOpt::doInitialization(Module &M)
 {
     initAll(M);
-    if (!alloc_obj_func)
+    if (!alloc_obj_func && !alloc_genericmemory_func)
         return false;
 
     DL = &M.getDataLayout();
@@ -1263,13 +1946,13 @@ bool AllocOpt::doInitialization(Module &M)
     return true;
 }
 
-bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
+bool AllocOpt::runOnFunction(Function &F, FunctionAnalysisManager &AM)
 {
-    if (!alloc_obj_func) {
-        LLVM_DEBUG(dbgs() << "AllocOpt: no alloc_obj function found, skipping pass\n");
+    if (!alloc_obj_func && !alloc_genericmemory_func) {
+        LLVM_DEBUG(dbgs() << "AllocOpt: no alloc_obj/alloc_genericmemory function found, skipping pass\n");
         return false;
     }
-    Optimizer optimizer(F, *this, std::move(GetDT));
+    Optimizer optimizer(F, *this, AM);
     optimizer.initialize();
     optimizer.optimizeAll();
     bool modified = optimizer.finalize();
@@ -1284,11 +1967,11 @@ bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
 PreservedAnalyses AllocOptPass::run(Function &F, FunctionAnalysisManager &AM) {
     AllocOpt opt;
     bool modified = opt.doInitialization(*F.getParent());
-    if (opt.runOnFunction(F, [&]()->DominatorTree &{ return AM.getResult<DominatorTreeAnalysis>(F); })) {
+    if (opt.runOnFunction(F, AM)) {
         modified = true;
     }
     if (modified) {
-        auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
+        auto preserved = opt.cfgChanged ? PreservedAnalyses::none() : PreservedAnalyses::allInSet<CFGAnalyses>();
         preserved.preserve<DominatorTreeAnalysis>();
         return preserved;
     } else {

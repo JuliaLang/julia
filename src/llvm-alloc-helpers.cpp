@@ -31,51 +31,57 @@ static bool hasObjref(Type *ty)
 std::pair<const uint32_t,Field>&
 AllocUseInfo::getField(uint32_t offset, uint32_t size, Type *elty)
 {
-    auto it = findLowerField(offset);
-    auto end = memops.end();
-    auto lb = end; // first overlap
-    auto ub = end; // last overlap
-    if (it != end) {
-        // The slot found contains the current location
-        if (it->first + it->second.size >= offset + size) {
-            if (it->second.elty != elty)
-                it->second.elty = nullptr;
-            assert(it->second.elty == nullptr || (it->first == offset && it->second.size == size));
-            return *it;
-        }
-        if (it->first + it->second.size > offset) {
-            lb = it;
-            ub = it;
-        }
-    }
-    else {
-        it = memops.begin();
-    }
-    // Now find the last slot that overlaps with the current memory location.
-    // Also set `lb` if we didn't find any above.
-    for (; it != end && it->first < offset + size; ++it) {
-        if (lb == end)
-            lb = it;
-        ub = it;
-    }
-    // no overlap found just create a new one.
-    if (lb == end)
+    // get next slot beyond containing slots (-1 to ignore slot starting at offset + size)
+    auto ub = memops.upper_bound(offset + size - 1);
+    if (ub == memops.begin()) {
+        // We need to create a new slot, since there is no slot containing offset + size
         return *memops.emplace(offset, Field(size, elty)).first;
-    // We find overlapping but not containing slot we need to merge slot/create new one
-    uint32_t new_offset = std::min(offset, lb->first);
-    uint32_t new_addrub = std::max(offset + uint32_t(size), ub->first + ub->second.size);
-    uint32_t new_size = new_addrub - new_offset;
-    Field field(new_size, nullptr);
+    }
+    assert(!memops.empty());
+    auto lb = memops.upper_bound(offset);
+    if (lb == memops.begin()) {
+        // must create an entry that contains lb
+        if (size <= lb->first - offset) {
+            // create entry for entire range
+            return *memops.emplace(offset, Field(size, elty)).first;
+        }
+        lb = memops.emplace(offset, Field(lb->first - offset, elty)).first;
+    } else {
+        --lb;
+        // lb is dereferenceable since we know memops is not empty
+        if (lb->first + lb->second.size <= offset) {
+            // lb does not actually contain offset
+            ++lb;
+            if (lb == memops.end()) {
+                // create entry for entire range
+                return *memops.emplace(offset, Field(size, elty)).first;
+            } else {
+                // create entry for range between offset and lb
+                if (size <= lb->first - offset) {
+                    return *memops.emplace(offset, Field(size, elty)).first;
+                }
+                lb = memops.emplace(offset, Field(lb->first - offset, elty)).first;
+            }
+        }
+    }
+    // lb must definitely contain offset at this point
+    assert(lb->first <= offset && lb->first + lb->second.size > offset);
+    assert(lb != ub);
+    if (lb->first + lb->second.size >= offset + size) {
+        // lb contains entire range
+        return *lb;
+    }
+    size_t off = lb->first;
+    Field field(offset - lb->first + size, elty);
     field.multiloc = true;
-    ++ub;
-    for (it = lb; it != ub; ++it) {
+    for (auto it = lb; it != ub; ++it) {
         field.hasobjref |= it->second.hasobjref;
         field.hasload |= it->second.hasload;
         field.hasaggr |= it->second.hasaggr;
         field.accesses.append(it->second.accesses.begin(), it->second.accesses.end());
     }
     memops.erase(lb, ub);
-    return *memops.emplace(new_offset, std::move(field)).first;
+    return *memops.emplace(off, std::move(field)).first;
 }
 
 bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
@@ -88,7 +94,7 @@ bool AllocUseInfo::addMemOp(Instruction *inst, unsigned opno, uint32_t offset,
     memop.isaggr = isa<StructType>(elty) || isa<ArrayType>(elty) || isa<VectorType>(elty);
     memop.isobjref = hasObjref(elty);
     auto &field = getField(offset, size, elty);
-    if (field.second.hasobjref != memop.isobjref)
+    if (field.second.hasobjref != memop.isobjref && !field.second.accesses.empty())
         field.second.multiloc = true; // can't split this field, since it contains a mix of references and bits
     if (!isstore)
         field.second.hasload = true;
@@ -118,7 +124,6 @@ JL_USED_FUNC void AllocUseInfo::dump(llvm::raw_ostream &OS)
     OS << "escaped: " << escaped << '\n';
     OS << "addrescaped: " << addrescaped << '\n';
     OS << "returned: " << returned << '\n';
-    OS << "haserror: " << haserror << '\n';
     OS << "hasload: " << hasload << '\n';
     OS << "haspreserve: " << haspreserve << '\n';
     OS << "hasunknownmem: " << hasunknownmem << '\n';
@@ -134,10 +139,19 @@ JL_USED_FUNC void AllocUseInfo::dump(llvm::raw_ostream &OS)
     OS << "Uses: " << uses.size() << '\n';
     for (auto inst: uses)
         inst->print(OS);
+    OS << '\n';
     if (!preserves.empty()) {
         OS << "Preserves: " << preserves.size() << '\n';
         for (auto inst: preserves)
             inst->print(OS);
+        OS << '\n';
+    }
+    if (!errorbbs.empty()) {
+        OS << "ErrorBBs: " << errorbbs.size() << '\n';
+        for (auto bb: errorbbs) {
+            bb->printAsOperand(OS);
+            OS << '\n';
+        }
     }
     OS << "MemOps: " << memops.size() << '\n';
     for (auto &field: memops) {
@@ -146,6 +160,7 @@ JL_USED_FUNC void AllocUseInfo::dump(llvm::raw_ostream &OS)
         OS << "  hasobjref: " << field.second.hasobjref << '\n';
         OS << "  hasload: " << field.second.hasload << '\n';
         OS << "  hasaggr: " << field.second.hasaggr << '\n';
+        OS << "  multiloc: " << field.second.multiloc << '\n';
         OS << "  accesses: " << field.second.accesses.size() << '\n';
         for (auto &memop: field.second.accesses) {
             OS << "    ";
@@ -170,11 +185,13 @@ JL_USED_FUNC void AllocUseInfo::dump()
 #define REMARK(remark)
 #endif
 
-void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options) {
+void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options) {
     required.use_info.reset();
-    Attribute allockind = I->getFnAttr(Attribute::AllocKind);
-    if (allockind.isValid())
-        required.use_info.allockind = allockind.getAllocKind();
+    if (auto CI = dyn_cast<CallInst>(I)) {
+        Attribute allockind = CI->getFnAttr(Attribute::AllocKind);
+        if (allockind.isValid())
+            required.use_info.allockind = allockind.getAllocKind();
+    }
     if (I->use_empty())
         return;
     CheckInst::Frame cur{I, 0, I->use_begin(), I->use_end()};
@@ -249,13 +266,15 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
             }
             if (required.pass.write_barrier_func == callee)
                 return true;
+            if (required.pass.gc_loaded_func == callee)
+                return true;
             auto opno = use->getOperandNo();
             // Uses in `jl_roots` operand bundle are not counted as escaping, everything else is.
             if (!call->isBundleOperand(opno) ||
                 call->getOperandBundleForOperand(opno).getTagName() != "jl_roots") {
                 if (isa<UnreachableInst>(call->getParent()->getTerminator())) {
                     LLVM_DEBUG(dbgs() << "Detected use of allocation in block terminating with unreachable, likely error function\n");
-                    required.use_info.haserror = true;
+                    required.use_info.errorbbs.insert(call->getParent());
                     return true;
                 }
                 LLVM_DEBUG(dbgs() << "Unknown call, marking escape\n");
@@ -274,6 +293,11 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
         if (auto store = dyn_cast<StoreInst>(inst)) {
             // Only store value count
             if (use->getOperandNo() != StoreInst::getPointerOperandIndex()) {
+                if (isa<UnreachableInst>(store->getParent()->getTerminator())) {
+                    LLVM_DEBUG(dbgs() << "Detected use of allocation in block terminating with unreachable, likely error function\n");
+                    required.use_info.errorbbs.insert(store->getParent());
+                    return true;
+                }
                 LLVM_DEBUG(dbgs() << "Object address is stored somewhere, marking escape\n");
                 REMARK([&]() {
                     return OptimizationRemarkMissed(DEBUG_TYPE, "StoreObjAddr",
@@ -347,6 +371,35 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
             LLVM_DEBUG(dbgs() << "Allocation is returned\n");
             required.use_info.returned = true;
             return true;
+        }
+        if (isa<PHINode>(inst)) {
+            // PHI nodes are immediate, always escapes
+            // many parts of alloc-opt and julia-licm assume no phis exist,
+            // so the whole infrastructure would have to be rewritten for it
+            LLVM_DEBUG(dbgs() << "PHI node, marking escape\n");
+            REMARK([&]() {
+                return OptimizationRemarkMissed(DEBUG_TYPE, "PhiNode",
+                                                inst)
+                       << "PHI node, marking escape (" << ore::NV("Phi", inst) << ")";
+            });
+            required.use_info.escaped = true;
+            return false;
+        }
+        switch (inst->getOpcode()) {
+        case Instruction::Select:
+        case Instruction::PtrToInt:
+        case Instruction::Freeze:
+        // These are safe ops that just don't have handling yet in alloc opt, they're fine in error blocks
+        {
+            if (isa<UnreachableInst>(inst->getParent()->getTerminator())) {
+                LLVM_DEBUG(dbgs() << "Detected use of allocation in block terminating with unreachable, likely error function\n");
+                required.use_info.errorbbs.insert(inst->getParent());
+                return true;
+            }
+            break;
+        }
+        default:
+            break;
         }
         LLVM_DEBUG(dbgs() << "Unknown instruction, marking escape\n");
         REMARK([&]() {

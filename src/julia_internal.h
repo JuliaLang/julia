@@ -639,6 +639,13 @@ typedef union {
     uint8_t packed;
 } jl_code_info_flags_t;
 
+typedef struct {
+    size_t elsize;
+    uint8_t isunion;
+    uint8_t zeroinit;
+    uint8_t isboxed;
+} jl_genericmemory_info_t;
+
 // -- functions -- //
 
 JL_DLLEXPORT jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
@@ -978,6 +985,11 @@ STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 
 uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT;
+
+// used by alloc-opt
+JL_DLLEXPORT size_t jl_genericmemory_bytesize(const jl_genericmemory_info_t *info, size_t nel);
+// used by codegen to give info to alloc-opt
+JL_DLLEXPORT jl_genericmemory_info_t jl_get_genericmemory_info(jl_value_t *mtype);
 
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns

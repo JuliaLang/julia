@@ -53,6 +53,7 @@ void JuliaPassContext::initFunctions(Module &M)
     typeof_func = M.getFunction("julia.typeof");
     write_barrier_func = M.getFunction("julia.write_barrier");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
+    alloc_genericmemory_func = M.getFunction("julia.gc_alloc_genericmemory");
     call_func = M.getFunction("julia.call");
     call2_func = M.getFunction("julia.call2");
     call3_func = M.getFunction("julia.call3");

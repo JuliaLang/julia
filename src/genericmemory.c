@@ -56,19 +56,40 @@ typedef uint64_t wideint_t;
 
 #define MAXINTVAL (((size_t)-1)>>1)
 
-jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz)
+// used by alloc-opt
+JL_DLLEXPORT size_t jl_genericmemory_bytesize(const jl_genericmemory_info_t *info, size_t nel)
+{
+    wideint_t prod = (wideint_t)nel * info->elsize;
+    if (info->isunion) {
+        // an extra byte for each isbits union memory element, stored at m->ptr + m->length
+        prod += nel;
+    }
+    if (nel >= MAXINTVAL || prod >= (wideint_t) MAXINTVAL)
+        return MAXINTVAL;
+    return (size_t) prod;
+}
+
+// used by codegen to give info to alloc-opt
+JL_DLLEXPORT jl_genericmemory_info_t jl_get_genericmemory_info(jl_value_t *mtype)
+{
+    assert(jl_is_datatype(mtype));
+    jl_genericmemory_info_t info;
+    info.isboxed = ((jl_datatype_t*)mtype)->layout->flags.arrayelem_isboxed;
+    info.elsize = info.isboxed ? sizeof(void*) : ((jl_datatype_t*)mtype)->layout->size;
+    info.isunion = ((jl_datatype_t*)mtype)->layout->flags.arrayelem_isunion;
+    info.zeroinit = ((jl_datatype_t*)mtype)->zeroinit;
+    return info;
+}
+
+jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, const jl_genericmemory_info_t *info)
 {
     jl_task_t *ct = jl_current_task;
     char *data;
     jl_genericmemory_t *m;
     if (nel == 0) // zero-sized allocation optimization
         return (jl_genericmemory_t*)((jl_datatype_t*)mtype)->instance;
-    wideint_t prod = (wideint_t)nel * elsz;
-    if (isunion) {
-        // an extra byte for each isbits union memory element, stored at m->ptr + m->length
-        prod += nel;
-    }
-    if (nel >= MAXINTVAL || prod >= (wideint_t) MAXINTVAL)
+    size_t prod = jl_genericmemory_bytesize(info, nel);
+    if (prod == MAXINTVAL)
         jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size");
     size_t tot = (size_t)prod + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
 
@@ -89,7 +110,7 @@ jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t is
     m->length = nel;
     m->ptr = data;
 
-    if (zeroinit)
+    if (info->zeroinit)
         memset(data, 0, (size_t)prod);
     return m;
 }
@@ -114,13 +135,8 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory(jl_value_t *mtype, size_
     if (nel == 0) // zero-sized allocation optimization fast path
         return m;
 
-    size_t elsz = layout->size;
-    int isboxed = layout->flags.arrayelem_isboxed;
-    int isunion = layout->flags.arrayelem_isunion;
-    int zi = ((jl_datatype_t*)mtype)->zeroinit;
-    if (isboxed)
-        elsz = sizeof(void*);
-    return _new_genericmemory_(mtype, nel, isunion, zi, elsz);
+    jl_genericmemory_info_t info = jl_get_genericmemory_info(mtype);
+    return _new_genericmemory_(mtype, nel, &info);
 }
 
 JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str)
@@ -447,18 +463,18 @@ JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t 
 {
     jl_value_t *mtype = (jl_value_t*)jl_typetagof(mem);
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)mtype)->layout;
-    size_t elsz = layout->size;
-    int isunion = layout->flags.arrayelem_isunion;
-    jl_genericmemory_t *new_mem = _new_genericmemory_(mtype, len, isunion, 0, elsz);
-    if (isunion) {
-        memcpy(new_mem->ptr, (char*)mem->ptr + (size_t)data * elsz, len * elsz);
+    jl_genericmemory_info_t info = jl_get_genericmemory_info(mtype);
+    info.zeroinit = 0;
+    jl_genericmemory_t *new_mem = _new_genericmemory_(mtype, len, &info);
+    if (info.isunion) {
+        memcpy(new_mem->ptr, (char*)mem->ptr + (size_t)data * info.elsize, len * info.elsize);
         memcpy(jl_genericmemory_typetagdata(new_mem), jl_genericmemory_typetagdata(mem) + (size_t)data, len);
     }
     else if (layout->first_ptr != -1) {
-        memmove_refs((_Atomic(void*)*)new_mem->ptr, (_Atomic(void*)*)data, len * elsz / sizeof(void*));
+        memmove_refs((_Atomic(void*)*)new_mem->ptr, (_Atomic(void*)*)data, len * info.elsize / sizeof(void*));
     }
     else if (data != NULL) {
-        memcpy(new_mem->ptr, data, len * elsz);
+        memcpy(new_mem->ptr, data, len * info.elsize);
     }
     return new_mem;
 }

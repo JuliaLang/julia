@@ -146,6 +146,7 @@ struct JuliaLICM : public JuliaPassContext {
         BasicBlock *header = L->getHeader();
         const llvm::DataLayout &DL = header->getModule()->getDataLayout();
         initFunctions(*header->getModule());
+        Function *except_enter_func = header->getModule()->getFunction("julia.except_enter");
         // Also require `gc_preserve_begin_func` whereas
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
@@ -182,6 +183,8 @@ struct JuliaLICM : public JuliaPassContext {
         LoopBlocksRPO worklist(L);
         worklist.perform(LI);
         for (auto *bb : worklist) {
+            if (isa<UnreachableInst>(bb->getTerminator()))
+                continue;
             for (BasicBlock::iterator II = bb->begin(), E = bb->end(); II != E;) {
                 auto call = dyn_cast<CallInst>(&*II++);
                 if (!call)
@@ -322,6 +325,15 @@ struct JuliaLICM : public JuliaPassContext {
                         });
                         continue;
                     }
+                    if (!use_info.errorbbs.empty() && except_enter_func) {
+                        // If we escape via error handling, we don't want to catch the error inside the loop
+                        REMARK([&](){
+                            return OptimizationRemarkMissed(DEBUG_TYPE, "Escape", call)
+                                << "not hoisting gc allocation " << ore::NV("GC Allocation", call)
+                                << " because it may escape via error handling";
+                        });
+                        continue;
+                    }
                     REMARK([&](){
                         return OptimizationRemark(DEBUG_TYPE, "Hoist", call)
                             << "hoisting gc allocation " << ore::NV("GC Allocation", call);
@@ -339,6 +351,22 @@ struct JuliaLICM : public JuliaPassContext {
                         MSSAU.insertDef(cast<MemoryDef>(clear_mdef), true);
                     }
                     changed = true;
+                } else if (callee == gc_loaded_func) {
+                    bool valid = true;
+                    for (std::size_t i = 0; i < call->arg_size(); i++) {
+                        if (!makeLoopInvariant(L, call->getArgOperand(i),
+                            changed, preheader->getTerminator(),
+                            MSSAU, SE)) {
+                            valid = false;
+                            LLVM_DEBUG(dbgs() << "Failed to hoist gc_loaded argument: " << *call->getArgOperand(i) << "\n");
+                            break;
+                        }
+                    }
+                    if (!valid) {
+                        LLVM_DEBUG(dbgs() << "Failed to hoist gc_loaded: " << *call << "\n");
+                        continue;
+                    }
+                    moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                 }
             }
         }

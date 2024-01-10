@@ -62,6 +62,7 @@ namespace jl_alloc {
     struct AllocUseInfo {
         llvm::SmallSet<llvm::Instruction*,16> uses;
         llvm::SmallSet<llvm::CallInst*,4> preserves;
+        llvm::SmallSet<llvm::BasicBlock*,4> errorbbs;
         std::map<uint32_t,Field> memops;
         // Completely unknown use
         bool escaped:1;
@@ -85,8 +86,6 @@ namespace jl_alloc {
         bool hasunknownmem:1;
         // The object is returned
         bool returned:1;
-        // The object is used in an error function
-        bool haserror:1;
         // For checking attributes of "uninitialized" or "zeroed" or unknown
         llvm::AllocFnKind allockind;
 
@@ -106,12 +105,12 @@ namespace jl_alloc {
             hastypeof = false;
             hasunknownmem = false;
             returned = false;
-            haserror = false;
             allockind = llvm::AllocFnKind::Unknown;
             has_unknown_objref = false;
             has_unknown_objrefaggr = false;
             uses.clear();
             preserves.clear();
+            errorbbs.clear();
             memops.clear();
         }
         void dump(llvm::raw_ostream &OS);
@@ -119,14 +118,6 @@ namespace jl_alloc {
         bool addMemOp(llvm::Instruction *inst, unsigned opno, uint32_t offset, llvm::Type *elty,
                       bool isstore, const llvm::DataLayout &DL);
         std::pair<const uint32_t,Field> &getField(uint32_t offset, uint32_t size, llvm::Type *elty);
-        std::map<uint32_t,Field>::iterator findLowerField(uint32_t offset)
-        {
-            // Find the last field that starts no higher than `offset`.
-            auto it = memops.upper_bound(offset);
-            if (it != memops.begin())
-                return --it;
-            return memops.end();
-        }
     };
 
     struct EscapeAnalysisRequiredArgs {
@@ -156,7 +147,7 @@ namespace jl_alloc {
         }
     };
 
-    void runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options=EscapeAnalysisOptionalArgs());
+    void runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArgs required, EscapeAnalysisOptionalArgs options=EscapeAnalysisOptionalArgs());
 }
 
 
