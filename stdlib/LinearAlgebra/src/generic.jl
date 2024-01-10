@@ -129,7 +129,10 @@ match the length of the second, $(length(X))."))
     C
 end
 
-@inline function mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
+@inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
+    _lscale_add!(C, s, X, alpha, beta)
+
+@inline function _lscale_add!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
     if axes(C) == axes(X)
         C .= (s .* X) .*ₛ alpha .+ C .*ₛ beta
     else
@@ -137,7 +140,10 @@ end
     end
     return C
 end
-@inline function mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
+@inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
+    _rscale_add!(C, X, s, alpha, beta)
+
+@inline function _rscale_add!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
     if axes(C) == axes(X)
         C .= (X .* s) .*ₛ alpha .+ C .*ₛ beta
     else
