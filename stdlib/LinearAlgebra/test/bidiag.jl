@@ -22,6 +22,9 @@ using .Main.FillArrays
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
