@@ -1248,6 +1248,11 @@ end
     D = Diagonal([1:2;])
     @test S * D == A * D
     @test D * S == D * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, D) == mul!(C2, A, D)
+    @test mul!(C1, S, D, 1, 2) == mul!(C2, A, D, 1 ,2)
+    @test mul!(C1, D, S) == mul!(C2, D, A)
+    @test mul!(C1, D, S, 1, 2) == mul!(C2, D, A, 1 ,2)
 end
 
 @testset "copy" begin

@@ -902,6 +902,11 @@ end
     U = UpperTriangular(ones(2,2))
     @test S * U == A * U
     @test U * S == U * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, U) == mul!(C2, A, U)
+    @test mul!(C1, S, U, 1, 2) == mul!(C2, A, U, 1 ,2)
+    @test mul!(C1, U, S) == mul!(C2, U, A)
+    @test mul!(C1, U, S, 1, 2) == mul!(C2, U, A, 1 ,2)
 end
 
 @testset "custom axes" begin

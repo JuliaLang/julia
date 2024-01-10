@@ -10,6 +10,7 @@ module SizedArrays
 import Base: +, *, ==
 
 using LinearAlgebra
+import LinearAlgebra: mul!
 
 export SizedArray
 
@@ -33,6 +34,7 @@ struct SizedArray{SZ,T,N,A<:AbstractArray} <: AbstractArray{T,N}
         new{SZ,T,N,A}(A(data))
     end
 end
+SizedMatrix{SZ,T,A<:AbstractArray} = SizedArray{SZ,T,2,A}
 Base.convert(::Type{SizedArray{SZ,T,N,A}}, data::AbstractArray) where {SZ,T,N,A} = SizedArray{SZ,T,N,A}(data)
 
 # Minimal AbstractArray interface
@@ -57,8 +59,13 @@ function *(S1::SizedArrayLike, S2::SizedArrayLike)
     SizedArray{SZ}(data)
 end
 
-# deliberately wide method definition to ensure that this doesn't lead to ambiguities with
-# structured matrices
+# deliberately wide method definitions to test for method ambiguties in LinearAlgebra
 *(S1::SizedArrayLike, M::AbstractMatrix) = _data(S1) * M
+mul!(dest::AbstractMatrix, S1::SizedMatrix, M::AbstractMatrix, α::Number, β::Number) =
+    mul!(dest, _data(S1), M, α, β)
+mul!(dest::AbstractMatrix, M::AbstractMatrix, S2::SizedMatrix, α::Number, β::Number) =
+    mul!(dest, M, _data(S2), α, β)
+mul!(dest::AbstractMatrix, S1::SizedMatrix, S2::SizedMatrix, α::Number, β::Number) =
+    mul!(dest, _data(S1), _data(S2), α, β)
 
 end
