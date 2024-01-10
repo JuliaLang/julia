@@ -35,6 +35,7 @@ struct SizedArray{SZ,T,N,A<:AbstractArray} <: AbstractArray{T,N}
     end
 end
 SizedMatrix{SZ,T,A<:AbstractArray} = SizedArray{SZ,T,2,A}
+SizedVector{SZ,T,A<:AbstractArray} = SizedArray{SZ,T,1,A}
 Base.convert(::Type{SizedArray{SZ,T,N,A}}, data::AbstractArray) where {SZ,T,N,A} = SizedArray{SZ,T,N,A}(data)
 
 # Minimal AbstractArray interface
@@ -67,5 +68,7 @@ mul!(dest::AbstractMatrix, M::AbstractMatrix, S2::SizedMatrix, α::Number, β::N
     mul!(dest, M, _data(S2), α, β)
 mul!(dest::AbstractMatrix, S1::SizedMatrix, S2::SizedMatrix, α::Number, β::Number) =
     mul!(dest, _data(S1), _data(S2), α, β)
+mul!(dest::AbstractVector, M::AbstractMatrix, v::SizedVector, α::Number, β::Number) =
+    mul!(dest, M, _data(v), α, β)
 
 end

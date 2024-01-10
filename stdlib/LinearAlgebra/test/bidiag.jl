@@ -872,6 +872,13 @@ end
     @test mul!(C1, S, B, 1, 2) == mul!(C2, A, B, 1 ,2)
     @test mul!(C1, B, S) == mul!(C2, B, A)
     @test mul!(C1, B, S, 1, 2) == mul!(C2, B, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test B * sv == B * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, B, sv) == mul!(C2, B, v)
+    @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
 end
 
 end # module TestBidiagonal

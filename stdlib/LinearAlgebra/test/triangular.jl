@@ -907,6 +907,13 @@ end
     @test mul!(C1, S, U, 1, 2) == mul!(C2, A, U, 1 ,2)
     @test mul!(C1, U, S) == mul!(C2, U, A)
     @test mul!(C1, U, S, 1, 2) == mul!(C2, U, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test U * sv == U * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, U, sv) == mul!(C2, U, v)
+    @test mul!(C1, U, sv, 1, 2) == mul!(C2, U, v, 1 ,2)
 end
 
 @testset "custom axes" begin
