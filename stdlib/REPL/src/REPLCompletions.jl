@@ -285,7 +285,7 @@ function cache_path()
     @debug "caching PATH files" PATH=path
     pathdirs = split(path, @static Sys.iswindows() ? ";" : ":")
 
-    for pathdir in pathdirs
+    t = @elapsed for pathdir in pathdirs
         actualpath = try
             realpath(pathdir)
         catch ex
@@ -331,6 +331,7 @@ function cache_path()
             yield() # so startup doesn't block when -t1
         end
     end
+    @debug "caching PATH files took $t seconds" length(pathdirs) length(path_cache)
     return path_cache
 end
 
