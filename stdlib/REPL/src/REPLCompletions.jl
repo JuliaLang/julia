@@ -269,6 +269,42 @@ function do_string_escape(s)
     return escape_string(s, ('\"','$'))
 end
 
+const path_cache_lock = Base.ReentrantLock()
+const path_cache = Dict{String,Vector{String}}()
+
+function cache_path()
+    pathdirs = split(ENV["PATH"], @static Sys.iswindows() ? ";" : ":")
+
+    for pathdir in pathdirs
+        actualpath = try
+            realpath(pathdir)
+        catch ex
+            ex isa Base.IOError || rethrow()
+            # Bash doesn't expect every folder in PATH to exist, so neither shall we
+            continue
+        end
+
+        if actualpath != pathdir && in(actualpath, pathdirs)
+            # Remove paths which (after resolving links) are in the env path twice.
+            # Many distros eg. point /bin to /usr/bin but have both in the env path.
+            continue
+        end
+
+        try
+            @lock path_cache_lock get!(path_cache, pathdir, readdir(pathdir))
+        catch e
+            # Bash allows dirs in PATH that can't be read, so we should as well.
+            if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
+                continue
+            else
+                # We only handle IOError and ArgumentError here
+                rethrow()
+            end
+        end
+    end
+    return path_cache
+end
+
 function complete_path(path::AbstractString;
                        use_envpath=false,
                        shell_escape=false,
@@ -307,37 +343,11 @@ function complete_path(path::AbstractString;
         end
     end
 
-    if use_envpath && isempty(dir)
-        # Look for files in PATH as well
-        pathdirs = split(ENV["PATH"], @static Sys.iswindows() ? ";" : ":")
-
-        for pathdir in pathdirs
-            actualpath = try
-                realpath(pathdir)
-            catch ex
-                ex isa Base.IOError || rethrow()
-                # Bash doesn't expect every folder in PATH to exist, so neither shall we
-                continue
-            end
-
-            if actualpath != pathdir && in(actualpath, pathdirs)
-                # Remove paths which (after resolving links) are in the env path twice.
-                # Many distros eg. point /bin to /usr/bin but have both in the env path.
-                continue
-            end
-
-            filesinpath = try
-                readdir(pathdir)
-            catch e
-                # Bash allows dirs in PATH that can't be read, so we should as well.
-                if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
-                    continue
-                else
-                    # We only handle IOError and ArgumentError here
-                    rethrow()
-                end
-            end
-
+    if use_envpath && isempty(dir) && trylock(path_cache_lock)
+        # Look for files in PATH as well.
+        # these are cached in `cache_path` in a separate task at first shell mode switch.
+        # If we cannot get lock because its still caching just pass over this.
+        for (pathdir, filesinpath) in path_cache
             for file in filesinpath
                 # In a perfect world, we would filter on whether the file is executable
                 # here, or even on whether the current user can execute the file in question.
