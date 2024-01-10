@@ -532,11 +532,9 @@ function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular
     return A
 end
 
-# Define `mul!` for (Unit){Upper,Lower}Triangular matrices times a number.
-# be permissive here and require compatibility later in _triscale!
-@inline mul!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
+@inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
-@inline mul!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
+@inline _lscale_add!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
 
 function checksize1(A, B)
