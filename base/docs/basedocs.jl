@@ -2903,6 +2903,9 @@ UnionAll
 julia> typeof(Vector{Int})
 DataType
 ```
+
+
+See the manual section on [UnionAll Types](@ref).
 """
 UnionAll
 
