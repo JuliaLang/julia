@@ -270,12 +270,14 @@ function do_string_escape(s)
 end
 
 const path_cache_lock = Base.ReentrantLock()
-const path_cache = Dict{String,Vector{String}}()
+const path_cache = Set{String}()
 cached_path_string::Union{String,Nothing} = nothing
 
+# caches all reachable files in PATH dirs
 function cache_path()
     pathdirs = @lock path_cache_lock begin
         global cached_path_string = get(ENV, "PATH", nothing)
+        empty!(path_cache)
         cached_path_string isa String || return
         split(cached_path_string, @static Sys.iswindows() ? ";" : ":")
     end
@@ -295,8 +297,8 @@ function cache_path()
             continue
         end
 
-        try
-            @lock path_cache_lock path_cache[pathdir] = readdir(pathdir)
+        filesinpath = try
+            readdir(pathdir)
         catch e
             # Bash allows dirs in PATH that can't be read, so we should as well.
             if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
@@ -304,6 +306,24 @@ function cache_path()
             else
                 # We only handle IOError and ArgumentError here
                 rethrow()
+            end
+        end
+        for file in filesinpath
+            # In a perfect world, we would filter on whether the file is executable
+            # here, or even on whether the current user can execute the file in question.
+            try
+                if isfile(joinpath(pathdir, file))
+                    @lock path_cache_lock push!(path_cache, file)
+                end
+            catch e
+                # `isfile()` can throw in rare cases such as when probing a
+                # symlink that points to a file within a directory we do not
+                # have read access to.
+                if isa(e, Base.IOError)
+                    continue
+                else
+                    rethrow()
+                end
             end
         end
     end
@@ -355,26 +375,10 @@ function complete_path(path::AbstractString;
         if trylock(path_cache_lock)
             # Look for files in PATH as well.
             # these are cached in `cache_path` in a separate task at first shell mode switch.
-            # If we cannot get lock because its still caching just pass over this.
-            for (pathdir, filesinpath) in path_cache
-                for file in filesinpath
-                    # In a perfect world, we would filter on whether the file is executable
-                    # here, or even on whether the current user can execute the file in question.
-                    try
-                        if startswith(file, prefix) && isfile(joinpath(pathdir, file))
-                            push!(matches, file)
-                        end
-                    catch e
-                        # `isfile()` can throw in rare cases such as when probing a
-                        # symlink that points to a file within a directory we do not
-                        # have read access to.
-                        if isa(e, Base.IOError)
-                            continue
-                        else
-                            rethrow()
-                        end
-                    end
-                end
+            # If we cannot get lock because its still caching just pass over this so that initial
+            # typing isn't laggy
+            for file in path_cache
+                startswith(file, prefix) && push!(matches, file)
             end
         end
     end
