@@ -1982,11 +1982,11 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
             error("package `$(uuidkey.name)` did not define the expected \
                   module `$(uuidkey.name)`, check for typos in package module name")
         end
-        first_require && run_package_callbacks(uuidkey)
         insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
+        first_require && run_package_callbacks(uuidkey)
         newm = root_module(uuidkey)
     end
     return newm
