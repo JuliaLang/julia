@@ -85,6 +85,9 @@ New library features
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
 * New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
 * New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
+* The functions `unsafe_ashr`, `unsafe_lshr` and `unsafe_shl` are processor-native
+  bitshifting functions which may be faster than the similar functions `>>`, `>>>`
+  and `<<` when the shift is not known at compile time.
 * Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
   expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
   no longer required there for correctness to avoid data races ([#52461]).
