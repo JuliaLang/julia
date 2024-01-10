@@ -328,6 +328,7 @@ function cache_path()
                     rethrow()
                 end
             end
+            yield() # so startup doesn't block when -t1
         end
     end
     return path_cache
