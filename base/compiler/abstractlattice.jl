@@ -227,9 +227,12 @@ that should be forwarded along with constant propagation.
 end
 @nospecializeinfer function is_const_prop_profitable_arg(𝕃::ConstsLattice, @nospecialize t)
     if isa(t, Const)
-        # don't consider mutable values useful constants
         val = t.val
-        return isa(val, Symbol) || isa(val, Type) || !ismutable(val)
+        # `Const(ty::Type)` is essentially equivalent to `Type{ty}`
+        val isa Type && return false
+        # don't consider mutable values useful constants
+        val isa Symbol && return true # except for Symbols
+        return !ismutable(val)
     end
     isa(t, PartialTypeVar) && return false # this isn't forwardable
     return is_const_prop_profitable_arg(widenlattice(𝕃), t)
