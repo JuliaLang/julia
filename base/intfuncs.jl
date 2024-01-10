@@ -309,16 +309,15 @@ to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
     "\nMake x a float matrix by adding a zero decimal ",
     "(e.g., [2.0 1.0;1.0 0.0]^", p, " instead of [2 1;1 0]^", p, ")",
     "or write float(x)^", p, " or Rational.(x)^", p, ".")))
-power_by_squaring(x_, p::Integer) = power_by_squaring_with_op(*, x_, p)
-# The following implementation is shared by power_by_squaring and checked_power_by_squaring.
-@assume_effects :terminates_locally function power_by_squaring_with_op(mul_, x_, p::Integer)
+# The * keyword supports `*=checked_mul` for `checked_pow`
+@assume_effects :terminates_locally function power_by_squaring(x_, p::Integer; *=*)
     x = to_power_type(x_)
     if p == 1
         return copy(x)
     elseif p == 0
         return one(x)
     elseif p == 2
-        return mul_(x, x)
+        return x*x
     elseif p < 0
         isone(x) && return copy(x)
         isone(-x) && return iseven(p) ? one(x) : copy(x)
@@ -327,16 +326,16 @@ power_by_squaring(x_, p::Integer) = power_by_squaring_with_op(*, x_, p)
     t = trailing_zeros(p) + 1
     p >>= t
     while (t -= 1) > 0
-        x = mul_(x, x)
+        x *= x
     end
     y = x
     while p > 0
         t = trailing_zeros(p) + 1
         p >>= t
         while (t -= 1) >= 0
-            x = mul_(x, x)
+            x *= x
         end
-        y = mul_(y, x)
+        y *= x
     end
     return y
 end

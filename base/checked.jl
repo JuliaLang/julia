@@ -367,10 +367,8 @@ The overflow protection may impose a perceptible performance penalty.
 """
 checked_pow(x::Integer, y::Integer) = checked_power_by_squaring(x, y)
 
-checked_power_by_squaring(x_, p::Integer) =
-    Base.power_by_squaring_with_op(checked_mul, x_, p)
+checked_power_by_squaring(x_, p::Integer) = Base.power_by_squaring(x_, p; * = checked_mul)
 # For Booleans, the default implementation covers all cases.
-checked_power_by_squaring(x::Bool, p::Unsigned) = Base.power_by_squaring(x, p)
 checked_power_by_squaring(x::Bool, p::Integer) = Base.power_by_squaring(x, p)
 
 """
