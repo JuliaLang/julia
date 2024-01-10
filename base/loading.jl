@@ -1212,13 +1212,13 @@ function run_module_init(mod::Module, i::Int=1)
             cumulative_compile_timing(false);
             comp_time, recomp_time = (cumulative_compile_time_ns() .- compile_elapsedtimes) ./ 1e6
 
-            print(round(elapsedtime, digits=1), " ms $mod.__init__() ")
+            print("$(round(elapsedtime, digits=1)) ms $mod.__init__() ")
             if comp_time > 0
                 printstyled(Ryu.writefixed(Float64(100 * comp_time / elapsedtime), 2), "% compilation time", color = Base.info_color())
             end
             if recomp_time > 0
                 perc = Float64(100 * recomp_time / comp_time)
-                printstyled(" (", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% recompilation)", color = Base.warn_color())
+                printstyled(" ($(perc < 1 ? "<1" : Ryu.writefixed(perc, 0))% recompilation)", color = Base.warn_color())
             end
             println()
         end
