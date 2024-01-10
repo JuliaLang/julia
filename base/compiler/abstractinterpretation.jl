@@ -2119,8 +2119,14 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             abstract_call_gf_by_type(interp, f, ArgInfo(nothing, T), si, atype, sv, max_methods)
         end
         pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
-        effects = builtin_effects(𝕃ᵢ, Core._typevar, Any[n, lb_var, ub_var], pT)
-        return CallMeta(pT, Any, effects, call.info)
+        typevar_argtypes = Any[n, lb_var, ub_var]
+        effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+        if effects.nothrow
+            exct = Union{}
+        else
+            exct = builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+        end
+        return CallMeta(pT, exct, effects, call.info)
     elseif f === UnionAll
         call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, Any[Const(UnionAll), Any, Any]), si, Tuple{Type{UnionAll}, Any, Any}, sv, max_methods)
         return abstract_call_unionall(interp, argtypes, call)
@@ -3288,10 +3294,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             # Process non control-flow statements
             (; changes, rt, exct) = abstract_eval_basic_statement(interp,
                 stmt, currstate, frame)
-            if exct !== Union{}
-                update_exc_bestguess!(interp, exct, frame)
-            end
             if !has_curr_ssaflag(frame, IR_FLAG_NOTHROW)
+                if exct !== Union{}
+                    update_exc_bestguess!(interp, exct, frame)
+                    # TODO: assert that these conditions match. For now, we assume the `nothrow` flag
+                    # to be correct, but allow the exct to be an over-approximation.
+                end
                 propagate_to_error_handler!(currstate, frame, 𝕃ᵢ)
             end
             if rt === Bottom
