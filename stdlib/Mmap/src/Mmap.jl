@@ -322,7 +322,7 @@ julia> rm("mmap.bin")
 This creates a 25-by-30000 `BitArray`, linked to the file associated with stream `io`.
 """
 function mmap(io::IOStream, ::Type{<:BitArray}, dims::NTuple{N,Integer},
-              offset::Int64=position(io); grow::Bool=true, shared::Bool=true) where N
+              offset::Integer=position(io); grow::Bool=true, shared::Bool=true) where N
     n = prod(dims)
     nc = Base.num_bit_chunks(n)
     chunks = mmap(io, Vector{UInt64}, (nc,), offset; grow=grow, shared=shared)

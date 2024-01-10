@@ -339,3 +339,14 @@ open(file, "r+") do s
     finalize(A); A = nothing; GC.gc()
 end
 rm(file)
+
+# test #30537
+file = tempname()
+rdat = rand(128)
+open(f->write(f, rdat), file, "w+")
+for T in (Int32, UInt32, UInt64, Int64)
+    Mmap.mmap(file, BitVector, (64), T(8))
+end
+GC.gc()
+rm(file)
+
