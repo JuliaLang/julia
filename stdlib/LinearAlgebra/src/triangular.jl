@@ -773,10 +773,6 @@ isunit_char(::LowerTriangular) = 'N'
 isunit_char(::UnitLowerTriangular) = 'U'
 
 lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) = _trimul!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix) = _trimul!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = _trimul!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractTriangular) = _trimul!(C, A, B)
 
 # generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
 _trimul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) =
@@ -809,7 +805,7 @@ rmul!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _trimul!(A, A, B)
 for TC in (:AbstractVector, :AbstractMatrix)
     @eval @inline function mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
         if isone(alpha) && iszero(beta)
-            return mul!(C, A, B)
+            return _trimul!(C, A, B)
         else
             return generic_matvecmul!(C, 'N', A, B, MulAddMul(alpha, beta))
         end
@@ -821,7 +817,7 @@ for (TA, TB) in ((:AbstractTriangular, :AbstractMatrix),
                 )
     @eval @inline function mul!(C::AbstractMatrix, A::$TA, B::$TB, alpha::Number, beta::Number)
         if isone(alpha) && iszero(beta)
-            return mul!(C, A, B)
+            return _trimul!(C, A, B)
         else
             return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
         end
