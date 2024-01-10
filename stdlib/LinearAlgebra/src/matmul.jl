@@ -55,14 +55,14 @@ function (*)(A::StridedMaybeAdjOrTransMat{T}, x::StridedVector{S}) where {T<:Bla
     y = isconcretetype(TS) ? convert(AbstractVector{TS}, x) : x
     mul!(similar(x, TS, size(A,1)), A, y)
 end
-function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
-    TS = promote_op(matprod, T, S)
+(*)(A::AbstractMatrix, x::AbstractVector) = mul(A, x)
+
+@inline function mul(A::AbstractMatrix, x::AbstractVector)
+    TS = promote_op(matprod, eltype(A), eltype(x))
     mul!(similar(x, TS, axes(A,1)), A, x)
 end
 
-# these will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
-(*)(a::AbstractVector, tB::TransposeAbsMat) = reshape(a, length(a), 1) * tB
-(*)(a::AbstractVector, adjB::AdjointAbsMat) = reshape(a, length(a), 1) * adjB
+# this will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
 
 # Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
@@ -91,9 +91,9 @@ end
                 _add::MulAddMul=MulAddMul()) where {T<:BlasReal} =
     gemv!(y, tA, A, x, _add.alpha, _add.beta)
 
-# Vector-Matrix multiplication
-(*)(x::AdjointAbsVec,   A::AbstractMatrix) = (A'*x')'
-(*)(x::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A)*transpose(x))
+# Row Vector-Matrix multiplication
+mul(x::AdjointAbsVec,   A::AbstractMatrix) = (A'*x')'
+mul(x::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A)*transpose(x))
 
 # Matrix-matrix multiplication
 """
@@ -109,7 +109,9 @@ julia> [1 1; 0 1] * [1 0; 1 1]
  1  1
 ```
 """
-function (*)(A::AbstractMatrix, B::AbstractMatrix)
+(*)(A::AbstractMatrix, B::AbstractMatrix) = mul(A, B)
+
+@inline function mul(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(matprod_dest(A, B, TS), A, B)
 end

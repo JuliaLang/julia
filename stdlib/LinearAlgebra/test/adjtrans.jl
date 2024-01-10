@@ -9,6 +9,9 @@ const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 @testset "Adjoint and Transpose inner constructor basics" begin
     intvec, intmat = [1, 2], [1 2; 3 4]
     # Adjoint/Transpose eltype must match the type of the Adjoint/Transpose of the input eltype
@@ -701,6 +704,18 @@ end
     B = zero.(At)
     LinearAlgebra.copy_transpose!(B, axes(B, 1), axes(B, 2), A, axes(A, 1), axes(A, 2))
     @test B == At
+end
+
+@testset "matmul ambiguities" begin
+    A = [1,2]
+    S = SizedArrays.SizedArray{(2,)}(A)
+    @test A' * S == A' * A
+    @test transpose(A) * S == A' * A
+
+    B = fill([1 2; 3 4], 2, 2)
+    S2 = SizedArrays.SizedArray{(2,2)}(B)
+    @test A' * B == A' * S2
+    @test transpose(A) * B == transpose(A) * S2
 end
 
 end # module TestAdjointTranspose

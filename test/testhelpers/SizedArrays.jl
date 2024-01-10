@@ -62,6 +62,7 @@ end
 
 # deliberately wide method definitions to test for method ambiguties in LinearAlgebra
 *(S1::SizedMatrixLike, M::AbstractMatrix) = _data(S1) * M
+*(M::AbstractMatrix, S2::SizedMatrixLike) = M * _data(S2)
 mul!(dest::AbstractMatrix, S1::SizedMatrix, M::AbstractMatrix, α::Number, β::Number) =
     mul!(dest, _data(S1), M, α, β)
 mul!(dest::AbstractMatrix, M::AbstractMatrix, S2::SizedMatrix, α::Number, β::Number) =

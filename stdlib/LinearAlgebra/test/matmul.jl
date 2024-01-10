@@ -6,6 +6,11 @@ using Base: rtoldefault
 using Test, LinearAlgebra, Random
 using LinearAlgebra: mul!, Symmetric, Hermitian
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 ## Test Julia fallbacks to BLAS routines
 
 mul_wrappers = [
@@ -236,6 +241,19 @@ end
     @test C == AB
     LinearAlgebra.generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(2, -1))
     @test C == AB
+end
+
+@testset "vector * adj/trans matrix and adj/trans vector * matrix" begin
+    v1 = [2, 3]
+    v2 = [1;2;;]
+    resexp = [2 4; 3 6]
+    @test v1 * permutedims(v2) == resexp
+    @test v1 * v2' == resexp
+    @test v1 * transpose(v2) == resexp
+
+    resexp = [8;;]
+    @test v1' * v2 == resexp
+    @test transpose(v1) * v2 == resexp
 end
 
 @testset "fallbacks & such for BlasFloats" begin
@@ -1059,6 +1077,14 @@ end
         f!(C, A, B, alphas, betas)
         @test_broken (@allocated f!(C, A, B, alphas, betas)) == 0
     end
+end
+
+@testset "ambiguities" begin
+    A = [1 2; 3 4]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    v = [1,2]
+    @test v' * S == v' * A
+    @test transpose(v) * S == transpose(v) * A
 end
 
 end # module TestMatmul
