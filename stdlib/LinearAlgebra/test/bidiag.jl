@@ -22,6 +22,9 @@ using .Main.FillArrays
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
@@ -859,6 +862,26 @@ end
     B = Bidiagonal(dv, uv, :U)
     ax = axes(dv, 1)
     @test axes(B) === (ax, ax)
+end
+
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    B = Bidiagonal([1:2;], [1;], :U)
+    @test S * B == A * B
+    @test B * S == B * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, B) == mul!(C2, A, B)
+    @test mul!(C1, S, B, 1, 2) == mul!(C2, A, B, 1 ,2)
+    @test mul!(C1, B, S) == mul!(C2, B, A)
+    @test mul!(C1, B, S, 1, 2) == mul!(C2, B, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test B * sv == B * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, B, sv) == mul!(C2, B, v)
+    @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
 end
 
 end # module TestBidiagonal
