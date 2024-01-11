@@ -239,6 +239,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 A2tmp = unitt(A1)
                 mul!(A1tmp, cr, A2tmp)
                 @test A1tmp == cr * A2tmp
+
+                A1tmp .= A1
+                @test mul!(A1tmp, A2tmp, cr, 0, 2) == 2A1
+                A1tmp .= A1
+                @test mul!(A1tmp, cr, A2tmp, 0, 2) == 2A1
             else
                 A1tmp = copy(A1)
                 rmul!(A1tmp, ci)
