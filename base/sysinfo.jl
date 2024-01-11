@@ -32,7 +32,6 @@ export BINDIR,
        isunix,
        iswindows,
        isjsvm,
-       show,
        isexecutable,
        username,
        which
@@ -236,6 +235,10 @@ describing a set of CPUs (which defaults to the return value of the [`Sys.cpu_in
 
 The summary includes aggregated information for each distinct CPU model,
 providing details such as average CPU speed and total time spent in different modes (user, nice, sys, idle, irq) across all cores with the same model.
+
+!!! compat "Julia 1.11"
+As of Julia 1.11, the `Sys.cpu_summary(io, cpu)` output is replicated by `show(io, "text/plain", cpu)` (which is called by e.g. 
+`display` for REPL output), so it need not be called directly.
 """
 function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
@@ -641,14 +644,8 @@ function username()
     isempty(pw.username) && Base.uv_error("username", Base.UV_ENOENT)
     return pw.username
 end
-"""
-    Sys.show(io::IO, ::MIME"text/plain", cpu::AbstractVector{CPUinfo})
 
-Print a summary of CPU information to the `io` stream (defaulting to [`stdout`](@ref)),
-organizing and displaying aggregated data for CPUs with the same model,
-for a given array of `CPUinfo` data structures.
-"""
-function show(io::IO,::MIME"text/plain",cpu::AbstractVector{CPUinfo})
+function show(io::IO, ::MIME"text/plain", cpu::AbstractVector{CPUinfo})
     summary(io, cpu)
     println(io, ':')
     cpu_summary(io, cpu)
