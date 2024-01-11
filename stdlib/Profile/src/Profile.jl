@@ -1260,7 +1260,7 @@ counted. Otherwise, report the actual size.
 If `streaming` is true, we will stream the snapshot data out into four files, using filepath
 as the prefix, to avoid having to hold the entire snapshot in memory. This option should be
 used for any setting where your memory is constrained. These files can then be reassembled
-by calling [`Profile.HeapSnapshot.assemble_snapshot(filepath)`](@ref), which can
+by calling Profile.HeapSnapshot.assemble_snapshot(), which can
 be done offline.
 
 NOTE: We strongly recommend setting streaming=true for performance reasons. Reconstructing
