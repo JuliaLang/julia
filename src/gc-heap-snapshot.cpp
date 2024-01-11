@@ -235,7 +235,7 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot)
     };
     serialize_node(snapshot, gc_roots);
     Edge root_to_gc_roots{
-        snapshot->edge_types.find_or_create_string_id("internal"),
+        (uint8_t)snapshot->edge_types.find_or_create_string_id("internal"),
         snapshot->names.find_or_create_string_id("GC roots"), // edge label
         snapshot->internal_root_idx, // from
         snapshot->_gc_root_idx // to
@@ -254,7 +254,7 @@ void _add_synthetic_root_entries(HeapSnapshot *snapshot)
     };
     serialize_node(snapshot, gc_finlist_roots);
     Edge root_to_gc_finlist_roots{
-        snapshot->edge_types.find_or_create_string_id("internal"),
+        (uint8_t)snapshot->edge_types.find_or_create_string_id("internal"),
         snapshot->names.find_or_create_string_id("GC finalizer list roots"), // edge label
         snapshot->internal_root_idx, // from
         snapshot->_gc_finlist_root_idx // to
