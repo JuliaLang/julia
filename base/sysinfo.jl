@@ -255,7 +255,7 @@ end
 """
     Sys.cpu_info()
 
-Return a vector of `CPUinfo` objects, where each object represent information about a CPU core.
+Return a vector of `CPUinfo` objects, where each object represents information about a CPU core.
 This is displayed in a tabular format by the REPL, so most users will not need to access the `CPUinfo`
 data structures directly.
 
