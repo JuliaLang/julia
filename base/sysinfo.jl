@@ -36,7 +36,6 @@ export BINDIR,
        isexecutable,
        username,
        which
-       
 
 import ..Base: show
 
@@ -645,10 +644,9 @@ end
 """
     Sys.show(io::IO, ::MIME"text/plain", cpu::AbstractVector{CPUinfo})
 
-Print a summary of CPU information to the `io` stream (defaulting to [`stdout`](@ref)), 
-organizing and displaying aggregated data for CPUs with the same model, 
+Print a summary of CPU information to the `io` stream (defaulting to [`stdout`](@ref)),
+organizing and displaying aggregated data for CPUs with the same model,
 for a given array of `CPUinfo` data structures.
-
 """
 function show(io::IO,::MIME"text/plain",cpu::AbstractVector{CPUinfo})
     summary(io, cpu)
