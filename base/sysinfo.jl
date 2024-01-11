@@ -32,9 +32,11 @@ export BINDIR,
        isunix,
        iswindows,
        isjsvm,
+       show,
        isexecutable,
        username,
        which
+       
 
 import ..Base: show
 
@@ -639,6 +641,19 @@ function username()
     pw = Libc.getpw()
     isempty(pw.username) && Base.uv_error("username", Base.UV_ENOENT)
     return pw.username
+end
+"""
+    Sys.show(io::IO, ::MIME"text/plain", cpu::AbstractVector{CPUinfo})
+
+Print a summary of CPU information to the `io` stream (defaulting to [`stdout`](@ref)), 
+organizing and displaying aggregated data for CPUs with the same model, 
+for a given array of `CPUinfo` data structures.
+
+"""
+function show(io::IO,::MIME"text/plain",cpu::AbstractVector{CPUinfo})
+    summary(io, cpu)
+    println(io, ':')
+    cpu_summary(io, cpu)
 end
 
 end # module Sys
