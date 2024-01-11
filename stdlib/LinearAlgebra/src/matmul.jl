@@ -56,7 +56,7 @@ function (*)(A::StridedMaybeAdjOrTransMat{T}, x::StridedVector{S}) where {T<:Bla
     mul!(similar(x, TS, size(A,1)), A, y)
 end
 (*)(A::AbstractMatrix, x::AbstractVector) = mul(A, x)
-
+# Add a level of indirection to avoid ambiguities in methods added to (*) by external packages
 @inline function mul(A::AbstractMatrix, x::AbstractVector)
     TS = promote_op(matprod, eltype(A), eltype(x))
     mul!(similar(x, TS, axes(A,1)), A, x)
@@ -110,7 +110,7 @@ julia> [1 1; 0 1] * [1 0; 1 1]
 ```
 """
 (*)(A::AbstractMatrix, B::AbstractMatrix) = mul(A, B)
-
+# Add a level of indirection to avoid ambiguities in methods added to (*) by external packages
 @inline function mul(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(matprod_dest(A, B, TS), A, B)
