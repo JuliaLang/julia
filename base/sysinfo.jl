@@ -237,7 +237,7 @@ The summary includes aggregated information for each distinct CPU model,
 providing details such as average CPU speed and total time spent in different modes (user, nice, sys, idle, irq) across all cores with the same model.
 
 !!! compat "Julia 1.11"
-As of Julia 1.11, the `Sys.cpu_summary(io, cpu)` output is replicated by `show(io, "text/plain", cpu)` (which is called by e.g.
+    As of Julia 1.11, the `Sys.cpu_summary(io, cpu)` output is replicated by `show(io, "text/plain", cpu)` (which is called by e.g.
 `display` for REPL output), so it need not be called directly.
 """
 function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
