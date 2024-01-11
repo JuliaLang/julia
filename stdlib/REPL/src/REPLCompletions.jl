@@ -278,7 +278,7 @@ function cache_path()
     global cached_path_string
     path = @lock path_cache_lock begin
         empty!(path_cache)
-        global cached_path_string = get(ENV, "PATH", nothing)
+        cached_path_string = get(ENV, "PATH", nothing)
     end
     path isa String || return
 
@@ -378,8 +378,8 @@ function complete_path(path::AbstractString;
         # If we cannot get lock because its still caching just pass over this so that initial
         # typing isn't laggy. If the PATH string has changed since last cache re-cache it
         global cached_path_string
-        get(ENV, "PATH", nothing) === @lock(path_cache_lock, cached_path_string) || cache_path()
         if trylock(path_cache_lock)
+            get(ENV, "PATH", nothing) === cached_path_string || cache_path()
             for file in path_cache
                 startswith(file, prefix) && push!(matches, file)
             end
