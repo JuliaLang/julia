@@ -118,7 +118,7 @@ global CPU_NAME::String
 A string representing the specific Just-In-Time (JIT) compiler being utilized in the current runtime.
 
 # Examples
-Currently, this returns `"ORCJIT"` for the LLVM "ORC" ("On-Request Compilation") JIT library:
+Currently, this equals `"ORCJIT"` for the LLVM "ORC" ("On-Request Compilation") JIT library:
 ```jldoctest
 julia> Sys.JIT
 "ORCJIT"
@@ -255,7 +255,7 @@ end
 """
     Sys.cpu_info()
 
-Return a vector of `CPUinfo` objects, where each object represent information about a CPU core.
+Return a vector of `CPUinfo` objects, where each object represents information about a CPU core.
 This is displayed in a tabular format by the REPL, so most users will not need to access the `CPUinfo`
 data structures directly.
 
