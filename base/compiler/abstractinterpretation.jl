@@ -2310,11 +2310,7 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::U
 end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
-    if isa(e, QuoteNode)
-        effects = Effects(EFFECTS_TOTAL;
-            inaccessiblememonly = is_mutation_free_argtype(typeof(e.value)) ? ALWAYS_TRUE : ALWAYS_FALSE)
-        return RTEffects(Const(e.value), Union{}, effects)
-    elseif isa(e, SSAValue)
+    if isa(e, SSAValue)
         return RTEffects(abstract_eval_ssavalue(e, sv), Union{}, EFFECTS_TOTAL)
     elseif isa(e, SlotNumber)
         if vtypes !== nothing
@@ -2335,8 +2331,12 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, GlobalRef)
         return abstract_eval_globalref(interp, e, sv)
     end
-
-    return RTEffects(Const(e), Union{}, EFFECTS_TOTAL)
+    if isa(e, QuoteNode)
+        e = e.value
+    end
+    effects = Effects(EFFECTS_TOTAL;
+        inaccessiblememonly = is_mutation_free_argtype(typeof(e)) ? ALWAYS_TRUE : ALWAYS_FALSE)
+    return RTEffects(Const(e), Union{}, effects)
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
