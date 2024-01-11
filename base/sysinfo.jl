@@ -118,7 +118,7 @@ global CPU_NAME::String
 A string representing the specific Just-In-Time (JIT) compiler being utilized in the current runtime.
 
 # Examples
-Currently, this returns `"ORCJIT"` for the LLVM "ORC" ("On-Request Compilation") JIT library:
+Currently, this equals `"ORCJIT"` for the LLVM "ORC" ("On-Request Compilation") JIT library:
 ```jldoctest
 julia> Sys.JIT
 "ORCJIT"
