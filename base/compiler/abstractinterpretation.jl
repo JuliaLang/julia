@@ -2267,11 +2267,7 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
 end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
-    if isa(e, QuoteNode)
-        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL;
-            inaccessiblememonly = is_mutation_free_argtype(typeof(e.value)) ? ALWAYS_TRUE : ALWAYS_FALSE))
-        return Const(e.value)
-    elseif isa(e, SSAValue)
+    if isa(e, SSAValue)
         return abstract_eval_ssavalue(e, sv)
     elseif isa(e, SlotNumber)
         if vtypes !== nothing
@@ -2293,7 +2289,11 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, GlobalRef)
         return abstract_eval_globalref(interp, e, sv)
     end
-
+    if isa(e, QuoteNode)
+        e = e.value
+    end
+    merge_effects!(interp, sv, Effects(EFFECTS_TOTAL;
+        inaccessiblememonly = is_mutation_free_argtype(typeof(e)) ? ALWAYS_TRUE : ALWAYS_FALSE))
     return Const(e)
 end
 
