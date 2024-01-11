@@ -1245,9 +1245,8 @@ end
 
 
 """
-    Profile.take_heap_snapshot(io::IOStream, all_one::Bool=false)
-    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
-    Profile.take_heap_snapshot(all_one::Bool=false; dir::String)
+    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false, streaming=false)
+    Profile.take_heap_snapshot(all_one::Bool=false; dir::String, streaming=false)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
 Devtools Heap Snapshot viewer (.heapsnapshot extension) to a file
@@ -1257,15 +1256,68 @@ full file path, or IO stream.
 
 If `all_one` is true, then report the size of every object as one so they can be easily
 counted. Otherwise, report the actual size.
+
+If `streaming` is true, we will stream the snapshot data out into four files, using filepath
+as the prefix, to avoid having to hold the entire snapshot in memory. This option should be
+used for any setting where your memory is constrained. These files can then be reassembled
+by calling [`Profile.HeapSnapshot.assemble_snapshot(filepath)`](@ref), which can
+be done offline.
+
+NOTE: We strongly recommend setting streaming=true for performance reasons. Reconstructing
+the snapshot from the parts requires holding the entire snapshot in memory, so if the
+snapshot is large, you can run out of memory while processing it. Streaming allows you to
+reconstruct the snapshot offline, after your workload is done running.
+If you do attempt to collect a snapshot with streaming=false (the default, for
+backwards-compatibility) and your process is killed, note that this will always save the
+parts in the same directory as your provided filepath, so you can still reconstruct the
+snapshot after the fact, via `assemble_snapshot()`.
 """
-function take_heap_snapshot(io::IOStream, all_one::Bool=false)
-    Base.@_lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
-end
-function take_heap_snapshot(filepath::String, all_one::Bool=false)
-    open(filepath, "w") do io
-        take_heap_snapshot(io, all_one)
+function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; streaming::Bool=false)
+    if streaming
+        _stream_heap_snapshot(filepath, all_one)
+        println("Finished streaming heap snapshot parts to prefix: $filepath")
+    else
+        # Support the legacy, non-streaming mode, by first streaming the parts, then
+        # reassembling it after we're done.
+        prefix = filepath
+        _stream_heap_snapshot(prefix, all_one)
+        Profile.HeapSnapshot.assemble_snapshot(prefix, filepath)
+        println("Recorded heap snapshot: $filepath")
     end
     return filepath
+end
+function take_heap_snapshot(io::IO, all_one::Bool=false)
+    # Support the legacy, non-streaming mode, by first streaming the parts to a tempdir,
+    # then reassembling it after we're done.
+    dir = tempdir()
+    prefix = joinpath(dir, "snapshot")
+    _stream_heap_snapshot(prefix, all_one)
+    Profile.HeapSnapshot.assemble_snapshot(prefix, io)
+end
+function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool)
+    # Nodes and edges are binary files
+    open("$prefix.nodes", "w") do nodes
+        open("$prefix.edges", "w") do edges
+            # The other two files are json data
+            open("$prefix.strings.json", "w") do strings
+                open("$prefix.metadata.json", "w") do json
+                    Base.@_lock_ios(nodes,
+                    Base.@_lock_ios(edges,
+                    Base.@_lock_ios(strings,
+                    Base.@_lock_ios(json,
+                        ccall(:jl_gc_take_heap_snapshot,
+                            Cvoid,
+                            (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}, Cchar),
+                            nodes.handle, edges.handle, strings.handle, json.handle,
+                            Cchar(all_one))
+                    )
+                    )
+                    )
+                    )
+                end
+            end
+        end
+    end
 end
 function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) where {S <: AbstractString}
     fname = "$(getpid())_$(time_ns()).heapsnapshot"
@@ -1302,6 +1354,7 @@ function take_page_profile(filepath::String)
 end
 
 include("Allocs.jl")
+include("heapsnapshot_reassemble.jl")
 include("precompile.jl")
 
 end # module
