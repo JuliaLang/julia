@@ -1333,9 +1333,6 @@ function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missi
     return nothing
 end
 
-# Modules that have been explicitly `require`d in the Julia session,
-const required_modules = Set{PkgId}()
-
 function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}, weakdeps::Dict{String, Any})
     for (ext, triggers) in extensions
         triggers = triggers::Union{String, Vector{String}}
@@ -1352,7 +1349,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             # TODO: Better error message if this lookup fails?
             uuid_trigger = UUID(weakdeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
-            if !(trigger_id in required_modules) || haskey(package_locks, trigger_id)
+            if !haskey(explicit_loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
@@ -1974,8 +1971,6 @@ end
 
 function __require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
-    first_require = !(uuidkey in required_modules)
-    push!(required_modules, uuidkey)
     if !root_module_exists(uuidkey)
         newm = _require(uuidkey, env)
         if newm === nothing
@@ -1986,7 +1981,6 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
-        first_require && run_package_callbacks(uuidkey)
         newm = root_module(uuidkey)
     end
     return newm
@@ -2001,6 +1995,8 @@ PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 const loaded_modules = Dict{PkgId,Module}()
+# Emptied on Julia start
+const explicit_loaded_modules = Dict{PkgId,Module}()
 const loaded_modules_order = Vector{Module}()
 const module_keys = IdDict{Module,PkgId}() # the reverse
 
@@ -2024,6 +2020,7 @@ root_module_key(m::Module) = @lock require_lock module_keys[m]
     end
     push!(loaded_modules_order, m)
     loaded_modules[key] = m
+    explicit_loaded_modules[key] = m
     module_keys[m] = key
     end
     nothing
