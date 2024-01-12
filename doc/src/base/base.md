@@ -356,6 +356,7 @@ Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
 Base.Sys.CPU_NAME
+Base.Sys.CPUinfo
 Base.Sys.JIT
 Base.Sys.cpu_info
 Base.Sys.isunix

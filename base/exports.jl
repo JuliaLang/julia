@@ -1088,6 +1088,7 @@ public
     Event,
     Fix1,
     Fix2,
+    CPUinfo,
     Generator,
     ImmutableDict,
     OneTo,
