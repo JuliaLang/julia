@@ -387,6 +387,7 @@ function complete_path(path::AbstractString;
             for file in PATH_cache
                 startswith(file, prefix) && push!(matches, file)
             end
+            unlock(PATH_cache_lock)
         end
     end
 
