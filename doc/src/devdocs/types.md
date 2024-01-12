@@ -100,6 +100,8 @@ UnionAll
       lb: Union{}
       ub: Any
     body: Array{T, N} <: DenseArray{T, N}
+      ref::MemoryRef{T}
+      size::NTuple{N, Int64}
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for

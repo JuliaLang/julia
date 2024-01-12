@@ -4,6 +4,7 @@
 
 // CPUID
 
+#include "julia.h"
 extern "C" JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
     asm volatile (
@@ -771,7 +772,7 @@ static inline void disable_depends(FeatureList<n> &features)
     ::disable_depends(features, Feature::deps, sizeof(Feature::deps) / sizeof(FeatureDep));
 }
 
-static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
+static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(void)
 {
     auto feature_cb = [] (const char *str, size_t len, FeatureList<feature_sz> &list) {
         auto fbit = find_feature_bit(feature_names, nfeature_names, str, len);
@@ -789,7 +790,7 @@ static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
     return targets;
 }
 
-static std::vector<TargetData<feature_sz>> jit_targets;
+static llvm::SmallVector<TargetData<feature_sz>, 0> jit_targets;
 
 static TargetData<feature_sz> arg_target_data(const TargetData<feature_sz> &arg, bool require_host)
 {
@@ -840,7 +841,7 @@ static int max_vector_size(const FeatureList<feature_sz> &features)
     return 16;
 }
 
-static uint32_t sysimg_init_cb(const void *id)
+static uint32_t sysimg_init_cb(const void *id, jl_value_t** rejection_reason)
 {
     // First see what target is requested for the JIT.
     auto &cmdline = get_cmdline_targets();
@@ -868,7 +869,9 @@ static uint32_t sysimg_init_cb(const void *id)
                  "virtualized environment.  Please read "
                  "https://docs.julialang.org/en/v1/devdocs/sysimg/ for more.");
     }
-    auto match = match_sysimg_targets(sysimg, target, max_vector_size);
+    auto match = match_sysimg_targets(sysimg, target, max_vector_size, rejection_reason);
+    if (match.best_idx == (uint32_t)-1)
+        return match.best_idx;
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
     if (match.vreg_size != max_vector_size(target.en.features) &&
@@ -884,7 +887,7 @@ static uint32_t sysimg_init_cb(const void *id)
     return match.best_idx;
 }
 
-static uint32_t pkgimg_init_cb(const void *id)
+static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     TargetData<feature_sz> target = jit_targets.front();
     auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
@@ -893,7 +896,7 @@ static uint32_t pkgimg_init_cb(const void *id)
             t.name = nname;
         }
     }
-    auto match = match_sysimg_targets(pkgimg, target, max_vector_size);
+    auto match = match_sysimg_targets(pkgimg, target, max_vector_size, rejection_reason);
     return match.best_idx;
 }
 
@@ -959,10 +962,17 @@ static void ensure_jit_target(bool imaging)
                 break;
             }
         }
+        static constexpr uint32_t clone_bf16[] = {Feature::avx512bf16};
+        for (auto fe: clone_bf16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_BFLOAT16;
+                break;
+            }
+        }
     }
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_noext(const TargetData<feature_sz> &data)
 {
     std::string name = data.name;
@@ -981,7 +991,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
         name = "x86-64";
 #endif
     }
-    std::vector<std::string> features;
+    llvm::SmallVector<std::string, 0> features;
     for (auto &fename: feature_names) {
         if (fename.llvmver > JL_LLVM_VERSION)
             continue;
@@ -1005,7 +1015,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     return std::make_pair(std::move(name), std::move(features));
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_vec(const TargetData<feature_sz> &data)
 {
     auto res0 = get_llvm_target_noext(data);
@@ -1032,9 +1042,15 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
                   cpus, ncpu_names);
 }
 
-JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
 {
-    pkgimg_init_cb(data);
+    jl_value_t *rejection_reason = NULL;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    JL_GC_POP();
+    if (match_idx == (uint32_t)-1)
+        return rejection_reason;
+    return jl_nothing;
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
@@ -1045,6 +1061,16 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
 JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
 {
     return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+}
+
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
+{
+    TargetData<feature_sz> target = jit_targets.front();
+    FeatureList<feature_sz> features = target.en.features;
+    if ((bits == 32 || bits == 64) && (test_nbit(features, Feature::fma) || test_nbit(features, Feature::fma4)))
+        return jl_true;
+    else
+        return jl_false;
 }
 
 jl_image_t jl_init_processor_sysimg(void *hdl)
@@ -1063,25 +1089,25 @@ jl_image_t jl_init_processor_pkgimg(void *hdl)
     return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
-extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags)
 {
     ensure_jit_target(imaging);
     flags = jit_targets[0].en.flags;
     return get_llvm_target_vec(jit_targets[0]);
 }
 
-extern "C" JL_DLLEXPORT const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
+const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
 {
     static const auto res = get_llvm_target_str(TargetData<feature_sz>{"generic", "",
             {feature_masks, 0}, {{}, 0}, 0});
     return res;
 }
 
-extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
-    std::vector<jl_target_spec_t> res;
+    llvm::SmallVector<jl_target_spec_t, 0> res;
     for (auto &target: jit_targets) {
         auto features_en = target.en.features;
         auto features_dis = target.dis.features;

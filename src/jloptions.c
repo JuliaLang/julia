@@ -112,7 +112,7 @@ static const char opts[]  =
     "                            Use native code from system image if available\n"
     " --compiled-modules={yes*|no|existing}\n"
     "                            Enable or disable incremental precompilation of modules\n"
-    " --pkgimages={yes*|no}\n"
+    " --pkgimages={yes*|no|existing}\n"
     "                            Enable or disable usage of native code caching in the form of pkgimages ($)\n\n"
 
     // actions
@@ -140,7 +140,8 @@ static const char opts[]  =
     // interactive options
     " -i, --interactive          Interactive mode; REPL runs and `isinteractive()` is true\n"
     " -q, --quiet                Quiet startup: no banner, suppress REPL warnings\n"
-    " --banner={yes|no|auto*}    Enable or disable startup banner\n"
+    " --banner={yes|no|short|auto*}\n"
+    "                            Enable or disable startup banner\n"
     " --color={yes|no|auto*}     Enable or disable color text\n"
     " --history-file={yes*|no}   Load or save history\n\n"
 
@@ -332,7 +333,6 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
     const char **cmds = NULL;
     int codecov = JL_LOG_NONE;
     int malloclog = JL_LOG_NONE;
-    int pkgimage_explicit = 0;
     int argc = *argcp;
     char **argv = *argvp;
     char *endptr;
@@ -444,8 +444,10 @@ restart_switch:
                 jl_options.banner = 0;
             else if (!strcmp(optarg, "auto"))
                 jl_options.banner = -1;
+            else if (!strcmp(optarg, "short"))
+                jl_options.banner = 2;
             else
-                jl_errorf("julia: invalid argument to --banner={yes|no|auto} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --banner={yes|no|auto|short} (%s)", optarg);
             break;
         case opt_sysimage_native_code:
             if (!strcmp(optarg,"yes"))
@@ -466,13 +468,14 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --compiled-modules={yes|no|existing} (%s)", optarg);
             break;
         case opt_pkgimages:
-            pkgimage_explicit = 1;
             if (!strcmp(optarg,"yes"))
                 jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_YES;
             else if (!strcmp(optarg,"no"))
                 jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_NO;
+            else if (!strcmp(optarg,"existing"))
+                jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_EXISTING;
             else
-                jl_errorf("julia: invalid argument to --pkgimage={yes|no} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --pkgimages={yes|no} (%s)", optarg);
             break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);
@@ -856,13 +859,6 @@ restart_switch:
             jl_errorf("julia: unhandled option -- %c\n"
                       "This is a bug, please report it.", c);
         }
-    }
-    if (codecov || malloclog) {
-        if (pkgimage_explicit && jl_options.use_pkgimages) {
-            jl_errorf("julia: Can't use --pkgimages=yes together "
-                      "with --track-allocation or --code-coverage.");
-        }
-        jl_options.use_pkgimages = 0;
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;

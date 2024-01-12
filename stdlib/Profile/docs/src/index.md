@@ -34,7 +34,7 @@ First, a single stack trace at the instant that the signal was thrown is shown, 
 followed by the profile report at the next yield point, which may be at task completion for code without yield points
 e.g. tight loops.
 
-Optionally set environment variable `JULIA_PROFILE_PEEK_HEAP_SNAPSHOT` to `1` to also automatically collect a
+Optionally set environment variable [`JULIA_PROFILE_PEEK_HEAP_SNAPSHOT`](@ref JULIA_PROFILE_PEEK_HEAP_SNAPSHOT) to `1` to also automatically collect a
 [heap snapshot](@ref Heap-Snapshots).
 
 ```julia-repl
@@ -106,6 +106,7 @@ The methods in `Profile.Allocs` are not exported and need to be called e.g. as `
 
 ```@docs
 Profile.Allocs.clear
+Profile.Allocs.print
 Profile.Allocs.fetch
 Profile.Allocs.start
 Profile.Allocs.stop

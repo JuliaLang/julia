@@ -28,8 +28,8 @@ using Test
     @test (1//typemax(Int)) / (1//typemax(Int)) == 1
     @test_throws OverflowError (1//2)^63
     @test inv((1+typemin(Int))//typemax(Int)) == -1
-    @test_throws ArgumentError inv(typemin(Int)//typemax(Int))
-    @test_throws ArgumentError Rational(0x1, typemin(Int32))
+    @test_throws OverflowError inv(typemin(Int)//typemax(Int))
+    @test_throws OverflowError Rational(0x1, typemin(Int32))
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
@@ -43,10 +43,15 @@ using Test
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
     # issue 32569
-    @test_throws ArgumentError 1 // typemin(Int)
+    @test_throws OverflowError 1 // typemin(Int)
     @test_throws ArgumentError 0 // 0
     @test -2 // typemin(Int) == -1 // (typemin(Int) >> 1)
     @test 2 // typemin(Int) == 1 // (typemin(Int) >> 1)
+    # issue 32443
+    @test Int8(-128)//Int8(1) == -128
+    @test_throws OverflowError Int8(-128)//Int8(-1)
+    @test_throws OverflowError Int8(-1)//Int8(-128)
+    @test Int8(-128)//Int8(-2) == 64
 
     @test_throws InexactError Rational(UInt(1), typemin(Int32))
     @test iszero(Rational{Int}(UInt(0), 1))
@@ -537,6 +542,7 @@ end
              100798//32085
              103993//33102
              312689//99532 ]
+    @test rationalize(pi) === rationalize(BigFloat(pi))
 end
 
 @testset "issue #12536" begin

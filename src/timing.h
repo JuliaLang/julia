@@ -174,6 +174,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(LOAD_MODULE)           \
         X(LOAD_IMAGE)            \
         X(VERIFY_IMAGE)          \
+        X(VERIFY_IR)             \
         X(SAVE_MODULE)           \
         X(INIT_MODULE)           \
         X(LOCK_SPIN)             \

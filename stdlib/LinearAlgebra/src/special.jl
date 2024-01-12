@@ -108,11 +108,9 @@ for op in (:+, :-)
 end
 
 # disambiguation between triangular and banded matrices, banded ones "dominate"
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix) = _mul!(C, A, B, MulAddMul())
-mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular) = _mul!(C, A, B, MulAddMul())
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
+_mul!(C::AbstractMatrix, A::AbstractTriangular, B::BandedMatrix, alpha::Number, beta::Number) =
     _mul!(C, A, B, MulAddMul(alpha, beta))
-mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
+_mul!(C::AbstractMatrix, A::BandedMatrix, B::AbstractTriangular, alpha::Number, beta::Number) =
     _mul!(C, A, B, MulAddMul(alpha, beta))
 
 function *(H::UpperHessenberg, B::Bidiagonal)
@@ -335,6 +333,116 @@ const _DenseConcatGroup = Union{}
 const _SpecialArrays = Union{}
 
 promote_to_array_type(::Tuple) = Matrix
+
+# promote_to_arrays(n,k, T, A...) promotes any UniformScaling matrices
+# in A to matrices of type T and sizes given by n[k:end].  n is an array
+# so that the same promotion code can be used for hvcat.  We pass the type T
+# so that we can re-use this code for sparse-matrix hcat etcetera.
+promote_to_arrays_(n::Int, ::Type, a::Number) = a
+promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = Matrix(J, n, n)
+promote_to_arrays_(n::Int, ::Type, A::AbstractArray) = A
+promote_to_arrays_(n::Int, ::Type, A::AbstractQ) = collect(A)
+promote_to_arrays(n,k, ::Type) = ()
+promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)
+promote_to_arrays(n,k, ::Type{T}, A, B) where {T} =
+    (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B))
+promote_to_arrays(n,k, ::Type{T}, A, B, C) where {T} =
+    (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays_(n[k+2], T, C))
+promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
+    (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
+
+_us2number(A) = A
+_us2number(J::UniformScaling) = J.λ
+
+for (f, _f, dim, name) in ((:hcat, :_hcat, 1, "rows"), (:vcat, :_vcat, 2, "cols"))
+    @eval begin
+        @inline $f(A::Union{AbstractArray,AbstractQ,UniformScaling}...) = $_f(A...)
+        # if there's a Number present, J::UniformScaling must be 1x1-dimensional
+        @inline $f(A::Union{AbstractArray,AbstractQ,UniformScaling,Number}...) = $f(map(_us2number, A)...)
+        function $_f(A::Union{AbstractArray,AbstractQ,UniformScaling,Number}...; array_type = promote_to_array_type(A))
+            n = -1
+            for a in A
+                if !isa(a, UniformScaling)
+                    require_one_based_indexing(a)
+                    na = size(a,$dim)
+                    n >= 0 && n != na &&
+                        throw(DimensionMismatch(string("number of ", $name,
+                            " of each array must match (got ", n, " and ", na, ")")))
+                    n = na
+                end
+            end
+            n == -1 && throw(ArgumentError($("$f of only UniformScaling objects cannot determine the matrix size")))
+            return cat(promote_to_arrays(fill(n, length(A)), 1, array_type, A...)..., dims=Val(3-$dim))
+        end
+    end
+end
+
+hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractArray,AbstractQ,UniformScaling}...) = _hvcat(rows, A...)
+hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractArray,AbstractQ,UniformScaling,Number}...) = _hvcat(rows, A...)
+function _hvcat(rows::Tuple{Vararg{Int}}, A::Union{AbstractArray,AbstractQ,UniformScaling,Number}...; array_type = promote_to_array_type(A))
+    require_one_based_indexing(A...)
+    nr = length(rows)
+    sum(rows) == length(A) || throw(ArgumentError("mismatch between row sizes and number of arguments"))
+    n = fill(-1, length(A))
+    needcols = false # whether we also need to infer some sizes from the column count
+    j = 0
+    for i = 1:nr # infer UniformScaling sizes from row counts, if possible:
+        ni = -1 # number of rows in this block-row, -1 indicates unknown
+        for k = 1:rows[i]
+            if !isa(A[j+k], UniformScaling)
+                na = size(A[j+k], 1)
+                ni >= 0 && ni != na &&
+                    throw(DimensionMismatch("mismatch in number of rows"))
+                ni = na
+            end
+        end
+        if ni >= 0
+            for k = 1:rows[i]
+                n[j+k] = ni
+            end
+        else # row consisted only of UniformScaling objects
+            needcols = true
+        end
+        j += rows[i]
+    end
+    if needcols # some sizes still unknown, try to infer from column count
+        nc = -1
+        j = 0
+        for i = 1:nr
+            nci = 0
+            rows[i] > 0 && n[j+1] == -1 && (j += rows[i]; continue)
+            for k = 1:rows[i]
+                nci += isa(A[j+k], UniformScaling) ? n[j+k] : size(A[j+k], 2)
+            end
+            nc >= 0 && nc != nci && throw(DimensionMismatch("mismatch in number of columns"))
+            nc = nci
+            j += rows[i]
+        end
+        nc == -1 && throw(ArgumentError("sizes of UniformScalings could not be inferred"))
+        j = 0
+        for i = 1:nr
+            if rows[i] > 0 && n[j+1] == -1 # this row consists entirely of UniformScalings
+                nci, r = divrem(nc, rows[i])
+                r != 0 && throw(DimensionMismatch("indivisible UniformScaling sizes"))
+                for k = 1:rows[i]
+                    n[j+k] = nci
+                end
+            end
+            j += rows[i]
+        end
+    end
+    Amat = promote_to_arrays(n, 1, array_type, A...)
+    # We have two methods for promote_to_array_type, one returning Matrix and
+    # another one returning SparseMatrixCSC (in SparseArrays.jl). In the dense
+    # case, we cannot call hvcat for the promoted UniformScalings because this
+    # causes a stack overflow. In the sparse case, however, we cannot call
+    # typed_hvcat because we need a sparse output.
+    if array_type == Matrix
+        return typed_hvcat(promote_eltype(Amat...), rows, Amat...)
+    else
+        return hvcat(rows, Amat...)
+    end
+end
 
 # factorizations
 function cholesky(S::RealHermSymComplexHerm{<:Real,<:SymTridiagonal}, ::NoPivot = NoPivot(); check::Bool = true)

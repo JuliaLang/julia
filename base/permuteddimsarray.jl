@@ -49,10 +49,8 @@ Base.parent(A::PermutedDimsArray) = A.parent
 Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(size(parent(A)), perm)
 Base.axes(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(axes(parent(A)), perm)
 Base.has_offset_axes(A::PermutedDimsArray) = Base.has_offset_axes(A.parent)
-
 Base.similar(A::PermutedDimsArray, T::Type, dims::Base.Dims) = similar(parent(A), T, dims)
-
-Base.unsafe_convert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))
+Base.cconvert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.cconvert(Ptr{T}, parent(A))
 
 # It's OK to return a pointer to the first element, and indeed quite
 # useful for wrapping C routines that require a different storage
@@ -89,13 +87,68 @@ end
 
 """
     permutedims(A::AbstractArray, perm)
+    permutedims(A::AbstractMatrix)
 
-Permute the dimensions of array `A`. `perm` is a vector or a tuple of length `ndims(A)`
+Permute the dimensions (axes) of array `A`. `perm` is a tuple or vector of `ndims(A)` integers
 specifying the permutation.
+
+If `A` is a 2d array ([`AbstractMatrix`](@ref)), then
+`perm` defaults to `(2,1)`, swapping the two axes of `A` (the rows and columns
+of the matrix).   This differs from [`transpose`](@ref) in that the
+operation is not recursive, which is especially useful for arrays of non-numeric values
+(where the recursive `transpose` would throw an error) and/or 2d arrays that do not represent
+linear operators.
+
+For 1d arrays, see [`permutedims(v::AbstractVector)`](@ref), which returns a 1-row “matrix”.
 
 See also [`permutedims!`](@ref), [`PermutedDimsArray`](@ref), [`transpose`](@ref), [`invperm`](@ref).
 
 # Examples
+
+## 2d arrays:
+Unlike `transpose`, `permutedims` can be used to swap rows and columns of 2d arrays of
+arbitrary non-numeric elements, such as strings:
+```jldoctest
+julia> A = ["a" "b" "c"
+            "d" "e" "f"]
+2×3 Matrix{String}:
+ "a"  "b"  "c"
+ "d"  "e"  "f"
+
+julia> permutedims(A)
+3×2 Matrix{String}:
+ "a"  "d"
+ "b"  "e"
+ "c"  "f"
+```
+And `permutedims` produces results that differ from `transpose`
+for matrices whose elements are themselves numeric matrices:
+```jldoctest; setup = :(using LinearAlgebra)
+julia> a = [1 2; 3 4];
+
+julia> b = [5 6; 7 8];
+
+julia> c = [9 10; 11 12];
+
+julia> d = [13 14; 15 16];
+
+julia> X = [[a] [b]; [c] [d]]
+2×2 Matrix{Matrix{Int64}}:
+ [1 2; 3 4]     [5 6; 7 8]
+ [9 10; 11 12]  [13 14; 15 16]
+
+julia> permutedims(X)
+2×2 Matrix{Matrix{Int64}}:
+ [1 2; 3 4]  [9 10; 11 12]
+ [5 6; 7 8]  [13 14; 15 16]
+
+julia> transpose(X)
+2×2 transpose(::Matrix{Matrix{Int64}}) with eltype Transpose{Int64, Matrix{Int64}}:
+ [1 3; 2 4]  [9 11; 10 12]
+ [5 7; 6 8]  [13 15; 14 16]
+```
+
+## Multi-dimensional arrays
 ```jldoctest
 julia> A = reshape(Vector(1:8), (2,2,2))
 2×2×2 Array{Int64, 3}:
@@ -145,54 +198,62 @@ function permutedims(A::AbstractArray, perm)
     permutedims!(dest, A, perm)
 end
 
-"""
-    permutedims(m::AbstractMatrix)
-
-Permute the dimensions of the matrix `m`, by flipping the elements across the diagonal of
-the matrix. Differs from `LinearAlgebra`'s [`transpose`](@ref) in that the
-operation is not recursive.
-
-# Examples
-```jldoctest; setup = :(using LinearAlgebra)
-julia> a = [1 2; 3 4];
-
-julia> b = [5 6; 7 8];
-
-julia> c = [9 10; 11 12];
-
-julia> d = [13 14; 15 16];
-
-julia> X = [[a] [b]; [c] [d]]
-2×2 Matrix{Matrix{Int64}}:
- [1 2; 3 4]     [5 6; 7 8]
- [9 10; 11 12]  [13 14; 15 16]
-
-julia> permutedims(X)
-2×2 Matrix{Matrix{Int64}}:
- [1 2; 3 4]  [9 10; 11 12]
- [5 6; 7 8]  [13 14; 15 16]
-
-julia> transpose(X)
-2×2 transpose(::Matrix{Matrix{Int64}}) with eltype Transpose{Int64, Matrix{Int64}}:
- [1 3; 2 4]  [9 11; 10 12]
- [5 7; 6 8]  [13 15; 14 16]
-```
-"""
 permutedims(A::AbstractMatrix) = permutedims(A, (2,1))
 
 """
     permutedims(v::AbstractVector)
 
 Reshape vector `v` into a `1 × length(v)` row matrix.
-Differs from `LinearAlgebra`'s [`transpose`](@ref) in that
-the operation is not recursive.
+Differs from [`transpose`](@ref) in that
+the operation is not recursive, which is especially useful for arrays of non-numeric values
+(where the recursive `transpose` might throw an error).
 
 # Examples
+Unlike `transpose`, `permutedims` can be used on vectors of
+arbitrary non-numeric elements, such as strings:
+```jldoctest
+julia> permutedims(["a", "b", "c"])
+1×3 Matrix{String}:
+ "a"  "b"  "c"
+```
+For vectors of numbers, `permutedims(v)` works much like `transpose(v)`
+except that the return type differs (it uses [`reshape`](@ref)
+rather than a `LinearAlgebra.Transpose` view, though both
+share memory with the original array `v`):
 ```jldoctest; setup = :(using LinearAlgebra)
-julia> permutedims([1, 2, 3, 4])
+julia> v = [1, 2, 3, 4]
+4-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
+
+julia> p = permutedims(v)
 1×4 Matrix{Int64}:
  1  2  3  4
 
+julia> r = transpose(v)
+1×4 transpose(::Vector{Int64}) with eltype Int64:
+ 1  2  3  4
+
+julia> p == r
+true
+
+julia> typeof(r)
+Transpose{Int64, Vector{Int64}}
+
+julia> p[1] = 5; r[2] = 6; # mutating p or r also changes v
+
+julia> v # shares memory with both p and r
+4-element Vector{Int64}:
+ 5
+ 6
+ 3
+ 4
+```
+However, `permutedims` produces results that differ from `transpose`
+for vectors whose elements are themselves numeric matrices:
+```jldoctest; setup = :(using LinearAlgebra)
 julia> V = [[[1 2; 3 4]]; [[5 6; 7 8]]]
 2-element Vector{Matrix{Int64}}:
  [1 2; 3 4]
