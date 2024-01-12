@@ -1740,3 +1740,27 @@ end
     return 0
 end
 @test code_typed(f52703)[1][2] === Int
+
+# Issue #52858 - compaction gets confused by pending node
+let code = Any[
+    # Block 1
+    GotoIfNot(true, 6),
+    # Block 2
+    Expr(:call, println, 1),
+    Expr(:call, Base.inferencebarrier, true),
+    GotoIfNot(SSAValue(3), 6),
+    # Block 3
+    nothing,
+    # Block 4
+    PhiNode(Int32[1, 4, 5], Any[1, 2, 3]),
+    ReturnNode(SSAValue(6))
+]
+    ir = make_ircode(code)
+    Core.Compiler.insert_node!(ir, SSAValue(5),
+        Core.Compiler.NewInstruction(
+            Expr(:call, println, 2), Nothing, Int32(1)),
+            #= attach_after = =# true)
+    ir = Core.Compiler.compact!(ir, true)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    @test count(x->isa(x, GotoIfNot), ir.stmts.stmt) == 1
+end

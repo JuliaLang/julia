@@ -1147,7 +1147,18 @@ function (this::IntermediaryCollector)(@nospecialize(pi), @nospecialize(ssa))
 end
 
 function update_scope_mapping!(scope_mapping, bb, val)
-    @assert (scope_mapping[bb] in (val, SSAValue(0)))
+    current_mapping = scope_mapping[bb]
+    if current_mapping != SSAValue(0)
+        if val == SSAValue(0)
+            # Unreachable bbs will have SSAValue(0), but can branch into
+            # try/catch regions. We could validate with the domtree, but that's
+            # quite expensive for a debug check, so simply allow this without
+            # making any changes to mapping.
+            return
+        end
+        @assert current_mapping == val
+        return
+    end
     scope_mapping[bb] = val
 end
 
