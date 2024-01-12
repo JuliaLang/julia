@@ -146,7 +146,7 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
 static inline void _record_gc_edge(const char *edge_type,
                                    jl_value_t *a, jl_value_t *b, size_t name_or_index) JL_NOTSAFEPOINT;
 void _record_gc_just_edge(const char *edge_type, size_t from_idx, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT;
-void _add_synthetic_root_entries(HeapSnapshot *snapshot);
+void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT;
 
 
 JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
@@ -180,7 +180,7 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *nodes, ios_t *edges,
     final_serialize_heap_snapshot((ios_t*)json, (ios_t*)strings, snapshot, all_one);
 }
 
-void serialize_node(HeapSnapshot *snapshot, const Node &node)
+void serialize_node(HeapSnapshot *snapshot, const Node &node) JL_NOTSAFEPOINT
 {
     // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
     ios_write(snapshot->nodes, (char*)&node.type, sizeof(node.type));
@@ -194,7 +194,8 @@ void serialize_node(HeapSnapshot *snapshot, const Node &node)
 
     g_snapshot->num_nodes += 1;
 }
-void serialize_edge(HeapSnapshot *snapshot, const Edge &edge)
+
+void serialize_edge(HeapSnapshot *snapshot, const Edge &edge) JL_NOTSAFEPOINT
 {
     // ["type","name_or_index","to_node"]
     ios_write(snapshot->edges, (char*)&edge.type, sizeof(edge.type));
@@ -208,7 +209,7 @@ void serialize_edge(HeapSnapshot *snapshot, const Edge &edge)
 
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L212
 // add synthetic nodes for the uber root, the GC roots, and the GC finalizer list roots
-void _add_synthetic_root_entries(HeapSnapshot *snapshot)
+void _add_synthetic_root_entries(HeapSnapshot *snapshot) JL_NOTSAFEPOINT
 {
     // adds a node at id 0 which is the "uber root":
     // a synthetic node which points to all the GC roots.
