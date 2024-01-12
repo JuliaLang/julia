@@ -269,16 +269,20 @@ function do_string_escape(s)
     return escape_string(s, ('\"','$'))
 end
 
-const path_cache_lock = Base.ReentrantLock()
-const path_cache = Set{String}()
-cached_path_string::Union{String,Nothing} = nothing
+const PATH_cache_lock = Base.ReentrantLock()
+const PATH_cache = Set{String}()
+cached_PATH_string::Union{String,Nothing} = nothing
+function cached_PATH_changed()
+    global cached_PATH_string
+    @lock(PATH_cache_lock, cached_PATH_string) !== get(ENV, "PATH", nothing)
+end
 
 # caches all reachable files in PATH dirs
-function cache_path()
-    global cached_path_string
-    path = @lock path_cache_lock begin
-        empty!(path_cache)
-        cached_path_string = get(ENV, "PATH", nothing)
+function cache_PATH()
+    global cached_PATH_string
+    path = @lock PATH_cache_lock begin
+        empty!(PATH_cache)
+        cached_PATH_string = get(ENV, "PATH", nothing)
     end
     path isa String || return
 
@@ -316,7 +320,7 @@ function cache_path()
             # here, or even on whether the current user can execute the file in question.
             try
                 if isfile(joinpath(pathdir, file))
-                    @lock path_cache_lock push!(path_cache, file)
+                    @lock PATH_cache_lock push!(PATH_cache, file)
                 end
             catch e
                 # `isfile()` can throw in rare cases such as when probing a
@@ -331,8 +335,8 @@ function cache_path()
             yield() # so startup doesn't block when -t1
         end
     end
-    @debug "caching PATH files took $t seconds" length(pathdirs) length(path_cache)
-    return path_cache
+    @debug "caching PATH files took $t seconds" length(pathdirs) length(PATH_cache)
+    return PATH_cache
 end
 
 function complete_path(path::AbstractString;
@@ -374,13 +378,13 @@ function complete_path(path::AbstractString;
     end
 
     if use_envpath && isempty(dir)
-        # Look for files in PATH as well. These are cached in `cache_path` in a separate task in REPL init.
+        # Look for files in PATH as well. These are cached in `cache_PATH` in a separate task in REPL init.
         # If we cannot get lock because its still caching just pass over this so that initial
         # typing isn't laggy. If the PATH string has changed since last cache re-cache it
-        global cached_path_string
-        if trylock(path_cache_lock)
-            get(ENV, "PATH", nothing) === cached_path_string || cache_path()
-            for file in path_cache
+        global cached_PATH_string
+        cached_PATH_changed() && Base.errormonitor(Threads.@spawn REPLCompletions.cache_PATH())
+        if trylock(PATH_cache_lock)
+            for file in PATH_cache
                 startswith(file, prefix) && push!(matches, file)
             end
         end
