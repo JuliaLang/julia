@@ -3585,7 +3585,7 @@ f(x) = yt(x)
                   (rhs  (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f #f interp opaq (table) locals) #t lam))
                   (ex (cond (closed `(call (core setfield!)
                                            ,(if interp
-                                                `($ (call (core QuoteNode) ,var))
+                                                `($ ,var)
                                                 (capt-var-access var fname opaq))
                                            (inert contents)
                                            ,rhs))
