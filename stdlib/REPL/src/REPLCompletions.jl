@@ -276,6 +276,7 @@ function cached_PATH_changed()
     global cached_PATH_string
     @lock(PATH_cache_lock, cached_PATH_string) !== get(ENV, "PATH", nothing)
 end
+const PATH_cache_finished = Base.Condition() # used for sync in tests
 
 # caches all reachable files in PATH dirs
 function cache_PATH()
@@ -335,6 +336,7 @@ function cache_PATH()
             yield() # so startup doesn't block when -t1
         end
     end
+    notify(PATH_cache_finished)
     @debug "caching PATH files took $t seconds" length(pathdirs) length(PATH_cache)
     return PATH_cache
 end
