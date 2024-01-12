@@ -30,6 +30,8 @@ New language features
   a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
   version. This makes managing environments for multiple julia versions at the same time
   easier ([#43845]).
+* `@time` now reports a count of any lock conflicts where a `ReentrantLock` had to wait, plus a new macro
+  `@lock_conflicts` which returns that count ([#52883]).
 
 Language changes
 ----------------
