@@ -3,7 +3,7 @@
 if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
-    const env_dict = IdDict{String, Vector{Cwchar_t}}()
+    const env_dict = Dict{String, Vector{Cwchar_t}}()
     const env_lock = ReentrantLock()
 
     function memoized_env_lookup(str::AbstractString)
@@ -11,13 +11,14 @@ if Sys.iswindows()
         # incurred allocations because we had to convert a String to a Vector{Cwchar_t} each time
         # an environment variable was looked up. This function memoizes that lookup process, storing
         # the String => Vector{Cwchar_t} pairs in env_dict
-        var = get(env_dict, str, nothing)
-        if isnothing(var)
-            var = @lock env_lock begin
-                env_dict[str] = cwstring(str)
+        @lock env_lock begin
+            var = get(env_dict, str, nothing)
+            if isnothing(var)
+                var = cwstring(str)
+                env_dict[str] = var
             end
+            return var
         end
-        var
     end
 
     _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)

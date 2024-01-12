@@ -115,6 +115,8 @@ precompile_test_harness(false) do dir
                   d = den(a)
                   return h
               end
+              abstract type AbstractAlgebraMap{A} end
+              struct GAPGroupHomomorphism{A, B} <: AbstractAlgebraMap{GAPGroupHomomorphism{B, A}} end
           end
           """)
     write(Foo2_file,
@@ -130,7 +132,7 @@ precompile_test_harness(false) do dir
     write(Foo_file,
           """
           module $Foo_module
-              import $FooBase_module, $FooBase_module.typeA
+              import $FooBase_module, $FooBase_module.typeA, $FooBase_module.GAPGroupHomomorphism
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
@@ -213,6 +215,8 @@ precompile_test_harness(false) do dir
               Base.convert(::Type{Some{Value18343}}, ::Value18343{Some}) = 2
               Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
+              const GAPType1 = GAPGroupHomomorphism{Nothing, Nothing}
+              const GAPType2 = GAPGroupHomomorphism{1, 2}
 
               # issue #28297
               mutable struct Result
@@ -432,7 +436,8 @@ precompile_test_harness(false) do dir
         modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> mod_fl_mt.filename
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
-        @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
+        # foo.jl and bar.jl are never written to disk, so they are not relocatable
+        @test map(x -> x.filename, deps) == [ Foo_file, joinpath("@depot", "foo.jl"), joinpath("@depot", "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
                             Base.PkgId(Foo) => Base.PkgId(Test),
@@ -1793,10 +1798,10 @@ precompile_test_harness("PkgCacheInspector") do load_path
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
     end
 
-    modules, init_order, external_methods, new_specializations, new_method_roots, external_targets, edges = sv
+    modules, init_order, external_methods, new_ext_cis, new_method_roots, external_targets, edges = sv
     m = only(external_methods)
     @test m.name == :repl_cmd && m.nargs < 2
-    @test any(new_specializations) do ci
+    @test new_ext_cis === nothing || any(new_ext_cis) do ci
         mi = ci.def
         mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end

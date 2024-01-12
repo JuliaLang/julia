@@ -252,6 +252,11 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 A2tmp = unitt(A1)
                 mul!(A1tmp, cr, A2tmp)
                 @test A1tmp == cr * A2tmp
+
+                A1tmp .= A1
+                @test mul!(A1tmp, A2tmp, cr, 0, 2) == 2A1
+                A1tmp .= A1
+                @test mul!(A1tmp, cr, A2tmp, 0, 2) == 2A1
             else
                 A1tmp = copy(A1)
                 rmul!(A1tmp, ci)
@@ -894,6 +899,26 @@ end
             @test A * A' == D * D'
         end
     end
+end
+
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    U = UpperTriangular(ones(2,2))
+    @test S * U == A * U
+    @test U * S == U * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, U) == mul!(C2, A, U)
+    @test mul!(C1, S, U, 1, 2) == mul!(C2, A, U, 1 ,2)
+    @test mul!(C1, U, S) == mul!(C2, U, A)
+    @test mul!(C1, U, S, 1, 2) == mul!(C2, U, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test U * sv == U * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, U, sv) == mul!(C2, U, v)
+    @test mul!(C1, U, sv, 1, 2) == mul!(C2, U, v, 1 ,2)
 end
 
 @testset "custom axes" begin

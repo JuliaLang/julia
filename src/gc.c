@@ -1862,7 +1862,7 @@ STATIC_INLINE uintptr_t gc_read_stack(void *_addr, uintptr_t offset,
 
 STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *child) JL_NOTSAFEPOINT
 {
-#ifdef GC_ASSERT_PARENT_VALIDITY
+#if defined(GC_VERIFY) || defined(GC_ASSERT_PARENT_VALIDITY)
     jl_taggedvalue_t *child_astagged = jl_astaggedvalue(child);
     jl_taggedvalue_t *child_vtag = (jl_taggedvalue_t *)(child_astagged->header & ~(uintptr_t)0xf);
     uintptr_t child_vt = (uintptr_t)child_vtag;
@@ -3086,6 +3086,17 @@ void gc_mark_clean_reclaim_sets(void)
             free(a->buffer);
             free(a);
         }
+    }
+    // Reset queue indices
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL) {
+            continue;
+        }
+        jl_atomic_store_relaxed(&ptls2->mark_queue.ptr_queue.bottom, 0);
+        jl_atomic_store_relaxed(&ptls2->mark_queue.ptr_queue.top, 0);
+        jl_atomic_store_relaxed(&ptls2->mark_queue.chunk_queue.bottom, 0);
+        jl_atomic_store_relaxed(&ptls2->mark_queue.chunk_queue.top, 0);
     }
 }
 

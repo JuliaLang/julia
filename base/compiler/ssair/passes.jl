@@ -986,7 +986,7 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, ð
     return
 end
 
-# TODO: We could do the whole lifing machinery here, but really all
+# TODO: We could do the whole lifting machinery here, but really all
 # we want to do is clean this up when it got inserted by inlining,
 # which always targets simple `svec` call or `_compute_sparams`,
 # so this specialized lifting would be enough
@@ -1147,7 +1147,18 @@ function (this::IntermediaryCollector)(@nospecialize(pi), @nospecialize(ssa))
 end
 
 function update_scope_mapping!(scope_mapping, bb, val)
-    @assert (scope_mapping[bb] in (val, SSAValue(0)))
+    current_mapping = scope_mapping[bb]
+    if current_mapping != SSAValue(0)
+        if val == SSAValue(0)
+            # Unreachable bbs will have SSAValue(0), but can branch into
+            # try/catch regions. We could validate with the domtree, but that's
+            # quite expensive for a debug check, so simply allow this without
+            # making any changes to mapping.
+            return
+        end
+        @assert current_mapping == val
+        return
+    end
     scope_mapping[bb] = val
 end
 
@@ -1617,7 +1628,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     end
 
     # Ok, legality check complete. Figure out the exact statement where we're
-    # gonna inline the finalizer.
+    # going to inline the finalizer.
     loc = bb_insert_idx === nothing ? first(ir.cfg.blocks[bb_insert_block].stmts) : bb_insert_idx::Int
     attach_after = bb_insert_idx !== nothing
 
