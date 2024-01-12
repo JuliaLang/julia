@@ -69,7 +69,6 @@ struct Edge {
 //   [ "type", "name", "id", "self_size", "edge_count", "trace_node_id", "detachedness" ]
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2568-L2575
 
-const int k_node_number_of_fields = 7;
 struct Node {
     uint8_t type; // index into snapshot->node_types
     size_t name;
@@ -200,7 +199,7 @@ void serialize_edge(HeapSnapshot *snapshot, const Edge &edge)
     // ["type","name_or_index","to_node"]
     ios_write(snapshot->edges, (char*)&edge.type, sizeof(edge.type));
     ios_write(snapshot->edges, (char*)&edge.name_or_index, sizeof(edge.name_or_index));
-    // NOTE: Row numbers for nodes (not adjusted for k_node_number_of_fields)
+    // NOTE: Row numbers for nodes (not adjusted for k_node_number_of_fields, which is 7)
     ios_write(snapshot->edges, (char*)&edge.from_node, sizeof(edge.from_node));
     ios_write(snapshot->edges, (char*)&edge.to_node, sizeof(edge.to_node));
 

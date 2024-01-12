@@ -51,6 +51,8 @@ function init_nodes(n::Int, e::Int)
 end
 Base.length(n::Nodes) = length(n.type)
 
+const k_node_number_of_fields = 7
+
 # Like Base.dec, but doesn't allocate a string and writes directly to the io object
 # We know all of the numbers we're about to write fit into a UInt and are non-negative
 let _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
@@ -124,7 +126,7 @@ function assemble_snapshot(in_prefix, io::IO)
 
         nodes.edges.type[i] = edge_type
         nodes.edges.name_or_index[i] = edge_name_or_index
-        nodes.edges.to_pos[i] = to_node * 7 # 7 fields per node, the streaming format doesn't multiply the offset by 7
+        nodes.edges.to_pos[i] = to_node * k_node_number_of_fields # 7 fields per node, the streaming format doesn't multiply the offset by 7
         nodes.edge_count[from_node + 1] += UInt32(1)  # C and JSON use 0-based indexing
         push!(nodes.edge_idxs[from_node + 1], i) # Index into nodes.edges
         # remove the node from the orphans if it has at least one incoming edge
@@ -163,7 +165,7 @@ function assemble_snapshot(in_prefix, io::IO)
             _write_decimal_number(io, nodes.edges.name_or_index[i], _digits_buf)
             print(io, ",")
             _write_decimal_number(io, nodes.edges.to_pos[i], _digits_buf)
-            if !(nodes.edges.to_pos[i] % 7 == 0)
+            if !(nodes.edges.to_pos[i] % k_node_number_of_fields == 0)
                 @warn "Bug in to_pos for edge $i from node $n: $(nodes.edges.to_pos[i])"
             end
             e += 1
