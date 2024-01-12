@@ -1275,14 +1275,12 @@ snapshot after the fact, via `assemble_snapshot()`.
 function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; streaming::Bool=false)
     if streaming
         _stream_heap_snapshot(filepath, all_one)
-        println("Finished streaming heap snapshot parts to prefix: $filepath")
     else
         # Support the legacy, non-streaming mode, by first streaming the parts, then
         # reassembling it after we're done.
         prefix = filepath
         _stream_heap_snapshot(prefix, all_one)
         Profile.HeapSnapshot.assemble_snapshot(prefix, filepath)
-        println("Recorded heap snapshot: $filepath")
     end
     return filepath
 end
