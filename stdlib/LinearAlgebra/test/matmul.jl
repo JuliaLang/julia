@@ -856,6 +856,8 @@ end
     Xv1 = [X[:, j] for i in 1:1, j in 1:3]
     Xv2 = [transpose(X[i, :]) for i in 1:3]
     Xv3 = [transpose(X[i, :]) for i in 1:3, j in 1:1]
+    Xv4 = [adjoint(X[i, :]) for i in 1:3]
+    Xv5 = [adjoint(X[i, :]) for i in 1:3, j in 1:1]
 
     XX = X * X
     XtX = transpose(X) * X
@@ -887,6 +889,10 @@ end
     @test Xv3 * Xv3' ≈ XXc
     @test transpose(Xv1) * Xv2' ≈ XtXc
     @test transpose(Xv1) * Xv3' ≈ XtXc
+    @test transpose(Xv1) * transpose(Xv4) ≈ XtXc
+    @test transpose(Xv1) * transpose(Xv5) ≈ XtXc
+    @test Xv1' * transpose(Xv4) ≈ XcXc
+    @test Xv1' * transpose(Xv5) ≈ XcXc
     @test Xv1' * Xv2' ≈ XcXc
     @test Xv1' * Xv3' ≈ XcXc
 end

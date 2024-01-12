@@ -63,7 +63,9 @@ end
 end
 
 # this will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
-(*)(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
+(*)(a::AbstractVector, B::AbstractMatrix) = mul(a, B)
+# Add a level of indirection to avoid ambiguities in methods added to (*) by external packages
+mul(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
 
 # Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
 @inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
