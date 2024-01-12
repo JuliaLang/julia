@@ -381,7 +381,6 @@ function complete_path(path::AbstractString;
         # Look for files in PATH as well. These are cached in `cache_PATH` in a separate task in REPL init.
         # If we cannot get lock because its still caching just pass over this so that initial
         # typing isn't laggy. If the PATH string has changed since last cache re-cache it
-        global cached_PATH_string
         cached_PATH_changed() && Base.errormonitor(Threads.@spawn REPLCompletions.cache_PATH())
         if trylock(PATH_cache_lock)
             for file in PATH_cache
