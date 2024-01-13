@@ -292,7 +292,7 @@ function BigFloat(x::Base.BitInteger64, r::MPFRRoundingMode=ROUNDING_MODE[]; pre
     end
 
     unsigned_x = unsigned(abs(x))
-    exp_x = (sizeof(x) << 3) - leading_zeros(unsigned_x)
+    exp_x = 8 * sizeof(x) - leading_zeros(unsigned_x)
 
     requiredprecision = exp_x - 1
 
@@ -339,7 +339,7 @@ function BigFloat(x::Base.IEEEFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precis
 
     # BigFloat doesn't have an implicit bit
     val = UInt64(reinterpret(Base.uinttype(typeof(x)), significand(x)))
-    val <<= (sizeof(UInt64) << 3 - sizeof(x) << 3) + Base.exponent_bits(typeof(x))
+    val <<= (8 * (sizeof(UInt64) - sizeof(x))) + Base.exponent_bits(typeof(x))
     val |= typemin(Int64)
 
     store_significand_in_limbs!(z, val)
