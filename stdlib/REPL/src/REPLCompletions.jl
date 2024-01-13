@@ -276,7 +276,7 @@ function cached_PATH_changed()
     global cached_PATH_string
     @lock(PATH_cache_lock, cached_PATH_string) !== get(ENV, "PATH", nothing)
 end
-const PATH_cache_finished = Threads.Condition() # used for sync in tests
+PATH_cache_task::Union{Task,Nothing} = nothing # used for sync in tests
 
 # caches all reachable files in PATH dirs
 function cache_PATH()
@@ -336,7 +336,6 @@ function cache_PATH()
             yield() # so startup doesn't block when -t1
         end
     end
-    @lock(PATH_cache_finished, notify(PATH_cache_finished))
     @debug "caching PATH files took $t seconds" length(pathdirs) length(PATH_cache)
     return PATH_cache
 end
@@ -383,7 +382,11 @@ function complete_path(path::AbstractString;
         # Look for files in PATH as well. These are cached in `cache_PATH` in a separate task in REPL init.
         # If we cannot get lock because its still caching just pass over this so that initial
         # typing isn't laggy. If the PATH string has changed since last cache re-cache it
-        cached_PATH_changed() && Base.errormonitor(Threads.@spawn REPLCompletions.cache_PATH())
+        if cached_PATH_changed()
+            global PATH_cache_task
+            PATH_cache_task = Threads.@spawn REPLCompletions.cache_PATH()
+            Base.errormonitor(PATH_cache_task)
+        end
         if trylock(PATH_cache_lock)
             for file in PATH_cache
                 startswith(file, prefix) && push!(matches, file)

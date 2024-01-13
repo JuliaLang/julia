@@ -1150,7 +1150,7 @@ let s, c, r
                 # Files reachable by PATH are cached async when PATH is seen to have been changed by `complete_path`
                 # so changes are unlikely to appear in the first complete. For testing purposes we can wait for
                 # caching to finish
-                wait(REPL.REPLCompletions.PATH_cache_finished)
+                wait(REPL.REPLCompletions.PATH_cache_task::Task)
                 c,r = test_scomplete(s)
                 @test "tmp-executable" in c
                 @test r == 1:9
@@ -1180,7 +1180,7 @@ let s, c, r
             withenv("PATH" => string(tempdir(), ":", dir)) do
                 s = string("repl-completio")
                 c,r = test_scomplete(s)
-                wait(REPL.REPLCompletions.PATH_cache_finished) # wait for caching to complete
+                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"
