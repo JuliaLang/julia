@@ -702,6 +702,7 @@ export
     @lock,
     notify,
     ReentrantLock,
+    Lockable,
     schedule,
     task_local_storage,
     trylock,

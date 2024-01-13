@@ -302,6 +302,9 @@ supports [`@lock`](@ref), [`lock`](@ref), [`trylock`](@ref),
 [`unlock`](@ref), [`islocked`](@ref), and can be indexed to retrieve
 the value.
 
+!!! compat "Julia 1.11"
+    Requires at least Julia 1.11.
+
 ## Example
 
 ```jldoctest
@@ -333,6 +336,10 @@ argument: the value wrapped by `l`. If the lock is already locked by a
 different task/thread, wait for it to become available.
 When this function returns, the `lock` has been released, so the caller should
 not attempt to `unlock` it.
+
+!!! compat "Julia 1.11"
+    Requires at least Julia 1.11.
+
 """
 function Base.lock(f, l::Lockable)
     lock(l.lock) do

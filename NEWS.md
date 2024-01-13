@@ -60,6 +60,8 @@ difference between defining a `main` function and executing the code directly at
 Multi-threading changes
 -----------------------
 
+* There is a new struct `Lockable{T, L<:AbstractLock}` that makes it easy to bundle a resource and its lock together.
+
 Build system changes
 --------------------
 
