@@ -1764,3 +1764,17 @@ let code = Any[
     @test Core.Compiler.verify_ir(ir) === nothing
     @test count(x->isa(x, GotoIfNot), ir.stmts.stmt) == 1
 end
+
+# Issue #52857 - Affinity of sroa definedness check
+let code = Any[
+    Expr(:new, ImmutableRef{Any}),
+    GotoIfNot(Argument(1), 4),
+    Expr(:call, GlobalRef(Base, :getfield), SSAValue(1), 1), # Will throw
+    ReturnNode(1)
+]
+    ir = make_ircode(code; ssavaluetypes = Any[ImmutableRef{Any}, Any, Any, Any], slottypes=Any[Bool], verify=true)
+    ir = Core.Compiler.sroa_pass!(ir)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    @test !any(iscall((ir, getfield)), ir.stmts.stmt)
+    @test length(ir.cfg.blocks[end].stmts) == 1
+end
