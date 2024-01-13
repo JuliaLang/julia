@@ -1147,6 +1147,11 @@ let s, c, r
             withenv("PATH" => string(path, ":", unreadable)) do
                 s = "tmp-execu"
                 c,r = test_scomplete(s)
+                # Files reachable by PATH are cached async when PATH is seen to have been changed by `complete_path`
+                # so changes are unlikely to appear in the first complete. For testing purposes we can wait for
+                # caching to finish
+                wait(REPL.REPLCompletions.PATH_cache_finished)
+                c,r = test_scomplete(s)
                 @test "tmp-executable" in c
                 @test r == 1:9
                 @test s[r] == "tmp-execu"
@@ -1174,6 +1179,8 @@ let s, c, r
 
             withenv("PATH" => string(tempdir(), ":", dir)) do
                 s = string("repl-completio")
+                c,r = test_scomplete(s)
+                wait(REPL.REPLCompletions.PATH_cache_finished) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"
