@@ -272,9 +272,13 @@ end
 const PATH_cache_lock = Base.ReentrantLock()
 const PATH_cache = Set{String}()
 PATH_cache_task::Union{Task,Nothing} = nothing # used for sync in tests
+next_cache_update::Float64 = 0.0
 function maybe_spawn_cache_PATH()
-    global PATH_cache_task
-    PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
+    global PATH_cache_task, next_cache_update
+    @lock PATH_cache_lock begin
+        PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
+        time() < next_cache_update && return
+    end
     PATH_cache_task = Threads.@spawn REPLCompletions.cache_PATH()
     Base.errormonitor(PATH_cache_task)
 end
@@ -283,6 +287,8 @@ end
 function cache_PATH()
     path = get(ENV, "PATH", nothing)
     path isa String || return
+
+    global next_cache_update
 
     # Calling empty! on PATH_cache would be annoying for async typing hints as completions would temporarily disappear.
     # So keep track of what's added this time and at the end remove any that didn't appear this time from the global cache.
@@ -343,8 +349,11 @@ function cache_PATH()
             end
         end
     end
-    # remove entries from PATH_cache that weren't found this time
-    @lock PATH_cache_lock intersect!(PATH_cache, this_PATH_cache)
+
+    @lock PATH_cache_lock begin
+        intersect!(PATH_cache, this_PATH_cache) # remove entries from PATH_cache that weren't found this time
+        next_cache_update = time() + 10 # earliest next update can run is 10s after
+    end
 
     @debug "caching PATH files took $t seconds" length(pathdirs) length(PATH_cache)
     return PATH_cache
@@ -391,7 +400,7 @@ function complete_path(path::AbstractString;
     if use_envpath && isempty(dir)
         # Look for files in PATH as well. These are cached in `cache_PATH` in an async task to not block typing.
         # If we cannot get lock because its still caching just pass over this so that typing isn't laggy.
-        maybe_spawn_cache_PATH() # only spawns if the previous caching task has completed
+        maybe_spawn_cache_PATH() # only spawns if enough time has passed and the previous caching task has completed
         @lock PATH_cache_lock begin
             for file in PATH_cache
                 startswith(file, prefix) && push!(matches, file)
