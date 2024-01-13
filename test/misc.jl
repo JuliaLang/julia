@@ -130,9 +130,10 @@ let l = ReentrantLock()
 end
 
 # Lockable{T, L<:AbstractLock}
-let # test the constructor `Lockable(value, lock)`
+let
     lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
     @test lockable.value["foo"] == "hello"
+    @test lockable[]["foo"] == "hello"
     lock(lockable) do d
         @test d["foo"] == "hello"
     end
@@ -140,23 +141,19 @@ let # test the constructor `Lockable(value, lock)`
         d["foo"] = "goodbye"
     end
     @test lockable.value["foo"] == "goodbye"
-    lock(lockable) do d
-        @test d["foo"] == "goodbye"
+    @lock lockable begin
+        @test lockable[]["foo"] == "goodbye"
     end
-end
-let # test the constructor `Lockable(value)`
-    lockable = Lockable(Dict("foo" => "hello"))
-    @test lockable.value["foo"] == "hello"
-    lock(lockable) do d
-        @test d["foo"] == "hello"
+    l = trylock(lockable)
+    try
+        @test l
+    finally
+        unlock(lockable)
     end
-    lock(lockable) do d
-        d["foo"] = "goodbye"
-    end
-    @test lockable.value["foo"] == "goodbye"
-    lock(lockable) do d
-        @test d["foo"] == "goodbye"
-    end
+    # Test 1-arg constructor
+    lockable2 = Lockable(Dict("foo" => "hello"))
+    @test lockable2.lock isa ReentrantLock
+    @test lockable2[]["foo"] == "hello"
 end
 
 for l in (Threads.SpinLock(), ReentrantLock())
