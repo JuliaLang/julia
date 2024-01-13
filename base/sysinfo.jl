@@ -171,12 +171,12 @@ end
 
 The `CPUinfo` type is a mutable struct with the following fields:
 - `model::String`: CPU model information.
-- `speed::Int32`: CPU speed.
-- `cpu_times!user::UInt64`: Time spent in user mode. CPU state shows CPU time used by user space processes.
-- `cpu_times!nice::UInt64`: Time spent in nice mode. CPU state is a subset of the "user" state and shows the CPU time used by processes that have a positive niceness, meaning a lower priority than other tasks.
-- `cpu_times!sys::UInt64`: Time spent in system mode. CPU state shows the amount of CPU time used by the kernel.
-- `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
-- `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
+- `speed::Int32`: CPU speed. unit: MHz.
+- `cpu_times!user::UInt64`: Time spent in user mode. CPU state shows CPU time used by user space processes. unit: second.
+- `cpu_times!nice::UInt64`: Time spent in nice mode. CPU state is a subset of the "user" state and shows the CPU time used by processes that have a positive niceness, meaning a lower priority than other tasks.unit: second.
+- `cpu_times!sys::UInt64`: Time spent in system mode. CPU state shows the amount of CPU time used by the kernel. unit: second.
+- `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used. unit: second.
+- `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts. unit: second.
 """
 mutable struct CPUinfo
     model::String
@@ -191,6 +191,8 @@ end
 CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
     info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
     info.cpu_times!idle, info.cpu_times!irq)
+
+public CPUinfo
 
 function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
     tck = SC_CLK_TCK
