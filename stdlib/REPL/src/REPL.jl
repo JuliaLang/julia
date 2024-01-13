@@ -14,21 +14,8 @@ REPL.run_repl(repl)
 """
 module REPL
 
-const PRECOMPILE_STATEMENTS = Vector{String}()
-
 function __init__()
     Base.REPL_MODULE_REF[] = REPL
-    # We can encounter the situation where the sub-ordinate process used
-    # during precompilation of REPL, can load a valid cache-file.
-    # We need to replay the statements such that the parent process
-    # can also include those. See JuliaLang/julia#51532
-    if Base.JLOptions().trace_compile !== C_NULL && !isempty(PRECOMPILE_STATEMENTS)
-        for statement in PRECOMPILE_STATEMENTS
-            ccall(:jl_write_precompile_statement, Cvoid, (Cstring,), statement)
-        end
-    else
-        empty!(PRECOMPILE_STATEMENTS)
-    end
 end
 
 Base.Experimental.@optlevel 1
