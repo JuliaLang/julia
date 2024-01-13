@@ -3,19 +3,18 @@
 if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
-    const env_dict = Dict{String, Vector{Cwchar_t}}()
-    const env_lock = ReentrantLock()
+    const env_dict = Lockable(Dict{String, Vector{Cwchar_t}}())
 
     function memoized_env_lookup(str::AbstractString)
         # Windows environment variables have a different format from Linux / MacOS, and previously
         # incurred allocations because we had to convert a String to a Vector{Cwchar_t} each time
         # an environment variable was looked up. This function memoizes that lookup process, storing
         # the String => Vector{Cwchar_t} pairs in env_dict
-        @lock env_lock begin
-            var = get(env_dict, str, nothing)
+        @lock env_dict begin
+            var = get(env_dict[], str, nothing)
             if isnothing(var)
                 var = cwstring(str)
-                env_dict[str] = var
+                env_dict[][str] = var
             end
             return var
         end
