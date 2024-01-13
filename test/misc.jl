@@ -265,6 +265,9 @@ let
     stats = @timed sin(1)
     @test stats.value == sin(1)
     @test isa(stats.time, Real) && stats.time >= 0
+    @test isa(stats.compile_time, Real) && stats.compile_time >= 0
+    @test isa(stats.recompile_time, Real) && stats.recompile_time >= 0
+    @test stats.compile_time <= stats.time
 
     # The return type of gcstats was changed in Julia 1.4 (# 34147)
     # Test that the 1.0 API still works
