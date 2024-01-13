@@ -384,7 +384,7 @@ function complete_path(path::AbstractString;
     end
 
     if use_envpath && isempty(dir)
-        # Look for files in PATH as well. These are cached in `cache_PATH` in a separate task in REPL init.
+        # Look for files in PATH as well. These are cached in `cache_PATH` in an async task to not block typing.
         # If we cannot get lock because its still caching just pass over this so that initial
         # typing isn't laggy. If the PATH string has changed since last cache re-cache it
         if cached_PATH_changed()
