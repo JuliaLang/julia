@@ -271,21 +271,22 @@ end
 
 const PATH_cache_lock = Base.ReentrantLock()
 const PATH_cache = Set{String}()
-cached_PATH_string::Union{String,Nothing} = nothing
-function cached_PATH_changed()
-    global cached_PATH_string
-    @lock(PATH_cache_lock, cached_PATH_string) !== get(ENV, "PATH", nothing)
-end
 PATH_cache_task::Union{Task,Nothing} = nothing # used for sync in tests
+function maybe_spawn_cache_PATH()
+    global PATH_cache_task
+    PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
+    PATH_cache_task = Threads.@spawn REPLCompletions.cache_PATH()
+    Base.errormonitor(PATH_cache_task)
+end
 
 # caches all reachable files in PATH dirs
 function cache_PATH()
-    global cached_PATH_string
-    path = @lock PATH_cache_lock begin
-        empty!(PATH_cache)
-        cached_PATH_string = get(ENV, "PATH", nothing)
-    end
+    path = get(ENV, "PATH", nothing)
     path isa String || return
+
+    # Calling empty! on PATH_cache would be annoying for async typing hints as completions would temporarily disappear.
+    # So keep track of what's added this time and at the end remove any that didn't appear this time from the global cache.
+    this_PATH_cache = Set{String}()
 
     @debug "caching PATH files" PATH=path
     pathdirs = split(path, @static Sys.iswindows() ? ";" : ":")
@@ -324,6 +325,7 @@ function cache_PATH()
             try
                 if isfile(joinpath(pathdir, file))
                     @lock PATH_cache_lock push!(PATH_cache, file)
+                    push!(this_PATH_cache, file)
                 end
             catch e
                 # `isfile()` can throw in rare cases such as when probing a
@@ -341,6 +343,9 @@ function cache_PATH()
             end
         end
     end
+    # remove entries from PATH_cache that weren't found this time
+    @lock PATH_cache_lock intersect!(PATH_cache, this_PATH_cache)
+
     @debug "caching PATH files took $t seconds" length(pathdirs) length(PATH_cache)
     return PATH_cache
 end
@@ -385,18 +390,12 @@ function complete_path(path::AbstractString;
 
     if use_envpath && isempty(dir)
         # Look for files in PATH as well. These are cached in `cache_PATH` in an async task to not block typing.
-        # If we cannot get lock because its still caching just pass over this so that initial
-        # typing isn't laggy. If the PATH string has changed since last cache re-cache it
-        if cached_PATH_changed()
-            global PATH_cache_task
-            PATH_cache_task = Threads.@spawn REPLCompletions.cache_PATH()
-            Base.errormonitor(PATH_cache_task)
-        end
-        if trylock(PATH_cache_lock)
+        # If we cannot get lock because its still caching just pass over this so that typing isn't laggy.
+        maybe_spawn_cache_PATH() # only spawns if the previous caching task has completed
+        @lock PATH_cache_lock begin
             for file in PATH_cache
                 startswith(file, prefix) && push!(matches, file)
             end
-            unlock(PATH_cache_lock)
         end
     end
 
