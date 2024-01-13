@@ -165,6 +165,7 @@ mutable struct UV_cpu_info_t
     cpu_times!idle::UInt64
     cpu_times!irq::UInt64
 end
+
 """
     Sys.CPUinfo
 
