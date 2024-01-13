@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+`Base.TOML` is an internal, undocumented TOML parser;
+users should call the TOML.jl standard library instead.
+"""
 module TOML
 
 using Base: IdSet
