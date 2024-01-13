@@ -370,7 +370,7 @@ function BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::I
     else
         setprecision(BigFloat, precision) do
             setrounding_raw(BigFloat, r) do
-                BigFloat(numerator(x))::BigFloat / BigFloat(denominator(x))::BigFloat
+                BigFloat(numerator(x))::BigFloat / denominator(x)
             end
         end
     end
