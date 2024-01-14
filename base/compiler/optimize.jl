@@ -186,7 +186,7 @@ function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
     src = ir_to_codeinf!(src, opt.ir::IRCode)
     opt.ir = nothing
-    validate_code_in_debug_mode(linfo, src, "optimized")
+    maybe_validate_code(linfo, src, "optimized")
     return src
 end
 
@@ -934,8 +934,11 @@ function run_passes_ipo_safe(
     if made_changes
         @pass "compact 3" ir = compact!(ir, true)
     end
-    if JLOptions().debug_level == 2
-        @timeit "verify 3" (verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp)); verify_linetable(ir.linetable))
+    if is_asserts()
+        @timeit "verify 3" begin
+            verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp))
+            verify_linetable(ir.linetable)
+        end
     end
     @label __done__  # used by @pass
     return ir
@@ -1056,7 +1059,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                     ssaflags[block_end] = IR_FLAG_NOTHROW
 
                     # Verify that type-inference did its job
-                    if JLOptions().debug_level == 2
+                    if is_asserts()
                         for i = (oldidx + 1):last(sv.cfg.blocks[block].stmts)
                             @assert i in sv.unreachable
                         end

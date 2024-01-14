@@ -520,6 +520,7 @@ end
 is_root_module(m::Module) = false
 
 inlining_enabled() = (JLOptions().can_inline == 1)
+
 function coverage_enabled(m::Module)
     generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
@@ -533,9 +534,12 @@ function coverage_enabled(m::Module)
     end
     return false
 end
+
 function inbounds_option()
     opt_check_bounds = JLOptions().check_bounds
     opt_check_bounds == 0 && return :default
     opt_check_bounds == 1 && return :on
     return :off
 end
+
+is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
