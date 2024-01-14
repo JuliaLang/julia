@@ -299,8 +299,7 @@ end
 Creates a `Lockable` object that wraps `value` and
 associates it with the provided `lock`. This object
 supports [`@lock`](@ref), [`lock`](@ref), [`trylock`](@ref),
-[`unlock`](@ref), [`islocked`](@ref), and can be indexed to retrieve
-the value.
+[`unlock`](@ref), and can be indexed to retrieve the value.
 
 !!! compat "Julia 1.11"
     Requires at least Julia 1.11.
@@ -319,13 +318,13 @@ julia> locked_list[]
  1
 ```
 """
-struct Lockable{T, L <: Base.AbstractLock}
+struct Lockable{T, L <: AbstractLock}
     value::T
     lock::L
 end
 
 Lockable(value) = Lockable(value, ReentrantLock())
-Base.getindex(l::Lockable) = (assert_havelock(l.lock); l.value)
+getindex(l::Lockable) = (assert_havelock(l.lock); l.value)
 
 """
   lock(f::Function, l::Lockable)
@@ -341,16 +340,16 @@ not attempt to `unlock` it.
     Requires at least Julia 1.11.
 
 """
-function Base.lock(f, l::Lockable)
+function lock(f, l::Lockable)
     lock(l.lock) do
         f(l.value)
     end
 end
 
 # implement the rest of the Lock interface on Lockable
-Base.lock(l::Lockable) = lock(l.lock)
-Base.trylock(l::Lockable) = trylock(l.lock)
-Base.unlock(l::Lockable) = unlock(l.lock)
+lock(l::Lockable) = lock(l.lock)
+trylock(l::Lockable) = trylock(l.lock)
+unlock(l::Lockable) = unlock(l.lock)
 
 @eval Threads begin
     """

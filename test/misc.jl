@@ -132,8 +132,9 @@ end
 # Lockable{T, L<:AbstractLock}
 let
     lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
+    # note field access is non-public
     @test lockable.value["foo"] == "hello"
-    @test lockable[]["foo"] == "hello"
+    @test @lock(lockable, lockable[]["foo"]) == "hello"
     lock(lockable) do d
         @test d["foo"] == "hello"
     end
@@ -153,7 +154,7 @@ let
     # Test 1-arg constructor
     lockable2 = Lockable(Dict("foo" => "hello"))
     @test lockable2.lock isa ReentrantLock
-    @test lockable2[]["foo"] == "hello"
+    @test @lock(lockable2, lockable2[]["foo"]) == "hello"
 end
 
 for l in (Threads.SpinLock(), ReentrantLock())
