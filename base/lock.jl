@@ -325,7 +325,7 @@ struct Lockable{T, L <: Base.AbstractLock}
 end
 
 Lockable(value) = Lockable(value, ReentrantLock())
-Base.getindex(l::Lockable) = l.value
+Base.getindex(l::Lockable) = (assert_havelock(l.lock); l.value)
 
 """
   lock(f::Function, l::Lockable)
@@ -348,7 +348,6 @@ function Base.lock(f, l::Lockable)
 end
 
 # implement the rest of the Lock interface on Lockable
-Base.islocked(l::Lockable) = islocked(l.lock)
 Base.lock(l::Lockable) = lock(l.lock)
 Base.trylock(l::Lockable) = trylock(l.lock)
 Base.unlock(l::Lockable) = unlock(l.lock)
