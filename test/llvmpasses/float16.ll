@@ -3,9 +3,9 @@
 
 ; RUN: opt -enable-new-pm=1 --opaque-pointers=1  --load-pass-plugin=libjulia-codegen%shlibext -passes='DemoteFloat16' -S %s | FileCheck %s
 
-define half @demotehalf_test(half %a, half %b) #0 {
+define half @demote_half_test(half %a, half %b) #0 {
 top:
-; CHECK-LABEL: @demotehalf_test(
+; CHECK-LABEL: @demote_half_test(
 ; CHECK-NEXT:  top:
 ; CHECK-NEXT:    %0 = fpext half %a to float
 ; CHECK-NEXT:    %1 = fpext half %b to float
@@ -99,6 +99,67 @@ top:
   %12 = fadd half %10, %11
   %13 = fadd half %12, %4
   ret half %13
+}
+
+define bfloat @demote_bfloat_test(bfloat %a, bfloat %b) {
+top:
+; CHECK-LABEL: @demote_bfloat_test(
+; CHECK-NEXT:  top:
+; CHECK-NEXT:    %0 = fpext bfloat %a to float
+; CHECK-NEXT:    %1 = fpext bfloat %b to float
+; CHECK-NEXT:    %2 = fadd float %0, %1
+; CHECK-NEXT:    %3 = fptrunc float %2 to bfloat
+; CHECK-NEXT:    %4 = fpext bfloat %3 to float
+; CHECK-NEXT:    %5 = fpext bfloat %b to float
+; CHECK-NEXT:    %6 = fadd float %4, %5
+; CHECK-NEXT:    %7 = fptrunc float %6 to bfloat
+; CHECK-NEXT:    %8 = fpext bfloat %7 to float
+; CHECK-NEXT:    %9 = fpext bfloat %b to float
+; CHECK-NEXT:    %10 = fadd float %8, %9
+; CHECK-NEXT:    %11 = fptrunc float %10 to bfloat
+; CHECK-NEXT:    %12 = fpext bfloat %11 to float
+; CHECK-NEXT:    %13 = fpext bfloat %b to float
+; CHECK-NEXT:    %14 = fmul float %12, %13
+; CHECK-NEXT:    %15 = fptrunc float %14 to bfloat
+; CHECK-NEXT:    %16 = fpext bfloat %15 to float
+; CHECK-NEXT:    %17 = fpext bfloat %b to float
+; CHECK-NEXT:    %18 = fdiv float %16, %17
+; CHECK-NEXT:    %19 = fptrunc float %18 to bfloat
+; CHECK-NEXT:    %20 = insertelement <2 x bfloat> undef, bfloat %a, i32 0
+; CHECK-NEXT:    %21 = insertelement <2 x bfloat> %20, bfloat %b, i32 1
+; CHECK-NEXT:    %22 = insertelement <2 x bfloat> undef, bfloat %b, i32 0
+; CHECK-NEXT:    %23 = insertelement <2 x bfloat> %22, bfloat %b, i32 1
+; CHECK-NEXT:    %24 = fpext <2 x bfloat> %21 to <2 x float>
+; CHECK-NEXT:    %25 = fpext <2 x bfloat> %23 to <2 x float>
+; CHECK-NEXT:    %26 = fadd <2 x float> %24, %25
+; CHECK-NEXT:    %27 = fptrunc <2 x float> %26 to <2 x bfloat>
+; CHECK-NEXT:    %28 = extractelement <2 x bfloat> %27, i32 0
+; CHECK-NEXT:    %29 = extractelement <2 x bfloat> %27, i32 1
+; CHECK-NEXT:    %30 = fpext bfloat %28 to float
+; CHECK-NEXT:    %31 = fpext bfloat %29 to float
+; CHECK-NEXT:    %32 = fadd float %30, %31
+; CHECK-NEXT:    %33 = fptrunc float %32 to bfloat
+; CHECK-NEXT:    %34 = fpext bfloat %33 to float
+; CHECK-NEXT:    %35 = fpext bfloat %19 to float
+; CHECK-NEXT:    %36 = fadd float %34, %35
+; CHECK-NEXT:    %37 = fptrunc float %36 to bfloat
+; CHECK-NEXT:    ret bfloat %37
+;
+  %0 = fadd bfloat %a, %b
+  %1 = fadd bfloat %0, %b
+  %2 = fadd bfloat %1, %b
+  %3 = fmul bfloat %2, %b
+  %4 = fdiv bfloat %3, %b
+  %5 = insertelement <2 x bfloat> undef, bfloat %a, i32 0
+  %6 = insertelement <2 x bfloat> %5, bfloat %b, i32 1
+  %7 = insertelement <2 x bfloat> undef, bfloat %b, i32 0
+  %8 = insertelement <2 x bfloat> %7, bfloat %b, i32 1
+  %9 = fadd <2 x bfloat> %6, %8
+  %10 = extractelement <2 x bfloat> %9, i32 0
+  %11 = extractelement <2 x bfloat> %9, i32 1
+  %12 = fadd bfloat %10, %11
+  %13 = fadd bfloat %12, %4
+  ret bfloat %13
 }
 
 attributes #0 = { "target-features"="-avx512fp16" }

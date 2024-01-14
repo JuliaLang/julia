@@ -49,9 +49,9 @@ ci(x) = CartesianIndex(x)
 @test @inferred(newindex(ci((2,2)), (true, false), (-1,-1)))  == ci((2,-1))
 @test @inferred(newindex(ci((2,2)), (false, true), (-1,-1)))  == ci((-1,2))
 @test @inferred(newindex(ci((2,2)), (false, false), (-1,-1))) == ci((-1,-1))
-@test @inferred(newindex(ci((2,2)), (true,), (-1,-1)))   == ci((2,))
-@test @inferred(newindex(ci((2,2)), (true,), (-1,)))   == ci((2,))
-@test @inferred(newindex(ci((2,2)), (false,), (-1,))) == ci((-1,))
+@test @inferred(newindex(ci((2,2)), (true,), (-1,-1))) == 2
+@test @inferred(newindex(ci((2,2)), (true,), (-1,)))   == 2
+@test @inferred(newindex(ci((2,2)), (false,), (-1,)))  == -1
 @test @inferred(newindex(ci((2,2)), (), ())) == ci(())
 
 end
@@ -589,6 +589,16 @@ end
         @test a isa Array{String}
         @test a == ["false"]
         @test f.([true, false]) == [true, "false"]
+    end
+end
+
+@testset "convert behavior of logical broadcast" begin
+    a = mod.(1:4, 2)
+    @test !isa(a, BitArray)
+    for T in (Array{Bool}, BitArray)
+        la = T(a)
+        la .= mod.(0:3, 2)
+        @test la == [false; true; false; true]
     end
 end
 
@@ -1153,6 +1163,9 @@ Base.BroadcastStyle(a::MyBroadcastStyleWithField, b::MyBroadcastStyleWithField) 
         MyBroadcastStyleWithField(1)
     @test_throws ErrorException Broadcast.result_style(MyBroadcastStyleWithField(1),
                                                        MyBroadcastStyleWithField(2))
+    dest = [0, 0]
+    dest .= Broadcast.Broadcasted(MyBroadcastStyleWithField(1), +, (1:2, 2:3))
+    @test dest == [3, 5]
 end
 
 # test that `Broadcast` definition is defined as total and eligible for concrete evaluation
@@ -1162,3 +1175,16 @@ import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 
 f51129(v, x) = (1 .- (v ./ x) .^ 2)
 @test @inferred(f51129([13.0], 6.5)) == [-3.0]
+
+@testset "broadcast for `AbstractArray` without `CartesianIndex` support" begin
+    struct BVec52775 <: AbstractVector{Int}
+        a::Vector{Int}
+    end
+    Base.size(a::BVec52775) = size(a.a)
+    Base.getindex(a::BVec52775, i::Real) = a.a[i]
+    Base.getindex(a::BVec52775, i) = error("unsupported index!")
+    a = BVec52775([1,2,3])
+    bc = Base.broadcasted(identity, a)
+    @test bc[1] == bc[CartesianIndex(1)] == bc[1, CartesianIndex()]
+    @test a .+ [1 2] == a.a .+ [1 2]
+end

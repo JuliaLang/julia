@@ -179,6 +179,8 @@ firstindex(s::AbstractString) = 1
 lastindex(s::AbstractString) = thisind(s, ncodeunits(s)::Int)
 isempty(s::AbstractString) = iszero(ncodeunits(s)::Int)
 
+@propagate_inbounds first(s::AbstractString) = s[firstindex(s)]
+
 function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds return isvalid(s, i) ? (iterate(s, i)::NTuple{2,Any})[1] : string_index_err(s, i)
@@ -241,9 +243,10 @@ end
 """
     *(s::Union{AbstractString, AbstractChar}, t::Union{AbstractString, AbstractChar}...) -> AbstractString
 
-Concatenate strings and/or characters, producing a [`String`](@ref). This is equivalent
-to calling the [`string`](@ref) function on the arguments. Concatenation of built-in
-string types always produces a value of type `String` but other string types may choose
+Concatenate strings and/or characters, producing a [`String`](@ref) or
+[`AnnotatedString`](@ref) (as appropriate). This is equivalent to calling the
+[`string`](@ref) or [`annotatedstring`](@ref) function on the arguments. Concatenation of built-in string
+types always produces a value of type `String` but other string types may choose
 to return a string of a different type as appropriate.
 
 # Examples
@@ -255,7 +258,15 @@ julia> 'j' * "ulia"
 "julia"
 ```
 """
-(*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...) = string(s1, ss...)
+function (*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...)
+    isannotated = s1 isa AnnotatedString || s1 isa AnnotatedChar ||
+        any(s -> s isa AnnotatedString || s isa AnnotatedChar, ss)
+    if isannotated
+        annotatedstring(s1, ss...)
+    else
+        string(s1, ss...)
+    end
+end
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 
@@ -309,7 +320,8 @@ end
     ==(a::AbstractString, b::AbstractString) -> Bool
 
 Test whether two strings are equal character by character (technically, Unicode
-code point by code point).
+code point by code point). Should either string be a [`AnnotatedString`](@ref) the
+string properties must match too.
 
 # Examples
 ```jldoctest
@@ -790,8 +802,8 @@ IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
 
-unsafe_convert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = unsafe_convert(Ptr{T}, s.s)
-unsafe_convert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = unsafe_convert(Ptr{Int8}, s.s)
+cconvert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = cconvert(Ptr{T}, s.s)
+cconvert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = cconvert(Ptr{Int8}, s.s)
 
 """
     codeunits(s::AbstractString)

@@ -716,7 +716,7 @@
 
 ;; ";" at the top level produces a sequence of top level expressions
 (define (parse-stmts s)
-  (let ((ex (parse-Nary s (lambda (s) (parse-docstring s parse-eq))
+  (let ((ex (parse-Nary s (lambda (s) (parse-public s parse-eq))
                         '(#\;) 'toplevel (lambda (x) (eqv? x #\newline)) #f)))
     ;; check for unparsed junk after an expression
     (let ((t (peek-token s)))
@@ -1608,18 +1608,18 @@
        ((module baremodule)
         (let* ((name (parse-unary-prefix s))
                (loc  (line-number-node s))
-               (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
+               (body (parse-block s (lambda (s) (parse-public s parse-eq)))))
           (if (reserved-word? name)
               (error (string "invalid module name \"" name "\"")))
           (expect-end s word)
           (list 'module (if (eq? word 'module) '(true) '(false)) name
                 `(block ,loc ,@(cdr body)))))
-       ((export)
+       ((export public)
         (let ((es (map macrocall-to-atsym
                        (parse-comma-separated s parse-unary-prefix))))
           (if (not (every symbol-or-interpolate? es))
-              (error "invalid \"export\" statement"))
-          `(export ,@es)))
+              (error (string "invalid \"" word "\" statement")))
+          `(,word ,@es)))
        ((import using)
         (parse-imports s word))
        ((do)
@@ -2663,6 +2663,17 @@
       (and (pair? e)
            ;; string interpolation
            (eq? (car e) 'string))))
+
+(define (parse-public s production)
+  (if (eq? (peek-token s) 'public)
+      (let ((spc (ts:space? s)))
+        (take-token s)
+        (if (memv (peek-token s) '(#\( = #\[))
+            (begin ;; TODO: deprecation warning here
+                   (ts:put-back! s 'public spc)
+                   (parse-docstring s production))
+            (parse-resword s 'public)))
+      (parse-docstring s production)))
 
 (define (parse-docstring s production)
   (let ((startloc (line-number-node s)) ; be sure to use the line number from the head of the docstring

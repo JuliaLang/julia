@@ -38,7 +38,7 @@ end
 #        false, false, false, false
 #    ))
 #
-#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), Int32(0), Int32(0))
+#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), Int32(0), UInt32(0))
 #    Compiler.run_passes(ci, 1, [NullLineInfo])
 #    # XXX: missing @test
 #end
@@ -143,7 +143,7 @@ end
 @test f32579(0, false) === false
 
 # Test for bug caused by renaming blocks improperly, related to PR #32145
-let ci = make_ci([
+let code = Any[
         # block 1
         Expr(:boundscheck),
         Core.Compiler.GotoIfNot(SSAValue(1), 6),
@@ -162,34 +162,34 @@ let ci = make_ci([
         Core.Compiler.ReturnNode(Core.SSAValue(9)),
         # block 6
         Core.Compiler.ReturnNode(Core.SSAValue(9))
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code)
     ir = Core.Compiler.compact!(ir, true)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # Test that the verifier doesn't choke on cglobals (which aren't linearized)
-let ci = make_ci([
+let code = Any[
         Expr(:call, GlobalRef(Main, :cglobal),
                     Expr(:call, Core.tuple, :(:c)), Nothing),
                     Core.Compiler.ReturnNode()
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # Test that GlobalRef in value position is non-canonical
-let ci = make_ci([
+let code = Any[
         Expr(:call, GlobalRef(Main, :something_not_defined_please))
         ReturnNode(SSAValue(1))
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code; verify=false)
     ir = Core.Compiler.compact!(ir, true)
     @test_throws ErrorException Core.Compiler.verify_ir(ir, false)
 end
 
 # Issue #29107
-let ci = make_ci([
+let code = Any[
         # Block 1
         Core.Compiler.GotoNode(6),
         # Block 2
@@ -204,8 +204,8 @@ let ci = make_ci([
         Core.Compiler.GotoNode(2),
         # Block 3
         Core.Compiler.ReturnNode(1000)
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code)
     ir = Core.Compiler.compact!(ir, true)
     # Make sure that if there is a call to `something` (block 2 should be
     # removed entirely with working DCE), it doesn't use any SSA values that
@@ -220,9 +220,8 @@ let ci = make_ci([
     end
 end
 
-# Make sure dead blocks that are removed are not still referenced in live phi
-# nodes
-let ci = make_ci([
+# Make sure dead blocks that are removed are not still referenced in live phi nodes
+let code = Any[
         # Block 1
         Core.Compiler.GotoNode(3),
         # Block 2 (no predecessors)
@@ -230,8 +229,8 @@ let ci = make_ci([
         # Block 3
         Core.PhiNode(Int32[1, 2], Any[100, 200]),
         Core.Compiler.ReturnNode(Core.SSAValue(3))
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code; verify=false)
     ir = Core.Compiler.compact!(ir, true)
     @test Core.Compiler.verify_ir(ir) == nothing
 end
@@ -338,7 +337,7 @@ let # https://github.com/JuliaLang/julia/issues/42258
         code_typed(Core.Compiler.setindex!, (Core.Compiler.UseRef,Core.Compiler.NewSSAValue); optimize=true)
         """
     cmd = `$(Base.julia_cmd()) -g 2 -e $code`
-    stderr = Base.BufferStream()
+    stderr = IOBuffer()
     @test success(pipeline(Cmd(cmd); stdout, stderr))
     @test readchomp(stderr) == ""
 end
@@ -424,7 +423,7 @@ let
         Expr(:enter, 11),
         Expr(:call, :+, SSAValue(3), 1),
         Expr(:throw_undef_if_not, :expected, false),
-        Expr(:leave, 1),
+        Expr(:leave, Core.SSAValue(1)),
         Expr(:(=), SSAValue(1), Expr(:call, :+, SSAValue(3), 1)),
         UpsilonNode(),
         UpsilonNode(SSAValue(2)),
@@ -568,7 +567,7 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
 end
 
 # Issue #50379 - insert_node!(::IncrementalCompact, ...) at end of basic block
-let ci = make_ci([
+let code = Any[
         # block 1
         #= %1: =# Expr(:boundscheck),
         #= %2: =# Core.Compiler.GotoIfNot(SSAValue(1), 4),
@@ -577,8 +576,8 @@ let ci = make_ci([
         # block 3
         #= %4: =# Core.PhiNode(),
         #= %5: =# Core.Compiler.ReturnNode(),
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code)
 
     # Insert another call at end of "block 2"
     compact = Core.Compiler.IncrementalCompact(ir)
@@ -596,11 +595,11 @@ let ci = make_ci([
 end
 
 # compact constant PiNode
-let ci = make_ci(Any[
+let code = Any[
         PiNode(0.0, Const(0.0))
         ReturnNode(SSAValue(1))
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code)
     ir = Core.Compiler.compact!(ir)
     @test fully_eliminated(ir)
 end

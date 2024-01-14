@@ -17,15 +17,16 @@ declare {}* @julia.pointer_from_objref({} addrspace(11)*)
 ; Test that non-0 addrspace allocas are properly emitted and handled
 
 ; CHECK-LABEL: @non_zero_addrspace
-; CHECK: %1 = alloca i32, align 8, addrspace(5)
+; TYPED: %1 = alloca i32, align 8, addrspace(5)
 
 ; TYPED: %2 = bitcast i32 addrspace(5)* %1 to i8 addrspace(5)*
-; TYPED: %3 = bitcast i8 addrspace(5)* %2 to {} addrspace(5)*
-; TYPED: %var1 = addrspacecast {} addrspace(5)* %3 to {} addrspace(10)*
+; TYPED: %var1 = bitcast i8 addrspace(5)* %2 to {} addrspace(5)*
+; TYPED: %3 = addrspacecast {} addrspace(5)* %var1 to {}*
 ; TYPED: call void @llvm.lifetime.start.p5i8(i64 4, i8 addrspace(5)* %2)
 
-; OPAQUE: %var1 = addrspacecast ptr addrspace(5) %1 to ptr addrspace(10)
-; OPAQUE: call void @llvm.lifetime.start.p5(i64 4, ptr addrspace(5) %1)
+; OPAQUE: %var1 = alloca i32, align 8, addrspace(5)
+; OPAQUE: %1 = addrspacecast ptr addrspace(5) %var1 to ptr
+; OPAQUE: call void @llvm.lifetime.start.p5(i64 4, ptr addrspace(5) %var1)
 
 ; CHECK: ret void
 define void @non_zero_addrspace() {

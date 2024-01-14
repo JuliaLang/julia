@@ -7,4 +7,6 @@ EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Printf/docs/src
 ```@docs
 Printf.@printf
 Printf.@sprintf
+Printf.Format
+Printf.format
 ```

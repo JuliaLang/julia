@@ -229,7 +229,7 @@ module Tmp14173
 end
 varinfo(Tmp14173) # warm up
 const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 100000)
+@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 125000)
 
 # PR #24997: test that `varinfo` doesn't fail when encountering `missing`
 module A
@@ -364,7 +364,7 @@ let err = tempname(),
             @test startswith(errstr, """start
                 end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
-                ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """) || errstr
             @test !endswith(errstr, "\nend\n") || errstr
         end

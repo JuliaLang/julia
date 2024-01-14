@@ -161,13 +161,17 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 void GCInvariantVerifier::visitCallInst(CallInst &CI) {
     Function *Callee = CI.getCalledFunction();
     if (Callee && (Callee->getName() == "julia.call" ||
-                   Callee->getName() == "julia.call2")) {
-        bool First = true;
+                   Callee->getName() == "julia.call2" ||
+                   Callee->getName() == "julia.call3")) {
+        unsigned Fixed = CI.getFunctionType()->getNumParams();
         for (Value *Arg : CI.args()) {
+            if (Fixed) {
+                Fixed--;
+                continue;
+            }
             Type *Ty = Arg->getType();
-            Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == (First ? 0 : AddressSpace::Tracked),
+            Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == AddressSpace::Tracked,
                 "Invalid derived pointer in jlcall", &CI);
-            First = false;
         }
     }
 }

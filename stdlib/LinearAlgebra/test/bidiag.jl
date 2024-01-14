@@ -19,6 +19,12 @@ using .Main.InfiniteArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 n = 10 #Size of test matrix
@@ -439,6 +445,9 @@ Random.seed!(1)
                 for op in (+, -, *)
                     @test Array(op(T, T2)) ≈ op(Tfull, Tfull2)
                 end
+                A = kron(T.dv, T.dv')
+                @test T * A ≈ lmul!(T, copy(A))
+                @test A * T ≈ rmul!(copy(A), T)
             end
             # test pass-through of mul! for SymTridiagonal*Bidiagonal
             TriSym = SymTridiagonal(T.dv, T.ev)
@@ -446,7 +455,8 @@ Random.seed!(1)
             # test pass-through of mul! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(1 => T.ev))
             Dia = Diagonal(T.dv)
-            @test Array(Tri*T) ≈ Array(Tri)*Array(T)
+            @test Array(Tri*T) ≈ Array(Tri)*Array(T) ≈ rmul!(copy(Tri), T)
+            @test Array(T*Tri) ≈ Array(T)*Array(Tri) ≈ lmul!(T, copy(Tri))
             # test mul! itself for these types
             for AA in (Tri, Dia)
                 for f in (identity, transpose, adjoint)
@@ -459,8 +469,10 @@ Random.seed!(1)
             for f in (identity, transpose, adjoint)
                 C = relty == Int ? rand(float(elty), n, n) : rand(elty, n, n)
                 B = rand(elty, n, n)
-                D = copy(C) + 2.0 * Array(T*f(B))
-                mul!(C, T, f(B), 2.0, 1.0) ≈ D
+                D = C + 2.0 * Array(T*f(B))
+                @test mul!(C, T, f(B), 2.0, 1.0) ≈ D
+                @test lmul!(T, copy(f(B))) ≈ T * f(B)
+                @test rmul!(copy(f(B)), T) ≈ f(B) * T
             end
 
             # Issue #31870
@@ -835,6 +847,41 @@ end
     copyto!(B, I)
     @test all(isone, diag(B))
     @test all(iszero, diag(B, 1))
+end
+
+@testset "diagind" begin
+    B = Bidiagonal(1:4, 1:3, :U)
+    M = Matrix(B)
+    @testset for k in -4:4
+        @test B[diagind(B,k)] == M[diagind(M,k)]
+    end
+end
+
+@testset "custom axes" begin
+    dv, uv = OffsetArray(1:4), OffsetArray(1:3)
+    B = Bidiagonal(dv, uv, :U)
+    ax = axes(dv, 1)
+    @test axes(B) === (ax, ax)
+end
+
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    B = Bidiagonal([1:2;], [1;], :U)
+    @test S * B == A * B
+    @test B * S == B * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, B) == mul!(C2, A, B)
+    @test mul!(C1, S, B, 1, 2) == mul!(C2, A, B, 1 ,2)
+    @test mul!(C1, B, S) == mul!(C2, B, A)
+    @test mul!(C1, B, S, 1, 2) == mul!(C2, B, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test B * sv == B * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, B, sv) == mul!(C2, B, v)
+    @test mul!(C1, B, sv, 1, 2) == mul!(C2, B, v, 1 ,2)
 end
 
 end # module TestBidiagonal

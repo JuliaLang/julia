@@ -160,7 +160,8 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
-    println(io, "  Threads: ", Threads.maxthreadid(), " on ", Sys.CPU_THREADS, " virtual cores")
+    println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
+      $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
 
     function is_nonverbose_env(k::String)
         return occursin(r"^JULIA_|^DYLD_|^LD_", k)
@@ -201,6 +202,8 @@ The optional second argument restricts the search to a particular module or func
 
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
+
+See also: [`methods`](@ref).
 """
 function methodswith(@nospecialize(t::Type), @nospecialize(f::Base.Callable), meths = Method[]; supertypes::Bool=false)
     for d in methods(f)

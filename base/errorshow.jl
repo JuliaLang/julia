@@ -70,6 +70,8 @@ function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
     if ex.expected === Bool
         print(io, "non-boolean (", typeof(ex.got), ") used in boolean context")
+    elseif ex.func === :var"dict key"
+        print(io, "$(limitrepr(ex.got)) is not a valid key for type $(ex.expected)")
     else
         if isvarargtype(ex.got)
             targs = (ex.got,)
@@ -80,7 +82,7 @@ function showerror(io::IO, ex::TypeError)
         end
         if ex.context == ""
             ctx = "in $(ex.func)"
-        elseif ex.func === Symbol("keyword argument")
+        elseif ex.func === :var"keyword argument"
             ctx = "in keyword argument $(ex.context)"
         else
             ctx = "in $(ex.func), in $(ex.context)"
@@ -147,13 +149,7 @@ showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division erro
 showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
 showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
 showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
-function showerror(io::IO, ex::ErrorException)
-    print(io, ex.msg)
-    if ex.msg == "type String has no field data"
-        println(io)
-        print(io, "Use `codeunits(str)` instead.")
-    end
-end
+showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
 showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
                                    show(io, ex.key);
                                    print(io, " not found"))
@@ -168,6 +164,16 @@ showerror(io::IO, ex::UndefKeywordError) =
 
 function showerror(io::IO, ex::UndefVarError)
     print(io, "UndefVarError: `$(ex.var)` not defined")
+    if isdefined(ex, :scope)
+        scope = ex.scope
+        if scope isa Module
+            print(io, " in `$scope`")
+        elseif scope === :static_parameter
+            print(io, " in static parameter matching")
+        else
+            print(io, " in $scope scope")
+        end
+    end
     Experimental.show_error_hints(io, ex)
 end
 
@@ -175,7 +181,13 @@ function showerror(io::IO, ex::InexactError)
     print(io, "InexactError: ", ex.func, '(')
     T = first(ex.args)
     nameof(T) === ex.func || print(io, T, ", ")
-    join(io, ex.args[2:end], ", ")
+    # `join` calls `string` on its arguments, which shadows the size of e.g. Inf16
+    # as `string(Inf16) == "Inf"` instead of "Inf16". Thus we cannot use `join` here.
+    for arg in ex.args[2:end-1]
+        show(io, arg)
+        print(io, ", ")
+    end
+    show(io, ex.args[end])
     print(io, ")")
     Experimental.show_error_hints(io, ex)
 end
@@ -242,7 +254,6 @@ function showerror(io::IO, ex::MethodError)
         return showerror_ambiguous(io, meth, f, arg_types)
     end
     arg_types_param::SimpleVector = arg_types.parameters
-    show_candidates = true
     print(io, "MethodError: ")
     ft = typeof(f)
     f_is_function = false
@@ -258,9 +269,6 @@ function showerror(io::IO, ex::MethodError)
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
-    elseif f === mapreduce_empty || f === reduce_empty
-        print(io, "reducing over an empty collection is not allowed; consider supplying `init` to the reducer")
-        show_candidates = false
     elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
@@ -270,7 +278,8 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
         end
         print(io, "no method matching ")
-        iob = IOContext(IOBuffer(), io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
+        buf = IOBuffer()
+        iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
         show_signature_function(iob, isa(f, Type) ? Type{f} : typeof(f))
         print(iob, "(")
         for (i, typ) in enumerate(arg_types_param)
@@ -285,7 +294,7 @@ function showerror(io::IO, ex::MethodError)
             end
         end
         print(iob, ")")
-        str = String(take!(unwrapcontext(iob)[1]))
+        str = String(take!(buf))
         str = type_limited_string_from_context(io, str)
         print(io, str)
     end
@@ -334,11 +343,12 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
-    show_candidates && try
+    try
         show_method_candidates(io, ex, kwargs)
     catch ex
         @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
     end
+    nothing
 end
 
 striptype(::Type{T}) where {T} = T
@@ -787,7 +797,7 @@ function show_backtrace(io::IO, t::Vector)
 
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
         f = filtered[1][1]::StackFrame
-        if f.line == 0 && f.file === Symbol("")
+        if f.line == 0 && f.file === :var""
             # don't show a single top-level frame with no location info
             return
         end
@@ -1013,6 +1023,18 @@ function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
 end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
+
+
+# Display a hint in case the user tries to use the min or max function on an iterable
+function min_max_on_iterable(io, ex, arg_types, kwargs)
+    @nospecialize
+    if (ex.f === max || ex.f === min) && length(arg_types) == 1 && Base.isiterable(only(arg_types))
+        f_correct = ex.f === max ? "maximum" : "minimum"
+        print(io, "\nFinding the $f_correct of an iterable is performed with `$f_correct`.")
+    end
+end
+
+Experimental.register_error_hint(min_max_on_iterable, MethodError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

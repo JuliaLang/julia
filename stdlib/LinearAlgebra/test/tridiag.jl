@@ -15,6 +15,9 @@ using .Main.InfiniteArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
 include("testutils.jl") # test_approx_eq_modphase
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
@@ -82,7 +85,7 @@ end
             @test TT == Matrix(TT)
             @test TT.dl === y
             @test TT.d  === x
-            @test TT.du === y
+            @test TT.du == y
             @test typeof(TT)(TT) === TT
         end
         ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
@@ -95,12 +98,12 @@ end
         @test isa(ST, SymTridiagonal{elty,Vector{elty}})
         TT = Tridiagonal{elty,Vector{elty}}(GenericArray(dl), d, GenericArray(dl))
         @test isa(TT, Tridiagonal{elty,Vector{elty}})
-        @test_throws MethodError SymTridiagonal(d, GenericArray(dl))
-        @test_throws MethodError SymTridiagonal(GenericArray(d), dl)
-        @test_throws MethodError Tridiagonal(GenericArray(dl), d, GenericArray(dl))
-        @test_throws MethodError Tridiagonal(dl, GenericArray(d), dl)
-        @test_throws MethodError SymTridiagonal{elty}(d, GenericArray(dl))
-        @test_throws MethodError Tridiagonal{elty}(GenericArray(dl), d,GenericArray(dl))
+        @test_throws ArgumentError SymTridiagonal(d, GenericArray(dl))
+        @test_throws ArgumentError SymTridiagonal(GenericArray(d), dl)
+        @test_throws ArgumentError Tridiagonal(GenericArray(dl), d, GenericArray(dl))
+        @test_throws ArgumentError Tridiagonal(dl, GenericArray(d), dl)
+        @test_throws ArgumentError SymTridiagonal{elty}(d, GenericArray(dl))
+        @test_throws ArgumentError Tridiagonal{elty}(GenericArray(dl), d,GenericArray(dl))
         STI = SymTridiagonal([1,2,3,4], [1,2,3])
         TTI = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3])
         TTI2 = Tridiagonal([1,2,3], [1,2,3,4], [1,2,3], [1,2])
@@ -434,17 +437,23 @@ end
             end
         else # mat_type is Tridiagonal
             @testset "tridiagonal linear algebra" begin
-                for (BB, vv) in ((copy(B), copy(v)), (view(B, 1:n, 1), view(v, 1:n)))
+                for vv in (copy(v), view(copy(v), 1:n))
                     @test A*vv ≈ fA*vv
                     invFv = fA\vv
                     @test A\vv ≈ invFv
-                    # @test Base.solve(T,v) ≈ invFv
-                    # @test Base.solve(T, B) ≈ F\B
                     Tlu = factorize(A)
                     x = Tlu\vv
                     @test x ≈ invFv
                 end
+                elty != Int && @test A \ v ≈ ldiv!(copy(A), copy(v))
             end
+            F = lu(A)
+            L1, U1, p1 = F
+            G = lu!(F, 2A)
+            L2, U2, p2 = F
+            @test L1 ≈ L2
+            @test 2U1 ≈ U2
+            @test p1 == p2
         end
         @testset "generalized dot" begin
             x = fill(convert(elty, 1), n)
@@ -499,6 +508,11 @@ end
     @test SymTridiagonal([1, 2], [0])^3 == [1 0; 0 8]
 end
 
+@testset "Issue #48505" begin
+    @test SymTridiagonal([1,2,3],[4,5.0]) == [1.0 4.0 0.0; 4.0 2.0 5.0; 0.0 5.0 3.0]
+    @test Tridiagonal([1, 2], [4, 5, 1], [6.0, 7]) == [4.0 6.0 0.0; 1.0 5.0 7.0; 0.0 2.0 1.0]
+end
+
 @testset "convert for SymTridiagonal" begin
     STF32 = SymTridiagonal{Float32}(fill(1f0, 5), fill(1f0, 4))
     @test convert(SymTridiagonal{Float64}, STF32)::SymTridiagonal{Float64} == STF32
@@ -513,6 +527,14 @@ end
 @testset "constructors with range and other abstract vectors" begin
     @test SymTridiagonal(1:3, 1:2) == [1 1 0; 1 2 2; 0 2 3]
     @test Tridiagonal(4:5, 1:3, 1:2) == [1 1 0; 4 2 2; 0 5 3]
+end
+
+@testset "Prevent off-diagonal aliasing in Tridiagonal" begin
+    e = ones(4)
+    f = e[1:end-1]
+    T = Tridiagonal(f, 2e, f)
+    T ./= 10
+    @test all(==(0.1), f)
 end
 
 @testset "Issue #26994 (and the empty case)" begin
@@ -797,6 +819,15 @@ end
         @test all(iszero, diag(ST, 1))
         @test all(iszero, diag(ST, -1))
     end
+end
+
+@testset "custom axes" begin
+    dv, uv = OffsetArray(1:4), OffsetArray(1:3)
+    B = Tridiagonal(uv, dv, uv)
+    ax = axes(dv, 1)
+    @test axes(B) === (ax, ax)
+    B = SymTridiagonal(dv, uv)
+    @test axes(B) === (ax, ax)
 end
 
 end # module TestTridiagonal

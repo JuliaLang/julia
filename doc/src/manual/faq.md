@@ -725,7 +725,7 @@ julia> module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: `Foo` not defined
+UndefVarError: `Foo` not defined in `Main`
 Stacktrace:
 [...]
 ```
@@ -746,7 +746,7 @@ julia> @everywhere module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: `gvar` not defined
+UndefVarError: `gvar` not defined in `Main.Foo`
 Stacktrace:
 [...]
 ```
@@ -782,7 +782,7 @@ bar (generic function with 1 method)
 
 julia> remotecall_fetch(bar, 2)
 ERROR: On worker 2:
-UndefVarError: `#bar` not defined
+UndefVarError: `#bar` not defined in `Main`
 [...]
 
 julia> anon_bar  = ()->1
@@ -1053,13 +1053,13 @@ Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg
 ### How do I manage precompilation caches in distributed file systems?
 
 When using Julia in high-performance computing (HPC) facilities with shared filesystems, it is recommended to use a shared
-depot (via the `JULIA_DEPOT_PATH` environment variable). Since Julia v1.10, multiple Julia processes on functionally similar
+depot (via the [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable). Since Julia v1.10, multiple Julia processes on functionally similar
 workers and using the same depot will coordinate via pidfile locks to only spend effort precompiling on one process while the
 others wait. The precompilation process will indicate when the process is precompiling or waiting for another that is
 precompiling. If non-interactive the messages are via `@debug`.
 
 However, due to caching of binary code, the cache rejection since v1.9 is more strict and users may need to set the
-`[JULIA_CPU_TARGET](@ref)` environment variable appropriately to get a single cache that is usable throughout the HPC
+[`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) environment variable appropriately to get a single cache that is usable throughout the HPC
 environment.
 
 ## Julia Releases

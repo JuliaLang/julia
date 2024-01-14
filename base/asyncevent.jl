@@ -118,14 +118,18 @@ end
 unsafe_convert(::Type{Ptr{Cvoid}}, t::Timer) = t.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
+# if this returns true, the object has been signaled
+# if this returns false, the object is closed
 function _trywait(t::Union{Timer, AsyncCondition})
     set = t.set
     if set
         # full barrier now for AsyncCondition
         t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release)
     else
-        t.isopen || return false
-        t.handle == C_NULL && return false
+        if !isopen(t)
+            close(t) # wait for the close to complete
+            return false
+        end
         iolock_begin()
         set = t.set
         if !set
@@ -133,7 +137,7 @@ function _trywait(t::Union{Timer, AsyncCondition})
             lock(t.cond)
             try
                 set = t.set
-                if !set && t.isopen && t.handle != C_NULL
+                if !set && t.handle != C_NULL # wait for set or handle, but not the isopen flag
                     iolock_end()
                     set = wait(t.cond)
                     unlock(t.cond)
@@ -160,10 +164,28 @@ end
 isopen(t::Union{Timer, AsyncCondition}) = t.isopen && t.handle != C_NULL
 
 function close(t::Union{Timer, AsyncCondition})
+    t.handle == C_NULL && return # short-circuit path
     iolock_begin()
-    if isopen(t)
-        @atomic :monotonic t.isopen = false
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+    if t.handle != C_NULL
+        if t.isopen
+            @atomic :monotonic t.isopen = false
+            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+        end
+        # implement _trywait here without the auto-reset function, just waiting for the final close signal
+        preserve_handle(t)
+        lock(t.cond)
+        try
+            while t.handle != C_NULL
+                iolock_end()
+                wait(t.cond)
+                unlock(t.cond)
+                iolock_begin()
+                lock(t.cond)
+            end
+        finally
+            unlock(t.cond)
+            unpreserve_handle(t)
+        end
     end
     iolock_end()
     nothing
@@ -220,7 +242,10 @@ function uv_timercb(handle::Ptr{Cvoid})
         @atomic :monotonic t.set = true
         if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
             # timer is stopped now
-            close(t)
+            if t.isopen
+                @atomic :monotonic t.isopen = false
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+            end
         end
         notify(t.cond, true)
     finally
@@ -302,11 +327,24 @@ end
 """
     timedwait(testcb, timeout::Real; pollint::Real=0.1)
 
-Waits until `testcb()` returns `true` or `timeout` seconds have passed, whichever is earlier.
+Wait until `testcb()` returns `true` or `timeout` seconds have passed, whichever is earlier.
 The test function is polled every `pollint` seconds. The minimum value for `pollint` is 0.001 seconds,
 that is, 1 millisecond.
 
 Return `:ok` or `:timed_out`.
+
+# Examples
+```jldoctest
+julia> cb() = (sleep(5); return);
+
+julia> t = @async cb();
+
+julia> timedwait(()->istaskdone(t), 1)
+:timed_out
+
+julia> timedwait(()->istaskdone(t), 6.5)
+:ok
+```
 """
 function timedwait(testcb, timeout::Real; pollint::Real=0.1)
     pollint >= 1e-3 || throw(ArgumentError("pollint must be ≥ 1 millisecond"))

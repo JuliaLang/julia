@@ -28,12 +28,50 @@ include(mod, x) = Core.include(mod, x)
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
+macro _boundscheck() Expr(:boundscheck) end
+
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 
-# mostly used by compiler/methodtable.jl, but also by reflection.jl
+# These types are used by reflection.jl and expr.jl too, so declare them here.
+# Note that `@assume_effects` is available only after loading namedtuple.jl.
 abstract type MethodTableView end
 abstract type AbstractInterpreter end
+struct EffectsOverride
+    consistent::Bool
+    effect_free::Bool
+    nothrow::Bool
+    terminates_globally::Bool
+    terminates_locally::Bool
+    notaskstate::Bool
+    inaccessiblememonly::Bool
+    noub::Bool
+    noub_if_noinbounds::Bool
+end
+function EffectsOverride(
+    override::EffectsOverride =
+        EffectsOverride(false, false, false, false, false, false, false, false, false);
+    consistent::Bool = override.consistent,
+    effect_free::Bool = override.effect_free,
+    nothrow::Bool = override.nothrow,
+    terminates_globally::Bool = override.terminates_globally,
+    terminates_locally::Bool = override.terminates_locally,
+    notaskstate::Bool = override.notaskstate,
+    inaccessiblememonly::Bool = override.inaccessiblememonly,
+    noub::Bool = override.noub,
+    noub_if_noinbounds::Bool = override.noub_if_noinbounds)
+    return EffectsOverride(
+        consistent,
+        effect_free,
+        nothrow,
+        terminates_globally,
+        terminates_locally,
+        notaskstate,
+        inaccessiblememonly,
+        noub,
+        noub_if_noinbounds)
+end
+const NUM_EFFECTS_OVERRIDES = 9 # sync with julia.h
 
 # essential files and libraries
 include("essentials.jl")
@@ -104,6 +142,7 @@ include("strings/lazy.jl")
 
 # core array operations
 include("indices.jl")
+include("genericmemory.jl")
 include("array.jl")
 include("abstractarray.jl")
 

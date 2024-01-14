@@ -36,9 +36,18 @@ struct SubString{T<:AbstractString} <: AbstractString
         end
         return new(s, i-1, nextind(s,j)-i)
     end
+    function SubString{T}(s::T, i::Int, j::Int, ::Val{:noshift}) where T<:AbstractString
+        @boundscheck if !(i == j == 0)
+            si, sj = i + 1, prevind(s, j + i + 1)
+            @inbounds isvalid(s, si) || string_index_err(s, si)
+            @inbounds isvalid(s, sj) || string_index_err(s, sj)
+        end
+        new(s, i, j)
+    end
 end
 
 @propagate_inbounds SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
+@propagate_inbounds SubString(s::T, i::Int, j::Int, v::Val{:noshift}) where {T<:AbstractString} = SubString{T}(s, i, j, v)
 @propagate_inbounds SubString(s::AbstractString, i::Integer, j::Integer=lastindex(s)) = SubString(s, Int(i), Int(j))
 @propagate_inbounds SubString(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, first(r), last(r))
 

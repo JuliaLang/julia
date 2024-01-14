@@ -11,10 +11,17 @@ const VInt = UInt32
 Version number type which follows the specifications of
 [semantic versioning (semver)](https://semver.org/), composed of major, minor
 and patch numeric values, followed by pre-release and build
-alpha-numeric annotations.
+alphanumeric annotations.
 
 `VersionNumber` objects can be compared with all of the standard comparison
 operators (`==`, `<`, `<=`, etc.), with the result following semver rules.
+
+`VersionNumber` has the the following public fields:
+- `v.major::Integer`
+- `v.minor::Integer`
+- `v.patch::Integer`
+- `v.prerelease::Tuple{Vararg{Union{Integer, AbstractString}}}`
+- `v.build::Tuple{Vararg{Union{Integer, AbstractString}}}`
 
 See also [`@v_str`](@ref) to efficiently construct `VersionNumber` objects
 from semver-format literal strings, [`VERSION`](@ref) for the `VersionNumber`
@@ -266,73 +273,3 @@ else
 end
 
 libllvm_path() = ccall(:jl_get_libllvm, Any, ())
-
-function banner(io::IO = stdout; short = false)
-    if GIT_VERSION_INFO.tagged_commit
-        commit_string = TAGGED_RELEASE_BANNER
-    elseif isempty(GIT_VERSION_INFO.commit)
-        commit_string = ""
-    else
-        days = Int(floor((ccall(:jl_clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
-        days = max(0, days)
-        unit = days == 1 ? "day" : "days"
-        distance = GIT_VERSION_INFO.fork_master_distance
-        commit = GIT_VERSION_INFO.commit_short
-
-        if distance == 0
-            commit_string = "Commit $(commit) ($(days) $(unit) old master)"
-        else
-            branch = GIT_VERSION_INFO.branch
-            commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
-        end
-    end
-
-    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
-
-    if get(io, :color, false)::Bool
-        c = text_colors
-        tx = c[:normal] # text
-        jl = c[:normal] # julia
-        d1 = c[:bold] * c[:blue]    # first dot
-        d2 = c[:bold] * c[:red]     # second dot
-        d3 = c[:bold] * c[:green]   # third dot
-        d4 = c[:bold] * c[:magenta] # fourth dot
-
-        if short
-            print(io,"""
-              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
-             $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
-            """)
-        else
-            print(io,"""               $(d3)_$(tx)
-               $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
-              $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
-               $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
-              $(jl)| | | | | | |/ _` |$(tx)  |
-              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
-             $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-            $(jl)|__/$(tx)                   |
-
-            """)
-        end
-    else
-        if short
-            print(io,"""
-              o  |  Version $(VERSION)$(commit_date)
-             o o |  $(commit_string)
-            """)
-        else
-            print(io,"""
-                           _
-               _       _ _(_)_     |  Documentation: https://docs.julialang.org
-              (_)     | (_) (_)    |
-               _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
-              | | | | | | |/ _` |  |
-              | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
-             _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-            |__/                   |
-
-            """)
-        end
-    end
-end

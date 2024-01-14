@@ -25,7 +25,7 @@ Stop the program with an exit code. The default exit code is zero, indicating th
 program completed successfully. In an interactive session, `exit()` can be called with
 the keyboard shortcut `^D`.
 """
-exit(n) = ccall(:jl_exit, Cvoid, (Int32,), n)
+exit(n) = ccall(:jl_exit, Union{}, (Int32,), n)
 exit() = exit(0)
 
 const roottask = current_task()
@@ -73,22 +73,28 @@ environment variable if set.
 Each entry in `DEPOT_PATH` is a path to a directory which contains subdirectories used by Julia for various purposes.
 Here is an overview of some of the subdirectories that may exist in a depot:
 
+* `artifacts`: Contains content that packages use for which Pkg manages the installation of.
 * `clones`: Contains full clones of package repos. Maintained by `Pkg.jl` and used as a cache.
+* `config`: Contains julia-level configuration such as a `startup.jl`
 * `compiled`: Contains precompiled `*.ji` files for packages. Maintained by Julia.
 * `dev`: Default directory for `Pkg.develop`. Maintained by `Pkg.jl` and the user.
 * `environments`: Default package environments. For instance the global environment for a specific julia version. Maintained by `Pkg.jl`.
 * `logs`: Contains logs of `Pkg` and `REPL` operations. Maintained by `Pkg.jl` and `Julia`.
 * `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
 * `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
+* `scratchspaces`: Contains content that a package itself installs via the [`Scratch.jl`](https://github.com/JuliaPackaging/Scratch.jl) package. `Pkg.gc()` will delete content that is known to be unused.
+
+!!! note
+    Packages that want to store content should use the `scratchspaces` subdirectory via
+    [`Scratch.jl`](https://github.com/JuliaPackaging/Scratch.jl) instead of creating new
+    subdirectories in the depot root.
 
 See also [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
 [Code Loading](@ref code-loading).
 """
 const DEPOT_PATH = String[]
 
-function append_default_depot_path!(DEPOT_PATH)
-    path = joinpath(homedir(), ".julia")
-    path in DEPOT_PATH || push!(DEPOT_PATH, path)
+function append_bundled_depot_path!(DEPOT_PATH)
     path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
     path = abspath(Sys.BINDIR, "..", "share", "julia")
@@ -100,17 +106,31 @@ function init_depot_path()
     empty!(DEPOT_PATH)
     if haskey(ENV, "JULIA_DEPOT_PATH")
         str = ENV["JULIA_DEPOT_PATH"]
+
+        # explicitly setting JULIA_DEPOT_PATH to the empty string means using no depot
         isempty(str) && return
+
+        # otherwise, populate the depot path with the entries in JULIA_DEPOT_PATH,
+        # expanding empty strings to the bundled depot
+        populated = false
         for path in eachsplit(str, Sys.iswindows() ? ';' : ':')
             if isempty(path)
-                append_default_depot_path!(DEPOT_PATH)
+                append_bundled_depot_path!(DEPOT_PATH)
             else
                 path = expanduser(path)
                 path in DEPOT_PATH || push!(DEPOT_PATH, path)
+                populated = true
             end
         end
+
+        # backwards compatibility: if JULIA_DEPOT_PATH only contains empty entries
+        # (e.g., JULIA_DEPOT_PATH=':'), make sure to use the default depot
+        if !populated
+            pushfirst!(DEPOT_PATH, joinpath(homedir(), ".julia"))
+        end
     else
-        append_default_depot_path!(DEPOT_PATH)
+        push!(DEPOT_PATH, joinpath(homedir(), ".julia"))
+        append_bundled_depot_path!(DEPOT_PATH)
     end
     nothing
 end
@@ -367,9 +387,7 @@ end
 
 ## atexit: register exit hooks ##
 
-const atexit_hooks = Callable[
-    () -> Filesystem.temp_cleanup_purge(force=true)
-]
+const atexit_hooks = Callable[]
 const _atexit_hooks_lock = ReentrantLock()
 global _atexit_hooks_finished::Bool = false
 
@@ -413,7 +431,7 @@ function _atexit(exitcode::Cint)
     # will immediately run here.
     while true
         local f
-        Base.@lock _atexit_hooks_lock begin
+        @lock _atexit_hooks_lock begin
             # If this is the last iteration, atomically disable atexit hooks to prevent
             # someone from registering a hook that will never be run.
             # (We do this inside the loop, so that it is atomic: no one can have registered
@@ -434,7 +452,7 @@ function _atexit(exitcode::Cint)
             end
         catch ex
             showerror(stderr, ex)
-            Base.show_backtrace(stderr, catch_backtrace())
+            show_backtrace(stderr, catch_backtrace())
             println(stderr)
         end
     end
@@ -454,7 +472,7 @@ function _postoutput()
             f()
         catch ex
             showerror(stderr, ex)
-            Base.show_backtrace(stderr, catch_backtrace())
+            show_backtrace(stderr, catch_backtrace())
             println(stderr)
         end
     end

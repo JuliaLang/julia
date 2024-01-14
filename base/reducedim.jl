@@ -146,16 +146,18 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
             T = _realtype(f, promote_union(eltype(A)))
             Tr = v0 isa T ? T : typeof(v0)
 
-            # but NaNs and missing need to be avoided as initial values
+            # but NaNs, missing and unordered values need to be avoided as initial values
             if v0 isa Number && isnan(v0)
                 # v0 is NaN
                 v0 = oftype(v0, $initval)
             elseif isunordered(v0)
                 # v0 is missing or a third-party unordered value
                 Tnm = nonmissingtype(Tr)
-                # TODO: Some types, like BigInt, don't support typemin/typemax.
-                # So a Matrix{Union{BigInt, Missing}} can still error here.
-                v0 = $typeextreme(Tnm)
+                if Tnm <: Union{BitInteger, IEEEFloat, BigFloat}
+                    v0 = $typeextreme(Tnm)
+                elseif !all(isunordered, A1)
+                    v0 = mapreduce(f, $f2, Iterators.filter(!isunordered, A1))
+                end
             end
             # v0 may have changed type.
             Tr = v0 isa T ? T : typeof(v0)
@@ -186,12 +188,18 @@ function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray
 
     # but NaNs and missing need to be avoided as initial values
     if v0[1] isa Number && isnan(v0[1])
+        # v0 is NaN
         v0 = oftype(v0[1], Inf), oftype(v0[2], -Inf)
     elseif isunordered(v0[1])
         # v0 is missing or a third-party unordered value
-        # TODO: Some types, like BigInt, don't support typemin/typemax.
-        # So a Matrix{Union{BigInt, Missing}} can still error here.
-        v0 = typemax(nonmissingtype(Tmin)), typemin(nonmissingtype(Tmax))
+        Tminnm = nonmissingtype(Tmin)
+        Tmaxnm = nonmissingtype(Tmax)
+        if Tminnm <: Union{BitInteger, IEEEFloat, BigFloat} &&
+            Tmaxnm <: Union{BitInteger, IEEEFloat, BigFloat}
+            v0 = (typemax(Tminnm), typemin(Tmaxnm))
+        elseif !all(isunordered, A1)
+            v0 = reverse(mapreduce(f, op, Iterators.filter(!isunordered, A1)))
+        end
     end
     # v0 may have changed type.
     Tmin = v0[1] isa T ? T : typeof(v0[1])
@@ -448,6 +456,8 @@ _count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_s
 Count the number of elements in `A` for which `f` returns `true` over the
 singleton dimensions of `r`, writing the result into `r` in-place.
 
+$(_DOCS_ALIASING_WARNING)
+
 !!! compat "Julia 1.5"
     inplace `count!` was added in Julia 1.5.
 
@@ -525,8 +535,8 @@ sum(f, A::AbstractArray; dims)
     sum!(r, A)
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
-Note that since the sum! function is intended to operate without making any allocations,
-the target should not alias with the source.
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -600,6 +610,8 @@ prod(f, A::AbstractArray; dims)
     prod!(r, A)
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -678,6 +690,8 @@ maximum(f, A::AbstractArray; dims)
 
 Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -755,6 +769,8 @@ minimum(f, A::AbstractArray; dims)
 
 Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -819,6 +835,8 @@ extrema(f, A::AbstractArray; dims)
     extrema!(r, A)
 
 Compute the minimum and maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+$(_DOCS_ALIASING_WARNING)
 
 !!! compat "Julia 1.8"
     This method requires Julia 1.8 or later.
@@ -895,6 +913,8 @@ all(::Function, ::AbstractArray; dims)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
@@ -967,6 +987,8 @@ any(::Function, ::AbstractArray; dims)
 
 Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
 results to `r`.
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -1085,6 +1107,8 @@ end
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as less than all other values except `missing`.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
@@ -1156,6 +1180,8 @@ end
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as greater than all other values except `missing`.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
