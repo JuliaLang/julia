@@ -269,6 +269,78 @@ function do_string_escape(s)
     return escape_string(s, ('\"','$'))
 end
 
+const PATH_cache_lock = Base.ReentrantLock()
+const PATH_cache = Set{String}()
+cached_PATH_string::Union{String,Nothing} = nothing
+function cached_PATH_changed()
+    global cached_PATH_string
+    @lock(PATH_cache_lock, cached_PATH_string) !== get(ENV, "PATH", nothing)
+end
+const PATH_cache_finished = Base.Condition() # used for sync in tests
+
+# caches all reachable files in PATH dirs
+function cache_PATH()
+    global cached_PATH_string
+    path = @lock PATH_cache_lock begin
+        empty!(PATH_cache)
+        cached_PATH_string = get(ENV, "PATH", nothing)
+    end
+    path isa String || return
+
+    @debug "caching PATH files" PATH=path
+    pathdirs = split(path, @static Sys.iswindows() ? ";" : ":")
+
+    t = @elapsed for pathdir in pathdirs
+        actualpath = try
+            realpath(pathdir)
+        catch ex
+            ex isa Base.IOError || rethrow()
+            # Bash doesn't expect every folder in PATH to exist, so neither shall we
+            continue
+        end
+
+        if actualpath != pathdir && in(actualpath, pathdirs)
+            # Remove paths which (after resolving links) are in the env path twice.
+            # Many distros eg. point /bin to /usr/bin but have both in the env path.
+            continue
+        end
+
+        filesinpath = try
+            readdir(pathdir)
+        catch e
+            # Bash allows dirs in PATH that can't be read, so we should as well.
+            if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
+                continue
+            else
+                # We only handle IOError and ArgumentError here
+                rethrow()
+            end
+        end
+        for file in filesinpath
+            # In a perfect world, we would filter on whether the file is executable
+            # here, or even on whether the current user can execute the file in question.
+            try
+                if isfile(joinpath(pathdir, file))
+                    @lock PATH_cache_lock push!(PATH_cache, file)
+                end
+            catch e
+                # `isfile()` can throw in rare cases such as when probing a
+                # symlink that points to a file within a directory we do not
+                # have read access to.
+                if isa(e, Base.IOError)
+                    continue
+                else
+                    rethrow()
+                end
+            end
+            yield() # so startup doesn't block when -t1
+        end
+    end
+    notify(PATH_cache_finished)
+    @debug "caching PATH files took $t seconds" length(pathdirs) length(PATH_cache)
+    return PATH_cache
+end
+
 function complete_path(path::AbstractString;
                        use_envpath=false,
                        shell_escape=false,
@@ -308,54 +380,15 @@ function complete_path(path::AbstractString;
     end
 
     if use_envpath && isempty(dir)
-        # Look for files in PATH as well
-        pathdirs = split(ENV["PATH"], @static Sys.iswindows() ? ";" : ":")
-
-        for pathdir in pathdirs
-            actualpath = try
-                realpath(pathdir)
-            catch ex
-                ex isa Base.IOError || rethrow()
-                # Bash doesn't expect every folder in PATH to exist, so neither shall we
-                continue
+        # Look for files in PATH as well. These are cached in `cache_PATH` in a separate task in REPL init.
+        # If we cannot get lock because its still caching just pass over this so that initial
+        # typing isn't laggy. If the PATH string has changed since last cache re-cache it
+        cached_PATH_changed() && Base.errormonitor(Threads.@spawn REPLCompletions.cache_PATH())
+        if trylock(PATH_cache_lock)
+            for file in PATH_cache
+                startswith(file, prefix) && push!(matches, file)
             end
-
-            if actualpath != pathdir && in(actualpath, pathdirs)
-                # Remove paths which (after resolving links) are in the env path twice.
-                # Many distros eg. point /bin to /usr/bin but have both in the env path.
-                continue
-            end
-
-            filesinpath = try
-                readdir(pathdir)
-            catch e
-                # Bash allows dirs in PATH that can't be read, so we should as well.
-                if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
-                    continue
-                else
-                    # We only handle IOError and ArgumentError here
-                    rethrow()
-                end
-            end
-
-            for file in filesinpath
-                # In a perfect world, we would filter on whether the file is executable
-                # here, or even on whether the current user can execute the file in question.
-                try
-                    if startswith(file, prefix) && isfile(joinpath(pathdir, file))
-                        push!(matches, file)
-                    end
-                catch e
-                    # `isfile()` can throw in rare cases such as when probing a
-                    # symlink that points to a file within a directory we do not
-                    # have read access to.
-                    if isa(e, Base.IOError)
-                        continue
-                    else
-                        rethrow()
-                    end
-                end
-            end
+            unlock(PATH_cache_lock)
         end
     end
 

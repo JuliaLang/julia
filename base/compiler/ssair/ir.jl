@@ -1340,8 +1340,8 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
         else
             stmts = compact.ir.cfg.blocks[to].stmts
             for stmt in CompactPeekIterator(compact, first(stmts), last(stmts))
-                stmt === nothing && continue
-                isa(stmt, PhiNode) || break
+                is_valid_phiblock_stmt(stmt) || break
+                isa(stmt, PhiNode) || continue
                 i = findfirst(x::Int32->x==from, stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
@@ -1684,13 +1684,27 @@ struct CompactPeekIterator
     compact::IncrementalCompact
     start_idx::Int
     end_idx::Int
+    include_stmts_before_start::Bool
 end
+CompactPeekIterator(compact::IncrementalCompact, start_idx::Int, end_idx::Int) =
+    CompactPeekIterator(compact, start_idx, end_idx, false)
+
 
 function CompactPeekIterator(compact::IncrementalCompact, start_idx::Int)
     return CompactPeekIterator(compact, start_idx, 0)
 end
 
-entry_at_idx(entry::NewNodeInfo, idx::Int) = entry.attach_after ? entry.pos == idx - 1 : entry.pos == idx
+function entry_at_idx(entry::NewNodeInfo, idx::Int, start_idx::Int, include_stmts_before_start::Bool)
+    if entry.attach_after
+        if !include_stmts_before_start
+            entry.pos >= start_idx || return false
+        end
+        return entry.pos == idx - 1
+    else
+        return entry.pos == idx
+    end
+end
+
 function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.start_idx, it.compact.new_nodes_idx, 1))
     if it.end_idx > 0 && idx > it.end_idx
         return nothing
@@ -1702,7 +1716,7 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
     if compact.new_nodes_idx <= length(compact.perm)
         new_nodes = compact.ir.new_nodes
         for eidx in aidx:length(compact.perm)
-            if entry_at_idx(new_nodes.info[compact.perm[eidx]], idx)
+            if entry_at_idx(new_nodes.info[compact.perm[eidx]], idx, it.start_idx, it.include_stmts_before_start)
                 entry = new_nodes.stmts[compact.perm[eidx]]
                 return (entry[:stmt], (idx, eidx+1, bidx))
             end
@@ -1710,7 +1724,7 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
     end
     if !isempty(compact.pending_perm)
         for eidx in bidx:length(compact.pending_perm)
-            if entry_at_idx(compact.pending_nodes.info[compact.pending_perm[eidx]], idx)
+            if entry_at_idx(compact.pending_nodes.info[compact.pending_perm[eidx]], idx, it.start_idx, it.include_stmts_before_start)
                 entry = compact.pending_nodes.stmts[compact.pending_perm[eidx]]
                 return (entry[:stmt], (idx, aidx, eidx+1))
             end

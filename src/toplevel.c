@@ -759,14 +759,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 if (name != NULL)
                     u = (jl_module_t*)jl_eval_global_var(import, name);
                 if (from) {
-                    // `using A: B` syntax
+                    // `using A: B` and `using A: B.c` syntax
                     jl_module_use(m, import, name);
                 }
                 else {
                     if (!jl_is_module(u))
                         jl_eval_errorf(m, "invalid using path: \"%s\" does not name a module",
                                        jl_symbol_name(name));
-                    // `using A.B` syntax
+                    // `using A` and `using A.B` syntax
                     jl_module_using(m, u);
                     if (m == jl_main_module && name == NULL) {
                         // TODO: for now, `using A` in Main also creates an explicit binding for `A`

@@ -911,7 +911,7 @@ static bool is_tupletype_homogeneous(jl_svec_t *t, bool allow_va = false)
 }
 
 static bool for_each_uniontype_small(
-        std::function<void(unsigned, jl_datatype_t*)> f,
+        llvm::function_ref<void(unsigned, jl_datatype_t*)> f,
         jl_value_t *ty,
         unsigned &counter)
 {
@@ -4046,12 +4046,12 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
             Value *inbound = ctx.builder.CreateICmpULT(newdata, mlen);
             ctx.builder.CreateCondBr(inbound, endBB, failBB);
-            ctx.f->getBasicBlockList().push_back(failBB);
+            failBB->insertInto(ctx.f);
             ctx.builder.SetInsertPoint(failBB);
             ctx.builder.CreateCall(prepare_call(jlboundserror_func),
                 { mark_callee_rooted(ctx, boxed(ctx, ref)), i });
             ctx.builder.CreateUnreachable();
-            ctx.f->getBasicBlockList().push_back(endBB);
+            endBB->insertInto(ctx.f);
             ctx.builder.SetInsertPoint(endBB);
         }
     }
@@ -4119,12 +4119,12 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             Value *inbound = ctx.builder.CreateICmpULT(idx0, mlen);
 #endif
             ctx.builder.CreateCondBr(inbound, endBB, failBB);
-            ctx.f->getBasicBlockList().push_back(failBB);
+            failBB->insertInto(ctx.f);
             ctx.builder.SetInsertPoint(failBB);
             ctx.builder.CreateCall(prepare_call(jlboundserror_func),
                 { mark_callee_rooted(ctx, boxed(ctx, ref)), i });
             ctx.builder.CreateUnreachable();
-            ctx.f->getBasicBlockList().push_back(endBB);
+            endBB->insertInto(ctx.f);
             ctx.builder.SetInsertPoint(endBB);
         }
     }

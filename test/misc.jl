@@ -1300,6 +1300,11 @@ end
     @test sort([a, b]) == [b, a]
 end
 
+@testset "UUID display" begin
+    a = Base.UUID("dbd321ed-e87e-4f33-9511-65b7d01cdd55")
+    @test repr(a) == "$(Base.UUID)(\"dbd321ed-e87e-4f33-9511-65b7d01cdd55\")"
+end
+
 @testset "Libc.rand" begin
     low, high = extrema(Libc.rand(Float64) for i=1:10^4)
     # these fail with probability 2^(-10^4) ≈ 5e-3011

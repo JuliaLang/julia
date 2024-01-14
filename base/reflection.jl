@@ -75,7 +75,7 @@ end
 """
     names(x::Module; all::Bool = false, imported::Bool = false)
 
-Get an array of the public names of a `Module`, excluding deprecated names.
+Get a vector of the public names of a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-public names defined in the module,
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
