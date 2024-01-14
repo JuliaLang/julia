@@ -157,19 +157,24 @@ end
 import Base.Filesystem: TEMP_CLEANUP_MIN, TEMP_CLEANUP_MAX, TEMP_CLEANUP
 
 function with_temp_cleanup(f::Function, n::Int)
+    local SAVE_TEMP_CLEANUP
+    @lock TEMP_CLEANUP begin
+        SAVE_TEMP_CLEANUP = copy(TEMP_CLEANUP[])
+        empty!(TEMP_CLEANUP[])
+    end
     SAVE_TEMP_CLEANUP_MIN = TEMP_CLEANUP_MIN[]
     SAVE_TEMP_CLEANUP_MAX = TEMP_CLEANUP_MAX[]
-    SAVE_TEMP_CLEANUP = copy(TEMP_CLEANUP)
-    empty!(TEMP_CLEANUP)
     TEMP_CLEANUP_MIN[] = n
     TEMP_CLEANUP_MAX[] = n
     try f()
     finally
         Sys.iswindows() && GC.gc(true)
-        for t in keys(TEMP_CLEANUP)
-            rm(t, recursive=true, force=true)
+        @lock TEMP_CLEANUP begin
+            for t in keys(TEMP_CLEANUP[])
+                rm(t, recursive=true, force=true)
+            end
+            copy!(TEMP_CLEANUP[], SAVE_TEMP_CLEANUP)
         end
-        copy!(TEMP_CLEANUP, SAVE_TEMP_CLEANUP)
         TEMP_CLEANUP_MAX[] = SAVE_TEMP_CLEANUP_MAX
         TEMP_CLEANUP_MIN[] = SAVE_TEMP_CLEANUP_MIN
     end
@@ -185,7 +190,7 @@ end
     n = 12 # cleanup min & max
     @assert n % 2 == n % 3 == 0 # otherwise tests won't work
     with_temp_cleanup(n) do
-        @test length(TEMP_CLEANUP) == 0
+        @test lock(length, TEMP_CLEANUP) == 0
         @test TEMP_CLEANUP_MAX[] == n
         # for n mktemps, no purging is triggered
         temps = String[]
@@ -193,7 +198,7 @@ end
             t = i % 2 == 0 ? mktempfile() : mktempdir()
             push!(temps, t)
             @test ispath(t)
-            @test length(TEMP_CLEANUP) == i
+            @test lock(length, TEMP_CLEANUP) == i
             @test TEMP_CLEANUP_MAX[] == n
             # delete 1/3 of the temp paths
             i % 3 == 0 && rm(t, recursive=true, force=true)
@@ -201,7 +206,7 @@ end
         # without cleanup no purge is triggered
         t = mktempdir(cleanup=false)
         @test isdir(t)
-        @test length(TEMP_CLEANUP) == n
+        @test lock(length, TEMP_CLEANUP) == n
         @test TEMP_CLEANUP_MAX[] == n
         rm(t, recursive=true, force=true)
         # purge triggered by next mktemp with cleanup
@@ -210,7 +215,7 @@ end
         n′ = 2n÷3 + 1
         @test 2n′ > n
         @test isfile(t)
-        @test length(TEMP_CLEANUP) == n′
+        @test lock(length, TEMP_CLEANUP) == n′
         @test TEMP_CLEANUP_MAX[] == 2n′
         # remove all temp files
         for t in temps
@@ -221,7 +226,7 @@ end
             t = i % 2 == 0 ? mktempfile() : mktempdir()
             push!(temps, t)
             @test ispath(t)
-            @test length(TEMP_CLEANUP) == n′ + i
+            @test lock(length, TEMP_CLEANUP) == n′ + i
             @test TEMP_CLEANUP_MAX[] == 2n′
             # delete 2/3 of the temp paths
             i % 3 != 0 && rm(t, recursive=true, force=true)
@@ -229,7 +234,7 @@ end
         # without cleanup no purge is triggered
         t = mktempfile(cleanup=false)
         @test isfile(t)
-        @test length(TEMP_CLEANUP) == 2n′
+        @test lock(length, TEMP_CLEANUP) == 2n′
         @test TEMP_CLEANUP_MAX[] == 2n′
         rm(t, force=true)
         # purge triggered by next mktemp
@@ -238,7 +243,7 @@ end
         n′′ = n′÷3 + 1
         @test 2n′′ < n
         @test isdir(t)
-        @test length(TEMP_CLEANUP) == n′′
+        @test lock(length, TEMP_CLEANUP) == n′′
         @test TEMP_CLEANUP_MAX[] == n
     end
 end
@@ -249,7 +254,7 @@ no_error_logging(f::Function) =
 @testset "hof mktemp/dir when cleanup is prevented" begin
     d = mktempdir()
     with_temp_cleanup(3) do
-        @test length(TEMP_CLEANUP) == 0
+        @test lock(length, TEMP_CLEANUP) == 0
         @test TEMP_CLEANUP_MAX[] == 3
         local t, f
         temps = String[]
@@ -259,7 +264,7 @@ no_error_logging(f::Function) =
             t = path
         end
         @test !ispath(t)
-        @test length(TEMP_CLEANUP) == 0
+        @test lock(length, TEMP_CLEANUP) == 0
         @test TEMP_CLEANUP_MAX[] == 3
         # mktemp when cleanup is prevented
         no_error_logging() do
@@ -273,7 +278,7 @@ no_error_logging(f::Function) =
         chmod(d, 0o700)
         close(f)
         @test isfile(t)
-        @test length(TEMP_CLEANUP) == 1
+        @test lock(length, TEMP_CLEANUP) == 1
         @test TEMP_CLEANUP_MAX[] == 3
         push!(temps, t)
         # mktempdir is normally cleaned up on completion
@@ -282,7 +287,7 @@ no_error_logging(f::Function) =
             t = path
         end
         @test !ispath(t)
-        @test length(TEMP_CLEANUP) == 1
+        @test lock(length, TEMP_CLEANUP) == 1
         @test TEMP_CLEANUP_MAX[] == 3
         # mktempdir when cleanup is prevented
         no_error_logging() do
@@ -297,13 +302,13 @@ no_error_logging(f::Function) =
         chmod(d, 0o700)
         close(f)
         @test isdir(t)
-        @test length(TEMP_CLEANUP) == 2
+        @test lock(length, TEMP_CLEANUP) == 2
         @test TEMP_CLEANUP_MAX[] == 3
         push!(temps, t)
         # make one more temp file
         t = mktemp()[1]
         @test isfile(t)
-        @test length(TEMP_CLEANUP) == 3
+        @test lock(length, TEMP_CLEANUP) == 3
         @test TEMP_CLEANUP_MAX[] == 3
         # nothing has been deleted yet
         for t in temps
@@ -312,7 +317,7 @@ no_error_logging(f::Function) =
         # another temp file triggers purge
         t = mktempdir()
         @test isdir(t)
-        @test length(TEMP_CLEANUP) == 2
+        @test lock(length, TEMP_CLEANUP) == 2
         @test TEMP_CLEANUP_MAX[] == 4
         # now all the temps are gone
         for t in temps
