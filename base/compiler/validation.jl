@@ -61,9 +61,8 @@ struct InvalidCodeError <: Exception
 end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 
-function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind::String)
-    if JLOptions().debug_level == 2
-        # this is a debug build of julia, so let's validate linfo
+function maybe_validate_code(linfo::MethodInstance, src::CodeInfo, kind::String)
+    if is_asserts()
         errors = validate_code(linfo, src)
         if !isempty(errors)
             for e in errors
@@ -75,6 +74,7 @@ function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind:
                             linfo.def, ": ", e)
                 end
             end
+            error("")
         end
     end
 end
