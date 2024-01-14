@@ -278,9 +278,9 @@ function maybe_spawn_cache_PATH()
     @lock PATH_cache_lock begin
         PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
         time() < next_cache_update && return
+        PATH_cache_task = Threads.@spawn REPLCompletions.cache_PATH()
+        Base.errormonitor(PATH_cache_task)
     end
-    PATH_cache_task = Threads.@spawn REPLCompletions.cache_PATH()
-    Base.errormonitor(PATH_cache_task)
 end
 
 # caches all reachable files in PATH dirs
