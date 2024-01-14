@@ -36,7 +36,7 @@ none:1:16 error: failed to parse value
 ```
 
 There are other versions of the parse functions ([`TOML.tryparse`](@ref)
-and [`TOML.tryparsefile`]) that instead of throwing exceptions on parser error
+and [`TOML.tryparsefile`](@ref)) that instead of throwing exceptions on parser error
 returns a [`TOML.ParserError`](@ref) with information:
 
 ```jldoctest

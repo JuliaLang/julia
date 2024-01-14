@@ -11,6 +11,21 @@ code in Julia are represented by Julia data structures, powerful [reflection](ht
 capabilities are available to explore the internals of a program and its types just like any other
 data.
 
+!!! warning
+    Metaprogramming is a powerful tool, but it introduces complexity that can make code more
+    difficult to understand. For example, it can be surprisingly hard to get scope rules
+    correct. Metaprogramming should typically be used only when other approaches such as
+    [higher order functions](@ref man-anonymous-functions) and
+    [closures](https://en.wikipedia.org/wiki/Closure_(computer_programming)) cannot be applied.
+
+    `eval` and defining new macros should be typically used as a last resort. It is almost
+    never a good idea to use `Meta.parse` or convert an arbitrary string into Julia code. For
+    manipulating Julia code, use the `Expr` data structure directly to avoid the complexity
+    of how Julia syntax is parsed.
+
+    The best uses of metaprogramming often implement most of their functionality in runtime
+    helper functions, striving to minimize the amount of code they generate.
+
 ## Program representation
 
 Every Julia program starts life as a string:
@@ -102,7 +117,7 @@ julia> Meta.show_sexpr(ex3)
 
 The `:` character has two syntactic purposes in Julia. The first form creates a [`Symbol`](@ref),
 an [interned string](https://en.wikipedia.org/wiki/String_interning) used as one building-block
-of expressions:
+of expressions, from valid identifiers:
 
 ```jldoctest
 julia> s = :foo
@@ -116,8 +131,11 @@ The [`Symbol`](@ref) constructor takes any number of arguments and creates a new
 their string representations together:
 
 ```jldoctest
-julia> :foo == Symbol("foo")
+julia> :foo === Symbol("foo")
 true
+
+julia> Symbol("1foo") # `:1foo` would not work, as `1foo` is not a valid identifier
+Symbol("1foo")
 
 julia> Symbol("func",10)
 :func10
@@ -125,9 +143,6 @@ julia> Symbol("func",10)
 julia> Symbol(:var,'_',"sym")
 :var_sym
 ```
-
-Note that to use `:` syntax, the symbol's name must be a valid identifier.
-Otherwise the `Symbol(str)` constructor must be used.
 
 In the context of an expression, symbols are used to indicate access to variables; when an expression
 is evaluated, a symbol is replaced with the value bound to that symbol in the appropriate [scope](@ref scope-of-variables).
@@ -364,7 +379,7 @@ julia> ex = :(a + b)
 :(a + b)
 
 julia> eval(ex)
-ERROR: UndefVarError: b not defined
+ERROR: UndefVarError: `b` not defined in `Main`
 [...]
 
 julia> a = 1; b = 2;
@@ -382,7 +397,7 @@ julia> ex = :(x = 1)
 :(x = 1)
 
 julia> x
-ERROR: UndefVarError: x not defined
+ERROR: UndefVarError: `x` not defined in `Main`
 
 julia> eval(ex)
 1
@@ -425,7 +440,7 @@ value 1 and the variable `b`. Note the important distinction between the way `a`
 
 As hinted above, one extremely useful feature of Julia is the capability to generate and manipulate
 Julia code within Julia itself. We have already seen one example of a function returning [`Expr`](@ref)
-objects: the [`parse`](@ref) function, which takes a string of Julia code and returns the corresponding
+objects: the [`Meta.parse`](@ref) function, which takes a string of Julia code and returns the corresponding
 `Expr`. A function can also take one or more `Expr` objects as arguments, and return another
 `Expr`. Here is a simple, motivating example:
 
@@ -1325,8 +1340,7 @@ julia> function sub2ind_loop(dims::NTuple{N}, I::Integer...) where N
                ind = I[i]-1 + dims[i]*ind
            end
            return ind + 1
-       end
-sub2ind_loop (generic function with 1 method)
+       end;
 
 julia> sub2ind_loop((3, 5), 1, 2)
 4
@@ -1353,7 +1367,8 @@ Both these implementations, although different, do essentially the same thing: a
 over the dimensions of the array, collecting the offset in each dimension into the final index.
 
 However, all the information we need for the loop is embedded in the type information of the arguments.
-Thus, we can utilize generated functions to move the iteration to compile-time; in compiler parlance,
+This allows the compiler to move the iteration to compile time and eliminate the runtime loops
+altogether. We can utilize generated functions to achieve a similar effect; in compiler parlance,
 we use generated functions to manually unroll the loop. The body becomes almost identical, but
 instead of calculating the linear index, we build up an *expression* that calculates the index:
 
@@ -1364,8 +1379,7 @@ julia> @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
                ex = :(I[$i] - 1 + dims[$i] * $ex)
            end
            return :($ex + 1)
-       end
-sub2ind_gen (generic function with 1 method)
+       end;
 
 julia> sub2ind_gen((3, 5), 1, 2)
 4
@@ -1376,11 +1390,6 @@ julia> sub2ind_gen((3, 5), 1, 2)
 An easy way to find out is to extract the body into another (regular) function:
 
 ```jldoctest sub2ind_gen2
-julia> @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
-           return sub2ind_gen_impl(dims, I...)
-       end
-sub2ind_gen (generic function with 1 method)
-
 julia> function sub2ind_gen_impl(dims::Type{T}, I...) where T <: NTuple{N,Any} where N
            length(I) == N || return :(error("partial indexing is unsupported"))
            ex = :(I[$N] - 1)
@@ -1388,8 +1397,14 @@ julia> function sub2ind_gen_impl(dims::Type{T}, I...) where T <: NTuple{N,Any} w
                ex = :(I[$i] - 1 + dims[$i] * $ex)
            end
            return :($ex + 1)
-       end
-sub2ind_gen_impl (generic function with 1 method)
+       end;
+
+julia> @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
+           return sub2ind_gen_impl(dims, I...)
+       end;
+
+julia> sub2ind_gen((3, 5), 1, 2)
+4
 ```
 
 We can now execute `sub2ind_gen_impl` and examine the expression it returns:
@@ -1418,25 +1433,34 @@ To solve this problem, the language provides syntax for writing normal, non-gene
 alternative implementations of generated functions.
 Applied to the `sub2ind` example above, it would look like this:
 
-```julia
-function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
-    if N != length(I)
-        throw(ArgumentError("Number of dimensions must match number of indices."))
-    end
-    if @generated
-        ex = :(I[$N] - 1)
-        for i = (N - 1):-1:1
-            ex = :(I[$i] - 1 + dims[$i] * $ex)
-        end
-        return :($ex + 1)
-    else
-        ind = I[N] - 1
-        for i = (N - 1):-1:1
-            ind = I[i] - 1 + dims[i]*ind
-        end
-        return ind + 1
-    end
-end
+```jldoctest sub2ind_gen_opt
+julia> function sub2ind_gen_impl(dims::Type{T}, I...) where T <: NTuple{N,Any} where N
+           ex = :(I[$N] - 1)
+           for i = (N - 1):-1:1
+               ex = :(I[$i] - 1 + dims[$i] * $ex)
+           end
+           return :($ex + 1)
+       end;
+
+julia> function sub2ind_gen_fallback(dims::NTuple{N}, I) where N
+           ind = I[N] - 1
+           for i = (N - 1):-1:1
+               ind = I[i] - 1 + dims[i]*ind
+           end
+           return ind + 1
+       end;
+
+julia> function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
+           length(I) == N || error("partial indexing is unsupported")
+           if @generated
+               return sub2ind_gen_impl(dims, I...)
+           else
+               return sub2ind_gen_fallback(dims, I)
+           end
+       end;
+
+julia> sub2ind_gen((3, 5), 1, 2)
+4
 ```
 
 Internally, this code creates two implementations of the function: a generated one where

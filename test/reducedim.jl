@@ -6,7 +6,16 @@ using Random
 
 # issue #35800
 # tested very early since it can be state-dependent
-@test @inferred(mapreduce(x->count(!iszero,x), +, [rand(1)]; init = 0.)) == 1.0
+
+function my_simple_count(pred, g::Vector{T}) where {T}
+    n::T = zero(T)
+    for x in g
+        n += pred(x)
+    end
+    return n
+end
+
+@test @inferred(mapreduce(x->my_simple_count(!iszero,x), +, [rand(1)]; init = 0.)) == 1.0
 
 function safe_mapslices(op, A, region)
     newregion = intersect(region, 1:ndims(A))
@@ -197,6 +206,10 @@ end
         @test isequal(f(A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
         @test_throws ArgumentError f(A, dims=(1, 2))
         @test isequal(f(A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test_throws ArgumentError f(abs2, A, dims=1)
+        @test isequal(f(abs2, A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
+        @test_throws ArgumentError f(abs2, A, dims=(1, 2))
+        @test isequal(f(abs2, A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
     end
 
 end
@@ -225,15 +238,93 @@ for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(maximum!(copy(rval), A, init=false), rval)
 end
 
+@testset "findmin/findmax transformed arguments, numeric values" begin
+    A = [1.0 -5.0 -6.0;
+         -5.0 2.0 4.0]
+    TA = [((1,), [1.0 2.0 4.0], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
+          ((2,), reshape([1.0, 2.0], 2, 1), reshape([CartesianIndex(1,1), CartesianIndex(2,2)], 2, 1)),
+          ((1,2), fill(1.0,1,1), fill(CartesianIndex(1,1),1,1))]
+    TA2 = [((1,), [1.0 4.0 16.0], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
+           ((2,), reshape([1.0, 4.0], 2, 1), reshape([CartesianIndex(1,1), CartesianIndex(2,2)], 2, 1)),
+           ((1,2), fill(1.0,1,1), fill(CartesianIndex(1,1),1,1))]
+    TAc = [((1,), [0.28366218546322625 -0.4161468365471424 -0.6536436208636119], [CartesianIndex(2,1) CartesianIndex(2,2) CartesianIndex(2,3)]),
+           ((2,), reshape([0.28366218546322625, -0.6536436208636119], 2, 1), reshape([CartesianIndex(1,2), CartesianIndex(2,3)], 2, 1)),
+           ((1,2), fill(-0.6536436208636119,1,1), fill(CartesianIndex(2,3),1,1))]
+    for (f, At) in ((abs, TA), (abs2, TA2), (cos, TAc))
+        A′ = map(f, A)
+        for (tup, rval, rind) in At
+            (rval′, rind′) = findmin(f, A, dims=tup)
+            @test all(rval′ .≈ rval)
+            @test rind′ == rind
+            @test findmin(f, A, dims=tup) == (rval, rind)
+            @test (rval′, rind′) == findmin(A′, dims=tup)
+        end
+    end
+
+    TA = [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+          ((2,), reshape([6.0,5.0], 2, 1), reshape([CartesianIndex(1,3), CartesianIndex(2,1)], 2, 1)),
+          ((1,2), fill(6.0,1,1),fill(CartesianIndex(1,3),1,1))]
+    TA2 = [((1,), [25.0 25.0 36.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+           ((2,), reshape([36.0, 25.0], 2, 1), reshape([CartesianIndex(1,3), CartesianIndex(2,1)], 2, 1)),
+           ((1,2), fill(36.0,1,1), fill(CartesianIndex(1,3),1,1))]
+    TAc = [((1,), [0.5403023058681398 0.28366218546322625 0.960170286650366], [CartesianIndex(1,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+           ((2,), reshape([0.960170286650366, 0.28366218546322625], 2, 1), reshape([CartesianIndex(1,3), CartesianIndex(2,1)], 2, 1)),
+           ((1,2), fill(0.960170286650366,1,1), fill(CartesianIndex(1,3),1,1))]
+    for (f, At) in ((abs, TA), (abs2, TA2), (cos, TAc))
+        A′ = map(f, A)
+        for (tup, rval, rind) in At
+            (rval′, rind′) = findmax(f, A, dims=tup)
+            @test all(rval′ .≈ rval)
+            @test rind′ == rind
+            @test findmax(f, A, dims=tup) == (rval, rind)
+            @test (rval′, rind′) == findmax(A′, dims=tup)
+        end
+    end
+end
+
+# findmin/findmax function arguments: output type inference
+@testset "findmin/findmax output type inference" begin
+    A = ["1" "22"; "333" "4444"]
+    for (tup, rval, rind) in [((1,), [1 2], [CartesianIndex(1, 1) CartesianIndex(1, 2)]),
+                              ((2,), reshape([1, 3], 2, 1), reshape([CartesianIndex(1, 1), CartesianIndex(2, 1)], 2, 1)),
+                              ((1,2), fill(1,1,1), fill(CartesianIndex(1,1),1,1))]
+        rval′, rind′ = findmin(length, A, dims=tup)
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval′) == Matrix{Int}
+    end
+    for (tup, rval, rind) in [((1,), [3 4], [CartesianIndex(2, 1) CartesianIndex(2, 2)]),
+                              ((2,), reshape([2, 4], 2, 1), reshape([CartesianIndex(1, 2), CartesianIndex(2, 2)], 2, 1)),
+                              ((1,2), fill(4,1,1), fill(CartesianIndex(2,2),1,1))]
+        rval′, rind′ = findmax(length, A, dims=tup)
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval) == Matrix{Int}
+    end
+    B = [1.5 1.0; 5.5 6.0]
+    for (tup, rval, rind) in [((1,), [3//2 1//1], [CartesianIndex(1, 1) CartesianIndex(1, 2)]),
+                              ((2,), reshape([1//1, 11//2], 2, 1), reshape([CartesianIndex(1, 2), CartesianIndex(2, 1)], 2, 1)),
+                              ((1,2), fill(1//1,1,1), fill(CartesianIndex(1,2),1,1))]
+        rval′, rind′ = findmin(Rational, B, dims=tup)
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval) == Matrix{Rational{Int}}
+        rval′, rind′ = findmin(Rational ∘ abs ∘ complex, B, dims=tup)
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval) == Matrix{Rational{Int}}
+    end
+end
+
+
 @testset "missing in findmin/findmax" begin
     B = [1.0 missing NaN;
          5.0 NaN missing]
+    B′ = [1.0 missing -NaN;
+          -5.0 NaN missing]
     for (tup, rval, rind) in [(1, [5.0 missing missing], [CartesianIndex(2, 1) CartesianIndex(1, 2) CartesianIndex(2, 3)]),
                               (2, [missing; missing],    [CartesianIndex(1, 2) CartesianIndex(2, 3)] |> permutedims)]
         (rval′, rind′) = findmax(B, dims=tup)
         @test all(rval′ .=== rval)
         @test all(rind′ .== rind)
         @test all(maximum(B, dims=tup) .=== rval)
+        @test isequal(findmax(abs, B′, dims=tup), (rval′, rind′))
     end
 
     for (tup, rval, rind) in [(1, [1.0 missing missing], [CartesianIndex(1, 1) CartesianIndex(1, 2) CartesianIndex(2, 3)]),
@@ -242,6 +333,7 @@ end
         @test all(rval′ .=== rval)
         @test all(rind′ .== rind)
         @test all(minimum(B, dims=tup) .=== rval)
+        @test isequal(findmin(abs, B′, dims=tup), (rval′, rind′))
     end
 end
 
@@ -266,6 +358,7 @@ for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [CartesianIndex(2,1) CartesianIn
                           ((2,), reshape([1.0, NaN], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
                           ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
     @test isequal(findmin(A, dims=tup), (rval, rind))
+    @test isequal(findmin(abs, A, dims=tup), (rval, rind))
     @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(minimum(A, dims=tup), rval)
     @test isequal(minimum!(similar(rval), A), rval)
@@ -277,6 +370,7 @@ for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [CartesianIndex(2,1) CartesianIn
                           ((2,), reshape([6.0, NaN], 2, 1), reshape([CartesianIndex(1,3),CartesianIndex(2,1)], 2, 1)),
                           ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
     @test isequal(findmax(A, dims=tup), (rval, rind))
+    @test isequal(findmax(abs, A, dims=tup), (rval, rind))
     @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
@@ -286,125 +380,153 @@ end
 
 # issue #28320
 @testset "reducedim issue with abstract complex arrays" begin
-let A = Complex[1.5 0.5]
-    @test mapreduce(abs2, +, A, dims=2) == reshape([2.5], 1, 1)
-    @test sum(abs2, A, dims=2) == reshape([2.5], 1, 1)
-    @test prod(abs2, A, dims=2) == reshape([0.5625], 1, 1)
-    @test maximum(abs2, A, dims=2) == reshape([2.25], 1, 1)
-    @test minimum(abs2, A, dims=2) == reshape([0.25], 1, 1)
-end
-end
-
-A = [1.0 NaN 6.0;
-     NaN 2.0 4.0]
-for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(2,3)]),
-                          ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
-                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
-    @test isequal(findmin(A, dims=tup), (rval, rind))
-    @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(minimum(A, dims=tup), rval)
-    @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
+    let A = Complex[1.5 0.5]
+        @test mapreduce(abs2, +, A, dims=2) == reshape([2.5], 1, 1)
+        @test sum(abs2, A, dims=2) == reshape([2.5], 1, 1)
+        @test prod(abs2, A, dims=2) == reshape([0.5625], 1, 1)
+        @test maximum(abs2, A, dims=2) == reshape([2.25], 1, 1)
+        @test minimum(abs2, A, dims=2) == reshape([0.25], 1, 1)
+        @test findmin(abs2, A, dims=2) == (fill(0.25, 1, 1), fill(CartesianIndex(1, 2), 1, 1))
+        @test findmax(abs2, A, dims=2) == (fill(2.25, 1, 1), fill(CartesianIndex(1, 1), 1, 1))
+    end
 end
 
-for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
-                          ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
-                          ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
-    @test isequal(findmax(A, dims=tup), (rval, rind))
-    @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(maximum(A, dims=tup), rval)
-    @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
+@testset "NaN in findmin/findmax/minimum/maximum" begin
+    A = [1.0 NaN 6.0;
+         NaN 2.0 4.0]
+    A′ = [-1.0 NaN -6.0;
+          NaN -2.0 4.0]
+    for (tup, rval, rind) in [((1,), [NaN NaN 4.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(2,3)]),
+                              ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
+                              ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+        @test isequal(findmin(A, dims=tup), (rval, rind))
+        @test isequal(findmin(abs, A′, dims=tup), (rval, rind))
+        @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(minimum(A, dims=tup), rval)
+        @test isequal(minimum!(similar(rval), A), rval)
+        @test isequal(minimum!(copy(rval), A, init=false), rval)
+    end
+
+    for (tup, rval, rind) in [((1,), [NaN NaN 6.0], [CartesianIndex(2,1) CartesianIndex(1,2) CartesianIndex(1,3)]),
+                              ((2,), reshape([NaN, NaN], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,1)], 2, 1)),
+                              ((1,2), fill(NaN,1,1),fill(CartesianIndex(2,1),1,1))]
+        @test isequal(findmax(A, dims=tup), (rval, rind))
+        @test isequal(findmax(abs, A′, dims=tup), (rval, rind))
+        @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(maximum(A, dims=tup), rval)
+        @test isequal(maximum!(similar(rval), A), rval)
+        @test isequal(maximum!(copy(rval), A, init=false), rval)
+    end
 end
 
-A = [Inf -Inf Inf  -Inf;
-     Inf  Inf -Inf -Inf]
-for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [CartesianIndex(1,1) CartesianIndex(1,2) CartesianIndex(2,3) CartesianIndex(1,4)]),
-                          ((2,), reshape([-Inf -Inf], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,3)], 2, 1)),
-                          ((1,2), fill(-Inf,1,1),fill(CartesianIndex(1,2),1,1))]
-    @test isequal(findmin(A, dims=tup), (rval, rind))
-    @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(minimum(A, dims=tup), rval)
-    @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
+@testset "+/-Inf in findmin/findmax/minimum/maximum" begin
+    A = [Inf -Inf Inf  -Inf;
+         Inf  Inf -Inf -Inf]
+    A′ = [1 0 1 0;
+          1 1 0 0]
+    for (tup, rval, rind) in [((1,), [Inf -Inf -Inf -Inf], [CartesianIndex(1,1) CartesianIndex(1,2) CartesianIndex(2,3) CartesianIndex(1,4)]),
+                              ((2,), reshape([-Inf -Inf], 2, 1), reshape([CartesianIndex(1,2),CartesianIndex(2,3)], 2, 1)),
+                              ((1,2), fill(-Inf,1,1),fill(CartesianIndex(1,2),1,1))]
+        @test isequal(findmin(A, dims=tup), (rval, rind))
+        @test isequal(findmin(x -> x == 1 ? Inf : -Inf, A′, dims=tup), (rval, rind))
+        @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(minimum(A, dims=tup), rval)
+        @test isequal(minimum!(similar(rval), A), rval)
+        @test isequal(minimum!(copy(rval), A, init=false), rval)
+    end
+
+    for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(1,3) CartesianIndex(1,4)]),
+                              ((2,), reshape([Inf Inf], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
+                              ((1,2), fill(Inf,1,1),fill(CartesianIndex(1,1),1,1))]
+        @test isequal(findmax(A, dims=tup), (rval, rind))
+        @test isequal(findmax(x -> x == 1 ? Inf : -Inf, A′, dims=tup), (rval, rind))
+        @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(maximum(A, dims=tup), rval)
+        @test isequal(maximum!(similar(rval), A), rval)
+        @test isequal(maximum!(copy(rval), A, init=false), rval)
+    end
 end
 
-for (tup, rval, rind) in [((1,), [Inf Inf Inf -Inf], [CartesianIndex(1,1) CartesianIndex(2,2) CartesianIndex(1,3) CartesianIndex(1,4)]),
-                          ((2,), reshape([Inf Inf], 2, 1), reshape([CartesianIndex(1,1),CartesianIndex(2,1)], 2, 1)),
-                          ((1,2), fill(Inf,1,1),fill(CartesianIndex(1,1),1,1))]
-    @test isequal(findmax(A, dims=tup), (rval, rind))
-    @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(maximum(A, dims=tup), rval)
-    @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
+@testset "BigInt in findmin/findmax/minimum/maximum" begin
+    A = [BigInt(10)]
+    A′ = [BigInt(1)]
+    for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+        @test isequal(findmin(A, dims=tup), (rval, rind))
+        @test isequal(findmin(x -> 10^x, A′, dims=tup), (rval, rind))
+        @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(minimum(A, dims=tup), rval)
+        @test isequal(minimum!(similar(rval), A), rval)
+        @test isequal(minimum!(copy(rval), A, init=false), rval)
+    end
+
+    for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
+        @test isequal(findmax(A, dims=tup), (rval, rind))
+        @test isequal(findmax(x -> 10^x, A′, dims=tup), (rval, rind))
+        @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(maximum(A, dims=tup), rval)
+        @test isequal(maximum!(similar(rval), A), rval)
+        @test isequal(maximum!(copy(rval), A, init=false), rval)
+    end
+
+    A = [BigInt(-10)]
+    for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+        @test isequal(findmin(A, dims=tup), (rval, rind))
+        @test isequal(findmin(x -> -(x + 20), A, dims=tup), (rval, rind))
+        @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(minimum(A, dims=tup), rval)
+        @test isequal(minimum!(similar(rval), A), rval)
+        @test isequal(minimum!(copy(rval), A, init=false), rval)
+    end
+
+    for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
+        @test isequal(findmax(A, dims=tup), (rval, rind))
+        @test isequal(findmax(x -> -(x + 20), A, dims=tup), (rval, rind))
+        @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(maximum(A, dims=tup), rval)
+        @test isequal(maximum!(similar(rval), A), rval)
+        @test isequal(maximum!(copy(rval), A, init=false), rval)
+    end
+
+    A = [BigInt(10) BigInt(-10)]
+    A′ = [BigInt(1) BigInt(10)]
+    for (tup, rval, rind) in [((2,), reshape([BigInt(-10)], 1, 1), reshape([CartesianIndex(1,2)], 1, 1))]
+        @test isequal(findmin(A, dims=tup), (rval, rind))
+        @test isequal(findmin(x -> x == 1 ? 10^x : x - 20, A′, dims=tup), (rval, rind))
+        @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(minimum(A, dims=tup), rval)
+        @test isequal(minimum!(similar(rval), A), rval)
+        @test isequal(minimum!(copy(rval), A, init=false), rval)
+    end
+
+    for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([CartesianIndex(1,1)], 1, 1))]
+        @test isequal(findmax(A, dims=tup), (rval, rind))
+        @test isequal(findmax(x -> x == 1 ? 10^x : x - 20, A′, dims=tup), (rval, rind))
+        @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(maximum(A, dims=tup), rval)
+        @test isequal(maximum!(similar(rval), A), rval)
+        @test isequal(maximum!(copy(rval), A, init=false), rval)
+    end
 end
 
-A = [BigInt(10)]
-for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
-    @test isequal(findmin(A, dims=tup), (rval, rind))
-    @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(minimum(A, dims=tup), rval)
-    @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
-end
+@testset "String in findmin/findmax/minimum/maximum" begin
+    A = ["a", "b"]
+    for (tup, rval, rind) in [((1,), ["a"], [1])]
+        @test isequal(findmin(A, dims=tup), (rval, rind))
+        @test isequal(findmin(x -> (x^2)[1:1], A, dims=tup), (rval, rind))
+        @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(minimum(A, dims=tup), rval)
+        @test isequal(minimum!(similar(rval), A), rval)
+        @test isequal(minimum!(copy(rval), A, init=false), rval)
+    end
 
-for (tup, rval, rind) in [((2,), [BigInt(10)], [1])]
-    @test isequal(findmax(A, dims=tup), (rval, rind))
-    @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(maximum(A, dims=tup), rval)
-    @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
-end
-
-A = [BigInt(-10)]
-for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
-    @test isequal(findmin(A, dims=tup), (rval, rind))
-    @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(minimum(A, dims=tup), rval)
-    @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
-end
-
-for (tup, rval, rind) in [((2,), [BigInt(-10)], [1])]
-    @test isequal(findmax(A, dims=tup), (rval, rind))
-    @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(maximum(A, dims=tup), rval)
-    @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
-end
-
-A = [BigInt(10) BigInt(-10)]
-for (tup, rval, rind) in [((2,), reshape([BigInt(-10)], 1, 1), reshape([CartesianIndex(1,2)], 1, 1))]
-    @test isequal(findmin(A, dims=tup), (rval, rind))
-    @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(minimum(A, dims=tup), rval)
-    @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
-end
-
-for (tup, rval, rind) in [((2,), reshape([BigInt(10)], 1, 1), reshape([CartesianIndex(1,1)], 1, 1))]
-    @test isequal(findmax(A, dims=tup), (rval, rind))
-    @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(maximum(A, dims=tup), rval)
-    @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
-end
-
-A = ["a", "b"]
-for (tup, rval, rind) in [((1,), ["a"], [1])]
-    @test isequal(findmin(A, dims=tup), (rval, rind))
-    @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(minimum(A, dims=tup), rval)
-    @test isequal(minimum!(similar(rval), A), rval)
-    @test isequal(minimum!(copy(rval), A, init=false), rval)
-end
-
-for (tup, rval, rind) in [((1,), ["b"], [2])]
-    @test isequal(findmax(A, dims=tup), (rval, rind))
-    @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
-    @test isequal(maximum(A, dims=tup), rval)
-    @test isequal(maximum!(similar(rval), A), rval)
-    @test isequal(maximum!(copy(rval), A, init=false), rval)
+    for (tup, rval, rind) in [((1,), ["b"], [2])]
+        @test isequal(findmax(A, dims=tup), (rval, rind))
+        @test isequal(findmax(x -> (x^2)[1:1], A, dims=tup), (rval, rind))
+        @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(maximum(A, dims=tup), rval)
+        @test isequal(maximum!(similar(rval), A), rval)
+        @test isequal(maximum!(copy(rval), A, init=false), rval)
+    end
 end
 
 # issue #6672
@@ -486,7 +608,7 @@ end
 end
 @testset "NaN/missing test for extrema with dims #43599" begin
     for sz = (3, 10, 100)
-        for T in (Int, Float64, BigFloat)
+        for T in (Int, Float64, BigFloat, BigInt)
             Aₘ = Matrix{Union{T, Missing}}(rand(-sz:sz, sz, sz))
             Aₘ[rand(1:sz*sz, sz)] .= missing
             unordered_test_for_extrema(Aₘ)
@@ -500,9 +622,16 @@ end
         end
     end
 end
-@test_broken minimum([missing;BigInt(1)], dims = 1)
-@test_broken maximum([missing;BigInt(1)], dims = 1)
-@test_broken extrema([missing;BigInt(1)], dims = 1)
+
+@testset "minimum/maximum over dims with missing (#35308)" begin
+    for T in (Int, Float64, BigInt, BigFloat)
+        x = Union{T, Missing}[1 missing; 2 missing]
+        @test isequal(minimum(x, dims=1), reshape([1, missing], 1, :))
+        @test isequal(maximum(x, dims=1), reshape([2, missing], 1, :))
+        @test isequal(minimum(x, dims=2), reshape([missing, missing], :, 1))
+        @test isequal(maximum(x, dims=2), reshape([missing, missing], :, 1))
+    end
+end
 
 # issue #26709
 @testset "dimensional reduce with custom non-bitstype types" begin

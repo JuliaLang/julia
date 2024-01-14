@@ -3,6 +3,8 @@
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
+@test_throws "The profiling data buffer is not initialized. A profile has not been requested this session." Profile.print()
+
 Profile.clear()
 Profile.init()
 
@@ -36,36 +38,26 @@ let r = Profile.retrieve()
     end
 end
 
-let iobuf = IOBuffer()
-    Profile.print(iobuf, format=:tree, C=true)
+# test printing options
+for options in ((format=:tree, C=true),
+                (format=:tree, maxdepth=2),
+                (format=:flat, C=true),
+                (),
+                (format=:flat, sortedby=:count),
+                (format=:tree, recur=:flat),
+               )
+    iobuf = IOBuffer()
+    Profile.print(iobuf; options...)
     str = String(take!(iobuf))
     @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:tree, maxdepth=2)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:flat, C=true)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
-    Profile.print(iobuf)
-    @test !isempty(String(take!(iobuf)))
-    truncate(iobuf, 0)
-    Profile.print(iobuf, format=:flat, sortedby=:count)
-    @test !isempty(String(take!(iobuf)))
-    Profile.print(iobuf, format=:tree, recur=:flat)
-    str = String(take!(iobuf))
-    @test !isempty(str)
-    truncate(iobuf, 0)
 end
 
 @testset "Profile.print() groupby options" begin
     iobuf = IOBuffer()
     with_logger(NullLogger()) do
         @testset for format in [:flat, :tree]
-            @testset for threads in Any[1:Threads.nthreads(), 1, 1:1, 1:2, [1,2]]
-                @testset for groupby in [:none, :thread, :task, [:thread, :task], [:task, :thread]]
+            @testset for threads in Any[1:typemax(Int), 1, 1:1, 1:2, [1,2]]
+                @testset for groupby in Any[:none, :thread, :task, [:thread, :task], [:task, :thread]]
                     Profile.print(iobuf; groupby, threads, format)
                     @test !isempty(String(take!(iobuf)))
                 end
@@ -118,11 +110,10 @@ end
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
-    nthreads = Sys.iswindows() ? 1 : Threads.nthreads()
     sample_size_bytes = sizeof(Ptr)
     def_n = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 1_000_000 : 10_000_000
-    if Sys.WORD_SIZE == 32 && (def_n * nthreads * sample_size_bytes) > 2^29
-        @test n_ * nthreads * sample_size_bytes <= 2^29
+    if Sys.WORD_SIZE == 32 && (def_n * sample_size_bytes) > 2^29
+        @test n_ * sample_size_bytes <= 2^29
     else
         @test n_ == def_n
     end
@@ -131,8 +122,8 @@ end
     @test delay_ == def_delay
     Profile.init(n=1_000_001, delay=0.0005)
     n_, delay_ = Profile.init()
-    if Sys.WORD_SIZE == 32 && (1_000_001 * nthreads * sample_size_bytes) > 2^29
-        @test n_ * nthreads * sample_size_bytes <= 2^29
+    if Sys.WORD_SIZE == 32 && (1_000_001 * sample_size_bytes) > 2^29
+        @test n_ * sample_size_bytes <= 2^29
     else
         @test n_ == 1_000_001
     end
@@ -151,14 +142,14 @@ end
     @profile busywait(1, 20)
     _, fdict0 = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = function(list)
-        modify((sf, n)) = sf.func == :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        modify((sf, n)) = sf.func === :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
         map!(modify, list, list)
     end
     _, fdictc = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = identity
     function getline(sfs)
         for sf in sfs
-            sf.func == :busywait && return sf.line
+            sf.func === :busywait && return sf.line
         end
         nothing
     end
@@ -180,7 +171,7 @@ let cmd = Base.julia_cmd()
     p = open(`$cmd -e $script`)
     t = Timer(120) do t
         # should be under 10 seconds, so give it 2 minutes then report failure
-        println("KILLING BY PROFILE TEST WATCHDOG\n")
+        println("KILLING debuginfo registration test BY PROFILE TEST WATCHDOG\n")
         kill(p, Base.SIGTERM)
         sleep(10)
         kill(p, Base.SIGKILL)
@@ -197,42 +188,54 @@ if Sys.isbsd() || Sys.islinux()
     @testset "SIGINFO/SIGUSR1 profile triggering" begin
         let cmd = Base.julia_cmd()
             script = """
-                x = rand(1000, 1000)
-                println("started")
-                while true
-                    x * x
-                    yield()
-                end
+                print(stderr, "started\n")
+                eof(stdin)
                 """
-            iob = Base.BufferStream()
-            p = run(pipeline(`$cmd -e $script`, stderr = devnull, stdout = iob), wait = false)
+            iob = Base.BufferStream() # make an unbounded buffer, so we can just read after waiting for exit
+            notify_exit = Base.PipeEndpoint()
+            p = run(`$cmd -e $script`, notify_exit, devnull, iob, wait=false)
+            eof = @async try # set up a monitor task to set EOF on iob after p exits
+                wait(p)
+            finally
+                closewrite(iob)
+            end
             t = Timer(120) do t
                 # should be under 10 seconds, so give it 2 minutes then report failure
-                println("KILLING BY PROFILE TEST WATCHDOG\n")
+                println("KILLING siginfo/sigusr1 test BY PROFILE TEST WATCHDOG\n")
                 kill(p, Base.SIGTERM)
                 sleep(10)
                 kill(p, Base.SIGKILL)
-                close(iob)
+                close(notify_exit)
             end
             try
-                s = readuntil(iob, "started", keep = true)
+                s = readuntil(iob, "started", keep=true)
                 @assert occursin("started", s)
                 @assert process_running(p)
-                for _ in 1:2
-                    sleep(2.5)
+                for i in 1:2
+                    i > 1 && sleep(5)
                     if Sys.isbsd()
                         kill(p, 29) # SIGINFO
                     elseif Sys.islinux()
                         kill(p, 10) # SIGUSR1
                     end
-                    s = readuntil(iob, "Overhead ╎", keep = true)
+                    s = readuntil(iob, "Overhead ╎", keep=true)
                     @test process_running(p)
+                    readavailable(iob)
                     @test occursin("Overhead ╎", s)
                 end
-            finally
-                kill(p, Base.SIGKILL)
+                close(notify_exit) # notify test finished
+                wait(eof) # wait for test completion
+                s = read(iob, String) # consume test output from buffer
                 close(t)
+            catch
+                close(notify_exit)
+                wait(eof) # wait for test completion
+                errs = read(iob, String) # consume test output
+                isempty(errs) || println("CHILD STDERR after test failure: ", errs)
+                close(t)
+                rethrow()
             end
+            @test success(p)
         end
     end
 end
@@ -263,11 +266,37 @@ end
     Profile.tree!(root, backtraces, lidict, #= C =# true, :off)
     @test length(root.down) == 2
     for k in keys(root.down)
-        @test k.file == :file1
+        @test k.file === :file1
         @test k.line ∈ (1, 2)
     end
     node = root.down[stackframe(:f1, :file1, 2)]
     @test only(node.down).first == lidict[8]
+end
+
+@testset "HeapSnapshot" begin
+    tmpdir = mktempdir()
+    fname = cd(tmpdir) do
+        read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+    end
+
+    @test isfile(fname)
+
+    open(fname) do fs
+        @test readline(fs) != ""
+    end
+
+    rm(fname)
+    rm(tmpdir, force = true, recursive = true)
+end
+
+@testset "PageProfile" begin
+    fname = "$(getpid())_$(time_ns())"
+    fpath = joinpath(tempdir(), fname)
+    Profile.take_page_profile(fpath)
+    open(fpath) do fs
+        @test readline(fs) != ""
+    end
+    rm(fpath)
 end
 
 include("allocs.jl")

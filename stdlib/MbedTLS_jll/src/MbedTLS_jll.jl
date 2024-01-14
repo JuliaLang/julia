@@ -14,13 +14,13 @@ export libmbedcrypto, libmbedtls, libmbedx509
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libmbedcrypto_handle = C_NULL
-libmbedcrypto_path = ""
-libmbedtls_handle = C_NULL
-libmbedtls_path = ""
-libmbedx509_handle = C_NULL
-libmbedx509_path = ""
+artifact_dir::String = ""
+libmbedcrypto_handle::Ptr{Cvoid} = C_NULL
+libmbedcrypto_path::String = ""
+libmbedtls_handle::Ptr{Cvoid} = C_NULL
+libmbedtls_path::String = ""
+libmbedx509_handle::Ptr{Cvoid} = C_NULL
+libmbedx509_path::String = ""
 
 if Sys.iswindows()
     const libmbedcrypto = "libmbedcrypto.dll"

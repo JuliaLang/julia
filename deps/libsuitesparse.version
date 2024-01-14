@@ -1,0 +1,8 @@
+# -*- makefile -*-
+
+## jll artifact
+LIBSUITESPARSE_JLL_NAME := SuiteSparse
+
+## source build
+LIBSUITESPARSE_VER := 7.4.0
+LIBSUITESPARSE_SHA1=df91d7be262e6b5cddf5dd23ff42dec1713e7947

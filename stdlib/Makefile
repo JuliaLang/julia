@@ -6,20 +6,22 @@ SRCCACHE := $(abspath $(SRCDIR)/srccache)
 BUILDDIR := .
 
 include $(JULIAHOME)/Make.inc
-include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/deps/tools/common.mk
 include $(JULIAHOME)/deps/tools/stdlib-external.mk
+# include all `*.version` files, import `LIBNAME_JLL_NAME` and `LIBNAME_JLL_VER`
+# Note: Some deps do not have a `_jll` pkg: [libwhich, patchelf, utf8proc]
+include $(JULIAHOME)/deps/*.version
+
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
-
-$(build_datarootdir)/julia/stdlib/$(VERSDIR):
-	mkdir -p $@
+DIRS := $(build_datarootdir)/julia/stdlib/$(VERSDIR) $(build_prefix)/manifest/$(VERSDIR)
+$(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
 JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV MBEDTLS MPFR NGHTTP2 \
        BLASTRAMPOLINE OPENBLAS OPENLIBM P7ZIP PCRE LIBSUITESPARSE ZLIB \
-       LLVMUNWIND CSL UNWIND
+       LLVMUNWIND CSL UNWIND LLD
 
-# Initialize this with JLLs that aren't in deps/Versions.make
+# Initialize this with JLLs that aren't in "deps/$(LibName).version"
 JLL_NAMES := MozillaCACerts_jll
 get-MozillaCACerts_jll:
 install-MozillaCACerts_jll:
@@ -38,15 +40,21 @@ endef
 $(foreach jll,$(JLLS),$(eval $(call download-artifacts-toml,$(jll))))
 
 
-STDLIBS = Artifacts Base64 CRC32c Dates DelimitedFiles Distributed FileWatching \
-          Future InteractiveUtils LazyArtifacts Libdl LibGit2 LinearAlgebra Logging \
-          Markdown Mmap Printf Profile Random REPL Serialization SHA \
-          SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs \
+STDLIBS = Artifacts Base64 CRC32c Dates FileWatching \
+          Future InteractiveUtils Libdl LibGit2 LinearAlgebra Logging \
+          Markdown Mmap Printf Profile Random REPL Serialization \
+          SharedArrays Sockets Test TOML Unicode UUIDs \
           $(JLL_NAMES)
 
-STDLIBS_EXT = Pkg Statistics LibCURL Downloads ArgTools Tar NetworkOptions SuiteSparse SparseArrays SHA
+STDLIBS_EXT = Pkg Statistics LazyArtifacts LibCURL DelimitedFiles Downloads ArgTools \
+              Tar NetworkOptions SuiteSparse SparseArrays StyledStrings SHA Distributed
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
+
+ifneq ($(filter $(STDLIBS),$(STDLIBS_EXT)),)
+$(error ERROR duplicated STDLIBS in list)
+endif
+
 
 # Generate symlinks to all stdlibs at usr/share/julia/stdlib/vX.Y/
 $(foreach module, $(STDLIBS), $(eval $(call symlink_target,$$(JULIAHOME)/stdlib/$(module),$$(build_datarootdir)/julia/stdlib/$$(VERSDIR),$(module))))
@@ -65,5 +73,5 @@ clean: $(addprefix clean-, $(STDLIBS_EXT)) $(CLEAN_TARGETS) extstdlibclean
 distclean: $(addprefix distclean-, $(STDLIBS_EXT)) clean
 checksumall: $(addprefix checksum-, $(STDLIBS_EXT))
 
-DEP_LIBS_STAGED_ALL := $(STDLIBS_EXT)
+DEP_LIBS_STAGED_ALL := $(addprefix $(VERSDIR)/,$(STDLIBS_EXT))
 include $(JULIAHOME)/deps/tools/uninstallers.mk

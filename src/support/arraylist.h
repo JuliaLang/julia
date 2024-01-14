@@ -25,7 +25,7 @@ void arraylist_free(arraylist_t *a) JL_NOTSAFEPOINT;
 
 void arraylist_push(arraylist_t *a, void *elt) JL_NOTSAFEPOINT;
 void *arraylist_pop(arraylist_t *a) JL_NOTSAFEPOINT;
-void arraylist_grow(arraylist_t *a, size_t n) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void arraylist_grow(arraylist_t *a, size_t n) JL_NOTSAFEPOINT;
 
 typedef struct {
     uint32_t len;

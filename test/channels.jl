@@ -14,6 +14,28 @@ using Base: n_avail
     @test fetch(t) == "finished"
 end
 
+@testset "wait first behavior of wait on Condition" begin
+    a = Condition()
+    waiter1 = @async begin
+        wait(a)
+    end
+    waiter2 = @async begin
+        wait(a)
+    end
+    waiter3 = @async begin
+        wait(a; first=true)
+    end
+    waiter4 = @async begin
+        wait(a)
+    end
+    t = @async begin
+        Base.notify(a, "success"; all=false)
+        "finished"
+    end
+    @test fetch(waiter3) == "success"
+    @test fetch(t) == "finished"
+end
+
 @testset "various constructors" begin
     c = Channel()
     @test eltype(c) == Any
@@ -84,6 +106,11 @@ end
     # Test that the task is using the multithreaded scheduler
     @test taskref[].sticky == false
     @test collect(c) == [0]
+end
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no channel_threadpool.jl`
+    new_env = copy(ENV)
+    new_env["JULIA_NUM_THREADS"] = "1,1"
+    run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
 end
 
 @testset "multiple concurrent put!/take! on a channel for different sizes" begin
@@ -288,7 +315,8 @@ end
 end
 
 @testset "timedwait on multiple channels" begin
-    @Experimental.sync begin
+    Experimental.@sync begin
+        sync = Channel(1)
         rr1 = Channel(1)
         rr2 = Channel(1)
         rr3 = Channel(1)
@@ -298,20 +326,17 @@ end
         @test !callback()
         @test timedwait(callback, 0) === :timed_out
 
-        @async begin sleep(0.5); put!(rr1, :ok) end
+        @async begin put!(sync, :ready); sleep(0.5); put!(rr1, :ok) end
         @async begin sleep(1.0); put!(rr2, :ok) end
-        @async begin sleep(2.0); put!(rr3, :ok) end
+        @async begin @test take!(rr3) == :done end
 
+        @test take!(sync) == :ready
         et = @elapsed timedwait(callback, 1)
 
-        # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
-        try
-            @assert (et >= 1.0) && (et <= 1.5)
-            @assert !isready(rr3)
-        catch
-            @warn "`timedwait` tests delayed. et=$et, isready(rr3)=$(isready(rr3))"
-        end
+        @test et >= 1.0
+
         @test isready(rr1)
+        put!(rr3, :done)
     end
 end
 
@@ -359,7 +384,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n"
+    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n"
 end
 
 @testset "throwto" begin
@@ -432,8 +457,8 @@ end
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
         close(async) # and close
         @test !isopen(async)
-        @test tc[] == 2
-        @test tc[] == 2
+        @test tc[] == 3
+        @test tc[] == 3
         yield() # consume event & then close
         @test tc[] == 3
         sleep(0.1) # no further events
@@ -454,7 +479,7 @@ end
         close(async)
         @test !isopen(async)
         Base.process_events() # and close
-        @test tc[] == 0
+        @test tc[] == 1
         yield() # consume event & then close
         @test tc[] == 1
         sleep(0.1) # no further events
@@ -534,7 +559,7 @@ end
     e = @elapsed for i = 1:5
         wait(t)
     end
-    @test 1.5 > e >= 0.4
+    @test e >= 0.4
     @test a[] == 0
     nothing
 end

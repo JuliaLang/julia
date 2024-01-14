@@ -1,4 +1,4 @@
-# [Multi-dimensional Arrays](@id man-multi-dim-arrays)
+# [Single- and multi-dimensional Arrays](@id man-multi-dim-arrays)
 
 Julia, like most technical computing languages, provides a first-class array implementation. Most
 technical computing languages pay a lot of attention to their array implementation at the expense
@@ -103,10 +103,11 @@ same type, then that is its `eltype`. If they all have a common
 [promotion type](@ref conversion-and-promotion) then they get converted to that type using
 [`convert`](@ref) and that type is the array's `eltype`. Otherwise, a heterogeneous array
 that can hold anything — a `Vector{Any}` — is constructed; this includes the literal `[]`
-where no arguments are given.
+where no arguments are given. [Array literal can be typed](@ref man-array-typed-literal) with
+the syntax `T[A, B, C, ...]` where `T` is a type.
 
 ```jldoctest
-julia> [1,2,3] # An array of `Int`s
+julia> [1, 2, 3] # An array of `Int`s
 3-element Vector{Int64}:
  1
  2
@@ -117,6 +118,12 @@ julia> promote(1, 2.3, 4//5) # This combination of Int, Float64 and Rational pro
 
 julia> [1, 2.3, 4//5] # Thus that's the element type of this Array
 3-element Vector{Float64}:
+ 1.0
+ 2.3
+ 0.8
+
+julia> Float32[1, 2.3, 4//5] # Specify element type manually
+3-element Vector{Float32}:
  1.0
  2.3
  0.8
@@ -319,12 +326,12 @@ These syntaxes are shorthands for function calls that themselves are convenience
 | Syntax                 | Function         | Description                                                                                                |
 |:---------------------- |:---------------- |:---------------------------------------------------------------------------------------------------------- |
 |                        | [`cat`](@ref)    | concatenate input arrays along dimension(s) `k`                                                            |
-| `[A; B; C; ...]`       | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)                                                                           |
-| `[A B C ...]`          | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)                                                                           |
+| `[A; B; C; ...]`       | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)`                                                                          |
+| `[A B C ...]`          | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)`                                                                          |
 | `[A B; C D; ...]`      | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                                         |
 | `[A; C;; B; D;;; ...]` | [`hvncat`](@ref) | simultaneous n-dimensional concatenation, where number of semicolons indicate the dimension to concatenate |
 
-### Typed array literals
+### [Typed array literals](@id man-array-typed-literal)
 
 An array with a specific element type can be constructed using the syntax `T[A, B, C, ...]`. This
 will construct a 1-d array with element type `T`, initialized to contain elements `A`, `B`, `C`,
@@ -349,7 +356,7 @@ Comprehensions provide a general and powerful way to construct arrays. Comprehen
 similar to set construction notation in mathematics:
 
 ```
-A = [ F(x,y,...) for x=rx, y=ry, ... ]
+A = [ F(x, y, ...) for x=rx, y=ry, ... ]
 ```
 
 The meaning of this form is that `F(x,y,...)` is evaluated with the variables `x`, `y`, etc. taking
@@ -433,7 +440,7 @@ Ranges in generators and comprehensions can depend on previous ranges by writing
 keywords:
 
 ```jldoctest
-julia> [(i,j) for i=1:3 for j=1:i]
+julia> [(i, j) for i=1:3 for j=1:i]
 6-element Vector{Tuple{Int64, Int64}}:
  (1, 1)
  (2, 1)
@@ -448,7 +455,7 @@ In such cases, the result is always 1-d.
 Generated values can be filtered using the `if` keyword:
 
 ```jldoctest
-julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
+julia> [(i, j) for i=1:3 for j=1:i if i+j == 4]
 2-element Vector{Tuple{Int64, Int64}}:
  (2, 2)
  (3, 1)
@@ -596,7 +603,7 @@ overwritten with the value of `X`, [`convert`](@ref)ing to the
 If any index `I_k` is itself an array, then the right hand side `X` must also be an
 array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
 the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
-`A` is overwritten with the value `X[I_1, I_2, ..., I_n]`, converting if necessary. The
+`A` is overwritten with the value `X[i_1, i_2, ..., i_n]`, converting if necessary. The
 element-wise assignment operator `.=` may be used to [broadcast](@ref Broadcasting) `X`
 across the selected locations:
 
@@ -646,7 +653,7 @@ indices and can be converted to such by [`to_indices`](@ref):
     * [`CartesianIndex{N}`](@ref)s, which behave like an `N`-tuple of integers spanning multiple dimensions (see below for more details)
 2. An array of scalar indices. This includes:
     * Vectors and multidimensional arrays of integers
-    * Empty arrays like `[]`, which select no elements
+    * Empty arrays like `[]`, which select no elements e.g. `A[[]]` (not to be confused with `A[]`)
     * Ranges like `a:c` or `a:b:c`, which select contiguous or strided subsections from `a` to `c` (inclusive)
     * Any custom array of scalar indices that is a subtype of `AbstractArray`
     * Arrays of `CartesianIndex{N}` (see below for more details)
@@ -733,17 +740,17 @@ that is sometimes referred to as pointwise indexing. For example, it enables
 accessing the diagonal elements from the first "page" of `A` from above:
 
 ```jldoctest cartesianindex
-julia> page = A[:,:,1]
+julia> page = A[:, :, 1]
 4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
-julia> page[[CartesianIndex(1,1),
-             CartesianIndex(2,2),
-             CartesianIndex(3,3),
-             CartesianIndex(4,4)]]
+julia> page[[CartesianIndex(1, 1),
+             CartesianIndex(2, 2),
+             CartesianIndex(3, 3),
+             CartesianIndex(4, 4)]]
 4-element Vector{Int64}:
   1
   6
@@ -786,38 +793,46 @@ Indexing by a boolean vector `B` is effectively the same as indexing by the
 vector of integers that is returned by [`findall(B)`](@ref). Similarly, indexing
 by a `N`-dimensional boolean array is effectively the same as indexing by the
 vector of `CartesianIndex{N}`s where its values are `true`. A logical index
-must be a vector of the same length as the dimension it indexes into, or it
-must be the only index provided and match the size and dimensionality of the
-array it indexes into. It is generally more efficient to use boolean arrays as
-indices directly instead of first calling [`findall`](@ref).
+must be a array of the same shape as the dimension(s) it indexes into, or it
+must be the only index provided and match the shape of the one-dimensional
+reshaped view of the array it indexes into. It is generally more efficient
+to use boolean arrays as indices directly instead of first calling [`findall`](@ref).
 
 ```jldoctest
-julia> x = reshape(1:16, 4, 4)
-4×4 reshape(::UnitRange{Int64}, 4, 4) with eltype Int64:
- 1  5   9  13
- 2  6  10  14
- 3  7  11  15
- 4  8  12  16
+julia> x = reshape(1:12, 2, 3, 2)
+2×3×2 reshape(::UnitRange{Int64}, 2, 3, 2) with eltype Int64:
+[:, :, 1] =
+ 1  3  5
+ 2  4  6
 
-julia> x[[false, true, true, false], :]
-2×4 Matrix{Int64}:
- 2  6  10  14
- 3  7  11  15
+[:, :, 2] =
+ 7   9  11
+ 8  10  12
+
+julia> x[:, [true false; false true; true false]]
+2×3 Matrix{Int64}:
+ 1  5   9
+ 2  6  10
 
 julia> mask = map(ispow2, x)
-4×4 Matrix{Bool}:
- 1  0  0  0
- 1  0  0  0
- 0  0  0  0
- 1  1  0  1
+2×3×2 Array{Bool, 3}:
+[:, :, 1] =
+ 1  0  0
+ 1  1  0
+
+[:, :, 2] =
+ 0  0  0
+ 1  0  0
 
 julia> x[mask]
-5-element Vector{Int64}:
-  1
-  2
-  4
-  8
- 16
+4-element Vector{Int64}:
+ 1
+ 2
+ 4
+ 8
+
+julia> x[vec(mask)] == x[mask] # we can also index with a single Boolean vector
+true
 ```
 
 ### Number of indices
@@ -872,10 +887,15 @@ slower than multiplication. While some arrays — like [`Array`](@ref) itself �
 are implemented using a linear chunk of memory and directly use a linear index
 in their implementations, other arrays — like [`Diagonal`](@ref) — need the
 full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
-introspect which is which). As such, when iterating over an entire array, it's
-much better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
-Not only will the former be much faster in cases where `A` is `IndexCartesian`,
-but it will also support [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl), too.
+introspect which is which).
+
+!!! warnings
+
+    When iterating over all the indices for an array, it is
+    better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
+    Not only will this be faster in cases where `A` is `IndexCartesian`,
+    but it will also support arrays with custom indexing, such as [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
+    If only the values are needed, then is better to just iterate the array directly, i.e. `for a in A`.
 
 #### Omitted and extra indices
 
@@ -923,13 +943,13 @@ element of `axes(A, d)` where `d` is that particular dimension number). This
 allows vectors to be indexed like one-column matrices, for example:
 
 ```jldoctest
-julia> A = [8,6,7]
+julia> A = [8, 6, 7]
 3-element Vector{Int64}:
  8
  6
  7
 
-julia> A[2,1]
+julia> A[2, 1]
 6
 ```
 
@@ -952,7 +972,7 @@ construct, `i` will be an `Int` if `A` is an array type with fast linear indexin
 it will be a `CartesianIndex`:
 
 ```jldoctest
-julia> A = rand(4,3);
+julia> A = rand(4, 3);
 
 julia> B = view(A, 1:3, 2:3);
 
@@ -967,8 +987,11 @@ i = CartesianIndex(2, 2)
 i = CartesianIndex(3, 2)
 ```
 
-In contrast with `for i = 1:length(A)`, iterating with [`eachindex`](@ref) provides an efficient way to
-iterate over any array type.
+!!! note
+
+    In contrast with `for i = 1:length(A)`, iterating with [`eachindex`](@ref) provides an efficient way to
+    iterate over any array type. Besides, this also supports generic arrays with custom indexing such as
+    [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
 
 ## Array traits
 
@@ -991,7 +1014,7 @@ The following operators are supported for arrays:
 
 To enable convenient vectorization of mathematical and other operations,
 Julia [provides the dot syntax](@ref man-vectorized) `f.(args...)`, e.g. `sin.(x)`
-or `min.(x,y)`, for elementwise operations over arrays or mixtures of arrays and
+or `min.(x, y)`, for elementwise operations over arrays or mixtures of arrays and
 scalars (a [Broadcasting](@ref) operation); these have the additional advantage of
 "fusing" into a single loop when combined with other dot calls, e.g. `sin.(cos.(x))`.
 
@@ -1005,7 +1028,7 @@ operations like `<`, *only* the elementwise `.<` version is applicable to arrays
 
 Also notice the difference between `max.(a,b)`, which [`broadcast`](@ref)s [`max`](@ref)
 elementwise over `a` and `b`, and [`maximum(a)`](@ref), which finds the largest value within
-`a`. The same relationship holds for `min.(a,b)` and `minimum(a)`.
+`a`. The same relationship holds for `min.(a, b)` and `minimum(a)`.
 
 ## Broadcasting
 
@@ -1014,9 +1037,9 @@ sizes, such as adding a vector to each column of a matrix. An inefficient way to
 be to replicate the vector to the size of the matrix:
 
 ```julia-repl
-julia> a = rand(2,1); A = rand(2,3);
+julia> a = rand(2, 1); A = rand(2, 3);
 
-julia> repeat(a,1,3)+A
+julia> repeat(a, 1, 3) + A
 2×3 Array{Float64,2}:
  1.20813  1.82068  1.25387
  1.56851  1.86401  1.67846
@@ -1096,10 +1119,10 @@ generally work correctly as a fallback for any specific array implementation.
 The `AbstractArray` type includes anything vaguely array-like, and implementations of it might
 be quite different from conventional arrays. For example, elements might be computed on request
 rather than stored. However, any concrete `AbstractArray{T,N}` type should generally implement
-at least [`size(A)`](@ref) (returning an `Int` tuple), [`getindex(A,i)`](@ref) and [`getindex(A,i1,...,iN)`](@ref getindex);
-mutable arrays should also implement [`setindex!`](@ref). It is recommended that these operations
-have nearly constant time complexity, as otherwise some array
-functions may be unexpectedly slow. Concrete types should also typically provide a [`similar(A,T=eltype(A),dims=size(A))`](@ref)
+at least [`size(A)`](@ref) (returning an `Int` tuple), [`getindex(A, i)`](@ref) and
+[`getindex(A, i1, ..., iN)`](@ref getindex); mutable arrays should also implement [`setindex!`](@ref).
+It is recommended that these operations have nearly constant time complexity, as otherwise some array
+functions may be unexpectedly slow. Concrete types should also typically provide a [`similar(A, T=eltype(A), dims=size(A))`](@ref)
 method, which is used to allocate a similar array for [`copy`](@ref) and other out-of-place
 operations. No matter how an `AbstractArray{T,N}` is represented internally, `T` is the type of
 object returned by *integer* indexing (`A[1, ..., 1]`, when `A` is not empty) and `N` should be
@@ -1138,15 +1161,15 @@ arranged contiguously in column major order. This means that the stride of the f
 dimension — the spacing between elements in the same column — is `1`:
 
 ```julia-repl
-julia> A = rand(5,7,2);
+julia> A = rand(5, 7, 2);
 
-julia> stride(A,1)
+julia> stride(A, 1)
 1
 ```
 
 The stride of the second dimension is the spacing between elements in the same row, skipping
 as many elements as there are in a single column (`5`). Similarly, jumping between the two
-"pages" (in the third dimension) requires skipping `5*7 == 35` elements.  The [`strides`](@ref)
+"pages" (in the third dimension) requires skipping `5*7 == 35` elements. The [`strides`](@ref)
 of this array is the tuple of these three numbers together:
 
 ```julia-repl

@@ -33,7 +33,7 @@ You can wait for a remote call to finish by calling [`wait`](@ref) on the return
 and you can obtain the full value of the result using [`fetch`](@ref).
 
 On the other hand, [`RemoteChannel`](@ref) s are rewritable. For example, multiple processes can
-co-ordinate their processing by referencing the same remote `Channel`.
+coordinate their processing by referencing the same remote `Channel`.
 
 Each process has an associated identifier. The process providing the interactive Julia prompt
 always has an `id` equal to 1. The processes used by default for parallel operations are referred
@@ -158,7 +158,7 @@ julia> rand2(2,2)
  1.15119   0.918912
 
 julia> fetch(@spawnat :any rand2(2,2))
-ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
+ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))))
 Stacktrace:
 [...]
 ```
@@ -209,7 +209,7 @@ MyType(7)
 
 julia> fetch(@spawnat 2 MyType(7))
 ERROR: On worker 2:
-UndefVarError: MyType not defined
+UndefVarError: `MyType` not defined in `Main`
 ⋮
 
 julia> fetch(@spawnat 2 DummyModule.MyType(7))
@@ -249,6 +249,11 @@ The base Julia installation has in-built support for two types of clusters:
     `port` to the standard ssh port. `count` is the number of workers to spawn on the node, and defaults
     to 1. The optional `bind-to bind_addr[:port]` specifies the IP address and port that other workers
     should use to connect to this worker.
+
+!!! note
+    While Julia generally strives for backward compatibility, distribution of code to worker processes relies on
+    [`Serialization.serialize`](@ref). As pointed out in the corresponding documentation, this can not be guaranteed to work across
+    different Julia versions, so it is advised that all workers on all machines use the same version.
 
 Functions [`addprocs`](@ref), [`rmprocs`](@ref), [`workers`](@ref), and others are available
 as a programmatic means of adding, removing and querying the processes in a cluster.
@@ -534,9 +539,72 @@ Methods [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and 
 on a [`RemoteChannel`](@ref) are proxied onto the backing store on the remote process.
 
 [`RemoteChannel`](@ref) can thus be used to refer to user implemented `AbstractChannel` objects.
-A simple example of this is provided in `dictchannel.jl` in the
-[Examples repository](https://github.com/JuliaAttic/Examples), which uses a dictionary as its
-remote store.
+A simple example of this is the following `DictChannel` which uses a dictionary as its
+remote store:
+
+```jldoctest
+julia> struct DictChannel{T} <: AbstractChannel{T}
+           d::Dict
+           cond_take::Threads.Condition    # waiting for data to become available
+           DictChannel{T}() where {T} = new(Dict(), Threads.Condition())
+           DictChannel() = DictChannel{Any}()
+       end
+
+julia> begin
+       function Base.put!(D::DictChannel, k, v)
+           @lock D.cond_take begin
+               D.d[k] = v
+               notify(D.cond_take)
+           end
+           return D
+       end
+       function Base.take!(D::DictChannel, k)
+           @lock D.cond_take begin
+               v = fetch(D, k)
+               delete!(D.d, k)
+               return v
+           end
+       end
+       Base.isready(D::DictChannel) = @lock D.cond_take !isempty(D.d)
+       Base.isready(D::DictChannel, k) = @lock D.cond_take haskey(D.d, k)
+       function Base.fetch(D::DictChannel, k)
+           @lock D.cond_take begin
+               wait(D, k)
+               return D.d[k]
+           end
+       end
+       function Base.wait(D::DictChannel, k)
+           @lock D.cond_take begin
+               while !isready(D, k)
+                   wait(D.cond_take)
+               end
+           end
+       end
+       end;
+
+julia> d = DictChannel();
+
+julia> isready(d)
+false
+
+julia> put!(d, :k, :v);
+
+julia> isready(d, :k)
+true
+
+julia> fetch(d, :k)
+:v
+
+julia> wait(d, :k)
+
+julia> take!(d, :k)
+:v
+
+julia> isready(d, :k)
+false
+```
+
+
 
 
 ## Channels and RemoteChannels
