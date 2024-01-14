@@ -5,6 +5,14 @@ using Artifacts, Test, Base.BinaryPlatforms
 using Artifacts: with_artifacts_directory, pack_platform!, unpack_platform, load_overrides
 using TOML
 
+@info "Artifacts tests" Base.DEPOT_PATH artifacts_dirs() Artifacts.ARTIFACTS_DIR_OVERRIDE[]
+for depot in Base.DEPOT_PATH
+    @info "depot $depot" readdir(depot)
+end
+for artifact_dir in artifacts_dirs()
+    @info "artifact_dir $artifact_dir" readdir(artifact_dir)
+end
+
 # prepare for the package tests by ensuring the required artifacts are downloaded now
 artifacts_dir = mktempdir()
 run(addenv(`$(Base.julia_cmd()) --color=no $(joinpath(@__DIR__, "refresh_artifacts.jl")) $(artifacts_dir)`, "TERM"=>"dumb"))
