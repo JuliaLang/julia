@@ -164,9 +164,12 @@ mutable struct _FDWatcher
         @static if Sys.isunix()
             _FDWatcher(fd::RawFD, mask::FDEvent) = _FDWatcher(fd, mask.readable, mask.writable)
             function _FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
-                if !readable && !writable
+                if fd == RawFD(-1)
+                    throw(ArgumentError("Passed file descriptor is $(fd) == RawFD(-1), this is probably not a valid file descriptor"))
+                elseif !readable && !writable
                     throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
                 end
+
                 fdnum = Core.Intrinsics.bitcast(Int32, fd) + 1
                 iolock_begin()
                 if fdnum > length(FDWatchers)
