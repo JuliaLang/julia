@@ -1981,6 +1981,11 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
+        m = get(loaded_modules, uuidkey, nothing)
+        if m !== nothing
+            explicit_loaded_modules[uuidkey] = m
+            run_package_callbacks(uuidkey)
+        end
         newm = root_module(uuidkey)
     end
     return newm
