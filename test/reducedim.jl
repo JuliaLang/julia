@@ -124,6 +124,19 @@ fill!(r, -6.3)
 fill!(r, -1.1)
 @test sum!(abs2, r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1) .- 1.1
 
+# issue #35199
+function issue35199_test(sizes, dims)
+    M = rand(Float64, sizes)
+    ax = axes(M)
+    n1 = @allocations Base.reduced_indices(ax, dims)
+    n2 = @allocations sum(M; dims)
+    return @test (n1, n2) == (0, 1)
+end
+for dims in (1, 2, (1,), (2,), (1,2))
+    sizes = (64, 3)
+    issue35199_test(sizes, dims)
+end
+
 # Small arrays with init=false
 let A = reshape(1:15, 3, 5)
     R = fill(1, 3)
