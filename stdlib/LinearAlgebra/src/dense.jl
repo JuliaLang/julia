@@ -106,6 +106,10 @@ norm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
 norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
+# Conservative assessment of types that have zero(T) defined for themselves
+_zero(M::AbstractArray{T}, i, j) where {T<:Number} = isconcretetype(T) ? zero(T) : zero(M[i,j])
+_zero(M::AbstractArray, i, j) = zero(M[i,j])
+
 """
     triu!(M, k::Integer)
 
@@ -133,22 +137,10 @@ julia> triu!(M, 1)
 """
 function triu!(M::AbstractMatrix, k::Integer)
     require_one_based_indexing(M)
-    _triu!(M, k)
-end
-function _triu!(M::AbstractMatrix{<:Number}, k::Integer)
     m, n = size(M)
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
-            @inbounds M[i,j] = zero(eltype(M))
-        end
-    end
-    return M
-end
-function _triu!(M::AbstractMatrix, k::Integer)
-    m, n = size(M)
-    for j in 1:min(n, m + k)
-        for i in max(1, j - k + 1):m
-            @inbounds M[i,j] = zero(M[i,j])
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     return M
@@ -183,22 +175,10 @@ julia> tril!(M, 2)
 """
 function tril!(M::AbstractMatrix, k::Integer)
     require_one_based_indexing(M)
-    _tril!(M, k)
-end
-function _tril!(M::AbstractMatrix{<:Number}, k)
     m, n = size(M)
     for j in max(1, k + 1):n
         for i in 1:min(j - k - 1, m)
-            @inbounds M[i,j] = zero(eltype(M))
-        end
-    end
-    return M
-end
-function _tril!(M::AbstractMatrix, k)
-    m, n = size(M)
-    for j in max(1, k + 1):n
-        for i in 1:min(j - k - 1, m)
-            @inbounds M[i,j] = zero(M[i,j])
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     return M
