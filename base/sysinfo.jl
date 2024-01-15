@@ -109,6 +109,8 @@ A string representing the name of CPU.
 For example, `Sys.CPU_NAME` might equal `"tigerlake"` on an
 [Intel Core "Tiger Lake" CPU](https://en.wikipedia.org/wiki/Tiger_Lake),
 or `"apple-m1"` on an [Apple M1 CPU](https://en.wikipedia.org/wiki/Apple_M1).
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
 """
 global CPU_NAME::String
 
@@ -123,6 +125,8 @@ Currently, this equals `"ORCJIT"` for the LLVM "ORC" ("On-Request Compilation") 
 julia> Sys.JIT
 "ORCJIT"
 ```
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
 """
 global JIT::String
 
@@ -171,12 +175,14 @@ end
 
 The `CPUinfo` type is a mutable struct with the following fields:
 - `model::String`: CPU model information.
-- `speed::Int32`: CPU speed. unit: MHz.
-- `cpu_times!user::UInt64`: Time spent in user mode. CPU state shows CPU time used by user space processes. unit: second.
-- `cpu_times!nice::UInt64`: Time spent in nice mode. CPU state is a subset of the "user" state and shows the CPU time used by processes that have a positive niceness, meaning a lower priority than other tasks.unit: second.
-- `cpu_times!sys::UInt64`: Time spent in system mode. CPU state shows the amount of CPU time used by the kernel. unit: second.
-- `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used. unit: second.
-- `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts. unit: second.
+- `speed::Int32`: CPU speed (in MHz).
+- `cpu_times!user::UInt64`: Time spent in user mode. CPU state shows CPU time used by user space processes.
+- `cpu_times!nice::UInt64`: Time spent in nice mode. CPU state is a subset of the "user" state and shows the CPU time used by processes that have a positive niceness, meaning a lower priority than other tasks.
+- `cpu_times!sys::UInt64`: Time spent in system mode. CPU state shows the amount of CPU time used by the kernel.
+- `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
+- `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
 """
 mutable struct CPUinfo
     model::String
@@ -254,6 +260,8 @@ providing details such as average CPU speed and total time spent in different mo
 !!! compat "Julia 1.11"
      As of Julia 1.11, the `Sys.cpu_summary(io, cpu)` output is replicated by `show(io, "text/plain", cpu)` (which is called by e.g.
      `display` for REPL output), so it need not be called directly.
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
 """
 function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
