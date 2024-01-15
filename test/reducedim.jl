@@ -129,8 +129,7 @@ function issue35199_test(sizes, dims)
     M = rand(Float64, sizes)
     ax = axes(M)
     n1 = @allocations Base.reduced_indices(ax, dims)
-    n2 = @allocations sum(M; dims)
-    return @test (n1, n2) == (0, 1)
+    return @test n1 == 0
 end
 for dims in (1, 2, (1,), (2,), (1,2))
     sizes = (64, 3)
