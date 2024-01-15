@@ -181,6 +181,12 @@ end
 Array(A::AbstractTriangular) = Matrix(A)
 parent(A::UpperOrLowerTriangular) = A.data
 
+# For strided matrices, we may only loop over the filled triangle
+copy(A::UpperTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = UpperTriangular(copytrito!(similar(A.data), A.data, 'U'))
+copy(A::UnitUpperTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = UnitUpperTriangular(copytrito!(similar(A.data), A.data, 'U'))
+copy(A::LowerTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = LowerTriangular(copytrito!(similar(A.data), A.data, 'L'))
+copy(A::UnitLowerTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = UnitLowerTriangular(copytrito!(similar(A.data), A.data, 'L'))
+
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
 function Matrix{T}(A::LowerTriangular) where T
