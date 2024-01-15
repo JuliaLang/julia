@@ -235,6 +235,10 @@ mutable struct _FDWatcher
     @static if Sys.iswindows()
         _FDWatcher(fd::RawFD, mask::FDEvent) = _FDWatcher(fd, mask.readable, mask.writable)
         function _FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
+            if fd == RawFD(-1)
+                throw(ArgumentError("Passed file descriptor is $(fd) == RawFD(-1), this is probably not a valid file descriptor"))
+            end
+
             handle = Libc._get_osfhandle(fd)
             return _FDWatcher(handle, readable, writable)
         end
