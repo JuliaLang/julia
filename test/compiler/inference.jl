@@ -5614,3 +5614,6 @@ end
 let 𝕃 = Core.Compiler.fallback_lattice
     @test apply_type_tfunc(𝕃, Const(Tuple{Vararg{Any,N}} where N), Int) == Type{NTuple{_A, Any}} where _A
 end
+
+# Issue #52613
+@test (code_typed((Any,)) do x; TypeVar(x...); end)[1][2] === TypeVar

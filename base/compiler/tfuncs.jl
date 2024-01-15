@@ -331,7 +331,7 @@ end
 add_tfunc(Core.ifelse, 3, 3, ifelse_tfunc, 1)
 
 @nospecs function ifelse_nothrow(𝕃::AbstractLattice, cond, x, y)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     return cond ⊑ Bool
 end
 
@@ -380,7 +380,7 @@ function isdefined_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
     return isdefined_nothrow(𝕃, argtypes[1], argtypes[2])
 end
 @nospecs function isdefined_nothrow(𝕃::AbstractLattice, x, name)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     isvarargtype(x) && return false
     isvarargtype(name) && return false
     if hasintersect(widenconst(x), Module)
@@ -600,7 +600,8 @@ add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVec
     end
     return TypeVar
 end
-@nospecs function typebound_nothrow(b)
+@nospecs function typebound_nothrow(𝕃::AbstractLattice, b)
+    ⊑ = partialorder(𝕃)
     b = widenconst(b)
     (b ⊑ TypeVar) && return true
     if isType(b)
@@ -609,10 +610,10 @@ end
     return false
 end
 @nospecs function typevar_nothrow(𝕃::AbstractLattice, n, lb, ub)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     n ⊑ Symbol || return false
-    typebound_nothrow(lb) || return false
-    typebound_nothrow(ub) || return false
+    typebound_nothrow(𝕃, lb) || return false
+    typebound_nothrow(𝕃, ub) || return false
     return true
 end
 add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
@@ -813,7 +814,7 @@ end
 add_tfunc(typeassert, 2, 2, typeassert_tfunc, 4)
 
 @nospecs function typeassert_nothrow(𝕃::AbstractLattice, v, t)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     # ty, exact = instanceof_tfunc(t, true)
     # return exact && v ⊑ ty
     if (isType(t) && !has_free_typevars(t) && v ⊑ t.parameters[1]) ||
@@ -859,7 +860,7 @@ end
 add_tfunc(isa, 2, 2, isa_tfunc, 1)
 
 @nospecs function isa_nothrow(𝕃::AbstractLattice, obj, typ)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     return typ ⊑ Type
 end
 
@@ -882,7 +883,7 @@ end
 add_tfunc(<:, 2, 2, subtype_tfunc, 10)
 
 @nospecs function subtype_nothrow(𝕃::AbstractLattice, lty, rty)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     return lty ⊑ Type && rty ⊑ Type
 end
 
@@ -981,7 +982,7 @@ end
         isa(name, Const) || return false
     end
 
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
 
     # If we have s00 being a const, we can potentially refine our type-based analysis above
     if isa(s00, Const) || isconstType(s00)
@@ -1340,7 +1341,6 @@ end
     return setfield!_nothrow(𝕃, s00, name, v)
 end
 @nospecs function setfield!_nothrow(𝕃::AbstractLattice, s00, name, v)
-    ⊑ = Core.Compiler.:⊑(𝕃)
     s0 = widenconst(s00)
     s = unwrap_unionall(s0)
     if isa(s, Union)
@@ -1357,6 +1357,7 @@ end
         isconst(s, field) && return false
         isfieldatomic(s, field) && return false # TODO: currently we're only testing for ordering === :not_atomic
         v_expected = fieldtype(s0, field)
+        ⊑ = partialorder(𝕃)
         return v ⊑ v_expected
     end
     return false
@@ -1431,7 +1432,7 @@ add_tfunc(replacefield!, 4, 6, replacefield!_tfunc, 3)
 
 @nospecs function fieldtype_nothrow(𝕃::AbstractLattice, s0, name)
     s0 === Bottom && return true # unreachable
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
         # We have no idea
         return false
@@ -2084,12 +2085,13 @@ function array_type_undefable(@nospecialize(arytype))
     return true
 end
 
-@nospecs function memoryset_typecheck(memtype, elemtype)
+@nospecs function memoryset_typecheck(𝕃::AbstractLattice, memtype, elemtype)
     # Check that we can determine the element type
     isa(memtype, DataType) || return false
     elemtype_expected = memoryref_elemtype(memtype)
     elemtype_expected === Union{} && return false
     # Check that the element type is compatible with the element we're assigning
+    ⊑ = partialorder(𝕃)
     elemtype ⊑ elemtype_expected || return false
     return true
 end
@@ -2122,17 +2124,17 @@ function memoryref_builtin_common_nothrow(argtypes::Vector{Any})
     end
 end
 
-function memoryrefop_builtin_common_nothrow(argtypes::Vector{Any}, @nospecialize f)
+function memoryrefop_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize f)
     ismemoryset = f === memoryrefset!
     nargs = ismemoryset ? 4 : 3
     length(argtypes) == nargs || return false
     order = argtypes[2 + ismemoryset]
     boundscheck = argtypes[3 + ismemoryset]
     memtype = widenconst(argtypes[1])
-    memoryref_builtin_common_typecheck(boundscheck, memtype, order) || return false
+    memoryref_builtin_common_typecheck(𝕃, boundscheck, memtype, order) || return false
     if ismemoryset
         # Additionally check element type compatibility
-        memoryset_typecheck(memtype, argtypes[2]) || return false
+        memoryset_typecheck(𝕃, memtype, argtypes[2]) || return false
     elseif f === memoryrefget
         # If we could potentially throw undef ref errors, bail out now.
         array_type_undefable(memtype) && return false
@@ -2147,13 +2149,14 @@ function memoryrefop_builtin_common_nothrow(argtypes::Vector{Any}, @nospecialize
     return false
 end
 
-@nospecs function memoryref_builtin_common_typecheck(boundscheck, memtype, order)
+@nospecs function memoryref_builtin_common_typecheck(𝕃::AbstractLattice, boundscheck, memtype, order)
+    ⊑ = partialorder(𝕃)
     return boundscheck ⊑ Bool && memtype ⊑ GenericMemoryRef && order ⊑ Symbol
 end
 
 # Query whether the given builtin is guaranteed not to throw given the argtypes
 @nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     if f === memoryref
         return memoryref_builtin_common_nothrow(argtypes)
     elseif f === memoryrefoffset
@@ -2161,11 +2164,11 @@ end
         memtype = widenconst(argtypes[1])
         return memtype ⊑ GenericMemoryRef
     elseif f === memoryrefset!
-        return memoryrefop_builtin_common_nothrow(argtypes, f)
+        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryrefget
-        return memoryrefop_builtin_common_nothrow(argtypes, f)
+        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryref_isassigned
-        return memoryrefop_builtin_common_nothrow(argtypes, f)
+        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
@@ -3106,7 +3109,7 @@ end
 add_tfunc(Core.get_binding_type, 2, 2, get_binding_type_tfunc, 0)
 
 @nospecs function get_binding_type_nothrow(𝕃::AbstractLattice, M, s)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     return M ⊑ Module && s ⊑ Symbol
 end
 

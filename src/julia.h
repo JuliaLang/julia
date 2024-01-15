@@ -954,6 +954,7 @@ extern void JL_GC_PUSH2(void *, void *) JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH3(void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH4(void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH5(void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
+extern void JL_GC_PUSH6(void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH7(void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH8(void *, void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
@@ -2125,11 +2126,11 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
 
 
-JL_DLLEXPORT int jl_is_operator(char *sym);
-JL_DLLEXPORT int jl_is_unary_operator(char *sym);
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym);
-JL_DLLEXPORT int jl_is_syntactic_operator(char *sym);
-JL_DLLEXPORT int jl_operator_precedence(char *sym);
+JL_DLLEXPORT int jl_is_operator(const char *sym);
+JL_DLLEXPORT int jl_is_unary_operator(const char *sym);
+JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym);
+JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym);
+JL_DLLEXPORT int jl_operator_precedence(const char *sym);
 
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {

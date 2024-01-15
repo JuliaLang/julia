@@ -79,7 +79,12 @@ function break_me_docs end
 "This module has names without documentation."
 module _ModuleWithUndocumentedNames
 export f
+public ⨳, @foo
 f() = 1
+g() = 2
+⨳(a,b) = a * b
+macro foo(); nothing; end
+⊕(a,b) = a + b
 end
 
 "This module has some documentation."
@@ -90,9 +95,9 @@ f() = 1
 g() = 2
 end
 
-@test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [:f]
+@test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [Symbol("@foo"), :f, :⨳]
 @test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
-@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; all=true) == [:eval, :g, :include]
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:eval, :g, :include]
 
 
 # issue #11548
@@ -1551,3 +1556,9 @@ Base.@ccallable c51586_long()::Int = 3
 
 @test docstrings_equal(@doc(c51586_short()), doc"ensure we can document ccallable functions")
 @test docstrings_equal(@doc(c51586_long()), doc"ensure we can document ccallable functions")
+
+@testset "Docs docstrings" begin
+    undoc = Docs.undocumented_names(Docs)
+    @test_broken isempty(undoc)
+    @test undoc == [Symbol("@var")]
+end

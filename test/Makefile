@@ -43,7 +43,7 @@ relocatedepot:
 	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
 	@cd $(SRCDIR) && \
-	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading RELOCATEDEPOT="" JULIA_DEPOT_PATH=$(SRCDIR)/relocatedepot/julia $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
+	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading RELOCATEDEPOT="" $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
 
 revise-relocatedepot: revise-% :
 	@rm -rf $(SRCDIR)/relocatedepot
@@ -54,7 +54,7 @@ revise-relocatedepot: revise-% :
 	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
 	@cd $(SRCDIR) && \
-	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading RELOCATEDEPOT="" JULIA_DEPOT_PATH=$(SRCDIR)/relocatedepot/julia $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
+	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading RELOCATEDEPOT="" $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
 
 embedding:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(EMBEDDING_ARGS)

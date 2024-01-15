@@ -919,4 +919,17 @@ end
     end
 end
 
+@testset "Matrix elements" begin
+    M = [UpperTriangular([1 2; 3 4]) for i in 1:2, j in 1:2]
+    for T in (Symmetric, Hermitian)
+        H = T(M)
+        A = Array(H)
+        @test A isa Matrix
+        @test A == H
+        A = Array{Matrix{Int}}(H)
+        @test A isa Matrix{Matrix{Int}}
+        @test A == H
+    end
+end
+
 end # module TestSymmetric
