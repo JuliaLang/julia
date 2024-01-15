@@ -479,7 +479,7 @@ function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::Abst
     world = get_world_counter(interp)
     src = retrieve_code_info(result.linfo, world)
     src === nothing && return nothing
-    validate_code_in_debug_mode(result.linfo, src, "lowered")
+    maybe_validate_code(result.linfo, src, "lowered")
     return InferenceState(result, src, cache_mode, interp)
 end
 InferenceState(result::InferenceResult, cache_mode::Symbol, interp::AbstractInterpreter) =

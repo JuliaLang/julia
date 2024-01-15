@@ -78,11 +78,18 @@ generate_precompile_statements() = try
         # Collect statements from running a REPL process and replaying our REPL script
         touch(precompile_file)
         pts, ptm = open_fake_pty()
-        cmdargs = `-e 'import REPL; REPL.Terminals.is_precompiling[] = true'`
-        p = run(addenv(addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file
-                --cpu-target=native --startup-file=no --compiled-modules=existing --color=yes -i $cmdargs```, procenv),
-                "JULIA_PKG_PRECOMPILE_AUTO" => "0"),
-            pts, pts, pts; wait=false)
+        # we don't want existing REPL caches to be used so ignore them
+        setup_cmd = """
+        push!(Base.ignore_compiled_cache, Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
+        import REPL
+        REPL.Terminals.is_precompiling[] = true
+        """
+        p = run(
+                addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file
+                    --cpu-target=native --startup-file=no --compiled-modules=existing
+                    --color=yes -i -e "$setup_cmd"```, procenv),
+                pts, pts, pts; wait=false
+            )
         Base.close_stdio(pts)
         # Prepare a background process to copy output from process until `pts` is closed
         output_copy = Base.BufferStream()
@@ -181,9 +188,9 @@ generate_precompile_statements() = try
             if !isexpr(ps, :call)
                 # these are typically comments
                 @debug "skipping statement because it does not parse as an expression" statement
+                delete!(statements, statement)
                 continue
             end
-            push!(REPL.PRECOMPILE_STATEMENTS, statement)
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple
             # println(ps)
