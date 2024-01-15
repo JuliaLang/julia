@@ -107,8 +107,9 @@ norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
 # Conservative assessment of types that have zero(T) defined for themselves
-@propagate_inbounds _zero(M::AbstractArray{T}, i, j) where {T<:Number} = isconcretetype(T) ? zero(T) : zero(M[i,j])
-@propagate_inbounds _zero(M::AbstractArray, i, j) = zero(M[i,j])
+haszero(::Type) = false
+haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
+@propagate_inbounds _zero(M::AbstractArray{T}, i, j) where {T} = haszero(T) ? zero(T) : zero(M[i,j])
 
 """
     triu!(M, k::Integer)
