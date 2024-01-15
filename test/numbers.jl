@@ -3141,3 +3141,26 @@ end
         @test n == G(F(n)) == F(G(n))
     end
 end
+
+@testset "`precision`" begin
+    Fs = (Float16, Float32, Float64, BigFloat)
+
+    @testset "type vs instance" begin
+        @testset "F: $F" for F ∈ Fs
+            @test precision(F) == precision(one(F))
+            @test precision(F, base = 2) == precision(one(F), base = 2)
+            @test precision(F, base = 3) == precision(one(F), base = 3)
+        end
+    end
+
+    @testset "`precision` of `Union` shouldn't recur infinitely, #52909" begin
+        @testset "i: $i" for i ∈ eachindex(Fs)
+            @testset "j: $j" for j ∈ (i + 1):lastindex(Fs)
+                S = Fs[i]
+                T = Fs[j]
+                @test_throws MethodError precision(Union{S,T})
+                @test_throws MethodError precision(Union{S,T}, base = 3)
+            end
+        end
+    end
+end
