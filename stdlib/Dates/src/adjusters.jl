@@ -196,6 +196,28 @@ end
 Base.show(io::IO, df::DateFunction) = println(io, df.f)
 
 # Core adjuster
+
+"""
+    adjust(df::DateFunction, start, step, limit) -> TimeType
+
+Adjusts the date in `start` until `f::Function` in `df::DateFunction` returns `true`.
+The step size dictates change in `start` on every iteration. If `limit` iterations occur,
+then ArgumentError is thrown.
+
+# Examples
+```jldoctest
+julia> adjust(date -> month(date) == 10, Date(2022, 1, 1), step=Month(3), limit=10)
+2022-10-01
+
+julia> adjust(date -> year(date) == 2025, Date(2022, 1, 1), step=Year(1), limit=4)
+2025-01-01
+
+julia> adjust(date -> day(date) == 15, Date(2022, 1, 1); step=Year(1), limit=3)
+ERROR: ArgumentError: Adjustment limit reached: 3 iterations
+Stacktrace:
+[...]
+```
+"""
 function adjust(df::DateFunction, start, step, limit)
     for i = 1:limit
         df.f(start) && return start
@@ -204,6 +226,27 @@ function adjust(df::DateFunction, start, step, limit)
     throw(ArgumentError("Adjustment limit reached: $limit iterations"))
 end
 
+"""
+    adjust(df::DateFunction, start) -> TimeType
+
+Adjusts the date in `start` until `f::Function` in `df::DateFunction` returns `true`.
+On every iteration, start is incremented by 1 Day. If 10000 iterations occur,
+then ArgumentError is thrown.
+
+# Examples
+```jldoctest
+julia> adjust(date -> month(date) == 10, Date(2022, 1, 1))
+2022-10-01
+
+julia> adjust(date -> year(date) == 2025, Date(2022, 1, 1))
+2025-01-01
+
+julia> adjust(date -> year(date) == 2224, Date(2022, 1, 1))
+ERROR: ArgumentError: Adjustment limit reached: 10000 iterations
+Stacktrace:
+[...]
+```
+"""
 function adjust(func::Function, start; step::Period=Day(1), limit::Int=10000)
     return adjust(DateFunction(func, start), start, step, limit)
 end
