@@ -17,48 +17,24 @@ reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a)
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 
-function reduced_indices(inds::Indices{N}, d::Int) where N
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    if d == 1
-        return (reduced_index(inds[1]), tail(inds)...)::typeof(inds)
-    elseif 1 < d <= N
-        return tuple(inds[1:d-1]..., oftype(inds[d], reduced_index(inds[d])), inds[d+1:N]...)::typeof(inds)
-    else
-        return inds
-    end
-end
-
-function reduced_indices0(inds::Indices{N}, d::Int) where N
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    if d <= N
-        ind = inds[d]
-        rd = isempty(ind) ? ind : reduced_index(inds[d])
-        if d == 1
-            return (rd, tail(inds)...)::typeof(inds)
-        else
-            return tuple(inds[1:d-1]..., oftype(inds[d], rd), inds[d+1:N]...)::typeof(inds)
-        end
-    else
-        return inds
-    end
-end
-
 function reduced_indices(inds::Indices{N}, region) where N
-    rinds = collect(inds)
+    rinds = inds
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
         d = Int(i)
         if d < 1
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
-            rinds[d] = reduced_index(rinds[d])
+            rinds = let rinds_=rinds
+                ntuple(j -> j == d ? reduced_index(rinds_[d]) : rinds_[j], Val(N))
+            end
         end
     end
-    tuple(rinds...)::typeof(inds)
+    rinds
 end
 
 function reduced_indices0(inds::Indices{N}, region) where N
-    rinds = collect(inds)
+    rinds = inds
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
         d = Int(i)
@@ -66,10 +42,12 @@ function reduced_indices0(inds::Indices{N}, region) where N
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
             rind = rinds[d]
-            rinds[d] = isempty(rind) ? rind : reduced_index(rind)
+            rinds = let rinds_=rinds, rind=(isempty(rind) ? rind : reduced_index(rind))
+                ntuple(j -> j == d ? rind : rinds_[j], Val(N))
+            end
         end
     end
-    tuple(rinds...)::typeof(inds)
+    rinds
 end
 
 ###### Generic reduction functions #####
