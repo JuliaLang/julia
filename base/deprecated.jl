@@ -118,7 +118,8 @@ macro deprecate(old, new, export_old=true)
     end
 end
 
-function depwarn(msg, funcsym; force::Bool=false)
+@nospecializeinfer function depwarn(msg, funcsym; force::Bool=false)
+    @nospecialize
     opts = JLOptions()
     if opts.depwarn == 2
         throw(ErrorException(msg))

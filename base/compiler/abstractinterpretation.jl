@@ -517,10 +517,6 @@ const RECURSION_MSG_HARDLIMIT = "Bounded recursion detected under hardlimit. Cal
 function abstract_call_method(interp::AbstractInterpreter,
                               method::Method, @nospecialize(sig), sparams::SimpleVector,
                               hardlimit::Bool, si::StmtInfo, sv::AbsIntState)
-    if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
-        add_remark!(interp, sv, "Refusing to infer into `depwarn`")
-        return MethodCallResult(Any, Any, false, false, nothing, Effects())
-    end
     sigtuple = unwrap_unionall(sig)
     sigtuple isa DataType ||
         return MethodCallResult(Any, Any, false, false, nothing, Effects())
