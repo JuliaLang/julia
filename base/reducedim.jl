@@ -28,11 +28,11 @@ function reduced_indices0(inds::Indices{N}, region_) where N
 end
 
 function _get_valid_region(region)
-    map(region) do i
+    for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        (d = Int(i)) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        return d
+        Int(i) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $i"))
     end
+    Iterators.map(Int, region)
 end
 
 ###### Generic reduction functions #####
