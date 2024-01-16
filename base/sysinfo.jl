@@ -182,6 +182,9 @@ The `CPUinfo` type is a mutable struct with the following fields:
 - `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
 - `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
 
+The times are in units of `1/Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`; otherwise they are in
+unknown units.
+
 Note: Included in the detailed system information via `versioninfo(verbose=true)`.
 """
 mutable struct CPUinfo
