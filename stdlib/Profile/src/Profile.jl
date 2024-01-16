@@ -1296,8 +1296,8 @@ function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool)
     # Nodes and edges are binary files
     open("$prefix.nodes", "w") do nodes
         open("$prefix.edges", "w") do edges
-            # The other two files are json data
-            open("$prefix.strings.json", "w") do strings
+            open("$prefix.strings", "w") do strings
+                # The following file is json data
                 open("$prefix.metadata.json", "w") do json
                     Base.@_lock_ios(nodes,
                     Base.@_lock_ios(edges,

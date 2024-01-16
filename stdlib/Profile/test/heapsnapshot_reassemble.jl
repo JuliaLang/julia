@@ -29,3 +29,26 @@ using Test
         @test test_write(x) == string(x)
     end
 end
+
+function test_print_str_escape_json(input::AbstractString, expected::AbstractString)
+    output = IOBuffer()
+    Profile.HeapSnapshot.print_str_escape_json(output, input)
+    @test String(take!(output)) == expected
+end
+
+@testset "print_str_escape_json" begin
+    # Test basic string escaping
+    test_print_str_escape_json("\"hello\"", "\"\\\"hello\\\"\"")
+
+    # Test escaping of control characters
+    test_print_str_escape_json("\x01\x02\x03", "\"\\u0001\\u0002\\u0003\"")
+
+    # Test escaping of other special characters
+    test_print_str_escape_json("\b\f\n\r\t", "\"\\b\\f\\n\\r\\t\"")
+
+    # Test handling of mixed characters
+    test_print_str_escape_json("abc\ndef\"ghi", "\"abc\\ndef\\\"ghi\"")
+
+    # Test handling of empty string
+    test_print_str_escape_json("", "\"\"")
+end

@@ -82,6 +82,7 @@ function assemble_snapshot(in_prefix, out_file::AbstractString = in_prefix)
         assemble_snapshot(in_prefix, io)
     end
 end
+
 # Manually parse and write the .json files, given that we don't have JSON import/export in
 # julia's stdlibs.
 function assemble_snapshot(in_prefix, io::IO)
@@ -172,10 +173,24 @@ function assemble_snapshot(in_prefix, io::IO)
         end
     end
     println(io, "],")
-    open(string(in_prefix, ".strings.json"), "r") do strings_io
-        skip(strings_io, 2) # skip "{\n"
-        write(io, strings_io) # strings contain the trailing "}" so we close out what we opened in preamble
+
+    println(io, "\"strings\":[")
+    open(string(in_prefix, ".strings"), "r") do strings_io
+        first = true
+        while !eof(strings_io)
+            str_size = read(strings_io, UInt)
+            str_bytes = read(strings_io, str_size)
+            str = String(str_bytes)
+            if first
+                print_str_escape_json(io, str)
+                first = false
+            else
+                print(io, ",\n")
+                print_str_escape_json(io, str)
+            end
+        end
     end
+    print(io, "]}")
 
     # remove the uber node from the orphans
     if 0 in orphans
@@ -185,6 +200,32 @@ function assemble_snapshot(in_prefix, io::IO)
     @assert isempty(orphans) "Orphaned nodes: $(orphans), node count: $(length(nodes)), orphan node count: $(length(orphans))"
 
     return nothing
+end
+
+function print_str_escape_json(stream::IO, s::AbstractString)
+    print(stream, '"')
+    for c in s
+        if c == '"'
+            print(stream, "\\\"")
+        elseif c == '\\'
+            print(stream, "\\\\")
+        elseif c == '\b'
+            print(stream, "\\b")
+        elseif c == '\f'
+            print(stream, "\\f")
+        elseif c == '\n'
+            print(stream, "\\n")
+        elseif c == '\r'
+            print(stream, "\\r")
+        elseif c == '\t'
+            print(stream, "\\t")
+        elseif '\x00' <= c <= '\x1f'
+            print(stream, "\\u", lpad(string(UInt16(c), base=16), 4, '0'))
+        else
+            print(stream, c)
+        end
+    end
+    print(stream, '"')
 end
 
 end
