@@ -542,6 +542,7 @@ end
              100798//32085
              103993//33102
              312689//99532 ]
+    @test rationalize(pi) === rationalize(BigFloat(pi))
 end
 
 @testset "issue #12536" begin

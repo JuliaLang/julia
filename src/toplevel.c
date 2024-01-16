@@ -222,7 +222,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     size_t i;
     jl_svec_t *table = jl_atomic_load_relaxed(&newm->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b != jl_nothing) {
             // remove non-exported macros
             if (jl_symbol_name(b->name)[0]=='@' &&
@@ -759,14 +759,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 if (name != NULL)
                     u = (jl_module_t*)jl_eval_global_var(import, name);
                 if (from) {
-                    // `using A: B` syntax
+                    // `using A: B` and `using A: B.c` syntax
                     jl_module_use(m, import, name);
                 }
                 else {
                     if (!jl_is_module(u))
                         jl_eval_errorf(m, "invalid using path: \"%s\" does not name a module",
                                        jl_symbol_name(name));
-                    // `using A.B` syntax
+                    // `using A` and `using A.B` syntax
                     jl_module_using(m, u);
                     if (m == jl_main_module && name == NULL) {
                         // TODO: for now, `using A` in Main also creates an explicit binding for `A`

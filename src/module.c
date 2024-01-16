@@ -1,4 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
+//
 
 /*
   modules and top-level bindings
@@ -641,7 +642,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
     // silently override a "using" name. see issue #2054.
     jl_svec_t *table = jl_atomic_load_relaxed(&from->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
         if (b->exportp && (jl_atomic_load_relaxed(&b->owner) == b || b->imported)) {
@@ -666,7 +667,7 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
 {
     jl_binding_t *b = jl_get_module_binding(from, s, 1);
     b->publicp = 1;
-    b->exportp = exported;
+    b->exportp |= exported;
 }
 
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
@@ -939,7 +940,7 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
     JL_GC_PUSH1(&a);
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
         jl_sym_t *asname = b->globalref->name;
@@ -996,7 +997,7 @@ JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
     JL_LOCK(&m->lock);
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
         if (jl_atomic_load_relaxed(&b->owner) && jl_atomic_load_relaxed(&b->owner) != b && !b->imported)

@@ -142,6 +142,10 @@ let ex = quote
         struct WeirdNames end
         Base.propertynames(::WeirdNames) = (Symbol("oh no!"), Symbol("oh yes!"))
 
+        # https://github.com/JuliaLang/julia/issues/52551#issuecomment-1858543413
+        export exported_symbol
+        exported_symbol(::WeirdNames) = nothing
+
         end # module CompletionFoo
         test_repl_comp_dict = CompletionFoo.test_dict
         test_repl_comp_customdict = CompletionFoo.test_customdict
@@ -742,6 +746,9 @@ end
 
 #TODO: @test_nocompletion("CompletionFoo.?(3; len2=5; ")
 
+# https://github.com/JuliaLang/julia/issues/52551
+@test !isempty(test_complete("?("))
+
 #################################################################
 
 # Test method completion with varargs
@@ -1139,6 +1146,15 @@ let s, c, r
             # PATH can also contain folders which we aren't actually allowed to read.
             withenv("PATH" => string(path, ":", unreadable)) do
                 s = "tmp-execu"
+                # Files reachable by PATH are cached async when PATH is seen to have been changed by `complete_path`
+                # so changes are unlikely to appear in the first complete. For testing purposes we can wait for
+                # caching to finish
+                @lock REPL.REPLCompletions.PATH_cache_lock begin
+                    # force the next cache update to happen immediately
+                    REPL.REPLCompletions.next_cache_update = 0
+                end
+                c,r = test_scomplete(s)
+                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test "tmp-executable" in c
                 @test r == 1:9
@@ -1167,6 +1183,12 @@ let s, c, r
 
             withenv("PATH" => string(tempdir(), ":", dir)) do
                 s = string("repl-completio")
+                @lock REPL.REPLCompletions.PATH_cache_lock begin
+                    # force the next cache update to happen immediately
+                    REPL.REPLCompletions.next_cache_update = 0
+                end
+                c,r = test_scomplete(s)
+                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"
@@ -2156,3 +2178,28 @@ let t = REPLCompletions.repl_eval_ex(:(Base.PersistentDict(issue52099 => 3)), @_
         @test length(t.val) == 1
     end
 end
+
+# test REPLInterpreter effects for `getindex(::Dict, key)`
+for (DictT, KeyT) = Any[(Dict{Symbol,Any}, Symbol),
+                        (Dict{Int,Any}, Int),
+                        (Dict{String,Any}, String)]
+    @testset let DictT=DictT, KeyT=KeyT
+        effects = Base.infer_effects(getindex, (DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter())
+        @test Core.Compiler.is_effect_free(effects)
+        @test Core.Compiler.is_terminates(effects)
+        @test Core.Compiler.is_noub(effects)
+        effects = Base.infer_effects((DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter()) do d, key
+            key in keys(d)
+        end
+        @test Core.Compiler.is_effect_free(effects)
+        @test Core.Compiler.is_terminates(effects)
+        @test Core.Compiler.is_noub(effects)
+    end
+end
+
+# test invalidation support
+replinterp_invalidation_callee(c::Bool=rand(Bool)) = Some(c ? r"foo" : r"bar")
+replinterp_invalidation_caller() = replinterp_invalidation_callee().value
+@test REPLCompletions.repl_eval_ex(:(replinterp_invalidation_caller()), @__MODULE__) == Regex
+replinterp_invalidation_callee(c::Bool=rand(Bool)) = Some(c ? "foo" : "bar")
+@test REPLCompletions.repl_eval_ex(:(replinterp_invalidation_caller()), @__MODULE__) == String

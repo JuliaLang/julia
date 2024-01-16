@@ -612,6 +612,7 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     return *_shared_module;
 }
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
+void SetOpaquePointer(LLVMContext &ctx) JL_NOTSAFEPOINT;
 
 void optimizeDLSyms(Module &M);
 

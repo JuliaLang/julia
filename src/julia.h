@@ -265,20 +265,28 @@ typedef union __jl_purity_overrides_t {
     uint16_t bits;
 } _jl_purity_overrides_t;
 
+#define NUM_EFFECTS_OVERRIDES 9
+#define NUM_IR_FLAGS 11
+
 // This type describes a single function body
 typedef struct _jl_code_info_t {
     // ssavalue-indexed arrays of properties:
     jl_array_t *code;  // Any array of statements
     jl_value_t *codelocs; // Int32 array of indices into the line table
     jl_value_t *ssavaluetypes; // types of ssa values (or count of them)
-    jl_array_t *ssaflags; // flags associated with each statement:
-        // 0 = inbounds
-        // 1 = inline
-        // 2 = noinline
-        // 3 = <reserved> strict-ieee (strictfp)
-        // 4 = effect-free (may be deleted if unused)
-        // 5-6 = <unused>
-        // 7 = has out-of-band info
+    jl_array_t *ssaflags; // 32 bits flags associated with each statement:
+        // 1 << 0 = inbounds region
+        // 1 << 1 = callsite inline region
+        // 1 << 2 = callsite noinline region
+        // 1 << 3 = throw block
+        // 1 << 4 = :effect_free
+        // 1 << 5 = :nothrow
+        // 1 << 6 = :consistent
+        // 1 << 7 = :refined
+        // 1 << 8 = :noub
+        // 1 << 9 = :effect_free_if_inaccessiblememonly
+        // 1 << 10 = :inaccessiblemem_or_argmemonly
+        // 1 << 11-18 = callsite effects overrides
     // miscellaneous data:
     jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
     jl_value_t *linetable; // Table of locations [TODO: make this volatile like slotnames]
@@ -946,6 +954,7 @@ extern void JL_GC_PUSH2(void *, void *) JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH3(void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH4(void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH5(void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
+extern void JL_GC_PUSH6(void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH7(void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH8(void *, void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
@@ -1250,7 +1259,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPO
     assert(i < jl_array_len(a));
     jl_array_data(a, uint8_t)[i] = x;
 }
-STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint8_t x) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint32_t x) JL_NOTSAFEPOINT
 {
     assert(i < jl_array_len(a));
     assert(jl_typetagis(a, jl_array_uint32_type) || jl_typetagis(a, jl_array_int32_type));
@@ -1274,6 +1283,7 @@ STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint8_t x) JL_NOTSAFEP
 #define jl_gotoifnot_cond(x) (((jl_value_t**)(x))[0])
 #define jl_gotoifnot_label(x) (((intptr_t*)(x))[1])
 #define jl_enternode_catch_dest(x) (((intptr_t*)(x))[0])
+#define jl_enternode_scope(x) (((jl_value_t**)(x))[1])
 #define jl_globalref_mod(s) (*(jl_module_t**)(s))
 #define jl_globalref_name(s) (((jl_sym_t**)(s))[1])
 #define jl_quotenode_value(x) (((jl_value_t**)x)[0])
@@ -1285,12 +1295,13 @@ STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint8_t x) JL_NOTSAFEP
 #define jl_string_data(s) ((char*)s + sizeof(void*))
 #define jl_string_len(s)  (*(size_t*)s)
 
-#define jl_gf_mtable(f) (((jl_datatype_t*)jl_typeof(f))->name->mt)
+#define jl_gf_ft_mtable(ft) (((jl_datatype_t*)ft)->name->mt)
+#define jl_gf_mtable(f) (jl_gf_ft_mtable(jl_typeof(f)))
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
 
 // struct type info
-JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack);
-#define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st), NULL))
+JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable);
+#define jl_get_fieldtypes(st) ((st)->types ? (st)->types : jl_compute_fieldtypes((st), NULL, 0))
 STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st) JL_NOTSAFEPOINT
 {
     return st->name->names;
@@ -2115,11 +2126,11 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
 
 
-JL_DLLEXPORT int jl_is_operator(char *sym);
-JL_DLLEXPORT int jl_is_unary_operator(char *sym);
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym);
-JL_DLLEXPORT int jl_is_syntactic_operator(char *sym);
-JL_DLLEXPORT int jl_operator_precedence(char *sym);
+JL_DLLEXPORT int jl_is_operator(const char *sym);
+JL_DLLEXPORT int jl_is_unary_operator(const char *sym);
+JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym);
+JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym);
+JL_DLLEXPORT int jl_operator_precedence(const char *sym);
 
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {
@@ -2474,6 +2485,7 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_OPTIONS_USE_COMPILED_MODULES_YES 1
 #define JL_OPTIONS_USE_COMPILED_MODULES_NO 0
 
+#define JL_OPTIONS_USE_PKGIMAGES_EXISTING 2
 #define JL_OPTIONS_USE_PKGIMAGES_YES 1
 #define JL_OPTIONS_USE_PKGIMAGES_NO 0
 

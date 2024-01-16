@@ -190,25 +190,12 @@ extern jl_gc_page_stack_t global_page_pool_lazily_freed;
 extern jl_gc_page_stack_t global_page_pool_clean;
 extern jl_gc_page_stack_t global_page_pool_freed;
 
-#define GC_BACKOFF_MIN 4
-#define GC_BACKOFF_MAX 12
-
-STATIC_INLINE void gc_backoff(int *i) JL_NOTSAFEPOINT
-{
-    if (*i < GC_BACKOFF_MAX) {
-        (*i)++;
-    }
-    for (int j = 0; j < (1 << *i); j++) {
-        jl_cpu_pause();
-    }
-}
-
 // Lock-free stack implementation taken
 // from Herlihy's "The Art of Multiprocessor Programming"
 // XXX: this is not a general-purpose lock-free stack. We can
 // get away with just using a CAS and not implementing some ABA
 // prevention mechanism since once a node is popped from the
-// `jl_gc_global_page_pool_t`, it may only be pushed back to them
+// `jl_gc_page_stack_t`, it may only be pushed back to them
 // in the sweeping phase, which also doesn't push a node into the
 // same stack after it's popped
 
@@ -481,7 +468,7 @@ extern uv_sem_t gc_sweep_assists_needed;
 extern _Atomic(int) gc_n_threads_marking;
 extern _Atomic(int) gc_n_threads_sweeping;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
-void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end) JL_NOTSAFEPOINT;
+void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_value_t **fl_begin, jl_value_t **fl_end) JL_NOTSAFEPOINT;
 void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_NOTSAFEPOINT;
 void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_loop_serial(jl_ptls_t ptls);
@@ -538,6 +525,13 @@ void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
                      uint64_t freed, uint64_t live, uint64_t interval,
                      uint64_t pause, uint64_t ttsp, uint64_t mark,
                      uint64_t sweep);
+void gc_heuristics_summary(
+        uint64_t old_alloc_diff, uint64_t alloc_mem,
+        uint64_t old_mut_time, uint64_t alloc_time,
+        uint64_t old_freed_diff, uint64_t gc_mem,
+        uint64_t old_pause_time, uint64_t gc_time,
+        int thrash_counter, const char *reason,
+        uint64_t current_heap, uint64_t target_heap);
 #else
 #define gc_time_pool_start()
 STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT
@@ -565,6 +559,13 @@ STATIC_INLINE void gc_time_count_mallocd_memory(int bits) JL_NOTSAFEPOINT
                             estimate_freed, sweep_full)
 #define  gc_time_summary(sweep_full, start, end, freed, live,           \
                          interval, pause, ttsp, mark, sweep)
+#define gc_heuristics_summary( \
+        old_alloc_diff, alloc_mem, \
+        old_mut_time, alloc_time, \
+        old_freed_diff, gc_mem, \
+        old_pause_time, gc_time, \
+        thrash_counter, reason, \
+        current_heap, target_heap)
 #endif
 
 #ifdef MEMFENCE

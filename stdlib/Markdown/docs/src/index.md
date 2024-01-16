@@ -75,7 +75,7 @@ the text enclosed in square brackets, `[ ]`, is the name of the link and the tex
 parentheses, `( )`, is the URL.
 
 ```
-A paragraph containing a link to [Julia](http://www.julialang.org).
+A paragraph containing a link to [Julia](https://www.julialang.org).
 ```
 
 It's also possible to add cross-references to other documented functions/methods/variables within
@@ -398,3 +398,17 @@ complex features (such as references) without cluttering the basic syntax.
 
 In principle, the Markdown parser itself can also be arbitrarily extended by packages, or an entirely
 custom flavour of Markdown can be used, but this should generally be unnecessary.
+
+## [Markdown String Literals](@id stdlib-markdown-literals)
+
+Markdown strings can be constructed using the string literal syntax `md"..."`.
+
+## [API reference](@id stdlib-markdown-api)
+
+```@docs
+Markdown.MD
+Markdown.@md_str
+Markdown.@doc_str
+Markdown.html
+Markdown.latex
+```

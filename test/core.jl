@@ -111,6 +111,21 @@ let abcd = ABCDconst(1, 2, 3, 4)
         abcd.d = nothing)
     @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
 end
+# Issue #52686
+struct A52686{T} end
+struct B52686{T, S}
+    a::A52686{<:T}
+end
+function func52686()
+    @eval begin
+        struct A52686{T} end
+        struct B52686{T, S}
+            a::A52686{<:T}
+        end
+    end
+    return true
+end
+@test func52686()
 
 # test `===` handling null pointer in struct #44712
 struct N44712
@@ -8070,3 +8085,19 @@ let widen_diagonal(x::UnionAll) = Base.rewrap_unionall(Base.widen_diagonal(Base.
     @test Union{Tuple{T}, Tuple{T,Int}} where {T} === widen_diagonal(Union{Tuple{T}, Tuple{T,Int}} where {T})
     @test Tuple === widen_diagonal(Union{Tuple{Vararg{S}}, Tuple{Vararg{T}}} where {S, T})
 end
+
+# Test try/catch/else ordering
+function test_try_catch_else()
+    local x
+    try
+        x = 1
+    catch
+        rethrow()
+    else
+        return x
+    end
+end
+@test test_try_catch_else() == 1
+
+# #52433
+@test_throws ErrorException Core.Intrinsics.pointerref(Ptr{Vector{Int64}}(C_NULL), 1, 0)

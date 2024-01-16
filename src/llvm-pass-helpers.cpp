@@ -128,7 +128,7 @@ namespace jl_intrinsics {
     {
         auto FnAttrs = AttrBuilder(target->getContext());
 #if JL_LLVM_VERSION >= 160000
-        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | inaccessibleMemOnly(ModRefInfo::ModRef));
+        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
 #endif
         FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
         FnAttrs.addAttribute(Attribute::WillReturn);

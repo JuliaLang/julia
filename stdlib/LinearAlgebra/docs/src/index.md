@@ -157,7 +157,7 @@ sorts of systems of linear equations.
 
 ## Special matrices
 
-[Matrices with special symmetries and structures](http://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=3274)
+[Matrices with special symmetries and structures](https://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=3274)
 arise often in linear algebra and are frequently associated with various matrix factorizations.
 Julia features a rich collection of special matrix types, which allow for fast computation with
 specialized routines that are specially developed for particular matrix types.
@@ -300,7 +300,7 @@ of the Linear Algebra documentation.
 | `QRCompactWY`      | Compact WY form of the QR factorization                                                                        |
 | `QRPivoted`        | Pivoted [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition)                                     |
 | `LQ`               | [QR factorization](https://en.wikipedia.org/wiki/QR_decomposition) of `transpose(A)`                           |
-| `Hessenberg`       | [Hessenberg decomposition](http://mathworld.wolfram.com/HessenbergDecomposition.html)                          |
+| `Hessenberg`       | [Hessenberg decomposition](https://mathworld.wolfram.com/HessenbergDecomposition.html)                          |
 | `Eigen`            | [Spectral decomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix)                         |
 | `GeneralizedEigen` | [Generalized spectral decomposition](https://en.wikipedia.org/wiki/Eigendecomposition_of_a_matrix#Generalized_eigenvalue_problem)                            |
 | `SVD`              | [Singular value decomposition](https://en.wikipedia.org/wiki/Singular_value_decomposition)                     |
@@ -402,7 +402,7 @@ up front and cache it for future reuse.
 
 ## Standard functions
 
-Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](http://www.netlib.org/lapack/).
+Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](https://www.netlib.org/lapack/).
 Sparse matrix factorizations call functions from [SuiteSparse](http://suitesparse.com).
 Other sparse solvers are available as Julia packages.
 
@@ -586,8 +586,8 @@ LinearAlgebra.rdiv!
 ## BLAS functions
 
 In Julia (as in much of scientific computation), dense linear-algebra operations are based on
-the [LAPACK library](http://www.netlib.org/lapack/), which in turn is built on top of basic linear-algebra
-building-blocks known as the [BLAS](http://www.netlib.org/blas/). There are highly optimized
+the [LAPACK library](https://www.netlib.org/lapack/), which in turn is built on top of basic linear-algebra
+building-blocks known as the [BLAS](https://www.netlib.org/blas/). There are highly optimized
 implementations of BLAS available for every computer architecture, and sometimes in high-performance
 linear algebra routines it is useful to call the BLAS functions directly.
 

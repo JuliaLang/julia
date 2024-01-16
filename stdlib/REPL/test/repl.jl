@@ -1711,6 +1711,17 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     @test LineEdit.state(repl.mistate).hint === nothing
 
+    # issue #52376
+    write(stdin_write, "\x15")
+    write(stdin_write, "\\_ailuj")
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+    s5 = readuntil(stdout_read, "\\_ailuj")
+    write(stdin_write, "\t")
+    s6 = readuntil(stdout_read, "ₐᵢₗᵤⱼ")
+
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
 end
@@ -1737,4 +1748,10 @@ let io = IOBuffer()
     @test REPL.banner(io; short=true) === nothing
     seek(io, 0)
     @test countlines(io) == 2
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(REPL)
+    @test_broken isempty(undoc)
+    @test undoc == [:AbstractREPL, :BasicREPL, :LineEditREPL, :StreamREPL]
 end

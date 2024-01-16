@@ -18,15 +18,17 @@ const patterns = split("""
     *Makefile
 """)
 
+# Note: `git ls-files` gives `/` as a path separator on Windows,
+#   so we just use `/` for all platforms.
 allow_tabs(path) =
     path == "Make.inc" ||
     endswith(path, "Makefile") ||
     endswith(path, ".make") ||
     endswith(path, ".mk") ||
-    startswith(path, joinpath("src", "support")) ||
-    startswith(path, joinpath("src", "flisp")) ||
-    endswith(path, joinpath("test", "syntax.jl")) ||
-    endswith(path, joinpath("test", "triplequote.jl"))
+    startswith(path, "src/support") ||
+    startswith(path, "src/flisp") ||
+    endswith(path, "test/syntax.jl") ||
+    endswith(path, "test/triplequote.jl")
 
 const errors = Set{Tuple{String,Int,String}}()
 

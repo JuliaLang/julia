@@ -808,6 +808,12 @@ namedtup = (;a=1, b=2, c=3)
 @test Val{Tuple{Int64, Vararg{Int32,N}} where N} === Val{Tuple{Int64, Vararg{Int32}}}
 @test Val{Tuple{Int32, Vararg{Int64}}} === Val{Tuple{Int32, Vararg{Int64,N}} where N}
 
+@testset "from Pair, issue #52636" begin
+    pair = (1 => "2")
+    @test (1, "2") == @inferred Tuple(pair)
+    @test (1, "2") == @inferred Tuple{Int,String}(pair)
+end
+
 @testset "circshift" begin
     t1 = (1, 2, 3, 4, 5)
     t2 = (1, 'a', -7.0, 3)
