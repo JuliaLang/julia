@@ -622,9 +622,7 @@ foreach(f, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itrs...),
 Circularly shift, i.e. rotate, the data in a tuple. The second argument specifies
 the shift amount.
 
-When the shift amount is a compile-time constant, the generated code can be made more
-efficient by invoking the function as `circshift(x, Val(shift))`. However, when 'shift' is
-an ordinary variable, `circshift(x, shift)` is better.
+The generated code is most efficient when the shift amount is a compile-time constant.
 
 # Examples
 ```jldoctest
@@ -632,9 +630,6 @@ julia> x = (1, 2, 3, 4, 5)
 (1, 2, 3, 4, 5)
 
 julia> circshift(x, 4)
-(2, 3, 4, 5, 1)
-
-julia> circshift(x, Val(4))
 (2, 3, 4, 5, 1)
 
 julia> z = (1, 'a', -7.0, 3)
@@ -649,4 +644,3 @@ function circshift(x::Tuple, shift::Integer)
     j = mod1(shift, length(x))
     ntuple(k -> __safe_getindex(x, k-j+ifelse(k>j,0,length(x))), Val(length(x)))
 end
-circshift(x::Tuple, ::Val{shift}) where {shift} = circshift(x, shift::Integer)
