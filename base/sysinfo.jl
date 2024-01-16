@@ -100,7 +100,7 @@ const WORD_SIZE = Core.sizeof(Int) * 8
 
 """
     Sys.SC_CLK_TCK:
-    
+
 The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
 POSIX systems, or `0` if it is unknown.
 
