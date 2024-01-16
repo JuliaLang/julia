@@ -190,6 +190,8 @@ abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
 
+# TODO: Insert docstrings for pivoting strategies here.
+
 abstract type PivotingStrategy end
 struct NoPivot <: PivotingStrategy end
 struct RowNonZero <: PivotingStrategy end

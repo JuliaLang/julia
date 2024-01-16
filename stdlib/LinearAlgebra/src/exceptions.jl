@@ -6,6 +6,8 @@ export LAPACKException,
        RankDeficientException,
        ZeroPivotException
 
+# TODO: Insert docstring for LAPACKException here.
+
 struct LAPACKException <: Exception
     info::BlasInt
 end
@@ -40,6 +42,8 @@ function Base.showerror(io::IO, ex::PosDefException)
     end
     print(io, "; Factorization failed.")
 end
+
+# TODO: Insert docstring for RankDeficientException here.
 
 struct RankDeficientException <: Exception
     info::BlasInt

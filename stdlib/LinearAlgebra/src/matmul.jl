@@ -692,6 +692,8 @@ function copyto!(B::AbstractVecOrMat, ir_dest::AbstractUnitRange{Int}, jr_dest::
     B
 end
 
+# TODO: Insert docstring for copy_transpose! here.
+
 function copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
         LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
