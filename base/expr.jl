@@ -998,14 +998,13 @@ function findmeta_block(exargs, argsmatch=args->true)
     return 0, []
 end
 
-remove_linenums!(ex) = ex
-
 """
     Base.remove_linenums!(ex)
 
 Remove all line-number metadata from expression-like object `ex`.
 """
-function remove_linenums!(ex::Expr)
+function remove_linenums!(@nospecialize ex)
+    ex isa Expr || return ex
     if ex.head === :block || ex.head === :quote
         # remove line number expressions from metadata (not argument literal or inert) position
         filter!(ex.args) do x
