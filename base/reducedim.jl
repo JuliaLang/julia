@@ -17,36 +17,22 @@ reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a)
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 
-function reduced_indices(inds::Indices{N}, region) where N
-    rinds = inds
-    for i in region
-        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            tmp = rinds # reassignment prevents boxing
-            rinds = ntuple(j -> j == d ? reduced_index(tmp[d]) : tmp[j], Val(N))
-        end
-    end
-    rinds
+function reduced_indices(inds::Indices{N}, region_) where N
+    region = _get_valid_region(region_)
+    ntuple(i -> i in region ? reduced_index(inds[i]) : inds[i], Val(N))
 end
 
-function reduced_indices0(inds::Indices{N}, region) where N
-    rinds = inds
-    for i in region
+function reduced_indices0(inds::Indices{N}, region_) where N
+    region = _get_valid_region(region_)
+    ntuple(i -> i in region && !isempty(inds[i]) ? reduced_index(inds[i]) : inds[i], Val(N))
+end
+
+function _get_valid_region(region)
+    map(region) do i
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            rind = rinds[d]
-            tmpd = isempty(rind) ? rind : reduced_index(rind)
-            tmp = rinds # reassignment prevents boxing
-            rinds = ntuple(j -> j == d ? tmpd : tmp[j], Val(N))
-        end
+        (d = Int(i)) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
+        return d
     end
-    rinds
 end
 
 ###### Generic reduction functions #####
