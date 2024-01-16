@@ -662,10 +662,4 @@ function username()
     return pw.username
 end
 
-function show(io::IO, ::MIME"text/plain", cpu::AbstractVector{CPUinfo})
-    summary(io, cpu)
-    println(io, ':')
-    cpu_summary(io, cpu)
-end
-
 end # module Sys
