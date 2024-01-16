@@ -4845,10 +4845,21 @@ g() = empty_nt_values(Base.inferencebarrier(Tuple{}))
 # This is somewhat sensitive to the exact recursion level that inference is willing to do, but the intention
 # is to test the case where inference limited a recursion, but then a forced constprop nevertheless managed
 # to terminate the call.
+@newinterp RecurseInterpreter
+let CC = Core.Compiler
+    function CC.const_prop_entry_heuristic(interp::RecurseInterpreter, result::CC.MethodCallResult,
+                                           si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+        if result.rt isa CC.LimitedAccuracy
+            return force # allow forced constprop to recurse into unresolved cycles
+        end
+        return @invoke CC.const_prop_entry_heuristic(interp::CC.AbstractInterpreter, result::CC.MethodCallResult,
+                                                     si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+    end
+end
 Base.@constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(x) > 100 ? x : type_level_recurse2(x[1] + 1, x..., x...))
 Base.@constprop :aggressive type_level_recurse2(x...) = type_level_recurse1(x...)
 type_level_recurse_entry() = Val{type_level_recurse1(1)}()
-@test Base.return_types(type_level_recurse_entry, ()) |> only == Val{1}
+@test only(Base.return_types(type_level_recurse_entry, (); interp=RecurseInterpreter())) == Val{1}
 
 # Test that inference doesn't give up if it can potentially refine effects,
 # even if the return type is Any.
