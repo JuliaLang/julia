@@ -25,9 +25,8 @@ function reduced_indices(inds::Indices{N}, region) where N
         if d < 1
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
-            rinds = let rinds_=rinds
-                ntuple(j -> j == d ? reduced_index(rinds_[d]) : rinds_[j], Val(N))
-            end
+            tmp = rinds # reassignment prevents boxing
+            rinds = ntuple(j -> j == d ? reduced_index(tmp[d]) : tmp[j], Val(N))
         end
     end
     rinds
@@ -42,9 +41,9 @@ function reduced_indices0(inds::Indices{N}, region) where N
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
         elseif d <= N
             rind = rinds[d]
-            rinds = let rinds_=rinds, rind=(isempty(rind) ? rind : reduced_index(rind))
-                ntuple(j -> j == d ? rind : rinds_[j], Val(N))
-            end
+            tmpd = isempty(rind) ? rind : reduced_index(rind)
+            tmp = rinds # reassignment prevents boxing
+            rinds = ntuple(j -> j == d ? tmpd : tmp[j], Val(N))
         end
     end
     rinds
