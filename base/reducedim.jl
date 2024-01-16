@@ -17,22 +17,21 @@ reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a)
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 
-function reduced_indices(inds::Indices{N}, region_) where N
-    region = _get_valid_region(region_)
+function reduced_indices(inds::Indices{N}, region) where N
+    _check_valid_region(region)
     ntuple(i -> i in region ? reduced_index(inds[i]) : inds[i], Val(N))
 end
 
-function reduced_indices0(inds::Indices{N}, region_) where N
-    region = _get_valid_region(region_)
+function reduced_indices0(inds::Indices{N}, region) where N
+    _check_valid_region(region)
     ntuple(i -> i in region && !isempty(inds[i]) ? reduced_index(inds[i]) : inds[i], Val(N))
 end
 
-function _get_valid_region(region)
+function _check_valid_region(region)
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
         Int(i) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $i"))
     end
-    Iterators.map(Int, region)
 end
 
 ###### Generic reduction functions #####
