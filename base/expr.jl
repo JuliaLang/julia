@@ -1004,24 +1004,26 @@ end
 Remove all line-number metadata from expression-like object `ex`.
 """
 function remove_linenums!(@nospecialize ex)
-    ex isa Expr || return ex
-    if ex.head === :block || ex.head === :quote
-        # remove line number expressions from metadata (not argument literal or inert) position
-        filter!(ex.args) do x
-            isa(x, Expr) && x.head === :line && return false
-            isa(x, LineNumberNode) && return false
-            return true
+    if ex isa Expr
+        if ex.head === :block || ex.head === :quote
+            # remove line number expressions from metadata (not argument literal or inert) position
+            filter!(ex.args) do x
+                isa(x, Expr) && x.head === :line && return false
+                isa(x, LineNumberNode) && return false
+                return true
+            end
         end
+        for subex in ex.args
+            subex isa Expr && remove_linenums!(subex)
+        end
+        return ex
+    elseif ex isa CodeInfo
+        ex.codelocs .= 0
+        length(ex.linetable) > 1 && resize!(ex.linetable, 1)
+        return ex
+    else
+        return ex
     end
-    for subex in ex.args
-        subex isa Expr && remove_linenums!(subex)
-    end
-    return ex
-end
-function remove_linenums!(src::CodeInfo)
-    src.codelocs .= 0
-    length(src.linetable) > 1 && resize!(src.linetable, 1)
-    return src
 end
 
 public remove_linenums!
