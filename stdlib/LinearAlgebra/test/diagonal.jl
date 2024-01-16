@@ -1242,6 +1242,26 @@ end
     end
 end
 
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    D = Diagonal([1:2;])
+    @test S * D == A * D
+    @test D * S == D * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, D) == mul!(C2, A, D)
+    @test mul!(C1, S, D, 1, 2) == mul!(C2, A, D, 1 ,2)
+    @test mul!(C1, D, S) == mul!(C2, D, A)
+    @test mul!(C1, D, S, 1, 2) == mul!(C2, D, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test D * sv == D * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, D, sv) == mul!(C2, D, v)
+    @test mul!(C1, D, sv, 1, 2) == mul!(C2, D, v, 1 ,2)
+end
+
 @testset "copy" begin
     @test copy(Diagonal(1:5)) === Diagonal(1:5)
 end

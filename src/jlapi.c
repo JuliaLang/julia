@@ -514,6 +514,19 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT
 }
 
 /**
+ * @brief Check if Julia has been build with assertions enabled.
+ *
+ * @return Returns 1 if assertions are enabled, 0 otherwise.
+ */
+JL_DLLEXPORT int8_t jl_is_assertsbuild(void) JL_NOTSAFEPOINT {
+#ifndef JL_NDEBUG
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+/**
  * @brief Check if Julia's memory debugging is enabled.
  *
  * @return Returns 1 if memory debugging is enabled, 0 otherwise.

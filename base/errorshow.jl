@@ -278,7 +278,8 @@ function showerror(io::IO, ex::MethodError)
             f_is_function = true
         end
         print(io, "no method matching ")
-        iob = IOContext(IOBuffer(), io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
+        buf = IOBuffer()
+        iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
         show_signature_function(iob, isa(f, Type) ? Type{f} : typeof(f))
         print(iob, "(")
         for (i, typ) in enumerate(arg_types_param)
@@ -293,7 +294,7 @@ function showerror(io::IO, ex::MethodError)
             end
         end
         print(iob, ")")
-        str = String(take!(unwrapcontext(iob)[1]))
+        str = String(take!(buf))
         str = type_limited_string_from_context(io, str)
         print(io, str)
     end
@@ -1022,6 +1023,18 @@ function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
 end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
+
+
+# Display a hint in case the user tries to use the min or max function on an iterable
+function min_max_on_iterable(io, ex, arg_types, kwargs)
+    @nospecialize
+    if (ex.f === max || ex.f === min) && length(arg_types) == 1 && Base.isiterable(only(arg_types))
+        f_correct = ex.f === max ? "maximum" : "minimum"
+        print(io, "\nFinding the $f_correct of an iterable is performed with `$f_correct`.")
+    end
+end
+
+Experimental.register_error_hint(min_max_on_iterable, MethodError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

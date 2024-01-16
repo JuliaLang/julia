@@ -532,11 +532,9 @@ function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular
     return A
 end
 
-# Define `mul!` for (Unit){Upper,Lower}Triangular matrices times a number.
-# be permissive here and require compatibility later in _triscale!
-@inline mul!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
+@inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
-@inline mul!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
+@inline _lscale_add!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
 
 function checksize1(A, B)
@@ -547,7 +545,7 @@ end
 
 function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         for i = 1:j
             @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
@@ -557,7 +555,7 @@ function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
 end
 function _triscale!(A::UpperTriangular, c::Number, B::UpperTriangular, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         for i = 1:j
             @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
@@ -567,7 +565,7 @@ function _triscale!(A::UpperTriangular, c::Number, B::UpperTriangular, _add)
 end
 function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Number, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
@@ -578,7 +576,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Nu
 end
 function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriangular, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
@@ -589,7 +587,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriang
 end
 function _triscale!(A::LowerTriangular, B::LowerTriangular, c::Number, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         for i = j:n
             @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
@@ -599,7 +597,7 @@ function _triscale!(A::LowerTriangular, B::LowerTriangular, c::Number, _add)
 end
 function _triscale!(A::LowerTriangular, c::Number, B::LowerTriangular, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         for i = j:n
             @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
@@ -609,7 +607,7 @@ function _triscale!(A::LowerTriangular, c::Number, B::LowerTriangular, _add)
 end
 function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Number, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
@@ -620,7 +618,7 @@ function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Nu
 end
 function _triscale!(A::LowerOrUnitLowerTriangular, c::Number, B::UnitLowerTriangular, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
@@ -773,10 +771,6 @@ isunit_char(::LowerTriangular) = 'N'
 isunit_char(::UnitLowerTriangular) = 'U'
 
 lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) = _trimul!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix) = _trimul!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = _trimul!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractTriangular) = _trimul!(C, A, B)
 
 # generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
 _trimul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) =
@@ -807,9 +801,9 @@ rmul!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _trimul!(A, A, B)
 
 
 for TC in (:AbstractVector, :AbstractMatrix)
-    @eval @inline function mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
+    @eval @inline function _mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
         if isone(alpha) && iszero(beta)
-            return mul!(C, A, B)
+            return _trimul!(C, A, B)
         else
             return generic_matvecmul!(C, 'N', A, B, MulAddMul(alpha, beta))
         end
@@ -819,9 +813,9 @@ for (TA, TB) in ((:AbstractTriangular, :AbstractMatrix),
                     (:AbstractMatrix, :AbstractTriangular),
                     (:AbstractTriangular, :AbstractTriangular)
                 )
-    @eval @inline function mul!(C::AbstractMatrix, A::$TA, B::$TB, alpha::Number, beta::Number)
+    @eval @inline function _mul!(C::AbstractMatrix, A::$TA, B::$TB, alpha::Number, beta::Number)
         if isone(alpha) && iszero(beta)
-            return mul!(C, A, B)
+            return _trimul!(C, A, B)
         else
             return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
         end
@@ -1545,22 +1539,11 @@ rmul!(A::LowerTriangular, B::UnitLowerTriangular) = LowerTriangular(rmul!(tril!(
 ## necessary in the general triangular solve problem.
 
 _inner_type_promotion(op, ::Type{TA}, ::Type{TB}) where {TA<:Integer,TB<:Integer} =
-    _init_eltype(*, TA, TB)
+    promote_op(matprod, TA, TB)
 _inner_type_promotion(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
-    _init_eltype(op, TA, TB)
+    promote_op(op, TA, TB)
 ## The general promotion methods
-function *(A::AbstractTriangular, B::AbstractTriangular)
-    TAB = _init_eltype(*, eltype(A), eltype(B))
-    mul!(similar(B, TAB, size(B)), A, B)
-end
-
 for mat in (:AbstractVector, :AbstractMatrix)
-    ### Multiplication with triangle to the left and hence rhs cannot be transposed.
-    @eval function *(A::AbstractTriangular, B::$mat)
-        require_one_based_indexing(B)
-        TAB = _init_eltype(*, eltype(A), eltype(B))
-        mul!(similar(B, TAB, size(B)), A, B)
-    end
     ### Left division with triangle to the left hence rhs cannot be transposed. No quotients.
     @eval function \(A::Union{UnitUpperTriangular,UnitLowerTriangular}, B::$mat)
         require_one_based_indexing(B)
@@ -1570,7 +1553,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
     @eval function \(A::Union{UpperTriangular,LowerTriangular}, B::$mat)
         require_one_based_indexing(B)
-        TAB = _init_eltype(\, eltype(A), eltype(B))
+        TAB = promote_op(\, eltype(A), eltype(B))
         ldiv!(similar(B, TAB, size(B)), A, B)
     end
     ### Right division with triangle to the right hence lhs cannot be transposed. No quotients.
@@ -1582,20 +1565,10 @@ for mat in (:AbstractVector, :AbstractMatrix)
     ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
     @eval function /(A::$mat, B::Union{UpperTriangular,LowerTriangular})
         require_one_based_indexing(A)
-        TAB = _init_eltype(/, eltype(A), eltype(B))
+        TAB = promote_op(/, eltype(A), eltype(B))
         _rdiv!(similar(A, TAB, size(A)), A, B)
     end
 end
-### Multiplication with triangle to the right and hence lhs cannot be transposed.
-# Only for AbstractMatrix, hence outside the above loop.
-function *(A::AbstractMatrix, B::AbstractTriangular)
-    require_one_based_indexing(A)
-    TAB = _init_eltype(*, eltype(A), eltype(B))
-    mul!(similar(A, TAB, size(A)), A, B)
-end
-# ambiguity resolution with definitions in matmul.jl
-*(v::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) * v.parent)
-*(v::TransposeAbsVec, A::AbstractTriangular) = transpose(transpose(A) * v.parent)
 
 ## Some Triangular-Triangular cases. We might want to write tailored methods
 ## for these cases, but I'm not sure it is worth it.
