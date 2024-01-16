@@ -515,23 +515,22 @@ void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *
 
 void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT
 {
+    // valid alloc_type values are 0, 1, 2
+    assert(alloc_type <= 2);
     size_t name_or_idx = g_snapshot->names.find_or_create_string_id("<native>");
 
     auto from_node_idx = record_node_to_gc_snapshot(from);
-    const char *alloc_kind;
+    const char *alloc_kind = NULL;
     switch (alloc_type)
     {
     case 0:
-        alloc_kind = "<malloc>";
+        alloc_kind = "<generic memory - malloc>";
         break;
     case 1:
-        alloc_kind = "<pooled>";
+        alloc_kind = "<generic memory - pool alloc>";
         break;
     case 2:
-        alloc_kind = "<inline>";
-        break;
-    default:
-        alloc_kind = "<undef>";
+        alloc_kind = "<generic memory - inline alloc>";
         break;
     }
     auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, alloc_kind);
