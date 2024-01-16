@@ -98,6 +98,14 @@ Standard word size on the current machine, in bits.
 """
 const WORD_SIZE = Core.sizeof(Int) * 8
 
+"""
+    Sys.SC_CLK_TCK:
+    
+The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
+POSIX systems, or `0` if it is unknown.
+
+CPU times, e.g. as returned by `Sys.cpu_info()`, are in units of ticks, i.e. units of `1 / Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`.
+"""
 global SC_CLK_TCK::Clong
 
 """
