@@ -202,7 +202,7 @@ Base.show(io::IO, df::DateFunction) = println(io, df.f)
 
 Adjusts the date in `start` until `f::Function` in `df::DateFunction` returns `true`.
 The step size dictates change in `start` on every iteration. If `limit` iterations occur,
-then ArgumentError is thrown.
+then an [`ArgumentError`](@ref) is thrown.
 
 # Examples
 ```jldoctest
