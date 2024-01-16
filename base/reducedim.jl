@@ -17,20 +17,20 @@ reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a)
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 
-function reduced_indices(inds::Indices{N}, region) where N
+function reduced_indices(axs::Indices{N}, region) where N
     _check_valid_region(region)
-    ntuple(i -> i in region ? reduced_index(inds[i]) : inds[i], Val(N))
+    ntuple(d -> d in region ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
-function reduced_indices0(inds::Indices{N}, region) where N
+function reduced_indices0(axs::Indices{N}, region) where N
     _check_valid_region(region)
-    ntuple(i -> i in region && !isempty(inds[i]) ? reduced_index(inds[i]) : inds[i], Val(N))
+    ntuple(d -> d in region && !isempty(axs[d]) ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
 function _check_valid_region(region)
-    for i in region
-        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        Int(i) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $i"))
+    for d in region
+        isa(d, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
+        Int(d) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
     end
 end
 
