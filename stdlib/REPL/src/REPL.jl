@@ -42,6 +42,13 @@ _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 include("Terminals.jl")
 using .Terminals
 
+"""
+    AbstractREPL
+
+The abstract base type for all REPL implementations in Julia. `AbstractREPL` serves as a blueprint for defining various REPL interfaces.
+
+Implementations of `AbstractREPL` must define specific methods that dictate how the REPL reads input, evaluates it, and prints output.
+"""
 abstract type AbstractREPL end
 
 include("options.jl")
@@ -399,7 +406,16 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); ba
 end
 
 ## BasicREPL ##
+"""
+    BasicREPL
 
+A mutable struct representing a basic implementation of the Julia REPL (Read-Eval-Print Loop), primarily designed for straightforward and fundamental interactive command execution. 
+
+# Arguments
+- `terminal::TextTerminal`: Handles input/output operations.
+- `waserror::Bool`: A flag to track the occurrence of errors (initially set to `false`).
+- `frontend_task::Task`: Manages front-end activities like user interactions.
+"""
 mutable struct BasicREPL <: AbstractREPL
     terminal::TextTerminal
     waserror::Bool
@@ -458,7 +474,15 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
 end
 
 ## LineEditREPL ##
+"""
+    LineEditREPL
+An advanced implementation of the Julia REPL (Read-Eval-Print Loop), designed to enhance user interaction with robust line-editing capabilities.
 
+This REPL type integrates features such as cursor movement, text editing, command history navigation, auto-completion, and more interactive elements that facilitate a more efficient and user-friendly command-line experience.
+Unlike `BasicREPL`, which provides fundamental REPL functionalities, `LineEditREPL` focuses on a richer and more interactive command-line interface.
+It is particularly suited for environments where extended command-line usability is essential, offering a more sophisticated and feature-rich interface for users who perform complex and frequent interactions with the Julia REPL.
+This REPL type is typically the default in standard Julia installations, reflecting its comprehensive functionality that caters to a wide range of user needs.
+"""
 mutable struct LineEditREPL <: AbstractREPL
     t::TextTerminal
     hascolor::Bool
@@ -1344,7 +1368,12 @@ function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
 end
 
 ## StreamREPL ##
+"""
+    StreamREPL
+A specialized implementation of Julia's REPL (Read-Eval-Print Loop) designed to interface with generic IO streams.
 
+This flexibility makes it suitable for various input and output sources beyond the standard console, such as files, network sockets, or other custom IO types.
+"""
 mutable struct StreamREPL <: AbstractREPL
     stream::IO
     prompt_color::String
