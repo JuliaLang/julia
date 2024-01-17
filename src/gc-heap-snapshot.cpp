@@ -534,7 +534,7 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void
 {
     string path = _fieldpath_for_slot(from, slot);
     _record_gc_edge("property", from, to,
-                    g_snapshot->names.serialize(g_snapshot->strings, path));
+                    g_snapshot->names.serialize_if_necessary(g_snapshot->strings, path));
 }
 
 void _gc_heap_snapshot_record_module_to_binding(jl_module_t *module, jl_value_t *bindings, jl_value_t *bindingkeyset) JL_NOTSAFEPOINT
