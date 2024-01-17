@@ -120,6 +120,13 @@ end
 
 @nospecializeinfer function depwarn(msg, funcsym; force::Bool=false)
     @nospecialize
+    # N.B. With this use of `@invokelatest`, we're preventing the addition of backedges from
+    # callees, such as `convert`, to this user-facing method. This approach is designed to
+    # enhance the resilience of packages that utilize `depwarn` against invalidation.
+    return @invokelatest _depwarn(msg, funcsym, force)
+end
+@nospecializeinfer function _depwarn(msg, funcsym, force::Bool)
+    @nospecialize
     opts = JLOptions()
     if opts.depwarn == 2
         throw(ErrorException(msg))
