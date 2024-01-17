@@ -447,4 +447,10 @@ rm(dir)
     include("pidfile.jl")
 end
 
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(FileWatching)
+    @test_broken isempty(undoc)
+    @test undoc == [:FDWatcher, :FileMonitor, :FolderMonitor, :PollingFileWatcher]
+end
+
 end # testset

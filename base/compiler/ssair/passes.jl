@@ -986,7 +986,7 @@ function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, �
     return
 end
 
-# TODO: We could do the whole lifing machinery here, but really all
+# TODO: We could do the whole lifting machinery here, but really all
 # we want to do is clean this up when it got inserted by inlining,
 # which always targets simple `svec` call or `_compute_sparams`,
 # so this specialized lifting would be enough
@@ -1147,7 +1147,18 @@ function (this::IntermediaryCollector)(@nospecialize(pi), @nospecialize(ssa))
 end
 
 function update_scope_mapping!(scope_mapping, bb, val)
-    @assert (scope_mapping[bb] in (val, SSAValue(0)))
+    current_mapping = scope_mapping[bb]
+    if current_mapping != SSAValue(0)
+        if val == SSAValue(0)
+            # Unreachable bbs will have SSAValue(0), but can branch into
+            # try/catch regions. We could validate with the domtree, but that's
+            # quite expensive for a debug check, so simply allow this without
+            # making any changes to mapping.
+            return
+        end
+        @assert current_mapping == val
+        return
+    end
     scope_mapping[bb] = val
 end
 
@@ -1209,10 +1220,11 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
         if scope_mapping !== nothing && did_just_finish_bb(compact)
             bb = compact.active_result_bb - 1
-            if isexpr(stmt, :leave)
-                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[block_for_inst(compact, scope_mapping[bb])])
+            bbs = scope_mapping[bb]
+            if isexpr(stmt, :leave) && bbs != SSAValue(0)
+                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[block_for_inst(compact, bbs)])
             else
-                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[bb])
+                update_scope_mapping!(scope_mapping, bb+1, bbs)
             end
         end
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
@@ -1391,7 +1403,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         (lifted_val, nest) = perform_lifting!(compact,
             visited_philikes, field, result_t, lifted_leaves, val, lazydomtree)
 
-        node_was_deleted = false
+        should_delete_node = false
         line = compact[SSAValue(idx)][:line]
         if lifted_val !== nothing && !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
             compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
@@ -1400,9 +1412,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             # Save some work in a later compaction, by inserting this into the renamer now,
             # but only do this if we didn't set the REFINED flag, to save work for irinterp
             # in revisiting only the renamings that came through *this* idx.
-            delete_inst_here!(compact)
             compact.ssa_rename[old_idx] = lifted_val === nothing ? nothing : lifted_val.val
-            node_was_deleted = true
+            should_delete_node = true
         else
             compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
         end
@@ -1423,17 +1434,24 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 def_val = (def_val::LiftedValue).val
                 finish_phi_nest!(compact, nest)
             end
-            ni = NewInstruction(
-                Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val), Nothing, line)
-            if node_was_deleted
-                insert_node_here!(compact, ni, true)
+            throw_expr = Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val)
+            if should_delete_node
+                # Replace the node we already have rather than deleting/re-inserting.
+                # This way it is easier to handle BB boundary corner cases.
+                compact[SSAValue(idx)] = throw_expr
+                compact[SSAValue(idx)][:type] = Nothing
+                compact[SSAValue(idx)][:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_CONSISTENT | IR_FLAG_NOUB
+                should_delete_node = false
             else
+                ni = NewInstruction(throw_expr, Nothing, line)
                 insert_node!(compact, SSAValue(idx), ni)
             end
         else
             # val must be defined
             @assert lifted_val !== nothing
         end
+
+        should_delete_node && delete_inst_here!(compact)
     end
 
     non_dce_finish!(compact)
@@ -1616,7 +1634,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     end
 
     # Ok, legality check complete. Figure out the exact statement where we're
-    # gonna inline the finalizer.
+    # going to inline the finalizer.
     loc = bb_insert_idx === nothing ? first(ir.cfg.blocks[bb_insert_block].stmts) : bb_insert_idx::Int
     attach_after = bb_insert_idx !== nothing
 

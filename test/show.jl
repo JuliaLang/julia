@@ -1462,12 +1462,20 @@ end
 @test static_shown(:+) == ":+"
 @test static_shown(://) == "://"
 @test static_shown(://=) == "://="
-@test static_shown(Symbol("")) == "Symbol(\"\")"
-@test static_shown(Symbol("a/b")) == "Symbol(\"a/b\")"
-@test static_shown(Symbol("a-b")) == "Symbol(\"a-b\")"
+@test static_shown(Symbol("")) == ":var\"\""
+@test static_shown(Symbol("a/b")) == ":var\"a/b\""
+@test static_shown(Symbol("a-b")) == ":var\"a-b\""
 @test static_shown(UnionAll) == "UnionAll"
-
 @test static_shown(QuoteNode(:x)) == ":(:x)"
+@test static_shown(:!) == ":!"
+@test static_shown("\"") == "\"\\\"\""
+@test static_shown("\$") == "\"\\\$\""
+@test static_shown("\\") == "\"\\\\\""
+@test static_shown("a\x80b") == "\"a\\x80b\""
+@test static_shown("a\x80\$\\b") == "\"a\\x80\\\$\\\\b\""
+@test static_shown(GlobalRef(Main, :var"a#b")) == "Main.var\"a#b\""
+@test static_shown(GlobalRef(Main, :+)) == "Main.:(+)"
+@test static_shown((a = 3, ! = 4, var"a b" = 5)) == "(a=3, (!)=4, var\"a b\"=5)"
 
 # PR #38049
 @test static_shown(sum) == "Base.sum"
@@ -2169,6 +2177,20 @@ replstrcolor(x) = sprint((io, x) -> show(IOContext(io, :limit => true, :color =>
     @test repr([true, false]) == "Bool[1, 0]" == repr(BitVector([true, false]))
     @test_repr "Bool[1, 0]"
 end
+
+@testset "Unions with Bool (#39590)" begin
+    @test repr([missing, false]) == "Union{Missing, Bool}[missing, 0]"
+    @test_repr "Union{Bool, Nothing}[1, 0, nothing]"
+end
+
+# issue #26847
+@test_repr "Union{Missing, Float32}[1.0]"
+
+# intersection of #45396 and #48822
+@test_repr "Union{Missing, Rational{Int64}}[missing, 1//2, 2]"
+
+# Don't go too far with #48822
+@test_repr "Union{String, Bool}[true]"
 
 # issue #30505
 @test repr(Union{Tuple{Char}, Tuple{Char, Char}}[('a','b')]) == "Union{Tuple{Char}, Tuple{Char, Char}}[('a', 'b')]"

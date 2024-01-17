@@ -64,6 +64,10 @@
 #endif
 #endif
 
+// GC_ASSERT_PARENT_VALIDITY will check whether an object is valid when **pushing**
+// it to the mark queue
+// #define GC_ASSERT_PARENT_VALIDITY
+
 // profiling options
 
 // GC_FINAL_STATS prints total GC stats at exit

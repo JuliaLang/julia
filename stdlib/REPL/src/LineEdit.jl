@@ -1477,11 +1477,13 @@ end
 
 current_word_with_dots(s::MIState) = current_word_with_dots(buffer(s))
 
+previous_active_module::Module = Main
+
 function activate_module(s::MIState)
     word = current_word_with_dots(s);
-    mod = if isempty(word)
-        edit_insert(s, ' ') # makes the `edit_clear` below actually update the prompt
-        Main
+    empty = isempty(word)
+    mod = if empty
+        previous_active_module
     else
         try
             Base.Core.eval(Base.active_module(), Base.Meta.parse(word))
@@ -1489,9 +1491,15 @@ function activate_module(s::MIState)
             nothing
         end
     end
-    if !(mod isa Module)
+    if !(mod isa Module) || mod == Base.active_module()
         beep(s)
         return
+    end
+    empty && edit_insert(s, ' ') # makes the `edit_clear` below actually update the prompt
+    if Base.active_module() == Main || mod == Main
+        # At least one needs to be Main. Disallows toggling between two non-Main modules because it's
+        # otherwise hard to get back to Main
+        global previous_active_module = Base.active_module()
     end
     REPL.activate(mod)
     edit_clear(s)

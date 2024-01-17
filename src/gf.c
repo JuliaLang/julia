@@ -388,19 +388,23 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     }
     JL_CATCH {
         jl_value_t *e = jl_current_exception();
+        jl_printf((JL_STREAM*)STDERR_FILENO, "Internal error: during type inference of\n");
+        jl_static_show_func_sig((JL_STREAM*)STDERR_FILENO, (jl_value_t*)mi->specTypes);
+        jl_printf((JL_STREAM*)STDERR_FILENO, "\nEncountered ");
         if (e == jl_stackovf_exception) {
-            jl_printf((JL_STREAM*)STDERR_FILENO, "Internal error: stack overflow in type inference of ");
-            jl_static_show_func_sig((JL_STREAM*)STDERR_FILENO, (jl_value_t*)mi->specTypes);
-            jl_printf((JL_STREAM*)STDERR_FILENO, ".\n");
+            jl_printf((JL_STREAM*)STDERR_FILENO, "stack overflow.\n");
             jl_printf((JL_STREAM*)STDERR_FILENO, "This might be caused by recursion over very long tuples or argument lists.\n");
         }
         else {
-            jl_printf((JL_STREAM*)STDERR_FILENO, "Internal error: encountered unexpected error in runtime:\n");
+            jl_printf((JL_STREAM*)STDERR_FILENO, "unexpected error in runtime:\n");
             jl_static_show((JL_STREAM*)STDERR_FILENO, e);
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
             jlbacktrace(); // written to STDERR_FILENO
         }
         src = NULL;
+#ifndef JL_NDEBUG
+        abort();
+#endif
     }
     ct->world_age = last_age;
     ct->reentrant_timing -= 0b10;
@@ -2340,24 +2344,11 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
 }
 
 jl_mutex_t precomp_statement_out_lock;
-ios_t f_precompile;
-JL_STREAM* s_precompile = NULL;
-
-static void init_precompile_output(void)
-{
-    const char *t = jl_options.trace_compile;
-    if (!strncmp(t, "stderr", 6)) {
-        s_precompile = JL_STDERR;
-    }
-    else {
-        if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
-            jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
-        s_precompile = (JL_STREAM*) &f_precompile;
-    }
-}
 
 static void record_precompile_statement(jl_method_instance_t *mi)
 {
+    static ios_t f_precompile;
+    static JL_STREAM* s_precompile = NULL;
     jl_method_t *def = mi->def.method;
     if (jl_options.trace_compile == NULL)
         return;
@@ -2366,7 +2357,15 @@ static void record_precompile_statement(jl_method_instance_t *mi)
 
     JL_LOCK(&precomp_statement_out_lock);
     if (s_precompile == NULL) {
-        init_precompile_output();
+        const char *t = jl_options.trace_compile;
+        if (!strncmp(t, "stderr", 6)) {
+            s_precompile = JL_STDERR;
+        }
+        else {
+            if (ios_file(&f_precompile, t, 1, 1, 1, 1) == NULL)
+                jl_errorf("cannot open precompile statement file \"%s\" for writing", t);
+            s_precompile = (JL_STREAM*) &f_precompile;
+        }
     }
     if (!jl_has_free_typevars(mi->specTypes)) {
         jl_printf(s_precompile, "precompile(");
@@ -2375,20 +2374,6 @@ static void record_precompile_statement(jl_method_instance_t *mi)
         if (s_precompile != JL_STDERR)
             ios_flush(&f_precompile);
     }
-    JL_UNLOCK(&precomp_statement_out_lock);
-}
-
-JL_DLLEXPORT void jl_write_precompile_statement(char* statement)
-{
-    if (jl_options.trace_compile == NULL)
-        return;
-    JL_LOCK(&precomp_statement_out_lock);
-    if (s_precompile == NULL) {
-        init_precompile_output();
-    }
-    jl_printf(s_precompile, "%s\n", statement);
-    if (s_precompile != JL_STDERR)
-        ios_flush(&f_precompile);
     JL_UNLOCK(&precomp_statement_out_lock);
 }
 

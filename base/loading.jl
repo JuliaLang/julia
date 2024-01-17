@@ -955,7 +955,13 @@ function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::
         return path
     end
     hash = get(entry, "git-tree-sha1", nothing)::Union{Nothing, String}
-    hash === nothing && return nothing
+    if hash === nothing
+        mbypath = manifest_uuid_path(Sys.STDLIB, pkg)
+        if mbypath isa String
+            return entry_path(mbypath, pkg.name)
+        end
+        return nothing
+    end
     hash = SHA1(hash)
     # Keep the 4 since it used to be the default
     uuid = pkg.uuid::UUID # checked within `explicit_manifest_uuid_path`
@@ -1027,8 +1033,13 @@ function cache_file_entry(pkg::PkgId)
         uuid === nothing ? pkg.name : package_slug(uuid)
 end
 
+# for use during running the REPL precompilation subprocess script, given we don't
+# want it to pick up caches that already exist for other optimization levels
+const ignore_compiled_cache = PkgId[]
+
 function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
+    pkg in ignore_compiled_cache && return paths
     entrypath, entryfile = cache_file_entry(pkg)
     for path in joinpath.(DEPOT_PATH, entrypath)
         isdir(path) || continue
@@ -1206,13 +1217,13 @@ function run_module_init(mod::Module, i::Int=1)
             cumulative_compile_timing(false);
             comp_time, recomp_time = (cumulative_compile_time_ns() .- compile_elapsedtimes) ./ 1e6
 
-            print(round(elapsedtime, digits=1), " ms $mod.__init__() ")
+            print("$(round(elapsedtime, digits=1)) ms $mod.__init__() ")
             if comp_time > 0
                 printstyled(Ryu.writefixed(Float64(100 * comp_time / elapsedtime), 2), "% compilation time", color = Base.info_color())
             end
             if recomp_time > 0
                 perc = Float64(100 * recomp_time / comp_time)
-                printstyled(" (", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% recompilation)", color = Base.warn_color())
+                printstyled(" ($(perc < 1 ? "<1" : Ryu.writefixed(perc, 0))% recompilation)", color = Base.warn_color())
             end
             println()
         end
@@ -1502,7 +1513,6 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     assert_havelock(require_lock)
     loaded = nothing
     if root_module_exists(modkey)
-        warn_if_already_loaded_different(modkey)
         loaded = root_module(modkey)
     else
         loaded = start_loading(modkey)
@@ -1533,7 +1543,6 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Un
     assert_havelock(require_lock)
     loaded = nothing
     if root_module_exists(modkey)
-        warn_if_already_loaded_different(modkey)
         loaded = root_module(modkey)
     else
         loaded = start_loading(modkey)
@@ -1977,48 +1986,9 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
-        warn_if_already_loaded_different(uuidkey)
         newm = root_module(uuidkey)
     end
     return newm
-end
-
-const already_warned_path_change_pkgs = Set{UUID}()
-# warns if the loaded version of a module is different to the one that locate_package wants to load
-function warn_if_already_loaded_different(uuidkey::PkgId)
-    uuidkey.uuid ∈ already_warned_path_change_pkgs && return
-    pkgorig = get(pkgorigins, uuidkey, nothing)
-    if pkgorig !== nothing && pkgorig.path !== nothing
-        new_path = locate_package(uuidkey)
-        if !samefile(fixup_stdlib_path(pkgorig.path), new_path)
-            if isnothing(pkgorig.version)
-                v = get_pkgversion_from_path(dirname(dirname(pkgorig.path)))
-                cur_vstr = isnothing(v) ? "" : "v$v "
-            else
-                cur_vstr = "v$v "
-            end
-            new_v = get_pkgversion_from_path(dirname(dirname(new_path)))
-            new_vstr = isnothing(new_v) ? "" : "v$new_v "
-            warnstr = """
-            $uuidkey is already loaded from a different path:
-              loaded:    $cur_vstr$(repr(pkgorig.path))
-              requested: $new_vstr$(repr(new_path))
-            """
-            if isempty(already_warned_path_change_pkgs)
-                warnstr *= """
-                This might indicate a change of environment has happened between package loads and can mean that
-                incompatible packages have been loaded"""
-                if JLOptions().startupfile < 2 #(0 = auto, 1 = yes)
-                    warnstr *= """. If this happened due to a startup.jl consider starting julia
-                    directly in the project via the `--project` arg."""
-                else
-                    warnstr *= "."
-                end
-            end
-            @warn warnstr
-            push!(already_warned_path_change_pkgs, uuidkey.uuid)
-        end
-    end
 end
 
 mutable struct PkgOrigin
@@ -2769,22 +2739,10 @@ function restore_depot_path(path::AbstractString, depot::AbstractString)
     replace(path, r"^@depot" => depot; count=1)
 end
 
-# Find depot in DEPOT_PATH for which all @depot tags from the `includes`
-# can be replaced so that they point to a file on disk each.
-function resolve_depot(includes::Union{AbstractVector,AbstractSet})
-    # `all` because it's possible to have a mixture of includes inside and outside of the depot
-    if all(includes) do inc
-            !startswith(inc, "@depot")
-        end
-        return :fully_outside_depot
-    end
+function resolve_depot(inc::AbstractString)
+    startswith(inc, "@depot") || return :not_relocatable
     for depot in DEPOT_PATH
-        # `any` because it's possible to have a mixture of includes inside and outside of the depot
-        if any(includes) do inc
-                isfile(restore_depot_path(inc, depot))
-            end
-            return depot
-        end
+        isfile(restore_depot_path(inc, depot)) && return depot
     end
     return :no_depot_found
 end
@@ -2872,25 +2830,41 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     l = read(f, Int32)
     clone_targets = read(f, l)
 
-    # determine path for @depot replacement from srctext files only, e.g. ignore any include_dependency files
     srcfiles = srctext_files(f, srctextpos, includes)
-    depot = resolve_depot(srcfiles)
-    keepidx = Int[]
-    for (i, chi) in enumerate(includes)
-        chi.filename ∈ srcfiles && push!(keepidx, i)
+
+    includes_srcfiles = CacheHeaderIncludes[]
+    includes_depfiles = CacheHeaderIncludes[]
+    for (i, inc) in enumerate(includes)
+        if inc.filename ∈ srcfiles
+            push!(includes_srcfiles, inc)
+        else
+            push!(includes_depfiles, inc)
+        end
     end
-    if depot === :no_depot_found
-        @debug("Unable to resolve @depot tag in cache file $cachefile", srcfiles)
-    elseif depot === :fully_outside_depot
-        @debug("All include dependencies in cache file $cachefile are outside of a depot.", srcfiles)
+
+    # determine depot for @depot replacement for include() files and include_dependency() files separately
+    srcfiles_depot = resolve_depot(first(srcfiles))
+    if srcfiles_depot === :no_depot_found
+        @debug("Unable to resolve @depot tag include() files from cache file $cachefile", srcfiles)
+    elseif srcfiles_depot === :not_relocatable
+        @debug("include() files from $cachefile are not relocatable", srcfiles)
     else
-        for inc in includes
+        for inc in includes_srcfiles
+            inc.filename = restore_depot_path(inc.filename, srcfiles_depot)
+        end
+    end
+    for inc in includes_depfiles
+        depot = resolve_depot(inc.filename)
+        if depot === :no_depot_found
+            @debug("Unable to resolve @depot tag for include_dependency() file $(inc.filename) from cache file $cachefile", srcfiles)
+        elseif depot === :not_relocatable
+            @debug("include_dependency() file $(inc.filename) from $cachefile is not relocatable", srcfiles)
+        else
             inc.filename = restore_depot_path(inc.filename, depot)
         end
     end
-    includes_srcfiles_only = includes[keepidx]
 
-    return modules, (includes, includes_srcfiles_only, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags
+    return modules, (includes, includes_srcfiles, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags
 end
 
 function parse_cache_header(cachefile::String)

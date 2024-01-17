@@ -650,11 +650,37 @@ function loaddocs(docs::Vector{Core.SimpleVector})
     nothing
 end
 
+# FIXME: formatdoc, parsedoc, apropos, and doc are defined here (but only doc is exported)
+# for historical reasons (#25738), but are *implemented* in REPL/src/docview.jl, while
+# apropos is *exported* by InteractiveUtils and doc is exported by Docs.  Seems
+# like a more sensible refactoring should be possible.
+
 function formatdoc end
 function parsedoc end
-function apropos end
-function doc end
 
+"""
+    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
+
+Search available docstrings for entries containing `pattern`.
+
+When `pattern` is a string, case is ignored. Results are printed to `io`.
+
+`apropos` can be called from the help mode in the REPL by wrapping the query in double quotes:
+```
+help?> "pattern"
+```
+"""
+function apropos end
+
+"""
+    Docs.doc(binding, sig)
+
+Return all documentation that matches both `binding` and `sig`.
+
+If `getdoc` returns a non-`nothing` result on the value of the binding, then a
+dynamic docstring is returned instead of one based on the binding itself.
+"""
+function doc end
 
 """
     Docs.hasdoc(mod::Module, sym::Symbol)::Bool
@@ -676,18 +702,19 @@ end
 
 
 """
-    undocumented_names(mod::Module; all=false)
+    undocumented_names(mod::Module; private=false)
 
-Return an array of undocumented symbols in `module` (that is, lacking docstrings).
-`all=false` returns only public symbols; whereas `all=true` also includes
-non-public symbols, following the behavior of [`names`](@ref). Only valid identifiers
-are included. Names are returned in sorted order.
+Return a sorted vector of undocumented symbols in `module` (that is, lacking docstrings).
+`private=false` (the default) returns only identifiers declared with `public` and/or
+`export`, whereas `private=true` returns all symbols in the module (excluding
+compiler-generated hidden symbols starting with `#`).
 
-See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.isidentifier`](@ref).
+See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.ispublic`](@ref).
 """
-function undocumented_names(mod::Module; all::Bool=false)
-    filter!(names(mod; all)) do sym
-        !hasdoc(mod, sym) && Base.isidentifier(sym)
+function undocumented_names(mod::Module; private::Bool=false)
+    filter!(names(mod; all=true)) do sym
+        !hasdoc(mod, sym) && !startswith(string(sym), '#') &&
+            (private || Base.ispublic(mod, sym))
     end
 end
 

@@ -140,7 +140,7 @@ end
 
 show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
 # RFC 5952 compliant show function
-# http://tools.ietf.org/html/rfc5952
+# https://tools.ietf.org/html/rfc5952
 function print(io::IO,ip::IPv6)
     i = 8
     m = 0
