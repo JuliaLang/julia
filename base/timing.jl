@@ -140,7 +140,7 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     factor = binary ? 1024 : 1000
     bytes, mb = prettyprint_getunits(bytes, length(units), Int64(factor))
     if mb == 1
-        return string(Int(bytes), " ", units[mb], bytes==1 ? "" : "s")
+        return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
     else
         return string(Ryu.writefixed(Float64(bytes), 3), binary ? " $(units[mb])" : "$(units[mb])B")
     end

@@ -1394,6 +1394,18 @@ end
     @test (@allocations "a") == 0
     @test (@allocations "a" * "b") == 0 # constant propagation
     @test (@allocations "a" * Base.inferencebarrier("b")) == 1
+
+    # Test the output of `format_bytes()`
+    inputs = [(factor * ((1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
+    expected_output = ["1 byte", "1 byte", "2 bytes", "2 bytes", "1000 bytes", "1000 bytes", "2.000 kB", "1.953 KiB",
+                        "1000.000 kB", "976.562 KiB", "2.000 MB", "1.907 MiB", "1000.000 MB", "953.674 MiB",
+                        "2.000 GB", "1.863 GiB", "1000.000 GB", "931.323 GiB", "2.000 TB", "1.819 TiB",
+                        "1000.000 TB", "909.495 TiB", "2.000 PB", "1.776 PiB", "1000.000 PB", "888.178 PiB",
+                        "2000.000 PB", "1776.357 PiB"]
+
+    for ((n, binary), expected) in zip(inputs, expected_output)
+        @test Base.format_bytes(n; binary) == expected
+    end
 end
 
 @testset "in_finalizer" begin
