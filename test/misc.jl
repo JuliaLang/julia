@@ -1394,7 +1394,10 @@ end
     @test (@allocations "a") == 0
     @test (@allocations "a" * "b") == 0 # constant propagation
     @test (@allocations "a" * Base.inferencebarrier("b")) == 1
+end
 
+#TODO: merge with `@testset "Base/timing.jl"` once https://github.com/JuliaLang/julia/issues/52948 is resolved
+@testset "Base/timing.jl2" begin
     # Test the output of `format_bytes()`
     inputs = [(factor * ((1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
     expected_output = ["1 byte", "1 byte", "2 bytes", "2 bytes", "1000 bytes", "1000 bytes", "2.000 kB", "1.953 KiB",
