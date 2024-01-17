@@ -329,3 +329,9 @@ end
     lazy_name_lazy_lib = LazyLibrary(libname)
     @test dlpath(lazy_name_lazy_lib) == realpath(string(libname))
 end; end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Libdl)
+    @test_broken isempty(undoc)
+    @test undoc == [:Libdl]
+end

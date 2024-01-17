@@ -581,7 +581,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         end
     end
 
-    validate_code_in_debug_mode(me.linfo, me.src, "inferred")
+    maybe_validate_code(me.linfo, me.src, "inferred")
     nothing
 end
 
