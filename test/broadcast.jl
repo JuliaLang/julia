@@ -1176,6 +1176,12 @@ import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 f51129(v, x) = (1 .- (v ./ x) .^ 2)
 @test @inferred(f51129([13.0], 6.5)) == [-3.0]
 
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Broadcast)
+    @test_broken isempty(undoc)
+    @test undoc == [:dotview]
+end
+
 @testset "broadcast for `AbstractArray` without `CartesianIndex` support" begin
     struct BVec52775 <: AbstractVector{Int}
         a::Vector{Int}

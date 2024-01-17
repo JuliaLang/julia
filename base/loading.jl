@@ -1033,8 +1033,13 @@ function cache_file_entry(pkg::PkgId)
         uuid === nothing ? pkg.name : package_slug(uuid)
 end
 
+# for use during running the REPL precompilation subprocess script, given we don't
+# want it to pick up caches that already exist for other optimization levels
+const ignore_compiled_cache = PkgId[]
+
 function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
+    pkg in ignore_compiled_cache && return paths
     entrypath, entryfile = cache_file_entry(pkg)
     for path in joinpath.(DEPOT_PATH, entrypath)
         isdir(path) || continue
