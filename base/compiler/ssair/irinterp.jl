@@ -63,6 +63,7 @@ function kill_block!(ir::IRCode, bb::Int)
     ir[SSAValue(last(stmts))][:stmt] = ReturnNode()
     return
 end
+kill_block!(ir::IRCode) = (bb::Int)->kill_block!(ir, bb)
 
 function update_phi!(irsv::IRInterpretationState, from::Int, to::Int)
     ir = irsv.ir
@@ -102,26 +103,8 @@ function kill_terminator_edges!(irsv::IRInterpretationState, term_idx::Int, bb::
 end
 
 function kill_edge!(irsv::IRInterpretationState, from::Int, to::Int)
-    ir = irsv.ir
-    kill_edge!(ir, from, to, update_phi!(irsv))
-
-    lazydomtree = irsv.lazydomtree
-    domtree = nothing
-    if isdefined(lazydomtree, :domtree)
-        domtree = get!(lazydomtree)
-        domtree_delete_edge!(domtree, ir.cfg.blocks, from, to)
-    elseif length(ir.cfg.blocks[to].preds) != 0
-        # TODO: If we're not maintaining the domtree, computing it just for this
-        # is slightly overkill - just the dfs tree would be enough.
-        domtree = get!(lazydomtree)
-    end
-
-    if domtree !== nothing && bb_unreachable(domtree, to)
-        kill_block!(ir, to)
-        for edge in ir.cfg.blocks[to].succs
-            kill_edge!(irsv, to, edge)
-        end
-    end
+    kill_edge!(get!(irsv.lazyreachability), irsv.ir.cfg, from, to,
+               update_phi!(irsv), kill_block!(irsv.ir))
 end
 
 function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, idx::Int,
