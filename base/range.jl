@@ -1508,7 +1508,7 @@ See also [`range`](@ref) for linearly spaced points.
 # Examples
 ```jldoctest
 julia> logrange(10, 4000, length=3)
-3-element LogRange{Float64, Base.TwicePrecision{Float64}}:
+3-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
  10.0, 200.0, 4000.0
 
 julia> ans[2] ≈ sqrt(10 * 4000)  # middle element is the geometric mean
@@ -1518,14 +1518,14 @@ julia> range(10, 40, length=3)[2] ≈ (10 + 40)/2  # arithmetic mean
 true
 
 julia> logrange(1f0, 32f0, 11)
-11-element LogRange{Float32, Float64}:
+11-element Base.LogRange{Float32, Float64}:
  1.0, 1.41421, 2.0, 2.82843, 4.0, 5.65685, 8.0, 11.3137, 16.0, 22.6274, 32.0
 
 julia> logrange(1, 1000, length=4) ≈ 10 .^ (0:3)
 true
 
 julia> logrange(-27, -3, length=7)  # allows negative numbers
-7-element LogRange{Float64, Base.TwicePrecision{Float64}}:
+7-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
  -27.0, -18.7208, -12.9802, -9.0, -6.24025, -4.32675, -3.0
 ```
 
@@ -1553,15 +1553,15 @@ as used by `log(start)` and `log(stop)`.
 
 # Examples
 ```jldoctest
-julia> LogRange(1, 4, 5)
+julia> logrange(1, 4, 5)
 5-element LogRange{Float64, Base.TwicePrecision{Float64}}:
  1.0, 1.41421, 2.0, 2.82843, 4.0
 
-julia> LogRange{Float16}(-1, -4, 5)
+julia> Base.LogRange{Float16}(-1, -4, 5)
 5-element LogRange{Float16, Float64}:
  -1.0, -1.414, -2.0, -2.828, -4.0
 
-julia> LogRange(1e-310, 1e-300, 11)[1:2:end]
+julia> logrange(1e-310, 1e-300, 11)[1:2:end]
 6-element Vector{Float64}:
  1.0e-310
  9.999999999999974e-309

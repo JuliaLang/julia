@@ -58,7 +58,6 @@ export
     IOBuffer,
     IOStream,
     LinRange,
-    LogRange,
     Irrational,
     LazyString,
     Matrix,
