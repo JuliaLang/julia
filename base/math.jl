@@ -729,7 +729,7 @@ Stacktrace:
 julia> sqrt(big(complex(-81)))
 0.0 + 9.0im
 
-julia> sqrt(-81 -0.0im)  # -0.0im is below the branch cut
+julia> sqrt(-81 - 0.0im)  # -0.0im is below the branch cut
 0.0 - 9.0im
 
 julia> .√(1:4)
