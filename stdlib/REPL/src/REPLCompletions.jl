@@ -812,7 +812,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
             isa(c, TextCompletion) && return false
             isa(c, MethodCompletion) || return true
             sig = Base.unwrap_unionall(c.method.sig)::DataType
-            return !all(T -> T === Any || T === Vararg{Any}, sig.parameters[2:end])
+            return !all(@nospecialize(T) -> T === Any || T === Vararg{Any}, sig.parameters[2:end])
         end
     end
 
@@ -1400,7 +1400,7 @@ function shell_completions(string, pos)
         r = pos+1:pos
         paths, dir, success = complete_path("", use_envpath=false, shell_escape=true)
         return paths, r, success
-    elseif all(arg -> arg isa AbstractString, ex.args)
+    elseif all(@nospecialize(arg) -> arg isa AbstractString, ex.args)
         # Join these and treat this as a path
         path::String = join(ex.args)
         r = last_arg_start:pos
@@ -1479,20 +1479,26 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     else
         scope = undef
     end
-    warnfor(m, var) = Base.isbindingresolved(m, var) && (Base.isexported(m, var) || Base.ispublic(m, var)) && (print(io, "\nHint: a global variable of this name also exists in $m."); true)
-    if scope !== Base && !warnfor(Base, var)
+    if scope !== Base && !_UndefVarError_warnfor(Base, var)
         warned = false
         for m in Base.loaded_modules_order
             m === Core && continue
             m === Base && continue
             m === Main && continue
             m === scope && continue
-            warned = warnfor(m, var) || warned
+            warned = _UndefVarError_warnfor(m, var) || warned
         end
-        warned = warned || warnfor(Core, var)
-        warned = warned || warnfor(Main, var)
+        warned = warned || _UndefVarError_warnfor(Core, var)
+        warned = warned || _UndefVarError_warnfor(Main, var)
     end
     nothing
+end
+
+function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
+    Base.isbindingresolved(m, var) || return false
+    (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
+    print(io, "\nHint: a global variable of this name also exists in $m.")
+    return true
 end
 
 function __init__()
