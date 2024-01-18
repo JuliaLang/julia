@@ -129,25 +129,37 @@ const get_bool_env_falsy = (
     "0")
 
 """
-    Base.get_bool_env(name::String, default::Bool)::Union{Bool,Nothing}
+    Base.get_bool_env(name::String, default::Bool; throw=false)::Union{Bool,Nothing}
+    Base.get_bool_env(f_default::Callable, name::String; throw=false)::Union{Bool,Nothing}
 
 Evaluate whether the value of environnment variable `name` is a truthy or falsy string,
-and return `nothing` if it is not recognized as either. If the variable is not set, or is set to "",
-return `default`.
+and return `nothing` (or throw if `throw=true`) if it is not recognized as either. If
+the variable is not set, or is set to "", return `default` or the result of executing `f_default()`.
 
 Recognized values are the following, and their Capitalized and UPPERCASE forms:
     truthy: "t", "true", "y", "yes", "1"
     falsy:  "f", "false", "n", "no", "0"
 """
-function get_bool_env(name::String, default::Bool)
-    haskey(ENV, name) || return default
-    val = ENV[name]
-    if isempty(val)
-        return default
-    elseif val in get_bool_env_truthy
+get_bool_env(name::String, default::Bool; kwargs...) = get_bool_env(Returns(default), name; kwargs...)
+function get_bool_env(f_default::Callable, name::String; kwargs...)
+    if haskey(ENV, name)
+        val = ENV[name]
+        if isempty(val)
+            return f_default()
+        else
+            return parse_bool_env(name, val; kwargs...)
+        end
+    else
+        return f_default()
+    end
+end
+function parse_bool_env(name::String, val::String = ENV[name]; throw::Bool=false)
+    if val in get_bool_env_truthy
         return true
     elseif val in get_bool_env_falsy
         return false
+    elseif throw
+        Base.throw(ArgumentError("Value for environment variable `$name` could not be parsed as Boolean: $(repr(val))"))
     else
         return nothing
     end
