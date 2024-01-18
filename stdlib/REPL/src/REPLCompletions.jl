@@ -1090,7 +1090,10 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
     return Completion[PackageCompletion(name) for name in loading_candidates]
 end
 
-function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc::Function), context_module::Module, string::String, name::String, pos::Int, dotpos::Int, startpos::Int, comp_keywords=false)
+function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc),
+                               context_module::Module, string::String, name::String,
+                               pos::Int, dotpos::Int, startpos::Int;
+                               comp_keywords=false)
     ex = nothing
     if comp_keywords
         append!(suggestions, complete_keyword(name))
@@ -1132,10 +1135,41 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
             if something(findlast(in(non_identifier_chars), s), 0) < something(findlast(isequal('.'), s), 0)
                 lookup_name, name = rsplit(s, ".", limit=2)
                 name = String(name)
-
                 ex = Meta.parse(lookup_name, raise=false, depwarn=false)
             end
             isexpr(ex, :incomplete) && (ex = nothing)
+        elseif isexpr(ex, (:using, :import))
+            arg1 = ex.args[1]
+            if isexpr(arg1, :.)
+                # We come here for cases like:
+                # - `string`: "using Mod1.Mod2.M"
+                # - `ex`: :(using Mod1.Mod2)
+                # - `name`: "M"
+                # Now we transform `ex` to `:(Mod1.Mod2)` to allow `complete_symbol` to
+                # complete for inner modules whose name starts with `M`.
+                # Note that `ffunc` is set to `module_filter` within `completions`
+                ex = nothing
+                firstdot = true
+                for arg = arg1.args
+                    if arg === :.
+                        # override `context_module` if multiple `.` accessors are used
+                        if firstdot
+                            firstdot = false
+                        else
+                            context_module = parentmodule(context_module)
+                        end
+                    elseif arg isa Symbol
+                        if ex === nothing
+                            ex = arg
+                        else
+                            ex = Expr(:., out, QuoteNode(arg))
+                        end
+                    else # invalid expression
+                        ex = nothing
+                        break
+                    end
+                end
+            end
         elseif isexpr(ex, :call) && length(ex.args) > 1
             isinfix = s[end] != ')'
             # A complete call expression that does not finish with ')' is an infix call.
@@ -1216,8 +1250,9 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         ok && return ret
         startpos = first(varrange) + 4
         dotpos = something(findprev(isequal('.'), string, first(varrange)-1), 0)
-        return complete_identifiers!(Completion[], ffunc, context_module, string,
-            string[startpos:pos], pos, dotpos, startpos)
+        name = string[startpos:pos]
+        return complete_identifiers!(Completion[], ffunc, context_module, string, name, pos,
+                                     dotpos, startpos)
     elseif inc_tag === :cmd
         # TODO: should this call shell_completions instead of partially reimplementing it?
         let m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial)) # fuzzy shell_parse in reverse
@@ -1365,15 +1400,19 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                 end
             end
         end
-        ffunc = (mod,x)->(Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getfield(mod, x), Module))
+        ffunc = module_filter
         comp_keywords = false
     end
 
     startpos == 0 && (pos = -1)
     dotpos < startpos && (dotpos = startpos - 1)
-    return complete_identifiers!(suggestions, ffunc, context_module, string,
-        name, pos, dotpos, startpos, comp_keywords)
+    return complete_identifiers!(suggestions, ffunc, context_module, string, name, pos,
+                                 dotpos, startpos;
+                                 comp_keywords)
 end
+
+module_filter(mod::Module, x::Symbol) =
+    Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getglobal(mod, x), Module)
 
 function shell_completions(string, pos)
     # First parse everything up to the current position
