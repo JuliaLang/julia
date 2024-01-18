@@ -1479,17 +1479,18 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     else
         scope = undef
     end
-    if scope !== Base && !_UndefVarError_warnfor(Base, var)
+    if scope !== Base && !_UndefVarError_warnfor(io, Base, var)
         warned = false
         for m in Base.loaded_modules_order
             m === Core && continue
             m === Base && continue
             m === Main && continue
             m === scope && continue
-            warned = _UndefVarError_warnfor(m, var) || warned
+            warned |= _UndefVarError_warnfor(io, m, var)
         end
-        warned = warned || _UndefVarError_warnfor(Core, var)
-        warned = warned || _UndefVarError_warnfor(Main, var)
+        warned ||
+            _UndefVarError_warnfor(io, Core, var) ||
+            _UndefVarError_warnfor(io, Main, var)
     end
     nothing
 end
