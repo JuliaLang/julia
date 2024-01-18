@@ -2,7 +2,7 @@
 
 Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
-isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, EnterNode)
+isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, EnterNode) || isexpr(stmt, :leave)
 
 struct CFG
     blocks::Vector{BasicBlock}
@@ -65,7 +65,9 @@ block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
             push!(jump_dests, idx)
             push!(jump_dests, idx+1)
             # The catch block is a jump dest
-            push!(jump_dests, stmt.catch_dest)
+            if stmt.catch_dest != 0
+                push!(jump_dests, stmt.catch_dest)
+            end
         elseif isa(stmt, Expr)
             if stmt.head === :leave
                 # :leave terminates a BB
@@ -80,7 +82,7 @@ block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
             end
         end
     end
-    # and add add one more basic block start after the last statement
+    # and add one more basic block start after the last statement
     for i = length(stmts):-1:1
         if stmts[i] !== nothing
             push!(jump_dests, i+1)
@@ -129,10 +131,12 @@ function compute_basic_blocks(stmts::Vector{Any})
             # :enter gets a virtual edge to the exception handler and
             # the exception handler gets a virtual edge from outside
             # the function.
-            block′ = block_for_inst(basic_block_index, terminator.catch_dest)
-            push!(blocks[block′].preds, num)
-            push!(blocks[block′].preds, 0)
-            push!(b.succs, block′)
+            if terminator.catch_dest != 0
+                block′ = block_for_inst(basic_block_index, terminator.catch_dest)
+                push!(blocks[block′].preds, num)
+                push!(blocks[block′].preds, 0)
+                push!(b.succs, block′)
+            end
         end
         # statement fall-through
         if num + 1 <= length(blocks)
@@ -949,11 +953,15 @@ function insert_node!(compact::IncrementalCompact, @nospecialize(before), newins
     end
 end
 
-function maybe_reopen_bb!(compact)
+function did_just_finish_bb(compact)
     result_idx = compact.result_idx
     result_bbs = compact.cfg_transform.result_bbs
-    if (compact.active_result_bb == length(result_bbs) + 1) ||
-        result_idx == first(result_bbs[compact.active_result_bb].stmts)
+    (compact.active_result_bb == length(result_bbs) + 1) ||
+    result_idx == first(result_bbs[compact.active_result_bb].stmts)
+end
+
+function maybe_reopen_bb!(compact)
+    if did_just_finish_bb(compact)
         compact.active_result_bb -= 1
         return true
     end
@@ -1109,7 +1117,7 @@ function find_ssavalue_uses1(compact::IncrementalCompact)
 end
 
 function _oracle_check(compact::IncrementalCompact)
-    (observed_used_ssas, observed_used_newssas) = Core.Compiler.find_ssavalue_uses1(compact)
+    (observed_used_ssas, observed_used_newssas) = find_ssavalue_uses1(compact)
     for i = 1:length(observed_used_ssas)
         if observed_used_ssas[i] != compact.used_ssas[i]
             return (observed_used_ssas, observed_used_newssas, SSAValue(i))
@@ -1332,8 +1340,8 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
         else
             stmts = compact.ir.cfg.blocks[to].stmts
             for stmt in CompactPeekIterator(compact, first(stmts), last(stmts))
-                stmt === nothing && continue
-                isa(stmt, PhiNode) || break
+                is_valid_phiblock_stmt(stmt) || break
+                isa(stmt, PhiNode) || continue
                 i = findfirst(x::Int32->x==from, stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
@@ -1355,7 +1363,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     (; result, ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
     (; cfg_transforms_enabled, fold_constant_branches, bb_rename_succ, bb_rename_pred, result_bbs) = compact.cfg_transform
     mark_refined! = Refiner(result.flag, result_idx)
-    already_inserted = (::Int, ssa::OldSSAValue)->ssa.id <= processed_idx
+    already_inserted_phi_arg = already_inserted_ssa(compact, processed_idx)
     if stmt === nothing
         ssa_rename[idx] = stmt
     elseif isa(stmt, OldSSAValue)
@@ -1415,10 +1423,14 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         end
     elseif cfg_transforms_enabled && isa(stmt, EnterNode)
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::EnterNode
-        label = bb_rename_succ[stmt.catch_dest]
-        @assert label > 0
+        if stmt.catch_dest != 0
+            label = bb_rename_succ[stmt.catch_dest]
+            @assert label > 0
+            result[result_idx][:stmt] = EnterNode(stmt, label)
+        else
+            result[result_idx][:stmt] = stmt
+        end
         ssa_rename[idx] = SSAValue(result_idx)
-        result[result_idx][:stmt] = EnterNode(stmt, label)
         result_idx += 1
     elseif isa(stmt, Expr)
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::Expr
@@ -1527,7 +1539,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             values = stmt.values
         end
 
-        values = process_phinode_values(values, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
+        values = process_phinode_values(values, late_fixup, already_inserted_phi_arg, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
         # Don't remove the phi node if it is before the definition of its value
         # because doing so can create forward references. This should only
         # happen with dead loops, but can cause problems when optimization
@@ -1566,7 +1578,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 push!(values, value)
             end
         end
-        result[result_idx][:stmt] = PhiCNode(process_phinode_values(values, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
+        result[result_idx][:stmt] = PhiCNode(process_phinode_values(values, late_fixup, already_inserted_phi_arg, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
         result_idx += 1
     else
         if isa(stmt, SSAValue)
@@ -1672,13 +1684,27 @@ struct CompactPeekIterator
     compact::IncrementalCompact
     start_idx::Int
     end_idx::Int
+    include_stmts_before_start::Bool
 end
+CompactPeekIterator(compact::IncrementalCompact, start_idx::Int, end_idx::Int) =
+    CompactPeekIterator(compact, start_idx, end_idx, false)
+
 
 function CompactPeekIterator(compact::IncrementalCompact, start_idx::Int)
     return CompactPeekIterator(compact, start_idx, 0)
 end
 
-entry_at_idx(entry::NewNodeInfo, idx::Int) = entry.attach_after ? entry.pos == idx - 1 : entry.pos == idx
+function entry_at_idx(entry::NewNodeInfo, idx::Int, start_idx::Int, include_stmts_before_start::Bool)
+    if entry.attach_after
+        if !include_stmts_before_start
+            entry.pos >= start_idx || return false
+        end
+        return entry.pos == idx - 1
+    else
+        return entry.pos == idx
+    end
+end
+
 function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.start_idx, it.compact.new_nodes_idx, 1))
     if it.end_idx > 0 && idx > it.end_idx
         return nothing
@@ -1690,7 +1716,7 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
     if compact.new_nodes_idx <= length(compact.perm)
         new_nodes = compact.ir.new_nodes
         for eidx in aidx:length(compact.perm)
-            if entry_at_idx(new_nodes.info[compact.perm[eidx]], idx)
+            if entry_at_idx(new_nodes.info[compact.perm[eidx]], idx, it.start_idx, it.include_stmts_before_start)
                 entry = new_nodes.stmts[compact.perm[eidx]]
                 return (entry[:stmt], (idx, eidx+1, bidx))
             end
@@ -1698,7 +1724,7 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
     end
     if !isempty(compact.pending_perm)
         for eidx in bidx:length(compact.pending_perm)
-            if entry_at_idx(compact.pending_nodes.info[compact.pending_perm[eidx]], idx)
+            if entry_at_idx(compact.pending_nodes.info[compact.pending_perm[eidx]], idx, it.start_idx, it.include_stmts_before_start)
                 entry = compact.pending_nodes.stmts[compact.pending_perm[eidx]]
                 return (entry[:stmt], (idx, aidx, eidx+1))
             end
@@ -1875,6 +1901,8 @@ function fixup_node(compact::IncrementalCompact, @nospecialize(stmt), reify_new_
             compact.used_ssas[node.id] += 1
         elseif isa(node, NewSSAValue)
             compact.new_new_used_ssas[-node.id] += 1
+        elseif isa(node, OldSSAValue)
+            return fixup_node(compact, node, reify_new_nodes)
         end
         return FixedNode(node, needs_fixup)
     else

@@ -462,6 +462,16 @@ Base.functionloc(::Method)
 Base.@locals
 ```
 
+## Documentation
+(See also the [documentation](@ref man-documentation) chapter.)
+```@docs
+Base.@doc
+Docs.HTML
+Docs.Text
+Docs.hasdoc
+Docs.undocumented_names
+```
+
 ## Code loading
 
 ```@docs

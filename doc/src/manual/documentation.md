@@ -20,7 +20,8 @@ environments provide a way to access documentation directly:
   under the cursor.
 
 
-`Docs.hasdoc(module, name)::Bool` tells whether a name has a docstring.
+`Docs.hasdoc(module, name)::Bool` tells whether a name has a docstring. `Docs.undocumented_names(module; all)`
+returns the undocumented names in a module.
 
 ## Writing Documentation
 

@@ -172,7 +172,7 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
     partialsort!(copymutable(v), k; kws...)
 
 # reference on sorted binary search:
-#   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
+#   https://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
 
 # index of the first value of vector a that is greater than or equivalent to x;
 # returns lastindex(v)+1 if x is greater than all values in v.
@@ -1262,7 +1262,7 @@ function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
     k = cbrt(ln)
     k2 = round(Int, k^2)
     k2ln = k2/ln
-    offset = .15k2*top_set_bit(k2) # TODO for further optimization: tune this
+    offset = .15k*top_set_bit(k2) # TODO for further optimization: tune this
     lo_signpost_i, hi_signpost_i =
         (floor(Int, (tar - lo) * k2ln + lo + off) for (tar, off) in
             ((minimum(target), -offset), (maximum(target), offset)))

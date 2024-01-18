@@ -25,3 +25,7 @@ include("print.jl")
 include("parse.jl")
 
 @inferred TOML.parse("foo = 3")
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(TOML))
+end

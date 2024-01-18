@@ -370,8 +370,10 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
             push!(ip, pc + 1)
-            handler_at[l] = (0, handler_id)
-            push!(ip, l)
+            if l != 0
+                handler_at[l] = (0, handler_id)
+                push!(ip, l)
+            end
         end
     end
 
@@ -402,7 +404,9 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 l = stmt.catch_dest
                 # We assigned a handler number above. Here we just merge that
                 # with out current handler information.
-                handler_at[l] = (cur_stacks[1], handler_at[l][2])
+                if l != 0
+                    handler_at[l] = (cur_stacks[1], handler_at[l][2])
+                end
                 cur_stacks = (handler_at[pc´][1], cur_stacks[2])
             elseif isa(stmt, Expr)
                 head = stmt.head
@@ -475,7 +479,7 @@ function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::Abst
     world = get_world_counter(interp)
     src = retrieve_code_info(result.linfo, world)
     src === nothing && return nothing
-    validate_code_in_debug_mode(result.linfo, src, "lowered")
+    maybe_validate_code(result.linfo, src, "lowered")
     return InferenceState(result, src, cache_mode, interp)
 end
 InferenceState(result::InferenceResult, cache_mode::Symbol, interp::AbstractInterpreter) =
