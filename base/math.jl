@@ -581,8 +581,11 @@ atanh(x::Number)
 """
     log(x)
 
-Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
-[`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
+Compute the natural logarithm of `x`.
+
+Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use complex arguments to obtain complex results.
+Has a branch cut along the negative real axis, for which `-0.0im` is taken to be below the axis.
 
 See also [`ℯ`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
@@ -597,6 +600,12 @@ log was called with a negative real argument but will only return a complex resu
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
+
+julia> log(-3 + 0im)
+1.0986122886681098 + 3.141592653589793im
+
+julia> log(-3 - 0.0im)
+1.0986122886681098 - 3.141592653589793im
 
 julia> log.(exp.(-1:1))
 3-element Vector{Float64}:
