@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+TOML.jl is a Julia standard library for parsing and writing TOML v1.0 files.
+This module provides functions to parse TOML strings and files into Julia data structures
+and to serialize Julia data structures to TOML format.
+"""
 module TOML
 
 module Internals

@@ -269,6 +269,96 @@ function do_string_escape(s)
     return escape_string(s, ('\"','$'))
 end
 
+const PATH_cache_lock = Base.ReentrantLock()
+const PATH_cache = Set{String}()
+PATH_cache_task::Union{Task,Nothing} = nothing # used for sync in tests
+next_cache_update::Float64 = 0.0
+function maybe_spawn_cache_PATH()
+    global PATH_cache_task, next_cache_update
+    @lock PATH_cache_lock begin
+        PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
+        time() < next_cache_update && return
+        PATH_cache_task = Threads.@spawn REPLCompletions.cache_PATH()
+        Base.errormonitor(PATH_cache_task)
+    end
+end
+
+# caches all reachable files in PATH dirs
+function cache_PATH()
+    path = get(ENV, "PATH", nothing)
+    path isa String || return
+
+    global next_cache_update
+
+    # Calling empty! on PATH_cache would be annoying for async typing hints as completions would temporarily disappear.
+    # So keep track of what's added this time and at the end remove any that didn't appear this time from the global cache.
+    this_PATH_cache = Set{String}()
+
+    @debug "caching PATH files" PATH=path
+    pathdirs = split(path, @static Sys.iswindows() ? ";" : ":")
+
+    next_yield_time = time() + 0.01
+
+    t = @elapsed for pathdir in pathdirs
+        actualpath = try
+            realpath(pathdir)
+        catch ex
+            ex isa Base.IOError || rethrow()
+            # Bash doesn't expect every folder in PATH to exist, so neither shall we
+            continue
+        end
+
+        if actualpath != pathdir && in(actualpath, pathdirs)
+            # Remove paths which (after resolving links) are in the env path twice.
+            # Many distros eg. point /bin to /usr/bin but have both in the env path.
+            continue
+        end
+
+        filesinpath = try
+            readdir(pathdir)
+        catch e
+            # Bash allows dirs in PATH that can't be read, so we should as well.
+            if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
+                continue
+            else
+                # We only handle IOError and ArgumentError here
+                rethrow()
+            end
+        end
+        for file in filesinpath
+            # In a perfect world, we would filter on whether the file is executable
+            # here, or even on whether the current user can execute the file in question.
+            try
+                if isfile(joinpath(pathdir, file))
+                    @lock PATH_cache_lock push!(PATH_cache, file)
+                    push!(this_PATH_cache, file)
+                end
+            catch e
+                # `isfile()` can throw in rare cases such as when probing a
+                # symlink that points to a file within a directory we do not
+                # have read access to.
+                if isa(e, Base.IOError)
+                    continue
+                else
+                    rethrow()
+                end
+            end
+            if time() >= next_yield_time
+                yield() # to avoid blocking typing when -t1
+                next_yield_time = time() + 0.01
+            end
+        end
+    end
+
+    @lock PATH_cache_lock begin
+        intersect!(PATH_cache, this_PATH_cache) # remove entries from PATH_cache that weren't found this time
+        next_cache_update = time() + 10 # earliest next update can run is 10s after
+    end
+
+    @debug "caching PATH files took $t seconds" length(pathdirs) length(PATH_cache)
+    return PATH_cache
+end
+
 function complete_path(path::AbstractString;
                        use_envpath=false,
                        shell_escape=false,
@@ -308,53 +398,12 @@ function complete_path(path::AbstractString;
     end
 
     if use_envpath && isempty(dir)
-        # Look for files in PATH as well
-        pathdirs = split(ENV["PATH"], @static Sys.iswindows() ? ";" : ":")
-
-        for pathdir in pathdirs
-            actualpath = try
-                realpath(pathdir)
-            catch ex
-                ex isa Base.IOError || rethrow()
-                # Bash doesn't expect every folder in PATH to exist, so neither shall we
-                continue
-            end
-
-            if actualpath != pathdir && in(actualpath, pathdirs)
-                # Remove paths which (after resolving links) are in the env path twice.
-                # Many distros eg. point /bin to /usr/bin but have both in the env path.
-                continue
-            end
-
-            filesinpath = try
-                readdir(pathdir)
-            catch e
-                # Bash allows dirs in PATH that can't be read, so we should as well.
-                if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
-                    continue
-                else
-                    # We only handle IOError and ArgumentError here
-                    rethrow()
-                end
-            end
-
-            for file in filesinpath
-                # In a perfect world, we would filter on whether the file is executable
-                # here, or even on whether the current user can execute the file in question.
-                try
-                    if startswith(file, prefix) && isfile(joinpath(pathdir, file))
-                        push!(matches, file)
-                    end
-                catch e
-                    # `isfile()` can throw in rare cases such as when probing a
-                    # symlink that points to a file within a directory we do not
-                    # have read access to.
-                    if isa(e, Base.IOError)
-                        continue
-                    else
-                        rethrow()
-                    end
-                end
+        # Look for files in PATH as well. These are cached in `cache_PATH` in an async task to not block typing.
+        # If we cannot get lock because its still caching just pass over this so that typing isn't laggy.
+        maybe_spawn_cache_PATH() # only spawns if enough time has passed and the previous caching task has completed
+        @lock PATH_cache_lock begin
+            for file in PATH_cache
+                startswith(file, prefix) && push!(matches, file)
             end
         end
     end

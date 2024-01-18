@@ -8,6 +8,7 @@ include("testenv.jl")
 # re-register only the error hints that are being tested here (
 Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
+Base.Experimental.register_error_hint(Base.min_max_on_iterable, MethodError)
 
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
@@ -996,6 +997,15 @@ end
 let err_str
     err_str = @except_str "a" + "b" MethodError
     @test occursin("String concatenation is performed with *", err_str)
+end
+
+let err_str
+    err_str = @except_str min([1,2,3]) MethodError
+    @test occursin("Finding the minimum of an iterable is performed with `minimum`.", err_str)
+    err_str = @except_str min((i for i in 1:3)) MethodError
+    @test occursin("Finding the minimum of an iterable is performed with `minimum`.", err_str)
+    err_str = @except_str max([1,2,3]) MethodError
+    @test occursin("Finding the maximum of an iterable is performed with `maximum`.", err_str)
 end
 
 @testset "unused argument names" begin

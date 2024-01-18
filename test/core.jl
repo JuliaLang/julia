@@ -8076,14 +8076,14 @@ let src = code_lowered(check_globalref_lowering)[1]
 end
 
 # Test correctness of widen_diagonal
-let widen_diagonal(x::UnionAll) = Base.rewrap_unionall(Base.widen_diagonal(Base.unwrap_unionall(x), x), x),
-    check_widen_diagonal(x, y) = !<:(x, y) && x <: widen_diagonal(y)
+let widen_diagonal(x::UnionAll) = Base.rewrap_unionall(Base.widen_diagonal(Base.unwrap_unionall(x), x), x)
     @test Tuple{Int,Float64} <: widen_diagonal(NTuple)
     @test Tuple{Int,Float64} <: widen_diagonal(Tuple{T,T} where {T})
     @test Tuple{Real,Int,Float64} <: widen_diagonal(Tuple{S,Vararg{T}} where {S, T<:S})
     @test Tuple{Int,Int,Float64,Float64} <: widen_diagonal(Tuple{S,S,Vararg{T}} where {S, T<:S})
     @test Union{Tuple{T}, Tuple{T,Int}} where {T} === widen_diagonal(Union{Tuple{T}, Tuple{T,Int}} where {T})
     @test Tuple === widen_diagonal(Union{Tuple{Vararg{S}}, Tuple{Vararg{T}}} where {S, T})
+    @test Tuple{Vararg{Val{<:Set}}} == widen_diagonal(Tuple{Vararg{T}} where T<:Val{<:Set})
 end
 
 # Test try/catch/else ordering

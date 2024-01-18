@@ -1477,7 +1477,7 @@ end
 
 current_word_with_dots(s::MIState) = current_word_with_dots(buffer(s))
 
-previous_active_module = Main
+previous_active_module::Module = Main
 
 function activate_module(s::MIState)
     word = current_word_with_dots(s);

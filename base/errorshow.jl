@@ -1024,6 +1024,18 @@ end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
 
+
+# Display a hint in case the user tries to use the min or max function on an iterable
+function min_max_on_iterable(io, ex, arg_types, kwargs)
+    @nospecialize
+    if (ex.f === max || ex.f === min) && length(arg_types) == 1 && Base.isiterable(only(arg_types))
+        f_correct = ex.f === max ? "maximum" : "minimum"
+        print(io, "\nFinding the $f_correct of an iterable is performed with `$f_correct`.")
+    end
+end
+
+Experimental.register_error_hint(min_max_on_iterable, MethodError)
+
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)
 getindex(s::ExceptionStack, i::Int) = s.stack[i]
