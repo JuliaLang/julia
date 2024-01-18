@@ -1677,7 +1677,7 @@ end
 
 try # test the functionality of `UndefVarError_hint` against `Base.remove_linenums!`
     @assert isempty(Base.Experimental._hint_handlers)
-    Base.Experimental.register_error_hint(REPL.REPLCompletions.UndefVarError_hint, UndefVarError)
+    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
 
     # check the requirement to trigger the hint via `UndefVarError_hint`
     @test !isdefined(Main, :remove_linenums!) && Base.ispublic(Base, :remove_linenums!)
