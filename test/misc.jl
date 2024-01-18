@@ -1399,7 +1399,7 @@ end
 #TODO: merge with `@testset "Base/timing.jl"` once https://github.com/JuliaLang/julia/issues/52948 is resolved
 @testset "Base/timing.jl2" begin
     # Test the output of `format_bytes()`
-    inputs = [(factor * ((1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
+    inputs = [(factor * (Int64(1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
     expected_output = ["1 byte", "1 byte", "2 bytes", "2 bytes", "1000 bytes", "1000 bytes", "2.000 kB", "1.953 KiB",
                         "1000.000 kB", "976.562 KiB", "2.000 MB", "1.907 MiB", "1000.000 MB", "953.674 MiB",
                         "2.000 GB", "1.863 GiB", "1000.000 GB", "931.323 GiB", "2.000 TB", "1.819 TiB",
