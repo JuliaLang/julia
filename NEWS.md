@@ -171,7 +171,7 @@ Standard library changes
 Deprecated or removed
 ---------------------
 
-* `map` and `foreach` lost their single-argument methods ([#52631]).
+* `Base.map`, `Iterators.map`, and `foreach` lost their single-argument methods ([#52631]).
 
 
 External dependencies
