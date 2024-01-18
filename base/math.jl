@@ -1474,6 +1474,12 @@ function rem2pi(x::Int64, r::RoundingMode)
     fx == x || throw(ArgumentError("Int64 argument to rem2pi is too large: $x"))
     rem2pi(fx, r)
 end
+# general fallback
+function rem2pi(x::Integer, r::RoundingMode)
+    fx = float(x)
+    fx == x || throw(ArgumentError("$(typeof(x)) argument to rem2pi is too large: $x"))
+    rem2pi(fx, r)
+end
 
 """
     mod2pi(x)
