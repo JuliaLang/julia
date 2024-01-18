@@ -1477,7 +1477,7 @@ end
 # general fallback
 function rem2pi(x::Integer, r::RoundingMode)
     fx = float(x)
-    fx == x || throw(ArgumentError("$(typeof(x)) argument to rem2pi is too large: $x"))
+    fx == x || throw(ArgumentError(LazyString(typeof(x), " argument to rem2pi is too large: ", x)))
     rem2pi(fx, r)
 end
 
