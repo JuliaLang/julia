@@ -822,5 +822,6 @@ end
     # The return type of mixed tuples with runtime shift cannot be inferred.
     @test Base.circshift(t2, 3) == ('a', -7.0, 3, 1)
     @test @inferred(Base.circshift(t3, 7)) == ('b', 'c', 'd', 'a')
+    @test @inferred(Base.circshift(t3, -1)) == ('b', 'c', 'd', 'a')
     @test_throws MethodError circshift(t1, 'a')
 end
