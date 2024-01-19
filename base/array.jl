@@ -2294,7 +2294,9 @@ findfirst(A::AbstractArray) = findnext(A, first(keys(A)))
     findnext(predicate::Function, A, i)
 
 Find the next index after or including `i` of an element of `A`
-for which `predicate` returns `true`, or `nothing` if not found.
+for which `predicate` returns `true`, or `nothing` if not found. This works for
+any collection that supports [`getindex`](@ref), [`keys(A)`](@ref), and
+[`nextind`](@ref).
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -2312,6 +2314,9 @@ julia> A = [1 4; 2 2];
 
 julia> findnext(isodd, A, CartesianIndex(1, 1))
 CartesianIndex(1, 1)
+
+julia> findnext(isspace, "a b c", 3)
+4
 ```
 """
 function findnext(testf::Function, A, start)
@@ -2468,7 +2473,9 @@ findlast(A::AbstractArray) = findprev(A, last(keys(A)))
     findprev(predicate::Function, A, i)
 
 Find the previous index before or including `i` of an element of `A`
-for which `predicate` returns `true`, or `nothing` if not found.
+for which `predicate` returns `true`, or `nothing` if not found. This works for
+any collection that supports [`getindex`](@ref), [`keys(A)`](@ref), and
+[`prevind`](@ref).
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -2494,6 +2501,9 @@ julia> A = [4 6; 1 2]
 
 julia> findprev(isodd, A, CartesianIndex(1, 2))
 CartesianIndex(2, 1)
+
+julia> findprev(isspace, "a b c", 3)
+2
 ```
 """
 function findprev(testf::Function, A, start)
