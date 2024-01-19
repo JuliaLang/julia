@@ -411,7 +411,7 @@ end
 
 A mutable struct representing a basic implementation of the Julia REPL (Read-Eval-Print Loop), primarily designed for straightforward and fundamental interactive command execution. 
 
-# Arguments
+# Fields
 - `terminal::TextTerminal`: Handles input/output operations.
 - `waserror::Bool`: A flag to track the occurrence of errors (initially set to `false`).
 - `frontend_task::Task`: Manages front-end activities like user interactions.
