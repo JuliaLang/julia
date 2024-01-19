@@ -1410,3 +1410,13 @@ end
     GC.gc(true); yield()
     @test in_fin[]
 end
+
+@testset "Base docstrings" begin
+    undoc = Docs.undocumented_names(Base)
+    @test_broken isempty(undoc)
+    @test undoc == [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :Sort, :TTY]
+end
+
+@testset "Base.Libc docstrings" begin
+    @test isempty(Docs.undocumented_names(Libc))
+end

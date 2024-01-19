@@ -881,7 +881,7 @@ julia> empty([1.0, 2.0, 3.0], String)
 String[]
 ```
 """
-empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
+empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = similar(a, U, 0)
 
 # like empty, but should return a mutable collection, a Vector by default
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
@@ -3108,9 +3108,8 @@ julia> foreach((x, y) -> println(x, " with ", y), tri, 'a':'z')
 7 with c
 ```
 """
-foreach(f) = (f(); nothing)
 foreach(f, itr) = (for x in itr; f(x); end; nothing)
-foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
+foreach(f, itr, itrs...) = (for z in zip(itr, itrs...); f(z...); end; nothing)
 
 ## map over arrays ##
 
@@ -3282,10 +3281,6 @@ end
 concatenate_setindex!(R, v, I...) = (R[I...] .= (v,); R)
 concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
-## 0 arguments
-
-map(f) = f()
-
 ## 1 argument
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
@@ -3421,7 +3416,7 @@ julia> map(+, [1 2; 3 4], [1,10,100,1000], zeros(3,1))  # iterates until 3rd is 
  102.0
 ```
 """
-map(f, iters...) = collect(Generator(f, iters...))
+map(f, it, iters...) = collect(Generator(f, it, iters...))
 
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)

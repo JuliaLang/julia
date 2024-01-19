@@ -402,6 +402,9 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
             jlbacktrace(); // written to STDERR_FILENO
         }
         src = NULL;
+#ifndef JL_NDEBUG
+        abort();
+#endif
     }
     ct->world_age = last_age;
     ct->reentrant_timing -= 0b10;

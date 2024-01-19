@@ -5,6 +5,9 @@ using Random, LinearAlgebra
 isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
 using .Main.InfiniteArrays
 
+isdefined(Main, :StructArrays) || @eval Main include("testhelpers/StructArrays.jl")
+using .Main.StructArrays
+
 A = rand(5,4,3)
 @testset "Bounds checking" begin
     @test checkbounds(Bool, A, 1, 1, 1) == true
@@ -819,9 +822,8 @@ Base.getindex(A::TSlowNIndexes{T,2}, i::Int, j::Int) where {T} = A.data[i,j]
     @test isa(map(Set, Array[[1,2],[3,4]]), Vector{Set{Int}})
 end
 
-@testset "mapping over scalars and empty arguments:" begin
+@testset "mapping over scalars" begin
     @test map(sin, 1) === sin(1)
-    @test map(()->1234) === 1234
 end
 
 function test_UInt_indexing(::Type{TestAbstractArray})
@@ -1019,6 +1021,16 @@ end
     @test isempty(v)
     @test isempty(v2::Vector{Int})
     @test isempty(v3::Vector{Float64})
+
+    S = StructArrays.StructArray{Complex{Int}}((v, v))
+    for T in (Complex{Int}, ComplexF64)
+        S0 = empty(S, T)
+        @test S0 isa StructArrays.StructArray{T}
+        @test length(S0) == 0
+    end
+    S0 = empty(S, String)
+    @test S0 isa Vector{String}
+    @test length(S0) == 0
 end
 
 @testset "CartesianIndices" begin
