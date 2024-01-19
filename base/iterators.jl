@@ -59,7 +59,7 @@ julia> collect(Iterators.map(x -> x^2, 1:3))
  9
 ```
 """
-map(f, args...) = Base.Generator(f, args...)
+map(f, arg, args...) = Base.Generator(f, arg, args...)
 
 tail_if_any(::Tuple{}) = ()
 tail_if_any(x::Tuple) = tail(x)

@@ -321,7 +321,7 @@ end
 # n argument function
 heads(ts::Tuple...) = map(t -> t[1], ts)
 tails(ts::Tuple...) = map(tail, ts)
-map(f, ::Tuple{}...) = ()
+map(f, ::Tuple{}, ::Tuple{}...) = ()
 anyempty(x::Tuple{}, xs...) = true
 anyempty(x::Tuple, xs...) = anyempty(xs...)
 anyempty() = false
@@ -615,7 +615,7 @@ Return an empty tuple, `()`.
 empty(@nospecialize x::Tuple) = ()
 
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
-foreach(f, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itrs...), init=nothing)
+foreach(f, itr::Tuple, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itr, itrs...), init=nothing)
 
 """
     circshift(x::Tuple, shift)

@@ -2203,3 +2203,47 @@ replinterp_invalidation_caller() = replinterp_invalidation_callee().value
 @test REPLCompletions.repl_eval_ex(:(replinterp_invalidation_caller()), @__MODULE__) == Regex
 replinterp_invalidation_callee(c::Bool=rand(Bool)) = Some(c ? "foo" : "bar")
 @test REPLCompletions.repl_eval_ex(:(replinterp_invalidation_caller()), @__MODULE__) == String
+
+# JuliaLang/julia#52922
+let s = "using Base.Th"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Threads" in c
+end
+let s = "using Base."
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "BinaryPlatforms" in c
+end
+# test cases with the `.` accessor
+module Issue52922
+module Inner1
+module Inner12 end
+end
+module Inner2 end
+end
+let s = "using .Iss"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Issue52922" in c
+end
+let s = "using .Issue52922.Inn"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Inner1" in c
+end
+let s = "using .Inner1.Inn"
+    c, r, res = test_complete_context(s, Issue52922)
+    @test res
+    @test "Inner12" in c
+end
+let s = "using ..Issue52922.Inn"
+    c, r, res = test_complete_context(s, Issue52922.Inner1)
+    @test res
+    @test "Inner2" in c
+end
+let s = "using ...Issue52922.Inn"
+    c, r, res = test_complete_context(s, Issue52922.Inner1.Inner12)
+    @test res
+    @test "Inner2" in c
+end
