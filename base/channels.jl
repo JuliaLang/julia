@@ -619,6 +619,7 @@ function iterate(c::Channel, state=nothing)
             end
         end
     else
+        check_task_state(c)
         return nothing
     end
 end

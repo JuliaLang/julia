@@ -489,12 +489,27 @@ end
     end
 end
 
+struct CustomError <: Exception end
+
 @testset "check_channel_state" begin
     c = Channel(1)
     close(c)
     @test !isopen(c)
     c.excp == nothing # to trigger the branch
     @test_throws InvalidStateException Base.check_channel_state(c)
+
+    # Issue 52974 - closed channels with exceptions
+    # must be thrown on iteration
+    c = Channel(2)
+    put!(c, 5)
+    close(c, CustomError())
+    @test_throws CustomError iterate(c)
+
+    c = Channel(Inf)
+    put!(c, 1)
+    close(c)
+    @test_throws InvalidStateException take!(c)
+    @test_throws InvalidStateException put!(c)
 end
 
 # PR #36641
