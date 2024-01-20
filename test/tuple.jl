@@ -85,8 +85,6 @@ end
     @test Tuple{Char,Char}("za") === ('z','a')
     @test_throws ArgumentError Tuple{Char,Char}("z")
 
-    @test NTuple{20,Int}(Iterators.countfrom(2)) === (2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21)
-    @test NTuple{20,Float64}(Iterators.countfrom(2)) === (2.,3.,4.,5.,6.,7.,8.,9.,10.,11.,12.,13.,14.,15.,16.,17.,18.,19.,20.,21.)
     @test_throws ArgumentError NTuple{20,Int}([1,2])
 
     @test Tuple{Vararg{Float32}}(Float64[1,2,3]) === (1.0f0, 2.0f0, 3.0f0)
@@ -817,4 +815,285 @@ namedtup = (;a=1, b=2, c=3)
     pair = (1 => "2")
     @test (1, "2") == @inferred Tuple(pair)
     @test (1, "2") == @inferred Tuple{Int,String}(pair)
+end
+
+@testset "from iterators" begin
+    @testset "from infinite iterator" begin
+        types = (Tuple, Tuple{}, Tuple{Any}, Tuple{Int}, Tuple{Float64})
+        iters = (Iterators.cycle(3), Iterators.repeated(3))
+        @testset "T: $T" for T ∈ types
+            @testset "iter: $iter" for iter ∈ iters
+                @test_throws ArgumentError Tuple(Iterators.cycle(3))
+            end
+        end
+    end
+
+    @testset "incomplete return type inference" begin
+        @test Core.Compiler.return_type(Tuple, Tuple{Vector{Int}}) <: Tuple{Vararg{Int}}
+        @test Core.Compiler.return_type(Tuple{Vararg{Int}}, Tuple{Vector{Int}}) <: Tuple{Vararg{Int}}
+        @test Core.Compiler.return_type(Tuple{Vararg{Float64}}, Tuple{Vector{Int}}) <: Tuple{Vararg{Float64}}
+    end
+
+    allocs = function(::Type{T}, iter) where {T}
+        @allocated T(iter)
+    end
+
+    @testset "issue #53181" begin
+        T = Union{Tuple{Int,Int},Tuple{Float64}}
+        @test (1, 2) === T([1.0, 2.0])
+        @test (1, 2) === T(Any[1.0, 2.0])
+        @test (1, 2) === @inferred T(1.0 => 2.0)
+    end
+
+    @testset "issue #53182" begin
+        A = Tuple{Val{T},T,T} where {T}
+        v = [Val(Any), 2, 2.0]
+        t = (Val(Any), 2, 2.0)
+        @test A(v) === t
+    end
+
+    @testset "conversion" begin
+        @testset "length 1" begin
+            iters = (7::Number, Ref(7)::Ref, fill(7)::AbstractArray{<:Any,0})
+
+            @testset "iter: $iter" for iter ∈ iters
+                types = (
+                    Tuple{Float64}, Tuple{AbstractFloat}, Tuple{Float64,Vararg{Float64}},
+                    Tuple{Vararg{Float64}}, Tuple{Vararg{AbstractFloat}},
+                )
+                @testset "T: $T" for T ∈ types
+                    @test (7.0,) === @inferred T(iter)
+                    @test iszero(allocs(T, iter))
+                end
+            end
+        end
+
+        @testset "length 2" begin
+            iters = ((10 => 20)::Pair,)
+
+            @testset "iter: $iter" for iter ∈ iters
+                types = (
+                    Tuple{Float64,Float64}, Tuple{AbstractFloat,AbstractFloat},
+                    Tuple{Float64,AbstractFloat}, Tuple{AbstractFloat,Float64},
+                    Tuple{Vararg{Float64}}, Tuple{Vararg{AbstractFloat}},
+                    Tuple{Float64,Vararg{Float64}}, Tuple{Float64,Vararg{AbstractFloat}}
+                )
+                @testset "T: $T" for T ∈ types
+                    @test (10.0, 20.0) === @inferred T(iter)
+                    @test iszero(allocs(T, iter))
+                end
+            end
+        end
+    end
+
+    types_length_0 = (Tuple{},)
+    types_length_1 = (
+        Tuple{Int}, Tuple{Number}, Tuple{Any}, (Tuple{T} where {T<:Number}),
+        (Tuple{T} where {Number<:T<:Any}), (Tuple{T} where {Int<:T<:Number})
+    )
+    types_length_2 = (
+        Tuple{Int,Int}, Tuple{Number,Number}, Tuple{Number,Any}, Tuple{Number,Int},
+        Tuple{Any,Any}, (Tuple{Number, T} where {Int<:T<:Number}),
+        (Tuple{T, T} where {Int<:T<:Number}), (Tuple{T, T} where {T<:Number})
+    )
+    types_length_3 = (
+        Tuple{Int,Int,Int}, Tuple{Number,Number,Number}, Tuple{Number,Any,Int},
+        Tuple{Any,Any,Any}, (Tuple{T,T,T} where {T}),
+        (Tuple{T,T,T} where {Number<:T<:Any}), (Tuple{Number,T,T} where {T<:Number})
+    )
+    types_length_4 = (
+        Tuple{Int,Int,Int,Int}, Tuple{Any,Number,Int,Any}, (Tuple{T,T,T,T} where {T}),
+        (Tuple{T,T,T,T} where {Int<:T<:Number}), (Tuple{Int,T,T,T} where {T})
+    )
+
+    types_vararg_0 = (
+        Tuple, Tuple{Vararg{Int}}, Tuple{Vararg{Number}}, (Tuple{Vararg{T}} where {T}),
+        (Tuple{Vararg{T}} where {T<:Number}), (Tuple{Vararg{T}} where {T<:Int}),
+        (Tuple{Vararg{T}} where {Number<:T<:Any}),
+        (Tuple{Vararg{T}} where {Int<:T<:Number})
+    )
+    types_vararg_1 = (
+        Tuple{Number,Vararg{Number}}, Tuple{Number,Vararg{Any}}, Tuple{Int,Vararg{Int}},
+        (Tuple{Int,Vararg{T}} where {T}), (Tuple{Int,Vararg{T}} where {Int<:T<:Number})
+    )
+    types_vararg_2 = (
+        Tuple{Any,Any,Vararg{Any}}, Tuple{Int,Int,Vararg{Number}},
+        Tuple{Int,Int,Vararg{Int}}, (Tuple{Int,Number,Vararg{T}} where {T}),
+        (Tuple{Int,Number,Vararg{T}} where {T}),
+        (Tuple{Int,Number,Vararg{T}} where {T<:Number}),
+        (Tuple{Int,Number,Vararg{T}} where {Int, T<:Number})
+    )
+    types_vararg_3 = (
+        Tuple{Any,Any,Any,Vararg{Any}}, Tuple{Number,Int,Any,Vararg{Number}},
+        Tuple{Int,Int,Int,Vararg{Int}}, (Tuple{T,Number,Any,Vararg{T}} where {T}),
+        (Tuple{T,Number,Any,Vararg{T}} where {T<:Number}),
+        (Tuple{T,Number,Any,Vararg{T}} where {Int<:T<:Number})
+    )
+    types_vararg_4 = (
+        Tuple{Any,Number,Int,Number,Vararg{Number}},
+        (Tuple{Any,Number,Int,Number,Vararg{T}} where {T}),
+        (Tuple{Any,Number,T,Number,Vararg{T}} where {Int<:T<:Number})
+    )
+
+    @testset "constant length 1" begin
+        types_ok = (
+            types_length_1..., types_vararg_0..., types_vararg_1...
+        )
+        types_throws = (
+            types_length_0..., types_length_2..., types_length_3..., types_length_4...,
+            types_vararg_2..., types_vararg_3..., types_vararg_4...
+        )
+        iters = (7::Number, Ref(7)::Ref, fill(7)::AbstractArray{<:Any,0})
+
+        @testset "iter: $iter" for iter ∈ iters
+            @testset "OK" begin
+                @testset "T: $T" for T ∈ types_ok
+                    @test (7,) === @inferred T(iter)
+                    @test iszero(allocs(T, iter))
+                end
+            end
+
+            @testset "throws `ArgumentError`" begin
+                @testset "T: $T" for T ∈ types_throws
+                    @test_throws ArgumentError T(iter)
+                end
+            end
+
+            @testset "throws, failed conversion" begin
+                @test_throws Exception Tuple{Nothing}(iter)
+                @test_throws Exception Tuple{Matrix}(iter)
+            end
+        end
+    end
+
+    @testset "constant length 2" begin
+        types_ok = (
+            types_length_2..., types_vararg_0..., types_vararg_1..., types_vararg_2...
+        )
+        types_throws = (
+            types_length_0..., types_length_1..., types_length_3..., types_length_4...,
+            types_vararg_3..., types_vararg_4...
+        )
+        iters = ((10 => 20)::Pair,)
+
+        @testset "iter: $iter" for iter ∈ iters
+            @testset "OK" begin
+                @testset "T: $T" for T ∈ types_ok
+                    @test (10, 20) === @inferred T(iter)
+                    @test iszero(allocs(T, iter))
+                end
+            end
+
+            @testset "throws `ArgumentError`" begin
+                @testset "T: $T" for T ∈ types_throws
+                    @test_throws ArgumentError T(iter)
+                end
+            end
+
+            @testset "throws, failed conversion" begin
+                @test_throws Exception Tuple{Any,Nothing}(iter)
+                @test_throws Exception Tuple{Any,Matrix}(iter)
+            end
+        end
+    end
+
+    @testset "length 0" begin
+        types_ok = types_length_0
+        types_va = types_vararg_0
+        types_throws = (
+            types_length_1..., types_length_2..., types_length_3..., types_length_4...,
+            types_vararg_1..., types_vararg_2..., types_vararg_3..., types_vararg_4...
+        )
+        iters = (1:0, Base.OneTo(0), 1:1:0, Vector{Int}(undef, 0), Matrix{Int}(undef, 0, 0))
+
+        @testset "iter: $iter" for iter ∈ iters
+            @testset "OK" begin
+                @testset "T: $T" for T ∈ types_ok
+                    @test () === @inferred T(iter)
+                end
+            end
+
+            @testset "va" begin
+                @testset "T: $T" for T ∈ types_va
+                    @test () === T(iter)
+                end
+            end
+
+            @testset "throws `ArgumentError`" begin
+                @testset "T: $T" for T ∈ types_throws
+                    @test_throws ArgumentError T(iter)
+                end
+            end
+        end
+    end
+
+    @testset "length 1" begin
+        types_ok = types_length_1
+        types_va = (types_vararg_0..., types_vararg_1...)
+        types_throws = (
+            types_length_0..., types_length_2..., types_length_3..., types_length_4...,
+            types_vararg_2..., types_vararg_3..., types_vararg_4...
+        )
+        iters = (1:1, Base.OneTo(1), 1:1:1, [1], reshape([1], 1, 1))
+
+        @testset "iter: $iter" for iter ∈ iters
+            @testset "OK" begin
+                @testset "T: $T" for T ∈ types_ok
+                    @test (1,) === @inferred T(iter)
+                end
+            end
+
+            @testset "va" begin
+                @testset "T: $T" for T ∈ types_va
+                    @test (1,) === T(iter)
+                end
+            end
+
+            @testset "throws `ArgumentError`" begin
+                @testset "T: $T" for T ∈ types_throws
+                    @test_throws ArgumentError T(iter)
+                end
+            end
+
+            @testset "throws, failed conversion" begin
+                @test_throws Exception Tuple{Nothing}(iter)
+                @test_throws Exception Tuple{Matrix}(iter)
+            end
+        end
+    end
+
+    @testset "length 2" begin
+        types_ok = types_length_2
+        types_va = (types_vararg_0..., types_vararg_1..., types_vararg_2...)
+        types_throws = (
+            types_length_0..., types_length_1..., types_length_3..., types_length_4...,
+            types_vararg_3..., types_vararg_4...
+        )
+        iters = (1:2, Base.OneTo(2), [1, 2], reshape([1, 2], 2, 1), reshape([1, 2], 1, 2))
+
+        @testset "iter: $iter" for iter ∈ iters
+            @testset "OK" begin
+                @testset "T: $T" for T ∈ types_ok
+                    @test (1, 2) === @inferred T(iter)
+                end
+            end
+
+            @testset "va" begin
+                @testset "T: $T" for T ∈ types_va
+                    @test (1, 2) === T(iter)
+                end
+            end
+
+            @testset "throws `ArgumentError`" begin
+                @testset "T: $T" for T ∈ types_throws
+                    @test_throws ArgumentError T(iter)
+                end
+            end
+
+            @testset "throws, failed conversion" begin
+                @test_throws Exception Tuple{Any,Nothing}(iter)
+                @test_throws Exception Tuple{Any,Matrix}(iter)
+            end
+        end
+    end
 end

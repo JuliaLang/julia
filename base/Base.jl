@@ -169,6 +169,7 @@ include("ctypes.jl")
 include("gcutils.jl")
 include("generator.jl")
 include("reflection.jl")
+include("type_intersect_exact.jl")
 include("options.jl")
 
 # define invoke(f, T, args...; kwargs...), without kwargs wrapping
@@ -196,6 +197,7 @@ end
 
 # core operations & types
 include("promotion.jl")
+include("tuple_from_iterator.jl")
 include("tuple.jl")
 include("expr.jl")
 include("pair.jl")

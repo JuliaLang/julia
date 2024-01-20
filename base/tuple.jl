@@ -362,11 +362,6 @@ const Any32{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
                        Any,Any,Any,Any,Any,Any,Any,Any,
                        Any,Any,Any,Any,Any,Any,Any,Any,
                        Vararg{Any,N}}
-const All32{T,N} = Tuple{T,T,T,T,T,T,T,T,
-                         T,T,T,T,T,T,T,T,
-                         T,T,T,T,T,T,T,T,
-                         T,T,T,T,T,T,T,T,
-                         Vararg{T,N}}
 function map(f, t::Any32)
     n = length(t)
     A = Vector{Any}(undef, n)
@@ -449,51 +444,12 @@ end
 
 (::Type{T})(x::Tuple) where {T<:Tuple} = x isa T ? x : convert(T, x)  # still use `convert` for tuples
 
-Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
-Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
-
-(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
-
-_totuple(::Type{Tuple{}}, itr, s...) = ()
-
-function _totuple_err(@nospecialize T)
-    @noinline
-    throw(ArgumentError("too few elements for tuple type $T"))
-end
-
-function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
-    @inline
-    y = iterate(itr, s...)
-    y === nothing && _totuple_err(T)
-    T1 = fieldtype(T, 1)
-    y1 = y[1]
-    t1 = y1 isa T1 ? y1 : convert(T1, y1)::T1
-    # inference may give up in recursive calls, so annotate here to force accurate return type to be propagated
-    rT = tuple_type_tail(T)
-    ts = _totuple(rT, itr, y[2])::rT
-    return (t1, ts...)::T
-end
-
-# use iterative algorithm for long tuples
-function _totuple(T::Type{All32{E,N}}, itr) where {E,N}
-    len = N+32
-    elts = collect(E, Iterators.take(itr,len))
-    if length(elts) != len
-        _totuple_err(T)
+function (::Type{T})(iter::S) where {T<:Tuple,S}
+    if IteratorSize(S) == IsInfinite()
+        throw(ArgumentError("can't construct a tuple from an infinite iterator"))
     end
-    (elts...,)
+    TupleFromIterator.iterator_to_tuple_with_element_types(T, iter)::T
 end
-
-_totuple(::Type{Tuple{Vararg{E}}}, itr, s...) where {E} = (collect(E, Iterators.rest(itr,s...))...,)
-
-_totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
-
-# for types that `apply` knows about, just splatting is faster than collecting first
-_totuple(::Type{Tuple}, itr::Array) = (itr...,)
-_totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
-_totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
-_totuple(::Type{Tuple}, p::Pair) = (p.first, p.second)
-_totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
 
 end
 

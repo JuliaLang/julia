@@ -2102,7 +2102,6 @@ end
     @test CartesianIndex{3}(1,2,3)*2 == CartesianIndex{3}(2,4,6)
     @test_throws ErrorException iterate(CartesianIndex{3}(1,2,3))
     @test CartesianIndices(CartesianIndex{3}(1,2,3)) == CartesianIndices((1, 2, 3))
-    @test Tuple{}(CartesianIndices{0,Tuple{}}(())) == ()
 
     R = CartesianIndices(map(Base.IdentityUnitRange, (2:5, 3:5)))
     @test eltype(R) <: CartesianIndex{2}
