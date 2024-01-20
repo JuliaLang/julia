@@ -1506,8 +1506,6 @@ you specify the number of elements not the ratio.
 Unlike `logspace` in Python and Matlab, the `start` and `stop` arguments are
 always the first and last elements of the result, not powers applied to some base.
 
-See also [`range`](@ref) for linearly spaced points.
-
 # Examples
 ```jldoctest
 julia> logrange(10, 4000, length=3)
@@ -1532,6 +1530,10 @@ julia> logrange(-27, -3, length=7)  # allows negative numbers
  -27.0, -18.7208, -12.9802, -9.0, -6.24025, -4.32675, -3.0
 ```
 
+See the [`LogRange`](@ref Base.LogRange) type for further details.
+
+See also [`range`](@ref) for linearly spaced points.
+
 !!! compat "Julia 1.11"
     This function requires at least Julia 1.11.
 """
@@ -1555,7 +1557,7 @@ same sign. All values are then negative.
 
 # Examples
 ```jldoctest
-julia> logrange(1, 4, 5)
+julia> logrange(1, 4, length=5)
 5-element LogRange{Float64, Base.TwicePrecision{Float64}}:
  1.0, 1.41421, 2.0, 2.82843, 4.0
 
@@ -1584,15 +1586,26 @@ julia> logrange(0, 4, 5)
  NaN, NaN, NaN, NaN, 4.0
 ```
 
+Note that integer eltype `T` is not allowed.
+Use for instance `round.(Int, xs)`, or explicit powers of some integer base:
+
+```jldoctest
+julia> xs = logrange(1, 512, 4)
+4-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
+ 1.0, 8.0, 64.0, 512.0
+
+julia> 2 .^ (0:3:9) |> println
+[1, 8, 64, 512]
+```
+
 For complex `T`, all points lie on the same branch of [`log`](@ref) as is used by `log(start)`
 and `log(stop)`. That is, all branch cuts are on the negative real axis.
 
-If this is not what you want, then adjust the arguments. For instance `start * logrange(1, stop/start, length)`
+Other branches can be used by adjusting the arguments. For instance `start * logrange(1, stop/start, length)`
 places the cut where `stop/start` is negative real, i.e. where [`angle`](@ref)`(stop/start) ≈ pi`.
-This choice appears to match what `geomspace` in Python does.
 
 ```jldoctest
-julia> Base.LogRange{ComplexF32}(1, -1 +0.0im, 5) |> collect
+julia> Base.LogRange{ComplexF32}(1, -1+0im, 5) |> collect
 5-element Vector{ComplexF32}:
          1.0f0 + 0.0f0im
   0.70710677f0 + 0.70710677f0im
@@ -1603,22 +1616,25 @@ julia> Base.LogRange{ComplexF32}(1, -1 +0.0im, 5) |> collect
 julia> ans ≈ cis.(LinRange{Float32}(0, pi, 5))
 true
 
-julia> lo = -1+0.01im; hi = -1-0.01im;  # either side of branch cut
+julia> lo = -1+0.01f0im; hi = -1-0.01f0im;
+
+julia> angle(lo), angle(hi)  # either side of branch cut
+(3.131593f0, -3.131593f0)
 
 julia> logrange(lo, hi, 5)  # goes near to +1
-5-element Base.LogRange{ComplexF64, ComplexF64}:
+5-element Base.LogRange{ComplexF32, ComplexF64}:
  -1.0+0.01im, 0.00500006+1.00004im, 1.00005+0.0im, 0.00500006-1.00004im, -1.0-0.01im
 
-julia> angle(hi/lo)  # far from branch cut
-0.01999933337333048
-
-julia> lo .* logrange(1, hi/lo, 5) .|> ComplexF32  # stays near -1
+julia> lo .* logrange(1, hi/lo, 5)  # stays near -1
 5-element Vector{ComplexF32}:
        -1.0f0 + 0.01f0im
- -1.0000376f0 + 0.0050000623f0im
-   -1.00005f0 - 1.7347235f-18im
+ -1.0000374f0 + 0.0050000628f0im
+   -1.00005f0 + 0.0f0im
  -1.0000376f0 - 0.0050000623f0im
-       -1.0f0 - 0.01f0im
+       -1.0f0 - 0.009999999f0im
+
+julia> angle(hi/lo)  # far from branch cut
+0.01999933f0
 ```
 
 !!! compat "Julia 1.11"

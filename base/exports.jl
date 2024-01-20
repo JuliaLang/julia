@@ -1096,6 +1096,7 @@ public
     Generator,
     ImmutableDict,
     OneTo,
+    LogRange,
     AnnotatedString,
     AnnotatedChar,
     UUID,
