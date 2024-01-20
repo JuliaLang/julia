@@ -7,4 +7,5 @@ end
 
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(LinearAlgebra)
+    @test undoc == []
 end
