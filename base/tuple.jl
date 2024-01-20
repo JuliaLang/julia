@@ -449,9 +449,6 @@ end
 
 (::Type{T})(x::Tuple) where {T<:Tuple} = x isa T ? x : convert(T, x)  # still use `convert` for tuples
 
-Tuple(x::Ref) = tuple(getindex(x))  # faster than iterator for one element
-Tuple(x::Array{T,0}) where {T} = tuple(getindex(x))
-
 (::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr)
 
 _totuple(::Type{Tuple{}}, itr, s...) = ()
@@ -492,8 +489,66 @@ _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 _totuple(::Type{Tuple}, itr::Array) = (itr...,)
 _totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
 _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
-_totuple(::Type{Tuple}, p::Pair) = (p.first, p.second)
-_totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
+
+const Tuple1OrMore = Tuple{Any,Vararg}
+const Tuple2OrMore = Tuple{Any,Any,Vararg}
+const Tuple3OrMore = Tuple{Any,Any,Any,Vararg}
+
+const ConstantLengthIterator1 = Union{Number,Ref,AbstractArray{<:Any,0}}
+const ConstantLengthIterator2 = Pair
+const ConstantLengthIterator = Union{ConstantLengthIterator1,ConstantLengthIterator2}
+
+function tuple_from_truncated(::Type{T}, iter, ::Val{1}) where {T}
+    T1 = fieldtype(T, 1)
+    x1 = first(iter)
+    y1 = convert(T1, x1)
+    (y1,)
+end
+
+function tuple_from_truncated(::Type{T}, iter, ::Val{2}) where {T}
+    T1 = fieldtype(T, 1)
+    T2 = fieldtype(T, 2)
+    (x1, x2) = iter
+    y1 = convert(T1, x1)
+    y2 = convert(T2, x2)
+    (y1, y2)
+end
+
+tuple_from_constant_length_iterator(::Type{T},  ::ConstantLengthIterator1) where {T<:Tuple{}     } = ()
+tuple_from_constant_length_iterator(::Type{T}, i::ConstantLengthIterator1) where {T<:Tuple       } = tuple_from_truncated(T, i, Val(1))
+tuple_from_constant_length_iterator(::Type{T},  ::ConstantLengthIterator1) where {T<:Tuple2OrMore} = _totuple_err(T)
+tuple_from_constant_length_iterator(::Type{T},  ::ConstantLengthIterator2) where {T<:Tuple{}     } = ()
+tuple_from_constant_length_iterator(::Type{T}, i::ConstantLengthIterator2) where {T<:Tuple{Any}  } = tuple_from_truncated(T, i, Val(1))
+tuple_from_constant_length_iterator(::Type{T}, i::ConstantLengthIterator2) where {T<:Tuple2OrMore} = tuple_from_truncated(T, i, Val(2))
+tuple_from_constant_length_iterator(::Type{T},  ::ConstantLengthIterator2) where {T<:Tuple3OrMore} = _totuple_err(T)
+
+function tuple_from_constant_length_iterator(::Type{T}, i::ConstantLengthIterator2) where {T<:Tuple1OrMore}
+    S = typesplit(T, Tuple{Any})
+    tuple_from_truncated(S, i, Val(2))
+end
+
+function tuple_from_constant_length_iterator(::Type{T}, i::ConstantLengthIterator2) where {T<:Tuple}
+    T0 = Tuple{}
+    T1 = Tuple{Any}
+    T2 = Tuple{Any,Any}
+    X = typesplit(T, T0)
+    if !(typeintersect(X, T2) <: Union{})
+        let Y = typesplit(X, T1)
+            tuple_from_truncated(Y, i, Val(2))
+        end
+    elseif !(typeintersect(X, T1) <: Union{})
+        tuple_from_truncated(X, i, Val(1))
+    else
+        error("unexpected")
+    end::Union{T1,T2}
+end
+
+# Some special cased types as an optimization
+tuple_from_constant_length_iterator(::Type{Tuple                }, i::ConstantLengthIterator2) = tuple_from_truncated(Tuple, i, Val(2))
+tuple_from_constant_length_iterator(::Type{Tuple{Any,    Vararg}}, i::ConstantLengthIterator2) = tuple_from_truncated(Tuple, i, Val(2))
+tuple_from_constant_length_iterator(::Type{Tuple{Any,Any,Vararg}}, i::ConstantLengthIterator2) = tuple_from_truncated(Tuple, i, Val(2))
+
+(::Type{T})(x::ConstantLengthIterator) where {T<:Tuple} = tuple_from_constant_length_iterator(T, x)
 
 end
 

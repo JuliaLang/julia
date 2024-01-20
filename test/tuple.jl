@@ -818,3 +818,177 @@ namedtup = (;a=1, b=2, c=3)
     @test (1, "2") == @inferred Tuple(pair)
     @test (1, "2") == @inferred Tuple{Int,String}(pair)
 end
+
+@testset "from constant-length iterators, issue #52993" begin
+    allocs = function(::Type{T}, iter) where {T}
+        @allocated T(iter)
+    end
+
+    @testset "conversion" begin
+        @testset "length 1" begin
+            iters = (7::Number, Ref(7)::Ref, fill(7)::AbstractArray{<:Any,0})
+
+            @testset "iter: $iter" for iter ∈ iters
+                types = (
+                    Tuple{Float64}, Tuple{AbstractFloat},Tuple{Float64,Vararg{Float64}},
+                    Tuple{Vararg{Float64}}, Tuple{Vararg{AbstractFloat}},
+                )
+                @testset "T: $T" for T ∈ types
+                    @test (7.0,) === @inferred T(iter)
+                    @test iszero(allocs(T, iter))
+                end
+            end
+        end
+
+        @testset "length 2" begin
+            iters = ((10 => 20)::Pair,)
+
+            @testset "iter: $iter" for iter ∈ iters
+                types = (
+                    Tuple{Float64,Float64}, Tuple{AbstractFloat,AbstractFloat},
+                    Tuple{Float64,AbstractFloat}, Tuple{AbstractFloat,Float64},
+                    Tuple{Vararg{Float64}}, Tuple{Vararg{AbstractFloat}},
+                    Tuple{Float64,Vararg{Float64}}, Tuple{Float64,Vararg{AbstractFloat}}
+                )
+                @testset "T: $T" for T ∈ types
+                    @test (10.0, 20.0) === @inferred T(iter)
+                    @test iszero(allocs(T, iter))
+                end
+            end
+        end
+    end
+
+    types_length_0 = (Tuple{},)
+    types_length_1 = (
+        Tuple{Int}, Tuple{Number}, Tuple{Any}, (Tuple{T} where {T<:Number}),
+        (Tuple{T} where {Number<:T<:Any}), (Tuple{T} where {Int<:T<:Number})
+    )
+    types_length_2 = (
+        Tuple{Int,Int}, Tuple{Number,Number}, Tuple{Number,Any}, Tuple{Number,Int},
+        Tuple{Any,Any}, (Tuple{Number, T} where {Int<:T<:Number}),
+        (Tuple{T, T} where {Int<:T<:Number}), (Tuple{T, T} where {T<:Number})
+    )
+    types_length_3 = (
+        Tuple{Int,Int,Int}, Tuple{Number,Number,Number}, Tuple{Number,Any,Int},
+        Tuple{Any,Any,Any}, (Tuple{T,T,T} where {T}),
+        (Tuple{T,T,T} where {Number<:T<:Any}), (Tuple{Number,T,T} where {T<:Number})
+    )
+    types_length_4 = (
+        Tuple{Int,Int,Int,Int}, Tuple{Any,Number,Int,Any}, (Tuple{T,T,T,T} where {T}),
+        (Tuple{T,T,T,T} where {Int<:T<:Number}), (Tuple{Int,T,T,T} where {T})
+    )
+
+    types_vararg_0 = (
+        Tuple, Tuple{Vararg{Int}}, Tuple{Vararg{Number}}, (Tuple{Vararg{T}} where {T}),
+        (Tuple{Vararg{T}} where {T<:Number}), (Tuple{Vararg{T}} where {T<:Int}),
+        (Tuple{Vararg{T}} where {Number<:T<:Any}),
+        (Tuple{Vararg{T}} where {Int<:T<:Number})
+    )
+    types_vararg_1 = (
+        Tuple{Number,Vararg{Number}}, Tuple{Number,Vararg{Any}}, Tuple{Int,Vararg{Int}},
+        (Tuple{Int,Vararg{T}} where {T}), (Tuple{Int,Vararg{T}} where {Int<:T<:Number})
+    )
+    types_vararg_2 = (
+        Tuple{Any,Any,Vararg{Any}}, Tuple{Int,Int,Vararg{Number}},
+        Tuple{Int,Int,Vararg{Int}}, (Tuple{Int,Number,Vararg{T}} where {T}),
+        (Tuple{Int,Number,Vararg{T}} where {T}),
+        (Tuple{Int,Number,Vararg{T}} where {T<:Number}),
+        (Tuple{Int,Number,Vararg{T}} where {Int, T<:Number})
+    )
+    types_vararg_3 = (
+        Tuple{Any,Any,Any,Vararg{Any}}, Tuple{Number,Int,Any,Vararg{Number}},
+        Tuple{Int,Int,Int,Vararg{Int}}, (Tuple{T,Number,Any,Vararg{T}} where {T}),
+        (Tuple{T,Number,Any,Vararg{T}} where {T<:Number}),
+        (Tuple{T,Number,Any,Vararg{T}} where {Int<:T<:Number})
+    )
+    types_vararg_4 = (
+        Tuple{Any,Number,Int,Number,Vararg{Number}},
+        (Tuple{Any,Number,Int,Number,Vararg{T}} where {T}),
+        (Tuple{Any,Number,T,Number,Vararg{T}} where {Int<:T<:Number})
+    )
+
+    @testset "length 1" begin
+        types_ok_0 = types_length_0
+        types_ok_1 = (
+            types_length_1..., types_vararg_0..., types_vararg_1...
+        )
+        types_throws = (
+            types_length_2..., types_length_3..., types_length_4...,
+            types_vararg_2..., types_vararg_3..., types_vararg_4...
+        )
+        iters = (7::Number, Ref(7)::Ref, fill(7)::AbstractArray{<:Any,0})
+
+        @testset "iter: $iter" for iter ∈ iters
+            @testset "OK 0" begin
+                @testset "T: $T" for T ∈ types_ok_0
+                    @test () === @inferred T(iter)
+                    @test iszero(allocs(T, iter))
+                end
+            end
+
+            @testset "OK 1" begin
+                @testset "T: $T" for T ∈ types_ok_1
+                    @test (7,) === @inferred T(iter)
+                    @test iszero(allocs(T, iter))
+                end
+            end
+
+            @testset "throws `ArgumentError`" begin
+                @testset "T: $T" for T ∈ types_throws
+                    @test_throws ArgumentError T(iter)
+                end
+            end
+
+            @testset "throws" begin
+                @test_throws Exception Tuple{Nothing}(iter)
+                @test_throws Exception Tuple{Matrix}(iter)
+            end
+        end
+    end
+
+    @testset "length 2" begin
+        types_ok_0 = types_length_0
+        types_ok_1 = types_length_1
+        types_ok_2 = (
+            types_length_2..., types_vararg_0..., types_vararg_1..., types_vararg_2...
+        )
+        types_throws = (
+            types_length_3..., types_length_4..., types_vararg_3..., types_vararg_4...
+        )
+        iters = ((10 => 20)::Pair,)
+
+        @testset "iter: $iter" for iter ∈ iters
+            @testset "OK 0" begin
+                @testset "T: $T" for T ∈ types_ok_0
+                    @test () === @inferred T(iter)
+                    @test iszero(allocs(T, iter))
+                end
+            end
+
+            @testset "OK 1" begin
+                @testset "T: $T" for T ∈ types_ok_1
+                    @test (10,) === @inferred T(iter)
+                    @test iszero(allocs(T, iter))
+                end
+            end
+
+            @testset "OK 2" begin
+                @testset "T: $T" for T ∈ types_ok_2
+                    @test (10, 20) === @inferred T(iter)
+                    @test iszero(allocs(T, iter))
+                end
+            end
+
+            @testset "throws `ArgumentError`" begin
+                @testset "T: $T" for T ∈ types_throws
+                    @test_throws ArgumentError T(iter)
+                end
+            end
+
+            @testset "throws" begin
+                @test_throws Exception Tuple{Nothing,Any}(iter)
+                @test_throws Exception Tuple{Matrix,Any}(iter)
+            end
+        end
+    end
+end
