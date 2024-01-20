@@ -493,7 +493,7 @@ julia> stats.recompile_time
     The return type of this macro was changed from `Tuple` to `NamedTuple` in Julia 1.5.
 
 !!! compat "Julia 1.11"
-    The compilation and recompilation time fields were added in Julia 1.11.
+    The `compile_time` and `recompile_time` fields were added in Julia 1.11.
 """
 macro timed(ex)
     quote
