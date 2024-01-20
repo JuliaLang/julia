@@ -281,20 +281,10 @@ macro time(ex)
 end
 macro time(msg, ex)
     quote
-        Experimental.@force_compile
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        cumulative_compile_timing(true)
-        local compile_elapsedtimes = cumulative_compile_time_ns()
-        local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
-            cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
-        )
-        local diff = GC_Diff(gc_num(), stats)
+        local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        time_print(stdout, elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true; msg=_msg)
-        val
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg)
+        ret.value
     end
 end
 
@@ -363,20 +353,10 @@ macro timev(ex)
 end
 macro timev(msg, ex)
     quote
-        Experimental.@force_compile
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        cumulative_compile_timing(true)
-        local compile_elapsedtimes = cumulative_compile_time_ns()
-        local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
-            cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
-        )
-        local diff = GC_Diff(gc_num(), stats)
+        local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        timev_print(elapsedtime, diff, compile_elapsedtimes; msg=_msg)
-        val
+        timev_print(ret.time*1e9, ret.gcstats, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg)
+        ret.value
     end
 end
 
@@ -472,9 +452,9 @@ end
 """
     @timed
 
-A macro to execute an expression, and return the value of the expression, elapsed time,
-total bytes allocated, garbage collection time, and an object with various memory allocation
-counters.
+A macro to execute an expression, and return the value of the expression, elapsed time in seconds,
+total bytes allocated, garbage collection time, an object with various memory allocation
+counters, compilation time in seconds, and recompilation time in seconds.
 
 In some cases the system will look inside the `@timed` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
@@ -500,19 +480,34 @@ julia> propertynames(stats.gcstats)
 
 julia> stats.gcstats.total_time
 5576500
+
+julia> stats.compile_time
+0.0
+
+julia> stats.recompile_time
+0.0
+
 ```
 
 !!! compat "Julia 1.5"
     The return type of this macro was changed from `Tuple` to `NamedTuple` in Julia 1.5.
+
+!!! compat "Julia 1.11"
+    The `compile_time` and `recompile_time` fields were added in Julia 1.11.
 """
 macro timed(ex)
     quote
         Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
+        cumulative_compile_timing(true)
+        local compile_elapsedtimes = cumulative_compile_time_ns()
+        local val = @__tryfinally($(esc(ex)),
+            (elapsedtime = time_ns() - elapsedtime;
+            cumulative_compile_timing(false);
+            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
+        )
         local diff = GC_Diff(gc_num(), stats)
-        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff)
+        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff, compile_time=compile_elapsedtimes[1]/1e9, recompile_time=compile_elapsedtimes[2]/1e9)
     end
 end
