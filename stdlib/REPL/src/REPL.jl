@@ -409,7 +409,7 @@ end
 """
     BasicREPL
 
-A mutable struct representing a basic implementation of the Julia REPL (Read-Eval-Print Loop), primarily designed for straightforward and fundamental interactive command execution. 
+A mutable struct representing a basic implementation of the Julia REPL (Read-Eval-Print Loop), primarily designed for straightforward and fundamental interactive command execution.
 
 # Fields
 - `terminal::TextTerminal`: Handles input/output operations.
