@@ -198,8 +198,11 @@ static jl_callptr_t _jl_compile_codeinst(
         start_time = jl_hrtime();
 
     assert(jl_is_code_instance(codeinst));
-    assert(codeinst->min_world <= world && (codeinst->max_world >= world || codeinst->max_world == 0) &&
+#ifndef NDEBUG
+    size_t max_world = jl_atomic_load_relaxed(&codeinst->max_world);
+    assert(jl_atomic_load_relaxed(&codeinst->min_world) <= world && (max_world >= world || max_world == 0) &&
         "invalid world for method-instance");
+#endif
 
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
 #ifdef USE_TRACY
@@ -588,7 +591,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         if (src) {
             assert(jl_is_code_info(src));
             ++UnspecFPtrCount;
-            _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext(), 0);
+            _jl_compile_codeinst(unspec, src, jl_atomic_load_relaxed(&unspec->min_world), *jl_ExecutionEngine->getContext(), 0);
         }
         jl_callptr_t null = nullptr;
         // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
