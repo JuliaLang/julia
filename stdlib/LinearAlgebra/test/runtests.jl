@@ -6,6 +6,6 @@ for file in readlines(joinpath(@__DIR__, "testgroups"))
 end
 
 @testset "Docstrings" begin
-    undoc = Docs.undocumented_names(LinearAlgebra)
+    @test isempty(Docs.undocumented_names(LinearAlgebra))
     @test undoc == []
 end
