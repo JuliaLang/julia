@@ -195,6 +195,23 @@ extern jl_gc_page_stack_t global_page_pool_freed;
 // in the sweeping phase, which also doesn't push a node into the
 // same stack after it's popped
 
+STATIC_INLINE void push_lf_back_nosync(jl_gc_page_stack_t *pool, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
+{
+    jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
+    elt->next = old_back;
+    jl_atomic_store_relaxed(&pool->bottom, elt);
+}
+
+STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back_nosync(jl_gc_page_stack_t *pool) JL_NOTSAFEPOINT
+{
+    jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
+    if (old_back == NULL) {
+        return NULL;
+    }
+    jl_atomic_store_relaxed(&pool->bottom, old_back->next);
+    return old_back;
+}
+
 STATIC_INLINE void push_lf_back(jl_gc_page_stack_t *pool, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
 {
     while (1) {
@@ -205,6 +222,23 @@ STATIC_INLINE void push_lf_back(jl_gc_page_stack_t *pool, jl_gc_pagemeta_t *elt)
         }
         jl_cpu_pause();
     }
+}
+
+#define MAX_POP_ATTEMPTS (1 << 10)
+
+STATIC_INLINE jl_gc_pagemeta_t *try_pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFEPOINT
+{
+    for (int i = 0; i < MAX_POP_ATTEMPTS; i++) {
+        jl_gc_pagemeta_t *old_back = jl_atomic_load_relaxed(&pool->bottom);
+        if (old_back == NULL) {
+            return NULL;
+        }
+        if (jl_atomic_cmpswap(&pool->bottom, &old_back, old_back->next)) {
+            return old_back;
+        }
+        jl_cpu_pause();
+    }
+    return NULL;
 }
 
 STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFEPOINT
@@ -220,6 +254,16 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_lf_back(jl_gc_page_stack_t *pool) JL_NOTSAFE
         jl_cpu_pause();
     }
 }
+typedef struct {
+    jl_gc_page_stack_t stack;
+    // pad to 128 bytes to avoid false-sharing
+#ifdef _P64
+    void *_pad[15];
+#else
+    void *_pad[31];
+#endif
+} jl_gc_padded_page_stack_t;
+static_assert(sizeof(jl_gc_padded_page_stack_t) == 128, "jl_gc_padded_page_stack_t is not 128 bytes");
 
 typedef struct {
     _Atomic(size_t) n_freed_objs;
@@ -461,7 +505,7 @@ void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start) JL_
 void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_loop_serial(jl_ptls_t ptls);
 void gc_mark_loop_parallel(jl_ptls_t ptls, int master);
-void gc_sweep_pool_parallel(void);
+void gc_sweep_pool_parallel(jl_ptls_t ptls);
 void gc_free_pages(void);
 void sweep_stack_pools(void);
 void jl_gc_debug_init(void);

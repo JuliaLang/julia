@@ -143,7 +143,7 @@ void jl_parallel_gc_threadfun(void *arg)
             gc_mark_loop_parallel(ptls, 0);
         }
         if (may_sweep(ptls)) { // not an else!
-            gc_sweep_pool_parallel();
+            gc_sweep_pool_parallel(ptls);
             jl_atomic_fetch_add(&ptls->gc_sweeps_requested, -1);
         }
     }
