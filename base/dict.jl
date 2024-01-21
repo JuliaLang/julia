@@ -302,7 +302,7 @@ end
 # This version is for use by setindex! and get!
 function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
-    if sz == 0 # if Dict was empty resize and then return location to insert 
+    if sz == 0 # if Dict was empty resize and then return location to insert
         rehash!(h, 4)
         index, sh = hashindex(key, length(h.keys))
         return -index, sh
