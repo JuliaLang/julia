@@ -1558,11 +1558,11 @@ same sign. All values are then negative.
 # Examples
 ```jldoctest
 julia> logrange(1, 4, length=5)
-5-element LogRange{Float64, Base.TwicePrecision{Float64}}:
+5-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
  1.0, 1.41421, 2.0, 2.82843, 4.0
 
 julia> Base.LogRange{Float16}(-1, -4, 5)
-5-element LogRange{Float16, Float64}:
+5-element Base.LogRange{Float16, Float64}:
  -1.0, -1.414, -2.0, -2.828, -4.0
 
 julia> logrange(1e-310, 1e-300, 11)[1:2:end]
@@ -1578,11 +1578,11 @@ julia> prevfloat(1e-308, 5) == ans[2]
 true
 
 julia> logrange(2, Inf, 5)
-5-element LogRange{Float64, Base.TwicePrecision{Float64}}:
+5-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
  2.0, Inf, Inf, Inf, Inf
 
 julia> logrange(0, 4, 5)
-5-element LogRange{Float64, Base.TwicePrecision{Float64}}:
+5-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
  NaN, NaN, NaN, NaN, 4.0
 ```
 
@@ -1621,9 +1621,13 @@ julia> lo = -1+0.01f0im; hi = -1-0.01f0im;
 julia> angle(lo), angle(hi)  # either side of branch cut
 (3.131593f0, -3.131593f0)
 
-julia> logrange(lo, hi, 5)  # goes near to +1
-5-element Base.LogRange{ComplexF32, ComplexF64}:
- -1.0+0.01im, 0.00500006+1.00004im, 1.00005+0.0im, 0.00500006-1.00004im, -1.0-0.01im
+julia> logrange(lo, hi, 5) |> collect  # goes near to +1
+5-element Vector{ComplexF32}:
+         -1.0f0 + 0.01f0im
+ 0.0050000623f0 + 1.0000376f0im
+      1.00005f0 + 0.0f0im
+ 0.0050000623f0 - 1.0000376f0im
+         -1.0f0 - 0.01f0im
 
 julia> lo .* logrange(1, hi/lo, 5)  # stays near -1
 5-element Vector{ComplexF32}:
