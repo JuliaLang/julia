@@ -1837,6 +1837,9 @@ const toplevel_load = Ref(true)
 
 const _require_world_age = Ref{UInt}(typemax(UInt))
 
+# hide loading frames from stacktrace
+const hide_loading_frames = Ref(true)
+
 """
     require(into::Module, module::Symbol)
 
@@ -1859,11 +1862,19 @@ For more details regarding code loading, see the manual sections on [modules](@r
 [parallel computing](@ref code-availability).
 """
 function require(into::Module, mod::Symbol)
-    if _require_world_age[] != typemax(UInt)
-        Base.invoke_in_world(_require_world_age[], __require, into, mod)
-    else
-        @invokelatest __require(into, mod)
+    ex = nothing
+    out = try
+        if _require_world_age[] != typemax(UInt)
+            Base.invoke_in_world(_require_world_age[], __require, into, mod)
+        else
+            @invokelatest __require(into, mod)
+        end
+    catch _ex
+        # don't include loading internals in stacktrace unless requested
+        hide_loading_frames[] ? (ex = _ex) : rethrow()
     end
+    ex === nothing || throw(ex) # rethrow outside of catch to avoid nested stacktrace
+    return out
 end
 
 function __require(into::Module, mod::Symbol)
