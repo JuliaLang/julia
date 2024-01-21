@@ -1146,9 +1146,7 @@ end
 end
 
 @testset "Docstrings" begin
-    undoc = Docs.undocumented_names(Printf)
-    @test_broken isempty(undoc)
-    @test undoc == [:Printf]
+    @test isempty(Docs.undocumented_names(Printf))
 end
 
 # issue #52749

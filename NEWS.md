@@ -93,6 +93,7 @@ New library features
   content is fully written, then call `closewrite` manually to avoid
   data-races. Or use the callback form of `open` to have all that handled
   automatically.
+* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
 
 Standard library changes
 ------------------------
@@ -170,6 +171,8 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
+
+* `Base.map`, `Iterators.map`, and `foreach` lost their single-argument methods ([#52631]).
 
 
 External dependencies

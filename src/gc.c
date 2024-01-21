@@ -51,7 +51,6 @@ static jl_gc_callback_list_t *gc_cblist_post_gc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_free;
 static jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
-typedef void (*jl_gc_cb_notify_gc_pressure_t)(void);
 
 #define gc_invoke_callbacks(ty, list, args) \
     do { \
@@ -1602,6 +1601,7 @@ void gc_sweep_wake_all(void)
     uv_mutex_lock(&gc_threads_lock);
     for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
+        assert(ptls2 != NULL); // should be a GC thread
         jl_atomic_fetch_add(&ptls2->gc_sweeps_requested, 1);
     }
     uv_cond_broadcast(&gc_threads_cond);
@@ -2954,6 +2954,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
 
 size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
+    assert(ptls != NULL);
     // assume each chunk is worth 256 units of work and each pointer
     // is worth 1 unit of work
     size_t work = 256 * (jl_atomic_load_relaxed(&ptls->mark_queue.chunk_queue.bottom) -
@@ -2995,7 +2996,7 @@ size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
  * and therefore won't enter the mark-loop.
  */
 
-int gc_should_mark(jl_ptls_t ptls)
+int gc_should_mark(void)
 {
     int should_mark = 0;
     int n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
@@ -3017,7 +3018,11 @@ int gc_should_mark(jl_ptls_t ptls)
         }
         size_t work = gc_count_work_in_queue(gc_all_tls_states[tid]);
         for (tid = gc_first_tid; tid < gc_first_tid + jl_n_markthreads; tid++) {
-            work += gc_count_work_in_queue(gc_all_tls_states[tid]);
+            jl_ptls_t ptls2 = gc_all_tls_states[tid];
+            if (ptls2 == NULL) {
+                continue;
+            }
+            work += gc_count_work_in_queue(ptls2);
         }
         // if there is a lot of work left, enter the mark loop
         if (work >= 16 * n_threads_marking) {
@@ -3048,7 +3053,7 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
     }
     while (1) {
-        int should_mark = gc_should_mark(ptls);
+        int should_mark = gc_should_mark();
         if (!should_mark) {
             break;
         }
@@ -3080,6 +3085,9 @@ void gc_mark_clean_reclaim_sets(void)
     // Clean up `reclaim-sets`
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL) {
+            continue;
+        }
         arraylist_t *reclaim_set2 = &ptls2->mark_queue.reclaim_set;
         ws_array_t *a = NULL;
         while ((a = (ws_array_t *)arraylist_pop(reclaim_set2)) != NULL) {

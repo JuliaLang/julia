@@ -583,9 +583,9 @@ typedef struct {
 static void *jl_sysimg_handle = NULL;
 static jl_image_t sysimage;
 
-static inline uintptr_t *sysimg_gvars(uintptr_t *base, const int32_t *offsets, size_t idx)
+static inline uintptr_t *sysimg_gvars(const char *base, const int32_t *offsets, size_t idx)
 {
-    return base + offsets[idx] / sizeof(base[0]);
+    return (uintptr_t*)(base + offsets[idx]);
 }
 
 JL_DLLEXPORT int jl_running_on_valgrind(void)
@@ -601,7 +601,7 @@ static void jl_load_sysimg_so(void)
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
     // in --build mode only use sysimg data, not precompiled native code
     if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
-        assert(sysimage.fptrs.base);
+        assert(sysimage.fptrs.ptrs);
     }
     else {
         memset(&sysimage.fptrs, 0, sizeof(sysimage.fptrs));
@@ -1880,11 +1880,11 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         }
         switch ((jl_callingconv_t)offset) {
         case JL_API_BOXED:
-            if (s->image->fptrs.base)
+            if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_args;
             JL_FALLTHROUGH;
         case JL_API_WITH_PARAMETERS:
-            if (s->image->fptrs.base)
+            if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_sparam;
             return (uintptr_t)NULL;
         case JL_API_CONST:
@@ -2139,8 +2139,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
     jl_image_fptrs_t fvars = image->fptrs;
     // make these NULL now so we skip trying to restore GlobalVariable pointers later
     image->gvars_base = NULL;
-    image->fptrs.base = NULL;
-    if (fvars.base == NULL)
+    if (fvars.nptrs == 0)
         return;
 
     memcpy(image->jl_small_typeof, &jl_small_typeof, sizeof(jl_small_typeof));
@@ -2163,20 +2162,18 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
                 offset = ~offset;
             }
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
-            uintptr_t base = (uintptr_t)fvars.base;
             assert(jl_is_method(codeinst->def->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
             assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
             linfos[i] = codeinst->def;     // now it's a MethodInstance
-            int32_t offset = fvars.offsets[i];
+            void *fptr = fvars.ptrs[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
                 uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
                 if (idx < i)
                     continue;
                 if (idx == i)
-                    offset = fvars.clone_offsets[clone_idx];
+                    fptr = fvars.clone_ptrs[clone_idx];
                 break;
             }
-            void *fptr = (void*)(base + offset);
             if (specfunc) {
                 jl_atomic_store_relaxed(&codeinst->specptr.fptr, fptr);
                 jl_atomic_store_relaxed(&codeinst->specsigflags, 0b111); // TODO: set only if confirmed to be true

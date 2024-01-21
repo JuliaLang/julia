@@ -2686,7 +2686,7 @@ end
     @test divrem(a,-(a-20), RoundDown) == (div(a,-(a-20), RoundDown), rem(a,-(a-20), RoundDown))
 end
 
-@testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
+@testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat, Int8, Int16, Int32, Int64, Int128)
     @test rem2pi(T(1), RoundToZero)  == 1
     @test rem2pi(T(1), RoundNearest) == 1
     @test rem2pi(T(1), RoundDown)    == 1
