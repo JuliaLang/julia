@@ -19,6 +19,7 @@ include("editless.jl")
 include("codeview.jl")
 include("macros.jl")
 include("clipboard.jl")
+include("display_precision.jl")
 
 """
     varinfo(m::Module=Main, pattern::Regex=r""; all=false, imported=false, recursive=false, sortby::Symbol=:name, minsize::Int=0)

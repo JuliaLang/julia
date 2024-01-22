@@ -77,7 +77,7 @@ uuid = "b5f81e59-6552-4d32-b1f0-c071b021bf89"
 version = "0.2.3"
 
 [[deps.InteractiveUtils]]
-deps = ["Markdown"]
+deps = ["Markdown", "Printf"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 version = "1.11.0"
 
