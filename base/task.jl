@@ -365,6 +365,46 @@ function wait(t::Task)
     nothing
 end
 
+# Wait multiple tasks
+waitany(tasks) = _wait_multiple(tasks)
+waitall(tasks; failfast=false) = _wait_multiple(tasks; all=true, failfast=failfast)
+
+function _wait_multiple(tasks::Vector{Task}; all=false, failfast=false)::NTuple{2,Vector{Task}}
+    n = length(tasks)
+    done_tasks = Vector{Task}()
+
+    while length(done_tasks) < n
+        exception = false
+
+        m = length(done_tasks)
+
+        # Ensure at least one task has been done
+        while length(done_tasks) == m
+            remaining_tasks = Vector{Task}()
+
+            for t in tasks
+                if istaskdone(t)
+                    push!(done_tasks, t)
+                    exception |= istaskfailed(t)
+                else
+                    push!(remaining_tasks, t)
+                end
+            end
+
+            tasks = remaining_tasks
+            yield()
+        end
+
+        if !all || (failfast && exception)
+            return done_tasks, tasks
+        end
+    end
+
+    return done_tasks, Vector{Task}()
+end
+
+_wait_multiple(tasks::Tuple{Task}; kw...) = _wait_multiple([tasks...]; kw...)
+
 """
     fetch(x::Any)
 

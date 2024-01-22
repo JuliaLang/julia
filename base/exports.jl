@@ -706,6 +706,8 @@ export
     yield,
     yieldto,
     wait,
+    waitany,
+    waitall,
     timedwait,
     asyncmap,
     asyncmap!,

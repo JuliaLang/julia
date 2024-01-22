@@ -1186,4 +1186,76 @@ end
 @testset "threadcall + threads" begin
     threadcall_threads() #Shouldn't crash!
 end
+
+@testset "Wait multiple tasks" begin
+    function create_tasks()
+        tasks = Vector{Task}()
+        event = Threads.Event()
+        push!(tasks,
+              Threads.@spawn begin
+                  sleep(0.01)
+              end)
+        push!(tasks,
+              Threads.@spawn begin
+                  sleep(0.02)
+              end)
+        push!(tasks,
+              Threads.@spawn begin
+                  wait(event)
+              end)
+        return tasks, event
+    end
+
+    @testset "waitany" begin
+        tasks, event = create_tasks()
+        sleep(0.1)
+        done,  pending = waitany(tasks)
+        @test length(done) == 2
+        @test tasks[1] ∈ done
+        @test tasks[2] ∈ done
+        @test length(pending) == 1
+        @test tasks[3] ∈ pending
+        notify(event)
+        yield()
+        wait(tasks[3])
+    end
+
+    @testset "waitall" begin
+        @testset "All tasks succeed" begin
+            tasks, event = create_tasks()
+
+            sleep(0.1)
+            waiter = Threads.@spawn waitall(tasks)
+            @test !istaskdone(waiter)
+
+            notify(event)
+            done, pending = fetch(waiter)
+            @test length(done) == 3
+            @test tasks[1] ∈ done
+            @test tasks[2] ∈ done
+            @test tasks[3] ∈ done
+            @test length(pending) == 0
+        end
+
+        @testset "failfast=true" begin
+            tasks, event = create_tasks()
+            push!(tasks, Threads.@spawn error("Error"))
+
+            sleep(0.1)
+            waiter = Threads.@spawn waitall(tasks; failfast=true)
+
+            done, pending = fetch(waiter)
+            @test length(done) == 3
+            @test tasks[1] ∈ done
+            @test tasks[2] ∈ done
+            @test tasks[4] ∈ done
+            @test length(pending) == 1
+            @test tasks[3] ∈ pending
+
+            notify(event)
+            yield()
+            wait(tasks[3])
+        end
+    end
+end
 end # main testset
