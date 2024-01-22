@@ -3,10 +3,26 @@
 ## types ##
 
 """
-    <:(T1, T2)
+    <:(T1, T2)::Bool
 
-Subtype operator: returns `true` if and only if all values of type `T1` are
-also of type `T2`.
+Subtyping relation, defined between two types. In Julia, a type `S` is said to be a
+*subtype* of a type `T` if and only if we have `S <: T`.
+
+For any type `L` and any type `R`, `L <: R` implies that any value `v` of type `L`
+is also of type `R`. I.e., `(L <: R) && (v isa L)` implies `v isa R`.
+
+The subtyping relation is a *partial order*. I.e., `<:` is:
+
+* *reflexive*: for any type `T`, `T <: T` holds
+
+* *antisymmetric*: for any type `A` and any type `B`, `(A <: B) && (B <: A)`
+  implies `A == B`
+
+* *transitive*: for any type `A`, any type `B` and any type `C`;
+  `(A <: B) && (B <: C)` implies `A <: C`
+
+See also: [the Manual page on types](@ref man-types), [`Union{}`](@ref),
+[`Any`](@ref), [`isa`](@ref), [`where`](@ref).
 
 # Examples
 ```jldoctest
@@ -16,9 +32,29 @@ true
 julia> Vector{Int} <: AbstractArray
 true
 
-julia> Matrix{Float64} <: Matrix{AbstractFloat}
+julia> Matrix{Float64} <: Matrix{AbstractFloat}  # `Matrix` is invariant
 false
+
+julia> Tuple{Float64} <: Tuple{AbstractFloat}    # `Tuple` is covariant
+true
+
+julia> Union{} <: Int  # The bottom type, `Union{}`, subtypes each type.
+true
+
+julia> Union{} <: Float32 <: AbstractFloat <: Real <: Number <: Any  # Chaining
+true
 ```
+
+The `<:` operator is also used in other senses:
+
+* to specify the lower bound and the upper bound on a parameter of a
+  [`UnionAll`](@ref) type
+
+* to specify the lower bound and the upper bound on a (static) parameter of a
+  method, see [Parametric Methods](@ref)
+
+* to define a subtyping relation while declaring a new type, see [`struct`](@ref)
+  and [`abstract type`](@ref)
 """
 (<:)
 
