@@ -157,11 +157,6 @@ Parameters that control abstract interpretation-based type inference operation.
   information available. [`Base.@constprop :aggressive`](@ref Base.@constprop) can have a
   more fine-grained control on this configuration with per-method annotation basis.
 ---
-- `inf_params.unoptimize_throw_blocks::Bool = true`\\
-  If `true`, skips inferring calls that are in a block that is known to `throw`.
-  It may improve the compiler latency without sacrificing the runtime performance
-  in common situations.
----
 - `inf_params.assume_bindings_static::Bool = false`\\
   If `true`, assumes that no new bindings will be added, i.e. a non-existing binding at
   inference time can be assumed to always not exist at runtime (and thus e.g. any access to
@@ -177,7 +172,6 @@ struct InferenceParams
     tuple_complexity_limit_depth::Int
     ipo_constant_propagation::Bool
     aggressive_constant_propagation::Bool
-    unoptimize_throw_blocks::Bool
     assume_bindings_static::Bool
     ignore_recursion_hardlimit::Bool
 
@@ -189,7 +183,6 @@ struct InferenceParams
         tuple_complexity_limit_depth::Int,
         ipo_constant_propagation::Bool,
         aggressive_constant_propagation::Bool,
-        unoptimize_throw_blocks::Bool,
         assume_bindings_static::Bool,
         ignore_recursion_hardlimit::Bool)
         return new(
@@ -200,7 +193,6 @@ struct InferenceParams
             tuple_complexity_limit_depth,
             ipo_constant_propagation,
             aggressive_constant_propagation,
-            unoptimize_throw_blocks,
             assume_bindings_static,
             ignore_recursion_hardlimit)
     end
@@ -214,7 +206,6 @@ function InferenceParams(
         #=tuple_complexity_limit_depth::Int=# 3,
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
-        #=unoptimize_throw_blocks::Bool=# true,
         #=assume_bindings_static::Bool=# false,
         #=ignore_recursion_hardlimit::Bool=# false);
     max_methods::Int = params.max_methods,
@@ -224,7 +215,6 @@ function InferenceParams(
     tuple_complexity_limit_depth::Int = params.tuple_complexity_limit_depth,
     ipo_constant_propagation::Bool = params.ipo_constant_propagation,
     aggressive_constant_propagation::Bool = params.aggressive_constant_propagation,
-    unoptimize_throw_blocks::Bool = params.unoptimize_throw_blocks,
     assume_bindings_static::Bool = params.assume_bindings_static,
     ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit)
     return InferenceParams(
@@ -235,7 +225,6 @@ function InferenceParams(
         tuple_complexity_limit_depth,
         ipo_constant_propagation,
         aggressive_constant_propagation,
-        unoptimize_throw_blocks,
         assume_bindings_static,
         ignore_recursion_hardlimit)
 end
@@ -259,10 +248,6 @@ Parameters that control optimizer operation.
   Specifies the extra inlining willingness for a method specialization with non-concrete
   tuple return types (in hopes of splitting it up). `opt_params.inline_tupleret_bonus` will
   be added to `opt_params.inline_cost_threshold` when making inlining decision.
----
-- `opt_params.inline_error_path_cost::Int = 20`\\
-  Specifies the penalty cost for an un-optimized dynamic call in a block that is known to
-  `throw`. See also [`(inf_params::InferenceParams).unoptimize_throw_blocks`](@ref InferenceParams).
 ---
 - `opt_params.max_tuple_splat::Int = 32`\\
   When attempting to inline `Core._apply_iterate`, abort the optimization if the tuple
@@ -290,7 +275,6 @@ struct OptimizationParams
     inline_cost_threshold::Int
     inline_nonleaf_penalty::Int
     inline_tupleret_bonus::Int
-    inline_error_path_cost::Int
     max_tuple_splat::Int
     compilesig_invokes::Bool
     assume_fatal_throw::Bool
@@ -301,7 +285,6 @@ struct OptimizationParams
         inline_cost_threshold::Int,
         inline_nonleaf_penalty::Int,
         inline_tupleret_bonus::Int,
-        inline_error_path_cost::Int,
         max_tuple_splat::Int,
         compilesig_invokes::Bool,
         assume_fatal_throw::Bool,
@@ -311,7 +294,6 @@ struct OptimizationParams
             inline_cost_threshold,
             inline_nonleaf_penalty,
             inline_tupleret_bonus,
-            inline_error_path_cost,
             max_tuple_splat,
             compilesig_invokes,
             assume_fatal_throw,
@@ -324,7 +306,6 @@ function OptimizationParams(
         #=inline_cost_threshold::Int=# 100,
         #=inline_nonleaf_penalty::Int=# 1000,
         #=inline_tupleret_bonus::Int=# 250,
-        #=inline_error_path_cost::Int=# 20,
         #=max_tuple_splat::Int=# 32,
         #=compilesig_invokes::Bool=# true,
         #=assume_fatal_throw::Bool=# false,
@@ -333,7 +314,6 @@ function OptimizationParams(
     inline_cost_threshold::Int = params.inline_cost_threshold,
     inline_nonleaf_penalty::Int = params.inline_nonleaf_penalty,
     inline_tupleret_bonus::Int = params.inline_tupleret_bonus,
-    inline_error_path_cost::Int = params.inline_error_path_cost,
     max_tuple_splat::Int = params.max_tuple_splat,
     compilesig_invokes::Bool = params.compilesig_invokes,
     assume_fatal_throw::Bool = params.assume_fatal_throw,
@@ -343,7 +323,6 @@ function OptimizationParams(
         inline_cost_threshold,
         inline_nonleaf_penalty,
         inline_tupleret_bonus,
-        inline_error_path_cost,
         max_tuple_splat,
         compilesig_invokes,
         assume_fatal_throw,

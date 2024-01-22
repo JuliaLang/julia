@@ -121,7 +121,6 @@ end |> only === Nothing
 @newinterp Issue48097Interp
 @MethodTable Issue48097MT
 CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_world_counter(interp), Issue48097MT)
-CC.InferenceParams(::Issue48097Interp) = CC.InferenceParams(; unoptimize_throw_blocks=false)
 function CC.concrete_eval_eligible(interp::Issue48097Interp,
     @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
     ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter,

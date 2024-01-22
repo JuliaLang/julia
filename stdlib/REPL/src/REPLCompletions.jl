@@ -554,8 +554,7 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
-                                 aggressive_constant_propagation=true,
-                                 unoptimize_throw_blocks=false),
+                                 aggressive_constant_propagation=true),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
                              inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
                              code_cache::REPLInterpreterCache = get_code_cache())

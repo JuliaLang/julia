@@ -582,7 +582,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     end
 
     # Record the correct exception handler for all critical sections
-    handler_at, handlers = compute_trycatch(code, BitSet())
+    handler_at, handlers = compute_trycatch(code)
 
     phi_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
     live_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]

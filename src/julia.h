@@ -266,7 +266,7 @@ typedef union __jl_purity_overrides_t {
 } _jl_purity_overrides_t;
 
 #define NUM_EFFECTS_OVERRIDES 9
-#define NUM_IR_FLAGS 11
+#define NUM_IR_FLAGS 10
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
@@ -278,15 +278,14 @@ typedef struct _jl_code_info_t {
         // 1 << 0 = inbounds region
         // 1 << 1 = callsite inline region
         // 1 << 2 = callsite noinline region
-        // 1 << 3 = throw block
-        // 1 << 4 = :effect_free
-        // 1 << 5 = :nothrow
-        // 1 << 6 = :consistent
-        // 1 << 7 = :refined
-        // 1 << 8 = :noub
-        // 1 << 9 = :effect_free_if_inaccessiblememonly
-        // 1 << 10 = :inaccessiblemem_or_argmemonly
-        // 1 << 11-18 = callsite effects overrides
+        // 1 << 3 = :effect_free
+        // 1 << 4 = :nothrow
+        // 1 << 5 = :consistent
+        // 1 << 6 = :refined
+        // 1 << 7 = :noub
+        // 1 << 8 = :effect_free_if_inaccessiblememonly
+        // 1 << 9 = :inaccessiblemem_or_argmemonly
+        // 1 << 10-18 = callsite effects overrides
     // miscellaneous data:
     jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
     jl_value_t *linetable; // Table of locations [TODO: make this volatile like slotnames]

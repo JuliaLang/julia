@@ -462,51 +462,6 @@ function is_throw_call(e::Expr, code::Vector{Any})
     return false
 end
 
-function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Tuple{Int, Int}})
-    for stmt in find_throw_blocks(src.code, handler_at)
-        src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
-    end
-    return nothing
-end
-
-function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Tuple{Int, Int}})
-    stmts = BitSet()
-    n = length(code)
-    for i in n:-1:1
-        s = code[i]
-        if isa(s, Expr)
-            if s.head === :gotoifnot
-                if i+1 in stmts && s.args[2]::Int in stmts
-                    push!(stmts, i)
-                end
-            elseif s.head === :return
-                # see `ReturnNode` handling
-            elseif is_throw_call(s, code)
-                if handler_at[i][1] == 0
-                    push!(stmts, i)
-                end
-            elseif i+1 in stmts
-                push!(stmts, i)
-            end
-        elseif isa(s, ReturnNode)
-            # NOTE: it potentially makes sense to treat unreachable nodes
-            # (where !isdefined(s, :val)) as `throw` points, but that can cause
-            # worse codegen around the call site (issue #37558)
-        elseif isa(s, GotoNode)
-            if s.label in stmts
-                push!(stmts, i)
-            end
-        elseif isa(s, GotoIfNot)
-            if i+1 in stmts && s.dest in stmts
-                push!(stmts, i)
-            end
-        elseif i+1 in stmts
-            push!(stmts, i)
-        end
-    end
-    return stmts
-end
-
 # using a function to ensure we can infer this
 @inline function slot_id(s)
     isa(s, SlotNumber) && return s.id
