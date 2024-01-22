@@ -56,10 +56,8 @@ function rand_cfg(V, E)
 end
 
 function get_random_edge(cfg::CFG, V)
-    source = rand(1:V)
-    while length(cfg.blocks[source].succs) == 0
-        source = rand(1:V)
-    end
+    has_edge = [length(cfg.blocks[bb].succs) != 0 for bb in 1:V]
+    source = rand(findall(has_edge))
     target = rand(cfg.blocks[source].succs)
     return source, target
 end
@@ -121,6 +119,8 @@ function test_reachability(V, E; deletions = 2E ÷ 3, all_checks=false)
     killed_edges = Tuple{Int,Int}[]
     killed_blocks = Int[]
     for k = 1:deletions
+        length(blocks) == 1 && break # no more reachable blocks
+
         from, to = get_random_edge(cfg, V)
         kill_edge!(reachability, cfg, from, to,
             (from::Int, to::Int) -> push!(killed_edges, (from, to)),

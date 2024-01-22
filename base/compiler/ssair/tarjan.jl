@@ -46,7 +46,10 @@ function CFGReachability(cfg::CFG, domtree::DomTree)
         Int[],                      # _worklist
         SCCStackItem[],             # _stack
     )
-    tarjan!(reachability, cfg)
+    tarjan!(reachability, cfg;
+        # reducible back-edges don't need to be considered for reachability
+        filter = (from::Int,to::Int)->!dominates(domtree, to, from)
+    )
     return reachability
 end
 
@@ -59,12 +62,12 @@ bb_in_irreducible_loop(reach::CFGReachability, bb::Int) = reach.irreducible[bb]
 #
 # `tarjan!` takes the transitive closure of this relation in order to detect
 # which BasicBlocks are unreachable.
-function _bb_externally_reachable(reach::CFGReachability, cfg::CFG, bb::Int)
+function _bb_externally_reachable(reach::CFGReachability, cfg::CFG, bb::Int; filter)
     (; scc) = reach
     bb == 1 && return true
     for pred in cfg.blocks[bb].preds
         scc[pred] <= 0 && continue
-        dominates(reach.domtree, bb, pred) && continue
+        !filter(pred, bb) && continue
         @assert scc[pred] != scc[bb]
         return true
     end
@@ -85,10 +88,12 @@ Outputs:
   - `reach._worklist`: if performing an incremental update (`root != 1`), any traversed nodes that
     are unreachable from BasicBlock #1 are enqueued to this worklist
 """
-function tarjan!(reach::CFGReachability, cfg::CFG; root::Int=1)
-    (; scc, irreducible, domtree) = reach
+function tarjan!(reach::CFGReachability, cfg::CFG; root::Int=1,
+    filter = (from::Int,to::Int)->true,
+)
+    (; scc, irreducible) = reach
     scc[root] != 0 && return scc
-    live = _bb_externally_reachable(reach, cfg, root)
+    live = _bb_externally_reachable(reach, cfg, root; filter)
 
     # the original algorithm has a separate stack and worklist (unrelated to `reach._worklist`)
     # here we use a single combined stack for improved memory/cache efficiency
@@ -117,12 +122,8 @@ function tarjan!(reach::CFGReachability, cfg::CFG; root::Int=1)
             stack[cursor] = item = SCCStackItem(item; child=child+1)
             succ = bb.succs[child]
 
-            # ignore any back-edges in a (natural) loop (see `kill_edge!`)
-            if dominates(domtree, succ, convert(Int, v))
-                # This check ensures that reducible CFG's will contain no SCC's. The vast majority
-                # of functions have reducible CFG's, so this optimization is very important.
-                continue
-            end
+            # ignore any edges that don't pass the filter
+            !filter(convert(Int, v), succ) && continue
 
             if scc[succ] < 0
                 # next child is already in DFS tree
@@ -134,7 +135,7 @@ function tarjan!(reach::CFGReachability, cfg::CFG; root::Int=1)
             elseif scc[succ] == 0
                 # next child is a new element in DFS tree
                 preorder_id += 1
-                live = live || _bb_externally_reachable(reach, cfg, succ)
+                live = live || _bb_externally_reachable(reach, cfg, succ; filter)
                 push!(stack, SCCStackItem(
                     succ,        # v
                     1,           # child
@@ -154,7 +155,7 @@ function tarjan!(reach::CFGReachability, cfg::CFG; root::Int=1)
                     if live
                         scc[item.v] = v
                         scan_subgraph!(reach, cfg, convert(Int, item.v),
-                            #= filter =# (pred,x)->(!dominates(domtree, x, pred) && scc[x] > typemax(Int)÷2),
+                            #= filter =# (pred,x)->(filter(pred, x) && scc[x] > typemax(Int)÷2),
                             #= action =# (x)->(scc[x] -= typemax(Int)÷2;),
                         )
                     else # this offset marks a node as 'maybe-dead'
@@ -181,19 +182,19 @@ function tarjan!(reach::CFGReachability, cfg::CFG; root::Int=1)
     worklist = reach._worklist
 
     # filter the worklist, leaving any nodes not proven to be reachable from BB #1
-    n_filtered = 0
+    n_popped = 0
     for i = (worklist_len + 1):length(worklist)
         @assert worklist[i] != 1
         @assert scc[worklist[i]] > 0
         if scc[worklist[i]] > typemax(Int)÷2
             # node is unreachable, enqueue it
             scc[worklist[i]] = 0
-            worklist[i - n_filtered] = worklist[i]
+            worklist[i - n_popped] = worklist[i]
         else
-            n_filtered += 1
+            n_popped += 1
         end
     end
-    resize!(worklist, length(worklist) - n_filtered)
+    resize!(worklist, length(worklist) - n_popped)
 
     return length(worklist) > worklist_len # if true, a (newly) unreachable node was enqueued
 end
@@ -228,16 +229,20 @@ function enqueue_if_unreachable!(reach::CFGReachability, cfg::CFG, bb::Int)
         # irreducible CFG
         # this requires a full scan of the irreducible loop
 
+        # any reducible back-edges do not need to be considered as part of reachability
+        # (very important optimization, since it means reducible CFGs will have no SCCs)
+        filter = (from::Int, to::Int)->!dominates(domtree, to, from)
+
         scc′ = scc[bb]
         scc[bb] = 0
         scan_subgraph!(reach, cfg, bb, # set this SCC to 0
-            #= filter =# (pred,x)->(!dominates(domtree, x, pred) && scc[x] == scc′),
+            #= filter =# (pred,x)->(filter(pred, x) && scc[x] == scc′),
             #= action =# (x)->(scc[x] = 0;),
         )
 
         # re-compute the SCC's for this portion of the CFG, adding any freshly
         # unreachable nodes to `reach._worklist`
-        return tarjan!(reach, cfg; root=bb)
+        return tarjan!(reach, cfg; root=bb, filter)
     else
         # target is a reducible CFG node
         # this node lives iff it still has an incoming forward edge
@@ -248,6 +253,13 @@ function enqueue_if_unreachable!(reach::CFGReachability, cfg::CFG, bb::Int)
         push!(reach._worklist, bb)
         return true
     end
+end
+
+function kill_cfg_edge!(cfg::CFG, from::Int, to::Int)
+    preds, succs = cfg.blocks[to].preds, cfg.blocks[from].succs
+    deleteat!(preds, findfirst(x::Int->x==from, preds)::Int)
+    deleteat!(succs, findfirst(x::Int->x==to, succs)::Int)
+    return nothing
 end
 
 """
@@ -265,9 +277,7 @@ function kill_edge!(reach::CFGReachability, cfg::CFG, from::Int, to::Int,
     @assert reach.scc[to] != 0
 
     # delete (from → to) edge
-    preds, succs = cfg.blocks[to].preds, cfg.blocks[from].succs
-    deleteat!(preds, findfirst(x::Int->x==from, preds)::Int)
-    deleteat!(succs, findfirst(x::Int->x==to, succs)::Int)
+    kill_cfg_edge!(cfg, from, to)
 
     # check for unreachable target
     enqueued = enqueue_if_unreachable!(reach, cfg, to)
@@ -295,5 +305,6 @@ function kill_edge!(reach::CFGReachability, cfg::CFG, from::Int, to::Int,
                 edge_callback(node, succ)
             end
         end
+        empty!(cfg.blocks[node].succs)
     end
 end
