@@ -58,7 +58,7 @@ function kill_block!(ir::IRCode, bb::Int)
         inst = ir[SSAValue(bidx)]
         inst[:stmt] = nothing
         inst[:type] = Bottom
-        inst[:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        inst[:flag] = IR_FLAGS_REMOVABLE
     end
     ir[SSAValue(last(stmts))][:stmt] = ReturnNode()
     return
@@ -204,7 +204,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     if rt !== nothing
         if isa(rt, Const)
             inst[:type] = rt
-            if is_inlineable_constant(rt.val) && has_flag(inst, (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
+            if is_inlineable_constant(rt.val) && has_flag(inst, IR_FLAGS_REMOVABLE)
                 inst[:stmt] = quoted(rt.val)
             end
             return true
