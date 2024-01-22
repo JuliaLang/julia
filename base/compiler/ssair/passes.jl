@@ -820,7 +820,7 @@ function perform_lifting!(compact::IncrementalCompact,
         old_node = old_inst[:stmt]::Union{PhiNode,Expr}
         if isa(old_node, PhiNode)
             new_node = PhiNode()
-            ssa = insert_node!(compact, old_ssa, effect_free_and_nothrow(NewInstruction(new_node, result_t)))
+            ssa = insert_node!(compact, old_ssa, removable_if_unused(NewInstruction(new_node, result_t)))
             lifted_philikes[i] = LiftedPhilike(ssa, new_node, true)
         else
             @assert is_known_call(old_node, Core.ifelse, compact)
@@ -1101,15 +1101,15 @@ end
 
 function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
     inst = compact[SSAValue(idx)]
-    if has_flag(inst, (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE))
+    if has_flag(inst, IR_FLAGS_REMOVABLE)
         return # already accurate
     end
-    (consistent, effect_free_and_nothrow, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
+    (consistent, removable, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
     if consistent
         add_flag!(inst, IR_FLAG_CONSISTENT)
     end
-    if effect_free_and_nothrow
-        add_flag!(inst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
+    if removable
+        add_flag!(inst, IR_FLAGS_REMOVABLE)
     elseif nothrow
         add_flag!(inst, IR_FLAG_NOTHROW)
     end
