@@ -1513,6 +1513,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     assert_havelock(require_lock)
     loaded = nothing
     if root_module_exists(modkey)
+        warn_if_already_loaded_different(modkey)
         loaded = root_module(modkey)
     else
         loaded = start_loading(modkey)
@@ -1543,6 +1544,7 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Un
     assert_havelock(require_lock)
     loaded = nothing
     if root_module_exists(modkey)
+        warn_if_already_loaded_different(modkey)
         loaded = root_module(modkey)
     else
         loaded = start_loading(modkey)
@@ -1986,15 +1988,71 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
+        warn_if_already_loaded_different(uuidkey)
         newm = root_module(uuidkey)
     end
     return newm
+end
+
+const already_warned_path_change_pkgs = Set{PkgId}()
+# warns if the loaded version of a module is different to the one that locate_package wants to load
+function warn_if_already_loaded_different(uuidkey::PkgId)
+    uuidkey ∈ already_warned_path_change_pkgs && return
+    pkgorig = get(pkgorigins, uuidkey, nothing)
+    if pkgorig !== nothing && pkgorig.path !== nothing
+        # `locate_package()` can throw an error; if that happens just skip
+        local new_path
+        try
+            new_path = locate_package(uuidkey)
+        catch
+            return
+        end
+
+        # new_path can be `nothing` if `uuidkey` is not loadable in this environment
+        if new_path === nothing
+            return
+        end
+        if !samefile(fixup_stdlib_path(pkgorig.path), new_path)
+            # TODO: only check treehash if not same path, as it's expensive
+            loaded_treehash = 1 # TODO
+            new_treehash = 2 # TODO
+            if loaded_treehash != new_treehash
+                if isnothing(pkgorig.version)
+                    v = get_pkgversion_from_path(dirname(dirname(pkgorig.path)))
+                    cur_vstr = isnothing(v) ? "" : "v$v "
+                else
+                    cur_vstr = "v$(pkgorig.version) "
+                end
+                new_v = get_pkgversion_from_path(dirname(dirname(new_path)))
+                new_vstr = isnothing(new_v) ? "" : "v$new_v "
+                warnstr = """
+                $uuidkey is already loaded from a different path:
+                loaded:    $cur_vstr$(repr(pkgorig.path))
+                requested: $new_vstr$(repr(new_path))
+                """
+                if isempty(already_warned_path_change_pkgs)
+                    warnstr *= """
+                    This might indicate a change of environment has happened between package loads and can mean that
+                    incompatible packages have been loaded"""
+                    if JLOptions().startupfile < 2 #(0 = auto, 1 = yes)
+                        warnstr *= """. If this happened due to a startup.jl consider starting julia
+                        directly in the project via the `--project` arg."""
+                    else
+                        warnstr *= "."
+                    end
+                end
+                @warn warnstr
+                push!(already_warned_path_change_pkgs, uuidkey)
+            end
+        end
+    end
 end
 
 mutable struct PkgOrigin
     path::Union{String,Nothing}
     cachepath::Union{String,Nothing}
     version::Union{VersionNumber,Nothing}
+    treehash::
 end
 PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
