@@ -312,8 +312,6 @@ static uintptr_t nsym_tag;
 // array of definitions for the predefined tagged object types
 // (reverse of symbol_table)
 static arraylist_t deser_sym;
-// Predefined tags that do not have special handling in `externally_linked`
-static htable_t external_objects;
 
 static htable_t serialization_order; // to break cycles, mark all objects that are serialized
 static htable_t nullptrs;
@@ -2661,13 +2659,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, s.ptls->root_task->tls);
         }
         else {
-            // To ensure we don't have to manually update the list, go through all tags and queue any that are not otherwise
-            // judged to be externally-linked
-            htable_new(&external_objects, NUM_TAGS);
-            for (size_t i = 0; tags[i] != NULL; i++) {
-                jl_value_t *tag = *tags[i];
-                ptrhash_put(&external_objects, tag, tag);
-            }
             // Queue the worklist itself as the first item we serialize
             jl_queue_for_serialization(&s, worklist);
             jl_queue_for_serialization(&s, jl_module_init_order);
@@ -2871,8 +2862,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_free(&gvars);
     arraylist_free(&external_fns);
     htable_free(&field_replace);
-    if (worklist)
-        htable_free(&external_objects);
     htable_free(&serialization_order);
     htable_free(&nullptrs);
     htable_free(&symbol_table);
