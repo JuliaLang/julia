@@ -1,5 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-import Base: ScopedValues
+using Base.ScopedValues
 
 @testset "errors" begin
     @test ScopedValue{Float64}(1)[] == 1.0
