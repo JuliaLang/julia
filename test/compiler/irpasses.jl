@@ -1568,7 +1568,7 @@ function persistent_dict_elim_multiple()
 end
 @test_broken fully_eliminated(persistent_dict_elim_multiple)
 let code = code_typed(persistent_dict_elim_multiple)[1][1].code
-    @test_broken count(x->isexpr(x, :invoke), code) == 0
+    @test count(x->isexpr(x, :invoke), code) == 0
     @test code[end] == Core.ReturnNode(1)
 end
 
