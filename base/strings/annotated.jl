@@ -418,44 +418,8 @@ annotations(io::AnnotatedIOBuffer) = io.annotations
 function write(io::AnnotatedIOBuffer, astr::Union{AnnotatedString, SubString{<:AnnotatedString}})
     astr = AnnotatedString(astr)
     offset = position(io.io)
-    if !eof(io)
-        # If we are overwriting an existing span in the AnnotatedIOBuffer,
-        # clear out any overlapping pre-existing annotations.
-        span = offset+1:offset+ncodeunits(astr)
-        filter!(((range, _),) -> first(range) < first(span) || last(range) > last(span), io.annotations)
-        extras = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
-        for i in eachindex(io.annotations)
-            range, annot = io.annotations[i]
-            # Test for partial overlap
-            if first(range) <= first(span) <= last(range) || first(range) <= last(span) <= last(range)
-                io.annotations[i] = (if first(range) < first(span)
-                                         first(range):first(span)-1
-                                     else last(span)+1:last(range) end, annot)
-                # If `span` fits exactly within `range`, then we've only copied over
-                # the beginning overhang, but also need to conserve the end overhang.
-                if first(range) < first(span) && last(span) < last(range)
-                    push!(extras, (last(span)+1:last(range), annot))
-                end
-            end
-            # Insert any extra entries in the appropriate position
-            for entry in extras
-                indices = searchsorted(io.annotations, (first(entry),), by=first)
-                splice!(io.annotations, indices, Tuple{UnitRange{Int}, Pair{Symbol, Any}}[entry])
-            end
-        end
-        # Fill in the annotations from `astr`, accounting for `offset`
-        for (region, annot) in astr.annotations
-            region = first(region)+offset:last(region)+offset
-            indices = searchsorted(io.annotations, (region,), by=first)
-            splice!(io.annotations, indices, Tuple{UnitRange{Int}, Pair{Symbol, Any}}[(region, annot)])
-        end
-    else
-        # Fill in the annotations from `astr`, accounting for `offset`
-        for (region, annot) in astr.annotations
-            region = first(region)+offset:last(region)+offset
-            push!(io.annotations, (region, annot))
-        end
-    end
+    eof(io) || _clear_annotations_in_region!(io.annotations, offset+1:offset+ncodeunits(astr))
+    _insert_annotations!(io, astr.annotations)
     write(io.io, String(astr))
 end
 
@@ -464,6 +428,58 @@ write(io::AnnotatedIOBuffer, x::AbstractString) = write(io.io, x)
 write(io::AnnotatedIOBuffer, s::Union{SubString{String}, String}) = write(io.io, s)
 write(io::AnnotatedIOBuffer, b::UInt8) = write(io.io, b)
 
+function write(dest::AnnotatedIOBuffer, src::AnnotatedIOBuffer)
+    destpos = position(dest)
+    isappending = eof(dest)
+    srcpos = position(src)
+    nb = write(dest.io, src.io)
+    isappending || _clear_annotations_in_region!(dest.annotations, destpos:destpos+nb)
+    srcannots = [(max(1 + srcpos, first(region)):last(region), annot)
+                 for (region, annot) in src.annotations if first(region) >= srcpos]
+    _insert_annotations!(dest, srcannots, destpos - srcpos)
+    nb
+end
+
+function _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, span::UnitRange{Int})
+    # Clear out any overlapping pre-existing annotations.
+    filter!(((region, _),) -> first(region) < first(span) || last(region) > last(span), annotations)
+    extras = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    for i in eachindex(annotations)
+        region, annot = annotations[i]
+        # Test for partial overlap
+        if first(region) <= first(span) <= last(region) || first(region) <= last(span) <= last(region)
+            annotations[i] = (if first(region) < first(span)
+                                        first(region):first(span)-1
+                                    else last(span)+1:last(region) end, annot)
+            # If `span` fits exactly within `region`, then we've only copied over
+            # the beginning overhang, but also need to conserve the end overhang.
+            if first(region) < first(span) && last(span) < last(region)
+                push!(extras, (last(span)+1:last(region), annot))
+            end
+        end
+        # Insert any extra entries in the appropriate position
+        for entry in extras
+            indices = searchsorted(annotations, (first(entry),), by=first)
+            splice!(annotations, indices, Tuple{UnitRange{Int}, Pair{Symbol, Any}}[entry])
+        end
+    end
+    annotations
+end
+
+function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, offset::Int = position(io))
+    if !eof(io)
+        for (region, annot) in annotations
+            region = first(region)+offset:last(region)+offset
+            indices = searchsorted(io.annotations, (region,), by=first)
+            splice!(io.annotations, indices, Tuple{UnitRange{Int}, Pair{Symbol, Any}}[(region, annot)])
+        end
+    else
+        for (region, annot) in annotations
+            region = first(region)+offset:last(region)+offset
+            push!(io.annotations, (region, annot))
+        end
+    end
+end
 
 function read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{T}}) where {T <: AbstractString}
     if (start = position(io)) == 0
