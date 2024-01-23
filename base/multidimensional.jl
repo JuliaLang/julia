@@ -786,11 +786,11 @@ end
     n = s[1]
     n > length(L) && return nothing
     #unroll once to help inference, cf issue #29418
-    idx, i = iterate(tail(s)...)
+    idx, i = iterate(tail(s)...)::Tuple{Any,Any,Vararg{Any}}
     s = (n+1, s[2], i)
     L.mask[idx] && return (idx, s)
     while true
-        idx, i = iterate(tail(s)...)
+        idx, i = iterate(tail(s)...)::Tuple{Any,Any,Vararg{Any}}
         s = (n+1, s[2], i)
         L.mask[idx] && return (idx, s)
     end
