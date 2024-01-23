@@ -592,9 +592,12 @@
             (else
               (let ((cn (input-port-column port)))
                 (read-char port)
-                (if (default-ignorable-char? c)
-                    (error (string "invisible character \\u" (number->string (fixnum c) 16) " near column " (+ 1 cn)))
-                    (error (string "invalid character \"" c "\" near column " (+ 1 cn))))))))))
+                (cond ((default-ignorable-char? c)
+                       (error (string "invisible character \\u" (number->string (fixnum c) 16) " near column " (+ 1 cn))))
+                      ((identifier-char? c)
+                       (error (string "an identifier cannot begin with character \"" c "\", near column " (+ 1 cn))))
+                      (else
+                       (error (string "invalid character \"" c "\" near column " (+ 1 cn)))))))))))
 
 ;; --- token stream ---
 
