@@ -58,7 +58,7 @@ though other properties (like the shape for arrays) may also be taken into accou
 This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` and
 `NaN != NaN`.
 
-The result is of type `Bool` or `T` where `T` is the argument type. Examples of 
+The result is of type `Bool` or `T` where `T` is the argument type. Examples of
 returning the argument type includes [`missing`](@ref),
 in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic)).
