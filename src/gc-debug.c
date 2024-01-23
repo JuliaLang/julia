@@ -1207,6 +1207,10 @@ JL_DLLEXPORT void jl_enable_gc_logging(int enable) {
     gc_logging_enabled = enable;
 }
 
+JL_DLLEXPORT int jl_is_gc_logging_enabled(void) {
+    return gc_logging_enabled;
+}
+
 void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect, int64_t live_bytes) JL_NOTSAFEPOINT {
     if (!gc_logging_enabled) {
         return;

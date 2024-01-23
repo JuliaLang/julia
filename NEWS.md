@@ -74,6 +74,7 @@ New library functions
 * `eachrsplit(string, pattern)` iterates split substrings right to left.
 * `Sys.username()` can be used to return the current user's username ([#51897]).
 * `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` which is the safe counterpart to `unsafe_wrap` ([#52049]).
+* `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
 
 New library features
 --------------------
