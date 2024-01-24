@@ -608,6 +608,8 @@ end
 
 @testset "avoid stackoverflow in dot" begin
     @test_throws "cannot evaluate dot recursively" dot('a', 'c')
+    @test_throws "cannot evaluate dot recursively" dot('a', 'b':'c')
+    @test_throws "x and y are of different lengths" dot(1, 1:2)
 end
 
 @testset "generalized dot #32739" begin
