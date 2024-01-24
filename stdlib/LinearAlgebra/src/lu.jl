@@ -290,7 +290,7 @@ The relationship between `F` and `A` is
 | [`size`](@ref)                   | ✓    | ✓                      |
 
 !!! compat "Julia 1.11"
-    The `allowsingular=` argument was added in Julia 1.11.
+    The `allowsingular` keyword argument was added in Julia 1.11.
 
 # Examples
 ```jldoctest
