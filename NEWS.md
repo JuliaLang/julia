@@ -93,6 +93,7 @@ New library features
   content is fully written, then call `closewrite` manually to avoid
   data-races. Or use the callback form of `open` to have all that handled
   automatically.
+* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
 
 Standard library changes
 ------------------------
@@ -139,7 +140,14 @@ Standard library changes
 #### REPL
 
 * Tab complete hints now show in lighter text while typing in the repl. To disable
-  set `Base.active_repl.options.hint_tab_completes = false` ([#51229]).
+  set `Base.active_repl.options.hint_tab_completes = false` interactively, or in startup.jl:
+  ```
+  if VERSION >= v"1.11.0-0"
+    atreplinit() do repl
+        repl.options.hint_tab_completes = false
+    end
+  end
+  ``` ([#51229]).
 * Meta-M with an empty prompt now toggles the contextual module between the previous non-Main
   contextual module and Main so that switching back and forth is simple. ([#51616], [#52670])
 
@@ -170,6 +178,8 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
+
+* `Base.map`, `Iterators.map`, and `foreach` lost their single-argument methods ([#52631]).
 
 
 External dependencies

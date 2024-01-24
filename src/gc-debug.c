@@ -349,44 +349,15 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
     }
 }
 
-static void gc_verify_tags_pagetable0(pagetable0_t *pagetable0)
+static void gc_verify_tags_pagestack(void)
 {
-    for (int pg_i = 0; pg_i < REGION0_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable0->allocmap[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_verify_tags_page(pagetable0->meta[pg_i * 32 + j]);
-                }
-            }
-        }
-    }
-}
-
-static void gc_verify_tags_pagetable1(pagetable1_t *pagetable1)
-{
-    for (int pg_i = 0; pg_i < REGION1_PG_COUNT / 32; pg_i++) {
-        uint32_t line = pagetable1->allocmap0[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_verify_tags_pagetable0(pagetable1->meta0[pg_i * 32 + j]);
-                }
-            }
-        }
-    }
-}
-
-static void gc_verify_tags_pagetable(void)
-{
-    for (int pg_i = 0; pg_i < (REGION2_PG_COUNT + 31) / 32; pg_i++) {
-        uint32_t line = memory_map.allocmap1[pg_i];
-        if (line) {
-            for (int j = 0; j < 32; j++) {
-                if ((line >> j) & 1) {
-                    gc_verify_tags_pagetable1(memory_map.meta1[pg_i * 32 + j]);
-                }
-            }
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        jl_gc_page_stack_t *pgstk = &ptls2->page_metadata_allocd;
+        jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&pgstk->bottom);
+        while (pg != NULL) {
+            gc_verify_tags_page(pg);
+            pg = pg->next;
         }
     }
 }
@@ -423,7 +394,7 @@ void gc_verify_tags(void)
 
     // verify that all the objects on every page are either valid julia objects
     // or are part of the freelist or are on the allocated half of a page
-    gc_verify_tags_pagetable();
+    gc_verify_tags_pagestack();
 }
 #endif
 

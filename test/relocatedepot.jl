@@ -152,8 +152,6 @@ if !test_relocated_depot
                             using Example2
                             srcfile1 = joinpath(pkgdir(Example1), "src", "Example1.jl")
                             srcfile2 = joinpath(pkgdir(Example2), "src", "Example2.jl")
-                            @show srcfile1
-                            @show srcfile2
                             include_dependency(srcfile1)
                             include_dependency(srcfile2)
                             end

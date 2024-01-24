@@ -4460,19 +4460,18 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         jl_value_t *newbody = insert_nondiagonal(body, troot, widen2ub);
         if (v) v->var = var; // And restore it after inner insertation.
         jl_value_t *newvar = NULL;
-        JL_GC_PUSH2(&newbody, &newvar);
+        JL_GC_PUSH3(&newbody, &newvar, &type);
         if (body == newbody || jl_has_typevar(newbody, var)) {
             if (body != newbody)
-                newbody = jl_new_struct(jl_unionall_type, var, newbody);
+                type = jl_new_struct(jl_unionall_type, var, newbody);
             // n.b. we do not widen lb, since that would be the wrong direction
             newvar = insert_nondiagonal(var->ub, troot, widen2ub);
             if (newvar != var->ub) {
                 newvar = (jl_value_t*)jl_new_typevar(var->name, var->lb, newvar);
-                newbody = jl_apply_type1(newbody, newvar);
-                newbody = jl_type_unionall((jl_tvar_t*)newvar, newbody);
+                newbody = jl_apply_type1(type, newvar);
+                type = jl_type_unionall((jl_tvar_t*)newvar, newbody);
             }
         }
-        type = newbody;
         JL_GC_POP();
     }
     else if (jl_is_uniontype(type)) {

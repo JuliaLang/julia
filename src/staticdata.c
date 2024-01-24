@@ -312,8 +312,6 @@ static uintptr_t nsym_tag;
 // array of definitions for the predefined tagged object types
 // (reverse of symbol_table)
 static arraylist_t deser_sym;
-// Predefined tags that do not have special handling in `externally_linked`
-static htable_t external_objects;
 
 static htable_t serialization_order; // to break cycles, mark all objects that are serialized
 static htable_t nullptrs;
@@ -583,9 +581,9 @@ typedef struct {
 static void *jl_sysimg_handle = NULL;
 static jl_image_t sysimage;
 
-static inline uintptr_t *sysimg_gvars(uintptr_t *base, const int32_t *offsets, size_t idx)
+static inline uintptr_t *sysimg_gvars(const char *base, const int32_t *offsets, size_t idx)
 {
-    return base + offsets[idx] / sizeof(base[0]);
+    return (uintptr_t*)(base + offsets[idx]);
 }
 
 JL_DLLEXPORT int jl_running_on_valgrind(void)
@@ -601,7 +599,7 @@ static void jl_load_sysimg_so(void)
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
     // in --build mode only use sysimg data, not precompiled native code
     if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
-        assert(sysimage.fptrs.base);
+        assert(sysimage.fptrs.ptrs);
     }
     else {
         memset(&sysimage.fptrs, 0, sizeof(sysimage.fptrs));
@@ -1880,11 +1878,11 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         }
         switch ((jl_callingconv_t)offset) {
         case JL_API_BOXED:
-            if (s->image->fptrs.base)
+            if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_args;
             JL_FALLTHROUGH;
         case JL_API_WITH_PARAMETERS:
-            if (s->image->fptrs.base)
+            if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_sparam;
             return (uintptr_t)NULL;
         case JL_API_CONST:
@@ -2139,8 +2137,7 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
     jl_image_fptrs_t fvars = image->fptrs;
     // make these NULL now so we skip trying to restore GlobalVariable pointers later
     image->gvars_base = NULL;
-    image->fptrs.base = NULL;
-    if (fvars.base == NULL)
+    if (fvars.nptrs == 0)
         return;
 
     memcpy(image->jl_small_typeof, &jl_small_typeof, sizeof(jl_small_typeof));
@@ -2163,20 +2160,18 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
                 offset = ~offset;
             }
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
-            uintptr_t base = (uintptr_t)fvars.base;
             assert(jl_is_method(codeinst->def->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
             assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
             linfos[i] = codeinst->def;     // now it's a MethodInstance
-            int32_t offset = fvars.offsets[i];
+            void *fptr = fvars.ptrs[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
                 uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
                 if (idx < i)
                     continue;
                 if (idx == i)
-                    offset = fvars.clone_offsets[clone_idx];
+                    fptr = fvars.clone_ptrs[clone_idx];
                 break;
             }
-            void *fptr = (void*)(base + offset);
             if (specfunc) {
                 jl_atomic_store_relaxed(&codeinst->specptr.fptr, fptr);
                 jl_atomic_store_relaxed(&codeinst->specsigflags, 0b111); // TODO: set only if confirmed to be true
@@ -2664,13 +2659,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, s.ptls->root_task->tls);
         }
         else {
-            // To ensure we don't have to manually update the list, go through all tags and queue any that are not otherwise
-            // judged to be externally-linked
-            htable_new(&external_objects, NUM_TAGS);
-            for (size_t i = 0; tags[i] != NULL; i++) {
-                jl_value_t *tag = *tags[i];
-                ptrhash_put(&external_objects, tag, tag);
-            }
             // Queue the worklist itself as the first item we serialize
             jl_queue_for_serialization(&s, worklist);
             jl_queue_for_serialization(&s, jl_module_init_order);
@@ -2874,8 +2862,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_free(&gvars);
     arraylist_free(&external_fns);
     htable_free(&field_replace);
-    if (worklist)
-        htable_free(&external_objects);
     htable_free(&serialization_order);
     htable_free(&nullptrs);
     htable_free(&symbol_table);
