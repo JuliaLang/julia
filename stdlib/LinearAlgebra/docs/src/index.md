@@ -570,6 +570,7 @@ LinearAlgebra.checksquare
 LinearAlgebra.peakflops
 LinearAlgebra.hermitianpart
 LinearAlgebra.hermitianpart!
+LinearAlgebra.copy_transpose!
 ```
 
 ## Low-level matrix operations
