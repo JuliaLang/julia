@@ -606,6 +606,10 @@ end
     end
 end
 
+@testset "avoid stackoverflow in dot" begin
+    @test_throws "cannot evaluate dot recursively" dot('a', 'c')
+end
+
 @testset "generalized dot #32739" begin
     for elty in (Int, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
         n = 10

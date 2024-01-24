@@ -864,6 +864,8 @@ function dot(x, y) # arbitrary iterables
     end
     (vx, xs) = ix
     (vy, ys) = iy
+    (vx == x || vy == y) && throw(ArgumentError(
+            "cannot evaluate dot recursively if an element is identical to the container"))
     s = dot(vx, vy)
     while true
         ix = iterate(x, xs)
