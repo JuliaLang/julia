@@ -170,6 +170,17 @@ function getindex(tpdum::TwoPhaseDefUseMap, idx::Int)
     return TwoPhaseVectorView(tpdum.data, nelems, range)
 end
 
+mutable struct LazyCFGReachability
+    ir::IRCode
+    reachability::CFGReachability
+    LazyCFGReachability(ir::IRCode) = new(ir)
+end
+function get!(x::LazyCFGReachability)
+    isdefined(x, :reachability) && return x.reachability
+    domtree = construct_domtree(x.ir.cfg.blocks)
+    return x.reachability = CFGReachability(x.ir.cfg, domtree)
+end
+
 mutable struct LazyGenericDomtree{IsPostDom}
     ir::IRCode
     domtree::GenericDomTree{IsPostDom}
@@ -744,7 +755,7 @@ mutable struct IRInterpretationState
     const sptypes::Vector{VarState}
     const tpdum::TwoPhaseDefUseMap
     const ssa_refined::BitSet
-    const lazydomtree::LazyDomtree
+    const lazyreachability::LazyCFGReachability
     valid_worlds::WorldRange
     const edges::Vector{Any}
     parent # ::Union{Nothing,AbsIntState}
@@ -764,12 +775,12 @@ mutable struct IRInterpretationState
         append!(ir.argtypes, given_argtypes)
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
         ssa_refined = BitSet()
-        lazydomtree = LazyDomtree(ir)
+        lazyreachability = LazyCFGReachability(ir)
         valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
         edges = Any[]
         parent = nothing
         return new(method_info, ir, mi, world, curridx, argtypes_refined, ir.sptypes, tpdum,
-                   ssa_refined, lazydomtree, valid_worlds, edges, parent)
+                   ssa_refined, lazyreachability, valid_worlds, edges, parent)
     end
 end
 

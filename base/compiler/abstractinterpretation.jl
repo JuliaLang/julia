@@ -517,10 +517,6 @@ const RECURSION_MSG_HARDLIMIT = "Bounded recursion detected under hardlimit. Cal
 function abstract_call_method(interp::AbstractInterpreter,
                               method::Method, @nospecialize(sig), sparams::SimpleVector,
                               hardlimit::Bool, si::StmtInfo, sv::AbsIntState)
-    if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
-        add_remark!(interp, sv, "Refusing to infer into `depwarn`")
-        return MethodCallResult(Any, Any, false, false, nothing, Effects())
-    end
     sigtuple = unwrap_unionall(sig)
     sigtuple isa DataType ||
         return MethodCallResult(Any, Any, false, false, nothing, Effects())
@@ -814,7 +810,7 @@ end
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     result::MethodCallResult, @nospecialize(f), arginfo::ArgInfo, si::StmtInfo,
     match::MethodMatch, sv::AbsIntState, invokecall::Union{Nothing,InvokeCall}=nothing)
-    if !const_prop_enabled(interp, match, sv) || bail_out_const_call(interp, result, si, sv)
+    if bail_out_const_call(interp, result, si, match, sv)
         return nothing
     end
     eligibility = concrete_eval_eligible(interp, f, result, arginfo, sv)
@@ -847,26 +843,26 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     return const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
 end
 
-function const_prop_enabled(interp::AbstractInterpreter, match::MethodMatch, sv::AbsIntState)
+function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResult,
+                             si::StmtInfo, match::MethodMatch, sv::AbsIntState)
     if !InferenceParams(interp).ipo_constant_propagation
         add_remark!(interp, sv, "[constprop] Disabled by parameter")
-        return false
+        return true
     end
     if is_no_constprop(match.method)
         add_remark!(interp, sv, "[constprop] Disabled by method parameter")
-        return false
+        return true
     end
-    return true
-end
-
-function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResult,
-                             si::StmtInfo, sv::AbsIntState)
     if is_removable_if_unused(result.effects)
-        if isa(result.rt, Const) || call_result_unused(si)
+        if isa(result.rt, Const)
             add_remark!(interp, sv, "[constprop] No more information to be gained (const)")
             return true
+        elseif call_result_unused(si)
+            add_remark!(interp, sv, "[constprop] No more information to be gained (unused result)")
+            return true
         end
-    elseif result.rt === Bottom
+    end
+    if result.rt === Bottom
         if is_terminates(result.effects) && is_effect_free(result.effects)
             # In the future, we may want to add `&& isa(result.exct, Const)` to
             # the list of conditions here, but currently, our effect system isn't
@@ -2726,7 +2722,7 @@ end
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
         if isa(e, PhiNode)
-            add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
+            add_curr_ssaflag!(sv, IR_FLAGS_REMOVABLE)
             return RTEffects(abstract_eval_phi(interp, e, vtypes, sv), Union{}, EFFECTS_TOTAL)
         end
         (; rt, exct, effects) = abstract_eval_special_value(interp, e, vtypes, sv)

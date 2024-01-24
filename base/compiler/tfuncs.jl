@@ -3128,6 +3128,8 @@ function foreigncall_effects(@specialize(abstract_eval), e::Expr)
     if name === :jl_alloc_genericmemory
         nothrow = new_genericmemory_nothrow(abstract_eval, args)
         return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
+    elseif name === :jl_genericmemory_copy_slice
+        return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow=false)
     end
     return EFFECTS_UNKNOWN
 end
