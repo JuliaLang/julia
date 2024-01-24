@@ -57,6 +57,15 @@ enum jl_memory_order {
 };
 
 /**
+ * Cache line size
+*/
+#if defined(_CPU_AARCH64_) && defined(_OS_DARWIN_) // Apple silicon has 128 cache lines
+#define JL_CACHE_BYTE_ALIGNMENT 128
+#else
+#define JL_CACHE_BYTE_ALIGNMENT 64
+#endif
+
+/**
  * Thread synchronization primitives:
  *
  * These roughly follows the c11/c++11 memory model and the act as memory

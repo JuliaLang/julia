@@ -485,11 +485,6 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 }
 
 #define JL_SMALL_BYTE_ALIGNMENT 16
-#if defined(_CPU_AARCH64_) && defined(_OS_DARWIN_) // Apple silicon has 128 cache lines
-#define JL_CACHE_BYTE_ALIGNMENT 128
-#else
-#define JL_CACHE_BYTE_ALIGNMENT 64
-#endif
 // JL_HEAP_ALIGNMENT is the maximum alignment that the GC can provide
 #define JL_HEAP_ALIGNMENT JL_SMALL_BYTE_ALIGNMENT
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
