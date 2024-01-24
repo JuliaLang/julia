@@ -1370,6 +1370,7 @@ end
 ## StreamREPL ##
 """
     StreamREPL
+
 A specialized implementation of Julia's REPL (Read-Eval-Print Loop) designed to interface with generic IO streams.
 
 This flexibility makes it suitable for various input and output sources beyond the standard console, such as files, network sockets, or other custom IO types.
