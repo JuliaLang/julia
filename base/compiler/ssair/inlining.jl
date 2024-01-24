@@ -366,7 +366,7 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
     if !validate_sparams(mi.sparam_vals)
         # N.B. This works on the caller-side argexprs, (i.e. before the va fixup below)
         spvals_ssa = insert_node!(
-            effect_free_and_nothrow(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
+            removable_if_unused(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
     end
     if def.isva
         nargs_def = Int(def.nargs::Int32)
@@ -425,7 +425,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 inline_compact.result[idx′][:type] =
                     argextype(val, isa(val, Argument) || isa(val, Expr) ? compact : inline_compact)
                 # Everything legal in value position is guaranteed to be effect free in stmt position
-                inline_compact.result[idx′][:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+                inline_compact.result[idx′][:flag] = IR_FLAGS_REMOVABLE
                 break
             elseif isexpr(stmt′, :boundscheck)
                 adjust_boundscheck!(inline_compact, idx′, stmt′, boundscheck)
@@ -692,7 +692,7 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                 for aidx in 1:length(argexprs)
                     aexpr = argexprs[aidx]
                     if isa(aexpr, Expr) || isa(aexpr, GlobalRef)
-                        ninst = effect_free_and_nothrow(NewInstruction(aexpr, argextype(aexpr, compact), compact.result[idx][:line]))
+                        ninst = removable_if_unused(NewInstruction(aexpr, argextype(aexpr, compact), compact.result[idx][:line]))
                         argexprs[aidx] = insert_node_here!(compact, ninst)
                     end
                 end
@@ -996,28 +996,6 @@ function retrieve_ir_for_inlining(::MethodInstance, ir::IRCode, preserve_local_s
     return ir
 end
 
-function flags_for_effects(effects::Effects)
-    flags::UInt32 = 0
-    if is_consistent(effects)
-        flags |= IR_FLAG_CONSISTENT
-    end
-    if is_effect_free(effects)
-        flags |= IR_FLAG_EFFECT_FREE
-    elseif is_effect_free_if_inaccessiblememonly(effects)
-        flags |= IR_FLAG_EFIIMO
-    end
-    if is_inaccessiblemem_or_argmemonly(effects)
-        flags |= IR_FLAG_INACCESSIBLE_OR_ARGMEM
-    end
-    if is_nothrow(effects)
-        flags |= IR_FLAG_NOTHROW
-    end
-    if is_noub(effects)
-        flags |= IR_FLAG_NOUB
-    end
-    return flags
-end
-
 function handle_single_case!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(case),
     isinvoke::Bool = false)
@@ -1252,29 +1230,12 @@ end
 # As a matter of convenience, this pass also computes effect-freenes.
 # For primitives, we do that right here. For proper calls, we will
 # discover this when we consult the caches.
-function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecialize(rt), state::InliningState)
-    return check_effect_free!(ir, idx, stmt, rt, optimizer_lattice(state.interp))
-end
-function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecialize(rt), 𝕃ₒ::AbstractLattice)
-    (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(𝕃ₒ, stmt, rt, ir)
-    inst = ir.stmts[idx]
-    if consistent
-        add_flag!(inst, IR_FLAG_CONSISTENT)
-    end
-    if effect_free_and_nothrow
-        add_flag!(inst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
-    elseif nothrow
-        add_flag!(inst, IR_FLAG_NOTHROW)
-    end
-    if !(isexpr(stmt, :call) || isexpr(stmt, :invoke))
-        # There is a bit of a subtle point here, which is that some non-call
-        # statements (e.g. PiNode) can be UB:, however, we consider it
-        # illegal to introduce such statements that actually cause UB (for any
-        # input). Ideally that'd be handled at insertion time (TODO), but for
-        # the time being just do that here.
-        add_flag!(inst, IR_FLAG_NOUB)
-    end
-    return effect_free_and_nothrow
+add_inst_flag!(inst::Instruction, ir::IRCode, state::InliningState) =
+    add_inst_flag!(inst, ir, optimizer_lattice(state.interp))
+function add_inst_flag!(inst::Instruction, ir::IRCode, 𝕃ₒ::AbstractLattice)
+    flags = recompute_effects_flags(𝕃ₒ, inst[:stmt], inst[:type], ir)
+    add_flag!(inst, flags)
+    return !iszero(flags & IR_FLAGS_REMOVABLE)
 end
 
 # Handles all analysis and inlining of intrinsics and builtins. In particular,
@@ -1283,11 +1244,11 @@ end
 function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, state::InliningState)
     inst = ir[SSAValue(idx)]
     stmt = inst[:stmt]
-    rt = inst[:type]
     if !(stmt isa Expr)
-        check_effect_free!(ir, idx, stmt, rt, state)
+        add_inst_flag!(inst, ir, state)
         return nothing
     end
+    rt = inst[:type]
     head = stmt.head
     if head !== :call
         if head === :splatnew
@@ -1299,7 +1260,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
             sig === nothing && return nothing
             return stmt, sig
         end
-        check_effect_free!(ir, idx, stmt, rt, state)
+        add_inst_flag!(inst, ir, state)
         return nothing
     end
 
@@ -1317,7 +1278,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
         return nothing
     end
 
-    if check_effect_free!(ir, idx, stmt, rt, state)
+    if add_inst_flag!(inst, ir, state)
         if sig.f === typeassert || ⊑(optimizer_lattice(state.interp), sig.ft, typeof(typeassert))
             # typeassert is a no-op if effect free
             inst[:stmt] = stmt.args[2]
@@ -1335,7 +1296,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
     lateres = late_inline_special_case!(ir, idx, stmt, rt, sig, state)
     if isa(lateres, SomeCase)
         inst[:stmt] = lateres.val
-        check_effect_free!(ir, idx, lateres.val, rt, state)
+        add_inst_flag!(inst, ir, state)
         return nothing
     end
 
@@ -1683,7 +1644,7 @@ function inline_const_if_inlineable!(inst::Instruction)
         inst[:stmt] = quoted(rt.val)
         return true
     end
-    add_flag!(inst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
+    add_flag!(inst, IR_FLAGS_REMOVABLE)
     return false
 end
 
@@ -1808,7 +1769,7 @@ function late_inline_special_case!(
             return SomeCase(quoted(type.val))
         end
         cmp_call = Expr(:call, GlobalRef(Core, :(===)), stmt.args[2], stmt.args[3])
-        cmp_call_ssa = insert_node!(ir, idx, effect_free_and_nothrow(NewInstruction(cmp_call, Bool)))
+        cmp_call_ssa = insert_node!(ir, idx, removable_if_unused(NewInstruction(cmp_call, Bool)))
         not_call = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), cmp_call_ssa)
         return SomeCase(not_call)
     elseif length(argtypes) == 3 && istopfunction(f, :(>:))
@@ -1853,13 +1814,13 @@ end
 
 function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
     ret = insert_node!(
-        effect_free_and_nothrow(NewInstruction(Expr(:call, Core._svec_ref, spvals_ssa, spidx), Any)))
+        removable_if_unused(NewInstruction(Expr(:call, Core._svec_ref, spvals_ssa, spidx), Any)))
     tcheck_not = nothing
     if do_isdefined
         tcheck = insert_node!(
-            effect_free_and_nothrow(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
+            removable_if_unused(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
         tcheck_not = insert_node!(
-            effect_free_and_nothrow(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
+            removable_if_unused(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
     end
     return (ret, tcheck_not)
 end

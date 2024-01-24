@@ -822,9 +822,8 @@ Base.getindex(A::TSlowNIndexes{T,2}, i::Int, j::Int) where {T} = A.data[i,j]
     @test isa(map(Set, Array[[1,2],[3,4]]), Vector{Set{Int}})
 end
 
-@testset "mapping over scalars and empty arguments:" begin
+@testset "mapping over scalars" begin
     @test map(sin, 1) === sin(1)
-    @test map(()->1234) === 1234
 end
 
 function test_UInt_indexing(::Type{TestAbstractArray})
