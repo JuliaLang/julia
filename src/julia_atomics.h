@@ -59,7 +59,7 @@ enum jl_memory_order {
 /**
  * Cache line size
 */
-#if defined(_CPU_AARCH64_) && defined(_OS_DARWIN_) // Apple silicon has 128 cache lines
+#if (defined(_CPU_AARCH64_) && defined(_OS_DARWIN_)) || defined(_CPU_PPC64_)  // Apple silicon and PPC7+ have 128 cache lines
 #define JL_CACHE_BYTE_ALIGNMENT 128
 #else
 #define JL_CACHE_BYTE_ALIGNMENT 64
