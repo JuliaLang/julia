@@ -289,6 +289,7 @@ function applytri(f, A::HermOrSym, B::HermOrSym)
         throw(ArgumentError("uplo of A and B do not match"))
     end
 end
+parentof_applytri(f, args...) = applytri(parent ∘ f, args...)
 
 isdiag(A::HermOrSym) = applytri(isdiag, A)
 
@@ -407,9 +408,9 @@ transpose(A::Hermitian) = Transpose(A)
 
 real(A::Symmetric{<:Real}) = A
 real(A::Hermitian{<:Real}) = A
-real(A::Symmetric) = Symmetric(applytri(parent ∘ real, A), sym_uplo(A.uplo))
-real(A::Hermitian) = Hermitian(applytri(parent ∘ real, A), sym_uplo(A.uplo))
-imag(A::Symmetric) = Symmetric(applytri(parent ∘ imag, A), sym_uplo(A.uplo))
+real(A::Symmetric) = Symmetric(parentof_applytri(real, A), sym_uplo(A.uplo))
+real(A::Hermitian) = Hermitian(parentof_applytri(real, A), sym_uplo(A.uplo))
+imag(A::Symmetric) = Symmetric(parentof_applytri(imag, A), sym_uplo(A.uplo))
 
 Base.copy(A::Adjoint{<:Any,<:Symmetric}) =
     Symmetric(copy(adjoint(A.parent.data)), ifelse(A.parent.uplo == 'U', :L, :U))
@@ -419,8 +420,8 @@ Base.copy(A::Transpose{<:Any,<:Hermitian}) =
 tr(A::Symmetric) = tr(A.data) # to avoid AbstractMatrix fallback (incl. allocations)
 tr(A::Hermitian) = real(tr(A.data))
 
-Base.conj(A::HermOrSym) = typeof(A)(applytri(parent ∘ conj, A), A.uplo)
-Base.conj!(A::HermOrSym) = typeof(A)(applytri(parent ∘ conj!, A), A.uplo)
+Base.conj(A::HermOrSym) = typeof(A)(parentof_applytri(conj, A), A.uplo)
+Base.conj!(A::HermOrSym) = typeof(A)(parentof_applytri(conj!, A), A.uplo)
 
 # tril/triu
 function tril(A::Hermitian, k::Integer=0)
@@ -514,15 +515,15 @@ for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Uni
     end
 end
 
-(-)(A::Symmetric) = Symmetric(applytri(parent ∘ -, A), sym_uplo(A.uplo))
-(-)(A::Hermitian) = Hermitian(applytri(parent ∘ -, A), sym_uplo(A.uplo))
+(-)(A::Symmetric) = Symmetric(parentof_applytri(-, A), sym_uplo(A.uplo))
+(-)(A::Hermitian) = Hermitian(parentof_applytri(-, A), sym_uplo(A.uplo))
 
 ## Addition/subtraction
 for f ∈ (:+, :-), (Wrapper, conjugation) ∈ ((:Hermitian, :adjoint), (:Symmetric, :transpose))
     @eval begin
         function $f(A::$Wrapper, B::$Wrapper)
             if A.uplo == B.uplo
-                return $Wrapper(applytri(parent ∘ $f, A, B), sym_uplo(A.uplo))
+                return $Wrapper(parentof_applytri($f, A, B), sym_uplo(A.uplo))
             elseif A.uplo == 'U'
                 return $Wrapper($f(parent(A), $conjugation(parent(B))), :U)
             else
@@ -573,12 +574,12 @@ function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
 end
 
 # Scaling with Number
-*(A::Symmetric, x::Number) = Symmetric(applytri(parent ∘ (y -> y * x), A), sym_uplo(A.uplo))
-*(x::Number, A::Symmetric) = Symmetric(applytri(parent ∘ (y -> x * y), A), sym_uplo(A.uplo))
-*(A::Hermitian, x::Real) = Hermitian(applytri(parent ∘ (y -> y * x), A), sym_uplo(A.uplo))
-*(x::Real, A::Hermitian) = Hermitian(applytri(parent ∘ (y -> x * y), A), sym_uplo(A.uplo))
-/(A::Symmetric, x::Number) = Symmetric(applytri(parent ∘ (y -> y/x), A), sym_uplo(A.uplo))
-/(A::Hermitian, x::Real) = Hermitian(applytri(parent ∘ (y -> y/x), A), sym_uplo(A.uplo))
+*(A::Symmetric, x::Number) = Symmetric(parentof_applytri(y -> y * x, A), sym_uplo(A.uplo))
+*(x::Number, A::Symmetric) = Symmetric(parentof_applytri(y -> x * y, A), sym_uplo(A.uplo))
+*(A::Hermitian, x::Real) = Hermitian(parentof_applytri(y -> y * x, A), sym_uplo(A.uplo))
+*(x::Real, A::Hermitian) = Hermitian(parentof_applytri(y -> x * y, A), sym_uplo(A.uplo))
+/(A::Symmetric, x::Number) = Symmetric(parentof_applytri(y -> y/x, A), sym_uplo(A.uplo))
+/(A::Hermitian, x::Real) = Hermitian(parentof_applytri(y -> y/x, A), sym_uplo(A.uplo))
 
 factorize(A::HermOrSym) = _factorize(A)
 function _factorize(A::HermOrSym{T}; check::Bool=true) where T
