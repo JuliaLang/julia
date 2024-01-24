@@ -805,7 +805,7 @@ static int subtype_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int R, int pa
 // check that a type is concrete or quasi-concrete (Type{T}).
 // this is used to check concrete typevars:
 // issubtype is false if the lower bound of a concrete type var is not concrete.
-static int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
+int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (v == jl_bottom_type)
         return 1;
