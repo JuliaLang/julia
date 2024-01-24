@@ -1854,8 +1854,11 @@ end
     return s
 end
 @test !Core.Compiler.is_removable_if_unused(Base.infer_effects(issue52991, (Int,)))
-let src = code_typed1(issue52991, (Int,))
-    @test count(isinvoke(:issue52991), src.code) == 0
+let src = code_typed1((Int,)) do x
+        issue52991(x)
+        nothing
+    end
+    @test count(isinvoke(:issue52991), src.code) == 1
 end
 let t = @async begin
         issue52991(11) # this call never terminates
@@ -1869,4 +1872,12 @@ let t = @async begin
         schedule(t, InterruptException(); error=true)
     end
     @test ok
+end
+
+# JuliaLang/julia47664
+@test !fully_eliminated() do
+    any(isone, Iterators.repeated(0))
+end
+@test !fully_eliminated() do
+    all(iszero, Iterators.repeated(0))
 end
