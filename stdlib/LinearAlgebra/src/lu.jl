@@ -400,7 +400,7 @@ factorization that produces a valid but rank-deficient U factor is considered a
 failure. This can be changed by passing `allowsingular = true`.
 
 !!! compat "Julia 1.11"
-    The `allowsingular=` argument was added in Julia 1.11.
+    The `allowsingular` keyword argument was added in Julia 1.11.
 
 # Examples
 
