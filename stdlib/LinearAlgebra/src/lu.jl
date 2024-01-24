@@ -110,6 +110,9 @@ input `A`, instead of creating a copy. An [`InexactError`](@ref)
 exception is thrown if the factorization produces a number not representable by the
 element type of `A`, e.g. for integer types.
 
+!!! compat "Julia 1.11"
+    The `allowsingular` keyword argument was added in Julia 1.11.
+
 # Examples
 ```jldoctest
 julia> A = [4. 3.; 6. 3.]
