@@ -923,9 +923,9 @@ map([A, B, C]) do x
 end
 ```
 
-The `do x` syntax creates an anonymous function with argument `x` and passes 
+The `do x` syntax creates an anonymous function with argument `x` and passes
 the anonymous function as the first argument
-to the "outer" function - [`map`](@ref) in this example. 
+to the "outer" function - [`map`](@ref) in this example.
 Similarly, `do a,b` would create a two-argument anonymous function. Note that `do (a,b)` would create a one-argument anonymous function,
 whose argument is a tuple to be deconstructed. A plain `do` would declare that what follows is an anonymous function of the form `() -> ...`.
 
