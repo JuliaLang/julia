@@ -956,7 +956,7 @@ const UNROLL_UPTO = 16
 end
 
 @inline function findonesplace(buf, lbound, rbound)
-    decimalpoint = findlast(==(UInt8('.')), buf[lbound:rbound])
+    decimalpoint = findlast(==(UInt8('.')), view(buf, lbound:rbound))
     # find last digit of rounded float
     if isnothing(decimalpoint)
         for i in lbound:(rbound - 1)
@@ -977,12 +977,12 @@ function insertsep(buf, headpos, numsep, onesplace; numskip=0)
     headdivlength = mod1(intlength, 3) + numskip
     seconddiv = headpos + numsep + headdivlength
     separation = headpos + headdivlength
-    buf[headpos:(separation - 1)] = buf[(headpos + numsep):(headpos + numsep + headdivlength - 1)]
+    buf[headpos:(separation - 1)] = view(buf, (headpos + numsep):(headpos + numsep + headdivlength - 1))
 
     for i in 1:numsep
         div = seconddiv + 3 * (i - 1)
         buf[separation] = UInt8(',')
-        buf[(separation + 1):(separation + 3)] = buf[div:(div + 2)]
+        buf[(separation + 1):(separation + 3)] = view(buf, div:(div + 2))
         separation += 4
     end
 end
