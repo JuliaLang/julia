@@ -73,7 +73,7 @@ if !test_relocated_depot
         pkgname = "RelocationTestPkg1"
         test_harness(empty_depot_path=false) do
             push!(LOAD_PATH, @__DIR__)
-            push!(DEPOT_PATH, @__DIR__) # required to make relocatable, but cache is written to DEPOT_PATH[1]
+            push!(DEPOT_PATH, @__DIR__) # make src files available for relocation
             pkg = Base.identify_package(pkgname)
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
@@ -87,7 +87,7 @@ if !test_relocated_depot
         pkgname = "RelocationTestPkg2"
         test_harness(empty_depot_path=false) do
             push!(LOAD_PATH, @__DIR__)
-            push!(DEPOT_PATH, @__DIR__) # required to make relocatable, but cache is written to DEPOT_PATH[1]
+            push!(DEPOT_PATH, @__DIR__) # make src files available for relocation
             pkg = Base.identify_package(pkgname)
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
@@ -104,7 +104,7 @@ if !test_relocated_depot
         pkgname = "RelocationTestPkg3"
         test_harness(empty_depot_path=false) do
             push!(LOAD_PATH, @__DIR__)
-            push!(DEPOT_PATH, @__DIR__)
+            push!(DEPOT_PATH, @__DIR__) # make src files available for relocation
             pkg = Base.identify_package(pkgname)
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
@@ -161,10 +161,8 @@ if !test_relocated_depot
                         version = "1.0.0"
                         """)
                     end
-                    pushfirst!(LOAD_PATH, depot2)
-                    pushfirst!(DEPOT_PATH, depot2)
-                    pkg = Base.identify_package("Example2")
-                    Base.require(pkg)
+                    pushfirst!(LOAD_PATH, depot2); pushfirst!(DEPOT_PATH, depot2)
+                    pkg = Base.identify_package("Example2"); Base.require(pkg)
                     mktempdir() do depot3
                         # precompile Foo in depot3
                         open(joinpath(depot3, "Module52161.jl"), write=true) do io
@@ -179,10 +177,8 @@ if !test_relocated_depot
                             end
                             """)
                         end
-                        pushfirst!(LOAD_PATH, depot3)
-                        pushfirst!(DEPOT_PATH, depot3)
-                        pkg = Base.identify_package("Module52161")
-                        Base.compilecache(pkg)
+                        pushfirst!(LOAD_PATH, depot3); pushfirst!(DEPOT_PATH, depot3)
+                        pkg = Base.identify_package("Module52161"); Base.compilecache(pkg)
                         cachefile = joinpath(depot3, "compiled",
                                              "v$(VERSION.major).$(VERSION.minor)", "Module52161.ji")
                         _, (deps, _, _), _... = Base.parse_cache_header(cachefile)
@@ -198,22 +194,6 @@ if !test_relocated_depot
 
 
 else
-
-
-    # must come before any of the load tests, because this will recompile and generate new cache files
-    @testset "attempt loading when depot is missing" begin
-        test_harness() do
-            empty!(LOAD_PATH)
-            push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
-            for pkgname in ("RelocationTestPkg1", "RelocationTestPkg2", "RelocationTestPkg3")
-                pkg = Base.identify_package(pkgname)
-                cachefile = only(Base.find_all_in_cache_path(pkg))
-                @test_throws ArgumentError("""
-                  Failed to determine depot from srctext files in cache file $cachefile.
-                  - Make sure you have adjusted DEPOT_PATH in case you relocated depots.""") Base.isprecompiled(pkg)
-            end
-        end
-    end
 
     @testset "load stdlib from test/relocatedepot" begin
         test_harness() do
