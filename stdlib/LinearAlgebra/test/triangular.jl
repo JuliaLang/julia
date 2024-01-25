@@ -811,6 +811,14 @@ end
     end
 end
 
+@testset "indexing partly initialized matrices" begin
+    M = Matrix{BigFloat}(undef, 2, 2)
+    U = UpperTriangular(M)
+    @test iszero(U[2,1])
+    L = LowerTriangular(M)
+    @test iszero(L[1,2])
+end
+
 @testset "special printing of Lower/UpperTriangular" begin
     @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64, Matrix{Int64}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
                    sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))))
