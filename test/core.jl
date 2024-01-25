@@ -8109,6 +8109,6 @@ end
 @test Int isa Type{Union{Int,T2} where {T2<:T1}} where {T1}
 @test Int isa Type{Union{Int,T1}} where {T1}
 @test Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}}} where {T1}
-@test Int isaUnion{Union, Type{Union{Int,T1}}} where {T1}
+@test Int isa Union{Union, Type{Union{Int,T1}}} where {T1}
 @test_broken Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}} where {T1}}
 @test_broken Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
