@@ -864,6 +864,8 @@ function dot(x, y) # arbitrary iterables
     end
     (vx, xs) = ix
     (vy, ys) = iy
+    typeof(vx) == typeof(x) && typeof(vy) == typeof(y) && throw(ArgumentError(
+            "cannot evaluate dot recursively if the type of an element is identical to that of the container"))
     s = dot(vx, vy)
     while true
         ix = iterate(x, xs)
