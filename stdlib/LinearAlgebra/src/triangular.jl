@@ -262,11 +262,11 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 @propagate_inbounds getindex(A::LowerTriangular{T}, i::Integer, j::Integer) where {T} =
-    i >= j ? A.data[i,j] : (T <: Number ? zero(T) : zero(A.data[j,i]))
+    i >= j ? A.data[i,j] : _zero(A.data,j,i)
 @propagate_inbounds getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
     i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 @propagate_inbounds getindex(A::UpperTriangular{T}, i::Integer, j::Integer) where {T} =
-    i <= j ? A.data[i,j] : (T <: Number ? zero(T) : zero(A.data[j,i]))
+    i <= j ? A.data[i,j] : _zero(A.data,j,i)
 
 @propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
