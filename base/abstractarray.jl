@@ -209,7 +209,42 @@ String
 """
 valtype(A::Type{<:AbstractArray}) = eltype(A)
 
+"""
+    prevind(A, i::Integer) -> Int
+
+Return the index immediately before index `i` in `A`. The returned index may be
+out of bounds.
+
+See also: [`nextind`](@ref)
+
+# Examples
+```jldoctest
+julia> prevind(['a', 'b', 'c'], 3)
+2
+
+julia> prevind(['a', 'b', 'c'], 1)
+0
+```
+"""
 prevind(::AbstractArray, i::Integer) = Int(i)-1
+
+"""
+    prevind(A, i::Integer) -> Int
+
+Return the index immediately after index `i` in `A`. The returned index may be
+out of bounds.
+
+See also: [`prevind`](@ref)
+#
+# Examples
+```jldoctest
+julia> nextind(['a', 'b', 'c'], 1)
+2
+
+julia> nextind(['a', 'b', 'c'], 3)
+4
+```
+"""
 nextind(::AbstractArray, i::Integer) = Int(i)+1
 
 
