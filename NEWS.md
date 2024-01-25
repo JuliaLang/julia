@@ -7,7 +7,7 @@ New language features
   API. Symbols marked with `export` are now also treated as public API. The
   difference between `public` and `export` is that `public` names do not become
   available when `using` a package/module ([#50105]).
-* `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
+* `ScopedValue` implements dynamic scope with inheritance across tasks ([#50958]).
 * The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
   but allows to add keyword arguments to the function call ([#51501]).
 * Support for Unicode 15.1 ([#51799]).
@@ -30,7 +30,7 @@ Language changes
   wants to begin exiting.
 * Code coverage and malloc tracking is no longer generated during the package precompilation stage.
   Further, during these modes pkgimage caches are now used for packages that are not being tracked.
-  Meaning that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
+  This means that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
   pkgimage caches for all other packages than the package being tested, likely meaning faster test
   execution. ([#52123])
 
@@ -42,7 +42,7 @@ Compiler/Runtime improvements
 * Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
 * A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
   loads, primarily to be used within JLLs ([#50074]).
-* Added a support for annotating `Base.@assume_effects` on code block ([#52400]).
+* Added support for annotating `Base.@assume_effects` on code blocks ([#52400]).
 
 Command-line option changes
 ---------------------------
@@ -68,12 +68,11 @@ New library functions
 
 * `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not.
 * The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
-* `hardlink(src, dst)` can be used to create hard links ([#41639]).
-* `diskstat(path=pwd())` can be used to return statistics about the disk ([#42248]).
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 * `eachrsplit(string, pattern)` iterates split substrings right to left.
 * `Sys.username()` can be used to return the current user's username ([#51897]).
-* `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` which is the safe counterpart to `unsafe_wrap` ([#52049]).
+* `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` is the safe counterpart to `unsafe_wrap` ([#52049]).
+* `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
 
 New library features
 --------------------
@@ -108,6 +107,12 @@ Standard library changes
   styled content ([#49586]).
 * The new `@styled_str` string macro provides a convenient way of creating a
   `AnnotatedString` with various faces or other attributes applied ([#49586]).
+
+#### JuliaSyntaxHighlighting
+
+* A new standard library for applying syntax highlighting to Julia code, this
+  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
+  that creates an `AnnotatedString` with syntax highlighting applied.
 
 #### Package Manager
 

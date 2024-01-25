@@ -897,6 +897,35 @@ end
     end
 end
 
+@testset "tril!/triu! for non-bitstype matrices" begin
+    @testset "numeric" begin
+        M = Matrix{BigFloat}(undef, 3, 3)
+        tril!(M)
+        L = LowerTriangular(ones(3,3))
+        copytrito!(M, L, 'L')
+        @test M == L
+
+        M = Matrix{BigFloat}(undef, 3, 3)
+        triu!(M)
+        U = UpperTriangular(ones(3,3))
+        copytrito!(M, U, 'U')
+        @test M == U
+    end
+    @testset "array elements" begin
+        M = fill(ones(2,2), 4, 4)
+        tril!(M)
+        L = LowerTriangular(fill(fill(2,2,2),4,4))
+        copytrito!(M, L, 'L')
+        @test M == L
+
+        M = fill(ones(2,2), 4, 4)
+        triu!(M)
+        U = UpperTriangular(fill(fill(2,2,2),4,4))
+        copytrito!(M, U, 'U')
+        @test M == U
+    end
+end
+
 @testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
     A = [i+j for i in 1:2, j in 1:2]
     S = SizedArrays.SizedArray{(2,2)}(A)

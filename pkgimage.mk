@@ -94,6 +94,7 @@ $(eval $(call stdlib_builder,Printf,Unicode))
 $(eval $(call stdlib_builder,Random,SHA))
 $(eval $(call stdlib_builder,Tar,ArgTools,SHA))
 $(eval $(call stdlib_builder,DelimitedFiles,Mmap))
+$(eval $(call stdlib_builder,JuliaSyntaxHighlighting,))
 
 # 2-depth packages
 $(eval $(call stdlib_builder,LLD_jll,Zlib_jll libLLVM_jll Artifacts Libdl))
