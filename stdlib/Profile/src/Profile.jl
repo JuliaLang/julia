@@ -1193,14 +1193,14 @@ end
 
 # Utilities
 function rtruncto(str::String, w::Int)
-    if length(str) <= w
+    if textwidth(str) <= w
         return str
     else
         return string("…", str[prevind(str, end, w-2):end])
     end
 end
 function ltruncto(str::String, w::Int)
-    if length(str) <= w
+    if textwidth(str) <= w
         return str
     else
         return string(str[1:nextind(str, 1, w-2)], "…")
