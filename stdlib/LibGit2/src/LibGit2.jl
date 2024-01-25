@@ -14,6 +14,8 @@ using SHA: sha1, sha256
 
 export with, GitRepo, GitConfig
 
+using LibGit2_jll
+
 const GITHUB_REGEX =
     r"^(?:(?:ssh://)?git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
@@ -87,7 +89,7 @@ is in the repository.
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file);
 
@@ -230,7 +232,7 @@ Return `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file1);
 
@@ -477,7 +479,7 @@ current changes. Note that this detaches the current HEAD.
 
 # Examples
 ```julia
-repo = LibGit2.init(repo_path)
+repo = LibGit2.GitRepo(repo_path)
 open(joinpath(LibGit2.path(repo), "file1"), "w") do f
     write(f, "111\n")
 end
@@ -592,6 +594,44 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
     end
     approve(cred_payload)
     return repo
+end
+
+"""
+    connect(rmt::GitRemote, direction::Consts.GIT_DIRECTION; kwargs...)
+
+Open a connection to a remote. `direction` can be either `DIRECTION_FETCH`
+or `DIRECTION_PUSH`.
+
+The keyword arguments are:
+  * `credentials::Creds=nothing`: provides credentials and/or settings when authenticating
+    against a private repository.
+  * `callbacks::Callbacks=Callbacks()`: user provided callbacks and payloads.
+"""
+function connect(rmt::GitRemote, direction::Consts.GIT_DIRECTION;
+                 credentials::Creds=nothing,
+                 callbacks::Callbacks=Callbacks())
+    cred_payload = reset!(CredentialPayload(credentials))
+    if !haskey(callbacks, :credentials)
+        callbacks[:credentials] = (credentials_cb(), cred_payload)
+    elseif haskey(callbacks, :credentials) && credentials !== nothing
+        throw(ArgumentError(string(
+            "Unable to both use the provided `credentials` as a payload when the ",
+            "`callbacks` also contain a credentials payload.")))
+    end
+
+    remote_callbacks = RemoteCallbacks(callbacks)
+    try
+        connect(rmt, direction, remote_callbacks)
+    catch err
+        if isa(err, GitError) && err.code === Error.EAUTH
+            reject(cred_payload)
+        else
+            Base.shred!(cred_payload)
+        end
+        rethrow()
+    end
+    approve(cred_payload)
+    return rmt
 end
 
 """ git reset [<committish>] [--] <pathspecs>... """
@@ -848,7 +888,7 @@ function rebase!(repo::GitRepo, upstream::AbstractString="", newbase::AbstractSt
             end
         finally
             if !isempty(newbase)
-                close(onto_ann)
+                close(onto_ann::GitAnnotated)
             end
             close(upst_ann)
             close(head_ann)
@@ -983,7 +1023,7 @@ function ensure_initialized()
 end
 
 @noinline function initialize()
-    @check ccall((:git_libgit2_init, :libgit2), Cint, ())
+    @check ccall((:git_libgit2_init, libgit2), Cint, ())
 
     cert_loc = NetworkOptions.ca_roots()
     cert_loc !== nothing && set_ssl_cert_locations(cert_loc)
@@ -991,7 +1031,7 @@ end
     atexit() do
         # refcount zero, no objects to be finalized
         if Threads.atomic_sub!(REFCOUNT, 1) == 1
-            ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
+            ccall((:git_libgit2_shutdown, libgit2), Cint, ())
         end
     end
 end
@@ -1003,7 +1043,7 @@ function set_ssl_cert_locations(cert_loc)
     else # files, /dev/null, non-existent paths, etc.
         cert_file = cert_loc
     end
-    ret = @ccall "libgit2".git_libgit2_opts(
+        ret = @ccall libgit2.git_libgit2_opts(
         Consts.SET_SSL_CERT_LOCATIONS::Cint;
         cert_file::Cstring,
         cert_dir::Cstring)::Cint
@@ -1021,6 +1061,15 @@ function set_ssl_cert_locations(cert_loc)
     Your Julia is built with a SSL/TLS engine that libgit2 doesn't know how to configure to use a file or directory of certificate authority roots, but your environment specifies one via the $var variable. If you believe your system's root certificates are safe to use, you can `export JULIA_SSL_CA_ROOTS_PATH=""` in your environment to use those instead.
     """
     throw(Error.GitError(err.class, err.code, chomp(msg)))
+end
+
+"""
+    trace_set(level::Union{Integer,GIT_TRACE_LEVEL})
+
+Sets the system tracing configuration to the specified level.
+"""
+function trace_set(level::Union{Integer,Consts.GIT_TRACE_LEVEL}, cb=trace_cb())
+    @check @ccall libgit2.git_trace_set(level::Cint, cb::Ptr{Cvoid})::Cint
 end
 
 end # module

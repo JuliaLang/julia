@@ -44,6 +44,9 @@ struct ABI_PPC64leLayout : AbiLayout {
 // count the homogeneous floating aggregate size (saturating at max count of 8)
 unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
 {
+    if (jl_datatype_size(ty) > 128 || ty->layout->npointers || ty->layout->flags.haspadding)
+        return 9;
+
     size_t i, l = ty->layout->nfields;
     // handle homogeneous float aggregates
     if (l == 0) {
@@ -52,7 +55,7 @@ unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
         *hva = false;
         if (*ty0 == NULL)
             *ty0 = ty;
-        else if (*hva || ty->size != (*ty0)->size)
+        else if (*hva || jl_datatype_size(ty) != jl_datatype_size(*ty0))
             return 9;
         return 1;
     }
@@ -69,7 +72,7 @@ unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
         *hva = true;
         if (*ty0 == NULL)
             *ty0 = ty;
-        else if (!*hva || ty->size != (*ty0)->size)
+        else if (!*hva || jl_datatype_size(ty) != jl_datatype_size(*ty0))
             return 9;
         for (i = 1; i < l; i++) {
             jl_datatype_t *fld = (jl_datatype_t*)jl_field_type(ty, i);
@@ -101,12 +104,12 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
     return false;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
     if (jl_datatype_size(dt) > 64 && isHFA(dt, &ty0, &hva) > 8) {
-        ab.addAttribute(Attribute::ByVal);
+        ab.addByValAttr(Ty);
         return true;
     }
     return false;
@@ -115,7 +118,12 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx) overrid
 Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
 {
     // Arguments are either scalar or passed by value
-    size_t size = jl_datatype_size(dt);
+
+    // LLVM passes Float16 in floating-point registers, but this doesn't match the ABI.
+    // No C compiler seems to support _Float16 yet, so in the meantime, pass as i16
+    if (dt == jl_float16_type || dt == jl_bfloat16_type)
+        return Type::getInt16Ty(ctx);
+
     // don't need to change bitstypes
     if (!jl_datatype_nfields(dt))
         return NULL;
@@ -125,21 +133,22 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
     int hfa = isHFA(dt, &ty0, &hva);
     if (hfa <= 8) {
         if (ty0 == jl_float32_type) {
-            return ArrayType::get(T_float32, hfa);
+            return ArrayType::get(llvm::Type::getFloatTy(ctx), hfa);
         }
         else if (ty0 == jl_float64_type) {
-            return ArrayType::get(T_float64, hfa);
+            return ArrayType::get(llvm::Type::getDoubleTy(ctx), hfa);
         }
         else {
             jl_datatype_t *vecty = (jl_datatype_t*)jl_field_type(ty0, 0);
             assert(jl_is_datatype(vecty) && vecty->name == jl_vecelement_typename);
-            Type *ety = bitstype_to_llvm(jl_tparam0(vecty));
+            Type *ety = bitstype_to_llvm(jl_tparam0(vecty), ctx);
             Type *vty = FixedVectorType::get(ety, jl_datatype_nfields(ty0));
             return ArrayType::get(vty, hfa);
         }
     }
     // rewrite integer-sized (non-HFA) struct to an array
     // the bitsize of the integer gives the desired alignment
+    size_t size = jl_datatype_size(dt);
     if (size > 8) {
         if (jl_datatype_align(dt) <= 8) {
             Type  *T_int64 = Type::getInt64Ty(ctx);

@@ -18,12 +18,11 @@ end
 
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="", filename="none")
-    s = SubString(str, firstindex(str))
+    last_arg = firstindex(str) # N.B.: This is used by REPLCompletions
+    s = SubString(str, last_arg)
     s = rstrip_shell(lstrip(s))
 
-    # N.B.: This is used by REPLCompletions
-    last_parse = 0:-1
-    isempty(s) && return interpolate ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
+    isempty(s) && return interpolate ? (Expr(:tuple,:()), last_arg) : ([], last_arg)
 
     in_single_quotes = false
     in_double_quotes = false
@@ -32,6 +31,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     arg = []
     i = firstindex(s)
     st = Iterators.Stateful(pairs(s))
+    update_last_arg = false # true after spaces or interpolate
 
     function push_nonempty!(list, x)
         if !isa(x,AbstractString) || !isempty(x)
@@ -54,6 +54,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     for (j, c) in st
         j, c = j::Int, c::C
         if !in_single_quotes && !in_double_quotes && isspace(c)
+            update_last_arg = true
             i = consume_upto!(arg, s, i, j)
             append_2to1!(args, arg)
             while !isempty(st)
@@ -77,12 +78,17 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 # use parseatom instead of parse to respect filename (#28188)
                 ex, j = Meta.parseatom(s, stpos, filename=filename)
             end
-            last_parse = (stpos:prevind(s, j)) .+ s.offset
-            push_nonempty!(arg, ex)
+            last_arg = stpos + s.offset
+            update_last_arg = true
+            push!(arg, ex)
             s = SubString(s, j)
             Iterators.reset!(st, pairs(s))
             i = firstindex(s)
         else
+            if update_last_arg
+                last_arg = i + s.offset
+                update_last_arg = false
+            end
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
                 i = consume_upto!(arg, s, i, j)
@@ -124,14 +130,14 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     push_nonempty!(arg, s[i:end])
     append_2to1!(args, arg)
 
-    interpolate || return args, last_parse
+    interpolate || return args, last_arg
 
     # construct an expression
     ex = Expr(:tuple)
     for arg in args
         push!(ex.args, Expr(:tuple, arg...))
     end
-    return ex, last_parse
+    return ex, last_arg
 end
 
 function shell_split(s::AbstractString)
@@ -211,12 +217,12 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         first || print(io, ' ')
         # avoid printing quotes around simple enough strings
         # that any (reasonable) shell will definitely never consider them to be special
-        have_single = false
-        have_double = false
+        have_single::Bool = false
+        have_double::Bool = false
         function isword(c::AbstractChar)
             if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
                 # word characters
-            elseif c == '_' || c == '/' || c == '+' || c == '-'
+            elseif c == '_' || c == '/' || c == '+' || c == '-' || c == '.'
                 # other common characters
             elseif c == '\''
                 have_single = true
@@ -292,9 +298,9 @@ function shell_escape_csh(io::IO, args::AbstractString...)
         first = false
         i = 1
         while true
-            for (r,e) = (r"^[A-Za-z0-9/\._-]+\z" => "",
-                         r"^[^']*\z" => "'", r"^[^\$\`\"]*\z" => "\"",
-                         r"^[^']+"  => "'", r"^[^\$\`\"]+"  => "\"")
+            for (r,e) = (r"^[A-Za-z0-9/\._-]+\z"sa => "",
+                         r"^[^']*\z"sa => "'", r"^[^\$\`\"]*\z"sa => "\"",
+                         r"^[^']+"sa  => "'", r"^[^\$\`\"]+"sa  => "\"")
                 if ((m = match(r, SubString(arg, i))) !== nothing)
                     write(io, e)
                     write(io, replace(m.match, '\n' => "\\\n"))
@@ -361,12 +367,12 @@ cmdargs = Base.shell_escape_wincmd("Passing args with %cmdargs% works 100%!")
 run(setenv(`cmd /C echo %cmdargs%`, "cmdargs" => cmdargs))
 ```
 
-!warning
+!!! warning
     The argument parsing done by CMD when calling batch files (either inside
     `.bat` files or as arguments to them) is not fully compatible with the
     output of this function. In particular, the processing of `%` is different.
 
-!important
+!!! important
     Due to a peculiar behavior of the CMD parser/interpreter, each command
     after a literal `|` character (indicating a command pipeline) must have
     `shell_escape_wincmd` applied twice since it will be parsed twice by CMD.
@@ -391,7 +397,7 @@ julia> Base.shell_escape_wincmd("a^\\"^o\\"^u\\"")
 """
 function shell_escape_wincmd(io::IO, s::AbstractString)
     # https://stackoverflow.com/a/4095133/1990689
-    occursin(r"[\r\n\0]", s) &&
+    occursin(r"[\r\n\0]"sa, s) &&
         throw(ArgumentError("control character unsupported by CMD.EXE"))
     i = 1
     len = ncodeunits(s)
@@ -446,7 +452,7 @@ function escape_microsoft_c_args(io::IO, args::AbstractString...)
         else
             write(io, ' ')  # separator
         end
-        if isempty(arg) || occursin(r"[ \t\"]", arg)
+        if isempty(arg) || occursin(r"[ \t\"]"sa, arg)
             # Julia raw strings happen to use the same escaping convention
             # as the argv[] parser in Microsoft's C runtime library.
             write(io, '"')

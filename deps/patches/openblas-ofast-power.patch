@@ -1,17 +1,18 @@
 diff --git a/Makefile.power b/Makefile.power
-index 946f5523..19593050 100644
+index 28a0bae0..b4869fbd 100644
 --- a/Makefile.power
 +++ b/Makefile.power
-@@ -11,14 +11,14 @@ endif
-
+@@ -11,7 +11,7 @@ endif
+ 
  ifeq ($(CORE), POWER10)
  ifneq ($(C_COMPILER), PGI)
 -CCOMMON_OPT += -Ofast -mcpu=power10 -mtune=power10 -mvsx -fno-fast-math
 +CCOMMON_OPT += -mcpu=power10 -mtune=power10 -mvsx -fno-fast-math
- FCOMMON_OPT += -O2 -frecursive -mcpu=power10 -mtune=power10  -fno-fast-math
- endif
- endif
-
+ ifeq ($(F_COMPILER), IBM)
+ FCOMMON_OPT += -O2 -qrecur -qnosave
+ else
+@@ -22,7 +22,7 @@ endif
+ 
  ifeq ($(CORE), POWER9)
  ifneq ($(C_COMPILER), PGI)
 -CCOMMON_OPT += -Ofast -mvsx -fno-fast-math
@@ -19,8 +20,8 @@ index 946f5523..19593050 100644
  ifeq ($(C_COMPILER), GCC)
  ifneq ($(GCCVERSIONGT4), 1)
  $(warning your compiler is too old to fully support POWER9, getting a newer version of gcc is recommended)
-@@ -51,7 +51,7 @@ endif
-
+@@ -59,7 +59,7 @@ endif
+ 
  ifeq ($(CORE), POWER8)
  ifneq ($(C_COMPILER), PGI)
 -CCOMMON_OPT += -Ofast -mcpu=power8 -mtune=power8 -mvsx  -fno-fast-math

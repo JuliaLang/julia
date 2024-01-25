@@ -8,7 +8,7 @@ module SharedArrays
 using Mmap, Distributed, Random
 
 import Base: length, size, elsize, ndims, IndexStyle, reshape, convert, deepcopy_internal,
-             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, unsafe_convert
+             show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, cconvert
 import Random
 using Serialization
 using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG, serialize, deserialize
@@ -328,7 +328,7 @@ procs(S::SharedArray) = S.pids
 """
     indexpids(S::SharedArray)
 
-Returns the current worker's index in the list of workers
+Return the current worker's index in the list of workers
 mapping the `SharedArray` (i.e. in the same list returned by `procs(S)`), or
 0 if the `SharedArray` is not mapped locally.
 """
@@ -337,7 +337,7 @@ indexpids(S::SharedArray) = S.pidx
 """
     sdata(S::SharedArray)
 
-Returns the actual `Array` object backing `S`.
+Return the actual `Array` object backing `S`.
 """
 sdata(S::SharedArray) = S.s
 sdata(A::AbstractArray) = A
@@ -345,7 +345,7 @@ sdata(A::AbstractArray) = A
 """
     localindices(S::SharedArray)
 
-Returns a range describing the "default" indices to be handled by the
+Return a range describing the "default" indices to be handled by the
 current process.  This range should be interpreted in the sense of
 linear indexing, i.e., as a sub-range of `1:length(S)`.  In
 multi-process contexts, returns an empty range in the parent process
@@ -358,8 +358,8 @@ for each worker process.
 """
 localindices(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
-unsafe_convert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = unsafe_convert(Ptr{T}, sdata(S))
-unsafe_convert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = unsafe_convert(Ptr{T}, sdata(S))
+cconvert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = cconvert(Ptr{T}, sdata(S))
+cconvert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = cconvert(Ptr{T}, sdata(S))
 
 function SharedArray(A::Array)
     S = SharedArray{eltype(A),ndims(A)}(size(A))
@@ -374,7 +374,7 @@ function SharedArray{TS,N}(A::Array{TA,N}) where {TS,TA,N}
     copyto!(S, A)
 end
 
-convert(T::Type{<:SharedArray}, a::Array) = T(a)
+convert(T::Type{<:SharedArray}, a::Array) = T(a)::T
 
 function deepcopy_internal(S::SharedArray, stackdict::IdDict)
     haskey(stackdict, S) && return stackdict[S]
@@ -693,9 +693,15 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
 end
 
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
-shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint,
-    (Cstring, Cint, Base.Cmode_t), shm_seg_name, oflags, permissions)
-
+function shm_open(shm_seg_name, oflags, permissions)
+    # On macOS, `shm_open()` is a variadic function, so to properly match
+    # calling ABI, we must declare our arguments as variadic as well.
+    @static if Sys.isapple()
+        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t...), shm_seg_name, oflags, permissions)
+    else
+        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t), shm_seg_name, oflags, permissions)
+    end
+end
 end # os-test
 
 end # module

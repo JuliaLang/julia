@@ -256,7 +256,7 @@ runviews(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) where {T} = nothing
 
 ######### Tests #########
 
-testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+testfull = Base.get_bool_env("JULIA_TESTFULL", false)
 
 ### Views from Arrays ###
 index5 = (1, :, 2:5, [4,1,5], reshape([2]), view(1:5,[2 3 4 1]))  # all work with at least size 5
@@ -275,9 +275,6 @@ end
 # with the exception of Int-slicing
 oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9], reshape(2:11, 2, 5))
 
-_ndims(::AbstractArray{T,N}) where {T,N} = N
-_ndims(x) = 1
-
 if testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
         @testset "full tests: ($o1,$o2,$o3)" for o3 in oindex, o2 in oindex, o1 in oindex
@@ -288,7 +285,8 @@ if testfull
 end
 
 let B = copy(reshape(1:13^3, 13, 13, 13))
-    @testset "spot checks: $oind" for oind in ((:,:,:),
+    @testset "spot checks: $oind" for oind in (
+                 (:,:,:),
                  (:,:,6),
                  (:,6,:),
                  (6,:,:),
@@ -296,7 +294,6 @@ let B = copy(reshape(1:13^3, 13, 13, 13))
                  (3:7,:,:),
                  (3:7,6,:),
                  (3:7,6,0x6),
-                 (6,UInt(3):UInt(7),3:7),
                  (13:-2:1,:,:),
                  ([8,4,6,12,5,7],:,3:7),
                  (6,CartesianIndex.(6,[8,4,6,12,5,7])),
@@ -307,7 +304,29 @@ let B = copy(reshape(1:13^3, 13, 13, 13))
                  (3,reshape(2:11,5,2),4),
                  (3,reshape(2:2:13,3,2),4),
                  (view(1:13,[9,12,4,13,1]),2:6,4),
-                 ([1:5 2:6 3:7 4:8 5:9], :, 3))
+                 ([1:5 2:6 3:7 4:8 5:9], :, 3),
+        )
+        runsubarraytests(B, oind...)
+        viewB = view(B, oind...)
+        runviews(viewB, index5, index25, index125)
+    end
+end
+
+let B = copy(reshape(1:13^3, 13, 13, 13))
+    @testset "spot checks (other BitIntegers): $oind" for oind in (
+                 (:,:,0x6),
+                 (:,0x00000006,:),
+                 (0x0006,:,:),
+                 (:,0x00000003:0x00000007,:),
+                 (0x0000000000000003:0x0000000000000007,:,:),
+                 (0x0003:0x0007,0x6,:),
+                 (6,UInt(3):UInt(7),3:7),
+                 (Int16(3):Int16(7),Int16(6),:),
+                 (CartesianIndex(0xD,0x6),UInt8[8,4,6,12,5,7]),
+                 (Int8(1),:,view(1:13,[9,12,4,13,1])),
+                 (view(1:13,Int16[9,12,4,13,1]),UInt8(2):UInt16(6),Int8(4)),
+                 (Int8[1:5 2:6 3:7 4:8 5:9],:,UInt64(3)),
+        )
         runsubarraytests(B, oind...)
         viewB = view(B, oind...)
         runviews(viewB, index5, index25, index125)
@@ -444,6 +463,113 @@ end
     sA = view(A, 1:2, 2:3, 3:4)
     @test sA[(1:8)'] == [34 35 37 38 49 50 52 53]
     @test sA[[1 2 4 4; 6 1 1 4]] == [34 35 38 38; 50 34 34 38]
+end
+
+@testset "fast linear indexing with AbstractUnitRange or Colon indices" begin
+    @testset "getindex" begin
+        @testset "1D" begin
+            for a1 in Any[1:5, [1:5;]]
+                b1 = @view a1[:]; # FastContiguousSubArray
+                c1 = @view a1[eachindex(a1)]; # FastContiguousSubArray
+                d1 = @view a1[begin:1:end]; # FastSubArray
+
+                ax1 = eachindex(a1);
+                @test b1[ax1] == c1[ax1] == d1[ax1] == a1[ax1]
+                @test b1[:] == c1[:] == d1[:] == a1[:]
+
+                # some arbitrary indices
+                inds1 = 2:4
+                c1 = @view a1[inds1]
+                @test c1[axes(c1,1)] == c1[:] == a1[inds1]
+
+                inds12 = Base.IdentityUnitRange(Base.OneTo(4))
+                c1 = @view a1[inds12]
+                @test c1[axes(c1,1)] == c1[:] == a1[inds12]
+
+                inds2 = 3:2:5
+                d1 = @view a1[inds2]
+                @test d1[axes(d1,1)] == d1[:] == a1[inds2]
+            end
+        end
+
+        @testset "2D" begin
+            a2_ = reshape(1:25, 5, 5)
+            for a2 in Any[a2_, collect(a2_)]
+                b2 = @view a2[:, :]; # 2D FastContiguousSubArray
+                b22 = @view a2[:]; # 1D FastContiguousSubArray
+                c2 = @view a2[eachindex(a2)]; # 1D FastContiguousSubArray
+                d2 = @view a2[begin:1:end]; # 1D FastSubArray
+
+                ax2 = eachindex(a2);
+                @test b2[ax2] == b22[ax2] == c2[ax2] == d2[ax2] == a2[ax2]
+                @test b2[:] == b22[:] == c2[:] == d2[:] == a2[:]
+
+                # some arbitrary indices
+                inds1 = 2:4
+                c2 = @view a2[inds1]
+                @test c2[axes(c2,1)] == c2[:] == a2[inds1]
+
+                inds12 = Base.IdentityUnitRange(Base.OneTo(4))
+                c2 = @view a2[inds12]
+                @test c2[axes(c2,1)] == c2[:] == a2[inds12]
+
+                inds2 = 2:2:4
+                d2 = @view a2[inds2];
+                @test d2[axes(d2,1)] == d2[:] == a2[inds2]
+            end
+        end
+    end
+    @testset "setindex!" begin
+        @testset "1D" begin
+            a1 = rand(10);
+            a12 = copy(a1);
+            b1 = @view a1[:]; # 1D FastContiguousSubArray
+            c1 = @view a1[eachindex(a1)]; # 1D FastContiguousSubArray
+            d1 = @view a1[begin:1:end]; # 1D FastSubArray
+
+            ax1 = eachindex(a1);
+            @test (b1[ax1] = a12; b1) == (c1[ax1] = a12; c1) == (d1[ax1] = a12; d1) == (a1[ax1] = a12; a1)
+            @test (b1[:] = a12; b1) == (c1[:] = a12; c1) == (d1[:] = a12; d1) == (a1[:] = a12; a1)
+
+            # some arbitrary indices
+            ind1 = 2:4
+            c1 = a12[ind1]
+            @test (c1[axes(c1,1)] = a12[ind1]; c1) == (c1[:] = a12[ind1]; c1) == a12[ind1]
+
+            inds1 = Base.IdentityUnitRange(Base.OneTo(4))
+            c1 = @view a1[inds1]
+            @test (c1[eachindex(c1)] = @view(a12[inds1]); c1) == @view(a12[inds1])
+
+            ind2 = 2:2:8
+            d1 = a12[ind2]
+            @test (d1[axes(d1,1)] = a12[ind2]; d1) == (d1[:] = a12[ind2]; d1) == a12[ind2]
+        end
+
+        @testset "2D" begin
+            a2 = rand(10, 10);
+            a22 = copy(a2);
+            a2v = vec(a22);
+            b2 = @view a2[:, :]; # 2D FastContiguousSubArray
+            c2 = @view a2[eachindex(a2)]; # 1D FastContiguousSubArray
+            d2 = @view a2[begin:1:end]; # 1D FastSubArray
+
+            @test (b2[eachindex(b2)] = a2v; vec(b2)) == (c2[eachindex(c2)] = a2v; c2) == a2v
+            @test (d2[eachindex(d2)] = a2v; d2) == a2v
+
+            # some arbitrary indices
+            inds1 = 3:9
+            c2 = @view a2[inds1]
+            @test (c2[eachindex(c2)] = @view(a22[inds1]); c2) == @view(a22[inds1])
+
+            inds1 = Base.IdentityUnitRange(Base.OneTo(4))
+            c2 = @view a2[inds1]
+            @test (c2[eachindex(c2)] = @view(a22[inds1]); c2) == @view(a22[inds1])
+
+            inds2 = 3:3:9
+            d2 = @view a2[inds2]
+            @test (d2[eachindex(d2)] = @view(a22[inds2]); d2) == @view(a22[inds2])
+        end
+    end
 end
 
 @testset "issue #11871" begin
@@ -641,8 +767,21 @@ end
 @testset "unaliascopy trimming; Issue #26263" begin
     A = rand(5,5,5,5)
     V = view(A, 2:5, :, 2:5, 1:2:5)
-    @test @inferred(Base.unaliascopy(V)) == V == A[2:5, :, 2:5, 1:2:5]
-    @test @inferred(sum(Base.unaliascopy(V))) ≈ sum(V) ≈ sum(A[2:5, :, 2:5, 1:2:5])
+    V′ = @inferred(Base.unaliascopy(V))
+    @test size(V′.parent) == size(V)
+    @test V′::typeof(V) == V == A[2:5, :, 2:5, 1:2:5]
+    @test @inferred(sum(V′)) ≈ sum(V) ≈ sum(A[2:5, :, 2:5, 1:2:5])
+    V = view(A, Base.IdentityUnitRange(2:4), :, Base.StepRangeLen(1,1,3), 1:2:5)
+    V′ = @inferred(Base.unaliascopy(V))
+    @test size(V.parent) != size(V′.parent)
+    @test V′ == V && V′ isa typeof(V)
+    i1 = collect(CartesianIndices((2:5)))
+    i2 = [CartesianIndex(), CartesianIndex()]
+    i3 = collect(CartesianIndices((2:5, 1:2:5)))
+    V = view(A, i1, 1:5, i2, i3)
+    @test @inferred(Base.unaliascopy(V))::typeof(V) == V == A[i1, 1:5, i2, i3]
+    V = view(A, i1, 1:5, i3, i2)
+    @test @inferred(Base.unaliascopy(V))::typeof(V) == V == A[i1, 1:5, i3, i2]
 end
 
 @testset "issue #27632" begin
@@ -736,4 +875,65 @@ end
             @test c2[i1, i2] == c[i1, i2]
         end
     end
+end
+
+@testset "issue #41221: view(::Vector, :, 1)" begin
+    v = randn(3)
+    @test view(v,:,1) == v
+    @test parent(view(v,:,1)) === v
+    @test parent(view(v,2:3,1,1)) === v
+    @test_throws BoundsError view(v,:,2)
+    @test_throws BoundsError view(v,:,1,2)
+
+    m = randn(4,5).+im
+    @test view(m, 1:2, 3, 1, 1) == m[1:2, 3]
+    @test parent(view(m, 1:2, 3, 1, 1)) === m
+end
+
+@testset "replace_in_print_matrix" begin
+    struct MyIdentity <: AbstractMatrix{Bool}
+        n :: Int
+    end
+    Base.size(M::MyIdentity) = (M.n, M.n)
+    function Base.getindex(M::MyIdentity, i::Int, j::Int)
+        checkbounds(M, i, j)
+        i == j
+    end
+    function Base.replace_in_print_matrix(M::MyIdentity, i::Integer, j::Integer, s::AbstractString)
+        i == j ? s : Base.replace_with_centered_mark(s)
+    end
+    V = view(MyIdentity(3), 1:2, 1:3)
+    @test sprint(show, "text/plain", V) == "$(summary(V)):\n 1  ⋅  ⋅\n ⋅  1  ⋅"
+
+    struct OneElVec <: AbstractVector{Bool}
+        n :: Int
+        ind :: Int
+    end
+    Base.size(M::OneElVec) = (M.n,)
+    function Base.getindex(M::OneElVec, i::Int)
+        checkbounds(M, i)
+        i == M.ind
+    end
+    function Base.replace_in_print_matrix(M::OneElVec, i::Integer, j::Integer, s::AbstractString)
+        i == M.ind ? s : Base.replace_with_centered_mark(s)
+    end
+    V = view(OneElVec(6, 2), 1:5)
+    @test sprint(show, "text/plain", V) == "$(summary(V)):\n ⋅\n 1\n ⋅\n ⋅\n ⋅"
+
+    V = view(1:2, [CartesianIndex(2)])
+    @test sprint(show, "text/plain", V) == "$(summary(V)):\n 2"
+end
+
+@testset "Base.first_index for offset indices" begin
+    a = Vector(1:10)
+    b = view(a, Base.IdentityUnitRange(4:7))
+    @test first(b) == a[Base.first_index(b)]
+end
+
+@testset "StepRangeLen of CartesianIndex-es" begin
+    v = view(1:2, StepRangeLen(CartesianIndex(1,1), CartesianIndex(1,1), 0))
+    @test isempty(v)
+    r = StepRangeLen(CartesianIndex(1), CartesianIndex(1), 1)
+    v = view(1:2, r)
+    @test v == view(1:2, collect(r))
 end

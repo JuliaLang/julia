@@ -11,9 +11,9 @@ The use of functions is not only important for performance: functions are more r
 
 The functions should take arguments, instead of operating directly on global variables, see the next point.
 
-## Avoid global variables
+## Avoid untyped global variables
 
-A global variable might have its value, and therefore possibly its type, changed at any point. This makes
+The value of an untyped global variable might change at any point, possibly leading to a change of its type. This makes
 it difficult for the compiler to optimize code using global variables. This also applies to type-valued variables,
 i.e. type aliases on the global level. Variables should be local, or passed as arguments to functions, whenever possible.
 
@@ -24,7 +24,9 @@ performance:
 const DEFAULT_VAL = 0
 ```
 
-Uses of non-constant globals can be optimized by annotating their types at the point of use:
+If a global is known to always be of the same type, [the type should be annotated](@ref man-typed-globals).
+
+Uses of untyped globals can be optimized by annotating their types at the point of use:
 
 ```julia
 global x = rand(1000)
@@ -88,7 +90,14 @@ On the first call (`@time sum_global()`) the function gets compiled. (If you've 
 in this session, it will also compile functions needed for timing.)  You should not take the results
 of this run seriously. For the second run, note that in addition to reporting the time, it also
 indicated that a significant amount of memory was allocated. We are here just computing a sum over all elements in
-a vector of 64-bit floats so there should be no need to allocate memory (at least not on the heap which is what `@time` reports).
+a vector of 64-bit floats so there should be no need to allocate (heap) memory.
+
+We should clarify that what `@time` reports is specifically *heap* allocations, which are typically needed for either
+mutable objects or for creating/growing variable-sized containers (such as `Array` or `Dict`, strings, or "type-unstable"
+objects whose type is only known at runtime).  Allocating (or deallocating) such blocks of memory may require an expensive function
+call to libc (e.g. via `malloc` in C), and they must be tracked for garbage collection.  In contrast, immutable values like
+numbers (except bignums), tuples, and immutable `struct`s can be stored much more cheaply, e.g. in stack or CPU-register
+memory, so one doesn’t typically worry about the performance cost of "allocating" them.
 
 Unexpected memory allocation is almost always a sign of some problem with your code, usually a
 problem with type-stability or creating many small temporary arrays.
@@ -96,8 +105,8 @@ Consequently, in addition to the allocation itself, it's very likely
 that the code generated for your function is far from optimal. Take such indications seriously
 and follow the advice below.
 
-If we instead pass `x` as an argument to the function it no longer allocates memory
-(the allocation reported below is due to running the `@time` macro in global scope)
+In this particular case, the memory allocation is due to the usage of a type-unstable global variable `x`, so if we instead pass `x` as an argument to the function it no longer allocates memory
+(the remaining allocation reported below is due to running the `@time` macro in global scope)
 and is significantly faster after the first call:
 
 ```jldoctest sumarg; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
@@ -148,7 +157,7 @@ the performance of your code:
   * [Profiling](@ref) allows you to measure the performance of your running code and identify lines
     that serve as bottlenecks. For complex projects, the [ProfileView](https://github.com/timholy/ProfileView.jl)
     package can help you visualize your profiling results.
-  * The [Traceur](https://github.com/JunoLab/Traceur.jl) package can help you find common performance problems in your code.
+  * The [JET](https://github.com/aviatesk/JET.jl) package can help you find common performance problems in your code.
   * Unexpectedly-large memory allocations--as reported by [`@time`](@ref), [`@allocated`](@ref), or
     the profiler (through calls to the garbage-collection routines)--hint that there might be issues
     with your code. If you don't see another reason for the allocations, suspect a type problem.
@@ -349,6 +358,27 @@ julia> !isconcretetype(Array), !isabstracttype(Array), isstructtype(Array), !isc
 ```
 In this case, it would be better to avoid declaring `MyType` with a field `a::Array` and instead declare the field as `a::Array{T,N}` or as `a::A`, where `{T,N}` or `A` are parameters of `MyType`.
 
+The previous advice is especially useful when the fields of a struct are meant to be functions, or more generally callable objects.
+It is very tempting to define a struct as follows:
+
+```julia
+struct MyCallableWrapper
+    f::Function
+end
+```
+
+But since `Function` is an abstract type, every call to `wrapper.f` will require dynamic dispatch, due to the type instability of accessing the field `f`.
+Instead, you should write something like:
+
+```julia
+struct MyCallableWrapper{F}
+    f::F
+end
+```
+
+which has nearly identical behavior but will be much faster (because the type instability is eliminated).
+Note that we do not impose `F<:Function`: this means callable objects which do not subtype `Function` are also allowed for the field `f`.
+
 ### Avoid fields with abstract containers
 
 The same best practices also work for container types:
@@ -516,7 +546,7 @@ at the time `k` is compiled.
 
 ### Be aware of when Julia avoids specializing
 
-As a heuristic, Julia avoids automatically specializing on argument type parameters in three
+As a heuristic, Julia avoids automatically [specializing](@ref man-method-specializations) on argument type parameters in three
 specific cases: `Type`, `Function`, and `Vararg`. Julia will always specialize when the argument is
 used within the method, but not if the argument is just passed through to another function. This
 usually has no performance impact at runtime and
@@ -575,7 +605,7 @@ h_vararg(x::Vararg{Any, N}) where {N} = tuple(x...)
 Note that [`@code_typed`](@ref) and friends will always show you specialized code, even if Julia
 would not normally specialize that method call. You need to check the
 [method internals](@ref ast-lowered-method) if you want to see whether specializations are generated
-when argument types are changed, i.e., if `(@which f(...)).specializations` contains specializations
+when argument types are changed, i.e., if `Base.specializations(@which f(...))` contains specializations
 for the argument in question.
 
 ## Break functions into multiple definitions
@@ -602,8 +632,8 @@ end
 This can be written more concisely and efficiently as:
 
 ```julia
-norm(x::Vector) = sqrt(real(dot(x, x)))
-norm(A::Matrix) = maximum(svdvals(A))
+mynorm(x::Vector) = sqrt(real(dot(x, x)))
+mynorm(A::Matrix) = maximum(svdvals(A))
 ```
 
 It should however be noted that the compiler is quite efficient at optimizing away the dead branches in code
@@ -822,10 +852,10 @@ This might be worthwhile when either of the following are true:
   * You require CPU-intensive processing on each `Car`, and it becomes vastly more efficient if you
     know the `Make` and `Model` at compile time and the total number of different `Make` or `Model`
     that will be used is not too large.
-  * You have homogenous lists of the same type of `Car` to process, so that you can store them all
+  * You have homogeneous lists of the same type of `Car` to process, so that you can store them all
     in an `Array{Car{:Honda,:Accord},N}`.
 
-When the latter holds, a function processing such a homogenous array can be productively specialized:
+When the latter holds, a function processing such a homogeneous array can be productively specialized:
 Julia knows the type of each element in advance (all objects in the container have the same concrete
 type), so Julia can "look up" the correct method calls when the function is being compiled (obviating
 the need to check at run-time) and thereby emit efficient code for processing the whole list.
@@ -1005,6 +1035,20 @@ some judgment may be required. However, for "vectorized" (element-wise) function
 syntax `x .= f.(y)` can be used for in-place operations with fused loops and no temporary arrays
 (see the [dot syntax for vectorizing functions](@ref man-vectorized)).
 
+## [Use `MutableArithmetics` for more control over allocation for mutable arithmetic types](@id man-perftips-mutablearithmetics)
+
+Some [`Number`](@ref) subtypes, such as [`BigInt`](@ref) or [`BigFloat`](@ref), may
+be implemented as [`mutable struct`](@ref) types, or they may have mutable
+components. The arithmetic interfaces in Julia `Base` usually opt for convenience
+over efficiency in such cases, so using them in a naive manner may result in
+suboptimal performance. The abstractions of the
+[`MutableArithmetics`](https://juliahub.com/ui/Packages/General/MutableArithmetics)
+package, on the other hand, make it possible to exploit the mutability of such types
+for writing fast code that allocates only as much as necessary. `MutableArithmetics`
+also makes it possible to copy values of mutable arithmetic types explicitly when
+necessary. `MutableArithmetics` is a user package and is not affiliated with the
+Julia project.
+
 ## More dots: Fuse vectorized operations
 
 Julia has a special [dot syntax](@ref man-vectorized) that converts
@@ -1024,7 +1068,7 @@ consider the two functions:
 ```jldoctest dotfuse
 julia> f(x) = 3x.^2 + 4x + 7x.^3;
 
-julia> fdot(x) = @. 3x^2 + 4x + 7x^3 # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3;
+julia> fdot(x) = @. 3x^2 + 4x + 7x^3; # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3
 ```
 
 Both `f` and `fdot` compute the same thing. However, `fdot`
@@ -1046,11 +1090,37 @@ julia> @time f.(x);
 
 That is, `fdot(x)` is ten times faster and allocates 1/6 the
 memory of `f(x)`, because each `*` and `+` operation in `f(x)` allocates
-a new temporary array and executes in a separate loop. (Of course,
-if you just do `f.(x)` then it is as fast as `fdot(x)` in this
-example, but in many contexts it is more convenient to just sprinkle
-some dots in your expressions rather than defining a separate function
-for each vectorized operation.)
+a new temporary array and executes in a separate loop. In this example
+`f.(x)` is as fast as `fdot(x)` but in many contexts it is more
+convenient to sprinkle some dots in your expressions than to
+define a separate function for each vectorized operation.
+
+## [Fewer dots: Unfuse certain intermediate broadcasts](@id man-performance-unfuse)
+
+The dot loop fusion mentioned above enables concise and idiomatic code to express highly performant operations. However, it is important to remember that the fused operation will be computed at every iteration of the broadcast. This means that in some situations, particularly in the presence of composed or multidimensional broadcasts, an expression with dot calls may be computing a function more times than intended. As an example, say we want to build a random matrix whose rows have Euclidean norm one. We might write something like the following:
+```
+julia> x = rand(1000, 1000);
+
+julia> d = sum(abs2, x; dims=2);
+
+julia> @time x ./= sqrt.(d);
+  0.002049 seconds (4 allocations: 96 bytes)
+```
+This will work. However, this expression will actually recompute `sqrt(d[i])` for *every* element in the row `x[i, :]`, meaning that many more square roots are computed than necessary. To see precisely over which indices the broadcast will iterate, we can call `Broadcast.combine_axes` on the arguments of the fused expression. This will return a tuple of ranges whose entries correspond to the axes of iteration; the product of lengths of these ranges will be the total number of calls to the fused operation.
+
+It follows that when some components of the broadcast expression are constant along an axis—like the `sqrt` along the second dimension in the preceding example—there is potential for a performance improvement by forcibly "unfusing" those components, i.e. allocating the result of the broadcasted operation in advance and reusing the cached value along its constant axis. Some such potential approaches are to use temporary variables, wrap components of a dot expression in `identity`, or use an equivalent intrinsically vectorized (but non-fused) function.
+```
+julia> @time let s = sqrt.(d); x ./= s end;
+  0.000809 seconds (5 allocations: 8.031 KiB)
+
+julia> @time x ./= identity(sqrt.(d));
+  0.000608 seconds (5 allocations: 8.031 KiB)
+
+julia> @time x ./= map(sqrt, d);
+  0.000611 seconds (4 allocations: 8.016 KiB)
+```
+
+Any of these options yields approximately a three-fold speedup at the cost of an allocation; for large broadcastables this speedup can be asymptotically very large.
 
 ## [Consider using views for slices](@id man-performance-views)
 
@@ -1093,42 +1163,41 @@ of the `fview` version of the function.
 
 Arrays are stored contiguously in memory, lending themselves to CPU vectorization
 and fewer memory accesses due to caching. These are the same reasons that it is recommended
-to access arrays in column-major order (see above). Irregular access patterns and non-contiguous views
-can drastically slow down computations on arrays because of non-sequential memory access.
+to access arrays in column-major order (see above). Irregular access patterns and non-contiguous
+views can drastically slow down computations on arrays because of non-sequential memory access.
 
-Copying irregularly-accessed data into a contiguous array before operating on it can result
-in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at
-800,000 of their randomly-shuffled indices before being multiplied. Copying the views into
-plain arrays speeds up the multiplication even with the cost of the copying operation.
+Copying irregularly-accessed data into a contiguous array before repeated access it can result
+in a large speedup, such as in the example below. Here, a matrix is being accessed at
+randomly-shuffled indices before being multiplied. Copying into plain arrays speeds up the
+multiplication even with the added cost of copying and allocation.
 
 ```julia-repl
 julia> using Random
 
-julia> x = randn(1_000_000);
+julia> A = randn(3000, 3000);
 
-julia> inds = shuffle(1:1_000_000)[1:800000];
+julia> x = randn(2000);
 
-julia> A = randn(50, 1_000_000);
+julia> inds = shuffle(1:3000)[1:2000];
 
-julia> xtmp = zeros(800_000);
-
-julia> Atmp = zeros(50, 800_000);
-
-julia> @time sum(view(A, :, inds) * view(x, inds))
-  0.412156 seconds (14 allocations: 960 bytes)
--4256.759568345458
-
-julia> @time begin
-           copyto!(xtmp, view(x, inds))
-           copyto!(Atmp, view(A, :, inds))
-           sum(Atmp * xtmp)
+julia> function iterated_neural_network(A, x, depth)
+           for _ in 1:depth
+               x .= max.(0, A * x)
+           end
+           argmax(x)
        end
-  0.285923 seconds (14 allocations: 960 bytes)
--4256.759568345134
+
+julia> @time iterated_neural_network(view(A, inds, inds), x, 10)
+  0.324903 seconds (12 allocations: 157.562 KiB)
+1569
+
+julia> @time iterated_neural_network(A[inds, inds], x, 10)
+  0.054576 seconds (13 allocations: 30.671 MiB, 13.33% gc time)
+1569
 ```
 
-Provided there is enough memory for the copies, the cost of copying the view to an array is
-far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.
+Provided there is enough memory, the cost of copying the view to an array is outweighed
+by the speed boost from doing the repeated matrix multiplications on a contiguous array.
 
 ## Consider StaticArrays.jl for small fixed-size vector/matrix operations
 
@@ -1475,11 +1544,13 @@ julia> function f(x)
        end;
 
 julia> @code_warntype f(3.2)
-Variables
+MethodInstance for f(::Float64)
+  from f(x) @ Main REPL[9]:1
+Arguments
   #self#::Core.Const(f)
   x::Float64
-  y::UNION{FLOAT64, INT64}
-
+Locals
+  y::Union{Float64, Int64}
 Body::Float64
 1 ─      (y = Main.pos(x))
 │   %2 = (y * x)::Float64
@@ -1500,7 +1571,7 @@ At the top, the inferred return type of the function is shown as `Body::Float64`
 The next lines represent the body of `f` in Julia's SSA IR form.
 The numbered boxes are labels and represent targets for jumps (via `goto`) in your code.
 Looking at the body, you can see that the first thing that happens is that `pos` is called and the
-return value has been inferred as the `Union` type `UNION{FLOAT64, INT64}` shown in uppercase since
+return value has been inferred as the `Union` type `Union{Float64, Int64}` shown in uppercase since
 it is a non-concrete type. This means that we cannot know the exact return type of `pos` based on the
 input types. However, the result of `y*x`is a `Float64` no matter if `y` is a `Float64` or `Int64`
 The net result is that `f(x::Float64)` will not be type-unstable
@@ -1522,20 +1593,20 @@ are color highlighted in yellow, instead of red.
 
 The following examples may help you interpret expressions marked as containing non-leaf types:
 
-  * Function body starting with `Body::UNION{T1,T2})`
+  * Function body starting with `Body::Union{T1,T2})`
       * Interpretation: function with unstable return type
       * Suggestion: make the return value type-stable, even if you have to annotate it
 
-  * `invoke Main.g(%%x::Int64)::UNION{FLOAT64, INT64}`
+  * `invoke Main.g(%%x::Int64)::Union{Float64, Int64}`
       * Interpretation: call to a type-unstable function `g`.
       * Suggestion: fix the function, or if necessary annotate the return value
 
-  * `invoke Base.getindex(%%x::Array{Any,1}, 1::Int64)::ANY`
+  * `invoke Base.getindex(%%x::Array{Any,1}, 1::Int64)::Any`
       * Interpretation: accessing elements of poorly-typed arrays
       * Suggestion: use arrays with better-defined types, or if necessary annotate the type of individual
         element accesses
 
-  * `Base.getfield(%%x, :(:data))::ARRAY{FLOAT64,N} WHERE N`
+  * `Base.getfield(%%x, :(:data))::Array{Float64,N} where N`
       * Interpretation: getting a field that is of non-leaf type. In this case, the type of `x`, say `ArrayContainer`, had a
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
@@ -1622,3 +1693,32 @@ will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
+
+## [Multithreading and linear algebra](@id man-multithreading-linear-algebra)
+
+This section applies to multithreaded Julia code which, in each thread, performs linear algebra operations.
+Indeed, these linear algebra operations involve BLAS / LAPACK calls, which are themselves multithreaded.
+In this case, one must ensure that cores aren't oversubscribed due to the two different types of multithreading.
+
+Julia compiles and uses its own copy of OpenBLAS for linear algebra, whose number of threads is controlled by the environment variable `OPENBLAS_NUM_THREADS`.
+It can either be set as a command line option when launching Julia, or modified during the Julia session with `BLAS.set_num_threads(N)` (the submodule `BLAS` is exported by `using LinearAlgebra`).
+Its current value can be accessed with `BLAS.get_num_threads()`.
+
+When the user does not specify anything, Julia tries to choose a reasonable value for the number of OpenBLAS threads (e.g. based on the platform, the Julia version, etc.).
+However, it is generally recommended to check and set the value manually.
+The OpenBLAS behavior is as follows:
+
+* If `OPENBLAS_NUM_THREADS=1`, OpenBLAS uses the calling Julia thread(s), i.e. it "lives in" the Julia thread that runs the computation.
+* If `OPENBLAS_NUM_THREADS=N>1`, OpenBLAS creates and manages its own pool of threads (`N` in total). There is just one OpenBLAS thread pool shared among all Julia threads.
+
+When you start Julia in multithreaded mode with `JULIA_NUM_THREADS=X`, it is generally recommended to set `OPENBLAS_NUM_THREADS=1`.
+Given the behavior described above, increasing the number of BLAS threads to `N>1` can very easily lead to worse performance, in particular when `N<<X`.
+However this is just a rule of thumb, and the best way to set each number of threads is to experiment on your specific application.
+
+## [Alternative linear algebra backends](@id man-backends-linear-algebra)
+
+As an alternative to OpenBLAS, there exist several other backends that can help with linear algebra performance.
+Prominent examples include [MKL.jl](https://github.com/JuliaLinearAlgebra/MKL.jl) and [AppleAccelerate.jl](https://github.com/JuliaMath/AppleAccelerate.jl).
+
+These are external packages, so we will not discuss them in detail here.
+Please refer to their respective documentations (especially because they have different behaviors than OpenBLAS with respect to multithreading).

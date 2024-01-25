@@ -4,6 +4,7 @@
 ##             and REPL
 
 have_color = nothing
+have_truecolor = nothing
 const default_color_warn = :yellow
 const default_color_error = :light_red
 const default_color_info = :cyan
@@ -66,7 +67,15 @@ function repl_cmd(cmd, out)
             end
             cmd = `$shell -c $shell_escape_cmd`
         end
-        run(ignorestatus(cmd))
+        try
+            run(ignorestatus(cmd))
+        catch
+            # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
+            # Julia throws an exception if it can't find the program, but the stack trace isn't useful
+            lasterr = current_exceptions()
+            lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
+            invokelatest(display_error, lasterr)
+        end
     end
     nothing
 end
@@ -95,8 +104,8 @@ scrub_repl_backtrace(stack::ExceptionStack) =
     ExceptionStack(Any[(;x.exception, backtrace = scrub_repl_backtrace(x.backtrace)) for x in stack])
 
 istrivialerror(stack::ExceptionStack) =
-    length(stack) == 1 && length(stack[1].backtrace) ≤ 1
-    # frame 1 = top level; assumes already went through scrub_repl_backtrace
+    length(stack) == 1 && length(stack[1].backtrace) ≤ 1 && !isa(stack[1].exception, MethodError)
+    # frame 1 = top level; assumes already went through scrub_repl_backtrace; MethodError see #50803
 
 function display_error(io::IO, stack::ExceptionStack)
     printstyled(io, "ERROR: "; bold=true, color=Base.error_color())
@@ -124,14 +133,14 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
-                istrivialerror(lasterr) || ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
+                istrivialerror(lasterr) || setglobal!(Base.MainInclude, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
             else
                 ast = Meta.lower(Main, ast)
                 value = Core.eval(Main, ast)
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
+                setglobal!(Base.MainInclude, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
                         print(answer_color())
@@ -142,7 +151,6 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
                         @error "Evaluation succeeded, but an error occurred while displaying the value" typeof(value)
                         rethrow()
                     end
-                    println()
                 end
             end
             break
@@ -152,7 +160,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             errcount += 1
             lasterr = scrub_repl_backtrace(current_exceptions())
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
+            setglobal!(Base.MainInclude, :err, lasterr)
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
@@ -195,10 +203,7 @@ parse_input_line(s::AbstractString) = parse_input_line(String(s))
 # detect the reason which caused an :incomplete expression
 # from the error message
 # NOTE: the error messages are defined in src/julia-parser.scm
-incomplete_tag(ex) = :none
-function incomplete_tag(ex::Expr)
-    Meta.isexpr(ex, :incomplete) || return :none
-    msg = ex.args[1]
+function fl_incomplete_tag(msg::AbstractString)
     occursin("string", msg) && return :string
     occursin("comment", msg) && return :comment
     occursin("requires end", msg) && return :block
@@ -207,19 +212,24 @@ function incomplete_tag(ex::Expr)
     return :other
 end
 
-# call include() on a file, ignoring if not found
-include_ifexists(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
-
-function exec_options(opts)
-    if !isempty(ARGS)
-        idxs = findall(x -> x == "--", ARGS)
-        length(idxs) > 0 && deleteat!(ARGS, idxs[1])
+incomplete_tag(ex) = :none
+function incomplete_tag(ex::Expr)
+    if ex.head !== :incomplete
+        return :none
+    elseif isempty(ex.args)
+        return :other
+    elseif ex.args[1] isa String
+        return fl_incomplete_tag(ex.args[1])
+    else
+        return incomplete_tag(ex.args[1])
     end
-    quiet                 = (opts.quiet != 0)
+end
+incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
+
+cmd_suppresses_program(cmd) = cmd in ('e', 'E')
+function exec_options(opts)
     startup               = (opts.startupfile != 2)
-    history_file          = (opts.historyfile != 0)
-    color_set             = (opts.color != 0) # --color!=auto
-    global have_color     = color_set ? (opts.color == 1) : nothing # --color=on
+    global have_color     = (opts.color != 0) ? (opts.color == 1) : nothing # --color=on
     global is_interactive = (opts.isinteractive != 0)
 
     # pre-process command line argument list
@@ -227,10 +237,7 @@ function exec_options(opts)
     repl = !arg_is_program
     cmds = unsafe_load_commands(opts.commands)
     for (cmd, arg) in cmds
-        if cmd == 'e'
-            arg_is_program = false
-            repl = false
-        elseif cmd == 'E'
+        if cmd_suppresses_program(cmd)
             arg_is_program = false
             repl = false
         elseif cmd == 'L'
@@ -239,9 +246,9 @@ function exec_options(opts)
             # If we're doing a bug report, don't load anything else. We will
             # spawn a child in which to execute these options.
             let InteractiveUtils = load_InteractiveUtils()
-                InteractiveUtils.report_bug(arg)
+                invokelatest(InteractiveUtils.report_bug, arg)
             end
-            return nothing
+            return false
         else
             @warn "Unexpected command -$cmd'$arg'"
         end
@@ -254,8 +261,8 @@ function exec_options(opts)
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
         let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            Core.eval(Main, :(const Distributed = $Distributed))
-            Core.eval(Main, :(using .Distributed))
+            Core.eval(MainInclude, :(const Distributed = $Distributed))
+            Core.eval(Main, :(using Base.MainInclude.Distributed))
         end
 
         invokelatest(Main.Distributed.process_opts, opts)
@@ -263,6 +270,10 @@ function exec_options(opts)
 
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
     is_interactive::Bool |= interactiveinput
+
+    # load terminfo in for styled printing
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    global current_terminfo = load_terminfo(term_env)
 
     # load ~/.julia/config/startup.jl file
     if startup
@@ -301,7 +312,11 @@ function exec_options(opts)
             exit_on_sigint(true)
         end
         try
-            include(Main, PROGRAM_FILE)
+            if PROGRAM_FILE == "-"
+                include_string(Main, read(stdin, String), "stdin")
+            else
+                include(Main, PROGRAM_FILE)
+            end
         catch
             invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
             if !is_interactive::Bool
@@ -309,28 +324,37 @@ function exec_options(opts)
             end
         end
     end
-    if repl || is_interactive::Bool
-        if interactiveinput
-            banner = (opts.banner != 0) # --banner!=no
-        else
-            banner = (opts.banner == 1) # --banner=yes
-        end
-        run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
+
+    return repl
+end
+
+function _global_julia_startup_file()
+    # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
+    # If it is not found, then continue on to the relative path based on Sys.BINDIR
+    BINDIR = Sys.BINDIR
+    SYSCONFDIR = Base.SYSCONFDIR
+    if !isempty(SYSCONFDIR)
+        p1 = abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl")
+        isfile(p1) && return p1
     end
-    nothing
+    p2 = abspath(BINDIR, "..", "etc", "julia", "startup.jl")
+    isfile(p2) && return p2
+    return nothing
+end
+
+function _local_julia_startup_file()
+    if !isempty(DEPOT_PATH)
+        path = abspath(DEPOT_PATH[1], "config", "startup.jl")
+        isfile(path) && return path
+    end
+    return nothing
 end
 
 function load_julia_startup()
-    # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
-    #   If it is not found, then continue on to the relative path based on Sys.BINDIR
-    BINDIR = Sys.BINDIR::String
-    SYSCONFDIR = Base.SYSCONFDIR::String
-    if !isempty(SYSCONFDIR) && isfile(joinpath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
-        include(Main, abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl"))
-    else
-        include_ifexists(Main, abspath(BINDIR, "..", "etc", "julia", "startup.jl"))
-    end
-    !isempty(DEPOT_PATH) && include_ifexists(Main, abspath(DEPOT_PATH[1], "config", "startup.jl"))
+    global_file = _global_julia_startup_file()
+    (global_file !== nothing) && include(Main, global_file)
+    local_file = _local_julia_startup_file()
+    (local_file !== nothing) && include(Main, local_file)
     return nothing
 end
 
@@ -358,56 +382,68 @@ function __atreplinit(repl)
 end
 _atreplinit(repl) = invokelatest(__atreplinit, repl)
 
-# The REPL stdlib hooks into Base using this Ref
-const REPL_MODULE_REF = Ref{Module}()
-
-function load_InteractiveUtils()
+function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
-    if !isdefined(Main, :InteractiveUtils)
+    if !isdefined(MainInclude, :InteractiveUtils)
         try
             let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-                Core.eval(Main, :(const InteractiveUtils = $InteractiveUtils))
-                Core.eval(Main, :(using .InteractiveUtils))
-                return InteractiveUtils
+                Core.eval(MainInclude, :(const InteractiveUtils = $InteractiveUtils))
             end
         catch ex
-            @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
+            @warn "Failed to import InteractiveUtils into module $mod" exception=(ex, catch_backtrace())
+            return nothing
         end
-        return nothing
     end
-    return getfield(Main, :InteractiveUtils)
+    Core.eval(mod, :(using Base.MainInclude.InteractiveUtils))
+    return MainInclude.InteractiveUtils
 end
 
+function load_REPL()
+    # load interactive-only libraries
+    try
+        return Base.require(PkgId(UUID(0x3fa0cd96_eef1_5676_8a61_b3b8758bbffb), "REPL"))
+    catch ex
+        @warn "Failed to import REPL" exception=(ex, catch_backtrace())
+    end
+    return nothing
+end
+
+global active_repl
+
 # run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
-    global active_repl
-
-    load_InteractiveUtils()
-
-    if interactive && isassigned(REPL_MODULE_REF)
+function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool, color_set::Bool)
+    fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
+    if !fallback_repl && interactive
+        load_InteractiveUtils()
+        if !isassigned(REPL_MODULE_REF)
+            load_REPL()
+        end
+    end
+    # TODO cleanup REPL_MODULE_REF
+    if !fallback_repl && interactive && isassigned(REPL_MODULE_REF)
         invokelatest(REPL_MODULE_REF[]) do REPL
             term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
-            banner && Base.banner(term)
+            banner == :no || REPL.banner(term, short=banner==:short)
             if term.term_type == "dumb"
-                active_repl = REPL.BasicREPL(term)
+                repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
             else
-                active_repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
-                active_repl.history_file = history_file
+                repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
+                repl.history_file = history_file
             end
+            global active_repl = repl
             # Make sure any displays pushed in .julia/config/startup.jl ends up above the
             # REPLDisplay
-            pushdisplay(REPL.REPLDisplay(active_repl))
-            _atreplinit(active_repl)
-            REPL.run_repl(active_repl, backend->(global active_repl_backend = backend))
+            pushdisplay(REPL.REPLDisplay(repl))
+            _atreplinit(repl)
+            REPL.run_repl(repl, backend->(global active_repl_backend = backend))
         end
     else
         # otherwise provide a simple fallback
-        if interactive && !quiet
-            @warn "REPL provider not available: using basic fallback"
+        if !fallback_repl && interactive && !quiet
+            @warn "REPL provider not available: using basic fallback" LOAD_PATH=join(Base.LOAD_PATH, Sys.iswindows() ? ';' : ':')
         end
-        banner && Base.banner()
         let input = stdin
             if isa(input, File) || isa(input, IOStream)
                 # for files, we can slurp in the whole thing at once
@@ -423,7 +459,7 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
                     eval_user_input(stderr, ex, true)
                 end
             else
-                while isopen(input) || !eof(input)
+                while !eof(input)
                     if interactive
                         print("julia> ")
                         flush(stdout)
@@ -449,66 +485,146 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
     nothing
 end
 
-# MainInclude exists to hide Main.include and eval from `names(Main)`.
+# MainInclude exists to weakly add certain identifiers to Main
 baremodule MainInclude
 using ..Base
-# These definitions calls Base._include rather than Base.include to get
-# one-frame stacktraces for the common case of using include(fname) in Main.
-include(mapexpr::Function, fname::AbstractString) = Base._include(mapexpr, Main, fname)
-function include(fname::AbstractString)
-    isa(fname, String) || (fname = Base.convert(String, fname)::String)
-    Base._include(identity, Main, fname)
+
+"""
+    ans
+
+A variable referring to the last computed value, automatically imported to the interactive prompt.
+"""
+global ans = nothing
+
+"""
+    err
+
+A variable referring to the last thrown errors, automatically imported to the interactive prompt.
+The thrown errors are collected in a stack of exceptions.
+"""
+global err = nothing
+
+# weakly exposes ans and err variables to Main
+export ans, err
 end
-eval(x) = Core.eval(Main, x)
+
+function should_use_main_entrypoint()
+    isdefined(Main, :main) || return false
+    M_binding_owner = Base.binding_module(Main, :main)
+    (isdefined(M_binding_owner, Symbol("#__main_is_entrypoint__#")) && M_binding_owner.var"#__main_is_entrypoint__#") || return false
+    return true
 end
-
-"""
-    eval(expr)
-
-Evaluate an expression in the global scope of the containing module.
-Every `Module` (except those defined with `baremodule`) has its own 1-argument
-definition of `eval`, which evaluates expressions in that module.
-"""
-MainInclude.eval
-
-"""
-    include([mapexpr::Function,] path::AbstractString)
-
-Evaluate the contents of the input source file in the global scope of the containing module.
-Every module (except those defined with `baremodule`) has its own
-definition of `include`, which evaluates the file in that module.
-Returns the result of the last evaluated expression of the input file. During including,
-a task-local include path is set to the directory containing the file. Nested calls to
-`include` will search relative to that path. This function is typically used to load source
-interactively, or to combine files in packages that are broken into multiple source files.
-The argument `path` is normalized using [`normpath`](@ref) which will resolve
-relative path tokens such as `..` and convert `/` to the appropriate path separator.
-
-The optional first argument `mapexpr` can be used to transform the included code before
-it is evaluated: for each parsed expression `expr` in `path`, the `include` function
-actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
-
-Use [`Base.include`](@ref) to evaluate a file into another module.
-
-!!! compat "Julia 1.5"
-    Julia 1.5 is required for passing the `mapexpr` argument.
-"""
-MainInclude.include
 
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
-    if ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
-        # clear old invalid pointers
-        PCRE.__init__()
-    end
+    # clear any postoutput hooks that were saved in the sysimage
+    empty!(Base.postoutput_hooks)
+    local ret = 0
     try
-        exec_options(JLOptions())
+        repl_was_requested = exec_options(JLOptions())
+        if should_use_main_entrypoint() && !is_interactive
+            if Core.Compiler.generating_output()
+                precompile(Main.main, (typeof(ARGS),))
+            else
+                ret = invokelatest(Main.main, ARGS)
+            end
+        elseif (repl_was_requested || is_interactive)
+            # Run the Base `main`, which will either load the REPL stdlib
+            # or run the fallback REPL
+            ret = repl_main(ARGS)
+        end
+        ret === nothing && (ret = 0)
+        ret = Cint(ret)
     catch
+        ret = Cint(1)
         invokelatest(display_error, scrub_repl_backtrace(current_exceptions()))
-        exit(1)
     end
     if is_interactive && get(stdout, :color, false)
         print(color_normal)
     end
+    return ret
+end
+
+function repl_main(_)
+    opts = Base.JLOptions()
+    interactiveinput = isa(stdin, Base.TTY)
+    b = opts.banner
+    auto = b == -1
+    banner = b == 0 || (auto && !interactiveinput) ? :no  :
+             b == 1 || (auto && interactiveinput)  ? :yes :
+             :short # b == 2
+
+    quiet                 = (opts.quiet != 0)
+    history_file          = (opts.historyfile != 0)
+    color_set             = (opts.color != 0) # --color!=auto
+    return run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
+end
+
+"""
+    @main
+
+This macro is used to mark that the binding `main` in the current module is considered an
+entrypoint. The precise semantics of the entrypoint depend on the CLI driver.
+
+In the `julia` driver, if `Main.main` is marked as an entrypoint, it will be automatically called upon
+the completion of script execution.
+
+The `@main` macro may be used standalone or as part of the function definition, though in the latter
+case, parentheses are required. In particular, the following are equivalent:
+
+```
+function (@main)(ARGS)
+    println("Hello World")
+end
+```
+
+```
+function main(ARGS)
+end
+@main
+```
+
+## Detailed semantics
+
+The entrypoint semantics attach to the owner of the binding owner. In particular, if a marked entrypoint is
+imported into `Main`, it will be treated as an entrypoint in `Main`:
+
+```
+module MyApp
+    export main
+    (@main)(ARGS) = println("Hello World")
+end
+using .MyApp
+# `julia` Will execute MyApp.main at the conclusion of script execution
+```
+
+Note that in particular, the semantics do not attach to the method
+or the name:
+```
+module MyApp
+    (@main)(ARGS) = println("Hello World")
+end
+const main = MyApp.main
+# `julia` Will *NOT* execute MyApp.main unless there is a separate `@main` annotation in `Main`
+
+!!! compat "Julia 1.11"
+    This macro is new in Julia 1.11. At present, the precise semantics of `@main` are still subject to change.
+```
+"""
+macro main(args...)
+    if !isempty(args)
+        error("USAGE: `@main` is expected to be used as `(@main)` without macro arguments.")
+    end
+    if isdefined(__module__, :main)
+        if Base.binding_module(__module__, :main) !== __module__
+            error("USAGE: Symbol `main` is already a resolved import in module $(__module__). `@main` must be used in the defining module.")
+        end
+    end
+    Core.eval(__module__, quote
+        # Force the binding to resolve to this module
+        global main
+        global var"#__main_is_entrypoint__#"::Bool = true
+    end)
+    esc(:main)
 end

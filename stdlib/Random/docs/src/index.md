@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Random/docs/src/index.md"
+```
+
 # Random Numbers
 
 ```@meta
@@ -32,6 +36,8 @@ unbounded integers, the interval must be specified (e.g. `rand(big.(1:6))`).
 
 Additionally, normal and exponential distributions are implemented for some `AbstractFloat` and
 `Complex` types, see [`randn`](@ref) and [`randexp`](@ref) for details.
+
+To generate random numbers from other distributions, see the [Distributions.jl](https://juliastats.org/Distributions.jl/stable/) package.
 
 !!! warning
     Because the precise way in which random numbers are generated is considered an implementation detail, bug fixes and speed improvements may change the stream of numbers that are generated after a version change. Relying on a specific seed or generated stream of numbers during unit testing is thus discouraged - consider testing properties of the methods in question instead.
@@ -70,6 +76,7 @@ Random.shuffle!
 ## Generators (creation and seeding)
 
 ```@docs
+Random.default_rng
 Random.seed!
 Random.AbstractRNG
 Random.TaskLocalRNG
@@ -78,7 +85,7 @@ Random.MersenneTwister
 Random.RandomDevice
 ```
 
-## Hooking into the `Random` API
+## [Hooking into the `Random` API](@id rand-api-hook)
 
 There are two mostly orthogonal ways to extend `Random` functionalities:
 1) generating random values of custom types
@@ -123,8 +130,8 @@ Random.SamplerSimple
 Decoupling pre-computation from actually generating the values is part of the API, and is also available to the user. As an example, assume that `rand(rng, 1:20)` has to be called repeatedly in a loop: the way to take advantage of this decoupling is as follows:
 
 ```julia
-rng = MersenneTwister()
-sp = Random.Sampler(rng, 1:20) # or Random.Sampler(MersenneTwister, 1:20)
+rng = Xoshiro()
+sp = Random.Sampler(rng, 1:20) # or Random.Sampler(Xoshiro, 1:20)
 for x in X
     n = rand(rng, sp) # similar to n = rand(rng, 1:20)
     # use n
@@ -156,8 +163,8 @@ Scalar and array methods for `Die` now work as expected:
 julia> rand(Die)
 Die(5)
 
-julia> rand(MersenneTwister(0), Die)
-Die(11)
+julia> rand(Xoshiro(0), Die)
+Die(10)
 
 julia> rand(Die, 3)
 3-element Vector{Die}:
@@ -212,7 +219,7 @@ and that we *always* want to build an alias table, regardless of the number of v
 Random.eltype(::Type{<:DiscreteDistribution}) = Int
 
 function Random.Sampler(::Type{<:AbstractRNG}, distribution::DiscreteDistribution, ::Repetition)
-    SamplerSimple(disribution, make_alias_table(distribution.probabilities))
+    SamplerSimple(distribution, make_alias_table(distribution.probabilities))
 end
 ```
 should be defined to return a sampler with pre-computed data, then

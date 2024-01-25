@@ -21,6 +21,7 @@
 /julia_version.h
 /flisp/host
 /support/host
+/base/
 
 # Clang compilation database
 /compile_commands*.json

@@ -45,7 +45,7 @@ bool use_sret(jl_datatype_t *ty, LLVMContext &ctx) override
     return false;
 }
 
-bool needPassByRef(jl_datatype_t *ty, AttrBuilder &ab, LLVMContext &ctx) override
+bool needPassByRef(jl_datatype_t *ty, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
 {
     return false;
 }

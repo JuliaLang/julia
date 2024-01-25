@@ -116,8 +116,8 @@ signedproductarchive: $(PRODUCTARCHIVE)
 	mv $<.signed $<
 
 clean:
-	-rm -rf $(XCARCHIVE) $(XCDERIVEDDATA) $(XCEXPORT)
-	-rm -rf $(FRAMEWORK_DESTDIR)
+	rm -rf $(XCARCHIVE) $(XCDERIVEDDATA) $(XCEXPORT)
+	rm -rf $(FRAMEWORK_DESTDIR)
 	-rm -f $(PRODUCTARCHIVE)
 
 .PHONY: appexport clean productarchive signedproductarchive

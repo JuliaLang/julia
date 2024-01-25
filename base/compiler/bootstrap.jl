@@ -5,16 +5,16 @@
 # especially try to make sure any recursive and leaf functions have concrete signatures,
 # since we won't be able to specialize & infer them at runtime
 
-time() = ccall(:jl_clock_now, Float64, ())
+let time() = ccall(:jl_clock_now, Float64, ())
 
-let
-    world = get_world_counter()
-    interp = NativeInterpreter(world)
+    interp = NativeInterpreter()
 
+    # analyze_escapes_tt = Tuple{typeof(analyze_escapes), IRCode, Int, TODO}
+    optimize_tt = Tuple{typeof(optimize), NativeInterpreter, OptimizationState{NativeInterpreter}, InferenceResult}
     fs = Any[
         # we first create caches for the optimizer, because they contain many loop constructions
         # and they're better to not run in interpreter even during bootstrapping
-        run_passes,
+        #=analyze_escapes_tt,=# optimize_tt,
         # then we create caches for inference entries
         typeinf_ext, typeinf, typeinf_edge,
     ]
@@ -32,8 +32,14 @@ let
     end
     starttime = time()
     for f in fs
-        for m in _methods_by_ftype(Tuple{typeof(f), Vararg{Any}}, 10, typemax(UInt))
+        if isa(f, DataType) && f.name === typename(Tuple)
+            tt = f
+        else
+            tt = Tuple{typeof(f), Vararg{Any}}
+        end
+        for m in _methods_by_ftype(tt, 10, get_world_counter())::Vector
             # remove any TypeVars from the intersection
+            m = m::MethodMatch
             typ = Any[m.spec_types.parameters...]
             for i = 1:length(typ)
                 typ[i] = unwraptv(typ[i])

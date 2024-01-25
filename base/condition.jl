@@ -61,12 +61,12 @@ Abstract implementation of a condition object
 for synchronizing tasks objects with a given lock.
 """
 struct GenericCondition{L<:AbstractLock}
-    waitq::InvasiveLinkedList{Task}
+    waitq::IntrusiveLinkedList{Task}
     lock::L
 
-    GenericCondition{L}() where {L<:AbstractLock} = new{L}(InvasiveLinkedList{Task}(), L())
-    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(InvasiveLinkedList{Task}(), l)
-    GenericCondition(l::AbstractLock) = new{typeof(l)}(InvasiveLinkedList{Task}(), l)
+    GenericCondition{L}() where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), L())
+    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), l)
+    GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{Task}(), l)
 end
 
 assert_havelock(c::GenericCondition) = assert_havelock(c.lock)
@@ -78,12 +78,16 @@ islocked(c::GenericCondition) = islocked(c.lock)
 lock(f, c::GenericCondition) = lock(f, c.lock)
 
 # have waiter wait for c
-function _wait2(c::GenericCondition, waiter::Task)
+function _wait2(c::GenericCondition, waiter::Task, first::Bool=false)
     ct = current_task()
     assert_havelock(c)
-    push!(c.waitq, waiter)
+    if first
+        pushfirst!(c.waitq, waiter)
+    else
+        push!(c.waitq, waiter)
+    end
     # since _wait2 is similar to schedule, we should observe the sticky bit now
-    if waiter.sticky && Threads.threadid(waiter) == 0
+    if waiter.sticky && Threads.threadid(waiter) == 0 && !GC.in_finalizer()
         # Issue #41324
         # t.sticky && tid == 0 is a task that needs to be co-scheduled with
         # the parent task. If the parent (current_task) is not sticky we must
@@ -91,7 +95,7 @@ function _wait2(c::GenericCondition, waiter::Task)
         # XXX: Ideally we would be able to unset this
         ct.sticky = true
         tid = Threads.threadid()
-        ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
+        ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
     end
     return
 end
@@ -103,7 +107,9 @@ Block the current task until some event occurs, depending on the type of the arg
 
 * [`Channel`](@ref): Wait for a value to be appended to the channel.
 * [`Condition`](@ref): Wait for [`notify`](@ref) on a condition and return the `val`
-  parameter passed to `notify`.
+  parameter passed to `notify`. Waiting on a condition additionally allows passing
+  `first=true` which results in the waiter being put _first_ in line to wake up on `notify`
+  instead of the usual first-in-first-out behavior.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
   can be used to determine success or failure.
 * [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, a
@@ -116,14 +122,14 @@ restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
 Often `wait` is called within a `while` loop to ensure a waited-for condition is met before
 proceeding.
 """
-function wait(c::GenericCondition)
+function wait(c::GenericCondition; first::Bool=false)
     ct = current_task()
-    _wait2(c, ct)
+    _wait2(c, ct, first)
     token = unlockall(c.lock)
     try
         return wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         rethrow()
     finally
         relockall(c.lock, token)
@@ -139,7 +145,7 @@ is raised as an exception in the woken tasks.
 
 Return the count of tasks woken up. Return 0 if no tasks are waiting on `condition`.
 """
-notify(c::GenericCondition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
+@constprop :none notify(c::GenericCondition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
 function notify(c::GenericCondition, @nospecialize(arg), all, error)
     assert_havelock(c)
     cnt = 0
@@ -153,8 +159,6 @@ function notify(c::GenericCondition, @nospecialize(arg), all, error)
 end
 
 notify_error(c::GenericCondition, err) = notify(c, err, true, true)
-
-n_waiters(c::GenericCondition) = length(c.waitq)
 
 """
     isempty(condition)
@@ -171,8 +175,9 @@ isempty(c::GenericCondition) = isempty(c.waitq)
 
 Create an edge-triggered event source that tasks can wait for. Tasks that call [`wait`](@ref) on a
 `Condition` are suspended and queued. Tasks are woken up when [`notify`](@ref) is later called on
-the `Condition`. Edge triggering means that only tasks waiting at the time [`notify`](@ref) is
-called can be woken up. For level-triggered notifications, you must keep extra state to keep
+the `Condition`. Waiting on a condition can return a value or raise an error if the optional arguments
+of [`notify`](@ref) are used. Edge triggering means that only tasks waiting at the time [`notify`](@ref)
+is called can be woken up. For level-triggered notifications, you must keep extra state to keep
 track of whether a notification has happened. The [`Channel`](@ref) and [`Threads.Event`](@ref) types do
 this, and can be used for level-triggered events.
 

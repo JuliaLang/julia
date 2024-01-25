@@ -43,7 +43,7 @@ end
 
 An abstract type for IO streams handled by libuv.
 
-If`stream isa LibuvStream`, it must obey the following interface:
+If `stream isa LibuvStream`, it must obey the following interface:
 
 - `stream.handle`, if present, must be a `Ptr{Cvoid}`
 - `stream.status`, if present, must be an `Int`
@@ -105,7 +105,7 @@ function eof(s::LibuvStream)
     bytesavailable(s) > 0 && return false
     wait_readnb(s, 1)
     # This function is race-y if used from multiple threads, but we guarantee
-    # it to never return false until the stream is definitively exhausted
+    # it to never return true until the stream is definitively exhausted
     # and that we won't return true if there's a readerror pending (it'll instead get thrown).
     # This requires some careful ordering here (TODO: atomic loads)
     bytesavailable(s) > 0 && return false
@@ -377,7 +377,7 @@ if OS_HANDLE != RawFD
 end
 
 function isopen(x::Union{LibuvStream, LibuvServer})
-    if x.status == StatusUninit || x.status == StatusInit
+    if x.status == StatusUninit || x.status == StatusInit || x.handle === C_NULL
         throw(ArgumentError("$x is not initialized"))
     end
     return x.status != StatusClosed
@@ -409,7 +409,7 @@ function wait_readnb(x::LibuvStream, nb::Int)
         while bytesavailable(x.buffer) < nb
             x.readerror === nothing || throw(x.readerror)
             isopen(x) || break
-            x.status != StatusEOF || break
+            x.status == StatusEOF && break
             x.throttle = max(nb, x.throttle)
             start_reading(x) # ensure we are reading
             iolock_end()
@@ -436,7 +436,10 @@ end
 
 function closewrite(s::LibuvStream)
     iolock_begin()
-    check_open(s)
+    if !iswritable(s)
+        iolock_end()
+        return
+    end
     req = Libc.malloc(_sizeof_uv_shutdown)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     err = ccall(:uv_shutdown, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -457,7 +460,7 @@ function closewrite(s::LibuvStream)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we won't get spurious notifications later
@@ -496,34 +499,37 @@ end
 
 function close(stream::Union{LibuvStream, LibuvServer})
     iolock_begin()
-    should_wait = false
     if stream.status == StatusInit
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
         stream.status = StatusClosing
     elseif isopen(stream)
-        should_wait = uv_handle_data(stream) != C_NULL
         if stream.status != StatusClosing
             ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
             stream.status = StatusClosing
         end
     end
     iolock_end()
-    should_wait && wait_close(stream)
+    wait_close(stream)
     nothing
 end
 
 function uvfinalize(uv::Union{LibuvStream, LibuvServer})
-    uv.handle == C_NULL && return
     iolock_begin()
     if uv.handle != C_NULL
-        disassociate_julia_struct(uv.handle) # not going to call the usual close hooks
-        if uv.status != StatusUninit
-            close(uv)
-        else
+        disassociate_julia_struct(uv.handle) # not going to call the usual close hooks (so preserve_handle is not needed)
+        if uv.status == StatusUninit
+            Libc.free(uv.handle)
+        elseif uv.status == StatusInit
+            ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), uv.handle)
+        elseif isopen(uv)
+            if uv.status != StatusClosing
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), uv.handle)
+            end
+        elseif uv.status == StatusClosed
             Libc.free(uv.handle)
         end
-        uv.status = StatusClosed
         uv.handle = C_NULL
+        uv.status = StatusClosed
     end
     iolock_end()
     nothing
@@ -562,7 +568,6 @@ displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
 
 function displaysize(io::TTY)
-    # A workaround for #34620 and #26687 (this still has the TOCTOU problem).
     check_open(io)
 
     local h::Int, w::Int
@@ -585,6 +590,7 @@ function displaysize(io::TTY)
     s1 = Ref{Int32}(0)
     s2 = Ref{Int32}(0)
     iolock_begin()
+    check_open(io)
     Base.uv_error("size (TTY)", ccall(:uv_tty_get_winsize,
                                       Int32, (Ptr{Cvoid}, Ptr{Int32}, Ptr{Int32}),
                                       io, s1, s2) != 0)
@@ -662,9 +668,11 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
             elseif nread == UV_EOF # libuv called uv_stop_reading already
                 if stream.status != StatusClosing
                     stream.status = StatusEOF
-                    if stream isa TTY # TODO: || ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
-                        # stream can still be used either by reseteof # TODO: or write
-                        notify(stream.cond)
+                    notify(stream.cond)
+                    if stream isa TTY
+                        # stream can still be used by reseteof (or possibly write)
+                    elseif !(stream isa PipeEndpoint) && ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
+                        # stream can still be used by write
                     else
                         # underlying stream is no longer useful: begin finalization
                         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
@@ -673,6 +681,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                 end
             else
                 stream.readerror = _UVError("read", nread)
+                notify(stream.cond)
                 # This is a fatal connection error
                 ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                 stream.status = StatusClosing
@@ -713,7 +722,6 @@ end
 function _uv_hook_close(uv::Union{LibuvStream, LibuvServer})
     lock(uv.cond)
     try
-        uv.handle = C_NULL
         uv.status = StatusClosed
         # notify any listeners that exist on this libuv stream type
         notify(uv.cond)
@@ -735,19 +743,28 @@ mutable struct Pipe <: AbstractPipe
 end
 
 """
-Construct an uninitialized Pipe object.
+    Pipe()
 
-The appropriate end of the pipe will be automatically initialized if
-the object is used in process spawning. This can be useful to easily
-obtain references in process pipelines, e.g.:
+Construct an uninitialized Pipe object, especially for IO communication between multiple processes.
+
+The appropriate end of the pipe will be automatically initialized if the object is used in
+process spawning. This can be useful to easily obtain references in process pipelines, e.g.:
 
 ```
 julia> err = Pipe()
 
 # After this `err` will be initialized and you may read `foo`'s
-# stderr from the `err` pipe.
+# stderr from the `err` pipe, or pass `err` to other pipelines.
 julia> run(pipeline(pipeline(`foo`, stderr=err), `cat`), wait=false)
+
+# Now destroy the write half of the pipe, so that the read half will get EOF
+julia> closewrite(err)
+
+julia> read(err, String)
+"stderr messages"
 ```
+
+See also `Base.link_pipe!`.
 """
 Pipe() = Pipe(PipeEndpoint(), PipeEndpoint())
 pipe_reader(p::Pipe) = p.out
@@ -1045,7 +1062,7 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
@@ -1356,7 +1373,7 @@ julia> io1 = open("same/path", "w")
 
 julia> io2 = open("same/path", "w")
 
-julia> redirect_stdio(f, stdout=io1, stderr=io2) # not suppored
+julia> redirect_stdio(f, stdout=io1, stderr=io2) # not supported
 ```
 Also the `stdin` argument may not be the same descriptor as `stdout` or `stderr`.
 ```julia-repl
@@ -1484,7 +1501,7 @@ closewrite(s::BufferStream) = close(s)
 function close(s::BufferStream)
     lock(s.cond) do
         s.status = StatusClosed
-        notify(s.cond)
+        notify(s.cond) # aka flush
         nothing
     end
 end
@@ -1544,6 +1561,7 @@ stop_reading(s::BufferStream) = nothing
 write(s::BufferStream, b::UInt8) = write(s, Ref{UInt8}(b))
 function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt)
     nwrite = lock(s.cond) do
+        check_open(s)
         rv = unsafe_write(s.buffer, p, nb)
         s.buffer_writes || notify(s.cond)
         rv
@@ -1564,7 +1582,18 @@ end
 buffer_writes(s::BufferStream, bufsize=0) = (s.buffer_writes = true; s)
 function flush(s::BufferStream)
     lock(s.cond) do
+        check_open(s)
         notify(s.cond)
         nothing
     end
+end
+
+skip(s::BufferStream, n) = skip(s.buffer, n)
+
+function reseteof(x::BufferStream)
+    lock(s.cond) do
+        s.status = StatusOpen
+        nothing
+    end
+    nothing
 end

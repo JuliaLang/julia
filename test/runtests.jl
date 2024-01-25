@@ -71,10 +71,12 @@ function move_to_node1(t)
 end
 
 # Base.compilecache only works from node 1, so precompile test is handled specially
+move_to_node1("ccall")
 move_to_node1("precompile")
 move_to_node1("SharedArrays")
 move_to_node1("threads")
 move_to_node1("Distributed")
+move_to_node1("gc")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
 
@@ -82,12 +84,14 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Shuffle LinearAlgebra tests to the front, because they take a while, so we might
+# Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
 # as well get them all started early.
-linalg_test_ids = findall(x->occursin("LinearAlgebra", x), tests)
-linalg_tests = tests[linalg_test_ids]
-deleteat!(tests, linalg_test_ids)
-prepend!(tests, linalg_tests)
+for prependme in ["LinearAlgebra", "Pkg"]
+    prependme_test_ids = findall(x->occursin(prependme, x), tests)
+    prependme_tests = tests[prependme_test_ids]
+    deleteat!(tests, prependme_test_ids)
+    prepend!(tests, prependme_tests)
+end
 
 import LinearAlgebra
 cd(@__DIR__) do
@@ -102,11 +106,7 @@ cd(@__DIR__) do
     #   * https://github.com/JuliaLang/julia/pull/29384
     #   * https://github.com/JuliaLang/julia/pull/40348
     n = 1
-    JULIA_TEST_USE_MULTIPLE_WORKERS = get(ENV, "JULIA_TEST_USE_MULTIPLE_WORKERS", "") |>
-                                      strip |>
-                                      lowercase |>
-                                      s -> tryparse(Bool, s) |>
-                                      x -> x === true
+    JULIA_TEST_USE_MULTIPLE_WORKERS = Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", false)
     # If the `JULIA_TEST_USE_MULTIPLE_WORKERS` environment variable is set to `true`, we use
     # multiple worker processes regardless of the value of `net_on`.
     # Otherwise, we use multiple worker processes if and only if `net_on` is true.
@@ -123,6 +123,16 @@ cd(@__DIR__) do
         Base.invokelatest(revise_trackall)
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
+
+    println("""
+        Running parallel tests with:
+          getpid() = $(getpid())
+          nworkers() = $(nworkers())
+          nthreads() = $(Threads.threadpoolsize())
+          Sys.CPU_THREADS = $(Sys.CPU_THREADS)
+          Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
+          Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
+        """)
 
     #pretty print the information about gc and mem usage
     testgroupheader = "Test"
@@ -207,7 +217,7 @@ cd(@__DIR__) do
 
     local stdin_monitor
     all_tasks = Task[]
-    o_ts_duration = nothing
+    o_ts_duration = 0.0
     try
         # Monitor stdin and kill this task on ^C
         # but don't do this on Windows, because it may deadlock in the kernel
@@ -238,7 +248,7 @@ cd(@__DIR__) do
                 end
             end
         end
-        o_ts_duration = @elapsed @Experimental.sync begin
+        o_ts_duration = @elapsed Experimental.@sync begin
             for p in workers()
                 @async begin
                     push!(all_tasks, current_task())

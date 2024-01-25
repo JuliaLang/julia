@@ -1,5 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
-//
+
 // Lower intrinsics that expose subtarget information to the language. This makes it
 // possible to write code that changes behavior based on, e.g., the availability of
 // specific CPU features.
@@ -14,78 +14,81 @@
 //      instead of using the global target machine?
 
 #include "llvm-version.h"
+#include "passes.h"
 
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PassManager.h>
-#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Support/Debug.h>
 
-#include "julia.h"
+#include "jitlayers.h"
 
 #define DEBUG_TYPE "cpufeatures"
 
 using namespace llvm;
 
-extern TargetMachine *jl_TargetMachine;
+STATISTIC(LoweredWithFMA, "Number of have_fma's that were lowered to true");
+STATISTIC(LoweredWithoutFMA, "Number of have_fma's that were lowered to false");
+
+extern JuliaOJIT *jl_ExecutionEngine;
 
 // whether this platform unconditionally (i.e. without needing multiversioning) supports FMA
-Optional<bool> always_have_fma(Function &intr) {
-    auto intr_name = intr.getName();
-    auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
-
-#if defined(_OS_WINDOWS_)
-    // FMA on Windows is weirdly broken (#43088)
-    return false;
-#elif defined(_CPU_AARCH64_)
-    return typ == "f32" || typ == "f64";
-#else
-    (void)typ;
-    return {};
-#endif
+Optional<bool> always_have_fma(Function &intr, const Triple &TT) JL_NOTSAFEPOINT {
+    if (TT.isAArch64()) {
+        auto intr_name = intr.getName();
+        auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
+        return typ == "f32" || typ == "f64";
+    } else {
+        return None;
+    }
 }
 
-bool have_fma(Function &intr, Function &caller) {
-    auto unconditional = always_have_fma(intr);
-    if (unconditional.hasValue())
-        return unconditional.getValue();
+static bool have_fma(Function &intr, Function &caller, const Triple &TT) JL_NOTSAFEPOINT {
+    auto unconditional = always_have_fma(intr, TT);
+    if (unconditional)
+        return *unconditional;
 
     auto intr_name = intr.getName();
     auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
 
     Attribute FSAttr = caller.getFnAttribute("target-features");
     StringRef FS =
-        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_TargetMachine->getTargetFeatureString();
+        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
 
-    SmallVector<StringRef, 6> Features;
+    SmallVector<StringRef, 128> Features;
     FS.split(Features, ',');
     for (StringRef Feature : Features)
-#if defined _CPU_ARM_
+    if (TT.isARM()) {
       if (Feature == "+vfp4")
         return typ == "f32" || typ == "f64";
       else if (Feature == "+vfp4sp")
         return typ == "f32";
-#else
+    } else if (TT.isX86()) {
       if (Feature == "+fma" || Feature == "+fma4")
         return typ == "f32" || typ == "f64";
-#endif
+    }
 
     return false;
 }
 
-void lowerHaveFMA(Function &intr, Function &caller, CallInst *I) {
-    if (have_fma(intr, caller))
+void lowerHaveFMA(Function &intr, Function &caller, const Triple &TT, CallInst *I) JL_NOTSAFEPOINT {
+    if (have_fma(intr, caller, TT)) {
+        ++LoweredWithFMA;
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 1));
-    else
+    } else {
+        ++LoweredWithoutFMA;
         I->replaceAllUsesWith(ConstantInt::get(I->getType(), 0));
-
+    }
     return;
 }
 
-bool lowerCPUFeatures(Module &M)
+bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
 {
+    auto TT = Triple(M.getTargetTriple());
     SmallVector<Instruction*,6> Materialized;
 
     for (auto &F: M.functions()) {
@@ -95,7 +98,7 @@ bool lowerCPUFeatures(Module &M)
             for (Use &U: F.uses()) {
                 User *RU = U.getUser();
                 CallInst *I = cast<CallInst>(RU);
-                lowerHaveFMA(F, *I->getParent()->getParent(), I);
+                lowerHaveFMA(F, *I->getParent()->getParent(), TT, I);
                 Materialized.push_back(I);
             }
         }
@@ -105,47 +108,19 @@ bool lowerCPUFeatures(Module &M)
         for (auto I: Materialized) {
             I->eraseFromParent();
         }
+#ifdef JL_VERIFY_PASSES
+        assert(!verifyLLVMIR(M));
+#endif
         return true;
     } else {
         return false;
     }
 }
 
-struct CPUFeatures : PassInfoMixin<CPUFeatures> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
-};
-
-PreservedAnalyses CPUFeatures::run(Module &M, ModuleAnalysisManager &AM)
+PreservedAnalyses CPUFeaturesPass::run(Module &M, ModuleAnalysisManager &AM)
 {
-    lowerCPUFeatures(M);
-    return PreservedAnalyses::all();
-}
-
-namespace {
-struct CPUFeaturesLegacy : public ModulePass {
-    static char ID;
-    CPUFeaturesLegacy() : ModulePass(ID) {};
-
-    bool runOnModule(Module &M)
-    {
-        return lowerCPUFeatures(M);
+    if (lowerCPUFeatures(M)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
-};
-
-char CPUFeaturesLegacy::ID = 0;
-static RegisterPass<CPUFeaturesLegacy>
-        Y("CPUFeatures",
-          "Lower calls to CPU feature testing intrinsics.",
-          false,
-          false);
-}
-
-Pass *createCPUFeaturesPass()
-{
-    return new CPUFeaturesLegacy();
-}
-
-extern "C" JL_DLLEXPORT void LLVMExtraAddCPUFeaturesPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createCPUFeaturesPass());
+    return PreservedAnalyses::all();
 }

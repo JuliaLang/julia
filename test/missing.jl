@@ -21,8 +21,8 @@ end
     @test convert(Union{Nothing, Missing}, nothing) === nothing
     @test convert(Union{Missing, Nothing, Float64}, 1) === 1.0
 
-    @test_throws MethodError convert(Missing, 1)
-    @test_throws MethodError convert(Union{Nothing, Missing}, 1)
+    @test_throws ErrorException("cannot convert a value to missing for assignment") convert(Missing, 1)
+    @test_throws ErrorException("cannot convert a value to missing for assignment") convert(Union{Nothing, Missing}, 1)
     @test_throws MethodError convert(Union{Int, Missing}, "a")
 end
 
@@ -66,6 +66,7 @@ end
     @test isequal(missing, missing)
     @test !isequal(1, missing)
     @test !isequal(missing, 1)
+    @test !isequal('c', missing)
     @test (missing < missing) === missing
     @test (missing < 1) === missing
     @test (1 < missing) === missing
@@ -79,7 +80,7 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    @test !any(T -> T === Union{Missing,Bool}, Base.return_types(isequal, Tuple{Any,Any}))
+    @test all(==(Bool), Base.return_types(isequal, Tuple{Any,Any}))
 end
 
 @testset "arithmetic operators" begin
@@ -106,6 +107,19 @@ end
             @test ismissing(f(missing, arg))
             @test ismissing(f(arg, missing))
         end
+    end
+end
+
+@testset "two-argument functions" begin
+    two_argument_functions = [atan, hypot, log]
+
+    # All two-argument functions return missing when operating on two missing's
+    # All two-argument functions return missing when operating on a scalar and an missing
+    # All two-argument functions return missing when operating on an missing and a scalar
+    for f in two_argument_functions
+        @test ismissing(f(missing, missing))
+        @test ismissing(f(1, missing))
+        @test ismissing(f(missing, 1))
     end
 end
 
@@ -262,10 +276,10 @@ end
     @test sprint(show, [1 missing]) == "$(Union{Int, Missing})[1 missing]"
     b = IOBuffer()
     display(TextDisplay(b), [missing])
-    @test String(take!(b)) == "1-element Vector{$Missing}:\n missing"
+    @test String(take!(b)) == "1-element Vector{$Missing}:\n missing\n"
     b = IOBuffer()
     display(TextDisplay(b), [1 missing])
-    @test String(take!(b)) == "1×2 Matrix{$(Union{Int, Missing})}:\n 1  missing"
+    @test String(take!(b)) == "1×2 Matrix{$(Union{Int, Missing})}:\n 1  missing\n"
 end
 
 @testset "arrays with missing values" begin
@@ -516,7 +530,7 @@ end
             @test mapreduce(cos, *, collect(skipmissing(A))) ≈ mapreduce(cos, *, skipmissing(A))
         end
 
-        # Patterns that exercize code paths for inputs with 1 or 2 non-missing values
+        # Patterns that exercise code paths for inputs with 1 or 2 non-missing values
         @test sum(skipmissing([1, missing, missing, missing])) === 1
         @test sum(skipmissing([missing, missing, missing, 1])) === 1
         @test sum(skipmissing([1, missing, missing, missing, 2])) === 3
@@ -629,4 +643,37 @@ end
     @test isequal(sort(X, alg=MergeSort, rev=true), XRP)
 end
 
-sortperm(reverse([NaN, missing, NaN, missing]))
+@test (sortperm(reverse([NaN, missing, NaN, missing])); true)
+
+# use LazyString for MissingException to get the better effects
+for func in (round, ceil, floor, trunc)
+    @testset let func = func
+        @test Core.Compiler.is_foldable(Base.infer_effects(func, (Type{Int},Union{Int,Missing})))
+    end
+end
+
+@testset "Custom Missing type" begin
+    struct NewMissing end
+    Base.ismissing(::NewMissing) = true
+    Base.coalesce(x::NewMissing, y...) = coalesce(y...)
+    Base.isless(::NewMissing, ::NewMissing) = false
+    Base.isless(::NewMissing, ::Any) = false
+    Base.isless(::Any, ::NewMissing) = true
+    Base.isequal(::NewMissing, ::Missing) = true
+    Base.isequal(::Missing, ::NewMissing) = true
+    arr = [missing 1 2 3 missing 10 11 12 missing]
+    newarr = Union{Int, NewMissing}[ismissing(v) ? NewMissing() : v for v in arr]
+
+    @test all(skipmissing(arr) .== skipmissing(newarr))
+    @test all(eachindex(skipmissing(arr)) .== eachindex(skipmissing(newarr)))
+    @test all(keys(skipmissing(arr)) .== keys(skipmissing(newarr)))
+    @test_broken sum(skipmissing(arr)) == sum(skipmissing(newarr))
+    @test filter(>(10), skipmissing(arr)) == filter(>(10), skipmissing(newarr))
+    @test isequal(sort(vec(arr)), sort(vec(newarr)))
+
+    @test_throws MissingException skipmissing(newarr)[findfirst(ismissing, newarr)]
+    @test coalesce(NewMissing(), 1) == coalesce(NewMissing(), NewMissing(), 1) == 1
+    @test coalesce(NewMissing()) === coalesce(NewMissing(), NewMissing()) === missing
+    @test @coalesce(NewMissing(), 1) == @coalesce(NewMissing(), NewMissing(), 1) == 1
+    @test @coalesce(NewMissing()) === @coalesce(NewMissing(), NewMissing()) === missing
+end

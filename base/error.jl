@@ -20,6 +20,8 @@
     throw(e)
 
 Throw an object as an exception.
+
+See also: [`rethrow`](@ref), [`error`](@ref).
 """
 throw
 
@@ -35,7 +37,7 @@ error(s::AbstractString) = throw(ErrorException(s))
 """
     error(msg...)
 
-Raise an `ErrorException` with the given message.
+Raise an `ErrorException` with a message constructed by `string(msg...)`.
 """
 function error(s::Vararg{Any,N}) where {N}
     @noinline
@@ -160,7 +162,7 @@ end
 ## keyword arg lowering generates calls to this ##
 function kwerr(kw, args::Vararg{Any,N}) where {N}
     @noinline
-    throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
+    throw(MethodError(Core.kwcall, (kw, args...)))
 end
 
 ## system error handling ##
@@ -195,15 +197,17 @@ windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Mai
 """
     @assert cond [text]
 
-Throw an [`AssertionError`](@ref) if `cond` is `false`. Preferred syntax for writing assertions.
-Message `text` is optionally displayed upon assertion failure.
+Throw an [`AssertionError`](@ref) if `cond` is `false`. This is the preferred syntax for
+writing assertions, which are conditions that are assumed to be true, but that the user
+might decide to check anyways, as an aid to debugging if they fail.
+The optional message `text` is displayed upon assertion failure.
 
 !!! warning
-    An assert might be disabled at various optimization levels.
+    An assert might be disabled at some optimization levels.
     Assert should therefore only be used as a debugging tool
-    and not used for authentication verification (e.g., verifying passwords),
-    nor should side effects needed for the function to work correctly
-    be used inside of asserts.
+    and not used for authentication verification (e.g., verifying passwords or checking array bounds).
+    The code must not rely on the side effects of running `cond` for the correct behavior
+    of a function.
 
 # Examples
 ```jldoctest
@@ -259,7 +263,7 @@ function iterate(ebo::ExponentialBackOff, state= (ebo.n, min(ebo.first_delay, eb
     state[1] < 1 && return nothing
     next_n = state[1]-1
     curr_delay = state[2]
-    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (rand(Float64) * 2.0 * ebo.jitter)))
+    next_delay = min(ebo.max_delay, state[2] * ebo.factor * (1.0 - ebo.jitter + (Libc.rand(Float64) * 2.0 * ebo.jitter)))
     (curr_delay, (next_n, next_delay))
 end
 length(ebo::ExponentialBackOff) = ebo.n
@@ -293,7 +297,6 @@ function retry(f;  delays=ExponentialBackOff(), check=nothing)
             try
                 return f(args...; kwargs...)
             catch e
-                y === nothing && rethrow()
                 if check !== nothing
                     result = check(state, e)
                     state, retry_or_not = length(result) == 2 ? result : (state, result)
