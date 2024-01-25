@@ -2753,7 +2753,7 @@ end
 function resolve_depot(inc::AbstractString)
     startswith(inc, string("@depot", Filesystem.pathsep())) || return :not_relocatable
     for depot in DEPOT_PATH
-        isfile(restore_depot_path(inc, depot)) && return depot
+        ispath(restore_depot_path(inc, depot)) && return depot
     end
     return :no_depot_found
 end
