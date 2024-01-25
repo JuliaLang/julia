@@ -2740,7 +2740,7 @@ function restore_depot_path(path::AbstractString, depot::AbstractString)
 end
 
 function resolve_depot(inc::AbstractString)
-    startswith(inc, "@depot") || return :not_relocatable
+    startswith(inc, string("@depot", Filesystem.pathsep())) || return :not_relocatable
     for depot in DEPOT_PATH
         isfile(restore_depot_path(inc, depot)) && return depot
     end
@@ -2919,7 +2919,7 @@ function _read_dependency_src(io::IO, filename::AbstractString, includes::Vector
         filenamelen == 0 && break
         depotfn = String(read(io, filenamelen))
         len = read(io, UInt64)
-        fn = if !startswith(depotfn, "@depot")
+        fn = if !startswith(depotfn, string("@depot", Filesystem.pathsep()))
             depotfn
         else
             basefn = restore_depot_path(depotfn, "")
@@ -3433,7 +3433,7 @@ end
             end
             for chi in includes
                 f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
-                if startswith(f, "@depot/")
+                if startswith(f, string("@depot", Filesystem.pathsep()))
                     @debug("Rejecting stale cache file $cachefile because its depot could not be resolved")
                     record_reason(reasons, "nonresolveable depot")
                     return true
