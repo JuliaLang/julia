@@ -1561,7 +1561,10 @@ function persistent_dict_elim_multiple()
     return b[:a]
 end
 @test_broken fully_eliminated(persistent_dict_elim_multiple)
-@test code_typed(persistent_dict_elim_multiple)[1][1].code[end] == Core.ReturnNode(1)
+let code = code_typed(persistent_dict_elim_multiple)[1][1].code
+    @test count(x->isexpr(x, :invoke), code) == 0
+    @test code[end] == Core.ReturnNode(1)
+end
 
 function persistent_dict_elim_multiple_phi(c::Bool)
     if c
