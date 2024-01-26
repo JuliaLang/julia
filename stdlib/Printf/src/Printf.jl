@@ -989,19 +989,9 @@ end
 
 
 countthousandsep(::Spec, x) = 0
-@inline function countthousandsep(f::Spec{T}, x::BigInt) where {T <: Union{Ints, Floats}}
-    (isnan(x) || isinf(x) || base(T) != 10) && return 0
-    x < 0 && return countthousandsep(f, -x)
-    x2 = round(x, digits=f.precision)
-    x2 < 1000 && return 0
-    numdig = log10(x2)
-    numsep = Int(div(numdig, 3))
-    return numsep
-end
-
 @inline function countthousandsep(f::Spec{T}, x) where {T <: Union{Ints, Floats}}
     (isnan(x) || isinf(x) || base(T) != 10) && return 0
-    x isa Signed && x == typemin(typeof(x)) && return countthousandsep(f, - x - 1)
+    x isa Base.BitSigned && x == typemin(x) && return countthousandsep(f, unsigned(x))
     x < 0 && return countthousandsep(f, -x)
     x2 = round(x, digits=f.precision)
     x2 < 1000 && return 0
