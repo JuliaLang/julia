@@ -514,13 +514,13 @@ public:
                             bool ShouldOptimize = false) JL_NOTSAFEPOINT;
     Error addObjectFile(orc::JITDylib &JD,
                         std::unique_ptr<MemoryBuffer> Obj) JL_NOTSAFEPOINT;
-    Expected<ExecutorSymbolDef> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
+    Expected<llvm::orc::ExecutorSymbolDef> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
     orc::IRCompileLayer &getIRCompileLayer() JL_NOTSAFEPOINT { return ExternalCompileLayer; };
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
     orc::JITDylib &getExternalJITDylib() JL_NOTSAFEPOINT { return ExternalJD; }
 
-    ExecutorSymbolDef findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
-    ExecutorSymbolDef findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
+    llvm::orc::ExecutorSymbolDef findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
+    llvm::orc::ExecutorSymbolDef findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
     uint64_t getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT;
     uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT;
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;
