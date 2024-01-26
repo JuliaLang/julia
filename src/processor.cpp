@@ -158,7 +158,7 @@ struct FeatureList {
     {
         int cnt = 0;
         for (size_t i = 0; i < n; i++)
-            cnt += llvm::countPopulation(eles[i]);
+            cnt += llvm::popcount(eles[i]);
         return cnt;
     }
     inline bool empty() const

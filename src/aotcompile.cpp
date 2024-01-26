@@ -703,7 +703,7 @@ static FunctionInfo getFunctionWeight(const Function &F)
         auto val = F.getFnAttribute("julia.mv.clones").getValueAsString();
         // base16, so must be at most 4 * length bits long
         // popcount gives number of clones
-        info.clones = APInt(val.size() * 4, val, 16).countPopulation() + 1;
+        info.clones = APInt(val.size() * 4, val, 16).popcount() + 1;
     }
     info.weight += info.insts;
     // more basic blocks = more complex than just sum of insts,
