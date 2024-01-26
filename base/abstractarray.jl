@@ -216,8 +216,7 @@ Return the index before `i` in `A`. The returned index is often equivalent to `i
 function can be useful for generic code.
 
 !!! warning
-    The returned index is not guaranteed to be a valid index of the passed
-    `AbstractArray`. See [`checkbounds`](@ref).
+    The returned index might be out of bounds. Consider using [`checkbounds`](@ref).
 
 See also: [`nextind`](@ref).
 
@@ -251,8 +250,7 @@ function can be useful for generic code that operates on both arrays and
 strings, since string indices may not be consecutive.
 
 !!! warning
-    The returned index is not guaranteed to be a valid index of the passed
-    `AbstractArray`. See [`checkbounds`](@ref).
+    The returned index might be out of bounds. Consider using [`checkbounds`](@ref).
 
 See also: [`prevind`](@ref).
 
