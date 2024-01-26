@@ -126,6 +126,15 @@ Random.seed!(100)
                 @test BLAS.iamax(b) == findmax(fabs, b)[2] * (step(ind) >= 0)
             end
         end
+        @testset "nrm2 with non-finite elements" begin
+            # These tests would have caught <https://github.com/OpenMathLib/OpenBLAS/issues/2998>
+            # when running on appropriate hardware.
+            a = zeros(elty,n)
+            a[begin] = elty(-Inf)
+            @test BLAS.nrm2(a) === abs2(elty(Inf))
+            a[begin] = elty(NaN)
+            @test BLAS.nrm2(a) === abs2(elty(NaN))
+        end
         @testset "scal" begin
             α = rand(elty)
             a = rand(elty,n)
