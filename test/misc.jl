@@ -1343,8 +1343,10 @@ end
         open(tmppath, "w") do tmpio
             redirect_stderr(tmpio) do
                 GC.enable_logging(true)
+                @test GC.logging_enabled()
                 GC.gc()
                 GC.enable_logging(false)
+                @test !GC.logging_enabled()
             end
         end
         @test occursin("GC: pause", read(tmppath, String))
