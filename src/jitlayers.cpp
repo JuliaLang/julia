@@ -2139,7 +2139,7 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
                 }
                 // Reparent the global variable:
                 SG.removeFromParent();
-                dest.getGlobalList().push_back(&SG);
+                dest.insertGlobalVariable(&SG);
                 // Comdat is owned by the Module
                 SG.setComdat(nullptr);
             }
