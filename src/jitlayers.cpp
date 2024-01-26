@@ -2186,7 +2186,7 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
                     }
                 }
                 SG.removeFromParent();
-                dest.getAliasList().push_back(&SG);
+                dest.insertAlias(&SG);
             }
 
             // metadata nodes need to be explicitly merged not just copied
