@@ -30,6 +30,7 @@
     XX(jl_array_ptr_1d_push) \
     XX(jl_genericmemory_isassigned) \
     XX(jl_genericmemory_owner) \
+    XX(jl_genericmemory_typetagdata) \
     XX(jl_genericmemoryref) \
     XX(jl_genericmemoryset) \
     XX(jl_genericmemoryunset) \
