@@ -1496,6 +1496,8 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
 
+int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT;
+
 STATIC_INLINE int jl_is_kind(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return (v==(jl_value_t*)jl_uniontype_type || v==(jl_value_t*)jl_datatype_type ||
