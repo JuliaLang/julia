@@ -1094,7 +1094,7 @@ static void jl_dump_asm_internal(
                             const MCOperand &OpI = Inst.getOperand(Op);
                             if (OpI.isImm()) {
                                 int64_t imm = OpI.getImm();
-                                if (opinfo.OpInfo[Op].OperandType == MCOI::OPERAND_PCREL)
+                                if (opinfo.operands()[Op].OperandType == MCOI::OPERAND_PCREL)
                                     imm += Fptr + Index;
                                 const char *name = DisInfo.lookupSymbolName(imm);
                                 if (name)
