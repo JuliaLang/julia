@@ -123,20 +123,18 @@ julia> A
 ```
 """
 macro view(ex)
+    Meta.isexpr(ex, :ref) || throw(ArgumentError(
+        "Invalid use of @view macro: argument must be a reference expression A[...]."))
+    ex = replace_ref_begin_end!(ex)
     if Meta.isexpr(ex, :ref)
-        ex = replace_ref_begin_end!(ex)
-        if Meta.isexpr(ex, :ref)
-            ex = Expr(:call, view, ex.args...)
-        else # ex replaced by let ...; foo[...]; end
-            if !(Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref))
-                error("invalid expression")
-            end
-            ex.args[2] = Expr(:call, view, ex.args[2].args...)
-        end
-        Expr(:&&, true, esc(ex))
+        ex = Expr(:call, view, ex.args...)
+    elseif Meta.isexpr(ex, :let) && (arg2 = ex.args[2]; Meta.isexpr(arg2, :ref))
+        # ex replaced by let ...; foo[...]; end
+        ex.args[2] = Expr(:call, view, arg2.args...)
     else
-        throw(ArgumentError("Invalid use of @view macro: argument must be a reference expression A[...]."))
+        error("invalid expression")
     end
+    return esc(ex)
 end
 
 ############################################################################
