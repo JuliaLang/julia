@@ -417,6 +417,8 @@ Base.:/(::AbstractVecOrMat, ::AbstractVecOrMat)
 LinearAlgebra.SingularException
 LinearAlgebra.PosDefException
 LinearAlgebra.ZeroPivotException
+LinearAlgebra.RankDeficientException
+LinearAlgebra.LAPACKException
 LinearAlgebra.dot
 LinearAlgebra.dot(::Any, ::Any, ::Any)
 LinearAlgebra.cross
@@ -762,7 +764,7 @@ LinearAlgebra.BLAS.trsm!
 LinearAlgebra.BLAS.trsm
 ```
 
-## LAPACK functions
+## [LAPACK functions](@id man-linalg-lapack-functions)
 
 `LinearAlgebra.LAPACK` provides wrappers for some of the LAPACK functions for linear algebra.
  Those functions that overwrite one of the input arrays have names ending in `'!'`.

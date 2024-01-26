@@ -6,8 +6,13 @@ export LAPACKException,
        RankDeficientException,
        ZeroPivotException
 
-# TODO: Insert docstring for LAPACKException here.
+"""
+    LAPACKException
 
+Generic LAPACK exception thrown either during direct calls to the [LAPACK functions](@ref man-linalg-lapack-functions)
+or during calls to other functions that use the LAPACK functions internally but lack specialized error handling. The `info` field
+contains additional information on the underlying error and depends on the LAPACK function that was invoked.
+"""
 struct LAPACKException <: Exception
     info::BlasInt
 end
@@ -43,8 +48,13 @@ function Base.showerror(io::IO, ex::PosDefException)
     print(io, "; Factorization failed.")
 end
 
-# TODO: Insert docstring for RankDeficientException here.
+"""
+    RankDeficientException
 
+Exception thrown when the input matrix is [rank deficient](https://en.wikipedia.org/wiki/Rank_(linear_algebra)). Some
+linear algebra functions, such as the Cholesky decomposition, are only applicable to matrices that are not rank
+deficient, i.e., matrices with full rank. The `info` field indicates the computed rank of the matrix.
+"""
 struct RankDeficientException <: Exception
     info::BlasInt
 end
