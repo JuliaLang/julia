@@ -519,8 +519,8 @@ public:
     orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
     orc::JITDylib &getExternalJITDylib() JL_NOTSAFEPOINT { return ExternalJD; }
 
-    llvm::orc::ExecutorSymbolDef findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
-    llvm::orc::ExecutorSymbolDef findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
+    Expected<llvm::orc::ExecutorSymbolDef> findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
+    Expected<llvm::orc::ExecutorSymbolDef> findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
     uint64_t getGlobalValueAddress(StringRef Name) JL_NOTSAFEPOINT;
     uint64_t getFunctionAddress(StringRef Name) JL_NOTSAFEPOINT;
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst) JL_NOTSAFEPOINT;

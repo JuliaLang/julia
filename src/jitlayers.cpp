@@ -1932,17 +1932,15 @@ Error JuliaOJIT::addObjectFile(orc::JITDylib &JD, std::unique_ptr<MemoryBuffer> 
     return LockLayer.add(JD.getDefaultResourceTracker(), std::move(Obj));
 }
 
-ExecutorSymbolDef JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
+Expected<ExecutorSymbolDef> JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
 {
     orc::JITDylib* SearchOrders[3] = {&JD, &GlobalJD, &ExternalJD};
     ArrayRef<orc::JITDylib*> SearchOrder = ArrayRef<orc::JITDylib*>(&SearchOrders[0], ExportedSymbolsOnly ? 3 : 1);
     auto Sym = ES.lookup(SearchOrder, Name);
-    if (Sym)
-        return *Sym;
-    return Sym.takeError();
+    return Sym;
 }
 
-ExecutorSymbolDef JuliaOJIT::findUnmangledSymbol(StringRef Name)
+Expected<ExecutorSymbolDef> JuliaOJIT::findUnmangledSymbol(StringRef Name)
 {
     return findSymbol(getMangledName(Name), true);
 }
