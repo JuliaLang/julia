@@ -212,9 +212,8 @@ valtype(A::Type{<:AbstractArray}) = eltype(A)
 """
     prevind(::AbstractArray, i)
 
-Return the index before `i`, e.g. equivalent to `i - 1` for an integer `i`. This
-function can be useful for generic code that operates on both arrays and
-strings, since string indices may not be consecutive.
+Return the index before `i` in `A`. The returned index is often equivalent to `i - 1` for an integer `i`. This
+function can be useful for generic code.
 
 !!! warning
     The returned index is not guaranteed to be a valid index of the passed
