@@ -9,9 +9,5 @@ for file in readlines(joinpath(@__DIR__, "testgroups"))
 end
 
 @testset "Docstrings" begin
-    undoc = Docs.undocumented_names(Dates)
-    @test_broken isempty(undoc)
-    @test undoc == [:adjust]
-end
-
+    @test isempty(Docs.undocumented_names(Dates))
 end

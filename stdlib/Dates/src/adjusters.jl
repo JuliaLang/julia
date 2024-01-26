@@ -198,11 +198,14 @@ Base.show(io::IO, df::DateFunction) = println(io, df.f)
 # Core adjuster
 
 """
-    adjust(df::DateFunction, start, step, limit) -> TimeType
+    adjust(df, start[, step, limit]) -> TimeType
+    adjust(df, start) -> TimeType
 
-Adjusts the date in `start` until `f::Function` in `df::DateFunction` returns `true`.
-The step size dictates change in `start` on every iteration. If `limit` iterations occur,
-then an [`ArgumentError`](@ref) is thrown.
+Adjusts the date in `start` until the `f::Function` passed using `df` returns `true`.
+The optional `step` parameter dictates the change in `start` on every iteration.
+If `limit` iterations occur, then an [`ArgumentError`](@ref) is thrown.
+
+The default values for parameters `start` and `limit` are 1 Day and 10,000 respectively.
 
 # Examples
 ```jldoctest
@@ -212,29 +215,11 @@ julia> adjust(date -> month(date) == 10, Date(2022, 1, 1), step=Month(3), limit=
 julia> adjust(date -> year(date) == 2025, Date(2022, 1, 1), step=Year(1), limit=4)
 2025-01-01
 
-julia> adjust(date -> day(date) == 15, Date(2022, 1, 1); step=Year(1), limit=3)
+julia> adjust(date -> day(date) == 15, Date(2022, 1, 1), step=Year(1), limit=3)
 ERROR: ArgumentError: Adjustment limit reached: 3 iterations
 Stacktrace:
 [...]
-```
-"""
-function adjust(df::DateFunction, start, step, limit)
-    for i = 1:limit
-        df.f(start) && return start
-        start += step
-    end
-    throw(ArgumentError("Adjustment limit reached: $limit iterations"))
-end
 
-"""
-    adjust(df::DateFunction, start) -> TimeType
-
-Adjusts the date in `start` until `f::Function` in `df::DateFunction` returns `true`.
-On every iteration, start is incremented by 1 Day. If 10000 iterations occur,
-then ArgumentError is thrown.
-
-# Examples
-```jldoctest
 julia> adjust(date -> month(date) == 10, Date(2022, 1, 1))
 2022-10-01
 
@@ -247,6 +232,14 @@ Stacktrace:
 [...]
 ```
 """
+function adjust(df, start, step, limit)
+    for i = 1:limit
+        df.f(start) && return start
+        start += step
+    end
+    throw(ArgumentError("Adjustment limit reached: $limit iterations"))
+end
+
 function adjust(func::Function, start; step::Period=Day(1), limit::Int=10000)
     return adjust(DateFunction(func, start), start, step, limit)
 end
