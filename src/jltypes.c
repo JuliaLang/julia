@@ -558,6 +558,7 @@ static void isort_union(jl_value_t **a, size_t len) JL_NOTSAFEPOINT
 
 static int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
 {
+    assert(hasfree == (jl_has_free_typevars(a) | (jl_has_free_typevars(b) << 1)));
     if (a == jl_bottom_type || b == (jl_value_t*)jl_any_type)
         return 1;
     if (jl_egal(a, b))
@@ -571,7 +572,7 @@ static int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion
     }
     if (jl_is_typevar(a)) {
         jl_value_t *na = ((jl_tvar_t*)a)->ub;
-        hasfree &= jl_has_free_typevars(na);
+        hasfree &= (jl_has_free_typevars(na) | 2);
         return simple_subtype(na, b, hasfree, isUnion);
     }
     if (jl_is_typevar(b)) {
@@ -581,7 +582,7 @@ static int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion
         // Tuple{Union{Int,T},T} where {T>:Int} != Tuple{T,T} where {T>:Int}
         if (is_leaf_bound(nb))
             return 0;
-        hasfree &= jl_has_free_typevars(nb) << 1;
+        hasfree &= ((jl_has_free_typevars(nb) << 1) | 1);
         return simple_subtype(a, nb, hasfree, isUnion);
     }
     if (b==(jl_value_t*)jl_datatype_type || b==(jl_value_t*)jl_typeofbottom_type) {
@@ -643,6 +644,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
 
 static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
 {
+    assert(hasfree == (jl_has_free_typevars(a) | (jl_has_free_typevars(b) << 1)));
     int subab = 0, subba = 0;
     if (jl_egal(a, b)) {
         subab = subba = 1;
@@ -655,7 +657,7 @@ static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree, int isUnio
     }
     else if (hasfree != 0) {
         subab = simple_subtype(a, b, hasfree, isUnion);
-        subba = simple_subtype(b, a, hasfree, isUnion);
+        subba = simple_subtype(b, a, ((hasfree & 2) >> 1) | ((hasfree & 1) << 1), isUnion);
     }
     else if (jl_is_type_type(a) && jl_is_type_type(b) &&
              jl_typeof(jl_tparam0(a)) != jl_typeof(jl_tparam0(b))) {
@@ -784,10 +786,11 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
     for (i = 0; i < nta; i++) {
         if (temp[i] == NULL) continue;
         all_disjoint = 0;
-        int hasfree = jl_has_free_typevars(temp[i]);
+        int has_free = jl_has_free_typevars(temp[i]);
         for (j = nta; j < nt; j++) {
             if (temp[j] == NULL) continue;
-            int subs = simple_subtype2(temp[i], temp[j], hasfree || jl_has_free_typevars(temp[j]), 0);
+            int has_free2 = has_free | (jl_has_free_typevars(temp[j]) << 1);
+            int subs = simple_subtype2(temp[i], temp[j], has_free2, 0);
             int subab = subs & 1, subba = subs >> 1;
             if (subba && !subab) {
                 stemp[i] = -1;
