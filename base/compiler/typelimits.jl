@@ -807,6 +807,7 @@ end
                         end
                         if usep
                             widen = rewrap_unionall(wr{p...}, wr)
+                            widen <: wr || (widen = wr) # sometimes there are cross-constraints on wr that we may lose in this process, but that would cause future calls to this to need to return Any, which is undesirable
                         end
                         simplify[j] = !usep
                     end
