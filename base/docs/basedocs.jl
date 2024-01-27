@@ -2359,6 +2359,22 @@ julia> M.a
 setglobal!
 
 """
+    Core.get_binding_type(module::Module, name::Symbol)
+
+Retrieve the declared type of the binding `name` from the module `module`.
+"""
+Core.get_binding_type
+
+"""
+    Core.set_binding_type!(module::Module, name::Symbol, [type::Type])
+
+Set the declared type of the binding `name` in the module `module` to `type`. Error if the
+binding already has a type that is not equivalent to `type`. If the `type` argument is
+absent, set the binding type to `Any` if unset, but do not error.
+"""
+Core.set_binding_type!
+
+"""
     typeof(x)
 
 Get the concrete type of `x`.
