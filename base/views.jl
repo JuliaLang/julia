@@ -126,6 +126,9 @@ macro view(ex)
     Meta.isexpr(ex, :ref) || throw(ArgumentError(
         "Invalid use of @view macro: argument must be a reference expression A[...]."))
     ex = replace_ref_begin_end!(ex)
+    # NOTE We embed `view` as a function object itself directly into the AST.
+    #      By doing this, we prevent the creation of function definitions like
+    #      `view(A, idx) = xxx` in cases such as `@view(A[idx]) = xxx.`
     if Meta.isexpr(ex, :ref)
         ex = Expr(:call, view, ex.args...)
     elseif Meta.isexpr(ex, :let) && (arg2 = ex.args[2]; Meta.isexpr(arg2, :ref))
