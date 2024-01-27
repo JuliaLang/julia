@@ -836,12 +836,12 @@ number of significand digits in that base.
 """
 function precision end
 
-_precision(::Type{Float16}) = 11
-_precision(::Type{Float32}) = 24
-_precision(::Type{Float64}) = 53
-function _precision(x, base::Integer=2)
+_precision_with_base_2(::Type{Float16}) = 11
+_precision_with_base_2(::Type{Float32}) = 24
+_precision_with_base_2(::Type{Float64}) = 53
+function _precision(x, base::Integer)
     base > 1 || throw(DomainError(base, "`base` cannot be less than 2."))
-    p = _precision(x)
+    p = _precision_with_base_2(x)
     return base == 2 ? Int(p) : floor(Int, p / log2(base))
 end
 precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)

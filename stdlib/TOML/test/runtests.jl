@@ -27,7 +27,5 @@ include("parse.jl")
 @inferred TOML.parse("foo = 3")
 
 @testset "Docstrings" begin
-    undoc = Docs.undocumented_names(TOML)
-    @test_broken isempty(undoc)
-    @test undoc == [:TOML]
+    @test isempty(Docs.undocumented_names(TOML))
 end

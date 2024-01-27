@@ -342,7 +342,7 @@ function NewInstruction(inst::Instruction;
     return NewInstruction(stmt, type, info, line, flag)
 end
 @specialize
-effect_free_and_nothrow(newinst::NewInstruction) = add_flag(newinst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
+removable_if_unused(newinst::NewInstruction) = add_flag(newinst, IR_FLAGS_REMOVABLE)
 function add_flag(newinst::NewInstruction, newflag::UInt32)
     flag = newinst.flag
     if flag === nothing
@@ -595,7 +595,7 @@ function insert_node!(ir::IRCode, pos::SSAValue, newinst::NewInstruction, attach
     end
     node = add_inst!(ir.new_nodes, posid, attach_after)
     newline = something(newinst.line, ir[pos][:line])
-    newflag = recompute_inst_flag(newinst, ir)
+    newflag = recompute_newinst_flag(newinst, ir)
     node = inst_from_newinst!(node, newinst, newline, newflag)
     return SSAValue(length(ir.stmts) + node.idx)
 end
@@ -873,29 +873,14 @@ function inst_from_newinst!(node::Instruction, newinst::NewInstruction,
     return node
 end
 
-function recompute_inst_flag(newinst::NewInstruction, src::Union{IRCode,IncrementalCompact})
+function recompute_newinst_flag(newinst::NewInstruction, src::Union{IRCode,IncrementalCompact})
     flag = newinst.flag
     flag !== nothing && return flag
-    flag = IR_FLAG_NULL
-    (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(
-        fallback_lattice, newinst.stmt, newinst.type, src)
-    if consistent
-        flag |= IR_FLAG_CONSISTENT
-    end
-    if effect_free_and_nothrow
-        flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-    elseif nothrow
-        flag |= IR_FLAG_NOTHROW
-    end
-    if !isexpr(newinst.stmt, :call) && !isexpr(newinst.stmt, :invoke)
-        # See comment in check_effect_free!
-        flag |= IR_FLAG_NOUB
-    end
-    return flag
+    return recompute_effects_flags(fallback_lattice, newinst.stmt, newinst.type, src)
 end
 
 function insert_node!(compact::IncrementalCompact, @nospecialize(before), newinst::NewInstruction, attach_after::Bool=false)
-    newflag = recompute_inst_flag(newinst, compact)
+    newflag = recompute_newinst_flag(newinst, compact)
     if isa(before, SSAValue)
         if before.id < compact.result_idx
             count_added_node!(compact, newinst.stmt)
@@ -978,7 +963,7 @@ function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction,
         @assert result_idx == length(compact.result) + 1
         resize!(compact, result_idx)
     end
-    newflag = recompute_inst_flag(newinst, compact)
+    newflag = recompute_newinst_flag(newinst, compact)
     node = inst_from_newinst!(compact.result[result_idx], newinst, newline, newflag)
     count_added_node!(compact, newinst.stmt) && push!(compact.late_fixup, result_idx)
     compact.result_idx = result_idx + 1
@@ -1840,8 +1825,7 @@ function maybe_erase_unused!(callback::Function, compact::IncrementalCompact, id
     stmt = inst[:stmt]
     stmt === nothing && return false
     inst[:type] === Bottom && return false
-    effect_free = has_flag(inst, (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
-    effect_free || return false
+    has_flag(inst, IR_FLAGS_REMOVABLE) || return false
     foreachssa(stmt) do val::SSAValue
         if compact.used_ssas[val.id] == 1
             if val.id < idx || in_worklist

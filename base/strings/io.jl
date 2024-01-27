@@ -365,10 +365,7 @@ function join_annotated(iterator, delim="", last=delim)
 end
 
 function _join_maybe_annotated(args...)
-    if any(function (arg)
-               t = eltype(arg)
-               !(t == Union{}) && (t <: AnnotatedString || t <: AnnotatedChar)
-           end, args)
+    if any(_isannotated ∘ eltype, args)
         join_annotated(args...)
     else
         sprint(join, args...)
