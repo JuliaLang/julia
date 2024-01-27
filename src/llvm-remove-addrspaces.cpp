@@ -44,15 +44,7 @@ public:
 
         DstTy = SrcTy;
         if (auto Ty = dyn_cast<PointerType>(SrcTy)) {
-            if (Ty->isOpaque()) {
-                DstTy = PointerType::get(Ty->getContext(), ASRemapper(Ty->getAddressSpace()));
-            }
-            else {
-                //Remove once opaque pointer transition is complete
-                DstTy = PointerType::get(
-                        remapType(Ty->getNonOpaquePointerElementType()),
-                        ASRemapper(Ty->getAddressSpace()));
-            }
+            DstTy = PointerType::get(Ty->getContext(), ASRemapper(Ty->getAddressSpace()));
         }
         else if (auto Ty = dyn_cast<FunctionType>(SrcTy)) {
             SmallVector<Type *, 4> Params;
@@ -158,11 +150,6 @@ public:
                     // asserts remapType(typeof arg0) == typeof mapValue(arg0).
                     Constant *Src = CE->getOperand(0);
                     auto ptrty = cast<PointerType>(Src->getType()->getScalarType());
-                    //Remove once opaque pointer transition is complete
-                    if (!ptrty->isOpaque()) {
-                        Type *SrcTy = remapType(ptrty->getNonOpaquePointerElementType());
-                        DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
-                    }
                 }
                 else
                     DstV = CE->getWithOperands(Ops, Ty);
