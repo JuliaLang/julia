@@ -441,6 +441,19 @@ end
     @test record.group === :corelogging  # name of this file
 end
 
+@testset "id from @deprecate should be ::Symbol" begin
+    code = """
+    import Test
+    f() = Base.depwarn("msg", :f; force=true)
+    logs, _ = Test.collect_test_logs() do
+        f()
+    end
+    Test.@test logs[1].id isa Symbol
+    """
+    cmd = `$(Base.julia_cmd()) --depwarn=yes --startup-file=no -e $code`
+    @test success(run(cmd))
+end
+
 @testset "complicated kwargs logging macro" begin
     @test_logs (:warn, "foo")  @warn "foo" argvals=:((DoNotCare{$(Expr(:escape, :Any))}(),))
 end
