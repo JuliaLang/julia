@@ -1827,16 +1827,6 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
                   cpus, ncpu_names);
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
-{
-    return jl_cstr_to_string(host_cpu_name().c_str());
-}
-
-JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
-{
-    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
-}
-
 JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 {
 #ifdef _CPU_AARCH64_
