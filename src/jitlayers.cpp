@@ -1960,7 +1960,7 @@ uint64_t JuliaOJIT::getGlobalValueAddress(StringRef Name)
         consumeError(addr.takeError());
         return 0;
     }
-    return cantFail(addr).getAddress();
+    return cantFail(std::move(addr)).getAddress();
 }
 
 uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
@@ -1970,7 +1970,7 @@ uint64_t JuliaOJIT::getFunctionAddress(StringRef Name)
         consumeError(addr.takeError());
         return 0;
     }
-    return cantFail(addr).getAddress();
+    return cantFail(std::move(addr)).getAddress();
 }
 
 StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst)
