@@ -2047,7 +2047,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
                 } else {
                     auto p = literal_static_pointer_val(global.first, global.second->getValueType());
                     Type *elty;
-                    if (p->getType()->isOpaquePointerTy()) {
+                    if (p->getType()->isPointerTy()) {
                         elty = PointerType::get(output.getContext(), 0);
                     } else {
                         elty = p->getType()->getNonOpaquePointerElementType();
