@@ -2923,8 +2923,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type),
                         jl_emptysvec,
                         0, 1, 4);
-    const static uint32_t typemap_entry_constfields[1] = { 0x000003fe }; // (1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9)
-    const static uint32_t typemap_entry_atomicfields[1] = { 0x00000001 }; // (1<<0)
+    const static uint32_t typemap_entry_constfields[1] = { 0x000003ce }; // (1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<7)|(1<<8)|(1<<9)
+    const static uint32_t typemap_entry_atomicfields[1] = { 0x00000031 }; // (1<<0)|(1<<4)|(1<<5)
     jl_typemap_entry_type->name->constfields = typemap_entry_constfields;
     jl_typemap_entry_type->name->atomicfields = typemap_entry_atomicfields;
 
@@ -3198,8 +3198,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             "module",
                             "file",
                             "line",
-                            "primary_world",
-                            "deleted_world", // !const
+                            "primary_world", // atomic
+                            "deleted_world", // atomic
                             "sig",
                             "specializations", // !const
                             "speckeyset", // !const
@@ -3257,8 +3257,10 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint16_type),
                         jl_emptysvec,
                         0, 1, 10);
-    //const static uint32_t method_constfields[1] = { 0x03fc065f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<6)|(1<<9)|(1<<10)|(1<<18)|(1<<19)|(1<<20)|(1<<21)|(1<<22)|(1<<23)|(1<<24)|(1<<25);
+    //const static uint32_t method_constfields[1] = { 0x03fc065f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<9)|(1<<10)|(1<<18)|(1<<19)|(1<<20)|(1<<21)|(1<<22)|(1<<23)|(1<<24)|(1<<25);
     //jl_method_type->name->constfields = method_constfields;
+    const static uint32_t method_atomicfields[1] = { 0x00000030 }; // (1<<4)|(1<<5)
+    jl_method_type->name->atomicfields = method_atomicfields;
 
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
@@ -3333,7 +3335,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
     const static uint32_t code_instance_constfields[1]  = { 0b0000010101110001 }; // Set fields 1, 5-7, 9, 11 as const
-    const static uint32_t code_instance_atomicfields[1] = { 0b1101001010000010 }; // Set fields 2, 8, 10, 13, 15-16 as atomic
+    const static uint32_t code_instance_atomicfields[1] = { 0b1101001010001110 }; // Set fields 2-4, 8, 10, 13, 15-16 as atomic
     //Fields 3-4 are only operated on by construction and deserialization, so are const at runtime
     //Fields 11 and 15 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
     jl_code_instance_type->name->constfields = code_instance_constfields;

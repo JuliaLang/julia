@@ -9324,8 +9324,9 @@ void jl_compile_workqueue(
         auto proto = it.second;
         params.workqueue.pop_back();
         // try to emit code for this item from the workqueue
-        assert(codeinst->min_world <= params.world && codeinst->max_world >= params.world &&
-            "invalid world for code-instance");
+        assert(jl_atomic_load_relaxed(&codeinst->min_world) <= params.world &&
+               jl_atomic_load_relaxed(&codeinst->max_world) >= params.world &&
+               "invalid world for code-instance");
         StringRef preal_decl = "";
         bool preal_specsig = false;
         auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
