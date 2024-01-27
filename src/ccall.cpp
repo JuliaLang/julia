@@ -260,7 +260,6 @@ static GlobalVariable *emit_plt_thunk(
     SmallVector<Value*, 16> args;
     for (auto &arg : plt->args())
         args.push_back(&arg);
-    assert(cast<PointerType>(ptr->getType())->isOpaqueOrPointeeTypeMatches(functype));
     CallInst *ret = irbuilder.CreateCall(
         functype,
         ptr, ArrayRef<Value*>(args));
