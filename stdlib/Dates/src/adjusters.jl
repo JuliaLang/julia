@@ -196,6 +196,13 @@ end
 Base.show(io::IO, df::DateFunction) = println(io, df.f)
 
 # Core adjuster
+function adjust(df::DateFunction, start, step, limit)
+    for i = 1:limit
+        df.f(start) && return start
+        start += step
+    end
+    throw(ArgumentError("Adjustment limit reached: $limit iterations"))
+end
 
 """
     adjust(df, start[, step, limit]) -> TimeType
@@ -232,14 +239,6 @@ Stacktrace:
 [...]
 ```
 """
-function adjust(df, start, step, limit)
-    for i = 1:limit
-        df.f(start) && return start
-        start += step
-    end
-    throw(ArgumentError("Adjustment limit reached: $limit iterations"))
-end
-
 function adjust(func::Function, start; step::Period=Day(1), limit::Int=10000)
     return adjust(DateFunction(func, start), start, step, limit)
 end
