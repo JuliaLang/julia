@@ -404,6 +404,33 @@ generally broadcasting over elements in the matrix representation fail because t
 be highly inefficient. For such use cases, consider computing the matrix representation
 up front and cache it for future reuse.
 
+## [Pivoting Strategies](@id man-linalg-pivoting-strategies)
+
+Several [matrix factorizations](@ref man-linalg-factorizations) support
+[pivoting](https://en.wikipedia.org/wiki/Pivot_element), where the rows and columns
+of the original matrix are permuted with the intention of improving the numerical
+stability of the factorization.
+
+Pivoting may introduce a minor computational overhead. However, several matrix
+decompositions, such as the LU decomposition, may fail without pivoting.
+
+Unfortunately, there's no silver bullet pivoting strategy and the right approach
+depends on the problem. Nevertheless the default pivoting strategy of a matrix
+factorization technique is often a good first choice.
+
+In the following, the pivoting strategies implemented in Julia are described. Note
+that not all matrix factorizations may support them. Consult the documentation of the
+respective matrix factorization for details on the supported strategies.
+
+# TODO: Enhance and polish above text. Include DocStrings for the pivoting strategies.
+# TODO: Check if a table with available pivoting strategies per factorization is necessary.
+# TODO: Check if the rook pivoting strategy (bunchkaufman) is worth mentioning.
+# TODO: Add pivoting strategies in the @docs section below.
+
+```@docs
+
+```
+
 ## Standard functions
 
 Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](https://www.netlib.org/lapack/).
