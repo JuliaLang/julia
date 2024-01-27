@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <llvm/ADT/StringMap.h>
+#include <llvm/TargetParser/Host.h>
 #include <llvm/Support/raw_ostream.h>
 
 #include "julia.h"
