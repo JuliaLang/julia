@@ -2046,12 +2046,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
                     global.second->setLinkage(GlobalValue::ExternalLinkage);
                 } else {
                     auto p = literal_static_pointer_val(global.first, global.second->getValueType());
-                    Type *elty;
-                    if (p->getType()->isPointerTy()) {
-                        elty = PointerType::get(output.getContext(), 0);
-                    } else {
-                        elty = p->getType()->getNonOpaquePointerElementType();
-                    }
+                    Type *elty = PointerType::get(output.getContext(), 0);
                     // For pretty printing, when LLVM inlines the global initializer into its loads
                     auto alias = GlobalAlias::create(elty, 0, GlobalValue::PrivateLinkage, global.second->getName() + ".jit", p, global.second->getParent());
                     global.second->setInitializer(ConstantExpr::getBitCast(alias, global.second->getValueType()));

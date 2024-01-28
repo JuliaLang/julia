@@ -1565,9 +1565,6 @@ struct JuliaOJIT::DLSymOptimizer {
                     if (named) {
                         auto T = GV.getValueType();
                         assert(T->isPointerTy());
-                        if (!T->isPointerTy()) {
-                            T = T->getNonOpaquePointerElementType();
-                        }
                         init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, GV.getName() + ".jit", init, &M);
                     }
                     GV.setInitializer(init);
@@ -1618,9 +1615,6 @@ struct JuliaOJIT::DLSymOptimizer {
                         if (named) {
                             auto T = CI->getType();
                             assert(T->isPointerTy());
-                            if (!T->isPointerTy()) {
-                                T = T->getNonOpaquePointerElementType();
-                            }
                             init = GlobalAlias::create(T, 0, GlobalValue::PrivateLinkage, CI->getName() + ".jit", init, &M);
                         }
                         // DCE and SimplifyCFG will kill the branching structure around

@@ -184,13 +184,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
         }
         if (LiftingMap.count(CurrentV))
             CurrentV = LiftingMap[CurrentV];
-        if (CurrentV->getType() != TargetType) {
-            // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
-            assert(CurrentV->getContext().supportsTypedPointers());
-            auto *BCI = new BitCastInst(CurrentV, TargetType);
-            ToInsert.push_back(std::make_pair(BCI, InsertPt));
-            CurrentV = BCI;
-        }
+        assert(CurrentV->getType() == TargetType);
         return CurrentV;
     };
 

@@ -989,48 +989,48 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
     // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
     // that interferes with other optimizations.
     // TODO: Restore this for opaque pointers? Needs extra type information from the caller.
-    if (ctx.builder.getContext().supportsTypedPointers() && sz <= 64) {
-        // The size limit is arbitrary but since we mainly care about floating points and
-        // machine size vectors this should be enough.
-        const DataLayout &DL = jl_Module->getDataLayout();
-        auto srcty = cast<PointerType>(src->getType());
-        //TODO unsafe nonopaque pointer
-        auto srcel = srcty->getNonOpaquePointerElementType();
-        auto dstty = cast<PointerType>(dst->getType());
-        //TODO unsafe nonopaque pointer
-        auto dstel = dstty->getNonOpaquePointerElementType();
-        while (srcel->isArrayTy() && srcel->getArrayNumElements() == 1) {
-            src = ctx.builder.CreateConstInBoundsGEP2_32(srcel, src, 0, 0);
-            srcel = srcel->getArrayElementType();
-            srcty = srcel->getPointerTo();
-        }
-        while (dstel->isArrayTy() && dstel->getArrayNumElements() == 1) {
-            dst = ctx.builder.CreateConstInBoundsGEP2_32(dstel, dst, 0, 0);
-            dstel = dstel->getArrayElementType();
-            dstty = dstel->getPointerTo();
-        }
+    // if (ctx.builder.getContext().supportsTypedPointers() && sz <= 64) {
+    //     // The size limit is arbitrary but since we mainly care about floating points and
+    //     // machine size vectors this should be enough.
+    //     const DataLayout &DL = jl_Module->getDataLayout();
+    //     auto srcty = cast<PointerType>(src->getType());
+    //     //TODO unsafe nonopaque pointer
+    //     auto srcel = srcty->getNonOpaquePointerElementType();
+    //     auto dstty = cast<PointerType>(dst->getType());
+    //     //TODO unsafe nonopaque pointer
+    //     auto dstel = dstty->getNonOpaquePointerElementType();
+    //     while (srcel->isArrayTy() && srcel->getArrayNumElements() == 1) {
+    //         src = ctx.builder.CreateConstInBoundsGEP2_32(srcel, src, 0, 0);
+    //         srcel = srcel->getArrayElementType();
+    //         srcty = srcel->getPointerTo();
+    //     }
+    //     while (dstel->isArrayTy() && dstel->getArrayNumElements() == 1) {
+    //         dst = ctx.builder.CreateConstInBoundsGEP2_32(dstel, dst, 0, 0);
+    //         dstel = dstel->getArrayElementType();
+    //         dstty = dstel->getPointerTo();
+    //     }
 
-        llvm::Type *directel = nullptr;
-        if (srcel->isSized() && srcel->isSingleValueType() && DL.getTypeStoreSize(srcel) == sz) {
-            directel = srcel;
-            dst = emit_bitcast(ctx, dst, srcty);
-        }
-        else if (dstel->isSized() && dstel->isSingleValueType() &&
-                 DL.getTypeStoreSize(dstel) == sz) {
-            directel = dstel;
-            src = emit_bitcast(ctx, src, dstty);
-        }
-        if (directel) {
-            if (isa<Instruction>(src) && !src->hasName())
-                setName(ctx.emission_context, src, "memcpy_refined_src");
-            if (isa<Instruction>(dst) && !dst->hasName())
-                setName(ctx.emission_context, dst, "memcpy_refined_dst");
-            auto val = src_ai.decorateInst(ctx.builder.CreateAlignedLoad(directel, src, MaybeAlign(align_src), is_volatile));
-            dst_ai.decorateInst(ctx.builder.CreateAlignedStore(val, dst, Align(align_dst), is_volatile));
-            ++SkippedMemcpys;
-            return;
-        }
-    }
+    //     llvm::Type *directel = nullptr;
+    //     if (srcel->isSized() && srcel->isSingleValueType() && DL.getTypeStoreSize(srcel) == sz) {
+    //         directel = srcel;
+    //         dst = emit_bitcast(ctx, dst, srcty);
+    //     }
+    //     else if (dstel->isSized() && dstel->isSingleValueType() &&
+    //              DL.getTypeStoreSize(dstel) == sz) {
+    //         directel = dstel;
+    //         src = emit_bitcast(ctx, src, dstty);
+    //     }
+    //     if (directel) {
+    //         if (isa<Instruction>(src) && !src->hasName())
+    //             setName(ctx.emission_context, src, "memcpy_refined_src");
+    //         if (isa<Instruction>(dst) && !dst->hasName())
+    //             setName(ctx.emission_context, dst, "memcpy_refined_dst");
+    //         auto val = src_ai.decorateInst(ctx.builder.CreateAlignedLoad(directel, src, MaybeAlign(align_src), is_volatile));
+    //         dst_ai.decorateInst(ctx.builder.CreateAlignedStore(val, dst, Align(align_dst), is_volatile));
+    //         ++SkippedMemcpys;
+    //         return;
+    //     }
+    // }
     ++EmittedMemcpys;
 
     // the memcpy intrinsic does not allow to specify different alias tags
