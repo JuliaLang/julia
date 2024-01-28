@@ -77,10 +77,8 @@ else
 # JULIACODEGEN != LLVM
 endif
 
-RT_LLVM_LIBS := support # for APMath and some other useful ADT
-ifneq ($(LLVM_VER_MAJ),15)
-RT_LLVM_LIBS += targetparser # for getHostCPUName on LLVM 16+
-endif
+RT_LLVM_LIBS := support
+RT_LLVM_LIBS += targetparser
 
 ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
