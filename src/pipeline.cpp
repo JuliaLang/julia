@@ -805,13 +805,13 @@ void NewPM::run(Module &M) {
 #else
     StandardInstrumentations SI(false);
 #endif
-    FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
     PassInstrumentationCallbacks PIC;
+    adjustPIC(PIC);
+    TimePasses.registerCallbacks(PIC);
+    FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
     LoopAnalysisManager LAM;
     CGSCCAnalysisManager CGAM;
     ModuleAnalysisManager MAM;
-    adjustPIC(PIC);
-    TimePasses.registerCallbacks(PIC);
     SI.registerCallbacks(PIC, &MAM);
     SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
     PassBuilder PB(TM.get(), PipelineTuningOptions(), None, &PIC);
