@@ -107,13 +107,15 @@ If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset
 
 See also [`require_one_based_indexing`](@ref).
 """
-has_offset_axes(A) = _any_tuple(x->Int(first(x))::Int != 1, false, axes(A)...)
-has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve performance of a common case (ranges)
+has_offset_axes(A) = _has_offset_axes(A)
 # Use `_any_tuple` to avoid unneeded invoke.
 # note: this could call `any` directly if the compiler can infer it
-has_offset_axes(As...) = _any_tuple(has_offset_axes, false, As...)
-has_offset_axes(::Colon) = false
-has_offset_axes(::Array) = false
+has_offset_axes(As...) = _any_tuple(_has_offset_axes, false, As...)
+
+_has_offset_axes(A) = _any_tuple(x->Int(first(x))::Int != 1, false, axes(A)...)
+_has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve performance of a common case (ranges)
+_has_offset_axes(::Colon) = false
+_has_offset_axes(::Array) = false
 
 """
     require_one_based_indexing(A::AbstractArray)
