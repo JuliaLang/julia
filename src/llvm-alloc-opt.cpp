@@ -753,10 +753,12 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
             user->replaceUsesOfWith(orig_i, replace);
         }
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
+            #ifndef JL_NDEBUG
             auto cast_t = PointerType::get(user->getType(), new_i->getType()->getPointerAddressSpace());
-            auto replace_i = new_i;
             Type *new_t = new_i->getType();
             assert(cast_t == new_t);
+            #endif
+            auto replace_i = new_i;
             push_frame(user, replace_i);
         }
         else if (auto gep = dyn_cast<GetElementPtrInst>(user)) {
