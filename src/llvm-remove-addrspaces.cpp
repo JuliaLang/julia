@@ -145,14 +145,7 @@ public:
                     Ops.push_back(NewOp ? cast<Constant>(NewOp) : Op);
                 }
 
-                if (CE->getOpcode() == Instruction::GetElementPtr) {
-                    // GEP const exprs need to know the type of the source.
-                    // asserts remapType(typeof arg0) == typeof mapValue(arg0).
-                    Constant *Src = CE->getOperand(0);
-                    auto ptrty = cast<PointerType>(Src->getType()->getScalarType());
-                }
-                else
-                    DstV = CE->getWithOperands(Ops, Ty);
+                DstV = CE->getWithOperands(Ops, Ty);
             }
         }
 
