@@ -2295,8 +2295,8 @@ findfirst(A::AbstractArray) = findnext(A, first(keys(A)))
 
 Find the next index after or including `i` of an element of `A`
 for which `predicate` returns `true`, or `nothing` if not found. This works for
-any collection that supports [`getindex`](@ref), [`keys(A)`](@ref), and
-[`nextind`](@ref).
+Arrays, Strings, and most other collections that support [`getindex`](@ref),
+[`keys(A)`](@ref), and [`nextind`](@ref).
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -2474,8 +2474,8 @@ findlast(A::AbstractArray) = findprev(A, last(keys(A)))
 
 Find the previous index before or including `i` of an element of `A`
 for which `predicate` returns `true`, or `nothing` if not found. This works for
-any collection that supports [`getindex`](@ref), [`keys(A)`](@ref), and
-[`prevind`](@ref).
+Arrays, Strings, and most other collections that support [`getindex`](@ref),
+[`keys(A)`](@ref), and [`nextind`](@ref).
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
