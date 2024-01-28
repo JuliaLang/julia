@@ -33,6 +33,12 @@
 extern "C" {
 #endif
 
+// #ifndef _OS_LINUX_
+//     #ifdef GC_COPY_THROUGH_SHM
+//     #undef GC_COPY_THROUGH_SHM // not supported on Windows
+//     #endif
+// #endif
+
 #ifdef GC_SMALL_PAGE
 #define GC_PAGE_LG2 12 // log2(size of a page)
 #else
@@ -148,11 +154,19 @@ typedef struct _mallocarray_t {
     struct _mallocarray_t *next;
 } mallocarray_t;
 
+typedef struct _jl_gc_shm_addr_triplet_t {
+    const char *f_name;
+    char *data;
+    int offset;
+} jl_gc_shm_addr_triplet_t;
+
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
     // next metadata structure in per-thread list
     // or in one of the `jl_gc_global_page_pool_t`
     struct _jl_gc_pagemeta_t *next;
+    // the phantoms of a page are pages which have been `mmapped`ed into this one
+    struct _jl_gc_pagemeta_t *phantoms;
     // index of pool that owns this page
     uint8_t pool_n;
     // Whether any cell in the page is marked
@@ -183,7 +197,8 @@ typedef struct _jl_gc_pagemeta_t {
     uint16_t fl_begin_offset; // offset of first free object in this page
     uint16_t fl_end_offset;   // offset of last free object in this page
     uint16_t thread_n;        // thread id of the heap that owns this page
-    char *data;
+    jl_gc_shm_addr_triplet_t shm_addr_triplet;
+    uint8_t *alloc_bitmap;
 } jl_gc_pagemeta_t;
 
 extern jl_gc_page_stack_t global_page_pool_lazily_freed;
@@ -328,14 +343,15 @@ typedef struct {
     _Atomic(size_t) heap_target;
 } gc_heapstatus_t;
 
-#define GC_PAGE_UNMAPPED        0
-#define GC_PAGE_ALLOCATED       1
-#define GC_PAGE_LAZILY_FREED    2
-#define GC_PAGE_FREED           3
+#define GC_PAGE_UNMAPPED                    0
+#define GC_PAGE_ALLOCATED                   1
+#define GC_PAGE_LAZILY_FREED                2
+#define GC_PAGE_FREED                       3
+#define GC_PAGE_PHANTOM                     4
 
 extern pagetable_t alloc_map;
 
-STATIC_INLINE uint8_t gc_alloc_map_is_set(char *_data) JL_NOTSAFEPOINT
+STATIC_INLINE uint8_t gc_alloc_map_is_set(char *_data, uint8_t v) JL_NOTSAFEPOINT
 {
     uintptr_t data = ((uintptr_t)_data);
     unsigned i;
@@ -348,7 +364,7 @@ STATIC_INLINE uint8_t gc_alloc_map_is_set(char *_data) JL_NOTSAFEPOINT
     if (r0 == NULL)
         return 0;
     i = REGION0_INDEX(data);
-    return (r0->meta[i] == GC_PAGE_ALLOCATED);
+    return (r0->meta[i] == v);
 }
 
 STATIC_INLINE void gc_alloc_map_set(char *_data, uint8_t v) JL_NOTSAFEPOINT
@@ -402,15 +418,16 @@ STATIC_INLINE jl_gc_pagemeta_t *page_metadata_unsafe(void *_data) JL_NOTSAFEPOIN
 
 STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *_data) JL_NOTSAFEPOINT
 {
-    if (!gc_alloc_map_is_set((char*)_data)) {
-        return NULL;
+    if (gc_alloc_map_is_set((char*)_data, GC_PAGE_ALLOCATED) ||
+        gc_alloc_map_is_set((char*)_data, GC_PAGE_PHANTOM)) {
+        return page_metadata_unsafe(_data);
     }
-    return page_metadata_unsafe(_data);
+    return NULL;
 }
 
 STATIC_INLINE void set_page_metadata(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
-    *(jl_gc_pagemeta_t**)(pg->data) = pg;
+    *(jl_gc_pagemeta_t**)(pg->shm_addr_triplet.data) = pg;
 }
 
 STATIC_INLINE void push_page_metadata_back(jl_gc_pagemeta_t **ppg, jl_gc_pagemeta_t *elt) JL_NOTSAFEPOINT
@@ -454,12 +471,12 @@ STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 
 STATIC_INLINE jl_taggedvalue_t *page_pfl_beg(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT
 {
-    return (jl_taggedvalue_t*)(p->data + p->fl_begin_offset);
+    return (jl_taggedvalue_t*)(p->shm_addr_triplet.data + p->fl_begin_offset);
 }
 
 STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT
 {
-    return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
+    return (jl_taggedvalue_t*)(p->shm_addr_triplet.data + p->fl_end_offset);
 }
 
 STATIC_INLINE int gc_marked(uintptr_t bits) JL_NOTSAFEPOINT
@@ -526,6 +543,7 @@ void jl_gc_debug_init(void);
 
 void jl_gc_init_page(void) JL_NOTSAFEPOINT;
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT;
+void jl_gc_free_page_(void *p, size_t decommit_size) JL_NOTSAFEPOINT;
 void jl_gc_free_page(jl_gc_pagemeta_t *p) JL_NOTSAFEPOINT;
 
 // GC debug

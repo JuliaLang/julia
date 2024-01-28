@@ -30,7 +30,7 @@ jl_gc_pagemeta_t *jl_gc_page_metadata(void *data)
 // the end of the page.
 JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osize_p)
 {
-    if (!gc_alloc_map_is_set(p))
+    if (!gc_alloc_map_is_set(p, GC_PAGE_ALLOCATED))
         // Not in the pool
         return NULL;
     jl_gc_pagemeta_t *meta = page_metadata(p);
@@ -100,7 +100,7 @@ static void gc_clear_mark_page(jl_gc_pagemeta_t *pg, int bits)
 {
     jl_ptls_t ptls2 = gc_all_tls_states[pg->thread_n];
     jl_gc_pool_t *pool = &ptls2->heap.norm_pools[pg->pool_n];
-    jl_taggedvalue_t *pv = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
+    jl_taggedvalue_t *pv = (jl_taggedvalue_t*)(pg->shm_addr_triplet.data + GC_PAGE_OFFSET);
     char *lim = (char*)pv + GC_PAGE_SZ - GC_PAGE_OFFSET - pool->osize;
     while ((char*)pv <= lim) {
         if (!gc_verifying)
@@ -293,7 +293,7 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg)
     jl_ptls_t ptls2 = gc_all_tls_states[t_n];
     jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
     int osize = pg->osize;
-    char *data = pg->data;
+    char *data = pg->shm_addr_triplet.data;
     char *page_begin = data + GC_PAGE_OFFSET;
     jl_taggedvalue_t *v = (jl_taggedvalue_t*)page_begin;
     char *lim = data + GC_PAGE_SZ - osize;
@@ -1126,7 +1126,7 @@ static int64_t empty_pages;
 static void gc_count_pool_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     int osize = pg->osize;
-    char *data = pg->data;
+    char *data = pg->shm_addr_triplet.data;
     jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
     char *lim = (char*)v + GC_PAGE_SZ - GC_PAGE_OFFSET - osize;
     int has_live = 0;
@@ -1148,7 +1148,7 @@ static void gc_count_pool_pagetable(void)
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
         while (pg != NULL) {
-            if (gc_alloc_map_is_set(pg->data)) {
+            if (gc_alloc_map_is_set(pg->shm_addr_triplet.data, GC_PAGE_ALLOCATED)) {
                 gc_count_pool_page(pg);
             }
             pg = pg->next;

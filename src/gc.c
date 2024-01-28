@@ -828,7 +828,7 @@ FORCE_INLINE int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_N
 STATIC_INLINE void gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
                                   uint8_t mark_mode) JL_NOTSAFEPOINT
 {
-    assert(!gc_alloc_map_is_set((char*)o));
+    assert(!gc_alloc_map_is_set((char*)o, GC_PAGE_ALLOCATED));
     bigval_t *hdr = bigval_header(o);
     if (mark_mode == GC_OLD_MARKED) {
         ptls->gc_cache.perm_scanned_bytes += hdr->sz & ~3;
@@ -1265,13 +1265,15 @@ STATIC_INLINE jl_taggedvalue_t *gc_reset_page(jl_ptls_t ptls2, const jl_gc_pool_
     assert(GC_PAGE_OFFSET >= sizeof(void*));
     pg->nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / p->osize;
     pg->pool_n = p - ptls2->heap.norm_pools;
-    jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
+    memset(pg->alloc_bitmap, 0, GC_PAGE_SZ / 8 / p->osize + 1);
+    jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->shm_addr_triplet.data + GC_PAGE_OFFSET);
     pg->has_young = 0;
     pg->has_marked = 0;
     pg->prev_nold = 0;
     pg->nold = 0;
     pg->fl_begin_offset = UINT16_MAX;
     pg->fl_end_offset = UINT16_MAX;
+    pg->phantoms = NULL;
     return beg;
 }
 
@@ -1288,13 +1290,14 @@ static NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_gc_pagemeta_t *pg = pop_lf_back(&ptls->page_metadata_buffered);
     if (pg != NULL) {
-        gc_alloc_map_set(pg->data, GC_PAGE_ALLOCATED);
+        gc_alloc_map_set(pg->shm_addr_triplet.data, GC_PAGE_ALLOCATED);
     }
     else {
         pg = jl_gc_alloc_page();
     }
     pg->osize = p->osize;
     pg->thread_n = ptls->tid;
+    pg->alloc_bitmap = (uint8_t*)malloc_s(GC_PAGE_SZ / pg->osize / 8 + 1);
     set_page_metadata(pg);
     push_lf_back(&ptls->page_metadata_allocd, pg);
     jl_taggedvalue_t *fl = gc_reset_page(ptls, p, pg);
@@ -1429,7 +1432,8 @@ int64_t buffered_pages = 0;
 static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *buffered,
                           jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
 {
-    char *data = pg->data;
+    char *data = pg->shm_addr_triplet.data;
+    uint8_t *bitmap = pg->alloc_bitmap;
     jl_taggedvalue_t *v0 = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
     char *lim = data + GC_PAGE_SZ - osize;
     char *lim_newpages = data + GC_PAGE_SZ;
@@ -1446,6 +1450,13 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
     int keep_as_local_buffer = 0;
     int freedall = 1;
     int pg_skpd = 1;
+
+    // skip phantom pages
+    if (gc_alloc_map_is_set(data, GC_PAGE_PHANTOM)) {
+        push_lf_back(allocd, pg);
+        return;
+    }
+
     if (!pg->has_marked) {
         re_use_page = 0;
     #ifdef _P64 // TODO: re-enable on `_P32`?
@@ -1484,6 +1495,7 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
         jl_taggedvalue_t *fl = NULL;
         jl_taggedvalue_t **pfl = &fl;
         jl_taggedvalue_t **pfl_begin = NULL;
+        uint8_t msk = 1; // mask for the bit in the bitmap
         // collect page profile
         jl_taggedvalue_t *v = v0;
         if (page_profile_enabled) {
@@ -1508,6 +1520,7 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
                 pfl = &v->next;
                 pfl_begin = (pfl_begin != NULL) ? pfl_begin : pfl;
                 pg_nfree++;
+                *bitmap &= ~msk;
             }
             else { // marked young or old
                 if (current_sweep_full || bits == GC_MARKED) { // old enough
@@ -1515,9 +1528,15 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
                 }
                 prev_nold++;
                 has_marked |= gc_marked(bits);
+                *bitmap |= msk;
                 freedall = 0;
             }
             v = (jl_taggedvalue_t*)((char*)v + osize);
+            msk <<= 1;
+            if (!msk) {
+                msk = 1;
+                bitmap++;
+            }
         }
         assert(!freedall);
         pg->has_marked = has_marked;
@@ -1544,7 +1563,7 @@ done:
         push_lf_back(allocd, pg);
     }
     else {
-        gc_alloc_map_set(pg->data, GC_PAGE_LAZILY_FREED);
+        gc_alloc_map_set(pg->shm_addr_triplet.data, GC_PAGE_LAZILY_FREED);
         jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -GC_PAGE_SZ);
         if (keep_as_local_buffer) {
             push_lf_back(buffered, pg);
@@ -1745,6 +1764,147 @@ void gc_free_pages(void)
     }
 }
 
+int gc_check_disjoint_bitmaps(uint8_t *bm1, uint8_t *bm2, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        if (bm1[i] & bm2[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+// this will basically move the objects from `src` to `dst`
+// if the pages are not disjoint. I.e. if there is no object
+// at a given offset which is alive in both `src` and `dst`
+void gc_evacuate_page(jl_gc_pagemeta_t *dst, jl_gc_pagemeta_t *src)
+{
+#ifdef GC_COPY_THROUGH_SHM
+    size_t len = GC_PAGE_SZ / dst->osize / 8 + 1;
+    dst->has_marked |= src->has_marked;
+    dst->has_young |= src->has_young;
+    dst->nold += src->nold;
+    dst->prev_nold += src->prev_nold;
+    dst->nfree -= src->nfree;
+    for (size_t i = 0; i < len; i++) {
+        dst->alloc_bitmap[i] |= src->alloc_bitmap[i];
+    }
+    // re-thread the freelist and copy the objects
+    jl_taggedvalue_t *fl = NULL;
+    jl_taggedvalue_t **pfl = &fl;
+    // offsets to the first and last free object
+    uint16_t fl_begin_offset = UINT16_MAX;
+    uint16_t fl_end_offset = UINT16_MAX;
+    // start of the page
+    char *data = dst->shm_addr_triplet.data;
+    jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
+    char *lim = data + GC_PAGE_SZ - dst->osize;
+    // bitmaps for the source and destination
+    uint8_t *bitmap_src = src->alloc_bitmap;
+    uint8_t *bitmap_dst = dst->alloc_bitmap;
+    // mask for the bit in the bitmap
+    uint8_t msk = 1;
+    while ((char*)v <= lim) {
+        int bit_src = (*bitmap_src & msk) != 0;
+        int bit_dst = (*bitmap_dst & msk) != 0;
+        if (bit_src) {
+            char *v_src = (char*)v - (char*)dst->shm_addr_triplet.data + (char*)src->shm_addr_triplet.data;
+            memcpy(v, v_src, dst->osize);
+        }
+        if (!bit_dst) {
+            if (fl_begin_offset == UINT16_MAX) {
+                fl_begin_offset = (char*)v - data;
+            }
+            fl_end_offset = (char*)v - data;
+            *pfl = v;
+            pfl = &v->next;
+        }
+        msk <<= 1;
+        if (!msk) {
+            msk = 1;
+            bitmap_src++;
+            bitmap_dst++;
+        }
+        v = (jl_taggedvalue_t*)((char*)v + dst->osize);
+    }
+    dst->fl_begin_offset = fl_begin_offset;
+    dst->fl_end_offset = fl_end_offset;
+    // map `src` into the fd owned by `dst`
+    assert(src->shm_addr_triplet.offset % GC_PAGE_SZ == 0);
+    assert(src->phantoms == NULL);
+    int fd = shm_open(dst->shm_addr_triplet.f_name, O_RDWR, 0);
+    if (fd == -1) {
+        jl_safe_printf("shm_open failed\n");
+        abort();
+    }
+    jl_gc_free_page_(src->shm_addr_triplet.data, fd);
+    free(src->alloc_bitmap);
+    void *p = mmap(src->shm_addr_triplet.data, GC_PAGE_SZ, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, fd, dst->shm_addr_triplet.offset);
+    if (p == MAP_FAILED) {
+        jl_safe_printf("mmap failed\n");
+        char *err = strerror(errno);
+        jl_safe_printf("%s\n", err);
+        abort();
+    }
+    close(fd);
+    // mark `src`as a phantom of `dst`
+    src->phantoms = dst->phantoms;
+    dst->phantoms = src;
+    gc_alloc_map_set(src->shm_addr_triplet.data, GC_PAGE_PHANTOM);
+#endif // GC_COPY_THROUGH_SHM
+}
+
+int gc_pg_compare_by_nfree(jl_gc_pagemeta_t **pg1, jl_gc_pagemeta_t **pg2)
+{
+    return (*pg1)->nfree - (*pg2)->nfree;
+}
+
+void gc_evacuate_all(void)
+{
+#ifdef GC_COPY_THROUGH_SHM
+    arraylist_t a;
+    arraylist_new(&a, AL_N_INLINE + 1);
+    for (int pool = 0; pool < JL_GC_N_MAX_POOLS; pool++) {
+        for (int i = 0; i < gc_n_threads; i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[i];
+            if (ptls2 == NULL) {
+                continue;
+            }
+            jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
+            while (pg != NULL) {
+                jl_gc_pagemeta_t *pg2 = pg->next;
+                if (gc_alloc_map_is_set(pg->shm_addr_triplet.data, GC_PAGE_ALLOCATED)) {
+                    if (pg->osize == jl_gc_sizeclasses[pool]) {
+                        arraylist_push(&a, pg);
+                    }
+                }
+                pg = pg2;
+            }
+        }
+        // sort by `nfree`
+        qsort(a.items, a.len, sizeof(jl_gc_pagemeta_t*), (int (*)(const void *, const void *))gc_pg_compare_by_nfree);
+        for (int i = 0; i < a.len; i++) {
+            for (int j = a.len - 1; j > i; j--) {
+                jl_gc_pagemeta_t *pg1 = (jl_gc_pagemeta_t*)a.items[i];
+                jl_gc_pagemeta_t *pg2 = (jl_gc_pagemeta_t*)a.items[j];
+                if (gc_alloc_map_is_set(pg1->shm_addr_triplet.data, GC_PAGE_PHANTOM)) {
+                    continue;
+                }
+                if (pg1->phantoms != NULL) {
+                    continue;
+                }
+                if (gc_check_disjoint_bitmaps(pg1->alloc_bitmap, pg2->alloc_bitmap, GC_PAGE_SZ / pg1->osize / 8 + 1)) {
+                    gc_evacuate_page(pg2, pg1);
+                    break;
+                }
+            }
+        }
+        a.len = 0;
+    }
+    arraylist_free(&a);
+#endif // GC_COPY_THROUGH_SHM
+}
+
 // setup the data-structures for a sweep over all memory pools
 static void gc_sweep_pool(void)
 {
@@ -1818,6 +1978,9 @@ static void gc_sweep_pool(void)
         }
     }
 
+    // evacuate objects
+    gc_evacuate_all();
+
     // merge free lists
     for (int t_i = 0; t_i < n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
@@ -1827,12 +1990,14 @@ static void gc_sweep_pool(void)
         jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
         while (pg != NULL) {
             jl_gc_pagemeta_t *pg2 = pg->next;
-            if (pg->fl_begin_offset != UINT16_MAX) {
-                char *cur_pg = pg->data;
-                jl_taggedvalue_t *fl_beg = (jl_taggedvalue_t*)(cur_pg + pg->fl_begin_offset);
-                jl_taggedvalue_t *fl_end = (jl_taggedvalue_t*)(cur_pg + pg->fl_end_offset);
-                *pfl[t_i * JL_GC_N_POOLS + pg->pool_n] = fl_beg;
-                pfl[t_i * JL_GC_N_POOLS + pg->pool_n] = &fl_end->next;
+            if (!gc_alloc_map_is_set(pg->shm_addr_triplet.data, GC_PAGE_PHANTOM)) {
+                if (pg->fl_begin_offset != UINT16_MAX) {
+                    char *cur_pg = pg->shm_addr_triplet.data;
+                    jl_taggedvalue_t *fl_beg = (jl_taggedvalue_t*)(cur_pg + pg->fl_begin_offset);
+                    jl_taggedvalue_t *fl_end = (jl_taggedvalue_t*)(cur_pg + pg->fl_end_offset);
+                    *pfl[t_i * JL_GC_N_POOLS + pg->pool_n] = fl_beg;
+                    pfl[t_i * JL_GC_N_POOLS + pg->pool_n] = &fl_end->next;
+                }
             }
             pg = pg2;
         }
@@ -4523,7 +4688,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
             if (!newpages)
                 return NULL;
             char *data = gc_page_data(newpages);
-            if (data != meta->data) {
+            if (data != meta->shm_addr_triplet.data) {
                 // Pages on newpages form a linked list where only the
                 // first one is allocated from (see gc_reset_page()).
                 // All other pages are empty.

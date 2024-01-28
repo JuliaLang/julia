@@ -80,7 +80,10 @@
 // pool allocator configuration options
 
 // GC_SMALL_PAGE allocates objects in 4k pages
-// #define GC_SMALL_PAGE
+#define GC_SMALL_PAGE
+
+// GC_COPY_THROUGH_SHM copies objects by remapping pages through `shm`
+#define GC_COPY_THROUGH_SHM
 
 
 // method dispatch profiling --------------------------------------------------

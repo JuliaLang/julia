@@ -32,7 +32,7 @@ void gc_page_serializer_init(gc_page_profiler_serializer_t *serializer,
 {
     if (__unlikely(page_profile_enabled)) {
         serializer->typestrs.len = 0;
-        serializer->data = (char *)pg->data;
+        serializer->data = (char *)pg->shm_addr_triplet.data;
         serializer->osize = pg->osize;
     }
 }

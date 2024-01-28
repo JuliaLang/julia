@@ -19,6 +19,7 @@ extern "C" {
 #define MIN_BLOCK_PG_ALLOC (1) // 16 KB
 
 static int block_pg_cnt = DEFAULT_BLOCK_PG_ALLOC;
+static int page_count;
 
 void jl_gc_init_page(void)
 {
@@ -89,6 +90,66 @@ char *jl_gc_try_alloc_pages(void) JL_NOTSAFEPOINT
     return mem;
 }
 
+jl_gc_shm_addr_triplet_t jl_gc_try_alloc_shm_page(int pg_cnt) JL_NOTSAFEPOINT
+{
+    char *data = NULL;
+    char *filename = (char*)malloc_s(128);
+    snprintf(filename, 128, "jl_shm_%d_%d", (int)getpid(), page_count++);
+#ifdef GC_COPY_THROUGH_SHM
+    size_t pages_sz = GC_PAGE_SZ * pg_cnt;
+    assert(jl_page_size == GC_PAGE_SZ);
+    int fd = shm_open(filename, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    if (fd == -1) {
+        free(filename);
+        jl_throw(jl_memory_exception);
+    }
+    if (ftruncate(fd, pages_sz) == -1) {
+        shm_unlink(filename);
+        close(fd);
+        free(filename);
+        jl_throw(jl_memory_exception);
+    }
+    data = (char*)mmap(NULL, pages_sz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (data == MAP_FAILED) {
+        shm_unlink(filename);
+        close(fd);
+        free(filename);
+        return (jl_gc_shm_addr_triplet_t){NULL, NULL};
+    }
+    close(fd);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_mapped, pages_sz);
+    jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, pages_sz);
+#endif // GC_COPY_THROUGH_SHM
+    return (jl_gc_shm_addr_triplet_t){filename, data};
+}
+
+jl_gc_shm_addr_triplet_t jl_gc_try_alloc_shm_pages(void) JL_NOTSAFEPOINT
+{
+    unsigned pg_cnt = block_pg_cnt;
+    jl_gc_shm_addr_triplet_t mem = (jl_gc_shm_addr_triplet_t){NULL, NULL};
+    while (1) {
+        mem = jl_gc_try_alloc_shm_page(pg_cnt);
+        if (__likely(mem.data != NULL)) {
+            break;
+        }
+        size_t min_block_pg_alloc = MIN_BLOCK_PG_ALLOC;
+        if (GC_PAGE_SZ * min_block_pg_alloc < jl_page_size)
+            min_block_pg_alloc = jl_page_size / GC_PAGE_SZ; // exact division
+        if (pg_cnt >= 4 * min_block_pg_alloc) {
+            pg_cnt /= 4;
+            block_pg_cnt = pg_cnt;
+        }
+        else if (pg_cnt > min_block_pg_alloc) {
+            block_pg_cnt = pg_cnt = min_block_pg_alloc;
+        }
+        else {
+            uv_mutex_unlock(&gc_perm_lock);
+            jl_throw(jl_memory_exception);
+        }
+    }
+    return mem;
+}
+
 // get a new page, either from the freemap
 // or from the kernel if none are available
 NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
@@ -102,7 +163,7 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     // try to get page from `pool_lazily_freed`
     meta = pop_lf_back(&global_page_pool_lazily_freed);
     if (meta != NULL) {
-        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
+        gc_alloc_map_set(meta->shm_addr_triplet.data, GC_PAGE_ALLOCATED);
         // page is already mapped
         return meta;
     }
@@ -110,7 +171,7 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     // try to get page from `pool_clean`
     meta = pop_lf_back(&global_page_pool_clean);
     if (meta != NULL) {
-        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
+        gc_alloc_map_set(meta->shm_addr_triplet.data, GC_PAGE_ALLOCATED);
         goto exit;
     }
 
@@ -118,7 +179,7 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     meta = pop_lf_back(&global_page_pool_freed);
     if (meta != NULL) {
         jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, GC_PAGE_SZ);
-        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
+        gc_alloc_map_set(meta->shm_addr_triplet.data, GC_PAGE_ALLOCATED);
         goto exit;
     }
 
@@ -127,23 +188,41 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void) JL_NOTSAFEPOINT
     meta = pop_lf_back(&global_page_pool_clean);
     if (meta != NULL) {
         uv_mutex_unlock(&gc_perm_lock);
-        gc_alloc_map_set(meta->data, GC_PAGE_ALLOCATED);
+        gc_alloc_map_set(meta->shm_addr_triplet.data, GC_PAGE_ALLOCATED);
         goto exit;
     }
-    // must map a new set of pages
-    char *data = jl_gc_try_alloc_pages();
+#ifdef GC_COPY_THROUGH_SHM
+    jl_gc_shm_addr_triplet_t shm_addr_triplet = jl_gc_try_alloc_shm_pages();
     meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
     for (int i = 0; i < block_pg_cnt; i++) {
         jl_gc_pagemeta_t *pg = &meta[i];
-        pg->data = data + GC_PAGE_SZ * i;
-        gc_alloc_map_maybe_create(pg->data);
+        pg->shm_addr_triplet.data = shm_addr_triplet.data + GC_PAGE_SZ * i;
+        pg->shm_addr_triplet.f_name = shm_addr_triplet.f_name;
+        pg->shm_addr_triplet.offset = GC_PAGE_SZ * i;
+        gc_alloc_map_maybe_create(pg->shm_addr_triplet.data);
         if (i == 0) {
-            gc_alloc_map_set(pg->data, GC_PAGE_ALLOCATED);
+            gc_alloc_map_set(pg->shm_addr_triplet.data, GC_PAGE_ALLOCATED);
         }
         else {
             push_lf_back(&global_page_pool_clean, pg);
         }
     }
+#else
+    // must map a new set of pages
+    char *data = jl_gc_try_alloc_pages();
+    meta = (jl_gc_pagemeta_t*)malloc_s(block_pg_cnt * sizeof(jl_gc_pagemeta_t));
+    for (int i = 0; i < block_pg_cnt; i++) {
+        jl_gc_pagemeta_t *pg = &meta[i];
+        pg->shm_addr_triplet.data = data + GC_PAGE_SZ * i;
+        gc_alloc_map_maybe_create(pg->shm_addr_triplet.data);
+        if (i == 0) {
+            gc_alloc_map_set(pg->shm_addr_triplet.data, GC_PAGE_ALLOCATED);
+        }
+        else {
+            push_lf_back(&global_page_pool_clean, pg);
+        }
+    }
+#endif
     uv_mutex_unlock(&gc_perm_lock);
 exit:
 #ifdef _OS_WINDOWS_
@@ -154,26 +233,8 @@ exit:
     return meta;
 }
 
-// return a page to the freemap allocator
-void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+void jl_gc_free_page_(void *p, size_t decommit_size) JL_NOTSAFEPOINT
 {
-    void *p = pg->data;
-    gc_alloc_map_set((char*)p, GC_PAGE_FREED);
-    // tell the OS we don't need these pages right now
-    size_t decommit_size = GC_PAGE_SZ;
-    if (GC_PAGE_SZ < jl_page_size) {
-        // ensure so we don't release more memory than intended
-        size_t n_pages = jl_page_size / GC_PAGE_SZ; // exact division
-        decommit_size = jl_page_size;
-        void *otherp = (void*)((uintptr_t)p & ~(jl_page_size - 1)); // round down to the nearest physical page
-        p = otherp;
-        while (n_pages--) {
-            if (gc_alloc_map_is_set((char*)otherp)) {
-                return;
-            }
-            otherp = (void*)((char*)otherp + GC_PAGE_SZ);
-        }
-    }
 #ifdef _OS_WINDOWS_
     VirtualFree(p, decommit_size, MEM_DECOMMIT);
 #elif defined(MADV_FREE)
@@ -192,6 +253,30 @@ void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 #endif
     msan_unpoison(p, decommit_size);
     jl_atomic_fetch_add_relaxed(&gc_heap_stats.bytes_resident, -decommit_size);
+}
+
+// return a page to the freemap allocator
+void jl_gc_free_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+{
+    void *p = pg->shm_addr_triplet.data;
+    free(pg->alloc_bitmap);
+    gc_alloc_map_set((char*)p, GC_PAGE_FREED);
+    // tell the OS we don't need these pages right now
+    size_t decommit_size = GC_PAGE_SZ;
+    if (GC_PAGE_SZ < jl_page_size) {
+        // ensure so we don't release more memory than intended
+        size_t n_pages = jl_page_size / GC_PAGE_SZ; // exact division
+        decommit_size = jl_page_size;
+        void *otherp = (void*)((uintptr_t)p & ~(jl_page_size - 1)); // round down to the nearest physical page
+        p = otherp;
+        while (n_pages--) {
+            if (gc_alloc_map_is_set((char*)otherp, GC_PAGE_ALLOCATED)) {
+                return;
+            }
+            otherp = (void*)((char*)otherp + GC_PAGE_SZ);
+        }
+    }
+    jl_gc_free_page_(p, decommit_size);
 }
 
 #ifdef __cplusplus
