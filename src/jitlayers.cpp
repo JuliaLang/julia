@@ -1658,17 +1658,6 @@ void fixupTM(TargetMachine &TM) {
     }
 }
 
-extern int jl_opaque_ptrs_set;
-void SetOpaquePointer(LLVMContext &ctx) {
-    if (jl_opaque_ptrs_set)
-        return;
-#ifndef JL_LLVM_OPAQUE_POINTERS
-    ctx.setOpaquePointers(false);
-#else
-    ctx.setOpaquePointers(true);
-#endif
-}
-
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     // Mark our address spaces as non-integral
     auto jl_data_layout = TM.createDataLayout();
@@ -1690,7 +1679,6 @@ JuliaOJIT::JuliaOJIT()
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
-        SetOpaquePointer(*ctx);
         return orc::ThreadSafeContext(std::move(ctx));
     }),
 #ifdef JL_USE_JITLINK

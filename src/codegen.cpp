@@ -9551,8 +9551,6 @@ char jl_using_perf_jitevents = 0;
 
 int jl_is_timing_passes = 0;
 
-int jl_opaque_ptrs_set = 0;
-
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
@@ -9601,15 +9599,6 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
-
-    // we want the opaque-pointers to be opt-in, per LLVMContext, for this release
-    // so change the default value back to pre-14.x, without changing the NumOccurrences flag for it
-    clopt = llvmopts.lookup("opaque-pointers");
-    if (clopt && clopt->getNumOccurrences() == 0) {
-        clopt->addOccurrence(1, clopt->ArgStr, "false", true);
-    } else {
-        jl_opaque_ptrs_set = 1;
-    }
 
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)
