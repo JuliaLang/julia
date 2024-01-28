@@ -682,6 +682,26 @@ end
 
 lapack_size(t::AbstractChar, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
 
+"""
+    copyto!(B::AbstractMatrix, ir_dest::AbstractUnitRange, jr_dest::AbstractUnitRange,
+            tM::AbstractChar,
+            M::AbstractVecOrMat, ir_src::AbstractUnitRange, jr_src::AbstractUnitRange) -> B
+
+Efficiently copy elements of matrix `M` to `B` conditioned on the character
+parameter `tM` as follows:
+
+| `tM` | Destination | Source |
+| --- | :--- | :--- |
+| `'N'` | `B[ir_dest, jr_dest]` | `M[ir_src, jr_src]` |
+| `'T'` | `B[ir_dest, jr_dest]` | `transpose(M)[ir_src, jr_src]` |
+| `'C'` | `B[ir_dest, jr_dest]` | `conj(transpose(M))[ir_src, jr_src]` |
+
+The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore, the index range
+parameters must satisfy `length(ir_dest) == length(ir_src)` and
+`length(jr_dest) == length(jr_src)`.
+
+See also [`copy_transpose!`](@ref).
+"""
 function copyto!(B::AbstractVecOrMat, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
         copyto!(B, ir_dest, jr_dest, M, ir_src, jr_src)
@@ -693,9 +713,9 @@ function copyto!(B::AbstractVecOrMat, ir_dest::AbstractUnitRange{Int}, jr_dest::
 end
 
 """
-    copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange,
-                    jr_dest::AbstractUnitRange, tM::AbstractChar, M::AbstractVecOrMat,
-                    ir_src::AbstractUnitRange, jr_src::AbstractUnitRange) -> B
+    copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange, jr_dest::AbstractUnitRange,
+                    tM::AbstractChar,
+                    M::AbstractVecOrMat, ir_src::AbstractUnitRange, jr_src::AbstractUnitRange) -> B
 
 Efficiently copy elements of matrix `M` to `B` conditioned on the character
 parameter `tM` as follows:
@@ -703,13 +723,14 @@ parameter `tM` as follows:
 | `tM` | Destination | Source |
 | --- | :--- | :--- |
 | `'N'` | `B[ir_dest, jr_dest]` | `transpose(M)[jr_src, ir_src]` |
-| `'T'` | `B[ir_dest, jr_dest]` |  `M[jr_src, ir_src]` |
+| `'T'` | `B[ir_dest, jr_dest]` | `M[jr_src, ir_src]` |
 | `'C'` | `B[ir_dest, jr_dest]` | `conj(M)[jr_src, ir_src]` |
 
-The elements `B[ir_dest, jr_dest]` are overwritten.
-
-Furthermore, the index range parameters must satisfy `length(ir_dest) == length(jr_src)` and
+The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore, the index
+range parameters must satisfy `length(ir_dest) == length(jr_src)` and
 `length(jr_dest) == length(ir_src)`.
+
+See also [`copyto!`](@ref).
 """
 function copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
