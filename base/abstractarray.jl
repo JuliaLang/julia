@@ -210,13 +210,14 @@ String
 valtype(A::Type{<:AbstractArray}) = eltype(A)
 
 """
-    prevind(::AbstractArray, i)
+    prevind(A, i)
 
-Return the index before `i` in `A`. The returned index is often equivalent to `i - 1` for an integer `i`. This
-function can be useful for generic code.
+Return the index before `i` in `A`. The returned index is often equivalent to `i
+- 1` for an integer `i`. This function can be useful for generic code.
 
 !!! warning
-    The returned index might be out of bounds. Consider using [`checkbounds`](@ref).
+    The returned index might be out of bounds. Consider using
+    [`checkbounds`](@ref).
 
 See also: [`nextind`](@ref).
 
@@ -243,14 +244,14 @@ CartesianIndex(2, 0)
 prevind(::AbstractArray, i::Integer) = Int(i)-1
 
 """
-    nextind(::AbstractArray, i)
+    nextind(A, i)
 
-Return the index after `i`, e.g. equivalent to `i + 1` for an integer `i`. This
-function can be useful for generic code that operates on both arrays and
-strings, since string indices may not be consecutive.
+Return the index after `i` in `A`. The returned index is often equivalent to `i
++ 1` for an integer `i`. This function can be useful for generic code.
 
 !!! warning
-    The returned index might be out of bounds. Consider using [`checkbounds`](@ref).
+    The returned index might be out of bounds. Consider using
+    [`checkbounds`](@ref).
 
 See also: [`prevind`](@ref).
 
