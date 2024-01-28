@@ -1932,3 +1932,6 @@ f45952(x) = [x;;]
     @test_throws "invalid index: true of type Bool" isassigned(A, 1, true)
     @test_throws "invalid index: true of type Bool" isassigned(A, true)
 end
+
+typed_hvcat_rt() = [1 1.0; true "1.0"]
+@inferred typed_hvcat_rt()
