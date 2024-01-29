@@ -1116,7 +1116,7 @@ function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompa
     return nothing
 end
 
-function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr)
+function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
     length(stmt.args) == 4 || return false
     condarg = stmt.args[2]
     condtyp = argextype(condarg, compact)
@@ -1128,7 +1128,7 @@ function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr)
             compact[idx] = stmt.args[4]
             return true
         end
-    elseif stmt.args[3] === stmt.args[4]
+    elseif ⊑(𝕃ₒ, condtyp, Bool) && stmt.args[3] === stmt.args[4]
         compact[idx] = stmt.args[3]
         return true
     end
@@ -1316,7 +1316,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             elseif is_known_call(stmt, isa, compact)
                 lift_comparison!(isa, compact, idx, stmt, 𝕃ₒ)
             elseif is_known_call(stmt, Core.ifelse, compact)
-                fold_ifelse!(compact, idx, stmt)
+                fold_ifelse!(compact, idx, stmt, 𝕃ₒ)
             elseif is_known_invoke_or_call(stmt, Core.OptimizedGenerics.KeyValue.get, compact)
                 2 == (length(stmt.args) - (isexpr(stmt, :invoke) ? 2 : 1)) || continue
                 lift_keyvalue_get!(compact, idx, stmt, 𝕃ₒ)

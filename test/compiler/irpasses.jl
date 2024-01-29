@@ -1395,12 +1395,12 @@ end
 @test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(isa(x, Float64), x, exp(x))
 end
-@test fully_eliminated((Bool,Float64); retval=Core.Argument(3)) do c, x
-    return Core.ifelse(c, x, x)
-end
-@test fully_eliminated((Bool,Float64); retval=Core.Argument(3)) do c, x
-    return ifelse(c, x, x)
-end
+func_coreifelse(c, x) = Core.ifelse(c, x, x)
+func_ifelse(c, x) = ifelse(c, x, x)
+@test fully_eliminated(func_coreifelse, (Bool,Float64); retval=Core.Argument(3))
+@test !fully_eliminated(func_coreifelse, (Any,Float64))
+@test fully_eliminated(func_ifelse, (Bool,Float64); retval=Core.Argument(3))
+@test !fully_eliminated(func_ifelse, (Any,Float64))
 
 # PhiC fixup of compact! with cfg modification
 @inline function big_dead_throw_catch()

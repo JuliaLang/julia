@@ -1749,7 +1749,7 @@ function early_inline_special_case(
             elseif cond.val === false
                 return SomeCase(stmt.args[4])
             end
-        elseif stmt.args[3] === stmt.args[4]
+        elseif ⊑(optimizer_lattice(state.interp), cond, Bool) && stmt.args[3] === stmt.args[4]
             return SomeCase(stmt.args[3])
         end
     end
