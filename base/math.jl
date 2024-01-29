@@ -304,14 +304,19 @@ end
 
 # polynomial evaluation using compensated summation.
 # much more accurate, especially when lo can be combined with other rounding errors
-Base.@assume_effects :terminates_locally @inline function exthorner(x, p::Tuple)
-    hi, lo = p[end], zero(x)
-    for i in length(p)-1:-1:1
-        pi = getfield(p, i) # needed to prove consistency
-        prod, err = two_mul(hi,x)
-        hi = pi+prod
-        lo = fma(lo, x, prod - (hi - pi) + err)
-    end
+@inline function exthorner(x::T, p::Tuple{T,T,T}) where T<:Union{Float32,Float64}
+    hi, lo = p[lastindex(p)], zero(x)
+    hi, lo = _exthorner(2, x, p, hi, lo)
+    hi, lo = _exthorner(1, x, p, hi, lo)
+    return hi, lo
+end
+
+@inline function _exthorner(i::Int, x::T, p::Tuple{T,T,T}, hi::T, lo::T) where T<:Union{Float32,Float64}
+    i == 2 || i == 1 || error("unexpected index")
+    pi = p[i]
+    prod, err = two_mul(hi,x)
+    hi = pi+prod
+    lo = fma(lo, x, prod - (hi - pi) + err)
     return hi, lo
 end
 
@@ -1215,7 +1220,7 @@ end
 end
 
 @inline function pow_body(xu::UInt64, y::Float64)
-    logxhi,logxlo = Base.Math._log_ext(xu)
+    logxhi,logxlo = _log_ext(xu)
     xyhi, xylo = two_mul(logxhi,y)
     xylo = muladd(logxlo, y, xylo)
     hi = xyhi+xylo
@@ -1289,7 +1294,7 @@ end
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
     # double-double numbers and returns the high double. References:
-    # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
+    # [1] https://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
@@ -1464,9 +1469,11 @@ end
 rem2pi(x::Float32, r::RoundingMode) = Float32(rem2pi(Float64(x), r))
 rem2pi(x::Float16, r::RoundingMode) = Float16(rem2pi(Float64(x), r))
 rem2pi(x::Int32, r::RoundingMode) = rem2pi(Float64(x), r)
-function rem2pi(x::Int64, r::RoundingMode)
-    fx = Float64(x)
-    fx == x || throw(ArgumentError("Int64 argument to rem2pi is too large: $x"))
+
+# general fallback
+function rem2pi(x::Integer, r::RoundingMode)
+    fx = float(x)
+    fx == x || throw(ArgumentError(LazyString(typeof(x), " argument to rem2pi is too large: ", x)))
     rem2pi(fx, r)
 end
 

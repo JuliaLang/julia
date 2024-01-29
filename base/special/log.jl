@@ -155,14 +155,11 @@ logbU(::Type{Float64},::Val{10}) = 0.4342944819032518
 logbL(::Type{Float64},::Val{10}) = 1.098319650216765e-17
 
 # Procedure 1
-# XXX we want to mark :noub here so that this function can be concrete-folded,
-# because the effect analysis currently can't prove it in the presence of `@inbounds` or
-# `:boundscheck`, but still the access to `t_log_Float64` is really safe here
-Base.@assume_effects :consistent :noub @inline function log_proc1(y::Float64,mf::Float64,F::Float64,f::Float64,base=Val(:ℯ))
+@inline function log_proc1(y::Float64,mf::Float64,F::Float64,f::Float64,base=Val(:ℯ))
     jp = unsafe_trunc(Int,128.0*F)-127
 
     ## Steps 1 and 2
-    @inbounds hi,lo = t_log_Float64[jp]
+    Base.@assume_effects :nothrow :noub @inbounds hi,lo = t_log_Float64[jp]
     l_hi = mf* 0.6931471805601177 + hi
     l_lo = mf*-1.7239444525614835e-13 + lo
 
@@ -216,14 +213,11 @@ end
 end
 
 # Procedure 1
-# XXX we want to mark :noub here so that this function can be concrete-folded,
-# because the effect analysis currently can't prove it in the presence of `@inbounds` or
-# `:boundscheck`, but still the access to `t_log_Float32` is really safe here
-Base.@assume_effects :consistent :noub @inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,base=Val(:ℯ))
+@inline function log_proc1(y::Float32,mf::Float32,F::Float32,f::Float32,base=Val(:ℯ))
     jp = unsafe_trunc(Int,128.0f0*F)-127
 
     ## Steps 1 and 2
-    @inbounds hi = t_log_Float32[jp]
+    Base.@assume_effects :nothrow :noub @inbounds hi = t_log_Float32[jp]
     l = mf*0.6931471805599453 + hi
 
     ## Step 3
@@ -267,7 +261,7 @@ end
 @noinline log(x::Float64)   = _log(x, Val(:ℯ), :log)
 @noinline log10(x::Float64) = _log(x, Val(10), :log10)
 
-@inline function _log(x::Float64, base, func)
+@inline function _log(x::Float64, base, func::Symbol)
     if x > 0.0
         x == Inf && return x
 
@@ -294,15 +288,15 @@ end
 
         return log_proc1(y,mf,F,f,base)
     elseif x == 0.0
-        -Inf
+        return -Inf
     elseif isnan(x)
-        NaN
+        return NaN
     else
         throw_complex_domainerror(func, x)
     end
 end
 
-@inline function _log(x::Float32, base, func)
+@inline function _log(x::Float32, base, func::Symbol)
     if x > 0f0
         x == Inf32 && return x
 
@@ -327,11 +321,11 @@ end
         F = (y + 65536.0f0) - 65536.0f0 # 0x1p-7*round(0x1p7*y)
         f = y-F
 
-        log_proc1(y,mf,F,f,base)
+        return log_proc1(y,mf,F,f,base)
     elseif x == 0f0
-        -Inf32
+        return -Inf32
     elseif isnan(x)
-        NaN32
+        return NaN32
     else
         throw_complex_domainerror(func, x)
     end
@@ -562,17 +556,17 @@ end
 # Adapted and modified from https://github.com/ARM-software/optimized-routines/blob/master/math/pow.c
 # Copyright (c) 2018-2020, Arm Limited. (which is also MIT licensed)
 # note that this isn't an exact translation as this version compacts the table to reduce cache pressure.
-function _log_ext(xu)
+function _log_ext(xu::UInt64)
     # x = 2^k z; where z is in range [0x1.69555p-1,0x1.69555p-0) and exact.
     # The range is split into N subintervals.
     # The ith subinterval contains z and c is near the center of the interval.
     tmp = reinterpret(Int64, xu - 0x3fe6955500000000) #0x1.69555p-1
-    i = (tmp >> 45) & 127
     z = reinterpret(Float64, xu - (tmp & 0xfff0000000000000))
     k = Float64(tmp >> 52)
     # log(x) = k*Ln2 + log(c) + log1p(z/c-1).
-    # getfield instead of getindex to satisfy effect analysis not knowing whether this is inbounds
-    t, logctail = getfield(t_log_table_compact, Int(i+1))
+    # N.B. :nothrow and :noub since `idx` is known to be `1 ≤ idx ≤ length(t_log_table_compact)`
+    idx = (tmp >> 45) & (length(t_log_table_compact)-1) + 1
+    t, logctail = Base.@assume_effects :nothrow :noub @inbounds t_log_table_compact[idx]
     invc, logc = log_tab_unpack(t)
     # Note: invc is j/N or j/N/2 where j is an integer in [N,2N) and
     # |z/c - 1| < 1/N, so r = z/c - 1 is exactly representable.

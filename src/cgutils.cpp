@@ -911,7 +911,7 @@ static bool is_tupletype_homogeneous(jl_svec_t *t, bool allow_va = false)
 }
 
 static bool for_each_uniontype_small(
-        std::function<void(unsigned, jl_datatype_t*)> f,
+        llvm::function_ref<void(unsigned, jl_datatype_t*)> f,
         jl_value_t *ty,
         unsigned &counter)
 {
@@ -2911,7 +2911,8 @@ static void init_bits_cgval(jl_codectx_t &ctx, Value *newv, const jl_cgval_t& v,
 {
     // newv should already be tagged
     if (v.ispointer()) {
-        emit_memcpy(ctx, newv, jl_aliasinfo_t::fromTBAA(ctx, tbaa), v, jl_datatype_size(v.typ), sizeof(void*), julia_alignment(v.typ));
+        unsigned align = std::max(julia_alignment(v.typ), (unsigned)sizeof(void*));
+        emit_memcpy(ctx, newv, jl_aliasinfo_t::fromTBAA(ctx, tbaa), v, jl_datatype_size(v.typ), align, julia_alignment(v.typ));
     }
     else {
         init_bits_value(ctx, newv, v.V, tbaa);
@@ -3488,10 +3489,8 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt,
     if (static_size > 0)
         call->addRetAttr(Attribute::getWithDereferenceableBytes(call->getContext(), static_size));
     call->addRetAttr(Attribute::getWithAlignment(call->getContext(), Align(align)));
-#if JL_LLVM_VERSION >= 150000
     if (fully_initialized)
         call->addFnAttr(Attribute::get(call->getContext(), Attribute::AllocKind, uint64_t(AllocFnKind::Alloc | AllocFnKind::Uninitialized)));
-#endif
     return call;
 }
 
@@ -4045,12 +4044,12 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             Value *mlen = emit_genericmemorylen(ctx, mem, ref.typ);
             Value *inbound = ctx.builder.CreateICmpULT(newdata, mlen);
             ctx.builder.CreateCondBr(inbound, endBB, failBB);
-            ctx.f->getBasicBlockList().push_back(failBB);
+            failBB->insertInto(ctx.f);
             ctx.builder.SetInsertPoint(failBB);
             ctx.builder.CreateCall(prepare_call(jlboundserror_func),
                 { mark_callee_rooted(ctx, boxed(ctx, ref)), i });
             ctx.builder.CreateUnreachable();
-            ctx.f->getBasicBlockList().push_back(endBB);
+            endBB->insertInto(ctx.f);
             ctx.builder.SetInsertPoint(endBB);
         }
     }
@@ -4118,12 +4117,12 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
             Value *inbound = ctx.builder.CreateICmpULT(idx0, mlen);
 #endif
             ctx.builder.CreateCondBr(inbound, endBB, failBB);
-            ctx.f->getBasicBlockList().push_back(failBB);
+            failBB->insertInto(ctx.f);
             ctx.builder.SetInsertPoint(failBB);
             ctx.builder.CreateCall(prepare_call(jlboundserror_func),
                 { mark_callee_rooted(ctx, boxed(ctx, ref)), i });
             ctx.builder.CreateUnreachable();
-            ctx.f->getBasicBlockList().push_back(endBB);
+            endBB->insertInto(ctx.f);
             ctx.builder.SetInsertPoint(endBB);
         }
     }

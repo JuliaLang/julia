@@ -358,3 +358,7 @@ end
     @test checked_mul(1, 2, 3, 4, 5, 6, 7) === 5040
     @test checked_mul(1, 2, 3, 4, 5, 6, 7, 8) === 40320
 end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Base.Checked))
+end

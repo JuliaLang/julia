@@ -126,6 +126,15 @@ Random.seed!(100)
                 @test BLAS.iamax(b) == findmax(fabs, b)[2] * (step(ind) >= 0)
             end
         end
+        @testset "nrm2 with non-finite elements" begin
+            # These tests would have caught <https://github.com/OpenMathLib/OpenBLAS/issues/2998>
+            # when running on appropriate hardware.
+            a = zeros(elty,n)
+            a[begin] = elty(-Inf)
+            @test BLAS.nrm2(a) === abs2(elty(Inf))
+            a[begin] = elty(NaN)
+            @test BLAS.nrm2(a) === abs2(elty(NaN))
+        end
         @testset "scal" begin
             α = rand(elty)
             a = rand(elty,n)
@@ -135,7 +144,7 @@ Random.seed!(100)
             end
         end
 
-        @testset "ger, her, syr" for x in (rand(elty, n), view(rand(elty,2n), 1:2:2n), view(rand(elty,n), n:-1:1)),
+        @testset "ger, geru, her, syr" for x in (rand(elty, n), view(rand(elty,2n), 1:2:2n), view(rand(elty,n), n:-1:1)),
             y in (rand(elty,n), view(rand(elty,3n), 1:3:3n), view(rand(elty,2n), 2n:-2:2))
 
             A = rand(elty,n,n)
@@ -143,6 +152,9 @@ Random.seed!(100)
 
             @test BLAS.ger!(α,x,y,copy(A)) ≈ A + α*x*y'
             @test_throws DimensionMismatch BLAS.ger!(α,Vector{elty}(undef,n+1),y,copy(A))
+
+            @test BLAS.geru!(α,x,y,copy(A)) ≈ A + α*x*transpose(y)
+            @test_throws DimensionMismatch BLAS.geru!(α,Vector{elty}(undef,n+1),y,copy(A))
 
             A = rand(elty,n,n)
             A = A + transpose(A)
