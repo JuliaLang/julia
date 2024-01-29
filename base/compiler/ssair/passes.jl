@@ -1128,6 +1128,9 @@ function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr)
             compact[idx] = stmt.args[4]
             return true
         end
+    elseif stmt.args[3] === stmt.args[4]
+        compact[idx] = stmt.args[3]
+        return true
     end
     return false
 end
