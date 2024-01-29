@@ -406,29 +406,25 @@ up front and cache it for future reuse.
 
 ## [Pivoting Strategies](@id man-linalg-pivoting-strategies)
 
-Several [matrix factorizations](@ref man-linalg-factorizations) support
-[pivoting](https://en.wikipedia.org/wiki/Pivot_element), where the rows and columns
-of the original matrix are permuted with the intention of improving the numerical
-stability of the factorization.
+Several [matrix factorizations](@ref man-linalg-factorizations) support pivoting,
+where a [pivot element](https://en.wikipedia.org/wiki/Pivot_element) is selected
+by permuting the rows and columns of the original matrix according to a pivoting
+strategy. Then, the next steps of the factorization are performed based on the
+selected pivot element.
 
-Pivoting may introduce a minor computational overhead. However, several matrix
-decompositions, such as the LU decomposition, may fail without pivoting.
-
-Unfortunately, there's no silver bullet pivoting strategy and the right approach
-depends on the problem. Nevertheless the default pivoting strategy of a matrix
-factorization technique is often a good first choice.
+Pivoting improves the numerical stability of the factorization. In fact, several
+matrix decompositions, such as the LU decomposition, may fail without pivoting.
+On the other hand, pivoting may introduce a minor computational overhead.
 
 In the following, the pivoting strategies implemented in Julia are described. Note
 that not all matrix factorizations may support them. Consult the documentation of the
 respective matrix factorization for details on the supported strategies.
 
-# TODO: Enhance and polish above text. Include DocStrings for the pivoting strategies.
-# TODO: Check if a table with available pivoting strategies per factorization is necessary.
-# TODO: Check if the rook pivoting strategy (bunchkaufman) is worth mentioning.
-# TODO: Add pivoting strategies in the @docs section below.
-
 ```@docs
-
+LinearAlgebra.NoPivot
+LinearAlgebra.RowNonZero
+LinearAlgebra.RowMaximum
+LinearAlgebra.ColumnNorm
 ```
 
 ## Standard functions
