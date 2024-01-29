@@ -1,0 +1,250 @@
+From caa2945138f3c8a6f3f0dacbaf653c283e3cd2cb Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Tue, 11 Apr 2023 00:04:09 +0200
+Subject: [PATCH] Support Apple A15/M2 cpus through the existing VORTEX target
+
+---
+ cpuid_arm64.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/cpuid_arm64.c b/cpuid_arm64.c
+index 1080ea974..809f48e95 100644
+--- a/cpuid_arm64.c
++++ b/cpuid_arm64.c
+@@ -268,7 +268,8 @@ int detect(void)
+ #else
+ #ifdef __APPLE__
+ 	sysctlbyname("hw.cpufamily",&value,&length,NULL,0);
+-	if (value ==131287967|| value == 458787763 ) return CPU_VORTEX;
++	if (value ==131287967|| value == 458787763 ) return CPU_VORTEX; //A12/M1
++	if (value == 3660830781) return CPU_VORTEX; //A15/M2
+ #endif
+ 	return CPU_ARMV8;
+ #endif
+
+From cda29633a30bf7ecbc64f85e4bcc6517ad954f1c Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Thu, 13 Apr 2023 17:59:48 +0200
+Subject: [PATCH 1/8] move ALPHA_I out of register 18 (reserved on OSX)
+
+---
+ kernel/arm64/cgemm_kernel_8x4.S | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/arm64/cgemm_kernel_8x4.S b/kernel/arm64/cgemm_kernel_8x4.S
+index 24e08a646a..f100adc7af 100644
+--- a/kernel/arm64/cgemm_kernel_8x4.S
++++ b/kernel/arm64/cgemm_kernel_8x4.S
+@@ -49,7 +49,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ #define pCRow3		x15
+ #define pA		x16
+ #define alphaR		w17
+-#define alphaI		w18
++#define alphaI		w19
+
+ #define alpha0_R	s10
+ #define alphaV0_R	v10.s[0]
+
+From c7bbad09adf8cdd2fa4b8709ea669e530a0136a4 Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Thu, 13 Apr 2023 18:00:47 +0200
+Subject: [PATCH 2/8] Move ALPHA_I out of register 18 (reserved on OSX)
+
+---
+ kernel/arm64/cgemm_kernel_8x4_thunderx2t99.S | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/arm64/cgemm_kernel_8x4_thunderx2t99.S b/kernel/arm64/cgemm_kernel_8x4_thunderx2t99.S
+index 29a68ff227..2c63925be2 100644
+--- a/kernel/arm64/cgemm_kernel_8x4_thunderx2t99.S
++++ b/kernel/arm64/cgemm_kernel_8x4_thunderx2t99.S
+@@ -49,7 +49,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ #define pCRow3		x15
+ #define pA		x16
+ #define alphaR		w17
+-#define alphaI		w18
++#define alphaI		w19
+
+ #define alpha0_R	s10
+ #define alphaV0_R	v10.s[0]
+
+From 0b1acb0ba3aa327fee65bc6bcf596080dfc39f4b Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Thu, 13 Apr 2023 18:03:35 +0200
+Subject: [PATCH 3/8] Move ALPHA_I out of register 18 (reserved on OSX)
+
+---
+ kernel/arm64/ctrmm_kernel_8x4.S | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/kernel/arm64/ctrmm_kernel_8x4.S b/kernel/arm64/ctrmm_kernel_8x4.S
+index 5c08273975..e8f1d8cf30 100644
+--- a/kernel/arm64/ctrmm_kernel_8x4.S
++++ b/kernel/arm64/ctrmm_kernel_8x4.S
+@@ -49,10 +49,10 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ #define pCRow3		x15
+ #define pA		x16
+ #define alphaR		w17
+-#define alphaI		w18
+-#define temp		x19
+-#define tempOffset	x20
+-#define tempK		x21
++#define alphaI		w19
++#define temp		x20
++#define tempOffset	x21
++#define tempK		x22
+
+ #define alpha0_R	s10
+ #define alphaV0_R	v10.s[0]
+
+From 108a21e47a754032a9fb5477afcb76c6c158a146 Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Thu, 13 Apr 2023 18:05:14 +0200
+Subject: [PATCH 4/8] Move ALPHA out of register 18 (reserved on OSX)
+
+---
+ kernel/arm64/sgemm_kernel_sve_v2x8.S | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/arm64/sgemm_kernel_sve_v2x8.S b/kernel/arm64/sgemm_kernel_sve_v2x8.S
+index c969ed4db4..60e1f347b8 100644
+--- a/kernel/arm64/sgemm_kernel_sve_v2x8.S
++++ b/kernel/arm64/sgemm_kernel_sve_v2x8.S
+@@ -55,8 +55,8 @@ With this approach, we can reuse sgemm_n|tcopy_sve_v1.c packing functions. */
+ #define lanes		x15
+ #define pA1	    	x16
+ #define pA2	    	x17
+-#define alpha		w18
+-#define vec_len		x19
++#define alpha		w19
++#define vec_len		x20
+ #define vec_lenx2   x20
+
+ #define alpha0		s10
+
+From 3727672a74c18938230c3a2db012a5693688bfd6 Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Thu, 13 Apr 2023 18:07:52 +0200
+Subject: [PATCH 5/8] Improve workaround and keep compilers from optimizing it
+ out
+
+---
+ kernel/arm64/dznrm2_thunderx2t99.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/arm64/dznrm2_thunderx2t99.c b/kernel/arm64/dznrm2_thunderx2t99.c
+index e342b0b63f..0bd274b3f1 100644
+--- a/kernel/arm64/dznrm2_thunderx2t99.c
++++ b/kernel/arm64/dznrm2_thunderx2t99.c
+@@ -27,7 +27,7 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+ #include "common.h"
+-
++#include <float.h>
+ #include <arm_neon.h>
+
+ #if defined(SMP)
+@@ -344,6 +344,7 @@ FLOAT CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x)
+ 	FLOAT dummy_alpha[2];
+ #endif
+ 	FLOAT ssq, scale;
++	volatile FLOAT sca;
+
+ 	if (n <= 0 || inc_x <= 0) return 0.0;
+
+@@ -404,7 +405,8 @@ FLOAT CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x)
+ #else
+ 	nrm2_compute(n, x, inc_x, &ssq, &scale);
+ #endif
+-	if (fabs(scale) <1.e-300) return 0.;
++	sca = fabs(scale);
++	if (sca < DBL_MIN) return 0.;
+ 	ssq = sqrt(ssq) * scale;
+
+ 	return ssq;
+
+From f096a339e4a22f4bc6dc454640e5d4007b07368b Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Thu, 13 Apr 2023 18:16:09 +0200
+Subject: [PATCH 6/8] Use long value fields for cpu ident on OSX
+
+---
+ cpuid_arm64.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/cpuid_arm64.c b/cpuid_arm64.c
+index 809f48e95a..e586f9a3c2 100644
+--- a/cpuid_arm64.c
++++ b/cpuid_arm64.c
+@@ -267,9 +267,9 @@ int detect(void)
+ 	}
+ #else
+ #ifdef __APPLE__
+-	sysctlbyname("hw.cpufamily",&value,&length,NULL,0);
+-	if (value ==131287967|| value == 458787763 ) return CPU_VORTEX; //A12/M1
+-	if (value == 3660830781) return CPU_VORTEX; //A15/M2
++	sysctlbyname("hw.cpufamily",&value64,&length64,NULL,0);
++	if (value64 ==131287967|| value64 == 458787763 ) return CPU_VORTEX; //A12/M1
++	if (value64 == 3660830781) return CPU_VORTEX; //A15/M2
+ #endif
+ 	return CPU_ARMV8;
+ #endif
+
+From 8be68fa7f4edfa0c65949faf67f8feea2c7f0f43 Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Sat, 15 Apr 2023 12:02:39 +0200
+Subject: [PATCH 7/8] move declaration of sca to really keep the compiler from
+ throwing it out (for now)
+
+---
+ kernel/arm64/dznrm2_thunderx2t99.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/kernel/arm64/dznrm2_thunderx2t99.c b/kernel/arm64/dznrm2_thunderx2t99.c
+index 0bd274b3f1..6077c85dd1 100644
+--- a/kernel/arm64/dznrm2_thunderx2t99.c
++++ b/kernel/arm64/dznrm2_thunderx2t99.c
+@@ -344,7 +344,6 @@ FLOAT CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x)
+ 	FLOAT dummy_alpha[2];
+ #endif
+ 	FLOAT ssq, scale;
+-	volatile FLOAT sca;
+
+ 	if (n <= 0 || inc_x <= 0) return 0.0;
+
+@@ -405,7 +404,7 @@ FLOAT CNAME(BLASLONG n, FLOAT *x, BLASLONG inc_x)
+ #else
+ 	nrm2_compute(n, x, inc_x, &ssq, &scale);
+ #endif
+-	sca = fabs(scale);
++	volatile FLOAT sca = fabs(scale);
+ 	if (sca < DBL_MIN) return 0.;
+ 	ssq = sqrt(ssq) * scale;
+
+
+From 44164e3a3d7f5c956728596b9f88d43cad0a8c14 Mon Sep 17 00:00:00 2001
+From: Martin Kroeker <martin@ruby.chemie.uni-freiburg.de>
+Date: Mon, 17 Apr 2023 14:23:13 +0200
+Subject: [PATCH 8/8] revert "move alpha out of register 18" (out of PR scope,
+ no SVE on Apple hw)
+
+---
+ kernel/arm64/sgemm_kernel_sve_v2x8.S | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/kernel/arm64/sgemm_kernel_sve_v2x8.S b/kernel/arm64/sgemm_kernel_sve_v2x8.S
+index 60e1f347b8..c969ed4db4 100644
+--- a/kernel/arm64/sgemm_kernel_sve_v2x8.S
++++ b/kernel/arm64/sgemm_kernel_sve_v2x8.S
+@@ -55,8 +55,8 @@ With this approach, we can reuse sgemm_n|tcopy_sve_v1.c packing functions. */
+ #define lanes		x15
+ #define pA1	    	x16
+ #define pA2	    	x17
+-#define alpha		w19
+-#define vec_len		x20
++#define alpha		w18
++#define vec_len		x19
+ #define vec_lenx2   x20
+
+ #define alpha0		s10
