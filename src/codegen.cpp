@@ -1915,7 +1915,8 @@ public:
     jl_value_t *rettype = NULL;
     jl_code_info_t *source = NULL;
     jl_array_t *code = NULL;
-    size_t world = 0;
+    size_t min_world = 0;
+    size_t max_world = -1;
     const char *name = NULL;
     StringRef file{};
     ssize_t *line = NULL;
@@ -1942,7 +1943,8 @@ public:
       : builder(llvmctx),
         emission_context(params),
         call_targets(),
-        world(params.world),
+        min_world(params.min_world),
+        max_world(params.max_world),
         use_cache(params.cache),
         external_linkage(params.external_linkage),
         params(params.params) { }
@@ -4988,7 +4990,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
             }
         }
         else {
-            jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
+            jl_value_t *ci = ctx.params->lookup(mi, ctx.min_world, ctx.max_world);
             if (ci != jl_nothing) {
                 jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
                 auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
@@ -5992,7 +5994,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     sigtype = jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
 
     jl_method_instance_t *mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
-    jl_code_instance_t *ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.world, ctx.world);
+    jl_code_instance_t *ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.min_world, ctx.max_world);
 
     if (ci == NULL || (jl_value_t*)ci == jl_nothing) {
         JL_GC_POP();
@@ -6008,7 +6010,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
 
     if (it == ctx.emission_context.compiled_functions.end()) {
         ++EmittedOpaqueClosureFunctions;
-        jl_code_info_t *ir = jl_uncompress_ir(closure_method, ci, (jl_value_t*)inferred);
+        jl_code_info_t *ir = jl_uncompress_ir(closure_method, (jl_value_t*)inferred);
         JL_GC_PUSH1(&ir);
         // TODO: Emit this inline and outline it late using LLVM's coroutine support.
         orc::ThreadSafeModule closure_m = jl_create_ts_module(
@@ -6804,7 +6806,7 @@ static Function* gen_cfun_wrapper(
 
     jl_codectx_t ctx(M->getContext(), params);
     ctx.f = cw;
-    ctx.world = world;
+    ctx.min_world = ctx.max_world = world;
     ctx.name = name;
     ctx.funcName = name;
 
@@ -7482,7 +7484,7 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     ctx.f = w;
     ctx.linfo = lam;
     ctx.rettype = jlretty;
-    ctx.world = 0;
+    ctx.min_world = ctx.max_world = 0;
 
     BasicBlock *b0 = BasicBlock::Create(ctx.builder.getContext(), "top", w);
     ctx.builder.SetInsertPoint(b0);
@@ -7949,8 +7951,6 @@ static jl_llvm_functions_t
 
     bool specsig, needsparams;
     std::tie(specsig, needsparams) = uses_specsig(lam, jlrettype, params.params->prefer_specsig);
-    if (!src->inferred)
-        specsig = false;
 
     // step 3. some variable analysis
     size_t i;
@@ -7985,7 +7985,7 @@ static jl_llvm_functions_t
         jl_varinfo_t &varinfo = ctx.slots[i];
         uint8_t flags = jl_array_uint8_ref(src->slotflags, i);
         varinfo.isSA = (jl_vinfo_sa(flags) != 0) || varinfo.isArgument;
-        varinfo.usedUndef = (jl_vinfo_usedundef(flags) != 0) || (!varinfo.isArgument && !src->inferred);
+        varinfo.usedUndef = (jl_vinfo_usedundef(flags) != 0) || !varinfo.isArgument;
         if (!varinfo.isArgument) {
             varinfo.value = mark_julia_type(ctx, (Value*)NULL, false, (jl_value_t*)jl_any_type);
         }
@@ -9562,7 +9562,7 @@ jl_llvm_functions_t jl_emit_codeinst(
             return jl_emit_oc_wrapper(m, params, codeinst->def, codeinst->rettype);
         }
         if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def))
-            src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
+            src = jl_uncompress_ir(def, (jl_value_t*)src);
         if (!src || !jl_is_code_info(src)) {
             JL_GC_POP();
             m = orc::ThreadSafeModule();
@@ -9590,7 +9590,7 @@ jl_llvm_functions_t jl_emit_codeinst(
                 jl_add_code_in_flight(f, codeinst, DL);
         }
 
-        if (params.world) {// don't alter `inferred` when the code is not directly being used
+        if (params.min_world) {// don't alter `inferred` when the code is not directly being used
             jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
             // don't change inferred state
             if (inferred) {
@@ -9615,6 +9615,7 @@ jl_llvm_functions_t jl_emit_codeinst(
                 // because we already emitted LLVM code from it and the native
                 // Julia-level optimization will never need to see it
                 else if (jl_is_method(def) && // don't delete toplevel code
+                         def->source != NULL && // don't delete code from optimized opaque closures that can't be reconstructed
                          inferred != jl_nothing && // and there is something to delete (test this before calling jl_ir_inlining_cost)
                          !effects_foldable(codeinst->ipo_purity_bits) && // don't delete code we may want for irinterp
                          ((jl_ir_inlining_cost(inferred) == UINT16_MAX) || // don't delete inlineable code
@@ -9676,17 +9677,9 @@ void jl_compile_workqueue(
                 // method body. See #34993
                 if (policy != CompilationPolicy::Default &&
                     jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
-                    src = jl_type_infer(codeinst->def, jl_atomic_load_acquire(&jl_world_counter), 0);
-                    if (src) {
-                        orc::ThreadSafeModule result_m =
-                        jl_create_ts_module(name_from_method_instance(codeinst->def),
-                            params.tsctx, params.DL, params.TargetTriple);
-                        auto decls = jl_emit_code(result_m, codeinst->def, src, src->rettype, params);
-                        if (result_m)
-                            it = params.compiled_functions.insert(std::make_pair(codeinst, std::make_pair(std::move(result_m), std::move(decls)))).first;
-                    }
+                    codeinst = jl_type_infer(codeinst->def, jl_atomic_load_acquire(&jl_world_counter), 0, SOURCE_MODE_FORCE_SOURCE);
                 }
-                else {
+                if (codeinst) {
                     orc::ThreadSafeModule result_m =
                         jl_create_ts_module(name_from_method_instance(codeinst->def),
                             params.tsctx, params.DL, params.TargetTriple);

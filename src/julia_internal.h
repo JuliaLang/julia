@@ -269,6 +269,9 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
 
 #include "timing.h"
 
+extern JL_DLLEXPORT uint64_t jl_typeinf_timing_begin(void);
+extern JL_DLLEXPORT void jl_typeinf_timing_end(uint64_t start, int is_recompile);
+
 // Global *atomic* integers controlling *process-wide* measurement of compilation time.
 extern JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled;
 extern JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time;
@@ -643,7 +646,6 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
 // -- helper types -- //
 
 typedef struct {
-    uint8_t inferred:1;
     uint8_t propagate_inbounds:1;
     uint8_t has_fcall:1;
     uint8_t nospecializeinfer:1;
@@ -658,7 +660,10 @@ typedef union {
 
 // -- functions -- //
 
-JL_DLLEXPORT jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
+#define SOURCE_MODE_NOT_REQUIRED   0x0
+#define SOURCE_MODE_ABI            0x1
+#define SOURCE_MODE_FORCE_SOURCE   0x2
+JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force, uint8_t source_mode);
 JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
@@ -846,6 +851,8 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert) JL_GLOBA
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
     jl_value_t *source,  jl_value_t **env, size_t nenv, int do_compile);
+jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
+    int nargs, jl_value_t *functionloc, jl_value_t *uninferred_source, int isva);
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
 // Each tuple can exist in one of 4 Vararg states:
@@ -1023,7 +1030,9 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
 JL_DLLEXPORT jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, size_t *min_valid, size_t *max_valid, int mt_cache);
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp);
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_value_t *owner, jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
+JL_DLLEXPORT jl_value_t *jl_rettype_inferred_native(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_code_instance_t *jl_method_inferred_with_source(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_value_t *type, size_t world);
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
     jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams);
@@ -1724,9 +1733,8 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
 
 #define IR_FLAG_INBOUNDS 0x01
 
-JL_DLLIMPORT jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world);
 JL_DLLIMPORT void jl_generate_fptr_for_unspecialized(jl_code_instance_t *unspec);
-JL_DLLIMPORT void jl_generate_fptr_for_oc_wrapper(jl_code_instance_t *unspec);
+JL_DLLIMPORT void jl_compile_codeinst(jl_code_instance_t *unspec);
 JL_DLLIMPORT int jl_compile_extern_c(LLVMOrcThreadSafeModuleRef llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 typedef struct {

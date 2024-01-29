@@ -107,7 +107,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
         // OC wrapper methods are not world dependent
         ci = jl_get_method_inferred(mi_generic, selected_rt, 1, ~(size_t)0);
         if (!jl_atomic_load_acquire(&ci->invoke))
-            jl_generate_fptr_for_oc_wrapper(ci);
+            jl_compile_codeinst(ci);
         specptr = jl_atomic_load_relaxed(&ci->specptr.fptr);
     }
     jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ct->ptls, sizeof(jl_opaque_closure_t), oc_type);
@@ -131,20 +131,15 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
     return oc;
 }
 
-jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
-
 JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
-    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile)
+    jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile, int isinferred)
 {
-    if (!ci->inferred)
-        jl_error("CodeInfo must already be inferred");
     jl_value_t *root = NULL, *sigtype = NULL;
     jl_code_instance_t *inst = NULL;
     JL_GC_PUSH3(&root, &sigtype, &inst);
     root = jl_box_long(lineno);
     root = jl_new_struct(jl_linenumbernode_type, root, file);
-    jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, ci, isva);
+    jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, isinferred ? jl_nothing : (jl_value_t*)ci, isva);
     root = (jl_value_t*)meth;
     size_t world = jl_current_task->world_age;
     // these are only legal in the current world since they are not in any tables

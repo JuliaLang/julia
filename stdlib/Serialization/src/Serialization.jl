@@ -80,7 +80,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 26 # do not make changes without bumping the version #!
+const ser_version = 27 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -1201,26 +1201,35 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     if pre_12
         ci.slotflags = deserialize(s)
     else
-        ci.method_for_inference_limit_heuristics = deserialize(s)
+        if format_version(s) <= 26
+            ci.method_for_inference_limit_heuristics = deserialize(s)
+        end
         ci.linetable = deserialize(s)
     end
     ci.slotnames = deserialize(s)
     if !pre_12
         ci.slotflags = deserialize(s)
         ci.slottypes = deserialize(s)
-        ci.rettype = deserialize(s)
-        ci.parent = deserialize(s)
-        world_or_edges = deserialize(s)
-        pre_13 = isa(world_or_edges, Integer)
-        if pre_13
-            ci.min_world = world_or_edges
+        if format_version(s) <= 26
+            deserialize(s) # rettype
+            deserialize(s) # parent
+            world_or_edges = deserialize(s)
+            pre_13 = isa(world_or_edges, Integer)
+            if pre_13
+                ci.min_world = world_or_edges
+            else
+                ci.edges = world_or_edges
+                ci.min_world = reinterpret(UInt, deserialize(s))
+                ci.max_world = reinterpret(UInt, deserialize(s))
+            end
         else
-            ci.edges = world_or_edges
+            ci.method_for_inference_limit_heuristics = deserialize(s)
+            ci.edges = deserialize(s)
             ci.min_world = reinterpret(UInt, deserialize(s))
             ci.max_world = reinterpret(UInt, deserialize(s))
         end
     end
-    ci.inferred = deserialize(s)
+    #ci.inferred = deserialize(s)
     if format_version(s) < 22
         inlining_cost = deserialize(s)
         if isa(inlining_cost, Bool)

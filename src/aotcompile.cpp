@@ -301,21 +301,14 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
         if ((jl_value_t*)*src_out == jl_nothing)
             *src_out = NULL;
         if (*src_out && jl_is_method(def))
-            *src_out = jl_uncompress_ir(def, codeinst, (jl_value_t*)*src_out);
+            *src_out = jl_uncompress_ir(def, (jl_value_t*)*src_out);
     }
     if (*src_out == NULL || !jl_is_code_info(*src_out)) {
         if (cgparams.lookup != jl_rettype_inferred_addr) {
             jl_error("Refusing to automatically run type inference with custom cache lookup.");
         }
         else {
-            *src_out = jl_type_infer(mi, world, 0);
-            if (*src_out) {
-                codeinst = jl_get_codeinst_for_src(mi, *src_out);
-                if ((*src_out)->inferred) {
-                    jl_value_t *null = nullptr;
-                    jl_atomic_cmpswap_relaxed(&codeinst->inferred, &null, jl_nothing);
-                }
-            }
+            *ci_out = jl_type_infer(mi, world, 0, SOURCE_MODE_ABI);
         }
     }
     *ci_out = codeinst;
@@ -374,11 +367,11 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     size_t compile_for[] = { jl_typeinf_world, _world };
     for (int worlds = 0; worlds < 2; worlds++) {
         JL_TIMING(NATIVE_AOT, NATIVE_Codegen);
-        params.world = compile_for[worlds];
-        if (!params.world)
+        params.min_world = params.max_world = compile_for[worlds];
+        if (!params.min_world)
             continue;
         // Don't emit methods for the typeinf_world with extern policy
-        if (policy != CompilationPolicy::Default && params.world == jl_typeinf_world)
+        if (policy != CompilationPolicy::Default && params.min_world == jl_typeinf_world)
             continue;
         size_t i, l;
         for (i = 0, l = jl_array_nrows(methods); i < l; i++) {
@@ -395,10 +388,10 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             // if this method is generally visible to the current compilation world,
             // and this is either the primary world, or not applicable in the primary world
             // then we want to compile and emit this
-            if (jl_atomic_load_relaxed(&mi->def.method->primary_world) <= params.world && params.world <= jl_atomic_load_relaxed(&mi->def.method->deleted_world)) {
+            if (jl_atomic_load_relaxed(&mi->def.method->primary_world) <= params.min_world && params.max_world <= jl_atomic_load_relaxed(&mi->def.method->deleted_world)) {
                 // find and prepare the source code to compile
                 jl_code_instance_t *codeinst = NULL;
-                jl_ci_cache_lookup(*cgparams, mi, params.world, &codeinst, &src);
+                jl_ci_cache_lookup(*cgparams, mi, params.min_world, &codeinst, &src);
                 if (src && !params.compiled_functions.count(codeinst)) {
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
@@ -1951,12 +1944,9 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method)) {
             JL_GC_PUSH2(&codeinst, &src);
-            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_value_t*)src);
+            src = jl_uncompress_ir(mi->def.method, (jl_value_t*)src);
             JL_GC_POP();
         }
-    }
-    if (!src || (jl_value_t*)src == jl_nothing) {
-        src = jl_type_infer(mi, world, 0);
     }
     return src;
 }
@@ -1970,7 +1960,7 @@ extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
-            mi->def.method->generator == NULL) {
+            mi->def.method->generator == NULL && !mi->def.method->is_for_opaque_closure) {
         // not a generic function
         dump->F = NULL;
         return;
@@ -1981,34 +1971,23 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
     jl_code_info_t *src = NULL;
     jl_code_instance_t *codeinst = NULL;
     JL_GC_PUSH3(&src, &jlrettype, &codeinst);
-    if (jl_is_method(mi->def.method) && mi->def.method->source != NULL && mi->def.method->source != jl_nothing && jl_ir_flag_inferred(mi->def.method->source)) {
-        // uninferred opaque closure
-        src = (jl_code_info_t*)mi->def.method->source;
-        if (src && !jl_is_code_info(src))
-            src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
+    jl_value_t *ci = params.lookup(mi, world, world);
+    if (ci && ci != jl_nothing) {
+        codeinst = (jl_code_instance_t*)ci;
+        src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
     }
-    else {
-        jl_value_t *ci = params.lookup(mi, world, world);
-        if (ci != jl_nothing) {
-            codeinst = (jl_code_instance_t*)ci;
+    if (!src || (jl_value_t*)src == jl_nothing) {
+        codeinst = jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE);
+        if (codeinst) {
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
-            if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                src = jl_uncompress_ir(mi->def.method, codeinst, (jl_value_t*)src);
-            jlrettype = codeinst->rettype;
-            codeinst = NULL; // not needed outside of this branch
-        }
-        if (!src || (jl_value_t*)src == jl_nothing) {
-            src = jl_type_infer(mi, world, 0);
-            if (src)
-                jlrettype = src->rettype;
-            else if (jl_is_method(mi->def.method)) {
-                src = mi->def.method->generator ? jl_code_for_staged(mi, world) : (jl_code_info_t*)mi->def.method->source;
-                if (src && (jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-                    src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
-            }
-            // TODO: use mi->uninferred
         }
     }
+    if (src) {
+        if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
+            src = jl_uncompress_ir(mi->def.method, (jl_value_t*)src);
+        jlrettype = codeinst->rettype;
+    }
+    codeinst = NULL; // not needed outside of this branch
 
     // emit this function into a new llvm module
     if (src && jl_is_code_info(src)) {
@@ -2023,7 +2002,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             return std::make_pair(M.getDataLayout(), Triple(M.getTargetTriple()));
         });
         jl_codegen_params_t output(*ctx, std::move(target_info.first), std::move(target_info.second));
-        output.world = world;
+        output.min_world = output.max_world = world;
         output.params = &params;
         output.imaging_mode = imaging_default();
         // This would be nice, but currently it causes some assembly regressions that make printed output

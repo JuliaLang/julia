@@ -457,11 +457,10 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
     }
 }
 
-static jl_code_info_flags_t code_info_flags(uint8_t inferred, uint8_t propagate_inbounds, uint8_t has_fcall,
+static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t has_fcall,
                                             uint8_t nospecializeinfer, uint8_t inlining, uint8_t constprop)
 {
     jl_code_info_flags_t flags;
-    flags.bits.inferred = inferred;
     flags.bits.propagate_inbounds = propagate_inbounds;
     flags.bits.has_fcall = has_fcall;
     flags.bits.nospecializeinfer = nospecializeinfer;
@@ -824,7 +823,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         1
     };
 
-    jl_code_info_flags_t flags = code_info_flags(code->inferred, code->propagate_inbounds, code->has_fcall,
+    jl_code_info_flags_t flags = code_info_flags(code->propagate_inbounds, code->has_fcall,
                                                  code->nospecializeinfer, code->inlining, code->constprop);
     write_uint8(s.s, flags.packed);
     static_assert(sizeof(flags.packed) == IR_DATASIZE_FLAGS, "ir_datasize_flags is mismatched with the actual size");
@@ -899,7 +898,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     return v;
 }
 
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_string_t *data)
+JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_string_t *data)
 {
     if (jl_is_code_info(data))
         return (jl_code_info_t*)data;
@@ -925,7 +924,6 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     flags.packed = read_uint8(s.s);
     code->inlining = flags.bits.inlining;
     code->constprop = flags.bits.constprop;
-    code->inferred = flags.bits.inferred;
     code->propagate_inbounds = flags.bits.propagate_inbounds;
     code->has_fcall = flags.bits.has_fcall;
     code->nospecializeinfer = flags.bits.nospecializeinfer;
@@ -975,25 +973,8 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     jl_gc_enable(en);
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
-    if (metadata) {
-        code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
-        // n.b. this should perhaps be capped to jl_world_counter max here, since we don't have backedges on it after return
-        code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
-        code->rettype = metadata->rettype;
-        code->parent = metadata->def;
-    }
 
     return code;
-}
-
-JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_string_t *data)
-{
-    if (jl_is_code_info(data))
-        return ((jl_code_info_t*)data)->inferred;
-    assert(jl_is_string(data));
-    jl_code_info_flags_t flags;
-    flags.packed = jl_string_data(data)[ir_offset_flags];
-    return flags.bits.inferred;
 }
 
 JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_string_t *data)

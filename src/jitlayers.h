@@ -247,7 +247,8 @@ struct jl_codegen_params_t {
     std::unique_ptr<Module> _shared_module;
     inline Module &shared_module();
     // inputs
-    size_t world = 0;
+    size_t min_world = 0;
+    size_t max_world = -1;
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
     bool external_linkage = false;
