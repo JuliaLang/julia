@@ -1094,7 +1094,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance)
 end
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
-    world = ccall(:jl_get_tls_world_age, UInt, ())
+    world = tls_world_age()
     args = Any[_return_type, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
 end
@@ -1104,7 +1104,7 @@ function return_type(@nospecialize(f), t::DataType, world::UInt)
 end
 
 function return_type(t::DataType)
-    world = ccall(:jl_get_tls_world_age, UInt, ())
+    world = tls_world_age()
     return return_type(t, world)
 end
 
