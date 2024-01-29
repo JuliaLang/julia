@@ -1030,7 +1030,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         end
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
-        return retrieve_code_info(mi, get_world_counter(interp))
+        return retrieve_code_info(mi, get_inference_world(interp))
     end
     lock_mi_inference(interp, mi)
     result = InferenceResult(mi, typeinf_lattice(interp))
@@ -1122,7 +1122,7 @@ function _return_type(interp::AbstractInterpreter, t::DataType)
         rt = builtin_tfunction(interp, f, args, nothing)
         rt = widenconst(rt)
     else
-        for match in _methods_by_ftype(t, -1, get_world_counter(interp))::Vector
+        for match in _methods_by_ftype(t, -1, get_inference_world(interp))::Vector
             ty = typeinf_type(interp, match::MethodMatch)
             ty === nothing && return Any
             rt = tmerge(rt, ty)

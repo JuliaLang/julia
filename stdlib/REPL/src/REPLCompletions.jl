@@ -567,7 +567,7 @@ struct REPLInterpreter <: CC.AbstractInterpreter
 end
 CC.InferenceParams(interp::REPLInterpreter) = interp.inf_params
 CC.OptimizationParams(interp::REPLInterpreter) = interp.opt_params
-CC.get_world_counter(interp::REPLInterpreter) = interp.world
+CC.get_inference_world(interp::REPLInterpreter) = interp.world
 CC.get_inference_cache(interp::REPLInterpreter) = interp.inf_cache
 CC.code_cache(interp::REPLInterpreter) = CC.WorldView(interp.code_cache, CC.WorldRange(interp.world))
 CC.get(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
