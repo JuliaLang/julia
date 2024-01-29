@@ -805,6 +805,7 @@ void NewPM::run(Module &M) {
 #else
     StandardInstrumentations SI(false);
 #endif
+#if JL_LLVM_VERSION >= 170000
     PassInstrumentationCallbacks PIC;
     adjustPIC(PIC);
     TimePasses.registerCallbacks(PIC);
@@ -814,6 +815,17 @@ void NewPM::run(Module &M) {
     ModuleAnalysisManager MAM;
     SI.registerCallbacks(PIC, &MAM);
     SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
+#else
+    FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
+    PassInstrumentationCallbacks PIC;
+    adjustPIC(PIC);
+    TimePasses.registerCallbacks(PIC);
+    SI.registerCallbacks(PIC, &FAM);
+    SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
+    LoopAnalysisManager LAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+#endif
     PassBuilder PB(TM.get(), PipelineTuningOptions(), None, &PIC);
     PB.registerLoopAnalyses(LAM);
     PB.registerFunctionAnalyses(FAM);

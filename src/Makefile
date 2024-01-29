@@ -78,7 +78,10 @@ else
 endif
 
 RT_LLVM_LIBS := support
+
+ifeq ($(shell test $(LLVM_VER_MAJ) -ge 16),1)
 RT_LLVM_LIBS += targetparser
+endif
 
 ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
