@@ -26,7 +26,7 @@ debug && println("Test basic type functionality")
 @test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(Matrix(t), i) for i = 1:3]
 
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
-for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
+@testset for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
     # Begin loop for first Triangular matrix
     for (t1, uplo1) in ((UpperTriangular, :U),
                         (UnitUpperTriangular, :U),
@@ -998,9 +998,12 @@ end
 
 @testset "arithmetic with partly uninitialized matrices" begin
     @testset "$(typeof(A))" for A in (Matrix{BigFloat}(undef,2,2), Matrix{Complex{BigFloat}}(undef,2,2)')
-        A[1,1] = A[2,2] = A[2,1] = 4
+        A[2,1] = eltype(A) <: Complex ? 4 + 3im : 4
         B = Matrix{eltype(A)}(undef, size(A))
         for MT in (LowerTriangular, UnitLowerTriangular)
+            if MT == LowerTriangular
+                A[1,1] = A[2,2] = eltype(A) <: Complex ? 4 + 3im : 4
+            end
             L = MT(A)
             B .= 0
             copyto!(B, L)
@@ -1009,13 +1012,23 @@ end
             @test 2\L == 2\B
             @test real(L) == real(B)
             @test imag(L) == imag(B)
+            if A isa Matrix
+                @test transpose!(MT(copy(A))) == transpose(L)
+                @test adjoint!(MT(copy(A))) == adjoint(L)
+            else
+                @test_broken transpose!(MT(copy(A))) == transpose(L)
+                @test_broken adjoint!(MT(copy(A))) == adjoint(L)
+            end
         end
     end
 
     @testset "$(typeof(A))" for A in (Matrix{BigFloat}(undef,2,2), Matrix{Complex{BigFloat}}(undef,2,2)')
-        A[1,1] = A[2,2] = A[1,2] = 4
+        A[1,2] = eltype(A) <: Complex ? 4 + 3im : 4
         B = Matrix{eltype(A)}(undef, size(A))
         for MT in (UpperTriangular, UnitUpperTriangular)
+            if MT == UpperTriangular
+                A[1,1] = A[2,2] = eltype(A) <: Complex ? 4 + 3im : 4
+            end
             U = MT(A)
             B .= 0
             copyto!(B, U)
@@ -1024,6 +1037,13 @@ end
             @test 2\U == 2\B
             @test real(U) == real(B)
             @test imag(U) == imag(B)
+            if A isa Matrix
+                @test transpose!(MT(copy(A))) == transpose(U)
+                @test adjoint!(MT(copy(A))) == adjoint(U)
+            else
+                @test_broken transpose!(MT(copy(A))) == transpose(U)
+                @test_broken adjoint!(MT(copy(A))) == adjoint(U)
+            end
         end
     end
 end
