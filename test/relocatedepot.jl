@@ -161,6 +161,7 @@ if !test_relocated_depot
                         pushfirst!(DEPOT_PATH, depot3)
                         pkg = Base.identify_package("Foo")
                         Base.require(pkg)
+                        sleep(1) # Sleep to avoid a filesystem data race
                         cachefile = joinpath(depot3, "compiled",
                                              "v$(VERSION.major).$(VERSION.minor)", "Foo.ji")
                         _, (deps, _, _), _... = Base.parse_cache_header(cachefile)
