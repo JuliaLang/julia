@@ -1143,6 +1143,19 @@ end
         finally
             copy!(LOAD_PATH, old_load_path)
         end
+
+        # issue 53081
+        @testset "avoid circular precompilation deadlock through extensions" begin
+            testenv = joinpath(@__DIR__, "extensions", "circular")
+            # TODO: avoid the error? https://github.com/JuliaLang/julia/pull/53112
+            # @test_warn (r"Dependency cycle detected in extension precompilation", r"Error during loading of extension") begin
+                run(ignorestatus(addenv(
+                    `$(Base.julia_cmd()) --startup-file=no --project=$testenv -e 'using A'`,
+                    "JULIA_TESTS" => nothing, # we want precompilepkgs to print for this, which it doesn't if this is set
+                    "JULIA_DEPOT_PATH" => depot_path
+                )))
+            # end
+        end
     finally
         try
             rm(depot_path, force=true, recursive=true)

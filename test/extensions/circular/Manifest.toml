@@ -1,0 +1,32 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.11.0-DEV"
+manifest_format = "2.0"
+project_hash = "6c189c4d9e1e9194c4a4d7627740c379ecff4942"
+
+[[deps.A]]
+deps = ["B"]
+path = "./A"
+uuid = "c8938445-7efa-411c-ba8f-721576f9f47a"
+version = "0.1.0"
+weakdeps = ["C", "D"]
+
+    [deps.A.extensions]
+    CExt = "C"
+    DExt = "D"
+
+[[deps.B]]
+deps = ["C", "D"]
+path = "./B"
+uuid = "ef00b25e-dd85-47e0-9cd9-ed3c1ff51032"
+version = "0.1.0"
+
+[[deps.C]]
+path = "./C"
+uuid = "d95b043b-fbe6-48a2-93d2-75fba1b51518"
+version = "0.1.0"
+
+[[deps.D]]
+path = "./D"
+uuid = "64e66ba5-e914-4adb-a5f6-036ef0c801f3"
+version = "0.1.0"

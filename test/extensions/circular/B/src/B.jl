@@ -1,0 +1,3 @@
+module B
+
+end # module
