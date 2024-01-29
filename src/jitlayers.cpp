@@ -1885,7 +1885,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
         }
     }
     for (auto &Sym : *Lookups) {
-        assert(Sym.second);
+        assert(Sym.second.getAddress());
         (void) Sym;
     }
 }
