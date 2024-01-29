@@ -181,6 +181,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     # get the MethodInstance for the method match
     if !isa(f, Core.OpaqueClosure)
         world = Base.get_world_counter()
+        world == typemax(UInt) && error("code reflection cannot be used from generated functions")
         match = Base._which(signature_type(f, t); world)
         mi = Core.Compiler.specialize_method(match)
         # TODO: use jl_is_cacheable_sig instead of isdispatchtuple

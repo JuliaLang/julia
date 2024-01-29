@@ -1123,6 +1123,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     world = get_world_counter()
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     return map(method_instances(f, t, world)) do m
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
@@ -2329,6 +2330,7 @@ end
 
 function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
     @nospecialize
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     isempty(kwnames) && return hasmethod(f, t; world)
     t = to_tuple_type(t)
     ft = Core.Typeof(f)
