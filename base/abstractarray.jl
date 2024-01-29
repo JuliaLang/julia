@@ -113,7 +113,7 @@ has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve perf
 has_offset_axes(::Colon) = false
 has_offset_axes(::Array) = false
 # note: this could call `any` directly if the compiler can infer it. We don't use _any_tuple
-# here because it stops full elision in sone cases (#49332) and we don't need handling of
+# here because it stops full elision in some cases (#49332) and we don't need handling of
 # `missing` (has_offset_axes(A) always returns a Bool)
 has_offset_axes(A, As...) = has_offset_axes(A) || has_offset_axes(As...)
 
