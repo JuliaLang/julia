@@ -1438,6 +1438,13 @@ function run_extension_callbacks(pkgid::PkgId)
     extids = pop!(EXT_DORMITORY, pkgid, nothing)
     extids === nothing && return
     for extid in extids
+        if in(extid.id, precompilation_stack) && !isprecompiled(extid.id)
+            @debug """
+            Dependency cycle detected in extension precompilation: $(precompilation_stack_list()) > $(extid.id.name)
+            $(extid.id.name) will not be loaded here.
+            """
+            continue
+        end
         if extid.ntriggers > 0
             # indicate pkgid is loaded
             extid.ntriggers -= 1
@@ -2569,14 +2576,14 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
 end
 
 const precompilation_stack = Vector{PkgId}()
+precompilation_stack_list() = join(map(p->p.name, precompilation_stack), " > ")
 # Helpful for debugging when precompilation is unexpectedly nested.
 # Enable with `JULIA_DEBUG=nested_precomp`. Note that it expected to be nested in classical code-load precompilation
 # TODO: Add detection if extension precompilation is nested and error / return early?
 function track_nested_precomp(pkgs::Vector{PkgId})
     append!(precompilation_stack, pkgs)
     if length(precompilation_stack) > 1
-        list() = join(map(p->p.name, precompilation_stack), " > ")
-        @debug "Nested precompilation: $(list())" _group=:nested_precomp
+        @debug "Nested precompilation: $(precompilation_stack_list())" _group=:nested_precomp
     end
 end
 
