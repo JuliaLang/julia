@@ -2508,12 +2508,25 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
+        Base.track_nested_precomp($(vcat(Base.precompilation_stack, pkg)))
         Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
     close(io.in)
     return io
+end
+
+const precompilation_stack = Vector{PkgId}()
+# Helpful for debugging when precompilation is unexpectedly nested.
+# Enable with `JULIA_DEBUG=nested_precomp`. Note that it expected to be nested in classical code-load precompilation
+# TODO: Add detection if extension precompilation is nested and error / return early?
+function track_nested_precomp(pkgs::Vector{PkgId})
+    append!(precompilation_stack, pkgs)
+    if length(precompilation_stack) > 1
+        list() = join(map(p->p.name, precompilation_stack), " > ")
+        @debug "Nested precompilation: $(list())" _group=:nested_precomp
+    end
 end
 
 function compilecache_dir(pkg::PkgId)

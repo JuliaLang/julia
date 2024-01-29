@@ -69,6 +69,9 @@ cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
 .SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image
 endef
 
+# Note: you can check for the correctness of this tree by running `JULIA_DEBUG=nested_precomp make` and looking
+# out for `Debug: Nested precompilation` logs.
+
 # no dependencies
 $(eval $(call stdlib_builder,MozillaCACerts_jll,))
 $(eval $(call stdlib_builder,ArgTools,))
