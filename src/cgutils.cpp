@@ -1924,6 +1924,7 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
             elty = Type::getIntNTy(ctx.builder.getContext(), 8 * nb);
         }
     }
+    ctx.builder.CreateLifetimeStart(intcast, ConstantInt::get(Type::getInt64Ty(elty->getContext()), nb));
     Type *realelty = elty;
     if (Order != AtomicOrdering::NotAtomic && isa<IntegerType>(elty)) {
         unsigned nb2 = PowerOf2Ceil(nb);
