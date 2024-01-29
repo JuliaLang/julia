@@ -2,6 +2,7 @@ use crate::edges::JuliaVMEdge;
 use crate::edges::OffsetEdge;
 use crate::julia_types::*;
 use crate::object_model::mmtk_jl_array_ndims;
+use crate::JuliaVM;
 use crate::JULIA_BUFF_TAG;
 use crate::UPCALLS;
 use mmtk::util::{Address, ObjectReference};
@@ -388,7 +389,7 @@ pub fn process_edge<EV: EdgeVisitor<JuliaVMEdge>>(closure: &mut EV, slot: Addres
     let simple_edge = SimpleEdge::from_address(slot);
     debug_assert!(
         simple_edge.load().is_null()
-            || mmtk::memory_manager::is_mapped_address(simple_edge.load().to_raw_address()),
+            || mmtk::memory_manager::is_in_mmtk_spaces::<JuliaVM>(simple_edge.load()),
         "Object {:?} in slot {:?} is not mapped address",
         simple_edge.load(),
         simple_edge
@@ -442,7 +443,7 @@ pub fn process_offset_edge<EV: EdgeVisitor<JuliaVMEdge>>(
     let offset_edge = OffsetEdge::new_with_offset(slot, offset);
     debug_assert!(
         offset_edge.load().is_null()
-            || mmtk::memory_manager::is_mapped_address(offset_edge.load().to_raw_address()),
+            || mmtk::memory_manager::is_in_mmtk_spaces::<JuliaVM>(offset_edge.load()),
         "Object {:?} in slot {:?} is not mapped address",
         offset_edge.load(),
         offset_edge
