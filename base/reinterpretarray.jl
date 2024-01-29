@@ -58,7 +58,9 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
     julia> a[1] = 3
     ERROR: Padding of type Tuple{UInt8, UInt32} is not compatible with type UInt32.
 
-    julia> reinterpret(UInt32, Tuple{UInt8, UInt32}[(0x01, 0x00000002)])[1]
+    julia> b = reinterpret(UInt32, Tuple{UInt8, UInt32}[(0x01, 0x00000002)]); # showing will error
+    
+    julia> b[1]
     ERROR: Padding of type UInt32 is not compatible with type Tuple{UInt8, UInt32}.
     ```
     """
