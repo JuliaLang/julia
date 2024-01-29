@@ -646,7 +646,7 @@ let s = "CompletionFoo.?([1,2,3], 2.0)"
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
-    @test occursin("test(x::AbstractArray{T}, y) where T<:Real", c[1])
+    @test occursin("test(x::AbstractArray{T}, y) where T<:Real", only(c))
     # In particular, this checks that test(args...) is not a valid completion
     # since it is strictly less specific than test(x::AbstractArray{T}, y)
 end
@@ -680,15 +680,15 @@ let s = "CompletionFoo.?(false, \"a\", 3, "
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 2
-    @test occursin("test(args...)", c[1])
-    @test occursin("test11(a::Integer, b, c)", c[2])
+    @test any(s->occursin("test(args...)", s), c)
+    @test any(s->occursin("test11(a::Integer, b, c)", s), c)
 end
 
 let s = "CompletionFoo.?(false, \"a\", 3, "
     c, r, res = test_complete_noshift(s)
     @test !res
     @test length(c) == 1
-    @test occursin("test11(a::Integer, b, c)", c[1])
+    @test occursin("test11(a::Integer, b, c)", only(c))
 end
 
 let s = "CompletionFoo.?(\"a\", 3, "
@@ -711,7 +711,7 @@ let s = "CompletionFoo.?()"
     c, r, res = test_complete_noshift(s)
     @test !res
     @test length(c) == 1
-    @test occursin("test10(s::String...)", c[1])
+    @test occursin("test10(s::String...)", only(c))
 end
 
 #= TODO: restrict the number of completions when a semicolon is present in ".?(" syntax
