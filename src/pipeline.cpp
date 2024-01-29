@@ -215,9 +215,6 @@ namespace {
             // .sinkCommonInsts(true)
             ;
     }
-#if JL_LLVM_VERSION < 150000
-#define LICMOptions()
-#endif
 
 // At any given time exactly one of each pair of overloads is strictly unused
 #ifdef _COMPILER_GCC_
