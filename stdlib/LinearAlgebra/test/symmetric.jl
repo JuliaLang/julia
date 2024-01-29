@@ -488,6 +488,22 @@ end
         @test S*2 == 2*S == 2*MS
         @test S/2 == MS/2
     end
+    @testset "mixed uplo" begin
+        Mu = Matrix{Complex{BigFloat}}(undef,2,2)
+        Mu[1,1] = Mu[2,2] = 3
+        Mu[1,2] = 2 + 3im
+        Ml = Matrix{Complex{BigFloat}}(undef,2,2)
+        Ml[1,1] = Ml[2,2] = 4
+        Ml[2,1] = 4 + 5im
+        for ST in (Symmetric, Hermitian)
+            Su = ST(Mu, :U)
+            MSu = Matrix(Su)
+            Sl = ST(Ml, :L)
+            MSl = Matrix(Sl)
+            @test Su + Sl == Sl + Su == MSu + MSl
+            @test Su - Sl == -(Sl - Su) == MSu - MSl
+        end
+    end
 end
 
 # bug identified in PR #52318: dot products of quaternionic Hermitian matrices,

@@ -280,13 +280,15 @@ function applytri(f, A::HermOrSym)
     end
 end
 
-function applytri(f, A::HermOrSym, B::HermOrSym)
+function applytri(f, A::HermOrSym, B::HermOrSym, adjAf=identity, adjBf=identity)
     if A.uplo == B.uplo == 'U'
         f(UpperTriangular(A.data), UpperTriangular(B.data))
     elseif A.uplo == B.uplo == 'L'
         f(LowerTriangular(A.data), LowerTriangular(B.data))
-    else
-        throw(ArgumentError("uplo of A and B do not match"))
+    elseif A.uplo == 'U'
+        f(UpperTriangular(A.data), UpperTriangular(adjBf(B.data)))
+    else # A.uplo == 'L'
+        f(UpperTriangular(adjAf(A.data)), UpperTriangular(B.data))
     end
 end
 parentof_applytri(f, args...) = applytri(parent ∘ f, args...)
@@ -525,9 +527,9 @@ for f ∈ (:+, :-), (Wrapper, conjugation) ∈ ((:Hermitian, :adjoint), (:Symmet
             if A.uplo == B.uplo
                 return $Wrapper(parentof_applytri($f, A, B), sym_uplo(A.uplo))
             elseif A.uplo == 'U'
-                return $Wrapper($f(parent(A), $conjugation(parent(B))), :U)
+                return $Wrapper(parentof_applytri($f, A, B, identity, $conjugation), :U)
             else
-                return $Wrapper($f($conjugation(parent(A)), parent(B)), :U)
+                return $Wrapper(parentof_applytri($f, A, B, $conjugation, identity), :U)
             end
         end
     end
