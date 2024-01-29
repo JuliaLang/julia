@@ -1070,6 +1070,11 @@ end
     @test (@inferred Tschurpow LinearAlgebra.schurpow(Aa, 2.0)) ≈ Aa^2
 end
 
+@testset "BigFloat triangular real power" begin
+    A = Float64[3 1; 0 3]
+    @test A^(3/4) ≈ big.(A)^(3/4)
+end
+
 @testset "diagonal integer matrix to real power" begin
     A = Matrix(Diagonal([1, 2, 3]))
     @test A^2.3 ≈ float(A)^2.3

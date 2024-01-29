@@ -279,7 +279,7 @@ static void *jl_precompile(int all)
     return native_code;
 }
 
-static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_methods, jl_array_t *new_specializations)
+static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_methods, jl_array_t *new_ext_cis)
 {
     if (!worklist)
         return NULL;
@@ -310,9 +310,9 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
             }
         }
     }
-    n = jl_array_nrows(new_specializations);
+    n = jl_array_nrows(new_ext_cis);
     for (i = 0; i < n; i++) {
-        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_specializations, i);
+        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_ext_cis, i);
         precompile_enq_specialization_(ci->def, m);
     }
     void *native_code = jl_precompile_(m, 1);

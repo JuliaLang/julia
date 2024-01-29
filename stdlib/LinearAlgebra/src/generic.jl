@@ -129,7 +129,10 @@ match the length of the second, $(length(X))."))
     C
 end
 
-@inline function mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
+@inline mul!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number) =
+    _lscale_add!(C, s, X, alpha, beta)
+
+@inline function _lscale_add!(C::AbstractArray, s::Number, X::AbstractArray, alpha::Number, beta::Number)
     if axes(C) == axes(X)
         C .= (s .* X) .*ₛ alpha .+ C .*ₛ beta
     else
@@ -137,7 +140,10 @@ end
     end
     return C
 end
-@inline function mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
+@inline mul!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number) =
+    _rscale_add!(C, X, s, alpha, beta)
+
+@inline function _rscale_add!(C::AbstractArray, X::AbstractArray, s::Number, alpha::Number, beta::Number)
     if axes(C) == axes(X)
         C .= (X .* s) .*ₛ alpha .+ C .*ₛ beta
     else
@@ -858,6 +864,8 @@ function dot(x, y) # arbitrary iterables
     end
     (vx, xs) = ix
     (vy, ys) = iy
+    typeof(vx) == typeof(x) && typeof(vy) == typeof(y) && throw(ArgumentError(
+            "cannot evaluate dot recursively if the type of an element is identical to that of the container"))
     s = dot(vx, vy)
     while true
         ix = iterate(x, xs)
@@ -1903,7 +1911,7 @@ normalize(x, p::Real) = x / norm(x, p)
 
 Copies a triangular part of a matrix `A` to another matrix `B`.
 `uplo` specifies the part of the matrix `A` to be copied to `B`.
-Set `uplo = 'L'` for the lower triangular part or `uplo = 'U'
+Set `uplo = 'L'` for the lower triangular part or `uplo = 'U'`
 for the upper triangular part.
 
 !!! compat "Julia 1.11"

@@ -94,8 +94,8 @@ a vector of 64-bit floats so there should be no need to allocate (heap) memory.
 
 We should clarify that what `@time` reports is specifically *heap* allocations, which are typically needed for either
 mutable objects or for creating/growing variable-sized containers (such as `Array` or `Dict`, strings, or "type-unstable"
-objects whose type is only known at runtime).  Allocating (or deallocating) such blocks of memory may require an expensive
-system call (e.g. via `malloc` in C), and they must be tracked for garbage collection.  In contrast, immutable values like
+objects whose type is only known at runtime).  Allocating (or deallocating) such blocks of memory may require an expensive function
+call to libc (e.g. via `malloc` in C), and they must be tracked for garbage collection.  In contrast, immutable values like
 numbers (except bignums), tuples, and immutable `struct`s can be stored much more cheaply, e.g. in stack or CPU-register
 memory, so one doesn’t typically worry about the performance cost of "allocating" them.
 
@@ -157,7 +157,7 @@ the performance of your code:
   * [Profiling](@ref) allows you to measure the performance of your running code and identify lines
     that serve as bottlenecks. For complex projects, the [ProfileView](https://github.com/timholy/ProfileView.jl)
     package can help you visualize your profiling results.
-  * The [Traceur](https://github.com/JunoLab/Traceur.jl) package can help you find common performance problems in your code.
+  * The [JET](https://github.com/aviatesk/JET.jl) package can help you find common performance problems in your code.
   * Unexpectedly-large memory allocations--as reported by [`@time`](@ref), [`@allocated`](@ref), or
     the profiler (through calls to the garbage-collection routines)--hint that there might be issues
     with your code. If you don't see another reason for the allocations, suspect a type problem.

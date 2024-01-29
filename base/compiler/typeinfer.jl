@@ -581,17 +581,14 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         end
     end
 
-    validate_code_in_debug_mode(me.linfo, me.src, "inferred")
+    maybe_validate_code(me.linfo, me.src, "inferred")
     nothing
 end
 
 # record the backedges
-function store_backedges(caller::InferenceResult, edges::Vector{Any})
-    isa(caller.linfo.def, Method) || return nothing # don't add backedges to toplevel method instance
-    return store_backedges(caller.linfo, edges)
-end
-
+store_backedges(caller::InferenceResult, edges::Vector{Any}) = store_backedges(caller.linfo, edges)
 function store_backedges(caller::MethodInstance, edges::Vector{Any})
+    isa(caller.def, Method) || return nothing # don't add backedges to toplevel method instance
     for itr in BackedgeIterator(edges)
         callee = itr.caller
         if isa(callee, MethodInstance)

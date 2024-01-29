@@ -74,10 +74,10 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
     maxprobe::Int
 
     function Dict{K,V}() where V where K
-        n = 16
+        n = 0
         slots = Memory{UInt8}(undef,n)
         fill!(slots, 0x0)
-        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, n, 0)
+        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, max(1, n), 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
@@ -266,7 +266,7 @@ function empty!(h::Dict{K,V}) where V where K
     h.count = 0
     h.maxprobe = 0
     h.age += 1
-    h.idxfloor = sz
+    h.idxfloor = max(1, sz)
     return h
 end
 
@@ -302,6 +302,11 @@ end
 # This version is for use by setindex! and get!
 function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
+    if sz == 0 # if Dict was empty resize and then return location to insert
+        rehash!(h, 4)
+        index, sh = hashindex(key, length(h.keys))
+        return -index, sh
+    end
     iter = 0
     maxprobe = h.maxprobe
     index, sh = hashindex(key, sz)
@@ -367,7 +372,7 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
     # Rehash now if necessary
     if (h.count + h.ndel)*3 > sz*2
         # > 2/3 full (including tombstones)
-        rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
+        rehash!(h, h.count > 64000 ? h.count*2 : max(h.count*4, 4))
     end
     nothing
 end
@@ -901,14 +906,31 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
     @noinline function KeyValue.set(::Type{PersistentDict{K, V}}, ::Nothing, key, val) where {K, V}
         new{K, V}(HAMT.HAMT{K, V}(key => val))
     end
-    @noinline function KeyValue.set(dict::PersistentDict{K, V}, key, val) where {K, V}
+    @noinline @Base.assume_effects :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key, val) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
         found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
         HAMT.insert!(found, present, trie, i, bi, hs, val)
         return new{K, V}(top)
     end
-    @noinline function KeyValue.set(dict::PersistentDict{K, V}, key) where {K, V}
+    @noinline @Base.assume_effects :nothrow :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key::K, val::V) where {K, V}
+        trie = dict.trie
+        h = HAMT.HashState(key)
+        found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
+        HAMT.insert!(found, present, trie, i, bi, hs, val)
+        return new{K, V}(top)
+    end
+    @noinline @Base.assume_effects :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key) where {K, V}
+        trie = dict.trie
+        h = HAMT.HashState(key)
+        found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
+        if found && present
+            deleteat!(trie.data, i)
+            HAMT.unset!(trie, bi)
+        end
+        return new{K, V}(top)
+    end
+    @noinline @Base.assume_effects :nothrow :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key::K) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
         found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
@@ -929,11 +951,12 @@ returns a new dictionary separate from the previous one, but the underlying
 implementation is space-efficient and may share storage across multiple
 separate dictionaries.
 
-!!!note
+!!! note
     It behaves like an IdDict.
 
-
-    PersistentDict(KV::Pair)
+```julia
+PersistentDict(KV::Pair)
+```
 
 # Examples
 

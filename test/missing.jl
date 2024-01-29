@@ -651,3 +651,29 @@ for func in (round, ceil, floor, trunc)
         @test Core.Compiler.is_foldable(Base.infer_effects(func, (Type{Int},Union{Int,Missing})))
     end
 end
+
+@testset "Custom Missing type" begin
+    struct NewMissing end
+    Base.ismissing(::NewMissing) = true
+    Base.coalesce(x::NewMissing, y...) = coalesce(y...)
+    Base.isless(::NewMissing, ::NewMissing) = false
+    Base.isless(::NewMissing, ::Any) = false
+    Base.isless(::Any, ::NewMissing) = true
+    Base.isequal(::NewMissing, ::Missing) = true
+    Base.isequal(::Missing, ::NewMissing) = true
+    arr = [missing 1 2 3 missing 10 11 12 missing]
+    newarr = Union{Int, NewMissing}[ismissing(v) ? NewMissing() : v for v in arr]
+
+    @test all(skipmissing(arr) .== skipmissing(newarr))
+    @test all(eachindex(skipmissing(arr)) .== eachindex(skipmissing(newarr)))
+    @test all(keys(skipmissing(arr)) .== keys(skipmissing(newarr)))
+    @test_broken sum(skipmissing(arr)) == sum(skipmissing(newarr))
+    @test filter(>(10), skipmissing(arr)) == filter(>(10), skipmissing(newarr))
+    @test isequal(sort(vec(arr)), sort(vec(newarr)))
+
+    @test_throws MissingException skipmissing(newarr)[findfirst(ismissing, newarr)]
+    @test coalesce(NewMissing(), 1) == coalesce(NewMissing(), NewMissing(), 1) == 1
+    @test coalesce(NewMissing()) === coalesce(NewMissing(), NewMissing()) === missing
+    @test @coalesce(NewMissing(), 1) == @coalesce(NewMissing(), NewMissing(), 1) == 1
+    @test @coalesce(NewMissing()) === @coalesce(NewMissing(), NewMissing()) === missing
+end
