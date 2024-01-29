@@ -18,7 +18,11 @@ function hasuniquerep(@nospecialize t)
     iskindtype(typeof(t)) || return true # non-types are always compared by egal in the type system
     isconcretetype(t) && return true # these are also interned and pointer comparable
     if isa(t, Union)
-        return hasuniquerep(t.a) && hasuniquerep(t.b)
+        if ccall(:jl_union_sort_cmp, Cint, (Any,Any), t.a, t.b) < 0
+            # sortable union may have unique representation
+            return hasuniquerep(t.a) && hasuniquerep(t.b)
+        end
+        return false
     elseif isa(t, DataType) && t.name !== Tuple.name && !isvarargtype(t) # invariant DataTypes
         return all(hasuniquerep, t.parameters)
     end
