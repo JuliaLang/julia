@@ -264,8 +264,6 @@ struct jl_target_spec_t {
  * Return the list of targets to clone
  */
 extern "C" JL_DLLEXPORT llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void) JL_NOTSAFEPOINT;
-std::string jl_get_cpu_name_llvm(void) JL_NOTSAFEPOINT;
-std::string jl_get_cpu_features_llvm(void) JL_NOTSAFEPOINT;
 // NOLINTEND(clang-diagnostic-return-type-c-linkage)
 struct FeatureName {
     const char *name;

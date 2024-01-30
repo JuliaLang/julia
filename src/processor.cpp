@@ -6,6 +6,8 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringMap.h>
+#include <llvm/Support/Host.h>
 #include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -961,6 +963,43 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 
 }
 
+static std::string jl_get_cpu_name_llvm(void)
+{
+    return llvm::sys::getHostCPUName().str();
+}
+
+static std::string jl_get_cpu_features_llvm(void)
+{
+    llvm::StringMap<bool> HostFeatures;
+    llvm::sys::getHostCPUFeatures(HostFeatures);
+    std::string attr;
+    for (auto &ele: HostFeatures) {
+        if (ele.getValue()) {
+            if (!attr.empty()) {
+                attr.append(",+");
+            }
+            else {
+                attr.append("+");
+            }
+            attr.append(ele.getKey().str());
+        }
+    }
+    // Explicitly disabled features need to be added at the end so that
+    // they are not re-enabled by other features that implies them by default.
+    for (auto &ele: HostFeatures) {
+        if (!ele.getValue()) {
+            if (!attr.empty()) {
+                attr.append(",-");
+            }
+            else {
+                attr.append("-");
+            }
+            attr.append(ele.getKey().str());
+        }
+    }
+    return attr;
+}
+
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 
 #include "processor_x86.cpp"
@@ -974,6 +1013,16 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 #include "processor_fallback.cpp"
 
 #endif
+
+JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
+{
+    return jl_cstr_to_string(host_cpu_name().c_str());
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
+{
+    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+}
 
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
     auto specs = jl_get_llvm_clone_targets();
