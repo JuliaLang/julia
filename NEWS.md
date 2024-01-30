@@ -165,6 +165,8 @@ Standard library changes
 
 #### Dates
 
+The undocumented function `adjust` is no longer exported but is now documented
+
 #### Statistics
 
 * Statistics is now an upgradeable standard library ([#46501]).

@@ -145,9 +145,9 @@ if !test_relocated_depot
                     Base.require(pkg)
                     mktempdir() do depot3
                         # precompile Foo in depot3
-                        open(joinpath(depot3, "Foo.jl"), write=true) do io
+                        open(joinpath(depot3, "Module52161.jl"), write=true) do io
                             println(io, """
-                            module Foo
+                            module Module52161
                             using Example1
                             using Example2
                             srcfile1 = joinpath(pkgdir(Example1), "src", "Example1.jl")
@@ -159,13 +159,13 @@ if !test_relocated_depot
                         end
                         pushfirst!(LOAD_PATH, depot3)
                         pushfirst!(DEPOT_PATH, depot3)
-                        pkg = Base.identify_package("Foo")
-                        Base.require(pkg)
+                        pkg = Base.identify_package("Module52161")
+                        Base.compilecache(pkg)
                         cachefile = joinpath(depot3, "compiled",
-                                             "v$(VERSION.major).$(VERSION.minor)", "Foo.ji")
+                                             "v$(VERSION.major).$(VERSION.minor)", "Module52161.ji")
                         _, (deps, _, _), _... = Base.parse_cache_header(cachefile)
                         @test map(x -> x.filename, deps) ==
-                            [ joinpath(depot3, "Foo.jl"),
+                            [ joinpath(depot3, "Module52161.jl"),
                               joinpath(depot1, "Example1", "src", "Example1.jl"),
                               joinpath(depot2, "Example2", "src", "Example2.jl") ]
                     end

@@ -811,6 +811,14 @@ end
     end
 end
 
+@testset "indexing partly initialized matrices" begin
+    M = Matrix{BigFloat}(undef, 2, 2)
+    U = UpperTriangular(M)
+    @test iszero(U[2,1])
+    L = LowerTriangular(M)
+    @test iszero(L[1,2])
+end
+
 @testset "special printing of Lower/UpperTriangular" begin
     @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64, Matrix{Int64}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
                    sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))))
@@ -820,6 +828,11 @@ end
                    sprint(show, MIME"text/plain"(), UpperTriangular(2ones(Int64,3,3))))
     @test occursin(r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64, Matrix{Int64}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1",
                    sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))))
+
+    # don't access non-structural elements while displaying
+    M = Matrix{BigFloat}(undef, 2, 2)
+    @test sprint(show, UpperTriangular(M)) == "BigFloat[#undef #undef; 0.0 #undef]"
+    @test sprint(show, LowerTriangular(M)) == "BigFloat[#undef 0.0; #undef #undef]"
 end
 
 @testset "adjoint/transpose triangular/vector multiplication" begin

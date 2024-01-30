@@ -937,3 +937,21 @@ end
     v = view(1:2, r)
     @test v == view(1:2, collect(r))
 end
+
+# https://github.com/JuliaLang/julia/pull/53064
+# `@view(A[idx]) = xxx` should raise syntax error always
+@test try
+    Core.eval(@__MODULE__, :(@view(A[idx]) = 2))
+    false
+catch err
+    err isa ErrorException && startswith(err.msg, "syntax:")
+end
+module Issue53064
+import Base: view
+end
+@test try
+    Core.eval(Issue53064, :(@view(A[idx]) = 2))
+    false
+catch err
+    err isa ErrorException && startswith(err.msg, "syntax:")
+end

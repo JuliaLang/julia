@@ -29,7 +29,6 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     if (!m->build_id.lo)
         m->build_id.lo++; // build id 0 is invalid
     m->build_id.hi = ~(uint64_t)0;
-    m->primary_world = 0;
     jl_atomic_store_relaxed(&m->counter, 1);
     m->nospecialize = 0;
     m->optlevel = -1;
