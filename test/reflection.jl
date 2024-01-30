@@ -1225,6 +1225,6 @@ using Statistics as Stats
 @test_throws UndefVarError Statistics.mean([0])
 
 # combined "as" and "non-as"
-using Base, Statisitics as Stats, Test, .M1.M2 as Mod, M1
+using Base, Statistics as Stats, Test, .M1.M2 as Mod, M1
 
 end
