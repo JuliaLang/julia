@@ -79,7 +79,7 @@ endif
 
 RT_LLVM_LIBS := support
 
-ifeq ($(shell test $(LLVM_VER_MAJ) -ge 17 && echo true),true)
+ifeq ($(shell test $(LLVM_VER_MAJ) -ge 16 && echo true),true)
 RT_LLVM_LIBS += targetparser
 endif
 
