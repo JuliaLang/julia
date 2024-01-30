@@ -5,6 +5,9 @@ using Random, LinearAlgebra
 isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
 using .Main.InfiniteArrays
 
+isdefined(Main, :StructArrays) || @eval Main include("testhelpers/StructArrays.jl")
+using .Main.StructArrays
+
 A = rand(5,4,3)
 @testset "Bounds checking" begin
     @test checkbounds(Bool, A, 1, 1, 1) == true
@@ -84,6 +87,7 @@ end
     @test checkbounds(Bool, A, 1:60) == true
     @test checkbounds(Bool, A, 1:61) == false
     @test checkbounds(Bool, A, 2, 2, 2, 1:1) == true  # extra indices
+    @test checkbounds(Bool, A, 2, 2, 2, 10:9) == true
     @test checkbounds(Bool, A, 2, 2, 2, 1:2) == false
     @test checkbounds(Bool, A, 1:5, 1:4) == false
     @test checkbounds(Bool, A, 1:5, 1:12) == false
@@ -104,6 +108,7 @@ end
     @test checkbounds(Bool, A, trues(5), trues(13)) == false
     @test checkbounds(Bool, A, trues(6), trues(12)) == false
     @test checkbounds(Bool, A, trues(5, 4, 3)) == true
+    @test checkbounds(Bool, A, trues(5, 4, 3, 1)) == true # issue 45867
     @test checkbounds(Bool, A, trues(5, 4, 2)) == false
     @test checkbounds(Bool, A, trues(5, 12)) == false
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 4, 1), trues(1, 1, 3)) == false
@@ -111,7 +116,9 @@ end
     @test checkbounds(Bool, A, trues(1, 5), trues(1, 5, 1), trues(1, 1, 3)) == false
     @test checkbounds(Bool, A, trues(1, 5), :, 2) == false
     @test checkbounds(Bool, A, trues(5, 4), trues(3)) == true
-    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == true
+    @test checkbounds(Bool, A, trues(5), trues(4, 3, 1)) == true
+    @test checkbounds(Bool, A, trues(5, 4), trues(3, 2)) == false
+    @test checkbounds(Bool, A, trues(4, 4), trues(3)) == false
     @test checkbounds(Bool, A, trues(5, 4), trues(2)) == false
     @test checkbounds(Bool, A, trues(6, 4), trues(3)) == false
     @test checkbounds(Bool, A, trues(5, 4), trues(4)) == false
@@ -134,6 +141,10 @@ end
     @test checkbounds(Bool, A, [CartesianIndex((6, 4))], 3) == false
     @test checkbounds(Bool, A, [CartesianIndex((5, 5))], 3) == false
     @test checkbounds(Bool, A, [CartesianIndex((5, 4))], 4) == false
+    @test checkbounds(Bool, A, 5, [CartesianIndex((4, 3, 1))]) == true
+    @test checkbounds(Bool, A, 5, [CartesianIndex((4, 3, 2))]) == false
+    @test_throws ArgumentError checkbounds(Bool, A, [CartesianIndex((4, 3)), CartesianIndex((4,))])
+    @test_throws ArgumentError checkbounds(Bool, A, [CartesianIndex((1,)), 1])
 end
 
 @testset "index conversion" begin
@@ -487,6 +498,13 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
 
         mask = bitrand(shape)
         @testset "test logical indexing" begin
+            let
+                masks1 = (mask,)
+                @test only(@inferred(to_indices(A, masks1))) isa Base.LogicalIndex{Int}
+                if IndexStyle(B) isa IndexCartesian
+                    @test only(@inferred(to_indices(B, masks1))) === Base.LogicalIndex(mask)
+                end
+            end
             @test B[mask] == A[mask] == B[findall(mask)] == A[findall(mask)] == LinearIndices(mask)[findall(mask)]
             @test B[vec(mask)] == A[vec(mask)] == LinearIndices(mask)[findall(mask)]
             mask1 = bitrand(size(A, 1))
@@ -496,10 +514,15 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
             @test B[mask1, 1, trailing2] == A[mask1, 1, trailing2] == LinearIndices(mask)[findall(mask1)]
 
             if ndims(B) > 1
+                slice = ntuple(Returns(:), ndims(B)-1)
                 maskfront = bitrand(shape[1:end-1])
-                Bslice = B[ntuple(i->(:), ndims(B)-1)..., 1]
-                @test B[maskfront,1] == Bslice[maskfront]
+                Bslicefront = B[slice..., 1]
+                @test B[maskfront, 1] == Bslicefront[maskfront]
                 @test size(B[maskfront, 1:1]) == (sum(maskfront), 1)
+                maskend = bitrand(shape[2:end])
+                Bsliceend = B[1, slice...]
+                @test B[1 ,maskend] == Bsliceend[maskend]
+                @test size(B[1:1, maskend]) == (1, sum(maskend))
             end
         end
     end
@@ -799,9 +822,8 @@ Base.getindex(A::TSlowNIndexes{T,2}, i::Int, j::Int) where {T} = A.data[i,j]
     @test isa(map(Set, Array[[1,2],[3,4]]), Vector{Set{Int}})
 end
 
-@testset "mapping over scalars and empty arguments:" begin
+@testset "mapping over scalars" begin
     @test map(sin, 1) === sin(1)
-    @test map(()->1234) === 1234
 end
 
 function test_UInt_indexing(::Type{TestAbstractArray})
@@ -999,6 +1021,16 @@ end
     @test isempty(v)
     @test isempty(v2::Vector{Int})
     @test isempty(v3::Vector{Float64})
+
+    S = StructArrays.StructArray{Complex{Int}}((v, v))
+    for T in (Complex{Int}, ComplexF64)
+        S0 = empty(S, T)
+        @test S0 isa StructArrays.StructArray{T}
+        @test length(S0) == 0
+    end
+    S0 = empty(S, String)
+    @test S0 isa Vector{String}
+    @test length(S0) == 0
 end
 
 @testset "CartesianIndices" begin
@@ -1875,13 +1907,17 @@ end
 
 @testset "type-based offset axes check" begin
     a = randn(ComplexF64, 10)
+    b = randn(ComplexF64, 4, 4, 4, 4)
     ta = reinterpret(Float64, a)
     tb = reinterpret(Float64, view(a, 1:2:10))
     tc = reinterpret(Float64, reshape(view(a, 1:3:10), 2, 2, 1))
+    td = view(b, :, :, 1, 1)
     # Issue #44040
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(tc, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc, tb))
+    # Issue #49332
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(td, td, td))
     # Ranges && CartesianIndices
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(1:10, Base.OneTo(10), 1.0:2.0, LinRange(1.0, 2.0, 2), 1:2:10, CartesianIndices((1:2:10, 1:2:10))))
     # Remind us to call `any` in `Base.has_offset_axes` once our compiler is ready.

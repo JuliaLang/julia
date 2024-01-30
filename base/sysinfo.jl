@@ -98,7 +98,45 @@ Standard word size on the current machine, in bits.
 """
 const WORD_SIZE = Core.sizeof(Int) * 8
 
-global SC_CLK_TCK::Clong, CPU_NAME::String, JIT::String
+"""
+    Sys.SC_CLK_TCK:
+
+The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
+POSIX systems, or `0` if it is unknown.
+
+CPU times, e.g. as returned by `Sys.cpu_info()`, are in units of ticks, i.e. units of `1 / Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`.
+"""
+global SC_CLK_TCK::Clong
+
+"""
+    Sys.CPU_NAME::String
+
+A string representing the name of CPU.
+
+# Examples
+For example, `Sys.CPU_NAME` might equal `"tigerlake"` on an
+[Intel Core "Tiger Lake" CPU](https://en.wikipedia.org/wiki/Tiger_Lake),
+or `"apple-m1"` on an [Apple M1 CPU](https://en.wikipedia.org/wiki/Apple_M1).
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+"""
+global CPU_NAME::String
+
+"""
+    Sys.JIT::String
+
+A string representing the specific Just-In-Time (JIT) compiler being utilized in the current runtime.
+
+# Examples
+Currently, this equals `"ORCJIT"` for the LLVM "ORC" ("On-Request Compilation") JIT library:
+```jldoctest
+julia> Sys.JIT
+"ORCJIT"
+```
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+"""
+global JIT::String
 
 function __init__()
     env_threads = nothing
@@ -139,6 +177,24 @@ mutable struct UV_cpu_info_t
     cpu_times!idle::UInt64
     cpu_times!irq::UInt64
 end
+
+"""
+    Sys.CPUinfo
+
+The `CPUinfo` type is a mutable struct with the following fields:
+- `model::String`: CPU model information.
+- `speed::Int32`: CPU speed (in MHz).
+- `cpu_times!user::UInt64`: Time spent in user mode. CPU state shows CPU time used by user space processes.
+- `cpu_times!nice::UInt64`: Time spent in nice mode. CPU state is a subset of the "user" state and shows the CPU time used by processes that have a positive niceness, meaning a lower priority than other tasks.
+- `cpu_times!sys::UInt64`: Time spent in system mode. CPU state shows the amount of CPU time used by the kernel.
+- `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
+- `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
+
+The times are in units of `1/Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`; otherwise they are in
+unknown units.
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+"""
 mutable struct CPUinfo
     model::String
     speed::Int32
@@ -152,6 +208,8 @@ end
 CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
     info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
     info.cpu_times!idle, info.cpu_times!irq)
+
+public CPUinfo
 
 function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
     tck = SC_CLK_TCK
@@ -174,7 +232,7 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
     end
 end
 
-show(io::IO, info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
+show(io::IO, ::MIME"text/plain", info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
 
 function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     if j-i < 9
@@ -201,6 +259,17 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     println(io)
 end
 
+"""
+    Sys.cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo}=cpu_info())
+
+Print a summary of CPU information to the `io` stream (defaulting to [`stdout`](@ref)), organizing and displaying aggregated data for CPUs with the same model, for a given array of `CPUinfo` data structures
+describing a set of CPUs (which defaults to the return value of the [`Sys.cpu_info`](@ref) function).
+
+The summary includes aggregated information for each distinct CPU model,
+providing details such as average CPU speed and total time spent in different modes (user, nice, sys, idle, irq) across all cores with the same model.
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+"""
 function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
     first = 1
@@ -213,6 +282,18 @@ function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     _cpu_summary(io, cpu, first, length(cpu))
 end
 
+"""
+    Sys.cpu_info()
+
+Return a vector of `CPUinfo` objects, where each object represents information about a CPU core.
+
+This is pretty-printed in a tabular format by `Sys.cpu_summary`, which is included in the output
+of `versioninfo(verbose=true)`, so most users will not need to access the `CPUinfo`
+data structures directly.
+
+The function provides information about each CPU, including model, speed, and usage statistics such as user time, nice time, system time, idle time, and interrupt time.
+
+"""
 function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
     count = Ref{Int32}()
@@ -582,6 +663,8 @@ user = get(Sys.username, ENV, "USER")
 
 !!! compat "Julia 1.11"
     This function requires at least Julia 1.11.
+
+See also [`homedir`](@ref).
 """
 function username()
     pw = Libc.getpw()

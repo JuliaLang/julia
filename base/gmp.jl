@@ -320,11 +320,6 @@ function BigInt(x::Float64)
     unsafe_trunc(BigInt,x)
 end
 
-function round(::Type{BigInt}, x::Union{Float16,Float32,Float64}, r::RoundingMode{:ToZero})
-    isfinite(x) || throw(InexactError(:trunc, BigInt, x))
-    unsafe_trunc(BigInt,x)
-end
-
 BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 
@@ -611,8 +606,8 @@ function top_set_bit(x::BigInt)
     x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
 end
 
-divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
-divrem(x::BigInt, y::Integer) = MPZ.tdiv_qr(x, big(y))
+divrem(x::BigInt, y::BigInt,  ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, y)
+divrem(x::BigInt, y::Integer, ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, BigInt(y))
 
 cmp(x::BigInt, y::BigInt) = sign(MPZ.cmp(x, y))
 cmp(x::BigInt, y::ClongMax) = sign(MPZ.cmp_si(x, y))

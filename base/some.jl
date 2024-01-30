@@ -138,10 +138,31 @@ true
     This macro is available as of Julia 1.7.
 """
 macro something(args...)
-    expr = :(nothing)
-    for arg in reverse(args)
-        expr = :(val = $(esc(arg)); val !== nothing ? val : ($expr))
-    end
+    noth = GlobalRef(Base, :nothing)
     something = GlobalRef(Base, :something)
-    return :($something($expr))
+
+    # This preserves existing semantics of throwing on `nothing`
+    expr = :($something($noth))
+
+    #=
+    We go through the arguments in reverse
+    because we're building a nested if/else
+    expression from the inside out.
+    The innermost thing to check is the last argument,
+    which is why we need the last argument first
+    when building the final expression.
+    =#
+    for arg in reverse(args)
+        val = gensym()
+        expr = quote
+            $val = $(esc(arg))
+            if !isnothing($val)
+                # unwrap eagerly to help type inference
+                $something($val)
+            else
+                $expr
+            end
+        end
+    end
+    return expr
 end

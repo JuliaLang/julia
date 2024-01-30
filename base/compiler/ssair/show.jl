@@ -69,6 +69,10 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), used::BitSet, maxleng
     # given control flow information, we prefer to print these with the basic block #, instead of the ssa %
     elseif isa(stmt, EnterNode)
         print(io, "enter #", stmt.catch_dest, "")
+        if isdefined(stmt, :scope)
+            print(io, " with scope ")
+            show_unquoted(io, stmt.scope, indent)
+        end
     elseif stmt isa GotoNode
         print(io, "goto #", stmt.label)
     elseif stmt isa PhiNode
@@ -566,7 +570,7 @@ end
 function statement_indices_to_labels(stmt, cfg::CFG)
     # convert statement index to labels, as expected by print_stmt
     if stmt isa EnterNode
-        stmt = EnterNode(stmt, block_for_inst(cfg, stmt.catch_dest))
+        stmt = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest))
     elseif isa(stmt, GotoIfNot)
         stmt = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
     elseif stmt isa GotoNode

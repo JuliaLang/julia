@@ -80,8 +80,8 @@ Base.chopprefix
 Base.chopsuffix
 Base.chomp
 Base.thisind
-Base.nextind
-Base.prevind
+Base.nextind(::AbstractString, ::Integer, ::Integer)
+Base.prevind(::AbstractString, ::Integer, ::Integer)
 Base.textwidth
 Base.isascii
 Base.iscntrl
