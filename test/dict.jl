@@ -1519,3 +1519,24 @@ let d = Dict()
     d[1.0] = 'b'
     @test only(d) === Pair{Any,Any}(1.0, 'b')
 end
+
+@testset "UnionAll `keytype` and `valtype` (issue #53115)" begin
+    K = Int8
+    V = Int16
+    dicts = (
+        AbstractDict, IdDict, Dict, WeakKeyDict, Base.ImmutableDict,
+        Base.PersistentDict, Iterators.Pairs
+    )
+
+    @testset "D: $D" for D ∈ dicts
+        @test_throws MethodError keytype(D)
+        @test_throws MethodError keytype(D{<:Any,V})
+        @test                    keytype(D{K      }) == K
+        @test                    keytype(D{K,    V}) == K
+
+        @test_throws MethodError valtype(D)
+        @test                    valtype(D{<:Any,V}) == V
+        @test_throws MethodError valtype(D{K      })
+        @test                    valtype(D{K,    V}) == V
+    end
+end
