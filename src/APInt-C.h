@@ -5,6 +5,7 @@
 
 #include "julia.h"
 #include "dtypes.h"
+#include "llvm-version.h"
 
 #ifdef __cplusplus
 extern "C" {
