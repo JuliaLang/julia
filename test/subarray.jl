@@ -637,6 +637,44 @@ end
         @test foo == [X, X]
     end
 
+    # Test as an assignment's left hand side
+    let x = [1,2,3,4]
+        @test Meta.@lower(@view(x[1]) = 1).head == :error
+        @test Meta.@lower(@view(x[1]) += 1).head == :error
+        @test Meta.@lower(@view(x[end]) = 1).head == :error
+        @test Meta.@lower(@view(x[end]) += 1).head == :error
+        @test Meta.@lower(@view(f(x)[end]) = 1).head == :error
+        @test Meta.@lower(@view(f(x)[end]) += 1).head == :error
+        @test (@view(x[1]) .+= 1) == fill(2)
+        @test x == [2,2,3,4]
+        @test (@view(reshape(x,2,2)[1,1]) .+= 10) == fill(12)
+        @test x == [12,2,3,4]
+        @test (@view(x[end]) .+= 1) == fill(5)
+        @test x == [12,2,3,5]
+        @test (@view(reshape(x,2,2)[end]) .+= 10) == fill(15)
+        @test x == [12,2,3,15]
+        @test (@view(reshape(x,2,2)[[begin],[begin,end]])::AbstractMatrix{Int} .+= [2]) == [14 5]
+        @test x == [14,2,5,15]
+
+        x = [1,2,3,4]
+        @test Meta.@lower(@views(x[[1]]) = 1).head == :error
+        @test Meta.@lower(@views(x[[1]]) += 1).head == :error
+        @test Meta.@lower(@views(x[[end]]) = 1).head == :error
+        @test Meta.@lower(@views(x[[end]]) += 1).head == :error
+        @test Meta.@lower(@views(f(x)[end]) = 1).head == :error
+        @test Meta.@lower(@views(f(x)[end]) += 1).head == :error
+        @test (@views(x[[1]]) .+= 1) == [2]
+        @test x == [2,2,3,4]
+        @test (@views(reshape(x,2,2)[[1],1]) .+= 10) == [12]
+        @test x == [12,2,3,4]
+        @test (@views(x[[end]]) .+= 1) == [5]
+        @test x == [12,2,3,5]
+        @test (@views(reshape(x,2,2)[[end]]) .+= 10) == [15]
+        @test x == [12,2,3,15]
+        @test (@views(reshape(x,2,2)[[begin],[begin,end]])::AbstractMatrix{Int} .+= [2]) == [14 5]
+        @test x == [14,2,5,15]
+    end
+
     # test @views macro
     @views let f!(x) = x[begin:end-1] .+= x[begin+1:end].^2
         x = [1,2,3,4]
@@ -663,6 +701,12 @@ end
         @test x == [5,8,12,9] && i == [4,3]
         @. x[3:end] = 0       # make sure @. works with end expressions in @views
         @test x == [5,8,0,0]
+        x[begin:end] .+= 1
+        @test x == [6,9,1,1]
+        x[[begin,2,end]] .-= [1,2,3]
+        @test x == [5,7,1,-2]
+        @. x[[begin,2,end]] .+= [1,2,3]
+        @test x == [6,9,1,1]
     end
     @views @test isa(X[1:3], SubArray)
     @test X[begin:end] == @views X[begin:end]
