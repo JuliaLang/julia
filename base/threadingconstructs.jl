@@ -45,7 +45,7 @@ maxthreadid() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cin
     Threads.nthreads(:default | :interactive) -> Int
 
 Get the current number of threads within the specified thread pool. The threads in `:interactive`
-have id numbers `1:nthreads(:interactive)`, and the threads in `:default` have id numbers in 
+have id numbers `1:nthreads(:interactive)`, and the threads in `:default` have id numbers in
 `nthreads(:interactive):nthreads(:default)+nthreads(:interactive)`.
 
 See also `BLAS.get_num_threads` and `BLAS.set_num_threads` in the [`LinearAlgebra`](@ref
