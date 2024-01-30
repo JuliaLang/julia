@@ -1271,7 +1271,6 @@ tand(x::Real) = sind(x) / cosd(x)
 Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
 
 Throw a [`DomainError`](@ref) if `isinf(x)`, return a `(T(NaN), T(NaN))` tuple if `isnan(x)`.
-Propagates `Missing`.
 
 !!! compat "Julia 1.3"
     This function requires at least Julia 1.3.
