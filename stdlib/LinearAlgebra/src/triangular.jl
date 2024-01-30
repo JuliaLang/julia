@@ -262,11 +262,11 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 @propagate_inbounds getindex(A::LowerTriangular, i::Integer, j::Integer) =
-    i >= j ? A.data[i,j] : zero(A.data[j,i])
+    i >= j ? A.data[i,j] : _zero(A.data,j,i)
 @propagate_inbounds getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
     i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 @propagate_inbounds getindex(A::UpperTriangular, i::Integer, j::Integer) =
-    i <= j ? A.data[i,j] : zero(A.data[j,i])
+    i <= j ? A.data[i,j] : _zero(A.data,j,i)
 
 @propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
@@ -532,11 +532,9 @@ function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular
     return A
 end
 
-# Define `mul!` for (Unit){Upper,Lower}Triangular matrices times a number.
-# be permissive here and require compatibility later in _triscale!
-@inline mul!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
+@inline _rscale_add!(A::AbstractTriangular, B::AbstractTriangular, C::Number, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
-@inline mul!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
+@inline _lscale_add!(A::AbstractTriangular, B::Number, C::AbstractTriangular, alpha::Number, beta::Number) =
     _triscale!(A, B, C, MulAddMul(alpha, beta))
 
 function checksize1(A, B)
@@ -547,7 +545,7 @@ end
 
 function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         for i = 1:j
             @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
@@ -557,7 +555,7 @@ function _triscale!(A::UpperTriangular, B::UpperTriangular, c::Number, _add)
 end
 function _triscale!(A::UpperTriangular, c::Number, B::UpperTriangular, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         for i = 1:j
             @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
@@ -567,7 +565,7 @@ function _triscale!(A::UpperTriangular, c::Number, B::UpperTriangular, _add)
 end
 function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Number, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
@@ -578,7 +576,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, B::UnitUpperTriangular, c::Nu
 end
 function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriangular, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = 1:(j - 1)
@@ -589,7 +587,7 @@ function _triscale!(A::UpperOrUnitUpperTriangular, c::Number, B::UnitUpperTriang
 end
 function _triscale!(A::LowerTriangular, B::LowerTriangular, c::Number, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         for i = j:n
             @inbounds _modify!(_add, B.data[i,j] * c, A.data, (i,j))
@@ -599,7 +597,7 @@ function _triscale!(A::LowerTriangular, B::LowerTriangular, c::Number, _add)
 end
 function _triscale!(A::LowerTriangular, c::Number, B::LowerTriangular, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         for i = j:n
             @inbounds _modify!(_add, c * B.data[i,j], A.data, (i,j))
@@ -609,7 +607,7 @@ function _triscale!(A::LowerTriangular, c::Number, B::LowerTriangular, _add)
 end
 function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Number, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
@@ -620,7 +618,7 @@ function _triscale!(A::LowerOrUnitLowerTriangular, B::UnitLowerTriangular, c::Nu
 end
 function _triscale!(A::LowerOrUnitLowerTriangular, c::Number, B::UnitLowerTriangular, _add)
     n = checksize1(A, B)
-    iszero(_add.alpha) && return _rmul_or_fill!(C, _add.beta)
+    iszero(_add.alpha) && return _rmul_or_fill!(A, _add.beta)
     for j = 1:n
         @inbounds _modify!(_add, c, A, (j,j))
         for i = (j + 1):n
@@ -773,10 +771,6 @@ isunit_char(::LowerTriangular) = 'N'
 isunit_char(::UnitLowerTriangular) = 'U'
 
 lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) = _trimul!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix) = _trimul!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractTriangular) = _trimul!(C, A, B)
-mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractTriangular) = _trimul!(C, A, B)
 
 # generic fallback for AbstractTriangular matrices outside of the four subtypes provided here
 _trimul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVector) =
@@ -807,9 +801,9 @@ rmul!(A::AbstractMatrix, B::AbstractTriangular)   = @inline _trimul!(A, A, B)
 
 
 for TC in (:AbstractVector, :AbstractMatrix)
-    @eval @inline function mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
+    @eval @inline function _mul!(C::$TC, A::AbstractTriangular, B::AbstractVector, alpha::Number, beta::Number)
         if isone(alpha) && iszero(beta)
-            return mul!(C, A, B)
+            return _trimul!(C, A, B)
         else
             return generic_matvecmul!(C, 'N', A, B, MulAddMul(alpha, beta))
         end
@@ -819,9 +813,9 @@ for (TA, TB) in ((:AbstractTriangular, :AbstractMatrix),
                     (:AbstractMatrix, :AbstractTriangular),
                     (:AbstractTriangular, :AbstractTriangular)
                 )
-    @eval @inline function mul!(C::AbstractMatrix, A::$TA, B::$TB, alpha::Number, beta::Number)
+    @eval @inline function _mul!(C::AbstractMatrix, A::$TA, B::$TB, alpha::Number, beta::Number)
         if isone(alpha) && iszero(beta)
-            return mul!(C, A, B)
+            return _trimul!(C, A, B)
         else
             return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
         end

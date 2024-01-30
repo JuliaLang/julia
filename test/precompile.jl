@@ -1798,10 +1798,10 @@ precompile_test_harness("PkgCacheInspector") do load_path
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
     end
 
-    modules, init_order, external_methods, new_specializations, new_method_roots, external_targets, edges = sv
-    m = only(external_methods)
+    modules, init_order, external_methods, new_ext_cis, new_method_roots, external_targets, edges = sv
+    m = only(external_methods).func::Method
     @test m.name == :repl_cmd && m.nargs < 2
-    @test any(new_specializations) do ci
+    @test new_ext_cis === nothing || any(new_ext_cis) do ci
         mi = ci.def
         mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end

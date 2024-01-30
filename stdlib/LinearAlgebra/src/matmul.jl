@@ -65,9 +65,14 @@ end
 (*)(a::AbstractVector, adjB::AdjointAbsMat) = reshape(a, length(a), 1) * adjB
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
 
+# Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
 @inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
+                alpha::Number, beta::Number) = _mul!(y, A, x, alpha, beta)
+
+@inline _mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
                 alpha::Number, beta::Number) =
     generic_matvecmul!(y, wrapper_char(A), _unwrap(A), x, MulAddMul(alpha, beta))
+
 # BLAS cases
 # equal eltypes
 @inline generic_matvecmul!(y::StridedVector{T}, tA, A::StridedVecOrMat{T}, x::StridedVector{T},
@@ -277,7 +282,9 @@ julia> C == A * B * α + C_original * β
 true
 ```
 """
-@inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
+@inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) = _mul!(C, A, B, α, β)
+# Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
+@inline _mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
     generic_matmatmul!(
         C,
         wrapper_char(A),

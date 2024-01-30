@@ -1033,8 +1033,13 @@ function cache_file_entry(pkg::PkgId)
         uuid === nothing ? pkg.name : package_slug(uuid)
 end
 
+# for use during running the REPL precompilation subprocess script, given we don't
+# want it to pick up caches that already exist for other optimization levels
+const ignore_compiled_cache = PkgId[]
+
 function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
+    pkg in ignore_compiled_cache && return paths
     entrypath, entryfile = cache_file_entry(pkg)
     for path in joinpath.(DEPOT_PATH, entrypath)
         isdir(path) || continue
@@ -1212,13 +1217,13 @@ function run_module_init(mod::Module, i::Int=1)
             cumulative_compile_timing(false);
             comp_time, recomp_time = (cumulative_compile_time_ns() .- compile_elapsedtimes) ./ 1e6
 
-            print(round(elapsedtime, digits=1), " ms $mod.__init__() ")
+            print("$(round(elapsedtime, digits=1)) ms $mod.__init__() ")
             if comp_time > 0
                 printstyled(Ryu.writefixed(Float64(100 * comp_time / elapsedtime), 2), "% compilation time", color = Base.info_color())
             end
             if recomp_time > 0
                 perc = Float64(100 * recomp_time / comp_time)
-                printstyled(" (", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% recompilation)", color = Base.warn_color())
+                printstyled(" ($(perc < 1 ? "<1" : Ryu.writefixed(perc, 0))% recompilation)", color = Base.warn_color())
             end
             println()
         end
@@ -1349,7 +1354,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             # TODO: Better error message if this lookup fails?
             uuid_trigger = UUID(weakdeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
-            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
+            if !haskey(explicit_loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
@@ -1981,6 +1986,11 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
+        m = get(loaded_modules, uuidkey, nothing)
+        if m !== nothing
+            explicit_loaded_modules[uuidkey] = m
+            run_package_callbacks(uuidkey)
+        end
         newm = root_module(uuidkey)
     end
     return newm
@@ -1995,6 +2005,8 @@ PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 const loaded_modules = Dict{PkgId,Module}()
+# Emptied on Julia start
+const explicit_loaded_modules = Dict{PkgId,Module}()
 const loaded_modules_order = Vector{Module}()
 const module_keys = IdDict{Module,PkgId}() # the reverse
 
@@ -2018,6 +2030,7 @@ root_module_key(m::Module) = @lock require_lock module_keys[m]
     end
     push!(loaded_modules_order, m)
     loaded_modules[key] = m
+    explicit_loaded_modules[key] = m
     module_keys[m] = key
     end
     nothing

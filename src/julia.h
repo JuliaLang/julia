@@ -266,7 +266,7 @@ typedef union __jl_purity_overrides_t {
 } _jl_purity_overrides_t;
 
 #define NUM_EFFECTS_OVERRIDES 9
-#define NUM_IR_FLAGS 11
+#define NUM_IR_FLAGS 12
 
 // This type describes a single function body
 typedef struct _jl_code_info_t {
@@ -279,14 +279,15 @@ typedef struct _jl_code_info_t {
         // 1 << 1 = callsite inline region
         // 1 << 2 = callsite noinline region
         // 1 << 3 = throw block
-        // 1 << 4 = :effect_free
-        // 1 << 5 = :nothrow
-        // 1 << 6 = :consistent
-        // 1 << 7 = :refined
-        // 1 << 8 = :noub
-        // 1 << 9 = :effect_free_if_inaccessiblememonly
-        // 1 << 10 = :inaccessiblemem_or_argmemonly
-        // 1 << 11-18 = callsite effects overrides
+        // 1 << 4 = refined statement
+        // 1 << 5 = :consistent
+        // 1 << 6 = :effect_free
+        // 1 << 7 = :nothrow
+        // 1 << 8 = :terminates
+        // 1 << 9 = :noub
+        // 1 << 10 = :effect_free_if_inaccessiblememonly
+        // 1 << 11 = :inaccessiblemem_or_argmemonly
+        // 1 << 12-19 = callsite effects overrides
     // miscellaneous data:
     jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
     jl_value_t *linetable; // Table of locations [TODO: make this volatile like slotnames]
@@ -320,8 +321,8 @@ typedef struct _jl_method_t {
     struct _jl_module_t *module;
     jl_sym_t *file;
     int32_t line;
-    size_t primary_world;
-    size_t deleted_world;
+    _Atomic(size_t) primary_world;
+    _Atomic(size_t) deleted_world;
 
     // method's type signature. redundant with TypeMapEntry->specTypes
     jl_value_t *sig;
@@ -414,8 +415,8 @@ typedef struct _jl_code_instance_t {
     _Atomic(struct _jl_code_instance_t*) next; // pointer to the next cache entry
 
     // world range for which this object is valid to use
-    size_t min_world;
-    size_t max_world;
+    _Atomic(size_t) min_world;
+    _Atomic(size_t) max_world;
 
     // inference state cache
     jl_value_t *rettype; // return type for fptr
@@ -624,7 +625,6 @@ typedef struct _jl_module_t {
     arraylist_t usings;  // modules with all bindings potentially imported
     jl_uuid_t build_id;
     jl_uuid_t uuid;
-    size_t primary_world;
     _Atomic(uint32_t) counter;
     int32_t nospecialize;  // global bit flags: initialization for new methods
     int8_t optlevel;
@@ -649,8 +649,8 @@ typedef struct _jl_typemap_entry_t {
     jl_tupletype_t *sig; // the type signature for this entry
     jl_tupletype_t *simplesig; // a simple signature for fast rejection
     jl_svec_t *guardsigs;
-    size_t min_world;
-    size_t max_world;
+    _Atomic(size_t) min_world;
+    _Atomic(size_t) max_world;
     union {
         jl_value_t *value; // generic accessor
         jl_method_instance_t *linfo; // [nullable] for guard entries
@@ -954,8 +954,10 @@ extern void JL_GC_PUSH2(void *, void *) JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH3(void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH4(void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH5(void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
+extern void JL_GC_PUSH6(void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH7(void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH8(void *, void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
+extern void JL_GC_PUSH9(void *, void *, void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
 // This is necessary, because otherwise the analyzer considers this undefined
 // behavior and terminates the exploration
@@ -995,8 +997,13 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
 #define JL_GC_PUSH7(arg1, arg2, arg3, arg4, arg5, arg6, arg7)                                           \
   void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(7), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6, arg7}; \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
 #define JL_GC_PUSH8(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)                                     \
   void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(8), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8}; \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH9(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)                               \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(9), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9}; \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 
@@ -1493,6 +1500,8 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_genericmemory_isbitsunion(a) (((jl_datatype_t*)jl_typetagof(a))->layout->flags.arrayelem_isunion)
 
 JL_DLLEXPORT int jl_subtype(jl_value_t *a, jl_value_t *b);
+
+int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT;
 
 STATIC_INLINE int jl_is_kind(jl_value_t *v) JL_NOTSAFEPOINT
 {
@@ -2125,11 +2134,11 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
 
 
-JL_DLLEXPORT int jl_is_operator(char *sym);
-JL_DLLEXPORT int jl_is_unary_operator(char *sym);
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym);
-JL_DLLEXPORT int jl_is_syntactic_operator(char *sym);
-JL_DLLEXPORT int jl_operator_precedence(char *sym);
+JL_DLLEXPORT int jl_is_operator(const char *sym);
+JL_DLLEXPORT int jl_is_unary_operator(const char *sym);
+JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym);
+JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym);
+JL_DLLEXPORT int jl_operator_precedence(const char *sym);
 
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {

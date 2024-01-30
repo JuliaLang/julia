@@ -300,4 +300,10 @@ end
     @test occursin("CustomLog2: hello", String(take!(buf)))
 end
 
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Logging)
+    @test_broken isempty(undoc)
+    @test undoc == [:AboveMaxLevel, :BelowMinLevel]
+end
+
 end

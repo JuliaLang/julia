@@ -1051,11 +1051,9 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
     [](LLVMContext &C) {
         auto FnAttrs = AttrBuilder(C);
         FnAttrs.addAllocSizeAttr(1, None); // returns %1 bytes
-#if JL_LLVM_VERSION >= 150000
         FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
-#endif
 #if JL_LLVM_VERSION >= 160000
-        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | inaccessibleMemOnly(ModRefInfo::ModRef));
+        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
 #endif
         FnAttrs.addAttribute(Attribute::WillReturn);
         FnAttrs.addAttribute(Attribute::NoUnwind);
@@ -1314,7 +1312,7 @@ static const auto jl_allocgenericmemory = new JuliaFunction<TypeFnContextAndSize
             AttrBuilder FnAttrs(C);
             AttrBuilder RetAttrs(C);
 #if JL_LLVM_VERSION >= 160000
-            FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef) | argMemOnly(MemoryEffects::ModRefInfo::Ref));
+            FnAttrs.addMemoryAttr(MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef) | MemoryEffects::argMemOnly(ModRefInfo::Ref));
 #endif
             FnAttrs.addAttribute(Attribute::WillReturn);
             RetAttrs.addAlignmentAttr(Align(16));
@@ -1423,11 +1421,24 @@ static const auto gc_loaded_func = new JuliaFunction<>{
     [](LLVMContext &C) { return FunctionType::get(PointerType::get(JuliaType::get_prjlvalue_ty(C), AddressSpace::Loaded),
             {JuliaType::get_prjlvalue_ty(C), PointerType::get(JuliaType::get_prjlvalue_ty(C), 0)}, false); },
     [](LLVMContext &C) {
-        AttributeSet FnAttrs = Attributes(C, {Attribute::ReadNone, Attribute::NoSync, Attribute::NoUnwind, Attribute::Speculatable, Attribute::WillReturn, Attribute::NoRecurse});
-        AttributeSet RetAttrs = Attributes(C, {Attribute::NonNull, Attribute::NoUndef});
-        return AttributeList::get(C, FnAttrs, RetAttrs,
+        AttrBuilder FnAttrs(C);
+        FnAttrs.addAttribute(Attribute::NoSync);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        FnAttrs.addAttribute(Attribute::Speculatable);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoRecurse);
+#if JL_LLVM_VERSION >= 160000
+        FnAttrs.addMemoryAttr(MemoryEffects::none());
+#else
+        FnAttrs.addAttribute(Attribute::ReadNone);
+#endif
+        AttrBuilder RetAttrs(C);
+        RetAttrs.addAttribute(Attribute::NonNull);
+        RetAttrs.addAttribute(Attribute::NoUndef);
+        return AttributeList::get(C, AttributeSet::get(C,FnAttrs), AttributeSet::get(C,RetAttrs),
                 { Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone, Attribute::NoCapture}),
-                  Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}) }); },
+                  Attributes(C, {Attribute::NonNull, Attribute::NoUndef, Attribute::ReadNone}) });
+                  },
 };
 
 // julia.call represents a call with julia calling convention, it is used as
@@ -2615,11 +2626,7 @@ static void jl_init_function(Function *F, const Triple &TT)
         attr.addStackAlignmentAttr(16);
     }
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
-#if JL_LLVM_VERSION < 150000
-        attr.addAttribute(Attribute::UWTable); // force NeedsWinEH
-#else
         attr.addUWTableAttr(llvm::UWTableKind::Default); // force NeedsWinEH
-#endif
     }
     if (jl_fpo_disabled(TT))
         attr.addAttribute("frame-pointer", "all");
@@ -3714,11 +3721,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
                 endBB = BasicBlock::Create(ctx.builder.getContext(), "load");
                 ctx.builder.CreateCondBr(ctx.builder.CreateIsNull(mlen), failBB, endBB);
-                ctx.f->getBasicBlockList().push_back(failBB);
+                failBB->insertInto(ctx.f);
                 ctx.builder.SetInsertPoint(failBB);
                 ctx.builder.CreateCall(prepare_call(jlboundserror_func), { mark_callee_rooted(ctx, mem), ConstantInt::get(ctx.types().T_size, 1) });
                 ctx.builder.CreateUnreachable();
-                ctx.f->getBasicBlockList().push_back(endBB);
+                endBB->insertInto(ctx.f);
                 ctx.builder.SetInsertPoint(endBB);
             }
             bool isboxed = layout->flags.arrayelem_isboxed;
@@ -3787,11 +3794,11 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 failBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
                 endBB = BasicBlock::Create(ctx.builder.getContext(), "load");
                 ctx.builder.CreateCondBr(ctx.builder.CreateIsNull(mlen), failBB, endBB);
-                ctx.f->getBasicBlockList().push_back(failBB);
+                failBB->insertInto(ctx.f);
                 ctx.builder.SetInsertPoint(failBB);
                 ctx.builder.CreateCall(prepare_call(jlboundserror_func), { mark_callee_rooted(ctx, mem), ConstantInt::get(ctx.types().T_size, 1) });
                 ctx.builder.CreateUnreachable();
-                ctx.f->getBasicBlockList().push_back(endBB);
+                endBB->insertInto(ctx.f);
                 ctx.builder.SetInsertPoint(endBB);
             }
             emit_typecheck(ctx, val, ety, "memoryset");
@@ -3891,8 +3898,9 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                     BasicBlock *passBB, *endBB, *fromBB;
                     passBB = BasicBlock::Create(ctx.builder.getContext(), "load");
                     endBB = BasicBlock::Create(ctx.builder.getContext(), "oob");
-                    ctx.f->getBasicBlockList().push_back(passBB);
-                    ctx.f->getBasicBlockList().push_back(endBB);
+
+                    passBB->insertInto(ctx.f);
+                    endBB->insertInto(ctx.f);
                     fromBB = ctx.builder.CreateCondBr(oob, endBB, passBB)->getParent();
                     ctx.builder.SetInsertPoint(endBB);
                     result = ctx.builder.CreatePHI(getInt1Ty(ctx.builder.getContext()), 2);
@@ -5286,9 +5294,9 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Instruction *phi = dest->clone();
             phi->insertAfter(dest);
             PHINode *Tindex_phi = PHINode::Create(getInt8Ty(ctx.builder.getContext()), jl_array_nrows(edges), "tindex_phi");
-            BB->getInstList().insert(InsertPt, Tindex_phi);
+            Tindex_phi->insertInto(BB, InsertPt);
             PHINode *ptr_phi = PHINode::Create(ctx.types().T_prjlvalue, jl_array_nrows(edges), "ptr_phi");
-            BB->getInstList().insert(InsertPt, ptr_phi);
+            ptr_phi->insertInto(BB, InsertPt);
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
                     ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
@@ -5306,7 +5314,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         }
         else if (allunbox) {
             PHINode *Tindex_phi = PHINode::Create(getInt8Ty(ctx.builder.getContext()), jl_array_nrows(edges), "tindex_phi");
-            BB->getInstList().insert(InsertPt, Tindex_phi);
+            Tindex_phi->insertInto(BB, InsertPt);
             jl_cgval_t val = mark_julia_slot(NULL, phiType, Tindex_phi, ctx.tbaa().tbaa_stack);
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, (PHINode*)NULL, r));
             ctx.SAvalues[idx] = val;
@@ -5340,7 +5348,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     }
     else {
         value_phi = PHINode::Create(vtype, jl_array_nrows(edges), "value_phi");
-        BB->getInstList().insert(InsertPt, value_phi);
+        value_phi->insertInto(BB, InsertPt);
         slot = mark_julia_type(ctx, value_phi, isboxed, phiType);
     }
     ctx.PhiNodes.push_back(std::make_tuple(slot, BB, dest, value_phi, r));
@@ -9173,6 +9181,9 @@ jl_llvm_functions_t jl_emit_code(
         jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
+#ifndef JL_NDEBUG
+        abort();
+#endif
     }
 
     return decls;
@@ -9307,8 +9318,9 @@ void jl_compile_workqueue(
         auto proto = it.second;
         params.workqueue.pop_back();
         // try to emit code for this item from the workqueue
-        assert(codeinst->min_world <= params.world && codeinst->max_world >= params.world &&
-            "invalid world for code-instance");
+        assert(jl_atomic_load_relaxed(&codeinst->min_world) <= params.world &&
+               jl_atomic_load_relaxed(&codeinst->max_world) >= params.world &&
+               "invalid world for code-instance");
         StringRef preal_decl = "";
         bool preal_specsig = false;
         auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
@@ -9547,6 +9559,8 @@ char jl_using_perf_jitevents = 0;
 
 int jl_is_timing_passes = 0;
 
+int jl_opaque_ptrs_set = 0;
+
 extern "C" void jl_init_llvm(void)
 {
     jl_page_size = jl_getpagesize();
@@ -9560,9 +9574,6 @@ extern "C" void jl_init_llvm(void)
     // Initialize passes
     PassRegistry &Registry = *PassRegistry::getPassRegistry();
     initializeCore(Registry);
-#if JL_LLVM_VERSION < 150000
-    initializeCoroutines(Registry);
-#endif
     initializeScalarOpts(Registry);
     initializeVectorization(Registry);
     initializeAnalysis(Registry);
@@ -9604,6 +9615,8 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("opaque-pointers");
     if (clopt && clopt->getNumOccurrences() == 0) {
         clopt->addOccurrence(1, clopt->ArgStr, "false", true);
+    } else {
+        jl_opaque_ptrs_set = 1;
     }
 
     clopt = llvmopts.lookup("time-passes");

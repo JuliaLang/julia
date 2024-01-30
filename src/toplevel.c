@@ -217,7 +217,6 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         (void)jl_toplevel_eval_flex(newm, form, 1, 1);
     }
-    newm->primary_world = jl_atomic_load_acquire(&jl_world_counter);
     ct->world_age = last_age;
 
 #if 0
@@ -465,21 +464,24 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
 }
 
+size_t jl_require_world = ~(size_t)0;
 static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Require);
     jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "%s", jl_symbol_name(var));
 
-    static jl_value_t *require_func = NULL;
-    int build_mode = jl_generating_output();
+    int build_mode = jl_options.incremental && jl_generating_output();
     jl_module_t *m = NULL;
     jl_task_t *ct = jl_current_task;
+    static jl_value_t *require_func = NULL;
     if (require_func == NULL && jl_base_module != NULL) {
         require_func = jl_get_global(jl_base_module, jl_symbol("require"));
     }
     if (require_func != NULL) {
         size_t last_age = ct->world_age;
-        ct->world_age = (build_mode ? jl_base_module->primary_world : jl_atomic_load_acquire(&jl_world_counter));
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        if (build_mode && jl_require_world < ct->world_age)
+            ct->world_age = jl_require_world;
         jl_value_t *reqargs[3];
         reqargs[0] = require_func;
         reqargs[1] = (jl_value_t*)mod;

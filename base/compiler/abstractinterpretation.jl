@@ -517,10 +517,6 @@ const RECURSION_MSG_HARDLIMIT = "Bounded recursion detected under hardlimit. Cal
 function abstract_call_method(interp::AbstractInterpreter,
                               method::Method, @nospecialize(sig), sparams::SimpleVector,
                               hardlimit::Bool, si::StmtInfo, sv::AbsIntState)
-    if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
-        add_remark!(interp, sv, "Refusing to infer into `depwarn`")
-        return MethodCallResult(Any, Any, false, false, nothing, Effects())
-    end
     sigtuple = unwrap_unionall(sig)
     sigtuple isa DataType ||
         return MethodCallResult(Any, Any, false, false, nothing, Effects())
@@ -814,12 +810,7 @@ end
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     result::MethodCallResult, @nospecialize(f), arginfo::ArgInfo, si::StmtInfo,
     match::MethodMatch, sv::AbsIntState, invokecall::Union{Nothing,InvokeCall}=nothing)
-
-    if !const_prop_enabled(interp, sv, match)
-        return nothing
-    end
-    if bail_out_const_call(interp, result, si)
-        add_remark!(interp, sv, "[constprop] No more information to be gained")
+    if bail_out_const_call(interp, result, si, match, sv)
         return nothing
     end
     eligibility = concrete_eval_eligible(interp, f, result, arginfo, sv)
@@ -852,30 +843,33 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     return const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
 end
 
-function const_prop_enabled(interp::AbstractInterpreter, sv::AbsIntState, match::MethodMatch)
+function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResult,
+                             si::StmtInfo, match::MethodMatch, sv::AbsIntState)
     if !InferenceParams(interp).ipo_constant_propagation
         add_remark!(interp, sv, "[constprop] Disabled by parameter")
-        return false
+        return true
     end
     if is_no_constprop(match.method)
         add_remark!(interp, sv, "[constprop] Disabled by method parameter")
-        return false
+        return true
     end
-    return true
-end
-
-function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResult, si::StmtInfo)
     if is_removable_if_unused(result.effects)
-        if isa(result.rt, Const) || call_result_unused(si)
+        if isa(result.rt, Const)
+            add_remark!(interp, sv, "[constprop] No more information to be gained (const)")
+            return true
+        elseif call_result_unused(si)
+            add_remark!(interp, sv, "[constprop] No more information to be gained (unused result)")
             return true
         end
-    elseif result.rt === Bottom
+    end
+    if result.rt === Bottom
         if is_terminates(result.effects) && is_effect_free(result.effects)
             # In the future, we may want to add `&& isa(result.exct, Const)` to
             # the list of conditions here, but currently, our effect system isn't
             # precise enough to let us determine :consistency of `exct`, so we
             # would have to force constprop just to determine this, which is too
             # expensive.
+            add_remark!(interp, sv, "[constprop] No more information to be gained (bottom)")
             return true
         end
     end
@@ -974,7 +968,10 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
     match::MethodMatch, sv::AbsIntState)
     method = match.method
     force = force_const_prop(interp, f, method)
-    force || const_prop_entry_heuristic(interp, result, si, sv) || return nothing
+    if !const_prop_entry_heuristic(interp, result, si, sv, force)
+        # N.B. remarks are emitted within `const_prop_entry_heuristic`
+        return nothing
+    end
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
     length(arginfo.argtypes) < nargs && return nothing
@@ -1001,8 +998,17 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
     return mi
 end
 
-function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult, si::StmtInfo, sv::AbsIntState)
-    if call_result_unused(si) && result.edgecycle
+function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult,
+                                    si::StmtInfo, sv::AbsIntState, force::Bool)
+    if result.rt isa LimitedAccuracy
+        # optimizations like inlining are disabled for limited frames,
+        # thus there won't be much benefit in constant-prop' here
+        # N.B. don't allow forced constprop' for safety (xref #52763)
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
+        return false
+    elseif force
+        return true
+    elseif call_result_unused(si) && result.edgecycle
         add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (edgecycle with unused result)")
         return false
     end
@@ -1015,27 +1021,21 @@ function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodC
         if rt === Bottom
             add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (erroneous result)")
             return false
-        else
-            return true
         end
+        return true
     elseif isa(rt, PartialStruct) || isa(rt, InterConditional) || isa(rt, InterMustAlias)
         # could be improved to `Const` or a more precise wrapper
         return true
-    elseif isa(rt, LimitedAccuracy)
-        # optimizations like inlining are disabled for limited frames,
-        # thus there won't be much benefit in constant-prop' here
-        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
-        return false
-    else
-        if isa(rt, Const)
-            if !is_nothrow(result.effects)
-                # Could still be improved to Bottom (or at least could see the effects improved)
-                return true
-            end
+    elseif isa(rt, Const)
+        if is_nothrow(result.effects)
+            add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (nothrow const)")
+            return false
         end
-        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable result)")
-        return false
+        # Could still be improved to Bottom (or at least could see the effects improved)
+        return true
     end
+    add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable result)")
+    return false
 end
 
 # determines heuristically whether if constant propagation can be worthwhile
@@ -2119,8 +2119,14 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             abstract_call_gf_by_type(interp, f, ArgInfo(nothing, T), si, atype, sv, max_methods)
         end
         pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
-        effects = builtin_effects(𝕃ᵢ, Core._typevar, Any[n, lb_var, ub_var], pT)
-        return CallMeta(pT, Any, effects, call.info)
+        typevar_argtypes = Any[n, lb_var, ub_var]
+        effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+        if effects.nothrow
+            exct = Union{}
+        else
+            exct = builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+        end
+        return CallMeta(pT, exct, effects, call.info)
     elseif f === UnionAll
         call = abstract_call_gf_by_type(interp, f, ArgInfo(nothing, Any[Const(UnionAll), Any, Any]), si, Tuple{Type{UnionAll}, Any, Any}, sv, max_methods)
         return abstract_call_unionall(interp, argtypes, call)
@@ -2310,11 +2316,7 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::U
 end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
-    if isa(e, QuoteNode)
-        effects = Effects(EFFECTS_TOTAL;
-            inaccessiblememonly = is_mutation_free_argtype(typeof(e.value)) ? ALWAYS_TRUE : ALWAYS_FALSE)
-        return RTEffects(Const(e.value), Union{}, effects)
-    elseif isa(e, SSAValue)
+    if isa(e, SSAValue)
         return RTEffects(abstract_eval_ssavalue(e, sv), Union{}, EFFECTS_TOTAL)
     elseif isa(e, SlotNumber)
         if vtypes !== nothing
@@ -2335,8 +2337,12 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, GlobalRef)
         return abstract_eval_globalref(interp, e, sv)
     end
-
-    return RTEffects(Const(e), Union{}, EFFECTS_TOTAL)
+    if isa(e, QuoteNode)
+        e = e.value
+    end
+    effects = Effects(EFFECTS_TOTAL;
+        inaccessiblememonly = is_mutation_free_argtype(typeof(e)) ? ALWAYS_TRUE : ALWAYS_FALSE)
+    return RTEffects(Const(e), Union{}, effects)
 end
 
 function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::AbsIntState)
@@ -2716,7 +2722,7 @@ end
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
         if isa(e, PhiNode)
-            add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
+            add_curr_ssaflag!(sv, IR_FLAGS_REMOVABLE)
             return RTEffects(abstract_eval_phi(interp, e, vtypes, sv), Union{}, EFFECTS_TOTAL)
         end
         (; rt, exct, effects) = abstract_eval_special_value(interp, e, vtypes, sv)
@@ -3288,10 +3294,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             # Process non control-flow statements
             (; changes, rt, exct) = abstract_eval_basic_statement(interp,
                 stmt, currstate, frame)
-            if exct !== Union{}
-                update_exc_bestguess!(interp, exct, frame)
-            end
             if !has_curr_ssaflag(frame, IR_FLAG_NOTHROW)
+                if exct !== Union{}
+                    update_exc_bestguess!(interp, exct, frame)
+                    # TODO: assert that these conditions match. For now, we assume the `nothrow` flag
+                    # to be correct, but allow the exct to be an over-approximation.
+                end
                 propagate_to_error_handler!(currstate, frame, 𝕃ᵢ)
             end
             if rt === Bottom

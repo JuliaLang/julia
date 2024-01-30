@@ -8,7 +8,7 @@ New language features
   difference between `public` and `export` is that `public` names do not become
   available when `using` a package/module ([#50105]).
 * The syntax `using LongPackageName as LPN` is now supported ([#52821]).
-* `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
+* `ScopedValue` implements dynamic scope with inheritance across tasks ([#50958]).
 * The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
   but allows to add keyword arguments to the function call ([#51501]).
 * Support for Unicode 15.1 ([#51799]).
@@ -31,7 +31,7 @@ Language changes
   wants to begin exiting.
 * Code coverage and malloc tracking is no longer generated during the package precompilation stage.
   Further, during these modes pkgimage caches are now used for packages that are not being tracked.
-  Meaning that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
+  This means that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
   pkgimage caches for all other packages than the package being tested, likely meaning faster test
   execution. ([#52123])
 * Module names are no longer considered "exported" by default. Nevertheless they are still
@@ -45,7 +45,7 @@ Compiler/Runtime improvements
 * Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
 * A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
   loads, primarily to be used within JLLs ([#50074]).
-* Added a support for annotating `Base.@assume_effects` on code block ([#52400]).
+* Added support for annotating `Base.@assume_effects` on code blocks ([#52400]).
 
 Command-line option changes
 ---------------------------
@@ -71,12 +71,11 @@ New library functions
 
 * `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not.
 * The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
-* `hardlink(src, dst)` can be used to create hard links ([#41639]).
-* `diskstat(path=pwd())` can be used to return statistics about the disk ([#42248]).
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 * `eachrsplit(string, pattern)` iterates split substrings right to left.
 * `Sys.username()` can be used to return the current user's username ([#51897]).
-* `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` which is the safe counterpart to `unsafe_wrap` ([#52049]).
+* `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` is the safe counterpart to `unsafe_wrap` ([#52049]).
+* `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
 
 New library features
 --------------------
@@ -96,6 +95,7 @@ New library features
   content is fully written, then call `closewrite` manually to avoid
   data-races. Or use the callback form of `open` to have all that handled
   automatically.
+* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
 
 Standard library changes
 ------------------------
@@ -111,6 +111,12 @@ Standard library changes
 * The new `@styled_str` string macro provides a convenient way of creating a
   `AnnotatedString` with various faces or other attributes applied ([#49586]).
 
+#### JuliaSyntaxHighlighting
+
+* A new standard library for applying syntax highlighting to Julia code, this
+  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
+  that creates an `AnnotatedString` with syntax highlighting applied.
+
 #### Package Manager
 
 #### LinearAlgebra
@@ -121,6 +127,7 @@ Standard library changes
 * There is now a specialized dispatch for `eigvals/eigen(::Hermitian{<:Tridiagonal})` which performs a similarity transformation to create a real symmetrix triagonal matrix, and solve that using the LAPACK routines ([#49546]).
 * Structured matrices now retain either the axes of the parent (for `Symmetric`/`Hermitian`/`AbstractTriangular`/`UpperHessenberg`), or that of the principal diagonal (for banded matrices) ([#52480]).
 * `bunchkaufman` and `bunchkaufman!` now work for any `AbstractFloat`, `Rational` and their complex variants. `bunchkaufman` now supports `Integer` types, by making an internal conversion to `Rational{BigInt}`. Added new function `inertia` that computes the inertia of the diagonal factor given by the `BunchKaufman` factorization object of a real symmetric or Hermitian matrix. For complex symmetric matrices, `inertia` only computes the number of zero eigenvalues of the diagonal factor ([#51487]).
+* Packages that specialize matrix-matrix `mul!` with a method signature of the form `mul!(::AbstractMatrix, ::MyMatrix, ::AbstractMatrix, ::Number, ::Number)` no longer encounter method ambiguities when interacting with `LinearAlgebra`. Previously, ambiguities used to arise when multiplying a `MyMatrix` with a structured matrix type provided by LinearAlgebra, such as `AbstractTriangular`, which used to necessitate additional methods to resolve such ambiguities. Similar sources of ambiguities have also been removed for matrix-vector `mul!` operations ([#52837]).
 
 #### Logging
 * New `@create_log_macro` macro for creating new log macros like `@info`, `@warn` etc. For instance
@@ -141,7 +148,14 @@ Standard library changes
 #### REPL
 
 * Tab complete hints now show in lighter text while typing in the repl. To disable
-  set `Base.active_repl.options.hint_tab_completes = false` ([#51229]).
+  set `Base.active_repl.options.hint_tab_completes = false` interactively, or in startup.jl:
+  ```
+  if VERSION >= v"1.11.0-0"
+    atreplinit() do repl
+        repl.options.hint_tab_completes = false
+    end
+  end
+  ``` ([#51229]).
 * Meta-M with an empty prompt now toggles the contextual module between the previous non-Main
   contextual module and Main so that switching back and forth is simple. ([#51616], [#52670])
 
@@ -153,6 +167,8 @@ Standard library changes
 #### Test
 
 #### Dates
+
+The undocumented function `adjust` is no longer exported but is now documented
 
 #### Statistics
 
@@ -172,6 +188,8 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
+
+* `Base.map`, `Iterators.map`, and `foreach` lost their single-argument methods ([#52631]).
 
 
 External dependencies
