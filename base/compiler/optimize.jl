@@ -526,8 +526,8 @@ function visit_bb_phis!(callback, ir::IRCode, bb::Int)
 end
 
 function any_stmt_may_throw(ir::IRCode, bb::Int)
-    for stmt in ir.cfg.blocks[bb].stmts
-        if has_flag(ir[SSAValue(stmt)], IR_FLAG_NOTHROW)
+    for idx in ir.cfg.blocks[bb].stmts
+        if !has_flag(ir[SSAValue(idx)], IR_FLAG_NOTHROW)
             return true
         end
     end
@@ -865,13 +865,14 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
 end
 
 function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
-    scan!(ScanStmt(sv), scanner, false)
-    complete!(sv.tpdum); push!(scanner.bb_ip, 1)
-    populate_def_use_map!(sv.tpdum, scanner)
-
     (; ir, inconsistent, tpdum) = sv
+
+    scan!(ScanStmt(sv), scanner, false)
+    complete!(tpdum); push!(scanner.bb_ip, 1)
+    populate_def_use_map!(tpdum, scanner)
+
     stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
-    for def in sv.inconsistent
+    for def in inconsistent
         for use in tpdum[def]
             if !(use in inconsistent)
                 push!(inconsistent, use)
@@ -879,6 +880,7 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
             end
         end
     end
+    lazydomtree = LazyDomtree(ir)
     while !isempty(stmt_ip)
         idx = popfirst!(stmt_ip)
         inst = ir[SSAValue(idx)]
@@ -895,12 +897,11 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
             any_non_boundscheck_inconsistent || continue
         elseif isa(stmt, ReturnNode)
             sv.all_retpaths_consistent = false
-        else isa(stmt, GotoIfNot)
+        elseif isa(stmt, GotoIfNot)
             bb = block_for_inst(ir, idx)
             cfg = ir.cfg
             blockliveness = BlockLiveness(cfg.blocks[bb].succs, nothing)
-            domtree = construct_domtree(cfg.blocks)
-            for succ in iterated_dominance_frontier(cfg, blockliveness, domtree)
+            for succ in iterated_dominance_frontier(cfg, blockliveness, get!(lazydomtree))
                 visit_bb_phis!(ir, succ) do phiidx::Int
                     push!(inconsistent, phiidx)
                     push!(stmt_ip, phiidx)
