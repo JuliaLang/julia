@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#ifdef LLVM_VERSION_MAJOR
+#if defined(__cplusplus) && defined(LLVM_VERSION_MAJOR)
 using integerPart = llvm::APInt::WordType;
 #else
 typedef void integerPart;
