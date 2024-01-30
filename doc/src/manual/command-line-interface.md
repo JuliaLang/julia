@@ -41,10 +41,12 @@ See also [Scripting](@ref man-scripting) for more information on writing Julia s
 
 ## The `Main.main` entry point
 
-As of Julia, 1.11, Base export a special macro `@main`. This macro simply expands to the symbol `main`,
+As of Julia, 1.11, `Base` exports the macro `@main`. This macro expands to the symbol `main`,
 but at the conclusion of executing a script or expression, `julia` will attempt to execute the function
 `Main.main(ARGS)` if such a function has been defined and this behavior was opted into
-using the `@main macro`. This feature is intended to aid in the unification
+by using the `@main` macro.
+
+This feature is intended to aid in the unification
 of compiled and interactive workflows. In compiled workflows, loading the code that defines the `main`
 function may be spatially and temporally separated from the invocation. However, for interactive workflows,
 the behavior is equivalent to explicitly calling `exit(main(ARGS))` at the end of the evaluated script or
@@ -62,10 +64,10 @@ Hello World!
 $
 ```
 
-Only the `main` binding in the `Main`, module has this special behavior and only if
+Only the `main` binding in the `Main` module has this behavior and only if
 the macro `@main` was used within the defining module.
 
-For example, using `hello` instead of `main` will result not result in the `hello` function executing:
+For example, using `hello` instead of `main` will not result in the `hello` function executing:
 
 ```
 $ julia -e 'hello(ARGS) = println("Hello World!")'
@@ -79,11 +81,13 @@ $
 ```
 
 However, the opt-in need not occur at definition time:
+```
 $ julia -e 'main(ARGS) = println("Hello World!"); @main'
 Hello World!
 $
+```
 
-The `main` binding may be imported from a package. A hello package defined as
+The `main` binding may be imported from a package. A *hello world* package defined as
 
 ```
 module Hello

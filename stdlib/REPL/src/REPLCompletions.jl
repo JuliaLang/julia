@@ -271,24 +271,33 @@ end
 
 const PATH_cache_lock = Base.ReentrantLock()
 const PATH_cache = Set{String}()
-cached_PATH_string::Union{String,Nothing} = nothing
-function cached_PATH_changed()
-    global cached_PATH_string
-    @lock(PATH_cache_lock, cached_PATH_string) !== get(ENV, "PATH", nothing)
+PATH_cache_task::Union{Task,Nothing} = nothing # used for sync in tests
+next_cache_update::Float64 = 0.0
+function maybe_spawn_cache_PATH()
+    global PATH_cache_task, next_cache_update
+    @lock PATH_cache_lock begin
+        PATH_cache_task isa Task && !istaskdone(PATH_cache_task) && return
+        time() < next_cache_update && return
+        PATH_cache_task = Threads.@spawn REPLCompletions.cache_PATH()
+        Base.errormonitor(PATH_cache_task)
+    end
 end
-const PATH_cache_finished = Base.Condition() # used for sync in tests
 
 # caches all reachable files in PATH dirs
 function cache_PATH()
-    global cached_PATH_string
-    path = @lock PATH_cache_lock begin
-        empty!(PATH_cache)
-        cached_PATH_string = get(ENV, "PATH", nothing)
-    end
+    path = get(ENV, "PATH", nothing)
     path isa String || return
+
+    global next_cache_update
+
+    # Calling empty! on PATH_cache would be annoying for async typing hints as completions would temporarily disappear.
+    # So keep track of what's added this time and at the end remove any that didn't appear this time from the global cache.
+    this_PATH_cache = Set{String}()
 
     @debug "caching PATH files" PATH=path
     pathdirs = split(path, @static Sys.iswindows() ? ";" : ":")
+
+    next_yield_time = time() + 0.01
 
     t = @elapsed for pathdir in pathdirs
         actualpath = try
@@ -322,6 +331,7 @@ function cache_PATH()
             try
                 if isfile(joinpath(pathdir, file))
                     @lock PATH_cache_lock push!(PATH_cache, file)
+                    push!(this_PATH_cache, file)
                 end
             catch e
                 # `isfile()` can throw in rare cases such as when probing a
@@ -333,10 +343,18 @@ function cache_PATH()
                     rethrow()
                 end
             end
-            yield() # so startup doesn't block when -t1
+            if time() >= next_yield_time
+                yield() # to avoid blocking typing when -t1
+                next_yield_time = time() + 0.01
+            end
         end
     end
-    notify(PATH_cache_finished)
+
+    @lock PATH_cache_lock begin
+        intersect!(PATH_cache, this_PATH_cache) # remove entries from PATH_cache that weren't found this time
+        next_cache_update = time() + 10 # earliest next update can run is 10s after
+    end
+
     @debug "caching PATH files took $t seconds" length(pathdirs) length(PATH_cache)
     return PATH_cache
 end
@@ -380,15 +398,13 @@ function complete_path(path::AbstractString;
     end
 
     if use_envpath && isempty(dir)
-        # Look for files in PATH as well. These are cached in `cache_PATH` in a separate task in REPL init.
-        # If we cannot get lock because its still caching just pass over this so that initial
-        # typing isn't laggy. If the PATH string has changed since last cache re-cache it
-        cached_PATH_changed() && Base.errormonitor(Threads.@spawn REPLCompletions.cache_PATH())
-        if trylock(PATH_cache_lock)
+        # Look for files in PATH as well. These are cached in `cache_PATH` in an async task to not block typing.
+        # If we cannot get lock because its still caching just pass over this so that typing isn't laggy.
+        maybe_spawn_cache_PATH() # only spawns if enough time has passed and the previous caching task has completed
+        @lock PATH_cache_lock begin
             for file in PATH_cache
                 startswith(file, prefix) && push!(matches, file)
             end
-            unlock(PATH_cache_lock)
         end
     end
 
@@ -796,7 +812,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
             isa(c, TextCompletion) && return false
             isa(c, MethodCompletion) || return true
             sig = Base.unwrap_unionall(c.method.sig)::DataType
-            return !all(T -> T === Any || T === Vararg{Any}, sig.parameters[2:end])
+            return !all(@nospecialize(T) -> T === Any || T === Vararg{Any}, sig.parameters[2:end])
         end
     end
 
@@ -1074,7 +1090,10 @@ function project_deps_get_completion_candidates(pkgstarts::String, project_file:
     return Completion[PackageCompletion(name) for name in loading_candidates]
 end
 
-function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc::Function), context_module::Module, string::String, name::String, pos::Int, dotpos::Int, startpos::Int, comp_keywords=false)
+function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ffunc),
+                               context_module::Module, string::String, name::String,
+                               pos::Int, dotpos::Int, startpos::Int;
+                               comp_keywords=false)
     ex = nothing
     if comp_keywords
         append!(suggestions, complete_keyword(name))
@@ -1116,10 +1135,41 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
             if something(findlast(in(non_identifier_chars), s), 0) < something(findlast(isequal('.'), s), 0)
                 lookup_name, name = rsplit(s, ".", limit=2)
                 name = String(name)
-
                 ex = Meta.parse(lookup_name, raise=false, depwarn=false)
             end
             isexpr(ex, :incomplete) && (ex = nothing)
+        elseif isexpr(ex, (:using, :import))
+            arg1 = ex.args[1]
+            if isexpr(arg1, :.)
+                # We come here for cases like:
+                # - `string`: "using Mod1.Mod2.M"
+                # - `ex`: :(using Mod1.Mod2)
+                # - `name`: "M"
+                # Now we transform `ex` to `:(Mod1.Mod2)` to allow `complete_symbol` to
+                # complete for inner modules whose name starts with `M`.
+                # Note that `ffunc` is set to `module_filter` within `completions`
+                ex = nothing
+                firstdot = true
+                for arg = arg1.args
+                    if arg === :.
+                        # override `context_module` if multiple `.` accessors are used
+                        if firstdot
+                            firstdot = false
+                        else
+                            context_module = parentmodule(context_module)
+                        end
+                    elseif arg isa Symbol
+                        if ex === nothing
+                            ex = arg
+                        else
+                            ex = Expr(:., out, QuoteNode(arg))
+                        end
+                    else # invalid expression
+                        ex = nothing
+                        break
+                    end
+                end
+            end
         elseif isexpr(ex, :call) && length(ex.args) > 1
             isinfix = s[end] != ')'
             # A complete call expression that does not finish with ')' is an infix call.
@@ -1200,8 +1250,9 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         ok && return ret
         startpos = first(varrange) + 4
         dotpos = something(findprev(isequal('.'), string, first(varrange)-1), 0)
-        return complete_identifiers!(Completion[], ffunc, context_module, string,
-            string[startpos:pos], pos, dotpos, startpos)
+        name = string[startpos:pos]
+        return complete_identifiers!(Completion[], ffunc, context_module, string, name, pos,
+                                     dotpos, startpos)
     elseif inc_tag === :cmd
         # TODO: should this call shell_completions instead of partially reimplementing it?
         let m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial)) # fuzzy shell_parse in reverse
@@ -1349,15 +1400,19 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                 end
             end
         end
-        ffunc = (mod,x)->(Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getfield(mod, x), Module))
+        ffunc = module_filter
         comp_keywords = false
     end
 
     startpos == 0 && (pos = -1)
     dotpos < startpos && (dotpos = startpos - 1)
-    return complete_identifiers!(suggestions, ffunc, context_module, string,
-        name, pos, dotpos, startpos, comp_keywords)
+    return complete_identifiers!(suggestions, ffunc, context_module, string, name, pos,
+                                 dotpos, startpos;
+                                 comp_keywords)
 end
+
+module_filter(mod::Module, x::Symbol) =
+    Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getglobal(mod, x), Module)
 
 function shell_completions(string, pos)
     # First parse everything up to the current position
@@ -1384,7 +1439,7 @@ function shell_completions(string, pos)
         r = pos+1:pos
         paths, dir, success = complete_path("", use_envpath=false, shell_escape=true)
         return paths, r, success
-    elseif all(arg -> arg isa AbstractString, ex.args)
+    elseif all(@nospecialize(arg) -> arg isa AbstractString, ex.args)
         # Join these and treat this as a path
         path::String = join(ex.args)
         r = last_arg_start:pos
@@ -1418,71 +1473,9 @@ function shell_completions(string, pos)
     return Completion[], 0:-1, false
 end
 
-function UndefVarError_hint(io::IO, ex::UndefVarError)
-    var = ex.var
-    if var === :or
-        print(io, "\nSuggestion: Use `||` for short-circuiting boolean OR.")
-    elseif var === :and
-        print(io, "\nSuggestion: Use `&&` for short-circuiting boolean AND.")
-    elseif var === :help
-        println(io)
-        # Show friendly help message when user types help or help() and help is undefined
-        show(io, MIME("text/plain"), Base.Docs.parsedoc(Base.Docs.keywords[:help]))
-    elseif var === :quit
-        print(io, "\nSuggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.")
-    end
-    if isdefined(ex, :scope)
-        scope = ex.scope
-        if scope isa Module
-            bnd = ccall(:jl_get_module_binding, Any, (Any, Any, Cint), scope, var, true)::Core.Binding
-            if isdefined(bnd, :owner)
-                owner = bnd.owner
-                if owner === bnd
-                    print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
-                end
-            else
-                owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), scope, var)
-                if C_NULL == owner
-                    # No global of this name exists in this module.
-                    # This is the common case, so do not print that information.
-                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
-                    owner = bnd
-                else
-                    owner = unsafe_pointer_to_objref(owner)::Core.Binding
-                end
-            end
-            if owner !== bnd
-                # this could use jl_binding_dbgmodule for the exported location in the message too
-                print(io, "\nSuggestion: this global was defined as `$(owner.globalref)` but not assigned a value.")
-            end
-        elseif scope === :static_parameter
-            print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
-        elseif scope === :local
-            print(io, "\nSuggestion: check for an assignment to a local variable that shadows a global of the same name.")
-        end
-    else
-        scope = undef
-    end
-    warnfor(m, var) = Base.isbindingresolved(m, var) && (Base.isexported(m, var) || Base.ispublic(m, var)) && (print(io, "\nHint: a global variable of this name also exists in $m."); true)
-    if scope !== Base && !warnfor(Base, var)
-        warned = false
-        for m in Base.loaded_modules_order
-            m === Core && continue
-            m === Base && continue
-            m === Main && continue
-            m === scope && continue
-            warned = warnfor(m, var) || warned
-        end
-        warned = warned || warnfor(Core, var)
-        warned = warned || warnfor(Main, var)
-    end
-    nothing
-end
-
 function __init__()
-    Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
     COMPLETION_WORLD[] = Base.get_world_counter()
-    nothing
+    return nothing
 end
 
 end # module

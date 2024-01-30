@@ -1355,13 +1355,13 @@ JL_CALLABLE(jl_f_set_binding_type)
     JL_TYPECHK(set_binding_type!, type, ty);
     jl_binding_t *b = jl_get_binding_wr(m, s);
     jl_value_t *old_ty = NULL;
-    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty) && ty != old_ty) {
-        if (nargs == 2)
-            return jl_nothing;
+    if (jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty)) {
+        jl_gc_wb(b, ty);
+    }
+    else if (nargs != 2 && !jl_types_equal(ty, old_ty)) {
         jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
                   jl_symbol_name(m->name), jl_symbol_name(s));
     }
-    jl_gc_wb(b, ty);
     return jl_nothing;
 }
 

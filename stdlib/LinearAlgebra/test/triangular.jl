@@ -510,11 +510,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
             @test_throws DimensionMismatch Ann'\bm
             @test_throws DimensionMismatch transpose(Ann)\bm
             if t1 == UpperTriangular || t1 == LowerTriangular
-                if elty1 === eltyB <: BlasFloat
-                    @test_throws LAPACKException ldiv!(t1(zeros(elty1, n, n)), fill(eltyB(1), n))
-                else
-                    @test_throws SingularException ldiv!(t1(zeros(elty1, n, n)), fill(eltyB(1), n))
-                end
+                @test_throws SingularException ldiv!(t1(zeros(elty1, n, n)), fill(eltyB(1), n))
             end
             @test B/A1 ≈ B/Matrix(A1)
             @test B/transpose(A1) ≈ B/transpose(Matrix(A1))
@@ -815,6 +811,14 @@ end
     end
 end
 
+@testset "indexing partly initialized matrices" begin
+    M = Matrix{BigFloat}(undef, 2, 2)
+    U = UpperTriangular(M)
+    @test iszero(U[2,1])
+    L = LowerTriangular(M)
+    @test iszero(L[1,2])
+end
+
 @testset "special printing of Lower/UpperTriangular" begin
     @test occursin(r"3×3 (LinearAlgebra\.)?LowerTriangular{Int64, Matrix{Int64}}:\n 2  ⋅  ⋅\n 2  2  ⋅\n 2  2  2",
                    sprint(show, MIME"text/plain"(), LowerTriangular(2ones(Int64,3,3))))
@@ -824,6 +828,11 @@ end
                    sprint(show, MIME"text/plain"(), UpperTriangular(2ones(Int64,3,3))))
     @test occursin(r"3×3 (LinearAlgebra\.)?UnitUpperTriangular{Int64, Matrix{Int64}}:\n 1  2  2\n ⋅  1  2\n ⋅  ⋅  1",
                    sprint(show, MIME"text/plain"(), UnitUpperTriangular(2ones(Int64,3,3))))
+
+    # don't access non-structural elements while displaying
+    M = Matrix{BigFloat}(undef, 2, 2)
+    @test sprint(show, UpperTriangular(M)) == "BigFloat[#undef #undef; 0.0 #undef]"
+    @test sprint(show, LowerTriangular(M)) == "BigFloat[#undef 0.0; #undef #undef]"
 end
 
 @testset "adjoint/transpose triangular/vector multiplication" begin
@@ -898,6 +907,35 @@ end
             A = dty(D)
             @test A * A' == D * D'
         end
+    end
+end
+
+@testset "tril!/triu! for non-bitstype matrices" begin
+    @testset "numeric" begin
+        M = Matrix{BigFloat}(undef, 3, 3)
+        tril!(M)
+        L = LowerTriangular(ones(3,3))
+        copytrito!(M, L, 'L')
+        @test M == L
+
+        M = Matrix{BigFloat}(undef, 3, 3)
+        triu!(M)
+        U = UpperTriangular(ones(3,3))
+        copytrito!(M, U, 'U')
+        @test M == U
+    end
+    @testset "array elements" begin
+        M = fill(ones(2,2), 4, 4)
+        tril!(M)
+        L = LowerTriangular(fill(fill(2,2,2),4,4))
+        copytrito!(M, L, 'L')
+        @test M == L
+
+        M = fill(ones(2,2), 4, 4)
+        triu!(M)
+        U = UpperTriangular(fill(fill(2,2,2),4,4))
+        copytrito!(M, U, 'U')
+        @test M == U
     end
 end
 

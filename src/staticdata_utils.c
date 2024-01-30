@@ -85,6 +85,7 @@ static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
 // Mutex for newly_inferred
 jl_mutex_t newly_inferred_mutex;
+extern jl_mutex_t world_counter_lock;
 
 // Register array of newly-inferred MethodInstances
 // This gets called as the first step of Base.include_package_for_output
@@ -237,7 +238,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
             int found = has_backedge_to_worklist(mi, &visited, &stack);
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);
-            if (found == 1 && ci->max_world == ~(size_t)0) {
+            if (found == 1 && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
                 void **bp = ptrhash_bp(&visited, mi);
                 if (*bp != (void*)((char*)HT_NOTFOUND + 3)) {
                     *bp = (void*)((char*)HT_NOTFOUND + 3);
@@ -828,16 +829,57 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 // Deserialization
 
 // Add methods to external (non-worklist-owned) functions
-static void jl_insert_methods(jl_array_t *list)
+// mutating external to point at the new methodtable entry instead of the new method
+static void jl_add_methods(jl_array_t *external)
 {
-    size_t i, l = jl_array_nrows(list);
+    size_t i, l = jl_array_nrows(external);
     for (i = 0; i < l; i++) {
-        jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(list, i);
+        jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(external, i);
         assert(jl_is_method(meth));
         assert(!meth->is_for_opaque_closure);
         jl_methtable_t *mt = jl_method_get_table(meth);
         assert((jl_value_t*)mt != jl_nothing);
-        jl_method_table_insert(mt, meth, NULL);
+        jl_typemap_entry_t *entry = jl_method_table_add(mt, meth, NULL);
+        jl_array_ptr_set(external, i, entry);
+    }
+}
+
+static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size_t world)
+{
+    size_t i, l = jl_array_nrows(internal);
+    for (i = 0; i < l; i++) {
+        jl_value_t *obj = jl_array_ptr_ref(internal, i);
+        if (jl_typetagis(obj, jl_typemap_entry_type)) {
+            jl_typemap_entry_t *entry = (jl_typemap_entry_t*)obj;
+            assert(jl_atomic_load_relaxed(&entry->min_world) == ~(size_t)0);
+            assert(jl_atomic_load_relaxed(&entry->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
+            jl_atomic_store_release(&entry->min_world, world);
+            jl_atomic_store_release(&entry->max_world, ~(size_t)0);
+        }
+        else if (jl_is_method(obj)) {
+            jl_method_t *m = (jl_method_t*)obj;
+            assert(jl_atomic_load_relaxed(&m->primary_world) == ~(size_t)0);
+            assert(jl_atomic_load_relaxed(&m->deleted_world) == WORLD_AGE_REVALIDATION_SENTINEL);
+            jl_atomic_store_release(&m->primary_world, world);
+            jl_atomic_store_release(&m->deleted_world, ~(size_t)0);
+        }
+        else if (jl_is_code_instance(obj)) {
+            jl_code_instance_t *ci = (jl_code_instance_t*)obj;
+            assert(jl_atomic_load_relaxed(&ci->min_world) == ~(size_t)0);
+            assert(jl_atomic_load_relaxed(&ci->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
+            jl_atomic_store_relaxed(&ci->min_world, world);
+            // n.b. ci->max_world is not updated until edges are verified
+        }
+        else {
+            abort();
+        }
+    }
+    l = jl_array_nrows(external);
+    for (i = 0; i < l; i++) {
+        jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
+        jl_methtable_t *mt = jl_method_get_table(entry->func.method);
+        assert((jl_value_t*)mt != jl_nothing);
+        jl_method_table_activate(mt, entry);
     }
 }
 
@@ -880,7 +922,7 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
             jl_method_t *m = ((jl_method_instance_t*)callee)->def.method;
             if (jl_egal(invokesig, m->sig)) {
                 // the invoke match is `m` for `m->sig`, unless `m` is invalid
-                if (m->deleted_world < max_valid)
+                if (jl_atomic_load_relaxed(&m->deleted_world) < max_valid)
                     max_valid = 0;
             }
             else {
@@ -958,7 +1000,7 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets, size_t minworld)
         }
         //jl_static_show((JL_STREAM*)ios_stderr, (jl_value_t*)invokesig);
         //jl_static_show((JL_STREAM*)ios_stderr, (jl_value_t*)callee);
-        //ios_puts(valid ? "valid\n" : "INVALID\n", ios_stderr);
+        //ios_puts(max_valid == ~(size_t)0 ? "valid\n" : "INVALID\n", ios_stderr);
     }
     JL_GC_POP();
     return maxvalids;
@@ -1005,7 +1047,7 @@ static jl_array_t *jl_verify_methods(jl_array_t *edges, jl_array_t *maxvalids)
             }
         }
         //jl_static_show((JL_STREAM*)ios_stderr, (jl_value_t*)caller);
-        //ios_puts(maxvalid2_data[i] == ~(size_t)0 ? "valid\n" : "INVALID\n", ios_stderr);
+        //ios_puts(maxvalids2_data[i] == ~(size_t)0 ? "valid\n" : "INVALID\n", ios_stderr);
     }
     JL_GC_POP();
     return maxvalids2;
@@ -1118,17 +1160,18 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
     // next build a map from external MethodInstances to their CodeInstance for insertion
     for (size_t i = 0; i < n_ext_cis; i++) {
         jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(ext_ci_list, i);
-        assert(ci->min_world == minworld);
-        if (ci->max_world == WORLD_AGE_REVALIDATION_SENTINEL) {
+        if (jl_atomic_load_relaxed(&ci->max_world) == WORLD_AGE_REVALIDATION_SENTINEL) {
+            assert(jl_atomic_load_relaxed(&ci->min_world) == minworld);
             ptrhash_put(&cis_pending_validation, (void*)ci->def, (void*)ci);
         }
         else {
-            assert(ci->max_world == ~(size_t)0);
+            assert(jl_atomic_load_relaxed(&ci->min_world) == 1);
+            assert(jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0);
             jl_method_instance_t *caller = ci->def;
             if (jl_atomic_load_relaxed(&ci->inferred) && jl_rettype_inferred(caller, minworld, ~(size_t)0) == jl_nothing) {
                 jl_mi_cache_insert(caller, ci);
             }
-            //jl_static_show((jl_stream*)ios_stderr, (jl_value_t*)caller);
+            //jl_static_show((JL_STREAM*)ios_stderr, (jl_value_t*)caller);
             //ios_puts("free\n", ios_stderr);
         }
     }
@@ -1168,8 +1211,10 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
             // Update any external CIs and add them to the cache.
             assert(jl_is_code_instance(ci));
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-            assert(codeinst->min_world == minworld && jl_atomic_load_relaxed(&codeinst->inferred) );
-            codeinst->max_world = maxvalid;
+            assert(jl_atomic_load_relaxed(&codeinst->min_world) == minworld);
+            assert(jl_atomic_load_relaxed(&codeinst->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
+            assert(jl_atomic_load_relaxed(&codeinst->inferred));
+            jl_atomic_store_relaxed(&codeinst->max_world, maxvalid);
 
             if (jl_rettype_inferred(caller, minworld, maxvalid) != jl_nothing) {
                 // We already got a code instance for this world age range from somewhere else - we don't need
@@ -1178,14 +1223,13 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
             }
 
             jl_mi_cache_insert(caller, codeinst);
-        } else {
+        }
+        else {
             // Likely internal. Find the CI already in the cache hierarchy.
-            for (jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&caller->cache); codeinst; codeinst=jl_atomic_load_relaxed(&codeinst->next)) {
-                if (codeinst->min_world != minworld)
-                    continue;
-                if (codeinst->max_world != WORLD_AGE_REVALIDATION_SENTINEL)
-                    continue;
-                codeinst->max_world = maxvalid;
+            for (jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&caller->cache); codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
+                if (jl_atomic_load_relaxed(&codeinst->min_world) == minworld && jl_atomic_load_relaxed(&codeinst->max_world) == WORLD_AGE_REVALIDATION_SENTINEL) {
+                    jl_atomic_store_relaxed(&codeinst->max_world, maxvalid);
+                }
             }
         }
     }

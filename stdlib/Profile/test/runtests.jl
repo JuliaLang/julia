@@ -300,4 +300,10 @@ end
 end
 
 include("allocs.jl")
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Profile)
+    @test_broken isempty(undoc)
+    @test undoc == [:Allocs]
+end
 include("heapsnapshot_reassemble.jl")

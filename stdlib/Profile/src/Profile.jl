@@ -891,7 +891,6 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
     ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
     ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
     widthfile = 2*ntext÷5 # min 12
-    widthfunc = 3*ntext÷5 # min 18
     strs = Vector{String}(undef, length(frames))
     showextra = false
     if level > nindent
@@ -933,11 +932,12 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                     ":",
                     li.line == -1 ? "?" : string(li.line),
                     "; ",
-                    ltruncto(fname, widthfunc))
+                    fname)
             end
         else
             strs[i] = string(stroverhead, "╎", base, strcount, " [unknown stackframe]")
         end
+        strs[i] = ltruncto(strs[i], cols)
     end
     return strs
 end
@@ -1193,17 +1193,17 @@ end
 
 # Utilities
 function rtruncto(str::String, w::Int)
-    if length(str) <= w
+    if textwidth(str) <= w
         return str
     else
-        return string("...", str[prevind(str, end, w-4):end])
+        return string("…", str[prevind(str, end, w-2):end])
     end
 end
 function ltruncto(str::String, w::Int)
-    if length(str) <= w
+    if textwidth(str) <= w
         return str
     else
-        return string(str[1:nextind(str, 1, w-4)], "...")
+        return string(str[1:nextind(str, 1, w-2)], "…")
     end
 end
 

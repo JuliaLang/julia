@@ -205,17 +205,23 @@ $(build_bindir)/7z$(EXE):
 	rm -f "$@" && \
 	ln -svf "$(7Z_PATH)" "$@"
 
-symlink_lld: $(build_bindir)/lld$(EXE)
+symlink_llvm_utils: $(build_depsbindir)/lld$(EXE) $(build_depsbindir)/dsymutil$(EXE)
 
 ifneq ($(USE_SYSTEM_LLD),0)
-SYMLINK_SYSTEM_LIBRARIES += symlink_lld
+SYMLINK_SYSTEM_LIBRARIES += symlink_llvm_utils
 LLD_PATH := $(shell which lld$(EXE))
+DSYMUTIL_PATH := $(shell which dsymutil$(EXE))
 endif
 
-$(build_bindir)/lld$(EXE):
+$(build_depsbindir)/lld$(EXE):
 	[ -e "$(LLD_PATH)" ] && \
 	rm -f "$@" && \
 	ln -svf "$(LLD_PATH)" "$@"
+
+$(build_depsbindir)/dsymutil$(EXE):
+	[ -e "$(DSYMUTIL_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(DSYMUTIL_PATH)" "$@"
 
 # the following excludes: libuv.a, libutf8proc.a
 

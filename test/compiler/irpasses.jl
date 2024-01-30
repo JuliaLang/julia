@@ -1386,15 +1386,21 @@ end
 # ifelse folding
 @test Core.Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
 @test !Core.Compiler.is_inlineable(code_typed1(exp, (Float64,)))
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return Core.ifelse(true, x, exp(x))
 end
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(true, x, exp(x)) # the optimization should be applied to post-inlining IR too
 end
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(isa(x, Float64), x, exp(x))
 end
+func_coreifelse(c, x) = Core.ifelse(c, x, x)
+func_ifelse(c, x) = ifelse(c, x, x)
+@test fully_eliminated(func_coreifelse, (Bool,Float64); retval=Core.Argument(3))
+@test !fully_eliminated(func_coreifelse, (Any,Float64))
+@test fully_eliminated(func_ifelse, (Bool,Float64); retval=Core.Argument(3))
+@test !fully_eliminated(func_ifelse, (Any,Float64))
 
 # PhiC fixup of compact! with cfg modification
 @inline function big_dead_throw_catch()
@@ -1561,7 +1567,10 @@ function persistent_dict_elim_multiple()
     return b[:a]
 end
 @test_broken fully_eliminated(persistent_dict_elim_multiple)
-@test code_typed(persistent_dict_elim_multiple)[1][1].code[end] == Core.ReturnNode(1)
+let code = code_typed(persistent_dict_elim_multiple)[1][1].code
+    @test count(x->isexpr(x, :invoke), code) == 0
+    @test code[end] == Core.ReturnNode(1)
+end
 
 function persistent_dict_elim_multiple_phi(c::Bool)
     if c
