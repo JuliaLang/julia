@@ -14,7 +14,7 @@ struct Edges
     name_or_index::Vector{UInt} # Either an index into `snapshot.strings`, or the index in an array, depending on edge_type
     to_pos::Vector{UInt}   # index into `snapshot.nodes`
 end
-function init_edges(n::Int)
+function Edges(n::Int)
     Edges(
         Vector{Int8}(undef, n),
         Vector{UInt}(undef, n),
@@ -38,14 +38,14 @@ struct Nodes
     # edges, and assigned them to their corresponding nodes, before we can emit the file.
     edge_idxs::Vector{Vector{UInt}} # indexes into edges, keeping per-node outgoing edge ids
 end
-function init_nodes(n::Int, e::Int)
+function Nodes(n::Int, e::Int)
     Nodes(
         Vector{Int8}(undef, n),
         Vector{UInt32}(undef, n),
         Vector{UInt}(undef, n),
         Vector{Int}(undef, n),
         Vector{UInt32}(undef, n),
-        init_edges(e),
+        Edges(e),
         [Vector{UInt}() for _ in 1:n],  # Take care to construct n separate empty vectors
     )
 end
@@ -95,7 +95,7 @@ function assemble_snapshot(in_prefix, io::IO)
     endpos = findnext(==('}'), preamble, pos) - 1
     edge_count = parse(Int, String(@view preamble[pos:endpos]))
 
-    nodes = init_nodes(node_count, edge_count)
+    nodes = Nodes(node_count, edge_count)
 
     orphans = Set{UInt}() # nodes that have no incoming edges
     # Parse nodes with empty edge counts that we need to fill later

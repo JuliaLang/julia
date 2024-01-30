@@ -10,14 +10,12 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/DenseMap.h"
 
-#include <atomic>
 #include <vector>
 #include <string>
 #include <sstream>
 #include <iostream>
 #include <set>
 
-using std::atomic;
 using std::string;
 using std::set;
 using std::ostringstream;
@@ -88,14 +86,16 @@ class StringTable {
 protected:
     StringMap<size_t> map;
     SmallVector<StringRef, 0> strings;
-    atomic<size_t> next_id{0};
+    size_t next_id;
 
 public:
+    StringTable() JL_NOTSAFEPOINT : map(), strings(), next_id(0) {};
+
     size_t find_or_create_string_id(StringRef key) JL_NOTSAFEPOINT {
-        auto val = map.insert(make_pair(key, next_id.load()));
+        auto val = map.insert(make_pair(key, next_id));
         if (val.second) {
             strings.push_back(val.first->first());
-            next_id.fetch_add(1);
+            next_id++;
         }
         return val.first->second;
     }
@@ -122,7 +122,7 @@ class SerializedStringTable: public StringTable {
 
     // serialize the string only if it's not already in the table
     size_t serialize_if_necessary(ios_t *stream, StringRef key) JL_NOTSAFEPOINT {
-        auto val = map.insert(make_pair(key, next_id.load()));
+        auto val = map.insert(make_pair(key, next_id));
         if (val.second) {
             strings.push_back(val.first->first());
             // persist the string size first, then the string itself
@@ -130,7 +130,7 @@ class SerializedStringTable: public StringTable {
             size_t s_size = key.size();
             ios_write(stream, reinterpret_cast<const char*>(&s_size), sizeof(size_t));
             ios_write(stream, key.data(), s_size);
-            next_id.fetch_add(1);
+            next_id++;
         }
         return val.first->second;
     }
@@ -142,8 +142,8 @@ class SerializedStringTable: public StringTable {
         size_t s_size = key.size();
         ios_write(stream, reinterpret_cast<const char*>(&s_size), sizeof(size_t));
         ios_write(stream, key.data(), s_size);
-        size_t current = next_id.load();
-        next_id.fetch_add(1);
+        size_t current = next_id;
+        next_id++;
         return current;
     }
 };
