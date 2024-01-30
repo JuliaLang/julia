@@ -9,6 +9,7 @@
 #include "APInt-C.h"
 #include "julia.h"
 #include "julia_internal.h"
+#include "llvm-version.h"
 
 const unsigned int host_char_bit = 8;
 
