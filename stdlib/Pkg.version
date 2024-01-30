@@ -1,4 +1,4 @@
 PKG_BRANCH = lh/remove-using-same-name
-PKG_SHA1 = 74d105303f91ded5b730856cc54aa36bd9972809
+PKG_SHA1 = 18669098c23ccb3e0c9fd52bc3075662c9ad829e
 PKG_GIT_URL := https://github.com/JuliaLang/Pkg.jl.git
 PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
