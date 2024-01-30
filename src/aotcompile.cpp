@@ -1799,7 +1799,7 @@ void jl_dump_native_impl(void *native_code,
         JL_TIMING(NATIVE_AOT, NATIVE_Metadata);
         LLVMContext Context;
         #if JL_LLVM_VERSION < 170000
-        SetOpaquePointer(ctx);
+        SetOpaquePointer(Context);
         #endif
         Module metadataM("metadata", Context);
         metadataM.setTargetTriple(TheTriple.str());
