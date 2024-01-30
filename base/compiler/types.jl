@@ -378,7 +378,6 @@ function NativeInterpreter(world::UInt = get_world_counter();
     if world == typemax(UInt)
         world = get_world_counter()
     end
-    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
 
     # If they didn't pass typemax(UInt) but passed something more subtly
     # incorrect, fail out loudly.

@@ -278,6 +278,9 @@ mutable struct InferenceState
                             interp::AbstractInterpreter)
         linfo = result.linfo
         world = get_inference_world(interp)
+        if world == typemax(UInt)
+            error("Entering inference from a generated function with an invalid world")
+        end
         def = linfo.def
         mod = isa(def, Method) ? def.module : def
         sptypes = sptypes_from_meth_instance(linfo)
