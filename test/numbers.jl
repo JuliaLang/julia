@@ -3164,3 +3164,17 @@ end
         end
     end
 end
+
+@testset "union constructor from `Number`, issue #53129" begin
+    types = (
+        Base.BitInteger_types..., BigInt, Bool, Rational{Int}, Rational{BigInt},
+        Float16, Float32, Float64, BigFloat, Complex{Int}, Complex{UInt},
+        ComplexF16, ComplexF32, ComplexF64
+    )
+    @testset "T: $T" for T ∈ types
+        o = one(T)
+        @test o === @inferred Union{String,T}(o)
+        @test o === @inferred Union{String,supertype(T)}(o)
+        @test o === @inferred Union{String,Number}(o)
+    end
+end

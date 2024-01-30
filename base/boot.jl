@@ -891,7 +891,9 @@ UInt32(x::BuiltinInts)  = toUInt32(x)::UInt32
 UInt64(x::BuiltinInts)  = toUInt64(x)::UInt64
 UInt128(x::BuiltinInts) = toUInt128(x)::UInt128
 
-(::Type{T})(x::T) where {T<:Number} = x
+# Assert the type to help type inference and satisfy `return_types`
+# tests in the test/numbers.jl test set.
+(s::Type{S})(x::T) where {T<:Number,S>:T} = x::s
 
 Int(x::Ptr)  = bitcast(Int, x)
 UInt(x::Ptr) = bitcast(UInt, x)
