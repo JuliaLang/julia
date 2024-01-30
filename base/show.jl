@@ -294,27 +294,35 @@ struct IOContext{IO_t <: IO} <: AbstractPipe
     dict::ImmutableDict{Symbol, Any}
 
     function IOContext{IO_t}(io::IO_t, dict::ImmutableDict{Symbol, Any}) where IO_t<:IO
-        @assert !(IO_t <: IOContext) "Cannot create `IOContext` from another `IOContext`."
+        io isa IOContext && (io = io.io) # implicitly unwrap, since the io.dict field is not useful anymore, and could confuse pipe_reader consumers
         return new(io, dict)
     end
 end
 
-# (Note that TTY and TTYTerminal io types have a :color property.)
-unwrapcontext(io::IO) = io, get(io,:color,false) ? ImmutableDict{Symbol,Any}(:color, true) : ImmutableDict{Symbol,Any}()
-unwrapcontext(io::IOContext) = io.io, io.dict
+# (Note that TTY and TTYTerminal io types have an implied :color property.)
+ioproperties(io::IO) = get(io, :color, false) ? ImmutableDict{Symbol,Any}(:color, true) : ImmutableDict{Symbol,Any}()
+ioproperties(io::IOContext) = io.dict
+# these can probably be deprecated, but there is a use in the ecosystem for them
+unwrapcontext(io::IO) = (io,)
+unwrapcontext(io::IOContext) = (io.io,)
 
-function IOContext(io::IO, dict::ImmutableDict)
-    io0 = unwrapcontext(io)[1]
-    IOContext{typeof(io0)}(io0, dict)
+function IOContext(io::IO, dict::ImmutableDict{Symbol, Any})
+    return IOContext{typeof(io)}(io, dict)
 end
 
-convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)::IOContext
+function IOContext(io::IOContext, dict::ImmutableDict{Symbol, Any})
+    return typeof(io)(io.io, dict)
+end
+
+
+convert(::Type{IOContext}, io::IOContext) = io
+convert(::Type{IOContext}, io::IO) = IOContext(io, ioproperties(io))::IOContext
 
 IOContext(io::IO) = convert(IOContext, io)
 
 function IOContext(io::IO, KV::Pair)
-    io0, d = unwrapcontext(io)
-    IOContext(io0, ImmutableDict{Symbol,Any}(d, KV[1], KV[2]))
+    d = ioproperties(io)
+    return IOContext(io, ImmutableDict{Symbol,Any}(d, KV[1], KV[2]))
 end
 
 """
@@ -322,7 +330,7 @@ end
 
 Create an `IOContext` that wraps an alternate `IO` but inherits the properties of `context`.
 """
-IOContext(io::IO, context::IO) = IOContext(unwrapcontext(io)[1], unwrapcontext(context)[2])
+IOContext(io::IO, context::IO) = IOContext(io, ioproperties(context))
 
 """
     IOContext(io::IO, KV::Pair...)
@@ -1231,8 +1239,9 @@ function show(io::IO, tn::Core.TypeName)
     print(io, ")")
 end
 
+nonnothing_nonmissing_typeinfo(io::IO) = nonmissingtype(nonnothingtype(get(io, :typeinfo, Any)))
+show(io::IO, b::Bool) = print(io, nonnothing_nonmissing_typeinfo(io) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, ::Nothing) = print(io, "nothing")
-show(io::IO, b::Bool) = print(io, get(io, :typeinfo, Any) === Bool ? (b ? "1" : "0") : (b ? "true" : "false"))
 show(io::IO, n::Signed) = (write(io, string(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", string(n, pad = sizeof(n)<<1, base = 16))
 print(io::IO, n::Unsigned) = print(io, string(n))
@@ -1783,7 +1792,7 @@ function show_sym(io::IO, sym::Symbol; allow_macroname=false)
         print(io, '@')
         show_sym(io, Symbol(sym_str[2:end]))
     else
-        print(io, "var", repr(string(sym)))
+        print(io, "var", repr(string(sym))) # TODO: this is not quite right, since repr uses String escaping rules, and Symbol uses raw string rules
     end
 end
 
@@ -2547,7 +2556,8 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
         return
     end
     tv = Any[]
-    io = IOContext(IOBuffer(), out)
+    buf = IOBuffer()
+    io = IOContext(buf, out)
     env_io = io
     while isa(sig, UnionAll)
         push!(tv, sig.var)
@@ -2590,7 +2600,7 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     end
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
-    str = String(take!(unwrapcontext(io)[1]))
+    str = String(take!(buf))
     str = type_limited_string_from_context(out, str)
     print(out, str)
     nothing
@@ -2990,8 +3000,11 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
         fieldtypes = datatype_fieldtypes(x)
         for idx in 1:length(fields)
             println(io)
-            print(io, indent, "  ", fields[idx], "::")
-            print(tvar_io, fieldtypes[idx])
+            print(io, indent, "  ", fields[idx])
+            if isassigned(fieldtypes, idx)
+                print(io, "::")
+                print(tvar_io, fieldtypes[idx])
+            end
         end
     end
     nothing

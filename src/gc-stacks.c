@@ -208,7 +208,10 @@ void sweep_stack_pools(void)
         for (int p = 0; p < JL_N_STACK_POOLS; p++) {
             small_arraylist_t *al = &ptls2->heap.free_stacks[p];
             size_t n_to_free;
-            if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
+            if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                n_to_free = al->len; // not alive yet or dead, so it does not need these anymore
+            }
+            else if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
                 n_to_free = al->len / 2;
                 if (n_to_free > (al->len - MIN_STACK_MAPPINGS_PER_POOL))
                     n_to_free = al->len - MIN_STACK_MAPPINGS_PER_POOL;
@@ -298,7 +301,7 @@ restart:
         if (t->stkbuf != NULL) {
             if (j == l)
                 goto restart;
-            ((void**)jl_array_data(a))[j++] = t;
+            jl_array_data(a,void*)[j++] = t;
         }
         small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
         size_t n = mtarraylist_length(live_tasks);
@@ -307,7 +310,7 @@ restart:
             if (t->stkbuf != NULL) {
                 if (j == l)
                     goto restart;
-                ((void**)jl_array_data(a))[j++] = t;
+                jl_array_data(a,void*)[j++] = t;
             }
         }
     }

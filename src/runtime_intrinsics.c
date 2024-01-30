@@ -213,7 +213,7 @@ static inline uint16_t double_to_half(double param) JL_NOTSAFEPOINT
 // x86-specific helpers for emulating the (B)Float16 ABI
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 #include <xmmintrin.h>
-static inline __m128 return_in_xmm(uint16_t input) JL_NOTSAFEPOINT {
+__attribute__((unused)) static inline __m128 return_in_xmm(uint16_t input) JL_NOTSAFEPOINT {
     __m128 xmm_output;
     asm (
         "movd %[input], %%xmm0\n\t"
@@ -224,7 +224,7 @@ static inline __m128 return_in_xmm(uint16_t input) JL_NOTSAFEPOINT {
     );
     return xmm_output;
 }
-static inline uint16_t take_from_xmm(__m128 xmm_input) JL_NOTSAFEPOINT {
+__attribute__((unused)) static inline uint16_t take_from_xmm(__m128 xmm_input) JL_NOTSAFEPOINT {
     uint32_t output;
     asm (
         "movss %[xmm_input], %%xmm0\n\t"
@@ -239,11 +239,14 @@ static inline uint16_t take_from_xmm(__m128 xmm_input) JL_NOTSAFEPOINT {
 
 // float16 conversion API
 
-// for use in APInt (without the ABI shenanigans from below)
-uint16_t julia_float_to_half(float param) {
+// for use in APInt and other soft-float ABIs (i.e. without the ABI shenanigans from below)
+JL_DLLEXPORT uint16_t julia_float_to_half(float param) {
     return float_to_half(param);
 }
-float julia_half_to_float(uint16_t param) {
+JL_DLLEXPORT uint16_t julia_double_to_half(double param) {
+    return double_to_half(param);
+}
+JL_DLLEXPORT float julia_half_to_float(uint16_t param) {
     return half_to_float(param);
 }
 
@@ -337,6 +340,14 @@ static inline float bfloat_to_float(uint16_t param) JL_NOTSAFEPOINT
 }
 
 // bfloat16 conversion API
+
+// for use in APInt (without the ABI shenanigans from below)
+uint16_t julia_float_to_bfloat(float param) {
+    return float_to_bfloat(param);
+}
+float julia_bfloat_to_float(uint16_t param) {
+    return bfloat_to_float(param);
+}
 
 // starting with GCC 13 and Clang 17, we have __bf16 on most platforms
 // (but not on Windows; this may be a bug in the MSYS2 GCC compilers)
@@ -1012,7 +1023,7 @@ static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsign
 
 // conversion operator
 
-typedef void (*intrinsic_cvt_t)(unsigned, void*, unsigned, void*);
+typedef void (*intrinsic_cvt_t)(jl_datatype_t*, void*, jl_datatype_t*, void*);
 typedef unsigned (*intrinsic_cvt_check_t)(unsigned, unsigned, void*);
 #define cvt_iintrinsic(LLVMOP, name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
@@ -1029,12 +1040,9 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
     if (!jl_is_primitivetype(aty))
         jl_errorf("%s: value is not a primitive type", name);
     void *pa = jl_data_ptr(a);
-    unsigned isize = jl_datatype_size(aty);
     unsigned osize = jl_datatype_size(ty);
     void *pr = alloca(osize);
-    unsigned isize_bits = isize * host_char_bit;
-    unsigned osize_bits = osize * host_char_bit;
-    op(isize_bits, pa, osize_bits, pr);
+    op((jl_datatype_t*)aty, pa, (jl_datatype_t*)ty, pr);
     return jl_new_bits(ty, pr);
 }
 
@@ -1666,16 +1674,15 @@ un_fintrinsic(trunc_float,trunc_llvm)
 un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm_fast)
-
-JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
-{
-    JL_TYPECHK(arraylen, array, a);
-    return jl_box_long(jl_array_len((jl_array_t*)a));
-}
+jl_value_t *jl_cpu_has_fma(int bits);
 
 JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
 {
-    JL_TYPECHK(have_fma, datatype, typ);
-    // TODO: run-time feature check?
-    return jl_false;
+    JL_TYPECHK(have_fma, datatype, typ); // TODO what about float16/bfloat16?
+    if (typ == (jl_value_t*)jl_float32_type)
+        return jl_cpu_has_fma(32);
+    else if (typ == (jl_value_t*)jl_float64_type)
+        return jl_cpu_has_fma(64);
+    else
+        return jl_false;
 }

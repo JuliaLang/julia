@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "clang/AST/Type.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/StaticAnalyzer/Checkers/SValExplainer.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
@@ -14,6 +15,7 @@
 #include "clang/Tooling/Tooling.h"
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
 
+#include "llvm/Support/Debug.h"
 #include <iostream>
 #include <memory>
 
@@ -806,6 +808,8 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.endswith_lower("jl_expr_t") ||
                    Name.endswith_lower("jl_code_info_t") ||
                    Name.endswith_lower("jl_array_t") ||
+                   Name.endswith_lower("jl_genericmemory_t") ||
+                   //Name.endswith_lower("jl_genericmemoryref_t") ||
                    Name.endswith_lower("jl_method_t") ||
                    Name.endswith_lower("jl_method_instance_t") ||
                    Name.endswith_lower("jl_tupletype_t") ||
@@ -892,9 +896,11 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
     if (!Decl || !FD) {
       if (Callee == nullptr) {
         isCalleeSafepoint = true;
-      } else if (const TypedefType *TDT = dyn_cast<TypedefType>(Callee->getType())) {
-        isCalleeSafepoint =
-            !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
+      } else if (const ElaboratedType *ET = dyn_cast<ElaboratedType>(Callee->getType())){
+        if (const TypedefType *TDT = dyn_cast<TypedefType>(ET->getNamedType())) {
+          isCalleeSafepoint =
+              !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
+        }
       } else if (const CXXPseudoDestructorExpr *PDE =
                      dyn_cast<CXXPseudoDestructorExpr>(Callee)) {
         // A pseudo-destructor is an expression that looks like a member
@@ -939,7 +945,7 @@ bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
             isGCTrackedType(ParmType->getPointeeType())) {
           // This is probably an out parameter. Find the value it refers to now.
           SVal Loaded =
-              State->getSVal(Call.getArgSVal(i).getAs<Loc>().getValue());
+              State->getSVal(*(Call.getArgSVal(i).getAs<Loc>()));
           SpeciallyRootedSymbol = Loaded.getAsSymbol();
           continue;
         }
@@ -1438,7 +1444,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   } else if (name == "JL_GC_PUSH1" || name == "JL_GC_PUSH2" ||
              name == "JL_GC_PUSH3" || name == "JL_GC_PUSH4" ||
              name == "JL_GC_PUSH5" || name == "JL_GC_PUSH6" ||
-             name == "JL_GC_PUSH7" || name == "JL_GC_PUSH8") {
+             name == "JL_GC_PUSH7" || name == "JL_GC_PUSH8" ||
+             name == "JL_GC_PUSH9") {
     ProgramStateRef State = C.getState();
     // Transform slots to roots, transform values to rooted
     unsigned NumArgs = CE->getNumArgs();
@@ -1518,7 +1525,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       }
     }
     if (FD) {
-      Loc ItemsLoc = State->getLValue(FD, ArrayList).getAs<Loc>().getValue();
+      Loc ItemsLoc = *(State->getLValue(FD, ArrayList).getAs<Loc>());
       SVal Items = State->getSVal(ItemsLoc);
       if (Items.isUnknown()) {
         Items = C.getSValBuilder().conjureSymbolVal(
@@ -1686,7 +1693,7 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
   // better than this.
   if (IsLoad && (RS = State->get<GCRootMap>(SLoc.getAsRegion()))) {
     SymbolRef LoadedSym =
-        State->getSVal(SLoc.getAs<Loc>().getValue()).getAsSymbol();
+        State->getSVal(*SLoc.getAs<Loc>()).getAsSymbol();
     if (LoadedSym) {
       const ValueState *ValS = State->get<GCValueMap>(LoadedSym);
       if (!ValS || !ValS->isRooted() || ValS->RootDepth > RS->RootedAtDepth) {

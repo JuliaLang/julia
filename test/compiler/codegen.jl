@@ -128,11 +128,16 @@ if !is_debug_build && opt_level > 0
     # String
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Core.SimpleVector})), [Iptr])
     # Array
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Vector{Int}})), [Iptr])
+    test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Vector{Int}})), [Iptr])
+    # As long as the eltype is known we don't need to load the elsize, but do need to check isvector
+    @test_skip test_loads_no_call(strip_debug_calls(get_llvm(sizeof, Tuple{Array{Any}})), ["atomic $Iptr", "ptr", "ptr", Iptr, Iptr, "ptr",  Iptr])
+    # Memory
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Int}})), [Iptr])
     # As long as the eltype is known we don't need to load the elsize
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Array{Any}})), [Iptr])
-    # Check that we load the elsize
-    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Vector})), [Iptr, "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory{Any}})), [Iptr])
+    # Check that we load the elsize and isunion from the typeof layout
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
+    test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Memory})), [Iptr, "atomic $Iptr", "ptr", "i32", "i16"])
     # Primitive Type size should be folded to a constant
     test_loads_no_call(strip_debug_calls(get_llvm(core_sizeof, Tuple{Ptr})), String[])
 
@@ -309,8 +314,8 @@ end
 
 # PR #23595
 @generated f23595(g, args...) = Expr(:call, :g, Expr(:(...), :args))
-x23595 = rand(1)
-@test f23595(Core.arrayref, true, x23595, 1) == x23595[]
+x23595 = rand(1).ref
+@test f23595(Core.memoryrefget, x23595, :not_atomic, true) == x23595[]
 
 # Issue #22421
 @noinline f22421_1(x) = x[] + 1
@@ -367,26 +372,10 @@ mktemp() do f_22330, _
 end
 
 # Alias scope
-macro aliasscope(body)
-    sym = gensym()
-    esc(quote
-        $(Expr(:aliasscope))
-        $sym = $body
-        $(Expr(:popaliasscope))
-        $sym
-    end)
-end
-
-struct ConstAliasScope{T<:Array}
-    a::T
-end
-
-@eval Base.getindex(A::ConstAliasScope, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
-@eval Base.getindex(A::ConstAliasScope, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
-
+using Base.Experimental: @aliasscope, Const
 function foo31018!(a, b)
     @aliasscope for i in eachindex(a, b)
-        a[i] = ConstAliasScope(b)[i]
+        a[i] = Const(b)[i]
     end
 end
 io = IOBuffer()
@@ -498,12 +487,16 @@ function f37262(x)
     catch
         GC.safepoint()
     end
+    local a
     try
         GC.gc()
-        return g37262(x)
+        a = g37262(x)
+        Base.inferencebarrier(false) && error()
+        return a
     catch ex
         GC.gc()
     finally
+        @isdefined(a) && Base.donotdelete(a)
         GC.gc()
     end
 end
@@ -867,3 +860,16 @@ foo50964(1) # Shouldn't assert!
 # https://github.com/JuliaLang/julia/issues/51233
 obj51233 = (1,)
 @test_throws ErrorException obj51233.x
+
+# Very specific test for multiversioning
+if Sys.ARCH === :x86_64
+    foo52079() = Core.Intrinsics.have_fma(Float64)
+    if foo52079() == true
+        let io = IOBuffer()
+            code_native(io,^,(Float64,Float64), dump_module=false)
+            str = String(take!(io))
+            @test !occursin("fma_emulated", str)
+            @test occursin("vfmadd", str)
+        end
+    end
+end

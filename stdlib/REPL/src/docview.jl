@@ -184,7 +184,7 @@ log_nonpublic_access(expr, ::Module, _) = expr
 
 function insert_internal_warning(md::Markdown.MD, internal_access::Set{Pair{Module,Symbol}})
     if !isempty(internal_access)
-        items = Any[Any[Markdown.Paragraph(Any[Markdown.Code("", s)])] for s in sort("$mod.$sym" for (mod, sym) in internal_access)]
+        items = Any[Any[Markdown.Paragraph(Any[Markdown.Code("", s)])] for s in sort!(["$mod.$sym" for (mod, sym) in internal_access])]
         admonition = Markdown.Admonition("warning", "Warning", Any[
             Markdown.Paragraph(Any["The following bindings may be internal; they may change or be removed in future versions:"]),
             Markdown.List(items, -1, false)])
@@ -198,14 +198,6 @@ function insert_internal_warning(other, internal_access::Set{Pair{Module,Symbol}
     other
 end
 
-"""
-    Docs.doc(binding, sig)
-
-Return all documentation that matches both `binding` and `sig`.
-
-If `getdoc` returns a non-`nothing` result on the value of the binding, then a
-dynamic docstring is returned instead of one based on the binding itself.
-"""
 function doc(binding::Binding, sig::Type = Union{})
     if defined(binding)
         result = getdoc(resolve(binding), sig)
@@ -920,18 +912,6 @@ stripmd(x::Markdown.Footnote) = "$(stripmd(x.id)) $(stripmd(x.text))"
 stripmd(x::Markdown.Table) =
     join([join(map(stripmd, r), " ") for r in x.rows], " ")
 
-"""
-    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
-
-Search available docstrings for entries containing `pattern`.
-
-When `pattern` is a string, case is ignored. Results are printed to `io`.
-
-`apropos` can be called from the help mode in the REPL by wrapping the query in double quotes:
-```
-help?> "pattern"
-```
-"""
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
 

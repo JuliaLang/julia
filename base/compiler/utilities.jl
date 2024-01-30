@@ -89,7 +89,7 @@ function count_const_size(@nospecialize(x), count_self::Bool = true)
     sz = count_self ? sizeof(dt) : 0
     sz > MAX_INLINE_CONST_SIZE && return MAX_INLINE_CONST_SIZE + 1
     dtfd = DataTypeFieldDesc(dt)
-    for i = 1:nfields(x)
+    for i = 1:Int(datatype_nfields(dt))
         isdefined(x, i) || continue
         f = getfield(x, i)
         if !dtfd[i].isptr && datatype_pointerfree(typeof(f))
@@ -140,7 +140,7 @@ function retrieve_code_info(linfo::MethodInstance, world::UInt)
             # can happen in images built with --strip-ir
             return nothing
         elseif isa(src, String)
-            c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
+            c = _uncompressed_ir(m, src)
         else
             c = copy(src::CodeInfo)
         end
@@ -321,6 +321,25 @@ function iterate(iter::BackedgeIterator, i::Int=1)
     return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
 end
 
+"""
+    add_invalidation_callback!(callback, mi::MethodInstance)
+
+Register `callback` to be triggered upon the invalidation of `mi`.
+`callback` should a function taking two arguments, `callback(replaced::MethodInstance, max_world::UInt32)`,
+and it will be recursively invoked on `MethodInstance`s within the invalidation graph.
+"""
+function add_invalidation_callback!(@nospecialize(callback), mi::MethodInstance)
+    if !isdefined(mi, :callbacks)
+        callbacks = mi.callbacks = Any[callback]
+    else
+        callbacks = mi.callbacks::Vector{Any}
+        if !any(@nospecialize(cb)->cb===callback, callbacks)
+            push!(callbacks, callback)
+        end
+    end
+    return callbacks
+end
+
 #########
 # types #
 #########
@@ -427,11 +446,14 @@ function find_ssavalue_uses(e::PhiNode, uses::Vector{BitSet}, line::Int)
     end
 end
 
-function is_throw_call(e::Expr)
+function is_throw_call(e::Expr, code::Vector{Any})
     if e.head === :call
         f = e.args[1]
+        if isa(f, SSAValue)
+            f = code[f.id]
+        end
         if isa(f, GlobalRef)
-            ff = abstract_eval_globalref(f)
+            ff = abstract_eval_globalref_type(f)
             if isa(ff, Const) && ff.val === Core.throw
                 return true
             end
@@ -440,14 +462,14 @@ function is_throw_call(e::Expr)
     return false
 end
 
-function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Int})
+function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Tuple{Int, Int}})
     for stmt in find_throw_blocks(src.code, handler_at)
         src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
     end
     return nothing
 end
 
-function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
+function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Tuple{Int, Int}})
     stmts = BitSet()
     n = length(code)
     for i in n:-1:1
@@ -459,8 +481,8 @@ function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
                 end
             elseif s.head === :return
                 # see `ReturnNode` handling
-            elseif is_throw_call(s)
-                if handler_at[i] == 0
+            elseif is_throw_call(s, code)
+                if handler_at[i][1] == 0
                     push!(stmts, i)
                 end
             elseif i+1 in stmts
@@ -498,6 +520,7 @@ end
 is_root_module(m::Module) = false
 
 inlining_enabled() = (JLOptions().can_inline == 1)
+
 function coverage_enabled(m::Module)
     generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
@@ -511,9 +534,12 @@ function coverage_enabled(m::Module)
     end
     return false
 end
+
 function inbounds_option()
     opt_check_bounds = JLOptions().check_bounds
     opt_check_bounds == 0 && return :default
     opt_check_bounds == 1 && return :on
     return :off
 end
+
+is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1

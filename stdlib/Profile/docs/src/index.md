@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Profile/docs/src/index.md"
+```
+
 # [Profiling](@id lib-profiling)
 
 ## CPU Profiling
@@ -106,6 +110,7 @@ The methods in `Profile.Allocs` are not exported and need to be called e.g. as `
 
 ```@docs
 Profile.Allocs.clear
+Profile.Allocs.print
 Profile.Allocs.fetch
 Profile.Allocs.start
 Profile.Allocs.stop

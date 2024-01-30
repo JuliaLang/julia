@@ -10,7 +10,7 @@ using Base: require_one_based_indexing, USE_BLAS64
 
 export
 # Note: `xFUNC_NAME` is a placeholder for not exported BLAS functions
-#   ref: http://www.netlib.org/blas/blasqr.pdf
+#   ref: https://www.netlib.org/blas/blasqr.pdf
 # Level 1
     # xROTG
     # xROTMG
@@ -52,6 +52,7 @@ export
     # xTBSV
     # xTPSV
     ger!,
+    geru!,
     # xGERU
     # xGERC
     her!,
@@ -63,6 +64,8 @@ export
     # xSYR2
     # xSPR2
 # Level 3
+    gemmt!,
+    gemmt,
     gemm!,
     gemm,
     symm!,
@@ -1062,7 +1065,7 @@ sbmv(uplo, k, A, x)
 Update vector `y` as `alpha*A*x + beta*y` where `A` is a symmetric band matrix of order
 `size(A,2)` with `k` super-diagonals stored in the argument `A`. The storage layout for `A`
 is described the reference BLAS module, level-2 BLAS at
-<http://www.netlib.org/lapack/explore-html/>.
+<https://www.netlib.org/lapack/explore-html/>.
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 
 Return the updated `y`.
@@ -1415,6 +1418,41 @@ for (fname, elty) in ((:dger_,:Float64),
     end
 end
 
+### geru
+
+"""
+    geru!(alpha, x, y, A)
+
+Rank-1 update of the matrix `A` with vectors `x` and `y` as `alpha*x*transpose(y) + A`.
+"""
+function geru! end
+
+for (fname, elty) in ((:zgeru_,:ComplexF64), (:cgeru_,:ComplexF32))
+    @eval begin
+        function geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A, x, y)
+            m, n = size(A)
+            if m != length(x) || n != length(y)
+                throw(DimensionMismatch(lazy"A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
+            end
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            py, sty = vec_pointer_stride(y, ArgumentError("input vector with 0 stride is not allowed"))
+            GC.@preserve x y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+                (Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
+                 Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                 Ref{BlasInt}),
+                 m, n, α, px, stx, py, sty, A, max(1,stride(A,2)))
+            A
+        end
+    end
+end
+for elty in (:Float64, :Float32)
+    @eval begin
+        geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty}) =
+            ger!(α, x, y, A)
+    end
+end
+
 ### syr
 
 """
@@ -1480,6 +1518,88 @@ end
 
 # Level 3
 ## (GE) general matrix-matrix multiplication
+
+"""
+    gemmt!(uplo, tA, tB, alpha, A, B, beta, C)
+
+Update the lower or upper triangular part specified by [`uplo`](@ref stdlib-blas-uplo) of `C` as
+`alpha*A*B + beta*C` or the other variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
+Return the updated `C`.
+
+!!! compat "Julia 1.11"
+    `gemmt!` requires at least Julia 1.11.
+"""
+function gemmt! end
+
+for (gemmt, elty) in
+        ((:dgemmt_,:Float64),
+         (:sgemmt_,:Float32),
+         (:zgemmt_,:ComplexF64),
+         (:cgemmt_,:ComplexF32))
+    @eval begin
+             # SUBROUTINE DGEMMT(UPLO,TRANSA,TRANSB,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
+             # *     .. Scalar Arguments ..
+             #       DOUBLE PRECISION ALPHA,BETA
+             #       INTEGER K,LDA,LDB,LDC,N
+             #       CHARACTER UPLO,TRANSA,TRANSB
+             # *     .. Array Arguments ..
+             #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
+        function gemmt!(uplo::AbstractChar, transA::AbstractChar, transB::AbstractChar,
+                        alpha::Union{($elty), Bool},
+                        A::AbstractVecOrMat{$elty}, B::AbstractVecOrMat{$elty},
+                        beta::Union{($elty), Bool},
+                        C::AbstractVecOrMat{$elty})
+            chkuplo(uplo)
+            require_one_based_indexing(A, B, C)
+            m = size(A, transA == 'N' ? 1 : 2)
+            ka = size(A, transA == 'N' ? 2 : 1)
+            kb = size(B, transB == 'N' ? 1 : 2)
+            n = size(B, transB == 'N' ? 2 : 1)
+            if ka != kb || m != n || m != size(C,1) || n != size(C,2)
+                throw(DimensionMismatch(lazy"A has size ($m,$ka), B has size ($kb,$n), C has size $(size(C))"))
+            end
+            chkstride1(A)
+            chkstride1(B)
+            chkstride1(C)
+            ccall((@blasfunc($gemmt), libblastrampoline), Cvoid,
+                (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
+                 Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt},
+                 Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
+                 Ref{BlasInt}, Clong, Clong, Clong),
+                 uplo, transA, transB, n,
+                 ka, alpha, A, max(1,stride(A,2)),
+                 B, max(1,stride(B,2)), beta, C,
+                 max(1,stride(C,2)), 1, 1, 1)
+            C
+        end
+        function gemmt(uplo::AbstractChar, transA::AbstractChar, transB::AbstractChar, alpha::($elty), A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            gemmt!(uplo, transA, transB, alpha, A, B, zero($elty), similar(B, $elty, (size(A, transA == 'N' ? 1 : 2), size(B, transB == 'N' ? 2 : 1))))
+        end
+        function gemmt(uplo::AbstractChar, transA::AbstractChar, transB::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
+            gemmt(uplo, transA, transB, one($elty), A, B)
+        end
+    end
+end
+
+"""
+    gemmt(uplo, tA, tB, alpha, A, B)
+
+Return the lower or upper triangular part specified by [`uplo`](@ref stdlib-blas-uplo) of `A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
+
+!!! compat "Julia 1.11"
+    `gemmt` requires at least Julia 1.11.
+"""
+gemmt(uplo, tA, tB, alpha, A, B)
+
+"""
+    gemmt(uplo, tA, tB, A, B)
+
+Return the lower or upper triangular part specified by [`uplo`](@ref stdlib-blas-uplo) of `A*B` or the other three variants according to [`tA`](@ref stdlib-blas-trans) and `tB`.
+
+!!! compat "Julia 1.11"
+    `gemmt` requires at least Julia 1.11.
+"""
+gemmt(uplo, tA, tB, A, B)
 
 """
     gemm!(tA, tB, alpha, A, B, beta, C)

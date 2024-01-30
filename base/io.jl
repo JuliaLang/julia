@@ -25,6 +25,14 @@ end
 
 lock(::IO) = nothing
 unlock(::IO) = nothing
+
+"""
+    reseteof(io)
+
+Clear the EOF flag from IO so that further reads (and possibly writes) are
+again allowed. Note that it may immediately get re-set, if the underlying
+stream object is at EOF and cannot be resumed.
+"""
 reseteof(x::IO) = nothing
 
 const SZ_UNBUFFERED_IO = 65536
@@ -67,6 +75,10 @@ function close end
 Shutdown the write half of a full-duplex I/O stream. Performs a [`flush`](@ref)
 first. Notify the other end that no more data will be written to the underlying
 file. This is not supported by all IO types.
+
+If implemented, `closewrite` causes subsequent `read` or `eof` calls that would
+block to instead throw EOF or return true, respectively. If the stream is
+already closed, this is idempotent.
 
 # Examples
 ```jldoctest
@@ -402,7 +414,14 @@ end
 """
     AbstractPipe
 
-`AbstractPipe` is the abstract supertype for IO pipes that provide for communication between processes.
+`AbstractPipe` is an abstract supertype that exists for the convenience of creating
+pass-through wrappers for other IO objects, so that you only need to implement the
+additional methods relevant to your type. A subtype only needs to implement one or both of
+these methods:
+
+    struct P <: AbstractPipe; ...; end
+    pipe_reader(io::P) = io.out
+    pipe_writer(io::P) = io.in
 
 If `pipe isa AbstractPipe`, it must obey the following interface:
 
@@ -780,10 +799,17 @@ end
 @noinline unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T} =
     unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-write(s::IO, x::Ref{T}) where {T} = unsafe_write(s, x, Core.sizeof(T))
+function write(s::IO, x::Ref{T}) where {T}
+    x isa Ptr && error("write cannot copy from a Ptr")
+    if isbitstype(T)
+        unsafe_write(s, x, Core.sizeof(T))
+    else
+        write(s, x[])
+    end
+end
 write(s::IO, x::Int8) = write(s, reinterpret(UInt8, x))
 function write(s::IO, x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
-    return write(s, Ref(x))
+    return unsafe_write(s, Ref(x), Core.sizeof(x))
 end
 
 write(s::IO, x::Bool) = write(s, UInt8(x))
@@ -797,7 +823,7 @@ function write(s::IO, A::AbstractArray)
     r = Ref{eltype(A)}()
     for a in A
         r[] = a
-        nb += @noinline unsafe_write(s, r, sizeof(r)) # r must be heap-allocated
+        nb += @noinline unsafe_write(s, r, Core.sizeof(r)) # r must be heap-allocated
     end
     return nb
 end
@@ -861,11 +887,21 @@ end
 
 @noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_read(s::IO, p::Ptr, n::Integer) = unsafe_read(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-read!(s::IO, x::Ref{T}) where {T} = (unsafe_read(s, x, Core.sizeof(T)); x)
+function read!(s::IO, x::Ref{T}) where {T}
+    x isa Ptr && error("read! cannot copy into a Ptr")
+    if isbitstype(T)
+        unsafe_read(s, x, Core.sizeof(T))
+    else
+        x[] = read(s, T)
+    end
+    return x
+end
 
 read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s, UInt8))
 function read(s::IO, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
-    return read!(s, Ref{T}(0))[]::T
+    r = Ref{T}(0)
+    unsafe_read(s, r, Core.sizeof(T))
+    return r[]
 end
 
 read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
@@ -878,7 +914,7 @@ function read!(s::IO, A::AbstractArray{T}) where {T}
         if isbitstype(T)
             r = Ref{T}()
             for i in eachindex(A)
-                @noinline unsafe_read(s, r, sizeof(r)) # r must be heap-allocated
+                @noinline unsafe_read(s, r, Core.sizeof(r)) # r must be heap-allocated
                 A[i] = r[]
             end
         else

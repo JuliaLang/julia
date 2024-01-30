@@ -47,6 +47,12 @@ end
     //(num, den)
 
 Divide two integers or rational numbers, giving a [`Rational`](@ref) result.
+More generally, `//` can be used for exact rational division of other numeric types
+with integer or rational components, such as complex numbers with integer components.
+
+Note that floating-point ([`AbstractFloat`](@ref)) arguments are not permitted by `//`
+(even if the values are rational).
+The arguments must be subtypes of [`Integer`](@ref), `Rational`, or composites thereof.
 
 # Examples
 ```jldoctest
@@ -55,6 +61,13 @@ julia> 3 // 5
 
 julia> (3 // 5) // (2 // 1)
 3//10
+
+julia> (1+2im) // (3+4im)
+11//25 + 2//25*im
+
+julia> 1.0 // 2
+ERROR: MethodError: no method matching //(::Float64, ::Int64)
+[...]
 ```
 """
 //(n::Integer,  d::Integer) = Rational(n,d)
@@ -82,7 +95,7 @@ end
 function show(io::IO, x::Rational)
     show(io, numerator(x))
 
-    if isone(denominator(x)) && get(io, :typeinfo, Any) <: Rational
+    if isone(denominator(x)) && nonnothing_nonmissing_typeinfo(io) <: Rational
         return
     end
 
@@ -232,7 +245,7 @@ function rationalize(::Type{T}, x::Union{AbstractFloat, Rational}, tol::Real) wh
     end
 end
 rationalize(::Type{T}, x::AbstractFloat; tol::Real = eps(x)) where {T<:Integer} = rationalize(T, x, tol)
-rationalize(x::AbstractFloat; kvs...) = rationalize(Int, x; kvs...)
+rationalize(x::Real; kvs...) = rationalize(Int, x; kvs...)
 rationalize(::Type{T}, x::Complex; kvs...) where {T<:Integer} = Complex(rationalize(T, x.re; kvs...), rationalize(T, x.im; kvs...))
 rationalize(x::Complex; kvs...) = Complex(rationalize(Int, x.re; kvs...), rationalize(Int, x.im; kvs...))
 rationalize(::Type{T}, x::Rational; tol::Real = 0) where {T<:Integer} = rationalize(T, x, tol)

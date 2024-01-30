@@ -11,6 +11,10 @@ using Dates: Date, Day
 # issue #4718
 @test collect(Iterators.filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
 
+# issue #45085
+@test_throws ArgumentError Iterators.reverse(zip("abc", "abcd"))
+@test_throws ArgumentError Iterators.reverse(zip("abc", Iterators.cycle("ab")))
+
 let z = zip(1:2)
     @test size(z) == (2,)
     @test collect(z) == [(1,), (2,)]
@@ -1015,4 +1019,17 @@ end
 let itr = (i for i in 1:9) # Base.eltype == Any
     @test first(Iterators.partition(itr, 3)) isa Vector{Any}
     @test collect(zip(repeat([Iterators.Stateful(itr)], 3)...)) == [(1, 2, 3), (4, 5, 6), (7, 8, 9)]
+end
+
+@testset "no single-argument map methods" begin
+    maps = (tuple, Returns(nothing), (() -> nothing))
+    mappers = (Iterators.map, map, foreach)
+    for f ∈ maps, m ∈ mappers
+        @test !applicable(m, f)
+        @test !hasmethod(m, Tuple{typeof(f)})
+    end
+end
+
+@testset "Iterators docstrings" begin
+    @test isempty(Docs.undocumented_names(Iterators))
 end

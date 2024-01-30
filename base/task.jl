@@ -180,9 +180,18 @@ end
     elseif field === :exception
         # TODO: this field name should be deprecated in 2.0
         return t._isexception ? t.result : nothing
+    elseif field === :scope
+        error("Querying `scope` is disallowed. Use `current_scope` instead.")
     else
         return getfield(t, field)
     end
+end
+
+@inline function setproperty!(t::Task, field::Symbol, @nospecialize(v))
+    if field === :scope
+        istaskstarted(t) && error("Setting scope on a started task directly is disallowed.")
+    end
+    return @invoke setproperty!(t::Any, field::Symbol, v::Any)
 end
 
 """

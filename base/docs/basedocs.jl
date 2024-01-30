@@ -165,7 +165,7 @@ kw"__init__"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base` or local definitions of
-[`eval`](@ref Base.MainInclude.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+[`eval`](@ref Main.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
 module Mod
@@ -217,7 +217,7 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling [`eval`](@ref Base.MainInclude.eval),
+Macros are a way to run generated code without calling [`eval`](@ref Main.eval),
 since the generated code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
@@ -1818,14 +1818,14 @@ In these examples, `a` is a [`Rational`](@ref), which has two fields.
 nfields
 
 """
-    UndefVarError(var::Symbol)
+    UndefVarError(var::Symbol, [scope])
 
 A symbol in the current scope is not defined.
 
 # Examples
 ```jldoctest
 julia> a
-ERROR: UndefVarError: `a` not defined
+ERROR: UndefVarError: `a` not defined in `Main`
 
 julia> a = 1;
 
@@ -2346,7 +2346,8 @@ See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 julia> module M end;
 
 julia> M.a  # same as `getglobal(M, :a)`
-ERROR: UndefVarError: `a` not defined
+ERROR: UndefVarError: `a` not defined in `M`
+Suggestion: check for spelling errors or missing imports.
 
 julia> setglobal!(M, :a, 1)
 1
@@ -2356,6 +2357,22 @@ julia> M.a
 ```
 """
 setglobal!
+
+"""
+    Core.get_binding_type(module::Module, name::Symbol)
+
+Retrieve the declared type of the binding `name` from the module `module`.
+"""
+Core.get_binding_type
+
+"""
+    Core.set_binding_type!(module::Module, name::Symbol, [type::Type])
+
+Set the declared type of the binding `name` in the module `module` to `type`. Error if the
+binding already has a type that is not equivalent to `type`. If the `type` argument is
+absent, set the binding type to `Any` if unset, but do not error.
+"""
+Core.set_binding_type!
 
 """
     typeof(x)
@@ -2420,6 +2437,42 @@ false
 """
 isdefined
 
+"""
+    Memory{T}(undef, n)
+
+Construct an uninitialized [`Memory{T}`](@ref) of length `n`. All Memory
+objects of length 0 might alias, since there is no reachable mutable content
+from them.
+
+# Examples
+```julia-repl
+julia> Memory{Float64}(undef, 3)
+3-element Memory{Float64}:
+ 6.90966e-310
+ 6.90966e-310
+ 6.90966e-310
+```
+"""
+Memory{T}(::UndefInitializer, n)
+
+"""
+    MemoryRef(memory)
+
+Construct a MemoryRef from a memory object. This does not fail, but the
+resulting memory may point out-of-bounds if the memory is empty.
+"""
+MemoryRef(::Memory)
+
+"""
+    MemoryRef(::Memory, index::Integer)
+    MemoryRef(::MemoryRef, index::Integer)
+
+Construct a MemoryRef from a memory object and an offset index (1-based) which
+can also be negative. This always returns an inbounds object, and will throw an
+error if that is not possible (because the index would result in a shift
+out-of-bounds of the underlying memory).
+"""
+MemoryRef(::Union{Memory,MemoryRef}, ::Integer)
 
 """
     Vector{T}(undef, n)
@@ -2821,23 +2874,33 @@ kw"Union{}", Base.Bottom
 """
     Union{Types...}
 
-A type union is an abstract type which includes all instances of any of its argument types. The empty
-union [`Union{}`](@ref) is the bottom type of Julia.
+A `Union` type is an abstract type which includes all instances of any of its argument types.
+This means that `T <: Union{T,S}` and `S <: Union{T,S}`.
+
+Like other abstract types, it cannot be instantiated, even if all of its arguments are non
+abstract.
 
 # Examples
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
 Union{Int64, AbstractString}
 
-julia> 1 isa IntOrString
+julia> 1 isa IntOrString # instance of Int is included in the union
 true
 
-julia> "Hello!" isa IntOrString
+julia> "Hello!" isa IntOrString # String is also included
 true
 
-julia> 1.0 isa IntOrString
+julia> 1.0 isa IntOrString # Float64 is not included because it is neither Int nor AbstractString
 false
 ```
+
+# Extended Help
+
+Unlike most other parametric types, unions are covariant in their parameters. For example,
+`Union{Real, String}` is a subtype of `Union{Number, AbstractString}`.
+
+The empty union [`Union{}`](@ref) is the bottom type of Julia.
 """
 Union
 
@@ -2846,7 +2909,7 @@ Union
     UnionAll
 
 A union of types over all values of a type parameter. `UnionAll` is used to describe parametric types
-where the values of some parameters are not known.
+where the values of some parameters are not known. See the manual section on [UnionAll Types](@ref).
 
 # Examples
 ```jldoctest
@@ -3265,7 +3328,7 @@ kw"atomic"
 
 This function prevents dead-code elimination (DCE) of itself and any arguments
 passed to it, but is otherwise the lightest barrier possible. In particular,
-it is not a GC safepoint, does model an observable heap effect, does not expand
+it is not a GC safepoint, does not model an observable heap effect, does not expand
 to any code itself and may be re-ordered with respect to other side effects
 (though the total number of executions may not change).
 
@@ -3282,6 +3345,14 @@ unused and delete the entire benchmark code).
     `donotdelete` does not affect constant folding. For example, in
     `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
     the code is semantically equivalent to `donotdelete(2).`
+
+!!! note
+    This intrinsic does not affect the semantics of code that is dead because it is
+    *unreachable*. For example, the body of the function `f(x) = false && donotdelete(x)`
+    may be deleted in its entirety. The semantics of this intrinsic only guarantee that
+    *if* the intrinsic is semantically executed, then there is some program state at
+    which the value of the arguments of this intrinsic were available (in a register,
+    in memory, etc.).
 
 # Examples
 
@@ -3372,5 +3443,7 @@ The current differences are:
 - `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
+
+Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end

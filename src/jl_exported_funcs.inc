@@ -8,6 +8,7 @@
     XX(jl_alloc_array_1d) \
     XX(jl_alloc_array_2d) \
     XX(jl_alloc_array_3d) \
+    XX(jl_alloc_array_nd) \
     XX(jl_alloc_string) \
     XX(jl_alloc_svec) \
     XX(jl_alloc_svec_uninit) \
@@ -21,29 +22,19 @@
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
     XX(jl_argument_datatype) \
-    XX(jl_arraylen) \
-    XX(jl_arrayref) \
-    XX(jl_arrayset) \
-    XX(jl_arrayunset) \
-    XX(jl_array_copy) \
-    XX(jl_array_del_at) \
-    XX(jl_array_del_beg) \
     XX(jl_array_del_end) \
     XX(jl_array_eltype) \
-    XX(jl_array_grow_at) \
-    XX(jl_array_grow_beg) \
     XX(jl_array_grow_end) \
-    XX(jl_array_isassigned) \
     XX(jl_array_ptr) \
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
-    XX(jl_array_ptr_copy) \
+    XX(jl_genericmemory_isassigned) \
+    XX(jl_genericmemory_owner) \
+    XX(jl_genericmemoryref) \
+    XX(jl_genericmemoryset) \
+    XX(jl_genericmemoryunset) \
     XX(jl_array_rank) \
-    XX(jl_array_size) \
-    XX(jl_array_sizehint) \
     XX(jl_array_to_string) \
-    XX(jl_array_typetagdata) \
-    XX(jl_array_validate_dims) \
     XX(jl_atexit_hook) \
     XX(jl_atomic_bool_cmpswap_bits) \
     XX(jl_atomic_cmpswap_bits) \
@@ -216,6 +207,7 @@
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
+    XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
     XX(jl_get_excstack) \
@@ -246,6 +238,8 @@
     XX(jl_get_world_counter) \
     XX(jl_get_zero_subnormals) \
     XX(jl_gf_invoke_lookup) \
+    XX(jl_method_lookup_by_tt) \
+    XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
     XX(jl_git_branch) \
     XX(jl_git_commit) \
@@ -290,6 +284,7 @@
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
     XX(jl_is_const) \
+    XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \
     XX(jl_is_foreign_type) \
     XX(jl_is_identifier) \
@@ -341,7 +336,6 @@
     XX(jl_module_uuid) \
     XX(jl_native_alignment) \
     XX(jl_nb_available) \
-    XX(jl_new_array) \
     XX(jl_new_bits) \
     XX(jl_new_codeinst) \
     XX(jl_new_code_info_uninit) \
@@ -362,7 +356,6 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
-    XX(jl_write_precompile_statement) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
@@ -393,7 +386,6 @@
     XX(jl_profile_maxlen_data) \
     XX(jl_profile_start_timer) \
     XX(jl_profile_stop_timer) \
-    XX(jl_ptrarrayref) \
     XX(jl_ptr_to_array) \
     XX(jl_ptr_to_array_1d) \
     XX(jl_queue_work) \
@@ -404,7 +396,6 @@
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
-    XX(jl_reshape_array) \
     XX(jl_resolve_globals_in_ir) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
@@ -460,7 +451,6 @@
     XX(jl_svec2) \
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
-    XX(jl_svec_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \
@@ -516,6 +506,7 @@
     XX(jl_uncompress_argname_n) \
     XX(jl_uncompress_ir) \
     XX(jl_undefined_var_error) \
+    XX(jl_unwrap_unionall) \
     XX(jl_has_no_field_error) \
     XX(jl_value_ptr) \
     XX(jl_ver_is_release) \

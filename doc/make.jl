@@ -8,6 +8,7 @@ using Pkg
 Pkg.instantiate()
 
 using Documenter
+import LibGit2
 
 baremodule GenStdLib end
 
@@ -40,6 +41,68 @@ cd(joinpath(@__DIR__, "src")) do
             end
         end
     end
+end
+
+# Because we have standard libraries that are hosted outside of the julia repo,
+# but their docs are included in the manual, we need to populate the remotes argument
+# of makedocs(), to make sure that Documenter knows how to resolve the directories
+# in stdlib/ to the correct remote Git repositories (for source and edit links).
+#
+# This function parses the *.version files in stdlib/, returning a dictionary with
+# all the key-value pairs from those files. *_GIT_URL and *_SHA1 fields are the ones
+# we will actually be interested in.
+function parse_stdlib_version_file(path)
+    values = Dict{String,String}()
+    for line in readlines(path)
+        m = match(r"^([A-Z0-9_]+)\s+:?=\s+(\S+)$", line)
+        if isnothing(m)
+            @warn "Unable to parse line in $(path)" line
+        else
+            values[m[1]] = m[2]
+        end
+    end
+    return values
+end
+# This generates the value that will be passed to the `remotes` argument of makedocs(),
+# by looking through all *.version files in stdlib/.
+documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "stdlib"))
+    # Get a list of all *.version files in stdlib/..
+    version_files = filter(readdir(stdlib_dir)) do fname
+        isfile(joinpath(stdlib_dir, fname)) && endswith(fname, ".version")
+    end
+    # .. and then parse them, each becoming an entry for makedocs's remotes.
+    # The values for each are of the form path => (remote, sha1), where
+    #  - path: the path to the stdlib package's root directory, i.e. "stdlib/$PACKAGE"
+    #  - remote: a Documenter.Remote object, pointing to the Git repository where package is hosted
+    #  - sha1: the SHA1 of the commit that is included with the current Julia version
+    remotes_list = map(version_files) do version_fname
+        package = match(r"(.+)\.version", version_fname)[1]
+        versionfile = parse_stdlib_version_file(joinpath(stdlib_dir, version_fname))
+        # From the (all uppercase) $(package)_GIT_URL and $(package)_SHA1 fields, we'll determine
+        # the necessary information. If this logic happens to fail for some reason for any of the
+        # standard libraries, we'll crash the documentation build, so that it could be fixed.
+        remote = let git_url_key = "$(uppercase(package))_GIT_URL"
+            haskey(versionfile, git_url_key) || error("Missing $(git_url_key) in $version_fname")
+            m = match(LibGit2.GITHUB_REGEX, versionfile[git_url_key])
+            isnothing(m) && error("Unable to parse $(git_url_key)='$(versionfile[git_url_key])' in $version_fname")
+            Documenter.Remotes.GitHub(m[2], m[3])
+        end
+        package_sha = let sha_key = "$(uppercase(package))_SHA1"
+            haskey(versionfile, sha_key) || error("Missing $(sha_key) in $version_fname")
+            versionfile[sha_key]
+        end
+        # Construct the absolute (local) path to the stdlib package's root directory
+        package_root_dir = joinpath(stdlib_dir, "$(package)-$(package_sha)")
+        # Documenter needs package_root_dir to exist --- it's just a sanity check it does on the remotes= keyword.
+        # In normal (local) builds, this will be the case, since the Makefiles will have unpacked the standard
+        # libraries. However, on CI we do this thing where we actually build docs in a clean worktree, just
+        # unpacking the `usr/` directory from the main build, and the unpacked stdlibs will be missing, and this
+        # will cause Documenter to throw an error. However, we don't _actually_ need the source files of the standard
+        # libraries to be present, so we just generate empty root directories to satisfy the check in Documenter.
+        isdir(package_root_dir) || mkpath(package_root_dir)
+        package_root_dir => (remote, package_sha)
+    end
+    Dict(remotes_list)
 end
 
 # Check if we are building a PDF
@@ -92,7 +155,6 @@ Manual = [
     "manual/environment-variables.md",
     "manual/embedding.md",
     "manual/code-loading.md",
-    "manual/profile.md",
     "manual/stacktraces.md",
     "manual/performance-tips.md",
     "manual/workflow-tips.md",
@@ -128,6 +190,12 @@ BaseDocs = [
 
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]
 
+Tutorials = [
+    "tutorials/creating-packages.md",
+    "tutorials/profile.md",
+    "tutorials/external.md",
+]
+
 DevDocs = [
     "Documentation of Julia's Internals" => [
         "devdocs/init.md",
@@ -158,6 +226,8 @@ DevDocs = [
         "devdocs/gc-sa.md",
         "devdocs/gc.md",
         "devdocs/jit.md",
+        "devdocs/builtins.md",
+        "devdocs/precompile_hang.md",
     ],
     "Developing/debugging Julia's C code" => [
         "devdocs/backtraces.md",
@@ -184,6 +254,7 @@ const PAGES = [
     "Manual" => ["index.md", Manual...],
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
+    "Tutorials" => Tutorials,
     # Add "Release Notes" to devdocs
     "Developer Documentation" => [DevDocs..., hide("NEWS.md")],
 ]
@@ -194,6 +265,7 @@ const PAGES = [
     "Manual" => Manual,
     "Base" => BaseDocs,
     "Standard Library" => StdlibDocs,
+    "Tutorials" => Tutorials,
     "Developer Documentation" => DevDocs,
 ]
 end
@@ -290,6 +362,8 @@ else
         collapselevel = 1,
         sidebar_sitename = false,
         ansicolor = true,
+        size_threshold = 800 * 2^10, # 800 KiB
+        size_threshold_warn = 200 * 2^10, # the manual has quite a few large pages, so we warn at 200+ KiB only
     )
 end
 
@@ -301,12 +375,12 @@ makedocs(
     doctest   = ("doctest=fix" in ARGS) ? (:fix) : ("doctest=only" in ARGS) ? (:only) : ("doctest=true" in ARGS) ? true : false,
     linkcheck = "linkcheck=true" in ARGS,
     linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
-    strict    = true,
     checkdocs = :none,
     format    = format,
     sitename  = "The Julia Language",
     authors   = "The Julia Project",
     pages     = PAGES,
+    remotes   = documenter_stdlib_remotes,
 )
 
 # Update URLs to external stdlibs (JuliaLang/julia#43199)

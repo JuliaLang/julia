@@ -1,9 +1,41 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Profiling support, main entry point is the [`@profile`](@ref) macro.
+    Profile
+
+Profiling support.
+
+## CPU profiling
+- `@profile foo()` to profile a specific call.
+- `Profile.print()` to print the report.
+- `Profile.clear()` to clear the buffer.
+- Send a $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") signal to the process to automatically trigger a profile and print.
+
+## Memory profiling
+- `Profile.Allocs.@profile [sample_rate=0.1] foo()` to sample allocations within a specific call. A sample rate of 1.0 will record everything; 0.0 will record nothing.
+- `Profile.Allocs.print()` to print the report.
+- `Profile.Allocs.clear()` to clear the buffer.
+
+## Heap profiling
+- `Profile.take_heap_snapshot()` to record a `.heapsnapshot` record of the heap.
+- Set `JULIA_PROFILE_PEEK_HEAP_SNAPSHOT=true` to capture a heap snapshot when signal $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") is sent.
 """
 module Profile
+
+global print
+public @profile,
+    clear,
+    print,
+    fetch,
+    retrieve,
+    add_fake_meta,
+    flatten,
+    callers,
+    init,
+    take_heap_snapshot,
+    take_page_profile,
+    clear_malloc_data,
+    Allocs
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 
@@ -220,7 +252,7 @@ function print(io::IO,
 
     pf = ProfileFormat(;C, combine, maxdepth, mincount, noisefloor, sortedby, recur)
     if groupby === :none
-        print(io, data, lidict, pf, format, threads, tasks, false)
+        print_group(io, data, lidict, pf, format, threads, tasks, false)
     else
         if !in(groupby, [:thread, :task, [:task, :thread], [:thread, :task]])
             error(ArgumentError("Unrecognized groupby option: $groupby. Options are :none (default), :task, :thread, [:task, :thread], or [:thread, :task]"))
@@ -244,7 +276,7 @@ function print(io::IO,
                     printstyled(io, "Task $(Base.repr(taskid))$nl"; bold=true, color=Base.debug_color())
                     for threadid in threadids
                         printstyled(io, " Thread $threadid "; bold=true, color=Base.info_color())
-                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
@@ -262,7 +294,7 @@ function print(io::IO,
                     printstyled(io, "Thread $threadid$nl"; bold=true, color=Base.info_color())
                     for taskid in taskids
                         printstyled(io, " Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
-                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
@@ -274,7 +306,7 @@ function print(io::IO,
             isempty(taskids) && (any_nosamples = true)
             for taskid in taskids
                 printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
-                nosamples = print(io, data, lidict, pf, format, threads, taskid, true)
+                nosamples = print_group(io, data, lidict, pf, format, threads, taskid, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
@@ -284,7 +316,7 @@ function print(io::IO,
             isempty(threadids) && (any_nosamples = true)
             for threadid in threadids
                 printstyled(io, "Thread $threadid "; bold=true, color=Base.info_color())
-                nosamples = print(io, data, lidict, pf, format, threadid, tasks, true)
+                nosamples = print_group(io, data, lidict, pf, format, threadid, tasks, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
@@ -306,7 +338,7 @@ See `Profile.print([io], data)` for an explanation of the valid keyword argument
 print(data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
     print(stdout, data, lidict; kwargs...)
 
-function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
+function print_group(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
                 format::Symbol, threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}},
                 is_subsection::Bool = false)
     cols::Int = Base.displaysize(io)[2]
@@ -859,7 +891,6 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
     ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
     ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
     widthfile = 2*ntext÷5 # min 12
-    widthfunc = 3*ntext÷5 # min 18
     strs = Vector{String}(undef, length(frames))
     showextra = false
     if level > nindent
@@ -901,11 +932,12 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                     ":",
                     li.line == -1 ? "?" : string(li.line),
                     "; ",
-                    ltruncto(fname, widthfunc))
+                    fname)
             end
         else
             strs[i] = string(stroverhead, "╎", base, strcount, " [unknown stackframe]")
         end
+        strs[i] = ltruncto(strs[i], cols)
     end
     return strs
 end
@@ -1161,17 +1193,17 @@ end
 
 # Utilities
 function rtruncto(str::String, w::Int)
-    if length(str) <= w
+    if textwidth(str) <= w
         return str
     else
-        return string("...", str[prevind(str, end, w-4):end])
+        return string("…", str[prevind(str, end, w-2):end])
     end
 end
 function ltruncto(str::String, w::Int)
-    if length(str) <= w
+    if textwidth(str) <= w
         return str
     else
-        return string(str[1:nextind(str, 1, w-4)], "...")
+        return string(str[1:nextind(str, 1, w-2)], "…")
     end
 end
 
@@ -1253,6 +1285,21 @@ function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) 
     return take_heap_snapshot(fpath, all_one)
 end
 
+"""
+    Profile.take_page_profile(io::IOStream)
+    Profile.take_page_profile(filepath::String)
+
+Write a JSON snapshot of the pages from Julia's pool allocator, printing for every pool allocated object, whether it's garbage, or its type.
+"""
+function take_page_profile(io::IOStream)
+    Base.@_lock_ios(io, ccall(:jl_gc_take_page_profile, Cvoid, (Ptr{Cvoid},), io.handle))
+end
+function take_page_profile(filepath::String)
+    open(filepath, "w") do io
+        take_page_profile(io)
+    end
+    return filepath
+end
 
 include("Allocs.jl")
 include("precompile.jl")

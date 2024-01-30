@@ -3,12 +3,30 @@
 if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
+    const env_dict = Dict{String, Vector{Cwchar_t}}()
+    const env_lock = ReentrantLock()
+
+    function memoized_env_lookup(str::AbstractString)
+        # Windows environment variables have a different format from Linux / MacOS, and previously
+        # incurred allocations because we had to convert a String to a Vector{Cwchar_t} each time
+        # an environment variable was looked up. This function memoizes that lookup process, storing
+        # the String => Vector{Cwchar_t} pairs in env_dict
+        @lock env_lock begin
+            var = get(env_dict, str, nothing)
+            if isnothing(var)
+                var = cwstring(str)
+                env_dict[str] = var
+            end
+            return var
+        end
+    end
+
     _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
     _hasenv(s::Vector{UInt16}) = _getenvlen(s) != 0 || Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND
-    _hasenv(s::AbstractString) = _hasenv(cwstring(s))
+    _hasenv(s::AbstractString) = _hasenv(memoized_env_lookup(s))
 
     function access_env(onError::Function, str::AbstractString)
-        var = cwstring(str)
+        var = memoized_env_lookup(str)
         len = _getenvlen(var)
         if len == 0
             return Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND ? "" : onError(str)
@@ -21,7 +39,7 @@ if Sys.iswindows()
     end
 
     function _setenv(svar::AbstractString, sval::AbstractString, overwrite::Bool=true)
-        var = cwstring(svar)
+        var = memoized_env_lookup(svar)
         val = cwstring(sval)
         if overwrite || !_hasenv(var)
             ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,val)
@@ -30,7 +48,7 @@ if Sys.iswindows()
     end
 
     function _unsetenv(svar::AbstractString)
-        var = cwstring(svar)
+        var = memoized_env_lookup(svar)
         ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,C_NULL)
         windowserror(:setenv, ret == 0 && Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND)
     end

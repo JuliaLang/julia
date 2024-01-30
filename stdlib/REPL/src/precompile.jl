@@ -40,7 +40,7 @@ foo(x) = 1
 @time @eval foo(1)
 ; pwd
 $CTRL_C
-$CTRL_R$CTRL_C
+$CTRL_R$CTRL_C#
 ? reinterpret
 using Ra\t$CTRL_C
 \\alpha\t$CTRL_C
@@ -78,11 +78,18 @@ generate_precompile_statements() = try
         # Collect statements from running a REPL process and replaying our REPL script
         touch(precompile_file)
         pts, ptm = open_fake_pty()
-        cmdargs = `-e 'import REPL; REPL.Terminals.is_precompiling[] = true'`
-        p = run(addenv(addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file
-                --cpu-target=native --startup-file=no --compiled-modules=existing --color=yes -i $cmdargs```, procenv),
-                "JULIA_PKG_PRECOMPILE_AUTO" => "0"),
-            pts, pts, pts; wait=false)
+        # we don't want existing REPL caches to be used so ignore them
+        setup_cmd = """
+        push!(Base.ignore_compiled_cache, Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
+        import REPL
+        REPL.Terminals.is_precompiling[] = true
+        """
+        p = run(
+                addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file
+                    --cpu-target=native --startup-file=no --compiled-modules=existing
+                    --color=yes -i -e "$setup_cmd"```, procenv),
+                pts, pts, pts; wait=false
+            )
         Base.close_stdio(pts)
         # Prepare a background process to copy output from process until `pts` is closed
         output_copy = Base.BufferStream()
@@ -93,6 +100,7 @@ generate_precompile_statements() = try
                 Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
                 write(output_copy, l)
             end
+            write(debug_output, "\n#### EOF ####\n")
         catch ex
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
                 rethrow() # ignore EIO on ptm after pts dies
@@ -117,7 +125,10 @@ generate_precompile_statements() = try
                 bytesavailable(output_copy) > 0 && readavailable(output_copy)
                 # push our input
                 write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
-                write(ptm, l, "\n")
+                # If the line ends with a CTRL_C, don't write an extra newline, which would
+                # cause a second empty prompt. Our code below expects one new prompt per
+                # input line and can race out of sync with the unexpected second line.
+                endswith(l, CTRL_C) ? write(ptm, l) : write(ptm, l, "\n")
                 readuntil(output_copy, "\n")
                 # wait for the next prompt-like to appear
                 readuntil(output_copy, "\n")
@@ -131,6 +142,7 @@ generate_precompile_statements() = try
                     sleep(0.1)
                 end
             end
+            write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
             write(ptm, "$CTRL_D")
             wait(tee)
             success(p) || Base.pipeline_error(p)
@@ -176,9 +188,9 @@ generate_precompile_statements() = try
             if !isexpr(ps, :call)
                 # these are typically comments
                 @debug "skipping statement because it does not parse as an expression" statement
+                delete!(statements, statement)
                 continue
             end
-            push!(REPL.PRECOMPILE_STATEMENTS, statement)
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple
             # println(ps)
@@ -199,10 +211,6 @@ finally
 end
 
 generate_precompile_statements()
-
-# As a last step in system image generation,
-# remove some references to build time environment for a more reproducible build.
-Base.Filesystem.temp_cleanup_purge(force=true)
 
 precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
 end # Precompile

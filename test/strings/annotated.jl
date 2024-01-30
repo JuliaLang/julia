@@ -34,8 +34,9 @@
         Base.AnnotatedString("ab", [(1:1, :a => 1), (2:2, :b => 2)])
     let allstrings =
         ['a', Base.AnnotatedChar('a'), Base.AnnotatedChar('a', [:aaa => 0x04]),
-        "a string", Base.AnnotatedString("a string"),
-        Base.AnnotatedString("a string", [(1:2, :hmm => '%')])]
+         "a string", Base.AnnotatedString("a string"),
+         Base.AnnotatedString("a string", [(1:2, :hmm => '%')]),
+         SubString(Base.AnnotatedString("a string", [(1:2, :hmm => '%')]), 1:1)]
         for str1 in repeat(allstrings, 2)
             for str2 in repeat(allstrings, 2)
                 @test String(str1 * str2) ==

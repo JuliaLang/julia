@@ -37,19 +37,29 @@ eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedI
 
 ## reshape(::Array, ::Dims) returns an Array, except for isbitsunion eltypes (issue #28611)
 # reshaping to same # of dimensions
-function reshape(a::Array{T,M}, dims::NTuple{N,Int}) where {T,N,M}
+@eval function reshape(a::Array{T,M}, dims::NTuple{N,Int}) where {T,N,M}
     throw_dmrsa(dims, len) =
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $len"))
-
-    if prod(dims) != length(a)
+    len = Core.checked_dims(dims...) # make sure prod(dims) doesn't overflow (and because of the comparison to length(a))
+    if len != length(a)
         throw_dmrsa(dims, length(a))
     end
     isbitsunion(T) && return ReshapedArray(a, dims, ())
     if N == M && dims == size(a)
         return a
     end
-    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
+    ref = a.ref
+    if M == 1 && N !== 1
+        mem = ref.mem::Memory{T}
+        if !(ref === GenericMemoryRef(mem) && len === mem.length)
+            mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
+            ref = GenericMemoryRef(mem)::typeof(ref)
+        end
+    end
+    # or we could use `a = Array{T,N}(undef, ntuple(0, Val(N))); a.ref = ref; a.size = dims; return a` here
+    return $(Expr(:new, :(Array{T,N}), :ref, :dims))
 end
+
 
 """
     reshape(A, dims...) -> AbstractArray
@@ -309,7 +319,12 @@ substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where
 function unsafe_convert(::Type{Ptr{S}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {S,T,N,P}
     parent = V.parent
     p = cconvert(Ptr{T}, parent) # XXX: this should occur in cconvert, the result is not GC-rooted
-    return Ptr{S}(unsafe_convert(Ptr{T}, p) + (first_index(V)-1)*sizeof(T))
+    Δmem = if _checkcontiguous(Bool, parent)
+        (first_index(V) - firstindex(parent)) * elsize(parent)
+    else
+        _memory_offset(parent, map(first, V.indices)...)
+    end
+    return Ptr{S}(unsafe_convert(Ptr{T}, p) + Δmem)
 end
 
 _checkcontiguous(::Type{Bool}, A::AbstractArray) = false
