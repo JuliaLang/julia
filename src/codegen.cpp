@@ -8515,7 +8515,7 @@ static jl_llvm_functions_t
         current_lineinfo.resize(new_lineinfo.size(), 0);
         for (dbg = 0; dbg < new_lineinfo.size(); dbg++) {
             unsigned newdbg = new_lineinfo[new_lineinfo.size() - dbg - 1];
-            if (newdbg != current_lineinfo[dbg]) {
+            if (newdbg != current_lineinfo[dbg] || dbg + 1 == new_lineinfo.size()) {
                 current_lineinfo[dbg] = newdbg;
                 const auto &info = linetable[newdbg];
                 if (do_coverage(info.is_user_code, info.is_tracked))
@@ -8605,14 +8605,15 @@ static jl_llvm_functions_t
 
     find_next_stmt(0);
     while (cursor != -1) {
+        ctx.noalias().aliasscope.current = aliasscopes[cursor];
+        jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
         int32_t debuginfoloc = jl_array_data(src->codelocs, int32_t)[cursor];
         if (debuginfoloc > 0) {
             if (debug_enabled)
                 ctx.builder.SetCurrentDebugLocation(linetable[debuginfoloc].loc);
-            coverageVisitStmt(debuginfoloc);
+            if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_coverageeffect_sym)
+                coverageVisitStmt(debuginfoloc);
         }
-        ctx.noalias().aliasscope.current = aliasscopes[cursor];
-        jl_value_t *stmt = jl_array_ptr_ref(stmts, cursor);
         if (jl_is_returnnode(stmt)) {
             jl_value_t *retexpr = jl_returnnode_value(stmt);
             if (retexpr == NULL) {
