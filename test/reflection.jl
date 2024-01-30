@@ -169,11 +169,11 @@ let
     @test Base.binding_module(TestMod7648, :d7648) == TestMod7648
     @test Base.binding_module(TestMod7648, :a9475) == TestMod7648.TestModSub9475
     @test Base.binding_module(TestMod7648.TestModSub9475, :b9475) == TestMod7648.TestModSub9475
-    @test Set(names(TestMod7648))==Set([:TestMod7648, :a9475, :foo9475, :c7648, :foo7648, :foo7648_nomethods, :Foo7648])
+    @test Set(names(TestMod7648))==Set([:a9475, :foo9475, :c7648, :foo7648, :foo7648_nomethods, :Foo7648])
     @test Set(names(TestMod7648, all = true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
                                                 :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
                                                 :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include")])
-    @test Set(names(TestMod7648, all = true, imported = true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
+    @test Set(names(TestMod7648, all = true, imported = true)) == Set([:TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
                                                       :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
                                                       :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include"),
                                                       :convert, :curmod_name, :curmod])
@@ -1132,7 +1132,7 @@ private() = 1
 
 end
 
-@test names(TestNames) == [:TestNames, :exported, :publicized]
+@test names(TestNames) == [:exported, :publicized]
 
 # reflections for generated function with abstract input types
 
@@ -1223,5 +1223,8 @@ using Statistics as Stats
 @test Stats.mean === mean
 @test Stats === Stats.Statistics
 @test_throws UndefVarError Statistics.mean([0])
+
+# combined "as" and "non-as"
+using Base, Statisitics as Stats, Test, .M1.M2 as Mod, M1
 
 end

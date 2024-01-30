@@ -727,6 +727,5 @@ end
 
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(InteractiveUtils)
-    @test_broken isempty(undoc)
-    @test undoc == [:InteractiveUtils]
+    @test isempty(undoc)
 end
