@@ -1007,6 +1007,7 @@ end
             L = MT(A)
             B .= 0
             copyto!(B, L)
+            @test copy(L) == B
             @test L * 2 == 2 * L == 2B
             @test L/2 == B/2
             @test 2\L == 2\B
@@ -1032,6 +1033,7 @@ end
             U = MT(A)
             B .= 0
             copyto!(B, U)
+            @test copy(U) == B
             @test U * 2 == 2 * U == 2B
             @test U/2 == B/2
             @test 2\U == 2\B

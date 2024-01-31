@@ -181,6 +181,9 @@ end
 Array(A::AbstractTriangular) = Matrix(A)
 parent(A::UpperOrLowerTriangular) = A.data
 
+# For strided matrices, we may only loop over the filled triangle
+copy(A::UpperOrLowerTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = copyto!(similar(A), A)
+
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
 function Matrix{T}(A::LowerTriangular) where T
