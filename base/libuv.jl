@@ -68,8 +68,8 @@ uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix),c)
 uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(UVError(prefix,c)) : nothing
 
 function showerror(io::IO, e::UVError)
-    print(io, e.prefix, ": ", struverror(e), " (", uverrorname(e), ")")
-    if e.code == UV_ENOENT && '~' in e.prefix
+    print(io, e.msg, ": ", struverror(e.code), " (", uverrorname(e.code), ")")
+    if e.code == UV_ENOENT && '~' in e.msg
         print(io, "\nMany shells expand '~' to the home directory in",
               " unquoted strings. To replicate this behavior, call",
               " `expanduser` to expand the '~' character to the user’s",
