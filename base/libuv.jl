@@ -82,7 +82,7 @@ struct IOError <: Exception
     IOError(msg::AbstractString, code::Integer) = new(msg, code)
 end
 
-function showerror(io::IO, e::UVError)
+function showerror(io::IO, e::IOError)
     print(io, "IOError: ", e.msg)
     if e.code == UV_ENOENT && '~' in e.msg
         print(io, "\nMany shells expand '~' to the home directory in unquoted strings. To replicate this behavior, call",
