@@ -323,14 +323,15 @@ To remove existing `label` annotations, use a value of `nothing`.
 """
 function annotate!(s::AnnotatedString, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any}))
     label, val = labelval
-    indices = searchsorted(s.annotations, (range,), by=first)
     if val === nothing
+        indices = searchsorted(s.annotations, (range,), by=first)
         labelindex = filter(i -> first(s.annotations[i][2]) === label, indices)
         for index in Iterators.reverse(labelindex)
             deleteat!(s.annotations, index)
         end
     else
-        splice!(s.annotations, indices, [(range, Pair{Symbol, Any}(label, val))])
+        sortedindex = searchsortedlast(s.annotations, (range,), by=first) + 1
+        insert!(s.annotations, sortedindex, (range, Pair{Symbol, Any}(label, val)))
     end
     s
 end
@@ -459,8 +460,8 @@ function _clear_annotations_in_region!(annotations::Vector{Tuple{UnitRange{Int},
         end
         # Insert any extra entries in the appropriate position
         for entry in extras
-            indices = searchsorted(annotations, (first(entry),), by=first)
-            splice!(annotations, indices, Tuple{UnitRange{Int}, Pair{Symbol, Any}}[entry])
+            sortedindex = searchsortedlast(annotations, (first(entry),), by=first) + 1
+            insert!(annotations, sortedindex, entry)
         end
     end
     annotations
@@ -470,8 +471,8 @@ function _insert_annotations!(io::AnnotatedIOBuffer, annotations::Vector{Tuple{U
     if !eof(io)
         for (region, annot) in annotations
             region = first(region)+offset:last(region)+offset
-            indices = searchsorted(io.annotations, (region,), by=first)
-            splice!(io.annotations, indices, Tuple{UnitRange{Int}, Pair{Symbol, Any}}[(region, annot)])
+            sortedindex = searchsortedlast(io.annotations, (region,), by=first) + 1
+            insert!(io.annotations, sortedindex, (region, annot))
         end
     else
         for (region, annot) in annotations
