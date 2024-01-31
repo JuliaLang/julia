@@ -144,14 +144,11 @@ get_bool_env(name::String, default::Bool; kwargs...) = get_bool_env(Returns(defa
 function get_bool_env(f_default::Callable, name::String; kwargs...)
     if haskey(ENV, name)
         val = ENV[name]
-        if isempty(val)
-            return f_default()
-        else
+        if !isempty(val)
             return parse_bool_env(name, val; kwargs...)
         end
-    else
-        return f_default()
     end
+    return f_default()
 end
 function parse_bool_env(name::String, val::String = ENV[name]; throw::Bool=false)
     if val in get_bool_env_truthy
