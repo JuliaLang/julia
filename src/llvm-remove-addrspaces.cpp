@@ -158,7 +158,8 @@ public:
                 }
 
                 #if JL_LLVM_VERSION >= 170000
-                DstV = CE->getWithOperands(Ops, Ty);
+                if (CE->getOpcode() != Instruction::GetElementPtr)
+                    DstV = CE->getWithOperands(Ops, Ty);
                 #else
                 if (CE->getOpcode() == Instruction::GetElementPtr) {
                     // GEP const exprs need to know the type of the source.
