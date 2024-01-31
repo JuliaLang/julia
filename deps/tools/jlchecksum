@@ -8,6 +8,8 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
+set -eu
+
 # Get the deps directory, one level up from this script
 DEPSDIR="$( cd "$( dirname "$0" )"/.. && pwd )"
 
@@ -21,7 +23,7 @@ print_hash()
     if [ ${#1} -gt 64 ]; then
         NUM_LINES=$(( (${#1} + 63) / 64))
         for i in `seq 0 1 $((NUM_LINES - 1))`; do
-            str_piece=$(echo "$1" | awk "{ string=substr(\$0, $((i*64 + 1)), $(((i+1)*64))); print string; }")
+            str_piece=$(echo "$1" | awk "{ string=substr(\$0, $((i*64 + 1)), 64); print string; }")
             echo "      $str_piece"
         done
     else
@@ -29,8 +31,14 @@ print_hash()
     fi
 }
 
+abspath()
+{
+    echo $(cd $(dirname "$1"); pwd)/$BASENAME;
+}
+
 checksum_error()
 {
+    ARG1=$(realpath "$ARG1" 2>/dev/null || echo $(abspath "$ARG1"))
     echo "===============================================================================" >&2
     echo "  ERROR: $CHECKSUM_TYPE checksum failure on $BASENAME, should be:" >&2
     print_hash "$TRUE_CHECKSUM"
@@ -38,7 +46,7 @@ checksum_error()
     print_hash "$CURR_CHECKSUM"
     echo "  This can happen due to bad downloads or network proxies, please check your" >&2
     echo "  network proxy/firewall settings and delete" >&2
-    echo "  $(realpath $ARG1)" >&2
+    echo "  $ARG1" >&2
     echo "  to force a redownload when you are ready" >&2
     echo "===============================================================================" >&2
     exit 2
@@ -46,7 +54,19 @@ checksum_error()
 
 find_checksum()
 {
+    for pack in "$DEPSDIR"/checksums/*; do
+        if [ -f "$pack" ]; then
+            TRUE_CHECKSUM=$(awk -F / "{ if (\$1 == \"$BASENAME\" && \$2 == \"$CHECKSUM_TYPE\") print \$3 }" "$pack")
+            if [ $TRUE_CHECKSUM ]; then
+                return
+            fi
+        fi
+    done
     if [ ! -f "$DEPSDIR/checksums/$BASENAME/$CHECKSUM_TYPE" ]; then
+        if [ ${TAGGED_RELEASE_BANNER:-} ]; then
+            echo "WARNING: $CHECKSUM_TYPE checksum for $BASENAME not found in deps/checksums/, failing release build." >&2
+            exit 3
+        fi
         echo "WARNING: $CHECKSUM_TYPE checksum for $BASENAME not found in deps/checksums/, autogenerating..." >&2
 
         # Generate as many checksum types as we can

@@ -1,15 +1,16 @@
 /* crc32c.c -- compute CRC-32C using software table or available hardware instructions
- * Copyright (C) 2013 Mark Adler
- * Version 1.1  1 Aug 2013  Mark Adler
+ * Copyright (C) 2013, 2021 Mark Adler
+ * Version 1.1  1 Aug 2013  Mark Adler, updates from Version 1.2 5 June 2021
  *
  * Code retrieved in August 2016 from August 2013 post by Mark Adler on
- *    http://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software
+ *    https://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software
  * Modified for use in libjulia:
  *    - exported function renamed to jl_crc32c, DLL exports added.
  *    - removed main() function
  *    - architecture and compiler detection
  *    - precompute crc32c tables and store in a generated .c file
  *    - ARMv8 support
+ * Updated to incorporate upstream 2021 patch by Mark Adler to register constraints.
  */
 
 /*
@@ -39,12 +40,15 @@
 /* Version history:
    1.0  10 Feb 2013  First version
    1.1   1 Aug 2013  Correct comments on why three crc instructions in parallel
+   1.2   5 Jun 2021  Correct register constraints on assembly instructions
+                     (+ other changes that were superfluous for us)
 */
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "processor.h"
 
-#ifdef _CPU_AARCH64_
+#if defined(_CPU_AARCH64_) && defined(_OS_LINUX_)
 #  include <sys/auxv.h>
 #endif
 
@@ -52,14 +56,9 @@
 #define POLY 0x82f63b78
 
 /* Block sizes for three-way parallel crc computation.  LONG and SHORT must
-   both be powers of two.  The associated string constants must be set
-   accordingly, for use in constructing the assembler instructions. */
+   both be powers of two. */
 #define LONG 8192
-#define LONGx1 "8192"
-#define LONGx2 "16384"
 #define SHORT 256
-#define SHORTx1 "256"
-#define SHORTx2 "512"
 
 #ifndef GEN_CRC32C_TABLES
 #include "crc32c-tables.c"
@@ -79,7 +78,7 @@ JL_UNUSED static inline uint32_t crc32c_shift(const uint32_t zeros[][256], uint3
         zeros[2][(crc >> 16) & 0xff] ^ zeros[3][crc >> 24];
 }
 
-#if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #  ifdef _CPU_X86_64_
 #    define CRC32_PTR "crc32q"
 #  else
@@ -96,27 +95,27 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
     /* compute the crc for up to seven leading bytes to bring the data pointer
        to an eight-byte boundary */
     while (len && ((uintptr_t)buf & 7) != 0) {
-        __asm__("crc32b\t" "(%1), %0"
-                : "=r"(crc0)
-                : "r"(buf), "0"(crc0));
+        __asm__("crc32b\t" "%1, %0"
+                : "+r"(crc0)
+                : "m"(*buf));
         buf++;
         len--;
     }
 
-    /* compute the crc on sets of LONG*3 bytes, executing three independent crc
-       instructions, each on LONG bytes -- this is optimized for the Nehalem,
-       Westmere, Sandy Bridge, and Ivy Bridge architectures, which have a
-       throughput of one crc per cycle, but a latency of three cycles */
+    /* compute the crc on sets of LONG*3 bytes,
+       making use of three ALUs in parallel on a single core. */
     while (len >= LONG * 3) {
         uintptr_t crc1 = 0;
         uintptr_t crc2 = 0;
         const char *end = buf + LONG;
         do {
-            __asm__(CRC32_PTR "\t" "(%3), %0\n\t"
-                    CRC32_PTR "\t" LONGx1 "(%3), %1\n\t"
-                    CRC32_PTR "\t" LONGx2 "(%3), %2"
-                    : "=r"(crc0), "=r"(crc1), "=r"(crc2)
-                    : "r"(buf), "0"(crc0), "1"(crc1), "2"(crc2));
+            __asm__(CRC32_PTR "\t%3, %0\n\t"
+                    CRC32_PTR "\t%4, %1\n\t"
+                    CRC32_PTR "\t%5, %2"
+                    : "+r"(crc0), "+r"(crc1), "+r"(crc2)
+                    : "m"(* (const uintptr_t *) &buf[0]),
+                      "m"(* (const uintptr_t *) &buf[LONG]),
+                      "m"(* (const uintptr_t *) &buf[LONG*2]));
             buf += sizeof(void*);
         } while (buf < end);
         crc0 = crc32c_shift(crc32c_long, crc0) ^ crc1;
@@ -132,11 +131,13 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
         uintptr_t crc2 = 0;
         const char *end = buf + SHORT;
         do {
-            __asm__(CRC32_PTR "\t" "(%3), %0\n\t"
-                    CRC32_PTR "\t" SHORTx1 "(%3), %1\n\t"
-                    CRC32_PTR "\t" SHORTx2 "(%3), %2"
-                    : "=r"(crc0), "=r"(crc1), "=r"(crc2)
-                    : "r"(buf), "0"(crc0), "1"(crc1), "2"(crc2));
+            __asm__(CRC32_PTR "\t%3, %0\n\t"
+                    CRC32_PTR "\t%4, %1\n\t"
+                    CRC32_PTR "\t%5, %2"
+                    : "+r"(crc0), "+r"(crc1), "+r"(crc2)
+                    : "m"(* (const uintptr_t *) &buf[0]),
+                      "m"(* (const uintptr_t *) &buf[SHORT]),
+                      "m"(* (const uintptr_t *) &buf[SHORT*2]));
             buf += sizeof(void*);
         } while (buf < end);
         crc0 = crc32c_shift(crc32c_short, crc0) ^ crc1;
@@ -149,18 +150,18 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
        block */
     const char *end = buf + (len - (len & 7));
     while (buf < end) {
-        __asm__(CRC32_PTR "\t" "(%1), %0"
-                : "=r"(crc0)
-                : "r"(buf), "0"(crc0));
+        __asm__(CRC32_PTR "\t" "%1, %0"
+                : "+r"(crc0)
+                : "m"(* (const uintptr_t *) buf));
         buf += sizeof(void*);
     }
     len &= 7;
 
     /* compute the crc for up to seven trailing bytes */
     while (len) {
-        __asm__("crc32b\t" "(%1), %0"
-                : "=r"(crc0)
-                : "r"(buf), "0"(crc0));
+        __asm__("crc32b\t" "%1, %0"
+                : "+r"(crc0)
+                : "m"(*buf));
         buf++;
         len--;
     }
@@ -203,7 +204,11 @@ static crc32c_func_t crc32c_dispatch(void)
 #    define crc32c_dispatch_ifunc "crc32c_dispatch"
 #  endif
 #elif defined(_CPU_AARCH64_)
+#ifdef _COMPILER_CLANG_
+#define CRC_TARGET __attribute__((target("crc")))
+#else
 #define CRC_TARGET __attribute__((target("+crc")))
+#endif
 /* Compute CRC-32C using the ARMv8 CRC32 extension. */
 CRC_TARGET static inline uint32_t crc32cx(uint32_t crc, uint64_t val)
 {
@@ -229,24 +234,6 @@ CRC_TARGET static inline uint32_t crc32cb(uint32_t crc, uint32_t val)
     asm("crc32cb %w0, %w1, %w2" : "=r"(res) : "r"(crc), "r"(val));
     return res;
 }
-static inline uint64_t unaligned_i64(const char *ptr)
-{
-    uint64_t val;
-    memcpy(&val, ptr, 8);
-    return val;
-}
-static inline uint32_t unaligned_i32(const char *ptr)
-{
-    uint32_t val;
-    memcpy(&val, ptr, 4);
-    return val;
-}
-static inline uint16_t unaligned_i16(const char *ptr)
-{
-    uint16_t val;
-    memcpy(&val, ptr, 2);
-    return val;
-}
 
 // Modified from the SSE4.2 version.
 CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t len)
@@ -270,11 +257,11 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
         const char *buf2 = end;
         const char *buf3 = end + LONG;
         do {
-            crc = crc32cx(crc, unaligned_i64(buf));
+            crc = crc32cx(crc, jl_load_unaligned_i64(buf));
             buf += 8;
-            crc1 = crc32cx(crc1, unaligned_i64(buf2));
+            crc1 = crc32cx(crc1, jl_load_unaligned_i64(buf2));
             buf2 += 8;
-            crc2 = crc32cx(crc2, unaligned_i64(buf3));
+            crc2 = crc32cx(crc2, jl_load_unaligned_i64(buf3));
             buf3 += 8;
         } while (buf < end);
         crc = crc32c_shift(crc32c_long, crc) ^ crc1;
@@ -292,11 +279,11 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
         const char *buf2 = end;
         const char *buf3 = end + SHORT;
         do {
-            crc = crc32cx(crc, unaligned_i64(buf));
+            crc = crc32cx(crc, jl_load_unaligned_i64(buf));
             buf += 8;
-            crc1 = crc32cx(crc1, unaligned_i64(buf2));
+            crc1 = crc32cx(crc1, jl_load_unaligned_i64(buf2));
             buf2 += 8;
-            crc2 = crc32cx(crc2, unaligned_i64(buf3));
+            crc2 = crc32cx(crc2, jl_load_unaligned_i64(buf3));
             buf3 += 8;
         } while (buf < end);
         crc = crc32c_shift(crc32c_short, crc) ^ crc1;
@@ -310,9 +297,9 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
         const char *end = buf + SHORT;
         const char *buf2 = end;
         do {
-            crc = crc32cx(crc, unaligned_i64(buf));
+            crc = crc32cx(crc, jl_load_unaligned_i64(buf));
             buf += 8;
-            crc1 = crc32cx(crc1, unaligned_i64(buf2));
+            crc1 = crc32cx(crc1, jl_load_unaligned_i64(buf2));
             buf2 += 8;
         } while (buf < end);
         crc = crc32c_shift(crc32c_short, crc) ^ crc1;
@@ -324,15 +311,15 @@ CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t le
        block */
     const char *end = buf + len - 8;
     while (buf <= end) {
-        crc = crc32cx(crc, unaligned_i64(buf));
+        crc = crc32cx(crc, jl_load_unaligned_i64(buf));
         buf += 8;
     }
     if (len & 4) {
-        crc = crc32cw(crc, unaligned_i32(buf));
+        crc = crc32cw(crc, jl_load_unaligned_i32(buf));
         buf += 4;
     }
     if (len & 2) {
-        crc = crc32ch(crc, unaligned_i16(buf));
+        crc = crc32ch(crc, jl_load_unaligned_i16(buf));
         buf += 2;
     }
     if (len & 1)
@@ -348,16 +335,22 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
 {
     return crc32c_armv8(crc, buf, len);
 }
-#  else
+#  elif defined(_OS_DARWIN_)
+// All Apple chips that run Darwin should have crc32 support.
+// If that ever changes for some reason, this could be detected via the hw.optional.crc32 sysctl
+#  error Darwin/ARM64, but no CRC32 support?
+#  elif defined(_OS_LINUX_)
 static crc32c_func_t crc32c_dispatch(unsigned long hwcap)
 {
-    if (hwcap & HWCAP_CRC32)
+    if (hwcap & (1 << JL_AArch64_crc))
         return crc32c_armv8;
     return jl_crc32c_sw;
 }
 // For ifdef detection below
 #    define crc32c_dispatch() crc32c_dispatch(getauxval(AT_HWCAP))
 #    define crc32c_dispatch_ifunc "crc32c_dispatch"
+#  else
+#  pragma message("CRC32 feature detection not implemented for this OS. Falling back to software version.")
 #  endif
 #else
 // If we don't have any accelerated version to define, just make the _sw version define

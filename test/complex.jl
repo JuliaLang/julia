@@ -1,23 +1,55 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using LinearAlgebra
+
 @test reim(2 + 3im) == (2, 3)
+
+import Base: zero, real
+struct TestQuaternion{T} <: Number
+    scalar::T
+    i_component::T
+    j_component::T
+    k_component::T
+end
+zero(::Type{TestQuaternion{T}}) where {T} =
+    TestQuaternion(zero(T), zero(T), zero(T), zero(T))
+real(quaternion::TestQuaternion) = quaternion.scalar
 
 for T in (Int64, Float64)
     @test real(T) == T
     @test real(Complex{T}) == T
+    # TestQuaternions are neither real or complex
+    @test real(TestQuaternion{T}) == T
     @test complex(T) == Complex{T}
     @test complex(Complex{T}) == Complex{T}
 end
 
-#showcompact
-@test sprint(showcompact, complex(1, 0)) == "1+0im"
+#show
+@test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
 @test sprint(show, complex(true, true)) == "Complex(true,true)"
+@test sprint(show, Complex{Int8}(0, typemin(Int8))) == "0 - 128im"
+
+@testset "unary operator on complex boolean" begin
+    @test +Complex(true, true) === Complex(1, 1)
+    @test +Complex(true, false) === Complex(1, 0)
+    @test +Complex(false, true) === Complex(0, 1)
+    @test +Complex(false, false) === Complex(0, 0)
+    @test -Complex(true, true) === Complex(-1, -1)
+    @test -Complex(true, false) === Complex(-1, 0)
+    @test -Complex(false, true) === Complex(0, -1)
+    @test -Complex(false, false) === Complex(0, 0)
+end
 
 @testset "arithmetic" begin
     @testset for T in (Float16, Float32, Float64, BigFloat)
         t = true
         f = false
-
+        @testset "equality" begin
+            @test isequal(T(0.0)*im, T(0.0))
+            @test !isequal(T(0.0)*im, T(-0.0))
+            @test isequal(Complex(T(-0.0), T(0.0)), T(-0.0))
+            @test !isequal(T(-0.0)*im, T(-0.0))
+        end
         @testset "add and subtract" begin
             @test isequal(T(+0.0) + im, Complex(T(+0.0), T(+1.0)))
             @test isequal(T(-0.0) + im, Complex(T(-0.0), T(+1.0)))
@@ -96,6 +128,8 @@ end
             @test atanh(x) ≈ atanh(big(x))
             @test cis(real(x)) ≈ cis(real(big(x)))
             @test cis(x) ≈ cis(big(x))
+            @test cispi(real(x)) ≈ cispi(real(big(x)))
+            @test cispi(x) ≈ cispi(big(x))
             @test cos(x) ≈ cos(big(x))
             @test cosh(x) ≈ cosh(big(x))
             @test exp(x) ≈ exp(big(x))
@@ -111,6 +145,12 @@ end
             @test sqrt(x) ≈ sqrt(big(x))
             @test tan(x) ≈ tan(big(x))
             @test tanh(x) ≈ tanh(big(x))
+            @test sec(x) ≈ sec(big(x))
+            @test csc(x) ≈ csc(big(x))
+            @test secd(x) ≈ secd(big(x))
+            @test cscd(x) ≈ cscd(big(x))
+            @test sech(x) ≈ sech(big(x))
+            @test csch(x) ≈ csch(big(x))
         end
         @testset "Inverses" begin
             @test acos(cos(x)) ≈ x
@@ -143,6 +183,12 @@ end
             @test sinh(x) ≈ (exp(x)-exp(-x))/2
             @test tan(x) ≈ sin(x)/cos(x)
             @test tanh(x) ≈ sinh(x)/cosh(x)
+            @test sec(x) ≈ inv(cos(x))
+            @test csc(x) ≈ inv(sin(x))
+            @test secd(x) ≈ inv(cosd(x))
+            @test cscd(x) ≈ inv(sind(x))
+            @test sech(x) ≈ inv(cosh(x))
+            @test csch(x) ≈ inv(sinh(x))
         end
     end
 end
@@ -202,9 +248,12 @@ end
     @test isequal(sqrt(complex(-Inf, NaN)), complex( NaN, Inf))
 
     @test isequal(sqrt(complex( NaN, 0.0)), complex( NaN, NaN))
-    @test isequal(sqrt(complex( NaN, 0.0)), complex( NaN, NaN))
+    @test isequal(sqrt(complex( NaN,-0.0)), complex( NaN, NaN))
     @test isequal(sqrt(complex( NaN, Inf)), complex( Inf, Inf))
     @test isequal(sqrt(complex( NaN,-Inf)), complex( Inf,-Inf))
+
+    # odd binary exponent
+    @test isequal(sqrt(complex(1.0e160, 0.0)), complex(1.0e80, 0.0))
 end
 
 @testset "log(conj(z)) == conj(log(z))" begin
@@ -334,6 +383,7 @@ import Base.Math.@horner
     @test isequal(log1p(complex(-2, 1e-10)), log(1 + complex(-2, 1e-10)))
     @test isequal(log1p(complex(1, Inf)), complex(Inf, pi/2))
     @test isequal(log1p(complex(1, -Inf)), complex(Inf, -pi/2))
+    @test isequal(log1p(complex(1e-200, 5e-175)), complex(1e-200, 5e-175))
 
     for z in (1e-10+1e-9im, 1e-10-1e-9im, -1e-10+1e-9im, -1e-10-1e-9im)
         @test log1p(z) ≈ @horner(z, 0, 1, -0.5, 1/3, -0.25, 0.2)
@@ -694,7 +744,9 @@ end
     @test isequal(atanh(complex(-0.0,-Inf)),complex(-0.0,-pi/2))
 
     @test isequal(atanh(complex( 1.0, 0.0)),complex( Inf, 0.0))
+    @test isequal(atanh(complex( 1.0,-0.0)),complex( Inf,-0.0))
     @test isequal(atanh(complex(-1.0, 0.0)),complex(-Inf, 0.0))
+    @test isequal(atanh(complex(-1.0,-0.0)),complex(-Inf,-0.0))
     @test isequal(atanh(complex( 5.0, Inf)),complex( 0.0, pi/2))
     @test isequal(atanh(complex( 5.0,-Inf)),complex( 0.0,-pi/2))
     @test isequal(atanh(complex( 5.0, NaN)),complex( NaN, NaN))
@@ -709,6 +761,8 @@ end
     @test isequal(atanh(complex( Inf, Inf)),complex(0.0, pi/2))
     @test isequal(atanh(complex( Inf,-Inf)),complex(0.0,-pi/2))
     @test isequal(atanh(complex( Inf, NaN)),complex(0.0, NaN))
+    # very big but not infinite
+    @test isequal(atanh(complex(4e200, NaN)),complex(NaN, NaN))
 
     @test isequal(atanh(complex(-Inf, 0.0)),complex(-0.0, pi/2))
     @test isequal(atanh(complex(-Inf,-0.0)),complex(-0.0,-pi/2))
@@ -774,26 +828,22 @@ end
     @test isequal(atan(complex( NaN, NaN)),complex( NaN, NaN))
 end
 
-@testset "lexcmp" begin
-    @test lexcmp(1.0-1.0im, 1.0+0.0im) == -1
-    @test lexcmp(0.0+0.0im, 0.0+0.0im) == 0
-    @test lexcmp(1.0-1.0im, 0.0+0.0im) == 1
-end
-
 # misc.
 
 @test complex(1//2,1//3)^2 === complex(5//36, 1//3)
 @test complex(2,2)^2 === complex(0,8)
-@test_throws DomainError complex(2,2)^(-2)
-@test complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
+let p = -2
+    @test_throws DomainError complex(2,2)^p
+end
+@test complex(2,2)^(-2) === complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
 
 @test complex.(1.0, [1.0, 1.0]) == [complex(1.0, 1.0), complex(1.0, 1.0)]
 @test complex.([1.0, 1.0], 1.0) == [complex(1.0, 1.0), complex(1.0, 1.0)]
 # robust division of Float64
 # hard complex divisions from Fig 6 of arxiv.1210.4539
-z7 = Complex{Float64}(3.898125604559113300e289, 8.174961907852353577e295)
-z9 = Complex{Float64}(0.001953125, -0.001953125)
-z10 = Complex{Float64}( 1.02951151789360578e-84, 6.97145987515076231e-220)
+z7 = ComplexF64(3.898125604559113300e289, 8.174961907852353577e295)
+z9 = ComplexF64(0.001953125, -0.001953125)
+z10 = ComplexF64( 1.02951151789360578e-84, 6.97145987515076231e-220)
 harddivs = ((1.0+im*1.0, 1.0+im*2^1023.0, 2^-1023.0-im*2^-1023.0), #1
       (1.0+im*1.0, 2^-1023.0+im*2^-1023.0, 2^1023.0+im*0.0), #2
       (2^1023.0+im*2^-1023.0, 2^677.0+im*2^-677.0, 2^346.0-im*2^-1008.0), #3
@@ -826,8 +876,8 @@ end
 
 # division of non-Float64
 function cdiv_test(a,b)
-    c=convert(Complex{Float64},a)/convert(Complex{Float64},b)
-    50 <= sb_accuracy(c,convert(Complex{Float64},a/b))
+    c=convert(ComplexF64,a)/convert(ComplexF64,b)
+    50 <= sb_accuracy(c,convert(ComplexF64,a/b))
 end
 @test cdiv_test(complex(1//2, 3//4), complex(17//13, 4//5))
 @test cdiv_test(complex(1,2), complex(8997,2432))
@@ -876,6 +926,22 @@ end
     @test cis(1.0+0.0im) ≈ 0.54030230586813971740093660744297660373231042061+0.84147098480789650665250232163029899962256306079im
     @test cis(pi) ≈ -1.0+0.0im
     @test cis(pi/2) ≈ 0.0+1.0im
+    @test cispi(false) == 1
+    @test cispi(true) == -1
+    @test cispi(-1) == -1
+    @test cispi(0) == 1
+    @test cispi(1) == -1
+    @test cispi(2) == 1
+    @test cispi(0.0) == cispi(0)
+    @test cispi(1.0) == cispi(1)
+    @test cispi(2.0) == cispi(2)
+    @test cispi(0.5) == im
+    @test cispi(1.5) == -im
+    @test cispi(0.25) ≈ cis(π/4)
+    @test cispi(0.0+0.0im) == cispi(0)
+    @test cispi(1.0+0.0im) == cispi(1)
+    @test cispi(2.0+0.0im) == cispi(2)
+    @test cispi(5im) ≈ exp(-5pi) rtol=1e-10 # https://github.com/JuliaLang/julia/pull/45945
 end
 
 @testset "exp2" begin
@@ -895,28 +961,28 @@ end
 end
 
 @testset "round and float, PR #8291" begin
-    @test round(Complex(1.125, 0.875), 2) == Complex(1.12, 0.88)
+    @test round(Complex(1.125, 0.875), digits=2) == Complex(1.12, 0.88)
     @test round(Complex(1.5, 0.5), RoundDown, RoundUp) == Complex(1.0, 1.0)
-    @test round.([1:5;] + im) == [1:5;] + im
-    @test round.([1:5;] + 0.5im) == [1.0:5.0;]
+    @test round.([1:5;] .+ im) == [1:5;] .+ im
+    @test round.([1:5;] .+ 0.5im) == [1.0:5.0;]
 
     @test float(Complex(1, 2)) == Complex(1.0, 2.0)
-    @test round(float(Complex(π, e)),3) == Complex(3.142, 2.718)
+    @test round(float(Complex(π, ℯ)), digits=3) == Complex(3.142, 2.718)
 end
 
-@testset "Complex32 arithmetic, PR #10003" begin
-    @test Float16(1)+Float16(1)im === Complex32(1, 1)
-    @test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === Complex32(1, -1)
-    @test Float16(1)*im === Complex32(im)
-    @test Float16(1)/im === Complex32(0,-1)
-    @test Float16(1)^im === Complex32(1) === Float16(1)+Float16(0)im
+@testset "ComplexF16 arithmetic, PR #10003" begin
+    @test Float16(1)+Float16(1)im === ComplexF16(1, 1)
+    @test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === ComplexF16(1, -1)
+    @test Float16(1)*im === ComplexF16(im)
+    @test Float16(1)/im === ComplexF16(0,-1)
+    @test Float16(1)^im === ComplexF16(1) === Float16(1)+Float16(0)im
 end
 
 # issue/PR #10148
 @test typeof(Int8(1) - im) == Complex{Int8}
 
 # issue #10926
-@test typeof(π - 1im) == Complex{Float64}
+@test typeof(π - 1im) == ComplexF64
 
 @testset "issue #15969" begin
     # specialized muladd for complex types
@@ -931,7 +997,7 @@ end
         @inferred sin(x)
         @inferred cos(x)
         @inferred norm(x)
-        @inferred vecnorm(x)
+        @inferred opnorm(x)
     end
 end
 
@@ -947,30 +1013,205 @@ end
 @test big(1)/(10+10im) ≈ (5-5im)/big(100) ≈ big"0.05" - big"0.05"*im
 
 @testset "Complex Irrationals, issue #21204" begin
-    for x in (pi, e, catalan) # No need to test all of them
+    for x in (pi, ℯ, Base.MathConstants.catalan) # No need to test all of them
         z = Complex(x, x)
         @test typeof(z) == Complex{typeof(x)}
         @test exp(z) ≈ exp(x) * cis(x)
         @test log1p(z) ≈ log(1 + z)
         @test exp2(z) ≈ exp(z * log(2))
         @test exp10(z) ≈ exp(z * log(10))
+        @test isequal(z^true, z)
+        @test isequal(z^0, complex(1.0,0.0))
     end
 end
 
 @testset "expm1 type stability" begin
     x = @inferred expm1(0.1im)
-    @test x isa Complex128
+    @test x isa ComplexF64
     x = @inferred expm1(0.1f0im)
-    @test x isa Complex64
+    @test x isa ComplexF32
 end
 
 @testset "array printing with exponent format" begin
     a = [1.0 + 1e-10im, 2.0e-15 - 2.0e-5im, 1.0e-15 + 2im, 1.0 + 2e-15im]
     @test sprint((io, x) -> show(io, MIME("text/plain"), x), a) ==
         join([
-            "4-element Array{Complex{Float64},1}:",
-            "     1.0+1.0e-10im",
-            " 2.0e-15-2.0e-5im ",
-            " 1.0e-15+2.0im    ",
-            "     1.0+2.0e-15im"], "\n")
+            "4-element Vector{ComplexF64}:",
+            "     1.0 + 1.0e-10im",
+            " 2.0e-15 - 2.0e-5im",
+            " 1.0e-15 + 2.0im",
+            "     1.0 + 2.0e-15im"], "\n")
+end
+
+@testset "corner cases of division, issue #22983" begin
+    # These results abide by ISO/IEC 10967-3:2006(E) and
+    # mathematical definition of division of complex numbers.
+    for T in (Float16, Float32, Float64, BigFloat)
+        @test isequal(one(T) / zero(Complex{T}), one(Complex{T}) / zero(Complex{T}))
+        @test isequal(one(T) / zero(Complex{T}), Complex{T}(NaN, NaN))
+        @test isequal(one(Complex{T}) / zero(T), Complex{T}(Inf, NaN))
+        @test isequal(one(Complex{T}) / one(Complex{T}), one(Complex{T}))
+        @test isequal(one(T) / complex(one(T),  zero(T)), Complex(one(T), -zero(T)))
+        @test isequal(one(T) / complex(one(T), -zero(T)), Complex(one(T),  zero(T)))
+    end
+end
+
+@testset "division by Inf, issue#23134" begin
+    @testset "$T" for T in (Float16, Float32, Float64, BigFloat)
+        @test isequal(one(T) / complex(T(Inf)),         complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(Inf), one(T)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(Inf), T(NaN)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(Inf), T(Inf)), complex(zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(T(-Inf)),         complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-Inf), one(T)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-Inf), T(NaN)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(T(Inf),-zero(T)), complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),-one(T)),  complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),T(-NaN)),  complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(Inf),T(-Inf)),  complex(zero(T), zero(T)))
+
+        @test isequal(one(T) / complex(T(-Inf),-zero(T)),complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),-one(T)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),T(-NaN)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-Inf),T(-Inf)), complex(-zero(T), zero(T)))
+
+        @test isequal(one(T) / complex(zero(T), T(Inf)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(one(T),  T(Inf)), complex(zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(NaN),  T(Inf)), complex(zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(zero(T), T(-Inf)), complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(one(T),  T(-Inf)), complex(zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(NaN),  T(-Inf)), complex(zero(T), zero(T)))
+
+        @test isequal(one(T) / complex(-zero(T), T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(-one(T),  T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(one(T) / complex(T(-NaN),  T(Inf)), complex(-zero(T), -zero(T)))
+
+        @test isequal(one(T) / complex(-zero(T), T(-Inf)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(-one(T),  T(-Inf)), complex(-zero(T), zero(T)))
+        @test isequal(one(T) / complex(T(-NaN),  T(-Inf)), complex(-zero(T), zero(T)))
+
+        # divide complex by complex Inf
+        @test isequal(complex(one(T)) / complex(T(Inf), T(-Inf)), complex(zero(T), zero(T)))
+        @test isequal(complex(one(T)) / complex(T(-Inf), T(Inf)), complex(-zero(T), -zero(T)))
+        @test isequal(complex(T(Inf)) / complex(T(Inf), T(-Inf)), complex(T(NaN), T(NaN)))
+        @test isequal(complex(T(NaN)) / complex(T(-Inf), T(Inf)), complex(T(NaN), T(NaN)))
+    end
+end
+
+@testset "complex^real, issue #14342" begin
+    for T in (Float32, Float64, BigFloat), p in (T(-21//10), -21//10)
+        z = T(2)+0im
+        @test real(z^p) ≈ 2^p
+        @test signbit(imag(z^p))
+    end
+    @test (2+0im)^(-21//10) === (2//1+0im)^(-21//10) === 2^-2.1 - 0.0im
+end
+
+@testset "more cpow" begin
+    # for testing signs of zeros, it is useful to convert ±0.0 to ±1e-15
+    zero2small(r::Real) = iszero(r) ? copysign(1e-15, r) : r
+    zero2small(z::Complex) = complex(zero2small(real(z)), zero2small(imag(z)))
+    ≋(x::Real, y::Real) = x*y == 0 ? abs(x) < 1e-8 && abs(y) < 1e-8 && signbit(x)==signbit(y) : isfinite(x) ? x ≈ y : isequal(x, y)
+    ≋(x::Complex, y::Complex) = real(x) ≋ real(y) && imag(x) ≋ imag(y)
+    ≟(x,y) = isequal(x,y)
+
+    # test z^p for positive/negative/zero real and imaginary parts of z and p:
+    v=(-2.7,-3.0,-2.0,-0.0,+0.0,2.0,3.0,2.7)
+    for zr=v, zi=v, pr=v, pi=v
+        z = complex(zr,zi)
+        p = iszero(pi) ? pr : complex(pr,pi)
+        if isinteger(p)
+            c = zero2small(z)^Integer(pr)
+        else
+            c = exp(zero2small(p) * log(zero2small(z)))
+        end
+        if !iszero(z*p) # z==0 or p==0 is tricky, check it separately
+            @test z^p ≋ c
+            if isreal(p)
+                @test z^(p + 1e-15im) ≈ z^(p - 1e-15im) ≈ c
+                if isinteger(p)
+                    @test isequal(z^Integer(pr), z^p)
+                end
+            elseif (zr != 0 || !signbit(zr)) && (zi != 0 || !signbit(zi))
+                @test isequal((Complex{Int}(z*10)//10)^p, z^p)
+            end
+        end
+    end
+
+    @test 2 ^ (0.3 + 0.0im) === 2.0 ^ (0.3 + 0.0im) === conj(2.0 ^ (0.3 - 0.0im)) ≋  2.0 ^ (0.3 + 1e-15im)
+    @test 0.2 ^ (0.3 + 0.0im) === conj(0.2 ^ (0.3 - 0.0im)) ≋  0.2 ^ (0.3 + 1e-15im)
+    @test (0.0 - 0.0im)^2.0 === (0.0 - 0.0im)^2 === (0.0 - 0.0im)^1.1 === (0.0 - 0.0im) ^ (1.1 + 2.3im) === 0.0 - 0.0im
+    @test (0.0 - 0.0im)^-2.0 ≟ (0.0 - 0.0im)^-2 ≟ (0.0 - 0.0im)^-1.1 ≟ (0.0 - 0.0im) ^ (-1.1 + 2.3im) ≟ NaN + NaN*im
+    @test (1.0+0.0)^(1.2+0.7im) === 1.0 + 0.0im
+    @test (-1.0+0.0)^(2.0+0.7im) ≈ exp(-0.7π)
+    @test (-4.0+0.0im)^1.5 === (-4.0)^(1.5+0.0im) === (-4)^(1.5+0.0im) === (-4)^(3//2+0im) === 0.0 - 8.0im
+
+    # issue #24515:
+    @test (Inf + Inf*im)^2.0 ≟ (Inf + Inf*im)^2 ≟ NaN + Inf*im
+    @test (0+0im)^-3.0 ≟ (0+0im)^-3 ≟ NaN + NaN*im
+    @test (1.0+0.0im)^1e300 === 1.0 + 0.0im
+    @test Inf^(-Inf + 0.0im) == (Inf + 0.0im)^(-Inf - 0.0im) == (Inf - 0.0im)^(-Inf - 0.0im) == (Inf - 0.0im)^-Inf == 0
+
+    # NaN propagation
+    @test (0 + NaN*im)^1 ≟ (0 + NaN*im)^1.0 ≟ (0 + NaN*im)^(1.0+0im) ≟ 0.0 + NaN*im
+    @test (0 + NaN*im)^2 ≟ (0 + NaN*im)^2.0 ≟ (0 + NaN*im)^(2.0+0im) ≟ NaN + NaN*im
+    @test (NaN + 0im)^2.0 ≟ (NaN + 0im)^(2.0+0im) ≟ (2+0im)^NaN ≟ NaN + 0im
+    @test (NaN + 0im)^2.5 ≟ NaN^(2.5+0im) ≟ (NaN + NaN*im)^2.5 ≟ (-2+0im)^NaN ≟ (2+0im)^(1+NaN*im) ≟ NaN + NaN*im
+
+    # more Inf cases:
+    @test (Inf + 0im)^Inf === Inf^(Inf + 0im) === (Inf + 0im)^(Inf + 0im) == Inf + 0im
+    @test (-Inf + 0im)^(0.7 + 0im) === (-Inf + 1im)^(0.7 + 0im) === conj((-Inf - 1im)^(0.7 + 0im)) === -Inf + Inf*im
+    @test (-Inf + 0.0im) ^ 3.1 === conj((-Inf - 0.0im) ^ 3.1) === -Inf - Inf*im
+    @test (3.0+0.0im)^(Inf + 1im) === (3.0-0.0im)^(Inf + 1im) === conj((3.0+0.0im)^(Inf - 1im)) === Inf + Inf*im
+
+    # The following cases should arguably give Inf + Inf*im, but currently
+    # give partial NaNs instead.  Marking as broken for now (since Julia 0.4 at least),
+    # in the hope that someday we can fix these corner cases.  (Python gets them wrong too.)
+    @test_broken (Inf + 1im)^3 === (Inf + 1im)^3.0 === (Inf + 1im)^(3+0im) === Inf + Inf*im
+    @test_broken (Inf + 1im)^3.1 === (Inf + 1im)^(3.1+0im) === Inf + Inf*im
+
+    # cases where phase angle is non-finite yield NaN + NaN*im:
+    @test NaN + NaN*im ≟ Inf ^ (2 + 3im) ≟ (Inf + 1im) ^ (2 + 3im) ≟ (Inf*im) ^ (2 + 3im) ≟
+          3^(Inf*im) ≟ (-3)^(Inf + 0im) ≟ (-3)^(Inf + 1im) ≟ (3+1im)^Inf ≟
+          (3+1im)^(Inf + 1im) ≟ (1e200+1e-200im)^Inf ≟ (1e200+1e-200im)^(Inf+1im)
+
+    @test @inferred(2.0^(3.0+0im)) === @inferred((2.0+0im)^(3.0+0im)) === @inferred((2.0+0im)^3.0) === 8.0+0.0im
+end
+
+@testset "issue #31054" begin
+    @test tanh(atanh(complex(1.0,1.0))) == complex(1.0,1.0)
+    @test tanh(atanh(complex(1.0,-1.0))) == complex(1.0,-1.0)
+    @test tanh(atanh(complex(-1.0,1.0))) == complex(-1.0,1.0)
+    @test tanh(atanh(complex(-1.0,-1.0))) == complex(-1.0,-1.0)
+end
+
+@testset "issue #29840" begin
+    @testset "$T" for T in (ComplexF32, ComplexF64, Complex{BigFloat})
+        @test isequal(ComplexF64(sec(T(-10, 1000))), ComplexF64(-0.0, 0.0))
+        @test isequal(ComplexF64(csc(T(-10, 1000))), ComplexF64(0.0, 0.0))
+        @test isequal(ComplexF64(sech(T(1000, 10))), ComplexF64(-0.0, 0.0))
+        @test isequal(ComplexF64(csch(T(1000, 10))), ComplexF64(-0.0, 0.0))
+        @test isequal(ComplexF64(secd(T(-1000, 100000))), ComplexF64(0.0, 0.0))
+        @test isequal(ComplexF64(cscd(T(-1000, 100000))), ComplexF64(0.0, -0.0))
+    end
+end
+
+# real(C) with C a Complex Unionall
+@test real(Complex{<:AbstractFloat}) == AbstractFloat
+
+# complex with non-concrete eltype
+@test_throws ErrorException complex(Union{Complex{Int}, Nothing}[])
+
+@testset "ispow2 and iseven/isodd" begin
+    @test ispow2(4+0im)
+    @test ispow2(0.25+0im)
+    @test !ispow2(4+5im)
+    @test !ispow2(7+0im)
+    @test iseven(6+0im) && !isodd(6+0im)
+    @test !iseven(7+0im) && isodd(7+0im)
+    @test !iseven(6+1im) && !isodd(7+1im)
 end

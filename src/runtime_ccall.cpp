@@ -3,185 +3,330 @@
 #include "llvm-version.h"
 #include <map>
 #include <string>
-#include <cstdio>
-#include <llvm/Support/Host.h>
-#include "fix_llvm_assert.h"
+#include <llvm/ADT/StringMap.h>
+#include <llvm/Support/raw_ostream.h>
+
 #include "julia.h"
 #include "julia_internal.h"
+#include "processor.h"
+#include "julia_assert.h"
+
+#ifndef _OS_WINDOWS_
+#include <sys/mman.h>
+#if defined(_OS_DARWIN_) && !defined(MAP_ANONYMOUS)
+#define MAP_ANONYMOUS MAP_ANON
+#endif
+#endif
+
 using namespace llvm;
 
 // --- library symbol lookup ---
-
-// map from "libX" to full soname "libX.so.ver"
-#if defined(__linux__) || defined(__FreeBSD__)
-static uv_rwlock_t soname_lock;
-static std::map<std::string, std::string> sonameMap;
-static bool got_sonames = false;
-
-extern "C" void jl_init_runtime_ccall(void)
-{
-    uv_rwlock_init(&soname_lock);
-}
-
-// This reloads the sonames, necessary after system upgrade.
-// Keep this DLLEXPORTed, this is used by `BinDeps.jl` to make sure
-// newly installed libraries can be found.
-extern "C" JL_DLLEXPORT void jl_read_sonames(void)
-{
-    char *line=NULL;
-    size_t sz=0;
-#if defined(__linux__)
-    FILE *ldc = popen("/sbin/ldconfig -p", "r");
-#else
-    FILE *ldc = popen("/sbin/ldconfig -r", "r");
-#endif
-    if (ldc == NULL) return; // ignore errors in running ldconfig (other than whatever might have been printed to stderr)
-
-    // This loop is not allowed to call julia GC while holding the lock
-    uv_rwlock_wrlock(&soname_lock);
-    sonameMap.clear();
-    while (!feof(ldc)) {
-        ssize_t n = getline(&line, &sz, ldc);
-        if (n == -1)
-            break;
-        if (n > 2 && isspace((unsigned char)line[0])) {
-#ifdef __linux__
-            int i = 0;
-            while (isspace((unsigned char)line[++i])) ;
-            char *name = &line[i];
-            char *dot = strstr(name, ".so");
-            i = 0;
-#else
-            char *name = strstr(line, ":-l");
-            if (name == NULL) continue;
-            strncpy(name, "lib", 3);
-            char *dot = strchr(name, '.');
-#endif
-
-            if (NULL == dot)
-                continue;
-
-#ifdef __linux__
-            // Detect if this entry is for the current architecture
-            while (!isspace((unsigned char)dot[++i])) ;
-            while (isspace((unsigned char)dot[++i])) ;
-            int j = i;
-            while (!isspace((unsigned char)dot[++j])) ;
-            char *arch = strstr(dot+i,"x86-64");
-            if (arch != NULL && arch < dot + j) {
-#ifdef _P32
-                continue;
-#endif
-            }
-            else {
-#ifdef _P64
-                continue;
-#endif
-            }
-#endif // __linux__
-
-            char *abslibpath = strrchr(line, ' ');
-            if (dot != NULL && abslibpath != NULL) {
-                std::string pfx(name, dot - name);
-                // Do not include ' ' in front and '\n' at the end
-                std::string soname(abslibpath+1, line+n-(abslibpath+1)-1);
-                sonameMap[pfx] = soname;
-            }
-        }
-    }
-
-    free(line);
-    pclose(ldc);
-    uv_rwlock_wrunlock(&soname_lock);
-}
-
-// This API is not thread safe. The return value can be free'd if
-// `jl_read_sonames()` is called on another thread.
-extern "C" JL_DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n)
-{
-    if (!got_sonames) {
-        jl_read_sonames();
-        got_sonames = true;
-    }
-    const char *res = nullptr;
-    uv_rwlock_rdlock(&soname_lock);
-    auto search = sonameMap.find(std::string(pfx, n));
-    if (search != sonameMap.end())
-        res = search->second.c_str();
-    uv_rwlock_rdunlock(&soname_lock);
-    return res;
-}
-
-extern "C" void *jl_dlopen_soname(const char *pfx, size_t n, unsigned flags)
-{
-    if (!got_sonames) {
-        jl_read_sonames();
-        got_sonames = true;
-    }
-    void *res = nullptr;
-    uv_rwlock_rdlock(&soname_lock);
-    auto search = sonameMap.find(std::string(pfx, n));
-    if (search != sonameMap.end())
-        res = jl_dlopen(search->second.c_str(), flags);
-    uv_rwlock_rdunlock(&soname_lock);
-    return res;
-}
-#else
-extern "C" void jl_init_runtime_ccall(void)
-{
-}
-#endif
 
 // map from user-specified lib names to handles
 static std::map<std::string, void*> libMap;
 static jl_mutex_t libmap_lock;
 extern "C"
-void *jl_get_library(const char *f_lib)
+void *jl_get_library_(const char *f_lib, int throw_err)
 {
-    void *hnd;
-#ifdef _OS_WINDOWS_
-    if (f_lib == JL_EXE_LIBNAME)
-        return jl_exe_handle;
-    if (f_lib == JL_DL_LIBNAME)
-        return jl_dl_handle;
-#endif
     if (f_lib == NULL)
         return jl_RTLD_DEFAULT_handle;
-    JL_LOCK_NOGC(&libmap_lock);
+    if (f_lib == JL_EXE_LIBNAME)
+        return jl_exe_handle;
+    if (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
+        return jl_libjulia_internal_handle;
+    if (f_lib == JL_LIBJULIA_DL_LIBNAME)
+        return jl_libjulia_handle;
+    JL_LOCK(&libmap_lock);
     // This is the only operation we do on the map, which doesn't invalidate
     // any references or iterators.
     void **map_slot = &libMap[f_lib];
-    JL_UNLOCK_NOGC(&libmap_lock);
-    hnd = jl_atomic_load_acquire(map_slot);
-    if (hnd != NULL)
-        return hnd;
-    // We might run this concurrently on two threads but it doesn't matter.
-    hnd = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT);
-    if (hnd != NULL)
-        jl_atomic_store_release(map_slot, hnd);
+    void *hnd = *map_slot;
+    if (hnd == NULL) {
+        hnd = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT, throw_err);
+        if (hnd != NULL)
+            *map_slot = hnd;
+    }
+    JL_UNLOCK(&libmap_lock);
     return hnd;
 }
 
 extern "C" JL_DLLEXPORT
-void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
+void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd)
 {
     void *handle = jl_atomic_load_acquire(hnd);
     if (!handle)
         jl_atomic_store_release(hnd, (handle = jl_get_library(f_lib)));
-    return jl_dlsym(handle, f_name);
+    void * ptr;
+    jl_dlsym(handle, f_name, &ptr, 1);
+    return ptr;
+}
+
+// jl_load_and_lookup, but with library computed at run time on first call
+extern "C" JL_DLLEXPORT
+void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name)
+{
+    void *lib_ptr;
+
+    if (jl_is_symbol(lib_val))
+        lib_ptr = jl_get_library(jl_symbol_name((jl_sym_t*)lib_val));
+    else if (jl_is_string(lib_val))
+        lib_ptr = jl_get_library(jl_string_data(lib_val));
+    else if (jl_libdl_dlopen_func != NULL) {
+        // Call `dlopen(lib_val)`; this is the correct path for the `LazyLibrary` case,
+        // but it also takes any other value, and so we define `dlopen(x::Any) = throw(TypeError(...))`.
+        lib_ptr = jl_unbox_voidpointer(jl_apply_generic(jl_libdl_dlopen_func, &lib_val, 1));
+    } else
+        jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
+    void *ptr;
+    jl_dlsym(lib_ptr, f_name, &ptr, 1);
+    return ptr;
 }
 
 // miscellany
-extern "C" JL_DLLEXPORT
-jl_value_t *jl_get_cpu_name(void)
-{
-    StringRef HostCPUName = llvm::sys::getHostCPUName();
-    return jl_pchar_to_string(HostCPUName.data(), HostCPUName.size());
-}
 
 extern "C" JL_DLLEXPORT
 jl_value_t *jl_get_JIT(void)
 {
     const std::string& HostJITName = "ORCJIT";
     return jl_pchar_to_string(HostJITName.data(), HostJITName.size());
+}
+
+#ifndef MAXHOSTNAMELEN
+# define MAXHOSTNAMELEN 256
+#endif
+
+// Form a file name from a pattern made by replacing tokens,
+// similar to many of those provided by ssh_config TOKENS:
+//
+//           %%    A literal `%'.
+//           %p    The process PID
+//           %d    Local user's home directory.
+//           %i    The local user ID.
+//           %L    The local hostname.
+//           %l    The local hostname, including the domain name.
+//           %u    The local username.
+std::string jl_format_filename(StringRef output_pattern)
+{
+    std::string buf;
+    raw_string_ostream outfile(buf);
+    bool special = false;
+    char hostname[MAXHOSTNAMELEN + 1];
+    uv_passwd_t pwd;
+    bool got_pwd = false;
+    for (auto c : output_pattern) {
+        if (special) {
+            if (!got_pwd && (c == 'i' || c == 'd' || c == 'u')) {
+                int r = uv_os_get_passwd(&pwd);
+                if (r == 0)
+                    got_pwd = true;
+            }
+            switch (c) {
+            case 'p':
+                outfile << uv_os_getpid();
+                break;
+            case 'd':
+                if (got_pwd)
+                    outfile << pwd.homedir;
+                break;
+            case 'i':
+                if (got_pwd)
+                    outfile << pwd.uid;
+                break;
+            case 'l':
+            case 'L':
+                if (gethostname(hostname, sizeof(hostname)) == 0) {
+                    hostname[sizeof(hostname) - 1] = '\0'; /* Null terminate, just to be safe. */
+                    outfile << hostname;
+                }
+#ifndef _OS_WINDOWS_
+                if (c == 'l' && getdomainname(hostname, sizeof(hostname)) == 0) {
+                    hostname[sizeof(hostname) - 1] = '\0'; /* Null terminate, just to be safe. */
+                    outfile << hostname;
+                }
+#endif
+                break;
+            case 'u':
+                if (got_pwd)
+                    outfile << pwd.username;
+                break;
+            default:
+                outfile << c;
+                break;
+            }
+            special = false;
+        }
+        else if (c == '%') {
+            special = true;
+        }
+        else {
+            outfile << c;
+        }
+    }
+    if (got_pwd)
+        uv_os_free_passwd(&pwd);
+    return outfile.str();
+}
+
+extern "C" JL_DLLEXPORT char *jl_format_filename(const char *output_pattern)
+{
+    return strdup(jl_format_filename(StringRef(output_pattern)).c_str());
+}
+
+
+static uv_mutex_t trampoline_lock; // for accesses to the cache and freelist
+
+static void *trampoline_freelist;
+
+static void *trampoline_alloc() JL_NOTSAFEPOINT // lock taken by caller
+{
+    const int sz = 64; // oversized for most platforms. todo: use precise value?
+    if (!trampoline_freelist) {
+        int last_errno = errno;
+#ifdef _OS_WINDOWS_
+        DWORD last_error = GetLastError();
+        void *mem = VirtualAlloc(NULL, jl_page_size,
+                MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        if (mem == NULL)
+            jl_throw(jl_memory_exception);
+        SetLastError(last_error);
+#else
+        void *mem = mmap(0, jl_page_size, PROT_READ | PROT_WRITE | PROT_EXEC,
+                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        errno = last_errno;
+        if (mem == MAP_FAILED)
+            jl_throw(jl_memory_exception);
+#endif
+        errno = last_errno;
+        void *next = NULL;
+        assert(sz < jl_page_size);
+        for (size_t i = 0; i + sz <= jl_page_size; i += sz) {
+            void **curr = (void**)((char*)mem + i);
+            *curr = next;
+            next = (void*)curr;
+        }
+        trampoline_freelist = next;
+    }
+    void *tramp = trampoline_freelist;
+    trampoline_freelist = *(void**)tramp;
+    return tramp;
+}
+
+static void trampoline_free(void *tramp) JL_NOTSAFEPOINT    // lock taken by caller
+{
+    *(void**)tramp = trampoline_freelist;
+    trampoline_freelist = tramp;
+}
+
+static void trampoline_deleter(void **f) JL_NOTSAFEPOINT
+{
+    void *tramp = f[0];
+    void *fobj = f[1];
+    void *cache = f[2];
+    void *nval = f[3];
+    f[0] = NULL;
+    f[2] = NULL;
+    f[3] = NULL;
+    uv_mutex_lock(&trampoline_lock);
+    if (tramp)
+        trampoline_free(tramp);
+    if (fobj && cache)
+        ptrhash_remove((htable_t*)cache, fobj);
+    if (nval)
+        free(nval);
+    uv_mutex_unlock(&trampoline_lock);
+}
+
+typedef void *(*init_trampoline_t)(void *tramp, void **nval) JL_NOTSAFEPOINT;
+
+// Use of `cache` is not clobbered in JL_TRY
+JL_GCC_IGNORE_START("-Wclobbered")
+extern "C" JL_DLLEXPORT
+jl_value_t *jl_get_cfunction_trampoline(
+    // dynamic inputs:
+    jl_value_t *fobj,
+    jl_datatype_t *result_type,
+    // call-site constants:
+    htable_t *cache, // weakref htable indexed by (fobj, vals)
+    jl_svec_t *fill,
+    init_trampoline_t init_trampoline,
+    jl_unionall_t *env,
+    jl_value_t **vals)
+{
+    // lookup (fobj, vals) in cache
+    uv_mutex_lock(&trampoline_lock);
+    if (!cache->table)
+        htable_new(cache, 1);
+    if (fill != jl_emptysvec) {
+        htable_t **cache2 = (htable_t**)ptrhash_bp(cache, (void*)vals);
+        cache = *cache2;
+        if (cache == HT_NOTFOUND) {
+            cache = htable_new((htable_t*)malloc_s(sizeof(htable_t)), 1);
+            *cache2 = cache;
+        }
+    }
+    void *tramp = ptrhash_get(cache, (void*)fobj);
+    uv_mutex_unlock(&trampoline_lock);
+    if (tramp != HT_NOTFOUND) {
+        assert((jl_datatype_t*)jl_typeof(tramp) == result_type);
+        return (jl_value_t*)tramp;
+    }
+
+    // not found, allocate a new one
+    size_t n = jl_svec_len(fill);
+    void **nval = (void**)malloc_s(sizeof(void*) * (n + 1));
+    nval[0] = (void*)fobj;
+    jl_value_t *result;
+    JL_TRY {
+        for (size_t i = 0; i < n; i++) {
+            jl_value_t *sparam_val = jl_instantiate_type_in_env(jl_svecref(fill, i), env, vals);
+            if (sparam_val != (jl_value_t*)jl_any_type)
+                if (!jl_is_concrete_type(sparam_val) || !jl_is_immutable(sparam_val))
+                    sparam_val = NULL;
+            nval[i + 1] = (void*)sparam_val;
+        }
+        int permanent =
+            (result_type == jl_voidpointer_type) ||
+            jl_is_concrete_type(fobj) ||
+            (((jl_datatype_t*)jl_typeof(fobj))->instance == fobj);
+        if (jl_is_unionall(fobj)) {
+            jl_value_t *uw = jl_unwrap_unionall(fobj);
+            if (jl_is_datatype(uw) && ((jl_datatype_t*)uw)->name->wrapper == fobj)
+                permanent = true;
+        }
+        if (permanent) {
+            result = jl_gc_permobj(sizeof(jl_taggedvalue_t) + jl_datatype_size(result_type), result_type);
+            memset(result, 0, jl_datatype_size(result_type));
+        }
+        else {
+            result = jl_new_struct_uninit(result_type);
+        }
+        if (result_type != jl_voidpointer_type) {
+            assert(jl_datatype_size(result_type) == sizeof(void*) * 4);
+            ((void**)result)[1] = (void*)fobj;
+        }
+        if (!permanent) {
+            jl_task_t *ct = jl_current_task;
+            jl_gc_add_ptr_finalizer(ct->ptls, result, (void*)(uintptr_t)&trampoline_deleter);
+            ((void**)result)[2] = (void*)cache;
+            ((void**)result)[3] = (void*)nval;
+        }
+    }
+    JL_CATCH {
+        free(nval);
+        jl_rethrow();
+    }
+    uv_mutex_lock(&trampoline_lock);
+    tramp = trampoline_alloc();
+    ((void**)result)[0] = tramp;
+    init_trampoline(tramp, nval);
+    ptrhash_put(cache, (void*)fobj, result);
+    uv_mutex_unlock(&trampoline_lock);
+    return result;
+}
+JL_GCC_IGNORE_STOP
+
+void jl_init_runtime_ccall(void)
+{
+    JL_MUTEX_INIT(&libmap_lock, "libmap_lock");
+    uv_mutex_init(&trampoline_lock);
 }

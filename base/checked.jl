@@ -2,18 +2,26 @@
 
 # Support for checked integer arithmetic
 
+"""
+    Checked
+
+The Checked module provides arithmetic functions for the built-in signed and unsigned
+Integer types which throw an error when an overflow occurs. They are named like `checked_sub`,
+`checked_div`, etc. In addition, `add_with_overflow`, `sub_with_overflow`, `mul_with_overflow`
+return both the unchecked results and a boolean value denoting the presence of an overflow.
+"""
 module Checked
 
 export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
-       checked_div, checked_rem, checked_fld, checked_mod, checked_cld,
-       add_with_overflow, sub_with_overflow, mul_with_overflow
+       checked_div, checked_rem, checked_fld, checked_mod, checked_cld, checked_pow,
+       checked_length, add_with_overflow, sub_with_overflow, mul_with_overflow
 
 import Core.Intrinsics:
        checked_sadd_int, checked_ssub_int, checked_smul_int, checked_sdiv_int,
        checked_srem_int,
        checked_uadd_int, checked_usub_int, checked_umul_int, checked_udiv_int,
        checked_urem_int
-import Base: no_op_err, @_inline_meta
+import ..no_op_err, ..@inline, ..@noinline, ..checked_length
 
 # define promotion behavior for checked operations
 checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
@@ -34,12 +42,12 @@ const UnsignedInt = Union{UInt8,UInt16,UInt32,UInt64,UInt128}
 
 # LLVM has several code generation bugs for checked integer arithmetic (see e.g.
 # #4905). We thus distinguish between operations that can be implemented via
-# intrinsics, and operations for which we have to provide work-arounds.
+# intrinsics, and operations for which we have to provide workarounds.
 
 # Note: As far as this code has been tested, most checked_* functions are
 # working fine in LLVM. (Note that division is still handled via `base/int.jl`,
 # which always checks for overflow, and which provides its own sets of
-# work-arounds for LLVM codegen bugs.) However, the comments in `base/int.jl`
+# workarounds for LLVM codegen bugs.) However, the comments in `base/int.jl`
 # and in issue #4905 are more pessimistic. For the time being, we thus retain
 # the ability to handle codegen bugs in LLVM, until the code here has been
 # tested on more systems and architectures. It also seems that things depend on
@@ -60,13 +68,9 @@ brokenSignedInt = Union{}
 brokenUnsignedInt = Union{}
 brokenSignedIntMul = Int128
 brokenUnsignedIntMul = UInt128
-if Core.sizeof(Ptr{Void}) == 4
+if Core.sizeof(Ptr{Cvoid}) == 4
     brokenSignedIntMul = Union{brokenSignedIntMul, Int64}
     brokenUnsignedIntMul = Union{brokenUnsignedIntMul, UInt64}
-end
-if llvm_version < 30500
-    brokenSignedIntMul = Union{brokenSignedIntMul, Int8}
-    brokenUnsignedIntMul = Union{brokenUnsignedIntMul, UInt8}
 end
 const BrokenSignedInt = brokenSignedInt
 const BrokenUnsignedInt = brokenUnsignedInt
@@ -90,16 +94,18 @@ The overflow protection may impose a perceptible performance penalty.
 function checked_neg(x::T) where T<:Integer
     checked_sub(T(0), x)
 end
+throw_overflowerr_negation(x) = (@noinline;
+    throw(OverflowError(Base.invokelatest(string, "checked arithmetic: cannot compute -x for x = ", x, "::", typeof(x)))))
 if BrokenSignedInt != Union{}
 function checked_neg(x::BrokenSignedInt)
     r = -x
-    (x<0) & (r<0) && throw(OverflowError())
+    (x<0) & (r<0) && throw_overflowerr_negation(x)
     r
 end
 end
 if BrokenUnsignedInt != Union{}
 function checked_neg(x::T) where T<:BrokenUnsignedInt
-    x != 0 && throw(OverflowError())
+    x != 0 && throw_overflowerr_negation(x)
     T(0)
 end
 end
@@ -117,9 +123,10 @@ function checked_abs end
 
 function checked_abs(x::SignedInt)
     r = ifelse(x<0, -x, x)
-    r<0 && throw(OverflowError())
-    r
- end
+    r<0 || return r
+    msg = LazyString("checked arithmetic: cannot compute |x| for x = ", x, "::", typeof(x))
+    throw(OverflowError(msg))
+end
 checked_abs(x::UnsignedInt) = x
 checked_abs(x::Bool) = x
 
@@ -152,6 +159,9 @@ end
 end
 
 
+throw_overflowerr_binaryop(op, x, y) = (@noinline;
+    throw(OverflowError(LazyString(x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
+
 """
     Base.checked_add(x, y)
 
@@ -160,9 +170,9 @@ Calculates `x+y`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 function checked_add(x::T, y::T) where T<:Integer
-    @_inline_meta
+    @inline
     z, b = add_with_overflow(x, y)
-    b && throw(OverflowError())
+    b && throw_overflowerr_binaryop(:+, x, y)
     z
 end
 
@@ -217,9 +227,9 @@ Calculates `x-y`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 function checked_sub(x::T, y::T) where T<:Integer
-    @_inline_meta
+    @inline
     z, b = sub_with_overflow(x, y)
-    b && throw(OverflowError())
+    b && throw_overflowerr_binaryop(:-, x, y)
     z
 end
 
@@ -282,9 +292,9 @@ Calculates `x*y`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 function checked_mul(x::T, y::T) where T<:Integer
-    @_inline_meta
+    @inline
     z, b = mul_with_overflow(x, y)
-    b && throw(OverflowError())
+    b && throw_overflowerr_binaryop(:*, x, y)
     z
 end
 
@@ -347,5 +357,26 @@ Calculates `cld(x,y)`, checking for overflow errors where applicable.
 The overflow protection may impose a perceptible performance penalty.
 """
 checked_cld(x::T, y::T) where {T<:Integer} = cld(x, y) # Base.cld already checks
+
+"""
+    Base.checked_pow(x, y)
+
+Calculates `^(x,y)`, checking for overflow errors where applicable.
+
+The overflow protection may impose a perceptible performance penalty.
+"""
+checked_pow(x::Integer, y::Integer) = checked_power_by_squaring(x, y)
+
+checked_power_by_squaring(x_, p::Integer) = Base.power_by_squaring(x_, p; mul = checked_mul)
+# For Booleans, the default implementation covers all cases.
+checked_power_by_squaring(x::Bool, p::Integer) = Base.power_by_squaring(x, p)
+
+"""
+    Base.checked_length(r)
+
+Calculates `length(r)`, but may check for overflow errors where applicable when
+the result doesn't fit into `Union{Integer(eltype(r)),Int}`.
+"""
+checked_length(r) = length(r) # for most things, length doesn't error
 
 end

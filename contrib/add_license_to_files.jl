@@ -15,27 +15,29 @@ const print_result = true  # prints files which where not processed.
 
 const rootdirs = [
     "../base",
+    "../cli",
     "../contrib",
-    "../examples",
     "../src",
-    "../test",
+    "../stdlib",
 ]
 
-# to exculde whole sub directories
+# to exclude whole sub directories
 const excludedirs = [
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98090053
-    "../base/grisu",
+    "../base/ryu",
     "../src/flisp",
+    "../stdlib/TOML/test/testfiles",
+    "../test/testhelpers/allocation_file.jl",
 ]
 
 const skipfiles = [
     "../contrib/add_license_to_files.jl",
-    "../contrib/windows/juliarc.jl",
+    "../contrib/asan/check.jl",
     # files to check - already copyright
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
     "../base/special/trig.jl",
     "../base/special/exp.jl",
-    "../base/linalg/givens.jl",
+    "../base/special/rem_pio2.jl",
     #
     "../src/abi_llvm.cpp",
     "../src/abi_ppc64le.cpp",
@@ -44,11 +46,10 @@ const skipfiles = [
     "../src/abi_x86.cpp",
     "../src/abi_x86_64.cpp",
     "../src/disasm.cpp",
-    "../src/getopt.c",
-    "../src/getopt.h",
     "../src/support/END.h",
     "../src/support/ENTRY.amd64.h",
     "../src/support/ENTRY.i387.h",
+    "../src/support/_setjmp.win32.S",
     "../src/support/MurmurHash3.c",
     "../src/support/MurmurHash3.h",
     "../src/support/asprintf.c",
@@ -57,17 +58,17 @@ const skipfiles = [
     "../src/support/strtod.c",
     "../src/support/tzfile.h",
     "../src/support/utf8.c",
-    "../test/perf/micro/randmtzig.c",
     "../src/crc32c.c",
-    "../examples/quine.jl", # has license text in code
+    "../src/mach_excUser.c",
 ]
 
 const ext_prefix = Dict([
-(".jl", "# "),
-(".sh", "# "),
-(".h", "\/\/ "),
-(".c", "\/\/ "),
-(".cpp", "\/\/ "),
+    (".jl", "# "),
+    (".sh", "# "),
+    (".h", "// "),
+    (".c", "// "),
+    (".cpp", "// "),
+    (".S", "// "),
 ])
 
 const new_license = "This file is a part of Julia. License is MIT: https://julialang.org/license"
@@ -84,7 +85,7 @@ function check_lines!(
     remove = []
     for i in 1:length(lines)
         line = lines[i]
-        if contains(line, checktxt)
+        if occursin(checktxt, line)
             if strip(line) == strip(prefix * checktxt) || strip(line) == strip(checktxt)
                 push!(remove, i)
             else
@@ -106,6 +107,7 @@ function getfilespaths!(filepaths::Vector, rootdir::AbstractString)
     abs_rootdir = abspath(rootdir)
     for name in readdir(abs_rootdir)
         path = joinpath(abs_rootdir, name)
+        islink(path) && continue
         if isdir(path)
             getfilespaths!(filepaths, path)
         else
@@ -120,6 +122,7 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
 
     for name in readdir(src)
         path = normpath(joinpath(src, name))
+        islink(path) && continue
         if isdir(path)
             if path in abs_excludedirs
                 getfilespaths!(unprocessed, path)
@@ -136,11 +139,12 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
             if ext in keys(ext_prefix)
                 prefix = ext_prefix[ext]
                 f = open(path, "r")
-                lines = readlines(f, chomp=false)
+                lines = readlines(f, keep=true)
                 close(f)
                 isempty(lines) && (push!(unprocessed, path); continue)
                 isempty(old_license) || check_lines!(path, lines, old_license, prefix, true)
                 check_lines!(path, lines, new_license, prefix, false)
+                isempty(lines) && continue  # file consisting of just license header
                 # check shebang file
                 linenum = license_linenum(lines[1])
                 if !isempty(strip(lines[linenum]))
@@ -165,7 +169,7 @@ end
 function abspaths(A::Vector)
     abs_A = []
     for p in A
-        abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(dirname(@__FILE__), p))
+        abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(@__DIR__, p))
         ispath(abs_p) || error(string("`abs_p` seems not to be an existing path. ",
                                       "Adjust your configuration: <", p, "> : ", abs_p, "\n"))
         push!(abs_A, abs_p)

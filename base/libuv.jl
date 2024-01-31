@@ -2,134 +2,165 @@
 
 # Core definitions for interacting with the libuv library from Julia
 
-include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
 
 # convert UV handle data to julia object, checking for null
 function uv_sizeof_handle(handle)
     if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)
-        throw(DomainError())
+        throw(DomainError(handle))
     end
-    ccall(:uv_handle_size,Csize_t,(Int32,),handle)
+    return ccall(:uv_handle_size, Csize_t, (Int32,), handle)
 end
 
 function uv_sizeof_req(req)
     if !(UV_UNKNOWN_REQ < req < UV_REQ_TYPE_MAX)
-        throw(DomainError())
+        throw(DomainError(req))
     end
-    ccall(:uv_req_size,Csize_t,(Int32,),req)
+    return ccall(:uv_req_size, Csize_t, (Int32,), req)
 end
 
 for h in uv_handle_types
-@eval const $(Symbol("_sizeof_",lowercase(string(h)))) = uv_sizeof_handle($h)
+@eval const $(Symbol("_sizeof_", lowercase(string(h)))) = uv_sizeof_handle($h)
 end
 for r in uv_req_types
-@eval const $(Symbol("_sizeof_",lowercase(string(r)))) = uv_sizeof_req($r)
+@eval const $(Symbol("_sizeof_", lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
-uv_handle_data(handle) = ccall(:jl_uv_handle_data,Ptr{Void},(Ptr{Void},),handle)
-uv_req_data(handle) = ccall(:jl_uv_req_data,Ptr{Void},(Ptr{Void},),handle)
-uv_req_set_data(req,data) = ccall(:jl_uv_req_set_data,Void,(Ptr{Void},Any),req,data)
-uv_req_set_data(req,data::Ptr{Void}) = ccall(:jl_uv_req_set_data,Void,(Ptr{Void},Ptr{Void}),req,data)
+uv_handle_data(handle) = ccall(:jl_uv_handle_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
+uv_req_data(handle) = ccall(:jl_uv_req_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
+uv_req_set_data(req, data) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Any), req, data)
+uv_req_set_data(req, data::Ptr{Cvoid}) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), req, data)
 
 macro handle_as(hand, typ)
-    quote
-        data = uv_handle_data($(esc(hand)))
+    return quote
+        local data = uv_handle_data($(esc(hand)))
         data == C_NULL && return
         unsafe_pointer_to_objref(data)::($(esc(typ)))
     end
 end
 
-associate_julia_struct(handle::Ptr{Void}, jlobj::ANY) =
-    ccall(:jl_uv_associate_julia_struct, Void, (Ptr{Void}, Any), handle, jlobj)
+associate_julia_struct(handle::Ptr{Cvoid}, @nospecialize(jlobj)) =
+    ccall(:jl_uv_associate_julia_struct, Cvoid, (Ptr{Cvoid}, Any), handle, jlobj)
 disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
-disassociate_julia_struct(handle::Ptr{Void}) =
-    handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct, Void, (Ptr{Void},), handle)
+disassociate_julia_struct(handle::Ptr{Cvoid}) =
+    handle != C_NULL && ccall(:jl_uv_disassociate_julia_struct, Cvoid, (Ptr{Cvoid},), handle)
+
+iolock_begin() = ccall(:jl_iolock_begin, Cvoid, ())
+iolock_end() = ccall(:jl_iolock_end, Cvoid, ())
 
 # A dict of all libuv handles that are being waited on somewhere in the system
 # and should thus not be garbage collected
-const uvhandles = ObjectIdDict()
-preserve_handle(x) = uvhandles[x] = get(uvhandles,x,0)::Int+1
-unpreserve_handle(x) = (v = uvhandles[x]::Int; v == 1 ? pop!(uvhandles,x) : (uvhandles[x] = v-1); nothing)
+const uvhandles = IdDict()
+const preserve_handle_lock = Threads.SpinLock()
+function preserve_handle(x)
+    lock(preserve_handle_lock)
+    v = get(uvhandles, x, 0)::Int
+    uvhandles[x] = v + 1
+    unlock(preserve_handle_lock)
+    nothing
+end
+function unpreserve_handle(x)
+    lock(preserve_handle_lock)
+    v = get(uvhandles, x, 0)::Int
+    if v == 0
+        unlock(preserve_handle_lock)
+        error("unbalanced call to unpreserve_handle for $(typeof(x))")
+    elseif v == 1
+        pop!(uvhandles, x)
+    else
+        uvhandles[x] = v - 1
+    end
+    unlock(preserve_handle_lock)
+    nothing
+end
 
 ## Libuv error handling ##
 
-mutable struct UVError <: Exception
-    prefix::AbstractString
+struct IOError <: Exception
+    msg::String
     code::Int32
-    UVError(p::AbstractString,code::Integer)=new(p,code)
+    IOError(msg::AbstractString, code::Integer) = new(msg, code)
 end
 
-struverror(err::Int32) = unsafe_string(ccall(:uv_strerror,Cstring,(Int32,),err))
-struverror(err::UVError) = struverror(err.code)
-uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name,Cstring,(Int32,),err))
-uverrorname(err::UVError) = uverrorname(err.code)
+showerror(io::IO, e::IOError) = print(io, "IOError: ", e.msg)
 
-uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix),c)
-uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(UVError(prefix,c)) : nothing
-
-function showerror(io::IO, e::UVError)
-    print(io, e.msg, ": ", struverror(e.code), " (", uverrorname(e.code), ")")
-    if e.code == UV_ENOENT && '~' in e.msg
-        print(io, "\nMany shells expand '~' to the home directory in",
-              " unquoted strings. To replicate this behavior, call",
-              " `expanduser` to expand the '~' character to the user’s",
-              " home directory.")
-    end
+function _UVError(pfx::AbstractString, code::Integer)
+    code = Int32(code)
+    IOError(string(pfx, ": ", struverror(code), " (", uverrorname(code), ")"), code)
 end
+function _UVError(pfx::AbstractString, code::Integer, sfxs::AbstractString...)
+    code = Int32(code)
+    IOError(string(pfx, ": ", struverror(code), " (", uverrorname(code), ")", " ", sfxs...), code)
+end
+
+struverror(err::Int32) = unsafe_string(ccall(:uv_strerror, Cstring, (Int32,), err))
+uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name, Cstring, (Int32,), err))
+
+uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix), c)
+uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix, c)) : nothing
 
 ## event loop ##
 
-eventloop() = uv_eventloop::Ptr{Void}
-#mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},()) # this would probably be fine, but is nowhere supported
+eventloop() = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
 
-function run_event_loop()
-    ccall(:jl_run_event_loop,Void,(Ptr{Void},),eventloop())
+function uv_unref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_unref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
 end
-function process_events(block::Bool)
-    loop = eventloop()
-    if block
-        return ccall(:jl_run_once,Int32,(Ptr{Void},),loop)
-    else
-        return ccall(:jl_process_events,Int32,(Ptr{Void},),loop)
-    end
+
+function uv_ref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_ref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
 end
+
+function process_events()
+    return ccall(:jl_process_events, Int32, ())
+end
+
+function uv_alloc_buf end
+function uv_readcb end
+function uv_writecb_task end
+function uv_shutdowncb_task end
+function uv_return_spawn end
+function uv_asynccb end
+function uv_timercb end
 
 function reinit_stdio()
-    global uv_jl_alloc_buf     = cfunction(uv_alloc_buf, Void, (Ptr{Void}, Csize_t, Ptr{Void}))
-    global uv_jl_readcb        = cfunction(uv_readcb, Void, (Ptr{Void}, Cssize_t, Ptr{Void}))
-    global uv_jl_connectioncb  = cfunction(uv_connectioncb, Void, (Ptr{Void}, Cint))
-    global uv_jl_connectcb     = cfunction(uv_connectcb, Void, (Ptr{Void}, Cint))
-    global uv_jl_writecb_task  = cfunction(uv_writecb_task, Void, (Ptr{Void}, Cint))
-    global uv_jl_getaddrinfocb = cfunction(uv_getaddrinfocb, Void, (Ptr{Void},Cint,Ptr{Void}))
-    global uv_jl_recvcb        = cfunction(uv_recvcb, Void, (Ptr{Void}, Cssize_t, Ptr{Void}, Ptr{Void}, Cuint))
-    global uv_jl_sendcb        = cfunction(uv_sendcb, Void, (Ptr{Void}, Cint))
-    global uv_jl_return_spawn  = cfunction(uv_return_spawn, Void, (Ptr{Void}, Int64, Int32))
-    global uv_jl_asynccb       = cfunction(uv_asynccb, Void, (Ptr{Void},))
-    global uv_jl_timercb       = cfunction(uv_timercb, Void, (Ptr{Void},))
-
-    global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
-    global STDIN = init_stdio(ccall(:jl_stdin_stream, Ptr{Void}, ()))
-    global STDOUT = init_stdio(ccall(:jl_stdout_stream, Ptr{Void}, ()))
-    global STDERR = init_stdio(ccall(:jl_stderr_stream, Ptr{Void}, ()))
+    global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))
+    global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
+    global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
+    opts = JLOptions()
+    if opts.color != 0
+        have_color = (opts.color == 1)
+        if !isa(stdout, TTY)
+            global stdout = IOContext(stdout, :color => have_color)
+        end
+        if !isa(stderr, TTY)
+            global stderr = IOContext(stderr, :color => have_color)
+        end
+    end
+    nothing
 end
 
 """
-    STDIN
+    stdin::IO
 
 Global variable referring to the standard input stream.
 """
-:STDIN
+:stdin
 
 """
-    STDOUT
+    stdout::IO
 
 Global variable referring to the standard out stream.
 """
-:STDOUT
+:stdout
 
 """
-    STDERR
+    stderr::IO
 
 Global variable referring to the standard error stream.
 """
-:STDERR
+:stderr

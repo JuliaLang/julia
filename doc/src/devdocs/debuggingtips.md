@@ -1,4 +1,4 @@
-# gdb debugging tips
+# [gdb debugging tips](@id gdb-debugging-tips)
 
 ## Displaying Julia variables
 
@@ -11,11 +11,11 @@ Within `gdb`, any `jl_value_t*` object `obj` can be displayed using
 The object will be displayed in the `julia` session, not in the gdb session. This is a useful
 way to discover the types and values of objects being manipulated by Julia's C code.
 
-Similarly, if you're debugging some of Julia's internals (e.g., `inference.jl`), you can print
+Similarly, if you're debugging some of Julia's internals (e.g., `compiler.jl`), you can print
 `obj` using
 
 ```julia
-ccall(:jl_, Void, (Any,), obj)
+ccall(:jl_, Cvoid, (Any,), obj)
 ```
 
 This is a good way to circumvent problems that arise from the order in which julia's output streams
@@ -25,7 +25,7 @@ Julia's flisp interpreter uses `value_t` objects; these can be displayed with `c
 
 ## Useful Julia variables for Inspecting
 
-While the addresses of many variables, like singletons, can be be useful to print for many failures,
+While the addresses of many variables, like singletons, can be useful to print for many failures,
 there are a number of additional variables (see `julia.h` for a complete list) that are even more
 useful.
 
@@ -41,11 +41,16 @@ useful.
 
 ## Useful Julia functions for Inspecting those variables
 
-  * `jl_gdblookup($rip)` :: For looking up the current function and line. (use `$eip` on i686 platforms)
+  * `jl_print_task_backtraces(0)` :: Similar to gdb's `thread apply all bt` or lldb's `thread backtrace
+    all`. Runs all threads while printing backtraces for all existing tasks.
+  * `jl_gdblookup($pc)` :: For looking up the current function and line.
+  * `jl_gdblookupinfo($pc)` :: For looking up the current method instance object.
+  * `jl_gdbdumpcode(mi)` :: For dumping all of `code_typed/code_llvm/code_asm` when the REPL is not working right.
   * `jlbacktrace()` :: For dumping the current Julia backtrace stack to stderr. Only usable after
     `record_backtrace()` has been called.
   * `jl_dump_llvm_value(Value*)` :: For invoking `Value->dump()` in gdb, where it doesn't work natively.
     For example, `f->linfo->functionObject`, `f->linfo->specFunctionObject`, and `to_function(f->linfo)`.
+  * `jl_dump_llvm_module(Module*)` :: For invoking `Module->dump()` in gdb, where it doesn't work natively.
   * `Type->dump()` :: only works in lldb. Note: add something like `;1` to prevent lldb from printing
     its prompt over the output
   * `jl_eval_string("expr")` :: for invoking side-effects to modify the current state or to lookup
@@ -64,7 +69,7 @@ In your `gdb` session, set a breakpoint in `jl_breakpoint` like so:
 Then within your Julia code, insert a call to `jl_breakpoint` by adding
 
 ```julia
-ccall(:jl_breakpoint, Void, (Any,), obj)
+ccall(:jl_breakpoint, Cvoid, (Any,), obj)
 ```
 
 where `obj` can be any variable or tuple you want to be accessible in the breakpoint.
@@ -107,11 +112,11 @@ Since this function is used for every call, you will make everything 1000x slowe
 
 ## Dealing with signals
 
-Julia requires a few signal to function property. The profiler uses `SIGUSR2` for sampling and
+Julia requires a few signals to function properly. The profiler uses `SIGUSR2` for sampling and
 the garbage collector uses `SIGSEGV` for threads synchronization. If you are debugging some code
 that uses the profiler or multiple threads, you may want to let the debugger ignore these signals
 since they can be triggered very often during normal operations. The command to do this in GDB
-is (replace `SIGSEGV` with `SIGUSRS` or other signals you want to ignore):
+is (replace `SIGSEGV` with `SIGUSR2` or other signals you want to ignore):
 
 ```
 (gdb) handle SIGSEGV noprint nostop pass
@@ -234,9 +239,16 @@ process)
 
 ## Mozilla's Record and Replay Framework (rr)
 
-Julia now works out of the box with [rr](http://rr-project.org/), the lightweight recording and
+Julia now works out of the box with [rr](https://rr-project.org/), the lightweight recording and
 deterministic debugging framework from Mozilla. This allows you to replay the trace of an execution
 deterministically.  The replayed execution's address spaces, register contents, syscall data etc
 are exactly the same in every run.
 
 A recent version of rr (3.1.0 or higher) is required.
+
+### Reproducing concurrency bugs with rr
+
+rr simulates a single-threaded machine by default. In order to debug concurrent
+code you can use `rr record --chaos` which will cause rr to simulate between
+one to eight cores, chosen randomly. You might therefore want to set `JULIA_NUM_THREADS=8`
+and rerun your code under rr until you have caught your bug.

@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random
+using InteractiveUtils: code_llvm, code_native
+
 @generated function staged_t1(a,b)
     if a == Int
         return :(a+b)
@@ -29,7 +32,7 @@ stagediobuf = IOBuffer()
     :(nothing)
 end
 
-const intstr = @sprintf("%s", Int)
+const intstr = string(Int)
 splat2(1)
 @test String(take!(stagediobuf)) == "($intstr,)"
 splat2(1, 3)
@@ -39,7 +42,7 @@ splat2(5, 2)
 splat2(1:3, 5.2)
 @test String(take!(stagediobuf)) == "(UnitRange{$intstr}, Float64)"
 splat2(3, 5:2:7)
-@test String(take!(stagediobuf)) == "($intstr, StepRange{$intstr,$intstr})"
+@test String(take!(stagediobuf)) == "($intstr, StepRange{$intstr, $intstr})"
 splat2(1, 2, 3, 4)
 @test String(take!(stagediobuf)) == "($intstr, $intstr, $intstr, $intstr)"
 splat2(1, 2, 3)
@@ -56,7 +59,7 @@ splat2(3, 3:5)
 @test String(take!(stagediobuf)) == "($intstr, UnitRange{$intstr})"
 
 # varargs specialization with parametric @generated functions (issue #8944)
-@generated function splat3{T,N}(A::AbstractArray{T,N}, indx::RangeIndex...)
+@generated function splat3(A::AbstractArray{T,N}, indx::Base.RangeIndex...) where {T,N}
     print(stagediobuf, indx)
     :(nothing)
 end
@@ -67,20 +70,20 @@ splat3(A, 1:2, 1, 1:2)
 @test String(take!(stagediobuf)) == "(UnitRange{$intstr}, $intstr, UnitRange{$intstr})"
 
 B = view(A, 1:3, 2, 1:3)
-@generated function mygetindex(S::SubArray, indexes::Real...)
+@generated function mygetindex(S::SubArray, indices::Real...)
     T, N, A, I = S.parameters
-    if N != length(indexes)
-        error("Wrong number of indexes supplied")
+    if N != length(indices)
+        error("Wrong number of indices supplied")
     end
     Ip = I.parameters
     NP = length(Ip)
-    indexexprs = Array{Expr}(NP)
+    indexexprs = Vector{Expr}(undef, NP)
     j = 1
     for i = 1:NP
         if Ip[i] == Int
-            indexexprs[i] = :(S.indexes[$i])
+            indexexprs[i] = :(S.indices[$i])
         else
-            indexexprs[i] = :(S.indexes[$i][indexes[$j]])
+            indexexprs[i] = :(S.indices[$i][indices[$j]])
             j += 1
         end
     end
@@ -101,10 +104,10 @@ end
 @test MyTest8497.h(3) == 4
 
 # static parameters (issue #8505)
-@generated function foo1{N,T}(a::Array{T,N})
+@generated function foo1(a::Array{T,N}) where {N,T}
     "N = $N, T = $T"
 end
-@generated function foo2{T,N}(a::Array{T,N})
+@generated function foo2(a::Array{T,N}) where {T,N}
     "N = $N, T = $T"
 end
 @test foo1(randn(3,3)) == "N = 2, T = Float64"
@@ -138,18 +141,22 @@ end
 
 # @generated functions that throw (shouldn't segfault or throw)
 module TestGeneratedThrow
-    using Base.Test
+    using Test, Random
 
     @generated function bar(x)
         error("I'm not happy with type $x")
     end
 
     foo() = (bar(rand() > 0.5 ? 1 : 1.0); error("foo"))
+    inited = false
     function __init__()
-        code_typed(foo,(); optimize = false)
-        cfunction(foo,Void,())
+        code_typed(foo, (); optimize = false)
+        @cfunction(foo, Cvoid, ())
+        global inited = true
     end
+    inited = false
 end
+@test TestGeneratedThrow.inited
 
 # @generated functions including inner functions
 @generated function _g_f_with_inner(x)
@@ -163,7 +170,7 @@ end
 @test _g_f_with_inner2(1)(2) == 2
 
 # @generated functions errors
-global gf_err_ref = Ref{Int}()
+const gf_err_ref = Ref{Int}()
 
 gf_err_ref[] = 0
 let gf_err, tsk = @async nothing # create a Task for yield to try to run
@@ -172,26 +179,28 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
         yield()
         gf_err_ref[] += 1000
     end
-    @test_throws ErrorException gf_err()
-    @test_throws ErrorException gf_err()
-    @test gf_err_ref[] == 4
+    Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
+    @test_throws Expected gf_err()
+    @test_throws Expected gf_err()
+    @test gf_err_ref[] < 1000
 end
 
 gf_err_ref[] = 0
 let gf_err2
-    @generated function gf_err2{f}(::f)
+    @generated function gf_err2(::f) where {f}
         gf_err_ref[] += 1
         reflect = f.instance
-        gf_err_ref[] += 1
-        reflect(+, (Int,Int))
+        gf_err_ref[] += 10
+        reflect(+, (Int, Int))
         gf_err_ref[] += 1000
         return nothing
     end
-    @test_throws ErrorException gf_err2(code_typed)
-    @test_throws ErrorException gf_err2(code_llvm)
-    @test_throws ErrorException gf_err2(code_native)
-    @test gf_err_ref[] == 12
-    @test gf_err2(code_lowered) === nothing
+    Expected = ErrorException("code reflection cannot be used from generated functions")
+    @test_throws Expected gf_err2(code_lowered)
+    @test_throws Expected gf_err2(code_typed)
+    @test_throws Expected gf_err2(code_llvm)
+    @test_throws Expected gf_err2(code_native)
+    @test gf_err_ref[] == 88
 end
 
 # issue #15043
@@ -228,3 +237,141 @@ g10178(x) = f10178(x)
 # issue #22135
 @generated f22135(x::T) where T = x
 @test f22135(1) === Int
+
+# PR #22440
+
+f22440kernel(x...) = x[1] + x[1]
+f22440kernel(x::AbstractFloat) = x * x
+f22440kernel(::Type{T}) where {T} = one(T)
+f22440kernel(::Type{T}) where {T<:AbstractFloat} = zero(T)
+
+function f22440_gen(world::UInt, source, _, y)
+    match = only(Base._methods_by_ftype(Tuple{typeof(f22440kernel),y}, -1, world))
+    code_info = Base.uncompressed_ir(match.method)
+    Meta.partially_inline!(code_info.code, Any[], match.spec_types, Any[match.sparams...], 0, 0, :propagate)
+    # TODO: this is mandatory: code_info.min_world = max(code_info.min_world, min_world[])
+    # TODO: this is mandatory: code_info.max_world = min(code_info.max_world, max_world[])
+    return code_info
+end
+@eval function f22440(y)
+    $(Expr(:meta, :generated, f22440_gen))
+    $(Expr(:meta, :generated_only))
+end
+
+@test f22440(Int) === f22440kernel(Int)
+@test f22440(Float64) === f22440kernel(Float64)
+@test f22440(Float32) === f22440kernel(Float32)
+@test f22440(0.0) === f22440kernel(0.0)
+@test f22440(0.0f0) === f22440kernel(0.0f0)
+@test f22440(0) === f22440kernel(0)
+
+# PR #23168
+
+function f23168(a, x)
+    push!(a, 1)
+    if @generated
+        :(y = x + x)
+    else
+        y = 2x
+    end
+    push!(a, y)
+    if @generated
+        :(y = (y, $x))
+    else
+        y = (y, typeof(x))
+    end
+    push!(a, 3)
+    return y
+end
+
+let a = Any[]
+    @test f23168(a, 3) == (6, Int)
+    @test a == [1, 6, 3]
+    @test occursin(" + ", string(code_lowered(f23168, (Vector{Any},Int))))
+    @test occursin("2 * ", string(Base.uncompressed_ir(first(methods(f23168)))))
+    @test occursin("2 * ", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
+    @test occursin("Base.add_int", string(code_typed(f23168, (Vector{Any},Int))))
+end
+
+# issue #18747
+@test_throws ErrorException eval(:(f(x) = @generated g() = x))
+
+@generated function f30284(x)
+    quote
+        local x
+    end
+end
+
+@test_throws ErrorException("syntax: local variable name \"x\" conflicts with an argument") f30284(1)
+
+# issue #33243
+@generated function f33243()
+    :(global x33243 = 2)
+end
+@test_throws ErrorException f33243()
+global x33243
+@test f33243() === 2
+@test x33243 === 2
+
+# https://github.com/JuliaDebug/CassetteOverlay.jl/issues/12
+# generated function with varargs and unfortunately placed unused slot
+@generated function f_vararg_generated(args...)
+    local unusedslot4
+    local unusedslot5
+    local unusedslot6
+    :($args)
+end
+g_vararg_generated() = f_vararg_generated((;), (;), Base.inferencebarrier((;)))
+let tup = g_vararg_generated()
+    @test all(==(typeof((;))), tup)
+    # This is just to make sure that the test is actually testing what we want:
+    # the test only works if there is an unused that matches the position of
+    # the inferencebarrier argument above (N.B. the generator function itself
+    # shifts everything over by 1)
+    @test_broken only(code_lowered(only(methods(f_vararg_generated)).generator.gen)).slotflags[5] == 0x00
+end
+
+# respect a given linetable in code generation
+# https://github.com/JuliaLang/julia/pull/47750
+let world = Base.get_world_counter()
+    match = Base._which(Tuple{typeof(sin), Int}; world)
+    mi = Core.Compiler.specialize_method(match)
+    lwr = Core.Compiler.retrieve_code_info(mi, world)
+    @test all(lin->lin.method === :sin, lwr.linetable)
+    @eval function sin_generated(a)
+        $(Expr(:meta, :generated, Returns(lwr)))
+        $(Expr(:meta, :generated_only))
+    end
+    src = only(code_lowered(sin_generated, (Int,)))
+    @test all(lin->lin.method === :sin, src.linetable)
+    @test sin_generated(42) == sin(42)
+end
+
+# Allow passing unreachable insts in generated codeinfo
+let
+    dummy() = return
+    dummy_m = which(dummy, Tuple{})
+
+    src = Base.uncompressed_ir(dummy_m)
+    src.code = Any[
+        # block 1
+        Core.ReturnNode(nothing),
+        # block 2
+        Core.ReturnNode(),
+    ]
+    nstmts = length(src.code)
+    nslots = 1
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    src.slotflags = fill(0, nslots)
+    src.slottypes = Any[Any]
+
+    @eval function f_unreachable()
+        $(Expr(:meta, :generated, Returns(src)))
+        $(Expr(:meta, :generated_only))
+    end
+
+    ir, _ = Base.code_ircode(f_unreachable, ()) |> only
+    @test length(ir.cfg.blocks) == 1
+end

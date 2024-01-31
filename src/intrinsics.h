@@ -12,12 +12,13 @@
     ADD_I(udiv_int, 2) \
     ADD_I(srem_int, 2) \
     ADD_I(urem_int, 2) \
+    ADD_I(add_ptr, 2) \
+    ADD_I(sub_ptr, 2) \
     ADD_I(neg_float, 1) \
     ADD_I(add_float, 2) \
     ADD_I(sub_float, 2) \
     ADD_I(mul_float, 2) \
     ADD_I(div_float, 2) \
-    ADD_I(rem_float, 2) \
     ADD_I(fma_float, 3) \
     ADD_I(muladd_float, 3) \
     /*  fast arithmetic */ \
@@ -26,7 +27,6 @@
     ALIAS(sub_float_fast, sub_float) \
     ALIAS(mul_float_fast, mul_float) \
     ALIAS(div_float_fast, div_float) \
-    ALIAS(rem_float_fast, rem_float) \
     /*  same-type comparisons */ \
     ADD_I(eq_int, 2) \
     ADD_I(ne_int, 2) \
@@ -43,7 +43,6 @@
     ALIAS(lt_float_fast, lt_float) \
     ALIAS(le_float_fast, le_float) \
     ADD_I(fpiseq, 2) \
-    ADD_I(fpislt, 2) \
     /*  bitwise operators */ \
     ADD_I(and_int, 2) \
     ADD_I(or_int, 2) \
@@ -66,10 +65,6 @@
     ADD_I(sitofp, 2) \
     ADD_I(fptrunc, 2) \
     ADD_I(fpext, 2) \
-    /*  checked conversion */ \
-    ADD_I(checked_trunc_sint, 2) \
-    ADD_I(checked_trunc_uint, 2) \
-    ADD_I(check_top_bit, 1) \
     /*  checked arithmetic */ \
     ADD_I(checked_sadd_int, 2) \
     ADD_I(checked_uadd_int, 2) \
@@ -85,21 +80,27 @@
     ADD_I(abs_float, 1) \
     ADD_I(copysign_float, 2) \
     ADD_I(flipsign_int, 2) \
-    ADD_I(select_value, 3) \
     ADD_I(ceil_llvm, 1) \
     ADD_I(floor_llvm, 1) \
     ADD_I(trunc_llvm, 1) \
     ADD_I(rint_llvm, 1) \
     ADD_I(sqrt_llvm, 1) \
-    ALIAS(sqrt_llvm_fast, sqrt_llvm) \
+    ADD_I(sqrt_llvm_fast, 1) \
     /*  pointer access */ \
     ADD_I(pointerref, 3) \
     ADD_I(pointerset, 4) \
-    /* c interface */ \
+    /*  pointer atomics */ \
+    ADD_I(atomic_fence, 1) \
+    ADD_I(atomic_pointerref, 2) \
+    ADD_I(atomic_pointerset, 3) \
+    ADD_I(atomic_pointerswap, 3) \
+    ADD_I(atomic_pointermodify, 4) \
+    ADD_I(atomic_pointerreplace, 5) \
+    /*  c interface */ \
     ADD_I(cglobal, 2) \
     ALIAS(llvmcall, llvmcall) \
-    /* object access */ \
-    ADD_I(arraylen, 1) \
+    /*  cpu feature tests */ \
+    ADD_I(have_fma, 1) \
     /*  hidden intrinsics */ \
     ADD_HIDDEN(cglobal_auto, 1)
 

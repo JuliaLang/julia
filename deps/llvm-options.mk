@@ -1,5 +1,9 @@
-ifeq ($(LLVM_DEBUG),1)
+ifneq ($(LLVM_DEBUG),0)
+ifeq  ($(LLVM_DEBUG),1)
 LLVM_BUILDTYPE := Debug
+else
+LLVM_BUILDTYPE := RelWithDebInfo
+endif
 else
 LLVM_BUILDTYPE := Release
 endif
@@ -11,11 +15,11 @@ LLVM_FLAVOR := $(LLVM_BUILDTYPE)
 ifeq ($(LLVM_SANITIZE),1)
 ifeq ($(SANITIZE_MEMORY),1)
 LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+MSAN
-else
+endif
+ifeq ($(SANITIZE_ADDRESS),1)
 LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+ASAN
 endif
+ifeq ($(SANITIZE_THREAD),1)
+LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+TSAN
 endif
-
-LLVM_SRC_DIR:=$(SRCDIR)/srccache/llvm-$(LLVM_VER)
-LLVM_BUILD_DIR:=$(BUILDDIR)/llvm-$(LLVM_VER)
-LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)
+endif

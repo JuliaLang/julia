@@ -6,24 +6,25 @@
     WeakKeyDict([itr])
 
 `WeakKeyDict()` constructs a hash table where the keys are weak
-references to objects, and thus may be garbage collected even when
+references to objects which may be garbage collected even when
 referenced in a hash table.
 
-See [`Dict`](@ref) for further help.
+See [`Dict`](@ref) for further help.  Note, unlike [`Dict`](@ref),
+`WeakKeyDict` does not convert keys on insertion, as this would imply the key
+object was unreferenced anywhere before insertion.
+
+See also [`WeakRef`](@ref).
 """
-mutable struct WeakKeyDict{K,V} <: Associative{K,V}
+mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
     ht::Dict{WeakRef,V}
-    lock::Threads.RecursiveSpinLock
+    lock::ReentrantLock
     finalizer::Function
+    dirty::Bool
 
     # Constructors mirror Dict's
     function WeakKeyDict{K,V}() where V where K
-        t = new(Dict{Any,V}(), Threads.RecursiveSpinLock(), identity)
-        t.finalizer = function (k)
-            # when a weak key is finalized, remove from dictionary if it is still there
-            islocked(t) && return finalizer(k, t.finalizer)
-            delete!(t, k)
-        end
+        t = new(Dict{WeakRef,V}(), ReentrantLock(), identity, 0)
+        t.finalizer = k -> t.dirty = true
         return t
     end
 end
@@ -55,93 +56,163 @@ WeakKeyDict(ps::Pair...)                            = WeakKeyDict{Any,Any}(ps)
 
 function WeakKeyDict(kv)
     try
-        Base.associative_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
-    catch e
-        if !applicable(start, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
+        Base.dict_with_eltype((K, V) -> WeakKeyDict{K, V}, kv, eltype(kv))
+    catch
+        if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
             throw(ArgumentError("WeakKeyDict(kv): kv needs to be an iterator of tuples or pairs"))
         else
-            rethrow(e)
+            rethrow()
         end
     end
 end
 
-similar(d::WeakKeyDict{K,V}) where {K,V} = WeakKeyDict{K,V}()
-similar(d::WeakKeyDict, ::Type{Pair{K,V}}) where {K,V} = WeakKeyDict{K,V}()
-
-# conversion between Dict types
-function convert(::Type{WeakKeyDict{K,V}},d::Associative) where V where K
-    h = WeakKeyDict{K,V}()
-    for (k,v) in d
-        ck = convert(K,k)
-        if !haskey(h,ck)
-            h[ck] = convert(V,v)
-        else
-            error("key collision during dictionary conversion")
+function _cleanup_locked(h::WeakKeyDict)
+    if h.dirty
+        h.dirty = false
+        idx = skip_deleted_floor!(h.ht)
+        while idx != 0
+            if h.ht.keys[idx].value === nothing
+                _delete!(h.ht, idx)
+            end
+            idx = skip_deleted(h.ht, idx + 1)
         end
     end
     return h
 end
-convert(::Type{WeakKeyDict{K,V}},d::WeakKeyDict{K,V}) where {K,V} = d
+
+sizehint!(d::WeakKeyDict, newsz; shrink::Bool = true) = @lock d sizehint!(d.ht, newsz; shrink = shrink)
+empty(d::WeakKeyDict, ::Type{K}, ::Type{V}) where {K, V} = WeakKeyDict{K, V}()
+
+IteratorSize(::Type{<:WeakKeyDict}) = SizeUnknown()
 
 islocked(wkh::WeakKeyDict) = islocked(wkh.lock)
+lock(wkh::WeakKeyDict) = lock(wkh.lock)
+unlock(wkh::WeakKeyDict) = unlock(wkh.lock)
 lock(f, wkh::WeakKeyDict) = lock(f, wkh.lock)
 trylock(f, wkh::WeakKeyDict) = trylock(f, wkh.lock)
 
 function setindex!(wkh::WeakKeyDict{K}, v, key) where K
-    k = convert(K, key)
-    finalizer(k, wkh.finalizer)
+    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
+    # 'nothing' is not valid both because 'finalizer' will reject it,
+    # and because we therefore use it as a sentinel value
+    key === nothing && throw(ArgumentError("`nothing` is not a valid WeakKeyDict key"))
     lock(wkh) do
-        wkh.ht[WeakRef(k)] = v
+        _cleanup_locked(wkh)
+        k = getkey(wkh.ht, key, nothing)
+        if k === nothing
+            finalizer(wkh.finalizer, key)
+            k = WeakRef(key)
+        else
+            k.value = key
+        end
+        wkh.ht[k] = v
     end
     return wkh
 end
+function get!(wkh::WeakKeyDict{K}, key, default) where {K}
+    v = lock(wkh) do
+        if key !== nothing && haskey(wkh.ht, key)
+            wkh.ht[key]
+        else
+            wkh[key] = default
+        end
+    end
+    return v
+end
+function get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K}
+    v = lock(wkh) do
+        if key !== nothing && haskey(wkh.ht, key)
+            wkh.ht[key]
+        else
+            wkh[key] = default()
+        end
+    end
+    return v
+end
 
 function getkey(wkh::WeakKeyDict{K}, kk, default) where K
-    return lock(wkh) do
-        k = getkey(wkh.ht, kk, secret_table_token)
-        k === secret_table_token && return default
-        return k.value::K
+    k = lock(wkh) do
+        local k = getkey(wkh.ht, kk, nothing)
+        k === nothing && return nothing
+        return k.value
+    end
+    return k === nothing ? default : k::K
+end
+
+map!(f, iter::ValueIterator{<:WeakKeyDict})= map!(f, values(iter.dict.ht))
+
+function get(wkh::WeakKeyDict{K}, key, default) where {K}
+    key === nothing && throw(KeyError(nothing))
+    lock(wkh) do
+        return get(wkh.ht, key, default)
+    end
+end
+function get(default::Callable, wkh::WeakKeyDict{K}, key) where {K}
+    key === nothing && throw(KeyError(nothing))
+    lock(wkh) do
+        return get(default, wkh.ht, key)
+    end
+end
+function pop!(wkh::WeakKeyDict{K}, key) where {K}
+    key === nothing && throw(KeyError(nothing))
+    lock(wkh) do
+        return pop!(wkh.ht, key)
+    end
+end
+function pop!(wkh::WeakKeyDict{K}, key, default) where {K}
+    key === nothing && return default
+    lock(wkh) do
+        return pop!(wkh.ht, key, default)
+    end
+end
+function delete!(wkh::WeakKeyDict, key)
+    key === nothing && return wkh
+    lock(wkh) do
+        delete!(wkh.ht, key)
+    end
+    return wkh
+end
+function empty!(wkh::WeakKeyDict)
+    lock(wkh) do
+        empty!(wkh.ht)
+    end
+    return wkh
+end
+function haskey(wkh::WeakKeyDict{K}, key) where {K}
+    key === nothing && return false
+    lock(wkh) do
+        return haskey(wkh.ht, key)
+    end
+end
+function getindex(wkh::WeakKeyDict{K}, key) where {K}
+    key === nothing && throw(KeyError(nothing))
+    lock(wkh) do
+        return getindex(wkh.ht, key)
+    end
+end
+isempty(wkh::WeakKeyDict) = length(wkh) == 0
+function length(t::WeakKeyDict)
+    lock(t) do
+        _cleanup_locked(t)
+        return length(t.ht)
     end
 end
 
-get(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get(wkh.ht, key, default), wkh)
-get(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get(default, wkh.ht, key), wkh)
-get!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get!(wkh.ht, key, default), wkh)
-get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get!(default, wkh.ht, key), wkh)
-pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, key), wkh)
-pop!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> pop!(wkh.ht, key, default), wkh)
-delete!(wkh::WeakKeyDict, key) = lock(() -> delete!(wkh.ht, key), wkh)
-empty!(wkh::WeakKeyDict) = (lock(() -> empty!(wkh.ht), wkh); wkh)
-haskey(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> haskey(wkh.ht, key), wkh)
-getindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> getindex(wkh.ht, key), wkh)
-isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
-length(t::WeakKeyDict) = length(t.ht)
-
-function start(t::WeakKeyDict{K,V}) where V where K
-    gc_token = Ref{Bool}(false) # no keys will be deleted via finalizers until this token is gc'd
-    finalizer(gc_token, function(r)
-        if r[]
-            r[] = false
-            unlock(t.lock)
-        end
-    end)
-    s = lock(t.lock)
-    gc_token[] = true
-    return (start(t.ht), gc_token)
-end
-done(t::WeakKeyDict, i) = done(t.ht, i[1])
-function next(t::WeakKeyDict{K,V}, i)  where V where K
-    gc_token = i[2]
-    wkv, i = next(t.ht, i[1])
-    kv = Pair{K,V}(wkv[1].value::K, wkv[2])
-    return (kv, (i, gc_token))
-end
-
-function filter!(f, d::WeakKeyDict)
-    for (k, v) in d
-        if !f(k, v)
-            delete!(d, k)
+function iterate(t::WeakKeyDict{K,V}, state...) where {K, V}
+    return lock(t) do
+        while true
+            y = iterate(t.ht, state...)
+            y === nothing && return nothing
+            wkv, state = y
+            k = wkv[1].value
+            GC.safepoint() # ensure `k` is now gc-rooted
+            k === nothing && continue # indicates `k` is scheduled for deletion
+            kv = Pair{K,V}(k::K, wkv[2])
+            return (kv, state)
         end
     end
-    return d
 end
+
+@propagate_inbounds Iterators.only(d::WeakKeyDict) = Iterators._only(d, first)
+
+filter!(f, d::WeakKeyDict) = filter_in_one_pass!(f, d)

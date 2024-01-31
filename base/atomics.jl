@@ -2,8 +2,8 @@
 
 using Core.Intrinsics: llvmcall
 
-import Base: setindex!, getindex, unsafe_convert
-import Base.Sys: ARCH, WORD_SIZE
+import .Base: setindex!, getindex, unsafe_convert
+import .Base.Sys: ARCH, WORD_SIZE
 
 export
     Atomic,
@@ -13,12 +13,15 @@ export
     atomic_and!, atomic_nand!, atomic_or!, atomic_xor!,
     atomic_max!, atomic_min!,
     atomic_fence
-
-# Disable 128-bit types on 32-bit Intel sytems due to LLVM problems;
-# see <https://github.com/JuliaLang/julia/issues/14818> (fixed on LLVM 3.9)
-# 128-bit atomics do not exist on AArch32.
-if (Base.libllvm_version < v"3.9-" && ARCH === :i686) ||
-        startswith(string(ARCH), "arm")
+##
+# Filter out unsupported atomic types on platforms
+# - 128-bit atomics do not exist on AArch32.
+# - Omitting 128-bit types on 32bit x86 and ppc64
+# - LLVM doesn't currently support atomics on floats for ppc64
+#   C++20 is adding limited support for atomics on float, but as of
+#   now Clang does not support that yet.
+if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
+   Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     const inttypes = (Int8, Int16, Int32, Int64,
                       UInt8, UInt16, UInt32, UInt64)
 else
@@ -26,10 +29,17 @@ else
                       UInt8, UInt16, UInt32, UInt64, UInt128)
 end
 const floattypes = (Float16, Float32, Float64)
-# TODO: Support Bool, Ptr
-const atomictypes = (inttypes..., floattypes...)
+const arithmetictypes = (inttypes..., floattypes...)
+# TODO: Support Ptr
+if Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
+    const atomictypes = (inttypes..., Bool)
+else
+    const atomictypes = (arithmetictypes..., Bool)
+end
+
 const IntTypes = Union{inttypes...}
 const FloatTypes = Union{floattypes...}
+const ArithmeticTypes = Union{arithmetictypes...}
 const AtomicTypes = Union{atomictypes...}
 
 """
@@ -39,14 +49,15 @@ Holds a reference to an object of type `T`, ensuring that it is only
 accessed atomically, i.e. in a thread-safe manner.
 
 Only certain "simple" types can be used atomically, namely the
-primitive integer and float-point types. These are `Int8`...`Int128`,
-`UInt8`...`UInt128`, and `Float16`...`Float64`.
+primitive boolean, integer, and float-point types. These are `Bool`,
+`Int8`...`Int128`, `UInt8`...`UInt128`, and `Float16`...`Float64`.
 
 New atomic objects can be created from a non-atomic values; if none is
 specified, the atomic object is initialized with zero.
 
 Atomic objects can be accessed using the `[]` notation:
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -58,8 +69,8 @@ julia> x[]
 1
 ```
 
-Atomic operations use an `atomic_` prefix, such as `atomic_add!`,
-`atomic_xchg!`, etc.
+Atomic operations use an `atomic_` prefix, such as [`atomic_add!`](@ref),
+[`atomic_xchg!`](@ref), etc.
 """
 mutable struct Atomic{T<:AtomicTypes}
     value::T
@@ -86,6 +97,7 @@ the transaction, one records the value in `x`. After the transaction,
 the new value is stored only if `x` has not been modified in the mean
 time.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -113,6 +125,7 @@ value.
 
 For further details, see LLVM's `atomicrmw xchg` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -127,14 +140,16 @@ julia> x[]
 function atomic_xchg! end
 
 """
-    Threads.atomic_add!(x::Atomic{T}, val::T) where T
+    Threads.atomic_add!(x::Atomic{T}, val::T) where T <: ArithmeticTypes
 
 Atomically add `val` to `x`
 
-Performs `x[] += val` atomically. Returns the **old** value.
+Performs `x[] += val` atomically. Returns the **old** value. Not defined for
+`Atomic{Bool}`.
 
 For further details, see LLVM's `atomicrmw add` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -149,14 +164,16 @@ julia> x[]
 function atomic_add! end
 
 """
-    Threads.atomic_sub!(x::Atomic{T}, val::T) where T
+    Threads.atomic_sub!(x::Atomic{T}, val::T) where T <: ArithmeticTypes
 
 Atomically subtract `val` from `x`
 
-Performs `x[] -= val` atomically. Returns the **old** value.
+Performs `x[] -= val` atomically. Returns the **old** value. Not defined for
+`Atomic{Bool}`.
 
 For further details, see LLVM's `atomicrmw sub` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -179,6 +196,7 @@ Performs `x[] &= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw and` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -201,6 +219,7 @@ Performs `x[] = ~(x[] & val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw nand` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -223,6 +242,7 @@ Performs `x[] |= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw or` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(5)
 Base.Threads.Atomic{Int64}(5)
@@ -245,6 +265,7 @@ Performs `x[] \$= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw xor` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(5)
 Base.Threads.Atomic{Int64}(5)
@@ -267,6 +288,7 @@ Performs `x[] = max(x[], val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw max` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(5)
 Base.Threads.Atomic{Int64}(5)
@@ -289,6 +311,7 @@ Performs `x[] = min(x[], val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw min` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(7)
 Base.Threads.Atomic{Int64}(7)
@@ -305,14 +328,14 @@ function atomic_min! end
 unsafe_convert(::Type{Ptr{T}}, x::Atomic{T}) where {T} = convert(Ptr{T}, pointer_from_objref(x))
 setindex!(x::Atomic{T}, v) where {T} = setindex!(x, convert(T, v))
 
-const llvmtypes = Dict(
-    Bool => "i1",
+const llvmtypes = IdDict{Any,String}(
+    Bool => "i8",  # julia represents bools with 8-bits for now. # TODO: is this okay?
     Int8 => "i8", UInt8 => "i8",
     Int16 => "i16", UInt16 => "i16",
     Int32 => "i32", UInt32 => "i32",
     Int64 => "i64", UInt64 => "i64",
     Int128 => "i128", UInt128 => "i128",
-    Float16 => "i16", # half
+    Float16 => "half",
     Float32 => "float",
     Float64 => "double",
 )
@@ -322,7 +345,7 @@ inttype(::Type{Float32}) = Int32
 inttype(::Type{Float64}) = Int64
 
 
-alignment(::Type{T}) where {T} = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T))
+import ..Base.gc_alignment
 
 # All atomic operations have acquire and/or release semantics, depending on
 # whether the load or store values. Most of the time, this is what one wants
@@ -330,32 +353,35 @@ alignment(::Type{T}) where {T} = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T
 for typ in atomictypes
     lt = llvmtypes[typ]
     ilt = llvmtypes[inttype(typ)]
-    rt = Base.libllvm_version >= v"3.6" ? "$lt, $lt*" : "$lt*"
-    irt = Base.libllvm_version >= v"3.6" ? "$ilt, $ilt*" : "$ilt*"
+    rt = "$lt, $lt*"
+    irt = "$ilt, $ilt*"
     @eval getindex(x::Atomic{$typ}) =
-        llvmcall($"""
-                 %rv = load atomic $rt %0 acquire, align $(alignment(typ))
+        GC.@preserve x llvmcall($"""
+                 %ptr = inttoptr i$WORD_SIZE %0 to $lt*
+                 %rv = load atomic $rt %ptr acquire, align $(gc_alignment(typ))
                  ret $lt %rv
                  """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
     @eval setindex!(x::Atomic{$typ}, v::$typ) =
-        llvmcall($"""
-                 store atomic $lt %1, $lt* %0 release, align $(alignment(typ))
+        GC.@preserve x llvmcall($"""
+                 %ptr = inttoptr i$WORD_SIZE %0 to $lt*
+                 store atomic $lt %1, $lt* %ptr release, align $(gc_alignment(typ))
                  ret void
-                 """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
+                 """, Cvoid, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
 
     # Note: atomic_cas! succeeded (i.e. it stored "new") if and only if the result is "cmp"
     if typ <: Integer
         @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-            llvmcall($"""
-                     %rs = cmpxchg $lt* %0, $lt %1, $lt %2 acq_rel acquire
+            GC.@preserve x llvmcall($"""
+                     %ptr = inttoptr i$WORD_SIZE %0 to $lt*
+                     %rs = cmpxchg $lt* %ptr, $lt %1, $lt %2 acq_rel acquire
                      %rv = extractvalue { $lt, i1 } %rs, 0
                      ret $lt %rv
                      """, $typ, Tuple{Ptr{$typ},$typ,$typ},
                      unsafe_convert(Ptr{$typ}, x), cmp, new)
     else
         @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-            llvmcall($"""
-                     %iptr = bitcast $lt* %0 to $ilt*
+            GC.@preserve x llvmcall($"""
+                     %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
                      %icmp = bitcast $lt %1 to $ilt
                      %inew = bitcast $lt %2 to $ilt
                      %irs = cmpxchg $ilt* %iptr, $ilt %icmp, $ilt %inew acq_rel acquire
@@ -366,24 +392,27 @@ for typ in atomictypes
                      unsafe_convert(Ptr{$typ}, x), cmp, new)
     end
 
-    for rmwop in [:xchg, :add, :sub, :and, :nand, :or, :xor, :max, :min]
+    arithmetic_ops = [:add, :sub]
+    for rmwop in [arithmetic_ops..., :xchg, :and, :nand, :or, :xor, :max, :min]
         rmw = string(rmwop)
         fn = Symbol("atomic_", rmw, "!")
         if (rmw == "max" || rmw == "min") && typ <: Unsigned
             # LLVM distinguishes signedness in the operation, not the integer type.
             rmw = "u" * rmw
         end
+        if rmwop in arithmetic_ops && !(typ <: ArithmeticTypes) continue end
         if typ <: Integer
             @eval $fn(x::Atomic{$typ}, v::$typ) =
-                llvmcall($"""
-                         %rv = atomicrmw $rmw $lt* %0, $lt %1 acq_rel
+                GC.@preserve x llvmcall($"""
+                         %ptr = inttoptr i$WORD_SIZE %0 to $lt*
+                         %rv = atomicrmw $rmw $lt* %ptr, $lt %1 acq_rel
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, x), v)
         else
-            rmwop == :xchg || continue
+            rmwop === :xchg || continue
             @eval $fn(x::Atomic{$typ}, v::$typ) =
-                llvmcall($"""
-                         %iptr = bitcast $lt* %0 to $ilt*
+                GC.@preserve x llvmcall($"""
+                         %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
                          %ival = bitcast $lt %1 to $ilt
                          %irv = atomicrmw $rmw $ilt* %iptr, $ilt %ival acq_rel
                          %rv = bitcast $ilt %irv to $lt
@@ -404,9 +433,9 @@ for op in [:+, :-, :max, :min]
             new = $op(old, val)
             cmp = old
             old = atomic_cas!(var, cmp, new)
-            reinterpret(IT, old) == reinterpret(IT, cmp) && return new
+            reinterpret(IT, old) == reinterpret(IT, cmp) && return old
             # Temporary solution before we have gc transition support in codegen.
-            ccall(:jl_gc_safepoint, Void, ())
+            ccall(:jl_gc_safepoint, Cvoid, ())
         end
     end
 end
@@ -429,4 +458,4 @@ For further details, see LLVM's `fence` instruction.
 atomic_fence() = llvmcall("""
                           fence seq_cst
                           ret void
-                          """, Void, Tuple{})
+                          """, Cvoid, Tuple{})

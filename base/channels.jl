@@ -1,11 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-abstract type AbstractChannel end
+"""
+    AbstractChannel{T}
+
+Representation of a channel passing objects of type `T`.
+"""
+abstract type AbstractChannel{T} end
+
+push!(c::AbstractChannel, v) = (put!(c, v); c)
+popfirst!(c::AbstractChannel) = take!(c)
 
 """
-    Channel{T}(sz::Int)
+    Channel{T=Any}(size::Int=0)
 
-Constructs a `Channel` with an internal buffer that can hold a maximum of `sz` objects
+Constructs a `Channel` with an internal buffer that can hold a maximum of `size` objects
 of type `T`.
 [`put!`](@ref) calls on a full channel block until an object is removed with [`take!`](@ref).
 
@@ -14,69 +22,69 @@ And vice-versa.
 
 Other constructors:
 
+* `Channel()`: default constructor, equivalent to `Channel{Any}(0)`
 * `Channel(Inf)`: equivalent to `Channel{Any}(typemax(Int))`
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
+
+!!! compat "Julia 1.3"
+    The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
 """
-mutable struct Channel{T} <: AbstractChannel
-    cond_take::Condition    # waiting for data to become available
-    cond_put::Condition     # waiting for a writeable slot
-    state::Symbol
-    excp::Nullable{Exception} # Exception to be thrown when state != :open
+mutable struct Channel{T} <: AbstractChannel{T}
+    cond_take::Threads.Condition                 # waiting for data to become available
+    cond_wait::Threads.Condition                 # waiting for data to become maybe available
+    cond_put::Threads.Condition                  # waiting for a writeable slot
+    @atomic state::Symbol
+    excp::Union{Exception, Nothing}      # exception to be thrown when state !== :open
 
     data::Vector{T}
-    sz_max::Int            # maximum size of channel
+    @atomic n_avail_items::Int           # Available items for taking, can be read without lock
+    sz_max::Int                          # maximum size of channel
 
-    # Used when sz_max == 0, i.e., an unbuffered channel.
-    waiters::Int
-    takers::Vector{Task}
-    putters::Vector{Task}
-
-    function Channel{T}(sz::Float64) where T
-        if sz == Inf
-            Channel{T}(typemax(Int))
-        else
-            Channel{T}(convert(Int, sz))
-        end
-    end
-    function Channel{T}(sz::Integer) where T
+    function Channel{T}(sz::Integer = 0) where T
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        ch = new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(0), sz, 0)
-        if sz == 0
-            ch.takers = Vector{Task}(0)
-            ch.putters = Vector{Task}(0)
-        end
-        return ch
-    end
-
-    # deprecated empty constructor
-    function Channel{T}() where T
-        depwarn(string("The empty constructor Channel() is deprecated. ",
-                        "The channel size needs to be specified explictly. ",
-                        "Defaulting to Channel{$T}(32)."), :Channel)
-        Channel(32)
+        lock = ReentrantLock()
+        cond_put, cond_take = Threads.Condition(lock), Threads.Condition(lock)
+        cond_wait = (sz == 0 ? Threads.Condition(lock) : cond_take) # wait is distinct from take iff unbuffered
+        return new(cond_take, cond_wait, cond_put, :open, nothing, Vector{T}(), 0, sz)
     end
 end
 
-Channel(sz) = Channel{Any}(sz)
+function Channel{T}(sz::Float64) where T
+    sz = (sz == Inf ? typemax(Int) : convert(Int, sz))
+    return Channel{T}(sz)
+end
+Channel(sz=0) = Channel{Any}(sz)
 
 # special constructors
 """
-    Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
+    Channel{T=Any}(func::Function, size=0; taskref=nothing, spawn=false, threadpool=nothing)
 
-Creates a new task from `func`, binds it to a new channel of type
-`ctype` and size `csize`, and schedules the task, all in a single call.
+Create a new task from `func`, bind it to a new channel of type
+`T` and size `size`, and schedule the task, all in a single call.
+The channel is automatically closed when the task terminates.
 
 `func` must accept the bound channel as its only argument.
 
 If you need a reference to the created task, pass a `Ref{Task}` object via
-keyword argument `taskref`.
+the keyword argument `taskref`.
 
-Returns a Channel.
+If `spawn=true`, the `Task` created for `func` may be scheduled on another thread
+in parallel, equivalent to creating a task via [`Threads.@spawn`](@ref).
 
+If `spawn=true` and the `threadpool` argument is not set, it defaults to `:default`.
+
+If the `threadpool` argument is set (to `:default` or `:interactive`), this implies
+that `spawn=true` and the new Task is spawned to the specified threadpool.
+
+Return a `Channel`.
+
+# Examples
 ```jldoctest
-julia> chnl = Channel(c->foreach(i->put!(c,i), 1:4));
+julia> chnl = Channel() do ch
+           foreach(i -> put!(ch, i), 1:4)
+       end;
 
 julia> typeof(chnl)
 Channel{Any}
@@ -90,37 +98,83 @@ i = 3
 i = 4
 ```
 
-An example of referencing the created task:
+Referencing the created task:
 
 ```jldoctest
 julia> taskref = Ref{Task}();
 
-julia> chnl = Channel(c->(@show take!(c)); taskref=taskref);
+julia> chnl = Channel(taskref=taskref) do ch
+           println(take!(ch))
+       end;
 
 julia> istaskdone(taskref[])
 false
 
 julia> put!(chnl, "Hello");
-take!(c) = "Hello"
+Hello
 
 julia> istaskdone(taskref[])
 true
 ```
-"""
-function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
-    chnl = Channel{ctype}(csize)
-    task = Task(() -> func(chnl))
-    bind(chnl, task)
-    yield(task) # immediately start it
 
+!!! compat "Julia 1.3"
+    The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
+    In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
+    those constructors are deprecated.
+
+!!! compat "Julia 1.9"
+    The `threadpool=` argument was added in Julia 1.9.
+
+```jldoctest
+julia> chnl = Channel{Char}(1, spawn=true) do ch
+           for c in "hello world"
+               put!(ch, c)
+           end
+       end
+Channel{Char}(1) (2 items available)
+
+julia> String(collect(chnl))
+"hello world"
+```
+"""
+function Channel{T}(func::Function, size=0; taskref=nothing, spawn=false, threadpool=nothing) where T
+    chnl = Channel{T}(size)
+    task = Task(() -> func(chnl))
+    if threadpool === nothing
+        threadpool = :default
+    else
+        spawn = true
+    end
+    task.sticky = !spawn
+    bind(chnl, task)
+    if spawn
+        Threads._spawn_set_thrpool(task, threadpool)
+        schedule(task) # start it on (potentially) another thread
+    else
+        yield(task) # immediately start it, yielding the current thread
+    end
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl
 end
+Channel(func::Function, args...; kwargs...) = Channel{Any}(func, args...; kwargs...)
 
-
-
-# deprecated empty constructor
-Channel() = Channel{Any}()
+# This constructor is deprecated as of Julia v1.3, and should not be used.
+# (Note that this constructor also matches `Channel(::Function)` w/out any kwargs, which is
+# of course not deprecated.)
+# We use `nothing` default values to check which arguments were set in order to throw the
+# deprecation warning if users try to use `spawn=` with `ctype=` or `csize=`.
+function Channel(func::Function; ctype=nothing, csize=nothing, taskref=nothing, spawn=nothing, threadpool=nothing)
+    # The spawn= keyword argument was added in Julia v1.3, and cannot be used with the
+    # deprecated keyword arguments `ctype=` or `csize=`.
+    if (ctype !== nothing || csize !== nothing) && (spawn !== nothing || threadpool !== nothing)
+        throw(ArgumentError("Cannot set `spawn=` or `threadpool=` in the deprecated constructor `Channel(f; ctype=Any, csize=0)`. Please use `Channel{T=Any}(f, size=0; taskref=nothing, spawn=false, threadpool=nothing)` instead!"))
+    end
+    # Set the actual default values for the arguments.
+    ctype === nothing && (ctype = Any)
+    csize === nothing && (csize = 0)
+    spawn === nothing && (spawn = false)
+    return Channel{ctype}(func, csize; taskref=taskref, spawn=spawn, threadpool=threadpool)
+end
 
 closed_exception() = InvalidStateException("Channel is closed.", :closed)
 
@@ -128,44 +182,61 @@ isbuffered(c::Channel) = c.sz_max==0 ? false : true
 
 function check_channel_state(c::Channel)
     if !isopen(c)
-        !isnull(c.excp) && throw(get(c.excp))
+        # if the monotonic load succeed, now do an acquire fence
+        (@atomic :acquire c.state) === :open && concurrency_violation()
+        excp = c.excp
+        excp !== nothing && throw(excp)
         throw(closed_exception())
     end
 end
 """
-    close(c::Channel)
+    close(c::Channel[, excp::Exception])
 
-Closes a channel. An exception is thrown by:
+Close a channel. An exception (optionally given by `excp`), is thrown by:
 
 * [`put!`](@ref) on a closed channel.
 * [`take!`](@ref) and [`fetch`](@ref) on an empty, closed channel.
 """
-function close(c::Channel)
-    c.state = :closed
-    c.excp = Nullable{}(closed_exception())
-    notify_error(c)
+close(c::Channel) = close(c, closed_exception()) # nospecialize on default arg seems to confuse makedocs
+function close(c::Channel, @nospecialize(excp::Exception))
+    lock(c)
+    try
+        c.excp = excp
+        @atomic :release c.state = :closed
+        notify_error(c.cond_take, excp)
+        notify_error(c.cond_wait, excp)
+        notify_error(c.cond_put, excp)
+    finally
+        unlock(c)
+    end
     nothing
 end
-isopen(c::Channel) = (c.state == :open)
+
+# Use acquire here to pair with release store in `close`, so that subsequent `isready` calls
+# are forced to see `isready == true` if they see `isopen == false`. This means users must
+# call `isopen` before `isready` if you are using the race-y APIs (or call `iterate`, which
+# does this right for you).
+isopen(c::Channel) = ((@atomic :acquire c.state) === :open)
 
 """
     bind(chnl::Channel, task::Task)
 
-Associates the lifetime of `chnl` with a task.
-Channel `chnl` is automatically closed when the task terminates.
+Associate the lifetime of `chnl` with a task.
+`Channel` `chnl` is automatically closed when the task terminates.
 Any uncaught exception in the task is propagated to all waiters on `chnl`.
 
 The `chnl` object can be explicitly closed independent of task termination.
-Terminating tasks have no effect on already closed Channel objects.
+Terminating tasks have no effect on already closed `Channel` objects.
 
 When a channel is bound to multiple tasks, the first task to terminate will
 close the channel. When multiple channels are bound to the same task,
 termination of the task will close all of the bound channels.
 
+# Examples
 ```jldoctest
 julia> c = Channel(0);
 
-julia> task = @schedule foreach(i->put!(c, i), 1:4);
+julia> task = @async foreach(i->put!(c, i), 1:4);
 
 julia> bind(c,task);
 
@@ -184,24 +255,26 @@ false
 ```jldoctest
 julia> c = Channel(0);
 
-julia> task = @schedule (put!(c,1);error("foo"));
+julia> task = @async (put!(c, 1); error("foo"));
 
-julia> bind(c,task);
+julia> bind(c, task);
 
 julia> take!(c)
 1
 
-julia> put!(c,1);
-ERROR: foo
+julia> put!(c, 1);
+ERROR: TaskFailedException
 Stacktrace:
- [1] check_channel_state(::Channel{Any}) at ./channels.jl:131
- [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:261
+[...]
+    nested task error: foo
+[...]
 ```
 """
 function bind(c::Channel, task::Task)
-    ref = WeakRef(c)
-    register_taskdone_hook(task, tsk->close_chnl_on_taskdone(tsk, ref))
-    c
+    T = Task(() -> close_chnl_on_taskdone(task, c))
+    T.sticky = false
+    _wait2(task, T)
+    return c
 end
 
 """
@@ -230,78 +303,137 @@ function channeled_tasks(n::Int, funcs...; ctypes=fill(Any,n), csizes=fill(0,n))
     return (chnls, tasks)
 end
 
-function close_chnl_on_taskdone(t::Task, ref::WeakRef)
-    if ref.value !== nothing
-        c = ref.value
-        !isopen(c) && return
+function close_chnl_on_taskdone(t::Task, c::Channel)
+    isopen(c) || return
+    lock(c)
+    try
+        isopen(c) || return
         if istaskfailed(t)
-            c.state = :closed
-            c.excp = Nullable{Exception}(task_result(t))
-            notify_error(c)
-        else
-            close(c)
+            close(c, TaskFailedException(t))
+            return
         end
+        close(c)
+    finally
+        unlock(c)
     end
+    nothing
 end
 
-mutable struct InvalidStateException <: Exception
-    msg::AbstractString
+struct InvalidStateException <: Exception
+    msg::String
     state::Symbol
 end
+showerror(io::IO, ex::InvalidStateException) = print(io, "InvalidStateException: ", ex.msg)
 
 """
     put!(c::Channel, v)
 
-Appends an item `v` to the channel `c`. Blocks if the channel is full.
+Append an item `v` to the channel `c`. Blocks if the channel is full.
 
 For unbuffered channels, blocks until a [`take!`](@ref) is performed by a different
 task.
+
+!!! compat "Julia 1.1"
+    `v` now gets converted to the channel's type with [`convert`](@ref) as `put!` is called.
 """
-function put!(c::Channel, v)
+function put!(c::Channel{T}, v) where T
     check_channel_state(c)
-    isbuffered(c) ? put_buffered(c,v) : put_unbuffered(c,v)
+    v = convert(T, v)
+    return isbuffered(c) ? put_buffered(c, v) : put_unbuffered(c, v)
+end
+
+# Atomically update channel n_avail, *assuming* we hold the channel lock.
+function _increment_n_avail(c, inc)
+    # We hold the channel lock so it's safe to non-atomically read and
+    # increment c.n_avail_items
+    newlen = c.n_avail_items + inc
+    # Atomically store c.n_avail_items to prevent data races with other threads
+    # reading this outside the lock.
+    @atomic :monotonic c.n_avail_items = newlen
 end
 
 function put_buffered(c::Channel, v)
-    while length(c.data) == c.sz_max
-        wait(c.cond_put)
-    end
-    push!(c.data, v)
-
-    # notify all, since some of the waiters may be on a "fetch" call.
-    notify(c.cond_take, nothing, true, false)
-    v
-end
-
-function put_unbuffered(c::Channel, v)
-    if length(c.takers) == 0
-        push!(c.putters, current_task())
-        c.waiters > 0 && notify(c.cond_take, nothing, false, false)
-
-        try
-            wait()
-        catch ex
-            filter!(x->x!=current_task(), c.putters)
-            rethrow(ex)
+    lock(c)
+    did_buffer = false
+    try
+        # Increment channel n_avail eagerly (before push!) to count data in the
+        # buffer as well as offers from tasks which are blocked in wait().
+        _increment_n_avail(c, 1)
+        while length(c.data) == c.sz_max
+            check_channel_state(c)
+            wait(c.cond_put)
         end
+        check_channel_state(c)
+        push!(c.data, v)
+        did_buffer = true
+        # notify all, since some of the waiters may be on a "fetch" call.
+        notify(c.cond_take, nothing, true, false)
+    finally
+        # Decrement the available items if this task had an exception before pushing the
+        # item to the buffer (e.g., during `wait(c.cond_put)`):
+        did_buffer || _increment_n_avail(c, -1)
+        unlock(c)
     end
-    taker = shift!(c.takers)
-    yield(taker, v) # immediately give taker a chance to run, but don't block the current task
     return v
 end
 
-push!(c::Channel, v) = put!(c, v)
+function put_unbuffered(c::Channel, v)
+    lock(c)
+    taker = try
+        _increment_n_avail(c, 1)
+        while isempty(c.cond_take.waitq)
+            check_channel_state(c)
+            notify(c.cond_wait)
+            wait(c.cond_put)
+        end
+        check_channel_state(c)
+        # unfair scheduled version of: notify(c.cond_take, v, false, false); yield()
+        popfirst!(c.cond_take.waitq)
+    finally
+        _increment_n_avail(c, -1)
+        unlock(c)
+    end
+    schedule(taker, v)
+    yield()  # immediately give taker a chance to run, but don't block the current task
+    return v
+end
 
 """
     fetch(c::Channel)
 
-Waits for and gets the first available item from the channel. Does not
-remove the item. `fetch` is unsupported on an unbuffered (0-size) channel.
+Waits for and returns (without removing) the first available item from the `Channel`.
+Note: `fetch` is unsupported on an unbuffered (0-size) `Channel`.
+
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(3) do ch
+           foreach(i -> put!(ch, i), 1:3)
+       end;
+
+julia> fetch(c)
+1
+
+julia> collect(c)  # item is not removed
+3-element Vector{Any}:
+ 1
+ 2
+ 3
+```
 """
 fetch(c::Channel) = isbuffered(c) ? fetch_buffered(c) : fetch_unbuffered(c)
 function fetch_buffered(c::Channel)
-    wait(c)
-    c.data[1]
+    lock(c)
+    try
+        while isempty(c.data)
+            check_channel_state(c)
+            wait(c.cond_take)
+        end
+        return c.data[1]
+    finally
+        unlock(c)
+    end
 end
 fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on an unbuffered Channel."))
 
@@ -309,111 +441,186 @@ fetch_unbuffered(c::Channel) = throw(ErrorException("`fetch` is not supported on
 """
     take!(c::Channel)
 
-Removes and returns a value from a [`Channel`](@ref). Blocks until data is available.
+Removes and returns a value from a [`Channel`](@ref) in order. Blocks until data is available.
+For unbuffered channels, blocks until a [`put!`](@ref) is performed by a different task.
 
-For unbuffered channels, blocks until a [`put!`](@ref) is performed by a different
-task.
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(1);
+
+julia> put!(c, 1);
+
+julia> take!(c)
+1
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel(0);
+
+julia> task = Task(() -> put!(c, 1));
+
+julia> schedule(task);
+
+julia> take!(c)
+1
+```
 """
 take!(c::Channel) = isbuffered(c) ? take_buffered(c) : take_unbuffered(c)
 function take_buffered(c::Channel)
-    wait(c)
-    v = shift!(c.data)
-    notify(c.cond_put, nothing, false, false) # notify only one, since only one slot has become available for a put!.
-    v
+    lock(c)
+    try
+        while isempty(c.data)
+            check_channel_state(c)
+            wait(c.cond_take)
+        end
+        v = popfirst!(c.data)
+        _increment_n_avail(c, -1)
+        notify(c.cond_put, nothing, false, false) # notify only one, since only one slot has become available for a put!.
+        return v
+    finally
+        unlock(c)
+    end
 end
-
-shift!(c::Channel) = take!(c)
 
 # 0-size channel
 function take_unbuffered(c::Channel{T}) where T
-    check_channel_state(c)
-    push!(c.takers, current_task())
+    lock(c)
     try
-        if length(c.putters) > 0
-            let putter = shift!(c.putters)
-                return Base.try_yieldto(putter) do
-                    # if we fail to start putter, put it back in the queue
-                    unshift!(c.putters, putter)
-                end::T
-            end
-        else
-            return wait()::T
-        end
-    catch ex
-        filter!(x->x!=current_task(), c.takers)
-        rethrow(ex)
+        check_channel_state(c)
+        notify(c.cond_put, nothing, false, false)
+        return wait(c.cond_take)::T
+    finally
+        unlock(c)
     end
 end
 
 """
     isready(c::Channel)
 
-Determine whether a [`Channel`](@ref) has a value stored to it. Returns
-immediately, does not block.
+Determines whether a [`Channel`](@ref) has a value stored in it.
+Returns immediately, does not block.
 
-For unbuffered channels returns `true` if there are tasks waiting
-on a [`put!`](@ref).
+For unbuffered channels returns `true` if there are tasks waiting on a [`put!`](@ref).
+
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(1);
+
+julia> isready(c)
+false
+
+julia> put!(c, 1);
+
+julia> isready(c)
+true
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel();
+
+julia> isready(c)  # no tasks waiting to put!
+false
+
+julia> task = Task(() -> put!(c, 1));
+
+julia> schedule(task);  # schedule a put! task
+
+julia> isready(c)
+true
+```
+
 """
 isready(c::Channel) = n_avail(c) > 0
-n_avail(c::Channel) = isbuffered(c) ? length(c.data) : length(c.putters)
-
-wait(c::Channel) = isbuffered(c) ? wait_impl(c) : wait_unbuffered(c)
-function wait_impl(c::Channel)
-    while !isready(c)
-        check_channel_state(c)
-        wait(c.cond_take)
-    end
-    nothing
+isempty(c::Channel) = n_avail(c) == 0
+function n_avail(c::Channel)
+    # Lock-free equivalent to `length(c.data) + length(c.cond_put.waitq)`
+    @atomic :monotonic c.n_avail_items
 end
 
-function wait_unbuffered(c::Channel)
-    c.waiters += 1
+lock(c::Channel) = lock(c.cond_take)
+lock(f, c::Channel) = lock(f, c.cond_take)
+unlock(c::Channel) = unlock(c.cond_take)
+trylock(c::Channel) = trylock(c.cond_take)
+
+"""
+    wait(c::Channel)
+
+Blocks until the `Channel` [`isready`](@ref).
+
+```jldoctest
+julia> c = Channel(1);
+
+julia> isready(c)
+false
+
+julia> task = Task(() -> wait(c));
+
+julia> schedule(task);
+
+julia> istaskdone(task)  # task is blocked because channel is not ready
+false
+
+julia> put!(c, 1);
+
+julia> istaskdone(task)  # task is now unblocked
+true
+```
+"""
+function wait(c::Channel)
+    isready(c) && return
+    lock(c)
     try
-        wait_impl(c)
+        while !isready(c)
+            check_channel_state(c)
+            wait(c.cond_wait)
+        end
     finally
-        c.waiters -= 1
+        unlock(c)
     end
     nothing
 end
-
-function notify_error(c::Channel, err)
-    notify_error(c.cond_take, err)
-    notify_error(c.cond_put, err)
-
-    # release tasks on a `wait()/yieldto()` call (on unbuffered channels)
-    if !isbuffered(c)
-        waiters = filter!(t->(t.state == :runnable), vcat(c.takers, c.putters))
-        foreach(t->schedule(t, err; error=true), waiters)
-    end
-end
-notify_error(c::Channel) = notify_error(c, get(c.excp))
 
 eltype(::Type{Channel{T}}) where {T} = T
 
-show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
+show(io::IO, c::Channel) = print(io, typeof(c), "(", c.sz_max, ")")
 
-mutable struct ChannelIterState{T}
-    hasval::Bool
-    val::T
-    ChannelIterState{T}(has::Bool) where {T} = new(has)
-end
-
-start(c::Channel{T}) where {T} = ChannelIterState{T}(false)
-function done(c::Channel, state::ChannelIterState)
-    try
-        # we are waiting either for more data or channel to be closed
-        state.hasval && return false
-        state.val = take!(c)
-        state.hasval = true
-        return false
-    catch e
-        if isa(e, InvalidStateException) && e.state==:closed
-            return true
+function show(io::IO, ::MIME"text/plain", c::Channel)
+    show(io, c)
+    if !(get(io, :compact, false)::Bool)
+        if !isopen(c)
+            print(io, " (closed)")
         else
-            rethrow(e)
+            n = n_avail(c)
+            if n == 0
+                print(io, " (empty)")
+            else
+                s = n == 1 ? "" : "s"
+                print(io, " (", n, " item$s available)")
+            end
         end
     end
 end
-next(c::Channel, state) = (v=state.val; state.hasval=false; (v, state))
 
-iteratorsize(::Type{<:Channel}) = SizeUnknown()
+function iterate(c::Channel, state=nothing)
+    if isopen(c) || isready(c)
+        try
+            return (take!(c), nothing)
+        catch e
+            if isa(e, InvalidStateException) && e.state === :closed
+                return nothing
+            else
+                rethrow()
+            end
+        end
+    else
+        return nothing
+    end
+end
+
+IteratorSize(::Type{<:Channel}) = SizeUnknown()

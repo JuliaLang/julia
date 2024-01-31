@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Random, Sockets
+
 mktempdir() do dir
 
 tasks = []
@@ -50,10 +52,12 @@ function run_test_server(srv, text)
         try
             sock = accept(srv)
             try
-                write(sock,text)
+                write(sock, text)
             catch e
-                if typeof(e) != Base.UVError
-                    rethrow(e)
+                if !(isa(e, Base.IOError) && e.code == Base.UV_EPIPE)
+                    if !(isa(e, Base.IOError) && e.code == Base.UV_ECONNRESET)
+                        rethrow()
+                    end
                 end
             finally
                 close(sock)
@@ -83,7 +87,7 @@ push!(l, ("TCPSocket", io))
 io = (text) -> begin
     a = "\\\\.\\pipe\\uv-test-$(randstring(6))"
     b = joinpath(dir, "socket-$(randstring(6))")
-    socketname = is_windows() ? a : b
+    socketname = Sys.iswindows() ? a : b
     srv = listen(socketname)
     run_test_server(srv, text)
     connect(socketname)
@@ -95,36 +99,32 @@ close(s)
 push!(l, ("PipeEndpoint", io))
 
 
-#FIXME See https://github.com/JuliaLang/julia/issues/14747
-#      Reading from open(::Command) seems to deadlock on Linux/Travis
-#=
-if !is_windows()
-
-# Windows type command not working?
-# See "could not spawn `type 'C:\Users\appveyor\AppData\Local\Temp\1\jul3516.tmp\file.txt'`"
-#https://ci.appveyor.com/project/StefanKarpinski/julia/build/1.0.12733/job/hpwjs4hmf03vs5ag#L1244
-
-# Pipe
+# Pipe (#14747)
 io = (text) -> begin
     write(filename, text)
-    open(`$(is_windows() ? "type" : "cat") $filename`)[1]
-#    Was open(`echo -n $text`)[1]
-#    See https://github.com/JuliaLang/julia/issues/14747
+    # we can skip using shell_escape_wincmd, since ", ^, and % aren't legal in
+    # a filename, so unconditionally wrapping in " is sufficient (okay, that's
+    # a lie, since ^ and % actually are legal, but DOS is broken)
+    if Sys.iswindows()
+        cmd = Cmd(["cmd.exe", "/c type \"$(replace(filename, '/' => '\\'))\""])
+        cmd = Cmd(cmd; windows_verbatim=true)
+        cmd = pipeline(cmd, stderr=devnull)
+    else
+        cmd = `cat $filename`
+    end
+    open(cmd)
 end
 s = io(text)
 @test isa(s, IO)
-@test isa(s, Pipe)
+@test isa(s, Base.Process)
 close(s)
-push!(l, ("Pipe", io))
-
-end
-=#
+push!(l, ("Process", io))
 
 
 open_streams = []
 function cleanup()
-    for s in open_streams
-        try close(s) end
+    for s_ in open_streams
+        close(s_)
     end
     empty!(open_streams)
     for tsk in tasks
@@ -136,9 +136,62 @@ end
 
 verbose = false
 
-
 for (name, f) in l
-    io = ()->(s=f(text); push!(open_streams, s); s)
+    local function io(text=text)
+        local s = f(text)
+        push!(open_streams, s)
+        return s
+    end
+
+    verbose && println("$name readuntil...")
+    for (t, s, m, kept) in [
+            ("a", "", "", ""),
+            ("a", "ab", "a", "a"),
+            ("b", "ab", "b", "b"),
+            ("α", "αγ", "α", "α"),
+            ("ab", "abc", "ab", "ab"),
+            ("bc", "abc", "bc", "bc"),
+            ("αβ", "αβγ", "αβ", "αβ"),
+            ("aaabc", "ab", "aa", "aaab"),
+            ("aaabc", "b", "aaa", "aaab"),
+            ("aaabc", "ac", "aaabc", "aaabc"),
+            ("aaabc", "aab", "a", "aaab"),
+            ("aaabc", "aac", "aaabc", "aaabc"),
+            ("αααβγ", "αβ", "αα", "αααβ"),
+            ("αααβγ", "β", "ααα", "αααβ"),
+            ("αααβγ", "ααβ", "α", "αααβ"),
+            ("αααβγ", "αγ", "αααβγ", "αααβγ"),
+            ("barbarbarians", "barbarian", "bar", "barbarbarian"),
+            ("abcaabcaabcxl", "abcaabcx", "abca", "abcaabcaabcx"),
+            ("abbaabbaabbabbaax", "abbaabbabbaax", "abba", "abbaabbaabbabbaax"),
+            ("abbaabbabbaabbaabbabbaax", "abbaabbabbaax", "abbaabbabba", "abbaabbabbaabbaabbabbaax"),
+            ('a'^500 * 'x' * "bbbb", "x", 'a'^500, 'a'^500 * 'x'),
+           ]
+        local t, s, m, kept
+        @test readuntil(io(t), s) == m
+        @test readuntil(io(t), s, keep=true) == kept
+        @test readuntil(io(t), SubString(s, firstindex(s))) == m
+        @test readuntil(io(t), SubString(s, firstindex(s)), keep=true) == kept
+        @test readuntil(io(t), GenericString(s)) == m
+        @test readuntil(io(t), GenericString(s), keep=true) == kept
+        @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s)) == unsafe_wrap(Vector{UInt8},m)
+        @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s), keep=true) == unsafe_wrap(Vector{UInt8},kept)
+        @test readuntil(io(t), collect(s)::Vector{Char}) == Vector{Char}(m)
+        @test readuntil(io(t), collect(s)::Vector{Char}, keep=true) == Vector{Char}(kept)
+
+        buf = IOBuffer()
+        @test String(take!(copyuntil(buf, io(t), s))) == m
+        @test String(take!(copyuntil(buf, io(t), s, keep=true))) == kept
+        file = tempname()
+        for (k,m) in ((false, m), (true, kept))
+            open(file, "w") do f
+                @test f == copyuntil(f, io(t), s, keep=k)
+            end
+            @test read(file, String) == m
+        end
+        rm(file)
+    end
+    cleanup()
 
     write(filename, text)
 
@@ -149,11 +202,11 @@ for (name, f) in l
     @test read(io(), Int) == read(filename,Int)
     s1 = io()
     s2 = IOBuffer(text)
-    @test read(s1, UInt32, 2) == read(s2, UInt32, 2)
+    @test read!(s1, Vector{UInt32}(undef, 2)) == read!(s2, Vector{UInt32}(undef, 2))
     @test !eof(s1)
-    @test read(s1, UInt8, 5) == read(s2, UInt8, 5)
+    @test read!(s1, Vector{UInt8}(undef, 5)) == read!(s2, Vector{UInt8}(undef, 5))
     @test !eof(s1)
-    @test read(s1, UInt8, 1) == read(s2, UInt8, 1)
+    @test read!(s1, Vector{UInt8}(undef, 1)) == read!(s2, Vector{UInt8}(undef, 1))
     @test eof(s1)
     @test_throws EOFError read(s1, UInt8)
     @test eof(s1)
@@ -162,37 +215,38 @@ for (name, f) in l
 
     verbose && println("$name eof...")
     n = length(text) - 1
-    @test read!(io(), Vector{UInt8}(n)) ==
-          read!(IOBuffer(text), Vector{UInt8}(n))
-    @test (s = io(); read!(s, Vector{UInt8}(n)); !eof(s))
+    @test read!(io(), Vector{UInt8}(undef, n)) ==
+          read!(IOBuffer(text), Vector{UInt8}(undef, n))
+    @test (s = io(); read!(s, Vector{UInt8}(undef, n)); !eof(s))
     n = length(text)
-    @test read!(io(), Vector{UInt8}(n)) ==
-          read!(IOBuffer(text), Vector{UInt8}(n))
-    @test (s = io(); read!(s, Vector{UInt8}(n)); eof(s))
+    @test read!(io(), Vector{UInt8}(undef, n)) ==
+          read!(IOBuffer(text), Vector{UInt8}(undef, n))
+    @test (s = io(); read!(s, Vector{UInt8}(undef, n)); eof(s))
     n = length(text) + 1
-    @test_throws EOFError read!(io(), Vector{UInt8}(n))
-    @test_throws EOFError read!(io(), Vector{UInt8}(n))
+    @test_throws EOFError read!(io(), Vector{UInt8}(undef, n))
+    @test_throws EOFError read!(io(), Vector{UInt8}(undef, n))
 
     old_text = text
     cleanup()
 
-    for text in [
+    for text_ in [
         old_text,
         String(Char['A' + i % 52 for i in 1:(div(Base.SZ_UNBUFFERED_IO,2))]),
         String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO -1)]),
         String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO   )]),
         String(Char['A' + i % 52 for i in 1:(    Base.SZ_UNBUFFERED_IO +1)])
     ]
+        text = text_
         write(filename, text)
 
-        verbose && println("$name readstring...")
-        @test readstring(io()) == text
+        verbose && println("$name read(io, String)...")
+        @test read(io(), String) == text
 
-        @test readstring(io()) == readstring(filename)
+        @test read(io(), String) == read(filename, String)
 
 
         verbose && println("$name read...")
-        @test read(io()) == Vector{UInt8}(text)
+        @test read(io()) == unsafe_wrap(Vector{UInt8},text)
 
         @test read(io()) == read(filename)
 
@@ -202,8 +256,8 @@ for (name, f) in l
         verbose && println("$name readbytes!...")
         l = length(text)
         for n = [1, 2, l-2, l-1, l, l+1, l+2]
-            a1 = Vector{UInt8}(n)
-            a2 = Vector{UInt8}(n)
+            a1 = Vector{UInt8}(undef, n)
+            a2 = Vector{UInt8}(undef, n)
             s1 = io()
             s2 = IOBuffer(text)
             n1 = readbytes!(s1, a1)
@@ -220,58 +274,105 @@ for (name, f) in l
         verbose && println("$name read!...")
         l = length(text)
         for n = [1, 2, l-2, l-1, l]
-            @test read!(io(), Vector{UInt8}(n)) ==
-                  read!(IOBuffer(text), Vector{UInt8}(n))
-            @test read!(io(), Vector{UInt8}(n)) ==
-                  read!(filename, Vector{UInt8}(n))
+            @test read!(io(), Vector{UInt8}(undef, n)) ==
+                  read!(IOBuffer(text), Vector{UInt8}(undef, n))
+            @test read!(io(), Vector{UInt8}(undef, n)) ==
+                  read!(filename, Vector{UInt8}(undef, n))
 
             cleanup()
         end
-        @test_throws EOFError read!(io(), Vector{UInt8}(length(text)+1))
+        @test_throws EOFError read!(io(), Vector{UInt8}(undef, length(text)+1))
 
 
         verbose && println("$name readuntil...")
-        @test readuntil(io(), '\n') == readuntil(IOBuffer(text),'\n')
-        @test readuntil(io(), '\n') == readuntil(filename,'\n')
-        @test readuntil(io(), "\n") == readuntil(IOBuffer(text),"\n")
-        @test readuntil(io(), "\n") == readuntil(filename,"\n")
-        @test readuntil(io(), ',')  == readuntil(IOBuffer(text),',')
-        @test readuntil(io(), ',')  == readuntil(filename,',')
+        for keep in [false, true]
+            @test readuntil(io(), '\n', keep=keep) == readuntil(IOBuffer(text),'\n', keep=keep)
+            @test readuntil(io(), '\n', keep=keep) == readuntil(filename,'\n', keep=keep)
+            @test readuntil(io(), "\n", keep=keep) == readuntil(IOBuffer(text),"\n", keep=keep)
+            @test readuntil(io(), "\n", keep=keep) == readuntil(filename,"\n", keep=keep)
+            @test readuntil(io(), ',', keep=keep)  == readuntil(IOBuffer(text),',', keep=keep)
+            @test readuntil(io(), ',', keep=keep)  == readuntil(filename,',', keep=keep)
+        end
 
         cleanup()
 
         verbose && println("$name readline...")
-        @test readline(io(), chomp=false) == readline(IOBuffer(text), chomp=false)
-        @test readline(io(), chomp=false) == readline(filename, chomp=false)
+        file = tempname()
+        for lineending in ("\n", "\r\n", "")
+            kept = "foo bar" * lineending
+            t = isempty(lineending) ? "foo bar" : kept * "baz\n"
+            write(file, t)
+            @test readline(io(t)) == readline(file) == "foo bar"
+            @test readline(io(t), keep=true) == readline(file, keep=true) == kept
+
+            @test String(take!(copyline(IOBuffer(), file))) == "foo bar"
+            @test String(take!(copyline(IOBuffer(), file, keep=true))) == kept
+
+            cleanup()
+
+            buf = IOBuffer()
+            @test buf === copyline(buf, io(t))
+            @test String(take!(buf)) == "foo bar"
+            @test String(take!(copyline(buf, file, keep=true))) == kept
+            for keep in (true, false)
+                open(file, "w") do f
+                    @test f === copyline(f, io(t), keep=keep)
+                end
+                @test read(file, String) == (keep ? kept : "foo bar")
+            end
+
+            cleanup()
+
+            write(file, lineending)
+            @test readline(IOBuffer(lineending)) == ""
+            @test readline(IOBuffer(lineending), keep=true) == lineending
+            @test String(take!(copyline(IOBuffer(), IOBuffer(lineending)))) == ""
+            @test String(take!(copyline(IOBuffer(), IOBuffer(lineending), keep=true))) == lineending
+            @test readline(file) == ""
+            @test readline(file, keep=true) == lineending
+            @test String(take!(copyline(IOBuffer(), file))) == ""
+            @test String(take!(copyline(IOBuffer(), file, keep=true))) == lineending
+
+            cleanup()
+        end
+        rm(file)
 
         verbose && println("$name readlines...")
-        @test readlines(io(), chomp=false) == readlines(IOBuffer(text), chomp=false)
-        @test readlines(io(), chomp=false) == readlines(filename, chomp=false)
+        @test readlines(io(), keep=true) == readlines(IOBuffer(text), keep=true)
+        @test readlines(io(), keep=true) == readlines(filename, keep=true)
         @test readlines(io()) == readlines(IOBuffer(text))
         @test readlines(io()) == readlines(filename)
-        @test collect(eachline(io(), chomp=false)) == collect(eachline(IOBuffer(text), chomp=false))
-        @test collect(eachline(io(), chomp=false)) == collect(eachline(filename, chomp=false))
+        @test collect(eachline(io(), keep=true)) == collect(eachline(IOBuffer(text), keep=true))
+        @test collect(eachline(io(), keep=true)) == collect(eachline(filename, keep=true))
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
         @test collect(@inferred(eachline(io()))) == collect(@inferred(eachline(filename))) #20351
+        if try; seekend(io()); true; catch; false; end # reverse iteration only supports seekable streams
+            for keep in (true, false)
+                lines = readlines(io(); keep)
+                @test last(lines) == last(eachline(io(); keep))
+                @test last(lines,2) == last(eachline(io(); keep),2)
+                @test reverse!(lines) == collect(Iterators.reverse(eachline(io(); keep))) == collect(Iterators.reverse(eachline(IOBuffer(text); keep)))
+            end
+        end
+
+        cleanup()
+
+        verbose && println("$name readeach...")
+        @test collect(readeach(io(), Char)) == Vector{Char}(text)
+        @test collect(readeach(io(), UInt8)) == Vector{UInt8}(text)
 
         cleanup()
 
         verbose && println("$name countlines...")
         @test countlines(io()) == countlines(IOBuffer(text))
-
-        verbose && println("$name readcsv...")
-        @test readcsv(io()) == readcsv(IOBuffer(text))
-        @test readcsv(io()) == readcsv(filename)
-
-        cleanup()
     end
 
     text = old_text
     write(filename, text)
 
-    if !(typeof(io()) in [Base.PipeEndpoint, Pipe, TCPSocket])
+    if !isa(io(), Union{Base.PipeEndpoint, Base.AbstractPipe, TCPSocket})
         verbose && println("$name position...")
-        @test (s = io(); read!(s, Vector{UInt8}(4)); position(s))  == 4
+        @test (s = io(); read!(s, Vector{UInt8}(undef, 4)); position(s)) == 4
 
         verbose && println("$name seek...")
         for n = 0:length(text)-1
@@ -285,7 +386,7 @@ for (name, f) in l
             cleanup()
         end
         verbose && println("$name seekend...")
-        @test readstring(seekend(io())) == ""
+        @test read(seekend(io()), String) == ""
     end
 
 
@@ -293,14 +394,14 @@ for (name, f) in l
     to = open("$filename.to", "w")
     write(to, io())
     close(to)
-    @test readstring("$filename.to") == text
+    @test read("$filename.to", String) == text
 
     verbose && println("$name write(filename, ...)")
     write("$filename.to", io())
-    @test readstring("$filename.to") == text
+    @test read("$filename.to", String) == text
 
     verbose && println("$name write(::IOBuffer, ...)")
-    to = IOBuffer(copy(Vector{UInt8}(text)), false, true)
+    to = IOBuffer(Vector{UInt8}(codeunits(text)), read=false, write=true)
     write(to, io())
     @test String(take!(to)) == text
 
@@ -311,7 +412,7 @@ function test_read_nbyte()
     fn = tempname()
     # Write one byte. One byte read should work once
     # but 2-byte read should throw EOFError.
-    f = open(fn, "w+") do f
+    open(fn, "w+") do f
         write(f, 0x55)
         flush(f)
         seek(f, 0)
@@ -355,28 +456,28 @@ end
 test_read_nbyte()
 
 
-# DevNull
-@test !isreadable(DevNull)
-@test iswritable(DevNull)
-@test isopen(DevNull)
-@test write(DevNull, 0xff) === 1
-@test write(DevNull, Int32(1234)) === 4
-@test_throws EOFError read(DevNull, UInt8)
-@test close(DevNull) === nothing
-@test flush(DevNull) === nothing
-@test eof(DevNull)
-@test print(DevNull, "go to /dev/null") === nothing
+# devnull
+@test !isreadable(devnull)
+@test iswritable(devnull)
+@test isopen(devnull)
+@test write(devnull, 0xff) === 1
+@test write(devnull, Int32(1234)) === 4
+@test_throws EOFError read(devnull, UInt8)
+@test close(devnull) === nothing
+@test flush(devnull) === nothing
+@test eof(devnull)
+@test print(devnull, "go to /dev/null") === nothing
 
 
 let s = "qwerty"
-    @test read(IOBuffer(s)) == Vector{UInt8}(s)
-    @test read(IOBuffer(s), 10) == Vector{UInt8}(s)
-    @test read(IOBuffer(s), 1) == Vector{UInt8}(s)[1:1]
+    @test read(IOBuffer(s)) == codeunits(s)
+    @test read(IOBuffer(s), 10) == codeunits(s)
+    @test read(IOBuffer(s), 1) == codeunits(s)[1:1]
 
     # Test growing output array
     x = UInt8[]
     n = readbytes!(IOBuffer(s), x, 10)
-    @test x == Vector{UInt8}(s)
+    @test x == codeunits(s)
     @test n == length(x)
 end
 
@@ -415,13 +516,13 @@ rm(f)
 io = Base.Filesystem.open(f, Base.Filesystem.JL_O_WRONLY | Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL, 0o000)
 @test write(io, "abc") == 3
 close(io)
-if !is_windows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
+if !Sys.iswindows() && Libc.geteuid() != 0 # root user
     # msvcrt _wchmod documentation states that all files are readable,
     # so we don't test that it correctly set the umask on windows
     @test_throws SystemError open(f)
-    @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
+    @test_throws Base.IOError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
 else
-    is_windows() || warn("file permissions tests skipped due to running tests as root (not recommended)")
+    Sys.iswindows() || @warn "File permissions tests skipped due to running tests as root (not recommended)"
     close(open(f))
 end
 chmod(f, 0o400)
@@ -432,8 +533,8 @@ for i = 1:2
     @test !eof(f2)
     @test position(f1) == 0
     @test position(f2) == 0
-    @test readstring(f1) == readstring(f2) == "abc"
-    @test readstring(f1) == readstring(f2) == ""
+    @test read(f1, String) == read(f2, String) == "abc"
+    @test read(f1, String) == read(f2, String) == ""
     @test position(f1) == 3
     @test position(f2) == 3
     @test eof(f1)
@@ -460,16 +561,16 @@ end
 @test eof(f1)
 @test eof(f2)
 @test_throws ArgumentError write(f1, '*')
-@test_throws Base.UVError write(f2, '*')
+@test_throws Base.IOError write(f2, '*')
 close(f1)
 close(f2)
 @test eof(f1)
-@test_throws Base.UVError eof(f2)
-if get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
+@test_throws Base.IOError eof(f2)
+if Libc.geteuid() != 0 # root user
     @test_throws SystemError open(f, "r+")
-    @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
+    @test_throws Base.IOError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 else
-    warn("file permissions tests skipped due to running tests as root (not recommended)")
+    @warn "File permissions tests skipped due to running tests as root (not recommended)"
 end
 chmod(f, 0o600)
 f1 = open(f, "r+")
@@ -486,9 +587,154 @@ f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 @test !eof(f1)
 @test seekstart(f1) == f1
 @test seekstart(f2) == f2
-@test readstring(f1) == readstring(f2) == "abc\0\0\0\0\0\0\0**"
+@test read(f1, String) == read(f2, String) == "abc\0\0\0\0\0\0\0**"
 close(f1)
 close(f2)
 rm(f)
 
 end # mktempdir() do dir
+
+@testset "countlines" begin
+    @test countlines(IOBuffer("")) == 0
+    @test countlines(IOBuffer("\n")) == 1
+    @test countlines(IOBuffer("\n"), eol = '\r') == 1
+    @test countlines(IOBuffer("\r\r\n\r"), eol = '\r') == 3
+    @test countlines(IOBuffer("\n\n\n\n\n\n\n\n\n\n")) == 10
+    @test countlines(IOBuffer("\n \n \n \n \n \n \n \n \n \n")) == 10
+    @test countlines(IOBuffer("\r\n \r\n \r\n \r\n \r\n")) == 5
+    @test countlines(IOBuffer("foo\nbar")) == length(readlines(IOBuffer("foo\nbar"))) == 2
+    file = tempname()
+    write(file,"Spiffy header\nspectacular first row\neven better 2nd row\nalmost done\n")
+    @test countlines(file) == 4
+    @test countlines(file, eol = '\r') == 1
+    @test countlines(file, eol = '\n') == 4
+    rm(file)
+end
+
+let p = Pipe()
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    t = @async read(p)
+    @sync begin
+        @async write(p, zeros(UInt16, 660_000))
+        yield() # TODO: need to add an Event to the previous line
+        order::UInt16 = 0
+        for i = 1:typemax(UInt16)
+            @async (order += 1; write(p, order); nothing)
+        end
+        yield() # TODO: need to add an Event to the previous line
+        @async close(p.in)
+    end
+    s = reinterpret(UInt16, fetch(t))
+    @test length(s) == 660_000 + typemax(UInt16)
+    @test s[(end - typemax(UInt16)):end] == UInt16.(0:typemax(UInt16))
+end
+
+# issue #26419
+@test Base.return_types(read, (String, Type{String})) == Any[String]
+
+@testset "read! to view" begin
+    x = rand(4, 4)
+    y = rand(10)
+    z = 1:10
+    v = [1.0, 2.0, 3.0, 4.0]
+    io = IOBuffer()
+    write(io, v)
+    flush(io)
+    seekstart(io)
+    read!(io, @view x[:, 3])
+    @test x[:, 3] == v
+    x = rand(3, 3)
+    seekstart(io)
+    read!(io, @view x[1:2, 2:3])
+    @test x[1:2, 2:3][:] == v[:]
+    seekstart(io)
+    read!(io, @view y[4:7])
+    @test y[4:7] == v
+    seekstart(io)
+    @test_throws Base.CanonicalIndexError read!(io, @view z[4:6])
+end
+
+# Bulk read from pipe
+let p = Pipe()
+    data = rand(UInt8, Base.SZ_UNBUFFERED_IO + 100)
+    Base.link_pipe!(p, reader_supports_async=true, writer_supports_async=true)
+    t = @async write(p.in, data)
+    @test read(p.out, UInt8) == data[1]
+    data_read = Vector{UInt8}(undef, 10*Base.SZ_UNBUFFERED_IO)
+    nread = readbytes!(p.out, data_read, Base.SZ_UNBUFFERED_IO + 50)
+    @test nread == Base.SZ_UNBUFFERED_IO + 50
+    @test data_read[1:nread] == data[2:nread+1]
+    @test read(p.out, 49) == data[end-48:end]
+    wait(t)
+    close(p)
+end
+
+@testset "issue #27412" for itr in [eachline(IOBuffer("a")), readeach(IOBuffer("a"), Char)]
+    @test !isempty(itr)
+    # check that the earlier isempty did not consume the iterator
+    @test !isempty(itr)
+    first(itr) # consume the iterator
+    @test  isempty(itr) # now it is empty
+end
+
+@testset "readuntil/copyuntil fallbacks" begin
+    # test fallback for generic delim::T
+    buf = IOBuffer()
+    fib = [1,1,2,3,5,8,13,21]
+    write(buf, fib)
+    @test readuntil(seekstart(buf), 21) == fib[1:end-1]
+    @test readuntil(buf, 21) == Int[]
+    @test readuntil(seekstart(buf), 21; keep=true) == fib
+    out = IOBuffer()
+    @test copyuntil(out, seekstart(buf), 21) === out
+    @test reinterpret(Int, take!(out)) == fib[1:end-1]
+    @test copyuntil(out, seekstart(buf), 21; keep=true) === out
+    @test reinterpret(Int, take!(out)) == fib
+end
+
+# more tests for reverse(eachline)
+@testset "reverse(eachline)" begin
+    lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
+    for lines in (lines, reverse(lines)), finalnewline in (true, false), eol in ("\n", "\r\n")
+        buf = IOBuffer(join(lines, eol) * (finalnewline ? eol : ""))
+        @test reverse!(collect(Iterators.reverse(eachline(seekstart(buf))))) == lines
+        @test last(eachline(seekstart(buf))) == last(lines)
+        @test last(eachline(seekstart(buf)),10^4) == last(lines,10^4)
+        @test last(eachline(seekstart(buf)),length(lines)*2) == lines
+        @test reverse!(collect(Iterators.reverse(eachline(seek(buf, sum(sizeof, lines[1:100]) + 100*sizeof(eol)))))) == lines[101:end]
+        @test isempty(Iterators.reverse(eachline(buf)))
+    end
+
+    let rempty = Iterators.reverse(eachline(IOBuffer()))
+        @test isempty(rempty)
+        @test isempty(collect(rempty))
+    end
+
+    let buf = IOBuffer("foo\nbar")
+        @test readline(buf) == "foo"
+        r = Iterators.reverse(eachline(buf))
+        line, state = iterate(r)
+        @test line == "bar"
+        @test Base.isdone(r, state)
+        @test Base.isdone(r)
+        @test isempty(r) && isempty(collect(r))
+    end
+end
+
+@testset "Ref API" begin
+    io = PipeBuffer()
+    @test write(io, Ref{Any}(0xabcd_1234)) === 4
+    @test read(io, UInt32) === 0xabcd_1234
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Cvoid}}, io, C_NULL)
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Int}}, io, Ptr{Int}(0))
+    @test_throws ErrorException("write cannot copy from a Ptr") invoke(write, Tuple{typeof(io), Ref{Any}}, io, Ptr{Any}(0))
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, C_NULL)
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, Ptr{Int}(0))
+    @test_throws ErrorException("read! cannot copy into a Ptr") read!(io, Ptr{Any}(0))
+    @test eof(io)
+    @test write(io, C_NULL) === sizeof(Int)
+    @test write(io, Ptr{Int}(4)) === sizeof(Int)
+    @test write(io, Ptr{Any}(5)) === sizeof(Int)
+    @test read!(io, Int[1, 2, 3]) == [0, 4, 5]
+    @test eof(io)
+end

@@ -4,6 +4,10 @@ The following sections explain a few aspects of idiomatic Julia coding style. No
 are absolute; they are only suggestions to help familiarize you with the language and to help
 you choose among alternative designs.
 
+## Indentation
+
+Use 4 spaces per indentation level.
+
 ## Write functions, not just scripts
 
 Writing code as a series of steps at the top level is a quick way to get started solving a problem,
@@ -20,7 +24,7 @@ on global variables (aside from constants like [`pi`](@ref)).
 Code should be as generic as possible. Instead of writing:
 
 ```julia
-convert(Complex{Float64}, x)
+Complex{Float64}(x)
 ```
 
 it's better to use available generic functions:
@@ -86,13 +90,13 @@ One issue here is that if a function inherently requires integers, it might be b
 the caller to decide how non-integers should be converted (e.g. floor or ceiling). Another issue
 is that declaring more specific types leaves more "space" for future method definitions.
 
-## Append `!` to names of functions that modify their arguments
+## [Append `!` to names of functions that modify their arguments](@id bang-convention)
 
 Instead of:
 
 ```julia
 function double(a::AbstractArray{<:Number})
-    for i = 1:endof(a)
+    for i in eachindex(a)
         a[i] *= 2
     end
     return a
@@ -103,68 +107,136 @@ use:
 
 ```julia
 function double!(a::AbstractArray{<:Number})
-    for i = 1:endof(a)
+    for i in eachindex(a)
         a[i] *= 2
     end
     return a
 end
 ```
 
-The Julia standard library uses this convention throughout and contains examples of functions
-with both copying and modifying forms (e.g., [`sort()`](@ref) and [`sort!()`](@ref)), and others
-which are just modifying (e.g., [`push!()`](@ref), [`pop!()`](@ref), [`splice!()`](@ref)).  It
+Julia Base uses this convention throughout and contains examples of functions
+with both copying and modifying forms (e.g., [`sort`](@ref) and [`sort!`](@ref)), and others
+which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)).  It
 is typical for such functions to also return the modified array for convenience.
+
+Functions related to IO or making use of random number generators (RNG) are notable exceptions:
+Since these functions almost invariably must mutate the IO or RNG, functions ending with `!` are used to signify a mutation _other_ than mutating the IO or advancing the RNG state.
+For example, `rand(x)` mutates the RNG, whereas `rand!(x)` mutates both the RNG and `x`; similarly, `read(io)` mutates `io`, whereas `read!(io, x)` mutates both arguments.
 
 ## Avoid strange type `Union`s
 
 Types such as `Union{Function,AbstractString}` are often a sign that some design could be cleaner.
-
-## Avoid type Unions in fields
-
-When creating a type such as:
-
-```julia
-mutable struct MyType
-    ...
-    x::Union{Void,T}
-end
-```
-
-ask whether the option for `x` to be `nothing` (of type `Void`) is really necessary. Here are
-some alternatives to consider:
-
-  * Find a safe default value to initialize `x` with
-  * Introduce another type that lacks `x`
-  * If there are many fields like `x`, store them in a dictionary
-  * Determine whether there is a simple rule for when `x` is `nothing`. For example, often the field
-    will start as `nothing` but get initialized at some well-defined point. In that case, consider
-    leaving it undefined at first.
-  * If `x` really needs to hold no value at some times, define it as `::Nullable{T}` instead, as this
-    guarantees type-stability in the code accessing this field (see [Nullable types](@ref man-nullable-types)).
 
 ## Avoid elaborate container types
 
 It is usually not much help to construct arrays like the following:
 
 ```julia
-a = Array{Union{Int,AbstractString,Tuple,Array}}(n)
+a = Vector{Union{Int,AbstractString,Tuple,Array}}(undef, n)
 ```
 
-In this case `Array{Any}(n)` is better. It is also more helpful to the compiler to annotate specific
+In this case `Vector{Any}(undef, n)` is better. It is also more helpful to the compiler to annotate specific
 uses (e.g. `a[i]::Int`) than to try to pack many alternatives into one type.
 
-## Use naming conventions consistent with Julia's `base/`
+## Prefer exported methods over direct field access
+
+Idiomatic Julia code should generally treat a module's exported methods as the
+interface to its types. An object's fields are generally considered
+implementation details and user code should only access them directly if this
+is stated to be the API. This has several benefits:
+
+- Package developers are freer to change the implementation without breaking
+  user code.
+- Methods can be passed to higher-order constructs like [`map`](@ref) (e.g.
+  `map(imag, zs)`) rather than `[z.im for z in zs]`).
+- Methods can be defined on abstract types.
+- Methods can describe a conceptual operation that can be shared across
+  disparate types (e.g. `real(z)` works on Complex numbers or Quaternions).
+
+Julia's dispatch system encourages this style because `play(x::MyType)` only
+defines the `play` method on that particular type, leaving other types to
+have their own implementation.
+
+Similarly, non-exported functions are typically internal and subject to change,
+unless the documentations states otherwise. Names sometimes are given a `_` prefix
+(or suffix) to further suggest that something is "internal" or an
+implementation-detail, but it is not a rule.
+
+Counter-examples to this rule include [`NamedTuple`](@ref), [`RegexMatch`](@ref match), [`StatStruct`](@ref stat).
+
+## Use naming conventions consistent with Julia `base/`
 
   * modules and type names use capitalization and camel case: `module SparseArrays`, `struct UnitRange`.
-  * functions are lowercase ([`maximum()`](@ref), [`convert()`](@ref)) and, when readable, with multiple
-    words squashed together ([`isequal()`](@ref), [`haskey()`](@ref)). When necessary, use underscores
-    as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch()`](@ref)
-    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers ([`sum_kbn()`](@ref)).
-  * conciseness is valued, but avoid abbreviation ([`indexin()`](@ref) rather than `indxin()`) as
+  * functions are lowercase ([`maximum`](@ref), [`convert`](@ref)) and, when readable, with multiple
+    words squashed together ([`isequal`](@ref), [`haskey`](@ref)). When necessary, use underscores
+    as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch`](@ref)
+    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers.
+  * functions mutating at least one of their arguments end in `!`.
+  * conciseness is valued, but avoid abbreviation ([`indexin`](@ref) rather than `indxin`) as
     it becomes difficult to remember whether and how particular words are abbreviated.
 
 If a function name requires multiple words, consider whether it might represent more than one
 concept and might be better split into pieces.
+
+## Write functions with argument ordering similar to Julia Base
+
+As a general rule, the Base library uses the following order of arguments to functions,
+as applicable:
+
+1. **Function argument**.
+   Putting a function argument first permits the use of [`do`](@ref) blocks for passing
+   multiline anonymous functions.
+
+2. **I/O stream**.
+   Specifying the `IO` object first permits passing the function to functions such as
+   [`sprint`](@ref), e.g. `sprint(show, x)`.
+
+3. **Input being mutated**.
+   For example, in [`fill!(x, v)`](@ref fill!), `x` is the object being mutated and it
+   appears before the value to be inserted into `x`.
+
+4. **Type**.
+   Passing a type typically means that the output will have the given type.
+   In [`parse(Int, "1")`](@ref parse), the type comes before the string to parse.
+   There are many such examples where the type appears first, but it's useful to note that
+   in [`read(io, String)`](@ref read), the `IO` argument appears before the type, which is
+   in keeping with the order outlined here.
+
+5. **Input not being mutated**.
+   In `fill!(x, v)`, `v` is *not* being mutated and it comes after `x`.
+
+6. **Key**.
+   For associative collections, this is the key of the key-value pair(s).
+   For other indexed collections, this is the index.
+
+7. **Value**.
+   For associative collections, this is the value of the key-value pair(s).
+   In cases like [`fill!(x, v)`](@ref fill!), this is `v`.
+
+8. **Everything else**.
+   Any other arguments.
+
+9. **Varargs**.
+   This refers to arguments that can be listed indefinitely at the end of a function call.
+   For example, in `Matrix{T}(undef, dims)`, the dimensions can be given as a
+   [`Tuple`](@ref), e.g. `Matrix{T}(undef, (1,2))`, or as [`Vararg`](@ref)s,
+   e.g. `Matrix{T}(undef, 1, 2)`.
+
+10. **Keyword arguments**.
+   In Julia keyword arguments have to come last anyway in function definitions; they're
+   listed here for the sake of completeness.
+
+The vast majority of functions will not take every kind of argument listed above; the
+numbers merely denote the precedence that should be used for any applicable arguments
+to a function.
+
+There are of course a few exceptions.
+For example, in [`convert`](@ref), the type should always come first.
+In [`setindex!`](@ref), the value comes before the indices so that the indices can be
+provided as varargs.
+
+When designing APIs, adhering to this general order as much as possible is likely to give
+users of your functions a more consistent experience.
 
 ## Don't overuse try-catch
 
@@ -224,7 +296,7 @@ Decide whether the concept in question will be written as `MyType` or `MyType()`
 it.
 
 The preferred style is to use instances by default, and only add methods involving `Type{MyType}`
-later if they become necessary to solve some problem.
+later if they become necessary to solve some problems.
 
 If a type is effectively an enumeration, it should be defined as a single (ideally immutable struct or primitive)
 type, with the enumeration values being instances of it. Constructors and conversions can check
@@ -235,7 +307,7 @@ with the "values" as subtypes.
 
 Be aware of when a macro could really be a function instead.
 
-Calling [`eval()`](@ref) inside a macro is a particularly dangerous warning sign; it means the
+Calling [`eval`](@ref) inside a macro is a particularly dangerous warning sign; it means the
 macro will only work when called at the top level. If such a macro is written as a function instead,
 it will naturally have access to the run-time values it needs.
 
@@ -274,11 +346,10 @@ This would provide custom showing of vectors with a specific new element type. W
 this should be avoided. The trouble is that users will expect a well-known type like `Vector()`
 to behave in a certain way, and overly customizing its behavior can make it harder to work with.
 
-## Avoid type piracy
+## [Avoid type piracy](@id avoid-type-piracy)
 
 "Type piracy" refers to the practice of extending or redefining methods in Base
-or other packages on types that you have not defined. In some cases, you can get away with
-type piracy with little ill effect. In extreme cases, however, you can even crash Julia
+or other packages on types that you have not defined. In extreme cases, you can crash Julia
 (e.g. if your method extension or redefinition causes invalid input to be passed to a
 `ccall`). Type piracy can complicate reasoning about code, and may introduce
 incompatibilities that are hard to predict and diagnose.
@@ -307,11 +378,11 @@ higher-level, Julia-friendly API.
 
 ## Be careful with type equality
 
-You generally want to use [`isa()`](@ref) and `<:` ([`issubtype()`](@ref)) for testing types,
+You generally want to use [`isa`](@ref) and [`<:`](@ref) for testing types,
 not `==`. Checking types for exact equality typically only makes sense when comparing to a known
 concrete type (e.g. `T == Float64`), or if you *really, really* know what you're doing.
 
-## Do not write `x->f(x)`
+## Don't write a trivial anonymous function `x->f(x)` for a named function `f`
 
 Since higher-order functions are often called with anonymous functions, it is easy to conclude
 that this is desirable or even necessary. But any function can be passed directly, without being

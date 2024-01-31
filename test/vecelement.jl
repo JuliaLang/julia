@@ -1,12 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-make_value{T<:Integer}(::Type{T}, i::Integer) = 3*i%T
-make_value{T<:AbstractFloat}(::Type{T},i::Integer) = T(3*i)
+make_value(::Type{T}, i::Integer) where {T<:Integer} = 3*i%T
+make_value(::Type{T},i::Integer) where {T<:AbstractFloat} = T(3*i)
 
-Vec{N,T} = NTuple{N,Base.VecElement{T}}
+const Vec{N,T} = NTuple{N,Base.VecElement{T}}
 
 # Crash report for #15244 motivated this test.
-@generated function thrice_iota{N,T}(::Type{Vec{N,T}})
+@generated function thrice_iota(::Type{Vec{N,T}}) where {N,T}
     :(tuple($([:(Base.VecElement(make_value($T,$i))) for i in 1:N]...)))
 end
 
@@ -36,21 +36,20 @@ struct Bunch{N,T}
 end
 
 unpeel(x) = x.elts[1].value
-
 @test unpeel(Bunch{2,Float64}((Base.VecElement(5.0),
                                Base.VecElement(4.0)))) === 5.0
 
-rewrap(x) = VecElement(x.elts[1].value+0)
-b = Bunch((VecElement(1.0), VecElement(2.0)))
-
-@test rewrap(b)===VecElement(1.0)
+rewrap(x) = VecElement(x.elts[1].value + 0)
+let b = Bunch((VecElement(1.0), VecElement(2.0)))
+    @test rewrap(b) === VecElement(1.0)
+end
 
 struct Herd{N,T}
     elts::NTuple{N,Base.VecElement{T}}
     Herd{N,T}(elts::NTuple{N,T}) where {N,T} = new(ntuple(i->Base.VecElement{T}(elts[i]), N))
 end
 
-function check{N,T}(x::Herd{N,T})
+function check(x::Herd{N,T}) where {N,T}
     for i=1:N
         @test x.elts[i].value === N*N+i-1
     end
@@ -66,12 +65,20 @@ struct Gr{N, T}
     w::T
 end
 
-a = Vector{Gr{2,Float64}}(2)
-a[2] = Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
-a[1] = Gr(5.0, Bunch((VecElement(6.0), VecElement(7.0))), 8.0)
-@test a[2] == Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
+let a = Vector{Gr{2,Float64}}(undef, 2)
+    a[2] = Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
+    a[1] = Gr(5.0, Bunch((VecElement(6.0), VecElement(7.0))), 8.0)
+    @test a[2] == Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
+end
 
 @test isa(VecElement((1,2)), VecElement{Tuple{Int,Int}})
+
+# test for alignment agreement (#32414)
+@noinline function bar32414(a)
+    v = ntuple(w -> VecElement(Float64(10w)), Val(8))
+    return a, (v, (a, (1e6, 1e9)))
+end
+@test bar32414(-35.0) === (-35.0, ((VecElement(10.0), VecElement(20.0), VecElement(30.0), VecElement(40.0), VecElement(50.0), VecElement(60.0), VecElement(70.0), VecElement(80.0)), (-35.0, (1.0e6, 1.0e9))))
 
 # The following test mimic SIMD.jl
 const _llvmtypes = Dict{DataType, String}(
@@ -89,8 +96,8 @@ const _llvmtypes = Dict{DataType, String}(
     ret <$(N) x $(llvmT)> %3
     """
     return quote
-        Base.@_inline_meta
-        Base.llvmcall($exp, Vec{$N, $T}, Tuple{Vec{$N, $T}, Vec{$N, $T}}, x, y)
+        Base.@inline
+        Core.getfield(Base, :llvmcall)($exp, Vec{$N, $T}, Tuple{Vec{$N, $T}, Vec{$N, $T}}, x, y)
     end
 end
 
@@ -105,14 +112,8 @@ end
 # Test various SIMD Vectors with known good sizes
 for T in (Float64, Float32, Int64, Int32)
     for N in 1:36
-        # For some vectortypes Julia emits llvm arrays instead of vectors
-        if N %  7 == 0 || N % 11 == 0 || N % 13 == 0 || N % 15 == 0 ||
-           N % 19 == 0 || N % 23 == 0 || N % 25 == 0 || N % 27 == 0 ||
-           N % 29 == 0 || N % 31 == 0
-            continue
-        end
-        a = ntuple(i->VecElement(T(i)), N)
-        result = ntuple(i-> VecElement(T(i+i)), N)
+        a = ntuple(i -> VecElement(T(i)), N)
+        result = ntuple(i -> VecElement(T(i+i)), N)
         b = vecadd(a, a)
         @test b == result
         b = f20961([a], [a])

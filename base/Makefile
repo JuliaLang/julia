@@ -1,28 +1,36 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(abspath $(SRCDIR)/..)
-include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
+
+# import LLVM_SHARED_LIB_NAME
+include $(JULIAHOME)/deps/llvm-ver.make
 
 TAGGED_RELEASE_BANNER := ""
 
-ifneq ($(USEMSVC), 1)
-CPP_STDOUT := $(CPP) -P
-else
-CPP_STDOUT := $(CPP) -E
-endif
+all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony features_h.jl file_constants.jl uv_constants.jl version_git.jl.phony)
 
-all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony file_constants.jl uv_constants.jl version_git.jl.phony)
-
-PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+
+PCRE_CONST := 0x[0-9a-fA-F]+|[0-9]+|\([\-0-9]+\)
 ifeq ($(USE_SYSTEM_PCRE), 1)
   PCRE_INCL_PATH := $(shell $(PCRE_CONFIG) --prefix)/include/pcre2.h
 else
   PCRE_INCL_PATH := $(build_includedir)/pcre2.h
 endif
 
+define parse_features
+@echo "# $(2) features" >> $@
+@$(call PRINT_PERL, cat $(SRCDIR)/../src/features_$(1).h | perl -lne 'print "const JL_$(2)_$$1 = UInt32($$2)" if /^\s*JL_FEATURE_DEF(?:_NAME)?\(\s*(\w+)\s*,\s*([^,]+)\s*,.*\)\s*(?:\/\/.*)?$$/' >> $@)
+@echo >> $@
+endef
+
+$(BUILDDIR)/features_h.jl: $(SRCDIR)/../src/features_x86.h $(SRCDIR)/../src/features_aarch32.h $(SRCDIR)/../src/features_aarch64.h
+	@-rm -f $@
+	@$(call parse_features,x86,X86)
+	@$(call parse_features,aarch32,AArch32)
+	@$(call parse_features,aarch64,AArch64)
+
 $(BUILDDIR)/pcre_h.jl: $(PCRE_INCL_PATH)
-	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $< | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print "const $$1 = UInt32($$2)"' | LC_ALL=C sort > $@)
+	@$(call PRINT_PERL, $(CPP) -D PCRE2_CODE_UNIT_WIDTH=8 -dM $< | perl -nle '/^\s*#define\s+PCRE2_(\w*)\s*\(?($(PCRE_CONST))\)?u?\s*$$/ and print index($$1, "ERROR_") == 0 ? "const $$1 = Cint($$2)" : "const $$1 = UInt32($$2)"' | LC_ALL=C sort > $@)
 
 $(BUILDDIR)/errno_h.jl:
 	@$(call PRINT_PERL, echo '#include <errno.h>' | $(CPP) -dM - | perl -nle 'print "const $$1 = Int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | LC_ALL=C sort > $@)
@@ -30,7 +38,7 @@ $(BUILDDIR)/errno_h.jl:
 $(BUILDDIR)/file_constants.jl: $(SRCDIR)/../src/file_constants.h
 	@$(call PRINT_PERL, $(CPP_STDOUT) -DJULIA $< | perl -nle 'print "$$1 0o$$2" if /^(\s*const\s+[A-z_]+\s+=)\s+(0[0-9]*)\s*$$/; print "$$1" if /^\s*(const\s+[A-z_]+\s+=\s+([1-9]|0x)[0-9A-z]*)\s*$$/' > $@)
 
-$(BUILDDIR)/uv_constants.jl: $(SRCDIR)/../src/uv_constants.h $(build_includedir)/uv-errno.h
+$(BUILDDIR)/uv_constants.jl: $(SRCDIR)/../src/uv_constants.h $(LIBUV_INC)/uv/errno.h
 	@$(call PRINT_PERL, $(CPP_STDOUT) "-I$(LIBUV_INC)" -DJULIA $< | tail -n 16 > $@)
 
 $(BUILDDIR)/build_h.jl.phony:
@@ -41,8 +49,6 @@ else
 	@echo "const MACHINE = \"$(XC_HOST)\"" >> $@
 endif
 	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
-	@echo "const libblas_name = \"$(LIBBLASNAME)\"" >> $@
-	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 ifeq ($(USE_BLAS64), 1)
 	@echo "const USE_BLAS64 = true" >> $@
 else
@@ -54,14 +60,39 @@ else
 	@echo "const USE_GPL_LIBS = false" >> $@
 endif
 	@echo "const libllvm_version_string = \"$$($(LLVM_CONFIG_HOST) --version)\"" >> $@
+	@echo "const libllvm_name = \"$(LLVM_SHARED_LIB_NAME)\"" >> $@
 	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
+ifeq ($(OS),WINNT)
+	@printf 'const SYSCONFDIR = "%s"\n' '$(subst /,\\,$(sysconfdir_rel))' >> $@
+	@printf 'const DATAROOTDIR = "%s"\n' '$(subst /,\\,$(datarootdir_rel))' >> $@
+	@printf 'const DOCDIR = "%s"\n' '$(subst /,\\,$(docdir_rel))' >> $@
+	@printf 'const LIBDIR = "%s"\n' '$(subst /,\\,$(libdir_rel))' >> $@
+	@printf 'const LIBEXECDIR = "%s"\n' '$(subst /,\\,$(libexecdir_rel))' >> $@
+	@printf 'const PRIVATE_LIBDIR = "%s"\n' '$(subst /,\\,$(private_libdir_rel))' >> $@
+	@printf 'const PRIVATE_LIBEXECDIR = "%s"\n' '$(subst /,\\,$(private_libexecdir_rel))' >> $@
+	@printf 'const INCLUDEDIR = "%s"\n' '$(subst /,\\,$(includedir_rel))' >> $@
+else
 	@echo "const SYSCONFDIR = \"$(sysconfdir_rel)\"" >> $@
 	@echo "const DATAROOTDIR = \"$(datarootdir_rel)\"" >> $@
 	@echo "const DOCDIR = \"$(docdir_rel)\"" >> $@
 	@echo "const LIBDIR = \"$(libdir_rel)\"" >> $@
+	@echo "const LIBEXECDIR = \"$(libexecdir_rel)\"" >> $@
 	@echo "const PRIVATE_LIBDIR = \"$(private_libdir_rel)\"" >> $@
+	@echo "const PRIVATE_LIBEXECDIR = \"$(private_libexecdir_rel)\"" >> $@
 	@echo "const INCLUDEDIR = \"$(includedir_rel)\"" >> $@
+endif
+ifeq ($(DARWIN_FRAMEWORK), 1)
+	@echo "const DARWIN_FRAMEWORK = true" >> $@
+	@echo "const DARWIN_FRAMEWORK_NAME = \"$(FRAMEWORK_NAME)\"" >> $@
+else
+	@echo "const DARWIN_FRAMEWORK = false" >> $@
+endif
+ifeq ($(OS), Darwin)
+	@echo "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
+	@echo "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --show-sdk-version)\"" >> $@
+endif
+	@echo "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible
@@ -75,7 +106,7 @@ endif
 $(BUILDDIR)/version_git.jl.phony: $(SRCDIR)/version_git.sh
 ifneq ($(NO_GIT), 1)
 	sh $< $(SRCDIR) > $@
-	@# This to avoid touching git_version.jl when it is not modified,
+	@# This to avoid touching version_git.jl when it is not modified,
 	@# so that the system image does not need to be rebuilt.
 	@if ! cmp -s $@ version_git.jl; then \
 	    $(call PRINT_PERL,) \
@@ -95,15 +126,196 @@ else
 endif
 endif
 
-.PHONY: $(BUILDDIR)/build_h.jl.phony $(BUILDDIR)/version_git.jl.phony clean all
+ifeq (,$(filter $(OS), WINNT emscripten))
+# For any USE_SYSTEM_* libraries that will be dynamically loaded by libjulia,
+# put a symlink in the private libdir.
+# System package managers may want to install these links manually,
+# but if not, this will try to create the proper symlink to the right minor version.
+all: symlink_system_libraries
+SYMLINK_SYSTEM_LIBRARIES :=
+
+# if it's a symlink, pick up the symlink target instead, for one level of indirection
+resolve_path = \
+	$1_wd="`pwd`" && \
+	$1_=`readlink -n $${$1} || true` && \
+	if [ -n "$${$1_}" ]; then $1_wd=`dirname "$${$1}"`; $1="$${$1_}"; fi
+## if it's a relative path, make it an absolute path
+resolve_path += && \
+	if [ -z "`echo $${$1} | grep '^/'`" ]; then $1=$${$1_wd}/$${$1}; fi
+ifeq ($(OS), Darwin)
+# try to use the install_name id instead (unless it is an @rpath or such)
+# if it's a relative path, make it an absolute path using the working directory from $1,
+# while in theory incorrect, this has been observed to be a common build mistake for many libraries
+resolve_path += && \
+	$1_=`otool -D $${$1} | tail -n +2 | sed -e 's/^@.*$$//'` && \
+	if [ -n "$${$1_}" ]; then \
+	$1_wd=`dirname "$${$1}"`; $1=$${$1_}; \
+	if [ -z "`echo $${$1} | grep '^/'`" ]; then $1=$${$1_wd}/$${$1}; fi; \
+	fi
+else
+# try to use the SO_NAME (if the named file exists)
+resolve_path += && \
+	$1_=`objdump -p "$${$1}" | awk '/SONAME/ {print $$2}'` && \
+	if [ -n "$${$1_}" ]; then \
+	$1_=$$(dirname "$${$1}")/$${$1_}; \
+	if [ -e "$${$1_}" ]; then $1=$${$1_}; fi; \
+	fi
+endif
+
+## debug code: `make resolve-path P=<path to test>`
+#resolve_path += && \
+#	echo "$${$1_wd} $${$1}"
+#resolve-path:
+#	$(call resolve_path,P) && \
+#	echo "$$P"
+
+define symlink_system_library
+libname_$2 := $$(notdir $(call versioned_libname,$2,$3))
+libpath_$2 := $$(shell $$(call spawn,$$(LIBWHICH)) -p $$(libname_$2) 2>/dev/null)
+symlink_$2: $$(build_private_libdir)/$$(libname_$2)
+$$(build_private_libdir)/$$(libname_$2):
+	@if [ -e "$$(libpath_$2)" ]; then \
+		REALPATH=$$(libpath_$2); \
+		$$(call resolve_path,REALPATH) && \
+		[ -e "$$$$REALPATH" ] && \
+		rm -f "$$@" && \
+		echo ln -sf "$$$$REALPATH" "$$@" && \
+		ln -sf "$$$$REALPATH" "$$@"; \
+	else \
+		if [ "$4" != "ALLOW_FAILURE" ]; then \
+			echo "System library symlink failure: Unable to locate $$(libname_$2) on your system!" >&2; \
+			false; \
+		fi; \
+	fi
+ifneq ($$(USE_SYSTEM_$1),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_$2
+endif
+endef
+
+# libexec executables
+symlink_p7zip: $(build_bindir)/7z$(EXE)
+
+ifneq ($(USE_SYSTEM_P7ZIP),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_p7zip
+7Z_PATH := $(shell which 7z$(EXE))
+endif
+
+$(build_bindir)/7z$(EXE):
+	[ -e "$(7Z_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(7Z_PATH)" "$@"
+
+symlink_llvm_utils: $(build_depsbindir)/lld$(EXE) $(build_depsbindir)/dsymutil$(EXE)
+
+ifneq ($(USE_SYSTEM_LLD),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_llvm_utils
+LLD_PATH := $(shell which lld$(EXE))
+DSYMUTIL_PATH := $(shell which dsymutil$(EXE))
+endif
+
+$(build_depsbindir)/lld$(EXE):
+	[ -e "$(LLD_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(LLD_PATH)" "$@"
+
+$(build_depsbindir)/dsymutil$(EXE):
+	[ -e "$(DSYMUTIL_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(DSYMUTIL_PATH)" "$@"
+
+# the following excludes: libuv.a, libutf8proc.a
+
+ifneq ($(USE_SYSTEM_LIBM),0)
+$(eval $(call symlink_system_library,LIBM,$(LIBMNAME)))
+else ifneq ($(USE_SYSTEM_OPENLIBM),0)
+$(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
+endif
+
+# On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
+# (-> libgfortran 5) on x86_64
+ifeq ($(OS),Darwin)
+ifeq ($(ARCH),aarch64)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
+ifeq ($(LIBGFORTRAN_VERSION),5)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
+$(eval $(call symlink_system_library,CSL,libgcc_s,1))
+endif
+endif
+else
+$(eval $(call symlink_system_library,CSL,libgcc_s,1))
+endif
+ifneq (,$(LIBGFORTRAN_VERSION))
+$(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))
+endif
+$(eval $(call symlink_system_library,CSL,libquadmath,0))
+$(eval $(call symlink_system_library,CSL,libstdc++,6))
+# We allow libssp, libatomic and libgomp to fail as they are not available on all systems
+$(eval $(call symlink_system_library,CSL,libssp,0,ALLOW_FAILURE))
+$(eval $(call symlink_system_library,CSL,libatomic,1,ALLOW_FAILURE))
+$(eval $(call symlink_system_library,CSL,libgomp,1,ALLOW_FAILURE))
+$(eval $(call symlink_system_library,PCRE,libpcre2-8))
+$(eval $(call symlink_system_library,DSFMT,libdSFMT))
+$(eval $(call symlink_system_library,LIBBLASTRAMPOLINE,libblastrampoline))
+$(eval $(call symlink_system_library,BLAS,$(LIBBLASNAME)))
+ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
+$(eval $(call symlink_system_library,LAPACK,$(LIBLAPACKNAME)))
+endif
+$(eval $(call symlink_system_library,GMP,libgmp))
+$(eval $(call symlink_system_library,MPFR,libmpfr))
+$(eval $(call symlink_system_library,MBEDTLS,libmbedtls))
+$(eval $(call symlink_system_library,MBEDTLS,libmbedcrypto))
+$(eval $(call symlink_system_library,MBEDTLS,libmbedx509))
+$(eval $(call symlink_system_library,LIBSSH2,libssh2))
+$(eval $(call symlink_system_library,NGHTTP2,libnghttp2))
+$(eval $(call symlink_system_library,CURL,libcurl))
+$(eval $(call symlink_system_library,LIBGIT2,libgit2))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libamd))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libcamd))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libccolamd))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libcholmod))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libcolamd))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libumfpack))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libspqr))
+$(eval $(call symlink_system_library,LIBSUITESPARSE,libsuitesparseconfig))
+# EXCLUDED LIBRARIES (installed/used, but not vendored for use with dlopen):
+# libunwind
+endif # WINNT
+
+symlink_libLLVM: $(build_private_libdir)/libLLVM.$(SHLIB_EXT)
+ifneq ($(USE_SYSTEM_LLVM),0)
+LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libfiles)
+# HACK: llvm-config doesn't correctly point to shared libs on all platforms
+#       https://github.com/JuliaLang/julia/issues/29981
+else
+LLVM_CONFIG_HOST_LIBS := $(shell $(LLVM_CONFIG_HOST) --libdir)/libLLVM.$(SHLIB_EXT)
+endif
+$(build_private_libdir)/libLLVM.$(SHLIB_EXT):
+	REALPATH=$(LLVM_CONFIG_HOST_LIBS) && \
+	$(call resolve_path,REALPATH) && \
+	[ -e "$$REALPATH" ] && \
+	rm -f "$@" && \
+	echo ln -sf "$$REALPATH" "$@" && \
+	ln -sf "$$REALPATH" "$@"
+ifneq ($(USE_SYSTEM_LLVM),0)
+ifneq ($(USE_LLVM_SHLIB),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_libLLVM
+endif
+endif
+
+symlink_system_libraries: $(SYMLINK_SYSTEM_LIBRARIES)
+
+.PHONY: $(BUILDDIR)/build_h.jl.phony $(BUILDDIR)/version_git.jl.phony clean all symlink_*
 
 clean:
-	rm -f $(BUILDDIR)/pcre_h.jl
-	rm -f $(BUILDDIR)/errno_h.jl
-	rm -f $(BUILDDIR)/build_h.jl
-	rm -f $(BUILDDIR)/build_h.jl.phony
-	rm -f $(BUILDDIR)/fenv_constants.jl # To be removed
-	rm -f $(BUILDDIR)/uv_constants.jl
-	rm -f $(BUILDDIR)/file_constants.jl
-	rm -f $(BUILDDIR)/version_git.jl
-	rm -f $(BUILDDIR)/version_git.jl.phony
+	-rm -f $(BUILDDIR)/pcre_h.jl
+	-rm -f $(BUILDDIR)/errno_h.jl
+	-rm -f $(BUILDDIR)/build_h.jl
+	-rm -f $(BUILDDIR)/build_h.jl.phony
+	-rm -f $(BUILDDIR)/features_h.jl
+	-rm -f $(BUILDDIR)/uv_constants.jl
+	-rm -f $(BUILDDIR)/file_constants.jl
+	-rm -f $(BUILDDIR)/version_git.jl
+	-rm -f $(BUILDDIR)/version_git.jl.phony
+	-rm -f $(build_private_libdir)/lib*.$(SHLIB_EXT)*

@@ -2,16 +2,30 @@
 
 import Base.Docs: meta, @var, DocStr, parsedoc
 
+using Markdown
+using REPL
+
+using REPL: @repl, repl_latex, _repl, accessible
+using InteractiveUtils: apropos
+
 # For curmod_*
 include("testenv.jl")
 
 # Test helpers.
-function docstrings_equal(d1, d2)
+function docstrings_equal(d1, d2; debug=true)
     io1 = IOBuffer()
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
-    String(take!(io1)) == String(take!(io2))
+    s1 = String(take!(io1))
+    s2 = String(take!(io2))
+    if debug && s1 != s2
+        print(s1)
+        println("--------------------------------------------------------------------------------")
+        print(s2)
+        println("================================================================================")
+    end
+    return s1 == s2
 end
 docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
 
@@ -24,18 +38,25 @@ function docstring_startswith(d1, d2)
 end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
-@doc "Doc abstract type" ->
+@doc "Doc abstract type"
 abstract type C74685{T,N} <: AbstractArray{T,N} end
-@test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
+@test repr("text/plain", Docs.doc(C74685))=="  Doc abstract type"
+@test string(Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
-@doc "Helps test if macros can be documented with `@doc \"...\" -> @...`." ->
+@doc "Helps test if macros can be documented with `@doc \"...\" @...`."
 :@macro_doctest
 
 @test (@doc @macro_doctest) !== nothing
 
+@test (@eval @doc $(Meta.parse("{a"))) isa Markdown.MD
+@test (@eval @doc $(Meta.parse("``"))) isa Markdown.MD
+@test (@eval @doc $(Meta.parse("``"))) == (@doc @cmd)
+@test (@eval @doc $(Meta.parse("123456789012345678901234567890"))) == (@doc @int128_str)
+@test (@eval @doc $(Meta.parse("1234567890123456789012345678901234567890"))) == (@doc @big_str)
+
 # test that random stuff interpolated into docstrings doesn't break search or other methods here
-doc"""
+@doc doc"""
 break me:
 
     code
@@ -47,6 +68,37 @@ $$latex literal$$
 ### header!
 """
 function break_me_docs end
+
+
+# `hasdoc` returns `true` on a name with a docstring.
+@test Docs.hasdoc(Base, :map)
+# `hasdoc` returns `false` on a name without a docstring.
+@test !isdefined(Base, :_this_name_doesnt_exist_) && !Docs.hasdoc(Base, :_this_name_doesnt_exist_)
+@test isdefined(Base, :_typed_vcat) && !Docs.hasdoc(Base, :_typed_vcat)
+
+"This module has names without documentation."
+module _ModuleWithUndocumentedNames
+export f
+public ⨳, @foo
+f() = 1
+g() = 2
+⨳(a,b) = a * b
+macro foo(); nothing; end
+⊕(a,b) = a + b
+end
+
+"This module has some documentation."
+module _ModuleWithSomeDocumentedNames
+export f
+"f() is 1."
+f() = 1
+g() = 2
+end
+
+@test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [Symbol("@foo"), :f, :⨳]
+@test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:eval, :g, :include]
+
 
 # issue #11548
 
@@ -60,11 +112,18 @@ end
 @test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module")
 @test docstrings_equal(@doc(ModuleMacroDoc.@m), doc"I am a macro")
 
+# issue #38819
+
+module NoDocStrings end
+@test meta(NoDocStrings) === getfield(NoDocStrings, Base.Docs.META)
+
 # General tests for docstrings.
 
 const LINE_NUMBER = @__LINE__() + 1
 "DocsTest"
 module DocsTest
+
+using Markdown
 
 "f-1"
 function f(x)
@@ -135,14 +194,26 @@ const K = :K
 
 t(x::AbstractString) = x
 t(x::Int, y) = y
-t{S <: Integer}(x::S) = x
+t(x::S) where {S <: Integer} = x
 
 "t-1"
 t(::AbstractString)
 "t-2"
 t(::Int, ::Any)
 "t-3"
-t{S <: Integer}(::S)
+t(::S) where {S <: Integer}
+
+# Docstrings to parametric methods after definition using where syntax (#32960):
+tw(x::T) where T = nothing
+tw(x::T, y::U) where {T, U <: Integer} = nothing
+tw(x::T, y::U, z::V) where T where U <: Integer where V <: AbstractFloat = nothing
+
+"tw-1"
+tw(x::T) where T
+"tw-2"
+tw(x::T, y::U) where {T, U <: Integer}
+"tw-3"
+tw(x::T, y::U, z::V) where T where U <: Integer where V <: AbstractFloat
 
 "FieldDocs"
 mutable struct FieldDocs
@@ -183,6 +254,13 @@ returntype(x::Float64)::Float64 = x
 function returntype(x::Int)::Int
     x
 end
+
+# @nospecialize (issue #34122)
+"`fnospecialize` for Numbers"
+fnospecialize(@nospecialize(x::Number)) = 1
+
+"`fnospecialize` for arrays"
+fnospecialize(@nospecialize(x::AbstractArray)) = 2
 
 end
 
@@ -257,6 +335,14 @@ let rt = @var(DocsTest.returntype)
     @test md.order == [Tuple{Float64}, Tuple{Int}]
 end
 
+let fns = @var(DocsTest.fnospecialize)
+    md = meta(DocsTest)[fns]
+    d = md.docs[Tuple{Number}]
+    @test docstrings_equal(d, doc"`fnospecialize` for Numbers")
+    d = md.docs[Tuple{AbstractArray}]
+    @test docstrings_equal(d, doc"`fnospecialize` for arrays")
+end
+
 @test docstrings_equal(@doc(DocsTest.TA), doc"TA")
 
 @test docstrings_equal(@doc(DocsTest.@mac), doc"@mac()")
@@ -295,7 +381,7 @@ let d1 = @doc(DocsTest.t(::Int, ::Any)),
     @test docstrings_equal(d1,d2)
 end
 
-let d1 = @doc(DocsTest.t{S <: Integer}(::S)),
+let d1 = @doc(DocsTest.t(::S) where {S <: Integer}),
     d2 = doc"t-3"
     @test docstrings_equal(d1,d2)
 end
@@ -391,6 +477,7 @@ macro example_1(f)
     end |> esc
 end
 
+const LINE_NUMBER_F = @__LINE__() + 1
 "f"
 @example_1 f
 
@@ -404,16 +491,23 @@ macro example_2(f)
     end |> esc
 end
 
+const LINE_NUMBER_G = @__LINE__() + 1
 "g"
 @example_2 g
 
 @example_2 _g
+
+const LINE_NUMBER_T = @__LINE__() + 1
+"T"
+Base.@kwdef struct T end
 
 end
 
 let md = meta(MacroGenerated)[@var(MacroGenerated.f)]
     @test md.order == [Tuple{Any}]
     @test docstrings_equal(md.docs[Tuple{Any}], doc"f")
+    @test md.docs[Tuple{Any}].data[:linenumber] == MacroGenerated.LINE_NUMBER_F
+    @test md.docs[Tuple{Any}].data[:path] == @__FILE__()
 end
 
 @test isdefined(MacroGenerated, :_f)
@@ -422,9 +516,18 @@ let md = meta(MacroGenerated)[@var(MacroGenerated.g)]
     @test md.order == [Tuple{Any}, Tuple{Any, Any}]
     @test docstrings_equal(md.docs[Tuple{Any}], doc"g")
     @test docstrings_equal(md.docs[Tuple{Any, Any}], doc"g")
+    @test md.docs[Tuple{Any}].data[:linenumber] == MacroGenerated.LINE_NUMBER_G
+    @test md.docs[Tuple{Any}].data[:path] == @__FILE__()
 end
 
 @test isdefined(MacroGenerated, :_g)
+
+let md = meta(MacroGenerated)[@var(MacroGenerated.T)]
+    @test md.order == Type[Union{}]
+    @test docstrings_equal(md.docs[Union{}], doc"T")
+    @test md.docs[Union{}].data[:linenumber] == MacroGenerated.LINE_NUMBER_T
+    @test md.docs[Union{}].data[:path] == @__FILE__()
+end
 
 module DocVars
 
@@ -522,6 +625,8 @@ end
 
 module I15424
 
+using REPL
+
 struct LazyHelp
     text
 end
@@ -540,7 +645,7 @@ function Base.Docs.catdoc(hs::LazyHelp...)
     end
 end
 
-Docs.docsearch(haystack::LazyHelp, needle) = Docs.docsearch(haystack.text, needle)
+REPL.docsearch(haystack::LazyHelp, needle) = REPL.docsearch(haystack.text, needle)
 
 @doc LazyHelp("LazyHelp\n") LazyHelp
 @doc LazyHelp("LazyHelp(text)\n") LazyHelp(text)
@@ -548,11 +653,17 @@ Docs.docsearch(haystack::LazyHelp, needle) = Docs.docsearch(haystack.text, needl
 end
 
 let d = @doc(I15424.LazyHelp)
-    @test stringmime("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
+    @test repr("text/plain", d) == "LazyHelp\nLazyHelp(text)\n"
+    # (no internal warning is inserted for non-markdown content)
 end
 
 # Issue #13385.
-@test @doc(I) !== nothing
+struct I13385
+    λ
+end
+"issue #13385"
+const i13385 = I13385(true)
+@test @doc(i13385) !== nothing
 
 # Issue #12700.
 @test docstrings_equal(@doc(DocsTest.@m), doc"Inner.@m")
@@ -563,15 +674,15 @@ macro m1_11993()
 end
 
 macro m2_11993()
-    Symbol("@m1_11993")
+    esc(Symbol("@m1_11993"))
 end
 
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc :@m2_11993),
-    macro_doc = Markdown.parse("`$(curmod_prefix)@m2_11993` is a macro.")
+    macro_doc = Markdown.parse("`$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993` is a macro.")
     @test docstring_startswith(d, doc"""
-    No documentation found.
+    No documentation found for private symbol.
 
     $macro_doc""")
 end
@@ -586,7 +697,7 @@ end
 
 f1_11993()
 
-@doc "Document inline function with old syntax" ->
+@doc "Document inline function with old syntax"
 @inline f2_11993() = nothing
 
 @test (@doc f2_11993) !== nothing
@@ -613,7 +724,7 @@ module I12515
 struct EmptyType{T} end
 
 "A new method"
-Base.collect{T}(::Type{EmptyType{T}}) = "borked"
+Base.collect(::Type{EmptyType{T}}) where {T} = "borked"
 
 end
 
@@ -633,29 +744,29 @@ f12593_2() = 1
 @test (@doc f12593_2) !== nothing
 
 # @test Docs.doc(svdvals, Tuple{Vector{Float64}}) === nothing
-@test Docs.doc(svdvals, Tuple{Float64}) !== nothing
+# @test Docs.doc(svdvals, Tuple{Float64}) !== nothing
 
 # crude test to make sure we sort docstring output by method specificity
 @test !docstrings_equal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
-                        Docs.doc(getindex, Tuple{Type{Int64},Int}))
+                        Docs.doc(getindex, Tuple{Type{Int64},Int}); debug=false)
 
 # test that macro documentation works
-@test (Docs.@repl :@assert) !== nothing
+@test (@repl :@assert) !== nothing
 
-@test (Docs.@repl 0) !== nothing
+@test (@repl 0) !== nothing
 
 let t = @doc(DocsTest.t(::Int, ::Int))
-    @test docstrings_equal(Docs.@repl(DocsTest.t(0, 0)), t)
-    @test docstrings_equal(Docs.@repl(DocsTest.t(::Int, ::Int)), t)
+    @test docstrings_equal(@repl(DocsTest.t(0, 0)), t)
+    @test docstrings_equal(@repl(DocsTest.t(::Int, ::Int)), t)
 end
 
 # Issue #13467.
-@test (Docs.@repl :@r_str) !== nothing
+@test (@repl :@r_str) !== nothing
 
 # Simple tests for apropos:
-@test contains(sprint(apropos, "pearson"), "cor")
-@test contains(sprint(apropos, r"ind(exes|ices)"), "eachindex")
-@test contains(sprint(apropos, "print"), "Profile.print")
+@test occursin("eachindex", sprint(apropos, r"ind(exes|ices)"))
+using Profile
+@test occursin("Profile.print", sprint(apropos, "print"))
 
 # Issue #13068.
 
@@ -706,11 +817,17 @@ end
 )
 
 # Issue #13905.
-@test @macroexpand(@doc "" f() = @x) == Expr(:error, UndefVarError(Symbol("@x")))
+let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
+    err::UndefVarError
+    @test err.var === Symbol("@x")
+ end
+
 
 # Undocumented DataType Summaries.
 
 module Undocumented
+
+export A, B, C, at0, pt2
 
 abstract type A end
 abstract type B <: A end
@@ -723,13 +840,54 @@ struct D <: B
     three::Float64
 end
 
+abstract type at0{T<:Number,N} end
+abstract type at1{T>:Integer,N} <:at0{T,N} end
+
+const at_ = at0{Int64}
+
+primitive type pt2{T<:Number,N,A>:Integer} <:at0{T,N} 32 end
+
+struct st3{T<:Integer,N} <: at0{T,N}
+    a::NTuple{N,T}
+    b::Array{Int64,N}
+    c::Int64
+end
+
+struct st4{T,N} <: at0{T,N}
+    a::T
+    b::NTuple{N,T}
+end
+
+struct st5{T>:Int64,N} <:at1{T,N}
+    c::st3{T,N}
+end
+
+mutable struct mt6{T<:Integer,N} <:at1{T,N}
+    d::st5{T,N}
+end
+
+const ut7 = Union{st5, mt6}
+
+const ut8 = Union{at1, pt2, st3, st4}
+
+const ut9{T} = Union{at1{T}, pt2{T}, st3{T}, st4{T}}
+
 f = () -> nothing
 
 undocumented() = 1
 undocumented(x) = 2
 undocumented(x,y) = 3
 
-end
+end # module
+
+doc_str = Markdown.parse("""
+No docstring or readme file found for internal module `$(curmod_prefix)Undocumented`.
+
+# Public names
+
+`A`, `B`, `C`, `at0`, `pt2`
+""")
+@test docstrings_equal(@doc(Undocumented), doc"$doc_str")
 
 doc_str = Markdown.parse("""
 No documentation found.
@@ -739,14 +897,14 @@ Binding `$(curmod_prefix)Undocumented.bindingdoesnotexist` does not exist.
 @test docstrings_equal(@doc(Undocumented.bindingdoesnotexist), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
-**Summary:**
+# Summary
 ```
-abstract type $(curmod_prefix)Undocumented.A <: Any
+abstract type $(curmod_prefix)Undocumented.A
 ```
 
-**Subtypes:**
+# Subtypes
 ```
 $(curmod_prefix)Undocumented.B
 $(curmod_prefix)Undocumented.C
@@ -755,19 +913,19 @@ $(curmod_prefix)Undocumented.C
 @test docstrings_equal(@doc(Undocumented.A), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
-**Summary:**
+# Summary
 ```
-abstract type $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A
+abstract type $(curmod_prefix)Undocumented.B
 ```
 
-**Subtypes:**
+# Subtypes
 ```
 $(curmod_prefix)Undocumented.D
 ```
 
-**Supertype Hierarchy:**
+# Supertype Hierarchy
 ```
 $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 ```
@@ -775,14 +933,14 @@ $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 @test docstrings_equal(@doc(Undocumented.B), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for public symbol.
 
-**Summary:**
+# Summary
 ```
-mutable struct $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A
+mutable struct $(curmod_prefix)Undocumented.C
 ```
 
-**Supertype Hierarchy:**
+# Supertype Hierarchy
 ```
 $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
 ```
@@ -790,42 +948,254 @@ $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
 @test docstrings_equal(@doc(Undocumented.C), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found.
+No documentation found for private symbol.
 
-**Summary:**
+# Summary
 ```
-struct $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B
+struct $(curmod_prefix)Undocumented.D
 ```
 
-**Fields:**
+# Fields
 ```
 one   :: Any
 two   :: String
 three :: Float64
 ```
 
-**Supertype Hierarchy:**
+# Supertype Hierarchy
 ```
 $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
 
-let d = @doc Undocumented.f
+doc_str = Markdown.parse("""
+No documentation found for public symbol.
+
+# Summary
+
+```
+abstract type $(curmod_prefix)Undocumented.at0{T<:Number, N}
+```
+
+# Subtypes
+
+```
+$(curmod_prefix)Undocumented.at1{Integer<:T<:Number, N}
+$(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer}
+$(curmod_prefix)Undocumented.st3{T<:Integer, N}
+$(curmod_prefix)Undocumented.st4{T<:Number, N}
+```
+""")
+@test docstrings_equal(@doc(Undocumented.at0), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found for private symbol.
+
+# Summary
+
+```
+abstract type $(curmod_prefix)Undocumented.at1{T>:Integer, N}
+```
+
+# Subtypes
+
+```
+$(curmod_prefix)Undocumented.mt6{Integer, N}
+$(curmod_prefix)Undocumented.st5{T>:Integer, N}
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.at1{T>:Integer, N} <: $(curmod_prefix)Undocumented.at0{T>:Integer, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.at1), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found for private symbol.
+
+# Summary
+
+```
+abstract type $(curmod_prefix)Undocumented.at0{Int64, N}
+```
+
+# Subtypes
+
+```
+$(curmod_prefix)Undocumented.pt2{Int64, N, A>:Integer}
+$(curmod_prefix)Undocumented.st3{Int64, N}
+$(curmod_prefix)Undocumented.st4{Int64, N}
+```
+""")
+@test docstrings_equal(@doc(Undocumented.at_), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found for public symbol.
+
+# Summary
+
+```
+primitive type $(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer}
+```
+
+# Supertype Hierarchy
+
+```
+$(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer} <: $(curmod_prefix)Undocumented.at0{T<:Number, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.pt2), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found for private symbol.
+
+# Summary
+
+```
+struct $(curmod_prefix)Undocumented.st3{T<:Integer, N}
+```
+
+# Fields
+```
+a :: NTuple{N, T<:Integer}
+b :: Array{Int64, N}
+c :: Int64
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.st3{T<:Integer, N} <: $(curmod_prefix)Undocumented.at0{T<:Integer, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.st3), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found for private symbol.
+
+# Summary
+
+```
+struct $(curmod_prefix)Undocumented.st4{T, N}
+```
+
+# Fields
+```
+a :: T
+b :: NTuple{N, T}
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.st4{T, N} <: $(curmod_prefix)Undocumented.at0{T, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.st4), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found for private symbol.
+
+# Summary
+
+```
+struct $(curmod_prefix)Undocumented.st5{T>:Int64, N}
+```
+
+# Fields
+```
+c :: $(curmod_prefix)Undocumented.st3{T>:Int64, N}
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.st5{T>:Int64, N} <: $(curmod_prefix)Undocumented.at1{T>:Int64, N} <: $(curmod_prefix)Undocumented.at0{T>:Int64, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.st5), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found for private symbol.
+
+# Summary
+
+```
+mutable struct $(curmod_prefix)Undocumented.mt6{T<:Integer, N}
+```
+
+# Fields
+```
+d :: $(curmod_prefix)Undocumented.st5{T<:Integer, N}
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.mt6{T<:Integer, N} <: $(curmod_prefix)Undocumented.at1{T<:Integer, N} <: $(curmod_prefix)Undocumented.at0{T<:Integer, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.mt6), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found for private symbol.
+
+# Summary
+
+`$(curmod_prefix)Undocumented.ut7` is of type `Union`.
+
+# Union Composed of Types
+
+ - `$(curmod_prefix)Undocumented.mt6`
+ - `$(curmod_prefix)Undocumented.st5`
+""")
+@test docstrings_equal(@doc(Undocumented.ut7), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found for private symbol.
+
+# Summary
+
+`$(curmod_prefix)Undocumented.ut8` is of type `Union`.
+
+# Union Composed of Types
+
+ - `$(curmod_prefix)Undocumented.at1`
+ - `$(curmod_prefix)Undocumented.pt2`
+ - `$(curmod_prefix)Undocumented.st3`
+ - `$(curmod_prefix)Undocumented.st4`
+""")
+@test docstrings_equal(@doc(Undocumented.ut8), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found for private symbol.
+
+# Summary
+
+`$(curmod_prefix)Undocumented.ut9` is of type `UnionAll`.
+
+# Union Composed of Types
+
+ - `$(curmod_prefix)Undocumented.at1{T} where T`
+ - `$(curmod_prefix)Undocumented.pt2{T} where T`
+ - `$(curmod_prefix)Undocumented.st3{T} where T`
+ - `$(curmod_prefix)Undocumented.st4`
+""")
+@test docstrings_equal(@doc(Undocumented.ut9), doc"$doc_str")
+
+let d = @doc(Undocumented.f)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)),"""
-    No documentation found.
+    No documentation found for private symbol.
 
     `$(curmod_prefix)Undocumented.f` is a `Function`.
     """)
 end
 
-let d = @doc Undocumented.undocumented
+let d = @doc(Undocumented.undocumented)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)), """
-    No documentation found.
+    No documentation found for private symbol.
 
     `$(curmod_prefix)Undocumented.undocumented` is a `Function`.
     """)
@@ -865,19 +1235,19 @@ end
 
 import Base.Docs: @var, Binding, defined
 
-let x = Binding(Base, Symbol("@time"))
+let x = Binding(Base, Symbol("@inline"))
     @test defined(x) == true
-    @test @var(@time) == x
-    @test @var(Base.@time) == x
-    @test @var(Base.Pkg.@time) == x
+    @test @var(@inline) == x
+    @test @var(Base.@inline) == x
+    @test @var(Base.Iterators.@inline) == x
 end
 
-let x = Binding(Base.LinAlg, :norm)
+let x = Binding(Iterators, :enumerate)
     @test defined(x) == true
-    @test @var(norm) == x
-    @test @var(Base.norm) == x
-    @test @var(Base.LinAlg.norm) == x
-    @test @var(Base.Pkg.Dir.norm) == x
+    @test @var(enumerate) == x
+    @test @var(Base.enumerate) == x
+    @test @var(Iterators.enumerate) == x
+    @test @var(Base.Iterators.enumerate) == x
 end
 
 let x = Binding(Core, :Int)
@@ -885,14 +1255,13 @@ let x = Binding(Core, :Int)
     @test @var(Int) == x
     @test @var(Base.Int) == x
     @test @var(Core.Int) == x
-    @test @var(Base.Pkg.Resolve.Int) == x
 end
 
-let x = Binding(Base, :Pkg)
+let x = Binding(Base, :Iterators)
     @test defined(x) == true
-    @test @var(Pkg) == x
-    @test @var(Base.Pkg) == x
-    @test @var(Main.Pkg) == x
+    @test @var(Iterators) == x
+    @test @var(Base.Iterators) == x
+    @test @var(Main.Iterators) == x
 end
 
 let x = Binding(Base, :VERSION)
@@ -912,48 +1281,24 @@ let x = Binding(curmod, :bindingdoesnotexist)
 end
 
 let x = Binding(Main, :+)
-    @test parse(string(x)) == :(Base.:+)
+    @test Meta.parse(string(x)) == :(Base.:+)
 end
 
-let x = Binding(Base, :parse)
-    @test parse(string(x)) == :(Base.parse)
+let x = Binding(Meta, :parse)
+    @test Meta.parse(string(x)) == :(Base.Meta.parse)
 end
 
 let x = Binding(Main, :⊕)
-    @test parse(string(x)) == :(⊕)
+    @test Meta.parse(string(x)) == :(⊕)
 end
 
-doc_util_path = Symbol(joinpath("docs", "utils.jl"))
-# Docs.helpmode tests: we test whether the correct expressions are being generated here,
-# rather than complete integration with Julia's REPL mode system.
-for (line, expr) in Pair[
-    "sin"          => :sin,
-    "Base.sin"     => :(Base.sin),
-    "@time(x)"     => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none), :x),
-    "@time"        => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
-    ":@time"       => Expr(:quote, (Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)))),
-    "@time()"      => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
-    "Base.@time()" => Expr(:macrocall, Expr(:., :Base, QuoteNode(Symbol("@time"))), LineNumberNode(1, :none)),
-    "ccall"        => :ccall, # keyword
-    "while       " => :while, # keyword, trailing spaces should be stripped.
-    "0"            => 0,
-    "\"...\""      => "...",
-    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
-    ]
-    @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(117, doc_util_path), STDOUT, expr)
-    buf = IOBuffer()
-    @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
-end
+@test sprint(repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
+@test sprint(repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
 
-let save_color = Base.have_color
-    try
-        @eval Base have_color = false
-        @test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
-        @test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
-    finally
-        @eval Base have_color = $save_color
-    end
-end
+# issue #36378 (\u1e8b and x\u307 are the fully composed and decomposed forms of ẋ, respectively)
+@test sprint(repl_latex, "\u1e8b") == "\"x\u307\" can be typed by x\\dot<tab>\n\n"
+# issue 39814
+@test sprint(repl_latex, "\u2209") == "\"\u2209\" can be typed by \\notin<tab>\n\n"
 
 # issue #15684
 begin
@@ -979,9 +1324,48 @@ dynamic_test.x = "test 2"
 @test @doc(dynamic_test) == "test 2 Union{}"
 @test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
 
-@test Docs._repl(:(dynamic_test(1.0))) == Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), esc(:(dynamic_test(::typeof(1.0)))))
-@test Docs._repl(:(dynamic_test(::String))) == Expr(:macrocall, Symbol("@doc"), LineNumberNode(206, doc_util_path), esc(:(dynamic_test(::String))))
+# For testing purposes, strip off the `trimdocs(expr)` wrapper
+function striptrimdocs(expr)
+    if Meta.isexpr(expr, :call)
+        fex = expr.args[1]
+        if Meta.isexpr(fex, :.) && fex.args[1] === :REPL
+            fmex = fex.args[2]
+            if isa(fmex, QuoteNode) && fmex.value === :trimdocs
+                expr = expr.args[2]
+            end
+        end
+    end
+    return expr
+end
 
+let dt1 = striptrimdocs(_repl(:(dynamic_test(1.0))))
+    @test dt1 isa Expr
+    @test dt1.args[1] isa Expr
+    @test dt1.args[1].head === :call
+    @test dt1.args[1].args[1] === Base.Docs.doc
+    @test dt1.args[1].args[3] == :(Union{Tuple{typeof(1.0)}})
+end
+let dt2 = striptrimdocs(_repl(:(dynamic_test(::String))))
+    @test dt2 isa Expr
+    @test dt2.args[1] isa Expr
+    @test dt2.args[1].head === :call
+    @test dt2.args[1].args[1] === Base.Docs.doc
+    @test dt2.args[1].args[3] == :(Union{Tuple{String}})
+end
+let dt3 = striptrimdocs(_repl(:(dynamic_test(a))))
+    @test dt3 isa Expr
+    @test dt3.args[1] isa Expr
+    @test dt3.args[1].head === :call
+    @test dt3.args[1].args[1] === Base.Docs.doc
+    @test dt3.args[1].args[3].args[2].head === :curly # can't test equality due to line numbers
+end
+let dt4 = striptrimdocs(_repl(:(dynamic_test(1.0,u=2.0))))
+    @test dt4 isa Expr
+    @test dt4.args[1] isa Expr
+    @test dt4.args[1].head === :call
+    @test dt4.args[1].args[1] === Base.Docs.doc
+    @test dt4.args[1].args[3] == :(Union{Tuple{typeof(1.0)}})
+end
 
 # Equality testing
 
@@ -991,6 +1375,9 @@ dynamic_test.x = "test 2"
 @test Text("docstring1") ≠ Text("docstring2")
 @test hash(Text("docstring1")) ≠ hash(Text("docstring2"))
 @test hash(Text("docstring")) ≠ hash(HTML("docstring"))
+
+# issue #25172
+@test repr(MIME"text/html"(), HTML("a","b")) == "ab"
 
 # issue 21016
 module I21016
@@ -1046,4 +1433,132 @@ let foo_docs = meta(I22105)[@var(I22105.foo)].docs
     @test docstr.data[:module] === I22105
     @test docstr.data[:typesig] === Union{}
     @test docstr.data[:binding] == Binding(I22105, :foo)
+end
+
+# issue #23011
+@test_nowarn @eval Main begin
+    @doc "first" f23011() = 1
+    @doc "second" f23011() = 2
+end
+@test Main.f23011() == 2
+@test docstrings_equal(@doc(Main.f23011), doc"second")
+
+# issue 22098
+"an empty macro"
+macro mdoc22098 end
+@test docstrings_equal(@doc(:@mdoc22098), doc"an empty macro")
+
+# issue #24468
+let ex = try
+    include_string(@__MODULE__, """
+
+    \"\"\"
+    an example
+    \"\"\"
+    function hello(param::Vector{In64_nOt_DeFiNeD__})
+    end
+    """)
+catch e
+    e
+end
+    @test ex.line == 2
+end
+
+struct t_docs_abc end
+@test "t_docs_abc" in accessible(@__MODULE__)
+
+# Call overloading issues #20087 and #44889
+"""
+Docs for `MyFunc` struct.
+"""
+mutable struct MyFunc x end
+"""
+Docs for `MyParametricFunc{T}` struct.
+"""
+struct MyParametricFunc{T} end
+
+"""
+Docs for calling `f::MyFunc`.
+"""
+(f::MyFunc)(x) = f
+
+"""
+Docs for calling `f::MyParametricFunc{T}`.
+"""
+(f::MyParametricFunc{T})(x) where T = f
+
+@test docstrings_equal(@doc((::MyFunc)(2)),
+doc"""
+Docs for calling `f::MyFunc`.
+""")
+
+@test docstrings_equal(@doc((::MyParametricFunc{Int})(44889)),
+doc"""
+Docs for calling `f::MyParametricFunc{T}`.
+""")
+
+struct A_20087 end
+
+"""a"""
+(a::A_20087)() = a
+
+@test docstrings_equal(@doc(A_20087()), doc"a")
+
+struct B_20087 end
+
+"""b"""
+(::B_20087)() = a
+
+@test docstrings_equal(@doc(B_20087()), doc"b")
+
+# issue #27832
+
+_last_atdoc = Core.atdoc
+Core.atdoc!(Core.Compiler.CoreDocs.docm)  # test bootstrap doc system
+
+"""
+"""
+module M27832
+macro foo(x)
+    repr(x)
+end
+for fn in (:isdone,)
+    global xs = @foo $fn
+end
+end
+@test M27832.xs == ":(\$(Expr(:\$, :fn)))"
+Core.atdoc!(_last_atdoc)
+
+# issue #29432
+"First docstring" module Module29432 end
+Test.collect_test_logs() do                          # suppress printing of any warning
+    eval(quote "Second docstring" Module29432 end)   # requires toplevel
+end
+@test docstrings_equal(@doc(Module29432), doc"Second docstring")
+
+# Issue #13109
+eval(Expr(:block, Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), nothing, "...", Expr(:module, false, :MBareModuleEmpty, Expr(:block)))))
+@test docstrings_equal(@doc(MBareModuleEmpty), doc"...")
+
+# issue #41727
+"struct docstring"
+struct S41727
+    "x is $(2*2)"
+    x
+end
+@test S41727(1) isa S41727
+@test string(@repl S41727.x) == "x is 4\n"
+
+"ensure we can document ccallable functions"
+Base.@ccallable c51586_short()::Int = 2
+"ensure we can document ccallable functions"
+Base.@ccallable c51586_long()::Int = 3
+
+@test docstrings_equal(@doc(c51586_short()), doc"ensure we can document ccallable functions")
+@test docstrings_equal(@doc(c51586_long()), doc"ensure we can document ccallable functions")
+
+@testset "Docs docstrings" begin
+    undoc = Docs.undocumented_names(Docs)
+    @test_broken isempty(undoc)
+    @test undoc == [Symbol("@var")]
 end

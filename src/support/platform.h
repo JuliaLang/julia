@@ -1,63 +1,79 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef PLATFORM_H
-#define PLATFORM_H
+#ifndef JL_PLATFORM_H
+#define JL_PLATFORM_H
 
 /*
  * This file provides convenient macros to be used to identify the platform
  * based of compiler-specific pre-defined macros. It is based on the
  * information that can be found at the following address:
  *
- *     http://sourceforge.net/p/predef/wiki/Home/
+ *     https://sourceforge.net/p/predef/wiki/Home/
  *
  * Possible values include:
  *      Compiler:
  *          _COMPILER_CLANG_
  *          _COMPILER_GCC_
- *          _COMPILER_INTEL_
- *          _COMPILER_MICROSOFT_
- *          _COMPILER_MINGW_
  *      OS:
  *          _OS_FREEBSD_
  *          _OS_LINUX_
  *          _OS_WINDOWS_
  *          _OS_DARWIN_
+ *          _OS_EMSCRIPTEN_
  *
  *      CPU/Architecture:
  *          _CPU_X86_
  *          _CPU_X86_64_
+ *          _CPU_AARCH64_
  *          _CPU_ARM_
+ *          _CPU_WASM_
  */
 
 /*******************************************************************************
 *                               Compiler                                       *
 *******************************************************************************/
 
-/*
- * Notes:
- *
- *  1. Checking for Intel's compiler should be done before checking for
- * Microsoft's. On Windows Intel's compiler also defines _MSC_VER as the
- * acknoledgement of the fact that it is integrated with Visual Studio.
- *
- *  2. Checking for MinGW should be done before checking for GCC as MinGW
- * pretends to be GCC.
- */
 #if defined(__clang__)
 #define _COMPILER_CLANG_
-// Clang can also be used as a MinGW compiler
-#if defined(__MINGW32__)
-#define _COMPILER_MINGW_
-#endif
-#elif defined(__INTEL_COMPILER) || defined(__ICC)
-#define _COMPILER_INTEL_
-#elif defined(__MINGW32__)
-#define _COMPILER_MINGW_
-#elif defined(_MSC_VER)
-#define _COMPILER_MICROSOFT_
 #elif defined(__GNUC__)
 #define _COMPILER_GCC_
+#elif defined(_MSC_VER)
+#define _COMPILER_MICROSOFT_
+#else
+#error Unsupported compiler
 #endif
+
+
+#define JL_NO_ASAN
+#define JL_NO_MSAN
+#define JL_NO_TSAN
+#if defined(__has_feature) // Clang flavor
+#if __has_feature(address_sanitizer)
+#define _COMPILER_ASAN_ENABLED_
+#undef JL_NO_ASAN
+#define JL_NO_ASAN __attribute__((no_sanitize("address")))
+#endif
+#if __has_feature(memory_sanitizer)
+#define _COMPILER_MSAN_ENABLED_
+#undef JL_NO_MSAN
+#define JL_NO_MSAN __attribute__((no_sanitize("memory")))
+#endif
+#if __has_feature(thread_sanitizer)
+#if __clang_major__ < 11
+#error Thread sanitizer runtime libraries in clang < 11 leak memory and cannot be used
+#endif
+#define _COMPILER_TSAN_ENABLED_
+#undef JL_NO_TSAN
+#define JL_NO_TSAN __attribute__((no_sanitize("thread")))
+#endif
+#else // GCC flavor
+#if defined(__SANITIZE_ADDRESS__)
+#define _COMPILER_ASAN_ENABLED_
+#undef JL_NO_ASAN
+#define JL_NO_ASAN __attribute__((no_sanitize("address")))
+#endif
+#endif // __has_feature
+#define JL_NO_SANITIZE JL_NO_ASAN JL_NO_MSAN JL_NO_TSAN
 
 /*******************************************************************************
 *                               OS                                             *
@@ -71,6 +87,8 @@
 #define _OS_WINDOWS_
 #elif defined(__APPLE__) && defined(__MACH__)
 #define _OS_DARWIN_
+#elif defined(__EMSCRIPTEN__)
+#define _OS_EMSCRIPTEN_
 #endif
 
 /*******************************************************************************
@@ -89,6 +107,8 @@
 #define _CPU_PPC64_
 #elif defined(_ARCH_PPC)
 #define _CPU_PPC_
+#elif defined(__wasm__)
+#define _CPU_WASM_
 #endif
 
 #if defined(_CPU_X86_64_)

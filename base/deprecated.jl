@@ -5,12 +5,8 @@
 # Please add new deprecations at the bottom of the file.
 # A function deprecated in a release will be removed in the next one.
 # Please also add a reference to the pull request which introduced the
-# deprecation.
-#
-# For simple cases where a direct replacement is available, use @deprecate:
-# the first argument is the signature of the deprecated method, the second one
-# is the call which replaces it. Remove the definition of the deprecated method
-# and unexport it, as @deprecate takes care of calling the replacement
+# deprecation. For simple cases where a direct replacement is available,
+# use @deprecate. @deprecate takes care of calling the replacement
 # and of exporting the function.
 #
 # For more complex cases, move the body of the deprecated method in this file,
@@ -18,1480 +14,386 @@
 # the name of the function, which is used to ensure that the deprecation warning
 # is only printed the first time for each call place.
 
-macro deprecate(old, new, ex=true)
+"""
+    @deprecate old new [export_old=true]
+
+Deprecate method `old` and specify the replacement call `new`, defining a new method `old`
+with the specified signature in the process.
+
+To prevent `old` from being exported, set `export_old` to `false`.
+
+!!! compat "Julia 1.5"
+    As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
+    is run without the `--depwarn=yes` flag set, as the default value of `--depwarn` option
+    is `no`.  The warnings are printed from tests run by `Pkg.test()`.
+
+# Examples
+```jldoctest
+julia> @deprecate old(x) new(x)
+old (generic function with 1 method)
+
+julia> @deprecate old(x) new(x) false
+old (generic function with 1 method)
+```
+
+Calls to `@deprecate` without explicit type-annotations will define
+deprecated methods accepting any number of positional and keyword
+arguments of type `Any`.
+
+!!! compat "Julia 1.9"
+    Keyword arguments are forwarded when there is no explicit type
+    annotation as of Julia 1.9. For older versions, you can manually
+    forward positional and keyword arguments by doing `@deprecate
+    old(args...; kwargs...) new(args...; kwargs...)`.
+
+To restrict deprecation to a specific signature, annotate the
+arguments of `old`. For example,
+```jldoctest; filter = r"@ .*"a
+julia> new(x::Int) = x;
+
+julia> new(x::Float64) = 2x;
+
+julia> @deprecate old(x::Int) new(x);
+
+julia> methods(old)
+# 1 method for generic function "old" from Main:
+ [1] old(x::Int64)
+     @ deprecated.jl:94
+```
+will define and deprecate a method `old(x::Int)` that mirrors `new(x::Int)` but will not
+define nor deprecate the method `old(x::Float64)`.
+"""
+macro deprecate(old, new, export_old=true)
+    function cannot_export_nonsymbol()
+        error(
+            "if the third `export_old` argument is not specified or `true`, the first",
+            " argument must be of form",
+            " (1) `f(...)` where `f` is a symbol,",
+            " (2) `T{...}(...)` where `T` is a symbol, or",
+            " (3) a symbol.",
+        )
+    end
     meta = Expr(:meta, :noinline)
-    @gensym oldmtname
-    if isa(old, Symbol)
-        oldname = Expr(:quote, old)
-        newname = Expr(:quote, new)
-        Expr(:toplevel,
-            ex ? Expr(:export, esc(old)) : nothing,
-            :(function $(esc(old))(args...)
-                  $meta
-                  depwarn(string($oldname, " is deprecated, use ", $newname, " instead."),
-                          $oldmtname)
-                  $(esc(new))(args...)
-              end),
-            :(const $oldmtname = Core.Typeof($(esc(old))).name.mt.name))
-    elseif isa(old, Expr) && (old.head == :call || old.head == :where)
+    if isa(old, Expr) && (old.head === :call || old.head === :where)
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
         newcall = sprint(show_unquoted, new)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
-        callexpr = old.head == :call ? old : old.args[1]
-        if callexpr.head == :call
-            if isa(callexpr.args[1], Symbol)
-                oldsym = callexpr.args[1]::Symbol
-            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head == :curly
-                oldsym = callexpr.args[1].args[1]::Symbol
+        callexpr = old.head === :call ? old : old.args[1]
+        if callexpr.head === :call
+            fnexpr = callexpr.args[1]
+            if fnexpr isa Expr && fnexpr.head === :curly
+                fnexpr = fnexpr.args[1]
+            end
+            if export_old
+                if fnexpr isa Symbol
+                    maybe_export = Expr(:export, esc(fnexpr))
+                else
+                    cannot_export_nonsymbol()
+                end
             else
-                error("invalid usage of @deprecate")
+                maybe_export = nothing
             end
         else
             error("invalid usage of @deprecate")
         end
         Expr(:toplevel,
-            ex ? Expr(:export, esc(oldsym)) : nothing,
+            maybe_export,
             :($(esc(old)) = begin
                   $meta
-                  depwarn(string($oldcall, " is deprecated, use ", $newcall, " instead."),
-                          $oldmtname)
+                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.mt.name)
                   $(esc(new))
-              end),
-            :(const $oldmtname = Core.Typeof($(esc(oldsym))).name.mt.name))
+              end))
     else
-        error("invalid usage of @deprecate")
+        if export_old && !(old isa Symbol)
+            cannot_export_nonsymbol()
+        end
+        Expr(:toplevel,
+            export_old ? Expr(:export, esc(old)) : nothing,
+            :(function $(esc(old))(args...; kwargs...)
+                  $meta
+                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
+                  $(esc(new))(args...; kwargs...)
+              end))
     end
 end
 
-function depwarn(msg, funcsym)
-    opts = JLOptions()
-    if opts.depwarn > 0
-        bt = backtrace()
-        _depwarn(msg, opts, bt, firstcaller(bt, funcsym))
-    end
-    nothing
+@nospecializeinfer function depwarn(msg, funcsym; force::Bool=false)
+    @nospecialize
+    # N.B. With this use of `@invokelatest`, we're preventing the addition of backedges from
+    # callees, such as `convert`, to this user-facing method. This approach is designed to
+    # enhance the resilience of packages that utilize `depwarn` against invalidation.
+    return @invokelatest _depwarn(msg, funcsym, force)
 end
-function _depwarn(msg, opts, bt, caller)
-    ln = Int(unsafe_load(cglobal(:jl_lineno, Cint)))
-    fn = unsafe_string(unsafe_load(cglobal(:jl_filename, Ptr{Cchar})))
-    if opts.depwarn == 1 # raise a warning
-        warn(msg, once=(caller != StackTraces.UNKNOWN), key=(caller,fn,ln), bt=bt,
-             filename=fn, lineno=ln)
-    elseif opts.depwarn == 2 # raise an error
+@nospecializeinfer function _depwarn(msg, funcsym, force::Bool)
+    @nospecialize
+    opts = JLOptions()
+    if opts.depwarn == 2
         throw(ErrorException(msg))
     end
+    deplevel = force || opts.depwarn == 1 ? CoreLogging.Warn : CoreLogging.BelowMinLevel
+    @logmsg(
+        deplevel,
+        msg,
+        _module=begin
+            bt = backtrace()
+            frame, caller = firstcaller(bt, funcsym)
+            linfo = caller.linfo
+            if linfo isa Core.MethodInstance
+                def = linfo.def
+                def isa Module ? def : def.module
+            else
+                Core    # TODO: Is it reasonable to attribute callers without linfo to Core?
+            end
+        end,
+        _file=String(caller.file),
+        _line=caller.line,
+        _id=(frame,funcsym),
+        _group=:depwarn,
+        caller=caller,
+        maxlog=funcsym === nothing ? nothing : 1
+    )
+    nothing
 end
 
-firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol) = firstcaller(bt, (funcsym,))
-function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
+firstcaller(bt::Vector, ::Nothing) = Ptr{Cvoid}(0), StackTraces.UNKNOWN
+firstcaller(bt::Vector, funcsym::Symbol) = firstcaller(bt, (funcsym,))
+function firstcaller(bt::Vector, funcsyms)
     # Identify the calling line
     found = false
-    lkup = StackTraces.UNKNOWN
-    for frame in bt
-        lkups = StackTraces.lookup(frame)
+    for ip in bt
+        lkups = StackTraces.lookup(ip)
         for lkup in lkups
-            if lkup == StackTraces.UNKNOWN
+            if lkup == StackTraces.UNKNOWN || lkup.from_c
                 continue
             end
-            found && @goto found
+            if found
+                return ip, lkup
+            end
             found = lkup.func in funcsyms
+            # look for constructor type name
+            if !found
+                li = lkup.linfo
+                if li isa Core.MethodInstance
+                    def = li.def
+                    found = def isa Method && def.name in funcsyms
+                end
+            end
         end
     end
-    return StackTraces.UNKNOWN
-    @label found
-    return lkup
+    return C_NULL, StackTraces.UNKNOWN
 end
 
-deprecate(m::Module, s::Symbol) = ccall(:jl_deprecate_binding, Void, (Any, Any), m, s)
+deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Cvoid, (Any, Any, Cint), m, s, flag)
 
-macro deprecate_binding(old, new, export_old=true)
+macro deprecate_binding(old, new, export_old=true, dep_message=:nothing, constant=true)
+    dep_message === :nothing && (dep_message = ", use $new instead.")
     return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
+         Expr(:const, Expr(:(=), esc(Symbol(string("_dep_message_",old))), esc(dep_message))),
+         constant ? Expr(:const, Expr(:(=), esc(old), esc(new))) : Expr(:(=), esc(old), esc(new)),
+         Expr(:call, :deprecate, __module__, Expr(:quote, old)))
+end
+
+macro deprecate_stdlib(old, mod, export_old=true, newname=old)
+    rename = old === newname ? "" : " as `$newname`"
+    dep_message = """: it has been moved to the standard library package `$mod`$rename.
+                        Add `using $mod` to your imports."""
+    new = GlobalRef(Base.root_module(Base, mod), newname)
+    return Expr(:toplevel,
+         export_old ? Expr(:export, esc(old)) : nothing,
+         Expr(:const, Expr(:(=), esc(Symbol(string("_dep_message_",old))), esc(dep_message))),
          Expr(:const, Expr(:(=), esc(old), esc(new))),
          Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
 
-# BEGIN 0.6-alpha deprecations (delete when 0.6 is released)
-
-@deprecate isambiguous(m1::Method, m2::Method, b::Bool) isambiguous(m1, m2, ambiguous_bottom=b) false
-# TODO: delete allow_bottom keyword code in Base.Test.detect_ambiguities
-
-# END 0.6-alpha deprecations
-
-# BEGIN 0.6 deprecations
-
-const _oldstyle_array_vcat_ = false
-
-@deprecate write(x) write(STDOUT::IO, x)
-
-function delete!(::EnvHash, k::AbstractString, def)
-    depwarn("`delete!(ENV, k, def)` should be replaced with `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, while `delete!` returns `ENV` or `def`.", :delete!)
-    haskey(ENV,k) ? delete!(ENV,k) : def
+macro deprecate_moved(old, new, export_old=true)
+    eold = esc(old)
+    emsg = string(old, " has been moved to the package ", new, ".jl.\n",
+        "Run `Pkg.add(\"", new, "\")` to install it, restart Julia,\n",
+        "and then run `using ", new, "` to load it.")
+    return Expr(:toplevel,
+        :($eold(args...; kwargs...) = error($emsg)),
+        export_old ? Expr(:export, eold) : nothing,
+        Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
 end
-
-@deprecate (+)(J::UniformScaling, x::Number) J.λ + x
-@deprecate (+)(x::Number, J::UniformScaling) x + J.λ
-@deprecate (-)(J::UniformScaling, x::Number) J.λ - x
-@deprecate (-)(x::Number, J::UniformScaling) x - J.λ
-
-# Deprecate methods that convert Diagonal and Bidiagonal to <:AbstractTriangular.
-function convert(::Type{UpperTriangular}, A::Diagonal)
-    depwarn(string("`convert(::Type{UpperTriangular}, A::Diagonal)` and other methods ",
-        "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
-        "Consider calling the `UpperTriangular` constructor directly ",
-        "(`UpperTriangular(A)`) instead."), :convert)
-    UpperTriangular(A)
-end
-function convert(::Type{LowerTriangular}, A::Diagonal)
-    depwarn(string("`convert(::Type{LowerTriangular}, A::Diagonal)` and other methods ",
-        "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
-        "Consider calling the `LowerTriangular` constructor directly ",
-        "(`LowerTriangular(A)`) instead."), :convert)
-    LowerTriangular(A)
-end
-function convert(::Type{Base.LinAlg.UnitUpperTriangular}, A::Diagonal)
-    depwarn(string("`convert(::Type{UnitUpperTriangular}, A::Diagonal)` and other methods ",
-        "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
-        "Consider calling the `UnitUpperTriangular` constructor directly ",
-        "(`Base.LinAlg.UnitUpperTriangular(A)`) instead."), :convert)
-    if !all(x -> x == oneunit(x), A.diag)
-        throw(ArgumentError("matrix cannot be represented as UnitUpperTriangular"))
-    end
-    Base.LinAlg.UnitUpperTriangular(Array(A))
-end
-function convert(::Type{Base.LinAlg.UnitLowerTriangular}, A::Diagonal)
-    depwarn(string("`convert(::Type{UnitLowerTriangular}, A::Diagonal)` and other methods ",
-        "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
-        "Consider calling the `UnitLowerTriangular` constructor directly ",
-        "(`Base.LinAlg.UnitLowerTriangular(A)`) instead."), :convert)
-    if !all(x -> x == oneunit(x), A.diag)
-        throw(ArgumentError("matrix cannot be represented as UnitLowerTriangular"))
-    end
-    Base.LinAlg.UnitLowerTriangular(Array(A))
-end
-function convert(::Type{LowerTriangular}, A::Bidiagonal)
-    depwarn(string("`convert(::Type{LowerTriangular}, A::Bidiagonal)` and other methods ",
-        "that convert `Diagonal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
-        "Consider calling the `LowerTriangular` constructor directly (`LowerTriangular(A)`) ",
-        "instead."), :convert)
-    if !A.isupper
-        LowerTriangular(Array(A))
-    else
-        throw(ArgumentError("Bidiagonal matrix must have lower off diagonal to be converted to LowerTriangular"))
-    end
-end
-function convert(::Type{UpperTriangular}, A::Bidiagonal)
-    depwarn(string("`convert(::Type{UpperTriangular}, A::Bidiagonal)` and other methods ",
-        "that convert `Diagoinal`/`Bidiagonal` to `<:AbstractTriangular` are deprecated. ",
-        "Consider calling the `UpperTriangular` constructor directly (`UpperTriangular(A)`) ",
-        "instead."), :convert)
-    if A.isupper
-        UpperTriangular(Array(A))
-    else
-        throw(ArgumentError("Bidiagonal matrix must have upper off diagonal to be converted to UpperTriangular"))
-    end
-end
-
-# Deprecate three-arg SubArray since the constructor doesn't need the dims tuple
-@deprecate SubArray(parent::AbstractArray, indexes::Tuple, dims::Tuple) SubArray(parent, indexes)
-
-# Deprecate vectorized unary functions over sparse matrices in favor of compact broadcast syntax (#17265).
-for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
-        :tan, :tanh, :tand, :atan, :atanh, :atand,
-        :sinpi, :cosc, :ceil, :floor, :trunc, :round,
-        :log1p, :expm1, :abs, :abs2,
-        :log, :log2, :log10, :exp, :exp2, :exp10, :sinc, :cospi,
-        :cos, :cosh, :cosd, :acos, :acosd,
-        :cot, :coth, :cotd, :acot, :acotd,
-        :sec, :sech, :secd, :asech,
-        :csc, :csch, :cscd, :acsch)
-    @eval @deprecate $f(A::SparseMatrixCSC) $f.(A)
-end
-
-# For deprecating vectorized functions in favor of compact broadcast syntax
-macro dep_vectorize_1arg(S, f)
-    S = esc(S)
-    f = esc(f)
-    T = esc(:T)
-    x = esc(:x)
-    AbsArr = esc(:AbstractArray)
-    :( @deprecate $f($x::$AbsArr{$T}) where {$T<:$S} $f.($x) )
-end
-macro dep_vectorize_2arg(S, f)
-    S = esc(S)
-    f = esc(f)
-    T1 = esc(:T1)
-    T2 = esc(:T2)
-    x = esc(:x)
-    y = esc(:y)
-    AbsArr = esc(:AbstractArray)
-    quote
-        @deprecate $f($x::$S, $y::$AbsArr{$T1}) where {$T1<:$S} $f.($x,$y)
-        @deprecate $f($x::$AbsArr{$T1}, $y::$S) where {$T1<:$S} $f.($x,$y)
-        @deprecate $f($x::$AbsArr{$T1}, $y::$AbsArr{$T2}) where {$T1<:$S,$T2<:$S} $f.($x,$y)
-    end
-end
-
-# Deprecate @vectorize_1arg-vectorized functions from...
-for f in (
-        # base/special/trig.jl
-        :sinpi, :cospi, :sinc, :cosc,
-        # base/special/log.jl
-        :log, :log1p,
-        # base/special/gamma.jl
-        :gamma, :lfact,
-        # base/math.jl
-        :cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :exp2,
-        :expm1, :exp10, :sin, :cos, :tan, :asin, :acos, :acosh, :atanh,
-        #=:log,=# :log2, :log10, :lgamma, #=:log1p,=# :sqrt,
-        # base/floatfuncs.jl
-        :abs, :abs2, :angle, :isnan, :isinf, :isfinite,
-        # base/complex.jl
-        :cis,
-        )
-    @eval @dep_vectorize_1arg Number $f
-end
-# base/fastmath.jl
-for f in ( :acos_fast, :acosh_fast, :angle_fast, :asin_fast, :asinh_fast,
-            :atan_fast, :atanh_fast, :cbrt_fast, :cis_fast, :cos_fast,
-            :cosh_fast, :exp10_fast, :exp2_fast, :exp_fast, :expm1_fast,
-            :lgamma_fast, :log10_fast, :log1p_fast, :log2_fast, :log_fast,
-            :sin_fast, :sinh_fast, :sqrt_fast, :tan_fast, :tanh_fast )
-    @eval FastMath Base.@dep_vectorize_1arg Number $f
-end
-for f in (
-        :trunc, :floor, :ceil, :round, # base/floatfuncs.jl
-        :rad2deg, :deg2rad, :exponent, :significand, # base/math.jl
-        :sind, :cosd, :tand, :asind, :acosd, :atand, :asecd, :acscd, :acotd, # base/special/trig.jl
-        )
-    @eval @dep_vectorize_1arg Real $f
-end
-# base/complex.jl
-@dep_vectorize_1arg Complex round
-@dep_vectorize_1arg Complex float
-# base/dates/*.jl
-for f in (:unix2datetime, :rata2datetime, :julian2datetime)  # base/dates/conversions.jl
-    @eval Dates Base.@dep_vectorize_1arg Real $f
-end
-for f in (
-        # base/dates/accessors.jl
-        :year, :month, :day, :week, :dayofmonth, :yearmonth, :monthday, :yearmonthday,
-        # base/dates/adjusters.jl
-        :firstdayofweek, :lastdayofweek, :firstdayofmonth,
-        :lastdayofmonth, :firstdayofyear, :lastdayofyear,
-        :firstdayofquarter, :lastdayofquarter,
-        # base/dates/query.jl
-        :dayname, :dayabbr, :dayofweek, :dayofweekofmonth,
-        :daysofweekinmonth, :monthname, :monthabbr, :daysinmonth,
-        :isleapyear, :dayofyear, :daysinyear, :quarterofyear, :dayofquarter,
-    )
-    @eval Dates Base.@dep_vectorize_1arg Dates.TimeType $f
-end
-for f in (
-    :hour, :minute, :second, :millisecond, # base/dates/accessors.jl
-    :Date, :datetime2unix, :datetime2rata, :datetime2julian, # base/dates/conversions.jl
-    )
-    @eval Dates Base.@dep_vectorize_1arg Dates.DateTime $f
-end
-@eval Dates Base.@dep_vectorize_1arg Dates.Date Datetime # base/dates/conversions.jl
-
-# Deprecate @vectorize_2arg-vectorized functions from...
-for f in (
-        # base/special/gamma.jl
-        :beta, :lbeta,
-        # base/math.jl
-        :log, :hypot, :atan2,
-    )
-    @eval @dep_vectorize_2arg Number $f
-end
-# base/fastmath.jl
-for f in (:pow_fast, :atan2_fast, :hypot_fast, :max_fast, :min_fast, :minmax_fast)
-    @eval FastMath Base.@dep_vectorize_2arg Number $f
-end
-for f in (
-        :max, :min, # base/math.jl
-        :copysign, :flipsign, # base/floatfuncs.jl
-    )
-    @eval @dep_vectorize_2arg Real $f
-end
-
-# Deprecate @vectorize_1arg and @vectorize_2arg themselves
-macro vectorize_1arg(S,f)
-    depwarn(string("`@vectorize_1arg` is deprecated in favor of compact broadcast syntax. ",
-        "Instead of `@vectorize_1arg`'ing function `f` and calling `f(arg)`, call `f.(arg)`."),
-        :vectorize_1arg)
-    quote
-        @dep_vectorize_1arg($(esc(S)),$(esc(f)))
-    end
-end
-macro vectorize_2arg(S,f)
-    depwarn(string("`@vectorize_2arg` is deprecated in favor of compact broadcast syntax. ",
-        "Instead of `@vectorize_2arg`'ing function `f` and calling `f(arg1, arg2)`, call ",
-        "`f.(arg1,arg2)`. "), :vectorize_2arg)
-    quote
-        @dep_vectorize_2arg($(esc(S)),$(esc(f)))
-    end
-end
-export @vectorize_1arg, @vectorize_2arg
-
-# deprecations for uses of old dot operators (.* etc) as objects, rather than
-# just calling them infix.
-for op in (:(!=), :≠, :+, :-, :*, :/, :÷, :%, :<, :(<=), :≤, :(==), :>, :>=, :≥, :\, :^, ://, :>>, :<<)
-    dotop = Symbol('.', op)
-    # define as const dotop = (a,b) -> ...
-    # to work around syntax deprecation for dotop(a,b) = ...
-    @eval const $dotop = (a,b) -> begin
-        depwarn(string($(string(dotop)), " is no longer a function object; use broadcast(",$op,", ...) instead"),
-                $(QuoteNode(dotop)))
-        broadcast($op, a, b)
-    end
-    @eval export $dotop
-end
-
-# Devectorize manually vectorized abs methods in favor of compact broadcast syntax
-@deprecate abs(f::Base.Pkg.Resolve.MaxSum.Field) abs.(f)
-@deprecate abs(B::BitArray) abs.(B)
-@deprecate abs(M::Bidiagonal) abs.(M)
-@deprecate abs(D::Diagonal) abs.(D)
-@deprecate abs(M::Tridiagonal) abs.(M)
-@deprecate abs(M::SymTridiagonal) abs.(M)
-@deprecate abs(x::AbstractSparseVector) abs.(x)
-
-# Deprecate @textmime into the Multimedia module, #18441
-@eval Multimedia macro textmime(mime)
-    Base.depwarn(string("`@textmime \"mime\"` is deprecated; use ",
-        "`Base.Multimedia.istextmime(::MIME\"mime\") = true` instead"
-        ), :textmime)
-    quote
-        Base.Multimedia.istextmime(::MIME{$(Meta.quot(Symbol(mime)))}) = true
-    end
-end
-
-@deprecate ipermutedims(A::AbstractArray,p) permutedims(A, invperm(p))
-
-# 18696
-function ($)(x, y)
-    depwarn("`x \$ y` is deprecated.  use `xor(x, y)` or `x ⊻ y` instead.", :$)
-    xor(x, y)
-end
-export $
-
-@deprecate is (===)
-
-# midpoints of intervals
-@deprecate midpoints(r::Range) r[1:length(r)-1] + 0.5*step(r)
-@deprecate midpoints(v::AbstractVector) [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
-
-@deprecate_binding Filter    Iterators.Filter
-@deprecate_binding Zip       Iterators.Zip
-@deprecate filter(flt, itr)  Iterators.filter(flt, itr)
-@deprecate_binding rest      Iterators.rest
-@deprecate_binding countfrom Iterators.countfrom
-@deprecate_binding take      Iterators.take
-@deprecate_binding drop      Iterators.drop
-@deprecate_binding cycle     Iterators.cycle
-@deprecate_binding repeated  Iterators.repeated
-
-# promote_op method where the operator is also a type
-function promote_op(op::Type, Ts::Type...)
-    depwarn("promote_op(op::Type, ::Type...) is deprecated as it is no " *
-            "longer needed in Base. If you need its functionality, consider " *
-            "defining it locally.", :promote_op)
-    if isdefined(Core, :Inference)
-        return Core.Inference.return_type(op, Tuple{Ts...})
-    end
-    return op
-end
-
-# NOTE: Deprecation of `isdefined(a::Array, i::Int)` is implemented in src/array.c
-# and deprecation of `invoke(f, (types...), ...)` is implemented in src/builtins.c
-# To be removed when 0.6 deprecations are removed
-
-# NOTE: Deprecation of Channel{T}() is implemented in channels.jl.
-# To be removed from there when 0.6 deprecations are removed.
-
-# Not exported, but probably better to have deprecations anyway
-function reduced_dims(::Tuple{}, d::Int)
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    ()
-end
-reduced_dims(::Tuple{}, region) = ()
-function reduced_dims(dims::Dims, region)
-    Base.depwarn("`reduced_dims` is deprecated for Dims-tuples; pass `indices` to `reduced_indices` instead", :reduced_dims)
-    map(last, reduced_indices(map(OneTo, dims), region))
-end
-
-function reduced_dims0(::Tuple{}, d::Int)
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    ()
-end
-reduced_dims0(::Tuple{}, region) = ()
-function reduced_dims0(dims::Dims, region)
-    Base.depwarn("`reduced_dims0` is deprecated for Dims-tuples; pass `indices` to `reduced_indices0` instead", :reduced_dims0)
-    map(last, reduced_indices0(map(OneTo, dims), region))
-end
-
-function reduced_dims(a::AbstractArray, region)
-    Base.depwarn("`reduced_dims` is deprecated in favor of `reduced_indices`", :reduced_dims)
-    to_shape(reduced_indices(a, region))  # to_shape keeps the return-type consistent, when it's possible to do so
-end
-
-function reduced_dims0(a::AbstractArray, region)
-    Base.depwarn("`reduced_dims0` is deprecated in favor of `reduced_indices0`", :reduced_dims)
-    to_shape(reduced_indices0(a, region))
-end
-
-# #18218
-@eval Base.LinAlg begin
-    function arithtype(T)
-        Base.depwarn(string("arithtype is now deprecated. If you were using it inside a ",
-            "promote_op call, use promote_op(LinAlg.matprod, Ts...) instead. Otherwise, ",
-            "if you need its functionality, consider defining it locally."),
-            :arithtype)
-        T
-    end
-    function arithtype(::Type{Bool})
-        Base.depwarn(string("arithtype is now deprecated. If you were using it inside a ",
-            "promote_op call, use promote_op(LinAlg.matprod, Ts...) instead. Otherwise, ",
-            "if you need its functionality, consider defining it locally."),
-            :arithtype)
-        Int
-    end
-end
-
-# #19246
-@deprecate den denominator
-@deprecate num numerator
-
-Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching(::_FDWatcher) should not be used", :stop_watching)
-
-# #19088
-@deprecate takebuf_array take!
-@deprecate takebuf_string(b) String(take!(b))
-
-# #19288
-@eval Base.Dates begin
-    function recur(fun::Function, dr::StepRange{<:TimeType}; negate::Bool=false, limit::Int=10000)
-        Base.depwarn("Dates.recur is deprecated, use filter instead.",:recur)
-        if negate
-            filter(x -> !fun(x), dr)
-        else
-            filter(fun, dr)
-        end
-     end
-     recur(fun::Function, start::T, stop::T; step::Period=Day(1), negate::Bool=false, limit::Int=10000) where {T<:TimeType} = recur(fun, start:step:stop; negate=negate)
-end
-
-# Index conversions revamp; #19730
-function getindex(A::LogicalIndex, i::Int)
-    depwarn("getindex(A::LogicalIndex, i) is deprecated; use iteration or index into the result of `collect(A)` instead.", :getindex)
-    checkbounds(A, i)
-    first(Iterators.drop(A, i-1))
-end
-function to_indexes(I...)
-    Istr = join(I, ", ")
-    depwarn("to_indexes is deprecated; pass both the source array `A` and indices as `to_indices(A, $Istr)` instead.", :to_indexes)
-    map(_to_index, I)
-end
-_to_index(i) = to_index(I)
-_to_index(c::Colon) = c
-const _colon_usage_msg = "convert Colons to a set of indices for indexing into array `A` by passing them in a complete tuple of indices `I` to `to_indices(A, I)`"
-function getindex(::Colon, i)
-    depwarn("getindex(::Colon, i) is deprecated; $_colon_usage_msg", :getindex)
-    to_index(i)
-end
-function unsafe_getindex(::Colon, i::Integer)
-    depwarn("getindex(::Colon, i) is deprecated; $_colon_usage_msg", :unsafe_getindex)
-    to_index(i)
-end
-function step(::Colon)
-    depwarn("step(::Colon) is deprecated; $_colon_usage_msg", :step)
-    1
-end
-function isempty(::Colon)
-    depwarn("isempty(::Colon) is deprecated; $_colon_usage_msg", :isempty)
-    false
-end
-function in(::Integer, ::Colon)
-    depwarn("in(::Integer, ::Colon) is deprecated; $_colon_usage_msg", :in)
-    true
-end
-
-# #18931
-@deprecate cummin(A, dim=1) accumulate(min, A, dim)
-@deprecate cummax(A, dim=1) accumulate(max, A, dim)
-
-# #19598
-@deprecate sumabs(x)          sum(abs, x)
-@deprecate sumabs(A, region)  sum(abs, A, region)
-@deprecate sumabs2(x)         sum(abs2, x)
-@deprecate sumabs2(A, region) sum(abs2, A, region)
-@deprecate minabs(x)          minimum(abs, x)
-@deprecate minabs(A, region)  minimum(abs, A, region)
-@deprecate maxabs(x)          maximum(abs, x)
-@deprecate maxabs(A, region)  maximum(abs, A, region)
-
-for (dep, f, op) in [(:sumabs!, :sum!, :abs),
-                     (:sumabs2!, :sum!, :abs2),
-                     (:minabs!, :minimum!, :abs),
-                     (:maxabs!, :maximum!, :abs)]
-    @eval function ($dep)(r, A; init=true)
-        Base.depwarn("$dep(r, A; init=$init) is deprecated, use $f($op, r, A; init=$init) instead.", Symbol($dep))
-        ($f)($op, r, A; init=init)
-    end
-end
-
-## Deprecate broadcast_zpreserving[!] (wasn't exported, but might as well be friendly)
-function gen_broadcast_function_sparse(genbody::Function, f::Function, is_first_sparse::Bool)
-    body = genbody(f, is_first_sparse)
-    @eval let
-        local _F_
-        function _F_{Tv,Ti}(B::SparseMatrixCSC{Tv,Ti}, A_1, A_2)
-            $body
-        end
-        _F_
-    end
-end
-function gen_broadcast_body_zpreserving(f::Function, is_first_sparse::Bool)
-    F = Expr(:quote, f)
-    if is_first_sparse
-        A1 = :(A_1)
-        A2 = :(A_2)
-        op1 = :(val1)
-        op2 = :(val2)
-    else
-        A1 = :(A_2)
-        A2 = :(A_1)
-        op1 = :(val2)
-        op2 = :(val1)
-    end
-    quote
-        Base.Broadcast.check_broadcast_indices(indices(B), $A1)
-        Base.Broadcast.check_broadcast_indices(indices(B), $A2)
-
-        nnzB = isempty(B) ? 0 :
-               nnz($A1) * div(B.n, ($A1).n) * div(B.m, ($A1).m)
-        if length(B.rowval) < nnzB
-            resize!(B.rowval, nnzB)
-        end
-        if length(B.nzval) < nnzB
-            resize!(B.nzval, nnzB)
-        end
-        z = zero(Tv)
-
-        ptrB = 1
-        B.colptr[1] = 1
-
-        @inbounds for col = 1:B.n
-            ptr1::Int  = ($A1).n == 1 ? ($A1).colptr[1] : ($A1).colptr[col]
-            stop1::Int = ($A1).n == 1 ? ($A1).colptr[2] : ($A1).colptr[col+1]
-            col2 = size($A2, 2) == 1 ? 1 : col
-            row = 1
-            while ptr1 < stop1 && row <= B.m
-                if ($A1).m != 1
-                    row = ($A1).rowval[ptr1]
-                end
-                row2 = size($A2, 1) == 1 ? 1 : row
-                val1 = ($A1).nzval[ptr1]
-                val2 = ($A2)[row2,col2]
-                res = ($F)($op1, $op2)
-                if res != z
-                    B.rowval[ptrB] = row
-                    B.nzval[ptrB] = res
-                    ptrB += 1
-                end
-                if ($A1).m != 1
-                    ptr1 += 1
-                else
-                    row += 1
-                end
-            end
-            B.colptr[col+1] = ptrB
-        end
-        deleteat!(B.rowval, B.colptr[end]:length(B.rowval))
-        deleteat!(B.nzval, B.colptr[end]:length(B.nzval))
-        nothing
-    end
-end
-for (Bsig, A1sig, A2sig, gbb, funcname) in
-    (
-     (SparseMatrixCSC   , SparseMatrixCSC  ,  Array,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     (SparseMatrixCSC   , Array  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     (SparseMatrixCSC   , Number  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     (SparseMatrixCSC   , SparseMatrixCSC  ,  Number,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     (SparseMatrixCSC   , BitArray  ,  SparseMatrixCSC,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     (SparseMatrixCSC   , SparseMatrixCSC  ,  BitArray,  :gen_broadcast_body_zpreserving, :_broadcast_zpreserving!),
-     )
-    @eval let cache = Dict{Function,Function}()
-        global $funcname
-        function $funcname(f::Function, B::$Bsig, A1::$A1sig, A2::$A2sig)
-            func       = @get! cache  f  gen_broadcast_function_sparse($gbb, f, ($A1sig) <: SparseMatrixCSC)
-            # need eval because func was just created by gen_broadcast_function_sparse
-            # TODO: convert this to a generated function
-            eval(_current_module(), Expr(:body, Expr(:return, Expr(:call, QuoteNode(func), QuoteNode(B), QuoteNode(A1), QuoteNode(A2)))))
-            return B
-        end
-    end  # let broadcast_cache
-end
-_broadcast_zpreserving!(args...) = broadcast!(args...)
-# note: promote_eltype_op also deprecated, defined later in this file
-_broadcast_zpreserving(f, As...) =
-    broadcast!(f, similar(Array{_promote_eltype_op(f, As...)}, Base.Broadcast.broadcast_indices(As...)), As...)
-_broadcast_zpreserving(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) where {Tv1,Ti1,Tv2,Ti2} =
-    _broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-_broadcast_zpreserving(f::Function, A_1::SparseMatrixCSC{<:Any,Ti}, A_2::Union{Array,BitArray,Number}) where {Ti} =
-    _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-_broadcast_zpreserving(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{<:Any,Ti}) where {Ti} =
-    _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-
-function _depstring_bczpres()
-    return string("broadcast_zpreserving[!] is deprecated. Generic sparse broadcast[!] ",
-        "provides most of broadcast_zpreserving[!]'s functionality. If you have a use case ",
-        "that generic sparse broadcast[!] does not cover, please describe your use case in ",
-        " issue #19533 (https://github.com/JuliaLang/julia/issues/19533).")
-end
-function _depwarn_bczpres(f, args...)
-    depwarn(_depstring_bczpres(), :broadcast_zpreserving)
-    return _broadcast_zpreserving(f, args...)
-end
-function _depwarn_bczpres!(f, args...)
-    depwarn(_depstring_bczpres(), :broadcast_zpreserving!)
-    return _broadcast_zpreserving!(f, args...)
-end
-@eval SparseArrays begin
-    broadcast_zpreserving(f, args...) = Base._depwarn_bczpres(f, args...)
-    broadcast_zpreserving(f, A::SparseMatrixCSC, B::SparseMatrixCSC) = Base._depwarn_bczpres(f, A, B)
-    broadcast_zpreserving(f, A::SparseMatrixCSC, B::Union{Array,BitArray,Number}) = Base._depwarn_bczpres(f, A, B)
-    broadcast_zpreserving(f, A::Union{Array,BitArray,Number}, B::SparseMatrixCSC) = Base._depwarn_bczpres(f, A, B)
-    broadcast_zpreserving!(f, args...) = Base._depwarn_bczpres!(f, args...)
-    broadcast_zpreserving!(f, C::SparseMatrixCSC, A::SparseMatrixCSC, B::Union{Array,BitArray,Number}) = Base._depwarn_bczpres!(f, C, A, B)
-    broadcast_zpreserving!(f, C::SparseMatrixCSC, A::Union{Array,BitArray,Number}, B::SparseMatrixCSC) = Base._depwarn_bczpres!(f, C, A, B)
-end
-
-# #19719
-@deprecate getindex(t::Tuple, r::AbstractArray)       getindex(t, vec(r))
-@deprecate getindex(t::Tuple, b::AbstractArray{Bool}) getindex(t, vec(b))
-
-# Deprecate isimag (#19947).
-@deprecate isimag(z::Number) iszero(real(z))
-
-# Deprecate vectorized xor in favor of compact broadcast syntax
-@deprecate xor(a::Bool, B::BitArray)                xor.(a, B)
-@deprecate xor(A::BitArray, b::Bool)                xor.(A, b)
-@deprecate xor(a::Number, B::AbstractArray)         xor.(a, B)
-@deprecate xor(A::AbstractArray, b::Number)         xor.(A, b)
-@deprecate xor(A::AbstractArray, B::AbstractArray)  xor.(A, B)
-
-# QuadGK moved to a package (#19741)
-function quadgk(args...; kwargs...)
-    error(string(quadgk, args, " has been moved to the package QuadGK.jl.\n",
-                 "Run Pkg.add(\"QuadGK\") to install QuadGK on Julia v0.6 and later, and then run `using QuadGK`."))
-end
-export quadgk
-
-# Collections functions moved to a package (#19800)
-module Collections
-    export PriorityQueue, enqueue!, dequeue!, heapify!, heapify, heappop!, heappush!, isheap, peek
-    for f in (:PriorityQueue, :enqueue!, :dequeue!, :heapify!, :heapify, :heappop!, :heappush!, :isheap, :peek)
-        @eval function ($f)(args...; kwargs...)
-            error(string($f, args, " has been moved to the package DataStructures.jl.\n",
-                         "Run Pkg.add(\"DataStructures\") to install DataStructures on Julia v0.6 and later, ",
-                         "and then run `using DataStructures`."))
-        end
-    end
-end
-export Collections
-
-# Broadcast now returns a BitArray when the resulting eltype is Bool (#17623)
-@deprecate bitbroadcast broadcast
-
-# Deprecate two-argument map! (map!(f, A)) for a cycle in anticipation of semantic change
-@deprecate map!(f::F, A::AbstractArray) where {F} map!(f, A, A)
-@deprecate asyncmap!(f, c; ntasks=0, batch_size=nothing) asyncmap!(f, c, c; ntasks=ntasks, batch_size=batch_size)
-
-# Not exported, but used outside Base
-_promote_array_type(F, ::Type, ::Type, T::Type) = T
-_promote_array_type(F, ::Type{<:Real}, ::Type{A}, ::Type) where {A<:AbstractFloat} = A
-_promote_array_type(F, ::Type{<:Integer}, ::Type{A}, ::Type) where {A<:Integer} = A
-_promote_array_type(::typeof(/), ::Type{<:Integer}, ::Type{<:Integer}, T::Type) = T
-_promote_array_type(::typeof(\), ::Type{<:Integer}, ::Type{<:Integer}, T::Type) = T
-_promote_array_type(::typeof(/), ::Type{<:Integer}, ::Type{Bool}, T::Type) = T
-_promote_array_type(::typeof(\), ::Type{<:Integer}, ::Type{Bool}, T::Type) = T
-_promote_array_type(F, ::Type{<:Integer}, ::Type{Bool}, T::Type) = T
-_promote_array_type(F, ::Type{<:Union{Complex, Real}}, ::Type{Complex{T}}, ::Type) where {T<:AbstractFloat} = Complex{T}
-function promote_array_type(F, R, S, T)
-    Base.depwarn("`promote_array_type` is deprecated as it is no longer needed " *
-                 "in Base. See https://github.com/JuliaLang/julia/issues/19669 " *
-                 "for more information.", :promote_array_type)
-    _promote_array_type(F, R, S, T)
-end
-
-# Deprecate manually vectorized abs2 methods in favor of compact broadcast syntax
-@deprecate abs2(x::AbstractSparseVector) abs2.(x)
-
-# Deprecate manually vectorized sign methods in favor of compact broadcast syntax
-@deprecate sign(A::AbstractArray) sign.(A)
-
-# Deprecate manually vectorized trigonometric and hyperbolic functions in favor of compact broadcast syntax
-for f in (:sec, :sech, :secd, :asec, :asech,
-            :csc, :csch, :cscd, :acsc, :acsch,
-            :cot, :coth, :cotd, :acot, :acoth)
-    @eval @deprecate $f(A::AbstractArray{<:Number}) $f.(A)
-end
-
-# Deprecate vectorized two-argument complex in favor of compact broadcast syntax
-@deprecate complex(A::AbstractArray, b::Real)           complex.(A, b)
-@deprecate complex(a::Real, B::AbstractArray)           complex.(a, B)
-@deprecate complex(A::AbstractArray, B::AbstractArray)  complex.(A, B)
-
-# Deprecate manually vectorized clamp methods in favor of compact broadcast syntax
-@deprecate clamp(A::AbstractArray, lo, hi) clamp.(A, lo, hi)
-
-# Deprecate manually vectorized round methods in favor of compact broadcast syntax
-@deprecate round(M::Bidiagonal) round.(M)
-@deprecate round(M::Tridiagonal) round.(M)
-@deprecate round(M::SymTridiagonal) round.(M)
-@deprecate round(::Type{T}, x::AbstractArray) where {T} round.(T, x)
-@deprecate round(::Type{T}, x::AbstractArray, r::RoundingMode) where {T} round.(T, x, r)
-@deprecate round(x::AbstractArray, r::RoundingMode) round.(x, r)
-@deprecate round(x::AbstractArray, digits::Integer, base::Integer = 10) round.(x, digits, base)
-
-# Deprecate manually vectorized trunc methods in favor of compact broadcast syntax
-@deprecate trunc(M::Bidiagonal) trunc.(M)
-@deprecate trunc(M::Tridiagonal) trunc.(M)
-@deprecate trunc(M::SymTridiagonal) trunc.(M)
-@deprecate trunc(::Type{T}, x::AbstractArray) where {T} trunc.(T, x)
-@deprecate trunc(x::AbstractArray, digits::Integer, base::Integer = 10) trunc.(x, digits, base)
-
-# Deprecate manually vectorized floor methods in favor of compact broadcast syntax
-@deprecate floor(M::Bidiagonal) floor.(M)
-@deprecate floor(M::Tridiagonal) floor.(M)
-@deprecate floor(M::SymTridiagonal) floor.(M)
-@deprecate floor(::Type{T}, A::AbstractArray) where {T} floor.(T, A)
-@deprecate floor(A::AbstractArray, digits::Integer, base::Integer = 10) floor.(A, digits, base)
-
-# Deprecate manually vectorized ceil methods in favor of compact broadcast syntax
-@deprecate ceil(M::Bidiagonal) ceil.(M)
-@deprecate ceil(M::Tridiagonal) ceil.(M)
-@deprecate ceil(M::SymTridiagonal) ceil.(M)
-@deprecate ceil(::Type{T}, x::AbstractArray) where {T} ceil.(T, x)
-@deprecate ceil(x::AbstractArray, digits::Integer, base::Integer = 10) ceil.(x, digits, base)
-
-# Deprecate manually vectorized `big` methods in favor of compact broadcast syntax
-@deprecate big(r::UnitRange) big.(r)
-@deprecate big(r::StepRange) big.(r)
-@deprecate big(r::StepRangeLen) big.(r)
-@deprecate big(r::LinSpace) big.(r)
-@deprecate big(x::AbstractArray{<:Integer}) big.(x)
-@deprecate big(x::AbstractArray{<:AbstractFloat}) big.(x)
-@deprecate big(A::LowerTriangular) big.(A)
-@deprecate big(A::UpperTriangular) big.(A)
-@deprecate big(A::Base.LinAlg.UnitLowerTriangular) big.(A)
-@deprecate big(A::Base.LinAlg.UnitUpperTriangular) big.(A)
-@deprecate big(B::Bidiagonal) big.(B)
-@deprecate big(A::AbstractArray{<:Complex{<:Integer}}) big.(A)
-@deprecate big(A::AbstractArray{<:Complex{<:AbstractFloat}}) big.(A)
-@deprecate big(x::AbstractArray{<:Complex{<:Rational{<:Integer}}}) big.(A)
-
-# Deprecate manually vectorized div methods in favor of compact broadcast syntax
-@deprecate div(A::Number, B::AbstractArray) div.(A, B)
-@deprecate div(A::AbstractArray, B::Number) div.(A, B)
-@deprecate div(A::AbstractArray, B::AbstractArray) div.(A, B)
-
-# Deprecate manually vectorized rem methods in favor of compact broadcast syntax
-@deprecate rem(A::Number, B::AbstractArray) rem.(A, B)
-@deprecate rem(A::AbstractArray, B::Number) rem.(A, B)
-
-# Deprecate manually vectorized div, mod, and % methods for dates
-@deprecate div(X::StridedArray{P}, y::P) where {P<:Dates.Period}  div.(X, y)
-@deprecate div(X::StridedArray{<:Dates.Period}, y::Integer)       div.(X, y)
-@deprecate (%)(X::StridedArray{P}, y::P) where {P<:Dates.Period}  X .% y
-@deprecate mod(X::StridedArray{P}, y::P) where {P<:Dates.Period}  mod.(X, y)
-
-# Deprecate manually vectorized mod methods in favor of compact broadcast syntax
-@deprecate mod(B::BitArray, x::Bool) mod.(B, x)
-@deprecate mod(x::Bool, B::BitArray) mod.(x, B)
-@deprecate mod(A::AbstractArray, B::AbstractArray) mod.(A, B)
-@deprecate mod(x::Number, A::AbstractArray) mod.(x, A)
-@deprecate mod(A::AbstractArray, x::Number) mod.(A, x)
-
-# Deprecate vectorized & in favor of dot syntax
-@deprecate (&)(a::Bool, B::BitArray)                a .& B
-@deprecate (&)(A::BitArray, b::Bool)                A .& b
-@deprecate (&)(a::Number, B::AbstractArray)         a .& B
-@deprecate (&)(A::AbstractArray, b::Number)         A .& b
-@deprecate (&)(A::AbstractArray, B::AbstractArray)  A .& B
-
-# Deprecate vectorized | in favor of compact broadcast syntax
-@deprecate (|)(a::Bool, B::BitArray)                a .| B
-@deprecate (|)(A::BitArray, b::Bool)                A .| b
-@deprecate (|)(a::Number, B::AbstractArray)         a .| B
-@deprecate (|)(A::AbstractArray, b::Number)         A .| b
-@deprecate (|)(A::AbstractArray, B::AbstractArray)  A .| B
-
-# Deprecate vectorized ifelse
-@deprecate ifelse(c::AbstractArray{Bool}, x, y) ifelse.(c, x, y)
-@deprecate ifelse(c::AbstractArray{Bool}, x, y::AbstractArray) ifelse.(c, x, y)
-@deprecate ifelse(c::AbstractArray{Bool}, x::AbstractArray, y) ifelse.(c, x, y)
-@deprecate ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray) ifelse.(c, x, y)
-
-# Deprecate vectorized !
-@deprecate(!(A::AbstractArray{Bool}), .!A) # parens for #20541
-@deprecate(!(B::BitArray), .!B) # parens for #20541
-!(::typeof(()->())) = () # make sure ! has at least 4 methods so that for-loops don't end up getting a back-edge to depwarn
-
-# Deprecate vectorized ~
-@deprecate ~(A::AbstractArray) .~A
-@deprecate ~(B::BitArray) .~B
-
-function frexp(A::Array{<:AbstractFloat})
-    depwarn(string("`frexp(x::Array)` is discontinued. Though not a direct replacement, ",
-                   "consider using dot-syntax to `broadcast` scalar `frexp` over `Array`s ",
-                   "instead, for example `frexp.(rand(4))`."), :frexp)
-    F = similar(A)
-    E = Array{Int}(size(A))
-    for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
-        F[iF], E[iE] = frexp(A[iA])
-    end
-    return (F, E)
-end
-
-# Deprecate reducing isinteger over arrays
-@deprecate isinteger(A::AbstractArray) all(isinteger, A)
-
-# Deprecate promote_eltype_op (#19814, #19937)
-_promote_eltype_op(::Any) = Any
-_promote_eltype_op(op, A) = (@_inline_meta; promote_op(op, eltype(A)))
-_promote_eltype_op(op, A, B) = (@_inline_meta; promote_op(op, eltype(A), eltype(B)))
-_promote_eltype_op(op, A, B, C, D...) = (@_inline_meta; _promote_eltype_op(op, eltype(A), _promote_eltype_op(op, B, C, D...)))
-@inline function promote_eltype_op(args...)
-    depwarn("""
-            `promote_eltype_op` is deprecated and should not be used.
-            See https://github.com/JuliaLang/julia/issues/19669.""",
-            :promote_eltype_op)
-    _promote_eltype_op(args...)
-end
-
-
-function unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, len::Integer, own::Bool=false)
-    Base.depwarn("unsafe_wrap(String, ...) is deprecated; use `unsafe_string` instead.", :unsafe_wrap)
-    #ccall(:jl_array_to_string, Ref{String}, (Any,),
-    #      ccall(:jl_ptr_to_array_1d, Vector{UInt8}, (Any, Ptr{UInt8}, Csize_t, Cint),
-    #            Vector{UInt8}, p, len, own))
-    unsafe_string(p, len)
-end
-unsafe_wrap(::Type{String}, p::Union{Ptr{UInt8},Ptr{Int8}}, own::Bool=false) =
-    unsafe_wrap(String, p, ccall(:strlen, Csize_t, (Ptr{UInt8},), p), own)
-unsafe_wrap(::Type{String}, p::Cstring, own::Bool=false) = unsafe_wrap(String, convert(Ptr{UInt8}, p), own)
-unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
-    unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
-
-# #19660
-@deprecate finalize(sa::LibGit2.StrArrayStruct) LibGit2.free(sa)
-@deprecate finalize(sa::LibGit2.Buffer) LibGit2.free(sa)
-
-## produce, consume, and task iteration
-# NOTE: When removing produce/consume, also remove field Task.consumers and related code in
-# task.jl and event.jl
-
-function produce(v)
-    depwarn("produce is now deprecated. Use Channels for inter-task communication.", :produce)
-
-    ct = current_task()
-    local empty, t, q
-    while true
-        q = ct.consumers
-        if isa(q,Task)
-            t = q
-            ct.consumers = nothing
-            empty = true
-            break
-        elseif isa(q,Condition) && !isempty(q.waitq)
-            t = shift!(q.waitq)
-            empty = isempty(q.waitq)
-            break
-        end
-        wait()
-    end
-
-    t.state == :runnable || throw(AssertionError("producer.consumer.state == :runnable"))
-    if empty
-        schedule_and_wait(t, v)
-        while true
-            # wait until there are more consumers
-            q = ct.consumers
-            if isa(q,Task)
-                return q.result
-            elseif isa(q,Condition) && !isempty(q.waitq)
-                return q.waitq[1].result
-            end
-            wait()
-        end
-    else
-        schedule(t, v)
-        # make sure `t` runs before us. otherwise, the producer might
-        # finish before `t` runs again, causing it to see the producer
-        # as done, causing done(::Task, _) to miss the value `v`.
-        # see issue #7727
-        yield()
-        return q.waitq[1].result
-    end
-end
-produce(v...) = produce(v)
-export produce
-
-function consume(P::Task, values...)
-    depwarn("consume is now deprecated. Use Channels for inter-task communication.", :consume)
-
-    if istaskdone(P)
-        return wait(P)
-    end
-
-    ct = current_task()
-    ct.result = length(values)==1 ? values[1] : values
-
-    #### un-optimized version
-    #if P.consumers === nothing
-    #    P.consumers = Condition()
-    #end
-    #push!(P.consumers.waitq, ct)
-    # optimized version that avoids the queue for 1 consumer
-    if P.consumers === nothing || (isa(P.consumers,Condition)&&isempty(P.consumers.waitq))
-        P.consumers = ct
-    else
-        if isa(P.consumers, Task)
-            t = P.consumers
-            P.consumers = Condition()
-            push!(P.consumers.waitq, t)
-        end
-        push!(P.consumers.waitq, ct)
-    end
-
-    P.state == :runnable ? schedule_and_wait(P) : wait() # don't attempt to queue it twice
-end
-export consume
-
-function start(t::Task)
-    depwarn(string("Task iteration is now deprecated.",
-                   " Use Channels for inter-task communication. ",
-                   " A for-loop on a Channel object is terminated by calling `close` on the object."), :taskfor)
-    nothing
-end
-function done(t::Task, val)
-    t.result = consume(t)
-    istaskdone(t)
-end
-next(t::Task, val) = (t.result, nothing)
-iteratorsize(::Type{Task}) = SizeUnknown()
-iteratoreltype(::Type{Task}) = EltypeUnknown()
-
-isempty(::Task) = error("isempty not defined for Tasks")
-
-@eval Base.Test begin
-    approx_full(x::AbstractArray) = x
-    approx_full(x::Number) = x
-    approx_full(x) = full(x)
-
-    function test_approx_eq(va, vb, Eps, astr, bstr)
-        va = approx_full(va)
-        vb = approx_full(vb)
-        la, lb = length(linearindices(va)), length(linearindices(vb))
-        if la != lb
-            error("lengths of ", astr, " and ", bstr, " do not match: ",
-                "\n  ", astr, " (length $la) = ", va,
-                "\n  ", bstr, " (length $lb) = ", vb)
-        end
-        diff = real(zero(eltype(va)))
-        for (xa, xb) = zip(va, vb)
-            if isfinite(xa) && isfinite(xb)
-                diff = max(diff, abs(xa-xb))
-            elseif !isequal(xa,xb)
-                error("mismatch of non-finite elements: ",
-                    "\n  ", astr, " = ", va,
-                    "\n  ", bstr, " = ", vb)
-            end
-        end
-
-        if !isnan(Eps) && !(diff <= Eps)
-            sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
-            error("assertion failed: ", sdiff,
-                "\n  ", astr, " = ", va,
-                "\n  ", bstr, " = ", vb,
-                "\n  difference = ", diff, " > ", Eps)
-        end
-    end
-
-    array_eps(a::AbstractArray{Complex{T}}) where {T} = eps(float(maximum(x->(isfinite(x) ? abs(x) : T(NaN)), a)))
-    array_eps(a) = eps(float(maximum(x->(isfinite(x) ? abs(x) : oftype(x,NaN)), a)))
-
-    test_approx_eq(va, vb, astr, bstr) =
-        test_approx_eq(va, vb, 1E4*length(linearindices(va))*max(array_eps(va), array_eps(vb)), astr, bstr)
-
-    """
-        @test_approx_eq_eps(a, b, tol)
-
-    Test two floating point numbers `a` and `b` for equality taking into account
-    a margin of tolerance given by `tol`.
-    """
-    macro test_approx_eq_eps(a, b, c)
-        Base.depwarn(string("@test_approx_eq_eps is deprecated, use `@test ", a, " ≈ ", b, " atol=", c, "` instead"),
-                    Symbol("@test_approx_eq_eps"))
-        :(test_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))
-    end
-    export @test_approx_eq_eps
-
-    """
-        @test_approx_eq(a, b)
-
-    Deprecated. Test two floating point numbers `a` and `b` for equality taking into
-    account small numerical errors.
-    """
-    macro test_approx_eq(a, b)
-        Base.depwarn(string("@test_approx_eq is deprecated, use `@test ", a, " ≈ ", b, "` instead"),
-                    Symbol("@test_approx_eq"))
-        :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
-    end
-    export @test_approx_eq
-end
-
-# Deprecate partial linear indexing
-function partial_linear_indexing_warning_lookup(nidxs_remaining)
-    # We need to figure out how many indices were passed for a sensible deprecation warning
-    opts = JLOptions()
-    if opts.depwarn > 0
-        # Find the caller -- this is very expensive so we don't want to do it twice
-        bt = backtrace()
-        found = false
-        call = StackTraces.UNKNOWN
-        caller = StackTraces.UNKNOWN
-        for frame in bt
-            lkups = StackTraces.lookup(frame)
-            for caller in lkups
-                if caller == StackTraces.UNKNOWN
-                    continue
-                end
-                found && @goto found
-                if caller.func in (:getindex, :setindex!, :view)
-                    found = true
-                    call = caller
-                end
-            end
-        end
-        @label found
-        fn = "`reshape`"
-        if call != StackTraces.UNKNOWN && !isnull(call.linfo)
-            # Try to grab the number of dimensions in the parent array
-            mi = get(call.linfo)
-            args = mi.specTypes.parameters
-            if length(args) >= 2 && args[2] <: AbstractArray
-                fn = "`reshape(A, Val{$(ndims(args[2]) - nidxs_remaining + 1)})`"
-            end
-        end
-        _depwarn("Partial linear indexing is deprecated. Use $fn to make the dimensionality of the array match the number of indices.", opts, bt, caller)
-    end
-end
-function partial_linear_indexing_warning(n)
-    depwarn("Partial linear indexing is deprecated. Use `reshape(A, Val{$n})` to make the dimensionality of the array match the number of indices.", (:getindex, :setindex!, :view))
-end
-
-# Deprecate Array(T, dims...) in favor of proper type constructors
-@deprecate Array(::Type{T}, d::NTuple{N,Int}) where {T,N}               Array{T}(d)
-@deprecate Array(::Type{T}, d::Int...) where {T}                        Array{T}(d...)
-@deprecate Array(::Type{T}, m::Int) where {T}                           Array{T}(m)
-@deprecate Array(::Type{T}, m::Int,n::Int) where {T}                    Array{T}(m,n)
-@deprecate Array(::Type{T}, m::Int,n::Int,o::Int) where {T}             Array{T}(m,n,o)
-@deprecate Array(::Type{T}, d::Integer...) where {T}                    Array{T}(convert(Tuple{Vararg{Int}}, d))
-@deprecate Array(::Type{T}, m::Integer) where {T}                       Array{T}(Int(m))
-@deprecate Array(::Type{T}, m::Integer,n::Integer) where {T}            Array{T}(Int(m),Int(n))
-@deprecate Array(::Type{T}, m::Integer,n::Integer,o::Integer) where {T} Array{T}(Int(m),Int(n),Int(o))
-
-# Likewise for SharedArrays
-@deprecate SharedArray(::Type{T}, dims::Dims{N}; kwargs...) where {T,N} SharedArray{T}(dims; kwargs...)
-@deprecate SharedArray(::Type{T}, dims::Int...; kwargs...) where {T}    SharedArray{T}(dims...; kwargs...)
-@deprecate(SharedArray(filename::AbstractString, ::Type{T}, dims::NTuple{N,Int}, offset; kwargs...) where {T,N},
-           SharedArray{T}(filename, dims, offset; kwargs...))
-@deprecate(SharedArray(filename::AbstractString, ::Type{T}, dims::NTuple, offset; kwargs...) where {T},
-           SharedArray{T}(filename, dims, offset; kwargs...))
-
-@noinline function is_intrinsic_expr(x::ANY)
-    Base.depwarn("is_intrinsic_expr is deprecated. There are no intrinsic functions anymore.", :is_intrinsic_expr)
-    return false
-end
-
-@deprecate EachLine(stream, ondone) EachLine(stream, ondone=ondone)
-
-# These conversions should not be defined, see #19896
-@deprecate convert(::Type{T}, x::Dates.Period) where {T<:Number} convert(T, Dates.value(x))
-@deprecate convert(::Type{T}, x::Real) where {T<:Dates.Period}   T(x)
-@deprecate convert(::Type{R}, x::Dates.DateTime) where {R<:Real} R(Dates.value(x))
-@deprecate convert(::Type{R}, x::Dates.Date) where {R<:Real}     R(Dates.value(x))
-@deprecate convert(::Type{Dates.DateTime}, x::Real)              Dates.DateTime(Dates.Millisecond(x))
-@deprecate convert(::Type{Dates.Date}, x::Real)                  Dates.Date(Dates.Day(x))
-
-function colon(start::T, stop::T) where T<:Dates.Period
-    depwarn("$start:$stop is deprecated, use $start:$T(1):$stop instead.", :colon)
-    colon(start, T(1), stop)
-end
-
-# LibGit2 refactor (#19839)
-@eval Base.LibGit2 begin
-     Base.@deprecate_binding Oid GitHash
-     Base.@deprecate_binding GitAnyObject GitUnknownObject
-
-     @deprecate owner(x) repository(x) false
-     @deprecate get(::Type{T}, repo::GitRepo, x) where {T<:GitObject} T(repo, x) false
-     @deprecate get(::Type{T}, repo::GitRepo, oid::GitHash, oid_size::Int) where {T<:GitObject} T(repo, GitShortHash(oid, oid_size)) false
-     @deprecate revparse(repo::GitRepo, objname::AbstractString) GitObject(repo, objname) false
-     @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
-     @deprecate commit(ann::GitAnnotated) GitHash(ann) false
-     @deprecate lookup(repo::GitRepo, oid::GitHash) GitBlob(repo, oid) false
-    function Base.cat(repo::GitRepo, ::Type{T}, spec::Union{AbstractString,AbstractGitHash}) where T<:GitObject
-        Base.depwarn("cat(repo::GitRepo, T, spec) is deprecated, use content(T(repo, spec))", :cat)
-        try
-            return content(GitBlob(repo, spec))
-        catch e
-            isa(e, LibGit2.GitError) && return nothing
-            rethrow(e)
-        end
-    end
-    Base.cat(repo::GitRepo, spec::Union{AbstractString,AbstractGitHash}) = cat(repo, GitBlob, spec)
-end
-
-# when this deprecation is deleted, remove all calls to it, and all
-# negate=nothing keyword arguments, from base/dates/adjusters.jl
-@eval Dates function deprecate_negate(f, func, sig, negate)
-    if negate === nothing
-        return func
-    else
-        msg = "$f($sig; negate=$negate) is deprecated, use $f("
-        negate && (msg *= "!")
-        msg *= "$sig) instead."
-        Base.depwarn(msg, f)
-        return negate ? !func : func
-    end
-end
-
-# TODO: remove `:typealias` from BINDING_HEADS in base/docs/Docs.jl
-# TODO: remove `'typealias` case in expand-table in julia-syntax.scm
-
-# FloatRange replaced by StepRangeLen
-
-## Old-style floating point ranges. We reimplement them here because
-## the replacement StepRangeLen also has 4 real-valued fields, which
-## makes deprecation tricky. See #20506.
-
-struct Use_StepRangeLen_Instead{T<:AbstractFloat} <: Range{T}
-    start::T
-    step::T
-    len::T
-    divisor::T
-end
-
-Use_StepRangeLen_Instead(a::AbstractFloat, s::AbstractFloat, l::Real, d::AbstractFloat) =
-    Use_StepRangeLen_Instead{promote_type(typeof(a),typeof(s),typeof(d))}(a,s,l,d)
-
-isempty(r::Use_StepRangeLen_Instead) = length(r) == 0
-
-step(r::Use_StepRangeLen_Instead) = r.step/r.divisor
-
-length(r::Use_StepRangeLen_Instead) = Integer(r.len)
-
-first(r::Use_StepRangeLen_Instead{T}) where {T} = convert(T, r.start/r.divisor)
-
-last(r::Use_StepRangeLen_Instead{T}) where {T} = convert(T, (r.start + (r.len-1)*r.step)/r.divisor)
-
-start(r::Use_StepRangeLen_Instead) = 0
-done(r::Use_StepRangeLen_Instead, i::Int) = length(r) <= i
-next(r::Use_StepRangeLen_Instead{T}, i::Int) where {T} =
-    (convert(T, (r.start + i*r.step)/r.divisor), i+1)
-
-function getindex(r::Use_StepRangeLen_Instead{T}, i::Integer) where T
-    @_inline_meta
-    @boundscheck checkbounds(r, i)
-    convert(T, (r.start + (i-1)*r.step)/r.divisor)
-end
-
-function getindex(r::Use_StepRangeLen_Instead, s::OrdinalRange)
-    @_inline_meta
-    @boundscheck checkbounds(r, s)
-    Use_StepRangeLen_Instead(r.start + (first(s)-1)*r.step, step(s)*r.step, length(s), r.divisor)
-end
-
--(r::Use_StepRangeLen_Instead)   = Use_StepRangeLen_Instead(-r.start, -r.step, r.len, r.divisor)
-+(x::Real, r::Use_StepRangeLen_Instead) = Use_StepRangeLen_Instead(r.divisor*x + r.start, r.step, r.len, r.divisor)
--(x::Real, r::Use_StepRangeLen_Instead) = Use_StepRangeLen_Instead(r.divisor*x - r.start, -r.step, r.len, r.divisor)
--(r::Use_StepRangeLen_Instead, x::Real) = Use_StepRangeLen_Instead(r.start - r.divisor*x, r.step, r.len, r.divisor)
-*(x::Real, r::Use_StepRangeLen_Instead)   = Use_StepRangeLen_Instead(x*r.start, x*r.step, r.len, r.divisor)
-*(r::Use_StepRangeLen_Instead, x::Real)   = x * r
-/(r::Use_StepRangeLen_Instead, x::Real)   = Use_StepRangeLen_Instead(r.start/x, r.step/x, r.len, r.divisor)
-promote_rule(::Type{Use_StepRangeLen_Instead{T1}},::Type{Use_StepRangeLen_Instead{T2}}) where {T1,T2} =
-    Use_StepRangeLen_Instead{promote_type(T1,T2)}
-convert(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead{T}) where {T<:AbstractFloat} = r
-convert(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead) where {T<:AbstractFloat} =
-    Use_StepRangeLen_Instead{T}(r.start,r.step,r.len,r.divisor)
-
-promote_rule(::Type{Use_StepRangeLen_Instead{F}}, ::Type{OR}) where {F,OR<:OrdinalRange} =
-    Use_StepRangeLen_Instead{promote_type(F,eltype(OR))}
-convert(::Type{Use_StepRangeLen_Instead{T}}, r::OrdinalRange) where {T<:AbstractFloat} =
-    Use_StepRangeLen_Instead{T}(first(r), step(r), length(r), one(T))
-convert(::Type{Use_StepRangeLen_Instead}, r::OrdinalRange{T}) where {T} =
-    Use_StepRangeLen_Instead{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
-
-promote_rule(::Type{LinSpace{F}}, ::Type{OR}) where {F,OR<:Use_StepRangeLen_Instead} =
-    LinSpace{promote_type(F,eltype(OR))}
-convert(::Type{LinSpace{T}}, r::Use_StepRangeLen_Instead) where {T<:AbstractFloat} =
-    linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
-convert(::Type{LinSpace}, r::Use_StepRangeLen_Instead{T}) where {T<:AbstractFloat} =
-    convert(LinSpace{T}, r)
-
-reverse(r::Use_StepRangeLen_Instead)   = Use_StepRangeLen_Instead(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)
-
-function sum(r::Use_StepRangeLen_Instead)
-    l = length(r)
-    if iseven(l)
-        s = r.step * (l-1) * (l>>1)
-    else
-        s = (r.step * l) * ((l-1)>>1)
-    end
-    return (l * r.start + s)/r.divisor
-end
-
-@deprecate_binding FloatRange Use_StepRangeLen_Instead
-
-## end of FloatRange
-
-@noinline zero_arg_matrix_constructor(prefix::String) =
-    depwarn("$prefix() is deprecated, use $prefix(0, 0) instead.", :zero_arg_matrix_constructor)
-function (::Type{Matrix{T}}){T}()
-    zero_arg_matrix_constructor("Matrix{T}")
-    return Matrix{T}(0, 0)
-end
-function (::Type{Matrix})()
-    zero_arg_matrix_constructor("Matrix")
-    return Matrix(0, 0)
-end
-
-for name in ("alnum", "alpha", "cntrl", "digit", "number", "graph",
-             "lower", "print", "punct", "space", "upper", "xdigit")
-    f = Symbol("is",name)
-    @eval @deprecate ($f)(s::AbstractString) all($f, s)
-end
-
-# TODO: remove warning for using `_` in parse_input_line in base/client.jl
-
-# Special functions have been moved to a package
-for f in (:airyai, :airyaiprime, :airybi, :airybiprime, :airyaix, :airyaiprimex, :airybix, :airybiprimex,
-          :besselh, :besselhx, :besseli, :besselix, :besselj, :besselj0, :besselj1, :besseljx, :besselk,
-          :besselkx, :bessely, :bessely0, :bessely1, :besselyx,
-          :dawson, :erf, :erfc, :erfcinv, :erfcx, :erfi, :erfinv,
-          :eta, :zeta, :digamma, :invdigamma, :polygamma, :trigamma,
-          :hankelh1, :hankelh1x, :hankelh2, :hankelh2x,
-          :airy, :airyx, :airyprime)
-    @eval begin
-        function $f(args...; kwargs...)
-            error(string($f, args, " has been moved to the package SpecialFunctions.jl.\n",
-                         "Run Pkg.add(\"SpecialFunctions\") to install SpecialFunctions on Julia v0.6 and later,\n",
-                         "and then run `using SpecialFunctions`."))
-        end
-        export $f
-    end
-end
-
-@deprecate_binding LinearIndexing IndexStyle false
-@deprecate_binding LinearFast IndexLinear false
-@deprecate_binding LinearSlow IndexCartesian false
-@deprecate_binding linearindexing IndexStyle false
-
-# #20876
-@eval Base.Dates begin
-    function Base.Dates.parse(x::AbstractString, df::DateFormat)
-        Base.depwarn(string(
-            "`Dates.parse(x::AbstractString, df::DateFormat)` is deprecated, use ",
-            "`sort!(filter!(el -> isa(el, Dates.Period), Dates.parse_components(x, df), rev=true, lt=Dates.periodisless)` ",
-            " instead."), :parse)
-        sort!(filter!(el -> isa(el, Period), parse_components(x, df)), rev=true, lt=periodisless)
-     end
-end
-
-# PR #16984
-@deprecate MersenneTwister() MersenneTwister(0)
-
-# #19635
-for fname in (:ones, :zeros)
-    @eval @deprecate ($fname)(T::Type, arr) ($fname)(T, size(arr))
-    @eval ($fname)(T::Type, i::Integer) = ($fname)(T, (i,))
-    @eval function ($fname)(::Type{T}, arr::Array{T}) where T
-        msg = string("`", $fname, "{T}(::Type{T}, arr::Array{T})` is deprecated, use ",
-                            "`", $fname , "(T, size(arr))` instead. ",
-                           )
-        error(msg)
-    end
-end
-
-# END 0.6 deprecations
-
-# BEGIN 0.7 deprecations
-
-# 12807
-start(::Union{Process, ProcessChain}) = 1
-done(::Union{Process, ProcessChain}, i::Int) = (i == 3)
-next(p::Union{Process, ProcessChain}, i::Int) = (getindex(p, i), i + 1)
-@noinline function getindex(p::Union{Process, ProcessChain}, i::Int)
-    depwarn("open(cmd) now returns only a Process<:IO object", :getindex)
-    return i == 1 ? getfield(p, p.openstream) : p
-end
-
-@deprecate cond(F::LinAlg.LU, p::Integer) cond(full(F), p)
-
-# PR #21359
-@deprecate srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) srand(r, read!(filename, Array{UInt32}(Int(n))))
-@deprecate srand(filename::AbstractString, n::Integer=4) srand(read!(filename, Array{UInt32}(Int(n))))
-@deprecate MersenneTwister(filename::AbstractString)  srand(MersenneTwister(0), read!(filename, Array{UInt32}(Int(4))))
-
-# PR #21974
-@deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
-@deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
-
-# PR #22188
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val{false})
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholfact!(Hermitian(A, uplo))
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val{false})
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol) cholfact(Hermitian(A, uplo))
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact!(Hermitian(A, uplo), Val{true}, tol = tol)
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact(Hermitian(A, uplo), Val{true}, tol = tol)
-
-# PR #22245
-@deprecate isposdef(A::AbstractMatrix, UL::Symbol) isposdef(Hermitian(A, UL))
-@deprecate isposdef!(A::StridedMatrix, UL::Symbol) isposdef!(Hermitian(A, UL))
-
-# also remove all support machinery in src for current_module when removing this deprecation
-# and make Base.include an error
-_current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
-@noinline function binding_module(s::Symbol)
-    depwarn("binding_module(symbol) is deprecated, use `binding_module(module, symbol)` instead.", :binding_module)
-    return binding_module(_current_module(), s)
-end
-@noinline function expand(x::ANY)
-    depwarn("expand(x) is deprecated, use `expand(module, x)` instead.", :expand)
-    return expand(_current_module(), x)
-end
-@noinline function macroexpand(x::ANY)
-    depwarn("macroexpand(x) is deprecated, use `macroexpand(module, x)` instead.", :macroexpand)
-    return macroexpand(_current_module(), x)
-end
-@noinline function isconst(s::Symbol)
-    depwarn("isconst(symbol) is deprecated, use `isconst(module, symbol)` instead.", :isconst)
-    return isconst(_current_module(), s)
-end
-@noinline function include_string(txt::AbstractString, fname::AbstractString)
-    depwarn("include_string(string, fname) is deprecated, use `include_string(module, string, fname)` instead.", :include_string)
-    return include_string(_current_module(), txt, fname)
-end
-@noinline function include_string(txt::AbstractString)
-    depwarn("include_string(string) is deprecated, use `include_string(module, string)` instead.", :include_string)
-    return include_string(_current_module(), txt, "string")
-end
-
-"""
-    current_module() -> Module
-
-Get the *dynamically* current `Module`, which is the `Module` code is currently being read
-from. In general, this is not the same as the module containing the call to this function.
-
-DEPRECATED: use @__MODULE__ instead
-"""
-@noinline function current_module()
-    depwarn("current_module() is deprecated, use `@__MODULE__` instead.", :current_module)
-    return _current_module()
-end
-export current_module
-
-# PR #22062
-function LibGit2.set_remote_url(repo::LibGit2.GitRepo, url::AbstractString; remote::AbstractString="origin")
-    Base.depwarn(string(
-        "`LibGit2.set_remote_url(repo, url; remote=remote)` is deprecated, use ",
-        "`LibGit2.set_remote_url(repo, remote, url)` instead."), :set_remote_url)
-    LibGit2.set_remote_url(repo, remote, url)
-end
-function LibGit2.set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
-    Base.depwarn(string(
-        "`LibGit2.set_remote_url(path, url; remote=remote)` is deprecated, use ",
-        "`LibGit2.set_remote_url(path, remote, url)` instead."), :set_remote_url)
-    LibGit2.set_remote_url(path, remote, url)
-end
-
-module Operators
-    for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
-               :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^, :colon,
-               :ctranspose, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
-               :xor, :|, :|>, :~, :×, :÷, :∈, :∉, :∋, :∌, :∘, :√, :∛, :∩, :∪, :≠, :≤,
-               :≥, :⊆, :⊈, :⊊, :⊻, :⋅]
-        if isdefined(Base, op)
-            @eval Base.@deprecate_binding $op Base.$op
-        end
-    end
-end
-export Operators
-
-# PR #21956
-# This mimics the structure as it was defined in Base to avoid directly breaking code
-# that assumes this structure
-module DFT
-    for f in [:bfft, :bfft!, :brfft, :dct, :dct!, :fft, :fft!, :fftshift, :idct, :idct!,
-              :ifft, :ifft!, :ifftshift, :irfft, :plan_bfft, :plan_bfft!, :plan_brfft,
-              :plan_dct, :plan_dct!, :plan_fft, :plan_fft!, :plan_idct, :plan_idct!,
-              :plan_ifft, :plan_ifft!, :plan_irfft, :plan_rfft, :rfft]
-        pkg = endswith(String(f), "shift") ? "AbstractFFTs" : "FFTW"
-        @eval begin
-            function $f(args...; kwargs...)
-                error($f, " has been moved to the package $($pkg).jl.\n",
-                      "Run `Pkg.add(\"$($pkg)\")` to install $($pkg) then run `using $($pkg)` ",
-                      "to load it.")
-            end
-            export $f
-        end
-    end
-    module FFTW
-        for f in [:r2r, :r2r!, :plan_r2r, :plan_r2r!]
-            @eval begin
-                function $f(args...; kwargs...)
-                    error($f, " has been moved to the package FFTW.jl.\n",
-                          "Run `Pkg.add(\"FFTW\")` to install FFTW then run `using FFTW` ",
-                          "to load it.")
-                end
-                export $f
-            end
-        end
-    end
-    export FFTW
-end
-using .DFT
-for f in names(DFT)
-    @eval export $f
-end
-module DSP
-    for f in [:conv, :conv2, :deconv, :filt, :filt!, :xcorr]
-        @eval begin
-            function $f(args...; kwargs...)
-                error($f, " has been moved to the package DSP.jl.\n",
-                      "Run `Pkg.add(\"DSP\")` to install DSP then run `using DSP` ",
-                      "to load it.")
-            end
-            export $f
-        end
-    end
-end
-using .DSP
-export conv, conv2, deconv, filt, filt!, xcorr
-
-# PR #21709
-@deprecate cov(x::AbstractVector, corrected::Bool) cov(x, corrected=corrected)
-@deprecate cov(x::AbstractMatrix, vardim::Int, corrected::Bool) cov(x, vardim, corrected=corrected)
-@deprecate cov(X::AbstractVector, Y::AbstractVector, corrected::Bool) cov(X, Y, corrected=corrected)
-@deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, vardim, corrected=corrected)
-
-# END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
+
+@deprecate one(i::CartesianIndex)                    oneunit(i)
+@deprecate one(I::Type{CartesianIndex{N}}) where {N} oneunit(I)
+
+@deprecate BigFloat(x, prec::Int)                               BigFloat(x; precision=prec)
+@deprecate BigFloat(x, prec::Int, rounding::RoundingMode)       BigFloat(x, rounding; precision=prec)
+@deprecate BigFloat(x::Real, prec::Int)                         BigFloat(x; precision=prec)
+@deprecate BigFloat(x::Real, prec::Int, rounding::RoundingMode) BigFloat(x, rounding; precision=prec)
+
 # END 1.0 deprecations
+
+# BEGIN 1.5 deprecations
+
+"""
+    isimmutable(v) -> Bool
+!!! warning
+    Consider using `!ismutable(v)` instead, as `isimmutable(v)` will be replaced by `!ismutable(v)` in a future release. (Since Julia 1.5)
+Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
+for a discussion of immutability. Note that this function works on values, so if you give it
+a type, it will tell you that a value of `DataType` is mutable.
+
+# Examples
+```jldoctest
+julia> isimmutable(1)
+true
+
+julia> isimmutable([1,2])
+false
+```
+"""
+isimmutable(@nospecialize(x)) = !ismutable(x)
+export isimmutable
+# Note isimmutable is not @deprecated out of performance concerns
+
+macro get!(h, key0, default)
+    f, l = __source__.file, __source__.line
+    @warn "`@get!(dict, key, default)` at $f:$l is deprecated, use `get!(()->default, dict, key)` instead."
+    return quote
+        get!(()->$(esc(default)), $(esc(h)), $(esc(key0)))
+    end
+end
+
+pointer(V::SubArray{<:Any,<:Any,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple) = pointer(V, CartesianIndex(is))
+
+# END 1.5 deprecations
+
+# BEGIN 1.6 deprecations
+
+# These changed from SimpleVector to `MethodMatch`. These definitions emulate
+# being a SimpleVector to ease transition for packages that make explicit
+# use of (internal) APIs that return raw method matches.
+iterate(match::Core.MethodMatch, field::Int=1) =
+    field > nfields(match) ? nothing : (getfield(match, field), field+1)
+getindex(match::Core.MethodMatch, field::Int) =
+    getfield(match, field)
+
+
+# these were internal functions, but some packages seem to be relying on them
+tuple_type_head(T::Type) = fieldtype(T, 1)
+tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
+@assume_effects :foldable tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S =
+    Tuple{S, T.parameters...}
+@assume_effects :foldable parameter_upper_bound(t::UnionAll, idx) =
+    rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
+
+# these were internal functions, but some packages seem to be relying on them
+@deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes) false
+cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not recursively calls itself
+
+@deprecate unsafe_indices(A) axes(A) false
+@deprecate unsafe_length(r) length(r) false
+
+# these were internal type aliases, but some packages seem to be relying on them
+const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                        Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,Vararg{T,N}}
+
+# END 1.6 deprecations
+
+# BEGIN 1.7 deprecations
+
+# the plan is to eventually overload getproperty to access entries of the dict
+@noinline function getproperty(x::Pairs, s::Symbol)
+    depwarn("use values(kwargs) and keys(kwargs) instead of kwargs.data and kwargs.itr", :getproperty, force=true)
+    return getfield(x, s)
+end
+
+# This function was marked as experimental and not exported.
+@deprecate catch_stack(task=current_task(); include_bt=true) current_exceptions(task; backtrace=include_bt) false
+
+# END 1.7 deprecations
+
+# BEGIN 1.8 deprecations
+
+const var"@_inline_meta" = var"@inline"
+const var"@_noinline_meta" = var"@noinline"
+@deprecate getindex(t::Tuple, i::Real) t[convert(Int, i)]
+
+# END 1.8 deprecations
+
+# BEGIN 1.9 deprecations
+
+# We'd generally like to avoid direct external access to internal fields
+# Core.Compiler.is_inlineable and Core.Compiler.set_inlineable! move towards this direction,
+# but we need to keep these around for compat
+function getproperty(ci::CodeInfo, s::Symbol)
+    s === :inlineable && return Core.Compiler.is_inlineable(ci)
+    return getfield(ci, s)
+end
+
+function setproperty!(ci::CodeInfo, s::Symbol, v)
+    s === :inlineable && return Core.Compiler.set_inlineable!(ci, v)
+    return setfield!(ci, s, convert(fieldtype(CodeInfo, s), v))
+end
+
+@eval Threads nthreads() = threadpoolsize()
+
+@eval Threads begin
+    """
+        resize_nthreads!(A, copyvalue=A[1])
+
+    Resize the array `A` to length [`nthreads()`](@ref).   Any new
+    elements that are allocated are initialized to `deepcopy(copyvalue)`,
+    where `copyvalue` defaults to `A[1]`.
+
+    This is typically used to allocate per-thread variables, and
+    should be called in `__init__` if `A` is a global constant.
+
+    !!! warning
+
+        This function is deprecated, since as of Julia v1.9 the number of
+        threads can change at run time. Instead, per-thread state should be
+        created as needed based on the thread id of the caller.
+    """
+    function resize_nthreads!(A::AbstractVector, copyvalue=A[1])
+        nthr = nthreads()
+        nold = length(A)
+        resize!(A, nthr)
+        for i = nold+1:nthr
+            A[i] = deepcopy(copyvalue)
+        end
+        return A
+    end
+end
+
+# END 1.9 deprecations
+
+# BEGIN 1.10 deprecations
+
+"""
+    @pure ex
+
+`@pure` gives the compiler a hint for the definition of a pure function,
+helping for type inference.
+
+!!! warning
+    This macro is intended for internal compiler use and may be subject to changes.
+
+!!! warning
+    In Julia 1.8 and higher, it is favorable to use [`@assume_effects`](@ref) instead of `@pure`.
+    This is because `@assume_effects` allows a finer grained control over Julia's purity
+    modeling and the effect system enables a wider range of optimizations.
+"""
+macro pure(ex)
+    return esc(:(Base.@assume_effects :foldable $ex))
+end
+
+# END 1.10 deprecations
+
+# BEGIN 1.11 deprecations
+
+# these were never a part of the public API and so they can be removed without deprecation
+# in a minor release but we're being nice and trying to avoid transient breakage.
+@deprecate permute!!(a, p::AbstractVector{<:Integer}) permute!(a, p) false
+@deprecate invpermute!!(a, p::AbstractVector{<:Integer}) invpermute!(a, p) false
+
+# END 1.11 deprecations

@@ -1,10 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Libdl
+@doc """
+Interface to libdl. Provides dynamic linking support.
+""" Libdl
+
+import Base.DL_LOAD_PATH
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
-    dlpath, find_library, dlext, dllist
+    dlpath, find_library, dlext, dllist, LazyLibrary, LazyLibraryPath, BundledLazyLibraryPath
 
 """
     DL_LOAD_PATH
@@ -12,11 +17,7 @@ export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOC
 When calling [`dlopen`](@ref), the paths in this list will be searched first, in
 order, before searching the system locations for a valid library handle.
 """
-const DL_LOAD_PATH = String[]
-if is_apple()
-    push!(DL_LOAD_PATH, "@loader_path/julia")
-    push!(DL_LOAD_PATH, "@loader_path")
-end
+DL_LOAD_PATH
 
 # note: constants to match JL_RTLD_* in src/julia.h, translated
 #       to system-specific values by JL_RTLD macro in src/dlload.c
@@ -29,7 +30,7 @@ const RTLD_NOLOAD    = 0x00000020
 const RTLD_DEEPBIND  = 0x00000040
 const RTLD_FIRST     = 0x00000080
 
-@doc """
+"""
     RTLD_DEEPBIND
     RTLD_FIRST
     RTLD_GLOBAL
@@ -41,32 +42,45 @@ const RTLD_FIRST     = 0x00000080
 
 Enum constant for [`dlopen`](@ref). See your platform man page for details, if
 applicable.
-""" ->
+"""
 (RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL, RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW)
 
+# The default flags for `dlopen()`
+const default_rtld_flags = RTLD_LAZY | RTLD_DEEPBIND
 
 """
-    dlsym(handle, sym)
+    dlsym(handle, sym; throw_error::Bool = true)
 
 Look up a symbol from a shared library handle, return callable function pointer on success.
+
+If the symbol cannot be found, this method throws an error, unless the keyword argument
+`throw_error` is set to `false`, in which case this method returns `nothing`.
 """
-function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString})
+function dlsym(hnd::Ptr, s::Union{Symbol,AbstractString}; throw_error::Bool = true)
     hnd == C_NULL && throw(ArgumentError("NULL library handle"))
-    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
+    val = Ref(Ptr{Cvoid}(0))
+    symbol_found = ccall(:jl_dlsym, Cint,
+        (Ptr{Cvoid}, Cstring, Ref{Ptr{Cvoid}}, Cint),
+        hnd, s, val, Int64(throw_error)
+    )
+    if symbol_found == 0
+        return nothing
+    end
+    return val[]
 end
 
 """
     dlsym_e(handle, sym)
 
-Look up a symbol from a shared library handle, silently return `NULL` pointer on lookup failure.
+Look up a symbol from a shared library handle, silently return `C_NULL` on lookup failure.
+This method is now deprecated in favor of `dlsym(handle, sym; throw_error=false)`.
 """
-function dlsym_e(hnd::Ptr, s::Union{Symbol,AbstractString})
-    hnd == C_NULL && throw(ArgumentError("NULL library handle"))
-    ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Cstring), hnd, s)
+function dlsym_e(args...)
+    return something(dlsym(args...; throw_error=false), C_NULL)
 end
 
 """
-    dlopen(libfile::AbstractString [, flags::Integer])
+    dlopen(libfile::AbstractString [, flags::Integer]; throw_error:Bool = true)
 
 Load a shared library, returning an opaque handle.
 
@@ -88,27 +102,62 @@ exported symbols and if the bound references are put into process local or globa
 instance `RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL` allows the library's symbols to be available
 for usage in other shared libraries, addressing situations where there are dependencies
 between shared libraries.
+
+If the library cannot be found, this method throws an error, unless the keyword argument
+`throw_error` is set to `false`, in which case this method returns `nothing`.
+
+!!! note
+     From Julia 1.6 on, this method replaces paths starting with `@executable_path/` with
+     the path to the Julia executable, allowing for relocatable relative-path loads. In
+     Julia 1.5 and earlier, this only worked on macOS.
 """
 function dlopen end
 
-dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    dlopen(string(s), flags)
+dlopen(s::Symbol, flags::Integer = default_rtld_flags; kwargs...) =
+    dlopen(string(s), flags; kwargs...)
 
-dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library, Ptr{Void}, (Cstring,UInt32), s, flags)
+function dlopen(s::AbstractString, flags::Integer = default_rtld_flags; throw_error::Bool = true)
+    ret = ccall(:jl_load_dynamic_library, Ptr{Cvoid}, (Cstring,UInt32,Cint), s, flags, Cint(throw_error))
+    if ret == C_NULL
+        return nothing
+    end
+    return ret
+end
+
+"""
+    dlopen(f::Function, args...; kwargs...)
+
+Wrapper for usage with `do` blocks to automatically close the dynamic library once
+control flow leaves the `do` block scope.
+
+# Example
+```julia
+vendor = dlopen("libblas") do lib
+    if Libdl.dlsym(lib, :openblas_set_num_threads; throw_error=false) !== nothing
+        return :openblas
+    else
+        return :other
+    end
+end
+```
+"""
+function dlopen(f::Function, name, args...; kwargs...)
+    hdl = nothing
+    try
+        hdl = dlopen(name, args...; kwargs...)
+        f(hdl)
+    finally
+        dlclose(hdl)
+    end
+end
 
 """
     dlopen_e(libfile::AbstractString [, flags::Integer])
 
-Similar to [`dlopen`](@ref), except returns a `NULL` pointer instead of raising errors.
+Similar to [`dlopen`](@ref), except returns `C_NULL` instead of raising errors.
+This method is now deprecated in favor of `dlopen(libfile::AbstractString [, flags::Integer]; throw_error=false)`.
 """
-function dlopen_e end
-
-dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    dlopen_e(string(s), flags)
-
-dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Cstring,UInt32), s, flags)
+dlopen_e(args...) = something(dlopen(args...; throw_error=false), C_NULL)
 
 """
     dlclose(handle)
@@ -116,11 +165,30 @@ dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
 Close shared library referenced by handle.
 """
 function dlclose(p::Ptr)
-    0 == ccall(:jl_dlclose, Cint, (Ptr{Void},), p)
+    0 == ccall(:jl_dlclose, Cint, (Ptr{Cvoid},), p)
 end
 
 """
-    find_library(names, locations)
+    dlclose(::Nothing)
+
+For the very common pattern usage pattern of
+
+    try
+        hdl = dlopen(library_name)
+        ... do something
+    finally
+        dlclose(hdl)
+    end
+
+We define a `dlclose()` method that accepts a parameter of type `Nothing`, so
+that user code does not have to change its behavior for the case that `library_name`
+was not found.
+"""
+function dlclose(p::Nothing)
+end
+
+"""
+    find_library(names [, locations])
 
 Searches for the first library in `names` in the paths in the `locations` list,
 `DL_LOAD_PATH`, or system library paths (in that order) which can successfully be dlopen'd.
@@ -132,14 +200,14 @@ function find_library(libnames, extrapaths=String[])
     for lib in libnames
         for path in extrapaths
             l = joinpath(path, lib)
-            p = dlopen_e(l, RTLD_LAZY)
-            if p != C_NULL
+            p = dlopen(l, RTLD_LAZY; throw_error=false)
+            if p !== nothing
                 dlclose(p)
                 return l
             end
         end
-        p = dlopen_e(lib, RTLD_LAZY)
-        if p != C_NULL
+        p = dlopen(lib, RTLD_LAZY; throw_error=false)
+        if p !== nothing
             dlclose(p)
             return lib
         end
@@ -149,13 +217,28 @@ end
 find_library(libname::Union{Symbol,AbstractString}, extrapaths=String[]) =
     find_library([string(libname)], extrapaths)
 
-function dlpath(handle::Ptr{Void})
-    p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Void},), handle)
+"""
+    dlpath(handle::Ptr{Cvoid})
+
+Given a library `handle` from `dlopen`, return the full path.
+"""
+function dlpath(handle::Ptr{Cvoid})
+    p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Cvoid},), handle)
     s = unsafe_string(p)
-    is_windows() && Libc.free(p)
+    Sys.iswindows() && Libc.free(p)
     return s
 end
 
+"""
+    dlpath(libname::Union{AbstractString, Symbol})
+
+Get the full path of the library `libname`.
+
+# Example
+```julia-repl
+julia> dlpath("libjulia")
+```
+"""
 function dlpath(libname::Union{AbstractString, Symbol})
     handle = dlopen(libname)
     path = dlpath(handle)
@@ -163,12 +246,12 @@ function dlpath(libname::Union{AbstractString, Symbol})
     return path
 end
 
-if is_apple()
+if Sys.isapple()
     const dlext = "dylib"
-elseif is_windows()
+elseif Sys.iswindows()
     const dlext = "dll"
 else
-    #assume is_linux, or similar
+    #assume Sys.islinux, or similar
     const dlext = "so"
 end
 
@@ -179,7 +262,7 @@ File extension for dynamic libraries (e.g. dll, dylib, so) on the current platfo
 """
 dlext
 
-if is_linux()
+if (Sys.islinux() || Sys.isbsd()) && !Sys.isapple()
     struct dl_phdr_info
         # Base address of object
         addr::Cuint
@@ -188,58 +271,30 @@ if is_linux()
         name::Ptr{UInt8}
 
         # Pointer to array of ELF program headers for this object
-        phdr::Ptr{Void}
+        phdr::Ptr{Cvoid}
 
         # Number of program headers for this object
         phnum::Cshort
     end
 
-    # This callback function called by dl_iterate_phdr() on Linux
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{AbstractString,1})
-        # Skip over objects without a path (as they represent this own object)
-        name = unsafe_string(di.name)
-        if !isempty(name)
-            push!(dynamic_libraries, name)
-        end
-        return convert(Cint, 0)::Cint
-    end
-end # linux-only
-
-if is_bsd() && !is_apple()
+    # This callback function called by dl_iterate_phdr() on Linux and BSD's
     # DL_ITERATE_PHDR(3) on freebsd
-    struct dl_phdr_info
-        # Base address of object
-        addr::Cuint
-
-        # Null-terminated name of object
-        name::Ptr{UInt8}
-
-        # Pointer to array of ELF program headers for this object
-        phdr::Ptr{Void}
-
-        # Number of program headers for this object
-        phnum::Cshort
-    end
-
-    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dy_libs::Array{AbstractString,1})
+    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{String,1})
         name = unsafe_string(di.name)
-        if !isempty(name)
-            push!(dy_libs, name)
-        end
-        return convert(Cint, 0)::Cint
+        push!(dynamic_libraries, name)
+        return Cint(0)
     end
-end # bsd family
+end
 
+"""
+    dllist()
+
+Return the paths of dynamic libraries currently loaded in a `Vector{String}`.
+"""
 function dllist()
-    dynamic_libraries = Vector{AbstractString}(0)
+    dynamic_libraries = Vector{String}()
 
-    @static if is_linux()
-        const callback = cfunction(dl_phdr_info_callback, Cint,
-                                   (Ref{dl_phdr_info}, Csize_t, Ref{Array{AbstractString,1}} ))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Array{AbstractString,1}}), callback, dynamic_libraries)
-    end
-
-    @static if is_apple()
+    @static if Sys.isapple()
         numImages = ccall(:_dyld_image_count, Cint, ())
 
         # start at 1 instead of 0 to skip self
@@ -247,20 +302,150 @@ function dllist()
             name = unsafe_string(ccall(:_dyld_get_image_name, Cstring, (UInt32,), i))
             push!(dynamic_libraries, name)
         end
-    end
-
-    @static if is_windows()
+    elseif Sys.islinux() || Sys.isbsd()
+        callback = @cfunction(dl_phdr_info_callback, Cint,
+                              (Ref{dl_phdr_info}, Csize_t, Ref{Vector{String}}))
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Cvoid}, Ref{Vector{String}}), callback, dynamic_libraries)
+        popfirst!(dynamic_libraries)
+        filter!(!isempty, dynamic_libraries)
+    elseif Sys.iswindows()
         ccall(:jl_dllist, Cint, (Any,), dynamic_libraries)
-    end
-
-    @static if is_bsd() && !is_apple()
-        const callback = cfunction(dl_phdr_info_callback, Cint,
-                                   (Ref{dl_phdr_info}, Csize_t, Ref{Array{AbstractString,1}} ))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Array{AbstractString,1}}), callback, dynamic_libraries)
-        shift!(dynamic_libraries)
+    else
+        # unimplemented
     end
 
     return dynamic_libraries
 end
 
-end # module
+
+"""
+    LazyLibraryPath
+
+Helper type for lazily constructed library paths for use with `LazyLibrary`.
+Arguments are passed to `joinpath()`.  Arguments must be able to have
+`string()` called on them.
+
+```
+libfoo = LazyLibrary(LazyLibraryPath(prefix, "lib/libfoo.so.1.2.3"))
+```
+"""
+struct LazyLibraryPath
+    pieces::Vector
+    LazyLibraryPath(pieces::Vector) = new(pieces)
+end
+LazyLibraryPath(args...) = LazyLibraryPath(collect(args))
+Base.string(llp::LazyLibraryPath) = joinpath(string.(llp.pieces)...)
+Base.cconvert(::Type{Cstring}, llp::LazyLibraryPath) = Base.cconvert(Cstring, string(llp))
+# Define `print` so that we can wrap this in a `LazyString`
+Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
+
+# Helper to get `Sys.BINDIR` at runtime
+struct SysBindirGetter; end
+Base.string(::SysBindirGetter) = dirname(Sys.BINDIR)
+
+"""
+    BundledLazyLibraryPath
+
+Helper type for lazily constructed library paths that are stored within the
+bundled Julia distribution, primarily for use by Base modules.
+
+```
+libfoo = LazyLibrary(BundledLazyLibraryPath("lib/libfoo.so.1.2.3"))
+```
+"""
+BundledLazyLibraryPath(subpath) = LazyLibraryPath(SysBindirGetter(), subpath)
+
+
+"""
+    LazyLibrary(name, flags = <default dlopen flags>,
+                dependencies = LazyLibrary[], on_load_callback = nothing)
+
+Represents a lazily-loaded library that opens itself and its dependencies on first usage
+in a `dlopen()`, `dlsym()`, or `ccall()` usage.  While this structure contains the
+ability to run arbitrary code on first load via `on_load_callback`, we caution that this
+should be used sparingly, as it is not expected that `ccall()` should result in large
+amounts of Julia code being run.  You may call `ccall()` from within the
+`on_load_callback` but only for the current library and its dependencies, and user should
+not call `wait()` on any tasks within the on load callback.
+"""
+mutable struct LazyLibrary
+    # Name and flags to open with
+    const path
+    const flags::UInt32
+
+    # Dependencies that must be loaded before we can load
+    dependencies::Vector{LazyLibrary}
+
+    # Function that get called once upon initial load
+    on_load_callback
+    const lock::Base.ReentrantLock
+
+    # Pointer that we eventually fill out upon first `dlopen()`
+    @atomic handle::Ptr{Cvoid}
+    function LazyLibrary(path; flags = default_rtld_flags, dependencies = LazyLibrary[],
+                         on_load_callback = nothing)
+        return new(
+            path,
+            UInt32(flags),
+            collect(dependencies),
+            on_load_callback,
+            Base.ReentrantLock(),
+            C_NULL,
+        )
+    end
+end
+
+# We support adding dependencies only because of very special situations
+# such as LBT needing to have OpenBLAS_jll added as a dependency dynamically.
+function add_dependency!(ll::LazyLibrary, dep::LazyLibrary)
+    @lock ll.lock begin
+        push!(ll.dependencies, dep)
+    end
+end
+
+# Register `jl_libdl_dlopen_func` so that `ccall()` lowering knows
+# how to call `dlopen()`, during bootstrap.
+# See  `post_image_load_hooks` for non-bootstrapping.
+Base.unsafe_store!(cglobal(:jl_libdl_dlopen_func, Any), dlopen)
+
+function dlopen(ll::LazyLibrary, flags::Integer = ll.flags; kwargs...)
+    handle = @atomic :acquire ll.handle
+    if handle == C_NULL
+        @lock ll.lock begin
+            # Check to see if another thread has already run this
+            if ll.handle == C_NULL
+                # Ensure that all dependencies are loaded
+                for dep in ll.dependencies
+                    dlopen(dep; kwargs...)
+                end
+
+                # Load our library
+                handle = dlopen(string(ll.path), flags; kwargs...)
+                @atomic :release ll.handle = handle
+
+                # Only the thread that loaded the library calls the `on_load_callback()`.
+                if ll.on_load_callback !== nothing
+                    ll.on_load_callback()
+                end
+            end
+        end
+    else
+        # Invoke our on load callback, if it exists
+        if ll.on_load_callback !== nothing
+            # This empty lock protects against the case where we have updated
+            # `ll.handle` in the branch above, but not exited the lock.  We want
+            # a second thread that comes in at just the wrong time to have to wait
+            # for that lock to be released (and thus for the on_load_callback to
+            # have finished), hence the empty lock here. But we want the
+            # on_load_callback thread to bypass this, which will be happen thanks
+            # to the fact that we're using a reentrant lock here.
+            @lock ll.lock begin end
+        end
+    end
+
+    return handle
+end
+dlopen(x::Any) = throw(TypeError(:dlopen, "", Union{Symbol,String,LazyLibrary}, x))
+dlsym(ll::LazyLibrary, args...; kwargs...) = dlsym(dlopen(ll), args...; kwargs...)
+dlpath(ll::LazyLibrary) = dlpath(dlopen(ll))
+end # module Libdl
