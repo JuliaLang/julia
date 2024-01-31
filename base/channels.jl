@@ -219,6 +219,21 @@ end
 isopen(c::Channel) = ((@atomic :acquire c.state) === :open)
 
 """
+    empty!(c)
+
+Empty a Channel `c`. Returns the number of elements removed.
+Elements added while emptying the channel are also removed.
+"""
+function Base.empty!(c::Channel)
+    counter = 0
+    while isready(c)
+        take!(c)
+        counter += 1
+    end
+    return counter
+end
+
+"""
     bind(chnl::Channel, task::Task)
 
 Associate the lifetime of `chnl` with a task.
