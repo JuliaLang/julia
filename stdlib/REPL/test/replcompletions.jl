@@ -2247,3 +2247,8 @@ let s = "using ...Issue52922.Inn"
     @test res
     @test "Inner2" in c
 end
+
+struct Issue53126
+end
+Base.propertynames(::Type{A}) = error()
+@test isempty(test_complete_foo(A))
