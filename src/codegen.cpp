@@ -1051,9 +1051,7 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
     [](LLVMContext &C) {
         auto FnAttrs = AttrBuilder(C);
         FnAttrs.addAllocSizeAttr(1, None); // returns %1 bytes
-#if JL_LLVM_VERSION >= 150000
         FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
-#endif
 #if JL_LLVM_VERSION >= 160000
         FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
 #endif
@@ -2628,11 +2626,7 @@ static void jl_init_function(Function *F, const Triple &TT)
         attr.addStackAlignmentAttr(16);
     }
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
-#if JL_LLVM_VERSION < 150000
-        attr.addAttribute(Attribute::UWTable); // force NeedsWinEH
-#else
         attr.addUWTableAttr(llvm::UWTableKind::Default); // force NeedsWinEH
-#endif
     }
     if (jl_fpo_disabled(TT))
         attr.addAttribute("frame-pointer", "all");
@@ -9324,8 +9318,9 @@ void jl_compile_workqueue(
         auto proto = it.second;
         params.workqueue.pop_back();
         // try to emit code for this item from the workqueue
-        assert(codeinst->min_world <= params.world && codeinst->max_world >= params.world &&
-            "invalid world for code-instance");
+        assert(jl_atomic_load_relaxed(&codeinst->min_world) <= params.world &&
+               jl_atomic_load_relaxed(&codeinst->max_world) >= params.world &&
+               "invalid world for code-instance");
         StringRef preal_decl = "";
         bool preal_specsig = false;
         auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
@@ -9579,9 +9574,6 @@ extern "C" void jl_init_llvm(void)
     // Initialize passes
     PassRegistry &Registry = *PassRegistry::getPassRegistry();
     initializeCore(Registry);
-#if JL_LLVM_VERSION < 150000
-    initializeCoroutines(Registry);
-#endif
     initializeScalarOpts(Registry);
     initializeVectorization(Registry);
     initializeAnalysis(Registry);

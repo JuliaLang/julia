@@ -95,6 +95,7 @@ enum class CPU : uint32_t {
     amd_znver1,
     amd_znver2,
     amd_znver3,
+    amd_znver4,
 };
 
 static constexpr size_t feature_sz = 11;
@@ -235,6 +236,8 @@ constexpr auto znver1 = haswell | get_feature_masks(adx, aes, clflushopt, clzero
                                                     rdseed, sha, sse4a, xsavec);
 constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
 constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
+constexpr auto znver4 = znver3 | get_feature_masks(avx512f, avx512cd, avx512dq, avx512bw, avx512vl, avx512ifma, avx512vbmi,
+                                                   avx512vbmi2, avx512vnni, avx512bitalg, avx512vpopcntdq, avx512bf16, gfni, shstk, xsaves);
 
 }
 
@@ -296,6 +299,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"znver1", CPU::amd_znver1, CPU::generic, 0, Feature::znver1},
     {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
     {"znver3", CPU::amd_znver3, CPU::amd_znver2, 120000, Feature::znver3},
+    {"znver4", CPU::amd_znver4, CPU::amd_znver3, 160000, Feature::znver4},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
@@ -563,9 +567,15 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
         if (model >= 0x30)
             return CPU::amd_znver2;
         return CPU::amd_znver1;
-    case 0x19:  // AMD Family 19h
-        if (model <= 0x0f || model == 0x21)
+    case 25:  // AMD Family 19h
+        if (model <= 0x0f || (model >= 0x20 && model <= 0x5f))
             return CPU::amd_znver3;  // 00h-0Fh, 21h: Zen3
+        if ((model >= 0x10 && model <= 0x1f) ||
+            (model >= 0x60 && model <= 0x74) ||
+            (model >= 0x78 && model <= 0x7b) ||
+            (model >= 0xA0 && model <= 0xAf)) {
+                return CPU::amd_znver4;
+            }
         return CPU::amd_znver3; // fallback
     }
 }
@@ -1051,16 +1061,6 @@ JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
     if (match_idx == (uint32_t)-1)
         return rejection_reason;
     return jl_nothing;
-}
-
-JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
-{
-    return jl_cstr_to_string(host_cpu_name().c_str());
-}
-
-JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
-{
-    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
 }
 
 JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)

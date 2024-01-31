@@ -314,8 +314,9 @@ end
 @doc "`subtract(a,b)` subtracts `b` from `a`" subtract
 ```
 
-Documentation in non-toplevel blocks, such as `begin`, `if`, `for`, and `let`, should be
-added to the documentation system via `@doc` as well. For example:
+Documentation in non-toplevel blocks, such as `begin`, `if`, `for`, `let`, and
+inner constructors, should be added to the documentation system via `@doc` as
+well. For example:
 
 ```julia
 if condition()
@@ -464,11 +465,17 @@ struct T
     x
     "y"
     y
+
+    @doc "Inner constructor"
+    function T()
+        new(...)
+    end
 end
 ```
 
-Adds docstring `"..."` to type `T`, `"x"` to field `T.x` and `"y"` to field `T.y`. Also applicable
-to `mutable struct` types.
+Adds docstring `"..."` to type `T`, `"x"` to field `T.x`, `"y"` to field `T.y`,
+and `"Inner constructor"` to the inner constructor `T()`. Also applicable to
+`mutable struct` types.
 
 ### Modules
 

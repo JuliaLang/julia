@@ -343,6 +343,9 @@ See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 copy
 
 @eval function copy(a::Array{T}) where {T}
+    # `jl_genericmemory_copy_slice` only throws when the size exceeds the max allocation
+    # size, but since we're copying an existing array, we're guaranteed that this will not happen.
+    @_nothrow_meta
     ref = a.ref
     newmem = ccall(:jl_genericmemory_copy_slice, Ref{Memory{T}}, (Any, Ptr{Cvoid}, Int), ref.mem, ref.ptr_or_offset, length(a))
     return $(Expr(:new, :(typeof(a)), :(Core.memoryref(newmem)), :(a.size)))
@@ -1040,6 +1043,7 @@ end
 array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when implemented, this should attempt to first expand mem
 
 function _growbeg!(a::Vector, delta::Integer)
+    @_noub_meta
     delta = Int(delta)
     delta == 0 && return # avoid attempting to index off the end
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
@@ -1077,6 +1081,7 @@ function _growbeg!(a::Vector, delta::Integer)
 end
 
 function _growend!(a::Vector, delta::Integer)
+    @_noub_meta
     delta = Int(delta)
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
@@ -1113,6 +1118,7 @@ function _growend!(a::Vector, delta::Integer)
 end
 
 function _growat!(a::Vector, i::Integer, delta::Integer)
+    @_terminates_globally_noub_meta
     delta = Int(delta)
     i = Int(i)
     i == 1 && return _growbeg!(a, delta)
@@ -1715,10 +1721,11 @@ julia> insert!(Any[1:6;], 3, "here")
 ```
 """
 function insert!(a::Array{T,1}, i::Integer, item) where T
+    @_noub_meta
     # Throw convert error before changing the shape of the array
     _item = item isa T ? item : convert(T, item)::T
     _growat!(a, i, 1)
-    # _growat! already did bound check
+    # :noub, because _growat! already did bound check
     @inbounds a[i] = _item
     return a
 end
@@ -2294,7 +2301,9 @@ findfirst(A::AbstractArray) = findnext(A, first(keys(A)))
     findnext(predicate::Function, A, i)
 
 Find the next index after or including `i` of an element of `A`
-for which `predicate` returns `true`, or `nothing` if not found.
+for which `predicate` returns `true`, or `nothing` if not found. This works for
+Arrays, Strings, and most other collections that support [`getindex`](@ref),
+[`keys(A)`](@ref), and [`nextind`](@ref).
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -2312,6 +2321,9 @@ julia> A = [1 4; 2 2];
 
 julia> findnext(isodd, A, CartesianIndex(1, 1))
 CartesianIndex(1, 1)
+
+julia> findnext(isspace, "a b c", 3)
+4
 ```
 """
 function findnext(testf::Function, A, start)
@@ -2468,7 +2480,9 @@ findlast(A::AbstractArray) = findprev(A, last(keys(A)))
     findprev(predicate::Function, A, i)
 
 Find the previous index before or including `i` of an element of `A`
-for which `predicate` returns `true`, or `nothing` if not found.
+for which `predicate` returns `true`, or `nothing` if not found. This works for
+Arrays, Strings, and most other collections that support [`getindex`](@ref),
+[`keys(A)`](@ref), and [`nextind`](@ref).
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -2494,6 +2508,9 @@ julia> A = [4 6; 1 2]
 
 julia> findprev(isodd, A, CartesianIndex(1, 2))
 CartesianIndex(2, 1)
+
+julia> findprev(isspace, "a b c", 3)
+2
 ```
 """
 function findprev(testf::Function, A, start)

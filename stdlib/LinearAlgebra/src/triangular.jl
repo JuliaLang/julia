@@ -262,11 +262,11 @@ Base.isstored(A::UpperTriangular, i::Int, j::Int) =
 @propagate_inbounds getindex(A::UnitLowerTriangular{T}, i::Integer, j::Integer) where {T} =
     i > j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 @propagate_inbounds getindex(A::LowerTriangular, i::Integer, j::Integer) =
-    i >= j ? A.data[i,j] : zero(A.data[j,i])
+    i >= j ? A.data[i,j] : _zero(A.data,j,i)
 @propagate_inbounds getindex(A::UnitUpperTriangular{T}, i::Integer, j::Integer) where {T} =
     i < j ? A.data[i,j] : ifelse(i == j, oneunit(T), zero(T))
 @propagate_inbounds getindex(A::UpperTriangular, i::Integer, j::Integer) =
-    i <= j ? A.data[i,j] : zero(A.data[j,i])
+    i <= j ? A.data[i,j] : _zero(A.data,j,i)
 
 @propagate_inbounds function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
@@ -465,13 +465,13 @@ transpose(A::UnitLowerTriangular) = UnitUpperTriangular(transpose(A.data))
 transpose(A::UnitUpperTriangular) = UnitLowerTriangular(transpose(A.data))
 
 transpose!(A::LowerTriangular) = UpperTriangular(copytri!(A.data, 'L', false, true))
-transpose!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L', false, true))
+transpose!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L', false, false))
 transpose!(A::UpperTriangular) = LowerTriangular(copytri!(A.data, 'U', false, true))
-transpose!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U', false, true))
+transpose!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U', false, false))
 adjoint!(A::LowerTriangular) = UpperTriangular(copytri!(A.data, 'L' , true, true))
-adjoint!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L' , true, true))
+adjoint!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L' , true, false))
 adjoint!(A::UpperTriangular) = LowerTriangular(copytri!(A.data, 'U' , true, true))
-adjoint!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U' , true, true))
+adjoint!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U' , true, false))
 
 diag(A::LowerTriangular) = diag(A.data)
 diag(A::UnitLowerTriangular) = fill(oneunit(eltype(A)), size(A,1))

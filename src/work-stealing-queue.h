@@ -36,7 +36,8 @@ static inline ws_array_t *create_ws_array(size_t capacity, int32_t eltsz) JL_NOT
 
 typedef struct {
     _Atomic(int64_t) top;
-    _Atomic(int64_t) bottom;
+    char _padding[JL_CACHE_BYTE_ALIGNMENT - sizeof(_Atomic(int64_t))];
+    _Atomic(int64_t) bottom; // put on a separate cache line. conservatively estimate cache line size as 128 bytes
     _Atomic(ws_array_t *) array;
 } ws_queue_t;
 

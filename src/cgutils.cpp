@@ -3489,10 +3489,8 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt,
     if (static_size > 0)
         call->addRetAttr(Attribute::getWithDereferenceableBytes(call->getContext(), static_size));
     call->addRetAttr(Attribute::getWithAlignment(call->getContext(), Align(align)));
-#if JL_LLVM_VERSION >= 150000
     if (fully_initialized)
         call->addFnAttr(Attribute::get(call->getContext(), Attribute::AllocKind, uint64_t(AllocFnKind::Alloc | AllocFnKind::Uninitialized)));
-#endif
     return call;
 }
 

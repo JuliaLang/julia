@@ -84,6 +84,11 @@ are also included. Names are returned in sorted order.
 As a special case, all names defined in `Main` are considered \"public\",
 since it is not idiomatic to explicitly mark names from `Main` as public.
 
+!!! note
+    `sym ∈ names(SomeModule)` does *not* imply `isdefined(SomeModule, sym)`.
+    `names` will return symbols marked with `public` or `export`, even if
+    they are not defined in the module.
+
 See also: [`isexported`](@ref), [`ispublic`](@ref), [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =

@@ -976,8 +976,9 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
     if (metadata) {
-        code->min_world = metadata->min_world;
-        code->max_world = metadata->max_world;
+        code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
+        // n.b. this should perhaps be capped to jl_world_counter max here, since we don't have backedges on it after return
+        code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
         code->rettype = metadata->rettype;
         code->parent = metadata->def;
     }

@@ -1354,7 +1354,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             # TODO: Better error message if this lookup fails?
             uuid_trigger = UUID(weakdeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
-            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
+            if !haskey(explicit_loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
@@ -1986,6 +1986,11 @@ function __require_prelocked(uuidkey::PkgId, env=nothing)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
+        m = get(loaded_modules, uuidkey, nothing)
+        if m !== nothing
+            explicit_loaded_modules[uuidkey] = m
+            run_package_callbacks(uuidkey)
+        end
         newm = root_module(uuidkey)
     end
     return newm
@@ -2000,6 +2005,8 @@ PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
 const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 const loaded_modules = Dict{PkgId,Module}()
+# Emptied on Julia start
+const explicit_loaded_modules = Dict{PkgId,Module}()
 const loaded_modules_order = Vector{Module}()
 const module_keys = IdDict{Module,PkgId}() # the reverse
 
@@ -2023,6 +2030,7 @@ root_module_key(m::Module) = @lock require_lock module_keys[m]
     end
     push!(loaded_modules_order, m)
     loaded_modules[key] = m
+    explicit_loaded_modules[key] = m
     module_keys[m] = key
     end
     nothing
@@ -2145,7 +2153,7 @@ function _require(pkg::PkgId, env=nothing)
                 elseif isa(cachefile, Exception)
                     if precompilableerror(cachefile)
                         verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-                        @logmsg verbosity "Skipping precompilation since __precompile__(false). Importing $pkg."
+                        @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $pkg." exception=m
                     else
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     end
@@ -2740,7 +2748,7 @@ function restore_depot_path(path::AbstractString, depot::AbstractString)
 end
 
 function resolve_depot(inc::AbstractString)
-    startswith(inc, "@depot") || return :not_relocatable
+    startswith(inc, string("@depot", Filesystem.pathsep())) || return :not_relocatable
     for depot in DEPOT_PATH
         isfile(restore_depot_path(inc, depot)) && return depot
     end
@@ -2919,7 +2927,7 @@ function _read_dependency_src(io::IO, filename::AbstractString, includes::Vector
         filenamelen == 0 && break
         depotfn = String(read(io, filenamelen))
         len = read(io, UInt64)
-        fn = if !startswith(depotfn, "@depot")
+        fn = if !startswith(depotfn, string("@depot", Filesystem.pathsep()))
             depotfn
         else
             basefn = restore_depot_path(depotfn, "")
@@ -3433,7 +3441,7 @@ end
             end
             for chi in includes
                 f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
-                if startswith(f, "@depot/")
+                if startswith(f, string("@depot", Filesystem.pathsep()))
                     @debug("Rejecting stale cache file $cachefile because its depot could not be resolved")
                     record_reason(reasons, "nonresolveable depot")
                     return true
