@@ -18,7 +18,7 @@ debug && println("Test basic type functionality")
 @test LowerTriangular(randn(3, 3)) |> t -> [size(t, i) for i = 1:3] == [size(Matrix(t), i) for i = 1:3]
 
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
-for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
+@testset for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
     # Begin loop for first Triangular matrix
     for (t1, uplo1) in ((UpperTriangular, :U),
                         (UnitUpperTriangular, :U),
@@ -869,6 +869,14 @@ end
             @test A * A' == D * D'
         end
     end
+end
+
+@testset "transpose triangular diagonal" begin
+    M = Matrix{BigFloat}(undef, 2, 2);
+    M[1,2] = 3;
+    U = UnitUpperTriangular(M)
+    Ut = transpose(U)
+    @test transpose!(U) == Ut
 end
 
 end # module TestTriangular
