@@ -443,6 +443,9 @@ unwatch_folder(dir)
 rm(file)
 rm(dir)
 
+# Test that creating a FDWatcher with a (probably) negative FD fails
+@test_throws ArgumentError FDWatcher(RawFD(-1), true, true)
+
 @testset "Pidfile" begin
     include("pidfile.jl")
 end
