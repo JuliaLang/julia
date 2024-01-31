@@ -43,7 +43,7 @@ checksum-libsuitesparse: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
 
 # https://github.com/DrTimothyAldenDavis/SuiteSparse/pull/671
-$(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/suitesparse-blas-suffix.patch-applied: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
+$(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/suitesparse-blas-suffix.patch-applied: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
 	cd $(dir $@) && \
 		patch -p1 -f < $(SRCDIR)/patches/suitesparse-blas-suffix.patch
 	echo 1 > $@
