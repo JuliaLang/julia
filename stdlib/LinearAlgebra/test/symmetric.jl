@@ -968,4 +968,11 @@ end
     end
 end
 
+@testset "conj for immutable" begin
+    S = Symmetric(reshape((1:16)*im, 4, 4))
+    @test conj(S) == conj(Array(S))
+    H = Hermitian(reshape((1:16)*im, 4, 4))
+    @test conj(H) == conj(Array(H))
+end
+
 end # module TestSymmetric
