@@ -69,7 +69,7 @@ jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t is
         prod += nel;
     }
     if (nel >= MAXINTVAL || prod >= (wideint_t) MAXINTVAL)
-        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size");
+        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size: too large for system address width");
     size_t tot = (size_t)prod + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
 
     int pooled = tot <= GC_MAX_SZCLASS;
@@ -178,7 +178,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
         prod += nel;
     }
     if (nel >= MAXINTVAL || prod >= (wideint_t) MAXINTVAL)
-        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size");
+        jl_exceptionf(jl_argumenterror_type, "invalid GenericMemory size: too large for system address width");
     int tsz = sizeof(jl_genericmemory_t) + sizeof(void*);
     m = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, tsz, mtype);
     m->ptr = data;
