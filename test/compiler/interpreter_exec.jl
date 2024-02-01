@@ -20,10 +20,9 @@ let m = Meta.@lower 1 + 1
         ReturnNode(SSAValue(6)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
@@ -61,13 +60,13 @@ let m = Meta.@lower 1 + 1
         ReturnNode(SSAValue(18)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test (:b, :a, :c, :c) === @eval $m
+    src.ssavaluetypes = nstmts
     global test29262 = false
     @test (:b, :a, :c, :b) === @eval $m
 end
@@ -98,10 +97,9 @@ let m = Meta.@lower 1 + 1
         ReturnNode(SSAValue(11)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
