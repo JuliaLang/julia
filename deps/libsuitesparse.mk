@@ -3,14 +3,14 @@ include $(SRCDIR)/libsuitesparse.version
 
 ifneq ($(USE_BINARYBUILDER_LIBSUITESPARSE), 1)
 
-LIBSUITESPARSE_PROJECTS := "amd;btf;camd;ccolamd;colamd;cholmod;klu;ldl;umfpack;rbio;spqr"
+LIBSUITESPARSE_PROJECTS := "suitesparse_config;amd;btf;camd;ccolamd;colamd;cholmod;klu;ldl;umfpack;rbio;spqr"
 LIBSUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig $(subst ;, ,$(LIBSUITESPARSE_PROJECTS)))
 
 LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_COMMON) \
 	  -DCMAKE_BUILD_TYPE=Release \
 	  -DBUILD_STATIC_LIBS=OFF \
 	  -DBUILD_TESTING=OFF \
-	  -DSUITESPARSE_ENABLE_PROJECTS="suitesparse_config;$(LIBSUITESPARSE_PROJECTS)" \
+	  -DSUITESPARSE_ENABLE_PROJECTS=$(LIBSUITESPARSE_PROJECTS) \
 	  -DSUITESPARSE_DEMOS=OFF \
 	  -DSUITESPARSE_USE_STRICT=ON \
 	  -DSUITESPARSE_USE_CUDA=OFF \
