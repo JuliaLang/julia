@@ -188,6 +188,11 @@ Methods that accept a `RegexMatch` object are defined for [`iterate`](@ref),
 [`getindex`](@ref), where keys are the the names or numbers of a capture group.
 See [`keys`](@ref keys(::RegexMatch)) for more information.
 
+`RegexMatch` objects can be converted to base collection types for further processing: `Tuple(m)`, `NamedTuple(m)`, `Dict(m)`.
+
+!!! compat "Julia 1.11"
+    Converting to NamedTuples and Dicts requires Julia 1.11
+
 # Examples
 ```jldoctest
 julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30 in the morning")
@@ -210,6 +215,12 @@ julia> hr, min, ampm = m; # destructure capture groups by iteration
 
 julia> hr
 "11"
+
+julia> Dict(m)  # convert to Dict
+Dict{Any, Union{Nothing, SubString{String}}} with 3 entries:
+  "hour"   => "11"
+  3        => nothing
+  "minute" => "30"
 ```
 """
 struct RegexMatch <: AbstractMatch
@@ -380,9 +391,13 @@ end
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
 Search for the first match of the regular expression `r` in `s` and return a [`RegexMatch`](@ref)
-object containing the match, or nothing if the match failed. The matching substring can be
-retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
-`m.captures` The optional `idx` argument specifies an index at which to start the search.
+object containing the match, or nothing if the match failed.
+The optional `idx` argument specifies an index at which to start the search.
+The matching substring can be retrieved by accessing `m.match`, the captured sequences can be retrieved by accessing `m.captures`.
+The resulting [`RegexMatch`](@ref) object supports conversion to base collections: e.g., `Tuple(m)`, `NamedTuple(m)`.
+
+!!! compat "Julia 1.11"
+    Converting the result to NamedTuples and Dicts requires Julia 1.11
 
 # Examples
 ```jldoctest
