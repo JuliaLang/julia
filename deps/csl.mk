@@ -32,8 +32,8 @@ ifeq ($(USE_SYSTEM_CSL),1)
 USE_BINARYBUILDER_CSL ?= 0
 else
 # If it's not, see if we should disable it due to `libstdc++` being newer:
-LIBSTDCXX_PATH := $(eval $(call pathsearch,libstdc++,$(STD_LIB_PATH)))
-ifneq (,$(and $(LIBSTDCXX_PATH),$(shell objdump -p $(LIBSTDCXX_PATH) | grep $(CSL_NEXT_GLIBCXX_VERSION))))
+LIBSTDCXX_PATH := $(call pathsearch,$(call versioned_libname,libstdc++,6),$(STD_LIB_PATH))
+ifneq (,$(and $(LIBSTDCXX_PATH),$(shell objdump -p '$(LIBSTDCXX_PATH)' | grep '$(CSL_NEXT_GLIBCXX_VERSION)')))
 # Found `libstdc++`, grepped it for strings and found a `GLIBCXX` symbol
 # that is newer that whatever we have in CSL.  Default to not using BB.
 USE_BINARYBUILDER_CSL ?= 0
@@ -50,8 +50,8 @@ ifeq ($(USE_BINARYBUILDER_CSL),0)
 define copy_csl
 install-csl: | $$(build_shlibdir) $$(build_shlibdir)/$(1)
 $$(build_shlibdir)/$(1): | $$(build_shlibdir)
-	-@SRC_LIB=$$(call pathsearch,$(1),$$(STD_LIB_PATH)); \
-	[ -n "$$$${SRC_LIB}" ] && cp $$$${SRC_LIB} $$(build_shlibdir)
+	-@SRC_LIB='$$(call pathsearch,$(1),$$(STD_LIB_PATH))'; \
+	[ -n "$$$${SRC_LIB}" ] && cp "$$$${SRC_LIB}" '$$(build_shlibdir)'
 endef
 
 # libgfortran has multiple names; we're just going to copy any version we can find
@@ -104,4 +104,22 @@ distclean-csl: clean-csl
 
 else
 $(eval $(call bb-install,csl,CSL,true))
+ifeq ($(OS),WINNT)
+install-csl:
+	mkdir -p $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc_s.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libmsvcrt.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_libdir)/
+endif
+endif
+ifeq ($(OS),WINNT)
+uninstall-csl: uninstall-gcc-libraries
+uninstall-gcc-libraries:
+	-rm -f $(build_private_libdir)/libgcc_s.a
+	-rm -f $(build_private_libdir)/libgcc.a
+	-rm -f $(build_private_libdir)/libmsvcrt.a
+	-rm -f $(build_private_libdir)/libssp.dll.a
+	-rm -f $(build_libdir)/libssp.dll.a
 endif

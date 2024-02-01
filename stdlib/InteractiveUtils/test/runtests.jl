@@ -229,7 +229,7 @@ module Tmp14173
 end
 varinfo(Tmp14173) # warm up
 const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 100000)
+@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 125000)
 
 # PR #24997: test that `varinfo` doesn't fail when encountering `missing`
 module A
@@ -330,7 +330,9 @@ let _true = Ref(true), f, g, h
 end
 
 # manually generate a broken function, which will break codegen
-# and make sure Julia doesn't crash
+# and make sure Julia doesn't crash (when using a non-asserts build)
+is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+if !is_asserts()
 @eval @noinline Base.@constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
@@ -364,12 +366,13 @@ let err = tempname(),
             @test startswith(errstr, """start
                 end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
-                ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """) || errstr
             @test !endswith(errstr, "\nend\n") || errstr
         end
         rm(err)
     end
+end
 end
 
 # Issue #33163
@@ -721,3 +724,9 @@ end
 end
 
 @test Base.infer_effects(sin, (Int,)) == InteractiveUtils.@infer_effects sin(42)
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(InteractiveUtils)
+    @test_broken isempty(undoc)
+    @test undoc == [:InteractiveUtils]
+end

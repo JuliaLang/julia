@@ -359,6 +359,10 @@ USE_MLIR := 0
 # Options to use RegionVectorizer
 USE_RV := 0
 
+# Use `ccache` for speeding up recompilation of the C/C++ part of Julia.
+# Requires the `ccache` executable to be in the `PATH` environment variable.
+USECCACHE := 0
+
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
 #XC_HOST := x86_64-w64-mingw32
@@ -492,12 +496,12 @@ JCFLAGS_COMMON    := -std=gnu11 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSE
 JCFLAGS_CLANG     := $(JCFLAGS_COMMON)
 JCFLAGS_GCC       := $(JCFLAGS_COMMON) -fno-gnu-unique
 
-# AArch64 needs this flag to generate the .eh_frame used by libunwind
+# These flags are needed to generate decent debug info
 JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
-JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON)
-JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON)
+JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
+JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
-JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++14
+JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
 JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
@@ -567,10 +571,10 @@ CXX_BASE := ccache
 FC_BASE  := ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
-# http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
+# https://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
 CC += -Qunused-arguments
 CXX += -Qunused-arguments
-# http://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
+# https://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
 export CCACHE_CPP2 := yes
 endif
 else #USECCACHE
@@ -595,23 +599,26 @@ CPP_STDOUT := $(CPP) -P
 # file extensions
 ifeq ($(OS), WINNT)
   SHLIB_EXT := dll
+  PATHSEP := ;
 else ifeq ($(OS), Darwin)
   SHLIB_EXT := dylib
+  PATHSEP := :
 else
   SHLIB_EXT := so
+  PATHSEP := :
 endif
 
 ifeq ($(OS),WINNT)
 define versioned_libname
-$$(if $(2),$(1)-$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+$(if $(2),$(1)-$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
 endef
 else ifeq ($(OS),Darwin)
 define versioned_libname
-$$(if $(2),$(1).$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
+$(if $(2),$(1).$(2).$(SHLIB_EXT),$(1).$(SHLIB_EXT))
 endef
 else
 define versioned_libname
-$$(if $(2),$(1).$(SHLIB_EXT).$(2),$(1).$(SHLIB_EXT))
+$(if $(2),$(1).$(SHLIB_EXT).$(2),$(1).$(SHLIB_EXT))
 endef
 endif
 
@@ -897,6 +904,17 @@ else
 ISX86:=0
 endif
 
+
+#If nothing is set default to native unless we are cross-compiling
+ifeq ($(MARCH)$(MCPU)$(MTUNE)$(JULIA_CPU_TARGET)$(XC_HOST),)
+ifeq ($(ARCH),aarch64) #ARM recommends only setting MCPU for AArch64
+MCPU=native
+else
+MARCH=native
+MTUNE=native
+endif
+endif
+
 # If we are running on powerpc64le or ppc64le, set certain options automatically
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
@@ -971,6 +989,14 @@ CC += -mcpu=$(MCPU)
 CXX += -mcpu=$(MCPU)
 FC += -mcpu=$(MCPU)
 JULIA_CPU_TARGET ?= $(MCPU)
+endif
+
+# Set MTUNE-specific flags
+ifneq ($(MTUNE),)
+CC += -mtune=$(MTUNE)
+CXX += -mtune=$(MTUNE)
+FC += -mtune=$(MTUNE)
+JULIA_CPU_TARGET ?= $(MTUNE)
 endif
 
 ifneq ($(MARCH)$(MCPU),)
@@ -1171,7 +1197,7 @@ endif
 
 # We need python for things like BB triplet recognition.  We don't really care
 # about version, generally, so just find something that works:
-PYTHON := "$(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)"
+PYTHON := $(shell which python 2>/dev/null || which python3 2>/dev/null || which python2 2>/dev/null || echo not found)
 PYTHON_SYSTEM := $(shell $(PYTHON) -c 'from __future__ import print_function; import platform; print(platform.system())')
 
 # If we're running on Cygwin, but using a native-windows Python, we need to use cygpath -w
@@ -1229,7 +1255,7 @@ LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SP
 # shipped with CSL. Although we do not depend on any of the symbols, it is entirely
 # possible that a user might choose to install a library which depends on symbols provided
 # by a newer libstdc++. Without runtime detection, those libraries would break.
-CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.31|GLIBCXX_3\.5\.|GLIBCXX_4\.
+CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.33|GLIBCXX_3\.5\.|GLIBCXX_4\.
 
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
@@ -1503,7 +1529,7 @@ endef
 WINE ?= wine
 
 ifeq ($(BINARY),32)
-HEAPLIM := --heap-size-hint=500M
+HEAPLIM := --heap-size-hint=1000M
 else
 HEAPLIM :=
 endif

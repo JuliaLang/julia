@@ -73,6 +73,10 @@ static void free_stack(void *stkbuf, size_t bufsz)
 }
 #endif
 
+JL_DLLEXPORT uint32_t jl_get_num_stack_mappings(void)
+{
+    return jl_atomic_load_relaxed(&num_stack_mappings);
+}
 
 const unsigned pool_sizes[] = {
     128 * 1024,
@@ -112,7 +116,7 @@ static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz)
     if (bufsz <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
-            arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
+            small_arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
             return;
         }
     }
@@ -141,7 +145,7 @@ void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
 #ifdef _COMPILER_ASAN_ENABLED_
             __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
 #endif
-            arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
+            small_arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
         }
     }
 }
@@ -156,9 +160,9 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
     if (ssize <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(ssize);
         ssize = pool_sizes[pool_id];
-        arraylist_t *pool = &ptls->heap.free_stacks[pool_id];
+        small_arraylist_t *pool = &ptls->heap.free_stacks[pool_id];
         if (pool->len > 0) {
-            stk = arraylist_pop(pool);
+            stk = small_arraylist_pop(pool);
         }
     }
     else {
@@ -177,8 +181,8 @@ JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPO
     }
     *bufsz = ssize;
     if (owner) {
-        arraylist_t *live_tasks = &ptls->heap.live_tasks;
-        arraylist_push(live_tasks, owner);
+        small_arraylist_t *live_tasks = &ptls->heap.live_tasks;
+        mtarraylist_push(live_tasks, owner);
     }
     return stk;
 }
@@ -202,9 +206,12 @@ void sweep_stack_pools(void)
 
         // free half of stacks that remain unused since last sweep
         for (int p = 0; p < JL_N_STACK_POOLS; p++) {
-            arraylist_t *al = &ptls2->heap.free_stacks[p];
+            small_arraylist_t *al = &ptls2->heap.free_stacks[p];
             size_t n_to_free;
-            if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
+            if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL) {
+                n_to_free = al->len; // not alive yet or dead, so it does not need these anymore
+            }
+            else if (al->len > MIN_STACK_MAPPINGS_PER_POOL) {
                 n_to_free = al->len / 2;
                 if (n_to_free > (al->len - MIN_STACK_MAPPINGS_PER_POOL))
                     n_to_free = al->len - MIN_STACK_MAPPINGS_PER_POOL;
@@ -213,12 +220,12 @@ void sweep_stack_pools(void)
                 n_to_free = 0;
             }
             for (int n = 0; n < n_to_free; n++) {
-                void *stk = arraylist_pop(al);
+                void *stk = small_arraylist_pop(al);
                 free_stack(stk, pool_sizes[p]);
             }
         }
 
-        arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
         size_t n = 0;
         size_t ndel = 0;
         size_t l = live_tasks->len;
@@ -261,24 +268,52 @@ void sweep_stack_pools(void)
 
 JL_DLLEXPORT jl_array_t *jl_live_tasks(void)
 {
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
-    arraylist_t *live_tasks = &ptls->heap.live_tasks;
-    size_t i, j, l;
-    jl_array_t *a;
-    do {
-        l = live_tasks->len;
-        a = jl_alloc_vec_any(l + 1); // may gc, changing the number of tasks
-    } while (l + 1 < live_tasks->len);
-    l = live_tasks->len;
-    void **lst = live_tasks->items;
-    j = 0;
-    ((void**)jl_array_data(a))[j++] = ptls->root_task;
-    for (i = 0; i < l; i++) {
-        if (((jl_task_t*)lst[i])->stkbuf != NULL)
-            ((void**)jl_array_data(a))[j++] = lst[i];
+    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    size_t l = 0; // l is not reset on restart, so we keep getting more aggressive at making a big enough list everything it fails
+restart:
+    for (size_t i = 0; i < nthreads; i++) {
+        // skip GC threads since they don't have tasks
+        if (gc_first_tid <= i && i < gc_first_tid + jl_n_gcthreads) {
+            continue;
+        }
+        jl_ptls_t ptls2 = allstates[i];
+        if (ptls2 == NULL)
+            continue;
+        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        size_t n = mtarraylist_length(live_tasks);
+        l += n + (ptls2->root_task->stkbuf != NULL);
     }
-    l = jl_array_len(a);
+    l += l / 20; // add 5% for margin of estimation error
+    jl_array_t *a = jl_alloc_vec_any(l); // may gc, changing the number of tasks and forcing us to reload everything
+    nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    size_t j = 0;
+    for (size_t i = 0; i < nthreads; i++) {
+        // skip GC threads since they don't have tasks
+        if (gc_first_tid <= i && i < gc_first_tid + jl_n_gcthreads) {
+            continue;
+        }
+        jl_ptls_t ptls2 = allstates[i];
+        if (ptls2 == NULL)
+            continue;
+        jl_task_t *t = ptls2->root_task;
+        if (t->stkbuf != NULL) {
+            if (j == l)
+                goto restart;
+            jl_array_data(a,void*)[j++] = t;
+        }
+        small_arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        size_t n = mtarraylist_length(live_tasks);
+        for (size_t i = 0; i < n; i++) {
+            jl_task_t *t = (jl_task_t*)mtarraylist_get(live_tasks, i);
+            if (t->stkbuf != NULL) {
+                if (j == l)
+                    goto restart;
+                jl_array_data(a,void*)[j++] = t;
+            }
+        }
+    }
     if (j < l) {
         JL_GC_PUSH1(&a);
         jl_array_del_end(a, l - j);

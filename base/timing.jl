@@ -98,6 +98,13 @@ function gc_live_bytes()
     Int(ccall(:jl_gc_live_bytes, Int64, ())) + num.allocd + num.deferred_alloc
 end
 
+# must be kept in sync with the value from `src/julia_threads.h``
+const JL_GC_N_MAX_POOLS = 51
+function gc_page_utilization_data()
+    page_utilization_raw = cglobal(:jl_gc_page_utilization_stats, Float64)
+    return Base.unsafe_wrap(Array, page_utilization_raw, JL_GC_N_MAX_POOLS, own=false)
+end
+
 """
     Base.jit_total_bytes()
 
@@ -128,19 +135,25 @@ function padded_nonzero_print(value, str, always_print = true)
     end
 end
 
-function format_bytes(bytes) # also used by InteractiveUtils
-    bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
+function format_bytes(bytes; binary=true) # also used by InteractiveUtils
+    units = binary ? _mem_units : _cnt_units
+    factor = binary ? 1024 : 1000
+    bytes, mb = prettyprint_getunits(bytes, length(units), Int64(factor))
     if mb == 1
         return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
     else
-        return string(Ryu.writefixed(Float64(bytes), 3), " ", _mem_units[mb])
+        return string(Ryu.writefixed(Float64(bytes), 3), binary ? " $(units[mb])" : "$(units[mb])B")
     end
 end
 
-function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, recompile_time=0, newline=false, _lpad=true)
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, recompile_time=0, newline=false; msg::Union{String,Nothing}=nothing)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
-        _lpad && print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        if msg isa String
+            print(io, msg, ": ")
+        else
+            print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        end
         print(io, timestr, " seconds")
         parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
         parens && print(io, " (")
@@ -177,11 +190,11 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, compile_ti
     nothing
 end
 
-function timev_print(elapsedtime, diff::GC_Diff, compile_times, _lpad)
+function timev_print(elapsedtime, diff::GC_Diff, compile_times; msg::Union{String,Nothing}=nothing)
     allocs = gc_alloc_count(diff)
     compile_time = first(compile_times)
     recompile_time = last(compile_times)
-    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true, _lpad)
+    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true; msg)
     padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -268,22 +281,10 @@ macro time(ex)
 end
 macro time(msg, ex)
     quote
-        Experimental.@force_compile
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        cumulative_compile_timing(true)
-        local compile_elapsedtimes = cumulative_compile_time_ns()
-        local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
-            cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
-        )
-        local diff = GC_Diff(gc_num(), stats)
+        local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        local has_msg = !isnothing(_msg)
-        has_msg && print(_msg, ": ")
-        time_print(stdout, elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
-        val
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg)
+        ret.value
     end
 end
 
@@ -352,22 +353,10 @@ macro timev(ex)
 end
 macro timev(msg, ex)
     quote
-        Experimental.@force_compile
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        cumulative_compile_timing(true)
-        local compile_elapsedtimes = cumulative_compile_time_ns()
-        local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
-            cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
-        )
-        local diff = GC_Diff(gc_num(), stats)
+        local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        local has_msg = !isnothing(_msg)
-        has_msg && print(_msg, ": ")
-        timev_print(elapsedtime, diff, compile_elapsedtimes, !has_msg)
-        val
+        timev_print(ret.time*1e9, ret.gcstats, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg)
+        ret.value
     end
 end
 
@@ -463,9 +452,9 @@ end
 """
     @timed
 
-A macro to execute an expression, and return the value of the expression, elapsed time,
-total bytes allocated, garbage collection time, and an object with various memory allocation
-counters.
+A macro to execute an expression, and return the value of the expression, elapsed time in seconds,
+total bytes allocated, garbage collection time, an object with various memory allocation
+counters, compilation time in seconds, and recompilation time in seconds.
 
 In some cases the system will look inside the `@timed` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
@@ -491,19 +480,34 @@ julia> propertynames(stats.gcstats)
 
 julia> stats.gcstats.total_time
 5576500
+
+julia> stats.compile_time
+0.0
+
+julia> stats.recompile_time
+0.0
+
 ```
 
 !!! compat "Julia 1.5"
     The return type of this macro was changed from `Tuple` to `NamedTuple` in Julia 1.5.
+
+!!! compat "Julia 1.11"
+    The `compile_time` and `recompile_time` fields were added in Julia 1.11.
 """
 macro timed(ex)
     quote
         Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
+        cumulative_compile_timing(true)
+        local compile_elapsedtimes = cumulative_compile_time_ns()
+        local val = @__tryfinally($(esc(ex)),
+            (elapsedtime = time_ns() - elapsedtime;
+            cumulative_compile_timing(false);
+            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
+        )
         local diff = GC_Diff(gc_num(), stats)
-        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff)
+        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff, compile_time=compile_elapsedtimes[1]/1e9, recompile_time=compile_elapsedtimes[2]/1e9)
     end
 end
