@@ -43,17 +43,17 @@ checksum-libsuitesparse: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
 
 # https://github.com/DrTimothyAldenDavis/SuiteSparse/pull/671
-$(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/suitesparse-blas-suffix.patch-applied: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
+$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/suitesparse-blas-suffix.patch-applied: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
 	cd $(dir $@) && \
 		patch -p1 -f < $(SRCDIR)/patches/suitesparse-blas-suffix.patch
 	echo 1 > $@
 
-$(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/suitesparse-blas-suffix.patch-applied
+$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/suitesparse-blas-suffix.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/blastrampoline
 
-$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
+$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
 	cd $(dir $<) && $(CMAKE) .. $(LIBSUITESPARSE_CMAKE_FLAGS)
 	make
 	make install
