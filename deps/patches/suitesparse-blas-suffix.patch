@@ -1,0 +1,40 @@
+From b936940aab08dc4bc60ccf2b9daec2105a960ad4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Markus=20M=C3=BCtzel?= <markus.muetzel@gmx.de>
+Date: Mon, 1 Jan 2024 13:00:17 +0100
+Subject: [PATCH] Add preprocessor definitions also with user-supplied
+ BLAS_LIBRARIES
+
+---
+ SuiteSparse_config/cmake_modules/SuiteSparseBLAS.cmake   | 4 ++--
+ SuiteSparse_config/cmake_modules/SuiteSparseBLAS64.cmake | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/SuiteSparse_config/cmake_modules/SuiteSparseBLAS.cmake b/SuiteSparse_config/cmake_modules/SuiteSparseBLAS.cmake
+index ca241472d..be7cd2e73 100644
+--- a/SuiteSparse_config/cmake_modules/SuiteSparseBLAS.cmake
++++ b/SuiteSparse_config/cmake_modules/SuiteSparseBLAS.cmake
+@@ -36,9 +36,9 @@ if ( DEFINED BLAS_LIBRARIES OR DEFINED BLAS_INCLUDE_DIRS )
+     # User supplied variables for libraries and/or include directories.
+     # Use them as-is.
+     if ( SUITESPARSE_USE_64BIT_BLAS )
+-        set ( SuiteSparse_BLAS_integer "int64_t" )
++        include ( SuiteSparseBLAS64 )
+     else ( )
+-        set ( SuiteSparse_BLAS_integer "int32_t" )
++        include ( SuiteSparseBLAS32 )
+     endif ( )
+     return ( )
+ endif ( )
+diff --git a/SuiteSparse_config/cmake_modules/SuiteSparseBLAS64.cmake b/SuiteSparse_config/cmake_modules/SuiteSparseBLAS64.cmake
+index 744aaef91..1a5c63690 100644
+--- a/SuiteSparse_config/cmake_modules/SuiteSparseBLAS64.cmake
++++ b/SuiteSparse_config/cmake_modules/SuiteSparseBLAS64.cmake
+@@ -37,7 +37,7 @@ set ( SuiteSparse_BLAS_integer "int64_t" )
+ # https://github.com/spack/spack/blob/develop/var/spack/repos/builtin/packages/suite-sparse/package.py
+
+ if ( DEFINED BLAS64_SUFFIX )
+-    # append BLAS64_SUFFIX to each BLAS and LAPACK name
++    # append BLAS64_SUFFIX to each BLAS and LAPACK function name
+     string ( FIND ${BLAS64_SUFFIX} "_" HAS_UNDERSCORE )
+     message ( STATUS "BLAS64_suffix: ${BLAS64_SUFFIX}" )
+     if ( HAS_UNDERSCORE EQUAL -1 )

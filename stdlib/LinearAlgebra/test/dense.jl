@@ -1070,6 +1070,11 @@ end
     @test (@inferred Tschurpow LinearAlgebra.schurpow(Aa, 2.0)) ≈ Aa^2
 end
 
+@testset "BigFloat triangular real power" begin
+    A = Float64[3 1; 0 3]
+    @test A^(3/4) ≈ big.(A)^(3/4)
+end
+
 @testset "diagonal integer matrix to real power" begin
     A = Matrix(Diagonal([1, 2, 3]))
     @test A^2.3 ≈ float(A)^2.3
@@ -1230,6 +1235,54 @@ Base.:+(x::TypeWithZero, ::TypeWithoutZero) = x
 
 @testset "diagm for type with no zero" begin
     @test diagm(0 => [TypeWithoutZero()]) isa Matrix{TypeWithZero}
+end
+
+@testset "cbrt(A::AbstractMatrix{T})" begin
+    N = 10
+
+    # Non-square
+    A = randn(N,N+2)
+    @test_throws DimensionMismatch cbrt(A)
+
+    # Real valued diagonal
+    D = Diagonal(randn(N))
+    T = cbrt(D)
+    @test T*T*T ≈ D
+    @test eltype(D) == eltype(T)
+    # Real valued triangular
+    U = UpperTriangular(randn(N,N))
+    T = cbrt(U)
+    @test T*T*T ≈ U
+    @test eltype(U) == eltype(T)
+    L = LowerTriangular(randn(N,N))
+    T = cbrt(L)
+    @test T*T*T ≈ L
+    @test eltype(L) == eltype(T)
+    # Real valued symmetric
+    S =  (A -> (A+A')/2)(randn(N,N))
+    T = cbrt(Symmetric(S,:U))
+    @test T*T*T ≈ S
+    @test eltype(S) == eltype(T)
+    # Real valued symmetric
+    S =  (A -> (A+A')/2)(randn(N,N))
+    T = cbrt(Symmetric(S,:L))
+    @test T*T*T ≈ S
+    @test eltype(S) == eltype(T)
+    # Real valued Hermitian
+    S =  (A -> (A+A')/2)(randn(N,N))
+    T = cbrt(Hermitian(S,:U))
+    @test T*T*T ≈ S
+    @test eltype(S) == eltype(T)
+    # Real valued Hermitian
+    S =  (A -> (A+A')/2)(randn(N,N))
+    T = cbrt(Hermitian(S,:L))
+    @test T*T*T ≈ S
+    @test eltype(S) == eltype(T)
+    # Real valued arbitrary
+    A = randn(N,N)
+    T = cbrt(A)
+    @test T*T*T ≈ A
+    @test eltype(A) == eltype(T)
 end
 
 end # module TestDense

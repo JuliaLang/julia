@@ -353,7 +353,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     it's more general than that since methods are dispatched on every argument type, not only `this`,
     using the most-specific-declaration rule).
 
-### Julia &hArr; C/C++: Namespaces
+### Julia ⇔ C/C++: Namespaces
   * C/C++ `namespace`s correspond roughly to Julia `module`s.
   * There are no private globals or fields in Julia.  Everything is publicly accessible
     through fully qualified paths (or relative paths, if desired).
@@ -365,7 +365,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Caveat: `import`/`using` (Julia) works only at the global scope level (`module`s)
     * In C++, `using namespace X` works within arbitrary scopes (ex: function scope).
 
-### Julia &hArr; C/C++: Module loading
+### Julia ⇔ C/C++: Module loading
   * When you think of a C/C++ "**library**", you are likely looking for a Julia "**package**".
     * Caveat: C/C++ libraries often house multiple "software modules" whereas Julia
       "packages" typically house one.
@@ -396,7 +396,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     * Directory-based package repositories are the **quickest solution** to developing local
       libraries of "software modules".
 
-### Julia &hArr; C/C++: Assembling modules
+### Julia ⇔ C/C++: Assembling modules
   * In C/C++, `.c`/`.cpp` files are compiled & added to a library with build/`make` scripts.
     * In Julia, `import [PkgName]`/`using [PkgName]` statements load `[PkgName].jl` located
       in a package's `[PkgName]/src/` subdirectory.
@@ -413,7 +413,7 @@ For users coming to Julia from R, these are some noteworthy differences:
       Julia package* ("software module"). It is therefore relatively straightforward to ensure
       file are `include`d only once (No `#ifdef` confusion).
 
-### Julia &hArr; C/C++: Module interface
+### Julia ⇔ C/C++: Module interface
   * C++ exposes interfaces using "public" `.h`/`.hpp` files whereas Julia `module`s mark
     specific symbols that are intended for their users as `public`or `export`ed.
     * Often, Julia `module`s simply add functionality by generating new "methods" to existing
@@ -427,7 +427,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     * Users might be expected to access these components by qualifying functions/structs/...
       with the package/module name (ex: `MyModule.run_this_task(...)`).
 
-### Julia &hArr; C/C++: Quick reference
+### Julia ⇔ C/C++: Quick reference
 
 | Software Concept   | Julia | C/C++ |
 | :---               | :---  | :---  |

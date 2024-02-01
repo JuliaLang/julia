@@ -587,6 +587,12 @@ JL_CALLABLE(jl_f_ifelse)
     return (args[0] == jl_false ? args[2] : args[1]);
 }
 
+JL_CALLABLE(jl_f_current_scope)
+{
+    JL_NARGS(current_scope, 0, 0);
+    return jl_current_task->scope;
+}
+
 // apply ----------------------------------------------------------------------
 
 static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_t oldalloc)
@@ -998,7 +1004,7 @@ static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st,
     }
     if (mutabl && jl_field_isconst(st, idx)) {
         jl_errorf("%s: const field .%s of type %s cannot be changed", name,
-                jl_symbol_name((jl_sym_t*)jl_svec_ref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
+                jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
     }
     return idx;
 }
@@ -1349,13 +1355,13 @@ JL_CALLABLE(jl_f_set_binding_type)
     JL_TYPECHK(set_binding_type!, type, ty);
     jl_binding_t *b = jl_get_binding_wr(m, s);
     jl_value_t *old_ty = NULL;
-    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty) && ty != old_ty) {
-        if (nargs == 2)
-            return jl_nothing;
+    if (jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty)) {
+        jl_gc_wb(b, ty);
+    }
+    else if (nargs != 2 && !jl_types_equal(ty, old_ty)) {
         jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
                   jl_symbol_name(m->name), jl_symbol_name(s));
     }
-    jl_gc_wb(b, ty);
     return jl_nothing;
 }
 
@@ -1767,7 +1773,7 @@ JL_CALLABLE(jl_f__svec_ref)
     if (idx < 1 || idx > len) {
         jl_bounds_error_int((jl_value_t*)s, idx);
     }
-    return jl_svec_ref(s, idx-1);
+    return jl_svecref(s, idx-1);
 }
 
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
@@ -1780,7 +1786,7 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
         jl_value_t *ta = jl_svecref(old, i);
         jl_value_t *tb = jl_svecref(ft, i);
         if (jl_has_free_typevars(ta)) {
-            if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
+            if (!jl_has_free_typevars(tb) || !jl_types_egal(ta, tb))
                 return 0;
         }
         else if (jl_has_free_typevars(tb) || jl_typetagof(ta) != jl_typetagof(tb) ||
@@ -2158,6 +2164,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("finalizer", jl_f_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
+    add_builtin_func("current_scope", jl_f_current_scope);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

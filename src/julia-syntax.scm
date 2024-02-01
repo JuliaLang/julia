@@ -1653,8 +1653,10 @@
                  (let ((g (make-ssavalue)))
                    (begin (set! a (cons `(= ,g ,x) a))
                           g)))))
-        (cons (cons (car e) (map arg-to-temp (cdr e)))
-              (reverse a)))))
+        (if (eq? (car e) 'let)
+          (cons (arg-to-temp e) (reverse a))
+          (cons (cons (car e) (map arg-to-temp (cdr e)))
+                (reverse a))))))
 
 (define (lower-kw-call f args)
   (let* ((para (if (has-parameters? args) (cdar args) '()))
@@ -3428,8 +3430,7 @@ f(x) = yt(x)
 (define (type-for-closure-parameterized name P names fields types super)
   (let ((n (length P))
         (s (make-ssavalue)))
-    `((thunk
-       (lambda ()
+    `((thunk ,(linearize `(lambda ()
          (() () 0 ())
          (block (global ,name) (const ,name)
                 ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any)))) P names)
@@ -3440,22 +3441,22 @@ f(x) = yt(x)
                 (call (core _setsuper!) ,s ,super)
                 (= (outerref ,name) ,s)
                 (call (core _typebody!) ,s (call (core svec) ,@types))
-                (return (null))))))))
+                (return (null)))))))))
 
 (define (type-for-closure name fields super)
   (let ((s (make-ssavalue)))
-    `((thunk (lambda ()
-               (() () 0 ())
-               (block (global ,name) (const ,name)
-                      (= ,s (call (core _structtype) (thismodule) (inert ,name) (call (core svec))
-                                  (call (core svec) ,@(map quotify fields))
-                                  (call (core svec))
-                                  (false) ,(length fields)))
-                      (call (core _setsuper!) ,s ,super)
-                      (= (outerref ,name) ,s)
-                      (call (core _typebody!) ,s
-                            (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
-                      (return (null))))))))
+    `((thunk ,(linearize `(lambda ()
+       (() () 0 ())
+       (block (global ,name) (const ,name)
+              (= ,s (call (core _structtype) (thismodule) (inert ,name) (call (core svec))
+                          (call (core svec) ,@(map quotify fields))
+                          (call (core svec))
+                          (false) ,(length fields)))
+              (call (core _setsuper!) ,s ,super)
+              (= (outerref ,name) ,s)
+              (call (core _typebody!) ,s
+                    (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
+              (return (null)))))))))
 
 ;; better versions of above, but they get handled wrong in many places
 ;; need to fix that in order to handle #265 fully (and use the definitions)
@@ -3710,7 +3711,7 @@ f(x) = yt(x)
          thunk with-static-parameters toplevel-only
          global globalref outerref const-if-global thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
-         error gc_preserve_begin gc_preserve_end import using export public inline noinline)))
+         error gc_preserve_begin gc_preserve_end import using export public inline noinline purity)))
 
 (define (local-in? s lam (tab #f))
   (or (and tab (has? tab s))
@@ -4274,6 +4275,17 @@ f(x) = yt(x)
   ;; returning lambda directly is needed for @generated
   (or (valid-ir-argument? e) (and (pair? e) (memq (car e) '(lambda)))))
 
+(define (code-trivially-effect-free? e)
+  ;; determine whether the execution of this code can be observed.
+  ;; If not it may be deleted. In general, the only thing we can detect here
+  ;; is empty blocks that only have metadata in them.
+  (if (pair? e)
+    (case (car e)
+      ((block) (every code-trivially-effect-free? (cdr e)))
+      ((line null) #t)
+      (else #f))
+    #t))
+
 ;; this pass behaves like an interpreter on the given code.
 ;; to perform stateful operations, it calls `emit` to record that something
 ;; needs to be done. in value position, it returns an expression computing
@@ -4718,24 +4730,30 @@ f(x) = yt(x)
                #f))
 
             ;; exception handlers are lowered using
-            ;; (= tok (enter L)) - push handler with catch block at label L, yielding token
+            ;; (= tok (enter L scope))
+            ;;      push handler with catch block at label L and scope `scope`, yielding token
+            ;;      `scope` is only recognized for tryfinally and may be omitted in the lowering
             ;; (leave n) - pop N exception handlers
             ;; (pop_exception tok) - pop exception stack back to state of associated enter
             ((trycatch tryfinally trycatchelse)
              (let ((handler-token (make-ssavalue))
                    (catch (make-label))
+                   (catchcode (if (eq? (car e) 'tryfinally) '(call (top rethrow)) (caddr e)))
                    (els   (and (eq? (car e) 'trycatchelse) (make-label)))
                    (endl  (make-label))
                    (last-finally-handler finally-handler)
-                   (finally           (if (eq? (car e) 'tryfinally) (new-mutable-var) #f))
+                   ;; Special case optimization: If the finally block is trivially empty, don't perform finally
+                   ;; lowering, just lower this as a try/catch block with rethrow and scope hnadling.
+                   (finally           (if (and (eq? (car e) 'tryfinally) (not (code-trivially-effect-free? (caddr e)))) (new-mutable-var) #f))
+                   (scope             (if (eq? (car e) 'tryfinally) (cdddr e) '()))
                    (my-finally-handler #f))
                ;; handler block entry
-               (emit `(= ,handler-token (enter ,catch)))
+               (emit `(= ,handler-token (enter ,catch ,@(compile-args scope break-labels))))
                (set! handler-token-stack (cons handler-token handler-token-stack))
                (if finally (begin (set! my-finally-handler (list finally endl '() handler-token-stack catch-token-stack))
                                   (set! finally-handler my-finally-handler)
                                   (emit `(= ,finally -1))))
-               (let* ((v1  (compile (cadr e) break-labels value #f)) ;; emit try block code
+               (let* ((v1 (compile (cadr e) break-labels value #f)) ;; emit try block code
                       (val (if (and value (not tail))
                                (new-mutable-var) #f)))
                  ;; handler block postfix
@@ -4759,7 +4777,7 @@ f(x) = yt(x)
                  ;; separate trycatch and tryfinally blocks earlier.
                  (mark-label catch)
                  (if finally
-                     (begin (enter-finally-block '(call (top rethrow)) #f) ;; enter block via exception
+                     (begin (enter-finally-block catchcode #f) ;; enter block via exception
                             (mark-label endl) ;; non-exceptional control flow enters here
                             (set! finally-handler last-finally-handler)
                             (compile (caddr e) break-labels #f #f)
@@ -4783,7 +4801,7 @@ f(x) = yt(x)
                                     (if skip (mark-label skip))
                                     (loop (cdr actions))))))
                      (begin (set! catch-token-stack (cons handler-token catch-token-stack))
-                            (let ((v2 (compile (caddr e) break-labels value tail)))
+                            (let ((v2 (compile catchcode break-labels value tail)))
                               (if val (emit-assignment val v2))
                               (if (not tail) (emit `(pop_exception ,handler-token)))
                                              ;; else done in emit-return from compile
@@ -4877,7 +4895,7 @@ f(x) = yt(x)
                (cons (car e) args)))
 
             ;; metadata expressions
-            ((lineinfo line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope inline noinline)
+            ((lineinfo line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope inline noinline purity)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)
@@ -5104,8 +5122,10 @@ f(x) = yt(x)
              (let ((idx (get ssavalue-table (cadr e) #f)))
                (if (not idx) (begin (prn e) (prn lam) (error "ssavalue with no def")))
                `(ssavalue ,idx)))
-            ((memq (car e) '(goto enter))
-             (list* (car e) (get label-table (cadr e)) (cddr e)))
+            ((eq? (car e) 'goto)
+             `(goto ,(get label-table (cadr e))))
+            ((eq? (car e) 'enter)
+             `(enter ,(get label-table (cadr e)) ,@(map renumber-stuff (cddr e))))
             ((eq? (car e) 'gotoifnot)
              `(gotoifnot ,(renumber-stuff (cadr e)) ,(get label-table (caddr e))))
             ((eq? (car e) 'lambda)

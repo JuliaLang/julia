@@ -324,7 +324,7 @@ axes(A::AdjOrTrans) = reverse(axes(A.parent))
 length(A::AdjOrTrans) = length(A.parent)
 size(v::AdjOrTransAbsVec) = (1, length(v.parent))
 size(A::AdjOrTransAbsMat) = reverse(size(A.parent))
-axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
+axes(v::AdjOrTransAbsVec) = (axes(v.parent,2), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
@@ -396,8 +396,14 @@ hcat(tvs::Transpose{T,Vector{T}}...) where {T} = _transpose_hcat(tvs...)
 #
 # note that the caller's operation f operates in the domain of the wrapped vectors' entries.
 # hence the adjoint->f->adjoint shenanigans applied to the parent vectors' entries.
-map(f, avs::AdjointAbsVec...) = adjoint(map((xs...) -> adjoint(f(adjoint.(xs)...)), parent.(avs)...))
-map(f, tvs::TransposeAbsVec...) = transpose(map((xs...) -> transpose(f(transpose.(xs)...)), parent.(tvs)...))
+function map(f, av::AdjointAbsVec, avs::AdjointAbsVec...)
+    s = (av, avs...)
+    adjoint(map((xs...) -> adjoint(f(adjoint.(xs)...)), parent.(s)...))
+end
+function map(f, tv::TransposeAbsVec, tvs::TransposeAbsVec...)
+    s = (tv, tvs...)
+    transpose(map((xs...) -> transpose(f(transpose.(xs)...)), parent.(s)...))
+end
 quasiparentt(x) = parent(x); quasiparentt(x::Number) = x # to handle numbers in the defs below
 quasiparenta(x) = parent(x); quasiparenta(x::Number) = conj(x) # to handle numbers in the defs below
 quasiparentc(x) = parent(parent(x)); quasiparentc(x::Number) = conj(x) # to handle numbers in the defs below
@@ -476,10 +482,6 @@ end
 
 # vector * Adjoint/Transpose-vector
 *(u::AbstractVector, v::AdjOrTransAbsVec) = broadcast(*, u, v)
-# Adjoint/Transpose-vector * Adjoint/Transpose-vector
-# (necessary for disambiguation with fallback methods in linalg/matmul)
-*(u::AdjointAbsVec, v::AdjointAbsVec) = throw(MethodError(*, (u, v)))
-*(u::TransposeAbsVec, v::TransposeAbsVec) = throw(MethodError(*, (u, v)))
 
 # AdjOrTransAbsVec{<:Any,<:AdjOrTransAbsVec} is a lazy conj vectors
 # We need to expand the combinations to avoid ambiguities

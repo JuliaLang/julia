@@ -26,7 +26,7 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{A
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Int32[block_for_inst(cfg, Int(edge)) for edge in stmt.edges], stmt.values)
         elseif isa(stmt, EnterNode)
-            code[i] = EnterNode(stmt, block_for_inst(cfg, stmt.catch_dest))
+            code[i] = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest))
         end
     end
     nstmts = length(code)
@@ -93,7 +93,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode)
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Int32[edge == 0 ? 0 : last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
         elseif isa(stmt, EnterNode)
-            code[i] = EnterNode(stmt, first(ir.cfg.blocks[stmt.catch_dest].stmts))
+            code[i] = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : first(ir.cfg.blocks[stmt.catch_dest].stmts))
         end
     end
 end
