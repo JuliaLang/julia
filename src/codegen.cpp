@@ -9641,9 +9641,7 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0) {
         clopt->addOccurrence(1, clopt->ArgStr, "false", true);
     } else {
-        #if JL_LLVM_VERSION < 170000
         jl_opaque_ptrs_set = 1;
-        #endif
     }
 
     clopt = llvmopts.lookup("time-passes");
