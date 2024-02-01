@@ -1114,3 +1114,7 @@ end
         end
     end
 end
+
+# error message hint from PR #22647
+@test_throws "Many shells" cd("~")
+@test occursin("Many shells", sprint(showerror, Base.IOError("~", Base.UV_ENOENT)))

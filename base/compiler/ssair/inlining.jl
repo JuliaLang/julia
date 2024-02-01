@@ -827,7 +827,7 @@ function compileable_specialization(mi::MethodInstance, effects::Effects,
         end
     end
     add_inlining_backedge!(et, mi) # to the dispatch lookup
-    push!(et.edges, method.sig, mi_invoke) # add_inlining_backedge to the invoke call
+    mi_invoke !== mi && push!(et.edges, method.sig, mi_invoke) # add_inlining_backedge to the invoke call, if that is different
     return InvokeCase(mi_invoke, effects, info)
 end
 
@@ -1749,6 +1749,8 @@ function early_inline_special_case(
             elseif cond.val === false
                 return SomeCase(stmt.args[4])
             end
+        elseif ⊑(optimizer_lattice(state.interp), cond, Bool) && stmt.args[3] === stmt.args[4]
+            return SomeCase(stmt.args[3])
         end
     end
     return nothing

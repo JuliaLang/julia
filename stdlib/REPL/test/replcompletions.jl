@@ -2247,3 +2247,11 @@ let s = "using ...Issue52922.Inn"
     @test res
     @test "Inner2" in c
 end
+
+struct Issue53126 end
+Base.propertynames(::Issue53126) = error("this should not be called")
+let s = "Issue53126()."
+    c, r, res = test_complete_context(s)
+    @test res
+    @test isempty(c)
+end

@@ -1772,16 +1772,24 @@ JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *t
         jl_array_ptr_set(mt->backedges, 1, caller);
     }
     else {
-        // TODO: use jl_cache_type_(tt) like cache_method does, instead of a linear scan
+        // check if the edge is already present and avoid adding a duplicate
         size_t i, l = jl_array_nrows(mt->backedges);
         for (i = 1; i < l; i += 2) {
-            if (jl_types_equal(jl_array_ptr_ref(mt->backedges, i - 1), typ)) {
-                if (jl_array_ptr_ref(mt->backedges, i) == caller) {
+            if (jl_array_ptr_ref(mt->backedges, i) == caller) {
+                if (jl_types_equal(jl_array_ptr_ref(mt->backedges, i - 1), typ)) {
                     JL_UNLOCK(&mt->writelock);
                     return;
                 }
-                // reuse the already cached instance of this type
-                typ = jl_array_ptr_ref(mt->backedges, i - 1);
+            }
+        }
+        // reuse an already cached instance of this type, if possible
+        // TODO: use jl_cache_type_(tt) like cache_method does, instead of this linear scan?
+        for (i = 1; i < l; i += 2) {
+            if (jl_array_ptr_ref(mt->backedges, i) != caller) {
+                if (jl_types_equal(jl_array_ptr_ref(mt->backedges, i - 1), typ)) {
+                    typ = jl_array_ptr_ref(mt->backedges, i - 1);
+                    break;
+                }
             }
         }
         jl_array_ptr_1d_push(mt->backedges, typ);

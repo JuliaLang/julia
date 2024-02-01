@@ -1653,8 +1653,10 @@
                  (let ((g (make-ssavalue)))
                    (begin (set! a (cons `(= ,g ,x) a))
                           g)))))
-        (cons (cons (car e) (map arg-to-temp (cdr e)))
-              (reverse a)))))
+        (if (eq? (car e) 'let)
+          (cons (arg-to-temp e) (reverse a))
+          (cons (cons (car e) (map arg-to-temp (cdr e)))
+                (reverse a))))))
 
 (define (lower-kw-call f args)
   (let* ((para (if (has-parameters? args) (cdar args) '()))

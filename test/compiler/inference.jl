@@ -238,13 +238,18 @@ tuplemerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{Char, Int}}, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}}
 @test Core.Compiler.tmerge(Nothing, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{Int, Int}}, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Vector) == Union{Nothing, AbstractVector}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix{Int}) == Union{Nothing, AbstractArray{Int}}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Array) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractArray{Int}}, Vector) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector}, Matrix{Int}) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Vector) == Union{Nothing, Int, AbstractVector}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Matrix) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Matrix{Int}) == Union{Nothing, Int, AbstractArray{Int}}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Array) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractArray{Int}}, Vector) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector}, Matrix{Int}) == Union{Nothing, Int, AbstractArray}
 @test Core.Compiler.tmerge(Union{Nothing, AbstractFloat}, Integer) == Union{Nothing, AbstractFloat, Integer}
+@test Core.Compiler.tmerge(AbstractVector, AbstractMatrix) == Union{AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Nothing}, AbstractMatrix) == Union{Nothing, AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Int}, AbstractMatrix) == Union{Int, AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Integer}, AbstractMatrix) == Union{Integer, AbstractArray}
+@test Core.Compiler.tmerge(Union{AbstractVector, Nothing, Int}, AbstractMatrix) == Union{Nothing, Int, AbstractArray}
 
 # test that recursively more complicated types don't widen all the way to Any when there is a useful valid type upper bound
 # Specifically test with base types of a trivial type, a simple union, a complicated union, and a tuple.
@@ -4680,11 +4685,11 @@ end
 
     a = Tuple{Vararg{Tuple{}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}
+    @test a == Union{Tuple{Tuple{Vararg{Tuple{}}}}, Tuple{Vararg{Tuple{}}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}}}
+    @test a == Tuple{Vararg{Union{Tuple{Tuple{Vararg{Tuple{}}}}, Tuple{Vararg{Tuple{}}}}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}}}}}
+    @test a == Tuple
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
     @test a == Tuple
 end
