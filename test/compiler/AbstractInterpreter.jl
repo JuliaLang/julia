@@ -330,19 +330,17 @@ function CC.abstract_call(interp::NoinlineInterpreter,
     ret = @invoke CC.abstract_call(interp::CC.AbstractInterpreter,
         arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
     if sv.mod in noinline_modules(interp)
-        return CC.CallMeta(ret.rt, ret.effects, NoinlineCallInfo(ret.info))
+        return CC.CallMeta(ret.rt, ret.exct, ret.effects, NoinlineCallInfo(ret.info))
     end
     return ret
 end
 function CC.inlining_policy(interp::NoinlineInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32, mi::MethodInstance,
-    argtypes::Vector{Any})
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(info, NoinlineCallInfo)
         return nothing
     end
     return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter,
-        src::Any, info::CallInfo, stmt_flag::UInt32, mi::MethodInstance,
-        argtypes::Vector{Any})
+        src::Any, info::CallInfo, stmt_flag::UInt32)
 end
 
 @inline function inlined_usually(x, y, z)
@@ -437,18 +435,14 @@ custom_lookup_context(x::Int) = custom_lookup_target(true, x)
 const CONST_INVOKE_INTERP_WORLD = Base.get_world_counter()
 const CONST_INVOKE_INTERP = ConstInvokeInterp(; world=CONST_INVOKE_INTERP_WORLD)
 function custom_lookup(mi::MethodInstance, min_world::UInt, max_world::UInt)
-    local matched_mi = nothing
     for inf_result in CONST_INVOKE_INTERP.inf_cache
         if inf_result.linfo === mi
             if CC.any(inf_result.overridden_by_const)
                 return CodeInstance(CONST_INVOKE_INTERP, inf_result, inf_result.valid_worlds)
-            elseif matched_mi === nothing
-                matched_mi = inf_result.linfo
             end
         end
     end
-    matched_mi === nothing && return nothing
-    return CONST_INVOKE_INTERP.code_cache.dict[matched_mi]
+    return CONST_INVOKE_INTERP.code_cache.dict[mi]
 end
 
 let # generate cache
@@ -464,11 +458,13 @@ let # generate cache
     lookup = @cfunction(custom_lookup, Any, (Any,Csize_t,Csize_t))
     params = CodegenParams(;
         debug_info_kind=Cint(0),
+        debug_info_level=Cint(2),
         safepoint_on_entry=raw,
         gcstack_arg=raw,
         lookup)
     io = IOBuffer()
     code_llvm(io, custom_lookup_target, (Bool,Int,); params)
-    @test  occursin("j_sin_", String(take!(io)))
-    @test !occursin("j_cos_", String(take!(io)))
+    s = String(take!(io))
+    @test  occursin("j_sin_", s)
+    @test !occursin("j_cos_", s)
 end

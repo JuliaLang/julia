@@ -63,7 +63,11 @@ private:
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
 {
+#if JL_LLVM_VERSION >= 160000
+    pgcstack->addFnAttr(Attribute::getWithMemoryEffects(pgcstack->getContext(), MemoryEffects::none()));
+#else
     addFnAttr(pgcstack, Attribute::ReadNone);
+#endif
     addFnAttr(pgcstack, Attribute::NoUnwind);
 }
 
@@ -85,7 +89,7 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
 
         // The add instruction clobbers flags
         if (offset) {
-            std::vector<Type*> args(0);
+            SmallVector<Type*, 0> args(0);
             args.push_back(offset->getType());
             auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(builder.getContext()), args, false),
                                      dyn_asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);

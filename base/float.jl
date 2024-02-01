@@ -836,12 +836,12 @@ number of significand digits in that base.
 """
 function precision end
 
-_precision(::Type{Float16}) = 11
-_precision(::Type{Float32}) = 24
-_precision(::Type{Float64}) = 53
-function _precision(x, base::Integer=2)
+_precision_with_base_2(::Type{Float16}) = 11
+_precision_with_base_2(::Type{Float32}) = 24
+_precision_with_base_2(::Type{Float64}) = 53
+function _precision(x, base::Integer)
     base > 1 || throw(DomainError(base, "`base` cannot be less than 2."))
-    p = _precision(x)
+    p = _precision_with_base_2(x)
     return base == 2 ? Int(p) : floor(Int, p / log2(base))
 end
 precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
@@ -1014,11 +1014,22 @@ isodd(x::AbstractFloat) = isinteger(x) && abs(x) ≤ maxintfloat(x) && isodd(Int
     floatmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
     floatmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
 
-    eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= floatmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
     eps(::Type{Float16}) = $(bitcast(Float16, 0x1400))
     eps(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
     eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
     eps() = eps(Float64)
+end
+
+eps(x::AbstractFloat) = isfinite(x) ? abs(x) >= floatmin(x) ? ldexp(eps(typeof(x)), exponent(x)) : nextfloat(zero(x)) : oftype(x, NaN)
+
+function eps(x::T) where T<:IEEEFloat
+    # For isfinite(x), toggling the LSB will produce either prevfloat(x) or
+    # nextfloat(x) but will never change the sign or exponent.
+    # For !isfinite(x), this will map Inf to NaN and NaN to NaN or Inf.
+    y = reinterpret(T, reinterpret(Unsigned, x) ⊻ true)
+    # The absolute difference between these values is eps(x). This is true even
+    # for Inf/NaN values.
+    return abs(x - y)
 end
 
 """

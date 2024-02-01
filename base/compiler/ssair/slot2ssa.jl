@@ -207,7 +207,7 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, ir::IRCode, idx::Int, slott
         end
         return (ci.ssavaluetypes::Vector{Any})[idx]
     end
-    isa(x, GlobalRef) && return abstract_eval_globalref(x)
+    isa(x, GlobalRef) && return abstract_eval_globalref_type(x)
     isa(x, SSAValue) && return (ci.ssavaluetypes::Vector{Any})[x.id]
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return types(ir)[new_to_regular(x, length(ir.stmts))]
@@ -229,7 +229,7 @@ Run iterated dominance frontier.
 The algorithm we have here essentially follows LLVM, which itself is a
 a cleaned up version of the linear-time algorithm described in [^SG95].
 
-The algorithm here, is quite straightforward. Suppose we have a CFG:
+The algorithm here is quite straightforward. Suppose we have a CFG:
 
     A -> B -> D -> F
      \\-> C ------>/
@@ -468,10 +468,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             end
             result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
         elseif !isa(terminator, ReturnNode)
-            if isa(terminator, Expr)
-                if terminator.head === :enter
-                    terminator.args[1] = bb_rename[terminator.args[1]]
-                end
+            if isa(terminator, EnterNode)
+                result[inst_range[end]][:stmt] = EnterNode(terminator, terminator.catch_dest == 0 ? 0 : bb_rename[terminator.catch_dest])
             end
             if bb_rename[bb + 1] != new_bb + 1
                 # Add an explicit goto node
@@ -576,15 +574,15 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     catch_entry_blocks = TryCatchRegion[]
     for idx in 1:length(code)
         stmt = code[idx]
-        if isexpr(stmt, :enter)
+        if isa(stmt, EnterNode)
             push!(catch_entry_blocks, TryCatchRegion(
                 block_for_inst(cfg, idx),
-                block_for_inst(cfg, stmt.args[1]::Int)))
+                block_for_inst(cfg, stmt.catch_dest)))
         end
     end
 
     # Record the correct exception handler for all critical sections
-    handler_at = compute_trycatch(code, BitSet())
+    handler_at, handlers = compute_trycatch(code, BitSet())
 
     phi_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
     live_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
@@ -627,10 +625,12 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 # The slot is live-in into this block. We need to
                 # Create a PhiC node in the catch entry block and
                 # an upsilon node in the corresponding enter block
+                varstate = sv.bb_vartables[li]
+                if varstate === nothing
+                    continue
+                end
                 node = PhiCNode(Any[])
                 insertpoint = first_insert_for_bb(code, cfg, li)
-                varstate = sv.bb_vartables[li]
-                @assert varstate !== nothing
                 vt = varstate[idx]
                 phic_ssa = NewSSAValue(
                     insert_node!(ir, insertpoint,
@@ -690,6 +690,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     new_nodes = ir.new_nodes
     @timeit "SSA Rename" while !isempty(worklist)
         (item::Int, pred, incoming_vals) = pop!(worklist)
+        if sv.bb_vartables[item] === nothing
+            continue
+        end
         # Rename existing phi nodes first, because their uses occur on the edge
         # TODO: This isn't necessary if inlining stops replacing arguments by slots.
         for idx in cfg.blocks[item].stmts
@@ -810,9 +813,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                         incoming_vals[id] = Pair{Any, Any}(thisval, thisdef)
                         has_pinode[id] = false
                         enter_idx = idx
-                        while handler_at[enter_idx] != 0
-                            enter_idx = handler_at[enter_idx]
-                            leave_block = block_for_inst(cfg, code[enter_idx].args[1]::Int)
+                        while handler_at[enter_idx][1] != 0
+                            (; enter_idx) = handlers[handler_at[enter_idx][1]]
+                            leave_block = block_for_inst(cfg, (code[enter_idx]::EnterNode).catch_dest)
                             cidx = findfirst((; slot)::NewPhiCNode2->slot_id(slot)==id, new_phic_nodes[leave_block])
                             if cidx !== nothing
                                 node = thisdef ? UpsilonNode(thisval) : UpsilonNode()
@@ -874,8 +877,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             else
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end
-        elseif isexpr(stmt, :enter)
-            new_code[idx] = Expr(:enter, block_for_inst(cfg, stmt.args[1]::Int))
+        elseif isa(stmt, EnterNode)
+            except_bb = stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest)
+            new_code[idx] = EnterNode(stmt, except_bb)
             ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)

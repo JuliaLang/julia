@@ -260,21 +260,21 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
             uintptr_t *sp_ptr = NULL;
             if (returnsp) {
                 jl_array_grow_end(sp, maxincr);
-                sp_ptr = (uintptr_t*)jl_array_data(sp) + offset;
+                sp_ptr = jl_array_data(sp, uintptr_t) + offset;
             }
             size_t size_incr = 0;
-            have_more_frames = jl_unw_stepn(&cursor, (jl_bt_element_t*)jl_array_data(ip) + offset,
+            have_more_frames = jl_unw_stepn(&cursor, jl_array_data(ip, jl_bt_element_t) + offset,
                                             &size_incr, sp_ptr, maxincr, skip, &pgcstack, 0);
             skip = 0;
             offset += size_incr;
         }
-        jl_array_del_end(ip, jl_array_len(ip) - offset);
+        jl_array_del_end(ip, jl_array_nrows(ip) - offset);
         if (returnsp)
-            jl_array_del_end(sp, jl_array_len(sp) - offset);
+            jl_array_del_end(sp, jl_array_nrows(sp) - offset);
 
         size_t n = 0;
-        jl_bt_element_t *bt_data = (jl_bt_element_t*)jl_array_data(ip);
-        while (n < jl_array_len(ip)) {
+        jl_bt_element_t *bt_data = jl_array_data(ip, jl_bt_element_t);
+        while (n < jl_array_nrows(ip)) {
             jl_bt_element_t *bt_entry = bt_data + n;
             if (!jl_bt_is_native(bt_entry)) {
                 size_t njlvals = jl_bt_num_jlvals(bt_entry);
@@ -303,7 +303,7 @@ static void decode_backtrace(jl_bt_element_t *bt_data, size_t bt_size,
     bt = *btout = jl_alloc_array_1d(array_ptr_void_type, bt_size);
     static_assert(sizeof(jl_bt_element_t) == sizeof(void*),
                   "jl_bt_element_t is presented as Ptr{Cvoid} on julia side");
-    memcpy(bt->data, bt_data, bt_size * sizeof(jl_bt_element_t));
+    memcpy(jl_array_data(bt, jl_bt_element_t), bt_data, bt_size * sizeof(jl_bt_element_t));
     bt2 = *bt2out = jl_alloc_array_1d(jl_array_any_type, 0);
     // Scan the backtrace buffer for any gc-managed values
     for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
@@ -669,7 +669,7 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
             jl_code_info_t *src = (jl_code_info_t*)code;
             // See also the debug info handling in codegen.cpp.
             // NB: debuginfoloc is 1-based!
-            intptr_t debuginfoloc = ((int32_t*)jl_array_data(src->codelocs))[ip];
+            intptr_t debuginfoloc = jl_array_data(src->codelocs, int32_t)[ip];
             while (debuginfoloc != 0) {
                 jl_line_info_node_t *locinfo = (jl_line_info_node_t*)
                     jl_array_ptr_ref(src->linetable, debuginfoloc - 1);
@@ -791,7 +791,7 @@ _os_tsd_get_direct(unsigned long slot)
 // Unconditionally defined ptrauth_strip (instead of using the ptrauth.h header)
 // since libsystem will likely be compiled with -mbranch-protection, and we currently are not.
 // code from https://github.com/llvm/llvm-project/blob/7714e0317520207572168388f22012dd9e152e9e/compiler-rt/lib/sanitizer_common/sanitizer_ptrauth.h
-static inline uint64_t ptrauth_strip(uint64_t __value, unsigned int __key) {
+static inline uint64_t ptrauth_strip(uint64_t __value, unsigned int __key) JL_NOTSAFEPOINT {
   // On the stack the link register is protected with Pointer
   // Authentication Code when compiled with -mbranch-protection.
   // Let's strip the PAC unconditionally because xpaclri is in the NOP space,
@@ -809,7 +809,7 @@ static inline uint64_t ptrauth_strip(uint64_t __value, unsigned int __key) {
 
 __attribute__((always_inline, pure))
 static __inline__ void**
-_os_tsd_get_base(void)
+_os_tsd_get_base(void) JL_NOTSAFEPOINT
 {
 #if defined(__arm__)
     uintptr_t tsd;
@@ -831,7 +831,7 @@ _os_tsd_get_base(void)
 #ifdef _os_tsd_get_base
 __attribute__((always_inline))
 static __inline__ void*
-_os_tsd_get_direct(unsigned long slot)
+_os_tsd_get_direct(unsigned long slot) JL_NOTSAFEPOINT
 {
     return _os_tsd_get_base()[slot];
 }
@@ -839,14 +839,14 @@ _os_tsd_get_direct(unsigned long slot)
 
 __attribute__((always_inline, pure))
 static __inline__ uintptr_t
-_os_ptr_munge_token(void)
+_os_ptr_munge_token(void) JL_NOTSAFEPOINT
 {
     return (uintptr_t)_os_tsd_get_direct(__TSD_PTR_MUNGE);
 }
 
 __attribute__((always_inline, pure))
 JL_UNUSED static __inline__ uintptr_t
-_os_ptr_munge(uintptr_t ptr)
+_os_ptr_munge(uintptr_t ptr) JL_NOTSAFEPOINT
 {
     return ptr ^ _os_ptr_munge_token();
 }
@@ -1022,7 +1022,7 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
         mc->__r14 = ((uint64_t*)mctx)[5];
         mc->__r15 = ((uint64_t*)mctx)[6];
         mc->__rip = ((uint64_t*)mctx)[7];
-        // added in libsystem_plaform 177.200.16 (macOS Mojave 10.14.3)
+        // added in libsystem_platform 177.200.16 (macOS Mojave 10.14.3)
         // prior to that _os_ptr_munge_token was (hopefully) typically 0,
         // so x ^ 0 == x and this is a no-op
         mc->__rbp = _OS_PTR_UNMUNGE(mc->__rbp);

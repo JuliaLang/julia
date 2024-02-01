@@ -4,8 +4,8 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
-#include "work-stealing-queue.h"
 #include "julia_atomics.h"
+#include "work-stealing-queue.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
 #endif
@@ -130,6 +130,7 @@ typedef struct {
 
 typedef struct {
     _Atomic(int64_t) allocd;
+    _Atomic(int64_t) pool_live_bytes;
     _Atomic(uint64_t) malloc;
     _Atomic(uint64_t) realloc;
     _Atomic(uint64_t) poolalloc;
@@ -160,14 +161,8 @@ typedef struct {
     arraylist_t *last_remset;
 
     // variables for allocating objects from pools
-#ifdef _P64
-#  define JL_GC_N_POOLS 49
-#elif MAX_ALIGN == 8
-#  define JL_GC_N_POOLS 50
-#else
-#  define JL_GC_N_POOLS 51
-#endif
-    jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
+#define JL_GC_N_MAX_POOLS 51 // conservative. must be kept in sync with `src/julia_internal.h`
+    jl_gc_pool_t norm_pools[JL_GC_N_MAX_POOLS];
 
 #define JL_N_STACK_POOLS 16
     small_arraylist_t free_stacks[JL_N_STACK_POOLS];
@@ -211,7 +206,7 @@ typedef struct _jl_tls_states_t {
     int16_t tid;
     int8_t threadpoolid;
     uint64_t rngseed;
-    volatile size_t *safepoint;
+    _Atomic(volatile size_t *) safepoint; // may be changed to the suspend page by any thread
     _Atomic(int8_t) sleep_check_state; // read/write from foreign threads
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
@@ -225,9 +220,9 @@ typedef struct _jl_tls_states_t {
     // statements is prohibited from certain
     // callbacks (such as generated functions)
     // as it may make compilation undecidable
-    int8_t in_pure_callback;
-    int8_t in_finalizer;
-    int8_t disable_gc;
+    int16_t in_pure_callback;
+    int16_t in_finalizer;
+    int16_t disable_gc;
     // Counter to disable finalizer **on the current thread**
     int finalizers_inhibited;
     jl_thread_heap_t heap; // this is very large, and the offset is baked into codegen
@@ -262,8 +257,10 @@ typedef struct _jl_tls_states_t {
     int needs_resetstkoflw;
 #else
     void *signal_stack;
+    size_t signal_stack_size;
 #endif
     jl_thread_t system_id;
+    _Atomic(int16_t) suspend_count;
     arraylist_t finalizers;
     jl_gc_page_stack_t page_metadata_allocd;
     jl_gc_page_stack_t page_metadata_buffered;
@@ -333,26 +330,26 @@ void jl_sigint_safepoint(jl_ptls_t tls);
 // This triggers a SegFault when we are in GC
 // Assign it to a variable to make sure the compiler emit the load
 // and to avoid Clang warning for -Wunused-volatile-lvalue
-#define jl_gc_safepoint_(ptls) do {                     \
-        jl_signal_fence();                              \
-        size_t safepoint_load = *ptls->safepoint;       \
-        jl_signal_fence();                              \
-        (void)safepoint_load;                           \
+#define jl_gc_safepoint_(ptls) do {                                            \
+        jl_signal_fence();                                                     \
+        size_t safepoint_load = jl_atomic_load_relaxed(&ptls->safepoint)[0];   \
+        jl_signal_fence();                                                     \
+        (void)safepoint_load;                                                  \
     } while (0)
-#define jl_sigint_safepoint(ptls) do {                  \
-        jl_signal_fence();                              \
-        size_t safepoint_load = ptls->safepoint[-1];    \
-        jl_signal_fence();                              \
-        (void)safepoint_load;                           \
+#define jl_sigint_safepoint(ptls) do {                                         \
+        jl_signal_fence();                                                     \
+        size_t safepoint_load = jl_atomic_load_relaxed(&ptls->safepoint)[-1];  \
+        jl_signal_fence();                                                     \
+        (void)safepoint_load;                                                  \
     } while (0)
 #endif
 STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
                                      int8_t old_state)
 {
     jl_atomic_store_release(&ptls->gc_state, state);
-    // A safe point is required if we transition from GC-safe region to
-    // non GC-safe region.
-    if (old_state && !state)
+    if (state == JL_GC_STATE_SAFE && old_state == 0)
+        jl_gc_safepoint_(ptls);
+    if (state == 0 && old_state == JL_GC_STATE_SAFE)
         jl_gc_safepoint_(ptls);
     return old_state;
 }
@@ -374,11 +371,11 @@ void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE; // th
 #endif
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
-JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);
+JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gc_enable_finalizers_internal(void);
 JL_DLLEXPORT void jl_gc_run_pending_finalizers(struct _jl_task_t *ct);
 extern JL_DLLEXPORT _Atomic(int) jl_gc_have_pending_finalizers;
-JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void);
+JL_DLLEXPORT int8_t jl_gc_is_in_finalizer(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid);
 

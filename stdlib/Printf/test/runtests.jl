@@ -1145,4 +1145,11 @@ end
     @test_throws Printf.InvalidFormatStringError Printf.Format("%z")
 end
 
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Printf))
+end
+
+# issue #52749
+@test @sprintf("%.160g", 1.38e-23) == "1.380000000000000060010582465734078799297660966782642624395399644741944111814291318296454846858978271484375e-23"
+
 end # @testset "Printf"

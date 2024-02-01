@@ -4,13 +4,13 @@
 # Lots of implementation is shared with TaskLocalRNG
 
 """
-    Xoshiro(seed)
+    Xoshiro(seed::Union{Integer, AbstractString})
     Xoshiro()
 
 Xoshiro256++ is a fast pseudorandom number generator described by David Blackman and
 Sebastiano Vigna in "Scrambled Linear Pseudorandom Number Generators",
 ACM Trans. Math. Softw., 2021. Reference implementation is available
-at http://prng.di.unimi.it
+at https://prng.di.unimi.it
 
 Apart from the high speed, Xoshiro has a small memory footprint, making it suitable for
 applications where many different random states need to be held for long time.
@@ -20,6 +20,12 @@ from the parent, and uses SIMD to generate in parallel (i.e. the bulk stream con
 multiple interleaved xoshiro instances).
 The virtual PRNGs are discarded once the bulk request has been serviced (and should cause
 no heap allocations).
+
+If no seed is provided, a randomly generated one is created (using entropy from the system).
+See the [`seed!`](@ref) function for reseeding an already existing `Xoshiro` object.
+
+!!! compat "Julia 1.11"
+    Passing a negative integer seed requires at least Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -191,6 +197,12 @@ endianness and possibly word size.
 
 Using or seeding the RNG of any other task than the one returned by `current_task()`
 is undefined behavior: it will work most of the time, and may sometimes fail silently.
+
+When seeding `TaskLocalRNG()` with [`seed!`](@ref), the passed seed, if any,
+may be any integer.
+
+!!! compat "Julia 1.11"
+    Seeding `TaskLocalRNG()` with a negative integer seed requires at least Julia 1.11.
 """
 struct TaskLocalRNG <: AbstractRNG end
 TaskLocalRNG(::Nothing) = TaskLocalRNG()
@@ -218,8 +230,12 @@ rng_native_52(::TaskLocalRNG) = UInt64
 ## Shared implementation between Xoshiro and TaskLocalRNG
 
 # this variant of setstate! initializes the internal splitmix state, a.k.a. `s4`
-@inline initstate!(x::Union{TaskLocalRNG, Xoshiro}, (s0, s1, s2, s3)::NTuple{4, UInt64}) =
+@inline function initstate!(x::Union{TaskLocalRNG, Xoshiro}, state)
+    length(state) == 4 && eltype(state) == UInt64 ||
+        throw(ArgumentError("initstate! expects a list of 4 `UInt64` values"))
+    s0, s1, s2, s3 = state
     setstate!(x, (s0, s1, s2, s3, 1s0 + 3s1 + 5s2 + 7s3))
+end
 
 copy(rng::Union{TaskLocalRNG, Xoshiro}) = Xoshiro(getstate(rng)...)
 copy!(dst::Union{TaskLocalRNG, Xoshiro}, src::Union{TaskLocalRNG, Xoshiro}) = setstate!(dst, getstate(src))
@@ -227,7 +243,7 @@ copy!(dst::Union{TaskLocalRNG, Xoshiro}, src::Union{TaskLocalRNG, Xoshiro}) = se
 # use a magic (random) number to scramble `h` so that `hash(x)` is distinct from `hash(getstate(x))`
 hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2dda6fa9be % UInt)
 
-function seed!(rng::Union{TaskLocalRNG, Xoshiro})
+function seed!(rng::Union{TaskLocalRNG, Xoshiro}, ::Nothing)
     # as we get good randomness from RandomDevice, we can skip hashing
     rd = RandomDevice()
     s0 = rand(rd, UInt64)
@@ -237,14 +253,9 @@ function seed!(rng::Union{TaskLocalRNG, Xoshiro})
     initstate!(rng, (s0, s1, s2, s3))
 end
 
-function seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::Union{Vector{UInt32}, Vector{UInt64}})
-    c = SHA.SHA2_256_CTX()
-    SHA.update!(c, reinterpret(UInt8, seed))
-    s0, s1, s2, s3 = reinterpret(UInt64, SHA.digest!(c))
-    initstate!(rng, (s0, s1, s2, s3))
-end
+seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed) =
+    initstate!(rng, reinterpret(UInt64, hash_seed(seed)))
 
-seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::Integer) = seed!(rng, make_seed(seed))
 
 @inline function rand(x::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt64})
     s0, s1, s2, s3 = getstate(x)

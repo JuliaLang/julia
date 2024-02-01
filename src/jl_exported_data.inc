@@ -4,8 +4,12 @@
 #define JL_EXPORTED_DATA_POINTERS(XX) \
     XX(jl_abstractarray_type) \
     XX(jl_abstractstring_type) \
+    XX(jl_addrspace_type) \
+    XX(jl_addrspace_typename) \
+    XX(jl_addrspacecore_type) \
     XX(jl_an_empty_string) \
     XX(jl_an_empty_vec_any) \
+    XX(jl_an_empty_memory_any) \
     XX(jl_anytuple_type) \
     XX(jl_anytuple_type_type) \
     XX(jl_any_type) \
@@ -42,11 +46,13 @@
     XX(jl_float16_type) \
     XX(jl_float32_type) \
     XX(jl_float64_type) \
+    XX(jl_bfloat16_type) \
     XX(jl_floatingpoint_type) \
     XX(jl_function_type) \
     XX(jl_binding_type) \
     XX(jl_globalref_type) \
     XX(jl_gotoifnot_type) \
+    XX(jl_enternode_type) \
     XX(jl_gotonode_type) \
     XX(jl_initerror_type) \
     XX(jl_int16_type) \
@@ -63,12 +69,24 @@
     XX(jl_llvmpointer_typename) \
     XX(jl_loaderror_type) \
     XX(jl_main_module) \
+    XX(jl_memory_any_type) \
     XX(jl_memory_exception) \
+    XX(jl_genericmemory_type) \
+    XX(jl_genericmemory_typename) \
+    XX(jl_memory_uint8_type) \
+    XX(jl_memory_uint16_type) \
+    XX(jl_memory_uint32_type) \
+    XX(jl_memory_uint64_type) \
+    XX(jl_memoryref_any_type) \
+    XX(jl_genericmemoryref_type) \
+    XX(jl_genericmemoryref_typename) \
+    XX(jl_memoryref_uint8_type) \
     XX(jl_methoderror_type) \
     XX(jl_method_instance_type) \
     XX(jl_method_match_type) \
     XX(jl_method_type) \
     XX(jl_methtable_type) \
+    XX(jl_missingcodeerror_type) \
     XX(jl_module_type) \
     XX(jl_n_threads_per_pool) \
     XX(jl_namedtuple_type) \
@@ -129,6 +147,7 @@
     XX(jl_weakref_type) \
     XX(jl_libdl_module) \
     XX(jl_libdl_dlopen_func) \
+    XX(jl_precompilable_error) \
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \

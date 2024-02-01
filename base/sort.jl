@@ -5,8 +5,7 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit,
-    IteratorSize, HasShape, IsInfinite, tail
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
 
 import Base:
     sort,
@@ -91,7 +90,15 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    _sort!(v, InitialOptimizations(ScratchQuickSort(k)), o, (;))
+    # TODO move k from `alg` to `kw`
+    # Don't perform InitialOptimizations before Bracketing. The optimizations take O(n)
+    # time and so does the whole sort. But do perform them before recursive calls because
+    # that can cause significant speedups when the target range is large so the runtime is
+    # dominated by k log k and the optimizations runs in O(k) time.
+    _sort!(v, BoolOptimization(
+        Small{12}( # Very small inputs should go straight to insertion sort
+            BracketedSort(k))),
+        o, (;))
     maybeview(v, k)
 end
 
@@ -165,7 +172,7 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
     partialsort!(copymutable(v), k; kws...)
 
 # reference on sorted binary search:
-#   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
+#   https://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
 
 # index of the first value of vector a that is greater than or equivalent to x;
 # returns lastindex(v)+1 if x is greater than all values in v.
@@ -225,7 +232,10 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
+
+const FastRangeOrderings = Union{DirectOrdering,Lt{typeof(<)},ReverseOrdering{Lt{typeof(<)}}}
+
+function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if lt(o, x, f)
@@ -238,7 +248,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering):
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if !lt(o, f, x)
@@ -251,7 +261,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if lt(o, x, f)
@@ -259,7 +269,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     elseif h == 0 || !lt(o, x, l)
         length(a)
     else
-        if o isa ForwardOrdering
+        if !(o isa ReverseOrdering)
             fld(floor(Integer, x) - f, h) + 1
         else
             fld(ceil(Integer, x) - f, h) + 1
@@ -267,7 +277,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if !lt(o, f, x)
@@ -275,7 +285,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     elseif h == 0 || lt(o, l, x)
         length(a) + 1
     else
-        if o isa ForwardOrdering
+        if !(o isa ReverseOrdering)
             cld(ceil(Integer, x) - f, h) + 1
         else
             cld(floor(Integer, x) - f, h) + 1
@@ -283,7 +293,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     end
 end
 
-searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
+searchsorted(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings) =
     searchsortedfirst(a, x, o) : searchsortedlast(a, x, o)
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
@@ -526,6 +536,34 @@ internal or recursive calls.
 """
 function _sort! end
 
+# TODO: delete this optimization when views have no overhead.
+const UnwrappableSubArray = SubArray{T, 1, <:AbstractArray{T}, <:Tuple{AbstractUnitRange, Vararg{Number}}, true} where T
+"""
+    SubArrayOptimization(next) <: Algorithm
+
+Unwrap certain known SubArrays because views have a performance overhead 😢
+
+Specifically, unwraps some instances of the type
+
+    $UnwrappableSubArray
+"""
+struct SubArrayOptimization{T <: Algorithm} <: Algorithm
+    next::T
+end
+
+_sort!(v::AbstractVector, a::SubArrayOptimization, o::Ordering, kw) = _sort!(v, a.next, o, kw)
+function _sort!(v::UnwrappableSubArray, a::SubArrayOptimization, o::Ordering, kw)
+    @getkw lo hi
+    # @assert v.stride1 == 1
+    parent = v.parent
+    if parent isa Array && !(parent isa Vector) && hi - lo < 100
+        # vec(::Array{T, ≠1}) allocates and is therefore somewhat expensive.
+        # We don't want that for small inputs.
+        _sort!(v, a.next, o, kw)
+    else
+        _sort!(vec(parent), a.next, o, (;kw..., lo = lo + v.offset1, hi = hi + v.offset1))
+    end
+end
 
 """
     MissingOptimization(next) <: Algorithm
@@ -1033,7 +1071,7 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer
         v::AbstractVector, rev::Bool, pivot_dest::AbstractVector, pivot_index_offset::Integer)
     # Ideally we would use `pivot_index = rand(lo:hi)`, but that requires Random.jl
     # and would mutate the global RNG in sorting.
-    pivot_index = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + lo
+    pivot_index = mod(hash(lo), lo:hi)
     @inbounds begin
         pivot = v[pivot_index]
         while lo < pivot_index
@@ -1105,6 +1143,195 @@ function _sort!(v::AbstractVector, a::ScratchQuickSort, o::Ordering, kw;
     swap && copyto!(v, lo, t, lo+offset, hi-lo+1)
     rev && reverse!(v, lo, hi)
     _sort!(v, a.next, o, (;kw..., lo, hi))
+end
+
+
+"""
+    BracketedSort(target[, next::Algorithm]) <: Algorithm
+
+Perform a partialsort for the elements that fall into the indices specified by the `target`
+using BracketedSort with the `next` algorithm for subproblems.
+
+BracketedSort takes a random* sample of the input, estimates the quantiles of the input
+using the quantiles of the sample to find signposts that almost certainly bracket the target
+values, filters the value in the input that fall between the signpost values to the front of
+the input, and then, if that "almost certainly" turned out to be true, finds the target
+within the small chunk that are, by value, between the signposts and now by position, at the
+front of the vector. On small inputs or when target is close to the size of the input,
+BracketedSort falls back to the `next` algorithm directly. Otherwise, BracketedSort uses the
+`next` algorithm only to compute quantiles of the sample and to find the target within the
+small chunk.
+
+## Performance
+
+If the `next` algorithm has `O(n * log(n))` runtime and the input is not pathological then
+the runtime of this algorithm is `O(n + k * log(k))` where `n` is the length of the input
+and `k` is `length(target)`. On pathological inputs the asymptotic runtime is the same as
+the runtime of the `next` algorithm.
+
+BracketedSort itself does not allocate. If `next` is in-place then BracketedSort is also
+in-place. If `next` is not in place, and it's space usage increases monotonically with input
+length then BracketedSort's maximum space usage will never be more than the space usage
+of `next` on the input BracketedSort receives. For large nonpathological inputs and targets
+substantially smaller than the size of the input, BracketedSort's maximum memory usage will
+be much less than `next`'s. If the maximum additional space usage of `next` scales linearly
+then for small k the average* maximum additional space usage of BracketedSort will be
+`O(n^(2.3/3))`.
+
+By default, BracketedSort uses the `O(n)` space and `O(n + k log k)` runtime
+`ScratchQuickSort` algorithm recursively.
+
+*Sorting is unable to depend on Random.jl because Random.jl depends on sorting.
+ Consequently, we use `hash` as a source of randomness. The average runtime guarantees
+ assume that `hash(x::Int)` produces a random result. However, as this randomization is
+ deterministic, if you try hard enough you can find inputs that consistently reach the
+ worst case bounds. Actually constructing such inputs is an exercise left to the reader.
+ Have fun :).
+
+Characteristics:
+  * *unstable*: does not preserve the ordering of elements that compare equal
+    (e.g. "a" and "A" in a sort of letters that ignores case).
+  * *in-place* in memory if the `next` algorithm is in-place.
+  * *estimate-and-filter*: strategy
+  * *linear runtime* if `length(target)` is constant and `next` is reasonable
+  * *n + k log k* worst case runtime if `next` has that runtime.
+  * *pathological inputs* can significantly increase constant factors.
+"""
+struct BracketedSort{T, F} <: Algorithm
+    target::T
+    get_next::F
+end
+
+# TODO: this composition between BracketedSort and ScratchQuickSort does not bring me joy
+BracketedSort(k) = BracketedSort(k, k -> InitialOptimizations(ScratchQuickSort(k)))
+
+function bracket_kernel!(v::AbstractVector, lo, hi, lo_signpost, hi_signpost, o)
+    i = 0
+    count_below = 0
+    checkbounds(v, lo:hi)
+    for j in lo:hi
+        x = @inbounds v[j]
+        a = lo_signpost !== nothing && lt(o, x, lo_signpost)
+        b = hi_signpost === nothing || !lt(o, hi_signpost, x)
+        count_below += a
+        # if a != b # This branch is almost never taken, so making it branchless is bad.
+        #     @inbounds v[i], v[j] = v[j], v[i]
+        #     i += 1
+        # end
+        c = a != b # JK, this is faster.
+        k = i * c + j
+        # Invariant: @assert firstindex(v) ≤ lo ≤ i + j ≤ k ≤ j ≤ hi ≤ lastindex(v)
+        @inbounds v[j], v[k] = v[k], v[j]
+        i += c - 1
+    end
+    count_below, i+hi
+end
+
+function move!(v, target, source)
+    # This function never dominates runtime—only add `@inbounds` if you can demonstrate a
+    # performance improvement. And if you do, also double check behavior when `target`
+    # is out of bounds.
+    @assert length(target) == length(source)
+    if length(target) == 1 || isdisjoint(target, source)
+        for (i, j) in zip(target, source)
+            v[i], v[j] = v[j], v[i]
+        end
+    else
+        @assert minimum(source) <= minimum(target)
+        reverse!(v, minimum(source), maximum(target))
+        reverse!(v, minimum(target), maximum(target))
+    end
+end
+
+function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
+    @getkw lo hi scratch
+    # TODO for further optimization: reuse scratch between trials better, from signpost
+    # selection to recursive calls, and from the fallback (but be aware of type stability,
+    # especially when sorting IEEE floats.
+
+    # We don't need to bounds check target because that is done higher up in the stack
+    # However, we cannot assume the target is inbounds.
+    lo < hi || return scratch
+    ln = hi - lo + 1
+
+    # This is simply a precomputed short-circuit to avoid doing scalar math for small inputs.
+    # It does not change dispatch at all.
+    ln < 260 && return _sort!(v, a.get_next(a.target), o, kw)
+
+    target = a.target
+    k = cbrt(ln)
+    k2 = round(Int, k^2)
+    k2ln = k2/ln
+    offset = .15k*top_set_bit(k2) # TODO for further optimization: tune this
+    lo_signpost_i, hi_signpost_i =
+        (floor(Int, (tar - lo) * k2ln + lo + off) for (tar, off) in
+            ((minimum(target), -offset), (maximum(target), offset)))
+    lastindex_sample = lo+k2-1
+    expected_middle_ln = (min(lastindex_sample, hi_signpost_i) - max(lo, lo_signpost_i) + 1) / k2ln
+    # This heuristic is complicated because it fairly accurately reflects the runtime of
+    # this algorithm which is necessary to get good dispatch when both the target is large
+    # and the input are large.
+    # expected_middle_ln is a float and k2 is significantly below typemax(Int), so this will
+    # not overflow:
+    # TODO move target from alg to kw to avoid this ickyness:
+    ln <= 130 + 2k2 + 2expected_middle_ln && return _sort!(v, a.get_next(a.target), o, kw)
+
+    # We store the random sample in
+    #     sample = view(v, lo:lo+k2)
+    # but views are not quite as fast as using the input array directly,
+    # so we don't actually construct this view at runtime.
+
+    # TODO for further optimization: handle lots of duplicates better.
+    # Right now lots of duplicates rounds up when it could use some super fast optimizations
+    # in some cases.
+    # e.g.
+    #
+    # Target:                      |----|
+    # Sorted input: 000000000000000000011111112222223333333333
+    #
+    # Will filter all zeros and ones to the front when it could just take the first few
+    # it encounters. This optimization would be especially potent when `allequal(ans)` and
+    # equal elements are egal.
+
+    # 3 random trials should typically give us 0.99999 reliability; we can assume
+    # the input is pathological and abort to fallback if we fail three trials.
+    seed = hash(ln, Int === Int64 ? 0x85eb830e0216012d : 0xae6c4e15)
+    for attempt in 1:3
+        seed = hash(attempt, seed)
+        for i in lo:lo+k2-1
+            j = mod(hash(i, seed), i:hi) # TODO for further optimization: be sneaky and remove this division
+            v[i], v[j] = v[j], v[i]
+        end
+        count_below, lastindex_middle = if lo_signpost_i <= lo && lastindex_sample <= hi_signpost_i
+            # The heuristics higher up in this function that dispatch to the `next`
+            # algorithm should prevent this from happening.
+            # Specifically, this means that expected_middle_ln == ln, so
+            # ln <= ... + 2.0expected_middle_ln && return ...
+            # will trigger.
+            @assert false
+            # But if it does happen, the kernel reduces to
+            0, hi
+        elseif lo_signpost_i <= lo
+            _sort!(v, a.get_next(hi_signpost_i), o, (;kw..., hi=lastindex_sample))
+            bracket_kernel!(v, lo, hi, nothing, v[hi_signpost_i], o)
+        elseif lastindex_sample <= hi_signpost_i
+            _sort!(v, a.get_next(lo_signpost_i), o, (;kw..., hi=lastindex_sample))
+            bracket_kernel!(v, lo, hi, v[lo_signpost_i], nothing, o)
+        else
+            # TODO for further optimization: don't sort the middle elements
+            _sort!(v, a.get_next(lo_signpost_i:hi_signpost_i), o, (;kw..., hi=lastindex_sample))
+            bracket_kernel!(v, lo, hi, v[lo_signpost_i], v[hi_signpost_i], o)
+        end
+        target_in_middle = target .- count_below
+        if lo <= minimum(target_in_middle) && maximum(target_in_middle) <= lastindex_middle
+            scratch = _sort!(v, a.get_next(target_in_middle), o, (;kw..., hi=lastindex_middle))
+            move!(v, target, target_in_middle)
+            return scratch
+        end
+        # This line almost never runs.
+    end
+    # This line only runs on pathological inputs. Make sure it's covered by tests :)
+    _sort!(v, a.get_next(target), o, kw)
 end
 
 
@@ -1221,14 +1448,16 @@ future versions of Julia.
 If `next` is stable, then `InitialOptimizations(next)` is also stable.
 
 The specific optimizations attempted by `InitialOptimizations` are
-[`MissingOptimization`](@ref), [`BoolOptimization`](@ref), dispatch to
-[`InsertionSort`](@ref) for inputs with `length <= 10`, and [`IEEEFloatOptimization`](@ref).
+[`SubArrayOptimization`](@ref), [`MissingOptimization`](@ref), [`BoolOptimization`](@ref),
+dispatch to [`InsertionSort`](@ref) for inputs with `length <= 10`, and
+[`IEEEFloatOptimization`](@ref).
 """
-InitialOptimizations(next) = MissingOptimization(
-    BoolOptimization(
-        Small{10}(
-            IEEEFloatOptimization(
-                next))))
+InitialOptimizations(next) = SubArrayOptimization(
+    MissingOptimization(
+        BoolOptimization(
+            Small{10}(
+                IEEEFloatOptimization(
+                    next)))))
 """
     DEFAULT_STABLE
 
@@ -1296,7 +1525,7 @@ Next, we [`ConsiderCountingSort`](@ref). If the range the input is small compare
 length, we apply [`CountingSort`](@ref).
 
 Next, we [`ConsiderRadixSort`](@ref). This is similar to the dispatch to counting sort,
-but we conside rthe number of _bits_ in the range, rather than the range itself.
+but we consider the number of _bits_ in the range, rather than the range itself.
 Consequently, we apply [`RadixSort`](@ref) for any reasonably long inputs that reach this
 stage.
 
@@ -1364,7 +1593,7 @@ algorithms).
 Elements are first transformed with the function `by` and then compared
 according to either the function `lt` or the ordering `order`. Finally, the
 resulting order is reversed if `rev=true` (this preserves forward stability:
-elements that compare equal are not reversed). The current implemention applies
+elements that compare equal are not reversed). The current implementation applies
 the `by` transformation before each comparison rather than once per element.
 
 Passing an `lt` other than `isless` along with an `order` other than
@@ -1471,11 +1700,6 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
-Uses `Base.copymutable` to support immutable collections and iterables.
-
-!!! compat "Julia 1.10"
-    `sort` of arbitrary iterables requires at least Julia 1.10.
-
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2];
@@ -1493,39 +1717,7 @@ julia> v
  2
 ```
 """
-function sort(v; kws...)
-    size = IteratorSize(v)
-    size == HasShape{0}() && throw(ArgumentError("$v cannot be sorted"))
-    size == IsInfinite() && throw(ArgumentError("infinite iterator $v cannot be sorted"))
-    sort!(copymutable(v); kws...)
-end
-sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
-sort(::AbstractString; kws...) =
-    throw(ArgumentError("sort(::AbstractString) is not supported"))
-sort(::Tuple; kws...) =
-    throw(ArgumentError("sort(::Tuple) is only supported for NTuples"))
-
-function sort(x::NTuple{N}; lt::Function=isless, by::Function=identity,
-              rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) where N
-    o = ord(lt,by,rev,order)
-    if N > 9
-        v = sort!(copymutable(x), DEFAULT_STABLE, o)
-        tuple((v[i] for i in 1:N)...)
-    else
-        _sort(x, o)
-    end
-end
-_sort(x::Union{NTuple{0}, NTuple{1}}, o::Ordering) = x
-function _sort(x::NTuple, o::Ordering)
-    a, b = Base.IteratorsMD.split(x, Val(length(x)>>1))
-    merge(_sort(a, o), _sort(b, o), o)
-end
-merge(x::NTuple, y::NTuple{0}, o::Ordering) = x
-merge(x::NTuple{0}, y::NTuple, o::Ordering) = y
-merge(x::NTuple{0}, y::NTuple{0}, o::Ordering) = x # Method ambiguity
-merge(x::NTuple, y::NTuple, o::Ordering) =
-    (lt(o, y[1], x[1]) ? (y[1], merge(x, tail(y), o)...) : (x[1], merge(tail(x), y, o)...))
-
+sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
@@ -1583,6 +1775,8 @@ v[ix[k]] == partialsort(v, k)
 
 The return value is the `k`th element of `ix` if `k` is an integer, or view into `ix` if `k` is
 a range.
+
+$(Base._DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -1707,6 +1901,8 @@ end
 
 Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.
 `ix` is initialized to contain the values `LinearIndices(A)`.
+
+$(Base._DOCS_ALIASING_WARNING)
 
 !!! compat "Julia 1.9"
     The method accepting `dims` requires at least Julia 1.9.
@@ -1897,24 +2093,37 @@ function sort!(A::AbstractArray{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward, # TODO stop eagerly over-allocating.
-               scratch::Union{Vector{T}, Nothing}=Vector{T}(undef, size(A, dims))) where T
-    __sort!(A, Val(dims), maybe_apply_initial_optimizations(alg), ord(lt, by, rev, order), scratch)
-end
-function __sort!(A::AbstractArray{T}, ::Val{K},
-                alg::Algorithm,
-                order::Ordering,
-                scratch::Union{Vector{T}, Nothing}) where {K,T}
+               scratch::Union{Vector{T}, Nothing}=size(A, dims) < 10 ? nothing : Vector{T}(undef, size(A, dims))) where T
     nd = ndims(A)
+    1 <= dims <= nd || throw(ArgumentError("dimension out of range"))
+    alg2 = maybe_apply_initial_optimizations(alg)
+    order2 = ord(lt, by, rev, order)
+    foreach(ntuple(Val, nd)) do d
+        get_value(d) == dims || return
+        # We assume that an Integer between 1 and nd must be equal to one of the
+        # values 1:nd. If this assumption is false, then what's an integer? and
+        # also sort! will silently do nothing.
 
-    1 <= K <= nd || throw(ArgumentError("dimension out of range"))
-
-    remdims = ntuple(i -> i == K ? 1 : axes(A, i), nd)
-    for idx in CartesianIndices(remdims)
-        Av = view(A, ntuple(i -> i == K ? Colon() : idx[i], nd)...)
-        sort!(Av; alg, order, scratch)
+        idxs = CartesianIndices(ntuple(i -> i == get_value(d) ? 1 : axes(A, i), ndims(A)))
+        get_view(idx) = view(A, ntuple(i -> i == get_value(d) ? Colon() : idx[i], ndims(A))...)
+        if d == Val(1) || size(A, get_value(d)) < 30
+            for idx in idxs
+                sort!(get_view(idx); alg=alg2, order=order2, scratch)
+            end
+        else
+            v = similar(get_view(first(idxs)))
+            for idx in idxs
+                vw = get_view(idx)
+                v .= vw
+                sort!(v; alg=alg2, order=order2, scratch)
+                vw .= v
+            end
+        end
+        A
     end
     A
 end
+get_value(::Val{x}) where x = x
 
 
 ## uint mapping to allow radix sorting primitives other than UInts ##

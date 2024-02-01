@@ -406,3 +406,23 @@ let a = Base.NamedTuple{(:a, :b), Tuple{Any, Any}}((1, 2)), b = Base.NamedTuple{
     @test typeof(Base.merge(a, b)) == Base.NamedTuple{(:a, :b), Tuple{Any, Float64}}
     @test typeof(Base.structdiff(a, b)) == Base.NamedTuple{(:a,), Tuple{Any}}
 end
+
+function mergewith51009(combine, a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
+    names = Base.merge_names(an, bn)
+    NamedTuple{names}(ntuple(Val{nfields(names)}()) do i
+                          n = getfield(names, i)
+                          if Base.sym_in(n, an)
+                              if Base.sym_in(n, bn)
+                                  combine(getfield(a, n), getfield(b, n))
+                              else
+                                  getfield(a, n)
+                              end
+                          else
+                              getfield(b, n)
+                          end
+                      end)
+end
+let c = (a=1, b=2),
+    d = (b=3, c=(d=1,))
+    @test @inferred(mergewith51009((x,y)->y, c, d)) === (a = 1, b = 3, c = (d = 1,))
+end

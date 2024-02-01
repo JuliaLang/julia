@@ -19,6 +19,10 @@ environments provide a way to access documentation directly:
 - In [Juno](https://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
   under the cursor.
 
+
+`Docs.hasdoc(module, name)::Bool` tells whether a name has a docstring. `Docs.undocumented_names(module; all)`
+returns the undocumented names in a module.
+
 ## Writing Documentation
 
 Julia enables package developers and users to document functions, types and other objects easily
@@ -310,8 +314,9 @@ end
 @doc "`subtract(a,b)` subtracts `b` from `a`" subtract
 ```
 
-Documentation in non-toplevel blocks, such as `begin`, `if`, `for`, and `let`, should be
-added to the documentation system via `@doc` as well. For example:
+Documentation in non-toplevel blocks, such as `begin`, `if`, `for`, `let`, and
+inner constructors, should be added to the documentation system via `@doc` as
+well. For example:
 
 ```julia
 if condition()
@@ -460,11 +465,17 @@ struct T
     x
     "y"
     y
+
+    @doc "Inner constructor"
+    function T()
+        new(...)
+    end
 end
 ```
 
-Adds docstring `"..."` to type `T`, `"x"` to field `T.x` and `"y"` to field `T.y`. Also applicable
-to `mutable struct` types.
+Adds docstring `"..."` to type `T`, `"x"` to field `T.x`, `"y"` to field `T.y`,
+and `"Inner constructor"` to the inner constructor `T()`. Also applicable to
+`mutable struct` types.
 
 ### Modules
 

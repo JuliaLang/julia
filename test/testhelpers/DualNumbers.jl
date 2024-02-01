@@ -41,6 +41,6 @@ Base.sqrt(x::Dual) = Dual(sqrt(x.val), x.eps/(2sqrt(x.val)))
 Base.isless(x::Dual, y::Dual) = x.val < y.val
 Base.isless(x::Real, y::Dual) = x < y.val
 Base.isinf(x::Dual) = isinf(x.val) & isfinite(x.eps)
-Base.real(x::Dual) = x # since we curently only consider Dual{<:Real}
+Base.real(x::Dual) = x # since we currently only consider Dual{<:Real}
 
 end # module

@@ -38,7 +38,7 @@ end
 #        false, false, false, false
 #    ))
 #
-#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), Int32(0), Int32(0))
+#    NullLineInfo = Core.LineInfoNode(Main, Symbol(""), Symbol(""), Int32(0), UInt32(0))
 #    Compiler.run_passes(ci, 1, [NullLineInfo])
 #    # XXX: missing @test
 #end
@@ -143,7 +143,7 @@ end
 @test f32579(0, false) === false
 
 # Test for bug caused by renaming blocks improperly, related to PR #32145
-let ci = make_ci([
+let code = Any[
         # block 1
         Expr(:boundscheck),
         Core.Compiler.GotoIfNot(SSAValue(1), 6),
@@ -162,34 +162,34 @@ let ci = make_ci([
         Core.Compiler.ReturnNode(Core.SSAValue(9)),
         # block 6
         Core.Compiler.ReturnNode(Core.SSAValue(9))
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code)
     ir = Core.Compiler.compact!(ir, true)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # Test that the verifier doesn't choke on cglobals (which aren't linearized)
-let ci = make_ci([
+let code = Any[
         Expr(:call, GlobalRef(Main, :cglobal),
                     Expr(:call, Core.tuple, :(:c)), Nothing),
                     Core.Compiler.ReturnNode()
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # Test that GlobalRef in value position is non-canonical
-let ci = make_ci([
+let code = Any[
         Expr(:call, GlobalRef(Main, :something_not_defined_please))
         ReturnNode(SSAValue(1))
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code; verify=false)
     ir = Core.Compiler.compact!(ir, true)
     @test_throws ErrorException Core.Compiler.verify_ir(ir, false)
 end
 
 # Issue #29107
-let ci = make_ci([
+let code = Any[
         # Block 1
         Core.Compiler.GotoNode(6),
         # Block 2
@@ -204,8 +204,8 @@ let ci = make_ci([
         Core.Compiler.GotoNode(2),
         # Block 3
         Core.Compiler.ReturnNode(1000)
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code)
     ir = Core.Compiler.compact!(ir, true)
     # Make sure that if there is a call to `something` (block 2 should be
     # removed entirely with working DCE), it doesn't use any SSA values that
@@ -220,9 +220,8 @@ let ci = make_ci([
     end
 end
 
-# Make sure dead blocks that are removed are not still referenced in live phi
-# nodes
-let ci = make_ci([
+# Make sure dead blocks that are removed are not still referenced in live phi nodes
+let code = Any[
         # Block 1
         Core.Compiler.GotoNode(3),
         # Block 2 (no predecessors)
@@ -230,8 +229,8 @@ let ci = make_ci([
         # Block 3
         Core.PhiNode(Int32[1, 2], Any[100, 200]),
         Core.Compiler.ReturnNode(Core.SSAValue(3))
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code; verify=false)
     ir = Core.Compiler.compact!(ir, true)
     @test Core.Compiler.verify_ir(ir) == nothing
 end
@@ -338,7 +337,7 @@ let # https://github.com/JuliaLang/julia/issues/42258
         code_typed(Core.Compiler.setindex!, (Core.Compiler.UseRef,Core.Compiler.NewSSAValue); optimize=true)
         """
     cmd = `$(Base.julia_cmd()) -g 2 -e $code`
-    stderr = Base.BufferStream()
+    stderr = IOBuffer()
     @test success(pipeline(Cmd(cmd); stdout, stderr))
     @test readchomp(stderr) == ""
 end
@@ -424,7 +423,7 @@ let
         Expr(:enter, 11),
         Expr(:call, :+, SSAValue(3), 1),
         Expr(:throw_undef_if_not, :expected, false),
-        Expr(:leave, 1),
+        Expr(:leave, Core.SSAValue(1)),
         Expr(:(=), SSAValue(1), Expr(:call, :+, SSAValue(3), 1)),
         UpsilonNode(),
         UpsilonNode(SSAValue(2)),
@@ -550,25 +549,27 @@ import Core.Compiler: NewInstruction, insert_node!
 let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         a^b
     end |> only |> first
-    @test length(ir.stmts) == 2
-    @test Meta.isexpr(ir.stmts[1][:stmt], :invoke)
+    nstmts = length(ir.stmts)
+    invoke_idx = findfirst(@nospecialize(stmt)->Meta.isexpr(stmt, :invoke), ir.stmts.stmt)
+    @test invoke !== nothing
 
-    newssa = insert_node!(ir, SSAValue(1), NewInstruction(Expr(:call, println, SSAValue(1)), Nothing), #=attach_after=#true)
+    invoke_ssa = SSAValue(invoke_idx)
+    newssa = insert_node!(ir, invoke_ssa, NewInstruction(Expr(:call, println, invoke_ssa), Nothing), #=attach_after=#true)
     newssa = insert_node!(ir, newssa, NewInstruction(Expr(:call, println, newssa), Nothing), #=attach_after=#true)
 
     ir = Core.Compiler.compact!(ir)
-    @test length(ir.stmts) == 4
-    @test Meta.isexpr(ir.stmts[1][:stmt], :invoke)
-    call1 = ir.stmts[2][:stmt]
+    @test length(ir.stmts) == nstmts + 2
+    @test Meta.isexpr(ir.stmts[invoke_idx][:stmt], :invoke)
+    call1 = ir.stmts[invoke_idx+1][:stmt]
     @test iscall((ir,println), call1)
-    @test call1.args[2] === SSAValue(1)
-    call2 = ir.stmts[3][:stmt]
+    @test call1.args[2] === invoke_ssa
+    call2 = ir.stmts[invoke_idx+2][:stmt]
     @test iscall((ir,println), call2)
-    @test call2.args[2] === SSAValue(2)
+    @test call2.args[2] === SSAValue(invoke_idx+1)
 end
 
 # Issue #50379 - insert_node!(::IncrementalCompact, ...) at end of basic block
-let ci = make_ci([
+let code = Any[
         # block 1
         #= %1: =# Expr(:boundscheck),
         #= %2: =# Core.Compiler.GotoIfNot(SSAValue(1), 4),
@@ -577,8 +578,8 @@ let ci = make_ci([
         # block 3
         #= %4: =# Core.PhiNode(),
         #= %5: =# Core.Compiler.ReturnNode(),
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code)
 
     # Insert another call at end of "block 2"
     compact = Core.Compiler.IncrementalCompact(ir)
@@ -596,11 +597,11 @@ let ci = make_ci([
 end
 
 # compact constant PiNode
-let ci = make_ci(Any[
+let code = Any[
         PiNode(0.0, Const(0.0))
         ReturnNode(SSAValue(1))
-    ])
-    ir = Core.Compiler.inflate_ir(ci)
+    ]
+    ir = make_ircode(code)
     ir = Core.Compiler.compact!(ir)
     @test fully_eliminated(ir)
 end
@@ -609,26 +610,23 @@ end
 let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         a^b
     end |> only |> first
-    invoke_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
-        Meta.isexpr(x, :invoke)
-    end
+    invoke_idx = findfirst(@nospecialize(stmt)->Meta.isexpr(stmt, :invoke), ir.stmts.stmt)
     @test invoke_idx !== nothing
     invoke_expr = ir.stmts.stmt[invoke_idx]
+    invoke_ssa = SSAValue(invoke_idx)
 
     # effect-ful node
     let compact = Core.Compiler.IncrementalCompact(Core.Compiler.copy(ir))
-        insert_node!(compact, SSAValue(1), NewInstruction(Expr(:call, println, SSAValue(1)), Nothing), #=attach_after=#true)
+        insert_node!(compact, invoke_ssa, NewInstruction(Expr(:call, println, invoke_ssa), Nothing), #=attach_after=#true)
         state = Core.Compiler.iterate(compact)
         while state !== nothing
             state = Core.Compiler.iterate(compact, state[2])
         end
         ir = Core.Compiler.finish(compact)
-        new_invoke_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
-            x == invoke_expr
-        end
+        new_invoke_idx = findfirst(@nospecialize(stmt)->stmt==invoke_expr, ir.stmts.stmt)
         @test new_invoke_idx !== nothing
-        new_call_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
-            iscall((ir,println), x) && x.args[2] === SSAValue(invoke_idx)
+        new_call_idx = findfirst(ir.stmts.stmt) do @nospecialize(stmt)
+            iscall((ir,println), stmt) && stmt.args[2] === SSAValue(new_invoke_idx)
         end
         @test new_call_idx !== nothing
         @test new_call_idx == new_invoke_idx+1
@@ -636,7 +634,7 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
 
     # effect-free node
     let compact = Core.Compiler.IncrementalCompact(Core.Compiler.copy(ir))
-        insert_node!(compact, SSAValue(1), NewInstruction(Expr(:call, GlobalRef(Base, :add_int), SSAValue(1), SSAValue(1)), Int), #=attach_after=#true)
+        insert_node!(compact, invoke_ssa, NewInstruction(Expr(:call, GlobalRef(Base, :add_int), invoke_ssa, invoke_ssa), Int), #=attach_after=#true)
         state = Core.Compiler.iterate(compact)
         while state !== nothing
             state = Core.Compiler.iterate(compact, state[2])
@@ -644,12 +642,10 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         ir = Core.Compiler.finish(compact)
 
         ir = Core.Compiler.finish(compact)
-        new_invoke_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
-            x == invoke_expr
-        end
+        new_invoke_idx = findfirst(@nospecialize(stmt)->stmt==invoke_expr, ir.stmts.stmt)
         @test new_invoke_idx !== nothing
         new_call_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
-            iscall((ir,Base.add_int), x) && x.args[2] === SSAValue(invoke_idx)
+            iscall((ir,Base.add_int), x) && x.args[2] === SSAValue(new_invoke_idx)
         end
         @test new_call_idx === nothing # should be deleted during the compaction
     end

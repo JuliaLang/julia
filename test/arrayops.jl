@@ -115,7 +115,10 @@ end
         @test convert(Array{Int,1}, r) == [2,3,4]
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,4]
-        @test Base.unsafe_convert(Ptr{Int}, r) == Base.unsafe_convert(Ptr{Int}, s)
+        let rc = Base.cconvert(Ptr{Int}, r), rs = Base.cconvert(Ptr{Int}, s)
+            @test rc == rs
+            @test Base.unsafe_convert(Ptr{Int}, rc) == Base.unsafe_convert(Ptr{Int}, rs)
+        end
         @test isa(r, StridedArray)  # issue #22411
     end
     @testset "linearslow" begin
@@ -131,6 +134,7 @@ end
         @test convert(Array{Int,1}, r) == [2,3,5]
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,5]
+        # @test_throws ErrorException Base.cconvert(Ptr{Int}, r) broken=true
         @test_throws ErrorException Base.unsafe_convert(Ptr{Int}, r)
         r[2] = -1
         @test a[3] == -1
@@ -736,6 +740,9 @@ end
 
     v = [1,2,3]
     @test permutedims(v) == [1 2 3]
+
+    zd = fill(0)
+    @test permutedims(zd, ()) == zd
 
     x = PermutedDimsArray([1 2; 3 4], (2, 1))
     @test size(x) == (2, 2)
@@ -1442,6 +1449,15 @@ end
     @test sortslices(B, dims=(1,3)) == B
 end
 
+@testset "sortslices inference (#52019)" begin
+    x = rand(3, 2)
+    @inferred sortslices(x, dims=1)
+    @inferred sortslices(x, dims=(2,))
+    x = rand(1, 2, 3)
+    @inferred sortslices(x, dims=(1,2))
+    @inferred sortslices(x, dims=3, by=sum)
+end
+
 @testset "fill" begin
     @test fill!(Float64[1.0], -0.0)[1] === -0.0
     A = fill(1.,3,3)
@@ -1782,6 +1798,32 @@ end
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
     @test prepend!([1,2], OffsetArray([9,8], (-3,))) == [9,8,1,2]
+
+    # Error recovery
+    A = [1, 2]
+    @test_throws MethodError append!(A, [1, 2, "hi"])
+    @test A == [1, 2, 1, 2]
+
+    oA = OffsetVector(A, 0:3)
+    @test_throws InexactError append!(oA, [1, 2, 3.01])
+    @test oA == OffsetVector([1, 2, 1, 2, 1, 2], 0:5)
+
+    @test_throws InexactError append!(A, (x for x in [1, 2, 3.1]))
+    @test A == [1, 2, 1, 2, 1, 2, 1, 2]
+
+    @test_throws InexactError append!(A, (x for x in [1, 2, 3.1] if isfinite(x)))
+    @test A == [1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+
+    @test_throws MethodError prepend!(A, [1, 2, "hi"])
+    @test A == [2, 1, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+
+    A = [1, 2]
+    @test_throws InexactError prepend!(A, (x for x in [1, 2, 3.1]))
+    @test A == [2, 1, 1, 2]
+
+    A = [1, 2]
+    @test_throws InexactError prepend!(A, (x for x in [1, 2, 3.1] if isfinite(x)))
+    @test A == [2, 1, 1, 2]
 end
 
 let A = [1,2]
@@ -2124,6 +2166,8 @@ R = CartesianIndices((3,0))
     @test @inferred(eachindex(Base.IndexLinear(), a, b)) == 1:4
     @test @inferred(eachindex(a, b)) == CartesianIndices((2,2))
     @test @inferred(eachindex(a, a)) == 1:4
+    @test @inferred(eachindex(a, a, a)) == 1:4
+    @test @inferred(eachindex(a, a, b)) == CartesianIndices((2,2))
     @test_throws DimensionMismatch eachindex(a, rand(3,3))
     @test_throws DimensionMismatch eachindex(b, rand(3,3))
 end
@@ -2724,7 +2768,7 @@ end
 end
 
 @testset "accumulate, accumulate!" begin
-    @test accumulate(+, [1,2,3]) == [1, 3, 6]
+    @test accumulate(+, [1, 2, 3]) == [1, 3, 6]
     @test accumulate(min, [1 2; 3 4], dims=1) == [1 2; 1 2]
     @test accumulate(max, [1 2; 3 0], dims=2) == [1 2; 3 3]
     @test accumulate(+, Bool[]) == Int[]
@@ -2741,12 +2785,15 @@ end
     @test accumulate(min, [1 0; 0 1], dims=1) == [1 0; 0 0]
     @test accumulate(min, [1 0; 0 1], dims=2) == [1 0; 0 0]
 
+    @test accumulate(+, [1, 2, 3], dims=1, init=1) == [2, 4, 7]
+    @test accumulate(*, [1, 4, 2], dims=1, init=2) == [2, 8, 16]
+
     @test accumulate(min, [3 2 1; 3 2 1], dims=2) == [3 2 1; 3 2 1]
     @test accumulate(min, [3 2 1; 3 2 1], dims=2, init=2) == [2 2 1; 2 2 1]
 
     @test isa(accumulate(+, Int[]), Vector{Int})
     @test isa(accumulate(+, Int[]; init=1.), Vector{Float64})
-    @test accumulate(+, [1,2]; init=1) == [2, 4]
+    @test accumulate(+, [1, 2]; init=1) == [2, 4]
     arr = randn(4)
     @test accumulate(*, arr; init=1) ≈ accumulate(*, arr)
 
@@ -2790,7 +2837,7 @@ end
 
     # asymmetric operation
     op(x,y) = 2x+y
-    @test accumulate(op, [10,20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
+    @test accumulate(op, [10, 20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
     @test accumulate(op, [10 20 30], dims=2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 
     #25506
@@ -3125,4 +3172,23 @@ end
         c = view(b, 1:1, 1:1)
         @test c + zero(c) == c
     end
+end
+
+@testset "Wrapping Memory into Arrays" begin
+    mem = Memory{Int}(undef, 10) .= 1
+    memref = MemoryRef(mem)
+    @test_throws DimensionMismatch wrap(Array, mem, (10, 10))
+    @test wrap(Array, mem, (5,)) == ones(Int, 5)
+    @test wrap(Array, mem, 2) == ones(Int, 2)
+    @test wrap(Array, memref, 10) == ones(Int, 10)
+    @test wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
+    @test wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)
+
+    memref2 = MemoryRef(mem, 3)
+    @test wrap(Array, memref2, (5,)) == ones(Int, 5)
+    @test wrap(Array, memref2, 2) == ones(Int, 2)
+    @test wrap(Array, memref2, (2,2,2)) == ones(Int,2,2,2)
+    @test wrap(Array, memref2, (3, 2)) == ones(Int, 3, 2)
+    @test_throws DimensionMismatch wrap(Array, memref2, 9)
+    @test_throws DimensionMismatch wrap(Array, memref2, 10)
 end

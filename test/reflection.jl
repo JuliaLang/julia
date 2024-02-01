@@ -614,11 +614,16 @@ end
              sizeof(Real))
 @test sizeof(Union{ComplexF32,ComplexF64}) == 16
 @test sizeof(Union{Int8,UInt8}) == 1
-@test_throws ErrorException sizeof(AbstractArray)
+@test sizeof(MemoryRef{Int}) == 2 * sizeof(Int)
+@test sizeof(GenericMemoryRef{:atomic,Int,Core.CPU}) == 2 * sizeof(Int)
+@test sizeof(Array{Int,0}) == 2 * sizeof(Int)
+@test sizeof(Array{Int,1}) == 3 * sizeof(Int)
+@test sizeof(Array{Int,2}) == 4 * sizeof(Int)
+@test sizeof(Array{Int,20}) == 22 * sizeof(Int)
 @test_throws ErrorException sizeof(Tuple)
 @test_throws ErrorException sizeof(Tuple{Any,Any})
 @test_throws ErrorException sizeof(String)
-@test_throws ErrorException sizeof(Vector{Int})
+@test_throws ErrorException sizeof(Memory{false,Int})
 @test_throws ErrorException sizeof(Symbol)
 @test_throws ErrorException sizeof(Core.SimpleVector)
 @test_throws ErrorException sizeof(Union{})
@@ -923,7 +928,7 @@ end
 @test nameof(Any) === :Any
 @test nameof(:) === :Colon
 @test nameof(Core.Intrinsics.mul_int) === :mul_int
-@test nameof(Core.Intrinsics.arraylen) === :arraylen
+@test nameof(Core.Intrinsics.cglobal) === :cglobal
 
 module TestMod33403
 f(x) = 1
@@ -999,6 +1004,14 @@ end
     @test Base.default_tt(m.f4) == Tuple
 end
 
+@testset "lookup mi" begin
+    @test 1+1 == 2
+    mi1 = @ccall jl_method_lookup_by_tt(Tuple{typeof(+), Int, Int}::Any, Base.get_world_counter()::Csize_t, nothing::Any)::Ref{Core.MethodInstance}
+    @test mi1.def.name == :+
+    mi2 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
+    @test mi1 == mi2
+end
+
 Base.@assume_effects :terminates_locally function issue41694(x::Int)
     res = 1
     0 ≤ x < 20 || error("bad fact")
@@ -1015,7 +1028,22 @@ ambig_effects_test(a::Int, b) = 1
 ambig_effects_test(a, b::Int) = 1
 ambig_effects_test(a, b) = 1
 
-@testset "infer_effects" begin
+@testset "Base.infer_return_type[s]" begin
+    # generic function case
+    @test only(Base.return_types(issue41694, (Int,))) == Base.infer_return_type(issue41694, (Int,)) == Int
+    # case when it's not fully covered
+    @test only(Base.return_types(issue41694, (Integer,))) == Base.infer_return_type(issue41694, (Integer,)) == Int
+    # MethodError case
+    @test isempty(Base.return_types(issue41694, (Float64,)))
+    @test Base.infer_return_type(issue41694, (Float64,)) == Union{}
+    # builtin case
+    @test only(Base.return_types(typeof, (Any,))) == Base.infer_return_type(typeof, (Any,)) == DataType
+    @test only(Base.return_types(===, (Any,Any))) == Base.infer_return_type(===, (Any,Any)) == Bool
+    @test only(Base.return_types(setfield!, ())) == Base.infer_return_type(setfield!, ()) == Union{}
+    @test only(Base.return_types(Core.Intrinsics.mul_int, ())) == Base.infer_return_type(Core.Intrinsics.mul_int, ()) == Union{}
+end
+
+@testset "Base.infer_effects" begin
     # generic functions
     @test Base.infer_effects(issue41694, (Int,)) |> Core.Compiler.is_terminates
     @test Base.infer_effects((Int,)) do x
@@ -1039,7 +1067,34 @@ ambig_effects_test(a, b) = 1
     @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_foldable_nothrow
     @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_foldable_nothrow
     @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
-    @test (Base.infer_effects(Core.Intrinsics.arraylen, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
+    @test (Base.infer_effects(Core.Intrinsics.mul_int, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
+end
+
+@testset "Base.infer_exception_type[s]" begin
+    # generic functions
+    @test Base.infer_exception_type(issue41694, (Int,)) == only(Base.infer_exception_types(issue41694, (Int,))) == ErrorException
+    @test Base.infer_exception_type((Int,)) do x
+        issue41694(x)
+    end == Base.infer_exception_types((Int,)) do x
+        issue41694(x)
+    end |> only == ErrorException
+    @test Base.infer_exception_type(issue41694) == only(Base.infer_exception_types(issue41694)) == ErrorException # use `default_tt`
+    let excts = Base.infer_exception_types(maybe_effectful, (Any,))
+        @test any(==(Any), excts)
+        @test any(==(Union{}), excts)
+    end
+    @test Base.infer_exception_type(maybe_effectful, (Any,)) == Any
+    # `infer_exception_type` should account for MethodError
+    @test Base.infer_exception_type(issue41694, (Float64,)) == MethodError # definitive dispatch error
+    @test Base.infer_exception_type(issue41694, (Integer,)) == Union{MethodError,ErrorException} # possible dispatch error
+    @test Base.infer_exception_type(f_no_methods) == MethodError # no possible matching methods
+    @test Base.infer_exception_type(ambig_effects_test, (Int,Int)) == MethodError # ambiguity error
+    @test Base.infer_exception_type(ambig_effects_test, (Int,Any)) == MethodError # ambiguity error
+    # builtins
+    @test Base.infer_exception_type(typeof, (Any,)) === only(Base.infer_exception_types(typeof, (Any,))) === Union{}
+    @test Base.infer_exception_type(===, (Any,Any)) === only(Base.infer_exception_types(===, (Any,Any))) === Union{}
+    @test (Base.infer_exception_type(setfield!, ()); Base.infer_exception_types(setfield!, ()); true) # `infer_exception_type[s]` shouldn't throw on empty `argtypes`
+    @test (Base.infer_exception_type(Core.Intrinsics.mul_int, ()); Base.infer_exception_types(Core.Intrinsics.mul_int, ()); true) # `infer_exception_type[s]` shouldn't throw on empty `argtypes`
 end
 
 @test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
@@ -1087,7 +1142,9 @@ end
         return :(x)
     end
 end
-@test only(Base.return_types(generated_only_simple, (Real,))) == Core.Compiler.return_type(generated_only_simple, Tuple{Real}) == Any
+@test only(Base.return_types(generated_only_simple, (Real,))) ==
+      Base.infer_return_type(generated_only_simple, (Real,)) ==
+      Core.Compiler.return_type(generated_only_simple, Tuple{Real}) == Any
 let (src, rt) = only(code_typed(generated_only_simple, (Real,)))
     @test src isa Method
     @test rt == Any
@@ -1123,3 +1180,15 @@ let (src, rt) = only(code_typed(sub2ind_gen, (NTuple,Int,Int,); optimize=false))
     @test any(iscall((src,sub2ind_gen_fallback)), src.code)
     @test any(iscall((src,error)), src.code)
 end
+
+# marking a symbol as public should not "unexport" it
+# https://github.com/JuliaLang/julia/issues/52812
+module Mod52812
+export a, b
+public a
+end
+
+@test Base.isexported(Mod52812, :a)
+@test Base.isexported(Mod52812, :b)
+@test Base.ispublic(Mod52812, :a)
+@test Base.ispublic(Mod52812, :b)

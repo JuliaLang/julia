@@ -6,6 +6,9 @@ using Test, LinearAlgebra
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
 @testset "Adjoint and Transpose inner constructor basics" begin
     intvec, intmat = [1, 2], [1 2; 3 4]
     # Adjoint/Transpose eltype must match the type of the Adjoint/Transpose of the input eltype
@@ -87,11 +90,15 @@ end
         @test size(Transpose(intvec)) == (1, length(intvec))
         @test size(Transpose(intmat)) == reverse(size(intmat))
     end
-    @testset "indices methods" begin
+    @testset "axes methods" begin
         @test axes(Adjoint(intvec)) == (Base.OneTo(1), Base.OneTo(length(intvec)))
         @test axes(Adjoint(intmat)) == reverse(axes(intmat))
         @test axes(Transpose(intvec)) == (Base.OneTo(1), Base.OneTo(length(intvec)))
         @test axes(Transpose(intmat)) == reverse(axes(intmat))
+
+        A = OffsetArray([1,2], 2)
+        @test (@inferred axes(A')[2]) === axes(A,1)
+        @test (@inferred axes(A')[1]) === axes(A,2)
     end
     @testset "IndexStyle methods" begin
         @test IndexStyle(Adjoint(intvec)) == IndexLinear()
@@ -476,6 +483,16 @@ end
     @test adjoint!(b, a) === b
 end
 
+@testset "copyto! uses adjoint!/transpose!" begin
+    for T in (Float64, ComplexF64), f in (transpose, adjoint), sz in ((5,4), (5,))
+        S = rand(T, sz)
+        adjS = f(S)
+        A = similar(S')
+        copyto!(A, adjS)
+        @test A == adjS
+    end
+end
+
 @testset "aliasing with adjoint and transpose" begin
     A = collect(reshape(1:25, 5, 5)) .+ rand.().*im
     B = copy(A)
@@ -669,6 +686,21 @@ end
     o = OneHotVecOrMat((2,), (4,))
     @test sprint(Base.print_matrix, Transpose(o)) == sprint(Base.print_matrix, OneHotVecOrMat((1,2), (1,4)))
     @test sprint(Base.print_matrix, Adjoint(o)) == sprint(Base.print_matrix, OneHotVecOrMat((1,2), (1,4)))
+end
+
+@testset "copy_transpose!" begin
+    # scalar case
+    A = [randn() for _ in 1:2, _ in 1:3]
+    At = copy(transpose(A))
+    B = zero.(At)
+    LinearAlgebra.copy_transpose!(B, axes(B, 1), axes(B, 2), A, axes(A, 1), axes(A, 2))
+    @test B == At
+    # matrix of matrices
+    A = [randn(2,3) for _ in 1:2, _ in 1:3]
+    At = copy(transpose(A))
+    B = zero.(At)
+    LinearAlgebra.copy_transpose!(B, axes(B, 1), axes(B, 2), A, axes(A, 1), axes(A, 2))
+    @test B == At
 end
 
 end # module TestAdjointTranspose

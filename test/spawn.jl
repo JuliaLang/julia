@@ -22,7 +22,7 @@ lscmd = `ls`
 havebb = false
 
 function _tryonce_download_from_cache(desired_url::AbstractString)
-    cache_url = "https://cache.julialang.org/foo/$(desired_url)"
+    cache_url = "https://cache.julialang.org/$(desired_url)"
     cache_output_filename = joinpath(mktempdir(), "myfile")
     cache_response = Downloads.request(
         cache_url;
@@ -660,9 +660,21 @@ let p = run(`$sleepcmd 100`, wait=false)
     kill(p)
 end
 
-# Second argument of shell_parse
+# Second return of shell_parse
 let s = "   \$abc   "
-    @test s[Base.shell_parse(s)[2]] == "abc"
+    @test Base.shell_parse(s)[2] === findfirst('a', s)
+    s = "abc def"
+    @test Base.shell_parse(s)[2] === findfirst('d', s)
+    s = "abc 'de'f\"\"g"
+    @test Base.shell_parse(s)[2] === findfirst('\'', s)
+    s = "abc \$x'de'f\"\"g"
+    @test Base.shell_parse(s)[2] === findfirst('\'', s)
+    s = "abc def\$x'g'"
+    @test Base.shell_parse(s)[2] === findfirst('\'', s)
+    s = "abc def\$x "
+    @test Base.shell_parse(s)[2] === findfirst('x', s)
+    s = "abc \$(d)ef\$(x "
+    @test Base.shell_parse(s)[2] === findfirst('x', s) - 1
 end
 
 # Logging macros should not output to finalized streams (#26687)
@@ -795,8 +807,9 @@ let text = "input-test-text"
     out = Base.BufferStream()
     proc = run(catcmd, IOBuffer(text), out, wait=false)
     @test proc.out === out
-    @test read(out, String) == text
     @test success(proc)
+    closewrite(out)
+    @test read(out, String) == text
 
     out = PipeBuffer()
     proc = run(catcmd, IOBuffer(SubString(text)), out)
@@ -1003,5 +1016,19 @@ end
     args = ["ab ^` c", " \" ", "\"", ascii95, ascii95,
             "\"\\\"\\", "", "|", "&&", ";"];
     @test Base.shell_escape_wincmd(Base.escape_microsoft_c_args(args...)) == "\"ab ^` c\" \" \\\" \" \"\\\"\" \" !\\\"#\$%^&'^(^)*+,-./0123456789:;^<=^>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^^_`abcdefghijklmnopqrstuvwxyz{^|}~\" \" ^!\\\"#\$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\" \"\\\"\\\\\\\"\\\\\" \"\" ^| ^&^& ;"
+end
 
+# effects for Cmd construction
+for f in (() -> `a b c`, () -> `a a$("bb")a $("c")`)
+    effects = Base.infer_effects(f)
+    @test Core.Compiler.is_effect_free(effects)
+    @test Core.Compiler.is_terminates(effects)
+    @test Core.Compiler.is_noub(effects)
+    @test !Core.Compiler.is_consistent(effects)
+end
+let effects = Base.infer_effects(x -> `a $x`, (Any,))
+    @test !Core.Compiler.is_effect_free(effects)
+    @test !Core.Compiler.is_terminates(effects)
+    @test !Core.Compiler.is_noub(effects)
+    @test !Core.Compiler.is_consistent(effects)
 end

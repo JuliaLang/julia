@@ -366,6 +366,11 @@ The individual components of the decomposition `F` can be retrieved via property
  - `F.p`: the permutation vector of the pivot ([`QRPivoted`](@ref) only)
  - `F.P`: the permutation matrix of the pivot ([`QRPivoted`](@ref) only)
 
+!!! note
+    Each reference to the upper triangular factor via `F.R` allocates a new array.
+    It is therefore advisable to cache that array, say, by `R = F.R` and continue working
+    with `R`.
+
 Iterating the decomposition produces the components `Q`, `R`, and if extant `p`.
 
 The following functions are available for the `QR` objects: [`inv`](@ref), [`size`](@ref),
