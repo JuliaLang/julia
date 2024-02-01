@@ -244,6 +244,7 @@ function show_convert_error(io::IO, ex::MethodError, arg_types_param)
 end
 
 function showerror(io::IO, ex::MethodError)
+    @nospecialize io
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
     is_arg_types = !isa(ex.args, Tuple)
@@ -258,15 +259,22 @@ function showerror(io::IO, ex::MethodError)
     print(io, "MethodError: ")
     ft = typeof(f)
     f_is_function = false
-    kwargs = ()
-    if f === Core.kwcall && !is_arg_types
-        f = (ex.args::Tuple)[2]
-        ft = typeof(f)
+    kwargs = []
+    if f === Core.kwcall && length(arg_types_param) >= 2 && arg_types_param[1] <: NamedTuple && !is_arg_types
+        # if this is a kwcall, reformat it as a call with kwargs
+        # TODO: handle !is_arg_types here (aka invoke with kwargs), which needs a value for `f`
+        local kwt
+        let args = ex.args::Tuple
+            f = args[2]
+            ft = typeof(f)
+            kwt = typeof(args[1])
+            ex = MethodError(f, args[3:end], ex.world)
+        end
         arg_types_param = arg_types_param[3:end]
         san_arg_types_param = san_arg_types_param[3:end]
-        kwargs = pairs(ex.args[1])
-        ex = MethodError(f, ex.args[3:end::Int], ex.world)
-        arg_types = Tuple{arg_types_param...}
+        keys = kwt.parameters[1]::Tuple
+        kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in 1:length(keys)]
+        arg_types = rewrap_unionall(Tuple{arg_types_param...}, arg_types)
     end
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
@@ -286,8 +294,8 @@ function showerror(io::IO, ex::MethodError)
         end
         buf = IOBuffer()
         iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
-        show_signature_function(iob, isa(f, Type) ? Type{f} : typeof(f))
-        show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = !isempty(kwargs) ? Any[(k, typeof(v)) for (k, v) in kwargs] : nothing)
+        show_signature_function(iob, Core.Typeof(f))
+        show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
         str = String(take!(buf))
         str = type_limited_string_from_context(io, str)
         print(io, str)
@@ -318,8 +326,13 @@ function showerror(io::IO, ex::MethodError)
             end
         end
     end
-    if (ex.world != typemax(UInt) && hasmethod(f, arg_types) &&
-        !hasmethod(f, arg_types, world = ex.world))
+    if ex.world == typemax(UInt) || hasmethod(f, arg_types, world=ex.world)
+        if ex.world == typemax(UInt) || isempty(kwargs)
+            print(io, "\nThis error has been manually thrown, explicitly, so the method may exist but be intentionally marked as unimplemented.")
+        else
+            print(io, "\nThis method may not support any kwargs.")
+        end
+    elseif hasmethod(f, arg_types) && !hasmethod(f, arg_types, world=ex.world)
         curworld = get_world_counter()
         print(io, "\nThe applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     elseif f isa Function
@@ -398,7 +411,8 @@ stacktrace_expand_basepaths()::Bool = Base.get_bool_env("JULIA_STACKTRACE_EXPAND
 stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRACT_HOMEDIR", true) === true
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
-function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
+function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
+    @nospecialize io
     is_arg_types = !isa(ex.args, Tuple)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
     arg_types_param = Any[(unwrap_unionall(arg_types)::DataType).parameters...]
