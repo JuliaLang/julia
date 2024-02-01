@@ -183,7 +183,7 @@ end
             Dict(i => error("$i") for i in 1:3)
         catch ex
             @test ex isa ErrorException
-            @test length(Base.catch_stack()) == 1
+            @test length(Base.current_exceptions()) == 1
         end
     end
 end
