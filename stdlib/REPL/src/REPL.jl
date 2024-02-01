@@ -91,7 +91,7 @@ function __init__()
     return nothing
 end
 
-using Base.Meta, Sockets
+using Base.Meta, Sockets, StyledStrings
 import InteractiveUtils
 
 export
