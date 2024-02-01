@@ -9634,7 +9634,7 @@ extern "C" void jl_init_llvm(void)
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
 
-    // TODO (@mofeing): remove this once the minimum supported LLVM version is 17
+    #if JL_LLVM_VERSION < 170000
     // we want the opaque-pointers to be opt-in, per LLVMContext, for this release
     // so change the default value back to pre-14.x, without changing the NumOccurrences flag for it
     clopt = llvmopts.lookup("opaque-pointers");
@@ -9643,6 +9643,7 @@ extern "C" void jl_init_llvm(void)
     } else {
         jl_opaque_ptrs_set = 1;
     }
+    #endif
 
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)
