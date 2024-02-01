@@ -2116,3 +2116,20 @@ let src = code_typed1() do
     end
     @test count(isinvoke(:iterate), src.code) == 0
 end
+
+# JuliaLang/julia#53062: proper `joint_effects` for call with empty method matches
+let ir = first(only(Base.code_ircode(setproperty!, (Base.RefValue{Int},Symbol,Base.RefValue{Int}))))
+    i = findfirst(iscall((ir, convert)), ir.stmts.stmt)::Int
+    @test iszero(ir.stmts.flag[i] & Core.Compiler.IR_FLAG_NOTHROW)
+end
+function issue53062(cond)
+    x = Ref{Int}(0)
+    if cond
+        x[] = x
+    else
+        return -1
+    end
+end
+@test !Core.Compiler.is_nothrow(Base.infer_effects(issue53062, (Bool,)))
+@test issue53062(false) == -1
+@test_throws MethodError issue53062(true)

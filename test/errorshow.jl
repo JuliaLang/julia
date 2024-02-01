@@ -8,6 +8,7 @@ include("testenv.jl")
 # re-register only the error hints that are being tested here (
 Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
+Base.Experimental.register_error_hint(Base.min_max_on_iterable, MethodError)
 
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
@@ -998,6 +999,15 @@ let err_str
     @test occursin("String concatenation is performed with *", err_str)
 end
 
+let err_str
+    err_str = @except_str min([1,2,3]) MethodError
+    @test occursin("Finding the minimum of an iterable is performed with `minimum`.", err_str)
+    err_str = @except_str min((i for i in 1:3)) MethodError
+    @test occursin("Finding the minimum of an iterable is performed with `minimum`.", err_str)
+    err_str = @except_str max([1,2,3]) MethodError
+    @test occursin("Finding the maximum of an iterable is performed with `maximum`.", err_str)
+end
+
 @testset "unused argument names" begin
     g(::Int) = backtrace()
     bt = g(1)
@@ -1090,3 +1100,21 @@ let e = @test_throws MethodError convert(TypeCompareError{Float64,1}, TypeCompar
     @test  occursin("TypeCompareError{Float64,1}", str)
     @test !occursin("TypeCompareError{Float64{},2}", str) # No {...} for types without params
 end
+
+@testset "InexactError for Inf16 should print '16' (#51087)" begin
+    @test sprint(showerror, InexactError(:UInt128, UInt128, Inf16)) == "InexactError: UInt128(Inf16)"
+
+    for IntType in [Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128]
+        IntStr = string(IntType)
+        for InfVal in Any[Inf, Inf16, Inf32, Inf64]
+            InfStr = repr(InfVal)
+            e = @test_throws InexactError IntType(InfVal)
+            str = sprint(Base.showerror, e.value)
+            @test occursin("InexactError: $IntStr($InfStr)", str)
+        end
+    end
+end
+
+# error message hint from PR #22647
+@test_throws "Many shells" cd("~")
+@test occursin("Many shells", sprint(showerror, Base.IOError("~", Base.UV_ENOENT)))

@@ -58,11 +58,12 @@ function kill_block!(ir::IRCode, bb::Int)
         inst = ir[SSAValue(bidx)]
         inst[:stmt] = nothing
         inst[:type] = Bottom
-        inst[:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+        inst[:flag] = IR_FLAGS_REMOVABLE
     end
     ir[SSAValue(last(stmts))][:stmt] = ReturnNode()
     return
 end
+kill_block!(ir::IRCode) = (bb::Int)->kill_block!(ir, bb)
 
 function update_phi!(irsv::IRInterpretationState, from::Int, to::Int)
     ir = irsv.ir
@@ -102,26 +103,8 @@ function kill_terminator_edges!(irsv::IRInterpretationState, term_idx::Int, bb::
 end
 
 function kill_edge!(irsv::IRInterpretationState, from::Int, to::Int)
-    ir = irsv.ir
-    kill_edge!(ir, from, to, update_phi!(irsv))
-
-    lazydomtree = irsv.lazydomtree
-    domtree = nothing
-    if isdefined(lazydomtree, :domtree)
-        domtree = get!(lazydomtree)
-        domtree_delete_edge!(domtree, ir.cfg.blocks, from, to)
-    elseif length(ir.cfg.blocks[to].preds) != 0
-        # TODO: If we're not maintaining the domtree, computing it just for this
-        # is slightly overkill - just the dfs tree would be enough.
-        domtree = get!(lazydomtree)
-    end
-
-    if domtree !== nothing && bb_unreachable(domtree, to)
-        kill_block!(ir, to)
-        for edge in ir.cfg.blocks[to].succs
-            kill_edge!(irsv, to, edge)
-        end
-    end
+    kill_edge!(get!(irsv.lazyreachability), irsv.ir.cfg, from, to,
+               update_phi!(irsv), kill_block!(irsv.ir))
 end
 
 function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, idx::Int,
@@ -177,11 +160,18 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         elseif head === :gc_preserve_begin ||
                head === :gc_preserve_end
             return false
+        elseif head === :leave
+            return false
         else
             error("reprocess_instruction!: unhandled expression found")
         end
     elseif isa(stmt, PhiNode)
         rt = abstract_eval_phi_stmt(interp, stmt, idx, irsv)
+    elseif isa(stmt, UpsilonNode)
+        rt = argextype(stmt.val, irsv.ir)
+    elseif isa(stmt, PhiCNode)
+        # Currently not modeled
+        return false
     elseif isa(stmt, ReturnNode)
         # Handled at the very end
         return false
@@ -197,7 +187,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     if rt !== nothing
         if isa(rt, Const)
             inst[:type] = rt
-            if is_inlineable_constant(rt.val) && has_flag(inst, (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
+            if is_inlineable_constant(rt.val) && has_flag(inst, IR_FLAGS_REMOVABLE)
                 inst[:stmt] = quoted(rt.val)
             end
             return true

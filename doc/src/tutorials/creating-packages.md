@@ -160,7 +160,7 @@ it does add a new feature, that the message must be three words long.
 Later, we may wish to change `greet_alien` to
 
 ```julia
-"Greet an alien by a the name of \"Zork\"."
+"Greet an alien by the name of \"Zork\"."
 greet_alien() = print("Hello Zork")
 ```
 
@@ -557,7 +557,7 @@ This is done by making the following changes (using the example above):
 #### Using an extension while supporting older Julia versions
 
 In the case where one wants to use an extension (without worrying about the
-feature of the extension begin available on older Julia versions) while still
+feature of the extension being available on older Julia versions) while still
 supporting older Julia versions the packages under `[weakdeps]` should be
 duplicated into `[extras]`. This is an unfortunate duplication, but without
 doing this the project verifier under older Julia versions will throw an error

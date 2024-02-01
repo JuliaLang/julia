@@ -53,16 +53,8 @@
 #endif
 // The sanitizers don't play well with our memory manager
 
-#if defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
+#if defined(JL_FORCE_JITLINK) || defined(_CPU_AARCH64_) || defined(HAS_SANITIZER)
 # define JL_USE_JITLINK
-#else
-# if defined(_CPU_AARCH64_)
-#  if defined(_OS_LINUX_) && JL_LLVM_VERSION < 150000
-#   pragma message("On aarch64-gnu-linux, LLVM version >= 15 is required for JITLink; fallback suffers from occasional segfaults")
-#  else
-#   define JL_USE_JITLINK
-#  endif
-# endif
 #endif
 
 # include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
@@ -90,13 +82,33 @@ struct OptimizationOptions {
     bool dump_native;
     bool external_use;
     bool llvm_only;
+    bool always_inline;
+    bool enable_early_simplifications;
+    bool enable_early_optimizations;
+    bool enable_scalar_optimizations;
+    bool enable_loop_optimizations;
+    bool enable_vector_pipeline;
+    bool remove_ni;
+    bool cleanup;
 
     static constexpr OptimizationOptions defaults(
         bool lower_intrinsics=true,
         bool dump_native=false,
         bool external_use=false,
-        bool llvm_only=false) {
-        return {lower_intrinsics, dump_native, external_use, llvm_only};
+        bool llvm_only=false,
+        bool always_inline=true,
+        bool enable_early_simplifications=true,
+        bool enable_early_optimizations=true,
+        bool enable_scalar_optimizations=true,
+        bool enable_loop_optimizations=true,
+        bool enable_vector_pipeline=true,
+        bool remove_ni=true,
+        bool cleanup=true) {
+        return {lower_intrinsics, dump_native, external_use, llvm_only,
+                always_inline, enable_early_simplifications,
+                enable_early_optimizations, enable_scalar_optimizations,
+                enable_loop_optimizations, enable_vector_pipeline,
+                remove_ni, cleanup};
     }
 };
 
@@ -612,6 +624,7 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     return *_shared_module;
 }
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
+void SetOpaquePointer(LLVMContext &ctx) JL_NOTSAFEPOINT;
 
 void optimizeDLSyms(Module &M);
 

@@ -294,7 +294,7 @@ rem_knuth(a::T, b::T) where {T<:Unsigned} = b != 0 ? a % b : a
 # maximum multiple of k <= sup decremented by one,
 # that is 0xFFFF...FFFF if k = (typemax(T) - typemin(T)) + 1 and sup == typemax(T) - 1
 # with intentional underflow
-# see http://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
+# see https://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
 
 # sup == 0 means typemax(T) + 1
 maxmultiple(k::T, sup::T=zero(T)) where {T<:Unsigned} =

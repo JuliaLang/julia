@@ -10,7 +10,7 @@ using Base: require_one_based_indexing, USE_BLAS64
 
 export
 # Note: `xFUNC_NAME` is a placeholder for not exported BLAS functions
-#   ref: http://www.netlib.org/blas/blasqr.pdf
+#   ref: https://www.netlib.org/blas/blasqr.pdf
 # Level 1
     # xROTG
     # xROTMG
@@ -52,6 +52,7 @@ export
     # xTBSV
     # xTPSV
     ger!,
+    geru!,
     # xGERU
     # xGERC
     her!,
@@ -1064,7 +1065,7 @@ sbmv(uplo, k, A, x)
 Update vector `y` as `alpha*A*x + beta*y` where `A` is a symmetric band matrix of order
 `size(A,2)` with `k` super-diagonals stored in the argument `A`. The storage layout for `A`
 is described the reference BLAS module, level-2 BLAS at
-<http://www.netlib.org/lapack/explore-html/>.
+<https://www.netlib.org/lapack/explore-html/>.
 Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `A` is used.
 
 Return the updated `y`.
@@ -1414,6 +1415,41 @@ for (fname, elty) in ((:dger_,:Float64),
                  m, n, α, px, stx, py, sty, A, max(1,stride(A,2)))
             A
         end
+    end
+end
+
+### geru
+
+"""
+    geru!(alpha, x, y, A)
+
+Rank-1 update of the matrix `A` with vectors `x` and `y` as `alpha*x*transpose(y) + A`.
+"""
+function geru! end
+
+for (fname, elty) in ((:zgeru_,:ComplexF64), (:cgeru_,:ComplexF32))
+    @eval begin
+        function geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty})
+            require_one_based_indexing(A, x, y)
+            m, n = size(A)
+            if m != length(x) || n != length(y)
+                throw(DimensionMismatch(lazy"A has size ($m,$n), x has length $(length(x)), y has length $(length(y))"))
+            end
+            px, stx = vec_pointer_stride(x, ArgumentError("input vector with 0 stride is not allowed"))
+            py, sty = vec_pointer_stride(y, ArgumentError("input vector with 0 stride is not allowed"))
+            GC.@preserve x y ccall((@blasfunc($fname), libblastrampoline), Cvoid,
+                (Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty},
+                 Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
+                 Ref{BlasInt}),
+                 m, n, α, px, stx, py, sty, A, max(1,stride(A,2)))
+            A
+        end
+    end
+end
+for elty in (:Float64, :Float32)
+    @eval begin
+        geru!(α::$elty, x::AbstractVector{$elty}, y::AbstractVector{$elty}, A::AbstractMatrix{$elty}) =
+            ger!(α, x, y, A)
     end
 end
 
