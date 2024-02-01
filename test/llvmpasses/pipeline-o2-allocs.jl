@@ -1,12 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=0"
-
-# RUN: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s
-# RUN: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s
-
-# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=1"
-
 # RUN: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s
 # RUN: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s
 
@@ -60,8 +53,7 @@ end
 # CHECK-NOT: julia.gc_preserve_end
 function nopreserve()
     ref = Ref(0)
-    GC.@preserve ref begin
-    end
+    GC.@preserve ref begin end
 end
 
 # COM: this cordons off the attributes/function declarations from the actual
