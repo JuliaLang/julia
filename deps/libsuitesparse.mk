@@ -49,8 +49,8 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
 	cd $(dir $<) && $(CMAKE) . $(LIBSUITESPARSE_CMAKE_FLAGS)
-	make
-	make install
+	make -C $(dir $<)
+	make -C $(dir $<) install
 	echo 1 > $@
 
 ifeq ($(OS),WINNT)
