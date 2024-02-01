@@ -129,9 +129,10 @@ function macroexpand(m::Module, @nospecialize(x); recursive=true)
 end
 
 """
-    @macroexpand
+    @macroexpand [mod,] ex
 
 Return equivalent expression with all macros removed (expanded).
+If two arguments are provided, the first is the module to evaluate in.
 
 There are differences between `@macroexpand` and [`macroexpand`](@ref).
 
@@ -166,19 +167,27 @@ julia> M.f()
 ```
 With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module `M` in the example).
 With `macroexpand` the expression expands in the module given as the first argument.
+
+!!! compat "Julia 1.11"
+    The two-argument form requires at least Julia 1.11.
 """
 macro macroexpand(code)
     return :(macroexpand($__module__, $(QuoteNode(code)), recursive=true))
 end
-
+macro macroexpand(mod, code)
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=true))
+end
 
 """
-    @macroexpand1
+    @macroexpand1 [mod,] ex
 
 Non recursive version of [`@macroexpand`](@ref).
 """
 macro macroexpand1(code)
     return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
+end
+macro macroexpand1(mod, code)
+    return :(macroexpand($(esc(mod)), $(QuoteNode(code)), recursive=false))
 end
 
 ## misc syntax ##
@@ -346,39 +355,39 @@ macro noinline(x)
 end
 
 """
-    @constprop setting [ex]
+    Base.@constprop setting [ex]
 
 Control the mode of interprocedural constant propagation for the annotated function.
 
 Two `setting`s are supported:
 
-- `@constprop :aggressive [ex]`: apply constant propagation aggressively.
+- `Base.@constprop :aggressive [ex]`: apply constant propagation aggressively.
   For a method where the return type depends on the value of the arguments,
   this can yield improved inference results at the cost of additional compile time.
-- `@constprop :none [ex]`: disable constant propagation. This can reduce compile
+- `Base.@constprop :none [ex]`: disable constant propagation. This can reduce compile
   times for functions that Julia might otherwise deem worthy of constant-propagation.
   Common cases are for functions with `Bool`- or `Symbol`-valued arguments or keyword arguments.
 
-`@constprop` can be applied immediately before a function definition or within a function body.
+`Base.@constprop` can be applied immediately before a function definition or within a function body.
 
 ```julia
 # annotate long-form definition
-@constprop :aggressive function longdef(x)
-  ...
+Base.@constprop :aggressive function longdef(x)
+    ...
 end
 
 # annotate short-form definition
-@constprop :aggressive shortdef(x) = ...
+Base.@constprop :aggressive shortdef(x) = ...
 
 # annotate anonymous function that a `do` block creates
 f() do
-    @constprop :aggressive
+    Base.@constprop :aggressive
     ...
 end
 ```
 
 !!! compat "Julia 1.10"
-  The usage within a function body requires at least Julia 1.10.
+    The usage within a function body requires at least Julia 1.10.
 """
 macro constprop(setting, ex)
     sym = constprop_setting(setting)
@@ -401,61 +410,82 @@ function constprop_setting(@nospecialize setting)
 end
 
 """
-    @assume_effects setting... [ex]
+    Base.@assume_effects setting... [ex]
 
-Override the compiler's effect modeling for the given method or foreign call.
-`@assume_effects` can be applied immediately before a function definition or within a function body.
-It can also be applied immediately before a `@ccall` expression.
-
-!!! compat "Julia 1.8"
-    Using `Base.@assume_effects` requires Julia version 1.8.
+Override the compiler's effect modeling.
+This macro can be used in several contexts:
+1. Immediately before a method definition, to override the entire effect modeling of the applied method.
+2. Within a function body without any arguments, to override the entire effect modeling of the enclosing method.
+3. Applied to a code block, to override the local effect modeling of the applied code block.
 
 # Examples
 ```jldoctest
-julia> Base.@assume_effects :terminates_locally function pow(x)
-           # this :terminates_locally allows `pow` to be constant-folded
+julia> Base.@assume_effects :terminates_locally function fact(x)
+           # usage 1:
+           # this :terminates_locally allows `fact` to be constant-folded
            res = 1
-           1 < x < 20 || error("bad pow")
+           0 ≤ x < 20 || error("bad fact")
            while x > 1
                res *= x
                x -= 1
            end
            return res
        end
-pow (generic function with 1 method)
+fact (generic function with 1 method)
 
 julia> code_typed() do
-           pow(12)
-       end
-1-element Vector{Any}:
- CodeInfo(
+           fact(12)
+       end |> only
+CodeInfo(
 1 ─     return 479001600
 ) => Int64
 
 julia> code_typed() do
            map((2,3,4)) do x
+               # usage 2:
                # this :terminates_locally allows this anonymous function to be constant-folded
                Base.@assume_effects :terminates_locally
                res = 1
-               1 < x < 20 || error("bad pow")
+               0 ≤ x < 20 || error("bad fact")
                while x > 1
                    res *= x
                    x -= 1
                end
                return res
            end
-       end
-1-element Vector{Any}:
- CodeInfo(
+       end |> only
+CodeInfo(
 1 ─     return (2, 6, 24)
 ) => Tuple{Int64, Int64, Int64}
 
-julia> Base.@assume_effects :total !:nothrow @ccall jl_type_intersection(Vector{Int}::Any, Vector{<:Integer}::Any)::Any
-Vector{Int64} (alias for Array{Int64, 1})
+julia> code_typed() do
+           map((2,3,4)) do x
+               res = 1
+               0 ≤ x < 20 || error("bad fact")
+               # usage 3:
+               # with this :terminates_locally annotation the compiler skips tainting
+               # `:terminates` effect within this `while` block, allowing the parent
+               # anonymous function to be constant-folded
+               Base.@assume_effects :terminates_locally while x > 1
+                   res *= x
+                   x -= 1
+               end
+               return res
+           end
+       end |> only
+CodeInfo(
+1 ─     return (2, 6, 24)
+) => Tuple{Int64, Int64, Int64}
 ```
 
+!!! compat "Julia 1.8"
+    Using `Base.@assume_effects` requires Julia version 1.8.
+
 !!! compat "Julia 1.10"
-  The usage within a function body requires at least Julia 1.10.
+    The usage within a function body requires at least Julia 1.10.
+
+!!! compact "Julia 1.11"
+    The code block annotation requires at least Julia 1.11.
 
 !!! warning
     Improper use of this macro causes undefined behavior (including crashes,
@@ -478,6 +508,8 @@ The following `setting`s are supported.
 - `:terminates_locally`
 - `:notaskstate`
 - `:inaccessiblememonly`
+- `:noub`
+- `:noub_if_noinbounds`
 - `:foldable`
 - `:removable`
 - `:total`
@@ -516,13 +548,6 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
     the other was optimized).
 
 !!! note
-    The `:consistent`-cy assertion currently includes the assertion that the function
-    will not execute any undefined behavior (for any input). Note that undefined behavior
-    may technically cause the function to violate other effect assertions (such as
-    `:nothrow` or `:effect_free`) as well, but we do not model this, and all effects
-    except `:consistent` assume the absence of undefined behavior.
-
-!!! note
     If `:consistent` functions terminate by throwing an exception, that exception
     itself is not required to meet the egality requirement specified above.
 
@@ -559,7 +584,7 @@ were not executed.
 ---
 ## `:nothrow`
 
-The `:nothrow` settings asserts that this method does not terminate abnormally
+The `:nothrow` settings asserts that this method does not throw an exception
 (i.e. will either always return a value or never return).
 
 !!! note
@@ -568,7 +593,11 @@ The `:nothrow` settings asserts that this method does not terminate abnormally
     method itself.
 
 !!! note
-    `MethodErrors` and similar exceptions count as abnormal termination.
+    If the execution of a method may raise `MethodError`s and similar exceptions, then
+    the method is not considered as `:nothrow`.
+    However, note that environment-dependent errors like `StackOverflowError` or `InterruptException`
+    are not modeled by this effect and thus a method that may result in `StackOverflowError`
+    does not necessarily need to be `!:nothrow` (although it should usually be `!:terminates` too).
 
 ---
 ## `:terminates_globally`
@@ -581,7 +610,7 @@ The `:terminates_globally` settings asserts that this method will eventually ter
 
 !!! note
     The compiler will consider this a strong indication that the method will
-    terminate relatively *quickly* and may (if otherwise legal), call this
+    terminate relatively *quickly* and may (if otherwise legal) call this
     method at compile time. I.e. it is a bad idea to annotate this setting
     on a method that *technically*, but not *practically*, terminates.
 
@@ -642,6 +671,14 @@ global state or mutable memory pointed to by its arguments.
     This `:inaccessiblememonly` assertion covers any other methods called by the annotated method.
 
 ---
+## `:noub`
+
+The `:noub` setting asserts that the method will not execute any undefined behavior
+(for any input). Note that undefined behavior may technically cause the method to violate
+any other effect assertions (such as `:consistent` or `:effect_free`) as well, but we do
+not model this, and they assume the absence of undefined behavior.
+
+---
 ## `:foldable`
 
 This setting is a convenient shortcut for the set of effects that the compiler
@@ -650,6 +687,7 @@ currently equivalent to the following `setting`s:
 - `:consistent`
 - `:effect_free`
 - `:terminates_globally`
+- `:noub`
 
 !!! note
     This list in particular does not include `:nothrow`. The compiler will still
@@ -682,6 +720,7 @@ the following other `setting`s:
 - `:terminates_globally`
 - `:notaskstate`
 - `:inaccessiblememonly`
+- `:noub`
 
 !!! warning
     `:total` is a very strong assertion and will likely gain additional semantics
@@ -701,68 +740,85 @@ the call is generally total, it may however throw.
 """
 macro assume_effects(args...)
     lastex = args[end]
-    inner = unwrap_macrocalls(lastex)
-    if is_function_def(inner)
-        ex = lastex
-        idx = length(args)-1
+    override = compute_assumed_settings(args[begin:end-1])
+    if is_function_def(unwrap_macrocalls(lastex))
+        return esc(pushmeta!(lastex, form_purity_expr(override)))
     elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
-        ex = lastex
-        idx = length(args)-1
-    else # anonymous function case
-        ex = nothing
-        idx = length(args)
+        lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
+        insert!(lastex.args, 3, Core.Compiler.encode_effects_override(override))
+        return esc(lastex)
     end
-    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly) =
-        (false, false, false, false, false, false, false, false)
-    for org_setting in args[1:idx]
-        (setting, val) = compute_assumed_setting(org_setting)
-        if setting === :consistent
-            consistent = val
-        elseif setting === :effect_free
-            effect_free = val
-        elseif setting === :nothrow
-            nothrow = val
-        elseif setting === :terminates_globally
-            terminates_globally = val
-        elseif setting === :terminates_locally
-            terminates_locally = val
-        elseif setting === :notaskstate
-            notaskstate = val
-        elseif setting === :inaccessiblememonly
-            inaccessiblememonly = val
-        elseif setting === :foldable
-            consistent = effect_free = terminates_globally = val
-        elseif setting === :removable
-            effect_free = nothrow = terminates_globally = val
-        elseif setting === :total
-            consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = val
-        else
-            throw(ArgumentError("@assume_effects $org_setting not supported"))
-        end
-    end
-    if is_function_def(inner)
-        return esc(pushmeta!(ex, :purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
-    elseif isexpr(ex, :macrocall) && ex.args[1] === Symbol("@ccall")
-        ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
-        insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly,
-        )))
-        return esc(ex)
-    else # anonymous function case
-        return Expr(:meta, Expr(:purity,
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
+    override′ = compute_assumed_setting(override, lastex)
+    if override′ !== nothing
+        # anonymous function case
+        return Expr(:meta, form_purity_expr(override′))
+    else
+        # call site annotation case
+        return Expr(:block,
+                    form_purity_expr(override),
+                    Expr(:local, Expr(:(=), :val, esc(lastex))),
+                    Expr(:purity), # region end token
+                    :val)
     end
 end
 
-function compute_assumed_setting(@nospecialize(setting), val::Bool=true)
-    if isexpr(setting, :call) && setting.args[1] === :(!)
-        return compute_assumed_setting(setting.args[2], !val)
-    elseif isa(setting, QuoteNode)
-        return compute_assumed_setting(setting.value, val)
-    else
-        return (setting, val)
+function compute_assumed_settings(settings)
+    override = EffectsOverride()
+    for setting in settings
+        override = compute_assumed_setting(override, setting)
+        override === nothing &&
+            throw(ArgumentError("@assume_effects $setting not supported"))
     end
+    return override
+end
+
+using Core.Compiler: EffectsOverride
+
+function compute_assumed_setting(override::EffectsOverride, @nospecialize(setting), val::Bool=true)
+    if isexpr(setting, :call) && setting.args[1] === :(!)
+        return compute_assumed_setting(override, setting.args[2], !val)
+    elseif isa(setting, QuoteNode)
+        return compute_assumed_setting(override, setting.value, val)
+    end
+    if setting === :consistent
+        return EffectsOverride(override; consistent = val)
+    elseif setting === :effect_free
+        return EffectsOverride(override; effect_free = val)
+    elseif setting === :nothrow
+        return EffectsOverride(override; nothrow = val)
+    elseif setting === :terminates_globally
+        return EffectsOverride(override; terminates_globally = val)
+    elseif setting === :terminates_locally
+        return EffectsOverride(override; terminates_locally = val)
+    elseif setting === :notaskstate
+        return EffectsOverride(override; notaskstate = val)
+    elseif setting === :inaccessiblememonly
+        return EffectsOverride(override; inaccessiblememonly = val)
+    elseif setting === :noub
+        return EffectsOverride(override; noub = val)
+    elseif setting === :noub_if_noinbounds
+        return EffectsOverride(override; noub_if_noinbounds = val)
+    elseif setting === :foldable
+        consistent = effect_free = terminates_globally = noub = val
+        return EffectsOverride(override; consistent, effect_free, terminates_globally, noub)
+    elseif setting === :removable
+        effect_free = nothrow = terminates_globally = val
+        return EffectsOverride(override; effect_free, nothrow, terminates_globally)
+    elseif setting === :total
+        consistent = effect_free = nothrow = terminates_globally = notaskstate =
+            inaccessiblememonly = noub = val
+        return EffectsOverride(override;
+            consistent, effect_free, nothrow, terminates_globally, notaskstate,
+            inaccessiblememonly, noub)
+    end
+    return nothing
+end
+
+function form_purity_expr(override::EffectsOverride)
+    return Expr(:purity,
+        override.consistent, override.effect_free, override.nothrow,
+        override.terminates_globally, override.terminates_locally, override.notaskstate,
+        override.inaccessiblememonly, override.noub, override.noub_if_noinbounds)
 end
 
 """
@@ -836,23 +892,17 @@ function unwrap_macrocalls(ex::Expr)
     return inner
 end
 
-function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
-    if isempty(args)
-        tag = sym
-    else
-        tag = Expr(sym, args...)::Expr
-    end
-
+function pushmeta!(ex::Expr, tag::Union{Symbol,Expr})
     inner = unwrap_macrocalls(ex)
-
     idx, exargs = findmeta(inner)
     if idx != 0
-        push!(exargs[idx].args, tag)
+        metastmt = exargs[idx]::Expr
+        push!(metastmt.args, tag)
     else
         body = inner.args[2]::Expr
         pushfirst!(body.args, Expr(:meta, tag))
     end
-    ex
+    return ex
 end
 
 popmeta!(body, sym) = _getmeta(body, sym, true)
@@ -948,26 +998,35 @@ function findmeta_block(exargs, argsmatch=args->true)
     return 0, []
 end
 
-remove_linenums!(ex) = ex
-function remove_linenums!(ex::Expr)
-    if ex.head === :block || ex.head === :quote
-        # remove line number expressions from metadata (not argument literal or inert) position
-        filter!(ex.args) do x
-            isa(x, Expr) && x.head === :line && return false
-            isa(x, LineNumberNode) && return false
-            return true
+"""
+    Base.remove_linenums!(ex)
+
+Remove all line-number metadata from expression-like object `ex`.
+"""
+function remove_linenums!(@nospecialize ex)
+    if ex isa Expr
+        if ex.head === :block || ex.head === :quote
+            # remove line number expressions from metadata (not argument literal or inert) position
+            filter!(ex.args) do x
+                isa(x, Expr) && x.head === :line && return false
+                isa(x, LineNumberNode) && return false
+                return true
+            end
         end
+        for subex in ex.args
+            subex isa Expr && remove_linenums!(subex)
+        end
+        return ex
+    elseif ex isa CodeInfo
+        ex.codelocs .= 0
+        length(ex.linetable) > 1 && resize!(ex.linetable, 1)
+        return ex
+    else
+        return ex
     end
-    for subex in ex.args
-        subex isa Expr && remove_linenums!(subex)
-    end
-    return ex
 end
-function remove_linenums!(src::CodeInfo)
-    src.codelocs .= 0
-    length(src.linetable) > 1 && resize!(src.linetable, 1)
-    return src
-end
+
+public remove_linenums!
 
 replace_linenums!(ex, ln::LineNumberNode) = ex
 function replace_linenums!(ex::Expr, ln::LineNumberNode)
@@ -1026,7 +1085,6 @@ macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]
         lno = body.args[1]
-        tmp = gensym("tmp")
         return Expr(:escape,
                     Expr(f.head, f.args[1],
                          Expr(:block,

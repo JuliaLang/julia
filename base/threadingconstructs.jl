@@ -44,8 +44,9 @@ maxthreadid() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cin
 """
     Threads.nthreads(:default | :interactive) -> Int
 
-Get the current number of threads within the specified thread pool. The threads in default
-have id numbers `1:nthreads(:default)`.
+Get the current number of threads within the specified thread pool. The threads in `:interactive`
+have id numbers `1:nthreads(:interactive)`, and the threads in `:default` have id numbers in
+`nthreads(:interactive) .+ (1:nthreads(:default))`.
 
 See also `BLAS.get_num_threads` and `BLAS.set_num_threads` in the [`LinearAlgebra`](@ref
 man-linalg) standard library, and `nprocs()` in the [`Distributed`](@ref man-distributed)
@@ -63,6 +64,8 @@ function _tpid_to_sym(tpid::Int8)
         return :interactive
     elseif tpid == 1
         return :default
+    elseif tpid == -1
+        return :foreign
     else
         throw(ArgumentError("Unrecognized threadpool id $tpid"))
     end
@@ -73,6 +76,8 @@ function _sym_to_tpid(tp::Symbol)
         return Int8(0)
     elseif tp === :default
         return Int8(1)
+    elseif tp == :foreign
+        return Int8(-1)
     else
         throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
     end
@@ -81,7 +86,7 @@ end
 """
     Threads.threadpool(tid = threadid()) -> Symbol
 
-Returns the specified thread's threadpool; either `:default` or `:interactive`.
+Returns the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
 """
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
@@ -108,6 +113,8 @@ See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 function threadpoolsize(pool::Symbol = :default)
     if pool === :default || pool === :interactive
         tpid = _sym_to_tpid(pool)
+    elseif pool == :foreign
+        error("Threadpool size of `:foreign` is indeterminant")
     else
         error("invalid threadpool specified")
     end
@@ -146,7 +153,13 @@ function threading_run(fun, static)
     for i = 1:n
         t = Task(() -> fun(i)) # pass in tid
         t.sticky = static
-        static && ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+        if static
+            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid_offset + i-1)
+        else
+            # TODO: this should be the current pool (except interactive) if there
+            # are ever more than two pools.
+            @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default)) == 1
+        end
         tasks[i] = t
         schedule(t)
     end
@@ -351,10 +364,10 @@ end
 
 function _spawn_set_thrpool(t::Task, tp::Symbol)
     tpid = _sym_to_tpid(tp)
-    if _nthreads_in_pool(tpid) == 0
+    if tpid == -1 || _nthreads_in_pool(tpid) == 0
         tpid = _sym_to_tpid(:default)
     end
-    ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
+    @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid) == 1
     nothing
 end
 

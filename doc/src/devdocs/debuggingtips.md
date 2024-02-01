@@ -41,11 +41,16 @@ useful.
 
 ## Useful Julia functions for Inspecting those variables
 
-  * `jl_gdblookup($rip)` :: For looking up the current function and line. (use `$eip` on i686 platforms)
+  * `jl_print_task_backtraces(0)` :: Similar to gdb's `thread apply all bt` or lldb's `thread backtrace
+    all`. Runs all threads while printing backtraces for all existing tasks.
+  * `jl_gdblookup($pc)` :: For looking up the current function and line.
+  * `jl_gdblookupinfo($pc)` :: For looking up the current method instance object.
+  * `jl_gdbdumpcode(mi)` :: For dumping all of `code_typed/code_llvm/code_asm` when the REPL is not working right.
   * `jlbacktrace()` :: For dumping the current Julia backtrace stack to stderr. Only usable after
     `record_backtrace()` has been called.
   * `jl_dump_llvm_value(Value*)` :: For invoking `Value->dump()` in gdb, where it doesn't work natively.
     For example, `f->linfo->functionObject`, `f->linfo->specFunctionObject`, and `to_function(f->linfo)`.
+  * `jl_dump_llvm_module(Module*)` :: For invoking `Module->dump()` in gdb, where it doesn't work natively.
   * `Type->dump()` :: only works in lldb. Note: add something like `;1` to prevent lldb from printing
     its prompt over the output
   * `jl_eval_string("expr")` :: for invoking side-effects to modify the current state or to lookup

@@ -179,6 +179,7 @@ const _julia_charmap = Dict{UInt32,UInt32}(
     0x00B7 => 0x22C5,
     0x0387 => 0x22C5,
     0x2212 => 0x002D,
+    0x210F => 0x0127,
 )
 
 utf8proc_map(s::AbstractString, flags::Integer, chartransform=identity) = utf8proc_map(String(s), flags, chartransform)

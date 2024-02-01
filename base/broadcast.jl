@@ -379,7 +379,7 @@ make_makeargs(args::Tuple) = _make_makeargs(args, 1)[1]
 end
 _make_makeargs(::Tuple{}, n::Int) = (), n
 
-# A help struct to store the flattened index staticly
+# A help struct to store the flattened index statically
 struct Pick{N} <: Function end
 (::Pick{N})(@nospecialize(args::Tuple)) where {N} = args[N]
 
@@ -419,6 +419,10 @@ function combine_styles end
 
 combine_styles() = DefaultArrayStyle{0}()
 combine_styles(c) = result_style(BroadcastStyle(typeof(c)))
+function combine_styles(bc::Broadcasted)
+    bc.style isa Union{Nothing,Unknown} || return bc.style
+    throw(ArgumentError("Broadcasted{Unknown} wrappers do not have a style assigned"))
+end
 combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
@@ -441,7 +445,9 @@ Base.Broadcast.DefaultArrayStyle{1}()
 function result_style end
 
 result_style(s::BroadcastStyle) = s
-result_style(s1::S, s2::S) where S<:BroadcastStyle = S()
+function result_style(s1::S, s2::S) where S<:BroadcastStyle
+    s1 ≡ s2 ? s1 : error("inconsistent broadcast styles, custom rule needed")
+end
 # Test both orders so users typically only have to declare one order
 result_style(s1, s2) = result_join(s1, s2, BroadcastStyle(s1, s2), BroadcastStyle(s2, s1))
 
@@ -457,7 +463,8 @@ result_join(::Any, ::Any, s::BroadcastStyle, ::Unknown) = s
 result_join(::AbstractArrayStyle, ::AbstractArrayStyle, ::Unknown, ::Unknown) =
     ArrayConflict()
 # Fallbacks in case users define `rule` for both argument-orders (not recommended)
-result_join(::Any, ::Any, ::S, ::S) where S<:BroadcastStyle = S()
+result_join(::Any, ::Any, s1::S, s2::S) where S<:BroadcastStyle = result_style(s1, s2)
+
 @noinline function result_join(::S, ::T, ::U, ::V) where {S,T,U,V}
     error("""
 conflicting broadcast rules defined
@@ -564,15 +571,15 @@ an `Int`.
     Any remaining indices in `I` beyond the length of the `keep` tuple are truncated. The `keep` and `default`
     tuples may be created by `newindexer(argument)`.
 """
-Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = CartesianIndex(_newindex(axes(arg), I.I))
-Base.@propagate_inbounds newindex(arg, I::Integer) = CartesianIndex(_newindex(axes(arg), (I,)))
+Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = to_index(_newindex(axes(arg), I.I))
+Base.@propagate_inbounds newindex(arg, I::Integer) = to_index(_newindex(axes(arg), (I,)))
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(length(ax[1]) == 1, ax[1][1], I[1]), _newindex(tail(ax), tail(I))...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple) = ()
 Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][1], _newindex(tail(ax), ())...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
-@inline newindex(I::CartesianIndex, keep, Idefault) = CartesianIndex(_newindex(I.I, keep, Idefault))
+@inline newindex(I::CartesianIndex, keep, Idefault) = to_index(_newindex(I.I, keep, Idefault))
 @inline newindex(i::Integer, keep::Tuple, idefault) = ifelse(keep[1], i, idefault[1])
 @inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex(())
 @inline _newindex(I, keep, Idefault) =
@@ -592,18 +599,14 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
     (Base.length(ind1)::Integer != 1, keep...), (first(ind1), Idefault...)
 end
 
-@inline function Base.getindex(bc::Broadcasted, I::Union{Integer,CartesianIndex})
+@inline function Base.getindex(bc::Broadcasted, Is::Vararg{Union{Integer,CartesianIndex},N}) where {N}
+    I = to_index(Base.IteratorsMD.flatten(Is))
     @boundscheck checkbounds(bc, I)
     @inbounds _broadcast_getindex(bc, I)
 end
-Base.@propagate_inbounds Base.getindex(
-    bc::Broadcasted,
-    i1::Union{Integer,CartesianIndex},
-    i2::Union{Integer,CartesianIndex},
-    I::Union{Integer,CartesianIndex}...,
-) =
-    bc[CartesianIndex((i1, i2, I...))]
-Base.@propagate_inbounds Base.getindex(bc::Broadcasted) = bc[CartesianIndex(())]
+to_index(::Tuple{}) = CartesianIndex()
+to_index(Is::Tuple{Any}) = Is[1]
+to_index(Is::Tuple) = CartesianIndex(Is)
 
 @inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
@@ -711,8 +714,8 @@ _broadcast_getindex_eltype(A) = eltype(A)  # Tuple, Array, etc.
 eltypes(::Tuple{}) = Tuple{}
 eltypes(t::Tuple{Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]))
 eltypes(t::Tuple{Any,Any}) = Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), _broadcast_getindex_eltype(t[2]))
-# eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
-eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
+eltypes(t::Tuple) = (TT = eltypes(tail(t)); TT === Union{} ? Union{} : Iterators.TupleOrBottom(_broadcast_getindex_eltype(t[1]), TT.parameters...))
+# eltypes(t::Tuple) = Iterators.TupleOrBottom(ntuple(i -> _broadcast_getindex_eltype(t[i]), Val(length(t)))...)
 
 # Inferred eltype of result of broadcast(f, args...)
 function combine_eltypes(f, args::Tuple)
@@ -968,26 +971,41 @@ preprocess(dest, x) = extrude(broadcast_unalias(dest, x))
 end
 
 # Performance optimization: for BitArray outputs, we cache the result
-# in a "small" Vector{Bool}, and then copy in chunks into the output
+# in a 64-bit register before writing into memory (to bypass LSQ)
 @inline function copyto!(dest::BitArray, bc::Broadcasted{Nothing})
     axes(dest) == axes(bc) || throwdm(axes(dest), axes(bc))
     ischunkedbroadcast(dest, bc) && return chunkedcopyto!(dest, bc)
-    length(dest) < 256 && return invoke(copyto!, Tuple{AbstractArray, Broadcasted{Nothing}}, dest, bc)
-    tmp = Vector{Bool}(undef, bitcache_size)
-    destc = dest.chunks
-    cind = 1
+    ndims(dest) == 0 && (dest[] = bc[]; return dest)
     bc′ = preprocess(dest, bc)
-    @inbounds for P in Iterators.partition(eachindex(bc′), bitcache_size)
-        ind = 1
-        @simd for I in P
-            tmp[ind] = bc′[I]
-            ind += 1
+    ax = axes(bc′)
+    ax1, out = ax[1], CartesianIndices(tail(ax))
+    destc, indc = dest.chunks, 0
+    bitst, remain = 0, UInt64(0)
+    for I in out
+        i = first(ax1) - 1
+        if ndims(bc) == 1 || bitst >= 64 - length(ax1)
+            if ndims(bc) > 1 && bitst != 0
+                @inbounds @simd for j = bitst:63
+                    remain |= UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
+                end
+                @inbounds destc[indc+=1] = remain
+                bitst, remain = 0, UInt64(0)
+            end
+            while i <= last(ax1) - 64
+                z = UInt64(0)
+                @inbounds @simd for j = 0:63
+                    z |= UInt64(convert(Bool, bc′[i+=1, I])) << (j & 63)
+                end
+                @inbounds destc[indc+=1] = z
+            end
         end
-        @simd for i in ind:bitcache_size
-            tmp[i] = false
+        @inbounds @simd for j = i+1:last(ax1)
+            remain |= UInt64(convert(Bool, bc′[j, I])) << (bitst & 63)
+            bitst += 1
         end
-        dumpbitcache(destc, cind, tmp)
-        cind += bitcache_chunks
+    end
+    @inbounds if bitst != 0
+        destc[indc+=1] = remain
     end
     return dest
 end
