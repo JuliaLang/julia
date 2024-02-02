@@ -1399,8 +1399,8 @@ end
     @test (() -> @allocations "a" * "b")() == 0 # constant propagation
     @test (() -> @allocations "a" * Base.inferencebarrier("b"))() == 1
 
-    lock_conflicts() = parse(Int, read(`$(Base.julia_cmd()) -tauto -E '
-        @lock_conflicts begin
+    _lock_conflicts, _nthreads = eval(Meta.parse(read(`$(Base.julia_cmd()) -tauto -E '
+        _lock_conflicts = @lock_conflicts begin
             l = ReentrantLock()
             Threads.@threads for i in 1:Threads.nthreads()
                  lock(l) do
@@ -1408,8 +1408,9 @@ end
                 end
             end
         end
-    '`, String))
-    @test lock_conflicts() > 0 skip=(Sys.CPU_THREADS < 2) # can only test if the worker can multithread
+        _lock_conflicts,Threads.nthreads()
+    '`, String)))
+    @test _lock_conflicts > 0 skip=(_nthreads < 2) # can only test if the worker can multithread
 end
 
 #TODO: merge with `@testset "Base/timing.jl"` once https://github.com/JuliaLang/julia/issues/52948 is resolved
