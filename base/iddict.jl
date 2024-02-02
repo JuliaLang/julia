@@ -183,17 +183,16 @@ function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
 end
 
 function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    keyindex, inserted = ht_keyindex!(d, key)
-
-    if inserted
+    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
+    if val === secret_table_token
         val = default()
-        if !(val isa V) # avoid a dynamic call
+        if !isa(val, V)
             val = convert(V, val)::V
         end
-        _setindex!(d, val, key, keyindex, inserted)
-        return val::V
+        setindex!(d, val, key)
+        return val
     else
-        return @inbounds d.ht[keyindex+1]::V
+        return val::V
     end
 end
 
