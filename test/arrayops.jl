@@ -3192,3 +3192,12 @@ end
     @test_throws DimensionMismatch wrap(Array, memref2, 9)
     @test_throws DimensionMismatch wrap(Array, memref2, 10)
 end
+
+@testset "Memory size" begin
+    len = 5
+    mem = Memory{Int}(undef, len)
+    @test size(mem, 1) == len
+    @test size(mem, 0x1) == len
+    @test size(mem, 2) == 1
+    @test size(mem, 0x2) == 1
+end
