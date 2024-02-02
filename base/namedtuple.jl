@@ -268,6 +268,8 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
 
+filter(f, xs::NamedTuple) = xs[filter(k -> f(xs[k]), keys(xs))]
+
 function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize
     @_total_meta

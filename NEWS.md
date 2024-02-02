@@ -102,6 +102,7 @@ New library features
   data-races. Or use the callback form of `open` to have all that handled
   automatically.
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `filter` can now act on a `NamedTuple` ([#50795]).
 
 Standard library changes
 ------------------------
