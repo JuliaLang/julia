@@ -2,7 +2,7 @@
 
 There are many ways to install Julia. The following sections highlight the recommended method for each of the main supported platforms, and then present alternative ways that might be useful in specialized situations.
 
-Julia switched the default installation recommendation to a solution based on Juliaup in the summer of 2023. If you installed Julia previously with a method that is _not_ based on Juliaup and want to switch your system to an installation that is based on Juliaup, we recommend that you uninstall all previous Julia versions, ensure that you remove anything Julia related from your `PATH` variable and then install Julia with one of the methods described below.
+The current installation recommendation is a solution based on Juliaup. If you installed Julia previously with a method that is _not_ based on Juliaup and want to switch your system to an installation that is based on Juliaup, we recommend that you uninstall all previous Julia versions, ensure that you remove anything Julia related from your `PATH` variable and then install Julia with one of the methods described below.
 
 ## Windows
 
@@ -48,10 +48,6 @@ Note that we recommend the following methods _only_ if none of the installation 
 
 If the Windows Store is blocked on a system, we have an alternative [MSIX App Installer](https://learn.microsoft.com/en-us/windows/msix/app-installer/app-installer-file-overview) based setup. To use the App Installer version, download [this](https://install.julialang.org/Julia.appinstaller) file and open it by double clicking on it.
 
-### MSI Installer (Windows)
-
-If neither the Windows Store nor the App Installer version work on your Windows system, you can download a MSI installer from XXX. Note that this installation methods comes with serious limitations and is generally not recommended unless no other method works. For example, there is no automatic update mechanism for Juliaup with this installation method.
-
 ### [Homebrew](https://brew.sh) (Mac and Linux)
 
 On systems with brew, you can install Julia by running
@@ -59,7 +55,6 @@ On systems with brew, you can install Julia by running
 brew install juliaup
 ```
 in a shell. Note that you will have to update Juliaup with standard brew commands.
-
 
 ### [Arch Linux - AUR](https://aur.archlinux.org/packages/juliaup/) (Linux)
 
