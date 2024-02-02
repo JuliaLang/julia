@@ -503,7 +503,7 @@ end
 Determines whether a [`Channel`](@ref) has a value stored in it.
 Returns immediately, does not block.
 
-For unbuffered channels returns `true` if there are tasks waiting on a [`put!`](@ref).
+For unbuffered channels, this returns `true` if there are tasks waiting on a [`put!`](@ref).
 
 # Examples
 
@@ -542,6 +542,38 @@ function n_avail(c::Channel)
     # Lock-free equivalent to `length(c.data) + length(c.cond_put.waitq)`
     @atomic :monotonic c.n_avail_items
 end
+
+"""
+    isfull(c::Channel)
+
+Determines whether a [`Channel`](@ref) is full, in the 
+sense that calling `put!(c, some_value)` will block.
+Returns immediately, does not block.
+
+# Examples
+
+Buffered channel:
+```jldoctest
+julia> c = Channel(1); # capacity = 1
+
+julia> isfull(c)
+false
+
+julia> put!(c, 1);
+
+julia> isfull(c)
+true
+```
+
+Unbuffered channel:
+```jldoctest
+julia> c = Channel(); # capacity = 0
+
+julia> isfull(c) # unbuffered channel is always full
+true
+```
+"""
+isfull(c::Channel) = n_avail(c) ≥ c.sz_max
 
 lock(c::Channel) = lock(c.cond_take)
 lock(f, c::Channel) = lock(f, c.cond_take)
