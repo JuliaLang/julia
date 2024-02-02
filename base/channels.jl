@@ -546,13 +546,13 @@ end
 """
     isfull(c::Channel)
 
-Determines if a [`Channel`](@ref) is full, in the 
+Determines if a [`Channel`](@ref) is full, in the
 sense that calling `put!(c, some_value)` will block.
 Returns immediately, does not block.
 
-Note that if another task is currently waiting to `take!` 
-a value from `c`, a call to `put!(c, some_value)` might 
-immediately be unblocked, even if `isfull(c)==true`. 
+Note that if another task is currently waiting to `take!`
+a value from `c`, a call to `put!(c, some_value)` might
+immediately be unblocked, even if `isfull(c)==true`.
 This is particularly relevant for unbuffered channels.
 
 # Examples
