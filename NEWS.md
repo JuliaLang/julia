@@ -82,6 +82,7 @@ New library functions
 * `Sys.username()` can be used to return the current user's username ([#51897]).
 * `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` is the safe counterpart to `unsafe_wrap` ([#52049]).
 * `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
+* The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block.
 
 New library features
 --------------------
