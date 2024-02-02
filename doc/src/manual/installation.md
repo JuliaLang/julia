@@ -48,6 +48,10 @@ Note that we recommend the following methods _only_ if none of the installation 
 
 If the Windows Store is blocked on a system, we have an alternative [MSIX App Installer](https://learn.microsoft.com/en-us/windows/msix/app-installer/app-installer-file-overview) based setup. To use the App Installer version, download [this](https://install.julialang.org/Julia.appinstaller) file and open it by double clicking on it.
 
+### MSI Installer (Windows)
+
+If neither the Windows Store nor the App Installer version work on your Windows system, you can also use a MSI based installer. Note that this installation methods comes with serious limitations and is generally not recommended unless no other method works. For example, there is no automatic update mechanism for Juliaup with this installation method. The 64 bit version of the MSI installer can be downloaded from [here](https://install.julialang.org/Julia-x64.msi) and the 32 bit version from [here](https://install.julialang.org/Julia-x86.msi).
+
 ### [Homebrew](https://brew.sh) (Mac and Linux)
 
 On systems with brew, you can install Julia by running
