@@ -82,7 +82,7 @@ function ht_keyindex!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     return abs(keyindex), keyindex < 0
 end
 
-function _setindex!(d::IdDict{K,V}, val::V, key::K, keyindex::Int, inserted::Bool) where {K, V}
+function _setindex!(d::IdDict{K,V}, val::V, keyindex::Int, inserted::Bool) where {K, V}
     @inbounds d.ht[keyindex+1] = val
     d.count += inserted
 
@@ -98,7 +98,7 @@ function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where
     if !(val isa V) # avoid a dynamic call
         val = convert(V, val)::V
     end
-    _setindex!(d, val, key, keyindex, inserted)
+    _setindex!(d, val, keyindex, inserted)
     return d
 end
 
@@ -166,7 +166,7 @@ function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where 
 
     if inserted
         val = isa(default, V) ? default : convert(V, default)::V
-        _setindex!(d, val, key, keyindex, inserted)
+        _setindex!(d, val, keyindex, inserted)
         return val::V
     else
         return @inbounds d.ht[keyindex+1]::V
