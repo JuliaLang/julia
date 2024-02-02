@@ -1287,6 +1287,51 @@ end
     end
 end
 
+module KwdefWithEsc
+    const Int1 = Int
+    const val1 = 42
+    macro define_struct()
+        quote
+            @kwdef struct $(esc(:Struct))
+                a
+                b = val1
+                c::Int1
+                d::Int1 = val1
+
+                $(esc(quote
+                    e
+                    f = val2
+                    g::Int2
+                    h::Int2 = val2
+                end))
+
+                $(esc(:(i = val2)))
+                $(esc(:(j::Int2)))
+                $(esc(:(k::Int2 = val2)))
+
+                l::$(esc(:Int2))
+                m::$(esc(:Int2)) = val1
+
+                n = $(esc(:val2))
+                o::Int1 = $(esc(:val2))
+
+                $(esc(:p))
+                $(esc(:q)) = val1
+                $(esc(:s))::Int1
+                $(esc(:t))::Int1 = val1
+            end
+        end
+    end
+end
+
+module KwdefWithEsc_TestModule
+    using ..KwdefWithEsc
+    const Int2 = Int
+    const val2 = 42
+    KwdefWithEsc.@define_struct()
+end
+@test isdefined(KwdefWithEsc_TestModule, :Struct)
+
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules
         mod === Main && continue # Main exports everything

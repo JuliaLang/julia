@@ -575,12 +575,13 @@ macro kwdef(expr)
     # Only define a constructor if the type has fields, otherwise we'll get a stack
     # overflow on construction
     if !isempty(params_ex.args)
-        if T isa Symbol
+        T_no_esc,_ = strip_esc(T)
+        if T_no_esc isa Symbol
             sig = :(($(esc(T)))($params_ex))
             call = :(($(esc(T)))($(call_args...)))
             body = Expr(:block, __source__, call)
             kwdefs = Expr(:function, sig, body)
-        elseif isexpr(T, :curly)
+        elseif isexpr(T_no_esc, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
@@ -609,7 +610,7 @@ end
 
 # @kwdef helper function
 # mutates arguments inplace
-function _kwdef!(blk, params_args, call_args)
+function _kwdef!(blk, params_args, call_args, esc_count = 0)
     for i in eachindex(blk.args)
         ei = blk.args[i]
         if ei isa Symbol
@@ -628,35 +629,55 @@ function _kwdef!(blk, params_args, call_args)
                 push!(call_args, ei)
             elseif ei.head === :(=)
                 lhs = ei.args[1]
-                if lhs isa Symbol
+                lhs_no_esc, lhs_esc_count = strip_esc(lhs)
+                if lhs_no_esc isa Symbol
                     #  var = defexpr
-                    var = lhs
-                elseif lhs isa Expr && lhs.head === :(::) && lhs.args[1] isa Symbol
+                    var = lhs_no_esc
+                elseif lhs_no_esc isa Expr && lhs_no_esc.head === :(::) && strip_esc(lhs_no_esc.args[1])[1] isa Symbol
                     #  var::T = defexpr
-                    var = lhs.args[1]
+                    var = strip_esc(lhs_no_esc.args[1])[1]
                 else
                     # something else, e.g. inline inner constructor
                     #   F(...) = ...
                     continue
                 end
                 defexpr = ei.args[2]  # defexpr
+                defexpr = wrap_esc(defexpr, esc_count + lhs_esc_count)
                 push!(params_args, Expr(:kw, var, esc(defexpr)))
                 push!(call_args, var)
                 lhs = is_const ? Expr(:const, lhs) : lhs
                 lhs = is_atomic ? Expr(:atomic, lhs) : lhs
                 blk.args[i] = lhs # overrides arg
-            elseif ei.head === :(::) && ei.args[1] isa Symbol
+            elseif ei.head === :(::) && strip_esc(ei.args[1])[1] isa Symbol
                 # var::Typ
-                var = ei.args[1]
+                var,_ = strip_esc(ei.args[1])
                 push!(params_args, var)
                 push!(call_args, var)
             elseif ei.head === :block
                 # can arise with use of @static inside type decl
                 _kwdef!(ei, params_args, call_args)
+            elseif ei.head === :escape
+                _kwdef!(ei, params_args, call_args, esc_count + 1)
             end
         end
     end
     blk
+end
+
+function strip_esc(expr)
+    count = 0
+    while isexpr(expr, :escape)
+        expr = expr.args[1]
+        count += 1
+    end
+    return (expr, count)
+end
+
+function wrap_esc(expr, count)
+    for _ = 1:count
+        expr = esc(expr)
+    end
+    return expr
 end
 
 # testing
