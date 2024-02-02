@@ -352,6 +352,7 @@ Base.@timed
 Base.@elapsed
 Base.@allocated
 Base.@allocations
+Base.@lock_conflicts
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB

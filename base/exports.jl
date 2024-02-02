@@ -1036,6 +1036,7 @@ export
     @elapsed,
     @allocated,
     @allocations,
+    @lock_conflicts,
 
     # tasks
     @sync,
