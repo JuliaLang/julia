@@ -241,8 +241,8 @@ When `check = true`, an error is thrown if the decomposition fails.
 When `check = false`, responsibility for checking the decomposition's
 validity (via [`issuccess`](@ref)) lies with the user.
 
-By default with `check = true` an error is also thrown when the decomposition
-produces valid factors but with rank-deficient U. This can be changed by
+By default, with `check = true`, an error is also thrown when the decomposition
+produces valid factors, but the upper-triangular factor `U` is rank-deficient. This may be changed by
 passing `allowsingular = true`.
 
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
