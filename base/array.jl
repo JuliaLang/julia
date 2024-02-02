@@ -3067,7 +3067,8 @@ of [`unsafe_wrap`](@ref) utilizing `Memory` or `MemoryRef` instead of raw pointe
 """
 function wrap end
 
-@eval @propagate_inbounds function wrap(::Type{Array}, ref::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
+# validity checking for _wrap calls, separate from allocation of Array so that it can be more likely to inline into the caller
+function _wrap(ref::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
     mem = ref.mem
     mem_len = length(mem) + 1 - memoryrefoffset(ref)
     len = Core.checked_dims(dims...)
@@ -3076,18 +3077,35 @@ function wrap end
         mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
         ref = MemoryRef(mem)
     end
-    $(Expr(:new, :(Array{T, N}), :ref, :dims))
+    return ref
 end
 
 @noinline invalid_wrap_err(len, dims, proddims) = throw(DimensionMismatch(
     "Attempted to wrap a MemoryRef of length $len with an Array of size dims=$dims, which is invalid because prod(dims) = $proddims > $len, so that the array would have more elements than the underlying memory can store."))
 
-function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
-    wrap(Array, MemoryRef(m), dims)
+@eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
+    dims = convert(Dims, dims)
+    ref = _wrap(m, dims)
+    $(Expr(:new, :(Array{T, N}), :ref, :dims))
 end
-function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
-    wrap(Array, m, (l,))
+
+@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
+    dims = convert(Dims, dims)
+    ref = _wrap(MemoryRef(m), dims)
+    $(Expr(:new, :(Array{T, N}), :ref, :dims))
 end
-function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
-    wrap(Array, MemoryRef(m), (l,))
+@eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
+    dims = (Int(l),)
+    ref = _wrap(m, dims)
+    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
+end
+@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
+    dims = (Int(l),)
+    ref = _wrap(MemoryRef(m), (l,))
+    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
+end
+@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}) where {T}
+    ref = MemoryRef(m)
+    dims = (length(m),)
+    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end
