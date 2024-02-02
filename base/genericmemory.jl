@@ -23,7 +23,7 @@ size(a::GenericMemory, d::Int) =
     d < 1 ? error("dimension out of range") :
     d == 1 ? length(a) :
     1
-size(a::GenericMemory, d::Integer) =  size(a, convert(d, Int))
+size(a::GenericMemory, d::Integer) =  size(a, convert(Int, d))
 size(a::GenericMemory) = (length(a),)
 
 IndexStyle(::Type{<:GenericMemory}) = IndexLinear()
