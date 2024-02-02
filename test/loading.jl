@@ -1511,18 +1511,18 @@ end
         mkpath(project_path)
 
         # Create a `Foo.jl` package
-        foo_path = joinpath(depot, "dev", "Foo")
+        foo_path = joinpath(depot, "dev", "Foo52462")
         mkpath(joinpath(foo_path, "src"))
-        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+        open(joinpath(foo_path, "src", "Foo52462.jl"); write=true) do io
             println(io, """
-            module Foo
+            module Foo52462
             include("non-existent.jl")
             end
             """)
         end
         open(joinpath(foo_path, "Project.toml"); write=true) do io
             println(io, """
-            name = "Foo"
+            name = "Foo52462"
             uuid = "00000000-0000-0000-0000-000000000001"
             version = "1.0.0"
             """)
