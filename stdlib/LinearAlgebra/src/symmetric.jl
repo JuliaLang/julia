@@ -335,8 +335,8 @@ Hermitian{T,S}(A::Hermitian) where {T,S<:AbstractMatrix{T}} = Hermitian{T,S}(con
 AbstractMatrix{T}(A::Hermitian) where {T} = Hermitian(convert(AbstractMatrix{T}, A.data), sym_uplo(A.uplo))
 AbstractMatrix{T}(A::Hermitian{T}) where {T} = copy(A)
 
-copy(A::Symmetric) = (Symmetric(parentof_applytri(copy, B), sym_uplo(A.uplo)))
-copy(A::Hermitian) = (Hermitian(parentof_applytri(copy, B), sym_uplo(A.uplo)))
+copy(A::Symmetric) = (Symmetric(parentof_applytri(copy, A), sym_uplo(A.uplo)))
+copy(A::Hermitian) = (Hermitian(parentof_applytri(copy, A), sym_uplo(A.uplo)))
 
 function copyto!(dest::Symmetric, src::Symmetric)
     if src.uplo == dest.uplo
