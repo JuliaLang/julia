@@ -1404,7 +1404,7 @@ end
             l = ReentrantLock()
             Threads.@threads for i in 1:Threads.nthreads()
                  lock(l) do
-                    sleep(0.5)
+                    sleep(1)
                 end
             end
         end
