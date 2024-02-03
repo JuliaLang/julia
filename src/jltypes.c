@@ -3552,6 +3552,11 @@ void post_boot_hooks(void)
     jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
     jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
+    jl_divbyzero_fp_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideByZeroFloatingPointException"));
+    jl_overflow_fp_exception   = jl_new_struct_uninit((jl_datatype_t*)core("OverflowFloatingPointException"));
+    jl_underflow_fp_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UnderflowFloatingPointException"));
+    jl_inexact_fp_exception    = jl_new_struct_uninit((jl_datatype_t*)core("InexactFloatingPointException"));
+    jl_invalid_fp_exception    = jl_new_struct_uninit((jl_datatype_t*)core("InvalidFloatingPointException"));
     jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
     jl_atomicerror_type    = (jl_datatype_t*)core("ConcurrencyViolationError");

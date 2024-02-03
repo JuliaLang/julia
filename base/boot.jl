@@ -204,6 +204,11 @@ export
     ErrorException, BoundsError, DivideError, DomainError, Exception,
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
+    DivideByZeroFloatingPointException,
+    OverflowFloatingPointException,
+    UnderflowFloatingPointException,
+    InexactFloatingPointException,
+    InvalidFloatingPointException,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
     UndefKeywordError, ConcurrencyViolationError,
     # AST representation
@@ -399,6 +404,15 @@ struct AssertionError <: Exception
     msg::AbstractString
 end
 AssertionError() = AssertionError("")
+
+abstract type FloatingPointException  <: Exception end
+
+struct DivideByZeroFloatingPointException <: FloatingPointException end
+struct OverflowFloatingPointException     <: FloatingPointException end
+struct UnderflowFloatingPointException    <: FloatingPointException end
+struct InexactFloatingPointException      <: FloatingPointException end
+struct InvalidFloatingPointException      <: FloatingPointException end
+
 
 abstract type WrappedException <: Exception end
 

@@ -37,6 +37,11 @@
     XX(jl_datatype_type) \
     XX(jl_densearray_type) \
     XX(jl_diverror_exception) \
+    XX(jl_divbyzero_fp_exception) \
+    XX(jl_overflow_fp_exception) \
+    XX(jl_underflow_fp_exception) \
+    XX(jl_inexact_fp_exception) \
+    XX(jl_invalid_fp_exception) \
     XX(jl_emptysvec) \
     XX(jl_emptytuple) \
     XX(jl_emptytuple_type) \

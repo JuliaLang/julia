@@ -341,7 +341,57 @@ kern_return_t catch_mach_exception_raise(
     if (ptls2->gc_state == JL_GC_STATE_WAITING)
         return KERN_FAILURE;
     if (exception == EXC_ARITHMETIC) {
+      // https://github.com/apple/darwin-xnu/blob/a1babec6b135d1f35b2590a1990af3c5c5393479/osfmk/kern/ux_handler.c#L149
+      // uu_code = code[0]; uu_subcode = code[1]
+
+#ifdef _CPU_X86_64_
+      // https://github.com/apple/darwin-xnu/blob/8f02f2a044b9bb1ad951987ef5bab20ec9486310/bsd/dev/i386/unix_signal.c#L535-L551
+      if (code[0] == EXC_I386_DIV) {
         jl_throw_in_thread(ptls2, thread, jl_diverror_exception);
+      } else if (code[0] == EXC_I386_SSEEXTERR) {
+        // code[1] contains the contents of the MXCSR register
+        unsigned int flags = ~(code[1] >> 7) & code[1];  // extract unmasked flags
+
+        if (flags & (1 << 0))      // IE = invalid
+          jl_throw_in_thread(ptls2, thread, jl_invalid_fp_exception);
+        else if (flags & (1 << 1)) // DE = denormal
+          jl_throw_in_thread(ptls2, thread, jl_underflow_fp_exception);
+        else if (flags & (1 << 2)) // ZE = zero divide
+          jl_throw_in_thread(ptls2, thread, jl_divbyzero_fp_exception);
+        else if (flags & (1 << 3)) // OE = overflow
+          jl_throw_in_thread(ptls2, thread, jl_overflow_fp_exception);
+        else if (flags & (1 << 4)) // UE = underflow
+          jl_throw_in_thread(ptls2, thread, jl_underflow_fp_exception);
+        else if (flags & (1 << 5)) // PE = precision (inexact)
+          jl_throw_in_thread(ptls2, thread, jl_inexact_fp_exception);
+      }
+#elif defined(_CPU_AARCH64_)
+    // https://github.com/apple/darwin-xnu/blob/2ff845c2e033bd0ff64b5b6aa6063a1f8f65aa32/bsd/dev/arm/unix_signal.c#L436-L459
+      switch (code[0]) {
+      case EXC_ARM_FP_UF:
+        jl_throw_in_thread(ptls2, thread, jl_underflow_fp_exception);
+        break;
+      case EXC_ARM_FP_OF:
+        jl_throw_in_thread(ptls2, thread, jl_overflow_fp_exception);
+        break;
+      case EXC_ARM_FP_IO:
+        jl_throw_in_thread(ptls2, thread, jl_invalid_fp_exception);
+        break;
+      case EXC_ARM_FP_DZ:
+        jl_throw_in_thread(ptls2, thread, jl_divbyzero_fp_exception);
+        break;
+      case EXC_ARM_FP_ID: // denormal
+        jl_throw_in_thread(ptls2, thread, jl_underflow_fp_exception);
+        break;
+      case EXC_ARM_FP_IX:
+        jl_throw_in_thread(ptls2, thread, jl_inexact_fp_exception);
+        break;
+      default:
+        break;
+      }
+#else
+    jl_throw_in_thread(ptls2, thread, jl_diverror_exception);
+#endif
         return KERN_SUCCESS;
     }
     assert(exception == EXC_BAD_ACCESS); // SIGSEGV or SIGBUS

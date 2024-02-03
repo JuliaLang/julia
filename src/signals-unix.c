@@ -1002,7 +1002,6 @@ void restore_signals(void)
 
 static void fpe_handler(int sig, siginfo_t *info, void *context)
 {
-    (void)info;
     if (jl_get_safe_restore()) { // restarting jl_ or profile
         jl_call_in_ctx(NULL, &jl_sig_throw, sig, context);
         return;
@@ -1010,8 +1009,18 @@ static void fpe_handler(int sig, siginfo_t *info, void *context)
     jl_task_t *ct = jl_get_current_task();
     if (ct == NULL || ct->eh == NULL) // exception on foreign thread is fatal
         sigdie_handler(sig, info, context);
-    else
+    else if (info->si_code == FPE_INTDIV)
         jl_throw_in_ctx(ct, jl_diverror_exception, sig, context);
+    else if (info->si_code == FPE_FLTINV)
+        jl_throw_in_ctx(ct, jl_invalid_fp_exception, sig, context);
+    else if (info->si_code == FPE_FLTDIV)
+        jl_throw_in_ctx(ct, jl_divbyzero_fp_exception, sig, context);
+    else if (info->si_code == FPE_FLTOVF)
+        jl_throw_in_ctx(ct, jl_overflow_fp_exception, sig, context);
+    else if (info->si_code == FPE_FLTUND)
+        jl_throw_in_ctx(ct, jl_underflow_fp_exception, sig, context);
+    else if (info->si_code == FPE_FLTRES)
+        jl_throw_in_ctx(ct, jl_inexact_fp_exception, sig, context);
 }
 
 static void sigint_handler(int sig)

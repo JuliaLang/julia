@@ -313,6 +313,73 @@ for IEEE arithmetic, and `true` if they might be converted to zeros.
 """
 get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 
+
+function _get_exceptions()
+    excepts = ccall(:jl_get_fenv_except,Cint,())
+    if excepts < 0
+        error("Floating point exceptions not supported on this platform")
+    end
+    return excepts
+end
+function get_exceptions()
+    excepts = _get_exceptions()
+    return (;
+            invalid = excepts & JL_FE_INVALID != 0,
+            inexact = excepts & JL_FE_INEXACT != 0,
+            underflow = excepts & JL_FE_UNDERFLOW != 0,
+            overflow = excepts & JL_FE_OVERFLOW != 0,
+            dividebyzero = excepts & JL_FE_DIVBYZERO != 0,
+            )
+end
+
+function set_exceptions(;
+                        invalid=nothing,
+                        inexact=nothing,
+                        overflow=nothing,
+                        underflow=nothing,
+                        dividebyzero=nothing
+                        )
+    excepts = _get_exceptions()
+    if !isnothing(invalid)
+        if invalid
+            excepts |= JL_FE_INVALID
+        else
+            excepts &= ~JL_FE_INVALID
+        end
+    end
+    if !isnothing(inexact)
+        if inexact
+            excepts |= JL_FE_INEXACT
+        else
+            excepts &= ~JL_FE_INEXACT
+        end
+    end
+    if !isnothing(underflow)
+        if underflow
+            excepts |= JL_FE_UNDERFLOW
+        else
+            excepts &= ~JL_FE_UNDERFLOW
+        end
+    end
+    if !isnothing(overflow)
+        if overflow
+            excepts |= JL_FE_OVERFLOW
+        else
+            excepts &= ~JL_FE_OVERFLOW
+        end
+    end
+    if !isnothing(dividebyzero)
+        if dividebyzero
+            excepts |= JL_FE_DIVBYZERO
+        else
+            excepts &= ~JL_FE_DIVBYZERO
+        end
+    end
+    if ccall(:jl_set_fenv_except,Cint,(Cint,), excepts) < 0
+        error("Floating point exceptions not supported on this platform")
+    end
+end
+
 end #module
 using .Rounding
 

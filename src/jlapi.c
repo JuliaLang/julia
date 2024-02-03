@@ -19,6 +19,10 @@
 #include "tracy/TracyC.h"
 #endif
 
+#ifdef _OS_WINDOWS_
+#include <float.h>
+#endif
+
 #ifdef __cplusplus
 #include <cfenv>
 extern "C" {
@@ -898,6 +902,79 @@ JL_DLLEXPORT int jl_set_fenv_rounding(int i)
 {
     return fesetround(i);
 }
+
+
+JL_DLLEXPORT int jl_get_fenv_except(void)
+{
+#if defined(__GLIBC__)
+    return fegetexcept();
+#elif defined(_OS_WINDOWS_)
+    unsigned int flags = _controlfp(0, 0);
+    int excepts = 0;
+    if (flags & _EM_INEXACT)
+      excepts |= FE_INEXACT;
+    if (flags & _EM_UNDERFLOW)
+      excepts |= FE_UNDERFLOW;
+    if (flags & _EM_OVERFLOW)
+      excepts |= FE_OVERFLOW;
+    if (flags & _EM_ZERODIVIDE)
+      excepts |= FE_DIVBYZERO;
+    if (flags & _EM_INVALID)
+      excepts |= FE_INVALID;
+    return excepts;
+#elif defined(_OS_DARWIN_)
+    fenv_t env;
+    fegetenv(&env);
+#if defined(_CPU_AARCH64_)
+    return (env.__fpcr >> 8 & FE_ALL_EXCEPT);
+#elif defined(_CPU_X86_64_)
+    return (~env.__mxcsr >> 7 & FE_ALL_EXCEPT);
+#else
+    return -1;
+#endif
+#else
+    return -1;
+#endif
+}
+
+JL_DLLEXPORT int jl_set_fenv_except(int excepts)
+{
+#if defined(__GLIBC__)
+    int prev_excepts = feenableexcept(excepts);
+    return prev_excepts >= 0;
+#elif defined(_OS_WINDOWS_)
+    unsigned int flags = 0;
+    if (excepts & FE_INEXACT)
+      flags |= _EM_INEXACT;
+    if (excepts & FE_UNDERFLOW)
+      flags |= _EM_UNDERFLOW;
+    if (excepts & FE_OVERFLOW)
+      flags |= _EM_OVERFLOW;
+    if (excepts & FE_DIVBYZERO)
+      flags |= _EM_ZERODIVIDE;
+    if (excepts & FE_INVALID)
+      flags |= _EM_INVALID;
+    _controlfp(flags, _MCW_EM);
+    return 0;
+#elif defined(_OS_DARWIN_)
+    // https://stackoverflow.com/questions/71821666/trapping-floating-point-exceptions-and-signal-handling-on-apple-silicon
+    fenv_t env;
+    fegetenv(&env);
+#if defined(_CPU_AARCH64_)
+    env.__fpcr = (env.__fpcr & ~(FE_ALL_EXCEPT << 8)) | (excepts << 8);
+#elif defined(_CPU_X86_64_)
+    env.__control = (env.__control | FE_ALL_EXCEPT) & ~excepts;
+    env.__mxcsr = (env.__mxcsr | FE_ALL_EXCEPT << 7) & ~(excepts << 7);
+#else
+    return -1;
+#endif
+    fesetenv(&env);
+    return 0;
+#else
+    return -1;
+#endif
+}
+
 
 static int exec_program(char *program)
 {
