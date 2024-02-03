@@ -1015,12 +1015,12 @@ let err_str
     err_str = @except_str max([1,2,3]) MethodError
     @test occursin(expected, err_str)
 
-    expected = "You may need to implement the `length` method or define IteratorSize for this type to be SizeUnknown."
+    expected = "You may need to implement the `length` method or define `IteratorSize` for this type to be `SizeUnknown`."
     err_str = @except_str length(MissingLength()) MethodError
     @test occursin(expected, err_str)
     err_str = @except_str collect(MissingLength()) MethodError
     @test occursin(expected, err_str)
-    expected = "You may need to implement the `length` and `size` methods for IteratorSize HasShape."
+    expected = "You may need to implement the `length` and `size` methods for `IteratorSize` `HasShape`."
     err_str = @except_str size(MissingSize()) MethodError
     @test occursin(expected, err_str)
     err_str = @except_str collect(MissingSize()) MethodError

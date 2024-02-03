@@ -1039,9 +1039,9 @@ function methods_on_iterable(io, ex, arg_types, kwargs)
         if hasmethod(iterate, arg_type_tuple)
             iterkind = IteratorSize(arg_types[1])
             if iterkind isa HasLength
-                print(io, "\nYou may need to implement the `length` method or define IteratorSize for this type to be SizeUnknown.")
+                print(io, "\nYou may need to implement the `length` method or define `IteratorSize` for this type to be `SizeUnknown`.")
             elseif iterkind isa HasShape
-                print(io, "\nYou may need to implement the `length` and `size` methods for IteratorSize HasShape.")
+                print(io, "\nYou may need to implement the `length` and `size` methods for `IteratorSize` `HasShape`.")
             end
         end
     end
