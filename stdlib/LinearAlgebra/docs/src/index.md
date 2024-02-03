@@ -411,7 +411,7 @@ Several of Julia's [matrix factorizations](@ref man-linalg-factorizations) suppo
 numerical stability. In fact, some matrix factorizations, such as the LU
 factorization, may fail without pivoting.
 
-In pivoting, first, a [pivot element](https://en.wikipedia.org/wiki/Pivot_element) 
+In pivoting, first, a [pivot element](https://en.wikipedia.org/wiki/Pivot_element)
 with good numerical properties is chosen based on a pivoting strategy. Next, the rows and
 columns of the original matrix are permuted to bring the chosen element in place for
 subsequent computation. Furthermore, the process is repeated for each stage of the factorization.
