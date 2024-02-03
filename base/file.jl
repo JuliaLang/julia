@@ -517,30 +517,30 @@ end
 
 const TEMP_CLEANUP_MIN = Ref(1024)
 const TEMP_CLEANUP_MAX = Ref(1024)
-const TEMP_CLEANUP = Lockable(Dict{String,Bool}())
+const TEMP_CLEANUP = Dict{String,Bool}()
+const TEMP_CLEANUP_LOCK = ReentrantLock()
 
 function temp_cleanup_later(path::AbstractString; asap::Bool=false)
-    @lock TEMP_CLEANUP begin
-    paths = TEMP_CLEANUP[]
+    @lock TEMP_CLEANUP_LOCK begin
     # each path should only be inserted here once, but if there
     # is a collision, let !asap win over asap: if any user might
     # still be using the path, don't delete it until process exit
-    paths[path] = get(paths, path, true) & asap
-    if length(paths) > TEMP_CLEANUP_MAX[]
+    TEMP_CLEANUP[path] = get(TEMP_CLEANUP, path, true) & asap
+    if length(TEMP_CLEANUP) > TEMP_CLEANUP_MAX[]
         temp_cleanup_purge_prelocked(false)
-        TEMP_CLEANUP_MAX[] = max(TEMP_CLEANUP_MIN[], 2*length(paths))
+        TEMP_CLEANUP_MAX[] = max(TEMP_CLEANUP_MIN[], 2*length(TEMP_CLEANUP))
     end
     end
     nothing
 end
 
 function temp_cleanup_forget(path::AbstractString)
-    @lock TEMP_CLEANUP delete!(TEMP_CLEANUP[], path)
+    @lock TEMP_CLEANUP_LOCK delete!(TEMP_CLEANUP, path)
     nothing
 end
 
 function temp_cleanup_purge_prelocked(force::Bool)
-    filter!(TEMP_CLEANUP[]) do (path, asap)
+    filter!(TEMP_CLEANUP) do (path, asap)
         try
             ispath(path) || return false
             if force || asap
@@ -562,7 +562,7 @@ end
 
 function temp_cleanup_purge_all()
     may_need_gc = false
-    @lock TEMP_CLEANUP filter!(TEMP_CLEANUP[]) do (path, asap)
+    @lock TEMP_CLEANUP_LOCK filter!(TEMP_CLEANUP) do (path, asap)
         try
             ispath(path) || return false
             may_need_gc = true
@@ -576,12 +576,12 @@ function temp_cleanup_purge_all()
         # this is only usually required on Sys.iswindows(), but may as well do it everywhere
         GC.gc(true)
     end
-    @lock TEMP_CLEANUP temp_cleanup_purge_prelocked(true)
+    @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(true)
     nothing
 end
 
 # deprecated internal function used by some packages
-temp_cleanup_purge(; force=false) = force ? temp_cleanup_purge_all() : @lock TEMP_CLEANUP temp_cleanup_purge_prelocked(false)
+temp_cleanup_purge(; force=false) = force ? temp_cleanup_purge_all() : @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(false)
 
 function __postinit__()
     Base.atexit(temp_cleanup_purge_all)
