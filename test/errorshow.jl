@@ -590,7 +590,8 @@ let
 
     # Test that it shows a special message when no constructors have been defined by the user.
     @test sprint(showerror, method_error) ==
-        "MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)"
+        """MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)
+           The type `$(EnclosingModule.AbstractTypeNoConstructors)` exists, but no method is defined for this combination of argument types when trying to construct it."""
 
     # Does it go back to previous behaviour when there *is* at least
     # one constructor defined?
@@ -1118,3 +1119,7 @@ end
 # error message hint from PR #22647
 @test_throws "Many shells" cd("~")
 @test occursin("Many shells", sprint(showerror, Base.IOError("~", Base.UV_ENOENT)))
+
+# issue #47559"
+@test_throws("MethodError: no method matching invoke Returns(::Any, ::Val{N}) where N",
+             invoke(Returns, Tuple{Any,Val{N}} where N, 1, Val(1)))

@@ -246,14 +246,15 @@ end
 function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
-    is_arg_types = isa(ex.args, DataType)
-    arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
+    is_arg_types = !isa(ex.args, Tuple)
+    arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    arg_types_param::SimpleVector = (unwrap_unionall(arg_types)::DataType).parameters
+    san_arg_types_param = Any[rewrap_unionall(a, arg_types) for a in arg_types_param]
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
     if isa(meth, MethodList) && length(meth) > 1
         return showerror_ambiguous(io, meth, f, arg_types)
     end
-    arg_types_param::SimpleVector = arg_types.parameters
     print(io, "MethodError: ")
     ft = typeof(f)
     f_is_function = false
@@ -262,10 +263,11 @@ function showerror(io::IO, ex::MethodError)
         f = (ex.args::Tuple)[2]
         ft = typeof(f)
         arg_types_param = arg_types_param[3:end]
+        san_arg_types_param = san_arg_types_param[3:end]
         kwargs = pairs(ex.args[1])
         ex = MethodError(f, ex.args[3:end::Int], ex.world)
+        arg_types = Tuple{arg_types_param...}
     end
-    name = ft.name.mt.name
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
@@ -277,36 +279,28 @@ function showerror(io::IO, ex::MethodError)
         if ft <: Function && isempty(ft.parameters) && _isself(ft)
             f_is_function = true
         end
-        print(io, "no method matching ")
+        if is_arg_types
+            print(io, "no method matching invoke ")
+        else
+            print(io, "no method matching ")
+        end
         buf = IOBuffer()
         iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
         show_signature_function(iob, isa(f, Type) ? Type{f} : typeof(f))
-        print(iob, "(")
-        for (i, typ) in enumerate(arg_types_param)
-            print(iob, "::", typ)
-            i == length(arg_types_param) || print(iob, ", ")
-        end
-        if !isempty(kwargs)
-            print(iob, "; ")
-            for (i, (k, v)) in enumerate(kwargs)
-                print(iob, k, "::", typeof(v))
-                i == length(kwargs)::Int || print(iob, ", ")
-            end
-        end
-        print(iob, ")")
+        show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = !isempty(kwargs) ? Any[(k, typeof(v)) for (k, v) in kwargs] : nothing)
         str = String(take!(buf))
         str = type_limited_string_from_context(io, str)
         print(io, str)
     end
     # catch the two common cases of element-wise addition and subtraction
-    if (f === Base.:+ || f === Base.:-) && length(arg_types_param) == 2
+    if (f === Base.:+ || f === Base.:-) && length(san_arg_types_param) == 2
         # we need one array of numbers and one number, in any order
-        if any(x -> x <: AbstractArray{<:Number}, arg_types_param) &&
-            any(x -> x <: Number, arg_types_param)
+        if any(x -> x <: AbstractArray{<:Number}, san_arg_types_param) &&
+            any(x -> x <: Number, san_arg_types_param)
 
             nounf = f === Base.:+ ? "addition" : "subtraction"
             varnames = ("scalar", "array")
-            first, second = arg_types_param[1] <: Number ? varnames : reverse(varnames)
+            first, second = san_arg_types_param[1] <: Number ? varnames : reverse(varnames)
             fstring = f === Base.:+ ? "+" : "-"  # avoid depending on show_default for functions (invalidation)
             print(io, "\nFor element-wise $nounf, use broadcasting with dot syntax: $first .$fstring $second")
         end
@@ -315,17 +309,25 @@ function showerror(io::IO, ex::MethodError)
         print(io, "\nUse square brackets [] for indexing an Array.")
     end
     # Check for local functions that shadow methods in Base
-    if f_is_function && isdefined(Base, name)
-        basef = getfield(Base, name)
-        if basef !== ex.f && hasmethod(basef, arg_types)
-            print(io, "\nYou may have intended to import ")
-            show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
+    let name = ft.name.mt.name
+        if f_is_function && isdefined(Base, name)
+            basef = getfield(Base, name)
+            if basef !== f && hasmethod(basef, arg_types)
+                print(io, "\nYou may have intended to import ")
+                show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
+            end
         end
     end
-    if (ex.world != typemax(UInt) && hasmethod(ex.f, arg_types) &&
-        !hasmethod(ex.f, arg_types, world = ex.world))
+    if (ex.world != typemax(UInt) && hasmethod(f, arg_types) &&
+        !hasmethod(f, arg_types, world = ex.world))
         curworld = get_world_counter()
         print(io, "\nThe applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
+    elseif f isa Function
+        print(io, "\nThe function `$f` exists, but no method is defined for this combination of argument types.")
+    elseif f isa Type
+        print(io, "\nThe type `$f` exists, but no method is defined for this combination of argument types when trying to construct it.")
+    else
+        print(io, "\nThe object of type `$(typeof(f))` exists, but no method is defined for this combination of argument types when trying to treat it as a callable object.")
     end
     if !is_arg_types
         # Check for row vectors used where a column vector is intended.
@@ -342,7 +344,7 @@ function showerror(io::IO, ex::MethodError)
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
-    Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
+    Experimental.show_error_hints(io, ex, san_arg_types_param, kwargs)
     try
         show_method_candidates(io, ex, kwargs)
     catch ex
@@ -354,16 +356,12 @@ end
 striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
-function showerror_ambiguous(io::IO, meths, f, args)
+function showerror_ambiguous(io::IO, meths, f, args::Type)
+    @nospecialize f args
     print(io, "MethodError: ")
     show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
-    print(io, "(")
-    p = args.parameters
-    for (i,a) in enumerate(p)
-        print(io, "::", a)
-        i < length(p) && print(io, ", ")
-    end
-    println(io, ") is ambiguous.\n\nCandidates:")
+    show_tuple_as_call(io, :var"", args, hasfirst=false)
+    println(io, " is ambiguous.\n\nCandidates:")
     sigfix = Any
     for m in meths
         print(io, "  ")
@@ -375,7 +373,7 @@ function showerror_ambiguous(io::IO, meths, f, args)
         let sigfix=sigfix
             if all(m->morespecific(sigfix, m.sig), meths)
                 print(io, "\nPossible fix, define\n  ")
-                Base.show_tuple_as_call(io, :function,  sigfix)
+                show_tuple_as_call(io, :function,  sigfix)
             else
                 print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")
                 print(io, "adding a new method more specific than any of the existing applicable methods.")
@@ -401,9 +399,10 @@ stacktrace_contract_userdir()::Bool = Base.get_bool_env("JULIA_STACKTRACE_CONTRA
 stacktrace_linebreaks()::Bool = Base.get_bool_env("JULIA_STACKTRACE_LINEBREAKS", false) === true
 
 function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
-    is_arg_types = isa(ex.args, DataType)
+    is_arg_types = !isa(ex.args, Tuple)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
-    arg_types_param = Any[arg_types.parameters...]
+    arg_types_param = Any[(unwrap_unionall(arg_types)::DataType).parameters...]
+    arg_types_param = Any[rewrap_unionall(a, arg_types) for a in arg_types_param]
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
     f = ex.f
