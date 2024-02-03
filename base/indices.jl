@@ -106,22 +106,33 @@ IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 
 promote_shape(::Tuple{}, ::Tuple{}) = ()
 
-# Consistent error message for promote_shape mismatch, hiding implementation details like
+# Consistent error message for promote_shape mismatch, hiding type details like
 # OneTo. When b ≡ nothing, it is omitted; i can be supplied for an index.
-function throw_promote_shape_mismatch(a::Tuple{T,Vararg{T}},
-                                      b::Union{Nothing,Tuple{T,Vararg{T}}},
-                                      i = nothing) where {T}
-    _has_axes = T <: AbstractUnitRange
-    _normalize(d) = map(x -> _has_axes ? (firstindex(x):lastindex(x)) : x, d)
-    _things = _has_axes ? "axes" : "size"
-    msg = "a has $(_things) $(_normalize(a))"
+function throw_promote_shape_mismatch(a::Tuple, b::Union{Nothing,Tuple}, i = nothing)
+    if a isa Tuple{Vararg{Base.OneTo}} && (b === nothing || b isa Tuple{Vararg{Base.OneTo}})
+        a = map(lastindex, a)::Dims
+        b === nothing || (b = map(lastindex, b)::Dims)
+    end
+    _has_axes = !(a isa Dims && (b === nothing || b isa Dims))
+    if _has_axes
+        _normalize(d) = map(x -> firstindex(x):lastindex(x), d)
+        a = _normalize(a)
+        b === nothing || (b = _normalize(b))
+        _things = "axes "
+    else
+        _things = "size "
+    end
+    msg = IOBuffer()
+    print(msg, "a has ", _things)
+    print(msg, a)
     if b ≢ nothing
-        msg *= ", b has $(_things) $(_normalize(b))"
+        print(msg, ", b has ", _things)
+        print(msg, b)
     end
     if i ≢ nothing
-        msg *= ", mismatch at $(i)"
+        print(msg, ", mismatch at dim ", i)
     end
-    throw(DimensionMismatch(msg))
+    throw(DimensionMismatch(String(take!(msg))))
 end
 
 function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
