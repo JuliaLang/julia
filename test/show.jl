@@ -2046,11 +2046,11 @@ h_line() = f_line()
 @test repr(Core.Compiler.ReturnNode(23)) == ":(return 23)"
 @test repr(Core.Compiler.ReturnNode()) == ":(unreachable)"
 @test repr(Core.Compiler.GotoIfNot(true, 4)) == ":(goto %4 if not true)"
-@test repr(Core.Compiler.PhiNode(Int32[2, 3], Any[1, Core.SlotNumber(3)])) == ":(φ (%2 => 1, %3 => _3))"
-@test repr(Core.Compiler.UpsilonNode(Core.SlotNumber(3))) == ":(ϒ (_3))"
-@test repr(Core.Compiler.PhiCNode(Any[1, Core.SlotNumber(3)])) == ":(φᶜ (1, _3))"
-@test sprint(Base.show_unquoted, Core.Compiler.Argument(23)) == "_23"
-@test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "_-2"
+@test repr(Core.Compiler.PhiNode(Int32[2, 3], Any[1, Core.SlotNumber(3)])) == ":(φ (%2 => 1, %3 => %_3))"
+@test repr(Core.Compiler.UpsilonNode(Core.SlotNumber(3))) == ":(ϒ (%_3))"
+@test repr(Core.Compiler.PhiCNode(Any[1, Core.SlotNumber(3)])) == ":(φᶜ (1, %_3))"
+@test sprint(Base.show_unquoted, Core.Compiler.Argument(23)) == "%_23"
+@test sprint(Base.show_unquoted, Core.Compiler.Argument(-2)) == "%_-2"
 
 
 eval(Meta._parse_string("""function my_fun28173(x)
@@ -2077,7 +2077,7 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     fill!(src.codelocs, 0) # IRCode printing is only capable of printing partial line info
     let source_slotnames = String["my_fun28173", "x"],
         repr_ir = split(repr(ir, context = :SOURCE_SLOTNAMES=>source_slotnames), '\n'),
-        repr_ir = "CodeInfo(\n" * join((l[4:end] for l in repr_ir), "\n") * ")" # remove line numbers
+        repr_ir = "CodeInfo(\n(%x::$Int) =>\n" * join((l[4:end] for l in repr_ir), "\n") * ")" # remove line numbers
         @test repr(src) == repr_ir
     end
     lines1 = split(repr(ir), '\n')

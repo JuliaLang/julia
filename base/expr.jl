@@ -437,6 +437,7 @@ julia> code_typed() do
            fact(12)
        end |> only
 CodeInfo(
+() =>
 1 ─     return 479001600
 ) => Int64
 
@@ -455,6 +456,7 @@ julia> code_typed() do
            end
        end |> only
 CodeInfo(
+() =>
 1 ─     return (2, 6, 24)
 ) => Tuple{Int64, Int64, Int64}
 

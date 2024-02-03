@@ -1828,7 +1828,7 @@ Arguments
   #self#::Core.Const(f)
   a::Int64
 Body::UNION{FLOAT64, INT64}
-1 ─ %1 = (a > 1)::Bool
+1 ─ %1 = (%a > 1)::Bool
 └──      goto #3 if not %1
 2 ─      return 1
 3 ─      return 1.0
