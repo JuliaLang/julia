@@ -53,7 +53,7 @@ end
 
 Exception thrown when the input matrix is [rank deficient](https://en.wikipedia.org/wiki/Rank_(linear_algebra)). Some
 linear algebra functions, such as the Cholesky decomposition, are only applicable to matrices that are not rank
-deficient, i.e., matrices with full rank. The `info` field indicates the computed rank of the matrix.
+deficient. The `info` field indicates the computed rank of the matrix.
 """
 struct RankDeficientException <: Exception
     info::BlasInt

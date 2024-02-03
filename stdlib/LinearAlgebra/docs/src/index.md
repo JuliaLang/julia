@@ -406,19 +406,25 @@ up front and cache it for future reuse.
 
 ## [Pivoting Strategies](@id man-linalg-pivoting-strategies)
 
-Several [matrix factorizations](@ref man-linalg-factorizations) support pivoting,
-where a [pivot element](https://en.wikipedia.org/wiki/Pivot_element) is selected
-by permuting the rows and columns of the original matrix according to a pivoting
-strategy. Then, the next steps of the factorization are performed based on the
-selected pivot element.
+Several of Julia's [matrix factorizations](@ref man-linalg-factorizations) support
+[pivoting](https://en.wikipedia.org/wiki/Pivot_element), which can be used to improve their
+numerical stability. In fact, some matrix factorizations, such as the LU
+factorization, may fail without pivoting.
 
-Pivoting improves the numerical stability of the factorization. In fact, several
-matrix decompositions, such as the LU decomposition, may fail without pivoting.
-On the other hand, pivoting may introduce a minor computational overhead.
+In pivoting, first, a [pivot element](https://en.wikipedia.org/wiki/Pivot_element) 
+with good numerical properties is chosen based on a pivoting strategy. Next, the rows and
+columns of the original matrix are permuted to bring the chosen element in place for
+subsequent computation. Furthermore, the process is repeated for each stage of the factorization.
 
-In the following, the pivoting strategies implemented in Julia are described. Note
+Consequently, besides the conventional matrix factors, the outputs of
+pivoted factorization schemes also include permutation matrices.
+
+In the following, the pivoting strategies implemented in Julia are briefly described. Note
 that not all matrix factorizations may support them. Consult the documentation of the
-respective matrix factorization for details on the supported strategies.
+respective [matrix factorization](@ref man-linalg-factorizations) for details on the
+supported pivoting strategies.
+
+See also [`LinearAlgebra.ZeroPivotException`](@ref).
 
 ```@docs
 LinearAlgebra.NoPivot

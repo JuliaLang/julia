@@ -205,8 +205,6 @@ struct NoPivot <: PivotingStrategy end
     RowNonZero
 
 First non-zero element in the remaining rows is chosen as the pivot element.
-Furthermore, the rows of the matrix are permuted to bring the chosen pivot element
-into the right position.
 
 Note that the [element type](@ref eltype) of the matrix must support the [`iszero`](@ref)
 method.
@@ -217,8 +215,6 @@ struct RowNonZero <: PivotingStrategy end
     RowMaximum
 
 The maximum element in the remaining rows is chosen as the pivot element.
-Furthermore, the rows of the matrix are permuted to bring the chosen pivot element
-into the right position.
 
 Note that the [element type](@ref eltype) of the matrix must support the [`abs`](@ref)
 and [`<`](@ref) methods.
@@ -228,9 +224,7 @@ struct RowMaximum <: PivotingStrategy end
 """
     ColumnNorm
 
-The column with the maximum norm is used for choosing the pivot element. 
-Furthermore, the columns of the matrix are permuted to bring the chosen column
-to the right position.
+The column with the maximum norm is used for subsequent computation.
 
 Note that the [element type](@ref eltype) of the matrix must support the [`norm`](@ref),
 [`abs`](@ref), and [`<`](@ref) methods.
