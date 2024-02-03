@@ -88,3 +88,10 @@ end
         (t..., fill(val, N-M)...)
     end
 end
+
+function tail(x::Tuple{Any,Vararg{Any,n}}) where {n}
+    f = let x = x
+        i -> x[i + 1]
+    end
+    ntuple(f, Val(n))::NTuple{n,Any}
+end
