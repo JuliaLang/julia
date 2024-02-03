@@ -112,7 +112,7 @@ function add_failure_info!(data::Dict{String, Any}, result::Test.Result)
             "Exception (unexpectedly) thrown during test"
         elseif result.test_type === :test_nonbool
             "Expected the expression to evaluate to a Bool, not a $(typeof(result.data))"
-        elseif result.test_nonbool === :test_unbroken
+        elseif result.test_type === :test_unbroken
             "Expected this test to be broken, but it passed"
         else
             "unknown"
