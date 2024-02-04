@@ -3,7 +3,7 @@
 module TestDiagonal
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: BlasFloat, BlasComplex
+using LinearAlgebra: BlasFloat, BlasComplex,BlasReal
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
@@ -1264,6 +1264,17 @@ end
 
 @testset "copy" begin
     @test copy(Diagonal(1:5)) === Diagonal(1:5)
+end
+
+@testset "kron! test" begin
+    a=[1.0 0.0; 0.0 1.0]
+    b=[0.0 2.0; 2.0 0.0]
+    c=[0 0 0 0; 0 0 0 0;0 0 0 0;0 0 0 0]
+    @test kron!(c,a,b)==[0 2 0 0; 2 0 0 0; 0 0 0 2; 0 0 2 0]
+    @test kron!(c,b,a)==[0 0 2 0; 0 0 0 2; 2 0 0 0; 0 2 0 0]
+    c = Matrix{Float64}(undef, 4,4)
+    kron!(c, a, b')
+    @test c==[0 2 0 0; 2 0 0 0; 0 0 0 2; 0 0 2 0]
 end
 
 end # module TestDiagonal
