@@ -13,7 +13,7 @@ extern "C" {
 
 uint_t nextipow2(uint_t i) JL_NOTSAFEPOINT;
 uint32_t int32hash(uint32_t a) JL_NOTSAFEPOINT;
-uint64_t int64hash(uint64_t key) JL_NOTSAFEPOINT;
+STATIC_INLINE uint64_t int64hash(uint64_t key) JL_NOTSAFEPOINT;
 uint32_t int64to32hash(uint64_t key) JL_NOTSAFEPOINT;
 #ifdef _P64
 #define inthash int64hash
@@ -24,6 +24,12 @@ JL_DLLEXPORT uint64_t memhash(const char *buf, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint64_t memhash_seed(const char *buf, size_t n, uint32_t seed) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint32_t memhash32(const char *buf, size_t n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint32_t memhash32_seed(const char *buf, size_t n, uint32_t seed) JL_NOTSAFEPOINT;
+
+// FxHasher
+STATIC_INLINE uint64_t int64hash(uint64_t key)
+{
+    return key * 0x517cc1b727220a95;
+}
 
 // FxHasher
 #ifdef _P64
