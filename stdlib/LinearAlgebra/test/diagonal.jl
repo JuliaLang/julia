@@ -3,7 +3,7 @@
 module TestDiagonal
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: BlasFloat, BlasComplex,BlasReal
+using LinearAlgebra: BlasFloat, BlasComplex
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
