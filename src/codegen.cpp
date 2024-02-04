@@ -2010,6 +2010,53 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static unsigned julia_alignment(jl_value_t *jt);
 
+static AttributeList get_attrs_ipoeffects(jl_codectx_t &ctx, std::pair<bool,uint32_t> effect, bool is_decl, bool has_ptr_arg)
+{
+    auto &context = ctx.builder.getContext();
+    if (!effect.first)
+        return AttributeList();
+    uint32_t effects = effect.second;
+    uint8_t consistent = (effects >> 0) & 0x07;
+    uint8_t effect_free = (effects >> 3) & 0x03;
+    bool nothrow = (effects >> 5) & 0x01;
+    bool terminates = (effects >> 6) & 0x01;
+    bool notaskstate = (effects >> 7) & 0x01;
+    uint8_t inaccessiblememonly = (effects >> 8) & 0x03;
+    bool nonoverlayed = (effects >> 10) & 0x01;
+    bool noinbounds = (effects >> 11) & 0x01;
+    AttrBuilder attr(context);
+
+    if (consistent == 0) {
+    }
+    if (effect_free == 0) {
+        // if (!has_ptr_arg)
+            // attr.addAttribute(Attribute::ReadOnly); //Not legal because of the ptls
+    }
+    if (nothrow == 1) {
+        attr.addAttribute(Attribute::NoUnwind);
+    }
+    if (terminates == 1){
+        attr.addAttribute(Attribute::WillReturn);
+    }
+    if (inaccessiblememonly == 0) {
+        attr.addAttribute(Attribute::InaccessibleMemOrArgMemOnly); // Can't be inaccesiblememonly because of the ptls
+    } else if (inaccessiblememonly == 2){
+        attr.addAttribute(Attribute::InaccessibleMemOrArgMemOnly);
+    }
+    if (notaskstate == 1) {
+    }
+    if (nonoverlayed == 1) {
+    }
+    if (noinbounds == 1) {
+    }
+    if (is_decl && consistent == 0 && effect_free == 0 && nothrow == 1 && terminates == 1 && has_ptr_arg == false){
+        attr.addAttribute(Attribute::Speculatable); // This might not be legal because it assumes pointers can be null
+    }
+    if (ctx.emission_context.debug_level >= 2)
+        attr.addAttribute(std::to_string(effects));
+    return AttributeList::get(context,AttributeSet::get(context, attr), AttributeSet(), None);
+}
+
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
 {
     return G->realize(M);
@@ -4440,7 +4487,7 @@ static CallInst *emit_jlcall(jl_codectx_t &ctx, JuliaFunction<> *theFptr, Value 
 }
 
 static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_closure, jl_value_t *specTypes, jl_value_t *jlretty, llvm::Value *callee, StringRef specFunctionObject, jl_code_instance_t *fromexternal,
-                                          const jl_cgval_t *argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty)
+                                          const jl_cgval_t *argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty, std::pair<bool,uint32_t> effects = {false,0})
 {
     ++EmittedSpecfunCalls;
     // emit specialized call site
@@ -4484,6 +4531,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         argvals[idx] = ctx.pgcstack;
         idx++;
     }
+    bool has_ptr_arg = false;
     for (size_t i = 0; i < nargs; i++) {
         jl_value_t *jt = jl_nth_slot_type(specTypes, i);
         // n.b.: specTypes is required to be a datatype by construction for specsig
@@ -4527,10 +4575,16 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
                 argvals[idx] = val;
             }
         }
+        if(argvals[idx]->getType()->isPointerTy())
+            has_ptr_arg = true;
         idx++;
     }
     assert(idx == nfargs);
     Value *TheCallee = returninfo.decl.getCallee();
+    auto attrs = AttributeList();
+    if (auto fun = dyn_cast<Function>(TheCallee)){
+        attrs = fun->getAttributes();
+    }
     if (fromexternal) {
         std::string namep("p");
         namep += cast<Function>(returninfo.decl.getCallee())->getName();
@@ -4547,7 +4601,12 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         setName(ctx.emission_context, TheCallee, namep);
     }
     CallInst *call = ctx.builder.CreateCall(cft, TheCallee, argvals);
-    call->setAttributes(returninfo.attrs);
+    if (auto fun = dyn_cast<Function>(TheCallee)){
+        fun->setAttributes(AttributeList::get(ctx.builder.getContext(), {get_attrs_ipoeffects(ctx, effects, true, has_ptr_arg), returninfo.attrs, attrs}));
+        call->setAttributes(returninfo.attrs);
+    }
+    else
+        call->setAttributes(AttributeList::get(ctx.builder.getContext(), {get_attrs_ipoeffects(ctx, effects, false, has_ptr_arg), returninfo.attrs}));
     if (gcstack_arg)
         call->setCallingConv(CallingConv::Swift);
 
@@ -4589,11 +4648,11 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
 }
 
 static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_t *mi, jl_value_t *jlretty, StringRef specFunctionObject, jl_code_instance_t *fromexternal,
-                                          const jl_cgval_t *argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty)
+                                          const jl_cgval_t *argv, size_t nargs, jl_returninfo_t::CallingConv *cc, unsigned *return_roots, jl_value_t *inferred_retty, std::pair<bool,uint32_t> effects = {false,0})
 {
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
     return emit_call_specfun_other(ctx, is_opaque_closure, mi->specTypes, jlretty, NULL,
-        specFunctionObject, fromexternal, argv, nargs, cc, return_roots, inferred_retty);
+        specFunctionObject, fromexternal, argv, nargs, cc, return_roots, inferred_retty, effects);
 }
 
 static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty, StringRef specFunctionObject, jl_code_instance_t *fromexternal,
@@ -4724,7 +4783,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
                     unsigned return_roots = 0;
                     if (specsig)
-                        result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, &cc, &return_roots, rt);
+                        result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, &cc, &return_roots, rt, {true,codeinst->ipo_purity_bits});
                     else
                         result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, external ? codeinst : nullptr, argv, nargs, rt);
                     handled = true;
@@ -7340,15 +7399,21 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
     else {
         rt = ctx.types().T_prjlvalue;
     }
+    const DataLayout &DL = M->getDataLayout();
 
     SmallVector<AttributeSet, 8> attrs; // function declaration attributes
     if (props.cc == jl_returninfo_t::SRet) {
         assert(srt);
+        TypeSize sz = DL.getTypeAllocSize(srt);
+        Align al = DL.getPrefTypeAlign(srt);
         AttrBuilder param(ctx.builder.getContext());
         param.addStructRetAttr(srt);
+        param.addAttribute(Attribute::NonNull);
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
+        param.addDereferenceableAttr(sz);
+        param.addAlignmentAttr(al);
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
         assert(fsig.size() == 1);
     }
@@ -7357,6 +7422,9 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
+        param.addAttribute(Attribute::NonNull);
+        param.addDereferenceableAttr(props.union_bytes);
+        param.addAlignmentAttr(props.union_align);
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
         assert(fsig.size() == 1);
     }
@@ -7366,6 +7434,10 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         param.addAttribute(Attribute::NoAlias);
         param.addAttribute(Attribute::NoCapture);
         param.addAttribute(Attribute::NoUndef);
+        param.addAttribute(Attribute::NonNull);
+        size_t size = props.return_roots * sizeof(jl_value_t*);
+        param.addDereferenceableAttr(size);
+        param.addAlignmentAttr(Align(sizeof(jl_value_t*)));
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
         fsig.push_back(get_returnroots_type(ctx, props.return_roots)->getPointerTo(0));
         argnames.push_back("return_roots");
@@ -7406,6 +7478,7 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
         if (ty->isAggregateType()) { // aggregate types are passed by pointer
             param.addAttribute(Attribute::NoCapture);
             param.addAttribute(Attribute::ReadOnly);
+            maybe_mark_argument_dereferenceable(param, jt);
             ty = PointerType::get(ty, AddressSpace::Derived);
         }
         else if (isboxed && jl_is_immutable_datatype(jt)) {
@@ -7416,6 +7489,8 @@ static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value 
             Attribute::AttrKind attr = issigned ? Attribute::SExt : Attribute::ZExt;
             param.addAttribute(attr);
         }
+        if (isboxed)
+            maybe_mark_argument_dereferenceable(param, jt);
         attrs.push_back(AttributeSet::get(ctx.builder.getContext(), param));
         fsig.push_back(ty);
         if (used_arguments)
