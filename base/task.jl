@@ -369,41 +369,35 @@ end
 waitany(tasks) = _wait_multiple(tasks)
 waitall(tasks; failfast=false) = _wait_multiple(tasks; all=true, failfast=failfast)
 
-function _wait_multiple(tasks::Vector{Task}; all=false, failfast=false)::NTuple{2,Vector{Task}}
+function _wait_multiple(waiting_tasks::Union{AbstractVector{Task},Set{Task},Tuple{Task}}; all=false, failfast=false)::NTuple{2,Vector{Task}}
+    tasks = [waiting_tasks...]
+
     n = length(tasks)
-    done_tasks = Vector{Task}()
+    i = 1
 
-    while length(done_tasks) < n
+    while i <= n
         exception = false
-
-        m = length(done_tasks)
+        i0 = i
 
         # Ensure at least one task has been done
-        while length(done_tasks) == m
-            remaining_tasks = Vector{Task}()
-
-            for t in tasks
-                if istaskdone(t)
-                    push!(done_tasks, t)
-                    exception |= istaskfailed(t)
-                else
-                    push!(remaining_tasks, t)
+        while i == i0
+            for j in i:n
+                if istaskdone(tasks[j])
+                    exception |= istaskfailed(tasks[j])
+                    tasks[i], tasks[j] = tasks[j], tasks[i]
+                    i += 1
                 end
             end
-
-            tasks = remaining_tasks
             yield()
         end
 
         if !all || (failfast && exception)
-            return done_tasks, tasks
+            return tasks[1:i-1], tasks[i:end]
         end
     end
 
-    return done_tasks, Vector{Task}()
+    return tasks, Task[]
 end
-
-_wait_multiple(tasks::Tuple{Task}; kw...) = _wait_multiple([tasks...]; kw...)
 
 """
     fetch(x::Any)
