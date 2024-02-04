@@ -428,8 +428,11 @@ cd(@__DIR__) do
         Test.pop_testset()
     end
 
-    Base.get_bool_env("CI", false) &&
-        open(io -> write_testset_json(io, o_ts), "results.json", "w")
+    if Base.get_bool_env("CI", false)
+        testresults = joinpath(@__DIR__, "results.json")
+        @info "Writing test result data to $testresults"
+        open(io -> write_testset_json(io, o_ts), testresults, "w")
+    end
 
     Test.TESTSET_PRINT_ENABLE[] = true
     println()
