@@ -19,7 +19,7 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
         throw(BoundsError(s, i))
     end
     @inbounds isvalid(s, i) || string_index_err(s, i)
-    c = pred.x
+    c = getx(pred)
     c ≤ '\x7f' && return nothing_sentinel(_search(s, c % UInt8, i))
     while true
         i = _search(s, first_utf8_byte(c), i)
@@ -30,10 +30,10 @@ function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
 end
 
 findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
-    nothing_sentinel(_search(a, pred.x))
+    nothing_sentinel(_search(a, getx(pred)))
 
 findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
-    nothing_sentinel(_search(a, pred.x, i))
+    nothing_sentinel(_search(a, getx(pred), i))
 
 findfirst(::typeof(iszero), a::ByteArray) = nothing_sentinel(_search(a, zero(UInt8)))
 findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
@@ -61,7 +61,7 @@ end
 
 function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
                   s::String, i::Integer)
-    c = pred.x
+    c = getx(pred)
     c ≤ '\x7f' && return nothing_sentinel(_rsearch(s, c % UInt8, i))
     b = first_utf8_byte(c)
     while true
@@ -73,10 +73,10 @@ function findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar}
 end
 
 findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray) =
-    nothing_sentinel(_rsearch(a, pred.x))
+    nothing_sentinel(_rsearch(a, getx(pred)))
 
 findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
-    nothing_sentinel(_rsearch(a, pred.x, i))
+    nothing_sentinel(_rsearch(a, getx(pred), i))
 
 findlast(::typeof(iszero), a::ByteArray) = nothing_sentinel(_rsearch(a, zero(UInt8)))
 findprev(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
