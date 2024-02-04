@@ -1025,15 +1025,30 @@ Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
 
 
 # Display a hint in case the user tries to use the min or max function on an iterable
-function min_max_on_iterable(io, ex, arg_types, kwargs)
+# or tries to use something like `collect` on an iterator without defining either IteratorSize or length
+function methods_on_iterable(io, ex, arg_types, kwargs)
     @nospecialize
-    if (ex.f === max || ex.f === min) && length(arg_types) == 1 && Base.isiterable(only(arg_types))
-        f_correct = ex.f === max ? "maximum" : "minimum"
+    f = ex.f
+    if (f === max || f === min) && length(arg_types) == 1 && Base.isiterable(only(arg_types))
+        f_correct = f === max ? "maximum" : "minimum"
         print(io, "\nFinding the $f_correct of an iterable is performed with `$f_correct`.")
     end
+    if (f === Base.length || f === Base.size) && length(arg_types) >= 1
+        arg_type_tuple = Tuple{arg_types...}
+        if hasmethod(iterate, arg_type_tuple)
+            iterkind = IteratorSize(arg_types[1])
+            if iterkind isa HasLength
+                print(io, "\nYou may need to implement the `length` method or define `IteratorSize` for this type to be `SizeUnknown`.")
+            elseif iterkind isa HasShape
+                print(io, "\nYou may need to implement the `length` and `size` methods for `IteratorSize` `HasShape`.")
+            end
+        end
+    end
+    nothing
 end
 
-Experimental.register_error_hint(min_max_on_iterable, MethodError)
+Experimental.register_error_hint(methods_on_iterable, MethodError)
+
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)
