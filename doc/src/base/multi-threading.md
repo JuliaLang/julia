@@ -26,6 +26,7 @@ Base.@atomic
 Base.@atomicswap
 Base.@atomicreplace
 Base.@atomiconce
+Base.AtomicMemory
 ```
 
 There are also optional memory ordering parameters for the `unsafe` set of functions, that

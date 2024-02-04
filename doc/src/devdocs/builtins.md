@@ -12,7 +12,6 @@ Core.memoryrefoffset
 Core.memoryrefget
 Core.memoryrefset!
 Core.memoryref_isassigned
-Core.memoryrefsetonce!
 Core.memoryrefswap!
 Core.memoryrefmodify!
 Core.memoryrefreplace!
