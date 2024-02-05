@@ -82,7 +82,9 @@ STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem,
 STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
 {
     size_t nel;
-    if (jl_array_validate_dims(&nel, ndims, dims) || *(size_t*)jl_tparam1(atype) != ndims)
+    if (jl_array_validate_dims(&nel, ndims, dims))
+        jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions: too large for system address width");
+    if (*(size_t*)jl_tparam1(atype) != ndims)
         jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
     jl_value_t *mtype = jl_field_type_concrete((jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)atype, 0), 1);
     // extra byte for all julia allocated byte vectors
@@ -132,7 +134,9 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     assert(is_ntuple_long(_dims));
     size_t *dims = (size_t*)_dims;
     size_t nel;
-    if (jl_array_validate_dims(&nel, ndims, dims) || *(size_t*)jl_tparam1(atype) != ndims)
+    if (jl_array_validate_dims(&nel, ndims, dims))
+        jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions: too large for system address width");
+    if (*(size_t*)jl_tparam1(atype) != ndims)
         jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
     jl_value_t *mtype = jl_field_type_concrete((jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)atype, 0), 1);
     jl_genericmemory_t *mem = jl_ptr_to_genericmemory(mtype, data, nel, own_buffer);
@@ -165,6 +169,18 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 JL_DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr)
 {
     return new_array(atype, 1, &nr);
+}
+
+JL_DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr, size_t nc)
+{
+    size_t dims[2] = {nr, nc};
+    return new_array(atype, 2, &dims[0]);
+}
+
+JL_DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr, size_t nc, size_t z)
+{
+    size_t dims[3] = {nr, nc, z};
+    return new_array(atype, 3, &dims[0]);
 }
 
 JL_DLLEXPORT jl_array_t *jl_alloc_array_nd(jl_value_t *atype, size_t *dims, size_t ndims)

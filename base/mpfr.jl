@@ -16,7 +16,7 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, _string_n, decompose, minmax,
+        isone, big, _string_n, decompose, minmax, _precision_with_base_2,
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
         uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask,
         RawBigIntRoundingIncrementHelper, truncated, RawBigInt
@@ -221,7 +221,7 @@ widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
 
 function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
-    if precision == _precision(x)
+    if precision == _precision_with_base_2(x)
         return x
     else
         z = BigFloat(;precision=precision)
@@ -232,7 +232,7 @@ function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::I
 end
 
 function _duplicate(x::BigFloat)
-    z = BigFloat(;precision=_precision(x))
+    z = BigFloat(;precision=_precision_with_base_2(x))
     ccall((:mpfr_set, libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), z, x, 0)
     return z
 end
@@ -954,12 +954,12 @@ function sign(x::BigFloat)
     return c < 0 ? -one(x) : one(x)
 end
 
-function _precision(x::BigFloat)  # precision of an object of type BigFloat
+function _precision_with_base_2(x::BigFloat)  # precision of an object of type BigFloat
     return ccall((:mpfr_get_prec, libmpfr), Clong, (Ref{BigFloat},), x)
 end
 precision(x::BigFloat; base::Integer=2) = _precision(x, base)
 
-_precision(::Type{BigFloat}) = Int(DEFAULT_PRECISION[]) # default precision of the type BigFloat itself
+_precision_with_base_2(::Type{BigFloat}) = Int(DEFAULT_PRECISION[]) # default precision of the type BigFloat itself
 
 """
     setprecision([T=BigFloat,] precision::Int; base=2)

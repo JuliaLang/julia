@@ -84,7 +84,7 @@ function sizehint!(d::IdDict, newsz)
 end
 
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
-    !isa(key, K) && throw(ArgumentError("$(limitrepr(key)) is not a valid key for type $K"))
+    !isa(key, K) && throw(KeyTypeError(K, key))
     if !(val isa V) # avoid a dynamic call
         val = convert(V, val)::V
     end

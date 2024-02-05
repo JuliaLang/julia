@@ -6,6 +6,9 @@
     XX(jl_adopt_thread) \
     XX(jl_alignment) \
     XX(jl_alloc_array_1d) \
+    XX(jl_alloc_array_2d) \
+    XX(jl_alloc_array_3d) \
+    XX(jl_alloc_array_nd) \
     XX(jl_alloc_string) \
     XX(jl_alloc_svec) \
     XX(jl_alloc_svec_uninit) \
@@ -26,6 +29,7 @@
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
     XX(jl_genericmemory_owner) \
+    XX(jl_genericmemoryref) \
     XX(jl_array_rank) \
     XX(jl_array_to_string) \
     XX(jl_atexit_hook) \
@@ -34,6 +38,7 @@
     XX(jl_atomic_error) \
     XX(jl_atomic_new_bits) \
     XX(jl_atomic_store_bits) \
+    XX(jl_atomic_storeonce_bits) \
     XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
@@ -200,6 +205,7 @@
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
+    XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
     XX(jl_get_excstack) \
@@ -230,6 +236,8 @@
     XX(jl_get_world_counter) \
     XX(jl_get_zero_subnormals) \
     XX(jl_gf_invoke_lookup) \
+    XX(jl_method_lookup_by_tt) \
+    XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
     XX(jl_git_branch) \
     XX(jl_git_commit) \
@@ -274,6 +282,7 @@
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
     XX(jl_is_const) \
+    XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \
     XX(jl_is_foreign_type) \
     XX(jl_is_identifier) \
@@ -345,7 +354,6 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
-    XX(jl_write_precompile_statement) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
@@ -441,7 +449,6 @@
     XX(jl_svec2) \
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
-    XX(jl_svec_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \

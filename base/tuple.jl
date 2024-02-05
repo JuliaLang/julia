@@ -28,10 +28,9 @@ firstindex(@nospecialize t::Tuple) = 1
 lastindex(@nospecialize t::Tuple) = length(t)
 size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
-@eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
-@eval getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
-__inbounds_getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, false)
-__inbounds_getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), false)
+getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, @_boundscheck)
+getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), @_boundscheck)
+__safe_getindex(@nospecialize(t::Tuple), i::Int) = (@_nothrow_noub_meta; getfield(t, i, false))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = (eltype(t)[t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 getindex(t::Tuple, c::Colon) = t
@@ -73,6 +72,74 @@ function iterate(@nospecialize(t::Tuple), i::Int=1)
 end
 
 keys(@nospecialize t::Tuple) = OneTo(length(t))
+
+"""
+    prevind(A, i)
+
+Return the index before `i` in `A`. The returned index is often equivalent to `i
+- 1` for an integer `i`. This function can be useful for generic code.
+
+!!! warning
+    The returned index might be out of bounds. Consider using
+    [`checkbounds`](@ref).
+
+See also: [`nextind`](@ref).
+
+# Examples
+```jldoctest
+julia> x = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> prevind(x, 4) # valid result
+3
+
+julia> prevind(x, 1) # invalid result
+0
+
+julia> prevind(x, CartesianIndex(2, 2)) # valid result
+CartesianIndex(1, 2)
+
+julia> prevind(x, CartesianIndex(1, 1)) # invalid result
+CartesianIndex(2, 0)
+```
+"""
+function prevind end
+
+"""
+    nextind(A, i)
+
+Return the index after `i` in `A`. The returned index is often equivalent to `i
++ 1` for an integer `i`. This function can be useful for generic code.
+
+!!! warning
+    The returned index might be out of bounds. Consider using
+    [`checkbounds`](@ref).
+
+See also: [`prevind`](@ref).
+
+# Examples
+```jldoctest
+julia> x = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> nextind(x, 1) # valid result
+2
+
+julia> nextind(x, 4) # invalid result
+5
+
+julia> nextind(x, CartesianIndex(1, 1)) # valid result
+CartesianIndex(2, 1)
+
+julia> nextind(x, CartesianIndex(2, 2)) # invalid result
+CartesianIndex(1, 3)
+```
+"""
+function nextind end
 
 prevind(@nospecialize(t::Tuple), i::Integer) = Int(i)-1
 nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
@@ -241,6 +308,13 @@ end
 #  @ tuple.jl:209
 typeof(function eltype end).name.max_methods = UInt8(4)
 
+# key/val types
+keytype(@nospecialize t::Tuple) = keytype(typeof(t))
+keytype(@nospecialize T::Type{<:Tuple}) = Int
+
+valtype(@nospecialize t::Tuple) = valtype(typeof(t))
+valtype(@nospecialize T::Type{<:Tuple}) = eltype(T)
+
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
 safe_tail(t::Tuple{}) = ()
@@ -322,7 +396,7 @@ end
 # n argument function
 heads(ts::Tuple...) = map(t -> t[1], ts)
 tails(ts::Tuple...) = map(tail, ts)
-map(f, ::Tuple{}...) = ()
+map(f, ::Tuple{}, ::Tuple{}...) = ()
 anyempty(x::Tuple{}, xs...) = true
 anyempty(x::Tuple, xs...) = anyempty(xs...)
 anyempty() = false
@@ -418,6 +492,7 @@ _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 _totuple(::Type{Tuple}, itr::Array) = (itr...,)
 _totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
 _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
+_totuple(::Type{Tuple}, p::Pair) = (p.first, p.second)
 _totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
 
 end
@@ -615,4 +690,4 @@ Return an empty tuple, `()`.
 empty(@nospecialize x::Tuple) = ()
 
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
-foreach(f, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itrs...), init=nothing)
+foreach(f, itr::Tuple, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itr, itrs...), init=nothing)

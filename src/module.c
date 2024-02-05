@@ -1,4 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
+//
 
 /*
   modules and top-level bindings
@@ -28,7 +29,6 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     if (!m->build_id.lo)
         m->build_id.lo++; // build id 0 is invalid
     m->build_id.hi = ~(uint64_t)0;
-    m->primary_world = 0;
     jl_atomic_store_relaxed(&m->counter, 1);
     m->nospecialize = 0;
     m->optlevel = -1;
@@ -39,7 +39,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
         bitmix(name->hash, parent->hash);
     JL_MUTEX_INIT(&m->lock, "module->lock");
     jl_atomic_store_relaxed(&m->bindings, jl_emptysvec);
-    jl_atomic_store_relaxed(&m->bindingkeyset, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&m->bindingkeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
     arraylist_new(&m->usings, 0);
     if (jl_core_module && default_names) {
         JL_GC_PUSH1(&m);
@@ -426,13 +426,6 @@ static jl_binding_t *jl_resolve_owner(jl_binding_t *b/*optional*/, jl_module_t *
     return b2;
 }
 
-JL_DLLEXPORT jl_binding_t *jl_get_binding_if_bound(jl_module_t *m, jl_sym_t *var)
-{
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
-    return b == NULL ? NULL : jl_atomic_load_relaxed(&b->owner);
-}
-
-
 // get the current likely owner of binding when accessing m.var, without resolving the binding (it may change later)
 JL_DLLEXPORT jl_binding_t *jl_binding_owner(jl_module_t *m, jl_sym_t *var)
 {
@@ -467,7 +460,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var
 {
     jl_binding_t *b = jl_get_binding(m, var);
     if (b == NULL)
-        jl_undefined_var_error(var);
+        jl_undefined_var_error(var, (jl_value_t*)m);
     // XXX: this only considers if the original is deprecated, not the binding in m
     if (b->deprecated)
         jl_binding_deprecation_warning(m, var, b);
@@ -648,7 +641,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
     // silently override a "using" name. see issue #2054.
     jl_svec_t *table = jl_atomic_load_relaxed(&from->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
         if (b->exportp && (jl_atomic_load_relaxed(&b->owner) == b || b->imported)) {
@@ -673,13 +666,13 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
 {
     jl_binding_t *b = jl_get_module_binding(from, s, 1);
     b->publicp = 1;
-    b->exportp = exported;
+    b->exportp |= exported;
 }
 
-JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
+JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var) // unlike most queries here, this is currently seq_cst
 {
     jl_binding_t *b = jl_get_binding(m, var);
-    return b && (jl_atomic_load_relaxed(&b->value) != NULL);
+    return b && (jl_atomic_load(&b->value) != NULL);
 }
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
@@ -706,14 +699,14 @@ JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
     return b && jl_atomic_load_relaxed(&b->owner) != NULL;
 }
 
-static uint_t bindingkey_hash(size_t idx, jl_svec_t *data)
+static uint_t bindingkey_hash(size_t idx, jl_value_t *data)
 {
     jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx);
     jl_sym_t *var = b->globalref->name;
     return var->hash;
 }
 
-static int bindingkey_eq(size_t idx, const void *var, jl_svec_t *data, uint_t hv)
+static int bindingkey_eq(size_t idx, const void *var, jl_value_t *data, uint_t hv)
 {
     jl_binding_t *b = (jl_binding_t*)jl_svecref(data, idx);
     jl_sym_t *name = b->globalref->name;
@@ -724,9 +717,9 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
 {
     uint_t hv = var->hash;
     for (int locked = 0; ; locked++) {
-        jl_array_t *bindingkeyset = jl_atomic_load_acquire(&m->bindingkeyset);
+        jl_genericmemory_t *bindingkeyset = jl_atomic_load_acquire(&m->bindingkeyset);
         jl_svec_t *bindings = jl_atomic_load_relaxed(&m->bindings);
-        ssize_t idx = jl_smallintset_lookup(bindingkeyset, bindingkey_eq, var, bindings, hv); // acquire
+        ssize_t idx = jl_smallintset_lookup(bindingkeyset, bindingkey_eq, var, (jl_value_t*)bindings, hv, 0); // acquire
         if (idx != -1) {
             jl_binding_t *b = (jl_binding_t*)jl_svecref(bindings, idx); // relaxed
             if (locked)
@@ -760,7 +753,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
             jl_binding_t *b = new_binding(m, var);
             assert(jl_svecref(bindings, i) == jl_nothing);
             jl_svecset(bindings, i, b); // relaxed
-            jl_smallintset_insert(&m->bindingkeyset, (jl_value_t*)m, bindingkey_hash, i, bindings); // release
+            jl_smallintset_insert(&m->bindingkeyset, (jl_value_t*)m, bindingkey_hash, i, (jl_value_t*)bindings); // release
             JL_UNLOCK(&m->lock);
             return b;
         }
@@ -882,7 +875,7 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_sym_t *s, jl_binding_t *b
     }
 }
 
-JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
+jl_value_t *jl_check_binding_wr(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED, int reassign)
 {
     jl_value_t *old_ty = NULL;
     if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type)) {
@@ -894,24 +887,73 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
             JL_GC_POP();
         }
     }
+    else {
+        old_ty = (jl_value_t*)jl_any_type;
+    }
     if (b->constp) {
-        jl_value_t *old = NULL;
-        if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
-            jl_gc_wb(b, rhs);
-            return;
+        if (reassign) {
+            jl_value_t *old = NULL;
+            if (jl_atomic_cmpswap(&b->value, &old, rhs)) {
+                jl_gc_wb(b, rhs);
+                return NULL;
+            }
+            if (jl_egal(rhs, old))
+                return NULL;
+            if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs))
+                reassign = 0;
+            else
+                jl_safe_printf("WARNING: redefinition of constant %s.%s. This may fail, cause incorrect answers, or produce other errors.\n",
+                               jl_symbol_name(mod->name), jl_symbol_name(var));
         }
-        if (jl_egal(rhs, old))
-            return;
-        if (jl_typeof(rhs) != jl_typeof(old) || jl_is_type(rhs) || jl_is_module(rhs)) {
+        if (!reassign)
             jl_errorf("invalid redefinition of constant %s.%s",
                       jl_symbol_name(mod->name), jl_symbol_name(var));
-
-        }
-        jl_safe_printf("WARNING: redefinition of constant %s.%s. This may fail, cause incorrect answers, or produce other errors.\n",
-                       jl_symbol_name(mod->name), jl_symbol_name(var));
     }
-    jl_atomic_store_release(&b->value, rhs);
+    return old_ty;
+}
+
+JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
+{
+    if (jl_check_binding_wr(b, mod, var, rhs, 1) != NULL) {
+        jl_atomic_store_release(&b->value, rhs);
+        jl_gc_wb(b, rhs);
+    }
+}
+
+JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
+{
+    jl_check_binding_wr(b, mod, var, rhs, 0);
+    jl_value_t *old = jl_atomic_exchange(&b->value, rhs);
     jl_gc_wb(b, rhs);
+    if (__unlikely(old == NULL))
+        jl_undefined_var_error(var, (jl_value_t*)mod);
+    return old;
+}
+
+JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs)
+{
+    jl_value_t *ty = jl_check_binding_wr(b, mod, var, rhs, 0);
+    return replace_value(ty, &b->value, (jl_value_t*)b, expected, rhs, 1, mod, var);
+}
+
+JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs)
+{
+    jl_value_t *ty = NULL;
+    if (jl_atomic_cmpswap_relaxed(&b->ty, &ty, (jl_value_t*)jl_any_type))
+        ty = (jl_value_t*)jl_any_type;
+    if (b->constp)
+        jl_errorf("invalid redefinition of constant %s.%s",
+                  jl_symbol_name(mod->name), jl_symbol_name(var));
+    return modify_value(ty, &b->value, (jl_value_t*)b, op, rhs, 1, mod, var);
+}
+
+JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs )
+{
+    jl_check_binding_wr(b, mod, var, rhs, 0);
+    jl_value_t *old = NULL;
+    if (jl_atomic_cmpswap(&b->value, &old, rhs))
+        jl_gc_wb(b, rhs);
+    return old;
 }
 
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var)
@@ -946,7 +988,7 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
     JL_GC_PUSH1(&a);
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
         jl_sym_t *asname = b->globalref->name;
@@ -1003,7 +1045,7 @@ JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
     JL_LOCK(&m->lock);
     jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b == jl_nothing)
             break;
         if (jl_atomic_load_relaxed(&b->owner) && jl_atomic_load_relaxed(&b->owner) != b && !b->imported)

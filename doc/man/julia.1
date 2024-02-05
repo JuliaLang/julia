@@ -93,8 +93,12 @@ Enable or disable Julia's default signal handlers
 Use native code from system image if available
 
 .TP
---compiled-modules={yes*|no}
-Enable or disable incremental precompilation of modules
+--compiled-modules={yes*|no|existing}
+Enable or disable incremental precompilation of modules.
+
+.TP
+--pkgimages={yes*|no|existing}
+Enable or disable usage of native code caching in the form of pkgimages
 
 .TP
 -e, --eval <expr>
@@ -119,9 +123,9 @@ process affinity is not configured, it uses the number of CPU
 threads.
 
 .TP
---gcthreads <n>
-Enable n GC threads; If unspecified is set to half of the
-compute worker threads.
+--gcthreads=N[,M]
+Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC.
+N is set to half of the number of compute threads and M is set to 0 if unspecified.
 
 .TP
 -p, --procs {N|auto}

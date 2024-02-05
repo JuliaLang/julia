@@ -285,9 +285,12 @@ has_extended_unionsplit(::AnyMustAliasesLattice) = true
 has_extended_unionsplit(::JLTypeLattice) = false
 
 # Curried versions
-⊑(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊑(lattice, a, b)
-⊏(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊏(lattice, a, b)
-⋤(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⋤(lattice, a, b)
+⊑(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊑(𝕃, a, b)
+⊏(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊏(𝕃, a, b)
+⋤(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⋤(𝕃, a, b)
+partialorder(𝕃::AbstractLattice) = ⊑(𝕃)
+strictpartialorder(𝕃::AbstractLattice) = ⊏(𝕃)
+strictneqpartialorder(𝕃::AbstractLattice) = ⋤(𝕃)
 
 # Fallbacks for external packages using these methods
 const fallback_lattice = InferenceLattice(BaseInferenceLattice.instance)

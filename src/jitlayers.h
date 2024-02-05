@@ -1,6 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <llvm/ADT/MapVector.h>
+#include <llvm/ADT/StringSet.h>
+#include <llvm/Support/AllocatorBase.h>
 
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Constants.h>
@@ -8,6 +10,7 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/PassTimingInfo.h>
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
@@ -50,16 +53,8 @@
 #endif
 // The sanitizers don't play well with our memory manager
 
-#if defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
+#if defined(JL_FORCE_JITLINK) || defined(_CPU_AARCH64_) || defined(HAS_SANITIZER)
 # define JL_USE_JITLINK
-#else
-# if defined(_CPU_AARCH64_)
-#  if defined(_OS_LINUX_) && JL_LLVM_VERSION < 150000
-#   pragma message("On aarch64-gnu-linux, LLVM version >= 15 is required for JITLink; fallback suffers from occasional segfaults")
-#  else
-#   define JL_USE_JITLINK
-#  endif
-# endif
 #endif
 
 # include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
@@ -87,26 +82,41 @@ struct OptimizationOptions {
     bool dump_native;
     bool external_use;
     bool llvm_only;
+    bool always_inline;
+    bool enable_early_simplifications;
+    bool enable_early_optimizations;
+    bool enable_scalar_optimizations;
+    bool enable_loop_optimizations;
+    bool enable_vector_pipeline;
+    bool remove_ni;
+    bool cleanup;
 
     static constexpr OptimizationOptions defaults(
         bool lower_intrinsics=true,
         bool dump_native=false,
         bool external_use=false,
-        bool llvm_only=false) {
-        return {lower_intrinsics, dump_native, external_use, llvm_only};
+        bool llvm_only=false,
+        bool always_inline=true,
+        bool enable_early_simplifications=true,
+        bool enable_early_optimizations=true,
+        bool enable_scalar_optimizations=true,
+        bool enable_loop_optimizations=true,
+        bool enable_vector_pipeline=true,
+        bool remove_ni=true,
+        bool cleanup=true) {
+        return {lower_intrinsics, dump_native, external_use, llvm_only,
+                always_inline, enable_early_simplifications,
+                enable_early_optimizations, enable_scalar_optimizations,
+                enable_loop_optimizations, enable_vector_pipeline,
+                remove_ni, cleanup};
     }
 };
 
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
-#if JL_LLVM_VERSION < 160000
-    StandardInstrumentations SI;
-#endif
-    std::unique_ptr<PassInstrumentationCallbacks> PIC;
-    PassBuilder PB;
-    ModulePassManager MPM;
     OptimizationLevel O;
-
+    OptimizationOptions options;
+    TimePassesHandler TimePasses;
     NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options = OptimizationOptions::defaults()) JL_NOTSAFEPOINT;
     ~NewPM() JL_NOTSAFEPOINT;
 
@@ -292,6 +302,46 @@ static const inline char *name_from_method_instance(jl_method_instance_t *li) JL
     return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
 }
 
+template <size_t offset = 0>
+class MaxAlignedAllocImpl
+    : public AllocatorBase<MaxAlignedAllocImpl<offset>> {
+
+public:
+    MaxAlignedAllocImpl() JL_NOTSAFEPOINT = default;
+
+    static Align alignment(size_t Size) JL_NOTSAFEPOINT {
+        // Define the maximum alignment we expect to require, from offset bytes off
+        // the returned pointer, this is >= alignof(std::max_align_t), which is too
+        // small often to actually use.
+        const size_t MaxAlignment = JL_CACHE_BYTE_ALIGNMENT;
+        if (Size <= offset)
+            return Align(1);
+        return Align(std::min((size_t)llvm::PowerOf2Ceil(Size - offset), MaxAlignment));
+    }
+
+    LLVM_ATTRIBUTE_RETURNS_NONNULL void *Allocate(size_t Size, Align Alignment) {
+        Align MaxAlign = alignment(Size);
+        assert(Alignment < MaxAlign); (void)Alignment;
+        return jl_gc_perm_alloc(Size, 0, MaxAlign.value(), offset);
+    }
+
+    inline LLVM_ATTRIBUTE_RETURNS_NONNULL
+    void * Allocate(size_t Size, size_t Alignment) {
+        return Allocate(Size, Align(Alignment));
+    }
+
+    // Pull in base class overloads.
+    using AllocatorBase<MaxAlignedAllocImpl>::Allocate;
+
+    void Deallocate(const void *Ptr, size_t Size, size_t /*Alignment*/) { abort(); }
+
+    // Pull in base class overloads.
+    using AllocatorBase<MaxAlignedAllocImpl>::Deallocate;
+
+private:
+};
+using MaxAlignedAlloc = MaxAlignedAllocImpl<>;
+
 typedef JITSymbol JL_JITSymbol;
 // The type that is similar to SymbolInfo on LLVM 4.0 is actually
 // `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
@@ -300,6 +350,7 @@ typedef JITSymbol JL_SymbolInfo;
 
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 using OptimizerResultT = Expected<orc::ThreadSafeModule>;
+using SharedBytesT = StringSet<MaxAlignedAllocImpl<sizeof(StringSet<>::MapEntryTy)>>;
 
 class JuliaOJIT {
 public:
@@ -516,6 +567,7 @@ public:
 
     // Note that this is a safepoint due to jl_get_library_ and jl_dlsym calls
     void optimizeDLSyms(Module &M);
+
 private:
 
     const std::unique_ptr<TargetMachine> TM;
@@ -529,6 +581,7 @@ private:
     std::mutex RLST_mutex{};
     int RLST_inc = 0;
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
+    SharedBytesT SharedBytes;
 
     std::unique_ptr<DLSymOptimizer> DLSymOpt;
 
@@ -537,6 +590,7 @@ private:
     jl_locked_stream dump_compiles_stream;
     jl_locked_stream dump_llvm_opt_stream;
 
+    std::mutex llvm_printing_mutex{};
     SmallVector<std::function<void()>, 0> PrintLLVMTimers;
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
@@ -570,6 +624,7 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     return *_shared_module;
 }
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
+void SetOpaquePointer(LLVMContext &ctx) JL_NOTSAFEPOINT;
 
 void optimizeDLSyms(Module &M);
 

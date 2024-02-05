@@ -214,7 +214,6 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         (void)jl_toplevel_eval_flex(newm, form, 1, 1);
     }
-    newm->primary_world = jl_atomic_load_acquire(&jl_world_counter);
     ct->world_age = last_age;
 
 #if 0
@@ -222,7 +221,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     size_t i;
     jl_svec_t *table = jl_atomic_load_relaxed(&newm->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b != jl_nothing) {
             // remove non-exported macros
             if (jl_symbol_name(b->name)[0]=='@' &&
@@ -352,7 +351,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static void expr_attributes(jl_value_t *v, int *has_ccall, int *has_defs, int *has_opaque)
+static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int *has_defs, int *has_opaque)
 {
     if (!jl_is_expr(v))
         return;
@@ -390,6 +389,9 @@ static void expr_attributes(jl_value_t *v, int *has_ccall, int *has_defs, int *h
     else if (head == jl_call_sym && jl_expr_nargs(e) > 0) {
         jl_value_t *called = NULL;
         jl_value_t *f = jl_exprarg(e, 0);
+        if (jl_is_ssavalue(f)) {
+            f = jl_array_ptr_ref(body, ((jl_ssavalue_t*)f)->id - 1);
+        }
         if (jl_is_globalref(f)) {
             jl_module_t *mod = jl_globalref_mod(f);
             jl_sym_t *name = jl_globalref_name(f);
@@ -417,7 +419,7 @@ static void expr_attributes(jl_value_t *v, int *has_ccall, int *has_defs, int *h
     for (i = 0; i < jl_array_nrows(e->args); i++) {
         jl_value_t *a = jl_exprarg(e, i);
         if (jl_is_expr(a))
-            expr_attributes(a, has_ccall, has_defs, has_opaque);
+            expr_attributes(a, body, has_ccall, has_defs, has_opaque);
     }
 }
 
@@ -431,7 +433,7 @@ int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile)
         return 1;
     for(i=0; i < jl_array_nrows(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        expr_attributes(stmt, &has_ccall, &has_defs, &has_opaque);
+        expr_attributes(stmt, body, &has_ccall, &has_defs, &has_opaque);
         if (has_ccall)
             return 1;
     }
@@ -454,26 +456,29 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
                     *has_loops = 1;
             }
         }
-        expr_attributes(stmt, has_ccall, has_defs, has_opaque);
+        expr_attributes(stmt, body, has_ccall, has_defs, has_opaque);
     }
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
 }
 
+size_t jl_require_world = ~(size_t)0;
 static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Require);
     jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "%s", jl_symbol_name(var));
 
-    static jl_value_t *require_func = NULL;
-    int build_mode = jl_generating_output();
+    int build_mode = jl_options.incremental && jl_generating_output();
     jl_module_t *m = NULL;
     jl_task_t *ct = jl_current_task;
+    static jl_value_t *require_func = NULL;
     if (require_func == NULL && jl_base_module != NULL) {
         require_func = jl_get_global(jl_base_module, jl_symbol("require"));
     }
     if (require_func != NULL) {
         size_t last_age = ct->world_age;
-        ct->world_age = (build_mode ? jl_base_module->primary_world : jl_atomic_load_acquire(&jl_world_counter));
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        if (build_mode && jl_require_world < ct->world_age)
+            ct->world_age = jl_require_world;
         jl_value_t *reqargs[3];
         reqargs[0] = require_func;
         reqargs[1] = (jl_value_t*)mod;
@@ -756,14 +761,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 if (name != NULL)
                     u = (jl_module_t*)jl_eval_global_var(import, name);
                 if (from) {
-                    // `using A: B` syntax
+                    // `using A: B` and `using A: B.c` syntax
                     jl_module_use(m, import, name);
                 }
                 else {
                     if (!jl_is_module(u))
                         jl_eval_errorf(m, "invalid using path: \"%s\" does not name a module",
                                        jl_symbol_name(name));
-                    // `using A.B` syntax
+                    // `using A` and `using A.B` syntax
                     jl_module_using(m, u);
                     if (m == jl_main_module && name == NULL) {
                         // TODO: for now, `using A` in Main also creates an explicit binding for `A`

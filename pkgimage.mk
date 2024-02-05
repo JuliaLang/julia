@@ -35,12 +35,10 @@ $$(BUILDDIR)/stdlib/$1.debug.image: export JULIA_CPU_TARGET=$(JULIA_CPU_TARGET)
 
 $$(BUILDDIR)/stdlib/$1.release.image: $$($1_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
-	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --pkgimage=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
 $$(BUILDDIR)/stdlib/$1.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
-	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --pkgimage=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
 else
@@ -75,6 +73,7 @@ $(eval $(call stdlib_builder,Sockets,))
 $(eval $(call stdlib_builder,Unicode,))
 $(eval $(call stdlib_builder,Profile,))
 $(eval $(call stdlib_builder,StyledStrings,))
+$(eval $(call stdlib_builder,SuiteSparse_jll,))
 
 # 1-depth packages
 $(eval $(call stdlib_builder,GMP_jll,Artifacts Libdl))
@@ -96,6 +95,7 @@ $(eval $(call stdlib_builder,Printf,Unicode))
 $(eval $(call stdlib_builder,Random,SHA))
 $(eval $(call stdlib_builder,Tar,ArgTools,SHA))
 $(eval $(call stdlib_builder,DelimitedFiles,Mmap))
+$(eval $(call stdlib_builder,JuliaSyntaxHighlighting,StyledStrings))
 
 # 2-depth packages
 $(eval $(call stdlib_builder,LLD_jll,Zlib_jll libLLVM_jll Artifacts Libdl))
@@ -111,7 +111,7 @@ $(eval $(call stdlib_builder,InteractiveUtils,Markdown))
  # 3-depth packages
 $(eval $(call stdlib_builder,LibGit2_jll,MbedTLS_jll LibSSH2_jll Artifacts Libdl))
 $(eval $(call stdlib_builder,LibCURL_jll,LibSSH2_jll nghttp2_jll MbedTLS_jll Zlib_jll Artifacts Libdl))
-$(eval $(call stdlib_builder,REPL,InteractiveUtils Markdown Sockets Unicode))
+$(eval $(call stdlib_builder,REPL,InteractiveUtils Markdown Sockets StyledStrings Unicode))
 $(eval $(call stdlib_builder,SharedArrays,Distributed Mmap Random Serialization))
 $(eval $(call stdlib_builder,TOML,Dates))
 $(eval $(call stdlib_builder,Test,Logging Random Serialization InteractiveUtils))
@@ -131,6 +131,5 @@ $(eval $(call stdlib_builder,Pkg, Artifacts Dates Downloads FileWatching LibGit2
 # 7-depth packages
 $(eval $(call stdlib_builder,LazyArtifacts,Artifacts Pkg))
 
-$(eval $(call stdlib_builder,SparseArrays,Libdl LinearAlgebra Random Serialization))
+$(eval $(call stdlib_builder,SparseArrays,Libdl LinearAlgebra Random Serialization SuiteSparse_jll))
 $(eval $(call stdlib_builder,Statistics,LinearAlgebra SparseArrays))
-# SuiteSparse_jll

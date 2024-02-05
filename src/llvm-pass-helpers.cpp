@@ -7,6 +7,7 @@
 
 #include "llvm-version.h"
 
+#include "llvm/IR/Attributes.h"
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
@@ -123,9 +124,16 @@ namespace jl_intrinsics {
 
     // Annotates a function with attributes suitable for GC allocation
     // functions. Specifically, the return value is marked noalias and nonnull.
-    // The allocation size is set to the first argument.
     static Function *addGCAllocAttributes(Function *target)
     {
+        auto FnAttrs = AttrBuilder(target->getContext());
+#if JL_LLVM_VERSION >= 160000
+        FnAttrs.addMemoryAttr(MemoryEffects::argMemOnly(ModRefInfo::Ref) | MemoryEffects::inaccessibleMemOnly(ModRefInfo::ModRef));
+#endif
+        FnAttrs.addAllocKindAttr(AllocFnKind::Alloc);
+        FnAttrs.addAttribute(Attribute::WillReturn);
+        FnAttrs.addAttribute(Attribute::NoUnwind);
+        target->addFnAttrs(FnAttrs);
         addRetAttr(target, Attribute::NoAlias);
         addRetAttr(target, Attribute::NonNull);
         return target;

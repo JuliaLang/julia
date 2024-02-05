@@ -164,7 +164,11 @@ enum class CPU : uint32_t {
     apple_a12,
     apple_a13,
     apple_a14,
+    apple_a15,
+    apple_a16,
     apple_m1,
+    apple_m2,
+    apple_m3,
     apple_s4,
     apple_s5,
 
@@ -349,7 +353,11 @@ constexpr auto apple_a11 = armv8_2a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a12 = armv8_3a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16, sha3);
 constexpr auto apple_a14 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+constexpr auto apple_a15 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
+constexpr auto apple_a16 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 constexpr auto apple_m1 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+constexpr auto apple_m2 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
+constexpr auto apple_m3 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 // Features based on https://github.com/llvm/llvm-project/blob/82507f1798768280cf5d5aab95caaafbc7fe6f47/llvm/include/llvm/Support/AArch64TargetParser.def
 // and sysctl -a hw.optional
 constexpr auto apple_s4 = apple_a12;
@@ -431,7 +439,11 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"apple-a12", CPU::apple_a12, CPU::generic, 100000, Feature::apple_a12},
     {"apple-a13", CPU::apple_a13, CPU::generic, 100000, Feature::apple_a13},
     {"apple-a14", CPU::apple_a14, CPU::apple_a13, 120000, Feature::apple_a14},
+    {"apple-a15", CPU::apple_a15, CPU::apple_a14, 160000, Feature::apple_a15},
+    {"apple-a16", CPU::apple_a16, CPU::apple_a14, 160000, Feature::apple_a16},
     {"apple-m1", CPU::apple_m1, CPU::apple_a14, 130000, Feature::apple_m1},
+    {"apple-m2", CPU::apple_m2, CPU::apple_m1, 160000, Feature::apple_m2},
+    {"apple-m3", CPU::apple_m3, CPU::apple_m2, 180000, Feature::apple_m3},
     {"apple-s4", CPU::apple_s4, CPU::generic, 100000, Feature::apple_s4},
     {"apple-s5", CPU::apple_s5, CPU::generic, 100000, Feature::apple_s5},
     {"thunderx3t110", CPU::marvell_thunderx3t110, CPU::cavium_thunderx2t99, 110000,
@@ -699,16 +711,17 @@ static inline const char *find_cpu_name(uint32_t cpu)
 
 static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 {
+    using namespace llvm;
     char buffer[128];
     size_t bufferlen = 128;
     sysctlbyname("machdep.cpu.brand_string",&buffer,&bufferlen,NULL,0);
-
-    if(strcmp(buffer,"Apple M1") == 0)
+    StringRef cpu_name(buffer);
+    if (cpu_name.find("M1") != StringRef ::npos)
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
-    else if(strcmp(buffer,"Apple M1 Max") == 0)
-        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
-    else if(strcmp(buffer,"Apple M1 Pro") == 0)
-        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
+    else if (cpu_name.find("M2") != StringRef ::npos)
+        return std::make_pair((uint32_t)CPU::apple_m2, Feature::apple_m2);
+    else if (cpu_name.find("M3") != StringRef ::npos)
+        return std::make_pair((uint32_t)CPU::apple_m3, Feature::apple_m3);
     else
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
 }
@@ -1053,7 +1066,23 @@ static CPU get_cpu_name(CPUID cpuid)
             return CPU::apple_a14;
         case 0x22: // Icestorm m1
         case 0x23: // Firestorm m1
+        case 0x24:
+        case 0x25: // From https://github.com/AsahiLinux/m1n1/blob/3b9a71422e45209ef57c563e418f877bf54358be/src/chickens.c#L9
+        case 0x28:
+        case 0x29:
             return CPU::apple_m1;
+        case 0x30: // Blizzard m2
+        case 0x31: // Avalanche m2
+        case 0x32:
+        case 0x33:
+        case 0x34:
+        case 0x35:
+        case 0x38:
+        case 0x39:
+            return CPU::apple_m2;
+        case 0x49: // Everest m3
+        case 0x48: // Sawtooth m3
+            return CPU::apple_m3;
         default: return CPU::generic;
         }
     case 0x68: // 'h': Huaxintong Semiconductor
@@ -1798,14 +1827,20 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
                   cpus, ncpu_names);
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 {
-    return jl_cstr_to_string(host_cpu_name().c_str());
-}
-
-JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
-{
-    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+#ifdef _CPU_AARCH64_
+    return jl_true;
+#else
+    TargetData<feature_sz> target = jit_targets.front();
+    FeatureList<feature_sz> features = target.en.features;
+    if (bits == 32 && test_nbit(features, Feature::vfp4sp))
+        return jl_true;
+    else if ((bits == 64 || bits == 32) && test_nbit(features, Feature::vfp4))
+        return jl_true;
+    else
+        return jl_false;
+#endif
 }
 
 jl_image_t jl_init_processor_sysimg(void *hdl)

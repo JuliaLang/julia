@@ -3,26 +3,38 @@ include $(SRCDIR)/libsuitesparse.version
 
 ifneq ($(USE_BINARYBUILDER_LIBSUITESPARSE), 1)
 
-LIBSUITESPARSE_PROJECTS := AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR
-LIBSUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd btf camd ccolamd colamd cholmod klu ldl umfpack rbio spqr)
+LIBSUITESPARSE_PROJECTS := "suitesparse_config;amd;btf;camd;ccolamd;colamd;cholmod;klu;ldl;umfpack;rbio;spqr"
+LIBSUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig $(subst ;, ,$(LIBSUITESPARSE_PROJECTS)))
+
+ifeq ($(OS),WINNT)
+BLAS_LIB_NAME_NO_EXT:=blastrampoline-5
+else
+BLAS_LIB_NAME_NO_EXT:=blastrampoline
+endif
 
 LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_COMMON) \
 	  -DCMAKE_BUILD_TYPE=Release \
-	  -DENABLE_CUDA=0 \
-	  -DNFORTRAN=1 \
-	  -DNOPENMP=1 \
-	  -DNPARTITION=0 \
-	  -DNSTATIC=1 \
+	  -DBUILD_STATIC_LIBS=OFF \
+	  -DBUILD_TESTING=OFF \
+	  -DSUITESPARSE_ENABLE_PROJECTS=$(LIBSUITESPARSE_PROJECTS) \
+	  -DSUITESPARSE_DEMOS=OFF \
+	  -DSUITESPARSE_USE_STRICT=ON \
+	  -DSUITESPARSE_USE_CUDA=OFF \
+	  -DSUITESPARSE_USE_FORTRAN=OFF \
+	  -DSUITESPARSE_USE_OPENMP=OFF \
+	  -DCHOLMOD_PARTITION=ON \
 	  -DBLAS_FOUND=1 \
-	  -DBLAS_LIBRARIES="$(build_shlibdir)/libblastrampoline.$(SHLIB_EXT)" \
-	  -DBLAS_LINKER_FLAGS="blastrampoline" \
-	  -DBLAS_UNDERSCORE=ON \
-	  -DBLA_VENDOR="blastrampoline" \
-	  -DBLAS64_SUFFIX="_64" \
-	  -DALLOW_64BIT_BLAS=ON \
-	  -DLAPACK_FOUND=1 \
-	  -DLAPACK_LIBRARIES="$(build_shlibdir)/libblastrampoline.$(SHLIB_EXT)" \
-	  -DLAPACK_LINKER_FLAGS="blastrampoline"
+	  -DBLAS_LIBRARIES="$(build_shlibdir)/lib$(BLAS_LIB_NAME_NO_EXT).$(SHLIB_EXT)" \
+	  -DBLAS_LINKER_FLAGS="$(BLAS_LIB_NAME_NO_EXT)" \
+	  -DBLA_VENDOR="$(BLAS_LIB_NAME_NO_EXT)" \
+	  -DLAPACK_LIBRARIES="$(build_shlibdir)/lib$(BLAS_LIB_NAME_NO_EXT).$(SHLIB_EXT)" \
+	  -DLAPACK_LINKER_FLAGS="${BLAS_LIB_NAME_NO_EXT}"
+
+ifeq ($(BINARY),64)
+LIBSUITESPARSE_CMAKE_FLAGS += -DBLAS64_SUFFIX="_64" -DSUITESPARSE_USE_64BIT_BLAS=YES
+else
+LIBSUITESPARSE_CMAKE_FLAGS += -DSUITESPARSE_USE_64BIT_BLAS=NO
+endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBSUITESPARSE_CMAKE_FLAGS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
@@ -40,17 +52,15 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted: $(SRCCACHE)/Suit
 checksum-libsuitesparse: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
 
+$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
+	echo 1 > $@
+
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/blastrampoline
 
-$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
-	cd $(dir $<); \
-	for PROJ in SuiteSparse_config $(LIBSUITESPARSE_PROJECTS); do \
-		cd $${PROJ}/build || exit 1; \
-		$(CMAKE) .. $(LIBSUITESPARSE_CMAKE_FLAGS) || exit 1; \
-		make || exit 1; \
-		make install || exit 1; \
-		cd ../..; \
-	done
+$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
+	cd $(dir $<) && $(CMAKE) . $(LIBSUITESPARSE_CMAKE_FLAGS)
+	make -C $(dir $<)
+	make -C $(dir $<) install
 	echo 1 > $@
 
 ifeq ($(OS),WINNT)
@@ -59,7 +69,7 @@ else
 LIBSUITESPARSE_SHLIB_ENV:=LD_LIBRARY_PATH="$(build_shlibdir)"
 endif
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
-	for PROJ in $(LIBSUITESPARSE_PROJECTS); do \
+	for PROJ in $(shell echo $(subst ;, ,$(LIBSUITESPARSE_PROJECTS))); do \
 		$(LIBSUITESPARSE_SHLIB_ENV) $(MAKE) -C $(dir $<)$${PROJ} default $(LIBSUITESPARSE_MFLAGS) || exit 1; \
 	done
 	echo 1 > $@

@@ -741,6 +741,9 @@ end
     v = [1,2,3]
     @test permutedims(v) == [1 2 3]
 
+    zd = fill(0)
+    @test permutedims(zd, ()) == zd
+
     x = PermutedDimsArray([1 2; 3 4], (2, 1))
     @test size(x) == (2, 2)
     @test copy(x) == [1 3; 2 4]
@@ -1446,6 +1449,15 @@ end
     @test sortslices(B, dims=(1,3)) == B
 end
 
+@testset "sortslices inference (#52019)" begin
+    x = rand(3, 2)
+    @inferred sortslices(x, dims=1)
+    @inferred sortslices(x, dims=(2,))
+    x = rand(1, 2, 3)
+    @inferred sortslices(x, dims=(1,2))
+    @inferred sortslices(x, dims=3, by=sum)
+end
+
 @testset "fill" begin
     @test fill!(Float64[1.0], -0.0)[1] === -0.0
     A = fill(1.,3,3)
@@ -1786,6 +1798,32 @@ end
     # offset array
     @test append!([1,2], OffsetArray([9,8], (-3,))) == [1,2,9,8]
     @test prepend!([1,2], OffsetArray([9,8], (-3,))) == [9,8,1,2]
+
+    # Error recovery
+    A = [1, 2]
+    @test_throws MethodError append!(A, [1, 2, "hi"])
+    @test A == [1, 2, 1, 2]
+
+    oA = OffsetVector(A, 0:3)
+    @test_throws InexactError append!(oA, [1, 2, 3.01])
+    @test oA == OffsetVector([1, 2, 1, 2, 1, 2], 0:5)
+
+    @test_throws InexactError append!(A, (x for x in [1, 2, 3.1]))
+    @test A == [1, 2, 1, 2, 1, 2, 1, 2]
+
+    @test_throws InexactError append!(A, (x for x in [1, 2, 3.1] if isfinite(x)))
+    @test A == [1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+
+    @test_throws MethodError prepend!(A, [1, 2, "hi"])
+    @test A == [2, 1, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+
+    A = [1, 2]
+    @test_throws InexactError prepend!(A, (x for x in [1, 2, 3.1]))
+    @test A == [2, 1, 1, 2]
+
+    A = [1, 2]
+    @test_throws InexactError prepend!(A, (x for x in [1, 2, 3.1] if isfinite(x)))
+    @test A == [2, 1, 1, 2]
 end
 
 let A = [1,2]
@@ -3134,4 +3172,32 @@ end
         c = view(b, 1:1, 1:1)
         @test c + zero(c) == c
     end
+end
+
+@testset "Wrapping Memory into Arrays" begin
+    mem = Memory{Int}(undef, 10) .= 1
+    memref = MemoryRef(mem)
+    @test_throws DimensionMismatch wrap(Array, mem, (10, 10))
+    @test wrap(Array, mem, (5,)) == ones(Int, 5)
+    @test wrap(Array, mem, 2) == ones(Int, 2)
+    @test wrap(Array, memref, 10) == ones(Int, 10)
+    @test wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
+    @test wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)
+
+    memref2 = MemoryRef(mem, 3)
+    @test wrap(Array, memref2, (5,)) == ones(Int, 5)
+    @test wrap(Array, memref2, 2) == ones(Int, 2)
+    @test wrap(Array, memref2, (2,2,2)) == ones(Int,2,2,2)
+    @test wrap(Array, memref2, (3, 2)) == ones(Int, 3, 2)
+    @test_throws DimensionMismatch wrap(Array, memref2, 9)
+    @test_throws DimensionMismatch wrap(Array, memref2, 10)
+end
+
+@testset "Memory size" begin
+    len = 5
+    mem = Memory{Int}(undef, len)
+    @test size(mem, 1) == len
+    @test size(mem, 0x1) == len
+    @test size(mem, 2) == 1
+    @test size(mem, 0x2) == 1
 end

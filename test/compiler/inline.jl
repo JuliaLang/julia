@@ -71,7 +71,7 @@ function bar12620()
         foo_inl(i==1)
     end
 end
-@test_throws UndefVarError(:y) bar12620()
+@test_throws UndefVarError(:y, :local) bar12620()
 
 # issue #16165
 @inline f16165(x) = (x = UInt(x) + 1)
@@ -507,6 +507,17 @@ end
         Base.@constprop :aggressive noinlined_constprop_implicit(a) = a+g
         force_inline_constprop_implicit() = @inline noinlined_constprop_implicit(0)
 
+        function force_inline_constprop_cached1()
+            r1 =         noinlined_constprop_implicit(0)
+            r2 = @inline noinlined_constprop_implicit(0)
+            return (r1, r2)
+        end
+        function force_inline_constprop_cached2()
+            r1 = @inline noinlined_constprop_implicit(0)
+            r2 =         noinlined_constprop_implicit(0)
+            return (r1, r2)
+        end
+
         @inline Base.@constprop :aggressive inlined_constprop_explicit(a) = a+g
         force_noinline_constprop_explicit() = @noinline inlined_constprop_explicit(0)
         @inline Base.@constprop :aggressive inlined_constprop_implicit(a) = a+g
@@ -557,6 +568,12 @@ end
     let code = get_code(M.force_inline_constprop_implicit)
         @test all(!isinvoke(:noinlined_constprop_implicit), code)
     end
+    let code = get_code(M.force_inline_constprop_cached1)
+        @test count(isinvoke(:noinlined_constprop_implicit), code) == 1
+    end
+    let code = get_code(M.force_inline_constprop_cached2)
+        @test count(isinvoke(:noinlined_constprop_implicit), code) == 1
+    end
 
     let code = get_code(M.force_noinline_constprop_explicit)
         @test any(isinvoke(:inlined_constprop_explicit), code)
@@ -568,6 +585,18 @@ end
     let code = get_code(M.nested, (Int,Int))
         @test count(isinvoke(:notinlined), code) == 1
     end
+end
+
+@noinline fresh_edge_noinlined(a::Integer) = unresolvable(a)
+let src = code_typed1((Integer,)) do x
+        @inline fresh_edge_noinlined(x)
+    end
+    @test count(iscall((src, fresh_edge_noinlined)), src.code) == 0
+end
+let src = code_typed1((Integer,)) do x
+        @inline fresh_edge_noinlined(x)
+    end
+    @test count(iscall((src, fresh_edge_noinlined)), src.code) == 0 # should be idempotent
 end
 
 # force constant-prop' for `setproperty!`
@@ -1646,13 +1675,12 @@ function oc_capture_oc(z)
 end
 @test fully_eliminated(oc_capture_oc, (Int,))
 
+# inlining with unmatched type parameters
 @eval struct OldVal{T}
-    x::T
     (OV::Type{OldVal{T}})() where T = $(Expr(:new, :OV))
 end
-with_unmatched_typeparam1(x::OldVal{i}) where {i} = i
-with_unmatched_typeparam2() = [ Base.donotdelete(OldVal{i}()) for i in 1:10000 ]
-function with_unmatched_typeparam3()
+@test OldVal{0}() === OldVal{0}.instance
+function with_unmatched_typeparam()
     f(x::OldVal{i}) where {i} = i
     r = 0
     for i = 1:10000
@@ -1660,17 +1688,15 @@ function with_unmatched_typeparam3()
     end
     return r
 end
-
-@testset "Inlining with unmatched type parameters" begin
-    let src = code_typed1(with_unmatched_typeparam1, (Any,))
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
+let src = code_typed1(with_unmatched_typeparam)
+    found = nothing
+    for x in src.code
+        if isexpr(x, :call) && length(x.args) == 1
+            found = x
+            break
+        end
     end
-    let src = code_typed1(with_unmatched_typeparam2)
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
-    end
-    let src = code_typed1(with_unmatched_typeparam3)
-        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
-    end
+    @test isnothing(found) || (source=src, statement=found)
 end
 
 function twice_sitofp(x::Int, y::Int)
@@ -1767,6 +1793,24 @@ let src = code_typed1((Atomic{Int},Union{Int,Float64})) do a, b
     end
     @test count(isinvokemodify(:mymax), src.code) == 2
 end
+global x_global_inc::Int = 1
+let src = code_typed1(()) do
+        @atomic (@__MODULE__).x_global_inc += 1
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((Ptr{Int},)) do a
+        unsafe_modify!(a, +, 1)
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((AtomicMemoryRef{Int},)) do a
+        Core.memoryrefmodify!(a, +, 1, :sequentially_consistent, true)
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+
+
 
 # apply `ssa_inlining_pass` multiple times
 let interp = Core.Compiler.NativeInterpreter()
@@ -1840,26 +1884,16 @@ end
 # Test that inlining can still use nothrow information from concrete-eval
 # even if the result itself is too big to be inlined, and nothrow is not
 # known without concrete-eval
-const THE_BIG_TUPLE = ntuple(identity, 1024)
+const THE_BIG_TUPLE = ntuple(identity, 1024);
 function return_the_big_tuple(err::Bool)
     err && error("BAD")
     return THE_BIG_TUPLE
 end
-@noinline function return_the_big_tuple_noinline(err::Bool)
-    err && error("BAD")
-    return THE_BIG_TUPLE
+@test fully_eliminated() do
+    return_the_big_tuple(false)[1]
 end
-big_tuple_test1() = return_the_big_tuple(false)[1]
-big_tuple_test2() = return_the_big_tuple_noinline(false)[1]
-
-@test fully_eliminated(big_tuple_test2, Tuple{})
-# Currently we don't run these cleanup passes, but let's make sure that
-# if we did, inlining would be able to remove this
-let ir = Base.code_ircode(big_tuple_test1, Tuple{})[1][1]
-    ir = Core.Compiler.compact!(ir, true)
-    ir = Core.Compiler.cfg_simplify!(ir)
-    ir = Core.Compiler.compact!(ir, true)
-    @test length(ir.stmts) == 1
+@test fully_eliminated() do
+    @inline return_the_big_tuple(false)[1]
 end
 
 # inlineable but removable call should be eligible for DCE
@@ -2100,3 +2134,20 @@ let src = code_typed1() do
     end
     @test count(isinvoke(:iterate), src.code) == 0
 end
+
+# JuliaLang/julia#53062: proper `joint_effects` for call with empty method matches
+let ir = first(only(Base.code_ircode(setproperty!, (Base.RefValue{Int},Symbol,Base.RefValue{Int}))))
+    i = findfirst(iscall((ir, convert)), ir.stmts.stmt)::Int
+    @test iszero(ir.stmts.flag[i] & Core.Compiler.IR_FLAG_NOTHROW)
+end
+function issue53062(cond)
+    x = Ref{Int}(0)
+    if cond
+        x[] = x
+    else
+        return -1
+    end
+end
+@test !Core.Compiler.is_nothrow(Base.infer_effects(issue53062, (Bool,)))
+@test issue53062(false) == -1
+@test_throws MethodError issue53062(true)

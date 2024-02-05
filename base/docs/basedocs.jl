@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+#
 
 module BaseDocs
 
@@ -1818,14 +1819,14 @@ In these examples, `a` is a [`Rational`](@ref), which has two fields.
 nfields
 
 """
-    UndefVarError(var::Symbol)
+    UndefVarError(var::Symbol, [scope])
 
 A symbol in the current scope is not defined.
 
 # Examples
 ```jldoctest
 julia> a
-ERROR: UndefVarError: `a` not defined
+ERROR: UndefVarError: `a` not defined in `Main`
 
 julia> a = 1;
 
@@ -2235,11 +2236,14 @@ setfield!
     swapfield!(value, name::Symbol, x, [order::Symbol])
     swapfield!(value, i::Int, x, [order::Symbol])
 
-These atomically perform the operations to simultaneously get and set a field:
+Atomically perform the operations to simultaneously get and set a field:
 
     y = getfield(value, name)
     setfield!(value, name, x)
     return y
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 swapfield!
 
@@ -2247,7 +2251,7 @@ swapfield!
     modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
     modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
 
-These atomically perform the operations to get and set a field after applying
+Atomically perform the operations to get and set a field after applying
 the function `op`.
 
     y = getfield(value, name)
@@ -2257,6 +2261,9 @@ the function `op`.
 
 If supported by the hardware (for example, atomic increment), this may be
 optimized to the appropriate hardware instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 modifyfield!
 
@@ -2266,7 +2273,7 @@ modifyfield!
     replacefield!(value, i::Int, expected, desired,
                   [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
 
-These atomically perform the operations to get and conditionally set a field to
+Atomically perform the operations to get and conditionally set a field to
 a given value.
 
     y = getfield(value, name, fail_order)
@@ -2278,8 +2285,29 @@ a given value.
 
 If supported by the hardware, this may be optimized to the appropriate hardware
 instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 replacefield!
+
+"""
+    setfieldonce!(value, name::Union{Int,Symbol}, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> success::Bool
+
+Atomically perform the operations to set a field to
+a given value, only if it was previously not set.
+
+    ok = !isdefined(value, name, fail_order)
+    if ok
+        setfield!(value, name, desired, success_order)
+    end
+    return ok
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+setfieldonce!
 
 """
     getglobal(module::Module, name::Symbol, [order::Symbol=:monotonic])
@@ -2321,6 +2349,7 @@ julia> getglobal(M, :a)
 """
 getglobal
 
+
 """
     setglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
 
@@ -2346,7 +2375,8 @@ See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 julia> module M end;
 
 julia> M.a  # same as `getglobal(M, :a)`
-ERROR: UndefVarError: `a` not defined
+ERROR: UndefVarError: `a` not defined in `M`
+Suggestion: check for spelling errors or missing imports.
 
 julia> setglobal!(M, :a, 1)
 1
@@ -2356,6 +2386,81 @@ julia> M.a
 ```
 """
 setglobal!
+
+"""
+    Core.get_binding_type(module::Module, name::Symbol)
+
+Retrieve the declared type of the binding `name` from the module `module`.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+"""
+Core.get_binding_type
+
+"""
+    Core.set_binding_type!(module::Module, name::Symbol, [type::Type])
+
+Set the declared type of the binding `name` in the module `module` to `type`. Error if the
+binding already has a type that is not equivalent to `type`. If the `type` argument is
+absent, set the binding type to `Any` if unset, but do not error.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+"""
+Core.set_binding_type!
+
+"""
+    swapglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
+
+Atomically perform the operations to simultaneously get and set a global.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`swapproperty!`](@ref Base.swapproperty!) and [`setglobal!`](@ref).
+"""
+swapglobal!
+
+"""
+    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic]) -> Pair
+
+Atomically perform the operations to get and set a global after applying
+the function `op`.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`modifyproperty!`](@ref Base.modifyproperty!) and [`setglobal!`](@ref).
+"""
+modifyglobal!
+
+"""
+    replaceglobal!(module::Module, name::Symbol, expected, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+
+Atomically perform the operations to get and conditionally set a global to
+a given value.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`replaceproperty!`](@ref Base.replaceproperty!) and [`setglobal!`](@ref).
+"""
+replaceglobal!
+
+"""
+    setglobalonce!(module::Module, name::Symbol, value,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> success::Bool
+
+Atomically perform the operations to set a global to
+a given value, only if it was previously not set.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@ref).
+"""
+setglobalonce!
 
 """
     typeof(x)
@@ -2892,7 +2997,7 @@ Union
     UnionAll
 
 A union of types over all values of a type parameter. `UnionAll` is used to describe parametric types
-where the values of some parameters are not known.
+where the values of some parameters are not known. See the manual section on [UnionAll Types](@ref).
 
 # Examples
 ```jldoctest
@@ -3160,13 +3265,29 @@ Base.modifyproperty!
     replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
 
 Perform a compare-and-swap operation on `x.f` from `expected` to `desired`, per
-egal. The syntax `@atomic_replace! x.f expected => desired` can be used instead
+egal. The syntax `@atomicreplace x.f expected => desired` can be used instead
 of the function call form.
 
 See also [`replacefield!`](@ref Core.replacefield!)
-and [`setproperty!`](@ref Base.setproperty!).
+[`setproperty!`](@ref Base.setproperty!),
+[`setpropertyonce!`](@ref Base.setpropertyonce!).
 """
 Base.replaceproperty!
+
+"""
+    setpropertyonce!(x, f::Symbol, value, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+
+Perform a compare-and-swap operation on `x.f` to set it to `value` if previously unset.
+The syntax `@atomiconce x.f = value` can be used instead of the function call form.
+
+See also [`setfieldonce!`](@ref Core.replacefield!),
+[`setproperty!`](@ref Base.setproperty!),
+[`replaceproperty!`](@ref Base.replaceproperty!).
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+Base.setpropertyonce!
 
 
 """
@@ -3311,7 +3432,7 @@ kw"atomic"
 
 This function prevents dead-code elimination (DCE) of itself and any arguments
 passed to it, but is otherwise the lightest barrier possible. In particular,
-it is not a GC safepoint, does model an observable heap effect, does not expand
+it is not a GC safepoint, does not model an observable heap effect, does not expand
 to any code itself and may be re-ordered with respect to other side effects
 (though the total number of executions may not change).
 
@@ -3328,6 +3449,14 @@ unused and delete the entire benchmark code).
     `donotdelete` does not affect constant folding. For example, in
     `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
     the code is semantically equivalent to `donotdelete(2).`
+
+!!! note
+    This intrinsic does not affect the semantics of code that is dead because it is
+    *unreachable*. For example, the body of the function `f(x) = false && donotdelete(x)`
+    may be deleted in its entirety. The semantics of this intrinsic only guarantee that
+    *if* the intrinsic is semantically executed, then there is some program state at
+    which the value of the arguments of this intrinsic were available (in a register,
+    in memory, etc.).
 
 # Examples
 

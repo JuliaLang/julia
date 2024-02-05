@@ -14,11 +14,11 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
+        (Core.CodeInstance, [:def, :rettype, :exctype, :rettype_const, :ipo_purity_bits, :analysis_results]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:module]),
-        (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
+        (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
@@ -32,11 +32,11 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :inferred, :purity_bits, :invoke, :specptr, :precompile]),
-        (Core.Method, []),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :purity_bits, :invoke, :specptr, :precompile]),
+        (Core.Method, [:primary_world, :deleted_world]),
         (Core.MethodInstance, [:uninferred, :cache, :precompiled]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
-        (Core.TypeMapEntry, [:next]),
+        (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
         (Core.TypeName, [:cache, :linearcache]),
         (DataType, [:types, :layout]),
@@ -111,6 +111,21 @@ let abcd = ABCDconst(1, 2, 3, 4)
         abcd.d = nothing)
     @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
 end
+# Issue #52686
+struct A52686{T} end
+struct B52686{T, S}
+    a::A52686{<:T}
+end
+function func52686()
+    @eval begin
+        struct A52686{T} end
+        struct B52686{T, S}
+            a::A52686{<:T}
+        end
+    end
+    return true
+end
+@test func52686()
 
 # test `===` handling null pointer in struct #44712
 struct N44712
@@ -224,8 +239,8 @@ k11840(::Type{Union{Tuple{Int32}, Tuple{Int64}}}) = '2'
 # issue #20511
 f20511(x::DataType) = 0
 f20511(x) = 1
-Type{Integer}  # cache this
-@test f20511(Union{Integer,T} where T <: Unsigned) == 1
+Type{AbstractSet}  # cache this
+@test f20511(Union{AbstractSet,Set{T}} where T) == 1
 
 # join
 @test typejoin(Int8,Int16) === Signed
@@ -552,7 +567,7 @@ function i18408()
     return (x -> i)
 end
 let f = i18408()
-    @test_throws UndefVarError(:i) f(0)
+    @test_throws UndefVarError(:i, :local) f(0)
 end
 
 # issue #23558
@@ -612,7 +627,7 @@ begin
         global f7234_cnt += -10000
     end
 end
-@test_throws UndefVarError(:glob_x2) f7234_a()
+@test_throws UndefVarError(:glob_x2, :local) f7234_a()
 @test f7234_cnt == 1
 begin
     global glob_x2 = 24
@@ -622,7 +637,7 @@ begin
         global f7234_cnt += -10000
     end
 end
-@test_throws UndefVarError(:glob_x2) f7234_b()
+@test_throws UndefVarError(:glob_x2, :local) f7234_b()
 @test f7234_cnt == 2
 # globals can accessed if declared
 for i = 1:2
@@ -737,11 +752,11 @@ function f21900()
     global f21900_cnt += -1000
     nothing
 end
-@test_throws UndefVarError(:x_global_undefined_error) f21900()
+@test_throws UndefVarError(:x_global_undefined_error, @__MODULE__) f21900()
 @test f21900_cnt == 1
 
 # use @eval so this runs as a toplevel scope block
-@test_throws UndefVarError(:foo21900) @eval begin
+@test_throws UndefVarError(:foo21900, @__MODULE__) @eval begin
     for i21900 = 1:10
         local bar21900
         for j21900 = 1:10
@@ -754,7 +769,7 @@ end
 @test !@isdefined(foo21900)
 @test !@isdefined(bar21900)
 bar21900 = 0
-@test_throws UndefVarError(:foo21900) @eval begin
+@test_throws UndefVarError(:foo21900, @__MODULE__) @eval begin
     for i21900 = 1:10
         global bar21900
         for j21900 = 1:10
@@ -1164,6 +1179,10 @@ let A = [1]
     GC.gc(); GC.gc()
     @test x == 1
 end
+
+# Make sure that `Module` is not resolved to `Core.Module` during sysimg generation
+# so that users can define their own binding named `Module` in Main.
+@test !Base.isbindingresolved(Main, :Module)
 
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
@@ -4176,7 +4195,7 @@ let foo(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = 1
 end
 let foo(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = T
     @test foo(1, nothing) === Int
-    @test_throws UndefVarError(:T) foo(nothing, nothing)
+    @test_throws UndefVarError(:T, :static_parameter) foo(nothing, nothing)
 end
 
 module TestMacroGlobalFunction
@@ -4230,14 +4249,14 @@ foo9677(x::Array) = invoke(foo9677, Tuple{AbstractArray}, x)
 
 # issue #6846
 f6846() = (please6846; 2)
-@test_throws UndefVarError(:please6846) f6846()
+@test_throws UndefVarError(:please6846, @__MODULE__) f6846()
 
 module M6846
     macro f()
         return esc(:(please6846; 2))
     end
 end
-@test_throws UndefVarError(:please6846) @M6846.f()
+@test_throws UndefVarError(:please6846, @__MODULE__) @M6846.f()
 
 # issue #14758
 @test isa(@eval(f14758(; $([]...)) = ()), Function)
@@ -4940,7 +4959,7 @@ function trigger14878()
     w.ext[:14878] = B14878(junk)  # global junk not defined!
     return w
 end
-@test_throws UndefVarError(:junk) trigger14878()
+@test_throws UndefVarError(:junk, @__MODULE__) trigger14878()
 
 # issue #1090
 function f1090(x)::Int
@@ -5258,9 +5277,9 @@ GC.enable(true)
 @test isa(which(bad_tvars, ()), Method)
 @test bad_tvars() === 1
 @test_warn "declares type variable T but does not use it" @eval bad_tvars2() where {T} = T
-@test_throws UndefVarError(:T) bad_tvars2()
+@test_throws UndefVarError(:T, :static_parameter) bad_tvars2()
 missing_tvar(::T...) where {T} = T
-@test_throws UndefVarError(:T) missing_tvar()
+@test_throws UndefVarError(:T, :static_parameter) missing_tvar()
 @test missing_tvar(1) === Int
 @test missing_tvar(1, 2, 3) === Int
 @test_throws MethodError missing_tvar(1, 2, "3")
@@ -5876,7 +5895,7 @@ function f_unused_undefined_sp(::T...) where T
     T
     return 0
 end
-@test_throws UndefVarError(:T) f_unused_undefined_sp()
+@test_throws UndefVarError(:T, :static_parameter) f_unused_undefined_sp()
 
 # note: the constant `5` here should be > DataType.ninitialized.
 # This tests that there's no crash due to accessing Type.body.layout.
@@ -6866,7 +6885,7 @@ end
 # issue #21004
 const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
 @test_throws ArgumentError("too few elements for tuple type $PTuple_21004") PTuple_21004(1)
-@test_throws UndefVarError(:T) PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+@test_throws UndefVarError(:T, :static_parameter) PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
 
 #issue #22792
 foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
@@ -7164,7 +7183,7 @@ end
 c28399 = 42
 @test g28399(0)() == 42
 @test g28399(1)() == 42
-@test_throws UndefVarError(:__undef_28399__) f28399()
+@test_throws UndefVarError(:__undef_28399__, @__MODULE__) f28399()
 
 # issue #28445
 mutable struct foo28445
@@ -7357,21 +7376,27 @@ let fc = FieldConvert(1.0, [2.0], 0x3, 0x4, 0x5)
 end
 @test ftype_eval[] == 1
 let code = code_lowered(FieldConvert)[1].code
-    @test code[1] == Expr(:call, GlobalRef(Core, :apply_type), GlobalRef(@__MODULE__, :FieldConvert), GlobalRef(@__MODULE__, :FieldTypeA), Expr(:static_parameter, 1))
-    @test code[2] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 1)
-    @test code[7] == Expr(:(=), Core.SlotNumber(10), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(2), Core.SlotNumber(10)))
-    @test code[8] == Core.SlotNumber(10)
-    @test code[9] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 2)
-    @test code[14] == Expr(:(=), Core.SlotNumber(9), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(9), Core.SlotNumber(9)))
-    @test code[15] == Core.SlotNumber(9)
-    @test code[16] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 4)
-    @test code[21] == Expr(:(=), Core.SlotNumber(8), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(16), Core.SlotNumber(8)))
-    @test code[22] == Core.SlotNumber(8)
-    @test code[23] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
-    @test code[28] == Expr(:(=), Core.SlotNumber(7), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(23), Core.SlotNumber(7)))
-    @test code[29] == Core.SlotNumber(7)
-    @test code[30] == Expr(:new, Core.SSAValue(1), Core.SSAValue(8), Core.SSAValue(15), Core.SlotNumber(4), Core.SSAValue(22), Core.SSAValue(29))
-    @test code[31] == Core.ReturnNode(Core.SSAValue(30))
+    local fc_global_ssa, sp1_ssa, apply_type_ssa, field_type_ssa,
+        field_type2_ssa, field_type4_ssa, field_type5_ssa,
+        slot_read_1, slot_read_2, slot_read_3, slot_read_4,
+        new_ssa
+    @test code[(fc_global_ssa = 1;)] == GlobalRef(@__MODULE__, :FieldConvert)
+    @test code[(sp1_ssa = 2;)] == Expr(:static_parameter, 1)
+    @test code[(apply_type_ssa = 3;)] == Expr(:call, GlobalRef(Core, :apply_type), Core.SSAValue(fc_global_ssa), GlobalRef(@__MODULE__, :FieldTypeA), Core.SSAValue(sp1_ssa))
+    @test code[(field_type_ssa = 4;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 1)
+    @test code[10] == Expr(:(=), Core.SlotNumber(10), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type_ssa), Core.SlotNumber(10)))
+    @test code[(slot_read_1 = 11;)] == Core.SlotNumber(10)
+    @test code[(field_type2_ssa = 12;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 2)
+    @test code[18] == Expr(:(=), Core.SlotNumber(9), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type2_ssa), Core.SlotNumber(9)))
+    @test code[(slot_read_2 = 19;)] == Core.SlotNumber(9)
+    @test code[(field_type4_ssa = 20;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 4)
+    @test code[26] == Expr(:(=), Core.SlotNumber(8), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type4_ssa), Core.SlotNumber(8)))
+    @test code[(slot_read_3 = 27;)] == Core.SlotNumber(8)
+    @test code[(field_type5_ssa = 28;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 5)
+    @test code[34] == Expr(:(=), Core.SlotNumber(7), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type5_ssa), Core.SlotNumber(7)))
+    @test code[(slot_read_4 = 35;)] == Core.SlotNumber(7)
+    @test code[(new_ssa = 36;)] == Expr(:new, Core.SSAValue(apply_type_ssa), Core.SSAValue(slot_read_1), Core.SSAValue(slot_read_2), Core.SlotNumber(4), Core.SSAValue(slot_read_3), Core.SSAValue(slot_read_4))
+    @test code[37] == Core.ReturnNode(Core.SSAValue(new_ssa))
 end
 
 # Issue #32820
@@ -7960,14 +7985,14 @@ code_typed(f47476, (Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
 code_typed(f47476, (Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
 code_typed(f47476, (Int, Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
 @test f47476(1, 2, 3, 4, 5, 6, (7, 8)) === 2
-@test_throws UndefVarError(:N) f47476(1, 2, 3, 4, 5, 6, 7)
+@test_throws UndefVarError(:N, :static_parameter) f47476(1, 2, 3, 4, 5, 6, 7)
 
 vect47476(::Type{T}) where {T} = T
 @test vect47476(Type{Type{Type{Int32}}}) === Type{Type{Type{Int32}}}
 @test vect47476(Type{Type{Type{Int64}}}) === Type{Type{Type{Int64}}}
 
 g47476(::Union{Nothing,Int,Val{T}}...) where {T} = T
-@test_throws UndefVarError(:T) g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5)
+@test_throws UndefVarError(:T, :static_parameter) g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5)
 @test g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5, Val(6)) === 6
 let spec = only(methods(g47476)).specializations::Core.SimpleVector
     @test !isempty(spec)
@@ -7994,12 +8019,11 @@ for T in (Int, String, Symbol, Module)
     @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T},)))
     @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T,T},)))
     @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T,T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Ref{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Ref{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Vector{T}},)))
 end
-@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Ref{Int},)))
-@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Ref{Int}},)))
-# objectid for datatypes is inconsistent for types that have unbound type parameters.
-@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (DataType,)))
-@test !Core.Compiler.is_consistent(Base.infer_effects(objectid, (Tuple{Vector{Int}},)))
+@test Core.Compiler.is_foldable(Base.infer_effects(objectid, (DataType,)))
 
 # donotdelete should not taint consistency of the containing function
 f_donotdete(x) = (Core.Compiler.donotdelete(x); 1)
@@ -8041,4 +8065,65 @@ end
 
 let lin = Core.LineInfoNode(Base, first(methods(convert)), :foo, Int32(5), Int32(0))
     @test convert(LineNumberNode, lin) == LineNumberNode(5, :foo)
+end
+
+# Test that a nothrow-globalref doesn't get outlined during lowering
+module WellKnownGlobal
+    global well_known = 1
+end
+macro insert_global()
+    Expr(:call, GlobalRef(Base, :println), GlobalRef(WellKnownGlobal, :well_known))
+end
+check_globalref_lowering() = @insert_global
+let src = code_lowered(check_globalref_lowering)[1]
+    @test length(src.code) == 2
+end
+
+# Test correctness of widen_diagonal
+let widen_diagonal(x::UnionAll) = Base.rewrap_unionall(Base.widen_diagonal(Base.unwrap_unionall(x), x), x)
+    @test Tuple{Int,Float64} <: widen_diagonal(NTuple)
+    @test Tuple{Int,Float64} <: widen_diagonal(Tuple{T,T} where {T})
+    @test Tuple{Real,Int,Float64} <: widen_diagonal(Tuple{S,Vararg{T}} where {S, T<:S})
+    @test Tuple{Int,Int,Float64,Float64} <: widen_diagonal(Tuple{S,S,Vararg{T}} where {S, T<:S})
+    @test Union{Tuple{T}, Tuple{T,Int}} where {T} === widen_diagonal(Union{Tuple{T}, Tuple{T,Int}} where {T})
+    @test Tuple === widen_diagonal(Union{Tuple{Vararg{S}}, Tuple{Vararg{T}}} where {S, T})
+    @test Tuple{Vararg{Val{<:Set}}} == widen_diagonal(Tuple{Vararg{T}} where T<:Val{<:Set})
+end
+
+# Test try/catch/else ordering
+function test_try_catch_else()
+    local x
+    try
+        x = 1
+    catch
+        rethrow()
+    else
+        return x
+    end
+end
+@test test_try_catch_else() == 1
+
+# #52433
+@test_throws ErrorException Core.Intrinsics.pointerref(Ptr{Vector{Int64}}(C_NULL), 1, 0)
+
+# #53034 (Union normalization for typevar elimination)
+@test Tuple{Int,Any} <: Tuple{Union{Int,T},T} where {T>:Int}
+@test Tuple{Int,Any} <: Tuple{Union{Int,T},T} where {T>:Integer}
+# #53034 (Union normalization for Type elimination)
+@test Int isa Type{Union{Int,T2} where {T2<:T1}} where {T1}
+@test Int isa Type{Union{Int,T1}} where {T1}
+@test Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}}} where {T1}
+@test Int isa Union{Union, Type{Union{Int,T1}}} where {T1}
+@test_broken Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}} where {T1}}
+@test_broken Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
+
+let M = @__MODULE__
+    @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
+    @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
+    @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
+    @test Core.set_binding_type!(M, :a_typed_global, Union{Tuple{Integer},Tuple{Nothing}}) === nothing
+    @test_throws(ErrorException("cannot set type for global $(nameof(M)).a_typed_global. It already has a value or is already set to a different type."),
+                 Core.set_binding_type!(M, :a_typed_global, Union{Nothing,Tuple{Union{Integer,Nothing}}}))
+    @test Core.set_binding_type!(M, :a_typed_global) === nothing
+    @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
 end
