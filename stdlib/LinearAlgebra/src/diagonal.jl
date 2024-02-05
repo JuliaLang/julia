@@ -133,9 +133,9 @@ Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
 ```jldoctest
 julia> Diagonal(Vector{Float64}(undef,4))
 4×4 Diagonal{Float64, Vector{Float64}}:
- 1.5e-323   ⋅             ⋅             ⋅ 
-  ⋅        6.94928e-310   ⋅             ⋅ 
-  ⋅         ⋅            6.94928e-310   ⋅ 
+ 1.5e-323   ⋅             ⋅             ⋅
+  ⋅        6.94928e-310   ⋅             ⋅
+  ⋅         ⋅            6.94928e-310   ⋅
   ⋅         ⋅             ⋅            6.94929e-310
 
 julia> Diagonal(Vector{Int32}(undef,3))
@@ -143,7 +143,6 @@ julia> Diagonal(Vector{Int32}(undef,3))
  -921881376      ⋅           ⋅
           ⋅  32748           ⋅
           ⋅      ⋅  -961061375
-
 
 ```
 """
