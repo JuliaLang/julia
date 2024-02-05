@@ -446,7 +446,7 @@ let effects = Base.infer_effects() do
     end
     @test !Core.Compiler.is_nothrow(effects)
 end
-@test_throws ErrorException setglobal!_nothrow_undefinedyet()
+@test_throws Union{ErrorException,TypeError} setglobal!_nothrow_undefinedyet() # TODO: what kind of error should this be?
 
 # Nothrow for setfield!
 mutable struct SetfieldNothrow

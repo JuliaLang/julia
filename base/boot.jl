@@ -65,7 +65,7 @@
 #end
 
 # struct GenericMemoryRef{kind::Symbol, T, AS::AddrSpace}
-#    mem::Memory{kind, T, AS}
+#    mem::GenericMemory{kind, T, AS}
 #    data::Ptr{Cvoid} # make this GenericPtr{addrspace, Cvoid}
 #end
 
@@ -191,8 +191,8 @@ export
     Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
     AbstractArray, DenseArray, NamedTuple, Pair,
     # special objects
-    Function, Method, Array, Memory, MemoryRef, GenericMemory, GenericMemoryRef,
-    Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
+    Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
+    Array, Memory, MemoryRef, AtomicMemory, AtomicMemoryRef, GenericMemory, GenericMemoryRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
@@ -209,10 +209,10 @@ export
     # AST representation
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
-    fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!,
+    fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
     nfields, throw, tuple, ===, isdefined, eval,
     # access to globals
-    getglobal, setglobal!,
+    getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
     # type reflection
     <:, typeof, isa, typeassert,
@@ -516,22 +516,24 @@ const undef = UndefInitializer()
 (self::Type{GenericMemory{kind,T,addrspace}})(::UndefInitializer, d::NTuple{1,Int}) where {T,kind,addrspace} = self(undef, getfield(d,1))
 # empty vector constructor
 (self::Type{GenericMemory{kind,T,addrspace}})() where {T,kind,addrspace} = self(undef, 0)
-# copy constructors
 
-const Memory{T} = GenericMemory{:not_atomic, T, CPU}
-const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
 GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
 GenericMemoryRef(ref::GenericMemoryRef, i::Integer) = memoryref(ref, Int(i), @_boundscheck)
 GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(memoryref(mem), Int(i), @_boundscheck)
-MemoryRef(mem::Memory) = memoryref(mem)
-MemoryRef(ref::MemoryRef, i::Integer) = memoryref(ref, Int(i), @_boundscheck)
-MemoryRef(mem::Memory, i::Integer) = memoryref(memoryref(mem), Int(i), @_boundscheck)
-MemoryRef{T}(mem::Memory{T}) where {T} = memoryref(mem)
-MemoryRef{T}(ref::MemoryRef{T}, i::Integer) where {T} = memoryref(ref, Int(i), @_boundscheck)
-MemoryRef{T}(mem::Memory{T}, i::Integer) where {T} = memoryref(memoryref(mem), Int(i), @_boundscheck)
+GenericMemoryRef{kind,<:Any,AS}(mem::GenericMemory{kind,<:Any,AS}) where {kind,AS} = memoryref(mem)
+GenericMemoryRef{kind,<:Any,AS}(ref::GenericMemoryRef{kind,<:Any,AS}, i::Integer) where {kind,AS} = memoryref(ref, Int(i), @_boundscheck)
+GenericMemoryRef{kind,<:Any,AS}(mem::GenericMemory{kind,<:Any,AS}, i::Integer) where {kind,AS}  = memoryref(memoryref(mem), Int(i), @_boundscheck)
+GenericMemoryRef{kind,T,AS}(mem::GenericMemory{kind,T,AS}) where {kind,T,AS}  = memoryref(mem)
+GenericMemoryRef{kind,T,AS}(ref::GenericMemoryRef{kind,T,AS}, i::Integer) where {kind,T,AS} = memoryref(ref, Int(i), @_boundscheck)
+GenericMemoryRef{kind,T,AS}(mem::GenericMemory{kind,T,AS}, i::Integer) where {kind,T,AS} = memoryref(memoryref(mem), Int(i), @_boundscheck)
+
+const Memory{T} = GenericMemory{:not_atomic, T, CPU}
+const MemoryRef{T} = GenericMemoryRef{:not_atomic, T, CPU}
+const AtomicMemory{T} = GenericMemory{:atomic, T, CPU}
+const AtomicMemoryRef{T} = GenericMemoryRef{:atomic, T, CPU}
 
 # construction helpers for Array
-new_as_memoryref(self::Type{GenericMemoryRef{isatomic,T,addrspace}}, m::Int) where {T,isatomic,addrspace} = memoryref(fieldtype(self, :mem)(undef, m))
+new_as_memoryref(self::Type{GenericMemoryRef{kind,T,addrspace}}, m::Int) where {T,kind,addrspace} = memoryref(fieldtype(self, :mem)(undef, m))
 
 # checked-multiply intrinsic function for dimensions
 _checked_mul_dims() = 1, false
