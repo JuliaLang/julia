@@ -129,6 +129,23 @@ end
     Diagonal{T}(undef, n)
 
 Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
+# Examples
+```jldoctest
+julia> Diagonal(Vector{Float64}(undef,4))
+4×4 Diagonal{Float64, Vector{Float64}}:
+ 1.5e-323   ⋅             ⋅             ⋅ 
+  ⋅        6.94928e-310   ⋅             ⋅ 
+  ⋅         ⋅            6.94928e-310   ⋅ 
+  ⋅         ⋅             ⋅            6.94929e-310
+
+julia> Diagonal(Vector{Int32}(undef,3))
+3×3 Diagonal{Int32, Vector{Int32}}:
+ -921881376      ⋅           ⋅
+          ⋅  32748           ⋅
+          ⋅      ⋅  -961061375
+
+
+```
 """
 Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, n))
 
