@@ -309,7 +309,7 @@ bytesavailable(f::File) = max(0, filesize(f) - position(f)) # position can be > 
 
 eof(f::File) = bytesavailable(f) == 0
 
-function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
+function readbytes!(f::File, b::MutableByteArray, nb=length(b))
     nr = min(nb, bytesavailable(f))
     if length(b) < nr
         resize!(b, nr)

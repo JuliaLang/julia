@@ -486,13 +486,6 @@ function copyuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false)
     return out
 end
 
-const MutableByteArray = Union{
-    Array{UInt8},
-    Memory{UInt8},
-    FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}},
-    FastContiguousSubArray{UInt8,<:Any,<:Memory{UInt8}},
-}
-
 function readbytes_all!(s::IOStream, b::MutableByteArray, nb::Integer)
     olb = lb = length(b)
     nr = 0

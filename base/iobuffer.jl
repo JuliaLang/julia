@@ -548,8 +548,15 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
-function readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb::Int)
+const MutableByteArray = Union{
+    Array{UInt8},
+    Memory{UInt8},
+    FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}},
+    FastContiguousSubArray{UInt8,<:Any,<:Memory{UInt8}},
+}
+
+readbytes!(io::GenericIOBuffer, b::MutableByteArray, nb=length(b)) = readbytes!(io, b, Int(nb))
+function readbytes!(io::GenericIOBuffer, b::MutableByteArray, nb::Int)
     nr = min(nb, bytesavailable(io))
     if length(b) < nr
         resize!(b, nr)
