@@ -586,12 +586,12 @@ module EnclosingModule
     abstract type AbstractTypeNoConstructors end
 end
 let
-    method_error = MethodError(EnclosingModule.AbstractTypeNoConstructors, ())
+    method_error = MethodError(EnclosingModule.AbstractTypeNoConstructors, (), Base.get_world_counter())
 
     # Test that it shows a special message when no constructors have been defined by the user.
-    @test sprint(showerror, method_error) ==
+    @test startswith(sprint(showerror, method_error),
         """MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)
-           The type `$(EnclosingModule.AbstractTypeNoConstructors)` exists, but no method is defined for this combination of argument types when trying to construct it."""
+           The type `$(EnclosingModule.AbstractTypeNoConstructors)` exists, but no method is defined for this combination of argument types when trying to construct it.""")
 
     # Does it go back to previous behaviour when there *is* at least
     # one constructor defined?
@@ -650,6 +650,24 @@ end
         @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
         @test !occursin("The applicable method may be too new", str)
     end
+
+    str = sprint(Base.showerror, MethodError(+, (1.0, 2.0)))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64)")
+    @test occursin("This error has been manually thrown, explicitly", str)
+
+    str = sprint(Base.showerror, MethodError(+, (1.0, 2.0), Base.get_world_counter()))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64)")
+    @test occursin("This error has been manually thrown, explicitly", str)
+
+    str = sprint(Base.showerror, MethodError(Core.kwcall, ((; a=3.0), +, 1.0, 2.0)))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64; a::Float64)")
+    @test occursin("This error has been manually thrown, explicitly", str)
+
+    str = sprint(Base.showerror, MethodError(Core.kwcall, ((; a=3.0), +, 1.0, 2.0), Base.get_world_counter()))
+    @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64; a::Float64)")
+    @test occursin("This method may not support any kwargs", str)
+
+    @test_throws "MethodError: no method matching kwcall()" Core.kwcall()
 end
 
 # Issue #50200
@@ -658,8 +676,9 @@ using Base.Experimental: @opaque
     test_no_error(f) = @test f() === nothing
     function test_worldage_error(f)
         ex = try; f(); error("Should not have been reached") catch ex; ex; end
-        @test occursin("The applicable method may be too new", sprint(Base.showerror, ex))
-        @test !occursin("!Matched::", sprint(Base.showerror, ex))
+        strex = sprint(Base.showerror, ex)
+        @test occursin("The applicable method may be too new", strex)
+        @test !occursin("!Matched::", sprint(Base.showerror, strex))
     end
 
     global callback50200
