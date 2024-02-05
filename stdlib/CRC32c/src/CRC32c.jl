@@ -35,12 +35,8 @@ but note that the result may be endian-dependent.
 function crc32c end
 
 
-function crc32c(a::Union{
-        Array{UInt8},
-        Memory{UInt8},
-        FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N,
-        FastContiguousSubArray{UInt8,N,<:Memory{UInt8}} where N,
-    },
+function crc32c(
+    a::Union{DenseArray{UInt8}, FastContiguousSubArray{UInt8,N,<:DenseArray{UInt8}} where N},
     crc::UInt32=0x00000000
 )
     Base._crc32c(a, crc)

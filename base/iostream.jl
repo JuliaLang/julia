@@ -487,12 +487,7 @@ function copyuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false)
 end
 
 function readbytes_all!(s::IOStream,
-                        b::Union{
-                            Array{UInt8},
-                            Memory{UInt8},
-                            FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}},
-                            FastContiguousSubArray{UInt8,<:Any,<:Memory{UInt8}},
-                        },
+                        b::Union{DenseArray{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:DenseArray{UInt8}}},
                         nb::Integer)
     olb = lb = length(b)
     nr = 0
@@ -522,12 +517,7 @@ function readbytes_all!(s::IOStream,
 end
 
 function readbytes_some!(s::IOStream,
-                         b::Union{
-                            Array{UInt8},
-                            Memory{UInt8},
-                            FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}},
-                            FastContiguousSubArray{UInt8,<:Any,<:Memory{UInt8}},
-                        },
+                         b::Union{DenseArray{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:DenseArray{UInt8}}},
                          nb::Integer)
     olb = length(b)
     if nb > olb
@@ -558,12 +548,7 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 all stream types support the `all` option.
 """
 function readbytes!(s::IOStream,
-                    b::Union{
-                        Array{UInt8},
-                        Memory{UInt8},
-                        FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}},
-                        FastContiguousSubArray{UInt8,<:Any,<:Memory{UInt8}},
-                    },
+                    b::Union{DenseArray{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:DenseArray{UInt8}}},
                     nb=length(b);
                     all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
