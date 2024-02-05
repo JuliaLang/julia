@@ -1266,4 +1266,14 @@ end
     @test copy(Diagonal(1:5)) === Diagonal(1:5)
 end
 
+@testset "kron! for Diagonal" begin 
+    a = Diagonal([2,2])
+    b = Diagonal([1,1])
+    c = Diagonal([0,0,0,0])
+    @test kron!(c,a,b) == Diagonal([2,2,2,2])
+    @test kron!(c,b,a) == Diagonal([2,2,2,2])
+    c=Diagonal(Vector{Float64}(undef, 4))
+    @test kron!(c,a,b') == Diagonal([2,2,2,2])
+end 
+
 end # module TestDiagonal
