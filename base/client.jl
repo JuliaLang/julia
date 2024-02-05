@@ -399,11 +399,22 @@ function load_InteractiveUtils(mod::Module=Main)
 end
 
 function load_REPL()
-    # load interactive-only libraries
+    repl_pkgid = Base.PkgId(UUID(0x3fa0cd96_eef1_5676_8a61_b3b8758bbffb), "REPL")
     try
-        return Base.require(PkgId(UUID(0x3fa0cd96_eef1_5676_8a61_b3b8758bbffb), "REPL"))
+        return Base.require(repl_pkgid)
     catch ex
-        @warn "Failed to import REPL" exception=(ex, catch_backtrace())
+        old_load_path = copy(LOAD_PATH)
+        old_depot_path = copy(DEPOT_PATH)
+        push!(empty!(LOAD_PATH), "@stdlib")
+        push!(empty(DEPOT_PATH), Sys.BINDIR, "..", "share", "julia")
+        try
+            @warn "REPL failed to load with LOAD_PATH: $old_load_path, try running `Pkg.resolve` to fix the issue" exception=(ex, catch_backtrace())
+            Base.require(repl_pkgid)
+        catch ex2
+            @warn "Failed to import REPL with LOAD_PATH and DEPOT_PATH reset" exception=(ex2, catch_backtrace())
+        end
+        copy!(LOAD_PATH, old_load_path)
+        copy!(DEPOT_PATH, old_depot_path)
     end
     return nothing
 end
