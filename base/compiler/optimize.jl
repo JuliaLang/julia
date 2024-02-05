@@ -48,9 +48,9 @@ const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 11
 const NUM_IR_FLAGS = 12 # sync with julia.h
 
 const IR_FLAGS_EFFECTS =
-    IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_NOUB
+    IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES | IR_FLAG_NOUB
 
-const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_TERMINATES
 
 const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
 
@@ -68,6 +68,9 @@ function flags_for_effects(effects::Effects)
     end
     if is_nothrow(effects)
         flags |= IR_FLAG_NOTHROW
+    end
+    if is_terminates(effects)
+        flags |= IR_FLAG_TERMINATES
     end
     if is_inaccessiblemem_or_argmemonly(effects)
         flags |= IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
@@ -338,7 +341,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
-            removable = effect_free & nothrow
+            terminates = is_terminates(effects)
+            removable = effect_free & nothrow & terminates
             return (consistent, removable, nothrow)
         elseif head === :new
             return new_expr_effect_flags(𝕃ₒ, args, src)
@@ -349,7 +353,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
-            removable = effect_free & nothrow
+            terminates = is_terminates(effects)
+            removable = effect_free & nothrow & terminates
             return (consistent, removable, nothrow)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
