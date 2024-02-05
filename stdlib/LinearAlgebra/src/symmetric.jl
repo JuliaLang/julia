@@ -496,6 +496,121 @@ for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Uni
     end
 end
 
+function kron(A::Hermitian{T}, B::Hermitian{S}) where {T<:Union{Real,Complex},S<:Union{Real,Complex}}
+    resultuplo = A.uplo == 'U' || B.uplo == 'U' ? :U : :L
+    R = Hermitian(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)), resultuplo)
+    return kron!(R, A, B)
+end
+
+function kron(A::Symmetric{T}, B::Symmetric{S}) where {T,S}
+    resultuplo = A.uplo == 'U' || B.uplo == 'U' ? :U : :L
+    R = Symmetric(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)), resultuplo)
+    return kron!(R, A, B)
+end
+
+for (T, conj, real) in [(:Symmetric, :identity, :identity), (:(Hermitian{<:Union{Real,Complex}}), :conj, :real)]
+    @eval begin
+        function kron!(C::$T, A::$T, B::$T)
+            size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
+            if ((A.uplo == 'U' || B.uplo == 'U') && C.uplo != 'U') || ((A.uplo == 'L' && B.uplo == 'L') && C.uplo != 'L')
+                throw(ArgumentError("C.uplo must match A.uplo and B.uplo, got $(C.uplo) $(A.uplo) $(B.uplo)"))
+            end
+            n_A = size(A, 1)
+            n_B = size(B, 1)
+            @inbounds if A.uplo == 'U' && B.uplo == 'U'
+                for j = 1:n_A
+                    jnB = (j - 1) * n_B
+                    for i = 1:(j-1)
+                        Aij = A.data[i, j]
+                        inB = (i - 1) * n_B
+                        for l = 1:n_B
+                            for k = 1:(l-1)
+                                C.data[inB+k, jnB+l] = Aij * B.data[k, l]
+                                C.data[inB+l, jnB+k] = Aij * $conj(B.data[k, l])
+                            end
+                            C.data[inB+l, jnB+l] = Aij * $real(B[l, l])
+                        end
+                    end
+                    Ajj = $real(A[j, j])
+                    for l = 1:n_B
+                        for k = 1:(l-1)
+                            C.data[jnB+k, jnB+l] = Ajj * B.data[k, l]
+                        end
+                        C.data[jnB+l, jnB+l] = Ajj * $real(B[l, l])
+                    end
+                end
+            elseif A.uplo == 'U' && B.uplo == 'L'
+                for j = 1:n_A
+                    jnB = (j - 1) * n_B
+                    for i = 1:(j-1)
+                        Aij = A.data[i, j]
+                        inB = (i - 1) * n_B
+                        for l = 1:n_B
+                            C.data[inB+l, jnB+l] = Aij * $real(B[l, l])
+                            for k = (l+1):n_B
+                                C.data[inB+l, jnB+k] = Aij * $conj(B.data[k, l])
+                                C.data[inB+k, jnB+l] = Aij * B.data[k, l]
+                            end
+                        end
+                    end
+                    Ajj = $real(A[j, j])
+                    for l = 1:n_B
+                        C.data[jnB+l, jnB+l] = Ajj * $real(B[l, l])
+                        for k = (l+1):n_B
+                            C.data[jnB+l, jnB+k] = Ajj * $conj(B.data[k, l])
+                        end
+                    end
+                end
+            elseif A.uplo == 'L' && B.uplo == 'U'
+                for j = 1:n_A
+                    jnB = (j - 1) * n_B
+                    Ajj = $real(A[j, j])
+                    for l = 1:n_B
+                        for k = 1:(l-1)
+                            C.data[jnB+k, jnB+l] = Ajj * B.data[k, l]
+                        end
+                        C.data[jnB+l, jnB+l] = Ajj * $real(B[l, l])
+                    end
+                    for i = (j+1):n_A
+                        conjAij = $conj(A.data[i, j])
+                        inB = (i - 1) * n_B
+                        for l = 1:n_B
+                            for k = 1:(l-1)
+                                C.data[jnB+k, inB+l] = conjAij * B.data[k, l]
+                                C.data[jnB+l, inB+k] = conjAij * $conj(B.data[k, l])
+                            end
+                            C.data[jnB+l, inB+l] = conjAij * $real(B[l, l])
+                        end
+                    end
+                end
+            else #if A.uplo == 'L' && B.uplo == 'L'
+                for j = 1:n_A
+                    jnB = (j - 1) * n_B
+                    Ajj = $real(A[j, j])
+                    for l = 1:n_B
+                        C.data[jnB+l, jnB+l] = Ajj * $real(B[l, l])
+                        for k = (l+1):n_B
+                            C.data[jnB+k, jnB+l] = Ajj * B.data[k, l]
+                        end
+                    end
+                    for i = (j+1):n_A
+                        Aij = A.data[i, j]
+                        inB = (i - 1) * n_B
+                        for l = 1:n_B
+                            C.data[inB+l, jnB+l] = Aij * $real(B[l, l])
+                            for k = (l+1):n_B
+                                C.data[inB+k, jnB+l] = Aij * B.data[k, l]
+                                C.data[inB+l, jnB+k] = Aij * $conj(B.data[k, l])
+                            end
+                        end
+                    end
+                end
+            end
+            return C
+        end
+    end
+end
+
 (-)(A::Symmetric) = Symmetric(-A.data, sym_uplo(A.uplo))
 (-)(A::Hermitian) = Hermitian(-A.data, sym_uplo(A.uplo))
 
