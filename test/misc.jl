@@ -1420,10 +1420,25 @@ end
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
 
-    # sanity check `@allocations` returns what we expect in some very simple cases
-    @test (@allocations "a") == 0
-    @test (@allocations "a" * "b") == 0 # constant propagation
-    @test (@allocations "a" * Base.inferencebarrier("b")) == 1
+    # sanity check `@allocations` returns what we expect in some very simple cases.
+    # These are inside functions because `@allocations` uses `Experimental.@force_compile`
+    # so can be affected by other code in the same scope.
+    @test (() -> @allocations "a")() == 0
+    @test (() -> @allocations "a" * "b")() == 0 # constant propagation
+    @test (() -> @allocations "a" * Base.inferencebarrier("b"))() == 1
+
+    _lock_conflicts, _nthreads = eval(Meta.parse(read(`$(Base.julia_cmd()) -tauto -E '
+        _lock_conflicts = @lock_conflicts begin
+            l = ReentrantLock()
+            Threads.@threads for i in 1:Threads.nthreads()
+                 lock(l) do
+                    sleep(1)
+                end
+            end
+        end
+        _lock_conflicts,Threads.nthreads()
+    '`, String)))
+    @test _lock_conflicts > 0 skip=(_nthreads < 2) # can only test if the worker can multithread
 end
 
 #TODO: merge with `@testset "Base/timing.jl"` once https://github.com/JuliaLang/julia/issues/52948 is resolved

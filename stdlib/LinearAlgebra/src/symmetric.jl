@@ -461,17 +461,17 @@ for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Uni
                 throw(DimensionMismatch("A has dimensions $(size(A)) but B has dimensions $(size(B))"))
             end
 
-            dotprod = zero(dot(first(A), first(B)))
+            dotprod = $real(zero(dot(first(A), first(B))))
             @inbounds if A.uplo == 'U' && B.uplo == 'U'
                 for j in 1:n
                     for i in 1:(j - 1)
                         dotprod += 2 * $real(dot(A.data[i, j], B.data[i, j]))
                     end
-                    dotprod += dot(A[j, j], B[j, j])
+                    dotprod += $real(dot(A[j, j], B[j, j]))
                 end
             elseif A.uplo == 'L' && B.uplo == 'L'
                 for j in 1:n
-                    dotprod += dot(A[j, j], B[j, j])
+                    dotprod += $real(dot(A[j, j], B[j, j]))
                     for i in (j + 1):n
                         dotprod += 2 * $real(dot(A.data[i, j], B.data[i, j]))
                     end
@@ -481,11 +481,11 @@ for (T, trans, real) in [(:Symmetric, :transpose, :identity), (:(Hermitian{<:Uni
                     for i in 1:(j - 1)
                         dotprod += 2 * $real(dot(A.data[i, j], $trans(B.data[j, i])))
                     end
-                    dotprod += dot(A[j, j], B[j, j])
+                    dotprod += $real(dot(A[j, j], B[j, j]))
                 end
             else
                 for j in 1:n
-                    dotprod += dot(A[j, j], B[j, j])
+                    dotprod += $real(dot(A[j, j], B[j, j]))
                     for i in (j + 1):n
                         dotprod += 2 * $real(dot(A.data[i, j], $trans(B.data[j, i])))
                     end

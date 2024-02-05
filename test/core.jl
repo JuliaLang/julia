@@ -1180,6 +1180,10 @@ let A = [1]
     @test x == 1
 end
 
+# Make sure that `Module` is not resolved to `Core.Module` during sysimg generation
+# so that users can define their own binding named `Module` in Main.
+@test !Base.isbindingresolved(Main, :Module)
+
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]

@@ -366,9 +366,14 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
-getindex(A::GenericMemory{:not_atomic}, i::Int) = (@_noub_if_noinbounds_meta;
-    memoryrefget(memoryref(memoryref(A), i, @_boundscheck), :not_atomic, false))
-getindex(A::GenericMemoryRef{:not_atomic}) = memoryrefget(A, :not_atomic, @_boundscheck)
+default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
+default_access_order(a::GenericMemory{:atomic}) = :monotonic
+default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
+default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
+
+getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
+    memoryrefget(memoryref(memoryref(A), i, @_boundscheck), default_access_order(A), false))
+getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 function iterate end
 
@@ -889,8 +894,8 @@ function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     return A
 end
 setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryref(memoryref(A), i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
-setindex!(A::MemoryRef{T}, x) where {T} = memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck)
-setindex!(A::MemoryRef{Any}, @nospecialize(x)) = memoryrefset!(A, x, :not_atomic, @_boundscheck)
+setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
+setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
 
 # SimpleVector
 

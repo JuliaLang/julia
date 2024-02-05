@@ -1113,12 +1113,12 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
                 if !still_nothrow || ismutabletype(arrty)
                     return false
                 end
-            elseif ⊑(𝕃ᵢ, arrty, Array)
+            elseif ⊑(𝕃ᵢ, arrty, Array) || ⊑(𝕃ᵢ, arrty, GenericMemory)
                 return false
             end
         elseif istopfunction(f, :iterate)
             itrty = argtypes[2]
-            if ⊑(𝕃ᵢ, itrty, Array)
+            if ⊑(𝕃ᵢ, itrty, Array) || ⊑(𝕃ᵢ, itrty, GenericMemory)
                 return false
             end
         end
@@ -1501,7 +1501,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
-    # TODO: this doesn't realize that Array, SimpleVector, Tuple, and NamedTuple do not use the iterate protocol
+    # TODO: this doesn't realize that Array, GenericMemory, SimpleVector, Tuple, and NamedTuple do not use the iterate protocol
     stateordonet === Bottom && return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(CallMeta[CallMeta(Bottom, Any, call.effects, info)], true))
     valtype = statetype = Bottom
     ret = Any[]
@@ -2076,8 +2076,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_apply(interp, argtypes, si, sv, max_methods)
         elseif f === invoke
             return abstract_invoke(interp, arginfo, si, sv)
-        elseif f === modifyfield!
-            return abstract_modifyfield!(interp, argtypes, si, sv)
+        elseif f === modifyfield! || f === Core.modifyglobal! || f === Core.memoryrefmodify! || f === atomic_pointermodify
+            return abstract_modifyop!(interp, f, argtypes, si, sv)
         elseif f === Core.finalizer
             return abstract_finalizer(interp, argtypes, sv)
         elseif f === applicable

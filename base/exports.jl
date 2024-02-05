@@ -757,6 +757,7 @@ export
     swapproperty!,
     modifyproperty!,
     replaceproperty!,
+    setpropertyonce!,
     fieldoffset,
     fieldname,
     fieldnames,
@@ -1037,6 +1038,7 @@ export
     @elapsed,
     @allocated,
     @allocations,
+    @lock_conflicts,
 
     # tasks
     @sync,
@@ -1065,6 +1067,7 @@ export
     @atomic,
     @atomicswap,
     @atomicreplace,
+    @atomiconce,
     @__dot__,
     @enum,
     @label,

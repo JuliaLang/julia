@@ -8,6 +8,9 @@ using .Main.InfiniteArrays
 isdefined(Main, :StructArrays) || @eval Main include("testhelpers/StructArrays.jl")
 using .Main.StructArrays
 
+isdefined(Main, :FillArrays) || @eval Main include("testhelpers/FillArrays.jl")
+using .Main.FillArrays
+
 A = rand(5,4,3)
 @testset "Bounds checking" begin
     @test checkbounds(Bool, A, 1, 1, 1) == true
@@ -1935,4 +1938,15 @@ f45952(x) = [x;;]
     A = zeros(2,2)
     @test_throws "invalid index: true of type Bool" isassigned(A, 1, true)
     @test_throws "invalid index: true of type Bool" isassigned(A, true)
+end
+
+@testset "repeat for FillArrays" begin
+    f = FillArrays.Fill(3, (4,))
+    @test repeat(f, 2) === FillArrays.Fill(3, (8,))
+    @test repeat(f, 2, 3) === FillArrays.Fill(3, (8, 3))
+    @test repeat(f, inner=(1,2), outer=(3,1)) === repeat(f, 3, 2) === FillArrays.Fill(3, (12,2))
+    f = FillArrays.Fill(3, (4, 2))
+    @test repeat(f, 2, 3) === FillArrays.Fill(3, (8, 6))
+    @test repeat(f, 2, 3, 4) === FillArrays.Fill(3, (8, 6, 4))
+    @test repeat(f, inner=(1,2), outer=(3,1)) === FillArrays.Fill(3, (12, 4))
 end

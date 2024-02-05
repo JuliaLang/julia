@@ -145,6 +145,7 @@ Each `lock` must be matched by an [`unlock`](@ref).
 """
 @inline function lock(rl::ReentrantLock)
     trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
+        Threads.lock_profiling() && Threads.inc_lock_conflict_count()
         c = rl.cond_wait
         lock(c.lock)
         try
