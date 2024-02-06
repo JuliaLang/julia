@@ -233,6 +233,13 @@ The keyword arguments can be any combination of:
 
  - `tasks::Union{Int,AbstractVector{Int}}` -- Specify which tasks to include snapshots from in the report. Note that this
     does not control which tasks samples are collected within.
+
+!!! compat "Julia 1.8"
+    The `groupby` keyword argument is new in Julia 1.8.
+
+!!! note
+    Profiling on windows is limited to the main thread. Other threads have not been sampled and will not show in the report.
+
 """
 function print(io::IO,
         data::Vector{<:Unsigned} = fetch(),
