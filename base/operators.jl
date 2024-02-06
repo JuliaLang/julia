@@ -53,8 +53,8 @@ Should be implemented for all types with a notion of equality, based on the abst
 that an instance represents. For example, all numeric types are compared by numeric value,
 ignoring type. Strings are compared as sequences of characters, ignoring encoding.
 Collections of the same type generally compare their key sets, and if those are `==`, then compare the values 
-for each of those keys, returning true if all such pairs are `==`. Other properties are typically not taken into account (such as the exact type)
-taken into account (like the shape for `AbstractArray`s).
+for each of those keys, returning true if all such pairs are `==`.
+Other properties are typically not taken into account (such as the exact type).
 
 This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` and
 `NaN != NaN`.
