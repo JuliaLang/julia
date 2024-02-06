@@ -1825,13 +1825,17 @@ end
 
 @testset "type-based offset axes check" begin
     a = randn(ComplexF64, 10)
+    b = randn(ComplexF64, 4, 4, 4, 4)
     ta = reinterpret(Float64, a)
     tb = reinterpret(Float64, view(a, 1:2:10))
     tc = reinterpret(Float64, reshape(view(a, 1:3:10), 2, 2, 1))
+    td = view(b, :, :, 1, 1)
     # Issue #44040
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(tc, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc, tb))
+    # Issue #49332
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(td, td, td))
     # Ranges && CartesianIndices
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(1:10, Base.OneTo(10), 1.0:2.0, LinRange(1.0, 2.0, 2), 1:2:10, CartesianIndices((1:2:10, 1:2:10))))
     # Remind us to call `any` in `Base.has_offset_axes` once our compiler is ready.
