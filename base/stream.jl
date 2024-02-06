@@ -786,8 +786,6 @@ function link_pipe!(pipe::Pipe;
      return pipe
 end
 
-public link_pipe!
-
 show(io::IO, stream::Pipe) = print(io,
     "Pipe(",
     _fd(stream.in), " ",

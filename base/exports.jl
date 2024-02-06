@@ -1168,6 +1168,7 @@ public
     TTY,
     # functions
     reseteof,
+    link_pipe!,
 
 # misc
     notnothing,
