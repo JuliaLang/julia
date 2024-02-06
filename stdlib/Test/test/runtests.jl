@@ -1586,3 +1586,21 @@ end
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Test))
 end
+
+module CustomTestSetModule
+    using Test
+    struct CustomTestSet <: Test.AbstractTestSet
+        description::String
+    end
+    Test.record(::CustomTestSet, result) = result
+    Test.finish(cts::CustomTestSet) = cts
+end
+
+@testset "Unexported custom TestSet" begin
+    using .CustomTestSetModule
+    let res = @testset CustomTestSetModule.CustomTestSet begin
+                @test true
+            end
+        @test res isa CustomTestSetModule.CustomTestSet
+    end
+end

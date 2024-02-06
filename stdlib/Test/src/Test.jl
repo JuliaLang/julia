@@ -1731,7 +1731,8 @@ function parse_testset_args(args)
     options = :(Dict{Symbol, Any}())
     for arg in args
         # a standalone symbol is assumed to be the test set we should use
-        if isa(arg, Symbol)
+        # the same is true for a symbol that's not exported from a module
+        if isa(arg, Symbol) || Base.isexpr(arg, :.)
             testsettype = esc(arg)
         # a string is the description
         elseif isa(arg, AbstractString) || (isa(arg, Expr) && arg.head === :string)
