@@ -235,7 +235,7 @@ The keyword arguments can be any combination of:
     does not control which tasks samples are collected within.
 
 !!! compat "Julia 1.8"
-    The `groupby` keyword argument is new in Julia 1.8.
+    The `groupby`, `threads`, and `tasks` keyword arguments were introduced in Julia 1.8.
 
 !!! note
     Profiling on windows is limited to the main thread. Other threads have not been sampled and will not show in the report.
