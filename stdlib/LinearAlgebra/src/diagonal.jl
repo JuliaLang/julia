@@ -129,7 +129,6 @@ end
     Diagonal{T}(undef, n)
 
 Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
-
 """
 Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, n))
 
