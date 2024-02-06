@@ -31,6 +31,7 @@ cd(joinpath(@__DIR__, "src")) do
         else
             sourcefile = joinpath(sourcefile, "index.md")
         end
+        # TODO: skip SuiteSparse
         if isfile(sourcefile)
             targetfile = joinpath("stdlib", dir * ".md")
             push!(STDLIB_DOCS, (stdlib = Symbol(dir), targetfile = targetfile))
@@ -311,12 +312,15 @@ for stdlib in STDLIB_DOCS
 end
 # A few standard libraries need more than just the module itself in the DocTestSetup.
 # This overwrites the existing ones from above though, hence the warn=false.
+if Base.USE_GPL_LIBS
 DocMeta.setdocmeta!(
     SparseArrays,
     :DocTestSetup,
     maybe_revise(:(using SparseArrays, LinearAlgebra));
     recursive=true, warn=false,
 )
+end
+
 DocMeta.setdocmeta!(
     UUIDs,
     :DocTestSetup,

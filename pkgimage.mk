@@ -73,7 +73,9 @@ $(eval $(call stdlib_builder,Sockets,))
 $(eval $(call stdlib_builder,Unicode,))
 $(eval $(call stdlib_builder,Profile,))
 $(eval $(call stdlib_builder,StyledStrings,))
+ifeq ($(USE_GPL_LIBS), 1)
 $(eval $(call stdlib_builder,SuiteSparse_jll,))
+endif # USE_GPL_LIBS
 
 # 1-depth packages
 $(eval $(call stdlib_builder,GMP_jll,Artifacts Libdl))
@@ -131,5 +133,9 @@ $(eval $(call stdlib_builder,Pkg, Artifacts Dates Downloads FileWatching LibGit2
 # 7-depth packages
 $(eval $(call stdlib_builder,LazyArtifacts,Artifacts Pkg))
 
+ifeq ($(USE_GPL_LIBS), 1)
 $(eval $(call stdlib_builder,SparseArrays,Libdl LinearAlgebra Random Serialization SuiteSparse_jll))
 $(eval $(call stdlib_builder,Statistics,LinearAlgebra SparseArrays))
+else # NO GPL
+$(eval $(call stdlib_builder,Statistics,LinearAlgebra))
+endif # USE_GPL_LIBS
