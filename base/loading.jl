@@ -1892,7 +1892,7 @@ function __require(into::Module, mod::Symbol)
                     ""
                 end
 
-                throw(ArgumentError("Package $mod not found in current path$hint_message.install_message"))
+                throw(ArgumentError("Package $mod not found in current path$hint_message.$install_message"))
             else
                 manifest_warnings = collect_manifest_warnings()
                 throw(ArgumentError("""
