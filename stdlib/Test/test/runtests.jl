@@ -468,11 +468,11 @@ end
     end
     @testset "ts results" begin
         @test isa(ts, Test.DefaultTestSet)
-        passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = Test.get_test_counts(ts)
-        total_pass   = passes + c_passes
-        total_fail   = fails  + c_fails
-        total_error  = errors + c_errors
-        total_broken = broken + c_broken
+        tc = Test.get_test_counts(ts)
+        total_pass   = tc.passes + tc.cumulative_passes
+        total_fail   = tc.fails  + tc.cumulative_fails
+        total_error  = tc.errors + tc.cumulative_errors
+        total_broken = tc.broken + tc.cumulative_broken
         @test total_pass   == 24
         @test total_fail   == 6
         @test total_error  == 6
