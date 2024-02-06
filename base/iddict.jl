@@ -99,7 +99,7 @@ function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where
     end
     keyindex = ht_keyindex2!(d, key)
     if keyindex >= 0
-        @inbounds d[keyindex] = val
+        @inbounds d.ht[keyindex+1] = val
     else
         @inbounds _setindex!(d, val, -keyindex)
     end
