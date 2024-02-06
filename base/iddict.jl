@@ -74,17 +74,17 @@ function sizehint!(d::IdDict, newsz)
     rehash!(d, newsz)
 end
 
-function ht_keyindex!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+# get (index) for the key
+#     index - where a key is stored, or -pos if not present
+#             and was inserted at pos
+function ht_keyindex2!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(KeyTypeError(K, key))
-    keyindex = ccall(:jl_eqtable_keyindex, Cssize_t, (Any, Any), d, key)
-    # keyindex - where a key is stored, or -pos if the key was not present and was inserted at pos
-
-    return abs(keyindex), keyindex < 0
+    return ccall(:jl_eqtable_keyindex, Cssize_t, (Any, Any), d, key)
 end
 
-function _setindex!(d::IdDict{K,V}, val::V, keyindex::Int, inserted::Bool) where {K, V}
-    @inbounds d.ht[keyindex+1] = val
-    d.count += inserted
+@propagate_inbounds function _setindex!(d::IdDict{K,V}, val::V, keyindex::Int) where {K, V}
+    d.ht[keyindex+1] = val
+    d.count += 1
 
     if d.ndel >= ((3*length(d.ht))>>2)
         rehash!(d, max((length(d.ht)%UInt)>>1, 32))
@@ -94,11 +94,15 @@ function _setindex!(d::IdDict{K,V}, val::V, keyindex::Int, inserted::Bool) where
 end
 
 function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
-    keyindex, inserted = ht_keyindex!(d, key)
     if !(val isa V) # avoid a dynamic call
         val = convert(V, val)::V
     end
-    _setindex!(d, val, keyindex, inserted)
+    keyindex = ht_keyindex2!(d, key)
+    if keyindex >= 0
+        @inbounds d[keyindex] = val
+    else
+        @inbounds _setindex!(d, val, -keyindex)
+    end
     return d
 end
 
@@ -162,11 +166,16 @@ isempty(d::IdDict) = length(d) == 0
 copy(d::IdDict) = typeof(d)(d)
 
 function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
-    keyindex, inserted = ht_keyindex!(d, key)
+    keyindex = ht_keyindex2!(d, key)
 
-    if inserted
+    if keyindex < 0
+        # If convert call fails we need the key to be deleted
+        @inbounds d[-keyindex] = nothing
+        d.ndel += 1
         val = isa(default, V) ? default : convert(V, default)::V
-        _setindex!(d, val, keyindex, inserted)
+        d.ndel -= 1
+        @inbounds d[-keyindex] = key
+        @inbounds _setindex!(d, val, -keyindex)
         return val::V
     else
         return @inbounds d.ht[keyindex+1]::V
