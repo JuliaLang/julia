@@ -170,11 +170,9 @@ function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where 
 
     if keyindex < 0
         # If convert call fails we need the key to be deleted
-        @inbounds d[-keyindex] = nothing
         d.ndel += 1
         val = isa(default, V) ? default : convert(V, default)::V
         d.ndel -= 1
-        @inbounds d[-keyindex] = key
         @inbounds _setindex!(d, val, -keyindex)
         return val::V
     else
