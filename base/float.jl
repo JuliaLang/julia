@@ -882,7 +882,10 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     end
                 end
                 function (::Type{$Ti})(x::$Tf)
-                    if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && isinteger(x)
+                    # When typemax(Ti) is not representable by Tf but typemax(Ti) + 1 is,
+                    # then < Tf(typemax(Ti) + 1) is stricter than <= Tf(typemax(Ti)). Using
+                    # the former causes us to throw on UInt64(Float64(typemax(UInt64))+1)
+                    if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti))+one(Tf))) && isinteger(x)
                         return unsafe_trunc($Ti,x)
                     else
                         throw(InexactError($(Expr(:quote,Ti.name.name)), $Ti, x))

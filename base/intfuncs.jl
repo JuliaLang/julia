@@ -558,7 +558,7 @@ function bit_ndigits0z(x::Base.BitUnsigned64)
 end
 function bit_ndigits0z(x::UInt128)
     n = 0
-    while x > 0x8ac7230489e80000
+    while x > 0x8ac7230489e80000 # 10e18
         x = div(x,0x8ac7230489e80000)
         n += 19
     end
@@ -724,7 +724,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
         x >>= 0x1
         i -= 1
     end
-    if neg; @inbounds a[1]=0x2d; end
+    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
 end
 
@@ -738,29 +738,77 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
         x >>= 0x3
         i -= 1
     end
-    if neg; @inbounds a[1]=0x2d; end
+    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
 end
 
 # 2-digit decimal characters ("00":"99")
-const _dec_d100 = UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
+const _dec_d100 = UInt16[
+# generating expression: UInt16[(0x30 + i % 10) << 0x8 + (0x30 + i ÷ 10) for i = 0:99]
+#    0 0,    0 1,    0 2,    0 3, and so on in little-endian
+  0x3030, 0x3130, 0x3230, 0x3330, 0x3430, 0x3530, 0x3630, 0x3730, 0x3830, 0x3930,
+  0x3031, 0x3131, 0x3231, 0x3331, 0x3431, 0x3531, 0x3631, 0x3731, 0x3831, 0x3931,
+  0x3032, 0x3132, 0x3232, 0x3332, 0x3432, 0x3532, 0x3632, 0x3732, 0x3832, 0x3932,
+  0x3033, 0x3133, 0x3233, 0x3333, 0x3433, 0x3533, 0x3633, 0x3733, 0x3833, 0x3933,
+  0x3034, 0x3134, 0x3234, 0x3334, 0x3434, 0x3534, 0x3634, 0x3734, 0x3834, 0x3934,
+  0x3035, 0x3135, 0x3235, 0x3335, 0x3435, 0x3535, 0x3635, 0x3735, 0x3835, 0x3935,
+  0x3036, 0x3136, 0x3236, 0x3336, 0x3436, 0x3536, 0x3636, 0x3736, 0x3836, 0x3936,
+  0x3037, 0x3137, 0x3237, 0x3337, 0x3437, 0x3537, 0x3637, 0x3737, 0x3837, 0x3937,
+  0x3038, 0x3138, 0x3238, 0x3338, 0x3438, 0x3538, 0x3638, 0x3738, 0x3838, 0x3938,
+  0x3039, 0x3139, 0x3239, 0x3339, 0x3439, 0x3539, 0x3639, 0x3739, 0x3839, 0x3939
+]
+
+function append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int)
+    i = olength
+    while i >= 2
+        d, c = divrem(digits, 0x64)
+        digits = oftype(digits, d)
+        @inbounds d100 = _dec_d100[(c % Int) + 1]
+        @inbounds buf[pos + i - 2] = d100 % UInt8
+        @inbounds buf[pos + i - 1] = (d100 >> 0x8) % UInt8
+        i -= 2
+    end
+    if i == 1
+        @inbounds buf[pos] = UInt8('0') + rem(digits, 0xa) % UInt8
+        i -= 1
+    end
+    return pos + olength
+end
+
+function append_nine_digits(digits::Unsigned, buf, pos::Int)
+    if digits == 0
+        for _ = 1:9
+            @inbounds buf[pos] = UInt8('0')
+            pos += 1
+        end
+        return pos
+    end
+    return @inline append_c_digits(9, digits, buf, pos) # force loop-unrolling on the length
+end
+
+function append_c_digits_fast(olength::Int, digits::Unsigned, buf, pos::Int)
+    i = olength
+    # n.b. olength may be larger than required to print all of `digits` (and will be padded
+    # with zeros), but the printed number will be undefined if it is smaller, and may include
+    # bits of both the high and low bytes.
+    maxpow10 = 0x3b9aca00 # 10e9 as UInt32
+    while i > 9 && digits > typemax(UInt)
+        # do everything in cheap math chunks, using the processor's native math size
+        d, c = divrem(digits, maxpow10)
+        digits = oftype(digits, d)
+        append_nine_digits(c % UInt32, buf, pos + i - 9)
+        i -= 9
+    end
+    append_c_digits(i, digits % UInt, buf, pos)
+    return pos + olength
+end
+
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     n = neg + ndigits(x, pad=pad)
     a = StringVector(n)
-    i = n
-    @inbounds while i >= 2
-        d, r = divrem(x, 0x64)
-        d100 = _dec_d100[(r % Int)::Int + 1]
-        a[i-1] = d100 % UInt8
-        a[i] = (d100 >> 0x8) % UInt8
-        x = oftype(x, d)
-        i -= 2
-    end
-    if i > neg
-        @inbounds a[i] = 0x30 + (rem(x, 0xa) % UInt8)::UInt8
-    end
-    if neg; @inbounds a[1]=0x2d; end
+    append_c_digits_fast(n, x, a, 1)
+    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
 end
 
@@ -781,7 +829,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         d = (x % UInt8)::UInt8 & 0xf
         @inbounds a[i] = d + ifelse(d > 0x9, 0x57, 0x30)
     end
-    if neg; @inbounds a[1]=0x2d; end
+    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
 end
 
@@ -806,7 +854,7 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
         end
         i -= 1
     end
-    if neg; @inbounds a[1]=0x2d; end
+    neg && (@inbounds a[1] = 0x2d) # UInt8('-')
     String(a)
 end
 

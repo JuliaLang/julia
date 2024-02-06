@@ -73,8 +73,8 @@ If a symmetric view of a matrix is to be constructed of which the elements are n
 matrices nor numbers, an appropriate method of `symmetric` has to be implemented. In that
 case, `symmetric_type` has to be implemented, too.
 """
-symmetric(A::AbstractMatrix, uplo::Symbol) = Symmetric(A, uplo)
-symmetric(A::Number, ::Symbol) = A
+symmetric(A::AbstractMatrix, uplo::Symbol=:U) = Symmetric(A, uplo)
+symmetric(A::Number, ::Symbol=:U) = A
 
 """
     symmetric_type(T::Type)
@@ -164,8 +164,8 @@ If a hermitian view of a matrix is to be constructed of which the elements are n
 matrices nor numbers, an appropriate method of `hermitian` has to be implemented. In that
 case, `hermitian_type` has to be implemented, too.
 """
-hermitian(A::AbstractMatrix, uplo::Symbol) = Hermitian(A, uplo)
-hermitian(A::Number, ::Symbol) = convert(typeof(A), real(A))
+hermitian(A::AbstractMatrix, uplo::Symbol=:U) = Hermitian(A, uplo)
+hermitian(A::Number, ::Symbol=:U) = convert(typeof(A), real(A))
 
 """
     hermitian_type(T::Type)

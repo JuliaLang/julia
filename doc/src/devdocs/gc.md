@@ -26,10 +26,10 @@ Julia's pool allocator follows a "tiered" allocation discipline. When requesting
 - If it failed claiming a page from `page_pool_lazily_freed`, it will try to claim a page from `the page_pool_clean`, which contains pages which were mmaped on a previous page allocation request but never accessed.
 
 - If it failed claiming a page from `pool_page_clean` and from `page_pool_lazily_freed`, it will try to claim a page
-from `page_pool_freed`, which contains pages which have already been madvised by a concurrent sweeper GC thread and whose underlying virtual address can be recycled.
+  from `page_pool_freed`, which contains pages which have already been madvised by a concurrent sweeper GC thread and whose underlying virtual address can be recycled.
 
 - If it failed in all of the attempts mentioned above, it will mmap a batch of pages, claim one page for itself, and
-insert the remaining pages into `page_pool_clean`.
+  insert the remaining pages into `page_pool_clean`.
 
 ![Diagram of tiered pool allocation](./img/gc-tiered-allocation.jpg)
 

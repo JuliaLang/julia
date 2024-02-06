@@ -458,7 +458,6 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 }
 
 #define JL_SMALL_BYTE_ALIGNMENT 16
-#define JL_CACHE_BYTE_ALIGNMENT 64
 // JL_HEAP_ALIGNMENT is the maximum alignment that the GC can provide
 #define JL_HEAP_ALIGNMENT JL_SMALL_BYTE_ALIGNMENT
 #define GC_MAX_SZCLASS (2032-sizeof(void*))

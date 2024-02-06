@@ -2190,9 +2190,10 @@ STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_ch
             break;
         }
         case GC_finlist_chunk: {
+            jl_value_t *fl_parent = c->parent;
             jl_value_t **fl_begin = c->begin;
             jl_value_t **fl_end = c->end;
-            gc_mark_finlist_(mq, fl_begin, fl_end);
+            gc_mark_finlist_(mq, fl_parent, fl_begin, fl_end);
             break;
         }
         default: {
@@ -2290,6 +2291,7 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     jl_value_t *bindingkeyset = (jl_value_t *)jl_atomic_load_relaxed(&mb_parent->bindingkeyset);
     gc_assert_parent_validity((jl_value_t *)mb_parent, bindingkeyset);
     gc_try_claim_and_push(mq, bindingkeyset, &nptr);
+    gc_heap_snapshot_record_module_to_binding(mb_parent, bindings, bindingkeyset);
     gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->parent);
     gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->parent, &nptr);
     size_t nusings = mb_parent->usings.len;
@@ -2308,7 +2310,7 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     }
 }
 
-void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end)
+void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_value_t **fl_begin, jl_value_t **fl_end)
 {
     jl_value_t *new_obj;
     // Decide whether need to chunk finlist
@@ -2318,8 +2320,10 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t *
         gc_chunkqueue_push(mq, &c);
         fl_end = fl_begin + GC_CHUNK_BATCH_SIZE;
     }
+    size_t i = 0;
     for (; fl_begin < fl_end; fl_begin++) {
-        new_obj = *fl_begin;
+        jl_value_t **slot = fl_begin;
+        new_obj = *slot;
         if (__unlikely(new_obj == NULL))
             continue;
         if (gc_ptr_tag(new_obj, 1)) {
@@ -2330,6 +2334,13 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t *
         if (gc_ptr_tag(new_obj, 2))
             continue;
         gc_try_claim_and_push(mq, new_obj, NULL);
+        if (fl_parent != NULL) {
+            gc_heap_snapshot_record_array_edge(fl_parent, slot);
+        } else {
+            // This is a list of objects following the same format as a finlist
+            // if `fl_parent` is NULL
+            gc_heap_snapshot_record_finlist(new_obj, ++i);
+        }
     }
 }
 
@@ -2341,7 +2352,7 @@ void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start)
         return;
     jl_value_t **fl_begin = (jl_value_t **)list->items + start;
     jl_value_t **fl_end = (jl_value_t **)list->items + len;
-    gc_mark_finlist_(mq, fl_begin, fl_end);
+    gc_mark_finlist_(mq, NULL, fl_begin, fl_end);
 }
 
 JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
@@ -3003,27 +3014,36 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq)
 {
     // modules
     gc_try_claim_and_push(mq, jl_main_module, NULL);
-    gc_heap_snapshot_record_root((jl_value_t*)jl_main_module, "main_module");
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_main_module, "main_module");
     // invisible builtin values
     gc_try_claim_and_push(mq, jl_an_empty_vec_any, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_an_empty_vec_any, "an_empty_vec_any");
     gc_try_claim_and_push(mq, jl_module_init_order, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_module_init_order, "module_init_order");
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
         if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
             gc_try_claim_and_push(mq, jl_current_modules.table[i], NULL);
-            gc_heap_snapshot_record_root((jl_value_t*)jl_current_modules.table[i], "top level module");
+            gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_current_modules.table[i], "top level module");
         }
     }
     gc_try_claim_and_push(mq, jl_anytuple_type_type, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_anytuple_type_type, "anytuple_type_type");
     for (size_t i = 0; i < N_CALL_CACHE; i++) {
         jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
         gc_try_claim_and_push(mq, v, NULL);
+        gc_heap_snapshot_record_array_edge_index((jl_value_t*)jl_anytuple_type_type, (jl_value_t*)v, i);
     }
     gc_try_claim_and_push(mq, jl_all_methods, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_all_methods, "all_methods");
     gc_try_claim_and_push(mq, _jl_debug_method_invalidation, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)_jl_debug_method_invalidation, "debug_method_invalidation");
     // constants
     gc_try_claim_and_push(mq, jl_emptytuple_type, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_emptytuple_type, "emptytuple_type");
     gc_try_claim_and_push(mq, cmpswap_names, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)cmpswap_names, "cmpswap_names");
     gc_try_claim_and_push(mq, jl_global_roots_table, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_global_roots_table, "global_roots_table");
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".
@@ -3729,7 +3749,10 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     if (data != NULL && pgcstack != NULL && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
-        if (!(sz < old))
+        if (sz < old)
+            jl_atomic_store_relaxed(&ptls->gc_num.freed,
+                jl_atomic_load_relaxed(&ptls->gc_num.freed) + (old - sz));
+        else
             jl_atomic_store_relaxed(&ptls->gc_num.allocd,
                 jl_atomic_load_relaxed(&ptls->gc_num.allocd) + (sz - old));
         jl_atomic_store_relaxed(&ptls->gc_num.realloc,
@@ -3856,7 +3879,10 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
         ptls->gc_cache.perm_scanned_bytes += allocsz - oldsz;
         inc_live_bytes(allocsz - oldsz);
     }
-    else if (!(allocsz < oldsz))
+    else if (allocsz < oldsz)
+        jl_atomic_store_relaxed(&ptls->gc_num.freed,
+            jl_atomic_load_relaxed(&ptls->gc_num.freed) + (oldsz - allocsz));
+    else
         jl_atomic_store_relaxed(&ptls->gc_num.allocd,
             jl_atomic_load_relaxed(&ptls->gc_num.allocd) + (allocsz - oldsz));
     jl_atomic_store_relaxed(&ptls->gc_num.realloc,

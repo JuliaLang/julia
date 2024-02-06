@@ -45,16 +45,15 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
         jl_datatype_t *dt = (jl_datatype_t*)t;
         assert(jl_object_in_image((jl_value_t*)dt->name) && "type_in_worklist mistake?");
         jl_datatype_t *super = dt->super;
-        // check if super is news, since then we must be new also
-        // (it is also possible that super is indeterminate now, wait for `t`
-        // to be resolved, then will be determined later and fixed up by the
-        // delay_list, for this and any other references to it).
-        while (super != jl_any_type) {
-            assert(super);
+        // fast-path: check if super is in news, since then we must be new also
+        // (it is also possible that super is indeterminate or NULL right now,
+        // waiting for `t` to be resolved, then will be determined later as
+        // soon as possible afterwards).
+        while (super != NULL && super != jl_any_type) {
             if (ptrhash_has(news, (void*)super))
                 return 1;
             if (!(image_base < (char*)super && (char*)super <= image_base + sizeof_sysimg))
-               break; // fast-path for rejection of super
+               break; // the rest must all be non-new
             // otherwise super might be something that was not cached even though a later supertype might be
             // for example while handling `Type{Mask{4, U} where U}`, if we have `Mask{4, U} <: AbstractSIMDVector{4}`
             super = super->super;

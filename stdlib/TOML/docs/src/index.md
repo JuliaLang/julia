@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/TOML/docs/src/index.md"
+```
+
 # TOML
 
 TOML.jl is a Julia standard library for parsing and writing [TOML

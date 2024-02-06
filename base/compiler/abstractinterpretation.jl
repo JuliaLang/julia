@@ -785,11 +785,7 @@ end
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     result::MethodCallResult, @nospecialize(f), arginfo::ArgInfo, si::StmtInfo,
     match::MethodMatch, sv::AbsIntState, invokecall::Union{Nothing,InvokeCall}=nothing)
-    if !const_prop_enabled(interp, sv, match)
-        return nothing
-    end
-    if bail_out_const_call(interp, result, si)
-        add_remark!(interp, sv, "[constprop] No more information to be gained")
+    if !const_prop_enabled(interp, match, sv) || bail_out_const_call(interp, result, si, sv)
         return nothing
     end
     eligibility = concrete_eval_eligible(interp, f, result, arginfo, sv)
@@ -822,7 +818,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     return const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
 end
 
-function const_prop_enabled(interp::AbstractInterpreter, sv::AbsIntState, match::MethodMatch)
+function const_prop_enabled(interp::AbstractInterpreter, match::MethodMatch, sv::AbsIntState)
     if !InferenceParams(interp).ipo_constant_propagation
         add_remark!(interp, sv, "[constprop] Disabled by parameter")
         return false
@@ -834,9 +830,11 @@ function const_prop_enabled(interp::AbstractInterpreter, sv::AbsIntState, match:
     return true
 end
 
-function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResult, si::StmtInfo)
+function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResult,
+                             si::StmtInfo, sv::AbsIntState)
     if is_removable_if_unused(result.effects)
         if isa(result.rt, Const) || call_result_unused(si)
+            add_remark!(interp, sv, "[constprop] No more information to be gained (const)")
             return true
         end
     end
@@ -937,7 +935,10 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
     match::MethodMatch, sv::AbsIntState)
     method = match.method
     force = force_const_prop(interp, f, method)
-    force || const_prop_entry_heuristic(interp, result, si, sv) || return nothing
+    if !const_prop_entry_heuristic(interp, result, si, sv, force)
+        # N.B. remarks are emitted within `const_prop_entry_heuristic`
+        return nothing
+    end
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
     length(arginfo.argtypes) < nargs && return nothing
@@ -964,8 +965,17 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
     return mi
 end
 
-function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult, si::StmtInfo, sv::AbsIntState)
-    if call_result_unused(si) && result.edgecycle
+function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult,
+                                    si::StmtInfo, sv::AbsIntState, force::Bool)
+    if result.rt isa LimitedAccuracy
+        # optimizations like inlining are disabled for limited frames,
+        # thus there won't be much benefit in constant-prop' here
+        # N.B. don't allow forced constprop' for safety (xref #52763)
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
+        return false
+    elseif force
+        return true
+    elseif call_result_unused(si) && result.edgecycle
         add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (edgecycle with unused result)")
         return false
     end
@@ -978,27 +988,21 @@ function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodC
         if rt === Bottom
             add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (erroneous result)")
             return false
-        else
-            return true
         end
+        return true
     elseif isa(rt, PartialStruct) || isa(rt, InterConditional) || isa(rt, InterMustAlias)
         # could be improved to `Const` or a more precise wrapper
         return true
-    elseif isa(rt, LimitedAccuracy)
-        # optimizations like inlining are disabled for limited frames,
-        # thus there won't be much benefit in constant-prop' here
-        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
-        return false
-    else
-        if isa(rt, Const)
-            if !is_nothrow(result.effects)
-                # Could still be improved to Bottom (or at least could see the effects improved)
-                return true
-            end
+    elseif isa(rt, Const)
+        if is_nothrow(result.effects)
+            add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (nothrow const)")
+            return false
         end
-        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable result)")
-        return false
+        # Could still be improved to Bottom (or at least could see the effects improved)
+        return true
     end
+    add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable result)")
+    return false
 end
 
 # determines heuristically whether if constant propagation can be worthwhile
@@ -2021,10 +2025,10 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
         return CallMeta(typeof(f).parameters[2], Effects(), NoCallInfo())
-    elseif f === TypeVar
+    elseif f === TypeVar && !isvarargtype(argtypes[end])
         # Manually look through the definition of TypeVar to
         # make sure to be able to get `PartialTypeVar`s out.
-        (la < 2 || la > 4) && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
+        2 ≤ la ≤ 4 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
         n = argtypes[2]
         ub_var = Const(Any)
         lb_var = Const(Union{})
@@ -2267,11 +2271,7 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
 end
 
 function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(e), vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
-    if isa(e, QuoteNode)
-        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL;
-            inaccessiblememonly = is_mutation_free_argtype(typeof(e.value)) ? ALWAYS_TRUE : ALWAYS_FALSE))
-        return Const(e.value)
-    elseif isa(e, SSAValue)
+    if isa(e, SSAValue)
         return abstract_eval_ssavalue(e, sv)
     elseif isa(e, SlotNumber)
         if vtypes !== nothing
@@ -2293,7 +2293,11 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, GlobalRef)
         return abstract_eval_globalref(interp, e, sv)
     end
-
+    if isa(e, QuoteNode)
+        e = e.value
+    end
+    merge_effects!(interp, sv, Effects(EFFECTS_TOTAL;
+        inaccessiblememonly = is_mutation_free_argtype(typeof(e)) ? ALWAYS_TRUE : ALWAYS_FALSE))
     return Const(e)
 end
 
