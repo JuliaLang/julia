@@ -1160,6 +1160,16 @@ function print_test_errors(ts::AbstractTestSet)
     end
 end
 
+"""
+    print_test_results(ts::AbstractTestSet, depth_pad=0)
+
+Print the results of an `AbstractTestSet` as a formatted table.
+
+`depth_pad` refers to how much padding should be added in front of all output.
+
+Called inside of `Test.finish`, if the `finish`ed testset is the topmost
+testset.
+"""
 function print_test_results(ts::AbstractTestSet, depth_pad=0)
     # Calculate the overall number for each type so each of
     # the test result types are aligned
