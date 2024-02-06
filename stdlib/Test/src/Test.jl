@@ -1419,7 +1419,7 @@ function print_counts(ts::AbstractTestSet, depth, align,
         printstyled(lpad(string(n_broken), broken_width, " "), "  ", color=Base.warn_color())
     elseif broken_width > 0
         # None broken at this level, but some at another level
-        printstyled(lpad(fallbackstr, broken_width, " "), "  ", color=Base.error_color())
+        printstyled(lpad(fallbackstr, broken_width, " "), "  ", color=Base.warn_color())
     end
 
     if n_passes == 0 && n_fails == 0 && n_errors == 0 && n_broken == 0
