@@ -127,7 +127,7 @@ struct EscapeAnalyzerCacheView
 end
 
 function CC.code_cache(interp::EscapeAnalyzer)
-    worlds = WorldRange(get_inference_world(interp))
+    worlds = WorldRange(CC.get_inference_world(interp))
     return WorldView(EscapeAnalyzerCacheView(interp.code_cache, interp.escape_cache), worlds)
 end
 CC.haskey(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance) = haskey(wvc.cache.code_cache.cache, mi)
