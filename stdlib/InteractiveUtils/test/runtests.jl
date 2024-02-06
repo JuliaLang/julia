@@ -730,3 +730,7 @@ end
     @test_broken isempty(undoc)
     @test undoc == [:InteractiveUtils]
 end
+
+@testset "code_llvm returns an object" begin
+    @test (@code_llvm sin(0.5)) isa InteractiveUtils.LLVMCode
+end
