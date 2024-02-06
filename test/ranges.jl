@@ -3,6 +3,9 @@
 using Base.Checked: checked_length
 using InteractiveUtils: code_llvm
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @testset "range construction" begin
     @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
     @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
@@ -545,6 +548,12 @@ end
         @test sort(1:10, rev=true) == 10:-1:1
         @test sort(-3:3, by=abs) == [0,-1,1,-2,2,-3,3]
         @test partialsort(1:10, 4) == 4
+
+        @testset "offset ranges" begin
+            x = OffsetArrays.IdOffsetRange(values=4:13, indices=4:13)
+            @test sort(x) === x === sort!(x)
+            @test sortperm(x) == eachindex(x)
+        end
     end
     @testset "in" begin
         @test 0 in UInt(0):100:typemax(UInt)
