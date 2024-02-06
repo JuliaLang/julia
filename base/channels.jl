@@ -503,7 +503,7 @@ end
 Determines whether a [`Channel`](@ref) has a value stored in it.
 Returns immediately, does not block.
 
-For unbuffered channels, this returns `true` if there are tasks waiting on a [`put!`](@ref).
+For unbuffered channels, return `true` if there are tasks waiting on a [`put!`](@ref).
 
 # Examples
 
