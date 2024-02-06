@@ -4,7 +4,7 @@
 
 const shell_special = "#{}()[]<>|&*?~;"
 
-"""
+@doc raw"""
     rstrip_shell(s::AbstractString)
 
 Strip trailing whitespace from a shell command string, while respecting a trailing backslash followed by a space ("\\ ").
@@ -16,7 +16,7 @@ julia> Base.rstrip_shell("echo 'Hello World' \\ ")
 julia> Base.rstrip_shell("echo 'Hello World'    ")
 "echo 'Hello World'"
 ```
-"""
+""" ->
 function rstrip_shell(s::AbstractString)
     c_old = nothing
     for (i, c) in Iterators.reverse(pairs(s))
