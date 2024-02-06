@@ -427,7 +427,7 @@ of the output corresponds to that of the three-argument method `similar(A, T, si
 
 See also: `copymutable_oftype`.
 """
-copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
+copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T), A)
 
 
 include("adjtrans.jl")
