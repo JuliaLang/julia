@@ -112,7 +112,7 @@ AnnotatedString(s::AnnotatedString, annots::Vector{Tuple{UnitRange{Int}, Pair{Sy
     AnnotatedString(s.string, vcat(s.annotations, annots))
 
 AnnotatedChar(c::AnnotatedChar, annots::Vector{Pair{Symbol, Any}}) =
-    AnnotatedChar(c.char, vcat(s.annotations, annots))
+    AnnotatedChar(c.char, vcat(c.annotations, annots))
 
 String(s::AnnotatedString{String}) = s.string # To avoid pointless overhead
 
