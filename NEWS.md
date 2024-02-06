@@ -180,6 +180,7 @@ Standard library changes
 #### Dates
 
 The undocumented function `adjust` is no longer exported but is now documented
+* `CompoundPeriod(x::Real, ::Type{T}) where {T}` now supports conversions from `T <: Nanoseconds` to `T <: Weeks`.
 
 #### Statistics
 

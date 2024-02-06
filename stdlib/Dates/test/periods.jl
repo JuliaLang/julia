@@ -397,6 +397,23 @@ end
     @test_throws MethodError (Dates.Month(1) + Dates.Day(1)) - Dates.Date(2009,2,1)
 end
 
+@testset "compound period from Real" begin
+    ccp(x, p) = Dates.canonicalize(Dates.CompoundPeriod(x, p))
+    @test string(ccp(1.5, Dates.Minute)) == "1 minute, 30 seconds"
+    @test string(ccp((Dates.Second(Dates.Week(1))+Dates.Second(1)).value, Dates.Second)) == "1 week, 1 second"
+    @test string(ccp(1.5, Dates.Day)) == "1 day, 12 hours"
+    @test string(ccp(1.5+7, Dates.Day)) == "1 week, 1 day, 12 hours"
+    @test string(ccp(1.4, Dates.Second)) == "1 second, 400 milliseconds"
+    @test string(ccp(10.1, Dates.Week)) == "10 weeks, 16 hours, 48 minutes"
+    @test string(ccp(10.1, Dates.Week) - Dates.Minute(6)) == "10 weeks, 16 hours, 42 minutes"
+    @test ccp(1000000, Dates.Nanosecond) == Dates.canonicalize(Dates.Millisecond(1))
+    @test ccp(1000, Dates.Millisecond) == Dates.canonicalize(Dates.Second(1))
+    @test ccp(60, Dates.Second) == Dates.canonicalize(Dates.Minute(1))
+    @test ccp(60, Dates.Minute) == Dates.canonicalize(Dates.Hour(1))
+    @test ccp(24, Dates.Hour) == Dates.canonicalize(Dates.Day(1))
+    @test ccp(7, Dates.Day) == Dates.canonicalize(Dates.Week(1))
+end
+
 @testset "canonicalize Period" begin
     # reduce individual Period into most basic CompoundPeriod
     @test Dates.canonicalize(Dates.Nanosecond(1000000)) == Dates.canonicalize(Dates.Millisecond(1))
