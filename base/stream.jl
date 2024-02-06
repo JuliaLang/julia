@@ -764,18 +764,29 @@ julia> read(err, String)
 "stderr messages"
 ```
 
-See also `Base.link_pipe!`.
+See also [`Base.link_pipe!`](@ref).
 """
 Pipe() = Pipe(PipeEndpoint(), PipeEndpoint())
 pipe_reader(p::Pipe) = p.out
 pipe_writer(p::Pipe) = p.in
 
+"""
+    link_pipe!(pipe; reader_supports_async=false, writer_supports_async=false)
+
+Initialize `pipe` and link the `in` endpoint to the `out` endpoint. The keyword
+arguments `reader_supports_async`/`writer_supports_async` correspond to
+`OVERLAPPED` on Windows and `O_NONBLOCK` on POSIX systems. They should be `true`
+unless they'll be used by an external program (e.g. the output of a command
+executed with [`run`](@ref)).
+"""
 function link_pipe!(pipe::Pipe;
                     reader_supports_async = false,
                     writer_supports_async = false)
      link_pipe!(pipe.out, reader_supports_async, pipe.in, writer_supports_async)
      return pipe
 end
+
+public link_pipe!
 
 show(io::IO, stream::Pipe) = print(io,
     "Pipe(",
@@ -1285,7 +1296,7 @@ the pipe.
 
 !!! note
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
-    `Pipe`, socket, or `devnull`.
+    [`Pipe`](@ref), socket, or `devnull`.
 
 See also [`redirect_stdio`](@ref).
 """
@@ -1298,7 +1309,7 @@ Like [`redirect_stdout`](@ref), but for [`stderr`](@ref).
 
 !!! note
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
-    `Pipe`, socket, or `devnull`.
+    [`Pipe`](@ref), socket, or `devnull`.
 
 See also [`redirect_stdio`](@ref).
 """
@@ -1312,7 +1323,7 @@ Note that the direction of the stream is reversed.
 
 !!! note
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
-    `Pipe`, socket, or `devnull`.
+    [`Pipe`](@ref), socket, or `devnull`.
 
 See also [`redirect_stdio`](@ref).
 """
@@ -1322,7 +1333,8 @@ redirect_stdin
     redirect_stdio(;stdin=stdin, stderr=stderr, stdout=stdout)
 
 Redirect a subset of the streams `stdin`, `stderr`, `stdout`.
-Each argument must be an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
+Each argument must be an `IOStream`, `TTY`, [`Pipe`](@ref), socket, or
+`devnull`.
 
 !!! compat "Julia 1.7"
     `redirect_stdio` requires Julia 1.7 or later.
@@ -1342,7 +1354,7 @@ call `f()` and restore each stream.
 Possible values for each stream are:
 * `nothing` indicating the stream should not be redirected.
 * `path::AbstractString` redirecting the stream to the file at `path`.
-* `io` an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
+* `io` an `IOStream`, `TTY`, [`Pipe`](@ref), socket, or `devnull`.
 
 # Examples
 ```julia-repl
