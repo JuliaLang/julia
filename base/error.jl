@@ -202,12 +202,7 @@ writing assertions, which are conditions that are assumed to be true, but that t
 might decide to check anyways, as an aid to debugging if they fail.
 The optional message `text` is displayed upon assertion failure.
 
-!!! warning
-    An assert might be disabled at some optimization levels.
-    Assert should therefore only be used as a debugging tool
-    and not used for authentication verification (e.g., verifying passwords or checking array bounds).
-    The code must not rely on the side effects of running `cond` for the correct behavior
-    of a function.
+The assertion will not be removed at any debug level and can be used for safety checks.
 
 # Examples
 ```jldoctest
