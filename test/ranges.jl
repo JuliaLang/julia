@@ -553,6 +553,7 @@ end
             x = OffsetArrays.IdOffsetRange(values=4:13, indices=4:13)
             @test sort(x) === x === sort!(x)
             @test sortperm(x) == eachindex(x)
+            @test issorted(x[sortperm(x)])
         end
     end
     @testset "in" begin
