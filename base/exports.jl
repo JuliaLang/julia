@@ -1137,6 +1137,7 @@ public
     summarysize,
     isexported,
     ispublic,
+    remove_linenums!,
 
 # Opperators
     operator_associativity,
