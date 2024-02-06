@@ -1599,3 +1599,7 @@ end === Float64
     @test tanpi(big(1//1)) == big(0.0)
     @test cospi(big(1//1)) == big(-1.0)
 end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(MathConstants))
+end

@@ -33,11 +33,6 @@
 // delete julia IR for non-inlineable functions after they're codegen'd
 #define JL_DELETE_NON_INLINEABLE 1
 
-// fill in the jl_all_methods in world-counter order
-// so that it is possible to map (in a debugger) from
-// an inferred world validity range back to the offending definition
-// #define RECORD_METHOD_ORDER
-
 // GC options -----------------------------------------------------------------
 
 // debugging options
@@ -63,6 +58,10 @@
 // #define GC_VERIFY
 #endif
 #endif
+
+// GC_ASSERT_PARENT_VALIDITY will check whether an object is valid when **pushing**
+// it to the mark queue
+// #define GC_ASSERT_PARENT_VALIDITY
 
 // profiling options
 

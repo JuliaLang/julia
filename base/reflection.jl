@@ -75,14 +75,19 @@ end
 """
     names(x::Module; all::Bool = false, imported::Bool = false)
 
-Get an array of the public names of a `Module`, excluding deprecated names.
+Get a vector of the public names of a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-public names defined in the module,
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
-are also included.
+are also included. Names are returned in sorted order.
 
 As a special case, all names defined in `Main` are considered \"public\",
 since it is not idiomatic to explicitly mark names from `Main` as public.
+
+!!! note
+    `sym ∈ names(SomeModule)` does *not* imply `isdefined(SomeModule, sym)`.
+    `names` will return symbols marked with `public` or `export`, even if
+    they are not defined in the module.
 
 See also: [`isexported`](@ref), [`ispublic`](@ref), [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
@@ -2187,7 +2192,17 @@ See also: [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which),
 """
 function which(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
-    return which(tt)
+    world = get_world_counter()
+    match, _ = Core.Compiler._findsup(tt, nothing, world)
+    if match === nothing
+        me = MethodError(f, t, world)
+        ee = ErrorException(sprint(io -> begin
+            println(io, "Calling invoke(f, t, args...) would throw:");
+            Base.showerror(io, me);
+        end))
+        throw(ee)
+    end
+    return match.method
 end
 
 """
@@ -2507,7 +2522,11 @@ function delete_method(m::Method)
 end
 
 function get_methodtable(m::Method)
-    return ccall(:jl_method_get_table, Any, (Any,), m)::Core.MethodTable
+    mt = ccall(:jl_method_get_table, Any, (Any,), m)
+    if mt === nothing
+        return nothing
+    end
+    return mt::Core.MethodTable
 end
 
 """

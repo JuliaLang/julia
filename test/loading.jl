@@ -721,16 +721,17 @@ end
 @testset "expansion of JULIA_DEPOT_PATH" begin
     s = Sys.iswindows() ? ';' : ':'
     tmp = "/this/does/not/exist"
-    DEFAULT = Base.append_default_depot_path!(String[])
+    default = joinpath(homedir(), ".julia")
+    bundled = Base.append_bundled_depot_path!(String[])
     cases = Dict{Any,Vector{String}}(
-        nothing => DEFAULT,
+        nothing => [default; bundled],
         "" => [],
-        "$s" => DEFAULT,
-        "$tmp$s" => [tmp; DEFAULT],
-        "$s$tmp" => [DEFAULT; tmp],
+        "$s" => [default; bundled],
+        "$tmp$s" => [tmp; bundled],
+        "$s$tmp" => [bundled; tmp],
         )
     for (env, result) in pairs(cases)
-        script = "DEPOT_PATH == $(repr(result)) || error()"
+        script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
         cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
         cmd = addenv(cmd, "JULIA_DEPOT_PATH" => env)
         cmd = pipeline(cmd; stdout, stderr)
@@ -1112,6 +1113,24 @@ end
             cmd_proj_ext = addenv(cmd_proj_ext, "JULIA_LOAD_PATH" => join([joinpath(proj, "HasExtensions.jl"), joinpath(proj, "EnvWithDeps")], sep))
             run(cmd_proj_ext)
         end
+
+        # Sysimage extensions
+        # The test below requires that LinearAlgebra is in the sysimage and that it has not been loaded yet.
+        # if it gets moved out, this test will need to be updated.
+        # We run this test in a new process so we are not vulnerable to a previous test having loaded LinearAlgebra
+        sysimg_ext_test_code = """
+            uuid_key = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
+            Base.in_sysimage(uuid_key) || error("LinearAlgebra not in sysimage")
+            haskey(Base.explicit_loaded_modules, uuid_key) && error("LinearAlgebra already loaded")
+            using HasExtensions
+            Base.get_extension(HasExtensions, :LinearAlgebraExt) === nothing || error("unexpectedly got an extension")
+            using LinearAlgebra
+            haskey(Base.explicit_loaded_modules, uuid_key) || error("LinearAlgebra not loaded")
+            Base.get_extension(HasExtensions, :LinearAlgebraExt) isa Module || error("expected extension to load")
+        """
+        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
+        run(cmd)
     finally
         try
             rm(depot_path, force=true, recursive=true)

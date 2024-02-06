@@ -52,9 +52,14 @@ Base.eltype(::ScopedValue{T}) where {T} = T
 """
     isassigned(val::ScopedValue)
 
-Test if the ScopedValue has a default value.
+Test whether a ScopedValue has an assigned value.
 """
-Base.isassigned(val::ScopedValue) = val.has_default
+function Base.isassigned(val::ScopedValue)
+    val.has_default && return true
+    scope = Core.current_scope()::Union{Scope, Nothing}
+    scope === nothing && return false
+    return haskey((scope::Scope).values, val)
+end
 
 const ScopeStorage = Base.PersistentDict{ScopedValue, Any}
 
@@ -111,11 +116,11 @@ value.
 function get(val::ScopedValue{T}) where {T}
     scope = Core.current_scope()::Union{Scope, Nothing}
     if scope === nothing
-        isassigned(val) && return Some{T}(val.default)
+        val.has_default && return Some{T}(val.default)
         return nothing
     end
     scope = scope::Scope
-    if isassigned(val)
+    if val.has_default
         return Some{T}(Base.get(scope.values, val, val.default)::T)
     else
         v = Base.get(scope.values, val, novalue)
@@ -161,7 +166,7 @@ macro with(exprs...)
         error("@with expects at least one argument")
     end
     exprs = map(esc, exprs)
-    Expr(:tryfinally, esc(ex), :(), :(Scope(Core.current_scope()::Union{Nothing, Scope}, $(exprs...))))
+    Expr(:tryfinally, esc(ex), nothing, :(Scope(Core.current_scope()::Union{Nothing, Scope}, $(exprs...))))
 end
 
 """

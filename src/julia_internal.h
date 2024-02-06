@@ -308,6 +308,25 @@ static inline void memmove_refs(_Atomic(void*) *dstp, _Atomic(void*) *srcp, size
     }
 }
 
+static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, size_t nb) JL_NOTSAFEPOINT
+{
+    assert(nb == jl_datatype_size(jl_typeof(src)));
+    if (hasptr) {
+        size_t nptr = nb / sizeof(void*);
+        memmove_refs((_Atomic(void*)*)dst, (_Atomic(void*)*)src, nptr);
+        nb -= nptr * sizeof(void*);
+        if (__likely(nb == 0))
+            return;
+        src = (jl_value_t*)((char*)src + nptr * sizeof(void*));
+        dst = dst + nptr * sizeof(void*);
+    }
+    else if (nb >= 16) {
+        memcpy(dst, jl_assume_aligned(src, 16), nb);
+        return;
+    }
+    memcpy(dst, jl_assume_aligned(src, sizeof(void*)), nb);
+}
+
 // -- gc.c -- //
 
 #define GC_CLEAN  0 // freshly allocated
@@ -337,7 +356,6 @@ extern JL_DLLEXPORT size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
-extern jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
 
 JL_DLLEXPORT extern int jl_lineno;
 JL_DLLEXPORT extern const char *jl_filename;
@@ -485,7 +503,6 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass_align8(unsigned sz) JL_NOTSAFE
 }
 
 #define JL_SMALL_BYTE_ALIGNMENT 16
-#define JL_CACHE_BYTE_ALIGNMENT 64
 // JL_HEAP_ALIGNMENT is the maximum alignment that the GC can provide
 #define JL_HEAP_ALIGNMENT JL_SMALL_BYTE_ALIGNMENT
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
@@ -710,12 +727,20 @@ typedef struct jl_typeenv_t {
 int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt);
 int jl_tuple1_isa(jl_value_t *child1, jl_value_t **child, size_t cl, jl_datatype_t *pdt);
 
+enum atomic_kind {
+    isatomic_none = 0,
+    isatomic_object = 1,
+    isatomic_field = 2
+};
+
 JL_DLLEXPORT int jl_has_intersect_type_not_kind(jl_value_t *t);
 int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
 int jl_has_concrete_subtype(jl_value_t *typ);
 jl_tupletype_t *jl_inst_arg_tuple_type(jl_value_t *arg1, jl_value_t **args, size_t nargs, int leaf);
 jl_tupletype_t *jl_lookup_arg_tuple_type(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl_value_t **args, size_t nargs, int leaf);
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype);
+void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry);
+jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype);
 jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED;
 int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v);
@@ -753,6 +778,13 @@ void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, 
 jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic);
 jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *op, jl_value_t *rhs, int isatomic);
 jl_value_t *replace_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *expected, jl_value_t *rhs, int isatomic);
+int set_nth_fieldonce(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic);
+jl_value_t *swap_bits(jl_value_t *ty, char *v, uint8_t *psel, jl_value_t *parent, jl_value_t *rhs, enum atomic_kind isatomic);
+jl_value_t *replace_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, int isatomic, jl_module_t *mod, jl_sym_t *name);
+jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *expected, jl_value_t *rhs, enum atomic_kind isatomic);
+jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_module_t *mod, jl_sym_t *name);
+jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic);
+int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *owner, jl_value_t *rhs, enum atomic_kind isatomic);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module);
 jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st);

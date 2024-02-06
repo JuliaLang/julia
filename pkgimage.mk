@@ -73,6 +73,7 @@ $(eval $(call stdlib_builder,Sockets,))
 $(eval $(call stdlib_builder,Unicode,))
 $(eval $(call stdlib_builder,Profile,))
 $(eval $(call stdlib_builder,StyledStrings,))
+$(eval $(call stdlib_builder,SuiteSparse_jll,))
 
 # 1-depth packages
 $(eval $(call stdlib_builder,GMP_jll,Artifacts Libdl))
@@ -94,6 +95,7 @@ $(eval $(call stdlib_builder,Printf,Unicode))
 $(eval $(call stdlib_builder,Random,SHA))
 $(eval $(call stdlib_builder,Tar,ArgTools,SHA))
 $(eval $(call stdlib_builder,DelimitedFiles,Mmap))
+$(eval $(call stdlib_builder,JuliaSyntaxHighlighting,StyledStrings))
 
 # 2-depth packages
 $(eval $(call stdlib_builder,LLD_jll,Zlib_jll libLLVM_jll Artifacts Libdl))
@@ -109,7 +111,7 @@ $(eval $(call stdlib_builder,InteractiveUtils,Markdown))
  # 3-depth packages
 $(eval $(call stdlib_builder,LibGit2_jll,MbedTLS_jll LibSSH2_jll Artifacts Libdl))
 $(eval $(call stdlib_builder,LibCURL_jll,LibSSH2_jll nghttp2_jll MbedTLS_jll Zlib_jll Artifacts Libdl))
-$(eval $(call stdlib_builder,REPL,InteractiveUtils Markdown Sockets Unicode))
+$(eval $(call stdlib_builder,REPL,InteractiveUtils Markdown Sockets StyledStrings Unicode))
 $(eval $(call stdlib_builder,SharedArrays,Distributed Mmap Random Serialization))
 $(eval $(call stdlib_builder,TOML,Dates))
 $(eval $(call stdlib_builder,Test,Logging Random Serialization InteractiveUtils))
@@ -129,6 +131,5 @@ $(eval $(call stdlib_builder,Pkg, Artifacts Dates Downloads FileWatching LibGit2
 # 7-depth packages
 $(eval $(call stdlib_builder,LazyArtifacts,Artifacts Pkg))
 
-$(eval $(call stdlib_builder,SparseArrays,Libdl LinearAlgebra Random Serialization))
+$(eval $(call stdlib_builder,SparseArrays,Libdl LinearAlgebra Random Serialization SuiteSparse_jll))
 $(eval $(call stdlib_builder,Statistics,LinearAlgebra SparseArrays))
-# SuiteSparse_jll

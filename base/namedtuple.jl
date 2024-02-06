@@ -196,9 +196,8 @@ function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple
 end
 
 if nameof(@__MODULE__) === :Base
-    Tuple(nt::NamedTuple) = (nt...,)
-    (::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
-end
+Tuple(nt::NamedTuple) = (nt...,)
+(::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
 
 function show(io::IO, t::NamedTuple)
     n = nfields(t)
@@ -231,6 +230,7 @@ function show(io::IO, t::NamedTuple)
         end
         print(io, ")")
     end
+end
 end
 
 eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
@@ -267,6 +267,8 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     end
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
+
+filter(f, xs::NamedTuple) = xs[filter(k -> f(xs[k]), keys(xs))]
 
 function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize
@@ -524,6 +526,7 @@ Base.Pairs{Symbol, Int64, Tuple{Symbol}, @NamedTuple{init::Int64}}
 
 julia> sum("julia"; init=1)
 ERROR: MethodError: no method matching +(::Char, ::Char)
+The function `+` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   +(::Any, ::Any, ::Any, ::Any...)

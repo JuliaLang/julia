@@ -37,7 +37,7 @@ end
 
 @testset "unicode sa#15" begin
     #Tests from Unicode SA#15, "Unicode normalization forms"
-    #http://www.unicode.org/reports/tr15/
+    #https://www.unicode.org/reports/tr15/
 
     @testset "canonical equivalence" begin
         let ==(a::Array{Char},b::Array{Char}) = normalize(string(a...), :NFC)==normalize(string(b...), :NFC)
@@ -533,4 +533,8 @@ isequal_normalized_naive(s1, s2; kws...) = normalize(s1; kws...) == normalize(s2
         # combining characters in the same class are inequivalent if re-ordered:
         @test !isequal_normalized("x\u0334\u0335", "x\u0335\u0334")
     end
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Unicode))
 end

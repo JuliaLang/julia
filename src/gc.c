@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc.h"
+#include "gc-page-profiler.h"
 #include "julia.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
@@ -20,8 +21,8 @@ int jl_n_sweepthreads;
 _Atomic(int) gc_n_threads_marking;
 // Number of threads sweeping
 _Atomic(int) gc_n_threads_sweeping;
-// Temporary for the `ptls->page_metadata_allocd` used during parallel sweeping
-_Atomic(jl_gc_page_stack_t *) gc_allocd_scratch;
+// Temporary for the `ptls->page_metadata_allocd` used during parallel sweeping (padded to avoid false sharing)
+_Atomic(jl_gc_padded_page_stack_t *) gc_allocd_scratch;
 // `tid` of mutator thread that triggered GC
 _Atomic(int) gc_master_tid;
 // `tid` of first GC thread
@@ -50,7 +51,6 @@ static jl_gc_callback_list_t *gc_cblist_post_gc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_free;
 static jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
-typedef void (*jl_gc_cb_notify_gc_pressure_t)(void);
 
 #define gc_invoke_callbacks(ty, list, args) \
     do { \
@@ -1426,11 +1426,11 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
 int64_t buffered_pages = 0;
 
 // Returns pointer to terminal pointer of list rooted at *pfl.
-static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *buffered,
+static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *buffered,
                           jl_gc_pagemeta_t *pg, int osize) JL_NOTSAFEPOINT
 {
     char *data = pg->data;
-    jl_taggedvalue_t *v = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
+    jl_taggedvalue_t *v0 = (jl_taggedvalue_t*)(data + GC_PAGE_OFFSET);
     char *lim = data + GC_PAGE_SZ - osize;
     char *lim_newpages = data + GC_PAGE_SZ;
     if (gc_page_data((char*)p->newpages - 1) == data) {
@@ -1438,6 +1438,9 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
     }
     size_t old_nfree = pg->nfree;
     size_t nfree;
+    // avoid loading a global variable in the hot path
+    int page_profile_enabled = gc_page_profile_is_enabled();
+    gc_page_serializer_init(s, pg);
 
     int re_use_page = 1;
     int keep_as_local_buffer = 0;
@@ -1457,6 +1460,7 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
         }
     #endif
         nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / osize;
+        gc_page_profile_write_empty_page(s, page_profile_enabled);
         goto done;
     }
     // For quick sweep, we might be able to skip the page if the page doesn't
@@ -1466,12 +1470,13 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
         if (!prev_sweep_full || pg->prev_nold == pg->nold) {
             freedall = 0;
             nfree = pg->nfree;
+            gc_page_profile_write_empty_page(s, page_profile_enabled);
             goto done;
         }
     }
 
     pg_skpd = 0;
-    {  // scope to avoid clang goto errors
+    {   // scope to avoid clang goto errors
         int has_marked = 0;
         int has_young = 0;
         int16_t prev_nold = 0;
@@ -1479,6 +1484,22 @@ static void gc_sweep_page(jl_gc_pool_t *p, jl_gc_page_stack_t *allocd, jl_gc_pag
         jl_taggedvalue_t *fl = NULL;
         jl_taggedvalue_t **pfl = &fl;
         jl_taggedvalue_t **pfl_begin = NULL;
+        // collect page profile
+        jl_taggedvalue_t *v = v0;
+        if (page_profile_enabled) {
+            while ((char*)v <= lim) {
+                int bits = v->bits.gc;
+                if (!gc_marked(bits) || (char*)v >= lim_newpages) {
+                    gc_page_profile_write_garbage(s, page_profile_enabled);
+                }
+                else {
+                    gc_page_profile_write_live_obj(s, v, page_profile_enabled);
+                }
+                v = (jl_taggedvalue_t*)((char*)v + osize);
+            }
+            v = v0;
+        }
+        // sweep the page
         while ((char*)v <= lim) {
             int bits = v->bits.gc;
             // if an object is past `lim_newpages` then we can guarantee it's garbage
@@ -1532,6 +1553,7 @@ done:
             push_lf_back(&global_page_pool_lazily_freed, pg);
         }
     }
+    gc_page_profile_write_to_file(s);
     gc_update_page_fragmentation_data(pg);
     gc_time_count_page(freedall, pg_skpd);
     jl_ptls_t ptls = gc_all_tls_states[pg->thread_n];
@@ -1540,7 +1562,7 @@ done:
 }
 
 // the actual sweeping over all allocated pages in a memory pool
-STATIC_INLINE void gc_sweep_pool_page(jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *lazily_freed,
+STATIC_INLINE void gc_sweep_pool_page(gc_page_profiler_serializer_t *s, jl_gc_page_stack_t *allocd, jl_gc_page_stack_t *lazily_freed,
                                       jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     int p_n = pg->pool_n;
@@ -1548,7 +1570,7 @@ STATIC_INLINE void gc_sweep_pool_page(jl_gc_page_stack_t *allocd, jl_gc_page_sta
     jl_ptls_t ptls2 = gc_all_tls_states[t_n];
     jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
     int osize = pg->osize;
-    gc_sweep_page(p, allocd, lazily_freed, pg, osize);
+    gc_sweep_page(s, p, allocd, lazily_freed, pg, osize);
 }
 
 // sweep over all memory that is being used and not in a pool
@@ -1574,45 +1596,83 @@ static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last) JL_
     pg->nfree = nfree;
 }
 
-void gc_sweep_wake_all(void)
+// pre-scan pages to check whether there are enough pages so that's worth parallelizing
+// also sweeps pages that don't need to be linearly scanned
+int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_scratch)
 {
+    // 4MB worth of pages is worth parallelizing
+    const int n_pages_worth_parallel_sweep = (int)(4 * (1 << 20) / GC_PAGE_SZ);
+    int n_pages_to_scan = 0;
+    gc_page_profiler_serializer_t serializer = gc_page_serializer_create();
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL) {
+            continue;
+        }
+        jl_gc_page_stack_t *dest = &new_gc_allocd_scratch[ptls2->tid].stack;
+        jl_gc_page_stack_t tmp;
+        jl_gc_pagemeta_t *tail = NULL;
+        memset(&tmp, 0, sizeof(tmp));
+        while (1) {
+            jl_gc_pagemeta_t *pg = pop_lf_back_nosync(&ptls2->page_metadata_allocd);
+            if (pg == NULL) {
+                break;
+            }
+            int should_scan = 1;
+            if (!pg->has_marked) {
+                should_scan = 0;
+            }
+            if (!current_sweep_full && !pg->has_young) {
+                assert(!prev_sweep_full || pg->prev_nold >= pg->nold);
+                if (!prev_sweep_full || pg->prev_nold == pg->nold) {
+                    should_scan = 0;
+                }
+            }
+            if (should_scan) {
+                if (tail == NULL) {
+                    tail = pg;
+                }
+                n_pages_to_scan++;
+                push_lf_back_nosync(&tmp, pg);
+            }
+            else {
+                gc_sweep_pool_page(&serializer, dest, &ptls2->page_metadata_buffered, pg);
+            }
+            if (n_pages_to_scan >= n_pages_worth_parallel_sweep) {
+                break;
+            }
+        }
+        if (tail != NULL) {
+            tail->next = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
+        }
+        ptls2->page_metadata_allocd = tmp;
+        if (n_pages_to_scan >= n_pages_worth_parallel_sweep) {
+            break;
+        }
+    }
+    gc_page_serializer_destroy(&serializer);
+    return n_pages_to_scan >= n_pages_worth_parallel_sweep;
+}
+
+// wake up all threads to sweep the pages
+void gc_sweep_wake_all(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_scratch)
+{
+    int parallel_sweep_worthwhile = gc_sweep_prescan(ptls, new_gc_allocd_scratch);
+    jl_atomic_store(&gc_allocd_scratch, new_gc_allocd_scratch);
+    if (!parallel_sweep_worthwhile) {
+        return;
+    }
     uv_mutex_lock(&gc_threads_lock);
     for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
+        assert(ptls2 != NULL); // should be a GC thread
         jl_atomic_fetch_add(&ptls2->gc_sweeps_requested, 1);
     }
     uv_cond_broadcast(&gc_threads_cond);
     uv_mutex_unlock(&gc_threads_lock);
 }
 
-void gc_sweep_pool_parallel(void)
-{
-    jl_atomic_fetch_add(&gc_n_threads_sweeping, 1);
-    jl_gc_page_stack_t *allocd_scratch = jl_atomic_load(&gc_allocd_scratch);
-    if (allocd_scratch != NULL) {
-        while (1) {
-            int found_pg = 0;
-            for (int t_i = 0; t_i < gc_n_threads; t_i++) {
-                jl_ptls_t ptls2 = gc_all_tls_states[t_i];
-                if (ptls2 == NULL) {
-                    continue;
-                }
-                jl_gc_page_stack_t *allocd = &allocd_scratch[t_i];
-                jl_gc_pagemeta_t *pg = pop_lf_back(&ptls2->page_metadata_allocd);
-                if (pg == NULL) {
-                    continue;
-                }
-                gc_sweep_pool_page(allocd, &ptls2->page_metadata_buffered, pg);
-                found_pg = 1;
-            }
-            if (!found_pg) {
-                break;
-            }
-        }
-    }
-    jl_atomic_fetch_add(&gc_n_threads_sweeping, -1);
-}
-
+// wait for all threads to finish sweeping
 void gc_sweep_wait_for_all(void)
 {
     jl_atomic_store(&gc_allocd_scratch, NULL);
@@ -1621,6 +1681,58 @@ void gc_sweep_wait_for_all(void)
     }
 }
 
+// sweep all pools
+void gc_sweep_pool_parallel(jl_ptls_t ptls)
+{
+    jl_atomic_fetch_add(&gc_n_threads_sweeping, 1);
+    jl_gc_padded_page_stack_t *allocd_scratch = jl_atomic_load(&gc_allocd_scratch);
+    if (allocd_scratch != NULL) {
+        gc_page_profiler_serializer_t serializer = gc_page_serializer_create();
+        while (1) {
+            int found_pg = 0;
+            // sequentially walk the threads and sweep the pages
+            for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+                jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+                // skip foreign threads that already exited
+                if (ptls2 == NULL) {
+                    continue;
+                }
+                jl_gc_page_stack_t *dest = &allocd_scratch[ptls2->tid].stack;
+                jl_gc_pagemeta_t *pg = try_pop_lf_back(&ptls2->page_metadata_allocd);
+                // failed steal attempt
+                if (pg == NULL) {
+                    continue;
+                }
+                gc_sweep_pool_page(&serializer, dest, &ptls2->page_metadata_buffered, pg);
+                found_pg = 1;
+            }
+            if (!found_pg) {
+                // check for termination
+                int no_more_work = 1;
+                for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+                    jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+                    // skip foreign threads that already exited
+                    if (ptls2 == NULL) {
+                        continue;
+                    }
+                    jl_gc_pagemeta_t *pg = jl_atomic_load_relaxed(&ptls2->page_metadata_allocd.bottom);
+                    if (pg != NULL) {
+                        no_more_work = 0;
+                        break;
+                    }
+                }
+                if (no_more_work) {
+                    break;
+                }
+            }
+            jl_cpu_pause();
+        }
+        gc_page_serializer_destroy(&serializer);
+    }
+    jl_atomic_fetch_add(&gc_n_threads_sweeping, -1);
+}
+
+// free all pages (i.e. through `madvise` on Linux) that were lazily freed
 void gc_free_pages(void)
 {
     while (1) {
@@ -1645,7 +1757,7 @@ static void gc_sweep_pool(void)
 
     // allocate enough space to hold the end of the free list chain
     // for every thread and pool size
-    jl_taggedvalue_t ***pfl = (jl_taggedvalue_t ***) alloca(n_threads * JL_GC_N_POOLS * sizeof(jl_taggedvalue_t**));
+    jl_taggedvalue_t ***pfl = (jl_taggedvalue_t ***) malloc_s(n_threads * JL_GC_N_POOLS * sizeof(jl_taggedvalue_t**));
 
     // update metadata of pages that were pointed to by freelist or newpages from a pool
     // i.e. pages being the current allocation target
@@ -1687,17 +1799,18 @@ static void gc_sweep_pool(void)
     }
 
     // the actual sweeping
-    jl_gc_page_stack_t *tmp = (jl_gc_page_stack_t *)alloca(n_threads * sizeof(jl_gc_page_stack_t));
-    memset(tmp, 0, n_threads * sizeof(jl_gc_page_stack_t));
-    jl_atomic_store(&gc_allocd_scratch, tmp);
-    gc_sweep_wake_all();
-    gc_sweep_pool_parallel();
+    jl_gc_padded_page_stack_t *new_gc_allocd_scratch = (jl_gc_padded_page_stack_t *) malloc_s(n_threads * sizeof(jl_gc_padded_page_stack_t));
+    memset(new_gc_allocd_scratch, 0, n_threads * sizeof(jl_gc_padded_page_stack_t));
+    jl_ptls_t ptls = jl_current_task->ptls;
+    gc_sweep_wake_all(ptls, new_gc_allocd_scratch);
+    gc_sweep_pool_parallel(ptls);
     gc_sweep_wait_for_all();
 
+    // reset half-pages pointers
     for (int t_i = 0; t_i < n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         if (ptls2 != NULL) {
-            ptls2->page_metadata_allocd = tmp[t_i];
+            ptls2->page_metadata_allocd = new_gc_allocd_scratch[t_i].stack;
             for (int i = 0; i < JL_GC_N_POOLS; i++) {
                 jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
                 p->newpages = NULL;
@@ -1734,6 +1847,10 @@ static void gc_sweep_pool(void)
             }
         }
     }
+
+    // cleanup
+    free(pfl);
+    free(new_gc_allocd_scratch);
 
 #ifdef _P64 // only enable concurrent sweeping on 64bit
     // wake thread up to sweep concurrently
@@ -1837,7 +1954,7 @@ STATIC_INLINE uintptr_t gc_read_stack(void *_addr, uintptr_t offset,
 
 STATIC_INLINE void gc_assert_parent_validity(jl_value_t *parent, jl_value_t *child) JL_NOTSAFEPOINT
 {
-#ifdef GC_ASSERT_PARENT_VALIDITY
+#if defined(GC_VERIFY) || defined(GC_ASSERT_PARENT_VALIDITY)
     jl_taggedvalue_t *child_astagged = jl_astaggedvalue(child);
     jl_taggedvalue_t *child_vtag = (jl_taggedvalue_t *)(child_astagged->header & ~(uintptr_t)0xf);
     uintptr_t child_vt = (uintptr_t)child_vtag;
@@ -2333,9 +2450,10 @@ STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_ch
             break;
         }
         case GC_finlist_chunk: {
+            jl_value_t *fl_parent = c->parent;
             jl_value_t **fl_begin = c->begin;
             jl_value_t **fl_end = c->end;
-            gc_mark_finlist_(mq, fl_begin, fl_end);
+            gc_mark_finlist_(mq, fl_parent, fl_begin, fl_end);
             break;
         }
         default: {
@@ -2433,6 +2551,7 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     jl_value_t *bindingkeyset = (jl_value_t *)jl_atomic_load_relaxed(&mb_parent->bindingkeyset);
     gc_assert_parent_validity((jl_value_t *)mb_parent, bindingkeyset);
     gc_try_claim_and_push(mq, bindingkeyset, &nptr);
+    gc_heap_snapshot_record_module_to_binding(mb_parent, bindings, bindingkeyset);
     gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->parent);
     gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->parent, &nptr);
     size_t nusings = mb_parent->usings.len;
@@ -2451,7 +2570,7 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     }
 }
 
-void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end)
+void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t *fl_parent, jl_value_t **fl_begin, jl_value_t **fl_end)
 {
     jl_value_t *new_obj;
     // Decide whether need to chunk finlist
@@ -2461,8 +2580,10 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t *
         gc_chunkqueue_push(mq, &c);
         fl_end = fl_begin + GC_CHUNK_BATCH_SIZE;
     }
+    size_t i = 0;
     for (; fl_begin < fl_end; fl_begin++) {
-        new_obj = *fl_begin;
+        jl_value_t **slot = fl_begin;
+        new_obj = *slot;
         if (__unlikely(new_obj == NULL))
             continue;
         if (gc_ptr_tag(new_obj, 1)) {
@@ -2473,6 +2594,13 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t *
         if (gc_ptr_tag(new_obj, 2))
             continue;
         gc_try_claim_and_push(mq, new_obj, NULL);
+        if (fl_parent != NULL) {
+            gc_heap_snapshot_record_array_edge(fl_parent, slot);
+        } else {
+            // This is a list of objects following the same format as a finlist
+            // if `fl_parent` is NULL
+            gc_heap_snapshot_record_finlist(new_obj, ++i);
+        }
     }
 }
 
@@ -2484,7 +2612,7 @@ void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start)
         return;
     jl_value_t **fl_begin = (jl_value_t **)list->items + start;
     jl_value_t **fl_end = (jl_value_t **)list->items + len;
-    gc_mark_finlist_(mq, fl_begin, fl_end);
+    gc_mark_finlist_(mq, NULL, fl_begin, fl_end);
 }
 
 JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
@@ -2918,6 +3046,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
 
 size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
+    assert(ptls != NULL);
     // assume each chunk is worth 256 units of work and each pointer
     // is worth 1 unit of work
     size_t work = 256 * (jl_atomic_load_relaxed(&ptls->mark_queue.chunk_queue.bottom) -
@@ -2959,7 +3088,7 @@ size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
  * and therefore won't enter the mark-loop.
  */
 
-int gc_should_mark(jl_ptls_t ptls)
+int gc_should_mark(void)
 {
     int should_mark = 0;
     int n_threads_marking = jl_atomic_load(&gc_n_threads_marking);
@@ -2981,7 +3110,11 @@ int gc_should_mark(jl_ptls_t ptls)
         }
         size_t work = gc_count_work_in_queue(gc_all_tls_states[tid]);
         for (tid = gc_first_tid; tid < gc_first_tid + jl_n_markthreads; tid++) {
-            work += gc_count_work_in_queue(gc_all_tls_states[tid]);
+            jl_ptls_t ptls2 = gc_all_tls_states[tid];
+            if (ptls2 == NULL) {
+                continue;
+            }
+            work += gc_count_work_in_queue(ptls2);
         }
         // if there is a lot of work left, enter the mark loop
         if (work >= 16 * n_threads_marking) {
@@ -3012,7 +3145,7 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
         jl_atomic_fetch_add(&gc_n_threads_marking, -1);
     }
     while (1) {
-        int should_mark = gc_should_mark(ptls);
+        int should_mark = gc_should_mark();
         if (!should_mark) {
             break;
         }
@@ -3044,12 +3177,26 @@ void gc_mark_clean_reclaim_sets(void)
     // Clean up `reclaim-sets`
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL) {
+            continue;
+        }
         arraylist_t *reclaim_set2 = &ptls2->mark_queue.reclaim_set;
         ws_array_t *a = NULL;
         while ((a = (ws_array_t *)arraylist_pop(reclaim_set2)) != NULL) {
             free(a->buffer);
             free(a);
         }
+    }
+    // Reset queue indices
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL) {
+            continue;
+        }
+        jl_atomic_store_relaxed(&ptls2->mark_queue.ptr_queue.bottom, 0);
+        jl_atomic_store_relaxed(&ptls2->mark_queue.ptr_queue.top, 0);
+        jl_atomic_store_relaxed(&ptls2->mark_queue.chunk_queue.bottom, 0);
+        jl_atomic_store_relaxed(&ptls2->mark_queue.chunk_queue.top, 0);
     }
 }
 
@@ -3133,28 +3280,36 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq)
 {
     // modules
     gc_try_claim_and_push(mq, jl_main_module, NULL);
-    gc_heap_snapshot_record_root((jl_value_t*)jl_main_module, "main_module");
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_main_module, "main_module");
     // invisible builtin values
     gc_try_claim_and_push(mq, jl_an_empty_vec_any, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_an_empty_vec_any, "an_empty_vec_any");
     gc_try_claim_and_push(mq, jl_module_init_order, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_module_init_order, "module_init_order");
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
         if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
             gc_try_claim_and_push(mq, jl_current_modules.table[i], NULL);
-            gc_heap_snapshot_record_root((jl_value_t*)jl_current_modules.table[i], "top level module");
+            gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_current_modules.table[i], "top level module");
         }
     }
     gc_try_claim_and_push(mq, jl_anytuple_type_type, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_anytuple_type_type, "anytuple_type_type");
     for (size_t i = 0; i < N_CALL_CACHE; i++) {
         jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
         gc_try_claim_and_push(mq, v, NULL);
+        gc_heap_snapshot_record_array_edge_index((jl_value_t*)jl_anytuple_type_type, (jl_value_t*)v, i);
     }
-    gc_try_claim_and_push(mq, jl_all_methods, NULL);
     gc_try_claim_and_push(mq, _jl_debug_method_invalidation, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)_jl_debug_method_invalidation, "debug_method_invalidation");
     // constants
     gc_try_claim_and_push(mq, jl_emptytuple_type, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_emptytuple_type, "emptytuple_type");
     gc_try_claim_and_push(mq, cmpswap_names, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)cmpswap_names, "cmpswap_names");
     gc_try_claim_and_push(mq, jl_global_roots_list, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_global_roots_list, "global_roots_list");
     gc_try_claim_and_push(mq, jl_global_roots_keyset, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_global_roots_keyset, "global_roots_keyset");
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".
@@ -3862,6 +4017,7 @@ void jl_gc_init(void)
 {
     JL_MUTEX_INIT(&heapsnapshot_lock, "heapsnapshot_lock");
     JL_MUTEX_INIT(&finalizers_lock, "finalizers_lock");
+    uv_mutex_init(&page_profile_lock);
     uv_mutex_init(&gc_cache_lock);
     uv_mutex_init(&gc_perm_lock);
     uv_mutex_init(&gc_threads_lock);

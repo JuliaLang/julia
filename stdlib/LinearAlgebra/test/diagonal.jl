@@ -50,6 +50,13 @@ Random.seed!(1)
         DI = Diagonal([1,2,3,4])
         @test Diagonal(DI) === DI
         @test isa(Diagonal{elty}(DI), Diagonal{elty})
+
+        # diagonal matrices may be converted to Diagonal
+        local A = [1 0; 0 2]
+        local DA = convert(Diagonal{Float32,Vector{Float32}}, A)
+        @test DA isa Diagonal{Float32,Vector{Float32}}
+        @test DA == A
+
         # issue #26178
         @test_throws MethodError convert(Diagonal, [1,2,3,4])
         @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
@@ -1233,6 +1240,26 @@ end
     @testset for k in -4:4
         @test D[diagind(D,k)] == M[diagind(M,k)]
     end
+end
+
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    D = Diagonal([1:2;])
+    @test S * D == A * D
+    @test D * S == D * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, D) == mul!(C2, A, D)
+    @test mul!(C1, S, D, 1, 2) == mul!(C2, A, D, 1 ,2)
+    @test mul!(C1, D, S) == mul!(C2, D, A)
+    @test mul!(C1, D, S, 1, 2) == mul!(C2, D, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test D * sv == D * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, D, sv) == mul!(C2, D, v)
+    @test mul!(C1, D, sv, 1, 2) == mul!(C2, D, v, 1 ,2)
 end
 
 @testset "copy" begin

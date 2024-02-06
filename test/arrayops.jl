@@ -741,6 +741,9 @@ end
     v = [1,2,3]
     @test permutedims(v) == [1 2 3]
 
+    zd = fill(0)
+    @test permutedims(zd, ()) == zd
+
     x = PermutedDimsArray([1 2; 3 4], (2, 1))
     @test size(x) == (2, 2)
     @test copy(x) == [1 3; 2 4]
@@ -3188,4 +3191,13 @@ end
     @test wrap(Array, memref2, (3, 2)) == ones(Int, 3, 2)
     @test_throws DimensionMismatch wrap(Array, memref2, 9)
     @test_throws DimensionMismatch wrap(Array, memref2, 10)
+end
+
+@testset "Memory size" begin
+    len = 5
+    mem = Memory{Int}(undef, len)
+    @test size(mem, 1) == len
+    @test size(mem, 0x1) == len
+    @test size(mem, 2) == 1
+    @test size(mem, 0x2) == 1
 end

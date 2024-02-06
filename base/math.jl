@@ -1294,7 +1294,7 @@ end
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
     # double-double numbers and returns the high double. References:
-    # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
+    # [1] https://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
@@ -1469,9 +1469,11 @@ end
 rem2pi(x::Float32, r::RoundingMode) = Float32(rem2pi(Float64(x), r))
 rem2pi(x::Float16, r::RoundingMode) = Float16(rem2pi(Float64(x), r))
 rem2pi(x::Int32, r::RoundingMode) = rem2pi(Float64(x), r)
-function rem2pi(x::Int64, r::RoundingMode)
-    fx = Float64(x)
-    fx == x || throw(ArgumentError("Int64 argument to rem2pi is too large: $x"))
+
+# general fallback
+function rem2pi(x::Integer, r::RoundingMode)
+    fx = float(x)
+    fx == x || throw(ArgumentError(LazyString(typeof(x), " argument to rem2pi is too large: ", x)))
     rem2pi(fx, r)
 end
 

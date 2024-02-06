@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Test/docs/src/index.md"
+```
+
 # Unit Testing
 
 ```@meta
@@ -69,6 +73,8 @@ Error During Test
   Test threw an exception of type MethodError
   Expression: foo(:cat) == 1
   MethodError: no method matching length(::Symbol)
+  The function `length` exists, but no method is defined for this combination of argument types.
+
   Closest candidates are:
     length(::SimpleVector) at essentials.jl:256
     length(::Base.MethodList) at reflection.jl:521

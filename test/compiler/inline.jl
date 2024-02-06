@@ -1793,6 +1793,24 @@ let src = code_typed1((Atomic{Int},Union{Int,Float64})) do a, b
     end
     @test count(isinvokemodify(:mymax), src.code) == 2
 end
+global x_global_inc::Int = 1
+let src = code_typed1(()) do
+        @atomic (@__MODULE__).x_global_inc += 1
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((Ptr{Int},)) do a
+        unsafe_modify!(a, +, 1)
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((AtomicMemoryRef{Int},)) do a
+        Core.memoryrefmodify!(a, +, 1, :sequentially_consistent, true)
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+
+
 
 # apply `ssa_inlining_pass` multiple times
 let interp = Core.Compiler.NativeInterpreter()
@@ -2116,3 +2134,20 @@ let src = code_typed1() do
     end
     @test count(isinvoke(:iterate), src.code) == 0
 end
+
+# JuliaLang/julia#53062: proper `joint_effects` for call with empty method matches
+let ir = first(only(Base.code_ircode(setproperty!, (Base.RefValue{Int},Symbol,Base.RefValue{Int}))))
+    i = findfirst(iscall((ir, convert)), ir.stmts.stmt)::Int
+    @test iszero(ir.stmts.flag[i] & Core.Compiler.IR_FLAG_NOTHROW)
+end
+function issue53062(cond)
+    x = Ref{Int}(0)
+    if cond
+        x[] = x
+    else
+        return -1
+    end
+end
+@test !Core.Compiler.is_nothrow(Base.infer_effects(issue53062, (Bool,)))
+@test issue53062(false) == -1
+@test_throws MethodError issue53062(true)

@@ -95,7 +95,7 @@ end
 function show(io::IO, x::Rational)
     show(io, numerator(x))
 
-    if isone(denominator(x)) && get(io, :typeinfo, Any) <: Rational
+    if isone(denominator(x)) && nonnothing_nonmissing_typeinfo(io) <: Rational
         return
     end
 

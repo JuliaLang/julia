@@ -28,11 +28,8 @@
     XX(jl_array_ptr) \
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
-    XX(jl_genericmemory_isassigned) \
     XX(jl_genericmemory_owner) \
     XX(jl_genericmemoryref) \
-    XX(jl_genericmemoryset) \
-    XX(jl_genericmemoryunset) \
     XX(jl_array_rank) \
     XX(jl_array_to_string) \
     XX(jl_atexit_hook) \
@@ -41,6 +38,7 @@
     XX(jl_atomic_error) \
     XX(jl_atomic_new_bits) \
     XX(jl_atomic_store_bits) \
+    XX(jl_atomic_storeonce_bits) \
     XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
@@ -284,6 +282,7 @@
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
     XX(jl_is_const) \
+    XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \
     XX(jl_is_foreign_type) \
     XX(jl_is_identifier) \
@@ -355,7 +354,6 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
-    XX(jl_write_precompile_statement) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \

@@ -556,6 +556,44 @@ static void isort_union(jl_value_t **a, size_t len) JL_NOTSAFEPOINT
     }
 }
 
+static int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
+{
+    assert(hasfree == (jl_has_free_typevars(a) | (jl_has_free_typevars(b) << 1)));
+    if (a == jl_bottom_type || b == (jl_value_t*)jl_any_type)
+        return 1;
+    if (jl_egal(a, b))
+        return 1;
+    if (hasfree == 0) {
+        int mergeable = isUnion;
+        if (!mergeable) // issue #24521: don't merge Type{T} where typeof(T) varies
+            mergeable = !(jl_is_type_type(a) && jl_is_type_type(b) &&
+             jl_typeof(jl_tparam0(a)) != jl_typeof(jl_tparam0(b)));
+        return mergeable && jl_subtype(a, b);
+    }
+    if (jl_is_typevar(a)) {
+        jl_value_t *na = ((jl_tvar_t*)a)->ub;
+        hasfree &= (jl_has_free_typevars(na) | 2);
+        return simple_subtype(na, b, hasfree, isUnion);
+    }
+    if (jl_is_typevar(b)) {
+        jl_value_t *nb = ((jl_tvar_t*)b)->lb;
+        // This branch is not valid if `b` obeys diagonal rule,
+        // as it might normalize `Union` into a single `TypeVar`, e.g.
+        // Tuple{Union{Int,T},T} where {T>:Int} != Tuple{T,T} where {T>:Int}
+        if (is_leaf_bound(nb))
+            return 0;
+        hasfree &= ((jl_has_free_typevars(nb) << 1) | 1);
+        return simple_subtype(a, nb, hasfree, isUnion);
+    }
+    if (b==(jl_value_t*)jl_datatype_type || b==(jl_value_t*)jl_typeofbottom_type) {
+        // This branch is not valid for `Union`/`UnionAll`, e.g.
+        // (Type{Union{Int,T2} where {T2<:T1}} where {T1}){Int} == Type{Int64}
+        // (Type{Union{Int,T1}} where {T1}){Int} == Type{Int64}
+        return jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b;
+    }
+    return 0;
+}
+
 JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
 {
     if (n == 0)
@@ -580,13 +618,9 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
         int has_free = temp[i] != NULL && jl_has_free_typevars(temp[i]);
         for (j = 0; j < nt; j++) {
             if (j != i && temp[i] && temp[j]) {
-                if (temp[i] == jl_bottom_type ||
-                    temp[j] == (jl_value_t*)jl_any_type ||
-                    jl_egal(temp[i], temp[j]) ||
-                    (!has_free && !jl_has_free_typevars(temp[j]) &&
-                     jl_subtype(temp[i], temp[j]))) {
+                int has_free2 = has_free | (jl_has_free_typevars(temp[j]) << 1);
+                if (simple_subtype(temp[i], temp[j], has_free2, 1))
                     temp[i] = NULL;
-                }
             }
         }
     }
@@ -608,18 +642,9 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     return tu;
 }
 
-// note: this is turned off as `Union` doesn't do such normalization.
-// static int simple_subtype(jl_value_t *a, jl_value_t *b)
-// {
-//     if (jl_is_kind(b) && jl_is_type_type(a) && jl_typeof(jl_tparam0(a)) == b)
-//         return 1;
-//     if (jl_is_typevar(b) && obviously_egal(a, ((jl_tvar_t*)b)->lb))
-//         return 1;
-//     return 0;
-// }
-
-static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree)
+static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion)
 {
+    assert(hasfree == (jl_has_free_typevars(a) | (jl_has_free_typevars(b) << 1)));
     int subab = 0, subba = 0;
     if (jl_egal(a, b)) {
         subab = subba = 1;
@@ -630,9 +655,9 @@ static int simple_subtype2(jl_value_t *a, jl_value_t *b, int hasfree)
     else if (b == jl_bottom_type || a == (jl_value_t*)jl_any_type) {
         subba = 1;
     }
-    else if (hasfree) {
-        // subab = simple_subtype(a, b);
-        // subba = simple_subtype(b, a);
+    else if (hasfree != 0) {
+        subab = simple_subtype(a, b, hasfree, isUnion);
+        subba = simple_subtype(b, a, ((hasfree & 2) >> 1) | ((hasfree & 1) << 1), isUnion);
     }
     else if (jl_is_type_type(a) && jl_is_type_type(b) &&
              jl_typeof(jl_tparam0(a)) != jl_typeof(jl_tparam0(b))) {
@@ -664,10 +689,11 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
     // first remove cross-redundancy and check if `a >: b` or `a <: b`.
     for (i = 0; i < nta; i++) {
         if (temp[i] == NULL) continue;
-        int hasfree = jl_has_free_typevars(temp[i]);
+        int has_free = jl_has_free_typevars(temp[i]);
         for (j = nta; j < nt; j++) {
             if (temp[j] == NULL) continue;
-            int subs = simple_subtype2(temp[i], temp[j], hasfree || jl_has_free_typevars(temp[j]));
+            int has_free2 = has_free | (jl_has_free_typevars(temp[j]) << 1);
+            int subs = simple_subtype2(temp[i], temp[j], has_free2, 0);
             int subab = subs & 1, subba = subs >> 1;
             if (subab) {
                 temp[i] = NULL;
@@ -697,15 +723,9 @@ jl_value_t *simple_union(jl_value_t *a, jl_value_t *b)
         size_t jmax = i < nta ? nta : nt;
         for (j = jmin; j < jmax; j++) {
             if (j != i && temp[i] && temp[j]) {
-                if (temp[i] == jl_bottom_type ||
-                    temp[j] == (jl_value_t*)jl_any_type ||
-                    jl_egal(temp[i], temp[j]) ||
-                    (!has_free && !jl_has_free_typevars(temp[j]) &&
-                     // issue #24521: don't merge Type{T} where typeof(T) varies
-                     !(jl_is_type_type(temp[i]) && jl_is_type_type(temp[j]) && jl_typeof(jl_tparam0(temp[i])) != jl_typeof(jl_tparam0(temp[j]))) &&
-                     jl_subtype(temp[i], temp[j]))) {
+                int has_free2 = has_free | (jl_has_free_typevars(temp[j]) << 1);
+                if (simple_subtype(temp[i], temp[j], has_free2, 0))
                     temp[i] = NULL;
-                }
             }
         }
     }
@@ -766,10 +786,11 @@ jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi)
     for (i = 0; i < nta; i++) {
         if (temp[i] == NULL) continue;
         all_disjoint = 0;
-        int hasfree = jl_has_free_typevars(temp[i]);
+        int has_free = jl_has_free_typevars(temp[i]);
         for (j = nta; j < nt; j++) {
             if (temp[j] == NULL) continue;
-            int subs = simple_subtype2(temp[i], temp[j], hasfree || jl_has_free_typevars(temp[j]));
+            int has_free2 = has_free | (jl_has_free_typevars(temp[j]) << 1);
+            int subs = simple_subtype2(temp[i], temp[j], has_free2, 0);
             int subab = subs & 1, subba = subs >> 1;
             if (subba && !subab) {
                 stemp[i] = -1;
@@ -2902,8 +2923,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type),
                         jl_emptysvec,
                         0, 1, 4);
-    const static uint32_t typemap_entry_constfields[1] = { 0x000003fe }; // (1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)|(1<<6)|(1<<7)|(1<<8)|(1<<9)
-    const static uint32_t typemap_entry_atomicfields[1] = { 0x00000001 }; // (1<<0)
+    const static uint32_t typemap_entry_constfields[1] = { 0x000003ce }; // (1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<7)|(1<<8)|(1<<9)
+    const static uint32_t typemap_entry_atomicfields[1] = { 0x00000031 }; // (1<<0)|(1<<4)|(1<<5)
     jl_typemap_entry_type->name->constfields = typemap_entry_constfields;
     jl_typemap_entry_type->name->atomicfields = typemap_entry_atomicfields;
 
@@ -3177,8 +3198,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             "module",
                             "file",
                             "line",
-                            "primary_world",
-                            "deleted_world", // !const
+                            "primary_world", // atomic
+                            "deleted_world", // atomic
                             "sig",
                             "specializations", // !const
                             "speckeyset", // !const
@@ -3236,8 +3257,10 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint16_type),
                         jl_emptysvec,
                         0, 1, 10);
-    //const static uint32_t method_constfields[1] = { 0x03fc065f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<6)|(1<<9)|(1<<10)|(1<<18)|(1<<19)|(1<<20)|(1<<21)|(1<<22)|(1<<23)|(1<<24)|(1<<25);
+    //const static uint32_t method_constfields[1] = { 0x03fc065f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<9)|(1<<10)|(1<<18)|(1<<19)|(1<<20)|(1<<21)|(1<<22)|(1<<23)|(1<<24)|(1<<25);
     //jl_method_type->name->constfields = method_constfields;
+    const static uint32_t method_atomicfields[1] = { 0x00000030 }; // (1<<4)|(1<<5)
+    jl_method_type->name->atomicfields = method_atomicfields;
 
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
@@ -3312,7 +3335,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
     const static uint32_t code_instance_constfields[1]  = { 0b0000010101110001 }; // Set fields 1, 5-7, 9, 11 as const
-    const static uint32_t code_instance_atomicfields[1] = { 0b1101001010000010 }; // Set fields 2, 8, 10, 13, 15-16 as atomic
+    const static uint32_t code_instance_atomicfields[1] = { 0b1101001010001110 }; // Set fields 2-4, 8, 10, 13, 15-16 as atomic
     //Fields 3-4 are only operated on by construction and deserialization, so are const at runtime
     //Fields 11 and 15 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
     jl_code_instance_type->name->constfields = code_instance_constfields;

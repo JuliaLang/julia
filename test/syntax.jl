@@ -3619,3 +3619,21 @@ end
     @test p("public[7] = 5") == Expr(:(=), Expr(:ref, :public, 7), 5)
     @test p("public() = 6") == Expr(:(=), Expr(:call, :public), Expr(:block, 6))
 end
+
+@testset "removing argument sideeffects" begin
+    # Allow let blocks in broadcasted LHSes, but only evaluate them once:
+    execs = 0
+    array = [1]
+    let x = array; execs += 1; x; end .+= 2
+    @test array == [3]
+    @test execs == 1
+    let; execs += 1; array; end .= 4
+    @test array == [4]
+    @test execs == 2
+    let x = array; execs += 1; x; end::Vector{Int} .+= 2
+    @test array == [6]
+    @test execs == 3
+    let; execs += 1; array; end::Vector{Int} .= 7
+    @test array == [7]
+    @test execs == 4
+end
