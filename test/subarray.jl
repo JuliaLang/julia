@@ -1009,4 +1009,18 @@ end
     @test parentindices(av2) === (2,3)
     av2 = view(av, 2:2, 2:2)
     @test parentindices(av2) === (view(inds[1], 2:2), view(inds[2], 2:2))
+
+    inds = (reshape([eachindex(a);], size(a)),)
+    av = view(a, inds...)
+    av2 = view(av, 1, 1)
+    @test parentindices(av2) === (1,)
+    av2 = view(av, 2:2, 2:2)
+    @test parentindices(av2) === (view(inds[1], 2:2, 2:2),)
+
+    inds = (reshape([eachindex(a);], size(a)..., 1),)
+    av = view(a, inds...)
+    av2 = view(av, 1, 1, 1)
+    @test parentindices(av2) === (1,)
+    av2 = view(av, 2:2, 2:2, 1:1)
+    @test parentindices(av2) === (view(inds[1], 2:2, 2:2, 1:1),)
 end
