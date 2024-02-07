@@ -401,7 +401,7 @@ The matching substring can be retrieved by accessing `m.match`, the captured seq
 The resulting [`RegexMatch`](@ref) object can be used to construct other collections: e.g. `Tuple(m)`, `NamedTuple(m)`.
 
 !!! compat "Julia 1.11"
-    Converting the result to NamedTuples and Dicts requires Julia 1.11
+    Constructing NamedTuples and Dicts requires Julia 1.11
 
 # Examples
 ```jldoctest
