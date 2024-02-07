@@ -3,7 +3,6 @@
 
 use crate::JuliaVM;
 use crate::Julia_Upcalls;
-use crate::BLOCK_FOR_GC;
 use crate::JULIA_HEADER_SIZE;
 use crate::SINGLETON;
 use crate::UPCALLS;
@@ -238,30 +237,6 @@ pub extern "C" fn mmtk_start_worker(tls: VMWorkerThread, worker: *mut GCWorker<J
 #[no_mangle]
 pub extern "C" fn mmtk_initialize_collection(tls: VMThread) {
     memory_manager::initialize_collection(&SINGLETON, tls);
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_enable_collection() {
-    if AtomicBool::load(&DISABLED_GC, Ordering::SeqCst) {
-        memory_manager::enable_collection(&SINGLETON);
-        AtomicBool::store(&DISABLED_GC, false, Ordering::SeqCst);
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn mmtk_disable_collection() {
-    if AtomicBool::load(&DISABLED_GC, Ordering::SeqCst) == false {
-        AtomicBool::store(&DISABLED_GC, true, Ordering::SeqCst);
-        memory_manager::disable_collection(&SINGLETON);
-    }
-
-    // if user has triggered GC, wait until GC is finished
-    while AtomicIsize::load(&USER_TRIGGERED_GC, Ordering::SeqCst) != 0
-        || AtomicBool::load(&BLOCK_FOR_GC, Ordering::SeqCst)
-    {
-        info!("Waiting for a triggered gc to finish...");
-        unsafe { ((*UPCALLS).wait_in_a_safepoint)() };
-    }
 }
 
 #[no_mangle]
