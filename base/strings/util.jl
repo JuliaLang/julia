@@ -224,6 +224,7 @@ end
     chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex}) -> SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
+Note, for case-insensitive, e.g. for shortening regular URLs, use with a Regex.
 
 See also [`chopsuffix`](@ref).
 
@@ -237,6 +238,9 @@ julia> chopprefix("Hamburger", "Ham")
 
 julia> chopprefix("Hamburger", "hotdog")
 "Hamburger"
+
+julia> chopprefix("HTTP://abc.com", r"https?://"i)  # The regex with i, and "s?", to also match e.g. http and httpS (the secure variant)
+"abc.com"
 ```
 """
 function chopprefix(s::AbstractString, prefix::AbstractString)
@@ -265,6 +269,7 @@ end
     chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex}) -> SubString
 
 Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
+Note, for case-insensitive, e.g. for chopping off file endings like .EXE or .jl, use with a Regex.
 
 See also [`chopprefix`](@ref).
 
@@ -278,6 +283,9 @@ julia> chopsuffix("Hamburger", "er")
 
 julia> chopsuffix("Hamburger", "hotdog")
 "Hamburger"
+
+julia> chopsuffix("my_Julia_program.jl", r".jl"i)  # The regex with i, to also match e.g. .JL
+"my_Julia_program"
 ```
 """
 function chopsuffix(s::AbstractString, suffix::AbstractString)
