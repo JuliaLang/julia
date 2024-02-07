@@ -765,7 +765,7 @@ function fuzzyscore(needle::AbstractString, haystack::AccessibleBinding)
 end
 
 function fuzzysort(search::String, candidates::Vector{AccessibleBinding})
-    scores = map(cand -> fuzzyscore(search, cand.name), candidates)
+    scores = map(cand -> fuzzyscore(search, cand), candidates)
     candidates[sortperm(scores)] |> reverse
 end
 
@@ -790,8 +790,8 @@ function levenshtein(s1, s2)
 end
 
 function levsort(search::String, candidates::Vector{AccessibleBinding})
-    scores = map(candidates) do (; name)
-        (Float64(levenshtein(search, name)), -fuzzyscore(search, name))
+    scores = map(candidates) do cand
+        (Float64(levenshtein(search, cand.name)), -fuzzyscore(search, cand))
     end
     candidates = candidates[sortperm(scores)]
     i = 0
