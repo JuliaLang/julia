@@ -66,9 +66,10 @@ struct TermInfo
     numbers::Dict{Symbol, Int}
     strings::Dict{Symbol, String}
     extensions::Union{Nothing, Set{Symbol}}
+    aliases::Dict{Symbol, Symbol}
 end
 
-TermInfo() = TermInfo([], Dict(), Dict(), Dict(), nothing)
+TermInfo() = TermInfo([], Dict(), Dict(), Dict(), nothing, Dict())
 
 function read(data::IO, ::Type{TermInfoRaw})
     # Parse according to `term(5)`
@@ -175,19 +176,20 @@ function TermInfo(raw::TermInfoRaw)
     flags = Dict{Symbol, Bool}()
     numbers = Dict{Symbol, Int}()
     strings = Dict{Symbol, String}()
+    aliases = Dict{Symbol, Symbol}()
     extensions = nothing
     for (flag, value) in zip(TERM_FLAGS, raw.flags)
-        flags[flag.capname] = value
         flags[flag.name] = value
+        aliases[flag.capname] = flag.name
     end
     for (num, value) in zip(TERM_NUMBERS, raw.numbers)
-        numbers[num.capname] = Int(value)
         numbers[num.name] = Int(value)
+        aliases[num.capname] = num.name
     end
     for (str, value) in zip(TERM_STRINGS, raw.strings)
         if !isnothing(value)
-            strings[str.capname] = value
             strings[str.name] = value
+            aliases[str.capname] = str.name
         end
     end
     if !isnothing(raw.extended)
@@ -201,26 +203,30 @@ function TermInfo(raw::TermInfoRaw)
             elseif value isa String
                 strings[key] = value
             end
+            if !isnothing(long)
+                aliases[short] = long
+            end
         end
     end
-    TermInfo(raw.names, flags, numbers, strings, extensions)
+    TermInfo(raw.names, flags, numbers, strings, extensions, aliases)
 end
 
-get(ti::TermInfo, key::Symbol, default::Bool) = get(ti.flags, key, default)
-get(ti::TermInfo, key::Symbol, default::Int) = get(ti.numbers, key, default)
-get(ti::TermInfo, key::Symbol, default::String) = get(ti.strings, key, default)
+get(ti::TermInfo, key::Symbol, default::Bool)   = get(ti.flags,   get(ti.aliases, key, key), default)
+get(ti::TermInfo, key::Symbol, default::Int)    = get(ti.numbers, get(ti.aliases, key, key), default)
+get(ti::TermInfo, key::Symbol, default::String) = get(ti.strings, get(ti.aliases, key, key), default)
 
 haskey(ti::TermInfo, key::Symbol) =
-    haskey(ti.flags, key) || haskey(ti.numbers, key) || haskey(ti.strings, key)
+    haskey(ti.flags, key) || haskey(ti.numbers, key) || haskey(ti.strings, key) || haskey(ti.aliases, key)
 
 function getindex(ti::TermInfo, key::Symbol)
     haskey(ti.flags, key) && return ti.flags[key]
     haskey(ti.numbers, key) && return ti.numbers[key]
     haskey(ti.strings, key) && return ti.strings[key]
+    haskey(ti.aliases, key) && return getindex(ti, ti.aliases[key])
     throw(KeyError(key))
 end
 
-keys(ti::TermInfo) = keys(ti.flags) ∪ keys(ti.numbers) ∪ keys(ti.strings)
+keys(ti::TermInfo) = keys(ti.flags) ∪ keys(ti.numbers) ∪ keys(ti.strings) ∪ keys(ti.aliases)
 
 function show(io::IO, ::MIME"text/plain", ti::TermInfo)
     print(io, "TermInfo(", ti.names, "; ", length(ti.flags), " flags, ",

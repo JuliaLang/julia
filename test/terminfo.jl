@@ -889,9 +889,9 @@ let
 @testset "terminfo" begin
     dumb = Base.TermInfo(read(IOBuffer(dumb_terminfo), Base.TermInfoRaw))
     @test dumb.names == ["dumb", "80-column dumb tty"]
-    @test length(dumb.flags) == 4
-    @test length(dumb.numbers) == 2
-    @test length(dumb.strings) == 8
+    @test length(dumb.flags) == 2
+    @test length(dumb.numbers) == 1
+    @test length(dumb.strings) == 4
     @test isnothing(dumb.extensions)
     for (key, value) in dumb_capabilities
         @test dumb[key] == value
@@ -899,9 +899,9 @@ let
 
     xterm = Base.TermInfo(read(IOBuffer(xterm_terminfo), Base.TermInfoRaw))
     @test xterm.names == ["xterm", "xterm terminal emulator (X Window System)"]
-    @test length(xterm.flags) == 78
-    @test length(xterm.numbers) == 29
-    @test length(xterm.strings) == 432
+    @test length(xterm.flags) == 40
+    @test length(xterm.numbers) == 15
+    @test length(xterm.strings) == 253
     @test sort(xterm.extensions |> collect) == sort(xterm_extensions)
     for (key, value) in xterm_capabilities
         @test xterm[key] == value
