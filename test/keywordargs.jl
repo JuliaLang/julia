@@ -181,7 +181,7 @@ end
     @test test4538_2(x=2) == 2
 
     # that, but in a module
-    @Foo4538.TEST()
+    Foo4538.@TEST()
     @test test4538_foo_2() == 1
     @test test4538_foo_2(x=2) == 2
 
@@ -288,7 +288,7 @@ end
 end
 @testset "issue #21510" begin
     f21510(; @nospecialize a = 2) = a
-    @test f21510(a=:b) == :b
+    @test f21510(a=:b) === :b
     @test f21510() == 2
 end
 @testset "issue #34516" begin
@@ -297,7 +297,7 @@ end
     @test_throws UndefKeywordError f34516()
     @test_throws UndefKeywordError f34516(1)
     g34516(@nospecialize(x); k=0) = 0
-    @test first(methods(Core.kwfunc(g34516))).nospecialize != 0
+    @test only(methods(Core.kwcall, (Any, typeof(g34516), Vararg))).nospecialize != 0
 end
 @testset "issue #21518" begin
     a = 0
@@ -380,3 +380,23 @@ f40964(xs::Int...=1; k = 2) = (xs, k)
 @test f40964() === ((1,), 2)
 @test f40964(7, 8) === ((7,8), 2)
 @test f40964(7, 8, k=0) === ((7,8), 0)
+# issue #41416
+@test f40964(; k = 1) === ((1,), 1)
+f41416(a...="a"; b=true) = (b, a)
+@test f41416()           === (true, ("a",))
+@test f41416(;b=false)   === (false, ("a",))
+@test f41416(33)         === (true, (33,))
+@test f41416(3; b=false) === (false, (3,))
+
+Core.kwcall(i::Int) = "hi $i"
+let m = first(methods(Core.kwcall, (NamedTuple,typeof(kwf1),Vararg)))
+    @test m.name === :kwf1
+    @test Core.kwcall(1) == "hi 1"
+    @test which(Core.kwcall, (Int,)).name === :kwcall
+end
+
+# issue #50518
+function f50518(xs...=["a", "b", "c"]...; debug=false)
+    return xs[1]
+end
+@test f50518() == f50518(;debug=false) == "a"

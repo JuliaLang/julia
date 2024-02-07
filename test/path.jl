@@ -34,11 +34,11 @@
         @test expanduser(S("x")) == "x"
         @test expanduser(S("~")) == (Sys.iswindows() ? "~" : homedir())
     end
-    @testset "Base.contractuser" begin
-        @test Base.contractuser(S(homedir())) == (Sys.iswindows() ? homedir() : "~")
-        @test Base.contractuser(S(joinpath(homedir(), "x"))) ==
+    @testset "contractuser" begin
+        @test contractuser(S(homedir())) == (Sys.iswindows() ? homedir() : "~")
+        @test contractuser(S(joinpath(homedir(), "x"))) ==
               (Sys.iswindows() ? joinpath(homedir(), "x") : "~$(sep)x")
-        @test Base.contractuser(S("/foo/bar")) == "/foo/bar"
+        @test contractuser(S("/foo/bar")) == "/foo/bar"
     end
     @testset "isdirpath" begin
         @test !isdirpath(S("foo"))
@@ -170,6 +170,9 @@
         @test joinpath(splitdir(S(homedir()))...) == homedir()
         @test string(splitdrive(S(homedir()))...) == homedir()
         @test splitdrive("a\nb") == ("", "a\nb")
+
+        @test splitdir("a/\xfe/\n/b/c.ext") == ("a/\xfe/\n/b", "c.ext")
+        @test splitext("a/\xfe/\n/b/c.ext") == ("a/\xfe/\n/b/c", ".ext")
 
         if Sys.iswindows()
             @test splitdrive(S("\\\\servername\\hello.world\\filename.ext")) ==

@@ -21,11 +21,14 @@ Base.:(==)(::Infinity, ::Int) = false
 Base.:(==)(::Int, ::Infinity) = false
 Base.:(<)(::Int, ::Infinity) = true
 Base.:(≤)(::Int, ::Infinity) = true
+Base.:(<)(::Infinity, ::Int) = false
 Base.:(≤)(::Infinity, ::Int) = false
 Base.:(≤)(::Infinity, ::Infinity) = true
 Base.:(-)(::Infinity, ::Int) = Infinity()
 Base.:(+)(::Infinity, ::Int) = Infinity()
 Base.:(:)(::Infinity, ::Infinity) = 1:0
+Base.max(::Infinity, ::Int) = Infinity()
+Base.max(::Int, ::Infinity) = Infinity()
 
 """
     OneToInf(n)
@@ -39,13 +42,12 @@ struct OneToInf{T<:Integer} <: AbstractUnitRange{T} end
 OneToInf() = OneToInf{Int}()
 
 Base.axes(r::OneToInf) = (r,)
-Base.unsafe_indices(r::OneToInf) = (r,)
-Base.unsafe_length(r::OneToInf) = Infinity()
 Base.size(r::OneToInf) = (Infinity(),)
 Base.first(r::OneToInf{T}) where {T} = oneunit(T)
-Base.length(r::OneToInf{T}) where {T} = Infinity()
-Base.last(r::OneToInf{T}) where {T} = Infinity()
+Base.length(r::OneToInf) = Infinity()
+Base.last(r::OneToInf) = Infinity()
 Base.unitrange(r::OneToInf) = r
 Base.oneto(::Infinity) = OneToInf()
+Base.unchecked_oneto(::Infinity) = OneToInf()
 
 end

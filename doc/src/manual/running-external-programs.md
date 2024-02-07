@@ -41,7 +41,7 @@ hello
 ```
 
 The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). If the external command fails to run
-successfully, the run method throws an [`ErrorException`](@ref).
+successfully, the run method throws an [`ProcessFailedException`](@ref).
 
 If you want to read the output of the external command, [`read`](@ref) or [`readchomp`](@ref)
 can be used instead:
@@ -399,7 +399,7 @@ julia> run(Cmd(`sh -c "echo foo \$HOWLONG"`, env=("HOWLONG" => "ever!",)));
 foo ever!
 ```
 
-See `[`Cmd`](@ref)` for additional keyword arguments. The [`setenv`](@ref) and [`addenv`](@ref) commands
+See [`Cmd`](@ref) for additional keyword arguments. The [`setenv`](@ref) and [`addenv`](@ref) commands
 provide another means for replacing or adding to the `Cmd` execution environment variables, respectively:
 
 ```jldoctest

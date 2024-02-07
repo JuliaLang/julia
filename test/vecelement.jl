@@ -96,7 +96,7 @@ const _llvmtypes = Dict{DataType, String}(
     ret <$(N) x $(llvmT)> %3
     """
     return quote
-        Base.@_inline_meta
+        Base.@inline
         Core.getfield(Base, :llvmcall)($exp, Vec{$N, $T}, Tuple{Vec{$N, $T}, Vec{$N, $T}}, x, y)
     end
 end

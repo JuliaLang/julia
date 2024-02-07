@@ -29,15 +29,14 @@ end
 function nonnothingtype_checked(T::Type)
     R = nonnothingtype(T)
     R >: T && error("could not compute non-nothing type")
+    R <: Union{} && error("cannot convert a value to nothing for assignment")
     return R
 end
 
 convert(::Type{T}, x::T) where {T>:Nothing} = x
 convert(::Type{T}, x) where {T>:Nothing} = convert(nonnothingtype_checked(T), x)
-convert(::Type{Nothing}, x) = throw(MethodError(convert, (Nothing, x)))
-convert(::Type{Nothing}, ::Nothing) = nothing
 convert(::Type{Some{T}}, x::Some{T}) where {T} = x
-convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
+convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))::Some{T}
 
 function show(io::IO, x::Some)
     if get(io, :typeinfo, Any) == typeof(x)
@@ -65,7 +64,7 @@ Return `true` if `x === nothing`, and return `false` if not.
 !!! compat "Julia 1.1"
     This function requires at least Julia 1.1.
 
-See also [`something`](@ref), [`notnothing`](@ref), [`ismissing`](@ref).
+See also [`something`](@ref), [`Base.notnothing`](@ref), [`ismissing`](@ref).
 """
 isnothing(x) = x === nothing
 
@@ -86,6 +85,9 @@ julia> something(nothing, 1)
 
 julia> something(Some(1), nothing)
 1
+
+julia> something(Some(nothing), 2) === nothing
+true
 
 julia> something(missing, nothing)
 missing
@@ -136,10 +138,31 @@ true
     This macro is available as of Julia 1.7.
 """
 macro something(args...)
-    expr = :(nothing)
-    for arg in reverse(args)
-        expr = :((val = $arg) !== nothing ? val : $expr)
-    end
-    return esc(:(something(let val; $expr; end)))
-end
+    noth = GlobalRef(Base, :nothing)
+    something = GlobalRef(Base, :something)
 
+    # This preserves existing semantics of throwing on `nothing`
+    expr = :($something($noth))
+
+    #=
+    We go through the arguments in reverse
+    because we're building a nested if/else
+    expression from the inside out.
+    The innermost thing to check is the last argument,
+    which is why we need the last argument first
+    when building the final expression.
+    =#
+    for arg in reverse(args)
+        val = gensym()
+        expr = quote
+            $val = $(esc(arg))
+            if !isnothing($val)
+                # unwrap eagerly to help type inference
+                $something($val)
+            else
+                $expr
+            end
+        end
+    end
+    return expr
+end

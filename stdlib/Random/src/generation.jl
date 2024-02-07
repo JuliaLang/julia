@@ -132,7 +132,7 @@ rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
 
 # rand_generic methods are intended to help RNG implementors with common operations
 # we don't call them simply `rand` as this can easily contribute to create
-# amibuities with user-side methods (forcing the user to resort to @eval)
+# ambiguities with user-side methods (forcing the user to resort to @eval)
 
 rand_generic(r::AbstractRNG, T::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}) =
     rand(r, UInt52Raw()) % T[]
@@ -166,6 +166,38 @@ function rand(r::AbstractRNG, ::SamplerType{T}) where {T<:AbstractChar}
     c = rand(r, 0x00000000:0x0010f7ff)
     (c < 0xd800) ? T(c) : T(c+0x800)
 end
+
+### random tuples
+
+function Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {T<:Tuple, RNG<:AbstractRNG}
+    tail_sp_ = Sampler(RNG, Tuple{Base.tail(fieldtypes(T))...}, n)
+    SamplerTag{Ref{T}}((Sampler(RNG, fieldtype(T, 1), n), tail_sp_.data...))
+    # Ref so that the gentype is `T` in SamplerTag's constructor
+end
+
+function Sampler(::Type{RNG}, ::Type{Tuple{Vararg{T, N}}}, n::Repetition) where {T, N, RNG<:AbstractRNG}
+    if N > 0
+        SamplerTag{Ref{Tuple{Vararg{T, N}}}}((Sampler(RNG, T, n),))
+    else
+        SamplerTag{Ref{Tuple{}}}(())
+    end
+end
+
+function rand(rng::AbstractRNG, sp::SamplerTag{Ref{T}}) where T<:Tuple
+    ntuple(i -> rand(rng, sp.data[min(i, length(sp.data))]), Val{fieldcount(T)}())::T
+end
+
+### random pairs
+
+function Sampler(::Type{RNG}, ::Type{Pair{A, B}}, n::Repetition) where {RNG<:AbstractRNG, A, B}
+    sp1 = Sampler(RNG, A, n)
+    sp2 = A === B ? sp1 : Sampler(RNG, B, n)
+    SamplerTag{Ref{Pair{A,B}}}(sp1 => sp2) # Ref so that the gentype is Pair{A, B}
+                                           # in SamplerTag's constructor
+end
+
+rand(rng::AbstractRNG, sp::SamplerTag{<:Ref{<:Pair}}) =
+    rand(rng, sp.data.first) => rand(rng, sp.data.second)
 
 
 ## Generate random integer within a range
@@ -210,9 +242,9 @@ SamplerRangeFast(r::AbstractUnitRange{T}) where T<:BitInteger =
     SamplerRangeFast(r, uint_sup(T))
 
 function SamplerRangeFast(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    isempty(r) && throw(ArgumentError("collection must be non-empty"))
     m = (last(r) - first(r)) % unsigned(T) % U # % unsigned(T) to not propagate sign bit
-    bw = (sizeof(U) << 3 - leading_zeros(m)) % UInt # bit-width
+    bw = (Base.top_set_bit(m)) % UInt # bit-width
     mask = ((1 % U) << bw) - (1 % U)
     SamplerRangeFast{U,T}(first(r), bw, m, mask)
 end
@@ -262,7 +294,7 @@ rem_knuth(a::T, b::T) where {T<:Unsigned} = b != 0 ? a % b : a
 # maximum multiple of k <= sup decremented by one,
 # that is 0xFFFF...FFFF if k = (typemax(T) - typemin(T)) + 1 and sup == typemax(T) - 1
 # with intentional underflow
-# see http://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
+# see https://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
 
 # sup == 0 means typemax(T) + 1
 maxmultiple(k::T, sup::T=zero(T)) where {T<:Unsigned} =
@@ -284,11 +316,11 @@ SamplerRangeInt(r::AbstractUnitRange{T}) where T<:BitInteger =
     SamplerRangeInt(r, uint_sup(T))
 
 function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    isempty(r) && throw(ArgumentError("collection must be non-empty"))
     a = first(r)
     m = (last(r) - first(r)) % unsigned(T) % U
     k = m + one(U)
-    bw = (sizeof(U) << 3 - leading_zeros(m)) % Int
+    bw = (Base.top_set_bit(m)) % Int
     mult = if U === UInt32
         maxmultiple(k)
     elseif U === UInt64
@@ -330,7 +362,7 @@ struct SamplerRangeNDL{U<:Unsigned,T} <: Sampler{T}
 end
 
 function SamplerRangeNDL(r::AbstractUnitRange{T}) where {T}
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    isempty(r) && throw(ArgumentError("collection must be non-empty"))
     a = first(r)
     U = uint_sup(T)
     s = (last(r) - first(r)) % unsigned(T) % U + one(U) # overflow ok
@@ -358,45 +390,56 @@ end
 
 ### BigInt
 
-struct SamplerBigInt <: Sampler{BigInt}
+struct SamplerBigInt{SP<:Sampler{Limb}} <: Sampler{BigInt}
     a::BigInt         # first
     m::BigInt         # range length - 1
     nlimbs::Int       # number of limbs in generated BigInt's (z ∈ [0, m])
     nlimbsmax::Int    # max number of limbs for z+a
-    mask::Limb        # applied to the highest limb
+    highsp::SP        # sampler for the highest limb of z
 end
 
-function SamplerBigInt(r::AbstractUnitRange{BigInt})
+function SamplerBigInt(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition=Val(Inf)
+                       ) where {RNG<:AbstractRNG}
     m = last(r) - first(r)
-    m < 0 && throw(ArgumentError("range must be non-empty"))
-    nd = ndigits(m, base=2)
-    nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
-    highbits > 0 && (nlimbs += 1)
-    mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)
+    m.size < 0 && throw(ArgumentError("collection must be non-empty"))
+    nlimbs = Int(m.size)
+    hm = nlimbs == 0 ? Limb(0) : GC.@preserve m unsafe_load(m.d, nlimbs)
+    highsp = Sampler(RNG, Limb(0):hm, N)
     nlimbsmax = max(nlimbs, abs(last(r).size), abs(first(r).size))
-    return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, mask)
+    return SamplerBigInt(first(r), m, nlimbs, nlimbsmax, highsp)
 end
 
-Sampler(::Type{<:AbstractRNG}, r::AbstractUnitRange{BigInt}, ::Repetition) = SamplerBigInt(r)
+Sampler(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition) where {RNG<:AbstractRNG} =
+    SamplerBigInt(RNG, r, N)
 
 rand(rng::AbstractRNG, sp::SamplerBigInt) =
     rand!(rng, BigInt(nbits = sp.nlimbsmax*8*sizeof(Limb)), sp)
 
 function rand!(rng::AbstractRNG, x::BigInt, sp::SamplerBigInt)
+    nlimbs = sp.nlimbs
+    nlimbs == 0 && return MPZ.set!(x, sp.a)
     MPZ.realloc2!(x, sp.nlimbsmax*8*sizeof(Limb))
+    @assert x.alloc >= nlimbs
+    # we randomize x ∈ [0, m] with rejection sampling:
+    # 1. the first nlimbs-1 limbs of x are uniformly randomized
+    # 2. the high limb hx of x is sampled from 0:hm where hm is the
+    #    high limb of m
+    # We repeat 1. and 2. until x <= m
+    hm = GC.@preserve sp unsafe_load(sp.m.d, nlimbs)
     GC.@preserve x begin
-        limbs = UnsafeView(x.d, sp.nlimbs)
+        limbs = UnsafeView(x.d, nlimbs-1)
         while true
             rand!(rng, limbs)
-            limbs[end] &= sp.mask
-            MPZ.mpn_cmp(x, sp.m, sp.nlimbs) <= 0 && break
+            hx = limbs[nlimbs] = rand(rng, sp.highsp)
+            hx < hm && break # avoid calling mpn_cmp most of the time
+            MPZ.mpn_cmp(x, sp.m, nlimbs) <= 0 && break
         end
         # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)
-        x.size = sp.nlimbs
-        while x.size > 0
-            limbs[x.size] != 0 && break
-            x.size -= 1
+        while nlimbs > 0
+            limbs[nlimbs] != 0 && break
+            nlimbs -= 1
         end
+        x.size = nlimbs
     end
     MPZ.add!(x, sp.a)
 end
@@ -426,6 +469,12 @@ function rand(rng::AbstractRNG, sp::SamplerSimple{<:Dict,<:Sampler})
         Base.isslotfilled(sp[], i) && @inbounds return (sp[].keys[i] => sp[].vals[i])
     end
 end
+
+rand(rng::AbstractRNG, sp::SamplerTrivial{<:Base.KeySet{<:Any,<:Dict}}) =
+    rand(rng, sp[].dict).first
+
+rand(rng::AbstractRNG, sp::SamplerTrivial{<:Base.ValueIterator{<:Dict}}) =
+    rand(rng, sp[].dict).second
 
 ## random values from Set
 

@@ -147,6 +147,14 @@ module TestOffsetArray
 end
 
 @testset "CartesianIndices getindex" begin
+    @testset "0D array" begin
+        a = zeros()
+        c = CartesianIndices(a)
+        @test a[c] == a
+        @test c[c] === c
+        @test c[] == CartesianIndex()
+    end
+
     @testset "AbstractUnitRange" begin
         for oinds in [(2, ), (2, 3), (2, 3, 4)]
             A = rand(1:10, oinds)
@@ -159,6 +167,34 @@ end
             @test all(i->A[i]==A[R[i]], R)
             @test all(i->A[i]==A[R[i]], collect(R))
             @test all(i->i in R, collect(R))
+
+            # Indexing a CartesianIndices with another CartesianIndices having the same ndims
+            # forwards the indexing to the component ranges and retains the wrapper
+            @test R[R] === R
+
+            R_array = collect(R)
+
+            all_onetoone = ntuple(x -> 1:1, Val(ndims(R)))
+            R2 = R[all_onetoone...]
+            @test R2 isa CartesianIndices{ndims(R)}
+
+            all_one = ntuple(x -> 1, Val(ndims(R)))
+            @test R2[all_one...] == R_array[all_one...]
+
+            @test R2 == R_array[all_onetoone...]
+
+            R3 = R[ntuple(x -> Colon(), Val(ndims(R)))...]
+            @test R3 === R
+
+            # test a mix of Colons and ranges
+            # up to two leading axes are colons, while the rest are UnitRanges
+            indstrailing = (1:1 for _ in min(ndims(R), 2)+1:ndims(R))
+            R4 = R[(Colon() for _ in 1:min(ndims(R), 2))..., indstrailing...]
+            @test R4 isa CartesianIndices{ndims(R)}
+            indsleading = CartesianIndices(axes(A)[1:min(ndims(A), 2)])
+            for I in indsleading
+                @test R4[I, indstrailing...] == R_array[I, indstrailing...]
+            end
         end
     end
 
@@ -173,6 +209,75 @@ end
 
             # TODO: A[SR] == A[Linearindices(SR)] should hold for StepRange CartesianIndices
             @test_broken A[SR] == A[LinearIndices(SR)]
+
+            # Create a CartesianIndices with StepRange indices to test indexing into it
+            R = CartesianIndices(oinds)
+            R_array = collect(R)
+
+            all_onetoone = ntuple(x -> 1:1, Val(ndims(R)))
+            R2 = R[all_onetoone...]
+            @test R2 isa CartesianIndices{ndims(R)}
+
+            all_one = ntuple(x -> 1, Val(ndims(R)))
+            @test R2[all_one...] == R_array[all_one...]
+            @test R2 == R_array[all_onetoone...]
+
+            R3 = R[ntuple(x -> Colon(), Val(ndims(R)))...]
+            @test R3 === R
+
+            # test a mix of Colons and ranges
+            # up to two leading axes are colons, while the rest are UnitRanges
+            indstrailing = (1:1 for _ in min(ndims(R), 2)+1:ndims(R))
+            R4 = R[(Colon() for _ in 1:min(ndims(R), 2))..., indstrailing...]
+            @test R4 isa CartesianIndices{ndims(R)}
+            indsleading = CartesianIndices(axes(R)[1:min(ndims(R), 2)])
+            for I in indsleading
+                @test R4[I, indstrailing...] == R_array[I, indstrailing...]
+            end
+        end
+
+        # CartesianIndices whole indices have a unit step may be their own axes
+        for oinds in [(1:1:4, ), (1:1:4, 1:1:5), (1:1:4, 1:1:5, 1:1:3)]
+            R = CartesianIndices(oinds)
+            @test R[R] === R
+            # test a mix of UnitRanges and StepRanges
+            R = CartesianIndices((oinds..., 1:3))
+            @test R[R] === R
+            R = CartesianIndices((1:3, oinds...))
+            @test R[R] === R
+        end
+    end
+
+    @testset "logical indexing of CartesianIndices with ranges" begin
+        c = CartesianIndices((1:0, 1:2))
+        c2 = c[true:false, 1:2]
+        @test c2 == c
+
+        for (inds, r) in Any[(1:2, false:true), (1:2, false:true:true),
+            (1:2:3, false:true), (1:2:3, false:true:true)]
+
+            c = CartesianIndices((inds, 1:2))
+            c2 = c[r, 1:2]
+            @test c2 isa CartesianIndices{ndims(c)}
+            @test c2[1, :] == c[2, :]
+        end
+
+        for (inds, r) in Any[(1:1, true:true), (1:1, true:true:true),
+            (1:1:1, true:true), (1:1:1, true:true:true)]
+
+            c = CartesianIndices((inds, 1:2))
+            c2 = c[r, 1:2]
+            @test c2 isa CartesianIndices{ndims(c)}
+            @test c2[1, :] == c[1, :]
+        end
+
+        for (inds, r) in Any[(1:1, false:false), (1:1, false:true:false),
+            (1:1:1, false:false), (1:1:1, false:true:false)]
+
+            c = CartesianIndices((inds, 1:2))
+            c2 = c[r, 1:2]
+            @test c2 isa CartesianIndices{ndims(c)}
+            @test size(c2, 1) == 0
         end
     end
 end
@@ -191,8 +296,7 @@ end
     R = CartesianIndex(1, 1):CartesianIndex(2, 3):CartesianIndex(4, 5)
     @test R.indices == (1:2:3, 1:3:4)
     i = CartesianIndex(4, 1)
-    i_next = CartesianIndex(1, 4)
-    @test !(i in R) && iterate(R, i) == (i_next, i_next)
+    @test !(i in R)
 
     for R in [
         CartesianIndices((1:-1:-1, 1:2:5)),
@@ -288,19 +392,20 @@ end
 
 @testset "CartesianIndices overflow" begin
     @testset "incremental steps" begin
+        # n.b. typemax is an odd number
         I = CartesianIndices((1:typemax(Int),))
         i = last(I)
         @test iterate(I, i) === nothing
 
         I = CartesianIndices((1:2:typemax(Int), ))
-        i = CartesianIndex(typemax(Int)-1)
-        @test iterate(I, i) === nothing
-
-        I = CartesianIndices((1:(typemax(Int)-1),))
         i = CartesianIndex(typemax(Int))
         @test iterate(I, i) === nothing
 
-        I = CartesianIndices((1:2:typemax(Int)-1, ))
+        I = CartesianIndices((1:(typemax(Int)-1),))
+        i = CartesianIndex(typemax(Int)-1)
+        @test iterate(I, i) === nothing
+
+        I = CartesianIndices((2:2:typemax(Int)-1, ))
         i = CartesianIndex(typemax(Int)-1)
         @test iterate(I, i) === nothing
 
@@ -308,7 +413,7 @@ end
         i = last(I)
         @test iterate(I, i) === nothing
 
-        I = CartesianIndices((1:2:typemax(Int), 1:2:typemax(Int)))
+        I = CartesianIndices((2:2:typemax(Int), 2:2:typemax(Int)))
         i = CartesianIndex(typemax(Int)-1, typemax(Int)-1)
         @test iterate(I, i) === nothing
 
@@ -316,9 +421,9 @@ end
         i = CartesianIndex(typemax(Int), 1)
         @test iterate(I, i) === (CartesianIndex(1, 2), CartesianIndex(1,2))
 
-        I = CartesianIndices((1:2:typemax(Int), 1:2:typemax(Int)))
+        I = CartesianIndices((2:2:typemax(Int), 2:2:typemax(Int)))
         i = CartesianIndex(typemax(Int)-1, 1)
-        @test iterate(I, i) === (CartesianIndex(1, 3), CartesianIndex(1, 3))
+        @test iterate(I, i) === (CartesianIndex(2, 3), CartesianIndex(2, 3))
 
         I = CartesianIndices((typemin(Int):(typemin(Int)+3),))
         i = last(I)
@@ -388,15 +493,6 @@ end
     end
     @test length(I) == length(indices)
     @test vec(collect(I)) == indices
-
-    # test invalid state
-    I = CartesianIndices((2:4, 3:5))
-    @test iterate(I, CartesianIndex(typemax(Int), 3))[1] == CartesianIndex(2,4)
-    @test iterate(I, CartesianIndex(typemax(Int), 4))[1] == CartesianIndex(2,5)
-    @test iterate(I, CartesianIndex(typemax(Int), 5))    === nothing
-
-    @test iterate(I, CartesianIndex(3, typemax(Int)))[1] == CartesianIndex(4,typemax(Int))
-    @test iterate(I, CartesianIndex(4, typemax(Int)))    === nothing
 end
 
 @testset "CartesianIndices operations" begin
@@ -410,9 +506,62 @@ end
 f39705() = Base.Cartesian.@nany 0 _ -> true
 @test f39705() === false
 
+@testset "Cartesian @nall macro test" begin
+    i_1, i_2, i_3 = 1, 2, 3;
+    @test Base.Cartesian.@nall 2 d->(i_d <= 2)
+    @test !Base.Cartesian.@nall 3 d->(i_d <= 2)
+end
+
 @testset "CartesianIndices with Bool" begin
     @test @inferred(CartesianIndices((true,))) == CartesianIndices((1,))
     @test @inferred(CartesianIndices((false,))) == CartesianIndices((0,))
     @test @inferred(CartesianIndices((true, false))) == CartesianIndices((1, 0))
     @test @inferred(CartesianIndices((false, true))) == CartesianIndices((0, 1))
+end
+
+@testset "CartedianIndex isassigned" begin
+    A = rand(2, 3, 3)
+    @test isassigned(A, CartesianIndex(1, 2, 3))
+    @test !isassigned(A, CartesianIndex(1, 2, 5))
+    @test isassigned(A, 1, CartesianIndex(2, 3))
+    @test isassigned(A, CartesianIndex(1, 2), 3)
+    @test !isassigned(A, CartesianIndex(5, 2), 3)
+end
+
+@testset "`CartedianIndex(x::Union{Integer,CartedianIndex}...)`'s stability" begin
+    CI = CartesianIndex
+    inds2 = (1, CI(1, 2), 1, CI(1, 2), 1, CI(1, 2), 1)
+    @test (@inferred CI(inds2)) == CI(1, 1, 2, 1, 1, 2, 1, 1, 2, 1)
+end
+
+@testset "@ncallkw" begin
+    f(x...; a, b = 1, c = 2, d = 3) = +(x..., a, b, c, d)
+    x_1, x_2 = (-1, -2)
+    kw = (a = 0, c = 0, d = 0)
+    @test x_1 + x_2 + 1 + 4 == Base.Cartesian.@ncallkw 2 f kw 4 x
+    b = 0
+    kw = (c = 0, d = 0)
+    @test x_1 + x_2 + 4 == Base.Cartesian.@ncallkw 2 f (; a = 0, b, kw...) 4 x
+end
+
+@testset "if with and without else branch" begin
+    t1 = Base.Cartesian.@ntuple 3 i -> i == 1 ? 1 : 0
+    t2 = Base.Cartesian.@ntuple 3 i -> begin
+        m = 0
+        if i == 1
+            m = 1
+        end
+        m
+    end
+    @test t1 == t2
+    t3 = Base.Cartesian.@ntuple 3 i -> begin
+        m = 0
+        if i == 1
+            m = 1
+        elseif i == 2
+            m = 2
+        end
+        m
+    end
+    @test t3 == (1, 2, 0)
 end
