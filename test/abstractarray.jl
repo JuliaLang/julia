@@ -1950,3 +1950,10 @@ end
     @test repeat(f, 2, 3, 4) === FillArrays.Fill(3, (8, 6, 4))
     @test repeat(f, inner=(1,2), outer=(3,1)) === FillArrays.Fill(3, (12, 4))
 end
+
+@testset "copyto! with matched CartesianIndices" begin
+    a = zeros(2, 2)
+    b = rand(size(a)...)
+    copyto!(view(a, axes(a)...), view(b, axes(b)...))
+    @test a == b
+end
