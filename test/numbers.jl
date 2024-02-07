@@ -2273,6 +2273,15 @@ end
 @test_throws InexactError convert(Int16, big(2)^100)
 @test_throws InexactError convert(Int, typemax(UInt))
 
+# Invalid rational errors
+@test_throws ArgumentError (0//1) // 0
+@test_throws ArgumentError 0 // (0//1)
+@test_throws ArgumentError (0//1) // (0//1)
+@test_throws ArgumentError (1//0) // (1//0)
+@test_throws ArgumentError 1//0 + 1//0
+@test_throws ArgumentError 1//0 * 0//1
+@test_throws ArgumentError 0//1 * 1//0
+
 @testset "infinity to integer conversion" begin
     for T in (
         UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128, BigInt

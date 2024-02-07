@@ -38,9 +38,14 @@ Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n, d)
 Rational(n::Integer, d::Integer) = Rational(promote(n, d)...)
 Rational(n::Integer) = unsafe_rational(n, one(n))
 
-function divgcd(x::Integer,y::Integer)
-    g = gcd(x,y)
-    div(x,g), div(y,g)
+function divgcd(x::Integer, y::Integer)
+    g = gcd(x, y)
+    if iszero(g)
+        Tx, Ty, Tg = typeof(x), typeof(y), typeof(g)
+        return zero(promote_op(div, Tx, Tg)), zero(promote_op(div, Ty, Tg))
+    else
+        return div(x, g), div(y, g)
+    end
 end
 
 """
