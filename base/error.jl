@@ -202,7 +202,7 @@ writing assertions, which are conditions that are assumed to be true, but that t
 might decide to check anyways, as an aid to debugging if they fail.
 The optional message `text` is displayed upon assertion failure.
 
-The assertion will not be removed at any debug level and can be used for safety checks.
+The assertion will not be removed at any optimization level and can be used for safety checks.
 
 # Examples
 ```jldoctest
