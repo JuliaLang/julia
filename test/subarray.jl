@@ -936,8 +936,9 @@ end
 
 @testset "issue #53209: avoid invalid elimination of singleton indices" begin
     A = randn(4,5)
-    @test A[CartesianIndices(()), :, 1] == @inferred(view(A, CartesianIndices(()), :, 1))
-    @test parent(@inferred(view(A, :, 1, 1, CartesianIndices(()), 1))) === A
+    @test A[CartesianIndices(()), :, 3] == @inferred(view(A, CartesianIndices(()), :, 3))
+    @test parent(@inferred(view(A, :, 3, 1, CartesianIndices(()), 1))) === A
+    @test_throws BoundsError view(A, :, 3, 2, CartesianIndices(()), 1)
 end
 
 @testset "replace_in_print_matrix" begin
