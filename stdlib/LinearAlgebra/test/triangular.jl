@@ -358,6 +358,7 @@ debug && println("Test basic type functionality")
                 # Binary operations
                 @test A1 + A2 == Matrix(A1) + Matrix(A2)
                 @test A1 - A2 == Matrix(A1) - Matrix(A2)
+                @test kron(A1,A2) == kron(Matrix(A1),Matrix(A2))
 
                 # Triangular-Triangular multiplication and division
                 @test A1*A2 ≈ Matrix(A1)*Matrix(A2)
