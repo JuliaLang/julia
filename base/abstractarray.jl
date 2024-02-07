@@ -1100,24 +1100,51 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         iterdest, itersrc = eachindex(dest), eachindex(src)
         if iterdest == itersrc
             # Shared-iterator implementation
-            for I in iterdest
-                if isassigned(src, I)
-                    @inbounds dest[I] = src[I]
-                else
-                    _unsetindex!(dest, I)
+            if iterdest isa CartesianIndices && itersrc isa CartesianIndices && ndims(iterdest) > 1
+                iterdesttail = CartesianIndices(tail(iterdest.indices))
+                indsdestslice = first(iterdest.indices)
+                for I in iterdesttail
+                    destslice = view(dest, indsdestslice, I)
+                    srcslice = view(src, indsdestslice, I)
+                    copyto_unaliased!(IndexStyle(destslice), destslice, IndexStyle(srcslice), srcslice)
+                end
+            else
+                for I in iterdest
+                    if isassigned(src, I)
+                        @inbounds dest[I] = src[I]
+                    else
+                        _unsetindex!(dest, I)
+                    end
                 end
             end
         else
             # Dual-iterator implementation
-            ret = iterate(iterdest)
-            @inbounds for a in itersrc
-                idx, state = ret::NTuple{2,Any}
-                if isassigned(src, a)
-                    dest[idx] = src[a]
-                else
-                    _unsetindex!(dest, idx)
+            if iterdest isa CartesianIndices && ndims(iterdest) > 1 && srcstyle isa IndexLinear
+                iterdesttail = CartesianIndices(tail(iterdest.indices))
+                indsdestslice = first(iterdest.indices)
+                slicelen = length(indsdestslice)
+                # iterate over src in chunks
+                ret = iterate(iterdesttail)
+                for srcindschunk in Iterators.partition(itersrc, slicelen)
+                    idx, state = ret::NTuple{2,Any}
+                    # the last chunk may not have a length equal to slicelen
+                    destsliceinds = indsdestslice[range(begin, length=length(srcindschunk))]
+                    destslice = view(dest, indsdestslice, idx)
+                    srcslice = view(src, srcindschunk)
+                    copyto_unaliased!(IndexStyle(destslice), destslice, IndexStyle(srcslice), srcslice)
+                    ret = iterate(iterdesttail, state)
                 end
-                ret = iterate(iterdest, state)
+            else
+                ret = iterate(iterdest)
+                @inbounds for a in itersrc
+                    idx, state = ret::NTuple{2,Any}
+                    if isassigned(src, a)
+                        dest[idx] = src[a]
+                    else
+                        _unsetindex!(dest, idx)
+                    end
+                    ret = iterate(iterdest, state)
+                end
             end
         end
     end
