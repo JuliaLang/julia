@@ -284,7 +284,7 @@ julia> chopsuffix("Hamburger", "er")
 julia> chopsuffix("Hamburger", "hotdog")
 "Hamburger"
 
-julia> chopsuffix("my_Julia_program.jl", r".jl"i)  # The regex with i, to also match e.g. .JL
+julia> chopsuffix("my_Julia_program.jl", r"\.jl"i)  # The regex with i, to also match e.g. .JL
 "my_Julia_program"
 ```
 """
