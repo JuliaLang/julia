@@ -216,7 +216,7 @@ julia> hr, min, ampm = m; # destructure capture groups by iteration
 julia> hr
 "11"
 
-julia> Dict(m)  # convert to Dict
+julia> Dict(m)
 Dict{Any, Union{Nothing, SubString{String}}} with 3 entries:
   "hour"   => "11"
   3        => nothing
