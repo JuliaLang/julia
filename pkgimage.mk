@@ -46,12 +46,12 @@ ifneq ($(filter $(1),$(PKG_EXTS)),)
 # This is weird. It set up for multiple Pkg exts because that suits the structure here better
 # but it hard codes the deps and `import REPL, Pkg`
 $$(BUILDDIR)/stdlib/REPLExt.release.image: $$(REPLExt_SRCS) $$(BUILDDIR)/stdlib/Pkg.release.image $$(BUILDDIR)/stdlib/REPL.release.image
-	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'import REPL, Pkg')
-	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e 'import REPL, Pkg')
+	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'using REPL; using Pkg')
+	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e 'using REPL; using Pkg')
 	touch $$@
 $$(BUILDDIR)/stdlib/REPLExt.debug.image: $$(REPLExt_SRCS) $(BUILDDIR)/stdlib/Pkg.debug.image $$(BUILDDIR)/stdlib/REPL.debug.image
-	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'import REPL, Pkg')
-	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e 'import REPL, Pkg')
+	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'using REPL; using Pkg')
+	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e 'using REPL; using Pkg')
 	touch $$@
 endif
 else
