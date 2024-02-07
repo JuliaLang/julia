@@ -277,7 +277,10 @@ mutable struct InferenceState
     function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
                             interp::AbstractInterpreter)
         linfo = result.linfo
-        world = get_world_counter(interp)
+        world = get_inference_world(interp)
+        if world == typemax(UInt)
+            error("Entering inference from a generated function with an invalid world")
+        end
         def = linfo.def
         mod = isa(def, Method) ? def.module : def
         sptypes = sptypes_from_meth_instance(linfo)
@@ -487,7 +490,7 @@ end
 
 function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
-    world = get_world_counter(interp)
+    world = get_inference_world(interp)
     src = retrieve_code_info(result.linfo, world)
     src === nothing && return nothing
     maybe_validate_code(result.linfo, src, "lowered")

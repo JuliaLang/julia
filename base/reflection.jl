@@ -1123,6 +1123,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     world = get_world_counter()
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     return map(method_instances(f, t, world)) do m
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
@@ -2329,6 +2330,7 @@ end
 
 function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
     @nospecialize
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     isempty(kwnames) && return hasmethod(f, t; world)
     t = to_tuple_type(t)
     ft = Core.Typeof(f)
@@ -2550,7 +2552,21 @@ min_world(m::Core.CodeInstance) = m.min_world
 max_world(m::Core.CodeInstance) = m.max_world
 min_world(m::Core.CodeInfo) = m.min_world
 max_world(m::Core.CodeInfo) = m.max_world
+
+"""
+    get_world_counter()
+
+Returns the current maximum world-age counter. This counter is global and monotonically
+increasing.
+"""
 get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
+
+"""
+    tls_world_age()
+
+Returns the world the [current_task()](@ref) is executing within.
+"""
+tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 
 """
     propertynames(x, private=false)
