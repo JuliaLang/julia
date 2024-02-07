@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+#
 
 module BaseDocs
 
@@ -2235,11 +2236,14 @@ setfield!
     swapfield!(value, name::Symbol, x, [order::Symbol])
     swapfield!(value, i::Int, x, [order::Symbol])
 
-These atomically perform the operations to simultaneously get and set a field:
+Atomically perform the operations to simultaneously get and set a field:
 
     y = getfield(value, name)
     setfield!(value, name, x)
     return y
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 swapfield!
 
@@ -2247,7 +2251,7 @@ swapfield!
     modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
     modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
 
-These atomically perform the operations to get and set a field after applying
+Atomically perform the operations to get and set a field after applying
 the function `op`.
 
     y = getfield(value, name)
@@ -2257,6 +2261,9 @@ the function `op`.
 
 If supported by the hardware (for example, atomic increment), this may be
 optimized to the appropriate hardware instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 modifyfield!
 
@@ -2266,7 +2273,7 @@ modifyfield!
     replacefield!(value, i::Int, expected, desired,
                   [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
 
-These atomically perform the operations to get and conditionally set a field to
+Atomically perform the operations to get and conditionally set a field to
 a given value.
 
     y = getfield(value, name, fail_order)
@@ -2278,8 +2285,29 @@ a given value.
 
 If supported by the hardware, this may be optimized to the appropriate hardware
 instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 replacefield!
+
+"""
+    setfieldonce!(value, name::Union{Int,Symbol}, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> success::Bool
+
+Atomically perform the operations to set a field to
+a given value, only if it was previously not set.
+
+    ok = !isdefined(value, name, fail_order)
+    if ok
+        setfield!(value, name, desired, success_order)
+    end
+    return ok
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+setfieldonce!
 
 """
     getglobal(module::Module, name::Symbol, [order::Symbol=:monotonic])
@@ -2320,6 +2348,7 @@ julia> getglobal(M, :a)
 ```
 """
 getglobal
+
 
 """
     setglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
@@ -2362,6 +2391,9 @@ setglobal!
     Core.get_binding_type(module::Module, name::Symbol)
 
 Retrieve the declared type of the binding `name` from the module `module`.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
 """
 Core.get_binding_type
 
@@ -2371,8 +2403,64 @@ Core.get_binding_type
 Set the declared type of the binding `name` in the module `module` to `type`. Error if the
 binding already has a type that is not equivalent to `type`. If the `type` argument is
 absent, set the binding type to `Any` if unset, but do not error.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
 """
 Core.set_binding_type!
+
+"""
+    swapglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
+
+Atomically perform the operations to simultaneously get and set a global.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`swapproperty!`](@ref Base.swapproperty!) and [`setglobal!`](@ref).
+"""
+swapglobal!
+
+"""
+    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic]) -> Pair
+
+Atomically perform the operations to get and set a global after applying
+the function `op`.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`modifyproperty!`](@ref Base.modifyproperty!) and [`setglobal!`](@ref).
+"""
+modifyglobal!
+
+"""
+    replaceglobal!(module::Module, name::Symbol, expected, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+
+Atomically perform the operations to get and conditionally set a global to
+a given value.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`replaceproperty!`](@ref Base.replaceproperty!) and [`setglobal!`](@ref).
+"""
+replaceglobal!
+
+"""
+    setglobalonce!(module::Module, name::Symbol, value,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> success::Bool
+
+Atomically perform the operations to set a global to
+a given value, only if it was previously not set.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@ref).
+"""
+setglobalonce!
 
 """
     typeof(x)
@@ -3177,13 +3265,29 @@ Base.modifyproperty!
     replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
 
 Perform a compare-and-swap operation on `x.f` from `expected` to `desired`, per
-egal. The syntax `@atomic_replace! x.f expected => desired` can be used instead
+egal. The syntax `@atomicreplace x.f expected => desired` can be used instead
 of the function call form.
 
 See also [`replacefield!`](@ref Core.replacefield!)
-and [`setproperty!`](@ref Base.setproperty!).
+[`setproperty!`](@ref Base.setproperty!),
+[`setpropertyonce!`](@ref Base.setpropertyonce!).
 """
 Base.replaceproperty!
+
+"""
+    setpropertyonce!(x, f::Symbol, value, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+
+Perform a compare-and-swap operation on `x.f` to set it to `value` if previously unset.
+The syntax `@atomiconce x.f = value` can be used instead of the function call form.
+
+See also [`setfieldonce!`](@ref Core.replacefield!),
+[`setproperty!`](@ref Base.setproperty!),
+[`replaceproperty!`](@ref Base.replaceproperty!).
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+Base.setpropertyonce!
 
 
 """

@@ -11,16 +11,27 @@ New language features
 * The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
   but allows to add keyword arguments to the function call ([#51501]).
 * Support for Unicode 15.1 ([#51799]).
-* A new `AbstractString` type, `AnnotatedString`, is introduced that allows for
-  regional annotations to be attached to an underlying string. This type is
-  particularly useful for holding styling information, and is used extensively
-  in the new `StyledStrings` standard library. There is also a new `AnnotatedChar`
-  type, that is the equivalent new `AbstractChar` type.
+* Three new types around the idea of text with "annotations" (`Pair{Symbol, Any}`
+  entries, e.g. `:lang => "en"` or `:face => :magenta`). These annotations
+  are preserved across operations (e.g. string concatenation with `*`) when
+  possible.
+  * `AnnotatedString` is a new `AbstractString` type. It wraps an underlying
+    string and allows for annotations to be attached to regions of the string.
+    This type is used extensively in the new `StyledStrings` standard library to
+    hold styling information.
+  * `AnnotatedChar` is a new `AbstractChar` type. It wraps another char and
+    holds a list of annotations that apply to it.
+  * `AnnotatedIOBuffer` is a new `IO` type that mimics an `IOBuffer`, but has
+    specialised `read`/`write` methods for annotated content. This can be
+    thought of both as a "string builder" of sorts and also as glue between
+    annotated and unannotated content.
 * `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
   to be preferentially picked up by the given julia version. i.e. in the same folder,
   a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
   version. This makes managing environments for multiple julia versions at the same time
   easier ([#43845]).
+* `@time` now reports a count of any lock conflicts where a `ReentrantLock` had to wait, plus a new macro
+  `@lock_conflicts` which returns that count ([#52883]).
 
 Language changes
 ----------------
@@ -60,6 +71,8 @@ difference between defining a `main` function and executing the code directly at
 Multi-threading changes
 -----------------------
 
+* `Threads.@threads` now supports the `:greedy` scheduler, intended for non-uniform workloads ([#52096]).
+
 Build system changes
 --------------------
 
@@ -93,6 +106,7 @@ New library features
   data-races. Or use the callback form of `open` to have all that handled
   automatically.
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `filter` can now act on a `NamedTuple` ([#50795]).
 * `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s.
 
 Standard library changes

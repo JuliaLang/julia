@@ -184,7 +184,7 @@ function Base.muladd(A::AbstractMatrix, y::AbstractVecOrMat, z::Union{Number, Ab
     end
     for d in ndims(Ay)+1:ndims(z)
         # Similar error to what Ay + z would give, to match (Any,Any,Any) method:
-        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+        size(z,d) > 1 && throw(DimensionMismatch(string("z has dims ",
             axes(z), ", must have singleton at dim ", d)))
     end
     Ay .+ z
@@ -197,7 +197,7 @@ function Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z::Union{Number, Ab
     end
     for d in 3:ndims(z)
         # Similar error to (u*v) + z:
-        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+        size(z,d) > 1 && throw(DimensionMismatch(string("z has dims ",
             axes(z), ", must have singleton at dim ", d)))
     end
     (u .* v) .+ z
