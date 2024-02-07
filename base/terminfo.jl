@@ -177,17 +177,17 @@ function TermInfo(raw::TermInfoRaw)
     strings = Dict{Symbol, String}()
     extensions = nothing
     for (flag, value) in zip(TERM_FLAGS, raw.flags)
-        flags[flag.short] = value
-        flags[flag.long] = value
+        flags[flag.capname] = value
+        flags[flag.name] = value
     end
     for (num, value) in zip(TERM_NUMBERS, raw.numbers)
-        numbers[num.short] = Int(value)
-        numbers[num.long] = Int(value)
+        numbers[num.capname] = Int(value)
+        numbers[num.name] = Int(value)
     end
     for (str, value) in zip(TERM_STRINGS, raw.strings)
         if !isnothing(value)
-            strings[str.short] = value
-            strings[str.long] = value
+            strings[str.capname] = value
+            strings[str.name] = value
         end
     end
     if !isnothing(raw.extended)
