@@ -30,6 +30,8 @@ New language features
   a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
   version. This makes managing environments for multiple julia versions at the same time
   easier ([#43845]).
+* `@time` now reports a count of any lock conflicts where a `ReentrantLock` had to wait, plus a new macro
+  `@lock_conflicts` which returns that count ([#52883]).
 
 Language changes
 ----------------
@@ -69,6 +71,8 @@ difference between defining a `main` function and executing the code directly at
 Multi-threading changes
 -----------------------
 
+* `Threads.@threads` now supports the `:greedy` scheduler, intended for non-uniform workloads ([#52096]).
+
 Build system changes
 --------------------
 
@@ -102,6 +106,7 @@ New library features
   data-races. Or use the callback form of `open` to have all that handled
   automatically.
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `filter` can now act on a `NamedTuple` ([#50795]).
 
 Standard library changes
 ------------------------

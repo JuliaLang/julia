@@ -1030,7 +1030,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         end
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
-        return retrieve_code_info(mi, get_world_counter(interp))
+        return retrieve_code_info(mi, get_inference_world(interp))
     end
     lock_mi_inference(interp, mi)
     result = InferenceResult(mi, typeinf_lattice(interp))
@@ -1094,7 +1094,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance)
 end
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
-    world = ccall(:jl_get_tls_world_age, UInt, ())
+    world = tls_world_age()
     args = Any[_return_type, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
 end
@@ -1104,7 +1104,7 @@ function return_type(@nospecialize(f), t::DataType, world::UInt)
 end
 
 function return_type(t::DataType)
-    world = ccall(:jl_get_tls_world_age, UInt, ())
+    world = tls_world_age()
     return return_type(t, world)
 end
 
@@ -1122,7 +1122,7 @@ function _return_type(interp::AbstractInterpreter, t::DataType)
         rt = builtin_tfunction(interp, f, args, nothing)
         rt = widenconst(rt)
     else
-        for match in _methods_by_ftype(t, -1, get_world_counter(interp))::Vector
+        for match in _methods_by_ftype(t, -1, get_inference_world(interp))::Vector
             ty = typeinf_type(interp, match::MethodMatch)
             ty === nothing && return Any
             rt = tmerge(rt, ty)

@@ -36,7 +36,7 @@ macro newinterp(InterpName)
         end
         $CC.InferenceParams(interp::$InterpName) = interp.inf_params
         $CC.OptimizationParams(interp::$InterpName) = interp.opt_params
-        $CC.get_world_counter(interp::$InterpName) = interp.world
+        $CC.get_inference_world(interp::$InterpName) = interp.world
         $CC.get_inference_cache(interp::$InterpName) = interp.inf_cache
         $CC.code_cache(interp::$InterpName) = $CC.WorldView(interp.code_cache, $CC.WorldRange(interp.world))
         $CC.get(wvc::$CC.WorldView{$InterpCacheName}, mi::$C.MethodInstance, default) = get(wvc.cache.dict, mi, default)

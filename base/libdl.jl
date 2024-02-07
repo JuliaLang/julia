@@ -334,7 +334,7 @@ struct LazyLibraryPath
     LazyLibraryPath(pieces::Vector) = new(pieces)
 end
 LazyLibraryPath(args...) = LazyLibraryPath(collect(args))
-Base.string(llp::LazyLibraryPath) = joinpath(string.(llp.pieces)...)
+Base.string(llp::LazyLibraryPath) = joinpath(string.(llp.pieces)...)::String
 Base.cconvert(::Type{Cstring}, llp::LazyLibraryPath) = Base.cconvert(Cstring, string(llp))
 # Define `print` so that we can wrap this in a `LazyString`
 Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))

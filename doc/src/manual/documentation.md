@@ -307,11 +307,11 @@ Or for use with Julia's metaprogramming functionality:
 ```julia
 for (f, op) in ((:add, :+), (:subtract, :-), (:multiply, :*), (:divide, :/))
     @eval begin
-        $f(a,b) = $op(a,b)
+        $f(a, b) = $op(a, b)
     end
 end
-@doc "`add(a,b)` adds `a` and `b` together" add
-@doc "`subtract(a,b)` subtracts `b` from `a`" subtract
+@doc "`add(a, b)` adds `a` and `b` together" add
+@doc "`subtract(a, b)` subtracts `b` from `a`" subtract
 ```
 
 Documentation in non-toplevel blocks, such as `begin`, `if`, `for`, `let`, and
@@ -407,7 +407,7 @@ f(x) = x
 
 "..."
 function f(x)
-    x
+    return x
 end
 
 "..."
