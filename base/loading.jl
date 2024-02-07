@@ -3548,10 +3548,10 @@ julia> cd("/home/JuliaUser") # working directory
 
 julia> # create script at /home/JuliaUser/Projects
        open("/home/JuliaUser/Projects/test.jl","w") do io
-           print(io, """
+           print(io, \"\"\"
                println("@__DIR__ = ", @__DIR__)
                println("pwd() = ", pwd())
-           """)
+           \"\"\")
        end
 
 julia> # outputs script directory and current working directory
