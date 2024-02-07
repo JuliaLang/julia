@@ -1119,7 +1119,7 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             end
         else
             # Dual-iterator implementation
-            if iterdest isa CartesianIndices && ndims(iterdest) > 1 && srcstyle isa IndexLinear
+            if iterdest isa CartesianIndices && ndims(iterdest) > 1 && itersrc isa AbstractUnitRange
                 iterdesttail = CartesianIndices(tail(iterdest.indices))
                 indsdestslice = first(iterdest.indices)
                 slicelen = length(indsdestslice)
