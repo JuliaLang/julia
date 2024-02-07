@@ -253,10 +253,13 @@ end
 ## 1-dimensional ranges ##
 
 """
-    AbstractRange{T}
+    AbstractRange{T} <: AbstractVector{T}
 
-Supertype for ranges with elements of type `T`.
-[`UnitRange`](@ref) and other types are subtypes of this.
+Supertype for linear ranges with elements of type `T`.
+[`UnitRange`](@ref), [`LinRange`](@ref) and other types are subtypes of this.
+
+All subtypes must define [`step`](@ref).
+Thus [`LogRange`](@ref Base.LogRange) is not a subtype of `AbstractRange`.
 """
 abstract type AbstractRange{T} <: AbstractArray{T,1} end
 
