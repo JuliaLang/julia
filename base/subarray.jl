@@ -282,8 +282,9 @@ reindex(::Tuple{}, ::Tuple{}) = ()
 
 _maybeview(A, i1::Integer, inds::Integer...) = (@_propagate_inbounds_meta; A[i1, inds...])
 function _maybeview(A, v...)
+    @_propagate_inbounds_meta
     B = view(A, v...)
-    B isa SubArray{<:Any, 0} ? B[] : B
+    iszero(ndims(B)) ? B[] : B
 end
 
 # Skip dropped scalars, so simply peel them off the parent indices and continue
