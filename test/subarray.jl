@@ -999,3 +999,14 @@ end
 catch err
     err isa ErrorException && startswith(err.msg, "syntax:")
 end
+
+
+@testset "avoid allocating in reindex" begin
+    a = reshape(1:16, 4, 4)
+    inds = ([2,3], [3,4])
+    av = view(a, inds...)
+    av2 = view(av, 1, 1)
+    @test parentindices(av2) === (2,3)
+    av2 = view(av, 2:2, 2:2)
+    @test parentindices(av2) === (view(inds[1], 2:2), view(inds[2], 2:2))
+end
