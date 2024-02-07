@@ -263,5 +263,5 @@ end
 end
 
 @testset "Docstrings" begin
-    @test_broken isempty(undoc)
+    @test isempty(Docs.undocumented_names(Artifacts))
 end
