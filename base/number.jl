@@ -320,7 +320,7 @@ zero(::Type{Union{}}, slurp...) = Union{}(0)
 
 Return a multiplicative identity for `x`: a value such that
 `one(x)*x == x*one(x) == x`. If the multiplicative identity can
-be known based on the type alone, then a type may be given as
+be deduced from the type alone, then a type may be given as
 an argument to `one` (e.g. `one(Int)` will work because the
 multiplicative identity is the same for all instances of `Int`,
 but `one(Matrix{Int})` is not defined because matrices of
