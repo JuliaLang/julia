@@ -694,7 +694,7 @@ parameter `tM` as follows:
 | --- | :--- | :--- |
 | `'N'` | `B[ir_dest, jr_dest]` | `M[ir_src, jr_src]` |
 | `'T'` | `B[ir_dest, jr_dest]` | `transpose(M)[ir_src, jr_src]` |
-| `'C'` | `B[ir_dest, jr_dest]` | `conj(transpose((M))[ir_src, jr_src]` |
+| `'C'` | `B[ir_dest, jr_dest]` | `conj(transpose(M))[ir_src, jr_src]` |
 
 The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore, the index range
 parameters must satisfy `length(ir_dest) == length(ir_src)` and
