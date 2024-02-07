@@ -74,21 +74,21 @@ end
 ##########
 
 # Fallback
-function printvalue(f::MbyFunc, io::IO, value)
+function printvalue(f::MbyFunc, io::IO, value, sorted::Bool)
     toml_value = to_toml_value(f, value)
     @invokelatest printvalue(f, io, toml_value)
 end
 
-function printvalue(f::MbyFunc, io::IO, value::AbstractVector)
+function printvalue(f::MbyFunc, io::IO, value::AbstractVector, sorted::Bool)
     Base.print(io, "[")
     for (i, x) in enumerate(value)
         i != 1 && Base.print(io, ", ")
-        printvalue(f, io, x)
+        printvalue(f, io, x, sorted)
     end
     Base.print(io, "]")
 end
 
-function printvalue(f::MbyFunc, io::IO, value::TOMLValue)
+function printvalue(f::MbyFunc, io::IO, value::TOMLValue, sorted::Bool)
     value isa Dates.DateTime ? Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd\THH:MM:SS.sss\Z")) :
     value isa Dates.Time     ? Base.print(io, Dates.format(value, Dates.dateformat"HH:MM:SS.sss")) :
     value isa Dates.Date     ? Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd")) :
@@ -100,7 +100,7 @@ function printvalue(f::MbyFunc, io::IO, value::TOMLValue)
     value isa AbstractString ? (Base.print(io, "\"");
                                 print_toml_escaped(io, value);
                                 Base.print(io, "\"")) :
-    value isa AbstractDict ? print_inline_table(f, io, value) :
+    value isa AbstractDict ? print_inline_table(f, io, value, sorted) :
     error("internal error in TOML printing, unhandled value")
 end
 
@@ -112,13 +112,18 @@ function print_integer(io::IO, value::Integer)
     return
 end
 
-function print_inline_table(f::MbyFunc, io::IO, value::AbstractDict)
+function print_inline_table(f::MbyFunc, io::IO, value::AbstractDict, sorted::Bool)
+    vkeys = collect(keys(value))
+    if sorted
+        sort!(vkeys)
+    end
     Base.print(io, "{")
-    for (i, (k,v)) in enumerate(value)
+    for (i, k) in enumerate(vkeys)
+        v = value[k]
         i != 1 && Base.print(io, ", ")
         printkey(io, [String(k)])
         Base.print(io, " = ")
-        printvalue(f, io, v)
+        printvalue(f, io, v, sorted)
     end
     Base.print(io, "}")
 end
@@ -168,7 +173,7 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
         Base.print(io, ' '^4max(0,indent-1))
         printkey(io, [String(key)])
         Base.print(io, " = ") # print separator
-        printvalue(f, io, value)
+        printvalue(f, io, value, sorted)
         Base.print(io, "\n")  # new line?
         first_block = false
     end
@@ -181,7 +186,7 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
         if is_table(value) && !(value in inline_tables)
             push!(ks, String(key))
             _values = @invokelatest values(value)
-            header = isempty(value) || !all(is_tabular(v) for v in _values)::Bool
+            header = isempty(value) || !all(is_tabular(v) for v in _values)::Bool || any(v in inline_tables for v in _values)::Bool
             if header
                 # print table
                 first_block || println(io)

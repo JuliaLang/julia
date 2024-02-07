@@ -153,6 +153,45 @@ push!(inline_tables, inline_dict)
 @test toml_str(d; sorted=true, inline_tables) ==
 """
 x = "y"
-y = {c = "foo", b = {a = "b"}, a = [1, 2]}
+y = {a = [1, 2], b = {a = "b"}, c = "foo"}
 z = [1, 2, 3]
 """
+
+
+d = Dict("deps" => Dict(
+        "LocalPkg" => "fcf55292-0d03-4e8a-9e0b-701580031fc3",
+        "Example" => "7876af07-990d-54b4-ab0e-23690620f79a"),
+   "sources" => Dict(
+        "LocalPkg" => Dict("path" => "LocalPkg"),
+        "Example" => Dict("url" => "https://github.com/JuliaLang/Example.jl")))
+
+inline_tables = Base.IdSet{Dict}()
+push!(inline_tables, d["sources"]["LocalPkg"])
+push!(inline_tables, d["sources"]["Example"])
+
+@test toml_str(d; sorted=true, inline_tables) ==
+"""
+[deps]
+Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+LocalPkg = "fcf55292-0d03-4e8a-9e0b-701580031fc3"
+
+[sources]
+Example = {url = "https://github.com/JuliaLang/Example.jl"}
+LocalPkg = {path = "LocalPkg"}
+"""
+
+inline_tables = Base.IdSet{Dict}()
+push!(inline_tables, d["sources"]["LocalPkg"])
+s = """
+[deps]
+Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+LocalPkg = "fcf55292-0d03-4e8a-9e0b-701580031fc3"
+
+[sources]
+LocalPkg = {path = "LocalPkg"}
+
+    [sources.Example]
+    url = "https://github.com/JuliaLang/Example.jl"
+"""
+@test toml_str(d; sorted=true, inline_tables) == s
+@test roundtrip(s)
