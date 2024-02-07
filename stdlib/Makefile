@@ -47,8 +47,11 @@ STDLIBS = Artifacts Base64 CRC32c Dates FileWatching \
           $(JLL_NAMES)
 
 STDLIBS_EXT = Pkg Statistics LazyArtifacts LibCURL DelimitedFiles Downloads ArgTools \
-              Tar NetworkOptions SuiteSparse SparseArrays StyledStrings SHA Distributed \
+              Tar NetworkOptions SuiteSparse StyledStrings SHA Distributed \
               JuliaSyntaxHighlighting
+ifeq ($(USE_GPL_LIBS), 1)
+STDLIBS_EXT += SparseArrays
+endif # USE_GPL_LIBS
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
 
