@@ -41,12 +41,15 @@ end
 using Downloads
 
 standard_caps = IOBuffer()
+user_caps = IOBuffer()
 
 Downloads.download("https://raw.githubusercontent.com/mirror/ncurses/v$NCURSES_VERSION/include/Caps", standard_caps)
+Downloads.download("https://raw.githubusercontent.com/mirror/ncurses/v$NCURSES_VERSION/include/Caps-ncurses", user_caps)
 
-const TERM_FLAGS = Tuple{String, String, String}[]
-const TERM_NUMBERS = Tuple{String, String, String}[]
-const TERM_STRINGS = Tuple{String, String, String}[]
+const TERM_FLAGS   = NTuple{3, String}[]
+const TERM_NUMBERS = NTuple{3, String}[]
+const TERM_STRINGS = NTuple{3, String}[]
+const TERM_USER    = NTuple{3, String}[]
 
 for line in eachline(seekstart(standard_caps))
     startswith(line, '#') && continue
@@ -65,6 +68,31 @@ for line in eachline(seekstart(standard_caps))
     end
     push!(caplist, (name, shortcode, description))
 end
+
+for line in eachline(seekstart(user_caps))
+    startswith(line, '#') && continue
+    !startswith(line, "userdef") && continue
+    line = line[1+ncodeunits("userdef "):end]
+    components = split(line, '\t', keepempty=false)
+    if length(components) ∉ 4:5
+        @warn "Malformed line: $(sprint(show, line))"
+        continue
+    end
+    code, type, _, description, _... = components
+    if code == "xm"
+        components[3] == "-" || continue
+        description = "mouse response"
+    end
+    dtype = get(Dict("bool" => "Bool", "num" => "Int", "str" => "String"), type, nothing)
+    if isnothing(dtype)
+        @warn "Unrecognised data type: $type"
+        continue
+    end
+    push!(TERM_USER, (dtype, code, description))
+end
+
+push!(TERM_USER, ("Bool", "Tc", "tmux extension to indicate 24-bit truecolor support"))
+push!(TERM_USER, ("Bool", "Su", "kitty extension to indicate styled underline support"))
 
 const SENTINEL = "\n## GENERATED CODE BEYOND THIS POINT ##"
 const PREAMBLE = readuntil(__FILE__, SENTINEL, keep=true)
@@ -86,6 +114,37 @@ for (ftype, list) in [("flag", TERM_FLAGS), ("number", TERM_NUMBERS), ("string",
     end
     println(out, "\n]")
 end
+
+function getcustomalias(allterms::Vector{NTuple{3, String}}, type, short, description)
+    specific_aliases = Dict{String, String}(
+        "smxx"  => ":enter_strikeout_mode",
+        "rmxx"  => ":exit_strikeout_mode",
+        "Smol"  => ":enter_overline_mode",
+        "Rmol"  => ":exit_overline_mode",
+        "Cs"    => ":set_cursor_color",
+        "Cr"    => ":reset_cursor_color",
+        "Ss"    => ":set_cursor_style",
+        "Se"    => ":reset_cursor_style",
+        "Smulx" => ":set_underline_style",
+        "Su"    => ":can_style_underline",
+        "csl"   => ":clear_status_line",
+        "Ms"    => ":set_host_clipboard",
+        "Tc"    => ":truecolor")
+    if startswith(short, 'k') && !occursin("keypad", description)
+        return ":key_" * replace(lowercase(description), r"[^a-z]" => '_')
+    end
+    return get(specific_aliases, short, "nothing")
+end
+
+print(out, "\n\"\"\"\nTerminfo extensions that NCurses $NCURSES_VERSION is aware of.\n\"\"\"",
+           "\nconst TERM_USER = Dict{Tuple{DataType, Symbol}, Union{Tuple{Nothing, String}, Tuple{Symbol, String}}}(")
+shortpad = maximum(textwidth, getindex.(TERM_USER, 2)) + 1
+for (type, short, description) in TERM_USER
+    print(out, "\n    ($(rpad(type * ',', 7)) :$short)", ' '^(shortpad - textwidth(short)),
+          "=> (", getcustomalias(TERM_USER, type, short, description), ", \"",
+          escape_string(description), "\"),")
+end
+println(out, "\n)")
 
 open(io -> write(io, seekstart(out)), __FILE__, "w")
 
@@ -610,3 +669,112 @@ const TERM_STRINGS = [
     TermCapability(:memory_unlock,             :memu,     "unlock memory"),
     TermCapability(:box_chars_1,               :box1,     "box characters primary set"),
 ]
+
+"""
+Terminfo extensions that NCurses 6.3 is aware of.
+"""
+const TERM_USER = Dict{Tuple{DataType, Symbol}, Union{Tuple{Nothing, String}, Tuple{Symbol, String}}}(
+    (Int,    :CO )    => (nothing, "number of indexed colors overlaying RGB space"),
+    (String, :E3)     => (nothing, "clears the terminal's scrollback buffer."),
+    (Bool,   :NQ)     => (nothing, "terminal does not support query/response"),
+    (Bool,   :RGB)    => (nothing, "use direct colors with 1/3 of color-pair bits per color."),
+    (Int,    :RGB)    => (nothing, "use direct colors with given number of bits per color."),
+    (String, :RGB)    => (nothing, "use direct colors with given bit-layout."),
+    (String, :TS)     => (nothing, "like \"tsl\", but uses no parameter."),
+    (Int,    :U8)     => (nothing, "terminal does/does not support VT100 SI/SO when processing UTF-8 encoding."),
+    (String, :XM)     => (nothing, "initialize alternate xterm mouse mode"),
+    (String, :grbom)  => (nothing, "disable real bold (not intensity bright) mode."),
+    (String, :gsbom)  => (nothing, "enable real bold (not intensity bright) mode."),
+    (String, :xm)     => (nothing, "mouse response"),
+    (String, :Rmol)   => (:exit_overline_mode, "remove overline-mode"),
+    (String, :Smol)   => (:enter_overline_mode, "set overline-mode"),
+    (String, :blink2) => (nothing, "turn on rapid blinking"),
+    (String, :norm)   => (nothing, "turn off bold and half-bright mode"),
+    (String, :opaq)   => (nothing, "turn off blank mode"),
+    (String, :setal)  => (nothing, "set underline-color"),
+    (String, :smul2)  => (nothing, "begin double underline mode"),
+    (Bool,   :AN)     => (nothing, "turn on autonuke."),
+    (Bool,   :AX)     => (nothing, "understands ANSI set default fg/bg color (\\E[39m / \\E[49m)."),
+    (String, :C0)     => (nothing, "use the string as a conversion table for font '0', like acsc."),
+    (Bool,   :C8)     => (nothing, "terminal shows bold as high-intensity colors."),
+    (String, :CE)     => (nothing, "switch cursor-keys back to normal mode."),
+    (String, :CS)     => (nothing, "switch cursor-keys to application mode."),
+    (String, :E0)     => (nothing, "switch charset 'G0' back to standard charset. Default is '\\E(B'."),
+    (Bool,   :G0)     => (nothing, "terminal can deal with ISO 2022 font selection sequences."),
+    (String, :KJ)     => (nothing, "set the encoding of the terminal."),
+    (Int,    :OL)     => (nothing, "set the screen program's output buffer limit."),
+    (String, :S0)     => (nothing, "switch charset 'G0' to the specified charset. Default is '\\E(%.'."),
+    (Bool,   :TF)     => (nothing, "add missing capabilities to screen's termcap/info entry. (Set by default)."),
+    (String, :WS)     => (nothing, "resize display. This capability has the desired width and height as arguments. SunView(tm) example: '\\E[8;%d;%dt'."),
+    (String, :XC)     => (nothing, "describe a translation of characters to strings depending on the current font."),
+    (Bool,   :XT)     => (nothing, "terminal understands special xterm sequences (OSC, mouse tracking)."),
+    (String, :Z0)     => (nothing, "change width to 132 columns."),
+    (String, :Z1)     => (nothing, "change width to 80 columns."),
+    (String, :Cr)     => (:reset_cursor_color, "restore the default cursor color."),
+    (String, :Cs)     => (:set_cursor_color, "set the cursor color."),
+    (String, :Csr)    => (nothing, "change the cursor style, overriding Ss."),
+    (String, :Ms)     => (:set_host_clipboard, "store the current buffer in the host terminal's selection (clipboard)."),
+    (String, :Se)     => (:reset_cursor_style, "reset the cursor style to the terminal initial state."),
+    (String, :Smulx)  => (:set_underline_style, "modify the appearance of underlines in VTE."),
+    (String, :Ss)     => (:set_cursor_style, "change the cursor style."),
+    (String, :rmxx)   => (:exit_strikeout_mode, "reset ECMA-48 strikeout/crossed-out attributes."),
+    (String, :smxx)   => (:enter_strikeout_mode, "set ECMA-48 strikeout/crossed-out attributes."),
+    (String, :csl)    => (:clear_status_line, "clear status line"),
+    (String, :kDC3)   => (:key_alt_delete_character, "alt delete-character"),
+    (String, :kDC4)   => (:key_shift_alt_delete_character, "shift+alt delete-character"),
+    (String, :kDC5)   => (:key_control_delete_character, "control delete-character"),
+    (String, :kDC6)   => (:key_shift_control_delete_character, "shift+control delete-character"),
+    (String, :kDC7)   => (:key_alt_control_delete_character, "alt+control delete-character"),
+    (String, :kDN)    => (:key_shift_down_cursor, "shift down-cursor"),
+    (String, :kDN3)   => (:key_alt_down_cursor, "alt down-cursor"),
+    (String, :kDN4)   => (:key_shift_alt_down_cursor, "shift+alt down-cursor"),
+    (String, :kDN5)   => (:key_control_down_cursor, "control down-cursor"),
+    (String, :kDN6)   => (:key_shift_control_down_cursor, "shift+control down-cursor"),
+    (String, :kDN7)   => (:key_alt_control_down_cursor, "alt+control down-cursor"),
+    (String, :kEND3)  => (:key_alt_end, "alt end"),
+    (String, :kEND4)  => (:key_shift_alt_end, "shift+alt end"),
+    (String, :kEND5)  => (:key_control_end, "control end"),
+    (String, :kEND6)  => (:key_shift_control_end, "shift+control end"),
+    (String, :kEND7)  => (:key_alt_control_end, "alt+control end"),
+    (String, :kHOM3)  => (:key_alt_home, "alt home"),
+    (String, :kHOM4)  => (:key_shift_alt_home, "shift+alt home"),
+    (String, :kHOM5)  => (:key_control_home, "control home"),
+    (String, :kHOM6)  => (:key_shift_control_home, "shift+control home"),
+    (String, :kHOM7)  => (:key_alt_control_home, "alt+control home"),
+    (String, :kIC3)   => (:key_alt_insert_character, "alt insert-character"),
+    (String, :kIC4)   => (:key_shift_alt_insert_character, "shift+alt insert-character"),
+    (String, :kIC5)   => (:key_control_insert_character, "control insert-character"),
+    (String, :kIC6)   => (:key_shift_control_insert_character, "shift+control insert-character"),
+    (String, :kIC7)   => (:key_alt_control_insert_character, "alt+control insert-character"),
+    (String, :kLFT3)  => (:key_alt_left_cursor, "alt left-cursor"),
+    (String, :kLFT4)  => (:key_shift_alt_left_cursor, "shift+alt left-cursor"),
+    (String, :kLFT5)  => (:key_control_left_cursor, "control left-cursor"),
+    (String, :kLFT6)  => (:key_shift_control_left_cursor, "shift+control left-cursor"),
+    (String, :kLFT7)  => (:key_alt_control_left_cursor, "alt+control left-cursor"),
+    (String, :kNXT3)  => (:key_alt_next, "alt next"),
+    (String, :kNXT4)  => (:key_shift_alt_next, "shift+alt next"),
+    (String, :kNXT5)  => (:key_control_next, "control next"),
+    (String, :kNXT6)  => (:key_shift_control_next, "shift+control next"),
+    (String, :kNXT7)  => (:key_alt_control_next, "alt+control next"),
+    (String, :kPRV3)  => (:key_alt_previous, "alt previous"),
+    (String, :kPRV4)  => (:key_shift_alt_previous, "shift+alt previous"),
+    (String, :kPRV5)  => (:key_control_previous, "control previous"),
+    (String, :kPRV6)  => (:key_shift_control_previous, "shift+control previous"),
+    (String, :kPRV7)  => (:key_alt_control_previous, "alt+control previous"),
+    (String, :kRIT3)  => (:key_alt_right_cursor, "alt right-cursor"),
+    (String, :kRIT4)  => (:key_shift_alt_right_cursor, "shift+alt right-cursor"),
+    (String, :kRIT5)  => (:key_control_right_cursor, "control right-cursor"),
+    (String, :kRIT6)  => (:key_shift_control_right_cursor, "shift+control right-cursor"),
+    (String, :kRIT7)  => (:key_alt_control_right_cursor, "alt+control right-cursor"),
+    (String, :kUP)    => (:key_shift_up_cursor, "shift up-cursor"),
+    (String, :kUP3)   => (:key_alt_up_cursor, "alt up-cursor"),
+    (String, :kUP4)   => (:key_shift_alt_up_cursor, "shift+alt up-cursor"),
+    (String, :kUP5)   => (:key_control_up_cursor, "control up-cursor"),
+    (String, :kUP6)   => (:key_shift_control_up_cursor, "shift+control up-cursor"),
+    (String, :kUP7)   => (:key_alt_control_up_cursor, "alt+control up-cursor"),
+    (String, :ka2)    => (nothing, "vt220-keypad extensions"),
+    (String, :kb1)    => (nothing, "vt220-keypad extensions"),
+    (String, :kb3)    => (nothing, "vt220-keypad extensions"),
+    (String, :kc2)    => (nothing, "vt220-keypad extensions"),
+    (Bool,   :Tc)     => (:truecolor, "tmux extension to indicate 24-bit truecolor support"),
+)

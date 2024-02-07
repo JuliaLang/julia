@@ -194,7 +194,10 @@ function TermInfo(raw::TermInfoRaw)
     end
     if !isnothing(raw.extended)
         extensions = Set{Symbol}()
-        for (key, value) in raw.extended
+        longalias(key, value) = first(get(TERM_USER, (typeof(value), key), (nothing, "")))
+        for (short, value) in raw.extended
+            long = longalias(short, value)
+            key = something(long, short)
             push!(extensions, key)
             if value isa Bool
                 flags[key] = value
