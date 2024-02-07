@@ -1,5 +1,20 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Updating this listing is fairly easy, assuming existence of a unix system,
+# posix shell, and `awk`. Just update the version string in the commented out
+# `NCURSES_VERSION` variable, and run this file. This works because this file is
+# a bit of a quine.
+
+#=
+awk '/^#=run/{flag=1;next}/=#/{flag=0}flag{gsub(/__FILE__/,"\"'"$0"'\"");print}' "$0" | \
+  julia --startup-file=no -E 'readchomp("/dev/fd/0") |> Meta.parse |> eval' && echo "Done"; exit
+=#
+
+#=run
+begin
+const NCURSES_VERSION = "6.3"
+=#
+
 """
     struct TermCapability
 
@@ -22,6 +37,63 @@ struct TermCapability
     description::String
 end
 
+#=run
+using Downloads
+
+standard_caps = IOBuffer()
+
+Downloads.download("https://raw.githubusercontent.com/mirror/ncurses/v$NCURSES_VERSION/include/Caps", standard_caps)
+
+const TERM_FLAGS = Tuple{String, String, String}[]
+const TERM_NUMBERS = Tuple{String, String, String}[]
+const TERM_STRINGS = Tuple{String, String, String}[]
+
+for line in eachline(seekstart(standard_caps))
+    startswith(line, '#') && continue
+    components = split(line, '\t', keepempty=false)
+    if length(components) ∉ 8:9
+        @warn "Malformed line: $(sprint(show, line))"
+        continue
+    end
+    name, shortcode, type, _, _, _, _, description, _... = components
+    caplist = if type == "bool" TERM_FLAGS
+    elseif type == "num" TERM_NUMBERS
+    elseif type == "str" TERM_STRINGS
+    else
+        @warn "Unrecognised capability type: $type"
+        continue
+    end
+    push!(caplist, (name, shortcode, description))
+end
+
+const SENTINEL = "\n## GENERATED CODE BEYOND THIS POINT ##"
+const PREAMBLE = readuntil(__FILE__, SENTINEL, keep=true)
+
+out = IOBuffer()
+write(out, PREAMBLE, "\n\n# Terminfo Capabilities as of NCurses $NCURSES_VERSION\n")
+
+for (ftype, list) in [("flag", TERM_FLAGS), ("number", TERM_NUMBERS), ("string", TERM_STRINGS)]
+    print(out, "\n\"\"\"\n\
+          Ordered list of known terminal capability $ftype fields, as of NCurses $NCURSES_VERSION.\n\
+          \"\"\"\n\
+          const TERM_$(uppercase(ftype))S = [")
+    namepad = maximum(textwidth, getindex.(list, 1)) + 1
+    codepad = maximum(textwidth, getindex.(list, 2)) + 1
+    for (name, shortcode, description) in list
+        print(out, "\n    TermCapability(:", shortcode, ',', ' '^(codepad - textwidth(shortcode)),
+              ':', name, ',', ' '^(namepad - textwidth(name)),
+              '"', escape_string(description), "\"),")
+    end
+    println(out, "\n]")
+end
+
+open(io -> write(io, seekstart(out)), __FILE__, "w")
+
+end
+=#
+
+## GENERATED CODE BEYOND THIS POINT ##
+
 # Terminfo Capabilities as of NCurses 6.3
 
 """
@@ -39,8 +111,8 @@ const TERM_FLAGS = [
     TermCapability(:km,    :has_meta_key,             "Has a meta key (i.e., sets 8th-bit)"),
     TermCapability(:hs,    :has_status_line,          "has extra status line"),
     TermCapability(:in,    :insert_null_glitch,       "insert mode distinguishes nulls"),
-    TermCapability(:db,    :memory_below,             "display may be retained below the screen"),
     TermCapability(:da,    :memory_above,             "display may be retained above the screen"),
+    TermCapability(:db,    :memory_below,             "display may be retained below the screen"),
     TermCapability(:mir,   :move_insert_mode,         "safe to move while in insert mode"),
     TermCapability(:msgr,  :move_standout_mode,       "safe to move while in standout mode"),
     TermCapability(:os,    :over_strike,              "terminal can overstrike"),
@@ -69,7 +141,7 @@ const TERM_FLAGS = [
     TermCapability(:OTns,  :crt_no_scrolling,         "crt cannot scroll"),
     TermCapability(:OTnc,  :no_correctly_working_cr,  "no way to go to start of line"),
     TermCapability(:OTMT,  :gnu_has_meta_key,         "has meta key"),
-    TermCapability(:OTNL,  :linefeed_is_newline,      "move down with \n"),
+    TermCapability(:OTNL,  :linefeed_is_newline,      "move down with \\n"),
     TermCapability(:OTpt,  :has_hardware_tabs,        "has 8-char tabs invoked with ^I"),
     TermCapability(:OTxr,  :return_does_clr_eol,      "return clears the line"),
 ]
@@ -394,13 +466,13 @@ const TERM_STRINGS = [
     TermCapability(:kf63,     :key_f63,                   "F63 function key"),
     TermCapability(:el1,      :clr_bol,                   "Clear to beginning of line"),
     TermCapability(:mgc,      :clear_margins,             "clear right and left soft margins"),
-    TermCapability(:smgl,     :set_left_margin,           "set left soft margin at current column. (ML is not in BSD termcap)."),
+    TermCapability(:smgl,     :set_left_margin,           "set left soft margin at current column."),
     TermCapability(:smgr,     :set_right_margin,          "set right soft margin at current column"),
     TermCapability(:fln,      :label_format,              "label format"),
     TermCapability(:sclk,     :set_clock,                 "set clock, #1 hrs #2 mins #3 secs"),
     TermCapability(:dclk,     :display_clock,             "display clock"),
     TermCapability(:rmclk,    :remove_clock,              "remove clock"),
-    TermCapability(:cwin,     :create_window,             "define a window #1 from #2, #3 to #4, #5"),
+    TermCapability(:cwin,     :create_window,             "define a window #1 from #2,#3 to #4,#5"),
     TermCapability(:wingo,    :goto_window,               "go to window #1"),
     TermCapability(:hup,      :hangup,                    "hang-up phone"),
     TermCapability(:dial,     :dial_phone,                "dial number #1"),
@@ -422,8 +494,8 @@ const TERM_STRINGS = [
     TermCapability(:u9,       :user9,                     "User string #9"),
     TermCapability(:op,       :orig_pair,                 "Set default pair to its original value"),
     TermCapability(:oc,       :orig_colors,               "Set all color pairs to the original ones"),
-    TermCapability(:initc,    :initialize_color,          "Initialize color #1 to (#2, #3, #4)"),
-    TermCapability(:initp,    :initialize_pair,           "Initialize color pair #1 to fg=(#2, #3, #4), bg=(#5,#6,#7)"),
+    TermCapability(:initc,    :initialize_color,          "initialize color #1 to (#2,#3,#4)"),
+    TermCapability(:initp,    :initialize_pair,           "Initialize color pair #1 to fg=(#2,#3,#4), bg=(#5,#6,#7)"),
     TermCapability(:scp,      :set_color_pair,            "Set current color pair to #1"),
     TermCapability(:setf,     :set_foreground,            "Set foreground color #1"),
     TermCapability(:setb,     :set_background,            "Set background color #1"),
@@ -491,7 +563,7 @@ const TERM_STRINGS = [
     TermCapability(:s1ds,     :set1_des_seq,              "Shift to codeset 1"),
     TermCapability(:s2ds,     :set2_des_seq,              "Shift to codeset 2"),
     TermCapability(:s3ds,     :set3_des_seq,              "Shift to codeset 3"),
-    TermCapability(:smglr,    :set_lr_margin,             "Set both left and right margins to #1, #2. (ML is not in BSD termcap)."),
+    TermCapability(:smglr,    :set_lr_margin,             "Set both left and right margins to #1, #2.  (ML is not in BSD termcap)."),
     TermCapability(:smgtb,    :set_tb_margin,             "Sets both top and bottom margins to #1, #2"),
     TermCapability(:birep,    :bit_image_repeat,          "Repeat bit image cell #1 #2 times"),
     TermCapability(:binel,    :bit_image_newline,         "Move to next row of the bit image"),
@@ -520,7 +592,7 @@ const TERM_STRINGS = [
     TermCapability(:OTi2,     :termcap_init2,             "secondary initialization string"),
     TermCapability(:OTrs,     :termcap_reset,             "terminal reset string"),
     TermCapability(:OTnl,     :linefeed_if_not_lf,        "use to move down"),
-    TermCapability(:OTbs,     :backspaces_with_bs,        "uses ^H to move left"),
+    TermCapability(:OTbc,     :backspace_if_not_bs,       "move left, if not ^H"),
     TermCapability(:OTko,     :other_non_function_keys,   "list of self-mapped keycaps"),
     TermCapability(:OTma,     :arrow_key_map,             "map motion-keys for vi version 2"),
     TermCapability(:OTG2,     :acs_ulcorner,              "single upper left"),
