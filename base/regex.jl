@@ -188,7 +188,7 @@ Methods that accept a `RegexMatch` object are defined for [`iterate`](@ref),
 [`getindex`](@ref), where keys are the the names or numbers of a capture group.
 See [`keys`](@ref keys(::RegexMatch)) for more information.
 
-`RegexMatch` objects can be converted to base collection types for further processing: `Tuple(m)`, `NamedTuple(m)`, `Dict(m)`.
+`Tuple(m)`, `NamedTuple(m)`, and `Dict(m)` can be used to construct more flexible collection types from `RegexMatch` objects.
 
 !!! compat "Julia 1.11"
     Converting to NamedTuples and Dicts requires Julia 1.11
