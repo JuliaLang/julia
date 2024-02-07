@@ -280,7 +280,7 @@ AbstractZeroDimArray{T} = AbstractArray{T, 0}
 
 reindex(::Tuple{}, ::Tuple{}) = ()
 
-_maybeview(A, i1::Integer, inds::Integer...) = A[i1, inds...]
+_maybeview(A, i1::Integer, inds::Integer...) = (@_propagate_inbounds_meta; A[i1, inds...])
 function _maybeview(A, v...)
     B = view(A, v...)
     B isa SubArray{<:Any, 0} ? B[] : B
