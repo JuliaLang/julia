@@ -1129,7 +1129,7 @@ end
         end
     end
 end
-  
+
 @testset "Irrational Inverses, Issue #30882" begin
     @test @inferred(inv(π)) ≈ 0.3183098861837907
 end
