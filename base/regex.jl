@@ -364,8 +364,8 @@ function endswith(s::SubString{String}, r::Regex)
 end
 
 function chopprefix(s::AbstractString, prefix::Regex)
-    # fast path to avoid (some) regex, i.e. meant for file endings
-    startswith(raw"\.", prefix.pattern) && any.(!isletter, @view prefix.pattern[2:end]) && endswith(s, prefix.pattern[2:end]) && return chopsuffix(s, prefix.pattern)
+    # fast path to avoid (some, letter-only) regex
+    any.(!isletter, prefix.pattern) && startswith(s, prefix.pattern) && return chopprefix(s, prefix.pattern)
 
     m = match(prefix, s, firstindex(s), PCRE.ANCHORED)
     m === nothing && return SubString(s)
@@ -373,6 +373,9 @@ function chopprefix(s::AbstractString, prefix::Regex)
 end
 
 function chopsuffix(s::AbstractString, suffix::Regex)
+    # fast path to avoid (some) regex, i.e. meant for file endings
+    startswith(raw"\.", prefix.pattern) && any.(!isletter, prefix.pattern[2:end]) && endswith(s, prefix.pattern[2:end]) && return chopsuffix(s, prefix.pattern)
+
     m = match(suffix, s, firstindex(s), PCRE.ENDANCHORED)
     m === nothing && return SubString(s)
     isempty(m.match) && return SubString(s)
