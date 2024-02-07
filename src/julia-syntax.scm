@@ -10,7 +10,7 @@
       a))
 (define (fix-arglist l (unused #t))
   (if (any vararg? (butlast l))
-      (error "invalid ... on non-final argument"))
+      (error "invalid \"...\" on non-final argument"))
   (map (lambda (a)
          (cond ((and (pair? a) (eq? (car a) 'kw))
                 `(kw ,(fill-missing-argname (cadr a) unused) ,(caddr a)))
@@ -46,10 +46,10 @@
          (arg2  (if (and (pair? arg)
                          (pair? (cdddr e)))
                     (make-ssavalue) arg)))
-    (if (and (not (dotop? (cadr e)))
+    (if (and (not (dotop-named? (cadr e)))
              (length> e 5)
              (pair? (cadddr (cdr e)))
-             (dotop? (cadddr (cddr e))))
+             (dotop-named? (cadddr (cddr e))))
         ;; look ahead: if the 2nd argument of the next comparison is also
         ;; an argument to an eager (dot) op, make sure we don't skip the
         ;; initialization of its variable by short-circuiting
@@ -68,7 +68,7 @@
 (define (expand-scalar-compare e)
   (comp-accum e
               (lambda (a b) `(&& ,a ,b))
-              (lambda (x) (or (not (length> x 2)) (dotop? (cadr x))))
+              (lambda (x) (or (not (length> x 2)) (dotop-named? (cadr x))))
               compare-one))
 
 ;; convert a series of scalar and vector comparisons into & calls,
@@ -79,14 +79,14 @@
               (lambda (a b) `(call .& ,a ,b))
               (lambda (x) (not (length> x 2)))
               (lambda (e)
-                (if (dotop? (cadr e))
+                (if (dotop-named? (cadr e))
                     (compare-one e)
                     (expand-scalar-compare e)))))
 
 (define (expand-compare-chain e)
   (car (expand-vector-compare e)))
 
-;; return the appropriate computation for an `end` symbol for indexing
+;; return the appropriate computation for a `begin` or `end` symbol for indexing
 ;; the array `a` in the `n`th index.
 ;; `tuples` are a list of the splatted arguments that precede index `n`
 ;; `last` = is this last index?
@@ -101,83 +101,93 @@
                                  tuples))))
             `(call (top lastindex) ,a ,dimno))))
 
-;; replace `end` for the closest ref expression, so doesn't go inside nested refs
-(define (replace-end ex a n tuples last)
+(define (begin-val a n tuples last)
+  (if (null? tuples)
+      (if (and last (= n 1))
+          `(call (top firstindex) ,a)
+          `(call (top firstindex) ,a ,n))
+      (let ((dimno `(call (top +) ,(- n (length tuples))
+                          ,.(map (lambda (t) `(call (top length) ,t))
+                                 tuples))))
+            `(call (top first) (call (top axes) ,a ,dimno)))))
+
+;; replace `begin` and `end` for the closest ref expression, so doesn't go inside nested refs
+(define (replace-beginend ex a n tuples last)
   (cond ((eq? ex 'end)                (end-val a n tuples last))
+        ((eq? ex 'begin)              (begin-val a n tuples last))
         ((or (atom? ex) (quoted? ex)) ex)
         ((eq? (car ex) 'ref)
          ;; inside ref only replace within the first argument
-         (list* 'ref (replace-end (cadr ex) a n tuples last)
+         (list* 'ref (replace-beginend (cadr ex) a n tuples last)
                 (cddr ex)))
+        ;; TODO: this probably should not be allowed since keyword args aren't
+        ;; positional, but in this context we have just used their positions anyway
+        ((eq? (car ex) 'kw)
+         (list 'kw (cadr ex) (replace-beginend (caddr ex) a n tuples last)))
         (else
          (cons (car ex)
-               (map (lambda (x) (replace-end x a n tuples last))
+               (map (lambda (x) (replace-beginend x a n tuples last))
                     (cdr ex))))))
 
-;; go through indices and replace the `end` symbol
+;; go through indices and replace the `begin` or `end` symbol
 ;; a = array being indexed, i = list of indices
 ;; returns (values index-list stmts) where stmts are statements that need
 ;; to execute first.
 (define (process-indices a i)
-  (let loop ((lst i)
-             (n   1)
-             (stmts '())
-             (tuples '())
-             (ret '()))
-    (if (null? lst)
-        (values (reverse ret) (reverse stmts))
-        (let ((idx  (car lst))
-              (last (null? (cdr lst))))
-          (if (and (pair? idx) (eq? (car idx) '...))
-              (if (symbol-like? (cadr idx))
-                  (loop (cdr lst) (+ n 1)
-                        stmts
-                        (cons (cadr idx) tuples)
-                        (cons `(... ,(replace-end (cadr idx) a n tuples last))
-                              ret))
-                  (let ((g (make-ssavalue)))
-                    (loop (cdr lst) (+ n 1)
-                          (cons `(= ,g ,(replace-end (cadr idx) a n tuples last))
-                                stmts)
-                          (cons g tuples)
-                          (cons `(... ,g) ret))))
-              (loop (cdr lst) (+ n 1)
-                    stmts tuples
-                    (cons (replace-end idx a n tuples last) ret)))))))
+  (let ((has-va? (any vararg? i)))
+    (let loop ((lst i)
+               (n   1)
+               (stmts '())
+               (tuples '())
+               (ret '()))
+      (if (null? lst)
+          (values (reverse ret) (reverse stmts))
+          (let* ((idx0 (car lst))
+                 (idx  (if (vararg? idx0) (cadr idx0) idx0))
+                 (last (null? (cdr lst)))
+                 (replaced (replace-beginend idx a n tuples last))
+                 (val      (if (kwarg? replaced) (caddr replaced) replaced))
+                 (idx      (if (or (not has-va?) (simple-atom? val))
+                               val (make-ssavalue))))
+            (loop (cdr lst) (+ n 1)
+                  (if (eq? idx val)
+                      stmts
+                      (cons `(= ,idx ,val)
+                            stmts))
+                  (if (vararg? idx0) (cons idx tuples) tuples)
+                  (cons (if (vararg? idx0)
+                            `(... ,idx)
+                            (if (eq? val replaced)
+                                idx
+                                (list 'kw (cadr replaced) idx)))
+                        ret)))))))
 
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg
 (define (method-lambda-expr argl body rett)
-  (let ((argl (map arg-name argl))
+  (let ((argl (map (lambda (x)
+                     (let ((n (arg-name x)))
+                       (if (underscore-symbol? n) UNUSED n)))
+                   argl))
         (body (blockify body)))
     `(lambda ,argl ()
              (scope-block
               ,(if (equal? rett '(core Any))
                    body
                    (let ((meta (take-while (lambda (x) (and (pair? x)
-                                                            (memq (car x) '(line meta))))
+                                                            (memq (car x) '(lineinfo line meta))))
                                            (cdr body)))
-                         (val (last body)))
-                     ;; wrap one-liners in `convert` instead of adding an ssavalue
-                     (if (and (length= (cdr body) (+ 1 (length meta)))
-                              (not (expr-contains-p return? (if (return? val)
-                                                                (cadr val)
-                                                                val))))
-                         `(,(car body) ,@meta
-                           ,(if (return? val)
-                                `(return ,(convert-for-type-decl (cadr val) rett))
-                                (convert-for-type-decl val rett)))
-                         (let ((R (make-ssavalue)))
-                           `(,(car body) ,@meta
-                             (= ,R ,rett)
-                             (meta ret-type ,R)
-                             ,@(list-tail body (+ 1 (length meta))))))))))))
+                         (R (make-ssavalue)))
+                     `(,(car body) ,@meta
+                       (= ,R ,rett)
+                       (meta ret-type ,R)
+                       ,@(list-tail body (+ 1 (length meta))))))))))
 
 ;; convert x<:T<:y etc. exprs into (name lower-bound upper-bound)
 ;; a bound is #f if not specified
 (define (analyze-typevar e)
   (define (check-sym s)
-    (if (symbol? s)
+    (if (symbol? (unescape s)) ; unescape for macroexpand.scm use
         s
         (error (string "invalid type parameter name \"" (deparse s) "\""))))
   (cond ((atom? e) (list (check-sym e) #f #f))
@@ -197,9 +207,17 @@
   (let ((bounds (map analyze-typevar params)))
     (values (map car bounds) bounds)))
 
+(define (unmangled-name v)
+  (if (eq? v '||)
+      v
+      (let ((s (string v)))
+        (if (eqv? (string.char s 0) #\#)
+            (symbol (last (string-split s "#")))
+            v))))
+
 ;; construct expression to allocate a TypeVar
-(define (bounds-to-TypeVar v)
-  (let ((v  (car v))
+(define (bounds-to-TypeVar v (unmangle #f))
+  (let ((v  ((if unmangle unmangled-name identity) (car v)))
         (lb (cadr v))
         (ub (caddr v)))
     `(call (core TypeVar) ',v
@@ -209,17 +227,18 @@
 
 (define (method-expr-name m)
   (let ((name (cadr m)))
+     (let ((name (if (or (length= m 2) (not (pair? name)) (not (quoted? name))) name (cadr name))))
        (cond ((not (pair? name)) name)
              ((eq? (car name) 'outerref) (cadr name))
              ;((eq? (car name) 'globalref) (caddr name))
-             (else name))))
+             (else name)))))
 
 ;; extract static parameter names from a (method ...) expression
 (define (method-expr-static-parameters m)
   (let ((type-ex (caddr m)))
     (if (eq? (car type-ex) 'block)
         ;; extract ssavalue labels of sparams from the svec-of-sparams argument to `method`
-        (let ((sp-ssavals (cddr (last (last type-ex)))))
+        (let ((sp-ssavals (cddr (cadddr (last type-ex)))))
           (map (lambda (a)  ;; extract T from (= v (call (core TypeVar) (quote T) ...))
                  (cadr (caddr (caddr a))))
                (filter (lambda (e)
@@ -227,33 +246,31 @@
                        (cdr type-ex))))
         '())))
 
-;; expressions of the form a.b.c... where everything is a symbol
-(define (sym-ref? e)
+(define (nodot-sym-ref? e)
   (or (symbol? e)
       (and (length= e 3) (eq? (car e) 'globalref))
-      (and (length= e 2) (eq? (car e) 'outerref))
-      (and (length= e 3) (eq? (car e) '|.|)
-           (or (atom? (cadr e)) (sym-ref? (cadr e)))
-           (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
-           (symbol? (cadr (caddr e))))))
+      (and (length= e 2) (eq? (car e) 'outerref))))
 
-;; e.g. Base.(:+) is deprecated in favor of Base.:+
-(define (deprecate-dotparen e)
-  (if (and (length= e 3) (eq? (car e) '|.|)
-           (or (atom? (cadr e)) (sym-ref? (cadr e)))
-           (length= (caddr e) 2) (eq? (caaddr e) 'tuple)
-           (pair? (cadr (caddr e))) (memq (caadr (caddr e)) '(quote inert)))
-      (let* ((s_ (cdadr (caddr e)))
-             (s (if (symbol? s_) s_
-                    (if (and (length= s_ 1) (symbol? (car s_))) (car s_) #f))))
-        (if s
-            (let ((newe (list (car e) (cadr e) (cadr (caddr e))))
-                  (S (deparse `(quote ,s)))) ; #16295
-              (syntax-deprecation (string (deparse (cadr e)) ".(" S ")")
-                                  (string (deparse (cadr e)) "." S) #f)
-              newe)
-            e))
-      e))
+;; expressions of the form a.b.c... where everything is a symbol
+(define (sym-ref? e)
+  (or (nodot-sym-ref? e)
+      (and (length= e 3) (eq? (car e) '|.|)
+            (or (atom? (cadr e)) (sym-ref? (cadr e)))
+            (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
+            (symbol? (cadr (caddr e))))))
+
+(define (overlay? e)
+  (and (pair? e) (eq? (car e) 'overlay)))
+
+(define (sym-ref-or-overlay? e)
+  (or (overlay? e)
+      (sym-ref? e)))
+
+(define (binding-to-globalref e)
+  (and (nodot-sym-ref? e)
+       (let ((mod (if (globalref? e) (cadr e) '(thismodule)))
+             (sym (if (symbol? e) e (last e))))
+         `(globalref ,mod ,sym))))
 
 ;; convert final (... x) to (curly Vararg x)
 (define (dots->vararg a)
@@ -264,10 +281,6 @@
             `(,@head (curly Vararg ,(cadr las)))
             `(,@head ,las)))))
 
-(define (hidden-name? s)
-  (and (symbol? s)
-       (eqv? (string.char (string s) 0) #\#)))
-
 (define (replace-vars e renames)
   (cond ((symbol? e)      (lookup e renames e))
         ((or (not (pair? e)) (quoted? e))  e)
@@ -277,22 +290,14 @@
                (map (lambda (x) (replace-vars x renames))
                     (cdr e))))))
 
-(define (replace-outer-vars e renames)
-  (cond ((and (pair? e) (eq? (car e) 'outerref)) (lookup (cadr e) renames e))
-        ((or (not (pair? e)) (quoted? e))  e)
-        ((memq (car e) '(-> function scope-block)) e)
-        (else
-         (cons (car e)
-               (map (lambda (x) (replace-outer-vars x renames))
-                    (cdr e))))))
-
 (define (make-generator-function name sp-names arg-names body)
   (let ((arg-names (append sp-names
                            (map (lambda (n)
                                   (if (eq? n '|#self#|) (gensy) n))
                                 arg-names))))
     (let ((body (insert-after-meta body  ;; don't specialize on generator arguments
-                                   `((meta nospecialize ,@arg-names)))))
+                                   ;; arg-names slots start at 2 (after name)
+                                   `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 2))) (iota (length arg-names))))))))
       `(block
         (global ,name)
         (function (call ,name ,@arg-names) ,body)))))
@@ -311,6 +316,24 @@
 
 (define (non-generated-version body)
   (generated-part- body #f))
+
+;; Remove and return the line number for the start of the function definition
+(define (maybe-remove-functionloc! body)
+  (let* ((prologue (extract-method-prologue body))
+         (prologue-lnos (filter linenum? prologue))
+         (functionloc (if (pair? prologue-lnos)
+                          (car prologue-lnos)
+                          ; Fallback - take first line anywhere in body
+                          (let ((lnos (filter linenum? body)))
+                            (if (null? lnos) '(line 0 none) (car lnos))))))
+    (if (length> prologue-lnos 1)
+        ; First of two line numbers in prologue is function definition location
+        ; which should be removed from the body.
+        (let loop ((stmts body))
+          (if (eq? functionloc (cadr stmts))
+              (set-cdr! stmts (cddr stmts))
+              (loop (cdr stmts)))))
+    functionloc))
 
 ;; construct the (method ...) expression for one primitive method definition,
 ;; assuming optional and keyword args are already handled
@@ -336,34 +359,32 @@
          (optional-positional-defs name sparams req opt dfl body
                                    (append req opt vararg) rett)))))
    ;; no optional positional args
-   (let ((names (map car sparams))
-         (anames (llist-vars argl)))
-     (if (has-dups (filter (lambda (x) (not (eq? x UNUSED))) anames))
-         (error "function argument names not unique"))
+   (let* ((names (map car sparams))
+          (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
+          (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames))
+          (ename (if (nodot-sym-ref? name) name
+                    (if (overlay? name) (cadr name) `(null)))))
+     (if (has-dups unused_anames)
+         (error (string "function argument name not unique: \"" (car (has-dups unused_anames)) "\"")))
      (if (has-dups names)
-         (error "function static parameter names not unique"))
+         (error (string "function static parameter name not unique: \"" (car (has-dups names)) "\"")))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
-         (error "function argument and static parameter names must be distinct"))
-     (if (or (and name (not (sym-ref? name))) (eq? name 'true) (eq? name 'false))
+         (error (string "function argument and static parameter name not distinct: \"" (car (intersect names unused_anames)) "\"")))
+     (if (or (and name (not (sym-ref-or-overlay? name))) (not (valid-name? name)))
          (error (string "invalid function name \"" (deparse name) "\"")))
-     (let* ((generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
+     (let* ((loc (maybe-remove-functionloc! body))
+            (generator (if (expr-contains-p if-generated? body (lambda (x) (not (function-def? x))))
                            (let* ((gen    (generated-version body))
                                   (nongen (non-generated-version body))
                                   (gname  (symbol (string (gensy) "#" (current-julia-module-counter))))
-                                  (gf     (make-generator-function gname names (llist-vars argl) gen))
-                                  (loc    (function-body-lineno body)))
+                                  (gf     (make-generator-function gname names anames gen)))
                              (set! body (insert-after-meta
                                          nongen
                                          `((meta generated
                                                  (new (core GeneratedFunctionStub)
                                                       ,gname
-                                                      ,(cons 'list anames)
-                                                      ,(if (null? sparams)
-                                                           'nothing
-                                                           (cons 'list (map car sparams)))
-                                                      ,(if (null? loc) 0 (cadr loc))
-                                                      (inert ,(if (null? loc) 'none (caddr loc)))
-                                                      false)))))
+                                                      (call (core svec) ,@(map quotify anames))
+                                                      (call (core svec) ,@(map quotify names)))))))
                              (list gf))
                            '()))
             (types (llist-types argl))
@@ -374,9 +395,13 @@
             (renames (map cons names temps))
             (mdef
              (if (null? sparams)
-                 `(method ,name (call (core svec) (call (core svec) ,@(dots->vararg types)) (call (core svec)))
+                 `(method ,ename
+                          (call (core svec)
+                                (call (core svec) ,@(dots->vararg types))
+                                (call (core svec))
+                                (inert ,loc))
                           ,body)
-                 `(method ,name
+                 `(method ,ename
                           (block
                            ,@(let loop ((n       names)
                                         (t       temps)
@@ -395,7 +420,8 @@
                                                       (map (lambda (ty)
                                                              (replace-vars ty renames))
                                                            types)))
-                                 (call (core svec) ,@temps)))
+                                 (call (core svec) ,@temps)
+                                 (inert ,loc)))
                           ,body))))
        (if (or (symbol? name) (globalref? name))
            `(block ,@generator (method ,name) ,mdef (unnecessary ,name))  ;; return the function
@@ -411,10 +437,15 @@
          (block
           ,(scopenest (cdr names) (cdr vals) expr)))))
 
-(define empty-vector-any '(call (core AnyVector) uninitialized 0))
+(define (make-assignments names vals expr)
+  `(block
+    ,@(map make-assignment names vals)
+    ,expr))
 
 (define (keywords-method-def-expr name sparams argl body rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
+         (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (cadr (caddr a)))))
+                           (filter nospecialize-meta? kargl)))
          (kargl (map (lambda (a)
                        (if (nospecialize-meta? a) (caddr a) a))
                      kargl))
@@ -422,9 +453,16 @@
          (body  (blockify body))
          (ftype (decl-type (car pargl)))
          ;; 1-element list of vararg argument, or empty if none
-         (vararg (let ((l (if (null? pargl) '() (last pargl))))
-                   (if (or (vararg? l) (varargexpr? l))
+         (vararg (let* ((l (if (null? pargl) '() (last pargl)))
+                        ;; handle vararg with default value
+                        (l- (if (kwarg? l) (cadr l) l)))
+                   (if (or (vararg? l-) (varargexpr? l-))
                        (list l) '())))
+         ;; expression to forward varargs to another call
+         (splatted-vararg (if (null? vararg) '()
+                              (list `(... ,(arg-name (car vararg))))))
+         ;; positional args with vararg
+         (pargl-all pargl)
          ;; positional args without vararg
          (pargl (if (null? vararg) pargl (butlast pargl)))
          ;; positional args with everything required; for use by the core function
@@ -435,7 +473,10 @@
          (restkw (let ((l (last kargl)))
                    (if (vararg? l)
                        (list (cadr l)) '())))
-         (kargl (if (null? restkw) kargl (butlast kargl)))
+         (kargl (let ((kws (if (null? restkw) kargl (butlast kargl))))
+                  (if (any vararg? kws)
+                      (error "invalid \"...\" on non-final keyword argument"))
+                  kws))
          ;; the keyword::Type expressions
          (vars     (map cadr kargl))
          ;; keyword default values
@@ -447,44 +488,40 @@
                                              (lambda (x) (eq? x v))
                                              vals))
                                 keynames))
+         ;; if keyword args don't depend on each other and the default
+         ;; values don't have embedded assignments (ick) then we can use
+         ;; ssavalues instead of slots in the sorter method.
+         (ssa-keyvars? (and (not ordered-defaults)
+                            (not (contains assignment? vals))))
+         (keyvars (if ssa-keyvars?
+                      (map (lambda (x) (make-ssavalue)) keynames)
+                      keynames))
+         (tempslot (gensy))
          ;; list of function's initial line number and meta nodes (empty if none)
          (prologue (extract-method-prologue body))
-         (annotations (map (lambda (a) `(meta nospecialize ,(arg-name (cadr (caddr a)))))
-                           (filter nospecialize-meta? kargl)))
          ;; body statements
          (stmts (cdr body))
-         (positional-sparams
-          (filter (lambda (s)
-                    (let ((name (car s)))
-                      (or (expr-contains-eq name (cons 'list pargl))
-                          (and (pair? vararg) (expr-contains-eq name (car vararg)))
-                          (not (expr-contains-eq name (cons 'list kargl))))))
-                  sparams))
+         (positional-sparams (filter-sparams (cons 'list pargl-all) sparams))
          (keyword-sparams
           (filter (lambda (s)
                     (not (any (lambda (p) (eq? (car p) (car s)))
                               positional-sparams)))
-                  sparams)))
-    (let ((kw      (gensy))
-          (rkw     (if (null? restkw) (make-ssavalue) (symbol (string (car restkw) "..."))))
-          (mangled (symbol (string "#" (if name (undot-name name) 'call) "#"
-                                   (string (current-julia-module-counter))))))
-      `(block
-        ;; call with no keyword args
-        ,(method-def-expr-
-          name positional-sparams (append pargl vararg)
-          `(block
-            ,@(without-generated prologue)
-            ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
-                   (ret `(return (call ,mangled
-                                       ,@(if ordered-defaults keynames vals)
-                                       ,@(if (null? restkw) '() `((call (top pairs) (call (core NamedTuple)))))
-                                       ,@(map arg-name pargl)
-                                       ,@(if (null? vararg) '()
-                                             (list `(... ,(arg-name (car vararg)))))))))
-               (if ordered-defaults
-                   (scopenest keynames vals ret)
-                   ret))))
+                  sparams))
+         (kw      (gensy))
+         (kwdecl  `(|::| ,kw (core NamedTuple)))
+         (rkw     (if (null? restkw) '() (symbol (string (car restkw) "..."))))
+         (restkw  (map (lambda (v) `(|::| ,v (call (top pairs) (core NamedTuple)))) restkw))
+         (mangled (let ((und (and name (undot-name name))))
+                    (symbol (string (if (and name (= (string.char (string name) 0) #\#))
+                                        ""
+                                        "#")
+                                    (or und '_) "#"
+                                    (string (current-julia-module-counter)))))))
+      ;; this is a hack: nest these statements inside a call so they get closure
+      ;; converted together, allowing all needed types to be defined before any methods.
+      `(call (core ifelse) (false) (false) (block
+        ;; forward-declare function so its type can occur in the signature of the inner method below
+        ,@(if (or (symbol? name) (globalref? name)) `((method ,name)) '())
 
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
@@ -492,34 +529,58 @@
           `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw
             ;; strip type off function self argument if not needed for a static param.
             ;; then it is ok for cl-convert to move this definition above the original def.
-            ,(if (decl? (car not-optional))
-                 (if (any (lambda (sp)
-                            (expr-contains-eq (car sp) (caddr (car not-optional))))
-                          positional-sparams)
-                     (car not-optional)
-                     (decl-var (car not-optional)))
-                 (car not-optional))
-            ,@(cdr not-optional) ,@vararg)
+            ,@not-optional ,@vararg)
           (insert-after-meta `(block
                                ,@stmts)
-                             annotations)
+                             (cons `(meta nkw ,(+ (length vars) (length restkw)))
+                                   annotations))
           rett)
+
+        ;; call with no keyword args
+        ,(method-def-expr-
+          name positional-sparams pargl-all
+          `(block
+            ,@(keep-first linenum? (without-generated prologue))
+            ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
+                   (ret `(return (call ,mangled
+                                       ,@(if ordered-defaults keynames vals)
+                                       ,@(if (null? restkw) '() `((call (top pairs) (call (core NamedTuple)))))
+                                       ,@(map arg-name pargl)
+                                       ,@splatted-vararg))))
+               (if ordered-defaults
+                   (scopenest keynames vals ret)
+                   ret))))
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
         ,(method-def-expr-
-          name
-          ;; remove sparams that don't occur, to avoid printing the warning twice
-          (filter-sparams (cons 'list argl) positional-sparams)
+          name positional-sparams
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
-             ,(if (any kwarg? pargl) (gensy) UNUSED)
-             (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
+             ,(if (any kwarg? `(,@pargl ,@vararg)) (gensy) UNUSED)
+             (call (core kwftype) ,ftype)) ,kwdecl ,@pargl ,@vararg)
           `(block
-            ,(scopenest
-              keynames
+            ;; propagate method metadata to keyword sorter
+            ,@(map propagate-method-meta (filter meta? prologue))
+            ,@(filter argwide-nospecialize-meta? prologue)
+            ,@(let ((lnns (filter linenum? prologue)))
+                (if (pair? lnns)
+                    (list (car lnns))
+                    '()))
+            ;; nospecialize meta for just positional args
+            ,@(map (lambda (m)
+                     `(meta ,(cadr m) ,@(filter (lambda (v) (not (memq v keynames)))
+                                                (cddr m))))
+                   (filter nospecialize-meta? prologue))
+            ;; If not using slots for the keyword argument values, still declare them
+            ;; for reflection purposes.
+            ,@(if ssa-keyvars?
+                  (map (lambda (v) `(local ,v)) (reverse keynames))
+                  '())
+            ,((if ssa-keyvars? make-assignments scopenest)
+              keyvars
               (map (lambda (v dflt)
                      (let* ((k     (decl-var v))
-                            (rval0 `(call (top getindex) ,kw (inert ,k)))
+                            (rval0 `(call (core getfield) ,kw (inert ,k)))
                             ;; note: if the "declared" type of a KW arg includes something
                             ;; from keyword-sparams then don't assert it here, since those
                             ;; static parameters don't have values yet. instead, the type
@@ -528,44 +589,42 @@
                                            (not (any (lambda (s)
                                                        (expr-contains-eq (car s) (caddr v)))
                                                      keyword-sparams)))
-                                      (let ((T (caddr v)))
-                                        `(call (core typeassert)
-                                               ,rval0
-                                               ;; work around `ANY` not being a type. if arg type
-                                               ;; looks like `ANY`, test whether it is `ANY` at run
-                                               ;; time and if so, substitute `Any`. issue #21510
-                                               ,(if (or (eq? T 'ANY)
-                                                        (and (globalref? T)
-                                                             (eq? (caddr T) 'ANY)))
-                                                    `(call (|.| (core Intrinsics) 'select_value)
-                                                           (call (core ===) ,T (core ANY))
-                                                           (core Any)
-                                                           ,T)
-                                                    T)))
+                                      (let ((T    (caddr v))
+                                            (temp (make-ssavalue)))
+                                        `(block (= ,temp ,rval0)
+                                                (if (call (core isa) ,temp ,T)
+                                                    (null)
+                                                    (call (core throw)
+                                                          (new (core TypeError)
+                                                               (inert |keyword argument|)
+                                                               (inert ,k)
+                                                               ,T
+                                                               ,temp)))
+                                                ,temp))
                                       rval0)))
-                       `(if (call (top haskey) ,kw (quote ,k))
-                            ,rval
-                            ,dflt)))
+                       `(block (if (call (core isdefined) ,kw (quote ,k))
+                                   (= ,tempslot ,rval)
+                                   (= ,tempslot ,dflt))
+                               ,tempslot)))
                    vars vals)
               `(block
-                (= ,rkw (call (top pairs)
-                              ,(if (null? keynames)
-                                   kw
-                                   `(call (top structdiff) ,kw (curly (core NamedTuple)
-                                                                      (tuple ,@(map quotify keynames)))))))
-                ,@(if (null? restkw)
-                      `((if (call (top isempty) ,rkw)
+                ,(if (null? restkw)
+                      `(if (call (top isempty)
+                                 (call (top diff_names)
+                                       (call (top keys) ,kw)
+                                       (tuple ,@(map quotify keynames))))
                             (null)
-                            (call (top kwerr) ,kw ,@(map arg-name pargl)
-                                  ,@(if (null? vararg) '()
-                                        (list `(... ,(arg-name (car vararg))))))))
-                      '())
+                            (call (top kwerr) ,kw ,@(map arg-name pargl) ,@splatted-vararg))
+                      `(= ,rkw (call (top pairs)
+                                     ,(if (null? keynames)
+                                          kw
+                                          `(call (top structdiff) ,kw (curly (core NamedTuple)
+                                                                             (tuple ,@(map quotify keynames))))))))
                 (return (call ,mangled  ;; finally, call the core function
-                              ,@keynames
+                              ,@keyvars
                               ,@(if (null? restkw) '() (list rkw))
                               ,@(map arg-name pargl)
-                              ,@(if (null? vararg) '()
-                                    (list `(... ,(arg-name (car vararg)))))))))))
+                              ,@splatted-vararg))))))
         ;; return primary function
         ,(if (not (symbol? name))
              '(null) name)))))
@@ -606,7 +665,10 @@
                       (vals   (list-tail dfl n))
                       (absent (list-tail opt n)) ;; absent arguments
                       (body
-                       (if (any (lambda (defaultv)
+                       (if (any vararg? (butlast vals))
+                         ;; Forbid splat in all but the final default value
+                         (error "invalid \"...\" in non-final positional argument default value")
+                         (if (any (lambda (defaultv)
                                   ;; does any default val expression...
                                   (contains (lambda (e)
                                               ;; contain "e" such that...
@@ -625,7 +687,7 @@
                            ;; otherwise add all
                            `(block
                              ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals)))))
+                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals))))))
                  (method-def-expr- name sp passed body)))
              (iota (length opt)))
       ,(method-def-expr- name sparams overall-argl body rett))))
@@ -651,13 +713,13 @@
 (define (throw-unassigned-kw-args argl)
   (define (throw-unassigned argname)
     `(call (core throw) (call (core UndefKeywordError) (inert ,argname))))
+  (define (to-kw x)
+    (cond ((symdecl? x) `(kw ,x ,(throw-unassigned (decl-var x))))
+          ((nospecialize-meta? x) `(meta ,(cadr x) ,(to-kw (caddr x))))
+          (else x)))
   (if (has-parameters? argl)
       (cons (cons 'parameters
-                  (map (lambda (x)
-                         (cond ((symbol? x) `(kw ,x ,(throw-unassigned x)))
-                               ((decl? x) `(kw ,x ,(throw-unassigned (cadr x))))
-                               (else x)))
-                       (cdar argl)))
+                  (map to-kw (cdar argl)))
             (cdr argl))
       argl))
 
@@ -696,33 +758,39 @@
 
 (define (default-inner-ctors name field-names field-types params bounds locs)
   (let* ((field-names (safe-field-names field-names field-types))
-         (any-ctor
+         (all-ctor (if (null? params)
+          ;; definition with exact types for all arguments
+          `(function (call ,name
+                          ,@(map make-decl field-names field-types))
+                    (block
+                     ,@locs
+                     (new (outerref ,name) ,@field-names)))
+          #f))
+         (any-ctor (if (or (not all-ctor) (any (lambda (t) (not (equal? t '(core Any))))
+                                 field-types))
           ;; definition with Any for all arguments
-          `(function ,(with-wheres
-                       `(call ,(if (pair? params)
-                                   `(curly ,name ,@params)
-                                   name)
-                              ,@field-names)
-                       (map (lambda (b) (cons 'var-bounds b)) bounds))
+          ;; only if any field type is not Any, checked at runtime
+          `(function (call (|::| |#ctor-self#|
+                            ,(with-wheres
+                              `(curly (core Type) ,(if (pair? params)
+                                                       `(curly ,name ,@params)
+                                                       name))
+                              (map (lambda (b) (cons 'var-bounds b)) bounds)))
+                           ,@field-names)
                      (block
                       ,@locs
-                      (call new ,@field-names)))))
-    (if (and (null? params) (any (lambda (t) (not (equal? t '(core Any))))
-                                 field-types))
-        (list
-         ;; definition with field types for all arguments
-         ;; only if any field type is not Any, checked at runtime
-         `(if ,(foldl (lambda (t u)
-                        `(&& ,u (call (core ===) (core Any) ,t)))
-                      `(call (core ===) (core Any) ,(car field-types))
-                      (cdr field-types))
-            (block)
-            (function (call ,name
-                            ,@(map make-decl field-names field-types))
-                      (block
-                        ,@locs
-                        (call new ,@field-names))))
-         any-ctor)
+                      (call new ,@field-names))) ; this will add convert calls later
+          #f)))
+    (if all-ctor
+        (if any-ctor
+            (list all-ctor
+                  `(if ,(foldl (lambda (t u)
+                           `(&& ,u (call (core ===) (core Any) ,t)))
+                         `(call (core ===) (core Any) ,(car field-types))
+                         (cdr field-types))
+                       '(block)
+                       ,any-ctor))
+            (list all-ctor))
         (list any-ctor))))
 
 (define (default-outer-ctor name field-names field-types params bounds locs)
@@ -732,45 +800,64 @@
                  (map (lambda (b) (cons 'var-bounds b)) bounds))
                (block
                 ,@locs
-                (call (curly ,name ,@params) ,@field-names)))))
+                (new (curly ,name ,@params) ,@field-names)))))
 
-(define (new-call Tname type-params params args field-names field-types)
-  (if (any vararg? args)
-      (error "... is not supported inside \"new\""))
+(define (num-non-varargs args)
+  (count (lambda (a) (not (vararg? a))) args))
+
+;; selftype?: tells us whether the called object is the type being constructed,
+;; i.e. `new()` and not `new{...}()`.
+(define (new-call Tname type-params sparams params args field-names field-types selftype?)
   (if (any kwarg? args)
       (error "\"new\" does not accept keyword arguments"))
-  (if (length> params (length type-params))
-      (error "too few type parameters specified in \"new{...}\""))
-  (let ((Texpr (if (null? type-params)
-                   `(outerref ,Tname)
-                   `(curly (outerref ,Tname)
-                           ,@type-params))))
-    (cond ((length> args (length field-names))
-           `(call (top error) "new: too many arguments"))
-          (else
-           (if (equal? type-params params)
-               `(new ,Texpr ,@(map (lambda (fty val)
-                                     `(call (top convert) ,fty ,val))
-                                   (list-head field-types (length args)) args))
-               (let ((tn (make-ssavalue)))
+  (let ((nnv (num-non-varargs type-params)))
+    (if (and (not (any vararg? type-params)) (length> params nnv))
+        (error "too few type parameters specified in \"new{...}\""))
+    (if (> nnv (length params))
+        (error "too many type parameters specified in \"new{...}\"")))
+  (let* ((Texpr (if (null? type-params)
+                    `(outerref ,Tname)
+                    (if selftype?
+                        '|#ctor-self#|
+                        `(curly (outerref ,Tname)
+                                ,@type-params))))
+         (tn (if (symbol? Texpr) Texpr (make-ssavalue)))
+         (field-convert (lambda (fld fty val)
+                          (if (equal? fty '(core Any))
+                              val
+                              (convert-for-type-decl val
+                                                     ; for ty, usually use the fieldtype, not the fty expression
+                                                     (if (and (not selftype?) (equal? type-params params) (memq fty params) (memq fty sparams))
+                                                      fty ; the field type is a simple parameter, the usage here is of a
+                                                          ; local variable (currently just handles sparam) for the bijection of params to type-params
+                                                      `(call (core fieldtype) ,tn ,(+ fld 1)))
+                                                      #f
+                                                      #f)))))
+    (cond ((> (num-non-varargs args) (length field-names))
+           `(call (core throw) (call (top ArgumentError)
+                                     ,(string "new: too many arguments (expected " (length field-names) ")"))))
+          ((any vararg? args)
+           (if (every (lambda (ty) (equal? ty '(core Any)))
+                      field-types)
+               `(splatnew ,Texpr (call (core tuple) ,@args))
+               (let ((argt (make-ssavalue))
+                     (nf (make-ssavalue)))
                  `(block
-                   (= ,tn ,Texpr)
-                   (new ,tn ,@(map (lambda (fld val)
-                                     `(call (top convert)
-                                            (call (core fieldtype) ,tn (quote ,fld))
-                                            ,val))
-                                   (list-head field-names (length args)) args)))))))))
-
-;; insert a statement after line number node
-(define (prepend-stmt stmt body)
-  (if (and (pair? body) (eq? (car body) 'block))
-      (cond ((atom? (cdr body))
-             `(block ,stmt (null)))
-            ((and (pair? (cadr body)) (eq? (caadr body) 'line))
-             `(block ,(cadr body) ,stmt ,@(cddr body)))
-            (else
-             `(block ,stmt ,@(cdr body))))
-      body))
+                   ,@(if (symbol? tn) '() `((= ,tn ,Texpr)))
+                   (= ,argt (call (core tuple) ,@args))
+                   (= ,nf (call (core nfields) ,argt))
+                   (if (call (top ult_int) ,nf ,(length field-names))
+                       (call (core throw) (call (top ArgumentError)
+                                                ,(string "new: too few arguments (expected " (length field-names) ")"))))
+                   (if (call (top ult_int) ,(length field-names) ,nf)
+                       (call (core throw) (call (top ArgumentError)
+                                                ,(string "new: too many arguments (expected " (length field-names) ")"))))
+                   (new ,tn ,@(map (lambda (fld fty) (field-convert fld fty `(call (core getfield) ,argt ,(+ fld 1) (false))))
+                                   (iota (length field-names)) (list-head field-types (length field-names))))))))
+          (else
+           `(block
+             ,@(if (symbol? tn) '() `((= ,tn ,Texpr)))
+             (new ,tn ,@(map field-convert (iota (length args)) (list-head field-types (length args)) args)))))))
 
 ;; insert item at start of arglist
 (define (arglist-unshift sig item)
@@ -783,60 +870,69 @@
         ((length= lno 3) (string " around " (caddr lno) ":" (cadr lno)))
         (else "")))
 
-(define (ctor-def name Tname params bounds sig ctor-body body wheres)
+;; convert constructor signature from X(...) to (|#ctor-self#|::Type{X})(...),
+;; or return #f if we can't
+(define (ctor-sig sig)
+  (cond ((or (eq? (car sig) '|::|) (eq? (car sig) 'where))
+         (let ((s2 (ctor-sig (cadr sig))))
+           (and s2 `(,(car sig) ,s2 ,@(cddr sig)))))
+        ((eq? (car sig) 'call)
+         (let ((head (cadr sig)))
+           (if (decl? head)
+               (if (eq? (cadr head) '|#ctor-self#|)
+                   sig  ;; already in the required form
+                   #f)
+               `(call (|::| |#ctor-self#| (curly (core Type) ,head)) ,@(cddr sig)))))
+        (else #f)))
+
+(define (ctor-def name Tname ctor-body sig body wheres)
   (let* ((curly?     (and (pair? name) (eq? (car name) 'curly)))
          (curlyargs  (if curly? (cddr name) '()))
-         (name       (if curly? (cadr name) name)))
+         (name       (if curly? (cadr name) name))
+         (sparams (map car (map analyze-typevar wheres))))
     (cond ((not (eq? name Tname))
-           `(function ,(with-wheres `(call ,(if curly?
-                                                `(curly ,name ,@curlyargs)
-                                                name)
-                                           ,@sig)
-                                    wheres)
+           `(function ,sig
                       ;; pass '() in order to require user-specified parameters with
                       ;; new{...} inside a non-ctor inner definition.
-                      ,(ctor-body body '())))
+                      ,(ctor-body body '() sparams #f)))
           (else
-           `(function ,(with-wheres `(call ,(if curly?
-                                                `(curly ,name ,@curlyargs)
-                                                name)
-                                           ,@sig)
-                                    wheres)
-                      ,(ctor-body body curlyargs))))))
-
-(define (function-body-lineno body)
-  (let ((lnos (filter (lambda (e) (and (pair? e) (eq? (car e) 'line)))
-                      body)))
-    (if (null? lnos) '() (car lnos))))
+           (let ((newsig (ctor-sig sig)))
+             `(function ,(or newsig sig)
+                        ,(ctor-body body curlyargs sparams (not (not newsig)))))))))
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
 ;; type, determined by the containing constructor definition.
-(define (rewrite-ctor ctor Tname params bounds field-names field-types)
-  (define (ctor-body body type-params)
+(define (rewrite-ctor ctor Tname params field-names field-types)
+  (define (ctor-body body type-params sparams selftype?)
     (pattern-replace (pattern-set
                       (pattern-lambda
                        (call (-/ new) . args)
-                       (new-call Tname type-params params
-                                 (map (lambda (a) (ctor-body a type-params)) args)
-                                 field-names field-types))
+                       (new-call Tname type-params sparams params
+                                 (map (lambda (a) (ctor-body a type-params sparams selftype?)) args)
+                                 field-names field-types selftype?))
                       (pattern-lambda
                        (call (curly (-/ new) . p) . args)
-                       (new-call Tname p params
-                                 (map (lambda (a) (ctor-body a type-params)) args)
-                                 field-names field-types)))
+                       (new-call Tname p sparams params
+                                 (map (lambda (a) (ctor-body a type-params sparams selftype?)) args)
+                                 field-names field-types #f)))
                      body))
   (pattern-replace
    (pattern-set
+    ;; recognize `(t::(Type{X{T}} where T))(...)` as an inner-style constructor for X
+    (pattern-lambda (function       (-$ (call (|::| self (where (curly (core (-/ Type)) name) . wheres)) . sig)
+                                        (|::| (call (|::| self (where (curly (core (-/ Type)) name) . wheres)) . sig) _t))
+                                    body)
+                    (ctor-def name Tname ctor-body (cadr __) body wheres))
     ;; definitions without `where`
     (pattern-lambda (function       (-$ (call name . sig) (|::| (call name . sig) _t)) body)
-                    (ctor-def name Tname params bounds sig ctor-body body #f))
+                    (ctor-def name Tname ctor-body (cadr __) body #f))
     (pattern-lambda (= (-$ (call name . sig) (|::| (call name . sig) _t)) body)
-                    (ctor-def name Tname params bounds sig ctor-body body #f))
+                    (ctor-def name Tname ctor-body (cadr __) body #f))
     ;; definitions with `where`
     (pattern-lambda (function       (where (-$ (call name . sig) (|::| (call name . sig) _t)) . wheres) body)
-                    (ctor-def name Tname params bounds sig ctor-body body wheres))
+                    (ctor-def name Tname ctor-body (cadr __) body wheres))
     (pattern-lambda (= (where (-$ (call name . sig) (|::| (call name . sig) _t)) . wheres) body)
-                    (ctor-def name Tname params bounds sig ctor-body body wheres)))
+                    (ctor-def name Tname ctor-body (cadr __) body wheres)))
 
    ;; flatten `where`s first
    (pattern-replace
@@ -860,10 +956,21 @@
 
 (define (struct-def-expr- name params bounds super fields0 mut)
   (receive
-   (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
-                           fields0)
-   (let* ((defs        (filter (lambda (x) (not (effect-free? x))) defs))
-          (locs        (if (and (pair? fields0) (pair? (car fields0)) (eq? (caar fields0) 'line))
+   (fields defs) (separate eventually-decl? fields0)
+   (let* ((attrs ())
+          (fields (let ((n 0))
+                    (map (lambda (x)
+                           (set! n (+ n 1))
+                           (let loop ((x x))
+                             (if (and (pair? x) (not (decl? x)))
+                                 (begin
+                                   (set! attrs (cons (quotify (car x)) (cons n attrs)))
+                                   (loop (cadr x)))
+                                 x)))
+                         fields)))
+          (attrs (reverse attrs))
+          (defs        (filter (lambda (x) (not (or (effect-free? x) (eq? (car x) 'string)))) defs))
+          (locs        (if (and (pair? fields0) (linenum? (car fields0)))
                            (list (car fields0))
                            '()))
           (field-names (map decl-var fields))
@@ -871,7 +978,8 @@
           (defs2 (if (null? defs)
                      (default-inner-ctors name field-names field-types params bounds locs)
                      defs))
-          (min-initialized (min (ctors-min-initialized defs) (length fields))))
+          (min-initialized (min (ctors-min-initialized defs) (length fields)))
+          (prev (make-ssavalue)))
      (let ((dups (has-dups field-names)))
        (if dups (error (string "duplicate field name: \"" (car dups) "\" is not unique"))))
      (for-each (lambda (v)
@@ -879,30 +987,60 @@
                      (error (string "field name \"" (deparse v) "\" is not a symbol"))))
                field-names)
      `(block
+       (global ,name) (const ,name)
        (scope-block
         (block
-         (global ,name) (const ,name)
+         (hardscope)
+         (local-def ,name)
          ,@(map (lambda (v) `(local ,v)) params)
-         ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v))) params bounds)
-         (struct_type ,name (call (core svec) ,@params)
-                      (call (core svec) ,@(map quotify field-names))
-                      ,super (call (core svec) ,@field-types) ,mut ,min-initialized)))
+         ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
+         (toplevel-only struct (outerref ,name))
+         (= ,name (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@params)
+                        (call (core svec) ,@(map quotify field-names))
+                        (call (core svec) ,@attrs)
+                        ,mut ,min-initialized))
+         (call (core _setsuper!) ,name ,super)
+         (if (isdefined (outerref ,name))
+             (block
+              (= ,prev (outerref ,name))
+              (if (call (core _equiv_typedef) ,prev ,name)
+                  ;; if this is compatible with an old definition, use the existing type object
+                  ;; and its parameters
+                  (block (= ,name ,prev)
+                         ,@(if (pair? params)
+                               `((= (tuple ,@params) (|.|
+                                                      ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
+                                                              prev
+                                                              params)
+                                                      (quote parameters))))
+                               '()))
+                  ;; otherwise do an assignment to trigger an error
+                  (= (outerref ,name) ,name)))
+             (= (outerref ,name) ,name))
+         (call (core _typebody!) ,name (call (core svec) ,@field-types))
+         (null)))
        ;; "inner" constructors
        (scope-block
         (block
+         (hardscope)
          (global ,name)
          ,@(map (lambda (c)
-                  (rewrite-ctor c name params bounds field-names field-types))
+                  (rewrite-ctor c name params field-names field-types))
                 defs2)))
        ;; "outer" constructors
        ,@(if (and (null? defs)
                   (not (null? params))
-                  ;; don't generate an outer constructor if the type has
-                  ;; parameters not mentioned in the field types. such a
-                  ;; constructor would not be callable anyway.
-                  (every (lambda (sp)
-                           (expr-contains-eq sp (cons 'list field-types)))
-                         params))
+                  ;; To generate an outer constructor, each parameter must occur in a field
+                  ;; type, or in the bounds of a subsequent parameter.
+                  ;; Otherwise the constructor would not work, since the parameter values
+                  ;; would never be specified.
+                  (let loop ((root-types field-types)
+                             (sp         (reverse bounds)))
+                    (or (null? sp)
+                        (let ((p (car sp)))
+                          (and (expr-contains-eq (car p) (cons 'list root-types))
+                               (loop (append (cdr p) root-types)
+                                     (cdr sp)))))))
              `((scope-block
                 (block
                  (global ,name)
@@ -918,9 +1056,18 @@
      (global ,name) (const ,name)
      (scope-block
       (block
+       (local-def ,name)
        ,@(map (lambda (v) `(local ,v)) params)
-       ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v))) params bounds)
-       (abstract_type ,name (call (core svec) ,@params) ,super))))))
+       ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
+       (toplevel-only abstract_type)
+       (= ,name (call (core _abstracttype) (thismodule) (inert ,name) (call (core svec) ,@params)))
+       (call (core _setsuper!) ,name ,super)
+       (call (core _typebody!) ,name)
+       (if (&& (isdefined (outerref ,name))
+               (call (core _equiv_typedef) (outerref ,name) ,name))
+           (null)
+           (= (outerref ,name) ,name))
+       (null))))))
 
 (define (primitive-type-def-expr n name params super)
   (receive
@@ -929,9 +1076,18 @@
      (global ,name) (const ,name)
      (scope-block
       (block
+       (local-def ,name)
        ,@(map (lambda (v) `(local ,v)) params)
-       ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v))) params bounds)
-       (primitive_type ,name (call (core svec) ,@params) ,n ,super))))))
+       ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v #t))) params bounds)
+       (toplevel-only primitive_type)
+       (= ,name (call (core _primitivetype) (thismodule) (inert ,name) (call (core svec) ,@params) ,n))
+       (call (core _setsuper!) ,name ,super)
+       (call (core _typebody!) ,name)
+       (if (&& (isdefined (outerref ,name))
+               (call (core _equiv_typedef) (outerref ,name) ,name))
+           (null)
+           (= (outerref ,name) ,name))
+       (null))))))
 
 ;; take apart a type signature, e.g. T{X} <: S{Y}
 (define (analyze-type-sig ex)
@@ -947,46 +1103,51 @@
 
 ;; insert calls to convert() in ccall, and pull out expressions that might
 ;; need to be rooted before conversion.
-(define (lower-ccall name RT atypes args cconv)
+(define (lower-ccall name RT atypes args cconv nreq)
   (let loop ((F atypes)  ;; formals
              (A args)    ;; actuals
              (stmts '()) ;; initializers
-             (C '())     ;; converted
+             (T '())     ;; argument types (F converted)
+             (C '())     ;; argument values (A converted)
              (GC '()))   ;; GC roots
-    (if (and (null? F) (not (null? A))) (error "more arguments than types for ccall"))
-    (if (and (null? A) (not (or (null? F) (and (pair? F) (vararg? (car F)) (null? (cdr F)))))) (error "more types than arguments for ccall"))
-    (if (null? A)
-        `(block
-          ,.(reverse! stmts)
-          (foreigncall ,name ,RT (call (core svec) ,@(dots->vararg atypes))
-                       ',cconv
-                       ,(length C)
-                       ,.(reverse! C)
-                       ,@GC)) ; GC root ordering is arbitrary
-        (let* ((a     (car A))
-               (isseq (and (vararg? (car F))))
-               (ty    (if isseq (cadar F) (car F))))
-          (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have '...'"))
-          (if (eq? ty 'Any)
-              (loop (if isseq F (cdr F)) (cdr A) stmts (list* a C) GC)
-              (let* ((g (make-ssavalue))
-                     (isamp (and (pair? a) (eq? (car a) '&)))
-                     (a (if isamp (cadr a) a))
-                     (stmts (cons `(= ,g (call (top ,(if isamp 'ptr_arg_cconvert 'cconvert)) ,ty ,a)) stmts))
-                     (ca `(call (top ,(if isamp 'ptr_arg_unsafe_convert 'unsafe_convert)) ,ty ,g)))
-                (loop (if isseq F (cdr F)) (cdr A) stmts
-                      (list* (if isamp `(& ,ca) ca) C) (list* g GC))))))))
+    (if (and (null? F) (not (null? A)))
+        (error "more arguments than types for ccall"))
+    (if (and (null? A) (not (or (null? F) (and (pair? F) (vararg? (car F)) (null? (cdr F))))))
+        (error "more types than arguments for ccall"))
+    (let ((isseq (and (not (null? F)) (vararg? (car F)))))
+      (if (and isseq (null? T))
+          (error "C ABI prohibits vararg without one required argument"))
+      (if (null? A)
+          `(block
+            ,.(reverse! stmts)
+            (foreigncall ,(expand-forms name) ,(expand-forms RT) (call (core svec) ,@(reverse! T))
+                         ;; 0 or number of arguments before ... in definition
+                         ,(or nreq
+                              (if isseq (- (length atypes) 1) 0))
+                         ',cconv
+                         ,.(reverse! C)
+                         ,@GC)) ; GC root ordering is arbitrary
+          (let* ((a     (expand-forms (car A)))
+                 (ty    (expand-forms (if isseq (cadar F) (car F)))))
+            (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have \"...\""))
+            (if (eq? ty 'Any)
+                (loop (if isseq F (cdr F)) (cdr A) stmts (list* '(core Any) T) (list* a C) GC)
+                (let* ((g (make-ssavalue))
+                       (stmts (cons `(= ,g (call (top cconvert) ,ty ,a)) stmts))
+                       (ca `(call (top unsafe_convert) ,ty ,g)))
+                  (loop (if isseq F (cdr F)) (cdr A) stmts
+                        (list* ty T) (list* ca C) (list* g GC)))))))))
+
+(define (just-arglist? ex)
+  (and (pair? ex)
+       (or (memq (car ex) '(tuple block ...))
+           (and (eq? (car ex) 'where)
+                (just-arglist? (cadr ex))))))
 
 (define (expand-function-def e)   ;; handle function definitions
-  (define (just-arglist? ex)
-    (and (pair? ex)
-         (or (memq (car ex) '(tuple block ...))
-             (and (eq? (car ex) 'where)
-                  (just-arglist? (cadr ex))))))
-  (let ((name (cadr e)))
-    (if (just-arglist? name)
-        (expand-forms (cons '-> (cdr e)))
-        (expand-function-def- e))))
+  (if (just-arglist? (cadr e))
+      (expand-forms (cons '-> (cdr e)))
+      (expand-function-def- e)))
 
 ;; convert (where (where x S) T) to (where x T S)
 (define (flatten-where-expr e)
@@ -1017,7 +1178,10 @@
              (newa  '())
              (stmts '()))
     (if (null? argl)
-        (cons (reverse newa) (reverse stmts))
+        (cons (reverse newa) (if (null? stmts)
+                                 stmts
+                                 ;; return `nothing` from the assignments (issue #26518)
+                                 (reverse (cons '(null) stmts))))
         (let ((a (transform-arg (car argl))))
           (loop (cdr argl) (cons (car a) newa)
                 (if (cdr a) (cons (cdr a) stmts) stmts))))))
@@ -1035,58 +1199,42 @@
          (rett  (if dcl (caddr name) '(core Any)))
          (name  (if dcl (cadr name) name)))
     (cond ((and (length= e 2) (or (symbol? name) (globalref? name)))
-           (if (or (eq? name 'true) (eq? name 'false))
+           (if (not (valid-name? name))
                (error (string "invalid function name \"" name "\"")))
            `(method ,name))
           ((not (pair? name))  e)
           ((eq? (car name) 'call)
-           (let* ((head    (cadr name))
-                  (argl    (cddr name))
-                  (has-sp  (and (not where) (pair? head) (eq? (car head) 'curly)))
-                  (name    (deprecate-dotparen (if has-sp (cadr head) head)))
-                  (op (let ((op_ (maybe-undotop name))) ; handle .op -> broadcast deprecation
-                        (if op_
-                            (syntax-deprecation (string "function " (deparse name) "(...)")
-                                                (string "function Base.broadcast(::typeof(" (deparse op_) "), ...)") #f))
-                        op_))
-                  (name (if op '(|.| Base (inert broadcast)) name))
-                  (annotations (map (lambda (a) `(meta nospecialize ,(arg-name a)))
+           (let* ((raw-typevars (or where '()))
+                  (sparams (map analyze-typevar raw-typevars))
+                  (argl    (cdr name))
+                  ;; strip @nospecialize
+                  (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (caddr a))))
                                     (filter nospecialize-meta? argl)))
                   (body (insert-after-meta (caddr e) annotations))
                   (argl (map (lambda (a)
                                (if (nospecialize-meta? a) (caddr a) a))
                              argl))
-                  (argl (if op (cons `(|::| (call (core Typeof) ,op)) argl) argl))
-                  (raw-typevars (cond (has-sp (cddr head))
-                                      (where  where)
-                                      (else   '())))
-                  (sparams (map analyze-typevar raw-typevars))
+                  ;; handle destructuring
+                  (argl-stmts (lower-destructuring-args argl))
+                  (argl       (car argl-stmts))
+                  (name       (check-dotop (car argl)))
+                  (argname    (if (overlay? name) (caddr name) name))
+                  ;; fill in first (closure) argument
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
                                             `(|::| |#self#| ,(cadr n))
                                             n)))
-                  ;; fill in first (closure) argument
-                  (farg    (if (decl? name)
-                               (adj-decl name)
-                               `(|::| |#self#| (call (core Typeof) ,name))))
-                  (argl-stmts (lower-destructuring-args argl))
-                  (argl       (car argl-stmts))
+                  (farg    (if (decl? argname)
+                               (adj-decl argname)
+                               `(|::| |#self#| (call (core Typeof) ,argname))))
                   (body       (insert-after-meta body (cdr argl-stmts)))
+                  (argl    (cdr argl))
                   (argl    (fix-arglist
                             (arglist-unshift argl farg)
                             (and (not (any kwarg? argl)) (not (and (pair? argl)
                                                                    (pair? (car argl))
                                                                    (eq? (caar argl) 'parameters))))))
-                  (name    (if (or (decl? name) (and (pair? name) (eq? (car name) 'curly)))
+                  (name    (if (or (decl? name) (and (pair? name) (memq (car name) '(curly where))))
                                #f name)))
-             (if has-sp
-                 (syntax-deprecation (string "parametric method syntax " (deparse (cadr e)))
-                                     (deparse `(where (call ,(or name
-                                                                 (cadr (cadr (cadr e))))
-                                                            ,@(if (has-parameters? argl)
-                                                                  (cons (car argl) (cddr argl))
-                                                                  (cdr argl)))
-                                                      ,@raw-typevars))
-                                     (function-body-lineno body)))
              (expand-forms
               (method-def-expr name sparams argl body rett))))
           (else
@@ -1103,18 +1251,7 @@
                               (set! a (cadr w))))
                     #f))
          (argl (if (pair? a)
-                   (if (eq? (car a) 'tuple)
-                       (map =-to-kw (cdr a))
-                       (if (eq? (car a) 'block)
-                           (cond ((length= a 1) '())
-                                 ((length= a 2) (list (cadr a)))
-                                 ((length= a 3)
-                                  (if (assignment? (caddr a))
-                                      `((parameters (kw ,@(cdr (caddr a)))) ,(cadr a))
-                                      `((parameters ,(caddr a)) ,(cadr a))))
-                                 (else
-                                  (error "more than one semicolon in argument list")))
-                           (list (=-to-kw a))))
+                   (tuple-to-arglist (filter (lambda (x) (not (linenum? x))) a))
                    (list a)))
          ;; TODO: always use a specific special name like #anon# or _, then ignore
          ;; this as a local variable name.
@@ -1127,37 +1264,45 @@
                    `(call ,name ,@argl))
               ,body)))))
 
+(define (function-arglist e)
+  (cond ((eq? (car e) 'function)
+         (if (just-arglist? (cadr e))
+             (function-arglist (cons '-> (cdr e)))
+             (let* ((name  (cadr e))
+                    (dcl   (and (pair? name) (eq? (car name) '|::|)))
+                    (name  (if dcl (cadr name) name)))
+               (cddr name))))
+        ((eq? (car e) '->)
+         (let* ((a (cadr e)))
+           (if (pair? a)
+               (tuple-to-arglist (filter (lambda (x) (not (linenum? x))) a))
+               (list a))))
+        (else '())))
+
 (define (let-binds e)
   (if (and (pair? (cadr e))
            (eq? (car (cadr e)) 'block))
       (cdr (cadr e))
       (list (cadr e))))
 
-(define (expand-let e)
-  (if (length= e 2)
-      (begin (deprecation-message (string "The form `Expr(:let, ex)` is deprecated. "
-                                          "Use `Expr(:let, Expr(:block), ex)` instead." #\newline) #f)
-             (return (expand-let `(let (block) ,(cadr e))))))
-  (if (length> e 3)
-      (begin (deprecation-message (string "The form `Expr(:let, ex, binds...)` is deprecated. "
-                                          "Use `Expr(:let, Expr(:block, binds...), ex)` instead." #\newline) #f)
-             (return (expand-let `(let (block ,@(cddr e)) ,(cadr e))))))
+(define (expand-let e (hard? #t))
   (let ((ex    (caddr e))
-        (binds (let-binds e)))
+        (binds (let-binds e))
+        (hs    (if hard? '((hardscope)) '())))
     (expand-forms
      (if
       (null? binds)
-      `(scope-block (block ,ex))
+      `(scope-block (block ,@hs ,ex))
       (let loop ((binds (reverse binds))
                  (blk   ex))
         (if (null? binds)
             blk
             (cond
-             ((or (symbol? (car binds)) (decl? (car binds)))
+             ((symdecl? (car binds))
               ;; just symbol -> add local
               (loop (cdr binds)
                     `(scope-block
-                      (block
+                      (block ,@hs
                        (local ,(car binds))
                        ,blk))))
              ((and (length= (car binds) 3)
@@ -1166,56 +1311,39 @@
               (cond
                ((eventually-call? (cadar binds))
                 ;; f() = c
-                (let ((asgn (butlast (expand-forms (car binds))))
-                      (name (assigned-name (cadar binds))))
+                (let ((name (assigned-name (cadar binds))))
                   (if (not (symbol? name))
                       (error "invalid let syntax"))
                   (loop (cdr binds)
                         `(scope-block
-                          (block
+                          (block ,@hs
                            ,(if (expr-contains-eq name (caddar binds))
                                 `(local ,name) ;; might need a Box for recursive functions
                                 `(local-def ,name))
-                           ,asgn
+                           ,(car binds)
                            ,blk)))))
-               ((or (symbol? (cadar binds))
-                    (decl?   (cadar binds)))
+               ((symdecl?   (cadar binds))
                 (let ((vname (decl-var (cadar binds))))
                   (loop (cdr binds)
-                        (if (expr-contains-eq vname (caddar binds))
-                            (let ((tmp (make-ssavalue)))
-                              `(scope-block
-                                (block (= ,tmp ,(caddar binds))
-                                       (scope-block
-                                        (block
-                                         (local-def ,(cadar binds))
-                                         (= ,vname ,tmp)
-                                         ,blk)))))
-                            `(scope-block
-                              (block
-                               (local-def ,(cadar binds))
-                               (= ,vname ,(caddar binds))
-                               ,blk))))))
+                        (let ((tmp (make-ssavalue)))
+                          `(block (= ,tmp ,(caddar binds))
+                                  (scope-block
+                                   (block ,@hs
+                                          (local-def ,(cadar binds))
+                                          (= ,vname ,tmp)
+                                          ,blk)))))))
                ;; (a, b, c, ...) = rhs
                ((and (pair? (cadar binds))
                      (eq? (caadar binds) 'tuple))
                 (let ((vars (lhs-vars (cadar binds))))
                   (loop (cdr binds)
-                        (if (expr-contains-p (lambda (x) (memq x vars)) (caddr (car binds)))
-                            ;; use more careful lowering if there are name conflicts. issue #25652
-                            (let ((temp (make-ssavalue)))
-                              `(block
-                                (= ,temp ,(caddr (car binds)))
-                                (scope-block
-                                 (block
-                                  ,@(map (lambda (v) `(local-def ,v)) vars)
-                                  (= ,(cadr (car binds)) ,temp)
-                                  ,blk))))
-                            `(scope-block
-                              (block
-                               ,@(map (lambda (v) `(local-def ,v)) vars)
-                               ,(car binds)
-                               ,blk))))))
+                        (let ((tmp (make-ssavalue)))
+                          `(block (= ,tmp ,(caddar binds))
+                                  (scope-block
+                                   (block ,@hs
+                                          ,@(map (lambda (v) `(local-def ,v)) vars)
+                                          (= ,(cadar binds) ,tmp)
+                                          ,blk)))))))
                (else (error "invalid let syntax"))))
              (else (error "invalid let syntax")))))))))
 
@@ -1249,9 +1377,9 @@
       (if (null? f)
           '()
           (let ((x (car f)))
-            (cond ((or (symbol? x) (decl? x) (and (pair? x) (eq? (car x) 'line)))
+            (cond ((or (eventually-decl? x) (linenum? x))
                    (loop (cdr f)))
-                  ((and (assignment? x) (or (symbol? (cadr x)) (decl? (cadr x))))
+                  ((and (assignment? x) (eventually-decl? (cadr x)))
                    (error (string "\"" (deparse x) "\" inside type definition is reserved")))
                   (else '())))))
     (expand-forms
@@ -1286,25 +1414,29 @@
   (let ((tryb   (cadr e))
         (var    (caddr e))
         (catchb (cadddr e)))
-    (cond ((length= e 5)
+    (cond ((and (length> e 4) (not (equal? (caddddr e) '(false))))
            (if (has-unmatched-symbolic-goto? tryb)
                (error "goto from a try/finally block is not permitted"))
-           (let ((finalb (cadddr (cdr e))))
+           (let ((finalb (caddddr e)))
              (expand-forms
               `(tryfinally
-                ,(if (not (eq? catchb 'false))
-                     `(try ,tryb ,var ,catchb)
-                     `(scope-block ,tryb))
+                ,(if (and (equal? catchb '(false)) (length= e 5))
+                     `(scope-block ,tryb)
+                     `(try ,tryb ,var ,catchb (false) ,@(cdddddr e)))
                 (scope-block ,finalb)))))
-          ((length= e 4)
-           (expand-forms
-            (if (and (symbol-like? var) (not (eq? var 'false)))
-                `(trycatch (scope-block ,tryb)
-                           (scope-block
-                            (block (= ,var (the_exception))
-                                   ,catchb)))
-                `(trycatch (scope-block ,tryb)
-                           (scope-block ,catchb)))))
+          ((length> e 3)
+           (and (length> e 6) (error "invalid \"try\" form"))
+           (let ((elseb (if (length= e 6) `((scope-block ,@(cdddddr e))) '())))
+             (expand-forms
+               `(,(if (null? elseb) 'trycatch 'trycatchelse)
+                 (scope-block ,tryb)
+                 (scope-block
+                   ,(if (symbol-like? var)
+                        `(scope-block
+                          (block (= ,var (the_exception))
+                                 ,catchb))
+                        `(scope-block ,catchb)))
+                 ,@elseb))))
           (else
            (error "invalid \"try\" form")))))
 
@@ -1335,7 +1467,10 @@
            (expand-forms (expand-decls (car arg) (cdr arg) #t)))
           ((= |::|)
            (expand-forms (expand-decls 'const (cdr e) #f)))
-          (else e)))))
+          (else (error "expected assignment after \"const\""))))))
+
+(define (expand-atomic-decl e)
+  (error "unimplemented or unsupported atomic declaration"))
 
 (define (expand-local-or-global-decl e)
   (if (and (symbol? (cadr e)) (length= e 2))
@@ -1392,7 +1527,8 @@
                 ,@(reverse after)
                 (unnecessary (tuple ,@(reverse elts))))
         (let ((L (car lhss))
-              (R (car rhss)))
+              ;; rhss can be null iff L is a vararg
+              (R (if (null? rhss) '() (car rhss))))
           (cond ((and (symbol-like? L)
                       (or (not (pair? R)) (quoted? R) (equal? R '(null)))
                       ;; overwrite var immediately if it doesn't occur elsewhere
@@ -1404,6 +1540,60 @@
                        (cons (make-assignment L R) stmts)
                        after
                        (cons R elts)))
+                ((vararg? L)
+                 (if (any vararg? (cdr lhss))
+                     (error "multiple \"...\" on lhs of assignment"))
+                 (if (null? (cdr lhss))
+                     (let ((temp (if (eventually-call? (cadr L)) (gensy) (make-ssavalue))))
+                       `(block ,@(reverse stmts)
+                               (= ,temp (tuple ,@rhss))
+                               ,@(reverse after)
+                               (= ,(cadr L) ,temp)
+                               (unnecessary (tuple ,@(reverse elts) (... ,temp)))))
+                     (let ((lhss- (reverse lhss))
+                           (rhss- (reverse rhss))
+                           (lhs-tail '())
+                           (rhs-tail '()))
+                       (define (extract-tail)
+                         (if (not (or (null? lhss-) (null? rhss-)
+                                      (vararg? (car lhss-)) (vararg? (car rhss-))))
+                             (begin
+                               (set! lhs-tail (cons (car lhss-) lhs-tail))
+                               (set! rhs-tail (cons (car rhss-) rhs-tail))
+                               (set! lhss- (cdr lhss-))
+                               (set! rhss- (cdr rhss-))
+                               (extract-tail))))
+                       (extract-tail)
+                       (let* ((temp (if (any (lambda (x)
+                                               (or (eventually-call? x)
+                                                   (and (vararg? x) (eventually-call? (cadr x)))))
+                                             lhss-)
+                                        (gensy)
+                                        (make-ssavalue)))
+                              (assigns (make-assignment temp `(tuple ,@(reverse rhss-))))
+                              (assigns (if (symbol? temp)
+                                          `((local-def ,temp) ,assigns)
+                                          (list assigns)))
+                              (n (length lhss-))
+                              (st (gensy))
+                              (end (list after))
+                              (assigns (if (and (length= lhss- 1) (vararg? (car lhss-)))
+                                           (begin
+                                             (set-car! end
+                                                       (cons `(= ,(cadar lhss-) ,temp) (car end)))
+                                             assigns)
+                                           (append (if (> n 0)
+                                                       `(,@assigns (local ,st))
+                                                       assigns)
+                                                   (destructure- 1 (reverse lhss-) temp
+                                                                 n st end)))))
+                         (loop lhs-tail
+                               (append (map (lambda (x) (if (vararg? x) (cadr x) x)) lhss-) assigned)
+                               rhs-tail
+                               (append (reverse assigns) stmts)
+                               (car end)
+                               (cons `(... ,temp) elts))))))
+
                 ((vararg? R)
                  (let ((temp (make-ssavalue)))
                    `(block ,@(reverse stmts)
@@ -1416,7 +1606,9 @@
                    (loop (cdr lhss)
                          (cons L assigned)
                          (cdr rhss)
-                         (cons (make-assignment temp R) stmts)
+                         (if (symbol? temp)
+                             (list* (make-assignment temp R) `(local-def ,temp) stmts)
+                             (cons  (make-assignment temp R) stmts))
                          (cons (make-assignment L temp) after)
                          (cons temp elts)))))))))
 
@@ -1427,13 +1619,14 @@
       (= ,t ,x)
       ,@(let loop ((lhs lhss)
                    (i   1))
-          (if (null? lhs) '((null))
+          (if (null? lhs) '()
               (cons (if (eventually-call? (car lhs))
                         ;; if this is a function assignment, avoid putting our ssavalue
                         ;; inside the function and instead create a capture-able variable.
                         ;; issue #22032
                         (let ((temp (gensy)))
                           `(block
+                            (local-def ,temp)
                             (= ,temp (call (core getfield) ,t ,i))
                             (= ,(car lhs) ,temp)))
                         `(= ,(car lhs)
@@ -1444,36 +1637,26 @@
 
 ;; make an expression safe for multiple evaluation
 ;; for example a[f(x)] => (temp=f(x); a[temp])
-;; retuns a pair (expr . assignments)
+;; returns a pair (expr . assignments)
 ;; where 'assignments' is a list of needed assignment statements
 (define (remove-argument-side-effects e)
-  (if
-   (not (pair? e))
-   (cons e '())
-   (let ((a '()))
-     (cons
-      (cons
-       (car e)
-       (map (lambda (x)
-              (cond ((effect-free? x)  x)
-                    ((or (eq? (car x) '...) (eq? (car x) '&))
-                     (if (effect-free? (cadr x))
-                         x
-                         (let ((g (make-ssavalue)))
-                           (begin (set! a (cons `(= ,g ,(cadr x)) a))
-                                  `(,(car x) ,g)))))
-                    ((eq? (car x) 'kw)
-                     (if (effect-free? (caddr x))
-                         x
-                         (let ((g (make-ssavalue)))
-                           (begin (set! a (cons `(= ,g ,(caddr x)) a))
-                                  `(kw ,(cadr x) ,g)))))
-                    (else
-                     (let ((g (make-ssavalue)))
-                       (begin (set! a (cons `(= ,g ,x) a))
-                              g)))))
-            (cdr e)))
-      (reverse a)))))
+  (if (not (pair? e))
+      (cons e '())
+      (let ((a '()))
+        (define (arg-to-temp x)
+          (cond ((effect-free? x)  x)
+                ((or (eq? (car x) '...) (eq? (car x) '&))
+                 `(,(car x) ,(arg-to-temp (cadr x))))
+                ((eq? (car x) 'kw)
+                 `(,(car x) ,(cadr x) ,(arg-to-temp (caddr x))))
+                (else
+                 (let ((g (make-ssavalue)))
+                   (begin (set! a (cons `(= ,g ,x) a))
+                          g)))))
+        (if (eq? (car e) 'let)
+          (cons (arg-to-temp e) (reverse a))
+          (cons (cons (car e) (map arg-to-temp (cdr e)))
+                (reverse a))))))
 
 (define (lower-kw-call f args)
   (let* ((para (if (has-parameters? args) (cdar args) '()))
@@ -1492,7 +1675,7 @@
   (define (kwcall-unless-empty f pa kw-container-test kw-container)
     `(if (call (top isempty) ,kw-container-test)
          (call ,f ,@pa)
-         (call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))
+         (call (core kwcall) ,kw-container ,f ,@pa)))
 
   (let ((f            (if (sym-ref? fexpr) fexpr (make-ssavalue)))
         (kw-container (make-ssavalue)))
@@ -1502,28 +1685,44 @@
                                            (lambda (name) (string "keyword argument \"" name
                                                                   "\" repeated in call to \"" (deparse fexpr) "\""))
                                            "keyword argument"
-                                           "keyword argument syntax"))
+                                           "keyword argument syntax"
+                                           #t))
       ,(if (every vararg? kw)
            (kwcall-unless-empty f pa kw-container kw-container)
-           `(call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))))
+           `(call (core kwcall) ,kw-container ,f ,@pa)))))
 
 ;; convert `a+=b` to `a=a+b`
 (define (expand-update-operator- op op= lhs rhs declT)
-  (let ((e (remove-argument-side-effects lhs)))
+  (let* ((e      (remove-argument-side-effects lhs))
+         (newlhs (car e))
+         (temp   (and (eq? op= '|.=|)
+                      (pair? newlhs)
+                      (not (or (eq? (car newlhs) 'ref)
+                               (and (eq? (car newlhs) '|.|) (length= newlhs 3))))
+                      (make-ssavalue)))
+         (e      (if temp
+                     (cons temp (append (cdr e) (list `(= ,temp ,newlhs))))
+                     e))
+         (newlhs (or temp newlhs)))
+    (if (and (pair? lhs) (eq? (car lhs) 'tuple))
+        (let loop ((a (cdr newlhs))
+                   (b (cdr lhs)))
+          (if (pair? a)
+              ;; if remove-argument-side-effects needed to replace an expression with
+              ;; an ssavalue, then it can't be updated by assignment. issue #30062
+              (begin (if (and (ssavalue? (car a)) (not (ssavalue? (car b))))
+                         (error (string "invalid multiple assignment location \"" (deparse (car b)) "\"")))
+                     (loop (cdr a) (cdr b))))))
     `(block ,@(cdr e)
             ,(if (null? declT)
-                 `(,op= ,(car e) (call ,op ,(car e) ,rhs))
-                 `(,op= ,(car e) (call ,op (:: ,(car e) ,(car declT)) ,rhs))))))
+                 `(,op= ,newlhs (call ,op ,newlhs ,rhs))
+                 `(,op= ,newlhs (call ,op (:: ,newlhs ,(car declT)) ,rhs))))))
 
 (define (partially-expand-ref e)
   (let ((a    (cadr e))
         (idxs (cddr e)))
     (let* ((reuse (and (pair? a)
-                       (contains (lambda (x)
-                                   (or (eq? x 'end)
-                                       (eq? x ':)
-                                       (and (pair? x)
-                                            (eq? (car x) ':))))
+                       (contains (lambda (x) (or (eq? x 'begin) (eq? x 'end)))
                                  idxs)))
            (arr   (if reuse (make-ssavalue) a))
            (stmts (if reuse `((= ,arr ,a)) '())))
@@ -1531,11 +1730,11 @@
        (new-idxs stuff) (process-indices arr idxs)
        `(block
          ,@(append stmts stuff)
-         (call getindex ,arr ,@new-idxs))))))
+         (call (top getindex) ,arr ,@new-idxs))))))
 
 (define (expand-update-operator op op= lhs rhs . declT)
   (cond ((and (pair? lhs) (eq? (car lhs) 'ref))
-         ;; expand indexing inside op= first, to remove "end" and ":"
+         ;; expand indexing inside op= first, to remove "begin", "end", and ":"
          (let* ((ex (partially-expand-ref lhs))
                 (stmts (butlast (cdr ex)))
                 (refex (last    (cdr ex)))
@@ -1549,8 +1748,8 @@
            `(block ,@(cdr e)
                    ,(expand-update-operator op op= (car e) rhs T))))
         (else
-         (if (and (pair? lhs)
-                  (not (memq (car lhs) '(|.| tuple vcat typed_hcat typed_vcat))))
+         (if (and (pair? lhs) (eq? op= '=)
+                  (not (memq (car lhs) '(|.| tuple vcat ncat typed_hcat typed_vcat typed_ncat))))
              (error (string "invalid assignment location \"" (deparse lhs) "\"")))
          (expand-update-operator- op op= lhs rhs declT))))
 
@@ -1567,18 +1766,18 @@
   (let ((e (cdr (flatten-ex '&& e))))
     (let loop ((tail e))
       (if (null? tail)
-          'true
+          '(true)
           (if (null? (cdr tail))
               (car tail)
               `(if ,(car tail)
                    ,(loop (cdr tail))
-                   false))))))
+                   (false)))))))
 
 (define (expand-or e)
   (let ((e (cdr (flatten-ex '|\|\|| e))))
     (let loop ((tail e))
       (if (null? tail)
-          'false
+          '(false)
           (if (null? (cdr tail))
               (car tail)
               (if (symbol-like? (car tail))
@@ -1589,115 +1788,128 @@
                             (if ,g ,g
                                 ,(loop (cdr tail)))))))))))
 
-;; If true, this will warn on all `for` loop variables that overwrite outer variables.
-;; If false, this will try to warn only for uses of the last value after the loop.
-(define *warn-all-loop-vars* #f)
-
-(define (expand-for while lhs X body)
-  ;; (for (= lhs X) body)
-  (let* ((coll   (make-ssavalue))
-         (state  (gensy))
-         (outer? (and (pair? lhs) (eq? (car lhs) 'outer)))
-         (lhs    (if outer? (cadr lhs) lhs)))
-    `(block (= ,coll ,(expand-forms X))
-            (= ,state (call (top start) ,coll))
-            ;; TODO avoid `local declared twice` error from this
-            ;;,@(if outer? `((local ,lhs)) '())
-            ,@(if outer? `((require-existing-local ,lhs)) '())
-            ,(expand-forms
-              `(,while
-                (call (top not_int) (call (core typeassert) (call (top done) ,coll ,state) (core Bool)))
-                (block
-                 ;; NOTE: enable this to force loop-local var
-                 #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
-                 ,@(if (not outer?)
-                       (map (lambda (v) `(warn-if-existing ,v)) (lhs-vars lhs))
-                       '())
-                 ,(lower-tuple-assignment (list lhs state)
-                                          `(call (top next) ,coll ,state))
-                 ,body))))))
-
-;; convert an operator parsed as (op a b) to (call op a b)
-(define (syntactic-op-to-call e)
-  `(call ,(car e) ,@(map expand-forms (cdr e))))
+(define (expand-for lhss itrs body)
+  (define (outer? x) (and (pair? x) (eq? (car x) 'outer)))
+  (let ((copied-vars  ;; variables not declared `outer` are copied in the innermost loop
+         ;; TODO: maybe filter these to remove vars not assigned in the loop
+         (delete-duplicates
+          (filter (lambda (x) (not (underscore-symbol? x)))
+                  (apply append
+                         (map lhs-vars
+                              (filter (lambda (x) (not (outer? x))) (butlast lhss))))))))
+    `(break-block
+      loop-exit
+      ,(let nest ((lhss lhss)
+                  (itrs itrs))
+         (if (null? lhss)
+             body
+             (let* ((coll  (make-ssavalue))
+                    (next  (gensy))
+                    (state (make-ssavalue))
+                    (outer (outer? (car lhss)))
+                    (lhs   (if outer (cadar lhss) (car lhss)))
+                    (body
+                     `(block
+                       ,@(if (not outer)
+                             (map (lambda (v) `(local ,v)) (lhs-vars lhs))
+                             '())
+                       ,(lower-tuple-assignment (list lhs state) next)
+                       ,(nest (cdr lhss) (cdr itrs))))
+                    (body
+                     (if (null? (cdr lhss))
+                         `(break-block
+                           loop-cont
+                           (soft-let (block ,@(map (lambda (v) `(= ,v ,v)) copied-vars))
+                             ,body))
+                         `(scope-block ,body))))
+               `(block (= ,coll ,(car itrs))
+                       (local ,next)
+                       (= ,next (call (top iterate) ,coll))
+                       ;; TODO avoid `local declared twice` error from this
+                       ;;,@(if outer `((local ,lhs)) '())
+                       ,@(if outer `((require-existing-local ,lhs)) '())
+                       (if (call (top not_int) (call (core ===) ,next (null)))
+                           (_do_while
+                            (block ,body
+                                   (= ,next (call (top iterate) ,coll ,state)))
+                            (call (top not_int) (call (core ===) ,next (null))))))))))))
 
 ;; wrap `expr` in a function appropriate for consuming values from given ranges
-(define (func-for-generator-ranges expr range-exprs)
+(define (func-for-generator-ranges expr range-exprs flat outervars)
   (let* ((vars    (map cadr range-exprs))
          (argname (if (and (length= vars 1) (symbol? (car vars)))
                       (car vars)
                       (gensy)))
+         (myvars  (lhs-vars `(tuple ,@vars)))
          (splat (cond ((eq? argname (car vars))  '())
                       ((length= vars 1)
-                       `(,@(map (lambda (v) `(local ,v)) (lhs-vars (car vars)))
+                       `(,@(map (lambda (v) `(local ,v)) myvars)
                          (= ,(car vars) ,argname)))
                       (else
-                       `(,@(map (lambda (v) `(local ,v)) (lhs-vars `(tuple ,@vars)))
+                       `(,@(map (lambda (v) `(local ,v)) myvars)
                          (= (tuple ,@vars) ,argname))))))
-    (if (and (null? splat)
-             (length= expr 3) (eq? (car expr) 'call)
-             (eq? (caddr expr) argname)
-             (not (dotop? (cadr expr)))
-             (not (expr-contains-eq argname (cadr expr))))
-        (cadr expr)  ;; eta reduce `x->f(x)` => `f`
-        `(-> ,argname (block ,@splat ,expr)))))
+    (cond
+     ((eq? expr argname)
+      ;; use `identity` for x->x
+      `(top identity))
+      ;; TODO: deprecate this (#18621):
+     ((and (null? splat)
+           (length= expr 3) (eq? (car expr) 'call)
+           (eq? (caddr expr) argname)
+           (underscore-symbol? argname)
+           (not (dotop-named? (cadr expr)))
+           (not (expr-contains-eq argname (cadr expr))))
+      ;; eta reduce `_->f(_)` => `f`
+      (cadr expr))
+     (else
+      (let ((expr (cond ((and flat (pair? expr) (eq? (car expr) 'generator))
+                         (expand-generator expr #f (delete-duplicates (append outervars myvars))))
+                        ((and flat (pair? expr) (eq? (car expr) 'flatten))
+                         (expand-generator (cadr expr) #t (delete-duplicates (append outervars myvars))))
+                        ((pair? outervars)
+                         `(let (block ,@(map (lambda (v) `(= ,v ,v)) (filter (lambda (x) (not (underscore-symbol? x)))
+                                                                             outervars)))
+                            ,expr))
+                        (else expr))))
+        `(-> ,argname (block ,@splat ,expr)))))))
+
+(define (expand-generator e flat outervars)
+  (let* ((expr  (cadr e))
+         (filt? (eq? (car (caddr e)) 'filter))
+         (range-exprs (if filt? (cddr (caddr e)) (cddr e)))
+         (ranges (map caddr range-exprs))
+         (iter (if (length= ranges 1)
+                   (car ranges)
+                   `(call (top product) ,@ranges)))
+         (iter (if filt?
+                   `(call (top Filter)
+                          ,(func-for-generator-ranges (cadr (caddr e)) range-exprs #f '())
+                          ,iter)
+                   iter))
+         (gen  `(call (top Generator)
+                      ,(func-for-generator-ranges expr range-exprs flat outervars)
+                      ,iter)))
+    (expand-forms
+     (if flat
+         `(call (top Flatten) ,gen)
+         gen))))
 
 (define (ref-to-view expr)
-  (if (and (pair? expr) (eq? (car expr) 'ref))
-      (let* ((ex (partially-expand-ref expr))
-             (stmts (butlast (cdr ex)))
-             (refex (last    (cdr ex)))
-             (nuref `(call (top dotview) ,(caddr refex) ,@(cdddr refex))))
-        `(block ,@stmts ,nuref))
-      expr))
+  (cond ((and (pair? expr) (eq? (car expr) 'ref))
+         (let* ((ex (partially-expand-ref expr))
+                (stmts (butlast (cdr ex)))
+                (refex (last    (cdr ex)))
+                (nuref `(call (top dotview) ,(caddr refex) ,@(cdddr refex))))
+           `(block ,@stmts ,nuref)))
+        ((and (length= expr 3) (eq? (car expr) '|.|))
+         `(call (top dotgetproperty) ,(cadr expr) ,(caddr expr)))
+        (else expr)))
 
-; fuse nested calls to expr == f.(args...) into a single broadcast call,
+; lazily fuse nested calls to expr == f.(args...) into a single broadcast call,
 ; or a broadcast! call if lhs is non-null.
 (define (expand-fuse-broadcast lhs rhs)
   (define (fuse? e) (and (pair? e) (eq? (car e) 'fuse)))
-  (define (anyfuse? exprs)
-    (if (null? exprs) #f (if (fuse? (car exprs)) #t (anyfuse? (cdr exprs)))))
-  (define (to-lambda f args kwargs) ; convert f to anonymous function with hygienic tuple args
-    (define (genarg arg) (if (vararg? arg) (list '... (gensy)) (gensy)))
-    ; (To do: optimize the case where f is already an anonymous function, in which
-    ;  case we only need to hygienicize the arguments?   But it is quite tricky
-    ;  to fully handle splatted args, typed args, keywords, etcetera.  And probably
-    ;  the extra function call is harmless because it will get inlined anyway.)
-    (let ((genargs (map genarg args))) ; hygienic formal parameters
-      (if (null? kwargs)
-          `(-> ,(cons 'tuple genargs) (call ,f ,@genargs)) ; no keyword args
-          `(-> ,(cons 'tuple genargs) (call ,f (parameters ,@kwargs) ,@genargs)))))
-  (define (from-lambda f) ; convert (-> (tuple args...) (call func args...)) back to func
-    (if (and (pair? f) (eq? (car f) '->) (pair? (cadr f)) (eq? (caadr f) 'tuple)
-             (pair? (caddr f)) (eq? (caaddr f) 'call) (equal? (cdadr f) (cdr (cdaddr f))))
-        (car (cdaddr f))
-        f))
-  (define (fuse-args oldargs) ; replace (fuse f args) with args in oldargs list
-    (define (fargs newargs oldargs)
-      (if (null? oldargs)
-          newargs
-          (fargs (if (fuse? (car oldargs))
-                     (append (reverse (caddar oldargs)) newargs)
-                     (cons (car oldargs) newargs))
-                 (cdr oldargs))))
-    (reverse (fargs '() oldargs)))
-  (define (fuse-funcs f args) ; for (fuse g a) in args, merge/inline g into f
-    ; any argument A of f that is (fuse g a) gets replaced by let A=(body of g):
-    (define (fuse-lets fargs args lets)
-      (if (null? args)
-          lets
-          (if (fuse? (car args))
-              (fuse-lets (cdr fargs) (cdr args) (cons (list '= (car fargs) (caddr (cadar args))) lets))
-              (fuse-lets (cdr fargs) (cdr args) lets))))
-    (let ((fargs (cdadr f))
-          (fbody (caddr f)))
-      `(->
-        (tuple ,@(fuse-args (map (lambda (oldarg arg) (if (fuse? arg)
-                                                 `(fuse _ ,(cdadr (cadr arg)))
-                                                 oldarg))
-                                 fargs args)))
-        (let (block ,@(reverse (fuse-lets fargs args '()))) ,fbody))))
-  (define (dot-to-fuse e) ; convert e == (. f (tuple args)) to (fuse f args)
+  (define (dot-to-fuse e (top #f)) ; convert e == (. f (tuple args)) to (fuse f args)
     (define (make-fuse f args) ; check for nested (fuse f args) exprs and combine
       (define (split-kwargs args) ; return (cons keyword-args positional-args) extracted from args
         (define (sk args kwargs pargs)
@@ -1709,77 +1921,57 @@
         (if (has-parameters? args)
             (sk (reverse (cdr args)) (cdar args) '())
             (sk (reverse args) '() '())))
-      (let* ((kws.args (split-kwargs args))
-             (kws (car kws.args))
-             (args (cdr kws.args)) ; fusing occurs on positional args only
-             (args_ (map dot-to-fuse args)))
-        (if (anyfuse? args_)
-            `(fuse ,(fuse-funcs (to-lambda f args kws) args_) ,(fuse-args args_))
-            `(fuse ,(to-lambda f args kws) ,args_))))
-    (if (and (pair? e) (eq? (car e) '|.|))
-        (let ((f (cadr e)) (x (caddr e)))
-          (cond ((or (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
-                 `(call (top getproperty) ,f ,x))
-                ((eq? (car x) 'tuple)
-                 (make-fuse f (cdr x)))
-                (else
-                 (error (string "invalid syntax " (deparse e))))))
-        (if (and (pair? e) (eq? (car e) 'call) (dotop? (cadr e)))
-            (make-fuse (undotop (cadr e)) (cddr e))
-            e)))
-  ; given e == (fuse lambda args), compress the argument list by removing (pure)
-  ; duplicates in args, inlining literals, and moving any varargs to the end:
-  (define (compress-fuse e)
-    (define (findfarg arg args fargs) ; for arg in args, return corresponding farg
-      (if (eq? arg (car args))
-          (car fargs)
-          (findfarg arg (cdr args) (cdr fargs))))
-    (if (fuse? e)
-        (let ((f (cadr e))
-              (args (caddr e)))
-          (define (cf old-fargs old-args new-fargs new-args renames varfarg vararg)
-            (if (null? old-args)
-                (let ((nfargs (if (null? varfarg) new-fargs (cons varfarg new-fargs)))
-                      (nargs (if (null? vararg) new-args (cons vararg new-args))))
-                  `(fuse (-> (tuple ,@(reverse nfargs)) ,(replace-vars (caddr f) renames))
-                         ,(reverse nargs)))
-                (let ((farg (car old-fargs)) (arg (car old-args)))
-                  (cond
-                   ((and (vararg? farg) (vararg? arg)) ; arg... must be the last argument
-                    (if (null? varfarg)
-                        (cf (cdr old-fargs) (cdr old-args)
-                            new-fargs new-args renames farg arg)
-                        (if (eq? (cadr vararg) (cadr arg))
-                            (cf (cdr old-fargs) (cdr old-args)
-                                new-fargs new-args (cons (cons (cadr farg) (cadr varfarg)) renames)
-                                varfarg vararg)
-                            (error "multiple splatted args cannot be fused into a single broadcast"))))
-                   ((julia-scalar? arg) ; inline numeric literals etc.
-                    (cf (cdr old-fargs) (cdr old-args)
-                        new-fargs new-args
-                        (cons (cons farg arg) renames)
-                        varfarg vararg))
-                   ((and (symbol? arg) (memq arg new-args)) ; combine duplicate args
-                                        ; (note: calling memq for every arg is O(length(args)^2) ...
-                                        ;  ... would be better to replace with a hash table if args is long)
-                    (cf (cdr old-fargs) (cdr old-args)
-                        new-fargs new-args
-                        (cons (cons farg (findfarg arg new-args new-fargs)) renames)
-                        varfarg vararg))
+      (let* ((kws+args (split-kwargs args)) ; fusing occurs on positional args only
+             (kws (car kws+args))
+             (kws (if (null? kws) kws (list (cons 'parameters kws))))
+             (args (map dot-to-fuse (cdr kws+args)))
+             (make `(call (top ,(if (null? kws) 'broadcasted 'broadcasted_kwsyntax)) ,@kws ,f ,@args)))
+        (if top (cons 'fuse make) make)))
+    (cond ((and (length= e 3) (eq? (car e) '|.|))
+           (let ((f (cadr e)) (x (caddr e)))
+             (cond ((or (atom? x) (eq? (car x) 'quote) (eq? (car x) 'inert) (eq? (car x) '$))
+                    `(call (top getproperty) ,f ,x))
+                   ((eq? (car x) 'tuple)
+                    (if (and (eq? (identifier-name f) '^) (length= x 3) (integer? (caddr x)))
+                        (make-fuse '(top literal_pow)
+                                   (list f (cadr x) (expand-forms `(call (call (core apply_type) (top Val) ,(caddr x))))))
+                        (make-fuse f (cdr x))))
                    (else
-                    (cf (cdr old-fargs) (cdr old-args)
-                        (cons farg new-fargs) (cons arg new-args) renames varfarg vararg))))))
-          (cf (cdadr f) args '() '() '() '() '()))
-        e)) ; (not (fuse? e))
-  (let ((e (compress-fuse (dot-to-fuse rhs))) ; an expression '(fuse func args) if expr is a dot call
+                    (error (string "invalid syntax \"" (deparse e) "\""))))))
+          ((and (pair? e) (eq? (car e) 'call))
+           (define (make-fuse- f x)
+             (if (and (eq? (identifier-name f) '^) (length= x 2) (integer? (cadr x)))
+                 (make-fuse '(top literal_pow)
+                            (list f (car x) (expand-forms `(call (call (core apply_type) (top Val) ,(cadr x))))))
+                 (make-fuse f x)))
+           (let ((f (cadr e)))
+             (cond ((dotop-named? f)
+                    (make-fuse- (undotop f) (cddr e)))
+                   ;; (.+)(a, b) is parsed as (call (|.| +) a b), but we still want it to fuse
+                   ((and (length= f 2) (eq? (car f) '|.|))
+                    (make-fuse- (cadr f) (cddr e)))
+                   (else
+                     e))))
+          ((and (pair? e) (eq? (car e) 'comparison))
+           (dot-to-fuse (expand-compare-chain (cdr e)) top))
+          ((and (pair? e) (eq? (car e) '.&&))
+           (make-fuse '(top andand) (cdr e)))
+          ((and (pair? e) (eq? (car e) '|.\|\||))
+           (make-fuse '(top oror) (cdr e)))
+          (else e)))
+  (let ((e (dot-to-fuse rhs #t)) ; an expression '(fuse func args) if expr is a dot call
         (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
     (if (fuse? e)
+        ; expanded to a fuse op call
         (if (null? lhs)
-            (expand-forms `(call (top broadcast) ,(from-lambda (cadr e)) ,@(caddr e)))
-            (expand-forms `(call (top broadcast!) ,(from-lambda (cadr e)) ,lhs-view ,@(caddr e))))
+            (expand-forms `(call (top materialize) ,(cdr e)))
+            (expand-forms `(call (top materialize!) ,lhs-view ,(cdr e))))
+        ; expanded to something else (like a getfield)
         (if (null? lhs)
             (expand-forms e)
-            (expand-forms `(call (top broadcast!) (top identity) ,lhs-view ,e))))))
+            (expand-forms `(call (top materialize!) ,lhs-view
+                                 (call (top broadcasted) (top identity) ,e)))))))
+
 
 (define (expand-where body var)
   (let* ((bounds (analyze-typevar var))
@@ -1808,24 +2000,31 @@
 
 (define (named-tuple-expr names values)
   `(call (curly (core NamedTuple) (tuple ,@names))
-         (tuple ,@values)))
+         ;; NOTE: don't use `tuple` head, so an assignment expression as a value
+         ;; doesn't turn this into another named tuple.
+         (call (core tuple) ,@values)))
 
 (define (lower-named-tuple lst
                            (dup-error-fn (lambda (name) (string "field name \"" name "\" repeated in named tuple")))
                            (name-str     "named tuple field")
-                           (syntax-str   "named tuple element"))
+                           (syntax-str   "named tuple element")
+                           (call-with-keyword-arguments? #f))
   (let* ((names (apply append
                        (map (lambda (x)
-                              (cond #;((symbol? x) (list x))
+                              (cond ((symbol? x) (list x))
                                     ((and (or (assignment? x) (kwarg? x)) (symbol? (cadr x)))
                                      (list (cadr x)))
-                                    #;((and (length= x 3) (eq? (car x) '|.|))
+                                    ((and (length= x 3) (eq? (car x) '|.|))
                                      (list (cadr (caddr x))))
                                     (else '())))
                             lst)))
          (dups (has-dups names)))
     (if dups
         (error (dup-error-fn (car dups)))))
+  (define (not-vararg x)
+    (if (vararg? x)
+        (error (string "\"...\" expression cannot be used as " name-str " value"))
+        x))
   (define (to-nt n v)
     (if (null? n)
         #f
@@ -1841,33 +2040,35 @@
              (current-vals  '())
              (expr          #f))
     (if (null? L)
-        (merge expr (to-nt current-names current-vals))
+        (or (merge expr (to-nt current-names current-vals))
+            ;; if that result is #f the named tuple is empty
+            '(call (core NamedTuple)))
         (let ((el (car L)))
           (cond ((or (assignment? el) (kwarg? el))
                  (if (not (symbol? (cadr el)))
                      (error (string "invalid " name-str " name \"" (deparse (cadr el)) "\"")))
+                 (not-vararg (caddr el))
                  (loop (cdr L)
                        (cons (cadr el) current-names)
                        (cons (caddr el) current-vals)
                        expr))
-#|
                 ((symbol? el)  ;; x  =>  x = x
                  (loop (cdr L)
                        (cons el current-names)
                        (cons el current-vals)
                        expr))
-                ((and (length= el 3) (eq? (car el) '|.|))  ;; a.x  =>  x = a.x
+                ((and (length= el 3) (eq? (car el) '|.|)   ;; a.x  =>  x = a.x
+                      (quoted-sym? (caddr el)))
                  (loop (cdr L)
                        (cons (cadr (caddr el)) current-names)
                        (cons el current-vals)
                        expr))
-|#
                 ((and (length= el 4) (eq? (car el) 'call) (eq? (cadr el) '=>))
                  (loop (cdr L)
                        '()
                        '()
                        (merge (merge expr (to-nt current-names current-vals))
-                              (named-tuple-expr (list (caddr el)) (list (cadddr el))))))
+                              (named-tuple-expr (list (caddr el)) (list (not-vararg (cadddr el)))))))
                 ((vararg? el)
                  (loop (cdr L)
                        '()
@@ -1876,11 +2077,298 @@
                          (if current
                              (merge current (cadr el))
                              `(call (top merge) (call (top NamedTuple)) ,(cadr el))))))
+                ((and call-with-keyword-arguments? (has-parameters? L))
+                 (error "more than one semicolon in argument list"))
                 (else
                  (error (string "invalid " syntax-str " \"" (deparse el) "\""))))))))
 
+(define (expand-condition cnd)
+  (let* ((blk? (and (pair? cnd) (eq? (car cnd) 'block)))
+         (stmts (if blk? (cdr (butlast cnd)) '()))
+         (test  (if blk? (last cnd) cnd)))
+    (if (and (pair? test) (memq (car test) '(&& |\|\||)))
+        (let* ((clauses `(,(car test) ,@(map expand-forms (cdr (flatten-ex (car test) test)))))
+               (clauses (if (null? (cdr clauses))
+                            (if (eq? (car clauses) '&&) '(true) '(false))
+                            clauses)))
+          (if blk?
+              `(block ,@(map expand-forms stmts) ,clauses)
+              clauses))
+        (expand-forms cnd))))
+
+(define (expand-if e)
+  (list* (car e) (expand-condition (cadr e)) (map expand-forms (cddr e))))
+
+(define (expand-while e)
+  `(break-block loop-exit
+                (_while ,(expand-condition (cadr e))
+                        (break-block loop-cont
+                                     (scope-block ,(blockify (expand-forms (caddr e))))))))
+
+(define (expand-vcat e
+                     (vcat '((top vcat)))
+                     (hvcat '((top hvcat)))
+                     (hvcat_rows '((top hvcat_rows))))
+  (let ((a (cdr e)))
+    (if (any assignment? a)
+        (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+    (if (has-parameters? a)
+        (error "unexpected semicolon in array expression")
+        (expand-forms
+         (if (any (lambda (x)
+                    (and (pair? x) (eq? (car x) 'row)))
+                  a)
+             ;; convert nested hcat inside vcat to hvcat
+             (let ((rows (map (lambda (x)
+                                (if (and (pair? x) (eq? (car x) 'row))
+                                    (cdr x)
+                                    (list x)))
+                              a)))
+               ;; in case there is splatting inside `hvcat`, collect each row as a
+               ;; separate tuple and pass those to `hvcat_rows` instead (ref #38844)
+               (if (any (lambda (row) (any vararg? row)) rows)
+                   `(call ,@hvcat_rows ,@(map (lambda (x) `(tuple ,@x)) rows))
+                   `(call ,@hvcat
+                          (tuple ,@(map length rows))
+                          ,@(apply append rows))))
+             `(call ,@vcat ,@a))))))
+
+(define (expand-ncat e (hvncat '((top hvncat))))
+  (define (is-row a) (and (pair? a)
+                          (or (eq? (car a) 'row)
+                              (eq? (car a) 'nrow))))
+  (define (is-1d a) (not (any is-row a)))
+  (define (sum xs) (foldl + 0 xs))
+  (define (get-shape a is-row-first d)
+    (define (zip xss) (apply map list xss))
+    (define (get-next x)
+      (cond ((or (not (is-row x))
+                 (and (eq? (car x) 'nrow) (> d (1+ (cadr x))))
+                 (and (eq? (car x) 'row) (> d 1)))
+             (list x))
+            ((eq? (car x) 'nrow) (cddr x))
+            (else (cdr x))))
+    ; describe the shape of the concatenation
+    (cond ((or (= d 0)
+               (and (not is-row-first) (= d 1)))
+           (length a))
+          ((and is-row-first (= d 3))
+           (get-shape a is-row-first (1- d)))
+          (else
+           (let ((ashape
+                 (map (lambda (x)
+                        (get-shape (get-next x) is-row-first (1- d)))
+                      a)))
+             (if (pair? (car ashape))
+                 (let ((zipashape (zip ashape)))
+                   (cons (sum (car zipashape))
+                         (cons (car zipashape)
+                               (map (lambda (x)
+                                      (apply append x))
+                                    (cdr zipashape)))))
+                 (list (sum ashape) ashape))))))
+  (define (get-dims a is-row-first d)
+    (cond ((and (< d 2) (not (is-row (car a))))
+           (list (length a)))
+          ((= d 1)
+           (list (car (get-dims (cdar a) is-row-first 0)) (length a)))
+          ((and (= d 3) is-row-first)
+           (get-dims a is-row-first 2))
+          (else
+           (let ((anext (if (and (pair? (car a))
+                                 (eq? (caar a) 'nrow)
+                                 (= d (1+ (cadar a))))
+                            (cddar a)
+                            (list (car a)))))
+             (cons (length a) (get-dims anext is-row-first (1- d)))))))
+  (define (is-balanced s)
+    ; determine whether there are exactly the same number of elements along each axis
+    (= 0 (sum (map (lambda (x y)
+                     (sum (map (lambda (z)
+                                 (- z y))
+                               x)))
+                   (cdr s) (map car (cdr s))))))
+  (define (hasrows-flatten a)
+    ; (car <result>) stores if a row was observed
+    (foldl (lambda (x y)
+             (let ((r (car y))
+                   (yt (cdr y)))
+               (if (is-row x)
+                   (if (eq? (car x) 'nrow)
+                       (let* ((raflat (append (hasrows-flatten (cddr x))))
+                              (aflat (cdr raflat))
+                              (rinner (car raflat))
+                              (r (if (null? (or r rinner))
+                                     (and r rinner)
+                                     r)))
+                         (if (and (not (null? r))
+                                  (or (null? rinner) (and (not r) rinner))
+                                  (and (= (cadr x) 2) r))
+                             (error "cannot mix space and ;; separators in an array expression, except to wrap a line"))
+                         (cons (if (and (= (cadr x) 2) (null? r))
+                                   #f
+                                   r)
+                               (append aflat yt)))
+                     (if (or (null? r) r)
+                         (cons #t (append (reverse (cdr x)) yt))
+                         (error "cannot mix space and ;; separators in an array expression, except to wrap a line")))
+                 (cons r (cons x yt)))))
+           (list '()) a))
+  (define (tf a) (if a '(true) '(false)))
+  (define (tuplize s)
+    (cons 'tuple (reverse (map (lambda (x)
+                                 (cons 'tuple x))
+                               (cons (list (car s)) (cdr s))))))
+  (let* ((d (cadr e))
+         (a (cddr e))
+         (raflat (hasrows-flatten a))
+         (r (car raflat))
+         (is-row-first (if (null? r) #f r))
+         (aflat (reverse (cdr raflat))))
+    (if (any assignment? aflat)
+        (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+    (if (has-parameters? aflat)
+        (error "unexpected parameters in array expression"))
+    (expand-forms
+      (if (is-1d a)
+          `(call ,@hvncat ,d ,@aflat)
+          (if (any vararg? aflat)
+              (error (string "Splatting ... in an hvncat with multiple dimensions is not supported"))
+              (let ((shape (get-shape a is-row-first d)))
+                (if (is-balanced shape)
+                    (let ((dims `(tuple ,@(reverse (get-dims a is-row-first d)))))
+                     `(call ,@hvncat ,dims ,(tf is-row-first) ,@aflat))
+                    `(call ,@hvncat ,(tuplize shape) ,(tf is-row-first) ,@aflat))))))))
+
+(define (maybe-ssavalue lhss x in-lhs?)
+  (cond ((or (and (not (in-lhs? x lhss)) (symbol? x))
+             (ssavalue? x))
+          x)
+        ((and (pair? lhss) (vararg? (last lhss))
+              (eventually-call? (cadr (last lhss))))
+         (gensy))
+        (else (make-ssavalue))))
+
+(define (expand-property-destruct lhs x)
+  (if (not (length= lhs 1))
+      (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\"")))
+  (let* ((lhss (cdar lhs))
+         (xx   (maybe-ssavalue lhss x memq))
+         (ini  (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x))))))
+    `(block
+       ,@ini
+       ,@(map
+           (lambda (field)
+             (let ((prop (cond ((symbol? field) field)
+                               ((and (pair? field) (eq? (car field) '|::|) (symbol? (cadr field)))
+                                (cadr field))
+                               (else
+                                (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\""))))))
+               (expand-forms `(= ,field (call (top getproperty) ,xx (quote ,prop))))))
+           lhss)
+       (unnecessary ,xx))))
+
+;; implement tuple destructuring, possibly with slurping
+;;
+;; `i`:    index of the current lhs arg
+;; `lhss`: remaining lhs args
+;; `xx`:   the rhs, already either an ssavalue or something simple
+;; `st`:   empty list if i=1, otherwise contains the iteration state
+;; `n`:    total nr of lhs args
+;; `end`:  car collects statements to be executed afterwards.
+;;         In general, actual assignments should only happen after
+;;         the whole iterator is desctructured (https://github.com/JuliaLang/julia/issues/40574)
+(define (destructure- i lhss xx n st end)
+  (if (null? lhss)
+      '()
+      (let* ((lhs  (car lhss))
+             (lhs- (cond ((or (symbol? lhs) (ssavalue? lhs))
+                          lhs)
+                         ((vararg? lhs)
+                          (let ((lhs- (cadr lhs)))
+                            (if (or (symbol? lhs-) (ssavalue? lhs-))
+                                lhs
+                                `(|...| ,(if (eventually-call? lhs-)
+                                             (gensy)
+                                             (make-ssavalue))))))
+                         ;; can't use ssavalues if it's a function definition
+                         ((eventually-call? lhs) (gensy))
+                         (else (make-ssavalue)))))
+        (if (and (vararg? lhs) (any vararg? (cdr lhss)))
+            (error "multiple \"...\" on lhs of assignment"))
+        (if (not (eq? lhs lhs-))
+            (if (vararg? lhs)
+                (set-car! end (cons (expand-forms `(= ,(cadr lhs) ,(cadr lhs-))) (car end)))
+                (set-car! end (cons (expand-forms `(= ,lhs ,lhs-)) (car end)))))
+        (if (vararg? lhs-)
+            (if (= i n)
+                (if (underscore-symbol? (cadr lhs-))
+                    '()
+                    (list (expand-forms
+                            `(= ,(cadr lhs-) (call (top rest) ,xx ,@(if (eq? i 1) '() `(,st)))))))
+                (let ((tail (if (eventually-call? lhs) (gensy) (make-ssavalue))))
+                  (cons (expand-forms
+                          (lower-tuple-assignment
+                            (list (cadr lhs-) tail)
+                            `(call (top split_rest) ,xx ,(- n i) ,@(if (eq? i 1) '() `(,st)))))
+                        (destructure- 1 (cdr lhss) tail (- n i) st end))))
+            (cons (expand-forms
+                    (lower-tuple-assignment
+                      (if (= i n)
+                          (list lhs-)
+                          (list lhs- st))
+                      `(call (top indexed_iterate)
+                             ,xx ,i ,@(if (eq? i 1) '() `(,st)))))
+                  (destructure- (+ i 1) (cdr lhss) xx n st end))))))
+
+(define (expand-tuple-destruct lhss x)
+  (define (sides-match? l r)
+    ;; l and r either have equal lengths, or r has a trailing ...
+    (cond ((null? l)          (null? r))
+          ((vararg? (car l))  #t)
+          ((null? r)          #f)
+          ((vararg? (car r))  (null? (cdr r)))
+          (else               (sides-match? (cdr l) (cdr r)))))
+  (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple) (not (any assignment? (cdr x)))
+           (not (has-parameters? (cdr x)))
+           (sides-match? lhss (cdr x)))
+      ;; (a, b, ...) = (x, y, ...)
+      (expand-forms
+       (tuple-to-assignments lhss x))
+      ;; (a, b, ...) = other
+      (begin
+        ;; like memq, but if lhs is (... sym), check against sym instead
+        (define (in-lhs? x lhss)
+          (if (null? lhss)
+              #f
+              (let ((l (car lhss)))
+                (cond ((and (pair? l) (eq? (car l) '|...|))
+                       (eq? (cadr l) x))
+                      ((eq? l x) #t)
+                      (else (in-lhs? x (cdr lhss)))))))
+        ;; in-lhs? also checks for invalid syntax, so always call it first
+        (let* ((xx  (maybe-ssavalue lhss x in-lhs?))
+               (ini (if (eq? x xx) '() (list (sink-assignment xx (expand-forms x)))))
+               (n   (length lhss))
+               (st  (gensy))
+               (end (list (list))))
+          `(block
+            ,@(if (> n 0) `((local ,st)) '())
+            ,@ini
+            ,@(destructure- 1 lhss xx n st end)
+            ,@(reverse (car end))
+            (unnecessary ,xx))))))
+
+;; move an assignment into the last statement of a block to keep more statements at top level
+(define (sink-assignment lhs rhs)
+  (if (and (pair? rhs) (eq? (car rhs) 'block))
+      (let ((rr (reverse (cdr rhs))))
+        `(block ,@(reverse (cdr rr))
+                (= ,lhs ,(car rr))))
+      `(= ,lhs ,rhs)))
+
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta using import importall export)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export public thismodule toplevel-only)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -1894,12 +2382,9 @@
    'function       expand-function-def
    '->             expand-arrow
    'let            expand-let
+   'soft-let       (lambda (e) (expand-let e #f))
    'macro          expand-macro-def
    'struct         expand-struct-def
-   'type
-   (lambda (e)
-     (syntax-deprecation ":type expression head" ":struct" #f)
-     (expand-struct-def e))
    'try            expand-try
 
    'lambda
@@ -1908,32 +2393,75 @@
         ,@(if (length= e 3) '(()) '())
         ,@(map expand-forms (cddr e))))
 
+   'opaque_closure
+   (lambda (e)
+     (let* ((ty   (and (length> e 2) (expand-forms (cadr e))))
+            (F    (if (length> e 2) (caddr e) (cadr e)))
+            (isva (let* ((arglist (function-arglist F))
+                         (lastarg (and (pair? arglist) (last arglist))))
+                    (if (and ty (any (lambda (arg)
+                                       (let ((arg (if (vararg? arg) (cadr arg) arg)))
+                                         (not (equal? (arg-type arg) '(core Any)))))
+                                     arglist))
+                        (error "Opaque closure argument type may not be specified both in the method signature and separately"))
+                    (if (or (varargexpr? lastarg) (vararg? lastarg))
+                        '(true) '(false))))
+            (meth (caddr (caddr (expand-forms F)))) ;; `method` expr
+            (lam       (cadddr meth))
+            (sig-block (caddr meth))
+            (sig-block (if (and (pair? sig-block) (eq? (car sig-block) 'block))
+                           sig-block
+                           `(block ,sig-block)))
+            (stmts     (cdr (butlast sig-block)))
+            (sig-svec  (last sig-block))
+            (typ-svec  (caddr sig-svec))
+            (tvars     (cddr (cadddr sig-svec)))
+            (argtypes  (cdddr typ-svec))
+            (functionloc (cadr (caddddr sig-svec))))
+       (let* ((argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
+                                (expand-forms `(curly (core Tuple) ,@argtypes))
+                                (reverse tvars))))
+         `(_opaque_closure ,(or ty argtype) ,isva ,(length argtypes) ,functionloc ,lam))))
+
    'block
    (lambda (e)
      (cond ((null? (cdr e)) '(null))
            ((and (null? (cddr e))
-                 (not (and (pair? (cadr e))
-                           (eq? (car (cadr e)) 'line))))
+                 (not (linenum? (cadr e))))
             (expand-forms (cadr e)))
            (else
             (cons 'block
                   (map expand-forms (cdr e))))))
 
    '|.|
-   (lambda (e) ; e = (|.| f x)
-     (expand-fuse-broadcast '() e))
+   (lambda (e)
+     (if (length= e 2)
+         ;; e = (|.| op)
+         `(call (top BroadcastFunction) ,(cadr e))
+         ;; e = (|.| f x)
+         (expand-fuse-broadcast '() e)))
+
+   '.&&
+   (lambda (e) (expand-fuse-broadcast '() e))
+   '|.\|\||
+   (lambda (e) (expand-fuse-broadcast '() e))
 
    '.=
    (lambda (e)
      (expand-fuse-broadcast (cadr e) (caddr e)))
 
-   '|<:| syntactic-op-to-call
-   '|>:| syntactic-op-to-call
+   '|<:|
+   (lambda (e) (expand-forms `(call |<:| ,@(cdr e))))
+   '|>:|
+   (lambda (e) (expand-forms `(call |>:| ,@(cdr e))))
+   '-->
+   (lambda (e) (expand-forms `(call --> ,@(cdr e))))
 
    'where
    (lambda (e) (expand-forms (expand-wheres (cadr e) (cddr e))))
 
    'const  expand-const-decl
+   'atomic expand-atomic-decl
    'local  expand-local-or-global-decl
    'global expand-local-or-global-decl
    'local-def expand-local-or-global-decl
@@ -1970,83 +2498,42 @@
                         ,@(map (lambda (l) `(= ,l ,rr))
                                lhss)
                         (unnecessary ,rr)))))))
-      ((symbol-like? lhs)
-       `(= ,lhs ,(expand-forms (caddr e))))
+      ((or (and (symbol-like? lhs) (valid-name? lhs))
+           (globalref? lhs) (outerref? lhs))
+       (sink-assignment lhs (expand-forms (caddr e))))
       ((atom? lhs)
        (error (string "invalid assignment location \"" (deparse lhs) "\"")))
       (else
        (case (car lhs)
-         ((globalref)
-          ;; M.b =
-          (let* ((rhs (caddr e))
-                 (rr  (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
-            `(block
-              ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
-              (= ,lhs ,rr)
-              (unnecessary ,rr))))
          ((|.|)
           ;; a.b =
           (let* ((a   (cadr lhs))
-                 (b_  (caddr lhs))
-                 (b   (if (and (length= b_ 2) (eq? (car b_) 'tuple))
-                          (begin
-                            (syntax-deprecation
-                             (string (deparse a) ".(" (deparse (cadr b_)) ") = ...")
-                             (string "setfield!(" (deparse a) ", " (deparse (cadr b_)) ", ...)") #f)
-                            (cadr b_))
-                          b_))
+                 (b  (caddr lhs))
                  (rhs (caddr e)))
+            (if (and (length= b 2) (eq? (car b) 'tuple))
+                (error (string "invalid syntax \""
+                               (string (deparse a) ".(" (deparse (cadr b)) ") = ...") "\"")))
             (let ((aa (if (symbol-like? a) a (make-ssavalue)))
                   (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
                           b (make-ssavalue)))
                   (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
               `(block
-                ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
-                ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b))))
-                ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
-                (call (top setproperty!) ,aa ,bb
-                      (if (call (top ===) (top setproperty!) (core setfield!))
-                          (call (top convert)
-                                (call (core fieldtype) (call (core typeof) ,aa) ,bb)
-                                ,rr)
-                          ,rr))
+                ,.(if (eq? aa a)   '() (list (sink-assignment aa (expand-forms a))))
+                ,.(if (eq? bb b)   '() (list (sink-assignment bb (expand-forms b))))
+                ,.(if (eq? rr rhs) '() (list (sink-assignment rr (expand-forms rhs))))
+                (call (top setproperty!) ,aa ,bb ,rr)
                 (unnecessary ,rr)))))
          ((tuple)
-          ;; multiple assignment
           (let ((lhss (cdr lhs))
                 (x    (caddr e)))
-            (define (sides-match? l r)
-              ;; l and r either have equal lengths, or r has a trailing ...
-              (cond ((null? l)          (null? r))
-                    ((null? r)          #f)
-                    ((vararg? (car r))  (null? (cdr r)))
-                    (else               (sides-match? (cdr l) (cdr r)))))
-            (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
-                     (sides-match? lhss (cdr x)))
-                ;; (a, b, ...) = (x, y, ...)
-                (expand-forms
-                 (tuple-to-assignments lhss x))
-                ;; (a, b, ...) = other
-                (let* ((xx  (if (or (and (symbol? x) (not (memq x lhss)))
-                                    (ssavalue? x))
-                                x (make-ssavalue)))
-                       (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
-                       (st  (gensy)))
-                  `(block
-                    ,@ini
-                    (= ,st (call (top start) ,xx))
-                    ,.(map (lambda (i lhs)
-                             (expand-forms
-                              (lower-tuple-assignment
-                               (list lhs st)
-                               `(call (top indexed_next)
-                                      ,xx ,(+ i 1) ,st))))
-                           (iota (length lhss))
-                           lhss)
-                    (unnecessary ,xx))))))
+            (if (has-parameters? lhss)
+                ;; property destructuring
+                (expand-property-destruct lhss x)
+                ;; multiple assignment
+                (expand-tuple-destruct lhss x))))
          ((typed_hcat)
           (error "invalid spacing in left side of indexed assignment"))
-         ((typed_vcat)
+         ((typed_vcat typed_ncat)
           (error "unexpected \";\" in left side of indexed assignment"))
          ((ref)
           ;; (= (ref a . idxs) rhs)
@@ -2054,16 +2541,13 @@
                 (idxs (cddr lhs))
                 (rhs  (caddr e)))
             (let* ((reuse (and (pair? a)
-                               (contains (lambda (x)
-                                           (or (eq? x 'end)
-                                               (and (pair? x)
-                                                    (eq? (car x) ':))))
+                               (contains (lambda (x) (eq? x 'end))
                                          idxs)))
                    (arr   (if reuse (make-ssavalue) a))
                    (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
                    (rrhs (and (pair? rhs) (not (ssavalue? rhs)) (not (quoted? rhs))))
                    (r    (if rrhs (make-ssavalue) rhs))
-                   (rini (if rrhs `((= ,r ,(expand-forms rhs))) '())))
+                   (rini (if rrhs (list (sink-assignment r (expand-forms rhs))) '())))
               (receive
                (new-idxs stuff) (process-indices arr idxs)
                `(block
@@ -2071,9 +2555,12 @@
                  ,.(map expand-forms stuff)
                  ,@rini
                  ,(expand-forms
-                   `(call setindex! ,arr ,r ,@new-idxs))
+                   `(call (top setindex!) ,arr ,r ,@new-idxs))
                  (unnecessary ,r))))))
          ((|::|)
+          ;; (= (|::| T) rhs) is an error
+          (if (null? (cddr lhs))
+              (error (string "invalid assignment location \"" (deparse lhs) "\"")))
           ;; (= (|::| x T) rhs)
           (let ((x (cadr lhs))
                 (T (caddr lhs))
@@ -2083,7 +2570,7 @@
                `(block ,@(cdr e)
                        (decl ,(car e) ,T)
                        (= ,(car e) ,rhs))))))
-         ((vcat)
+         ((vcat ncat)
           ;; (= (vcat . args) rhs)
           (error "use \"(a, b) = ...\" to assign multiple values"))
          (else
@@ -2096,10 +2583,6 @@
         (receive (name params super) (analyze-type-sig sig)
                  (abstract-type-def-expr name params super)))))
 
-   'bitstype
-   (lambda (e)
-     (syntax-deprecation "Expr(:bitstype, nbits, name)" "Expr(:primitive, name, nbits)" #f)
-     (expand-forms `(primitive ,(caddr e) ,(cadr e))))
    'primitive
    (lambda (e)
      (let ((sig (cadr e))
@@ -2122,6 +2605,8 @@
    (lambda (e)
      (if (has-parameters? (cddr e))
          (error (string "unexpected semicolon in \"" (deparse e) "\"")))
+     (if (any assignment? (cddr e))
+         (error (string "misplaced assignment statement in \"" (deparse e) "\"" )))
      (let* ((p (extract-implicit-whereparams e))
             (curlyparams (car p))
             (whereparams (cdr p)))
@@ -2133,12 +2618,17 @@
    (lambda (e)
      (if (length> e 2)
          (let ((f (cadr e)))
-           (cond ((dotop? f)
+           (cond ((dotop-named? f)
                   (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
+                 ;; "(.op)(...)"
+                 ((and (length= f 2) (eq? (car f) '|.|))
+                  (expand-fuse-broadcast '() `(|.| ,(cadr f) (tuple ,@(cddr e)))))
                  ((eq? f 'ccall)
                   (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))
-                         (have-cconv (memq cconv '(cdecl stdcall fastcall thiscall llvmcall)))
+                         (have-cconv-expr (and (pair? cconv) (eq? (car cconv) 'cconv)))
+                         (have-cconv (or have-cconv-expr
+                                         (memq cconv '(cdecl stdcall fastcall thiscall llvmcall))))
                          (after-cconv (if have-cconv (cddddr e) (cdddr e)))
                          (name (caddr e))
                          (RT   (car after-cconv))
@@ -2151,9 +2641,13 @@
                                        (eq? (car RT) 'tuple))
                                   (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
                                   (error "ccall argument types must be a tuple; try \"(T,)\"")))
-                          (expand-forms
-                           (lower-ccall name RT (cdr argtypes) args
-                                        (if have-cconv cconv 'ccall))))))
+                          (lower-ccall name RT (cdr argtypes) args
+                                       (if have-cconv
+                                           (if have-cconv-expr
+                                               (cadr cconv)
+                                               cconv)
+                                           'ccall)
+                                       (and have-cconv-expr (caddr cconv))))))
                  ((any kwarg? (cddr e))       ;; f(..., a=b, ...)
                   (expand-forms (lower-kw-call f (cddr e))))
                  ((has-parameters? (cddr e))  ;; f(...; ...)
@@ -2181,11 +2675,11 @@
                                            (tuple-wrap (cdr a) '())))
                                 (tuple-wrap (cdr a) (cons x run))))))
                     (expand-forms
-                     `(call (core _apply) ,f ,@(tuple-wrap argl '())))))
+                     `(call (core _apply_iterate) (top iterate) ,f ,@(tuple-wrap argl '())))))
 
-                 ((and (eq? f '^) (length= e 4) (integer? (cadddr e)))
+                 ((and (eq? (identifier-name f) '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
-                   `(call (top literal_pow) ^ ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
+                   `(call (top literal_pow) ,f ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
                  (else
                   (map expand-forms e))))
          (map expand-forms e)))
@@ -2216,7 +2710,14 @@
    'bracescat (lambda (e) (error "{ } matrix syntax is discontinued"))
 
    'string
-   (lambda (e) (expand-forms `(call (top string) ,@(cdr e))))
+   (lambda (e)
+     (expand-forms
+       `(call (top string)
+              ,@(map (lambda (s)
+                       (if (and (length= s 2) (eq? (car s) 'string) (string? (cadr s)))
+                           (cadr s)
+                           s))
+                     (cdr e)))))
 
    '|::|
    (lambda (e)
@@ -2227,18 +2728,9 @@
                 ,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
          (map expand-forms e)))
 
-   'while
-   (lambda (e)
-     `(break-block loop-exit
-                   (_while ,(expand-forms (cadr e))
-                           (break-block loop-cont
-                                        (scope-block ,(blockify (expand-forms (caddr e))))))))
-
-   'inner-while
-   (lambda (e)
-     `(_while ,(expand-forms (cadr e))
-              (break-block loop-cont
-                           (scope-block ,(blockify (expand-forms (caddr e)))))))
+   'if expand-if
+   'elseif expand-if
+   'while expand-while
 
    'break
    (lambda (e)
@@ -2250,19 +2742,15 @@
 
    'for
    (lambda (e)
-     (let nest ((ranges (if (eq? (car (cadr e)) 'block)
-                            (cdr (cadr e))
-                            (list (cadr e))))
-                (first  #t))
-       (expand-for (if first 'while 'inner-while)
-                   (cadr (car ranges))
-                   (caddr (car ranges))
-                   (if (null? (cdr ranges))
-                       (caddr e)  ;; body
-                       (nest (cdr ranges) #f)))))
+     (let ((ranges (if (eq? (car (cadr e)) 'block)
+                       (cdr (cadr e))
+                       (list (cadr e)))))
+       (expand-forms (expand-for (map cadr ranges) (map caddr ranges) (caddr e)))))
 
    '&&     (lambda (e) (expand-forms (expand-and e)))
    '|\|\|| (lambda (e) (expand-forms (expand-or  e)))
+
+   '&      (lambda (e) (error (string "invalid syntax " (deparse e))))
 
    '+=     lower-update-op
    '-=     lower-update-op
@@ -2296,16 +2784,6 @@
    '>>>=   lower-update-op
    '.>>>=   lower-update-op
 
-   ':
-   (lambda (e)
-     (if (or (length= e 2)
-             (and (length= e 3)
-                  (eq? (caddr e) ':))
-             (and (length= e 4)
-                  (eq? (cadddr e) ':)))
-         (error "invalid \":\" outside indexing"))
-     (expand-forms `(call colon ,@(cdr e))))
-
    '|...|
    (lambda (e) (error "\"...\" expression outside call"))
 
@@ -2316,83 +2794,47 @@
    (lambda (e)
      (if (has-parameters? (cdr e))
          (error "unexpected semicolon in array expression"))
+     (if (any assignment? (cdr e))
+         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
      (expand-forms `(call (top vect) ,@(cdr e))))
 
    'hcat
-   (lambda (e) (expand-forms `(call hcat ,@(cdr e))))
-
-   'vcat
    (lambda (e)
-     (let ((a (cdr e)))
-       (if (has-parameters? a)
-           (error "unexpected semicolon in array expression")
-           (expand-forms
-            (if (any (lambda (x)
-                       (and (pair? x) (eq? (car x) 'row)))
-                     a)
-                ;; convert nested hcat inside vcat to hvcat
-                (let ((rows (map (lambda (x)
-                                   (if (and (pair? x) (eq? (car x) 'row))
-                                       (cdr x)
-                                       (list x)))
-                                 a)))
-                  `(call hvcat
-                         (tuple ,.(map length rows))
-                         ,.(apply append rows)))
-                `(call vcat ,@a))))))
+     (if (any assignment? (cdr e))
+         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+     (expand-forms `(call (top hcat) ,@(cdr e))))
+
+   'vcat expand-vcat
+
+   'ncat expand-ncat
 
    'typed_hcat
-   (lambda (e) (expand-forms `(call (top typed_hcat) ,@(cdr e))))
+   (lambda (e)
+     (if (any assignment? (cddr e))
+         (error (string "misplaced assignment statement in \"" (deparse e) "\"")))
+     (expand-forms `(call (top typed_hcat) ,@(cdr e))))
 
    'typed_vcat
    (lambda (e)
      (let ((t (cadr e))
-           (a (cddr e)))
-       (expand-forms
-        (if (any (lambda (x)
-                   (and (pair? x) (eq? (car x) 'row)))
-                 a)
-            ;; convert nested hcat inside vcat to hvcat
-            (let ((rows (map (lambda (x)
-                               (if (and (pair? x) (eq? (car x) 'row))
-                                   (cdr x)
-                                   (list x)))
-                             a)))
-              `(call (top typed_hvcat) ,t
-                     (tuple ,.(map length rows))
-                     ,.(apply append rows)))
-            `(call (top typed_vcat) ,t ,@a)))))
+           (e (cdr e)))
+       (expand-vcat e `((top typed_vcat) ,t) `((top typed_hvcat) ,t) `((top typed_hvcat_rows) ,t))))
 
-   '|'|  (lambda (e) (expand-forms `(call (top adjoint) ,(cadr e))))
-   '|.'| (lambda (e) (begin (deprecation-message (string "The postfix .' syntax is deprecated. "
-                                             "For vector v in v.', use transpose(v) "
-                                             "instead. For matrix A in A.', use "
-                                             "copy(transpose(A)) instead, unless A.' "
-                                             "appears as an argument of *, / or \\. In "
-                                             "those cases, use transpose(A) instead. " #\newline) #f)
-                            (return (expand-forms `(call transpose ,(cadr e))))))
+   'typed_ncat
+   (lambda (e)
+     (let ((t (cadr e))
+           (e (cdr e)))
+       (expand-ncat e `((top typed_hvncat) ,t))))
+
+   '|'|  (lambda (e) (expand-forms `(call |'| ,(cadr e))))
 
    'generator
    (lambda (e)
-     (let* ((expr  (cadr e))
-            (filt? (eq? (car (caddr e)) 'filter))
-            (range-exprs (if filt? (cddr (caddr e)) (cddr e)))
-            (ranges (map caddr range-exprs))
-            (iter (if (length= ranges 1)
-                      (car ranges)
-                      `(call (top product) ,@ranges)))
-            (iter (if filt?
-                      `(call (|.| (top Iterators) 'Filter)
-                             ,(func-for-generator-ranges (cadr (caddr e)) range-exprs)
-                             ,iter)
-                      iter)))
-       (expand-forms
-        `(call (top Generator)
-               ,(func-for-generator-ranges expr range-exprs)
-               ,iter))))
+     (check-no-return e)
+     (expand-generator e #f '()))
 
    'flatten
-   (lambda (e) (expand-forms `(call (top Flatten) ,(cadr e))))
+   (lambda (e) (expand-generator (cadr e) #t '()))
 
    'comprehension
    (lambda (e)
@@ -2411,68 +2853,92 @@
                (let ((ranges (cddr (caddr e))))
                  (if (any (lambda (x) (eq? x ':)) ranges)
                      (error "comprehension syntax with `:` ranges has been removed"))
-                 (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)
-                                              (pair? (caddr x)) (eq? (car (caddr x)) ':)))
+                 (and (every (lambda (x) (and (pair? x) (eq? (car x) '=)))
                              ranges)
                       ;; TODO: this is a hack to lower simple comprehensions to loops very
                       ;; early, to greatly reduce the # of functions and load on the compiler
                       (lower-comprehension (cadr e) (cadr (caddr e)) ranges))))
-          `(call (top collect) ,(cadr e) ,(caddr e)))))))
+          `(call (top collect) ,(cadr e) ,(caddr e)))))
 
-(define (lower-comprehension atype expr ranges)
+    'gc_preserve
+    (lambda (e)
+      (let* ((s (make-ssavalue))
+             (r (make-ssavalue)))
+        `(block
+          (= ,s (gc_preserve_begin ,@(cddr e)))
+          (= ,r ,(expand-forms (cadr e)))
+          (gc_preserve_end ,s)
+          ,r)))
+
+    'line
+    (lambda (e)
+      (set! *current-desugar-loc* e)
+      e)
+    ))
+
+(define (has-return? e)
+  (expr-contains-p return? e (lambda (x) (not (function-def? x)))))
+
+(define (check-no-return e)
+  (if (has-return? e)
+      (error "\"return\" not allowed inside comprehension or generator")))
+
+(define (has-break-or-continue? e)
+  (expr-contains-p (lambda (x) (and (pair? x) (memq (car x) '(break continue))))
+                   e
+                   (lambda (x) (not (and (pair? x)
+                                         (memq (car x) '(for while)))))))
+
+(define (lower-comprehension ty expr itrs)
+  (check-no-return expr)
+  (if (has-break-or-continue? expr)
+      (error "break or continue outside loop"))
   (let ((result    (make-ssavalue))
-        (ri        (gensy))
+        (idx       (gensy))
         (oneresult (make-ssavalue))
-        (lengths   (map (lambda (x) (make-ssavalue)) ranges))
-        (states    (map (lambda (x) (gensy)) ranges))
-        (rv        (map (lambda (x) (make-ssavalue)) ranges)))
+        (prod      (make-ssavalue))
+        (isz       (make-ssavalue))
+        (szunk     (make-ssavalue))
+        (iv        (map (lambda (x) (make-ssavalue)) itrs)))
 
-    ;; construct loops to cycle over all dimensions of an n-d comprehension
-    (define (construct-loops ranges rv states lengths)
-      (if (null? ranges)
+    ;; construct loops over all iterators
+    (define (construct-loops itrs iv)
+      (if (null? itrs)
           `(block (= ,oneresult ,expr)
-                  (inbounds true)
-                  (call (top setindex!) ,result ,oneresult ,ri)
+                  (inbounds (true))
+                  (if ,szunk
+                      (call (top push!) ,result ,oneresult)
+                      (call (top setindex!) ,result ,oneresult ,idx))
                   (inbounds pop)
-                  (= ,ri (call (top add_int) ,ri 1)))
-          `(block
-            (= ,(car states) (call (top start) ,(car rv)))
-            (while (call (top not_int) (call (core typeassert) (call (top done) ,(car rv) ,(car states)) (core Bool)))
-                   (scope-block
-                   (block
-                    (= (tuple ,(cadr (car ranges)) ,(car states))
-                       (call (top next) ,(car rv) ,(car states)))
-                    ;; *** either this or force all for loop vars local
-                    ,.(map (lambda (r) `(local ,r))
-                           (lhs-vars (cadr (car ranges))))
-                    ,(construct-loops (cdr ranges) (cdr rv) (cdr states) (cdr lengths))))))))
+                  (= ,idx (call (top add_int) ,idx 1)))
+          `(for (= ,(cadr (car itrs)) ,(car iv))
+                ,(construct-loops (cdr itrs) (cdr iv)))))
 
-    ;; Evaluate the comprehension
-    `(block
-      ,.(map (lambda (v) `(local ,v)) states)
-      (local ,ri)
-      ,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
-      ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
-      (scope-block
-       (block
-        (= ,result (call (curly Array ,atype ,(length lengths)) uninitialized ,@lengths))
-        (= ,ri 1)
-        ,(construct-loops (reverse ranges) (reverse rv) states (reverse lengths))
-        ,result)))))
-
-(define (lhs-vars e)
-  (cond ((symbol? e) (list e))
-        ((decl? e)   (list (decl-var e)))
-        ((and (pair? e) (eq? (car e) 'tuple))
-         (apply append (map lhs-vars (cdr e))))
-        (else '())))
+    (let ((overall-itr (if (length= itrs 1) (car iv) prod)))
+      `(scope-block
+        (block
+         (local ,idx)
+         ,.(map (lambda (v r) `(= ,v ,(caddr r))) iv itrs)
+         ,.(if (length= itrs 1)
+               '()
+               `((= ,prod (call (top product) ,@iv))))
+         (= ,isz (call (top IteratorSize) ,overall-itr))
+         (= ,szunk (call (core isa) ,isz (top SizeUnknown)))
+         (= ,result (call (top _array_for) ,ty ,overall-itr ,isz))
+         (= ,idx (call (top first) (call (top LinearIndices) ,result)))
+         ,(construct-loops (reverse itrs) (reverse iv))
+         ,result)))))
 
 (define (lhs-decls e)
-  (cond ((symbol? e) (list e))
-        ((decl? e)   (list e))
-        ((and (pair? e) (eq? (car e) 'tuple))
+  (cond ((symdecl? e)   (list e))
+        ((and (pair? e)
+              (or (eq? (car e) 'tuple)
+                  (eq? (car e) 'parameters)))
          (apply append (map lhs-decls (cdr e))))
         (else '())))
+
+(define (lhs-vars e)
+  (map decl-var (lhs-decls e)))
 
 (define (all-decl-vars e)  ;; map decl-var over every level of an assignment LHS
   (cond ((eventually-call? e) e)
@@ -2483,212 +2949,332 @@
 
 ;; pass 2: identify and rename local vars
 
-(define (check-dups locals others)
-  (if (pair? locals)
-      (if (or (memq (car locals) (cdr locals)) (memq (car locals) others))
-          (error (string "local \"" (car locals) "\" declared twice"))
-          (check-dups (cdr locals) others)))
-  locals)
-
-(define (find-assigned-vars e env)
-  (if (or (not (pair? e)) (quoted? e))
-      '()
-      (case (car e)
-        ((lambda scope-block module toplevel)  '())
-        ((method)
-         (let ((v (decl-var (method-expr-name e))))
-           (append!
-            (if (length= e 2) '() (find-assigned-vars (caddr e) env))
-            (if (or (not (symbol? v)) (memq v env))
-                '()
-                (list v)))))
-        ((=)
-         (let ((v (decl-var (cadr e)))
-               (rest (find-assigned-vars (caddr e) env)))
-           (if (or (ssavalue? v) (memq v env) (globalref? v))
-               rest
-               (cons v rest))))
-        (else
-         (apply append! (map (lambda (x) (find-assigned-vars x env))
-                             e))))))
+(define (find-assigned-vars e)
+  (define vars '())
+  (define (find-assigned-vars- e)
+    (if (or (not (pair? e)) (quoted? e))
+        '()
+        (case (car e)
+          ((lambda scope-block module toplevel)  '())
+          ((method)
+           (let ((v (decl-var (method-expr-name e))))
+             (if (symbol? v)
+                 (set! vars (cons v vars)))
+             (if (not (length= e 2))
+                 (find-assigned-vars- (caddr e)))))
+          ((=)
+           (let ((v (decl-var (cadr e))))
+             (find-assigned-vars- (caddr e))
+             (if (or (ssavalue? v) (globalref? v) (outerref? v) (underscore-symbol? v))
+                 '()
+                 (set! vars (cons v vars)))))
+          (else
+           (for-each find-assigned-vars- (cdr e))))))
+  (find-assigned-vars- e)
+  (delete-duplicates vars))
 
 (define (find-decls kind e)
-  (if (or (not (pair? e)) (quoted? e))
-      '()
-      (cond ((memq (car e) '(lambda scope-block module toplevel))
-             '())
-            ((eq? (car e) kind)
-             (list (decl-var (cadr e))))
-            (else
-             (apply append! (map (lambda (x) (find-decls kind x))
-                                 e))))))
+  (define vars '())
+  (define (find-decls- e)
+    (cond ((or (not (pair? e)) (quoted? e))
+           '())
+          ((memq (car e) '(lambda scope-block module toplevel))
+           '())
+          ((eq? (car e) kind)
+           (if (underscore-symbol? (cadr e))
+               '()
+               (set! vars (cons (decl-var (cadr e)) vars))))
+          (else
+           (for-each find-decls- (cdr e)))))
+  (find-decls- e)
+  vars)
 
 (define (find-local-decls e) (find-decls 'local e))
 (define (find-local-def-decls e) (find-decls 'local-def e))
 (define (find-global-decls e) (find-decls 'global e))
 
-(define (implicit-locals e env deprecated-env glob)
-  ;; const decls on non-globals introduce locals
-  (append! (diff (find-decls 'const e) glob)
-           (filter
-             (lambda (v)
-               (if (memq v deprecated-env)
-                   (begin (syntax-deprecation (string "implicit assignment to global variable `" v "`") (string "global " v) #f) #f)
-                   #t))
-             (find-assigned-vars e env))))
+(define (find-scope-decl e kind)
+  (expr-contains-p
+   (lambda (x) (and (pair? x) (eq? (car x) kind) x))
+   e
+   (lambda (x) (not (and (pair? x)
+                         (memq (car x) '(lambda scope-block module toplevel)))))))
 
-(define (unbound-vars e bound tab)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e UNUSED)) tab)
-        ((symbol? e) (if (not (memq e bound)) (put! tab e #t)) tab)
-        ((or (not (pair? e)) (quoted? e)) tab)
-        ((memq (car e) '(lambda scope-block module toplevel)) tab)
-        ((eq? (car e) 'break-block) (unbound-vars (caddr e) bound tab))
-        ((eq? (car e) 'with-static-parameters) (unbound-vars (cadr e) bound tab))
-        (else (for-each (lambda (x) (unbound-vars x bound tab))
-                        (cdr e))
-              tab)))
+(define (check-valid-name e)
+  (or (valid-name? e)
+      (error (string "invalid identifier name \"" e "\""))))
 
-;; local variable identification and renaming, derived from:
-;; 1. (local x) expressions inside this scope-block and lambda
-;; 2. (const x) expressions in a scope-block where x is not declared global
-;; 3. variables assigned inside this scope-block that don't exist in outer
-;;    scopes
+(define (push-var! tab var val) (put! tab var (cons val (get tab var #f))))
+(define (pop-var! tab var) (put! tab var (cdr (get tab var))))
+
+(define (make-scope (lam #f) (args '()) (locals '()) (globals '()) (sp '()) (renames '()) (prev #f)
+                    (soft? #f) (hard? #f) (implicit-globals '()) (warn-vars #f))
+  (let ((tab (if prev (scope:table prev) (table))))
+    (for-each (lambda (v) (push-var! tab v v)) sp)
+    (for-each (lambda (v) (push-var! tab v v)) locals)
+    (for-each (lambda (pair) (push-var! tab (car pair) (cdr pair))) renames)
+    (for-each (lambda (v) (push-var! tab v `(outerref ,v))) globals)
+    (for-each (lambda (v) (push-var! tab v v)) args)
+    (vector lam args locals globals sp renames prev soft? hard? implicit-globals warn-vars tab)))
+
+(define (pop-scope! scope)
+  (let ((tab (scope:table scope)))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:sp scope))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:locals scope))
+    (for-each (lambda (pair) (pop-var! tab (car pair))) (scope:renames scope))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:globals scope))
+    (for-each (lambda (v) (pop-var! tab v)) (scope:args scope))))
+
+(define (scope:lam s)     (aref s 0))
+(define (scope:args s)    (aref s 1))
+(define (scope:locals s)  (aref s 2))
+(define (scope:globals s) (aref s 3))
+(define (scope:sp s)      (aref s 4))
+(define (scope:renames s) (aref s 5))
+(define (scope:prev s)    (aref s 6))
+(define (scope:soft? s)   (aref s 7))
+(define (scope:hard? s)   (aref s 8))
+(define (scope:implicit-globals s) (aref s 9))
+(define (scope:warn-vars s) (aref s 10))
+(define (scope:table s)   (aref s 11))
+
+(define (var-kind var scope (exclude-top-level-globals #f))
+  (if scope
+      (or (and (memq var (scope:args scope))    'argument)
+          (and (memq var (scope:locals scope))  'local)
+          (and (memq var (scope:globals scope))
+               (if (and exclude-top-level-globals
+                        (null? (lam:args (scope:lam scope)))
+                        ;; don't inherit global decls from the outermost scope block
+                        ;; in a top-level expression.
+                        (or (not (scope:prev scope))
+                            (not (scope:prev (scope:prev scope)))))
+                   'none 'global))
+          (and (memq var (scope:sp scope))      'static-parameter)
+          (var-kind var (scope:prev scope) exclude-top-level-globals))
+      'none))
+
+(define (in-scope? var scope) (not (eq? (var-kind var scope) 'none)))
+
+(define (warn-var?! v scope)
+  (and scope
+       (let ((w (scope:warn-vars scope)))
+         (if (and w (has? w v))
+             (begin (del! w v)
+                    #t)
+             (warn-var?! v (scope:prev scope))))))
+
+(define (all-local-names scope)
+  (define (all-lists s)
+    (if s
+        (list* (scope:args s) (scope:sp s) (scope:locals s) (all-lists (scope:prev s)))
+        '()))
+  (apply append (all-lists scope)))
+
 ;; returns lambdas in the form (lambda (args...) (locals...) body)
-(define (resolve-scopes- e env outerglobals implicitglobals lam renames newlam)
-  (cond ((symbol? e) (let ((r (assq e renames)))
-                       (if r (cdr r) e))) ;; return the renaming for e, or e
-        ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel global symbolicgoto symboliclabel))) e)
-        ((eq? (car e) 'local) '(null)) ;; remove local decls
-        ((eq? (car e) 'local-def) '(null)) ;; remove local decls
-        ((eq? (car e) 'implicit-global) '(null)) ;; remove implicit-global decls
-        ((eq? (car e) 'require-existing-local)
-         (if (not (memq (cadr e) env))
-             (error "no outer variable declaration exists for \"for outer\""))
+(define (resolve-scopes- e scope (sp '()) (loc #f))
+  (cond ((symbol? e)
+         (let ((val (and scope (get (scope:table scope) e #f))))
+           (cond (val (car val))
+                 ((underscore-symbol? e) e)
+                 (else `(outerref ,e)))))
+        ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel symbolicgoto symboliclabel toplevel-only)))
+         e)
+        ((eq? (car e) 'global)
+         (check-valid-name (cadr e))
+         e)
+        ((memq (car e) '(local local-def))
+         (check-valid-name (cadr e))
+         ;; remove local decls
          '(null))
-        ((eq? (car e) 'warn-if-existing)
-         (if (or (memq (cadr e) outerglobals) (memq (cadr e) implicitglobals))
-             `(warn-loop-var ,(cadr e))
-             '(null)))
+        ((eq? (car e) 'require-existing-local)
+         (if (not (in-scope? (cadr e) scope))
+             (error "no outer local variable declaration exists for \"for outer\""))
+         '(null))
+        ((or (eq? (car e) 'softscope) (eq? (car e) 'hardscope))
+         '(null))
+        ((eq? (car e) 'locals)
+         (let* ((names (filter (lambda (v)
+                                 (and (not (gensym? v))
+                                      (not (length= (string-split (string v) "#") 2))))
+                               (all-local-names scope)))
+                (names (delete-duplicates
+                        (filter (lambda (v) (not (eq? v '||)))
+                                (map unmangled-name names))))
+                (d (make-ssavalue)))
+           `(block (= ,d (call (call (core apply_type) (top Dict) (core Symbol) (core Any))))
+                   ,@(map (lambda (v)
+                            (let ((var (resolve-scopes- v scope)))
+                              `(if (isdefined ,var)
+                                   (call (top setindex!) ,d ,var (quote ,v)))))
+                          names)
+                   ,d)))
+        ((eq? (car e) 'islocal)
+         (if (memq (var-kind (cadr e) scope) '(global none))
+             '(false)
+             '(true)))
         ((eq? (car e) 'lambda)
-         (let* ((lv (lam:vars e))
-                (env (append lv env))
-                (body (resolve-scopes- (lam:body e) env
-                                       ;; don't propagate implicit or outer globals
-                                       '()
-                                       '()
-                                       e
-                                       ;; remove renames corresponding to local variables from the environment
-                                       (filter (lambda (ren) (not (memq (car ren) lv)))
-                                               renames)
-                                       #t)))
-               `(lambda ,(cadr e) ,(caddr e) ,body)))
+         (let* ((args (lam:argnames e))
+                (new-scope (make-scope e args '() '() sp '() scope))
+                (body (resolve-scopes- (lam:body e) new-scope)))
+           (pop-scope! new-scope)
+           `(lambda ,(cadr e) ,(caddr e) ,body)))
         ((eq? (car e) 'scope-block)
-         (let* ((blok (cadr e)) ;; body of scope-block expression
-                (other-locals (if lam (caddr lam) '())) ;; locals that are explicitly part of containing lambda expression
-                (iglo (find-decls 'implicit-global blok)) ;; globals possibly defined implicitly outside blok
-                (glob (diff (find-global-decls blok) iglo)) ;; all globals declared in blok
-                (vars-def (check-dups (find-local-def-decls blok) '()))
-                (locals-declared (check-dups (find-local-decls blok) vars-def))
-                (locals-implicit (implicit-locals
-                                   blok
-                                   ;; being declared global prevents a variable
-                                   ;; assignment from introducing a local
-                                   (append env glob iglo locals-declared vars-def)
-                                   outerglobals
-                                   (append glob iglo)))
-                (vars (delete-duplicates (append! locals-declared locals-implicit)))
-                (all-vars (append vars vars-def))
-                (need-rename?
-                 (lambda (vars)
-                  ;; compute the set of locals introduced by this scope which
-                  ;; have the same name as a variable used in an outer scope
-                  (if (or newlam (not lam))
-                      '()
-                       (filter (lambda (v) (or (memq v env)
-                                               (memq v other-locals)
-                                               (memq v (caddr lam))))
-                               vars))))
-                (need-rename (need-rename? vars))
-                (need-rename-def (need-rename? vars-def))
-                (deprecated-loop-vars
-                 (filter (lambda (v) (and (memq v env) (not (memq v locals-declared))))
-                         (delete-duplicates (find-decls 'warn-if-existing blok))))
+         (let* ((blok            (cadr e)) ;; body of scope-block expression
+                (lam             (scope:lam scope))
+                (argnames        (lam:argnames lam))
+                (toplevel?       (and (null? argnames) (eq? e (lam:body lam))))
+                (current-locals  (caddr lam)) ;; locals created so far in our lambda
+                (globals         (find-global-decls blok))
+                (assigned        (find-assigned-vars blok))
+                (locals-def      (find-local-def-decls blok))
+                (local-decls     (find-local-decls blok))
+                (hard?           (and (null? argnames) (or (scope:hard? scope)
+                                                           (find-scope-decl blok 'hardscope))))
+                (soft?           (and (null? argnames) (not hard?)
+                                      (let ((ss (find-scope-decl blok 'softscope)))
+                                        (cond ((not ss) (scope:soft? scope))
+                                              ((equal? (cadr ss) '(true))  #t)
+                                              ((equal? (cadr ss) '(false)) #f)
+                                              (else (scope:soft? scope))))))
+                (nonloc-assigned (filter (lambda (v) (and (not (memq v locals-def))
+                                                          (not (memq v local-decls))))
+                                         assigned))
+                (implicit-globals (if toplevel? nonloc-assigned '()))
+                (implicit-locals
+                 (filter (if toplevel?
+                             (lambda (v) #f)  ;; no implicit locals at top level
+                             (lambda (v) (and (memq (var-kind v scope #t) '(none static-parameter))
+                                              (not (and soft?
+                                                        (or (memq v (scope:implicit-globals scope))
+                                                            (defined-julia-global v))))
+                                              (not (memq v globals)))))
+                         nonloc-assigned))
+                (locals-nondef   (delete-duplicates (append local-decls implicit-locals)))
+                (need-rename?    (lambda (vars)
+                                   (filter (lambda (v) (or (memq v current-locals) (in-scope? v scope)))
+                                           vars)))
+                (need-rename     (need-rename? locals-nondef))
+                (need-rename-def (need-rename? locals-def))
                 ;; new gensym names for conflicting variables
-                (renamed (map named-gensy need-rename))
-                (renamed-def (map named-gensy need-rename-def))
-                (new-env (append all-vars glob env)) ;; all variables declared in or outside blok
-                ;; compute list of all globals used implicitly in blok (need renames)
-                (new-iglo (table.keys (unbound-vars blok
-                                                    new-env ;; list of everything else
-                                                    (table))))
-                ;; combine the list of new renamings with the inherited list
-                (new-renames (append (map cons need-rename renamed) ;; map from definition name -> gensym name
-                                     (map cons need-rename-def renamed-def)
-                                     (map (lambda (g) (cons g `(outerref ,g))) new-iglo)
-                                     (filter (lambda (ren) ;; old renames list, with anything in vars removed
-                                               (let ((var (car ren)))
-                                                 (not (or (memq var all-vars) ;; remove anything new
-                                                          (memq var implicitglobals) ;; remove anything only added implicitly in the last scope block
-                                                          (memq var glob))))) ;; remove anything that's now global
-                                             renames)))
-                (new-oglo (append iglo outerglobals)) ;; list of all implicit-globals from outside blok
-                (body (resolve-scopes- blok new-env new-oglo new-iglo lam new-renames #f))
-                (real-new-vars (append (diff vars need-rename) renamed))
-                (real-new-vars-def (append (diff vars-def need-rename-def) renamed-def)))
+                (renamed         (map named-gensy need-rename))
+                (renamed-def     (map named-gensy need-rename-def))
+                (newnames        (append (diff locals-nondef need-rename) renamed))
+                (newnames-def    (append (diff locals-def need-rename-def) renamed-def))
+                (warn-vars
+                 (and (not toplevel?) (null? argnames) (not soft?) (not hard?)
+                      (let ((vars (filter (lambda (v)
+                                            (and (or (memq v (scope:implicit-globals scope))
+                                                     (defined-julia-global v))
+                                                 (eq? (var-kind v scope) 'none)
+                                                 (not (memq v globals))))
+                                          nonloc-assigned)))
+                        (if (pair? vars)
+                            (let ((t (table)))
+                              (for-each (lambda (v) (put! t v #t))
+                                        vars)
+                              t)
+                            #f)))))
+
+           (for-each (lambda (v)
+                       (if (or (memq v locals-def) (memq v local-decls))
+                           (error (string "variable \"" v "\" declared both local and global")))
+                       (if (and (null? argnames) (memq (var-kind v scope) '(argument local)))
+                           (error (string "`global " v "`: " v " is a local variable in its enclosing scope"))))
+                     globals)
+           (if (and (pair? argnames) (eq? e (lam:body lam)))
                (for-each (lambda (v)
-                           (if (memq v all-vars)
-                               (error (string "variable \"" v "\" declared both local and global"))))
-                         glob)
-               (if lam ;; update in-place the list of local variables in lam
-                   (set-car! (cddr lam)
-                             (append real-new-vars real-new-vars-def (caddr lam))))
-               (let* ((warnings (map (lambda (v) `(warn-loop-var ,v)) deprecated-loop-vars))
-                      (body (if *warn-all-loop-vars*
-                                body
-                                (if (and (pair? body) (eq? (car body) 'block))
-                                    (append body warnings)
-                                    `(block ,body ,@warnings)))))
-                 (insert-after-meta ;; return the new, expanded scope-block
-                  (blockify body)
-                  (append! (map (lambda (v) `(local ,v)) real-new-vars)
-                           (map (lambda (v) `(local-def ,v)) real-new-vars-def)
-                           (if *warn-all-loop-vars*
-                               (map (lambda (v) `(warn-loop-var ,v)) deprecated-loop-vars)
-                               '()))))))
+                           (if (memq v argnames)
+                               (error (string "local variable name \"" v "\" conflicts with an argument"))))
+                         local-decls))
+           (for-each (lambda (lst)
+                       (for-each (lambda (v)
+                                   (if (eq? (var-kind v scope) 'static-parameter)
+                                       (error (string "local variable name \"" v "\" conflicts with a static parameter"))))
+                                 lst))
+                     (list local-decls implicit-locals))
+           (if lam
+               (set-car! (cddr lam)
+                         (append (caddr lam) newnames newnames-def)))
+           (insert-after-meta ;; return the new, expanded scope-block
+            (blockify
+             (let ((new-scope (make-scope lam
+                                          '()
+                                          (append locals-nondef locals-def)
+                                          globals
+                                          '()
+                                          (append (map cons need-rename renamed)
+                                                  (map cons need-rename-def renamed-def))
+                                          scope
+                                          (and soft? (null? argnames))
+                                          hard?
+                                          (if toplevel?
+                                              implicit-globals
+                                              (scope:implicit-globals scope))
+                                          warn-vars)))
+               (begin0
+                (resolve-scopes- blok new-scope '() loc)
+                (pop-scope! new-scope))))
+            (append! (map (lambda (v) `(local ,v)) newnames)
+                     (map (lambda (v) `(local-def ,v)) newnames-def)))
+           ))
         ((eq? (car e) 'module)
          (error "\"module\" expression not at top level"))
         ((eq? (car e) 'break-block)
          `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
-                       ,(resolve-scopes- (caddr e) env outerglobals implicitglobals lam renames #f))) ;; body of break-block expression
+                       ,(resolve-scopes- (caddr e) scope '() loc))) ;; body of break-block expression
         ((eq? (car e) 'with-static-parameters)
-         `(with-static-parameters ;; ignore list of sparams in break-block expression
-            ,(resolve-scopes- (cadr e) env outerglobals implicitglobals lam renames #f)
-            ,@(cddr e))) ;; body of break-block expression
+         `(with-static-parameters
+           ,(resolve-scopes- (cadr e) scope (cddr e) loc)
+           ,@(cddr e)))
+        ((and (eq? (car e) 'method) (length> e 2))
+         `(method
+           ,(resolve-scopes- (cadr   e) scope)
+           ,(resolve-scopes- (caddr  e) scope)
+           ,(resolve-scopes- (cadddr e) scope (method-expr-static-parameters e))))
         (else
+         (if (and (eq? (car e) '=) (symbol? (cadr e))
+                  scope (null? (lam:args (scope:lam scope)))
+                  (warn-var?! (cadr e) scope)
+                  (= *scopewarn-opt* 1))
+             (let* ((v    (cadr e))
+                    (loc  (extract-line-file loc))
+                    (line (if (= (car loc) 0) (julia-current-line) (car loc)))
+                    (file (if (eq? (cadr loc) 'none) (julia-current-file) (cadr loc))))
+               (lowering-warning
+                1000 'warn (symbol (string file line)) file line
+                (string "Assignment to `" v "` in soft scope is ambiguous "
+                        "because a global variable by the same name exists: "
+                        "`" v "` will be treated as a new local. "
+                        "Disambiguate by using `local " v "` to suppress this warning or "
+                        "`global " v "` to assign to the existing global variable."))))
          (cons (car e)
                (map (lambda (x)
-                      (resolve-scopes- x env outerglobals implicitglobals lam renames #f))
+                      (if (linenum? x)
+                          (set! loc x))
+                      (resolve-scopes- x scope '() loc))
                     (cdr e))))))
 
-(define (resolve-scopes e) (resolve-scopes- e '() '() '() #f '() #f))
+(define (resolve-scopes e) (resolve-scopes- e #f))
 
 ;; pass 3: analyze variables
 
 ;; names of arguments and local vars
 (define (lambda-all-vars e)
-  (append (lam:vars e) (caddr e)))
+  (append (lam:argnames e) (caddr e)))
 
 ;; compute set of variables referenced in a lambda but not bound by it
 (define (free-vars- e tab)
-  (cond ((or (eq? e 'true) (eq? e 'false) (eq? e UNUSED)) tab)
+  (cond ((or (eq? e UNUSED) (underscore-symbol? e)) tab)
         ((symbol? e) (put! tab e #t))
-        ((and (pair? e) (eq? (car e) 'outerref)) (put! tab (cadr e) #t))
+        ((and (pair? e) (eq? (car e) 'outerref)) tab)
         ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
         ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
         ((eq? (car e) 'lambda)
-         (let ((bound (lambda-all-vars e)))
-           (for-each (lambda (v) (if (not (memq v bound)) (put! tab v #t)))
+         (let ((bound (table)))
+           (for-each (lambda (b) (put! bound b #t)) (lambda-all-vars e))
+           (for-each (lambda (v) (if (not (has? bound v)) (put! tab v #t)))
                      (free-vars (lam:body e))))
          tab)
         (else
@@ -2699,24 +3285,32 @@
 (define (free-vars e)
   (table.keys (free-vars- e (table))))
 
-(define (analyze-vars-lambda e env captvars sp new-sp)
+(define (vinfo-to-table vi)
+  (let ((tab (table)))
+    (for-each (lambda (v) (put! tab (car v) v))
+              vi)
+    tab))
+
+(define (analyze-vars-lambda e env captvars sp new-sp methsig tab)
   (let* ((args (lam:args e))
          (locl (caddr e))
          (allv (nconc (map arg-name args) locl))
          (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
                       ;; add variables referenced in declared types for free vars
                       (dv (apply nconc (map (lambda (v)
-                                              (let ((vi (var-info-for v env)))
+                                              (let ((vi (get tab v #f)))
                                                 (if vi (free-vars (vinfo:type vi)) '())))
                                             fv))))
                  (append (diff dv fv) fv)))
+         (sig-fv (if methsig (free-vars methsig) '()))
          (glo  (find-global-decls (lam:body e)))
          ;; make var-info records for vars introduced by this lambda
          (vi   (nconc
                 (map (lambda (decl) (make-var-info (decl-var decl)))
                      args)
                 (map make-var-info locl)))
-         (capt-sp (filter (lambda (v) (and (memq v fv) (not (memq v glo)) (not (memq v new-sp))))
+         (capt-sp (filter (lambda (v) (or (and (memq v fv) (not (memq v glo)) (not (memq v new-sp)))
+                                          (memq v sig-fv)))
                           sp))
          ;; captured vars: vars from the environment that occur
          ;; in our set of free variables (fv).
@@ -2724,15 +3318,17 @@
                                                  (not (memq (vinfo:name v) new-sp))
                                                  (not (memq (vinfo:name v) glo))))
                                 env)
-                        (map make-var-info capt-sp))))
-    (analyze-vars (lam:body e)
-                  (append vi
+                        (map make-var-info capt-sp)))
+         (new-env (append vi
                           ;; new environment: add our vars
                           (filter (lambda (v)
                                     (and (not (memq (vinfo:name v) allv))
                                          (not (memq (vinfo:name v) glo))))
-                                  env))
-                  cv (delete-duplicates (append new-sp sp)))
+                                  env))))
+    (analyze-vars (lam:body e)
+                  new-env
+                  cv (delete-duplicates (append new-sp sp))
+                  (vinfo-to-table new-env))
     ;; mark all the vars we capture as captured
     (for-each (lambda (v) (vinfo:set-capt! v #t))
               cv)
@@ -2747,31 +3343,41 @@
 ;; in-place to
 ;;   (var-info-lst captured-var-infos ssavalues static_params)
 ;; where var-info-lst is a list of var-info records
-(define (analyze-vars e env captvars sp)
+(define (analyze-vars e env captvars sp tab)
   (if (or (atom? e) (quoted? e))
-      e
+      (begin
+        (if (symbol? e)
+            (let ((vi (get tab e #f)))
+              (if vi
+                  (vinfo:set-read! vi #t))))
+        e)
       (case (car e)
         ((local-def) ;; a local that we know has an assignment that dominates all usages
-         (let ((vi (var-info-for (cadr e) env)))
+         (let ((vi (get tab (cadr e) #f)))
               (vinfo:set-never-undef! vi #t)))
         ((=)
-         (let ((vi (and (symbol? (cadr e)) (var-info-for (cadr e) env))))
+         (let ((vi (and (symbol? (cadr e)) (get tab (cadr e) #f))))
            (if vi ; if local or captured
                (begin (if (vinfo:asgn vi)
                           (vinfo:set-sa! vi #f)
                           (vinfo:set-sa! vi #t))
                       (vinfo:set-asgn! vi #t))))
-         (analyze-vars (caddr e) env captvars sp))
+         (analyze-vars (caddr e) env captvars sp tab))
         ((call)
-         (let ((vi (var-info-for (cadr e) env)))
+         (let ((vi (get tab (cadr e) #f)))
            (if vi
                (vinfo:set-called! vi #t))
-           (for-each (lambda (x) (analyze-vars x env captvars sp))
+           ;; calls to functions with keyword args have head of `kwcall` first
+           (if (and (length> e 3) (equal? (cadr e) '(core kwcall)))
+               (let ((vi2 (get tab (cadddr e) #f)))
+                 (if vi2
+                     (vinfo:set-called! vi2 #t))))
+           (for-each (lambda (x) (analyze-vars x env captvars sp tab))
                      (cdr e))))
         ((decl)
          ;; handle var::T declaration by storing the type in the var-info
          ;; record. for non-symbols or globals, emit a type assertion.
-         (let ((vi (var-info-for (cadr e) env)))
+         (let ((vi (get tab (cadr e) #f)))
            (if vi
                (begin (if (not (equal? (vinfo:type vi) '(core Any)))
                           (error (string "multiple type declarations for \""
@@ -2781,30 +3387,31 @@
                                          "\" declared in inner scope")))
                       (vinfo:set-type! vi (caddr e))))))
         ((lambda)
-         (analyze-vars-lambda e env captvars sp '()))
+         (analyze-vars-lambda e env captvars sp '() #f tab))
         ((with-static-parameters)
          ;; (with-static-parameters func_expr sp_1 sp_2 ...)
          (assert (eq? (car (cadr e)) 'lambda))
          (analyze-vars-lambda (cadr e) env captvars sp
-                              (cddr e)))
+                              (cddr e) #f tab))
         ((method)
          (if (length= e 2)
-             (let ((vi (var-info-for (method-expr-name e) env)))
+             (let ((vi (get tab (method-expr-name e) #f)))
                (if vi
                    (begin (if (vinfo:asgn vi)
                               (vinfo:set-sa! vi #f)
                               (vinfo:set-sa! vi #t))
                           (vinfo:set-asgn! vi #t)))
                e)
-             (begin (analyze-vars (caddr e) env captvars sp)
+             (begin (analyze-vars (caddr e) env captvars sp tab)
                     (assert (eq? (car (cadddr e)) 'lambda))
                     (analyze-vars-lambda (cadddr e) env captvars sp
-                                         (method-expr-static-parameters e)))))
+                                         (method-expr-static-parameters e)
+                                         (caddr e) tab))))
         ((module toplevel) e)
-        (else (for-each (lambda (x) (analyze-vars x env captvars sp))
+        (else (for-each (lambda (x) (analyze-vars x env captvars sp tab))
                         (cdr e))))))
 
-(define (analyze-variables! e) (analyze-vars e '() '() '()) e)
+(define (analyze-variables! e) (analyze-vars e '() '() '() (table)) e)
 
 ;; pass 4: closure conversion
 
@@ -2821,29 +3428,35 @@ f(x) = yt(x)
 |#
 
 (define (type-for-closure-parameterized name P names fields types super)
-   (let ((n (length P)))
-    `((thunk
-      (lambda ()
-        (() () 0 ())
-        (body (global ,name) (const ,name)
-              ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any)))) P names)
-              (struct_type ,name (call (core svec) ,@P)
-                           (call (core svec) ,@(map quotify fields))
-                           ,super
-                           (call (core svec) ,@types) false ,(length fields))
-              (return (null))))))))
+  (let ((n (length P))
+        (s (make-ssavalue)))
+    `((thunk ,(linearize `(lambda ()
+         (() () 0 ())
+         (block (global ,name) (const ,name)
+                ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any)))) P names)
+                (= ,s (call (core _structtype) (thismodule) (inert ,name) (call (core svec) ,@P)
+                            (call (core svec) ,@(map quotify fields))
+                            (call (core svec))
+                            (false) ,(length fields)))
+                (call (core _setsuper!) ,s ,super)
+                (= (outerref ,name) ,s)
+                (call (core _typebody!) ,s (call (core svec) ,@types))
+                (return (null)))))))))
 
 (define (type-for-closure name fields super)
-  `((thunk (lambda ()
-            (() () 0 ())
-            (body (global ,name) (const ,name)
-                  (struct_type ,name (call (core svec))
-                               (call (core svec) ,@(map quotify fields))
-                               ,super
-                               (call (core svec) ,@(map (lambda (v) '(core Box)) fields))
-                               false ,(length fields))
-                  (return (null)))))))
-
+  (let ((s (make-ssavalue)))
+    `((thunk ,(linearize `(lambda ()
+       (() () 0 ())
+       (block (global ,name) (const ,name)
+              (= ,s (call (core _structtype) (thismodule) (inert ,name) (call (core svec))
+                          (call (core svec) ,@(map quotify fields))
+                          (call (core svec))
+                          (false) ,(length fields)))
+              (call (core _setsuper!) ,s ,super)
+              (= (outerref ,name) ,s)
+              (call (core _typebody!) ,s
+                    (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
+              (return (null)))))))))
 
 ;; better versions of above, but they get handled wrong in many places
 ;; need to fix that in order to handle #265 fully (and use the definitions)
@@ -2857,7 +3470,7 @@ f(x) = yt(x)
 ;          (struct_type ,name (call (core svec) ,@P)
 ;                       (call (core svec) ,@(map quotify fields))
 ;                       ,super
-;                       (call (core svec) ,@types) false ,(length fields)))))
+;                       (call (core svec) ,@types) (false) ,(length fields)))))
 
 ;; ... and without parameters
 ;(define (type-for-closure name fields super)
@@ -2867,41 +3480,96 @@ f(x) = yt(x)
 ;                 (call (core svec) ,@(map quotify fields))
 ;                 ,super
 ;                 (call (core svec) ,@(map (lambda (v) 'Any) fields))
-;                 false ,(length fields))))
+;                 (false) ,(length fields))))
 
 
 (define (vinfo:not-capt vi)
-  (list (car vi) (cadr vi) (logand (caddr vi) (lognot 5))))
+  (list (car vi) (cadr vi) (logand (caddr vi) (lognot 1))))
 
 (define (clear-capture-bits vinfos)
   (map vinfo:not-capt vinfos))
 
-(define (convert-lambda lam fname interp capt-sp)
+(define (convert-lambda lam fname interp capt-sp opaq)
   (let ((body (add-box-inits-to-body
-                lam (cl-convert (cadddr lam) fname lam (table) #f interp))))
+               lam (cl-convert (cadddr lam) fname lam (table) (table) #f interp opaq (table) (vinfo-to-table (car (lam:vinfo lam)))))))
     `(lambda ,(lam:args lam)
        (,(clear-capture-bits (car (lam:vinfo lam)))
         ()
         ,(caddr (lam:vinfo lam))
         ,(delete-duplicates (append (lam:sp lam) capt-sp)))
-      ,body)))
+       ,body)))
 
-(define (convert-for-type-decl rhs t)
+;; renumber ssavalues assigned in an expr, allowing it to be repeated
+(define (renumber-assigned-ssavalues e)
+  (let ((vals (expr-find-all (lambda (x) (and (assignment? x) (ssavalue? (cadr x))))
+                             e
+                             cadadr)))
+    (if (null? vals)
+        e
+        (let ((repl (table)))
+          (for-each (lambda (id) (put! repl id (make-ssavalue)))
+                    vals)
+          (let do-replace ((x e))
+            (if (or (atom? x) (quoted? x))
+                x
+                (if (eq? (car x) 'ssavalue)
+                    (or (get repl (cadr x) #f) x)
+                    (cons (car x)
+                          (map do-replace (cdr x))))))))))
+
+(define (convert-for-type-decl rhs t assert lam)
   (if (equal? t '(core Any))
       rhs
-      `(call (core typeassert)
-             (call (top convert) ,t ,rhs)
-             ,t)))
+      (let* ((new-mutable-var
+               (lambda () (let ((g (gensy)))
+                               (if lam (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,g Any 10)))))
+                               g)))
+             (left (if (or (atom? t) (ssavalue? t) (quoted? t))
+                       #f
+                       (make-ssavalue)))
+             (temp (new-mutable-var)) ; use a slot to permit union-splitting this in inference
+             (ty   (or left t))
+             (ex   `(call (top convert) ,ty ,temp))
+             (ex   (if assert `(call (core typeassert) ,ex ,ty) ex))
+             (ex   `(= ,temp ,ex))
+             (ex   `(if (call (core isa) ,temp ,ty) (null) ,ex))
+             (t    (if left (renumber-assigned-ssavalues t) t))
+             (ex   `((= ,temp ,rhs) ,ex ,temp))
+             (ex   (if left (cons `(= ,left ,t) ex) ex))
+             (ex   (if lam ex (cons `(local-def ,temp) ex))))
+        (cons 'block ex))))
+
+(define (capt-var-access var fname opaq)
+  (if opaq
+      `(call (core getfield) ,fname ,(get opaq var))
+      `(call (core getfield) ,fname (inert ,var))))
+
+(define (convert-global-assignment var rhs0 globals lam)
+  (let* ((rhs1 (if (or (simple-atom? rhs0)
+                       (equal? rhs0 '(the_exception)))
+                   rhs0
+                   (make-ssavalue)))
+         (ref   (binding-to-globalref var))
+         (ty   `(call (core get_binding_type) ,(cadr ref) (inert ,(caddr ref))))
+         (rhs  (if (get globals ref #t) ;; no type declaration for constants
+                   (convert-for-type-decl rhs1 ty #f lam)
+                   rhs1))
+         (ex   `(= ,var ,rhs)))
+    (if (eq? rhs1 rhs0)
+        `(block ,ex ,rhs0)
+        `(block (= ,rhs1 ,rhs0)
+                ,ex
+                ,rhs1))))
 
 ;; convert assignment to a closed variable to a setfield! call.
 ;; while we're at it, generate `convert` calls for variables with
 ;; declared types.
 ;; when doing this, the original value needs to be preserved, to
 ;; ensure the expression `a=b` always returns exactly `b`.
-(define (convert-assignment var rhs0 fname lam interp)
+(define (convert-assignment var rhs0 fname lam interp opaq globals locals)
   (cond
     ((symbol? var)
-     (let* ((vi (assq var (car  (lam:vinfo lam))))
+     (let* ((vi (get locals var #f))
             (cv (assq var (cadr (lam:vinfo lam))))
             (vt  (or (and vi (vinfo:type vi))
                      (and cv (vinfo:type cv))
@@ -2909,18 +3577,18 @@ f(x) = yt(x)
             (closed (and cv (vinfo:asgn cv) (vinfo:capt cv)))
             (capt   (and vi (vinfo:asgn vi) (vinfo:capt vi))))
        (if (and (not closed) (not capt) (equal? vt '(core Any)))
-           `(= ,var ,rhs0)
+           (if (or (local-in? var lam) (underscore-symbol? var))
+               `(= ,var ,rhs0)
+               (convert-global-assignment var rhs0 globals lam))
            (let* ((rhs1 (if (or (simple-atom? rhs0)
                                 (equal? rhs0 '(the_exception)))
                             rhs0
                             (make-ssavalue)))
-                  (rhs  (if (equal? vt '(core Any))
-                            rhs1
-                            (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f interp))))
+                  (rhs  (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f #f interp opaq (table) locals) #t lam))
                   (ex (cond (closed `(call (core setfield!)
                                            ,(if interp
                                                 `($ ,var)
-                                                `(call (core getfield) ,fname (inert ,var)))
+                                                (capt-var-access var fname opaq))
                                            (inert contents)
                                            ,rhs))
                             (capt `(call (core setfield!) ,var (inert contents) ,rhs))
@@ -2930,45 +3598,57 @@ f(x) = yt(x)
                  `(block (= ,rhs1 ,rhs0)
                          ,ex
                          ,rhs1))))))
-     ((and (pair? var) (or (eq? (car var) 'outerref)
-                           (eq? (car var) 'globalref)))
-
-      `(= ,var ,rhs0))
+     ((or (outerref? var) (globalref? var))
+      (convert-global-assignment var rhs0 globals lam))
      ((ssavalue? var)
       `(= ,var ,rhs0))
      (else
        (error (string "invalid assignment location \"" (deparse var) "\"")))))
 
+(define (rename-sig-types ex namemap)
+  (pattern-replace
+   (pattern-set
+    (pattern-lambda (call (core (-/ Typeof)) name)
+                    (get namemap name __)))
+   ex))
+
 ;; replace leading (function) argument type with `typ`
 (define (fix-function-arg-type te typ iskw namemap type-sp)
   (let* ((typapp (caddr te))
-         (types  (pattern-replace
-                  (pattern-set
-                   (pattern-lambda (call (core (-/ Typeof)) name)
-                                   (get namemap name __)))
-                  (cddr typapp)))
+         (types  (rename-sig-types (cddr typapp) namemap))
          (closure-type (if (null? type-sp)
                            typ
                            `(call (core apply_type) ,typ ,@type-sp)))
          (newtypes
           (if iskw
               `(,(car types) ,(cadr types) ,closure-type ,@(cdddr types))
-              `(,closure-type ,@(cdr types)))))
-    `(call (core svec) (call (core svec) ,@newtypes)
-           (call (core svec) ,@(append (cddr (cadddr te)) type-sp)))))
+              `(,closure-type ,@(cdr types))))
+         (loc (caddddr te)))
+    `(call (core svec)
+           (call (core svec) ,@newtypes)
+           (call (core svec) ,@(append (cddr (cadddr te)) type-sp))
+           ,loc)))
 
-;; collect all toplevel-butlast expressions inside `e`, and return
+;; collect all toplevel-butfirst expressions inside `e`, and return
 ;; (ex . stmts), where `ex` is the expression to evaluated and
 ;; `stmts` is a list of statements to move to the top level.
-;; TODO: this implementation seems quite inefficient.
 (define (lift-toplevel e)
-  (if (atom? e) (cons e '())
-      (let* ((rec (map lift-toplevel e))
-             (e2  (map car rec))
-             (tl  (apply append (map cdr rec))))
-        (if (eq? (car e) 'toplevel-butlast)
-            (cons (last e2) (append tl (butlast (cdr e2))))
-            (cons e2 tl)))))
+  (let ((top '()))
+    (define (lift- e)
+      (if (or (atom? e) (quoted? e))
+          e
+          (let ((e (cons (car e) (map lift- (cdr e)))))
+            (if (eq? (car e) 'toplevel-butfirst)
+                (begin (set! top (cons (cddr e) top))
+                       (cadr e))
+                e))))
+    (let ((e2 (lift- e)))
+      (let ((stmts (apply append (reverse top))))
+        ;; move all type definitions first
+        (receive (structs others)
+                 (separate (lambda (x) (and (pair? x) (eq? (car x) 'thunk)))
+                           stmts)
+                 (cons e2 (append structs others)))))))
 
 (define (first-non-meta blk)
   (let loop ((xs (cdr blk)))
@@ -2979,12 +3659,22 @@ f(x) = yt(x)
               (loop (cdr xs))
               elt)))))
 
+; try to ignore some metadata expressions for implicit return sometimes
+(define (only-meta? blk)
+  (let loop ((xs blk))
+    (if (null? xs)
+        #t
+        (let ((elt (car xs)))
+          (if (and (pair? elt) (memq (car elt) '(lineinfo line loopinfo)))
+              (loop (cdr xs))
+              #f)))))
+
 ;; return `body` with `stmts` inserted after any meta nodes
 (define (insert-after-meta body stmts)
   (if (null? stmts)
       body
       (let ((meta (take-while (lambda (x) (and (pair? x)
-                                               (memq (car x) '(line meta))))
+                                               (memq (car x) '(lineinfo line meta))))
                               (cdr body))))
         `(,(car body)
           ,@meta
@@ -3005,22 +3695,6 @@ f(x) = yt(x)
                          '())))
                  args)))))
 
-(define (take-statements-while pred body)
-  (let ((acc '()))
-    (define (take expr)
-      ;; returns #t as long as exprs match and we should continue
-      (cond ((and (pair? expr) (memq (car expr) '(block body)))
-             (let loop ((xs (cdr expr)))
-               (cond ((null? xs) #t)
-                     ((take (car xs)) (loop (cdr xs)))
-                     (else #f))))
-            ((pred expr)
-             (set! acc (cons expr acc))
-             #t)
-            (else #f)))
-    (take body)
-    (reverse! acc)))
-
 ;; find all methods for the same function as `ex` in `body`
 (define (all-methods-for ex body)
   (let ((mname (method-expr-name ex)))
@@ -3031,50 +3705,154 @@ f(x) = yt(x)
                    identity
                    (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda)))))))
 
-;; clear capture bit for vars assigned once at the top, to avoid allocating
-;; some unnecessary Boxes.
+(define lambda-opt-ignored-exprs
+  (Set '(quote top core lineinfo line inert local-def unnecessary copyast
+         meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
+         thunk with-static-parameters toplevel-only
+         global globalref outerref const-if-global thismodule
+         const atomic null true false ssavalue isdefined toplevel module lambda
+         error gc_preserve_begin gc_preserve_end import using export public inline noinline purity)))
+
+(define (local-in? s lam (tab #f))
+  (or (and tab (has? tab s))
+      (assq s (car  (lam:vinfo lam)))
+      (assq s (cadr (lam:vinfo lam)))))
+
+;; Try to identify never-undef variables, and then clear the `captured` flag for single-assigned,
+;; never-undef variables to avoid allocating unnecessary `Box`es.
 (define (lambda-optimize-vars! lam)
-  (define (expr-uses-var ex v stmts)
-    (cond ((assignment? ex) (expr-contains-eq v (caddr ex)))
-          ((eq? (car ex) 'method)
-           (and (length> ex 2)
-                ;; a method expression captures a variable if any methods for the
-                ;; same function do.
-                (let ((all-methods (all-methods-for ex (cons 'body stmts))))
-                  (any (lambda (ex)
-                         (assq v (cadr (lam:vinfo (cadddr ex)))))
-                       all-methods))))
-          (else (expr-contains-eq v ex))))
   (assert (eq? (car lam) 'lambda))
-  (let ((vi (car (lam:vinfo lam))))
-    (if (and (any vinfo:capt vi)
-             (any vinfo:sa vi))
-        (let* ((leading
-                (filter (lambda (x) (and (pair? x)
-                                         (let ((cx (car x)))
-                                           (or (and (eq? cx 'method) (length> x 2))
-                                               (eq? cx '=)
-                                               (eq? cx 'call)))))
-                        (take-statements-while
-                         (lambda (e)
-                           (or (atom? e)
-                               (memq (car e) '(quote top core line inert local local-def unnecessary
-                                               meta inbounds boundscheck simdloop decl
-                                               implicit-global global globalref outerref
-                                               const = null method call foreigncall ssavalue
-                                               gc_preserve_begin gc_preserve_end))))
-                         (lam:body lam))))
-               (unused (map cadr (filter (lambda (x) (memq (car x) '(method =)))
-                                         leading))))
-          ;; TODO: reorder leading statements to put assignments where the RHS is
-          ;; `simple-atom?` at the top.
-          (for-each (lambda (e)
-                      (set! unused (filter (lambda (v) (not (expr-uses-var e v leading)))
-                                           unused))
-                      (if (and (memq (car e) '(method =)) (memq (cadr e) unused))
-                          (let ((v (assq (cadr e) vi)))
-                            (if v (vinfo:set-never-undef! v #t)))))
-                    leading)))
+  ;; memoize all-methods-for to avoid O(n^2) behavior
+  (define allmethods-table (table))
+  (define (get-methods ex stmts)
+    (let ((mn (method-expr-name ex)))
+      (if (has? allmethods-table mn)
+          (get allmethods-table mn)
+          (let ((am (all-methods-for ex stmts)))
+            (put! allmethods-table mn am)
+            am))))
+  ;; This does a basic-block-local dominance analysis to find variables that
+  ;; are never used undef.
+  (let ((vi     (car (lam:vinfo lam)))
+        (args   (lam:argnames lam))
+        (decl   (table))
+        (unused (table))  ;; variables not (yet) used (read from) in the current block
+        (live   (table))  ;; variables that have been set in the current block
+        (seen   (table))) ;; all variables we've seen assignments to
+    ;; Collect candidate variables: those that are captured (and hence we want to optimize)
+    ;; and only assigned once. This populates the initial `unused` table.
+    (for-each (lambda (v)
+                (if (and (vinfo:capt v) (vinfo:sa v))
+                    (put! unused (car v) #t)))
+              vi)
+    (define (restore old)
+      (table.foreach (lambda (k v)
+                       (if (not (has? old k))
+                           (put! unused k v)))
+                     live)
+      (set! live old))
+    (define (kill)
+      ;; when we see control flow, empty live set back into unused set
+      (restore (table)))
+    (define (mark-used var)
+      ;; remove variable from the unused table
+      ;; Note arguments are only "used" for purposes of this analysis when
+      ;; they are captured, since they are never undefined.
+      (if (and (has? unused var) (not (memq var args)))
+          (del! unused var)))
+    (define (mark-captured var)
+      (if (has? unused var)
+          (del! unused var)))
+    (define (assign! var)
+      (if (has? unused var)
+          ;; When a variable is assigned, move it to the live set to protect
+          ;; it from being removed from `unused`.
+          (begin (put! live var #t)
+                 (put! seen var #t)
+                 (del! unused var))))
+    (define (declare! var)
+      (if (has? unused var)
+          (put! decl var #t)))
+    (define (leave-loop! old-decls)
+      ;; at the end of a loop, remove live variables that were declared outside,
+      ;; since those might be assigned multiple times (issue #37690)
+      (for-each (lambda (k)
+                  (if (has? old-decls k)
+                      (del! live k)))
+                (table.keys live))
+      (set! decl old-decls))
+    (define (visit e)
+      ;; returns whether e contained a symboliclabel
+      (cond ((atom? e) (if (symbol? e) (mark-used e))
+             #f)
+            ((lambda-opt-ignored-exprs (car e))
+             #f)
+            ((eq? (car e) 'scope-block)
+             (visit (cadr e)))
+            ((memq (car e) '(block call new splatnew new_opaque_closure))
+             (eager-any visit (cdr e)))
+            ((eq? (car e) 'break-block)
+             (visit (caddr e)))
+            ((eq? (car e) 'return)
+             (begin0 (visit (cadr e))
+                     (kill)))
+            ((memq (car e) '(break label symbolicgoto))
+             (kill)
+             #f)
+            ((eq? (car e) 'symboliclabel)
+             (kill)
+             #t)
+            ((memq (car e) '(if elseif trycatch tryfinally trycatchelse))
+             (let ((prev (table.clone live)))
+               (if (eager-any (lambda (e) (begin0 (visit e)
+                                                  (kill)))
+                              (cdr e))
+                   ;; if there is a label inside, we could have skipped a prior
+                   ;; variable initialization
+                   (begin (kill) #t)
+                   (begin (restore prev) #f))))
+            ((or (eq? (car e) '_while) (eq? (car e) '_do_while))
+             (let ((prev  (table.clone live))
+                   (decl- (table.clone decl)))
+               (let ((result (eager-any visit (cdr e))))
+                 (leave-loop! decl-)
+                 (if result
+                     #t
+                     (begin (restore prev) #f)))))
+            ((eq? (car e) '=)
+             (begin0 (visit (caddr e))
+                     (assign! (cadr e))))
+            ((eq? (car e) 'local)
+             (declare! (cadr e))
+             #f)
+            ((eq? (car e) 'method)
+             (if (length> e 2)
+                 (let* ((mn          (method-expr-name e))
+                        ;; a method expression captures a variable if any methods for
+                        ;; the same function do.
+                        (all-methods (if (local-in? mn lam)
+                                         (get-methods e (lam:body lam))
+                                         (list e))))
+                   (for-each (lambda (ex)
+                               (for-each mark-captured
+                                         (map car (cadr (lam:vinfo (cadddr ex))))))
+                             all-methods)
+                   (assign! (cadr e))))
+             #f)
+            (else
+             (eager-any visit (cdr e))
+             ;; in all other cases there's nothing to do except assert that
+             ;; all expression heads have been handled.
+             #;(assert (memq (car e) '(foreigncall cfunction |::|))))))
+    (visit (lam:body lam))
+    ;; Finally, variables can be marked never-undef if they were set in the first block,
+    ;; or are currently live, or are back in the unused set (because we've left the only
+    ;; block that uses them, or possibly because they have no uses at all).
+    (for-each (lambda (v)
+                (if (has? seen v)
+                    (let ((vv (assq v vi)))
+                      (vinfo:set-never-undef! vv #t))))
+              (append (table.keys live) (table.keys unused)))
     (for-each (lambda (v)
                 (if (and (vinfo:sa v) (vinfo:never-undef v))
                     (set-car! (cddr v) (logand (caddr v) (lognot 5)))))
@@ -3088,25 +3866,32 @@ f(x) = yt(x)
         (and cv (vinfo:asgn cv) (vinfo:capt cv)))))
 
 (define (toplevel-preserving? e)
-  (and (pair? e) (memq (car e) '(if block body trycatch tryfinally))))
+  (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse))))
 
-(define (map-cl-convert exprs fname lam namemap toplevel interp)
+(define (map-cl-convert exprs fname lam namemap defined toplevel interp opaq (globals (table)) (locals (table)))
   (if toplevel
       (map (lambda (x)
-             (let ((tl (lift-toplevel (cl-convert x fname lam namemap
+             (let ((tl (lift-toplevel (cl-convert x fname lam namemap defined
                                                   (and toplevel (toplevel-preserving? x))
-                                                  interp))))
+                                                  interp opaq globals locals))))
                (if (null? (cdr tl))
                    (car tl)
                    `(block ,@(cdr tl) ,(car tl)))))
            exprs)
-      (map (lambda (x) (cl-convert x fname lam namemap #f interp)) exprs)))
+      (map (lambda (x) (cl-convert x fname lam namemap defined #f interp opaq globals locals)) exprs)))
 
-(define (cl-convert e fname lam namemap toplevel interp)
+(define (prepare-lambda! lam)
+  ;; mark all non-arguments as assigned, since locals that are never assigned
+  ;; need to be handled the same as those that are (i.e., boxed).
+  (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
+            (list-tail (car (lam:vinfo lam)) (length (lam:args lam))))
+  (lambda-optimize-vars! lam))
+
+(define (cl-convert e fname lam namemap defined toplevel interp opaq (globals (table)) (locals (table)))
   (if (and (not lam)
-           (not (and (pair? e) (memq (car e) '(lambda method macro)))))
+           (not (and (pair? e) (memq (car e) '(lambda method macro opaque_closure)))))
       (if (atom? e) e
-          (cons (car e) (map-cl-convert (cdr e) fname lam namemap toplevel interp)))
+          (cons (car e) (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq globals locals)))
       (cond
        ((symbol? e)
         (define (new-undef-var name)
@@ -3125,19 +3910,19 @@ f(x) = yt(x)
                  (val (if (equal? typ '(core Any))
                           val
                           `(call (core typeassert) ,val
-                                 ,(cl-convert typ fname lam namemap toplevel interp)))))
+                                 ,(cl-convert typ fname lam namemap defined toplevel interp opaq globals locals)))))
             `(block
                ,@(if (eq? box access) '() `((= ,access ,box)))
                ,undefcheck
                ,val)))
-        (let ((vi (assq e (car  (lam:vinfo lam))))
+        (let ((vi (get locals e #f))
               (cv (assq e (cadr (lam:vinfo lam)))))
           (cond ((eq? e fname) e)
                 ((memq e (lam:sp lam)) e)
                 (cv
                  (let ((access (if interp
                                    `($ (call (core QuoteNode) ,e))
-                                   `(call (core getfield) ,fname (inert ,e)))))
+                                   (capt-var-access e fname opaq))))
                    (if (and (vinfo:asgn cv) (vinfo:capt cv))
                        (get-box-contents access (vinfo:type cv))
                        access)))
@@ -3149,62 +3934,85 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref outerref line break inert module toplevel null meta warn-loop-var) e)
+          ((quote top core globalref outerref thismodule lineinfo line break inert module toplevel null true false meta) e)
+          ((toplevel-only)
+           ;; hack to avoid generating a (method x) expr for struct types
+           (if (eq? (cadr e) 'struct)
+               (put! defined (caddr e) #t))
+           e)
           ((=)
            (let ((var (cadr e))
-                 (rhs (cl-convert (caddr e) fname lam namemap toplevel interp)))
-             (convert-assignment var rhs fname lam interp)))
+                 (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp opaq globals locals)))
+             (convert-assignment var rhs fname lam interp opaq globals locals)))
           ((local-def) ;; make new Box for local declaration of defined variable
-           (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
+           (let ((vi (get locals (cadr e) #f)))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
                  `(= ,(cadr e) (call (core Box)))
                  '(null))))
           ((local) ;; convert local declarations to newvar statements
-           (let ((vi (assq (cadr e) (car (lam:vinfo lam)))))
+           (let ((vi (get locals (cadr e) #f)))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
                  `(= ,(cadr e) (call (core Box)))
                  (if (vinfo:never-undef vi)
                      '(null)
                      `(newvar ,(cadr e))))))
-          ((const) e)
+          ((const)
+           (put! globals (binding-to-globalref (cadr e)) #f)
+           e)
+          ((atomic) e)
           ((const-if-global)
-           (if (or (assq (cadr e) (car  (lam:vinfo lam)))
-                   (assq (cadr e) (cadr (lam:vinfo lam))))
+           (if (local-in? (cadr e) lam locals)
                '(null)
                `(const ,(cadr e))))
           ((isdefined) ;; convert isdefined expr to function for closure converted variables
            (let* ((sym (cadr e))
-                  (vi (and (symbol? sym) (assq sym (car  (lam:vinfo lam)))))
+                  (vi (and (symbol? sym) (get locals sym #f)))
                   (cv (and (symbol? sym) (assq sym (cadr (lam:vinfo lam))))))
              (cond ((eq? sym fname) e)
                    ((memq sym (lam:sp lam)) e)
                    (cv
                     (if (and (vinfo:asgn cv) (vinfo:capt cv))
-                      (let ((access (if interp
-                                      `($ (call (core QuoteNode) ,sym))
-                                      `(call (core getfield) ,fname (inert ,sym)))))
+                        (let ((access (if interp
+                                          `($ (call (core QuoteNode) ,sym))
+                                          (capt-var-access sym fname opaq))))
                           `(call (core isdefined) ,access (inert contents)))
-                      'true))
+                        '(true)))
                    (vi
                     (if (and (vinfo:asgn vi) (vinfo:capt vi))
                         `(call (core isdefined) ,sym (inert contents))
                         e))
                    (else e))))
+          ((_opaque_closure)
+           (let* ((isva  (caddr e))
+                  (nargs (cadddr e))
+                  (functionloc (caddddr e))
+                  (lam2  (last e))
+                  (vis   (lam:vinfo lam2))
+                  (cvs   (map car (cadr vis))))
+             (prepare-lambda! lam2)
+             (let ((var-exprs (map (lambda (v)
+                                     (let ((cv (assq v (cadr (lam:vinfo lam)))))
+                                       (if cv
+                                           (capt-var-access v fname opaq)
+                                           v)))
+                                   cvs)))
+               `(new_opaque_closure
+                 ,(cadr e) (call (core apply_type) (core Union)) (core Any)
+                 (opaque_closure_method (null) ,nargs ,isva ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs)))
+                 ,@var-exprs))))
           ((method)
            (let* ((name  (method-expr-name e))
                   (short (length= e 2))  ;; function f end
                   (lam2  (if short #f (cadddr e)))
                   (vis   (if short '(() () ()) (lam:vinfo lam2)))
                   (cvs   (map car (cadr vis)))
-                  (local? (lambda (s) (and lam (symbol? s)
-                               (or (assq s (car  (lam:vinfo lam)))
-                                   (assq s (cadr (lam:vinfo lam)))))))
-                  (local (local? name))
+                  (local? (lambda (s) (and lam (symbol? s) (local-in? s lam locals))))
+                  (local (and (not (outerref? (cadr e))) (local? name)))
                   (sig      (and (not short) (caddr e)))
                   (sp-inits (if (or short (not (eq? (car sig) 'block)))
                                 '()
                                 (map-cl-convert (butlast (cdr sig))
-                                                fname lam namemap toplevel interp)))
+                                                fname lam namemap defined toplevel interp opaq globals locals)))
                   (sig      (and sig (if (eq? (car sig) 'block)
                                          (last sig)
                                          sig))))
@@ -3213,49 +4021,60 @@ f(x) = yt(x)
                             (error (string "cannot add method to function argument " name)))
                         (if (eqv? (string.char (string name) 0) #\@)
                             (error "macro definition not allowed inside a local scope"))))
-             (if lam2
-                 (begin
-                   ;; mark all non-arguments as assigned, since locals that are never assigned
-                   ;; need to be handled the same as those that are (i.e., boxed).
-                   (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
-                             (list-tail (car (lam:vinfo lam2)) (length (lam:args lam2))))
-                   (lambda-optimize-vars! lam2)))
+             (if lam2 (prepare-lambda! lam2))
              (if (not local) ;; not a local function; will not be closure converted to a new type
-                 (cond (short e)
+                 (cond (short (if (has? defined (cadr e))
+                                  e
+                                  (begin
+                                    (put! defined (cadr e) #t)
+                                    `(toplevel-butfirst
+                                      ;; wrap in toplevel-butfirst so it gets moved higher along with
+                                      ;; closure type definitions
+                                      ,e
+                                      (thunk (lambda () (() () 0 ()) (block (return ,e))))))))
                        ((null? cvs)
                         `(block
                           ,@sp-inits
-                          (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
+                          (method ,(cadr e) ,(cl-convert
+                                          ;; anonymous functions with keyword args generate global
+                                          ;; functions that refer to the type of a local function
+                                          (rename-sig-types sig namemap)
+                                          fname lam namemap defined toplevel interp opaq globals locals)
                                   ,(let ((body (add-box-inits-to-body
-                                                 lam2
-                                                 (cl-convert (cadddr lam2) 'anon lam2 (table) #f interp))))
+                                                lam2
+                                                (cl-convert (cadddr lam2) 'anon lam2 (table) (table) #f interp opaq (table)
+                                                            (vinfo-to-table (car (lam:vinfo lam2)))))))
                                      `(lambda ,(cadr lam2)
                                         (,(clear-capture-bits (car vis))
                                          ,@(cdr vis))
-                                         ,body))
-                                  ,(last e))))
+                                        ,body)))))
                        (else
-                        (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
+                        (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '() #f)))
                                (top-stmts (cdr exprs))
-                               (newlam    (renumber-slots-and-labels (linearize (car exprs)))))
-                          `(toplevel-butlast
-                            ,@top-stmts
+                               (newlam    (compact-and-renumber (linearize (car exprs)) 'none 0)))
+                          `(toplevel-butfirst
                             (block ,@sp-inits
-                                   (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
-                                           ,(julia-bq-macro newlam)))))))
+                                   (method ,name ,(cl-convert sig fname lam namemap defined toplevel interp opaq globals locals)
+                                           ,(julia-bq-macro newlam)))
+                            ,@top-stmts))))
+
                  ;; local case - lift to a new type at top level
-                 (let* ((exists (get namemap name #f))
-                        (type-name  (or exists
+                 (let* ((exists (get defined name #f))
+                        (type-name  (or (get namemap name #f)
                                         (and name
-                                             (symbol (string "#" name "#" (current-julia-module-counter))))))
+                                             (symbol (string (if (= (string.char (string name) 0) #\#)
+                                                                 ""
+                                                                 "#")
+                                                             name "#" (current-julia-module-counter))))))
                         (alldefs (expr-find-all
                                   (lambda (ex) (and (length> ex 2) (eq? (car ex) 'method)
                                                     (not (eq? ex e))
                                                     (eq? (method-expr-name ex) name)))
                                   (lam:body lam)
                                   identity
-                                  (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda))))))
-                        (all-capt-vars   (delete-duplicates
+                                  (lambda (x) (and (pair? x) (not (eq? (car x) 'lambda)))))))
+                 (and name (put! namemap name type-name))
+                 (let* ((all-capt-vars   (delete-duplicates
                                           (apply append  ;; merge captured vars from all definitions
                                                  cvs
                                                  (map (lambda (methdef)
@@ -3268,22 +4087,46 @@ f(x) = yt(x)
                                                     alldefs))))
                         (capt-sp (simple-sort (intersect all-capt-vars all-sparams))) ; the intersection is the list of sparams that need to be captured
                         (capt-vars (diff all-capt-vars capt-sp)) ; remove capt-sp from capt-vars
+                        (moved-vars  ;; signature-local vars that should be moved to the top-level
+                         (if lam2
+                             (delete-duplicates
+                              (expr-find-all
+                               (lambda (s) (and (symbol? s)
+                                                (not (eq? name s))
+                                                (not (memq s capt-sp))
+                                                (if (and (length> (lam:args lam) 0) (local? s))
+                                                    ;; local variable used in signature. either move it,
+                                                    ;; or give an error if there are uses outside the sig.
+                                                    (if (or (expr-contains-p (lambda (v) (eq? v s))
+                                                                             (lam:body lam)
+                                                                             (lambda (ex) (not (or (eq? ex (caddr e))
+                                                                                                   (and (pair? ex)
+                                                                                                        (eq? (car ex) 'local))))))
+                                                            ;; var must be assigned within the signature block.
+                                                            ;; otherwise it might not be assigned at all.
+                                                            (not
+                                                             (expr-contains-p (lambda (e)
+                                                                                (and (pair? e)
+                                                                                     (memq (car e) '(= method))
+                                                                                     (eq? (cadr e) s)))
+                                                                              (caddr e))))
+                                                        (if (has? namemap s)
+                                                            #f
+                                                            (error (string "local variable " s
+                                                                           " cannot be used in closure declaration")))
+                                                        #t)
+                                                    #f)))
+                               (caddr e)
+                               identity))
+                             '()))
                         (find-locals-in-method-sig (lambda (methdef)
                                                      (expr-find-all
-                                                      (lambda (e) (and (or (symbol? e) (and (pair? e) (eq? (car e) 'outerref)))
-                                                                       (let ((s (if (symbol? e) e (cadr e))))
-                                                                            (and (symbol? s)
-                                                                                 (not (eq? name s))
-                                                                                 (not (memq s capt-sp))
-                                                                                 (if (and (local? s) (length> (lam:args lam) 0))
-                                                                                     ; error for local variables except in toplevel thunks
-                                                                                     (error (string "local variable " s
-                                                                                                    " cannot be used in closure declaration"))
-                                                                                     #t)
-                                                                                 ; allow captured variables
-                                                                                 (memq s (lam:sp lam))))))
+                                                      (lambda (s) (and (symbol? s)
+                                                                       (not (eq? name s))
+                                                                       (not (memq s capt-sp))
+                                                                       (memq s (lam:sp lam))))
                                                       (caddr methdef)
-                                                      (lambda (e) (cadr e)))))
+                                                      identity)))
                         (sig-locals (simple-sort
                                      (delete-duplicates  ;; locals used in sig from all definitions
                                       (apply append      ;; will convert these into sparams for dispatch
@@ -3296,41 +4139,41 @@ f(x) = yt(x)
                                                    (if (is-var-boxed? v lam)
                                                        '(core Box)
                                                        (make-ssavalue)))
-                                                  capt-vars))
+                                                 capt-vars))
                                 (para (append closure-param-syms
-                                              (filter (lambda (v) (ssavalue? v)) fieldtypes)))
+                                              (filter ssavalue? fieldtypes)))
                                 (fieldnames (append closure-param-names (filter (lambda (v) (not (is-var-boxed? v lam))) capt-vars))))
                            (if (null? para)
                                (type-for-closure type-name capt-vars '(core Function))
                                (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function)))))
                         (mk-method ;; expression to make the method
-                          (if short '()
-                              (let* ((iskw ;; TODO jb/functions need more robust version of this
-                                      (contains (lambda (x) (eq? x 'kwftype)) sig))
-                                     (renamemap (map cons closure-param-names closure-param-syms))
-                                     (arg-defs (replace-outer-vars
-                                                (fix-function-arg-type sig type-name iskw namemap closure-param-syms)
-                                                renamemap)))
-                                    (append (map (lambda (gs tvar)
-                                                   (make-assignment gs `(call (core TypeVar) ',tvar (core Any))))
-                                                  closure-param-syms closure-param-names)
-                                            `((method #f ,(cl-convert arg-defs fname lam namemap toplevel interp)
-                                                  ,(convert-lambda lam2
-                                                                   (if iskw
-                                                                       (caddr (lam:args lam2))
-                                                                       (car (lam:args lam2)))
-                                                                   #f closure-param-names)))))))
+                         (if short '()
+                             (let* ((iskw ;; TODO jb/functions need more robust version of this
+                                     (contains (lambda (x) (eq? x 'kwftype)) sig))
+                                    (renamemap (map cons closure-param-names closure-param-syms))
+                                    (arg-defs (replace-vars
+                                               (fix-function-arg-type sig type-name iskw namemap closure-param-syms)
+                                               renamemap)))
+                               (append (map (lambda (gs tvar)
+                                              (make-assignment gs `(call (core TypeVar) ',tvar (core Any))))
+                                            closure-param-syms closure-param-names)
+                                       `((method #f ,(cl-convert arg-defs fname lam namemap defined toplevel interp opaq globals locals)
+                                                 ,(convert-lambda lam2
+                                                                  (if iskw
+                                                                      (caddr (lam:args lam2))
+                                                                      (car (lam:args lam2)))
+                                                                  #f closure-param-names #f)))))))
                         (mk-closure  ;; expression to make the closure
                          (let* ((var-exprs (map (lambda (v)
                                                   (let ((cv (assq v (cadr (lam:vinfo lam)))))
                                                     (if cv
                                                         (if interp
                                                             `($ (call (core QuoteNode) ,v))
-                                                            `(call (core getfield) ,fname (inert ,v)))
+                                                            (capt-var-access v fname opaq))
                                                         v)))
                                                 capt-vars))
                                 (P (append
-                                    (map (lambda (n) `(outerref ,n)) closure-param-names)
+                                    closure-param-names
                                     (filter identity (map (lambda (v ve)
                                                             (if (is-var-boxed? v lam)
                                                                 #f
@@ -3340,54 +4183,68 @@ f(x) = yt(x)
                                       type-name
                                       `(call (core apply_type) ,type-name ,@P))
                                  ,@var-exprs))))
-                   `(toplevel-butlast
-                     ,@(if exists
-                           '()
-                            (begin (and name (put! namemap name type-name))
-                                   typedef))
-                     ,@sp-inits
-                     ,@mk-method
-                     ,(if exists
-                          '(null)
-                          (convert-assignment name mk-closure fname lam interp)))))))
+                   (if (pair? moved-vars)
+                       (set-car! (lam:vinfo lam)
+                                 (filter (lambda (vi)
+                                           (not (memq (car vi) moved-vars)))
+                                         (car (lam:vinfo lam)))))
+                   (if (or exists (and short (pair? alldefs)))
+                       `(toplevel-butfirst
+                         (null)
+                         ,@sp-inits
+                         ,@mk-method)
+                       (begin
+                         (put! defined name #t)
+                         `(toplevel-butfirst
+                           ,(convert-assignment name mk-closure fname lam interp opaq globals locals)
+                           ,@typedef
+                           ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
+                           ,@sp-inits
+                           ,@mk-method))))))))
           ((lambda)  ;; happens inside (thunk ...) and generated function bodies
            (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
                      (list-tail (car (lam:vinfo e)) (length (lam:args e))))
+           (lambda-optimize-vars! e)
            (let ((body (map-cl-convert (cdr (lam:body e)) 'anon
-                                 (lambda-optimize-vars! e)
-                                 (table)
-                                 (null? (cadr e)) ;; only toplevel thunks have 0 args
-                                 interp)))
+                                       e
+                                       (table)
+                                       (table)
+                                       (null? (cadr e)) ;; only toplevel thunks have 0 args
+                                       interp opaq globals (vinfo-to-table (car (lam:vinfo e))))))
              `(lambda ,(cadr e)
                 (,(clear-capture-bits (car (lam:vinfo e)))
                  () ,@(cddr (lam:vinfo e)))
                 (block ,@body))))
           ;; remaining `::` expressions are type assertions
           ((|::|)
-           (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))
+           (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap defined toplevel interp opaq globals locals))
           ;; remaining `decl` expressions are only type assertions if the
           ;; argument is global or a non-symbol.
           ((decl)
            (cond ((and (symbol? (cadr e))
-                       (or (assq (cadr e) (car  (lam:vinfo lam)))
-                           (assq (cadr e) (cadr (lam:vinfo lam)))))
+                       (local-in? (cadr e) lam locals))
                   '(null))
                  (else
-                  (if (or (symbol? (cadr e)) (and (pair? (cadr e)) (eq? (caadr e) 'outerref)))
-                      (error "type declarations on global variables are not yet supported"))
-                  (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap toplevel interp))))
+                  (cl-convert
+                   (let ((ref (binding-to-globalref (cadr e))))
+                     (if ref
+                         (begin
+                           (put! globals ref #t)
+                           `(block
+                             (toplevel-only set_binding_type! ,(cadr e))
+                             (call (core set_binding_type!) ,(cadr ref) (inert ,(caddr ref)) ,(caddr e))))
+                         `(call (core typeassert) ,@(cdr e))))
+                   fname lam namemap defined toplevel interp opaq globals locals))))
           ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars
           ((with-static-parameters)
-           (cl-convert (cadr e) fname lam namemap toplevel interp))
-          (else (cons (car e)
-                      (map-cl-convert (cdr e) fname lam namemap toplevel interp))))))))
+           (cl-convert (cadr e) fname lam namemap defined toplevel interp opaq globals locals))
+          (else
+           (cons (car e)
+                 (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq globals locals))))))))
 
-(define (closure-convert e) (cl-convert e #f #f #f #f #f))
+(define (closure-convert e) (cl-convert e #f #f (table) (table) #f #f #f))
 
 ;; pass 5: convert to linear IR
-
-;; with this enabled, all nested calls are assigned to numbered locations
-(define *very-linear-mode* #t)
 
 (define (linearize e)
   (cond ((or (not (pair? e)) (quoted? e)) e)
@@ -3398,21 +4255,36 @@ f(x) = yt(x)
         (else (for-each linearize (cdr e))))
   e)
 
+;; N.B.: This assumes that resolve-scopes has run, so outerref is equivalent to
+;; a global in the current scope.
 (define (valid-ir-argument? e)
-  (or (simple-atom? e) (symbol? e)
+  (or (simple-atom? e)
+      (and (outerref? e) (nothrow-julia-global (cadr e)))
+      (and (globalref? e) (nothrow-julia-global (cadr e) (caddr e)))
       (and (pair? e)
-           (memq (car e) '(quote inert top core globalref outerref
-                                 slot static_parameter boundscheck copyast)))))
+           (memq (car e) '(quote inert top core
+                                 slot static_parameter)))))
 
 (define (valid-ir-rvalue? lhs e)
   (or (ssavalue? lhs)
       (valid-ir-argument? e)
       (and (symbol? lhs) (pair? e)
-           (memq (car e) '(new the_exception isdefined call invoke foreigncall gc_preserve_begin)))))
+           (memq (car e) '(new splatnew the_exception isdefined call invoke foreigncall cfunction gc_preserve_begin copyast new_opaque_closure globalref outerref)))))
 
 (define (valid-ir-return? e)
   ;; returning lambda directly is needed for @generated
   (or (valid-ir-argument? e) (and (pair? e) (memq (car e) '(lambda)))))
+
+(define (code-trivially-effect-free? e)
+  ;; determine whether the execution of this code can be observed.
+  ;; If not it may be deleted. In general, the only thing we can detect here
+  ;; is empty blocks that only have metadata in them.
+  (if (pair? e)
+    (case (car e)
+      ((block) (every code-trivially-effect-free? (cdr e)))
+      ((line null) #t)
+      (else #f))
+    #t))
 
 ;; this pass behaves like an interpreter on the given code.
 ;; to perform stateful operations, it calls `emit` to record that something
@@ -3426,20 +4298,23 @@ f(x) = yt(x)
         (first-line #t)
         (current-loc #f)
         (rett #f)
-        (deprecated-loop-vars (table))
-        (deprecated-global-const-locs '())
+        (global-const-error #f)
+        (vinfo-table (vinfo-to-table (car (lam:vinfo lam))))
         (arg-map #f)          ;; map arguments to new names if they are assigned
         (label-counter 0)     ;; counter for generating label addresses
         (label-map (table))   ;; maps label names to generated addresses
-        (label-level (table)) ;; exception handler level of each label
-        (finally-handler #f)  ;; `(var label map level)` where `map` is a list of `(tag . action)`.
-                              ;; to exit the current finally block, set `var` to integer `tag`,
-                              ;; jump to `label`, and put `(tag . action)` in the map, where `action`
-                              ;; is `(return x)`, `(break x)`, or a call to rethrow.
+        (label-nesting (table)) ;; exception handler and catch block nesting of each label
+        (finally-handler #f)  ;; Current finally block info: `(var label map level tokens)`
+                              ;; `map` is a list of `(tag . action)` which will
+                              ;; be emitted at the exit of the block. Code
+                              ;; should enter the finally block via `enter-finally-block`.
         (handler-goto-fixups '())  ;; `goto`s that might need `leave` exprs added
-        (handler-level 0))  ;; exception handler nesting depth
+        (handler-token-stack '())  ;; tokens identifying handler stack while active
+        (catch-token-stack '())) ;; tokens identifying handler enter for current catch blocks
     (define (emit c)
-      (set! code (cons c code)))
+      (or c (raise "missing value in IR"))
+      (set! code (cons c code))
+      c)
     (define (make-label)
       (begin0 label-counter
               (set! label-counter (+ 1 label-counter))))
@@ -3451,41 +4326,89 @@ f(x) = yt(x)
           (let ((l (make-label)))
             (mark-label l)
             l)))
-    (define (leave-finally-block action (need-goto #t))
+    ;; Enter a finally block, either through the landing pad or via a jump if
+    ;; `need-goto` is true. Before entering, the current code path is identified
+    ;; with a tag which labels the action to be taken at finally handler exit.
+    ;; `action` may be `(return x)`, `(break x)`, or a call to rethrow.
+    (define (enter-finally-block action (need-goto #t))
       (let* ((tags (caddr finally-handler))
              (tag  (if (null? tags) 1 (+ 1 (caar tags)))))
+        ;; To enter the current active finally block, set the tag variable
+        ;; to identify the current code path with the action for this code path
+        ;; which will run at finally block exit.
         (set-car! (cddr finally-handler) (cons (cons tag action) tags))
         (emit `(= ,(car finally-handler) ,tag))
         (if need-goto
-            (begin (emit `(leave ,(+ 1 (- handler-level (cadddr finally-handler)))))
-                   (emit `(goto ,(cadr finally-handler)))))
+            (let ((label (cadr finally-handler))
+                  (dest-handler-tokens (cadddr finally-handler))
+                  (dest-catch-tokens   (caddddr finally-handler)))
+              ;; Leave current exception handling scope and jump to finally block
+              (let ((pexc (pop-exc-expr catch-token-stack dest-catch-tokens)))
+                (if pexc (emit pexc)))
+              (let ((plist (pop-handler-list handler-token-stack (cdr dest-handler-tokens) '())))
+                (emit `(leave ,@plist)))
+              (emit `(goto ,label))))
         tag))
+    (define (pop-exc-expr src-tokens dest-tokens)
+      (if (eq? src-tokens dest-tokens)
+          #f
+          (let ((restore-token (let loop ((s src-tokens))
+                                 (if (not (pair? s))
+                                     (error "Attempt to jump into catch block"))
+                                 (if (eq? (cdr s) dest-tokens)
+                                     (car s)
+                                     (loop (cdr s))))))
+            `(pop_exception ,restore-token))))
+    (define (pop-handler-list src-tokens dest-tokens lab)
+      (if (eq? src-tokens dest-tokens)
+          #f
+          (let loop ((s src-tokens)
+                     (l '()))
+            (if (not (pair? s))
+                (if (null? lab)
+                  (error "Attempt to jump into catch block")
+                  (error (string "cannot goto label \"" lab "\" inside try/catch block"))))
+            (if (eq? (cdr s) dest-tokens)
+                (cons (car s) l)
+                (loop (cdr s) (cons (car s) l))))))
     (define (emit-return x)
+      (define (emit- x)
+        (let* ((tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
+                        #f
+                        (make-ssavalue))))
+          (if tmp
+              (begin (emit `(= ,tmp ,x)) tmp)
+              x)))
       (define (actually-return x)
-        (let* ((x   (if rett
-                        (compile (convert-for-type-decl x rett) '() #t #f)
-                        x))
-               (tmp (if (valid-ir-return? x) #f (make-ssavalue))))
-          (if tmp (emit `(= ,tmp ,x)))
-          (emit `(return ,(or tmp x)))))
-      (if (> handler-level 0)
-          (let ((tmp (cond ((and (simple-atom? x) (or (not (ssavalue? x)) (not finally-handler))) #f)
-                           (finally-handler  (new-mutable-var))
-                           (else             (make-ssavalue)))))
-            (if tmp (emit `(= ,tmp ,x)))
-            (if finally-handler
-                (leave-finally-block `(return ,(or tmp x)))
-                (begin (emit `(leave ,handler-level))
-                       (actually-return (or tmp x))))
-            (or tmp x))
-          (actually-return x)))
+        (let* ((x (if rett
+                      (compile (convert-for-type-decl (emit- x) rett #t lam) '() #t #f)
+                      x))
+               (x (emit- x)))
+          (let ((pexc (pop-exc-expr catch-token-stack '())))
+            (if pexc (emit pexc)))
+          (emit `(return ,x))))
+      (if x
+          (if (null? handler-token-stack)
+              (actually-return x)
+              (let ((tmp (cond ((and (simple-atom? x) (or (not (ssavalue? x)) (not finally-handler))) #f)
+                               (finally-handler  (new-mutable-var))
+                               (else             (make-ssavalue)))))
+                (if tmp (emit `(= ,tmp ,x)))
+                (if finally-handler
+                    (enter-finally-block `(return ,(or tmp x)))
+                    (begin (emit `(leave ,@handler-token-stack))
+                           (actually-return (or tmp x))))
+                (or tmp x)))))
     (define (emit-break labl)
-      (let ((lvl (caddr labl)))
-        (if (and finally-handler (> (cadddr finally-handler) lvl))
-            (leave-finally-block `(break ,labl))
+      (let ((dest-handler-tokens (caddr labl))
+            (dest-tokens (cadddr labl)))
+        (if (and finally-handler (> (length (cadddr finally-handler)) (length dest-handler-tokens)))
+            (enter-finally-block `(break ,labl))
             (begin
-              (if (> handler-level lvl)
-                  (emit `(leave ,(- handler-level lvl))))
+              (let ((pexc (pop-exc-expr catch-token-stack dest-tokens)))
+                (if pexc (emit pexc)))
+              (let ((plist (pop-handler-list handler-token-stack dest-handler-tokens '())))
+                (if plist (emit `(leave ,@plist))))
               (emit `(goto ,(cadr labl)))))))
     (define (new-mutable-var . name)
       (let ((g (if (null? name) (gensy) (named-gensy (car name)))))
@@ -3495,72 +4418,111 @@ f(x) = yt(x)
     (define (check-top-level e)
       (define (head-to-text h)
         (case h
-          ((abstract_type)  "\"abstract type\"")
-          ((primitive_type) "\"primitive type\"")
-          ((struct_type)    "\"struct\"")
-          ((method)         "method definition")
-          (else             (string "\"" h "\""))))
+          ((abstract_type)     "\"abstract type\" expression")
+          ((primitive_type)    "\"primitive type\" expression")
+          ((struct_type)       "\"struct\" expression")
+          ((method)            "method definition")
+          ((set_binding_type!) (string "type declaration for global \"" (deparse (cadr e)) "\""))
+          (else                (string "\"" h "\" expression"))))
       (if (not (null? (cadr lam)))
-          (error (string (head-to-text (car e)) " expression not at top level"))))
+          (error (string (head-to-text (car e)) " not at top level"))))
+    (define (valid-body-ir-argument? aval)
+      (or (valid-ir-argument? aval)
+          (and (symbol? aval) ; Arguments are always defined slots
+               (or (memq aval (lam:args lam))
+                   (let ((vi (get vinfo-table aval #f)))
+                     (and vi (vinfo:never-undef vi)))))))
+    (define (single-assign-var? aval)
+      (and (symbol? aval) ; Arguments are always sa
+           (or (memq aval (lam:args lam))
+               (let ((vi (get vinfo-table aval #f)))
+                 (and vi (vinfo:sa vi))))))
+    ;; TODO: We could also allow const globals here
+    (define (const-read-arg? x)
+      ;; Even if we have side effects, we know that singly-assigned
+      ;; locals cannot be affected them, so we can inline them anyway.
+      (or (simple-atom? x) (single-assign-var? x)
+        (and (pair? x)
+          (memq (car x) '(quote inert top core)))))
     ;; evaluate the arguments of a call, creating temporary locations as needed
-    (define (compile-args lst break-labels (linearize #t))
+    (define (compile-args lst break-labels)
       (if (null? lst) '()
-          (let ((temps? (or *very-linear-mode*
-                            (any (lambda (e)
-                                   (expr-contains-p (lambda (x) (or (and (assignment? x) (symbol? (cadr x)))
-                                                                    (and (pair? x) (eq? (car x) 'block))))
-                                                    e))
-                                 (cdr lst))))
-                (simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
-                                                (and (pair? x)
-                                                     (memq (car x) '(quote inert top core globalref outerref copyast boundscheck)))))
-                                lst)))
-            (let loop ((lst  lst)
-                       (vals '()))
-              (if (null? lst)
-                  (reverse! vals)
-                  (let* ((arg (car lst))
-                         (aval (compile arg break-labels #t #f linearize)))
-                    (loop (cdr lst)
-                          (cons (if (and temps? linearize (not simple?)
-                                         (not (simple-atom? arg))
-                                         (not (simple-atom? aval))
-                                         (not (and (pair? arg)
-                                                   (memq (car arg) '(& quote inert top core globalref outerref copyast boundscheck))))
-                                         (not (and (symbol? aval) ;; function args are immutable and always assigned
-                                                   (memq aval (lam:args lam))))
-                                         (not (and (symbol? arg)
-                                                   (or (null? (cdr lst))
-                                                       (null? vals)))))
-                                    (let ((tmp (make-ssavalue)))
-                                      (emit `(= ,tmp ,aval))
-                                      tmp)
-                                    aval)
-                                vals))))))))
+        ;; First check if all the arguments as simple (and therefore side-effect free).
+        ;; Otherwise, we need to use ssa values for all arguments to ensure proper
+        ;; left-to-right evaluation semantics.
+        (let ((simple? (every (lambda (x) (or (simple-atom? x) (symbol? x)
+                                              (and (pair? x)
+                                                   (memq (car x) '(quote inert top core globalref outerref)))))
+                              lst)))
+          (let loop ((lst  lst)
+                     (vals '()))
+            (if (null? lst)
+                (reverse! vals)
+                (let* ((arg (car lst))
+                       (aval (or (compile arg break-labels #t #f)
+                                 ;; TODO: argument exprs that don't yield a value?
+                                 '(null))))
+                  (loop (cdr lst)
+                        (cons (if (and
+                                   (or simple? (const-read-arg? aval))
+                                   (valid-body-ir-argument? aval))
+                                  aval
+                                  (let ((tmp (make-ssavalue)))
+                                    (emit `(= ,tmp ,aval))
+                                    tmp))
+                              vals))))))))
     (define (compile-cond ex break-labels)
-      (let ((cnd (compile ex break-labels #t #f)))
-        (if (and *very-linear-mode*
-                 (not (valid-ir-argument? cnd)))
+      (let ((cnd (or (compile ex break-labels #t #f)
+                     ;; TODO: condition exprs that don't yield a value?
+                     '(null))))
+        (if (valid-body-ir-argument? cnd) cnd
             (let ((tmp (make-ssavalue)))
               (emit `(= ,tmp ,cnd))
-              tmp)
-            cnd)))
+              tmp))))
+    (define (emit-cond cnd break-labels endl)
+      (let* ((cnd (if (and (pair? cnd) (eq? (car cnd) 'block))
+                      (flatten-ex 'block cnd)
+                      cnd))
+             (cnd (if (and (pair? cnd) (eq? (car cnd) 'block))
+                       (begin (if (length> cnd 2) (compile (butlast cnd) break-labels #f #f))
+                              (last cnd))
+                       cnd))
+             (or? (and (pair? cnd) (eq? (car cnd) '|\|\||)))
+             (tests (if or?
+                        (let ((short-circuit `(goto _)))
+                          (for-each
+                            (lambda (clause)
+                              (let ((jmp (emit `(gotoifnot ,(compile-cond clause break-labels) ,endl))))
+                                (emit short-circuit)
+                                (set-car! (cddr jmp) (make&mark-label))))
+                            (butlast (cdr cnd)))
+                          (let ((last-jmp (emit `(gotoifnot ,(compile-cond (last (cdr cnd)) break-labels) ,endl))))
+                            (set-car! (cdr short-circuit) (make&mark-label))
+                            (list last-jmp)))
+                        (map (lambda (clause)
+                               (emit `(gotoifnot ,(compile-cond clause break-labels) ,endl)))
+                             (if (and (pair? cnd) (eq? (car cnd) '&&))
+                                 (cdr cnd)
+                                 (list cnd))))))
+          tests))
     (define (emit-assignment lhs rhs)
-      (if (valid-ir-rvalue? lhs rhs)
-          (emit `(= ,lhs ,rhs))
-          (let ((rr (make-ssavalue)))
-            (emit `(= ,rr ,rhs))
-            (emit `(= ,lhs ,rr))))
-      `(null))
+      (if rhs
+          (if (valid-ir-rvalue? lhs rhs)
+              (emit `(= ,lhs ,rhs))
+              (let ((rr (make-ssavalue)))
+                (emit `(= ,rr ,rhs))
+                (emit `(= ,lhs ,rr))))
+          (emit `(= ,lhs (null)))) ; in unreachable code (such as after return), still emit the assignment so that the structure of those uses is preserved
+      #f)
     ;; the interpreter loop. `break-labels` keeps track of the labels to jump to
     ;; for all currently closing break-blocks.
     ;; `value` means we are in a context where a value is required; a meaningful
     ;; value must be returned.
     ;; `tail` means we are in tail position, where a value needs to be `return`ed
     ;; from the current function.
-    (define (compile e break-labels value tail (linearize-args #t))
-      (if (or (not (pair? e)) (memq (car e) '(null ssavalue quote inert top core copyast the_exception $
-                                                   globalref outerref cdecl stdcall fastcall thiscall llvmcall)))
+    (define (compile e break-labels value tail)
+      (if (or (not (pair? e)) (memq (car e) '(null true false ssavalue quote inert top core copyast the_exception $
+                                                   globalref outerref thismodule cdecl stdcall fastcall thiscall llvmcall)))
           (let ((e1 (if (and arg-map (symbol? e))
                         (get arg-map e e)
                         e)))
@@ -3568,113 +4530,125 @@ f(x) = yt(x)
                                (and (pair? e) (or (eq? (car e) 'outerref)
                                                   (eq? (car e) 'globalref))
                                     (underscore-symbol? (cadr e)))))
-                (syntax-deprecation "underscores as an rvalue" "" current-loc))
-            (if (and (not *warn-all-loop-vars*) (has? deprecated-loop-vars e))
-                (begin (deprecation-message
-                        (string "Use of final value of loop variable `" e "`" (linenode-string current-loc) " "
-                                "is deprecated. In the future the variable will be local to the loop instead.") current-loc)
-                       (del! deprecated-loop-vars e)))
+                (error (string "all-underscore identifiers are write-only and their values cannot be used in expressions" (format-loc current-loc))))
             (cond (tail  (emit-return e1))
                   (value e1)
-                  ((or (eq? e1 'true) (eq? e1 'false)) #f)
                   ((symbol? e1) (emit e1) #f)  ;; keep symbols for undefined-var checking
                   ((and (pair? e1) (eq? (car e1) 'outerref)) (emit e1) #f)  ;; keep globals for undefined-var checking
                   ((and (pair? e1) (eq? (car e1) 'globalref)) (emit e1) #f) ;; keep globals for undefined-var checking
                   (else #f)))
           (case (car e)
-            ((call new foreigncall)
+            ((call new splatnew foreigncall cfunction new_opaque_closure)
+             (define (atom-or-not-tuple-call? fptr)
+               (or (atom? fptr)
+                   (not (tuple-call? fptr))))
              (let* ((args
                      (cond ((eq? (car e) 'foreigncall)
-                            (for-each (lambda (a)
-                                        (if (and (length= a 2) (eq? (car a) '&))
-                                            (deprecation-message
-                                             (string "Syntax `&argument`" (linenode-string current-loc)
-                                                     " is deprecated. Remove the `&` and use a `Ref` argument "
-                                                     "type instead.")
-                                             current-loc)))
-                                      (list-tail e 6))
                             ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                             ;;       the 1st should be compiled if an atom.
-                            (append (if (atom? (cadr e))
-                                        (compile-args (list (cadr e)) break-labels linearize-args)
+                            (append (if (atom-or-not-tuple-call? (cadr e))
+                                        (compile-args (list (cadr e)) break-labels)
                                         (list (cadr e)))
                                     (list-head (cddr e) 4)
-                                    (compile-args (list-tail e 6) break-labels linearize-args)))
-                           ;; TODO: evaluate first argument to cglobal some other way
+                                    (compile-args (list-tail e 6) break-labels)))
+                           ;; NOTE: arguments of cfunction must be left in place
+                           ;;       except for argument 2 (fptr)
+                           ((eq? (car e) 'cfunction)
+                            (let ((fptr (car (compile-args (list (caddr e)) break-labels))))
+                              (cons (cadr e) (cons fptr (cdddr e)))))
+                           ;; Leave a literal lambda in place for later global expansion
+                           ((eq? (car e) 'new_opaque_closure)
+                            (let* ((oc_method (car (list-tail (cdr e) 3))) ;; opaque_closure_method
+                                   (lambda (list-ref oc_method 5))
+                                   (lambda (linearize lambda)))
+                              (append
+                               (compile-args (list-head (cdr e) 3) break-labels)
+                               (list (append (butlast oc_method) (list lambda)))
+                               (compile-args (list-tail (cdr e) 4) break-labels))))
+                           ;; NOTE: 1st argument to cglobal treated same as for ccall
                            ((and (length> e 2)
                                  (or (eq? (cadr e) 'cglobal)
                                      (equal? (cadr e) '(outerref cglobal))))
-                            (list* (cadr e) (caddr e)
-                                   (compile-args (cdddr e) break-labels linearize-args)))
-                           ((and (length> e 2)
-                                 (or (eq? (cadr e) 'llvmcall)
-                                     (equal? (cadr e) '(outerref llvmcall))))
-                            (cdr e))
+                            (append (list (cadr e))
+                                    (if (atom-or-not-tuple-call? (caddr e))
+                                        (compile-args (list (caddr e)) break-labels)
+                                        (list (caddr e)))
+                                    (compile-args (cdddr e) break-labels)))
                            (else
-                            (compile-args (cdr e) break-labels linearize-args))))
+                            (compile-args (cdr e) break-labels))))
                     (callex (cons (car e) args)))
                (cond (tail (emit-return callex))
                      (value callex)
                      (else (emit callex)))))
             ((=)
-             (let* ((rhs (compile (caddr e) break-labels #t #f))
-                    (lhs (cadr e))
-                    (lhs (if (and arg-map (symbol? lhs))
-                             (get arg-map lhs lhs)
-                             lhs)))
-               (if (and (not *warn-all-loop-vars*) (has? deprecated-loop-vars lhs))
-                   (del! deprecated-loop-vars lhs))
-               (if value
-                   (let ((rr (if (or (atom? rhs) (ssavalue? rhs) (eq? (car rhs) 'null))
-                                 rhs (make-ssavalue))))
-                     (if (not (eq? rr rhs))
-                         (emit `(= ,rr ,rhs)))
-                     (emit `(= ,lhs ,rr))
-                     (if tail (emit-return rr))
-                     rr)
-                   (emit-assignment lhs rhs))))
-            ((block body)
+             (let ((lhs (cadr e)))
+               (if (and (symbol? lhs) (underscore-symbol? lhs))
+                   (compile (caddr e) break-labels value tail)
+                   (let* ((rhs (compile (caddr e) break-labels #t #f))
+                          (lhs (if (and arg-map (symbol? lhs))
+                                   (get arg-map lhs lhs)
+                                   lhs)))
+                     (if (and value rhs)
+                         (let ((rr (if (or (atom? rhs) (ssavalue? rhs) (eq? (car rhs) 'null))
+                                       rhs (make-ssavalue))))
+                           (if (not (eq? rr rhs))
+                               (emit `(= ,rr ,rhs)))
+                           (emit `(= ,lhs ,rr))
+                           (if tail (emit-return rr))
+                           rr)
+                         (emit-assignment lhs rhs))))))
+            ((block)
              (let* ((last-fname filename)
                     (fnm        (first-non-meta e))
-                    (fname      (if (and (length> e 1) (pair? fnm) (eq? (car fnm) 'line)
+                    (fname      (if (and (length> e 1) (linenum? fnm)
                                          (length> fnm 2))
                                     (caddr fnm)
                                     filename))
                     (file-diff  (not (eq? fname last-fname)))
                     ;; don't need a filename node for start of function
                     (need-meta  (and file-diff last-fname
-                                     (not (eq? e (lam:body lam))))))
+                                     (not (eq? e (lam:body lam)))))
+                    (emit-final-meta (lambda ())))
                (if file-diff (set! filename fname))
                (if need-meta (emit `(meta push_loc ,fname)))
-               (begin0
-                (let loop ((xs (cdr e)))
-                  (if (null? (cdr xs))
-                      (compile (car xs) break-labels value tail)
+               (let ((v (let loop ((xs (cdr e)))
+                  (if (only-meta? (cdr xs))
+                      (begin (set! emit-final-meta (lambda () (map (lambda (v) (compile v break-labels #f #f)) (cdr xs))))
+                             (compile (car xs) break-labels value tail))
                       (begin (compile (car xs) break-labels #f #f)
-                             (loop (cdr xs)))))
-                (if need-meta
-                    (if (or (not tail)
-                            (and (pair? (car code))
-                                 (or (eq? (cdar code) 'meta)
-                                     (eq? (cdar code) 'line))))
-                        (emit '(meta pop_loc))
-                        ;; If we need to return the last non-meta expression
-                        ;; splice the pop before the result
-                        (let ((retv (car code))
-                              (body (cdr code)))
-                          (set! code body)
-                          (if (complex-return? retv)
-                              (let ((tmp (make-ssavalue)))
-                                (emit `(= ,tmp ,(cadr retv)))
-                                (emit '(meta pop_loc))
-                                (emit `(return ,tmp)))
-                              (begin
-                                (emit '(meta pop_loc))
-                                (emit retv))))))
-                (if file-diff (set! filename last-fname)))))
+                             (loop (cdr xs)))))))
+                  (if need-meta
+                    (cond (tail
+                           ;; If we need to return the last non-meta expression
+                           ;; attempt to splice the pop_loc before the return
+                           ;; so that the return location always gets
+                           ;; attributed to the right level of macro
+                           (if (and (pair? code) (return? (car code)))
+                               (let ((retv (cadr (car code))))
+                                 (set! code (cdr code))
+                                 (if (not (simple-atom? retv))
+                                   (let ((tmp (make-ssavalue)))
+                                     (emit `(= ,tmp ,retv))
+                                     (set! retv tmp)))
+                                 (emit-final-meta)
+                                 (emit '(meta pop_loc))
+                                 (emit `(return ,retv)))
+                               (emit '(meta pop_loc))))
+                          ((and v value (not (simple-atom? v)))
+                           (let ((tmp (make-ssavalue)))
+                             (emit `(= ,tmp ,v))
+                             (set! v tmp)
+                             (emit-final-meta)
+                             (emit `(meta pop_loc))))
+                          (else
+                           (emit-final-meta)
+                           (emit `(meta pop_loc))))
+                    (emit-final-meta))
+                  (if file-diff (set! filename last-fname))
+                  v)))
             ((return)
              (compile (cadr e) break-labels #t #t)
-             '(null))
+             #f)
             ((unnecessary)
              ;; `unnecessary` marks expressions generated by lowering that
              ;; do not need to be evaluated if their value is unused.
@@ -3682,15 +4656,17 @@ f(x) = yt(x)
                  (compile (cadr e) break-labels value tail)
                  #f))
             ((if elseif)
-             (let ((test `(gotoifnot ,(compile-cond (cadr e) break-labels) _))
-                   (end-jump `(goto _))
-                   (val (if (and value (not tail)) (new-mutable-var) #f)))
-               (emit test)
+             (let* ((tests (emit-cond (cadr e) break-labels '_))
+                    (end-jump `(goto _))
+                    (val (if (and value (not tail)) (new-mutable-var) #f)))
                (let ((v1 (compile (caddr e) break-labels value tail)))
                  (if val (emit-assignment val v1))
                  (if (and (not tail) (or (length> e 3) val))
                      (emit end-jump))
-                 (set-car! (cddr test) (make&mark-label))
+                 (let ((elselabel (make&mark-label)))
+                   (for-each (lambda (test)
+                               (set-car! (cddr test) elselabel))
+                             tests))
                  (let ((v2 (if (length> e 3)
                                (compile (cadddr e) break-labels value tail)
                                '(null))))
@@ -3702,19 +4678,28 @@ f(x) = yt(x)
                    val))))
             ((_while)
              (let* ((endl (make-label))
-                    (topl (make&mark-label))
-                    (test (compile-cond (cadr e) break-labels)))
-               (emit `(gotoifnot ,test ,endl))
+                    (topl (make&mark-label)))
+               (emit-cond (cadr e) break-labels endl)
                (compile (caddr e) break-labels #f #f)
                (emit `(goto ,topl))
-               (mark-label endl)))
+               (mark-label endl))
+             (if value (compile '(null) break-labels value tail)))
+            ((_do_while)
+             (let* ((endl (make-label))
+                    (topl (make&mark-label)))
+               (compile (cadr e) break-labels #f #f)
+               (let ((test (compile-cond (caddr e) break-labels)))
+                 (emit `(gotoifnot ,test ,endl)))
+               (emit `(goto ,topl))
+               (mark-label endl))
+             (if value (compile '(null) break-labels value tail)))
             ((break-block)
              (let ((endl (make-label)))
-               (begin0 (compile (caddr e)
-                                (cons (list (cadr e) endl handler-level)
-                                      break-labels)
-                                value #f)
-                       (mark-label endl)))
+               (compile (caddr e)
+                        (cons (list (cadr e) endl handler-token-stack catch-token-stack)
+                              break-labels)
+                        #f #f)
+               (mark-label endl))
              (if value (compile '(null) break-labels value tail)))
             ((break)
              (let ((labl (assq (cadr e) break-labels)))
@@ -3723,9 +4708,9 @@ f(x) = yt(x)
                    (emit-break labl))))
             ((label symboliclabel)
              (if (eq? (car e) 'symboliclabel)
-                 (if (has? label-level (cadr e))
+                 (if (has? label-nesting (cadr e))
                      (error (string "label \"" (cadr e) "\" defined multiple times"))
-                     (put! label-level (cadr e) handler-level)))
+                     (put! label-nesting (cadr e) (list handler-token-stack catch-token-stack))))
              (let ((m (get label-map (cadr e) #f)))
                (if m
                    (emit `(label ,m))
@@ -3741,47 +4726,63 @@ f(x) = yt(x)
                (emit `(null))  ;; save space for `leave` that might be needed
                (emit `(goto ,m))
                (set! handler-goto-fixups
-                     (cons (list code handler-level (cadr e)) handler-goto-fixups))
-               '(null)))
+                     (cons (list code handler-token-stack catch-token-stack (cadr e)) handler-goto-fixups))
+               #f))
 
             ;; exception handlers are lowered using
-            ;; (enter L) - push handler with catch block at label L
+            ;; (= tok (enter L scope))
+            ;;      push handler with catch block at label L and scope `scope`, yielding token
+            ;;      `scope` is only recognized for tryfinally and may be omitted in the lowering
             ;; (leave n) - pop N exception handlers
-            ((trycatch tryfinally)
-             (let ((catch (make-label))
+            ;; (pop_exception tok) - pop exception stack back to state of associated enter
+            ((trycatch tryfinally trycatchelse)
+             (let ((handler-token (make-ssavalue))
+                   (catch (make-label))
+                   (catchcode (if (eq? (car e) 'tryfinally) '(call (top rethrow)) (caddr e)))
+                   (els   (and (eq? (car e) 'trycatchelse) (make-label)))
                    (endl  (make-label))
                    (last-finally-handler finally-handler)
-                   (finally           (if (eq? (car e) 'tryfinally) (new-mutable-var) #f))
-                   (finally-exception (if (eq? (car e) 'tryfinally) (new-mutable-var) #f))
+                   ;; Special case optimization: If the finally block is trivially empty, don't perform finally
+                   ;; lowering, just lower this as a try/catch block with rethrow and scope hnadling.
+                   (finally           (if (and (eq? (car e) 'tryfinally) (not (code-trivially-effect-free? (caddr e)))) (new-mutable-var) #f))
+                   (scope             (if (eq? (car e) 'tryfinally) (cdddr e) '()))
                    (my-finally-handler #f))
-               (emit `(enter ,catch))
-               (set! handler-level (+ handler-level 1))
-               (if finally (begin (set! my-finally-handler (list finally endl '() handler-level))
+               ;; handler block entry
+               (emit `(= ,handler-token (enter ,catch ,@(compile-args scope break-labels))))
+               (set! handler-token-stack (cons handler-token handler-token-stack))
+               (if finally (begin (set! my-finally-handler (list finally endl '() handler-token-stack catch-token-stack))
                                   (set! finally-handler my-finally-handler)
                                   (emit `(= ,finally -1))))
-               (let* ((v1  (compile (cadr e) break-labels value #f))
+               (let* ((v1 (compile (cadr e) break-labels value #f)) ;; emit try block code
                       (val (if (and value (not tail))
                                (new-mutable-var) #f)))
-                 (if val (emit-assignment val v1))
+                 ;; handler block postfix
+                 (if (and val v1) (emit-assignment val v1))
                  (if tail
-                     (begin (emit-return v1)
+                     (begin (if els
+                                (begin (if (and (not val) v1) (emit v1))
+                                       (emit `(leave ,handler-token)))
+                                (if v1 (emit-return v1)))
                             (if (not finally) (set! endl #f)))
-                     (begin (emit '(leave 1))
-                            (emit `(goto ,endl))))
-                 (set! handler-level (- handler-level 1))
+                     (begin (emit `(leave ,handler-token))
+                            (emit `(goto ,(or els endl)))))
+                 (set! handler-token-stack (cdr handler-token-stack))
+                 ;; emit else block
+                 (if els
+                     (begin (mark-label els)
+                            (let ((v3 (compile (cadddr e) break-labels value tail))) ;; emit else block code
+                              (if val (emit-assignment val v3)))
+                            (if endl (emit `(goto ,endl)))))
+                 ;; emit either catch or finally block. A combined try/catch/finally block was split into
+                 ;; separate trycatch and tryfinally blocks earlier.
                  (mark-label catch)
-                 (emit `(leave 1))
                  (if finally
-                     (begin (emit `(= ,finally-exception (the_exception)))
-                            (leave-finally-block `(foreigncall 'jl_rethrow_other (core Nothing) (call (core svec) Any)
-                                                               'ccall 1 ,finally-exception)
-                                                 #f))
-                     (let ((v2 (compile (caddr e) break-labels value tail)))
-                       (if val (emit-assignment val v2))))
-                 (if endl (mark-label endl))
-                 (if finally
-                     (begin (set! finally-handler last-finally-handler)
+                     (begin (enter-finally-block catchcode #f) ;; enter block via exception
+                            (mark-label endl) ;; non-exceptional control flow enters here
+                            (set! finally-handler last-finally-handler)
                             (compile (caddr e) break-labels #f #f)
+                            ;; emit actions to be taken at exit of finally
+                            ;; block, depending on the tag variable `finally`
                             (let loop ((actions (caddr my-finally-handler)))
                               (if (pair? actions)
                                   (let ((skip (if (and tail (null? (cdr actions))
@@ -3798,51 +4799,41 @@ f(x) = yt(x)
                                             (else ;; assumed to be a rethrow
                                              (emit ac))))
                                     (if skip (mark-label skip))
-                                    (loop (cdr actions)))))))
+                                    (loop (cdr actions))))))
+                     (begin (set! catch-token-stack (cons handler-token catch-token-stack))
+                            (let ((v2 (compile catchcode break-labels value tail)))
+                              (if val (emit-assignment val v2))
+                              (if (not tail) (emit `(pop_exception ,handler-token)))
+                                             ;; else done in emit-return from compile
+                              (if endl (mark-label endl)))
+                            (set! catch-token-stack (cdr catch-token-stack))))
                  val)))
-
-            ((&)
-             (if (or (not value) tail)
-                 (error "misplaced \"&\" expression"))
-             `(& ,(compile (cadr e) break-labels value tail)))
 
             ((newvar)
              ;; avoid duplicate newvar nodes
-             (if (not (and (pair? code) (equal? (car code) e)))
+             (if (and (not (and (pair? code) (equal? (car code) e)))
+                      ;; exclude deleted vars
+                      (has? vinfo-table (cadr e)))
                  (emit e)
                  #f))
             ((global) ; keep global declarations as statements
              (if value (error "misplaced \"global\" declaration"))
-             (let ((vname (cadr e)))
-               (if (var-info-for vname vi) ;; issue #7264
-                   (error (string "`global " vname "`: " vname " is local variable in the enclosing scope"))
-                   (emit e))))
+             (emit e))
             ((local-def) #f)
             ((local) #f)
-            ((implicit-global) #f)
+            ((moved-local)
+             (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,(cadr e) Any 2))))
+             #f)
             ((const)
-             (if (or (assq (cadr e) (car  (lam:vinfo lam)))
-                     (assq (cadr e) (cadr (lam:vinfo lam))))
-                 (begin
-                   (syntax-deprecation "`const` declaration on local variable" "" current-loc)
-                   '(null))
+             (if (local-in? (cadr e) lam)
+                 (error (string "unsupported `const` declaration on local variable" (format-loc current-loc)))
                  (if (pair? (cadr lam))
-                     ;; delay these deprecation warnings to allow "misplaced struct" errors to happen first
-                     (set! deprecated-global-const-locs
-                           (cons current-loc deprecated-global-const-locs))
+                     ;; delay this error to allow "misplaced struct" errors to happen first
+                     (if (not global-const-error)
+                         (set! global-const-error current-loc))
                      (emit e))))
+            ((atomic) (error "misplaced atomic declaration"))
             ((isdefined) (if tail (emit-return e) e))
-            ((warn-loop-var)
-             (if (or *warn-all-loop-vars*
-                     (not (or (assq (cadr e) (car  (lam:vinfo lam)))
-                              (assq (cadr e) (cadr (lam:vinfo lam))))))
-                 (deprecation-message
-                  (string "Loop variable `" (cadr e) "`" (linenode-string current-loc) " "
-                          "overwrites a variable in an enclosing scope. "
-                          "In the future the variable will be local to the loop instead.")
-                  current-loc)
-                 (put! deprecated-loop-vars (cadr e) #t))
-             '(null))
             ((boundscheck) (if tail (emit-return e) e))
 
             ((method)
@@ -3862,7 +4853,7 @@ f(x) = yt(x)
                                  (let ((l  (make-ssavalue)))
                                    (emit `(= ,l ,(compile lam break-labels #t #f)))
                                    l))))
-                   (emit `(method ,(or (cadr e) 'false) ,sig ,lam))
+                   (emit `(method ,(or (cadr e) '(false)) ,sig ,lam))
                    (if value (compile '(null) break-labels value tail)))
                  (cond (tail  (emit-return e))
                        (value e)
@@ -3873,36 +4864,25 @@ f(x) = yt(x)
                      (value temp)
                      (else  (emit temp)))))
 
-            ;; top level expressions returning values
-            ((abstract_type primitive_type struct_type thunk toplevel module)
+            ;; top level expressions
+            ((thunk module)
              (check-top-level e)
-             (with-bindings
-              ((*very-linear-mode* #f))  ;; type defs use nonstandard evaluation order
-              (case (car e)
-                ((abstract_type)
-                 (let* ((para (compile (caddr e) break-labels #t #f))
-                        (supe (compile (cadddr e) break-labels #t #f)))
-                   (emit `(abstract_type ,(cadr e) ,para ,supe))))
-                ((primitive_type)
-                 (let* ((para (compile (caddr e) break-labels #t #f))
-                        (supe (compile (list-ref e 4) break-labels #t #f)))
-                   (emit `(primitive_type ,(cadr e) ,para ,(cadddr e) ,supe))))
-                ((struct_type)
-                 (let* ((para (compile (caddr e) break-labels #t #f))
-                        (supe (compile (list-ref e 4) break-labels #t #f))
-                        ;; struct_type has an unconventional evaluation rule that
-                        ;; needs to do work around the evaluation of the field types,
-                        ;; so the field type expressions need to be kept in place as
-                        ;; much as possible. (part of issue #21923)
-                        (ftys (compile (list-ref e 5) break-labels #t #f #f)))
-                   (emit `(struct_type ,(cadr e) ,para ,(cadddr e) ,supe ,ftys ,@(list-tail e 6)))))
-                (else
-                 (emit e))))
+             (emit e)
              (if tail (emit-return '(null)))
              '(null))
+            ((toplevel-only)
+             (check-top-level (cdr e))
+             '(null))
+
+            ((toplevel)
+             (check-top-level e)
+             (let ((val (make-ssavalue)))
+               (emit `(= ,val ,e))
+               (if tail (emit-return val))
+               val))
 
             ;; other top level expressions
-            ((import importall using export)
+            ((import using export public)
              (check-top-level e)
              (emit e)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
@@ -3911,12 +4891,11 @@ f(x) = yt(x)
              '(null))
 
             ((gc_preserve_begin)
-             (let ((s (make-ssavalue)))
-               (emit `(= ,s ,e))
-               s))
+             (let ((args (compile-args (cdr e) break-labels)))
+               (cons (car e) args)))
 
             ;; metadata expressions
-            ((line meta inbounds simdloop gc_preserve_end)
+            ((lineinfo line meta inbounds loopinfo gc_preserve_end aliasscope popaliasscope inline noinline purity)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
                       (set! current-loc e)
@@ -3934,6 +4913,11 @@ f(x) = yt(x)
                (if (and tail (not have-ret?))
                    (emit-return '(null)))
                '(null)))
+
+            ;; unsupported assignment operators
+            ((≔ ⩴ ≕ :=)
+             (error (string "unsupported assignment operator \"" (deparse (car e)) "\"")))
+
             ((error)
              (error (cadr e)))
             (else
@@ -3949,30 +4933,27 @@ f(x) = yt(x)
     (compile e '() #t #t)
     (for-each (lambda (x)
                 (let ((point (car x))
-                      (hl    (cadr x))
-                      (lab   (caddr x)))
-                  (let ((target-level (get label-level lab #f)))
-                    (cond ((not target-level)
-                           (error (string "label \"" lab "\" referenced but not defined")))
-                          ((> target-level hl)
-                           (error (string "cannot goto label \"" lab "\" inside try/catch block")))
-                          ((= target-level hl)
-                           (set-cdr! point (cddr point))) ;; remove empty slot
-                          (else
-                           (set-car! (cdr point) `(leave ,(- hl target-level))))))))
+                      (src-handler-tokens (cadr x))
+                      (src-catch-tokens (caddr x))
+                      (lab   (cadddr x)))
+                  (let ((target-nesting (get label-nesting lab #f)))
+                    (if (not target-nesting)
+                        (error (string "label \"" lab "\" referenced but not defined")))
+                    (let ((target-handler-tokens (car target-nesting))
+                          (target-catch-tokens (cadr target-nesting)))
+                      (let ((plist (pop-handler-list src-handler-tokens target-handler-tokens lab)))
+                        (if plist (set-car! (cdr point) `(leave ,@plist))))
+                      (let ((pexc (pop-exc-expr src-catch-tokens target-catch-tokens)))
+                        (if pexc (set-cdr! point (cons pexc (cdr point)))))))))
               handler-goto-fixups)
-    (for-each (lambda (loc)
-                (deprecation-message
-                 (string "`global const` declarations may no longer appear inside functions." #\newline
-                         "Instead, use a non-constant global, or a global `const var = Ref{T}()`.")
-                 loc))
-              (reverse! deprecated-global-const-locs))
+    (if global-const-error
+        (error (string "`global const` declaration not allowed inside function" (format-loc global-const-error))))
     (let* ((stmts (reverse! code))
            (di    (definitely-initialized-vars stmts vi))
-           (body  (cons 'body (filter (lambda (e)
-                                        (not (and (pair? e) (eq? (car e) 'newvar)
-                                                  (has? di (cadr e)))))
-                                      stmts))))
+           (body  (cons 'block (filter (lambda (e)
+                                         (not (and (pair? e) (eq? (car e) 'newvar)
+                                                   (has? di (cadr e)))))
+                                       stmts))))
       (if arg-map
           (insert-after-meta
            body
@@ -4011,12 +4992,14 @@ f(x) = yt(x)
                      (let ((vinf (var-info-for (cadr e) vi)))
                        (if (and vinf (not (vinfo:capt vinf)))
                            (put! vars (cadr e) #t))))
+                    ((and (pair? e) (or (memq (car e) '(goto gotoifnot))
+                                        (and (eq? (car e) '=) (pair? (caddr e))
+                                             (eq? (car (caddr e)) 'enter))))
+                     (set! vars (table)))
                     ((and (pair? e) (eq? (car e) '=))
                      (if (has? vars (cadr e))
                          (begin (del! vars (cadr e))
-                                (put! di (cadr e) #t))))
-                    ((and (pair? e) (memq (car e) '(goto gotoifnot enter)))
-                     (set! vars (table)))))
+                                (put! di (cadr e) #t))))))
             (loop (cdr stmts)))))))
 
 ;; pass 6: renumber slots and labels
@@ -4030,100 +5013,175 @@ f(x) = yt(x)
              (list ,@(cadr vi)) ,(caddr vi) (list ,@(cadddr vi)))
        ,@(cdddr lam))))
 
-(define (label-to-idx-map body)
-  (let ((tbl (table)))
-    (let loop ((stmts (cdr body))
-               (prev  (cdr body))
-               (i 1))
+(define (make-lineinfo name file line (inlined-at #f))
+  `(lineinfo (thismodule) ,(if inlined-at '|macro expansion| name) ,file ,line ,(or inlined-at 0)))
+
+(define (set-lineno! lineinfo num)
+  (set-car! (cddddr lineinfo) num))
+
+(define (compact-ir body name file line)
+  (let ((code         '(block))
+        (locs         '(list))
+        (linetable    '(list))
+        (linetablelen 0)
+        (labltable    (table))
+        (ssavtable    (table))
+        (current-loc  0)
+        (current-file file)
+        (current-line line)
+        (locstack     '())
+        (i            1))
+    (define (emit e)
+      (or e (raise "missing value in IR"))
+      (if (and (null? (cdr linetable))
+               (not (and (pair? e) (eq? (car e) 'meta))))
+          (begin (set! linetable (cons (make-lineinfo name file line) linetable))
+                 (set! linetablelen (+ linetablelen 1))
+                 (set! current-loc 1)))
+      (set! code (cons e code))
+      (set! i (+ i 1))
+      (set! locs (cons current-loc locs)))
+    (let loop ((stmts (cdr body)))
       (if (pair? stmts)
-          (let* ((el  (car stmts))
-                 (nxt (cdr stmts))
-                 ;; is next statement also a label?
-                 (nl  (and (pair? nxt) (pair? (car nxt)) (eq? (caar nxt) 'label))))
-            (if (and (pair? el) (eq? (car el) 'label))
-                (begin (put! tbl (cadr el) i)
-                       (loop nxt
-                             (if nl prev nxt)
-                             (if nl ;; merge adjacent labels
-                                 (begin (set-cdr! prev (cdr nxt))
-                                        i)
-                                 (+ i 1))))
-                (loop nxt nxt (+ i 1))))))
-    tbl))
+          (let ((e (car stmts)))
+            (cond ((atom? e) (emit e))
+                  ((eq? (car e) 'line)
+                   (if (and (= current-line 0) (length= e 2) (pair? linetable))
+                       ;; (line n) after push_loc just updates the line for the new file
+                       (begin (set-lineno! (car linetable) (cadr e))
+                              (set! current-line (cadr e)))
+                       (begin
+                         (set! current-line (cadr e))
+                         (if (pair? (cddr e))
+                             (set! current-file (caddr e)))
+                         (set! linetable (cons (if (null? locstack)
+                                                   (make-lineinfo name current-file current-line)
+                                                   (make-lineinfo name current-file current-line (caar locstack)))
+                                               linetable))
+                         (set! linetablelen (+ linetablelen 1))
+                         (set! current-loc linetablelen))))
+                  ((and (length> e 2) (eq? (car e) 'meta) (eq? (cadr e) 'push_loc))
+                   (set! locstack (cons (list current-loc current-line current-file) locstack))
+                   (set! current-file (caddr e))
+                   (set! current-line 0)
+                   (set! linetable (cons (make-lineinfo name current-file current-line current-loc) linetable))
+                   (set! linetablelen (+ linetablelen 1))
+                   (set! current-loc linetablelen))
+                  ((and (length= e 2) (eq? (car e) 'meta) (eq? (cadr e) 'pop_loc))
+                   (let ((l (car locstack)))
+                     (set! locstack (cdr locstack))
+                     (set! current-loc (car l))
+                     (set! current-line (cadr l))
+                     (set! current-file (caddr l))))
+                  ((eq? (car e) 'label)
+                   (put! labltable (cadr e) i))
+                  ((and (assignment? e) (ssavalue? (cadr e)))
+                   (let ((idx (and (ssavalue? (caddr e)) (get ssavtable (cadr (caddr e)) #f))))
+                     ;; if both lhs and rhs are ssavalues, merge them
+                     (if idx
+                         (put! ssavtable (cadr (cadr e)) idx)
+                         (begin
+                           (put! ssavtable (cadr (cadr e)) i)
+                           (emit (caddr e))))))
+                  (else
+                   (emit e)))
+            (loop (cdr stmts)))))
+    (vector (reverse code) (reverse locs) (reverse linetable) ssavtable labltable)))
 
-(define (renumber-labels! lam label2idx)
-  (let loop ((stmts (cdr (lam:body lam))))
-    (if (pair? stmts)
-        (let ((el (car stmts)))
-          (if (pair? el)
-              (case (car el)
-                ((label goto enter) (set-car! (cdr el) (get label2idx (cadr el))))
-                ((gotoifnot)        (set-car! (cddr el) (get label2idx (caddr el))))
-                (else #f)))
-          (loop (cdr stmts))))))
+(define (renumber-lambda lam file line)
+  (let* ((stuff (compact-ir (lam:body lam)
+                            (if (null? (cadr lam)) '|top-level scope| 'none)
+                            file line))
+         (code (aref stuff 0))
+         (locs (aref stuff 1))
+         (linetab (aref stuff 2))
+         (ssavalue-table (aref stuff 3))
+         (label-table (aref stuff 4)))
+    (set-car! (cdddr lam) code)
+    (define nslots (length (car (lam:vinfo lam))))
+    (define slot-table (symbol-to-idx-map (map car (car (lam:vinfo lam)))))
+    (define sp-table (symbol-to-idx-map (lam:sp lam)))
+    (define (renumber-stuff e)
+      (cond ((eq? e UNUSED) (error "Attempted to use slot marked unused"))
+            ((symbol? e)
+             (let ((idx (get slot-table e #f)))
+               (if idx
+                   `(slot ,idx)
+                   (let ((idx (get sp-table e #f)))
+                     (if idx
+                         `(static_parameter ,idx)
+                         e)))))
+            ((and (pair? e) (eq? (car e) 'outerref))
+             (cadr e))
+            ((nospecialize-meta? e)
+             ;; convert nospecialize vars to slot numbers
+             `(meta ,(cadr e) ,@(map renumber-stuff (cddr e))))
+            ((or (atom? e) (quoted? e) (eq? (car e) 'global))
+             e)
+            ((ssavalue? e)
+             (let ((idx (get ssavalue-table (cadr e) #f)))
+               (if (not idx) (begin (prn e) (prn lam) (error "ssavalue with no def")))
+               `(ssavalue ,idx)))
+            ((eq? (car e) 'goto)
+             `(goto ,(get label-table (cadr e))))
+            ((eq? (car e) 'enter)
+             `(enter ,(get label-table (cadr e)) ,@(map renumber-stuff (cddr e))))
+            ((eq? (car e) 'gotoifnot)
+             `(gotoifnot ,(renumber-stuff (cadr e)) ,(get label-table (caddr e))))
+            ((eq? (car e) 'lambda)
+             (renumber-lambda e 'none 0))
+            (else
+             (let ((e (cons (car e)
+                            (map renumber-stuff (cdr e)))))
+               (if (and (eq? (car e) 'foreigncall)
+                        (tuple-call? (cadr e))
+                        (expr-contains-p (lambda (x) (or (ssavalue? x) (slot? x))) (cadr e)))
+                   (error "ccall function name and library expression cannot reference local variables"))
+               e))))
+    (let ((body (renumber-stuff (lam:body lam)))
+          (vi   (lam:vinfo lam)))
+      (listify-lambda
+       `(lambda ,(cadr lam)
+          (,(car vi) ,(cadr vi) ,(length (cdr body)) ,(last vi))
+          ,body
+          ,locs
+          ,linetab)))))
 
-(define (symbol-to-idx-map lst)
-  (let ((tbl (table)))
-    (let loop ((xs lst) (i 1))
-      (if (pair? xs)
-          (begin (put! tbl (car xs) i)
-                 (loop (cdr xs) (+ i 1)))))
-    tbl))
-
-(define (renumber-lambda lam)
-  (renumber-labels! lam (label-to-idx-map (lam:body lam)))
-  (define nssavalues 0)
-  (define ssavalue-table (table))
-  (define nslots (length (car (lam:vinfo lam))))
-  (define slot-table (symbol-to-idx-map (map car (car (lam:vinfo lam)))))
-  (define sp-table (symbol-to-idx-map (lam:sp lam)))
-  (define (renumber-slots e)
-    (cond ((symbol? e)
-           (let ((idx (get slot-table e #f)))
-             (if idx `(slot ,idx) e)))
-          ((and (pair? e) (eq? (car e) 'outerref))
-           (let ((idx (get sp-table (cadr e) #f)))
-                (if idx `(static_parameter ,idx) (cadr e))))
-          ((nospecialize-meta? e)
-           ;; convert nospecialize vars to slot numbers
-           `(meta nospecialize ,@(map renumber-slots (cddr e))))
-          ((or (atom? e) (quoted? e)) e)
-          ((ssavalue? e)
-           (let ((idx (or (get ssavalue-table (cadr e) #f)
-                          (begin0 nssavalues
-                                  (put! ssavalue-table (cadr e) nssavalues)
-                                  (set! nssavalues (+ nssavalues 1))))))
-             `(ssavalue ,idx)))
-          ((eq? (car e) 'lambda)
-           (renumber-lambda e))
-          (else (cons (car e)
-                      (map renumber-slots (cdr e))))))
-  (let ((body (renumber-slots (lam:body lam)))
-        (vi   (lam:vinfo lam)))
-    (listify-lambda
-     `(lambda ,(cadr lam)
-        (,(car vi) ,(cadr vi) ,nssavalues ,(last vi))
-        ,body))))
-
-(define (renumber-slots-and-labels ex)
+(define (compact-and-renumber ex file line)
   (if (atom? ex) ex
       (if (eq? (car ex) 'lambda)
-          (renumber-lambda ex)
+          (renumber-lambda ex
+                           (if (null? (cadr ex)) file 'none)
+                           (if (null? (cadr ex)) line 0))
           (cons (car ex)
-                (map renumber-slots-and-labels (cdr ex))))))
+                (map (lambda (e) (compact-and-renumber e file line))
+                     (cdr ex))))))
 
 ;; expander entry point
 
-(define (julia-expand1 ex)
-  (renumber-slots-and-labels
+(define (julia-expand1 ex file line)
+  (compact-and-renumber
    (linearize
     (closure-convert
      (analyze-variables!
-      (resolve-scopes ex))))))
+      (resolve-scopes ex)))) file line))
 
-(define julia-expand0 expand-forms)
+(define *current-desugar-loc* #f)
 
-(define (julia-expand ex)
+(define (julia-expand0 ex lno)
+  (with-bindings ((*current-desugar-loc* lno))
+   (trycatch (expand-forms ex)
+             (lambda (e)
+               (if (and (pair? e) (eq? (car e) 'error))
+                   ; Add location for desugaring errors. This is approximate:
+                   ; - Line number nodes are sparse in the AST
+                   ; - Line number nodes apply to the next statement, so
+                   ;   tracking by `set!`ing *current-desugar-loc* relies on
+                   ;   AST traversal being in program order.
+                   (error (string (cadr e) (format-loc *current-desugar-loc*))))
+                   (raise e)))))
+
+(define (julia-expand ex (file 'none) (line 0))
   (julia-expand1
    (julia-expand0
-    (julia-expand-macroscope ex))))
+    (julia-expand-macroscope ex) `(line ,line ,file)) file line))

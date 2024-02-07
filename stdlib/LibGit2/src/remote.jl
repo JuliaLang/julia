@@ -12,8 +12,9 @@ remote = LibGit2.GitRemote(repo, "upstream", repo_url)
 ```
 """
 function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString)
+    ensure_initialized()
     rmt_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_remote_create, :libgit2), Cint,
+    @check ccall((:git_remote_create, libgit2), Cint,
                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring),
                 rmt_ptr_ptr, repo.ptr, rmt_name, rmt_url)
     return GitRemote(repo, rmt_ptr_ptr[])
@@ -34,8 +35,9 @@ remote = LibGit2.GitRemote(repo, "upstream", repo_url, refspec)
 ```
 """
 function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString)
+    ensure_initialized()
     rmt_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_remote_create_with_fetchspec, :libgit2), Cint,
+    @check ccall((:git_remote_create_with_fetchspec, libgit2), Cint,
                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Cstring),
                 rmt_ptr_ptr, repo.ptr, rmt_name, rmt_url, fetch_spec)
     return GitRemote(repo, rmt_ptr_ptr[])
@@ -53,11 +55,25 @@ remote = LibGit2.GitRemoteAnon(repo, repo_url)
 ```
 """
 function GitRemoteAnon(repo::GitRepo, url::AbstractString)
+    ensure_initialized()
     rmt_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_remote_create_anonymous, :libgit2), Cint,
+    @check ccall((:git_remote_create_anonymous, libgit2), Cint,
                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring),
                 rmt_ptr_ptr, repo.ptr, url)
     return GitRemote(repo, rmt_ptr_ptr[])
+end
+
+"""
+    GitRemoteDetached(url::AbstractString) -> GitRemote
+
+Create a remote without a connected local repo.
+"""
+function GitRemoteDetached(url::AbstractString)
+    ensure_initialized()
+    rmt_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
+    @check ccall((:git_remote_create_detached, libgit2), Cint,
+                 (Ptr{Ptr{Cvoid}}, Cstring), rmt_ptr_ptr, url)
+    return GitRemote(rmt_ptr_ptr[])
 end
 
 """
@@ -75,8 +91,9 @@ LibGit2.lookup_remote(repo, remote_name) # will return nothing
 ```
 """
 function lookup_remote(repo::GitRepo, remote_name::AbstractString)
+    ensure_initialized()
     rmt_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    err = ccall((:git_remote_lookup, :libgit2), Cint,
+    err = ccall((:git_remote_lookup, libgit2), Cint,
                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring),
                 rmt_ptr_ptr, repo.ptr, remote_name)
     if err == Int(Error.GIT_OK)
@@ -89,8 +106,9 @@ function lookup_remote(repo::GitRepo, remote_name::AbstractString)
 end
 
 function get(::Type{GitRemote}, repo::GitRepo, rmt_name::AbstractString)
+    ensure_initialized()
     rmt_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_remote_lookup, :libgit2), Cint,
+    @check ccall((:git_remote_lookup, libgit2), Cint,
                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring),
                 rmt_ptr_ptr, repo.ptr, rmt_name)
     return GitRemote(repo, rmt_ptr_ptr[])
@@ -114,7 +132,8 @@ julia> LibGit2.url(remote)
 ```
 """
 function url(rmt::GitRemote)
-    url_ptr = ccall((:git_remote_url, :libgit2), Cstring, (Ptr{Cvoid},), rmt.ptr)
+    ensure_initialized()
+    url_ptr = ccall((:git_remote_url, libgit2), Cstring, (Ptr{Cvoid},), rmt.ptr)
     url_ptr == C_NULL && return ""
     return unsafe_string(url_ptr)
 end
@@ -137,7 +156,8 @@ julia> LibGit2.push_url(LibGit2.get(LibGit2.GitRemote, repo, "origin"))
 ```
 """
 function push_url(rmt::GitRemote)
-    url_ptr = ccall((:git_remote_pushurl, :libgit2), Cstring, (Ptr{Cvoid},), rmt.ptr)
+    ensure_initialized()
+    url_ptr = ccall((:git_remote_pushurl, libgit2), Cstring, (Ptr{Cvoid},), rmt.ptr)
     url_ptr == C_NULL && return ""
     return unsafe_string(url_ptr)
 end
@@ -162,7 +182,8 @@ julia> name(remote)
 ```
 """
 function name(rmt::GitRemote)
-    name_ptr = ccall((:git_remote_name, :libgit2), Cstring, (Ptr{Cvoid},), rmt.ptr)
+    ensure_initialized()
+    name_ptr = ccall((:git_remote_name, libgit2), Cstring, (Ptr{Cvoid},), rmt.ptr)
     name_ptr == C_NULL && return ""
     return unsafe_string(name_ptr)
 end
@@ -184,8 +205,9 @@ String["+refs/heads/*:refs/remotes/upstream/*"]
 ```
 """
 function fetch_refspecs(rmt::GitRemote)
+    ensure_initialized()
     sa_ref = Ref(StrArrayStruct())
-    @check ccall((:git_remote_get_fetch_refspecs, :libgit2), Cint,
+    @check ccall((:git_remote_get_fetch_refspecs, libgit2), Cint,
                  (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, rmt.ptr)
     res = convert(Vector{String}, sa_ref[])
     free(sa_ref)
@@ -213,8 +235,9 @@ String["refs/heads/master"]
 ```
 """
 function push_refspecs(rmt::GitRemote)
+    ensure_initialized()
     sa_ref = Ref(StrArrayStruct())
-    @check ccall((:git_remote_get_push_refspecs, :libgit2), Cint,
+    @check ccall((:git_remote_get_push_refspecs, libgit2), Cint,
                  (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, rmt.ptr)
     res = convert(Vector{String}, sa_ref[])
     free(sa_ref)
@@ -236,7 +259,8 @@ String["+refs/heads/*:refs/remotes/upstream/*"]
 ```
 """
 function add_fetch!(repo::GitRepo, rmt::GitRemote, fetch_spec::String)
-    @check ccall((:git_remote_add_fetch, :libgit2), Cint,
+    ensure_initialized()
+    @check ccall((:git_remote_add_fetch, libgit2), Cint,
                  (Ptr{Cvoid}, Cstring, Cstring), repo.ptr,
                  name(rmt), fetch_spec)
 end
@@ -264,7 +288,8 @@ String["refs/heads/master"]
     to work.
 """
 function add_push!(repo::GitRepo, rmt::GitRemote, push_spec::String)
-    @check ccall((:git_remote_add_push, :libgit2), Cint,
+    ensure_initialized()
+    @check ccall((:git_remote_add_push, libgit2), Cint,
                  (Ptr{Cvoid}, Cstring, Cstring), repo.ptr,
                  name(rmt), push_spec)
 end
@@ -282,8 +307,9 @@ The keyword arguments are:
 function fetch(rmt::GitRemote, refspecs::Vector{<:AbstractString};
                options::FetchOptions = FetchOptions(),
                msg::AbstractString="")
+    ensure_initialized()
     msg = "libgit2.fetch: $msg"
-    @check ccall((:git_remote_fetch, :libgit2), Cint,
+    @check ccall((:git_remote_fetch, libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{StrArrayStruct}, Ptr{FetchOptions}, Cstring),
                  rmt.ptr, isempty(refspecs) ? C_NULL : refspecs, Ref(options), msg)
 end
@@ -307,7 +333,8 @@ The keyword arguments are:
 """
 function push(rmt::GitRemote, refspecs::Vector{<:AbstractString};
               force::Bool = false, options::PushOptions = PushOptions())
-    @check ccall((:git_remote_push, :libgit2), Cint,
+    ensure_initialized()
+    @check ccall((:git_remote_push, libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{StrArrayStruct}, Ptr{PushOptions}),
                  rmt.ptr, isempty(refspecs) ? C_NULL : refspecs, Ref(options))
 end
@@ -318,7 +345,8 @@ end
 Delete the `remote_name` from the git `repo`.
 """
 function remote_delete(repo::GitRepo, remote_name::AbstractString)
-    @check ccall((:git_remote_delete, :libgit2), Cint,
+    ensure_initialized()
+    @check ccall((:git_remote_delete, libgit2), Cint,
                  (Ptr{Cvoid}, Cstring),
                  repo.ptr, remote_name)
 end
@@ -336,7 +364,8 @@ located at `path`. Typically git repos use `"origin"` as the remote name.
 function set_remote_fetch_url end
 
 function set_remote_fetch_url(repo::GitRepo, remote_name::AbstractString, url::AbstractString)
-    @check ccall((:git_remote_set_url, :libgit2), Cint,
+    ensure_initialized()
+    @check ccall((:git_remote_set_url, libgit2), Cint,
                  (Ptr{Cvoid}, Cstring, Cstring),
                  repo.ptr, remote_name, url)
 end
@@ -358,7 +387,8 @@ located at `path`. Typically git repos use `"origin"` as the remote name.
 function set_remote_push_url end
 
 function set_remote_push_url(repo::GitRepo, remote_name::AbstractString, url::AbstractString)
-    @check ccall((:git_remote_set_pushurl, :libgit2), Cint,
+    ensure_initialized()
+    @check ccall((:git_remote_set_pushurl, libgit2), Cint,
                  (Ptr{Cvoid}, Cstring, Cstring),
                  repo.ptr, remote_name, url)
 end
@@ -396,4 +426,66 @@ function set_remote_url(path::AbstractString, remote_name::AbstractString, url::
     with(GitRepo, path) do repo
         set_remote_url(repo, remote_name, url)
     end
+end
+
+function connect(rmt::GitRemote, direction::Consts.GIT_DIRECTION,
+                 callbacks::RemoteCallbacks)
+    @check ccall((:git_remote_connect, libgit2),
+                 Cint, (Ptr{Cvoid}, Cint, Ref{RemoteCallbacks}, Ptr{Cvoid}, Ptr{Cvoid}),
+                 rmt.ptr, direction, callbacks, C_NULL, C_NULL)
+    return rmt
+end
+
+"""
+    connected(rmt::GitRemote)
+
+Check whether the remote is connected
+"""
+function connected(rmt::GitRemote)
+    return ccall((:git_remote_connected, libgit2), Cint, (Ptr{Cvoid},), rmt.ptr) != 0
+end
+
+"""
+    disconnect(rmt::GitRemote)
+
+Close the connection to the remote.
+"""
+function disconnect(rmt::GitRemote)
+    @check ccall((:git_remote_disconnect, libgit2), Cint, (Ptr{Cvoid},), rmt.ptr)
+    return
+end
+
+"""
+    default_branch(rmt::GitRemote)
+
+Retrieve the name of the remote's default branch.
+
+This function must only be called after connecting (See [`connect`](@ref)).
+"""
+function default_branch(rmt::GitRemote)
+    buf_ref = Ref(Buffer())
+    @check ccall((:git_remote_default_branch, libgit2), Cint,
+                 (Ptr{Buffer}, Ptr{Cvoid}), buf_ref, rmt.ptr)
+    buf = buf_ref[]
+    str = unsafe_string(buf.ptr, buf.size)
+    free(buf_ref)
+    return str
+end
+
+"""
+    ls(rmt::GitRemote) -> Vector{GitRemoteHead}
+
+Get the remote repository's reference advertisement list.
+
+This function must only be called after connecting (See [`connect`](@ref)).
+"""
+function ls(rmt::GitRemote)
+    nheads = Ref{Csize_t}()
+    head_refs = Ref{Ptr{Ptr{_GitRemoteHead}}}()
+    @check ccall((:git_remote_ls, libgit2), Cint,
+                 (Ptr{Ptr{Ptr{_GitRemoteHead}}}, Ptr{Csize_t}, Ptr{Cvoid}),
+                 head_refs, nheads, rmt.ptr)
+    head_ptr = head_refs[]
+    return [GitRemoteHead(unsafe_load(unsafe_load(head_ptr, i)))
+            for i in 1:nheads[]]
 end

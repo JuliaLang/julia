@@ -7,6 +7,8 @@
 extern "C" {
 #endif
 
+#include "analyzer_annotations.h"
+
 /* is c the start of a utf8 sequence? */
 #define isutf(c) (((c)&0xC0)!=0x80)
 
@@ -28,7 +30,7 @@ JL_DLLEXPORT size_t u8_offset(const char *str, size_t charnum);
 JL_DLLEXPORT size_t u8_charnum(const char *str, size_t offset);
 
 /* return next character, updating an index variable */
-uint32_t u8_nextchar(const char *s, size_t *i);
+uint32_t u8_nextchar(const char *s, size_t *i) JL_NOTSAFEPOINT;
 
 /* next character without NUL character terminator */
 uint32_t u8_nextmemchar(const char *s, size_t *i);
@@ -61,7 +63,7 @@ int u8_escape_wchar(char *buf, size_t sz, uint32_t ch);
 
    sz is buf size in bytes. must be at least 12.
 
-   if escape_quotes is nonzero, quote characters will be escaped.
+   if escapes is given, given characters will also be escaped (in addition to \\).
 
    if ascii is nonzero, the output is 7-bit ASCII, no UTF-8 survives.
 
@@ -73,7 +75,7 @@ int u8_escape_wchar(char *buf, size_t sz, uint32_t ch);
    returns number of bytes placed in buf, including a NUL terminator.
 */
 size_t u8_escape(char *buf, size_t sz, const char *src, size_t *pi, size_t end,
-                 int escape_quotes, int ascii);
+                 const char *escapes, int ascii);
 
 /* utility predicates used by the above */
 int octal_digit(char c);

@@ -23,6 +23,7 @@ fltype_t *get_type(fl_context_t *fl_ctx, value_t t)
     }
 
     ft = (fltype_t*)malloc(sizeof(fltype_t));
+    // TODO: if ft == NULL
     ft->type = t;
     if (issymbol(t)) {
         ft->numtype = sym_to_numtype(fl_ctx, t);

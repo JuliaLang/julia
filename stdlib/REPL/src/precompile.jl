@@ -1,247 +1,217 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function _precompile_()
-    ccall(:jl_generating_output, Cint, ()) == 1 || return nothing
-    precompile(Tuple{typeof(Base.__atreplinit), REPL.LineEditREPL})
-    precompile(Tuple{typeof(Base.banner), REPL.Terminals.TTYTerminal})
-    precompile(Tuple{typeof(Base._setindex!), Base.Dict{Symbol, Any}, REPL.LineEdit.Prompt, Symbol, Int64})
-    precompile(Tuple{typeof(Base.setindex!), Base.Dict{Symbol, Any}, REPL.LineEdit.Prompt, Symbol})
-    precompile(Tuple{typeof(REPL.LineEdit.getEntry), Base.Dict{Char, Any}, Char})
-    precompile(Tuple{typeof(REPL.LineEdit.getEntry), Base.Dict{Char, Any}, String})
-    precompile(Tuple{typeof(Base.promote_type), Type{REPL.LineEdit.HistoryPrompt{REPLHistoryProvider}}, Type{REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}}})
-    precompile(Tuple{typeof(Base.promote_rule), Type{REPL.LineEdit.HistoryPrompt{REPLHistoryProvider}}, Type{REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}}})
-    precompile(Tuple{typeof(Base.promote_rule), Type{REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}}, Type{REPL.LineEdit.HistoryPrompt{REPLHistoryProvider}}})
-    precompile(Tuple{typeof(Base.promote_result), Type{REPL.LineEdit.HistoryPrompt{REPLHistoryProvider}}, Type{REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}}, Type{Union{}}, Type{Union{}}})
-    precompile(Tuple{typeof(Base.promote_type), Type{REPL.LineEdit.Prompt}, Type{REPL.LineEdit.TextInterface}})
-    precompile(Tuple{typeof(Base.promote_rule), Type{REPL.LineEdit.Prompt}, Type{REPL.LineEdit.TextInterface}})
-    precompile(Tuple{typeof(Base.promote_rule), Type{REPL.LineEdit.TextInterface}, Type{REPL.LineEdit.Prompt}})
-    precompile(Tuple{typeof(Base.promote_result), Type{REPL.LineEdit.Prompt}, Type{REPL.LineEdit.TextInterface}, Type{Union{}}, Type{Union{}}})
-    precompile(Tuple{typeof(Base.setindex!), Array{REPL.LineEdit.TextInterface, 1}, REPL.LineEdit.Prompt, Int64})
-    precompile(Tuple{typeof(Base.setindex!), Array{REPL.LineEdit.TextInterface, 1}, REPL.LineEdit.HistoryPrompt{REPLHistoryProvider}, Int64})
-    precompile(Tuple{typeof(Base.setindex!), Array{REPL.LineEdit.TextInterface, 1}, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}, Int64})
-    precompile(Tuple{typeof(Base.copyto!), Array{REPL.LineEdit.TextInterface, 1}, Tuple{REPL.LineEdit.Prompt, REPL.LineEdit.Prompt, REPL.LineEdit.Prompt, REPL.LineEdit.HistoryPrompt{REPLHistoryProvider}, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}}})
-    precompile(Tuple{typeof(REPL.Terminals.cmove_up), REPL.Terminals.TerminalBuffer, Int64})
-    precompile(Tuple{typeof(REPL.Terminals.cmove_down), REPL.Terminals.TerminalBuffer, Int64})
-    precompile(Tuple{typeof(REPL.Terminals.cmove_right), REPL.Terminals.TerminalBuffer, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit._clear_input_area), REPL.Terminals.TerminalBuffer, REPL.LineEdit.InputAreaState})
-    precompile(Tuple{getfield(Base, Symbol("#kw##readline")), Array{Any, 1}, typeof(Base.readline), REPL.Terminals.TerminalBuffer})
-    precompile(Tuple{typeof(REPL.LineEdit.write_prompt), REPL.Terminals.TerminalBuffer, REPL.LineEdit.Prompt})
-    precompile(Tuple{getfield(REPL.LineEdit, Symbol("#kw##refresh_multi_line")), Array{Any, 1}, typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.Terminals.TerminalBuffer, REPL.Terminals.TerminalBuffer, REPL.LineEdit.InputAreaState, String})
-    precompile(Tuple{typeof(REPL.LineEdit.update_key_repeats), REPL.LineEdit.MIState, Array{Char, 1}})
-    precompile(Tuple{typeof(REPL.LineEdit.reset_state), REPL.LineEdit.MIState})
-    precompile(Tuple{typeof(Base.write), REPL.Terminals.TerminalBuffer, Array{UInt8, 1}})
-    precompile(Tuple{typeof(REPL.LineEdit.keymap), Array{Base.Dict{Any, Any}, 1}})
-    precompile(Tuple{typeof(REPL.LineEdit.add_specialisations), Base.Dict{Char, Any}, Base.Dict{Char, Any}, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit.keymap_merge), Base.Dict{Char, Any}, Base.Dict{Any, Any}})
-    precompile(Tuple{typeof(REPL.LineEdit.postprocess!), Base.Dict{Char, Any}})
-    precompile(Tuple{typeof(REPL.LineEdit.keymap_unify), Array{Base.Dict{Any, Any}, 1}})
-    precompile(Tuple{typeof(REPL.LineEdit.validate_keymap), Base.Dict{Char, Any}})
-    precompile(Tuple{getfield(Core, Symbol("#kw#Type")), Array{Any, 1}, Type{REPL.LineEdit.Prompt}, String})
-    precompile(Tuple{Type{Base.Dict{Symbol, Any}}, Base.Pair{Symbol, REPL.LineEdit.Prompt}, Base.Pair{Symbol, REPL.LineEdit.Prompt}, Base.Pair{Symbol, REPL.LineEdit.Prompt}})
-    precompile(Tuple{Type{REPLHistoryProvider}, Base.Dict{Symbol, Any}})
-    precompile(Tuple{typeof(find_hist_file)})
-    precompile(Tuple{typeof(history_reset_state), REPLHistoryProvider})
-    precompile(Tuple{typeof(REPL.LineEdit.setup_search_keymap), REPLHistoryProvider})
-    precompile(Tuple{typeof(REPL.LineEdit.setup_prefix_keymap), REPLHistoryProvider, REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(mode_keymap), REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(Base.Multimedia.popdisplay), REPLDisplay{REPL.LineEditREPL}})
-    precompile(Tuple{typeof(ends_with_semicolon), String})
-    precompile(Tuple{typeof(Base.Multimedia.popdisplay), REPLDisplay{BasicREPL}})
-    precompile(Tuple{typeof(Base.Multimedia.popdisplay), REPLDisplay{StreamREPL}})
-    precompile(Tuple{typeof(start_repl_backend), Base.Channel{Any}, Base.Channel{Any}})
-    precompile(Tuple{typeof(REPL.Terminals.hascolor), REPL.Terminals.TTYTerminal})
-    precompile(Tuple{Type{REPL.LineEditREPL}, REPL.Terminals.TTYTerminal, Bool})
-    precompile(Tuple{Type{REPL.Terminals.TTYTerminal}, String, Base.TTY, Base.TTY, Base.IOStream})
-    precompile(Tuple{typeof(Base.:(==)), Base.Multimedia.TextDisplay, REPLDisplay{REPL.LineEditREPL}})
-    precompile(Tuple{typeof(Base.:(==)), REPLDisplay{REPL.LineEditREPL}, REPLDisplay{REPL.LineEditREPL}})
-    precompile(Tuple{typeof(hist_from_file), REPLHistoryProvider, Base.IOStream, String})
-    precompile(Tuple{typeof(hist_getline), Base.IOStream})
-    precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, REPL.LineEdit.KeyAlias, Int64})
-    precompile(Tuple{typeof(Base._setindex!), Base.Dict{Any, Any}, REPL.LineEdit.KeyAlias, Int64, Int64})
-    precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, REPL.LineEdit.KeyAlias, String})
-    precompile(Tuple{typeof(Base._setindex!), Base.Dict{Any, Any}, REPL.LineEdit.KeyAlias, String, Int64})
-    precompile(Tuple{getfield(REPL.LineEdit, Symbol("#kw##add_nested_key!")), Array{Any, 1}, typeof(REPL.LineEdit.add_nested_key!), Base.Dict{Char, Any}, String, Nothing})
-    precompile(Tuple{getfield(REPL.LineEdit, Symbol("#kw##add_nested_key!")), Array{Any, 1}, typeof(REPL.LineEdit.add_nested_key!), Base.Dict{Char, Any}, String, REPL.LineEdit.KeyAlias})
-    precompile(Tuple{typeof(Base._setindex!), Base.Dict{Char, Any}, REPL.LineEdit.KeyAlias, Char, Int64})
-    precompile(Tuple{typeof(Base.setindex!), Base.Dict{Char, Any}, REPL.LineEdit.KeyAlias, Char})
-    precompile(Tuple{typeof(REPL.LineEdit.fixup_keymaps!), Base.Dict{Char, Any}, Int64, Char, Nothing})
-    precompile(Tuple{typeof(REPL.LineEdit.run_interface), REPL.Terminals.TTYTerminal, REPL.LineEdit.ModalInterface})
-    precompile(Tuple{getfield(REPL.LineEdit, Symbol("#kw##refresh_multi_line")), Array{Any, 1}, typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal, Base.GenericIOBuffer{Array{UInt8, 1}}, REPL.LineEdit.InputAreaState, REPL.LineEdit.PromptState})
-    precompile(Tuple{getfield(REPL.LineEdit, Symbol("#kw##refresh_multi_line")), Array{Any, 1}, typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal, Base.GenericIOBuffer{Array{UInt8, 1}}, REPL.LineEdit.InputAreaState, REPL.LineEdit.PrefixSearchState})
-    precompile(Tuple{typeof(Base.write), REPL.Terminals.TTYTerminal, Array{UInt8, 1}})
-    precompile(Tuple{typeof(REPL.LineEdit.init_state), REPL.Terminals.TTYTerminal, REPL.LineEdit.ModalInterface})
-    precompile(Tuple{typeof(REPL.LineEdit.prompt!), REPL.Terminals.TTYTerminal, REPL.LineEdit.ModalInterface, REPL.LineEdit.MIState})
-    precompile(Tuple{typeof(Base.getindex), Array{REPL.LineEdit.TextInterface, 1}, Int64})
-    precompile(Tuple{typeof(Base.start), Array{REPL.LineEdit.TextInterface, 1}})
-    precompile(Tuple{typeof(Base.done), Array{REPL.LineEdit.TextInterface, 1}, Int64})
-    precompile(Tuple{typeof(Base.next), Array{REPL.LineEdit.TextInterface, 1}, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit.init_state), REPL.Terminals.TTYTerminal, REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, REPL.LineEdit.PromptState, REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(Base.ht_keyindex2!), Base.Dict{Any, Any}, REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(Base._setindex!), Base.Dict{Any, Any}, REPL.LineEdit.PromptState, REPL.LineEdit.Prompt, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit.init_state), REPL.Terminals.TTYTerminal, REPL.LineEdit.HistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, REPL.LineEdit.SearchState, REPL.LineEdit.HistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(Base.ht_keyindex2!), Base.Dict{Any, Any}, REPL.LineEdit.HistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(Base._setindex!), Base.Dict{Any, Any}, REPL.LineEdit.SearchState, REPL.LineEdit.HistoryPrompt{REPLHistoryProvider}, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit.init_state), REPL.Terminals.TTYTerminal, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(Base.setindex!), Base.Dict{Any, Any}, REPL.LineEdit.PrefixSearchState, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(Base.ht_keyindex2!), Base.Dict{Any, Any}, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(Base._setindex!), Base.Dict{Any, Any}, REPL.LineEdit.PrefixSearchState, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit.activate), REPL.LineEdit.Prompt, REPL.LineEdit.MIState, REPL.Terminals.TTYTerminal, REPL.Terminals.TTYTerminal})
-    precompile(Tuple{typeof(Base.:(==)), REPL.LineEdit.Prompt, REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(Base.getindex), Base.Dict{Any, Any}, REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(Base.ht_keyindex), Base.Dict{Any, Any}, REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(REPL.LineEdit.activate), REPL.LineEdit.Prompt, REPL.LineEdit.PromptState, REPL.Terminals.TTYTerminal, REPL.Terminals.TTYTerminal})
-    precompile(Tuple{typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal, REPL.LineEdit.PromptState})
-    precompile(Tuple{getfield(REPL.LineEdit, Symbol("#kw##refresh_multi_line")), Array{Any, 1}, typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal, REPL.LineEdit.PromptState})
-    precompile(Tuple{getfield(REPL.LineEdit, Symbol("#kw##refresh_multi_line")), Array{Any, 1}, typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal, REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal, REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.match_input), Base.Dict{Char, Any}, REPL.LineEdit.MIState})
-    precompile(Tuple{typeof(REPL.LineEdit.match_input), Base.Dict{Char, Any}, REPL.LineEdit.MIState, Base.GenericIOBuffer{Array{UInt8, 1}}, Array{Char, 1}, Base.Dict{Char, Any}})
-    precompile(Tuple{typeof(REPL.LineEdit.terminal), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.match_input), Base.Dict{Char, Any}, REPL.LineEdit.MIState, REPL.Terminals.TTYTerminal, Array{Char, 1}, Base.Dict{Char, Any}})
-    precompile(Tuple{typeof(Base.read), REPL.Terminals.TTYTerminal, Type{Char}})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_splice!), Base.GenericIOBuffer{Array{UInt8, 1}}, Base.Pair{Int,Int}, String})
-    precompile(Tuple{typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_insert), Base.GenericIOBuffer{Array{UInt8, 1}}, String})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_insert), REPL.LineEdit.PromptState, String})
-    precompile(Tuple{typeof(REPL.Terminals.width), REPL.Terminals.TTYTerminal})
-    precompile(Tuple{typeof(mode_idx), REPLHistoryProvider, REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(REPL.LineEdit.commit_line), REPL.LineEdit.MIState})
-    precompile(Tuple{typeof(REPL.LineEdit.on_enter), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(return_callback), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.refresh_multi_line), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TTYTerminal, REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(Base.println), REPL.Terminals.TTYTerminal})
-    precompile(Tuple{typeof(Base.write), REPL.Terminals.TTYTerminal, Char})
-    precompile(Tuple{typeof(REPL.LineEdit.add_history), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.add_history), REPLHistoryProvider, REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.mode), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(reset), REPL.LineEditREPL})
-    precompile(Tuple{typeof(eval_user_input), Expr, REPLBackend})
-    precompile(Tuple{typeof(print_response), REPL.LineEditREPL, Int64, Nothing, Bool, Bool})
-    precompile(Tuple{typeof(print_response), REPL.Terminals.TTYTerminal, Int64, Nothing, Bool, Bool, Nothing})
-    precompile(Tuple{typeof(Base.print), REPL.Terminals.TTYTerminal, DataType})
-    precompile(Tuple{typeof(Base.print), REPL.Terminals.TTYTerminal, Char})
-    precompile(Tuple{typeof(Base.print), REPL.Terminals.TTYTerminal, String, DataType, String, Char})
-    precompile(Tuple{typeof(Base.print), REPL.Terminals.TTYTerminal, String, Char})
-    precompile(Tuple{Type{Base.IOContext{REPL.Terminals.TTYTerminal}}, REPL.Terminals.TTYTerminal, Base.ImmutableDict{Symbol, Any}})
-    precompile(Tuple{getfield(Base, Symbol("#kw##with_output_color")), Array{Any, 1}, typeof(Base.with_output_color), typeof(Base.print), Symbol, Base.IOContext{REPL.Terminals.TTYTerminal}, String})
-    precompile(Tuple{getfield(Base, Symbol("#kw##with_output_color")), Array{Any, 1}, typeof(Base.with_output_color), typeof(Base.print), Int64, Base.IOContext{REPL.Terminals.TTYTerminal}, String})
-    precompile(Tuple{typeof(Base.write), Base.IOContext{REPL.Terminals.TTYTerminal}, Symbol})
-    precompile(Tuple{typeof(Base.show), Base.IOContext{REPL.Terminals.TTYTerminal}, Module})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, String})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, Module})
-    precompile(Tuple{typeof(Base.show), Base.IOContext{REPL.Terminals.TTYTerminal}, Int32})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, Symbol})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, Int32})
-    precompile(Tuple{typeof(Base.show), Base.IOContext{REPL.Terminals.TTYTerminal}, Int64})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, Int64})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, String, Int64, String})
-    precompile(Tuple{typeof(Base.write), Base.IOContext{REPL.Terminals.TTYTerminal}, Char})
-    precompile(Tuple{typeof(Base.show_circular), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Any, 1}})
-    precompile(Tuple{typeof(Base.show_delim_array), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Any, 1}, Char, Char, Char, Bool, Int64, Int64})
-    precompile(Tuple{typeof(Base.join), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Any, 1}, String, String})
-    precompile(Tuple{typeof(Base.join), Base.IOContext{REPL.Terminals.TTYTerminal}, Tuple{}, String, String})
-    precompile(Tuple{typeof(Base.show_method_params), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Any, 1}})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, String, Module})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, String, Symbol, String, Int32})
-    precompile(Tuple{typeof(Base.show_tuple_as_call), Base.IOContext{REPL.Terminals.TTYTerminal}, Symbol, Type})
-    precompile(Tuple{typeof(getfield(Base, Symbol("#kw##printstyled"))), Array{Any,1}, typeof(Base.printstyled), Base.IOContext{REPL.Terminals.TTYTerminal}, String})
-    precompile(Tuple{typeof(Base.show), Base.IOContext{REPL.Terminals.TTYTerminal}, Core.MethodInstance})
-    precompile(Tuple{typeof(Base.StackTraces.show_spec_linfo), Base.IOContext{REPL.Terminals.TTYTerminal}, Base.StackTraces.StackFrame})
-    precompile(Tuple{getfield(Base, Symbol("#kw##show")), Array{Any, 1}, typeof(Base.show), Base.IOContext{REPL.Terminals.TTYTerminal}, Base.StackTraces.StackFrame})
-    precompile(Tuple{getfield(Base, Symbol("#kw##show_trace_entry")), Array{Any, 1}, typeof(Base.show_trace_entry), Base.IOContext{REPL.Terminals.TTYTerminal}, Base.StackTraces.StackFrame, Int64})
-    precompile(Tuple{typeof(Base.show_backtrace), REPL.Terminals.TTYTerminal, Array{Ptr{Cvoid}, 1}})
-    precompile(Tuple{typeof(Base.Multimedia.display), REPLDisplay{REPL.LineEditREPL}, Int64})
-    precompile(Tuple{typeof(Base.Multimedia.display), REPLDisplay{REPL.LineEditREPL}, Base.MIME{Symbol("text/plain")}, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit.reset_state), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.reset_state), REPL.LineEdit.SearchState})
-    precompile(Tuple{typeof(REPL.LineEdit.reset_state), REPLHistoryProvider})
-    precompile(Tuple{typeof(REPL.LineEdit.reset_state), REPL.LineEdit.PrefixSearchState})
-    precompile(Tuple{typeof(Base.haskey), Base.Dict{Any, Any}, REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(REPL.LineEdit.deactivate), REPL.LineEdit.Prompt, REPL.LineEdit.PromptState, REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal})
-    precompile(Tuple{typeof(REPL.LineEdit.activate), REPL.LineEdit.Prompt, REPL.LineEdit.PromptState, REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal})
-    precompile(Tuple{typeof(REPL.LineEdit.commit_changes), REPL.Terminals.TTYTerminal, REPL.Terminals.TerminalBuffer})
-    precompile(Tuple{typeof(REPL.LineEdit.complete_line), REPL.LineEdit.PromptState, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit.input_string_newlines_aftercursor), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.complete_line), REPL.REPLCompletionProvider, REPL.LineEdit.PromptState})
-    precompile(Tuple{getfield(REPLCompletions, Symbol("#kw##find_start_brace")), Array{Any, 1}, typeof(REPLCompletions.find_start_brace), String})
-    precompile(Tuple{typeof(REPLCompletions.dict_identifier_key), String, Symbol})
-    precompile(Tuple{typeof(REPLCompletions.bslash_completions), String, Int64})
-    precompile(Tuple{typeof(REPLCompletions.should_method_complete), String})
-    precompile(Tuple{typeof(REPLCompletions.afterusing), String, Int64})
-    precompile(Tuple{typeof(REPLCompletions.complete_keyword), String})
-    precompile(Tuple{typeof(beforecursor), Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPLCompletions.completions), String, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit.common_prefix), Array{String, 1}})
-    precompile(Tuple{typeof(REPL.LineEdit.show_completions), REPL.LineEdit.PromptState, Array{String, 1}})
-    precompile(Tuple{typeof(REPL.Terminals.cmove_down), REPL.Terminals.TTYTerminal, Int64})
-    precompile(Tuple{typeof(REPL.Terminals.cmove_col), REPL.Terminals.TTYTerminal, Int64})
-    precompile(Tuple{typeof(REPL.Terminals.cmove_right), REPL.Terminals.TTYTerminal, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit.match_input), REPL.LineEdit.KeyAlias, REPL.LineEdit.MIState, REPL.Terminals.TTYTerminal, Array{Char, 1}, Base.Dict{Char, Any}})
-    precompile(Tuple{typeof(REPL.LineEdit.char_move_left), Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_backspace), Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_backspace), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.Terminals.beep), REPL.Terminals.TTYTerminal})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_move_down), Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPL.LineEdit.replace_line), REPL.LineEdit.PrefixSearchState, String})
-    precompile(Tuple{typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.LineEdit.PrefixSearchState})
-    precompile(Tuple{typeof(history_move), REPL.LineEdit.PrefixSearchState, REPLHistoryProvider, Int64, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_move_down), REPL.LineEdit.MIState})
-    precompile(Tuple{typeof(REPL.LineEdit.enter_prefix_search), REPL.LineEdit.MIState, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}, Bool})
-    precompile(Tuple{typeof(Base.haskey), Base.Dict{Any, Any}, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(Base.ht_keyindex), Base.Dict{Any, Any}, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(Base.getindex), Base.Dict{Any, Any}, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(REPL.LineEdit.copybuf!), Base.GenericIOBuffer{Array{UInt8, 1}}, Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPL.LineEdit.activate), REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}, REPL.LineEdit.PrefixSearchState, REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal})
-    precompile(Tuple{typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal, REPL.LineEdit.PrefixSearchState})
-    precompile(Tuple{typeof(REPL.LineEdit.history_next_prefix), REPL.LineEdit.PrefixSearchState, REPLHistoryProvider, String})
-    precompile(Tuple{typeof(history_move_prefix), REPL.LineEdit.PrefixSearchState, REPLHistoryProvider, String, Bool, Int64})
-    precompile(Tuple{typeof(REPL.LineEdit.keymap), REPL.LineEdit.PrefixSearchState, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(REPL.LineEdit.terminal), REPL.LineEdit.PrefixSearchState})
-    precompile(Tuple{typeof(REPL.LineEdit.keymap_data), REPL.LineEdit.PrefixSearchState, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(REPL.LineEdit.history_prev_prefix), REPL.LineEdit.PrefixSearchState, REPLHistoryProvider, String})
-    precompile(Tuple{typeof(REPL.LineEdit.transition), REPL.LineEdit.MIState, REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(REPL.LineEdit.deactivate), REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}, REPL.LineEdit.PrefixSearchState, REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal})
-    precompile(Tuple{typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TTYTerminal, REPL.LineEdit.PrefixSearchState})
-    precompile(Tuple{typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal, REPL.LineEdit.PrefixSearchState})
-    precompile(Tuple{getfield(REPL.LineEdit, Symbol("#kw##refresh_multi_line")), Array{Any, 1}, typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal, REPL.LineEdit.PrefixSearchState})
-    precompile(Tuple{getfield(REPL.LineEdit, Symbol("#kw##refresh_multi_line")), Array{Any, 1}, typeof(REPL.LineEdit.refresh_multi_line), REPL.Terminals.TerminalBuffer, REPL.Terminals.TTYTerminal, REPL.LineEdit.PrefixSearchState})
-    precompile(Tuple{typeof(REPL.LineEdit.replace_line), REPL.LineEdit.PrefixSearchState, Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPL.LineEdit.accept_result), REPL.LineEdit.MIState, REPL.LineEdit.PrefixHistoryPrompt{REPLHistoryProvider}})
-    precompile(Tuple{typeof(REPL.LineEdit.replace_line), REPL.LineEdit.PromptState, Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPL.LineEdit.match_input), Base.Dict{Char, Any}, REPL.LineEdit.MIState, Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_move_left), Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_move_left), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_move_right), Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_move_right), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.move_line_start), REPL.LineEdit.MIState})
-    precompile(Tuple{typeof(REPL.LineEdit.move_line_end), Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPL.LineEdit.move_line_end), REPL.LineEdit.MIState})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_move_up), Base.GenericIOBuffer{Array{UInt8, 1}}})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_move_up), REPL.LineEdit.MIState})
-    precompile(Tuple{typeof(Base.:(==)), Symbol, REPL.LineEdit.Prompt})
-    precompile(Tuple{typeof(Base.isempty), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(REPL.LineEdit.default_enter_cb), REPL.LineEdit.PromptState})
-    precompile(Tuple{typeof(Base.displaysize), REPL.Terminals.TTYTerminal})
-    precompile(Tuple{typeof(Base.write), REPL.Terminals.TTYTerminal, Base.SubString{String}})
-    precompile(Tuple{typeof(Base.print), REPL.Terminals.TTYTerminal, Base.SubString{String}})
-    precompile(Tuple{typeof(Base.print), REPL.Terminals.TTYTerminal, Base.SubString{String}, Char})
-    precompile(Tuple{typeof(Base.Multimedia.display), REPLDisplay{REPL.LineEditREPL}, Array{Int64, 1}})
-    precompile(Tuple{typeof(Base.Multimedia.display), REPLDisplay{REPL.LineEditREPL}, Base.MIME{Symbol("text/plain")}, Array{Int64, 1}})
-    precompile(Tuple{typeof(Base.show_delim_array), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Int64, 1}, String, String, String, Bool, Int64, Int64})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, Char})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, String, Char})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, String, String})
-    precompile(Tuple{typeof(Base.print), Base.IOContext{REPL.Terminals.TTYTerminal}, String, String, Char})
-    precompile(Tuple{typeof(Base.show_vector), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Int64, 1}, String, String})
-    precompile(Tuple{typeof(Base._show_nonempty), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Int64, 1}, String})
-    precompile(Tuple{typeof(Base._show_empty), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Int64, 1}})
-    precompile(Tuple{typeof(Base.print_matrix), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Int64, 1}, String, String, String})
-    precompile(Tuple{typeof(Base.print_matrix_vdots), Base.IOContext{REPL.Terminals.TTYTerminal}, String, Array{Tuple{Int64, Int64}, 1}, String, Int64, Int64})
-    precompile(Tuple{typeof(Base.print_matrix), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Int64, 1}, String, String, String, String, String, String, Int64, Int64})
-    precompile(Tuple{typeof(Base.alignment), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Int64, 1}, Array{Int64, 1}, Array{Int64, 1}, Int64, Int64, Int64})
-    precompile(Tuple{typeof(Base.print_matrix_row), Base.IOContext{REPL.Terminals.TTYTerminal}, Array{Int64, 1}, Array{Tuple{Int64, Int64}, 1}, Int64, Array{Int64, 1}, String})
-    precompile(Tuple{typeof(REPL.LineEdit.edit_delete), Base.GenericIOBuffer{Array{UInt8, 1}}})
+module Precompile
+# Can't use this during incremental: `@eval Module() begin``
+
+import ..REPL
+
+# Ugly hack for our cache file to not have a dependency edge on FakePTYs.
+Base._track_dependencies[] = false
+try
+    Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+    import .FakePTYs: open_fake_pty
+finally
+    Base._track_dependencies[] = true
 end
+using Base.Meta
+
+import Markdown
+import StyledStrings
+
+## Debugging options
+# Disable parallel precompiles generation by setting `false`
+const PARALLEL_PRECOMPILATION = true
+
+# View the code sent to the repl by setting this to `stdout`
+const debug_output = devnull # or stdout
+
+CTRL_C = '\x03'
+CTRL_D = '\x04'
+CTRL_R = '\x12'
+UP_ARROW = "\e[A"
+DOWN_ARROW = "\e[B"
+
+repl_script = """
+2+2
+print("")
+printstyled("a", "b")
+display([1])
+display([1 2; 3 4])
+foo(x) = 1
+@time @eval foo(1)
+; pwd
+$CTRL_C
+$CTRL_R$CTRL_C#
+? reinterpret
+using Ra\t$CTRL_C
+\\alpha\t$CTRL_C
+\e[200~paste here ;)\e[201~"$CTRL_C
+$UP_ARROW$DOWN_ARROW$CTRL_C
+123\b\b\b$CTRL_C
+\b\b$CTRL_C
+f(x) = x03
+f(1,2)
+[][1]
+cd("complete_path\t\t$CTRL_C
+"""
+
+julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
+
+const JULIA_PROMPT = "julia> "
+const PKG_PROMPT = "pkg> "
+const SHELL_PROMPT = "shell> "
+const HELP_PROMPT = "help?> "
+
+blackhole = Sys.isunix() ? "/dev/null" : "nul"
+procenv = Dict{String,Any}(
+        "JULIA_HISTORY" => blackhole,
+        "JULIA_PROJECT" => nothing, # remove from environment
+        "JULIA_LOAD_PATH" => "@stdlib",
+        "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
+        "TERM" => "",
+        "JULIA_FALLBACK_REPL" => "0") # Turn REPL.jl on in subprocess
+
+generate_precompile_statements() = try
+    # Extract the precompile statements from the precompile file
+    statements_step = Channel{String}(Inf)
+
+    step = @async mktemp() do precompile_file, precompile_file_h
+        # Collect statements from running a REPL process and replaying our REPL script
+        touch(precompile_file)
+        pts, ptm = open_fake_pty()
+        # we don't want existing REPL caches to be used so ignore them
+        setup_cmd = """
+        push!(Base.ignore_compiled_cache, Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
+        import REPL
+        REPL.Terminals.is_precompiling[] = true
+        """
+        p = run(
+                addenv(```$(julia_exepath()) -O0 --trace-compile=$precompile_file
+                    --cpu-target=native --startup-file=no --compiled-modules=existing
+                    --color=yes -i -e "$setup_cmd"```, procenv),
+                pts, pts, pts; wait=false
+            )
+        Base.close_stdio(pts)
+        # Prepare a background process to copy output from process until `pts` is closed
+        output_copy = Base.BufferStream()
+        tee = @async try
+            while !eof(ptm)
+                l = readavailable(ptm)
+                write(debug_output, l)
+                Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
+                write(output_copy, l)
+            end
+            write(debug_output, "\n#### EOF ####\n")
+        catch ex
+            if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
+                rethrow() # ignore EIO on ptm after pts dies
+            end
+        finally
+            close(output_copy)
+            close(ptm)
+        end
+        Base.errormonitor(tee)
+        repl_inputter = @async begin
+            # wait for the definitive prompt before start writing to the TTY
+            readuntil(output_copy, JULIA_PROMPT)
+            sleep(0.1)
+            readavailable(output_copy)
+            # Input our script
+            precompile_lines = split(repl_script::String, '\n'; keepempty=false)
+            curr = 0
+            for l in precompile_lines
+                sleep(0.1)
+                curr += 1
+                # consume any other output
+                bytesavailable(output_copy) > 0 && readavailable(output_copy)
+                # push our input
+                write(debug_output, "\n#### inputting statement: ####\n$(repr(l))\n####\n")
+                # If the line ends with a CTRL_C, don't write an extra newline, which would
+                # cause a second empty prompt. Our code below expects one new prompt per
+                # input line and can race out of sync with the unexpected second line.
+                endswith(l, CTRL_C) ? write(ptm, l) : write(ptm, l, "\n")
+                readuntil(output_copy, "\n")
+                # wait for the next prompt-like to appear
+                readuntil(output_copy, "\n")
+                strbuf = ""
+                while !eof(output_copy)
+                    strbuf *= String(readavailable(output_copy))
+                    occursin(JULIA_PROMPT, strbuf) && break
+                    occursin(PKG_PROMPT, strbuf) && break
+                    occursin(SHELL_PROMPT, strbuf) && break
+                    occursin(HELP_PROMPT, strbuf) && break
+                    sleep(0.1)
+                end
+            end
+            write(debug_output, "\n#### COMPLETED - Closing REPL ####\n")
+            write(ptm, "$CTRL_D")
+            wait(tee)
+            success(p) || Base.pipeline_error(p)
+            close(ptm)
+            write(debug_output, "\n#### FINISHED ####\n")
+        end
+        Base.errormonitor(repl_inputter)
+
+        n_step = 0
+        precompile_copy = Base.BufferStream()
+        buffer_reader = @async for statement in eachline(precompile_copy)
+            push!(statements_step, statement)
+            n_step += 1
+        end
+
+        open(precompile_file, "r") do io
+            while true
+                # We need to always call eof(io) for bytesavailable(io) to work
+                eof(io) && istaskdone(repl_inputter) && eof(io) && break
+                if bytesavailable(io) == 0
+                    sleep(0.1)
+                    continue
+                end
+                write(precompile_copy, readavailable(io))
+            end
+        end
+        close(precompile_copy)
+        wait(buffer_reader)
+        close(statements_step)
+        return :ok
+    end
+    !PARALLEL_PRECOMPILATION && wait(step)
+
+    # Make statements unique
+    statements = Set{String}()
+    # Execute the precompile statements
+    for statement in statements_step
+        # Main should be completely clean
+        occursin("Main.", statement) && continue
+        Base.in!(statement, statements) && continue
+        try
+            ps = Meta.parse(statement)
+            if !isexpr(ps, :call)
+                # these are typically comments
+                @debug "skipping statement because it does not parse as an expression" statement
+                delete!(statements, statement)
+                continue
+            end
+            popfirst!(ps.args) # precompile(...)
+            ps.head = :tuple
+            # println(ps)
+            ps = eval(ps)
+            if !precompile(ps...)
+                @warn "Failed to precompile expression" form=statement _module=nothing _file=nothing _line=0
+            end
+        catch ex
+            # See #28808
+            @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
+        end
+    end
+
+    fetch(step) == :ok || throw("Collecting precompiles failed.")
+    return nothing
+finally
+    GC.gc(true); GC.gc(false); # reduce memory footprint
+end
+
+generate_precompile_statements()
+
+precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
+end # Precompile

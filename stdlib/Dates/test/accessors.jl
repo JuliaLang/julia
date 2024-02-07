@@ -29,7 +29,7 @@ using Test
     @test Dates.yearmonthday(730120) == (2000, 1, 1)
 end
 @testset "year/month/day" begin
-    # year, month, and day return the indivial components
+    # year, month, and day return the individual components
     # of yearmonthday, avoiding additional calculations when possible
     @test Dates.year(-1) == 0
     @test Dates.month(-1) == 12
@@ -153,7 +153,7 @@ end
     @test Dates.week(Dates.Date(2010, 1, 1)) == 53
     @test Dates.week(Dates.Date(2010, 1, 2)) == 53
     @test Dates.week(Dates.Date(2010, 1, 2)) == 53
-    # Tests from http://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=1999
+    # Tests from https://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=1999
     dt = Dates.DateTime(1999, 12, 27)
     dt1 = Dates.Date(1999, 12, 27)
     check = (52, 52, 52, 52, 52, 52, 52, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2)
@@ -163,7 +163,7 @@ end
         dt = dt + Dates.Day(1)
         dt1 = dt1 + Dates.Day(1)
     end
-    # Tests from http://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2000
+    # Tests from https://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2000
     dt = Dates.DateTime(2000, 12, 25)
     dt1 = Dates.Date(2000, 12, 25)
     for i = 1:21
@@ -172,7 +172,7 @@ end
         dt = dt + Dates.Day(1)
         dt1 = dt1 + Dates.Day(1)
     end
-    # Test from http://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2030
+    # Test from https://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2030
     dt = Dates.DateTime(2030, 12, 23)
     dt1 = Dates.Date(2030, 12, 23)
     for i = 1:21
@@ -181,7 +181,7 @@ end
         dt = dt + Dates.Day(1)
         dt1 = dt1 + Dates.Day(1)
     end
-    # Tests from http://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2004
+    # Tests from https://www.epochconverter.com/date-and-time/weeknumbers-by-year.php?year=2004
     dt = Dates.DateTime(2004, 12, 20)
     dt1 = Dates.Date(2004, 12, 20)
     check = (52, 52, 52, 52, 52, 52, 52, 53, 53, 53, 53, 53, 53, 53, 1, 1, 1, 1, 1, 1, 1)
@@ -195,28 +195,28 @@ end
 @testset "Vectorized accessors" begin
     a = Dates.Date(2014, 1, 1)
     dr = [a, a, a, a, a, a, a, a, a, a]
-    @test Dates.year.(dr) == repmat([2014], 10)
-    @test Dates.month.(dr) == repmat([1], 10)
-    @test Dates.day.(dr) == repmat([1], 10)
+    @test Dates.year.(dr) == repeat([2014], 10)
+    @test Dates.month.(dr) == repeat([1], 10)
+    @test Dates.day.(dr) == repeat([1], 10)
 
     a = Dates.DateTime(2014, 1, 1)
     dr = [a, a, a, a, a, a, a, a, a, a]
-    @test Dates.year.(dr) == repmat([2014], 10)
-    @test Dates.month.(dr) == repmat([1], 10)
-    @test Dates.day.(dr) == repmat([1], 10)
-    @test Dates.hour.(dr) == repmat([0], 10)
-    @test Dates.minute.(dr) == repmat([0], 10)
-    @test Dates.second.(dr) == repmat([0], 10)
-    @test Dates.millisecond.(dr) == repmat([0], 10)
+    @test Dates.year.(dr) == repeat([2014], 10)
+    @test Dates.month.(dr) == repeat([1], 10)
+    @test Dates.day.(dr) == repeat([1], 10)
+    @test Dates.hour.(dr) == repeat([0], 10)
+    @test Dates.minute.(dr) == repeat([0], 10)
+    @test Dates.second.(dr) == repeat([0], 10)
+    @test Dates.millisecond.(dr) == repeat([0], 10)
 
     b = Dates.Time(1, 2, 3, 4, 5, 6)
     tr = [b, b, b, b, b, b, b, b, b, b]
-    @test Dates.hour.(tr) == repmat([1], 10)
-    @test Dates.minute.(tr) == repmat([2], 10)
-    @test Dates.second.(tr) == repmat([3], 10)
-    @test Dates.millisecond.(tr) == repmat([4], 10)
-    @test Dates.microsecond.(tr) == repmat([5], 10)
-    @test Dates.nanosecond.(tr) == repmat([6], 10)
+    @test Dates.hour.(tr) == repeat([1], 10)
+    @test Dates.minute.(tr) == repeat([2], 10)
+    @test Dates.second.(tr) == repeat([3], 10)
+    @test Dates.millisecond.(tr) == repeat([4], 10)
+    @test Dates.microsecond.(tr) == repeat([5], 10)
+    @test Dates.nanosecond.(tr) == repeat([6], 10)
 end
 
 end

@@ -1,0 +1,49 @@
+@JULIA_SHLIB_SYMBOL_VERSION@ {
+  global:
+    pthread*;
+    __stack_chk_guard;
+    asprintf;
+    bitvector_*;
+    ios_*;
+    arraylist_grow;
+    small_arraylist_grow;
+    jl_*;
+    ijl_*;
+    _jl_mutex_*;
+    rec_backtrace;
+    julia_*;
+    libsupport_init;
+    localtime_r;
+    memhash;
+    memhash32;
+    memhash32_seed;
+    memhash_seed;
+    restore_signals;
+    u8_*;
+    uv_*;
+    add_library_mapping;
+    utf8proc_*;
+    jlbacktrace;
+    jlbacktracet;
+    _IO_stdin_used;
+    _Z24jl_coverage_data_pointerN4llvm9StringRefEi;
+    _Z22jl_coverage_alloc_lineN4llvm9StringRefEi;
+    _Z22jl_malloc_data_pointerN4llvm9StringRefEi;
+    _jl_timing_*;
+    LLVMExtra*;
+    JLJIT*;
+    llvmGetPassPluginInfo;
+
+    /* freebsd */
+    environ;
+    __progname;
+
+  local:
+    *;
+};
+
+@LLVM_SHLIB_SYMBOL_VERSION@ {
+  global:
+    /* Make visible so that linker will merge duplicate definitions across DSO boundaries */
+    _ZN4llvm3Any6TypeId*;
+};

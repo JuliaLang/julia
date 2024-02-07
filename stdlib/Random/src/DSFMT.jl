@@ -7,8 +7,7 @@ using Base.GMP.MPZ
 
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_gen_rand, dsfmt_init_by_array, dsfmt_gv_init_by_array,
-       dsfmt_fill_array_close_open!, dsfmt_fill_array_close1_open2!,
-       win32_SystemFunction036!
+       dsfmt_fill_array_close_open!, dsfmt_fill_array_close1_open2!
 
 "Mersenne Exponent"
 const MEXP = 19937
@@ -24,7 +23,7 @@ Size: (DSFMT state array of Int128 + 1)*4 + Int32 index + Int32 padding
 const JN32 = (N+1)*4+1+1
 
 
-mutable struct DSFMT_state
+struct DSFMT_state
     val::Vector{Int32}
 
     function DSFMT_state(val::Vector{Int32} = zeros(Int32, JN32))
@@ -66,7 +65,8 @@ function dsfmt_init_gen_rand(s::DSFMT_state, seed::UInt32)
           s.val, seed)
 end
 
-function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{UInt32})
+function dsfmt_init_by_array(s::DSFMT_state, seed::StridedVector{UInt32})
+    strides(seed) == (1,) || throw(ArgumentError("seed must have its stride equal to 1"))
     ccall((:dsfmt_init_by_array,:libdSFMT),
           Cvoid,
           (Ptr{Cvoid}, Ptr{UInt32}, Int32),
@@ -106,7 +106,7 @@ struct GF2X
 end
 
 GF2X(s::AbstractString) = GF2X(parse(BigInt, reverse(s), base = 16))
-Base.string(f::GF2X) = reverse(base(16, f.z))
+Base.string(f::GF2X) = reverse(string(f.z, base = 16))
 Base.:(==)(f::GF2X, g::GF2X) = f.z == g.z
 Base.copy(f::GF2X) = GF2X(MPZ.set(f.z))
 
@@ -136,7 +136,7 @@ function sqrmod!(f::GF2X, m::GF2X)::GF2X
         x2i = GF2X(1)
         GF2X[copy(mulxmod!(mulxmod!(x2i, m, d+1), m, d+1)) for i=1:d]
     end
-    foldl(GF2X(0), filter(i->coeff(f, i), 0:degree(f))) do g, i
+    foldl(filter(i->coeff(f, i), 0:degree(f)); init=GF2X(0)) do g, i
         i <= d÷2 ? # optimization for "simple" squares
             setcoeff!(g, 2i) :
             xor!(g, sqrs[i])
@@ -146,7 +146,7 @@ end
 # compute X^e mod m
 function powxmod(e::BigInt, m::GF2X)::GF2X
     e < 0 && throw(DomainError("e must be >= 0"))
-    foldl(GF2X(1), Base.ndigits0z(e, 2)-1:-1:0) do f, i
+    foldl(Base.ndigits0z(e, 2)-1:-1:0; init=GF2X(1)) do f, i
         MPZ.tstbit(e, i) ?
             mulxmod!(sqrmod!(f, m), m) :
             sqrmod!(f, m)
@@ -156,12 +156,13 @@ end
 "Cached jump polynomials for `MersenneTwister`."
 const JumpPolys = Dict{BigInt,GF2X}()
 
-const CharPoly = Ref{GF2X}()
-# Ref because it can not be initialized at compile time
-
-function __init__()
-    CharPoly[] = GF2X(Poly19937)
-    JumpPolys[big(10)^20] = GF2X(JPOLY1e20)
+const CharPoly_ref = Ref{GF2X}()
+# Ref because it can not be initialized at load time
+function CharPoly()
+    if !isassigned(CharPoly_ref)
+        CharPoly_ref[] = GF2X(Poly19937)
+    end
+    return CharPoly_ref[]
 end
 
 """
@@ -172,8 +173,11 @@ the Mersenne-Twister with exponent 19937). Note that `steps` should be
 less than the period (e.g. ``steps ≪ 2^19937-1``).
 """
 function calc_jump(steps::Integer,
-                   charpoly::GF2X=CharPoly[])::GF2X
-    steps < 0 && throw(DomainError("jump steps must be < 0 (got $steps)"))
+                   charpoly::GF2X=CharPoly())::GF2X
+    steps < 0 && throw(DomainError("jump steps must be >= 0 (got $steps)"))
+    if isempty(JumpPolys)
+        JumpPolys[big(10)^20] = GF2X(JPOLY1e20)
+    end
     get!(JumpPolys, steps) do
         powxmod(big(steps), charpoly)
     end
@@ -183,16 +187,21 @@ end
 ## dSFMT jump
 
 function dsfmt_jump(s::DSFMT_state, jp::GF2X)
-    degree(jp) < degree(CharPoly[]) || throw(DomainError("degree of jump polynomial must be < $(degree(CharPoly[])), got $(degree(jp))"))
+    degree(jp) < degree(CharPoly()) || throw(DomainError("degree of jump polynomial must be < $(degree(CharPoly())), got $(degree(jp))"))
 
     val = s.val
     nval = length(val)
     index = val[nval - 1]
     work = zeros(Int32, JN32)
     rwork = reinterpret(UInt64, work)
-    dsfmt = Vector{UInt64}(uninitialized, nval >> 1)
-    ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt64}, Ptr{Int32}, Csize_t),
-          dsfmt, val, (nval - 1) * sizeof(Int32))
+    dsfmt = Vector{UInt64}(undef, nval >> 1)
+    dsfmtref = Base.cconvert(Ptr{Cvoid}, dsfmt)
+    valref = Base.cconvert(Ptr{Cvoid}, val)
+    GC.@preserve dsfmtref valref begin
+        pdsfmt = Base.unsafe_convert(Ptr{Cvoid}, dsfmtref)
+        pval = Base.unsafe_convert(Ptr{Cvoid}, valref)
+        Base.Libc.memcpy(pdsfmt, pval, (nval - 1) * sizeof(Int32))
+    end
     dsfmt[end] = UInt64(N*2)
 
     for i in 0:degree(jp)

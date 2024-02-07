@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, FileWatching
-using Base: uv_error
+using Base: uv_error, Experimental
+
+@testset "FileWatching" begin
 
 # This script does the following
 # Sets up N unix pipes (or WSA sockets)
@@ -12,38 +14,42 @@ using Base: uv_error
 # Writable ends are always tested for write-ability before a write
 
 n = 20
-intvls = [2, .2, .1, .005]
+intvls = [2, .2, .1, .005, .00001]
+pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
 
-pipe_fds = Vector{Any}(uninitialized, n)
 for i in 1:n
-    @static if Sys.iswindows()
-        pipe_fds[i] = Vector{Libc.WindowsRawSocket}(uninitialized, 2)
-        uv_error("socketpair", ccall(:uv_socketpair, Cint, (Cint, Cint, Ptr{Libc.WindowsRawSocket}, Cint, Cint), 1, 6, pipe_fds[i], 0, 0))
+    if Sys.iswindows() || i > n ÷ 2
+        uv_error("socketpair", ccall(:uv_socketpair, Cint, (Cint, Cint, Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), 1, (Sys.iswindows() ? 6 : 0), Ref(pipe_fds, i), 0, 0))
     else
-        pipe_fds[i] = Vector{RawFD}(uninitialized, 2)
-        uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{RawFD}, Cint, Cint), pipe_fds[i], 0, 0))
+        uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
+    end
+    Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
+    FDmax = Sys.iswindows() ? typemax(Int32) : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
+    fd_in_limits =
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    # Dump out what file descriptors are open for easier debugging of failure modes
+    if !fd_in_limits && Sys.islinux()
+        run(`ls -la /proc/$(getpid())/fd`)
+    end
+    if !Sys.isapple()
+        @test fd_in_limits
     end
 end
 
 function pfd_tst_reads(idx, intvl)
     global ready += 1
     wait(ready_c)
-    t_elapsed = @elapsed begin
-        start_evt2 = Condition()
-        evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
-        wait(start_evt2); yield() # make sure the async poll_fd is pumping events
-        evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
-    end
+    start_evt2 = Condition()
+    evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
+    wait(start_evt2); yield() # make sure the async poll_fd is pumping events
+    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
     @test !evt.timedout
     @test evt.readable
     @test !evt.writable
     @test evt === fetch(evt2)
 
-    # println("Expected ", intvl, ", actual ", t_elapsed, ", diff ", t_elapsed - intvl)
-    # Disabled since this assertion fails randomly, notably on build VMs (issue #12824)
-    # @test t_elapsed <= (intvl + 1)
-
-    dout = Vector{UInt8}(uninitialized, 1)
+    dout = zeros(UInt8, 1)
     @static if Sys.iswindows()
         1 == ccall(:recv, stdcall, Cint, (Ptr{Cvoid}, Ptr{UInt8}, Cint, Cint), pipe_fds[idx][1], dout, 1, 0) || error(Libc.FormatMessage())
     else
@@ -56,34 +62,26 @@ end
 function pfd_tst_timeout(idx, intvl)
     global ready += 1
     wait(ready_c)
-    t_elapsed = @elapsed begin
-        start_evt2 = Condition()
-        evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
-        wait(start_evt2); yield() # make sure the async poll_fd is pumping events
-        evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
-        @test evt.timedout
-        @test !evt.readable
-        @test !evt.writable
-        @test evt === fetch(evt2)
-    end
-
-    # Disabled since these assertions fail randomly, notably on build VMs (issue #12824)
-    # @test intvl <= t_elapsed
-    # @test t_elapsed <= (intvl + 1)
+    start_evt2 = Condition()
+    evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
+    wait(start_evt2); yield() # make sure the async poll_fd is pumping events
+    evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
+    @test evt.timedout
+    @test !evt.readable
+    @test !evt.writable
+    @test evt === fetch(evt2)
 end
-
 
 # Odd numbers trigger reads, even numbers timeout
 for (i, intvl) in enumerate(intvls)
-    @sync begin
+    Experimental.@sync begin
         global ready = 0
         global ready_c = Condition()
-        t = Vector{Task}(uninitialized, n)
         for idx in 1:n
             if isodd(idx)
-                t[idx] = @async pfd_tst_reads(idx, intvl)
+                @async pfd_tst_reads(idx, intvl)
             else
-                t[idx] = @async pfd_tst_timeout(idx, intvl)
+                @async pfd_tst_timeout(idx, intvl)
             end
         end
 
@@ -107,9 +105,6 @@ for (i, intvl) in enumerate(intvls)
             end
         end
         notify(ready_c, all=true)
-        for idx in 1:n
-            Base._wait(t[idx])
-        end
     end
 end
 
@@ -123,7 +118,7 @@ for i in 1:n
     end
 end
 
-for f in (watch_file, poll_file)
+for f in (watch_file, watch_folder, poll_file)
     local f
     @test_throws ArgumentError f("adir\0bad")
 end
@@ -166,15 +161,55 @@ test2_12992()
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
+F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple()  # platforms where F_GETPATH is available
+F_PATH = F_GETPATH ? "afile.txt" : ""
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
-# like touch, but lets the operating system update the timestamp
-# for greater precision on some platforms (windows)
-@test close(open(file,"w")) === nothing
 
-function test_file_poll(channel,interval,timeout_s)
+# initialize a watch_folder instance and create afile.txt
+function test_init_afile()
+    @test isempty(FileWatching.watched_folders)
+    @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
+    @test @elapsed(@test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))) <= 0.5
+    @test length(FileWatching.watched_folders) == 1
+    @test unwatch_folder(dir) === nothing
+    @test isempty(FileWatching.watched_folders)
+    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent())))
+    @test 0.002 <= @elapsed(@test(watch_folder(dir, 0.004) == ("" => FileWatching.FileEvent()))) <= 0.5
+    @test unwatch_folder(dir) === nothing
+    @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
+    @test 0.99 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
+    # like touch, but lets the operating system update the timestamp
+    # for greater precision on some platforms (windows)
+    @test close(open(file, "w")) === nothing
+    @test(watch_folder(dir) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME)))
+    @test close(open(file, "w")) === nothing
+    sleep(3)
+    if !Sys.isapple()
+        let c
+            c = watch_folder(dir, 0)
+
+            if F_GETPATH
+                @test c.first == F_PATH
+                @test c.second.changed ⊻ c.second.renamed
+                @test !c.second.timedout
+            else # we don't expect to be able to detect file changes in this case
+                @test c.first == ""
+                @test !c.second.changed && !c.second.renamed
+                @test c.second.timedout
+            end
+        end
+    end
+    @test unwatch_folder(dir) === nothing
+    @test(watch_folder(dir, 0) == ("" => FileWatching.FileEvent()))
+    @test 0.9 <= @elapsed(@test(watch_folder(dir, 1) == ("" => FileWatching.FileEvent())))
+    @test length(FileWatching.watched_folders) == 1
+    nothing
+end
+
+function test_file_poll(channel, interval, timeout_s)
     rc = poll_file(file, interval, timeout_s)
-    put!(channel,rc)
+    put!(channel, rc)
 end
 
 function test_timeout(tval)
@@ -190,13 +225,14 @@ end
 function test_touch(slval)
     tval = slval*1.1
     channel = Channel(1)
-    @async test_file_poll(channel, tval/3, tval)
+    t = @async test_file_poll(channel, tval/3, tval)
     sleep(tval/3)  # one poll period
-    f = open(file,"a")
-    write(f,"Hello World\n")
+    f = open(file, "a")
+    write(f, "Hello World\n")
     close(f)
     tr = take!(channel)
     @test ispath(tr[1]) && ispath(tr[2])
+    fetch(t)
 end
 
 function test_watch_file_timeout(tval)
@@ -215,49 +251,209 @@ end
 
 function test_monitor_wait(tval)
     fm = FileMonitor(file)
-    @async begin
-        sleep(tval)
-        f = open(file,"a")
-        write(f,"Hello World\n")
-        close(f)
+    @sync begin
+        @async begin
+            sleep(tval)
+            f = open(file, "a")
+            write(f, "Hello World\n")
+            close(f)
+        end
+        events = wait(fm)
+        close(fm)
+        @test events.changed && !events.timedout && !events.renamed
     end
-    fname, events = wait(fm)
+end
+
+function test_dirmonitor_wait(tval)
+    fm = FolderMonitor(file)
+    @sync begin
+        @async begin
+            sleep(tval)
+            for i = 1:3
+                f = open(file, "w")
+                write(f, "Hello World\n")
+                close(f)
+            end
+        end
+        fname, events = wait(fm)::Pair
+        @test fname == F_PATH
+        @test events.changed && !events.timedout && !events.renamed
+        close(fm)
+    end
+end
+
+function test_dirmonitor_wait2(tval)
+    fm = FolderMonitor(dir)
+    @sync begin
+        @async begin
+            sleep(tval)
+            for i = 1:3
+                f = open("$file$i", "w")
+                write(f, "Hello World $i\n")
+                close(f)
+            end
+        end
+        if F_GETPATH
+            let (fname, events) = wait(fm)::Pair
+                for i = 1:3
+                    @test fname == "$F_PATH$i"
+                    @test (!events.changed && events.renamed) && !events.timedout
+                    i == 3 && break
+                    fname, events = wait(fm)
+                    if fname == "$F_PATH$i"
+                        @test (events.changed ⊻ events.renamed) && !events.timedout
+                        fname, events = wait(fm)
+                    end
+                end
+            end
+        else
+            let (fname, events) = wait(fm)::Pair
+                @test fname == ""
+                @test (!events.changed && events.renamed) && !events.timedout
+            end
+            close(fm)
+            fm = FolderMonitor(dir)
+        end
+    end
+    @sync begin
+        @async begin
+            for i = 1:3
+                sleep(tval)
+                rm("$file$i")
+            end
+        end
+        if F_GETPATH
+            let (fname, events) = wait(fm)::Pair
+                if fname == "$(F_PATH)3" # actually one more event from above
+                    @test events.changed && !events.timedout && !events.renamed
+                    fname, events = wait(fm)
+                end
+                for i = 1:3
+                    @testset let (fname, events) = (fname, events)
+                        @test fname == "$F_PATH$i"
+                        @test !events.changed && !events.timedout && events.renamed
+                    end
+                    i == 3 && break
+                    fname, events = wait(fm)
+                end
+            end
+        else
+            let (fname, events) = wait(fm)::Pair
+                @test fname == ""
+                @test !events.changed && !events.timedout && events.renamed
+            end
+        end
+    end
     close(fm)
-    if Sys.islinux() || Sys.iswindows() || Sys.isapple()
-        @test fname == basename(file)
-    else
-        @test fname == ""  # platforms where F_GETPATH is not available
-    end
-    @test events.changed
 end
 
 function test_monitor_wait_poll()
     pfw = PollingFileWatcher(file, 5.007)
-    @async begin
-        sleep(2.5)
-        f = open(file,"a")
-        write(f,"Hello World\n")
-        close(f)
+    @sync begin
+        @async begin
+            sleep(2.5)
+            f = open(file, "a")
+            write(f, "Hello World\n")
+            close(f)
+        end
+        (old, new) = wait(pfw)
+        close(pfw)
+        @test new.mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
     end
-    (old, new) = wait(pfw)
-    close(pfw)
-    @test new.mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
 end
 
+test_init_afile()
 test_timeout(0.1)
 test_timeout(1)
 test_touch(6)
-test_monitor_wait(0.1)
-test_monitor_wait(0.1)
+test_monitor_wait(0.2)
+test_monitor_wait(0.2)
+test_dirmonitor_wait(0.2)
+test_dirmonitor_wait(0.2)
 test_monitor_wait_poll()
 test_monitor_wait_poll()
-test_watch_file_timeout(0.1)
+test_watch_file_timeout(0.2)
 test_watch_file_change(6)
 
-@test_throws Base.UVError watch_file("____nonexistent_file", 10)
+if !Sys.isapple()
+    test_dirmonitor_wait2(0.2)
+    test_dirmonitor_wait2(0.2)
+
+    mv(file, file * "~")
+    mv(file * "~", file)
+    let changes = []
+        while true
+            let c
+                Sys.iswindows() && sleep(0.1)
+                @test @elapsed(c = watch_folder(dir, 0.0)) < 0.5
+                push!(changes, c)
+                (c.second::FileWatching.FileEvent).timedout && break
+            end
+        end
+        if F_GETPATH
+            @test 12 < length(changes) < 48
+        else
+            @test 5 < length(changes) < 16
+        end
+        @test pop!(changes) == ("" => FileWatching.FileEvent())
+        if F_GETPATH
+            Sys.iswindows() && @test pop!(changes) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_CHANGE))
+            p = pop!(changes)
+            if !Sys.isapple()
+                @test p == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME))
+            end
+            while changes[end][1] == F_PATH
+                @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
+            end
+            p = pop!(changes)
+            if !Sys.isapple()
+                @test p == (F_PATH * "~" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+            end
+            while changes[end][1] == F_PATH * "~"
+                @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
+            end
+            if changes[end][1] == F_PATH
+                @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
+            end
+            for j = 1:4
+                for i = 3:-1:1
+                    while changes[end - 1][1] == "$F_PATH$i"
+                        @test let x = pop!(changes)[2]; x.changed ⊻ x.renamed; end
+                    end
+                    p = pop!(changes)
+                    if !Sys.isapple()
+                        @test p == ("$F_PATH$i" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+                    end
+                end
+            end
+        end
+        @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) || changes
+    end
+end
+@test_throws(Base._UVError("FileMonitor (start)", Base.UV_ENOENT),
+             watch_file("____nonexistent_file", 10))
+@test_throws(Base._UVError("FolderMonitor (start)", Base.UV_ENOENT),
+             watch_folder("____nonexistent_file", 10))
 @test(@elapsed(
     @test(poll_file("____nonexistent_file", 1, 3.1) ===
           (Base.Filesystem.StatStruct(), EOFError()))) > 3)
 
+unwatch_folder(dir)
+@test isempty(FileWatching.watched_folders)
 rm(file)
 rm(dir)
+
+# Test that creating a FDWatcher with a (probably) negative FD fails
+@test_throws ArgumentError FDWatcher(RawFD(-1), true, true)
+
+@testset "Pidfile" begin
+    include("pidfile.jl")
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(FileWatching)
+    @test_broken isempty(undoc)
+    @test undoc == [:FDWatcher, :FileMonitor, :FolderMonitor, :PollingFileWatcher]
+end
+
+end # testset

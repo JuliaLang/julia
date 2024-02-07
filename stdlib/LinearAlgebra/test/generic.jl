@@ -3,39 +3,26 @@
 module TestGeneric
 
 using Test, LinearAlgebra, Random
-import Base: -, *, /, \
 
-# A custom Quaternion type with minimal defined interface and methods.
-# Used to test mul and mul! methods to show non-commutativity.
-struct Quaternion{T<:Real} <: Number
-    s::T
-    v1::T
-    v2::T
-    v3::T
-end
-Quaternion(s::Real, v1::Real, v2::Real, v3::Real) = Quaternion(promote(s, v1, v2, v3)...)
-Base.abs2(q::Quaternion) = q.s*q.s + q.v1*q.v1 + q.v2*q.v2 + q.v3*q.v3
-Base.abs(q::Quaternion) = sqrt(abs2(q))
-Base.real(::Type{Quaternion{T}}) where {T} = T
-Base.conj(q::Quaternion) = Quaternion(q.s, -q.v1, -q.v2, -q.v3)
-Base.isfinite(q::Quaternion) = isfinite(q.s) & isfinite(q.v1) & isfinite(q.v2) & isfinite(q.v3)
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
-(-)(ql::Quaternion, qr::Quaternion) =
-    Quaternion(ql.s - qr.s, ql.v1 - qr.v1, ql.v2 - qr.v2, ql.v3 - qr.v3)
-(*)(q::Quaternion, w::Quaternion) = Quaternion(q.s*w.s - q.v1*w.v1 - q.v2*w.v2 - q.v3*w.v3,
-                                               q.s*w.v1 + q.v1*w.s + q.v2*w.v3 - q.v3*w.v2,
-                                               q.s*w.v2 - q.v1*w.v3 + q.v2*w.s + q.v3*w.v1,
-                                               q.s*w.v3 + q.v1*w.v2 - q.v2*w.v1 + q.v3*w.s)
-(*)(q::Quaternion, r::Real) = Quaternion(q.s*r, q.v1*r, q.v2*r, q.v3*r)
-(*)(q::Quaternion, b::Bool) = b * q # remove method ambiguity
-(/)(q::Quaternion, w::Quaternion) = q * conj(w) * (1.0 / abs2(w))
-(\)(q::Quaternion, w::Quaternion) = conj(q) * w * (1.0 / abs2(q))
+isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
+using .Main.Quaternions
 
-srand(123)
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+isdefined(Main, :DualNumbers) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "DualNumbers.jl"))
+using .Main.DualNumbers
+
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
+Random.seed!(123)
 
 n = 5 # should be odd
 
-@testset for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat})
+@testset for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
     # In the long run, these tests should step through Strang's
     #  axiomatic definition of determinants.
     # If all axioms are satisfied and all the composition rules work,
@@ -80,75 +67,35 @@ n = 5 # should be odd
         @test logdet(A) ≈ log(det(A))
         @test logabsdet(A)[1] ≈ log(abs(det(A)))
         @test logabsdet(Matrix{elty}(-I, n, n))[2] == -1
+        infinity = convert(float(elty), Inf)
+        @test logabsdet(zeros(elty, n, n)) == (-infinity, zero(elty))
         if elty <: Real
             @test logabsdet(A)[2] == sign(det(A))
             @test_throws DomainError logdet(Matrix{elty}(-I, n, n))
         else
             @test logabsdet(A)[2] ≈ sign(det(A))
         end
+        # logabsdet for Number"
+        x = A[1, 1] # getting a number of type elty
+        X = fill(x, 1, 1)
+        @test logabsdet(x)[1] ≈ logabsdet(X)[1]
+        @test logabsdet(x)[2] ≈ logabsdet(X)[2]
+        # Diagonal, upper, and lower triangular matrices
+        chksign(s1, s2) = if elty <: Real s1 == s2 else s1 ≈ s2 end
+        D = Matrix(Diagonal(A))
+        v, s = logabsdet(D)
+        @test v ≈ log(abs(det(D))) && chksign(s, sign(det(D)))
+        R = triu(A)
+        v, s = logabsdet(R)
+        @test v ≈ log(abs(det(R))) && chksign(s, sign(det(R)))
+        L = tril(A)
+        v, s = logabsdet(L)
+        @test v ≈ log(abs(det(L))) && chksign(s, sign(det(L)))
     end
-end
 
-@testset "diff" begin
-    # test diff, throw ArgumentError for invalid dimension argument
-    X = [3  9   5;
-         7  4   2;
-         2  1  10]
-    @test diff(X,1) == [4  -5 -3; -5  -3  8]
-    @test diff(X,2) == [6 -4; -3 -2; -1 9]
-    @test diff(view(X, 1:2, 1:2),1) == [4 -5]
-    @test diff(view(X, 1:2, 1:2),2) == reshape([6; -3], (2,1))
-    @test diff(view(X, 2:3, 2:3),1) == [-3 8]
-    @test diff(view(X, 2:3, 2:3),2) == reshape([-2; 9], (2,1))
-    @test_throws ArgumentError diff(X,3)
-    @test_throws ArgumentError diff(X,-1)
-end
-
-@testset "linrange" begin
-    # make sure unequal input arrays throw an error
-    x = [2; 5; 6]
-    y = [3; 7; 10; 10]
-    @test_throws DimensionMismatch linreg(x, y)
-    x = [2 5 6]
-    y = [3; 7; 10]
-    @test_throws MethodError linreg(x, y)
-
-    # check (UnitRange, Array)
-    x = 1:12
-    y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
-    @test [linreg(x,y)...] ≈ [2.5559090909090867, 1.6960139860139862]
-    @test [linreg(view(x,1:6),view(y,1:6))...] ≈ [3.8366666666666642,1.3271428571428574]
-
-    # check (LinSpace, UnitRange)
-    x = linspace(1.0, 12.0, 100)
-    y = -100:-1
-    @test [linreg(x, y)...] ≈ [-109.0, 9.0]
-
-    # check (UnitRange, UnitRange)
-    x = 1:12
-    y = 12:-1:1
-    @test [linreg(x, y)...] ≈ [13.0, -1.0]
-
-    # check (LinSpace, LinSpace)
-    x = linspace(-5, 10, 100)
-    y = linspace(50, 200, 100)
-    @test [linreg(x, y)...] ≈ [100.0, 10.0]
-
-    # check (Array, Array)
-    # Anscombe's quartet (https://en.wikipedia.org/wiki/Anscombe%27s_quartet)
-    x123 = [10.0; 8.0; 13.0; 9.0; 11.0; 14.0; 6.0; 4.0; 12.0; 7.0; 5.0]
-    y1 = [8.04; 6.95; 7.58; 8.81; 8.33; 9.96; 7.24; 4.26; 10.84; 4.82; 5.68]
-    @test [linreg(x123,y1)...] ≈ [3.0,0.5] atol=15e-5
-
-    y2 = [9.14; 8.14; 8.74; 8.77; 9.26; 8.10; 6.12; 3.10; 9.13; 7.26; 4.74]
-    @test [linreg(x123,y2)...] ≈ [3.0,0.5] atol=10e-3
-
-    y3 = [7.46; 6.77; 12.74; 7.11; 7.81; 8.84; 6.08; 5.39; 8.15; 6.42; 5.73]
-    @test [linreg(x123,y3)...] ≈ [3.0,0.5] atol=10e-3
-
-    x4 = [8.0; 8.0; 8.0; 8.0; 8.0; 8.0; 8.0; 19.0; 8.0; 8.0; 8.0]
-    y4 = [6.58; 5.76; 7.71; 8.84; 8.47; 7.04; 5.25; 12.50; 5.56; 7.91; 6.89]
-    @test [linreg(x4,y4)...] ≈ [3.0,0.5] atol=10e-3
+    @testset "det with nonstandard Number type" begin
+        elty <: Real && @test det(Dual.(triu(A), zero(A))) isa Dual
+    end
 end
 
 @testset "diag" begin
@@ -163,19 +110,21 @@ end
     x = ['a','b','c','d','e']
     y = ['a','b','c','d','e']
     α, β = 'f', 'g'
-    @test_throws DimensionMismatch LinearAlgebra.axpy!(α,x,['g'])
-    @test_throws DimensionMismatch LinearAlgebra.axpby!(α,x,β,['g'])
-    @test_throws BoundsError LinearAlgebra.axpy!(α,x,Vector(-1:5),y,Vector(1:7))
-    @test_throws BoundsError LinearAlgebra.axpy!(α,x,Vector(1:7),y,Vector(-1:5))
-    @test_throws BoundsError LinearAlgebra.axpy!(α,x,Vector(1:7),y,Vector(1:7))
-    @test_throws DimensionMismatch LinearAlgebra.axpy!(α,x,Vector(1:3),y,Vector(1:5))
+    @test_throws DimensionMismatch axpy!(α, x, ['g'])
+    @test_throws DimensionMismatch axpby!(α, x, β, ['g'])
+    @test_throws BoundsError axpy!(α, x, Vector(-1:5), y, Vector(1:7))
+    @test_throws BoundsError axpy!(α, x, Vector(1:7), y, Vector(-1:5))
+    @test_throws BoundsError axpy!(α, x, Vector(1:7), y, Vector(1:7))
+    @test_throws DimensionMismatch axpy!(α, x, Vector(1:3), y, Vector(1:5))
 end
 
 @test !issymmetric(fill(1,5,3))
 @test !ishermitian(fill(1,5,3))
 @test (x = fill(1,3); cross(x,x) == zeros(3))
+@test_throws DimensionMismatch cross(fill(1,3), fill(1,4))
+@test_throws DimensionMismatch cross(fill(1,2), fill(1,3))
 
-@test trace(Bidiagonal(fill(1,5),fill(0,4),:U)) == 5
+@test tr(Bidiagonal(fill(1,5),fill(0,4),:U)) == 5
 
 
 @testset "array and subarray" begin
@@ -185,7 +134,7 @@ end
         @testset "Scaling with rmul! and lmul" begin
             @test rmul!(copy(a), 5.) == a*5
             @test lmul!(5., copy(a)) == a*5
-            b = randn(LinearAlgebra.SCAL_CUTOFF) # make sure we try BLAS path
+            b = randn(2048)
             subB = view(b, :, :)
             @test rmul!(copy(b), 5.) == b*5
             @test rmul!(copy(subB), 5.) == subB*5
@@ -193,8 +142,14 @@ end
             @test lmul!(Diagonal([1; 2]), copy(a)) == a.*[1; 2]
             @test rmul!(copy(a), Diagonal(1.:an)) == a.*Vector(1:an)'
             @test rmul!(copy(a), Diagonal(1:an)) == a.*Vector(1:an)'
-            @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(uninitialized,am+1)), a)
-            @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(uninitialized,an+1)))
+            @test_throws DimensionMismatch lmul!(Diagonal(Vector{Float64}(undef,am+1)), a)
+            @test_throws DimensionMismatch rmul!(a, Diagonal(Vector{Float64}(undef,an+1)))
+        end
+
+        @testset "Scaling with rdiv! and ldiv!" begin
+            @test rdiv!(copy(a), 5.) == a/5
+            @test ldiv!(5., copy(a)) == a/5
+            @test ldiv!(zero(a), 5., copy(a)) == a/5
         end
 
         @testset "Scaling with 3-argument mul!" begin
@@ -202,22 +157,35 @@ end
             @test mul!(similar(a), a, 5.) == a*5
             @test mul!(similar(a), Diagonal([1.; 2.]), a) == a.*[1; 2]
             @test mul!(similar(a), Diagonal([1; 2]), a)   == a.*[1; 2]
-            @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(uninitialized, am+1)), a)
-            @test_throws DimensionMismatch mul!(Matrix{Float64}(uninitialized, 3, 2), a, Diagonal(Vector{Float64}(uninitialized, an+1)))
-            @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(uninitialized, an+1)))
+            @test_throws DimensionMismatch mul!(similar(a), Diagonal(Vector{Float64}(undef, am+1)), a)
+            @test_throws DimensionMismatch mul!(Matrix{Float64}(undef, 3, 2), a, Diagonal(Vector{Float64}(undef, an+1)))
+            @test_throws DimensionMismatch mul!(similar(a), a, Diagonal(Vector{Float64}(undef, an+1)))
             @test mul!(similar(a), a, Diagonal(1.:an)) == a.*Vector(1:an)'
             @test mul!(similar(a), a, Diagonal(1:an))  == a.*Vector(1:an)'
+        end
+
+        @testset "Scaling with 5-argument mul!" begin
+            @test mul!(copy(a), 5., a, 10, 100) == a*150
+            @test mul!(copy(a), a, 5., 10, 100) == a*150
+            @test mul!(vec(copy(a)), 5., a, 10, 100) == vec(a*150)
+            @test mul!(vec(copy(a)), a, 5., 10, 100) == vec(a*150)
+            @test_throws DimensionMismatch mul!([vec(copy(a)); 0], 5., a, 10, 100)
+            @test_throws DimensionMismatch mul!([vec(copy(a)); 0], a, 5., 10, 100)
+            @test mul!(copy(a), Diagonal([1.; 2.]), a, 10, 100) == 10a.*[1; 2] .+ 100a
+            @test mul!(copy(a), Diagonal([1; 2]), a, 10, 100)   == 10a.*[1; 2] .+ 100a
+            @test mul!(copy(a), a, Diagonal(1.:an), 10, 100) == 10a.*Vector(1:an)' .+ 100a
+            @test mul!(copy(a), a, Diagonal(1:an), 10, 100)  == 10a.*Vector(1:an)' .+ 100a
         end
     end
 end
 
 @testset "scale real matrix by complex type" begin
     @test_throws InexactError rmul!([1.0], 2.0im)
-    @test isequal([1.0] * 2.0im,             Complex{Float64}[2.0im])
-    @test isequal(2.0im * [1.0],             Complex{Float64}[2.0im])
-    @test isequal(Float32[1.0] * 2.0f0im,    Complex{Float32}[2.0im])
-    @test isequal(Float32[1.0] * 2.0im,      Complex{Float64}[2.0im])
-    @test isequal(Float64[1.0] * 2.0f0im,    Complex{Float64}[2.0im])
+    @test isequal([1.0] * 2.0im,             ComplexF64[2.0im])
+    @test isequal(2.0im * [1.0],             ComplexF64[2.0im])
+    @test isequal(Float32[1.0] * 2.0f0im,    ComplexF32[2.0im])
+    @test isequal(Float32[1.0] * 2.0im,      ComplexF64[2.0im])
+    @test isequal(Float64[1.0] * 2.0f0im,    ComplexF64[2.0im])
     @test isequal(Float32[1.0] * big(2.0)im, Complex{BigFloat}[2.0im])
     @test isequal(Float64[1.0] * big(2.0)im, Complex{BigFloat}[2.0im])
     @test isequal(BigFloat[1.0] * 2.0im,     Complex{BigFloat}[2.0im])
@@ -231,11 +199,15 @@ end
     @test conj(q*qmat) ≈ conj(qmat)*conj(q)
     @test q * (q \ qmat) ≈ qmat ≈ (qmat / q) * q
     @test q\qmat ≉ qmat/q
+    alpha = Quaternion(rand(4)...)
+    beta = Quaternion(0, 0, 0, 0)
+    @test mul!(copy(qmat), qmat, q, alpha, beta) ≈ qmat * q * alpha
+    @test mul!(copy(qmat), q, qmat, alpha, beta) ≈ q * qmat * alpha
 end
 @testset "ops on Numbers" begin
     @testset for elty in [Float32,Float64,ComplexF32,ComplexF64]
         a = rand(elty)
-        @test trace(a)         == a
+        @test tr(a)            == a
         @test rank(zero(elty)) == 0
         @test rank(one(elty))  == 1
         @test !isfinite(cond(zero(elty)))
@@ -244,49 +216,150 @@ end
         @test issymmetric(a)
         @test ishermitian(one(elty))
         @test det(a) == a
+        @test norm(a) == abs(a)
+        @test norm(a, 0) == 1
+        @test norm(0, 0) == 0
     end
 
     @test !issymmetric(NaN16)
     @test !issymmetric(NaN32)
     @test !issymmetric(NaN)
+    @test norm(NaN)    === NaN
+    @test norm(NaN, 0) === NaN
 end
 
+@test rank(zeros(4)) == 0
+@test rank(1:10) == 1
+@test rank(fill(0, 0, 0)) == 0
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
-@test qr(big.([0 1; 0 0]))[2] == [0 1; 0 0]
+@test rank([1.0 0.0; 0.0 0.9],rtol=0.95) == 1
+@test rank([1.0 0.0; 0.0 0.9],atol=0.95) == 1
+@test rank([1.0 0.0; 0.0 0.9],atol=0.95,rtol=0.95)==1
+@test qr(big.([0 1; 0 0])).R == [0 1; 0 0]
 
 @test norm([2.4e-322, 4.4e-323]) ≈ 2.47e-322
 @test norm([2.4e-322, 4.4e-323], 3) ≈ 2.4e-322
-@test_throws ArgumentError norm(Matrix{Float64}(uninitialized,5,5),5)
+@test_throws ArgumentError opnorm(Matrix{Float64}(undef,5,5),5)
 
-@testset "generic vecnorm for arrays of arrays" begin
+# operator norm for zero-dimensional domain is zero (see #40370)
+@testset "opnorm" begin
+    for m in (0, 1, 2)
+        @test @inferred(opnorm(fill(1,0,m))) == 0.0
+        @test @inferred(opnorm(fill(1,m,0))) == 0.0
+    end
+    for m in (1, 2)
+        @test @inferred(opnorm(fill(1im,1,m))) ≈ sqrt(m)
+        @test @inferred(opnorm(fill(1im,m,1))) ≈ sqrt(m)
+    end
+    @test @inferred(opnorm(fill(1,2,2))) ≈ 2
+end
+
+@testset "generic norm for arrays of arrays" begin
     x = Vector{Int}[[1,2], [3,4]]
     @test @inferred(norm(x)) ≈ sqrt(30)
     @test norm(x, 0) == length(x)
-    @test norm(x, 1) ≈ sqrt(5) + 5
-    @test norm(x, 3) ≈ cbrt(sqrt(125)+125)
+    @test norm(x, 1) ≈ 5+sqrt(5)
+    @test norm(x, 3) ≈ cbrt(5^3  +sqrt(5)^3)
 end
 
-@testset "LinearAlgebra.axp(b)y! for element type without commutative multiplication" begin
+@testset "norm of transpose/adjoint equals norm of parent #32739" begin
+    for t in (transpose, adjoint), elt in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
+        # Vector/matrix of scalars
+        for sz in ((2,), (2, 3))
+            A = rand(elt, sz...)
+            Aᵀ = t(A)
+            @test norm(Aᵀ) ≈ norm(Matrix(Aᵀ))
+        end
+
+        # Vector/matrix of vectors/matrices
+        for sz_outer in ((2,), (2, 3)), sz_inner in ((3,), (1, 2))
+            A = [rand(elt, sz_inner...) for _ in CartesianIndices(sz_outer)]
+            Aᵀ = t(A)
+            @test norm(Aᵀ) ≈ norm(Matrix(Matrix.(Aᵀ)))
+        end
+    end
+end
+
+@testset "rotate! and reflect!" begin
+    x = rand(ComplexF64, 10)
+    y = rand(ComplexF64, 10)
+    c = rand(Float64)
+    s = rand(ComplexF64)
+
+    x2 = copy(x)
+    y2 = copy(y)
+    rotate!(x, y, c, s)
+    @test x ≈ c*x2 + s*y2
+    @test y ≈ -conj(s)*x2 + c*y2
+    @test_throws DimensionMismatch rotate!([x; x], y, c, s)
+
+    x3 = copy(x)
+    y3 = copy(y)
+    reflect!(x, y, c, s)
+    @test x ≈ c*x3 + s*y3
+    @test y ≈ conj(s)*x3 - c*y3
+    @test_throws DimensionMismatch reflect!([x; x], y, c, s)
+end
+
+@testset "LinearAlgebra.reflectorApply!" begin
+    for T in (Float64, ComplexF64)
+        x = rand(T, 6)
+        τ = rand(T)
+        A = rand(T, 6)
+        B = LinearAlgebra.reflectorApply!(x, τ, copy(A))
+        C = LinearAlgebra.reflectorApply!(x, τ, reshape(copy(A), (length(A), 1)))
+        @test B[1] ≈ C[1] ≈ A[1] - conj(τ)*(A[1] + dot(x[2:end], A[2:end]))
+        @test B[2:end] ≈ C[2:end] ≈ A[2:end] - conj(τ)*(A[1] + dot(x[2:end], A[2:end]))*x[2:end]
+    end
+end
+
+@testset "axp(b)y! for element type without commutative multiplication" begin
     α = [1 2; 3 4]
     β = [5 6; 7 8]
     x = fill([ 9 10; 11 12], 3)
     y = fill([13 14; 15 16], 3)
-    axpy = LinearAlgebra.axpy!(α, x, deepcopy(y))
-    axpby = LinearAlgebra.axpby!(α, x, β, deepcopy(y))
+    axpy = axpy!(α, x, deepcopy(y))
+    axpby = axpby!(α, x, β, deepcopy(y))
     @test axpy == x .* [α] .+ y
     @test axpy != [α] .* x .+ y
     @test axpby == x .* [α] .+ y .* [β]
     @test axpby != [α] .* x .+ [β] .* y
+    axpy = axpy!(zero(α), x, deepcopy(y))
+    axpby = axpby!(zero(α), x, one(β), deepcopy(y))
+    @test axpy == y
+    @test axpy == y
+    @test axpby == y
+    @test axpby == y
 end
 
-@testset "LinearAlgebra.axpy! for x and y of different dimensions" begin
+@testset "axpy! for x and y of different dimensions" begin
     α = 5
     x = 2:5
     y = fill(1, 2, 4)
     rx = [1 4]
     ry = [2 8]
-    @test LinearAlgebra.axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
+    @test axpy!(α, x, rx, y, ry) == [1 1 1 1; 11 1 1 26]
 end
+
+@testset "axp(b)y! for non strides input" begin
+    a = rand(5, 5)
+    @test axpby!(1, Hermitian(a), 1, zeros(size(a))) == Hermitian(a)
+    @test axpby!(1, 1.:5, 1, zeros(5)) == 1.:5
+    @test axpy!(1, Hermitian(a), zeros(size(a))) == Hermitian(a)
+    @test axpy!(1, 1.:5, zeros(5)) == 1.:5
+end
+
+@testset "LinearAlgebra.axp(b)y! for stride-vector like input" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = rand(T, 5, 5)
+        @test axpby!(1, view(a, :, 1:5), 1, zeros(T, size(a))) == a
+        @test axpy!(1, view(a, :, 1:5), zeros(T, size(a))) == a
+        b = view(a, 25:-2:1)
+        @test axpby!(1, b, 1, zeros(T, size(b))) == b
+        @test axpy!(1, b, zeros(T, size(b))) == b
+    end
+end
+
 @testset "norm and normalize!" begin
     vr = [3.0, 4.0]
     for Tr in (Float32, Float64)
@@ -302,6 +375,38 @@ end
     end
 end
 
+@testset "normalize for multidimensional arrays" begin
+
+    for arr in (
+        fill(10.0, ()),  # 0 dim
+        [1.0],           # 1 dim
+        [1.0 2.0 3.0; 4.0 5.0 6.0], # 2-dim
+        rand(1,2,3),                # higher dims
+        rand(1,2,3,4),
+        Dual.(randn(2,3), randn(2,3)),
+        OffsetArray([-1,0], (-2,))  # no index 1
+    )
+        @test normalize(arr) == normalize!(copy(arr))
+        @test size(normalize(arr)) == size(arr)
+        @test axes(normalize(arr)) == axes(arr)
+        @test vec(normalize(arr)) == normalize(vec(arr))
+    end
+
+    @test typeof(normalize([1 2 3; 4 5 6])) == Array{Float64,2}
+end
+
+@testset "normalize for scalars" begin
+    @test normalize(8.0) == 1.0
+    @test normalize(-3.0) == -1.0
+    @test normalize(-3.0, 1) == -1.0
+    @test isnan(normalize(0.0))
+end
+
+@testset "Issue #30466" begin
+    @test norm([typemin(Int), typemin(Int)], Inf) == -float(typemin(Int))
+    @test norm([typemin(Int), typemin(Int)], 1) == -2float(typemin(Int))
+end
+
 @testset "potential overflow in normalize!" begin
     δ = inv(prevfloat(typemax(Float64)))
     v = [δ, -δ]
@@ -311,6 +416,13 @@ end
     @test w ≈ [1/√2, -1/√2]
     @test norm(w) === 1.0
     @test norm(normalize!(v) - w, Inf) < eps()
+end
+
+@testset "normalize with Infs. Issue 29681." begin
+    @test all(isequal.(normalize([1, -1, Inf]),
+                       [0.0, -0.0, NaN]))
+    @test all(isequal.(normalize([complex(1), complex(0, -1), complex(Inf, -Inf)]),
+                       [0.0 + 0.0im, 0.0 - 0.0im, NaN + NaN*im]))
 end
 
 @testset "Issue 14657" begin
@@ -333,6 +445,11 @@ end
     @test [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]] ≈ [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 end
 
+@testset "Issue 40128" begin
+    @test det(BigInt[9 1 8 0; 0 0 8 7; 7 6 8 3; 2 9 7 7])::BigInt == -1
+    @test det(BigInt[1 big(2)^65+1; 3 4])::BigInt == (4 - 3*(big(2)^65+1))
+end
+
 # Minimal modulo number type - but not subtyping Number
 struct ModInt{n}
     k
@@ -346,10 +463,13 @@ Base.:-(a::ModInt{n}) where {n} = ModInt{n}(-a.k)
 Base.inv(a::ModInt{n}) where {n} = ModInt{n}(invmod(a.k, n))
 Base.:/(a::ModInt{n}, b::ModInt{n}) where {n} = a*inv(b)
 
+Base.isfinite(a::ModInt{n}) where {n} = isfinite(a.k)
 Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
+Base.conj(a::ModInt{n}) where {n} = a
+LinearAlgebra.lupivottype(::Type{ModInt{n}}) where {n} = RowNonZero()
 Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 LinearAlgebra.Adjoint(a::ModInt{n}) where {n} = adjoint(a)
@@ -359,15 +479,28 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
-    @test A*(lufact(A, Val(false))\b) == b
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
+    @test A*(lu(A, NoPivot())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
+    @test_throws MethodError lu(A, RowMaximum())
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
+    @test A*(lu(A, RowMaximum())\b) == b
 
-    @test A*(lufact(A, Val(true))\b) == b
+    A = [ModInt{2}(0) ModInt{2}(1); ModInt{2}(1) ModInt{2}(1)]
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
+    @test A*(lu(A, RowMaximum())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
 end
 
+@testset "Issue 18742" begin
+    @test_throws DimensionMismatch ones(4,5)/zeros(3,6)
+    @test_throws DimensionMismatch ones(4,5)\zeros(3,6)
+end
 @testset "fallback throws properly for AbstractArrays with dimension > 2" begin
     @test_throws ErrorException adjoint(rand(2,2,2,2))
     @test_throws ErrorException transpose(rand(2,2,2,2))
@@ -425,6 +558,112 @@ end
         @test !isdiag(lbidiag)
         @test isdiag(adiag)
     end
+end
+
+@testset "missing values" begin
+    @test ismissing(norm(missing))
+    x = [5, 6, missing]
+    y = [missing, 5, 6]
+    for p in (-Inf, -1, 1, 2, 3, Inf)
+        @test ismissing(norm(x, p))
+        @test ismissing(norm(y, p))
+    end
+    @test_broken ismissing(norm(x, 0))
+end
+
+@testset "peakflops" begin
+    @test LinearAlgebra.peakflops(1024, eltype=Float32, ntrials=2) > 0
+end
+
+@testset "NaN handling: Issue 28972" begin
+    @test all(isnan, rmul!([NaN], 0.0))
+    @test all(isnan, rmul!(Any[NaN], 0.0))
+    @test all(isnan, lmul!(0.0, [NaN]))
+    @test all(isnan, lmul!(0.0, Any[NaN]))
+
+    @test all(!isnan, rmul!([NaN], false))
+    @test all(!isnan, rmul!(Any[NaN], false))
+    @test all(!isnan, lmul!(false, [NaN]))
+    @test all(!isnan, lmul!(false, Any[NaN]))
+end
+
+@testset "adjtrans dot" begin
+    for t in (transpose, adjoint), T in (ComplexF64, Quaternion{Float64})
+        x, y = t(rand(T, 10)), t(rand(T, 10))
+        X, Y = copy(x), copy(y)
+        @test dot(x, y) ≈ dot(X, Y)
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
+        X, Y = copy(x), copy(y)
+        @test dot(x, y) ≈ dot(X, Y)
+        x, y = t(rand(T, 10, 5)), t(rand(T, 10, 5))
+        X, Y = copy(x), copy(y)
+        @test dot(x, y) ≈ dot(X, Y)
+        x = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
+        y = t([rand(T, 2, 2) for _ in 1:5, _ in 1:5])
+        X, Y = copy(x), copy(y)
+        @test dot(x, y) ≈ dot(X, Y)
+        x, y = t([rand(T, 2, 2) for _ in 1:5]), t([rand(T, 2, 2) for _ in 1:5])
+    end
+end
+
+@testset "avoid stackoverflow in dot" begin
+    @test_throws "cannot evaluate dot recursively" dot('a', 'c')
+    @test_throws "cannot evaluate dot recursively" dot('a', 'b':'c')
+    @test_throws "x and y are of different lengths" dot(1, 1:2)
+end
+
+@testset "generalized dot #32739" begin
+    for elty in (Int, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
+        n = 10
+        if elty <: Int
+            A = rand(-n:n, n, n)
+            x = rand(-n:n, n)
+            y = rand(-n:n, n)
+        elseif elty <: Real
+            A = convert(Matrix{elty}, randn(n,n))
+            x = rand(elty, n)
+            y = rand(elty, n)
+        else
+            A = convert(Matrix{elty}, complex.(randn(n,n), randn(n,n)))
+            x = rand(elty, n)
+            y = rand(elty, n)
+        end
+        @test dot(x, A, y) ≈ dot(A'x, y) ≈ *(x', A, y) ≈ (x'A)*y
+        @test dot(x, A', y) ≈ dot(A*x, y) ≈ *(x', A', y) ≈ (x'A')*y
+        elty <: Real && @test dot(x, transpose(A), y) ≈ dot(x, transpose(A)*y) ≈ *(x', transpose(A), y) ≈ (x'*transpose(A))*y
+        B = reshape([A], 1, 1)
+        x = [x]
+        y = [y]
+        @test dot(x, B, y) ≈ dot(B'x, y)
+        @test dot(x, B', y) ≈ dot(B*x, y)
+        elty <: Real && @test dot(x, transpose(B), y) ≈ dot(x, transpose(B)*y)
+    end
+end
+
+@testset "condskeel #34512" begin
+    A = rand(3, 3)
+    @test condskeel(A) ≈ condskeel(A, [8,8,8])
+end
+
+@testset "copytrito!" begin
+    n = 10
+    A = rand(n, n)
+    for uplo in ('L', 'U')
+        B = zeros(n, n)
+        copytrito!(B, A, uplo)
+        C = uplo == 'L' ? tril(A) : triu(A)
+        @test B ≈ C
+    end
+end
+
+@testset "immutable arrays" begin
+    A = FillArrays.Fill(big(3), (4, 4))
+    M = Array(A)
+    @test triu(A) == triu(M)
+    @test triu(A, -1) == triu(M, -1)
+    @test tril(A) == tril(M)
+    @test tril(A, 1) == tril(M, 1)
+    @test det(A) == det(M)
 end
 
 end # module TestGeneric

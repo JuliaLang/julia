@@ -1,6 +1,6 @@
 ## libssh2
-
-LIBSSH2_GIT_URL := git://github.com/libssh2/libssh2.git
+ifneq ($(USE_BINARYBUILDER_LIBSSH2), 1)
+LIBSSH2_GIT_URL := https://github.com/libssh2/libssh2.git
 LIBSSH2_TAR_URL = https://api.github.com/repos/libssh2/libssh2/tarball/$1
 $(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCCACHE)))
 
@@ -24,24 +24,28 @@ ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-$(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted
-	cd $(SRCCACHE)/$(LIBSSH2_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/libssh2-encryptedpem.patch
+ifeq ($(LIBSSH2_ENABLE_TESTS), 0)
+LIBSSH2_OPTS += -DBUILD_TESTING=OFF
+endif
+
+LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
+
+$(LIBSSH2_SRC_PATH)/libssh2-mbedtls-size_t.patch-applied: $(LIBSSH2_SRC_PATH)/source-extracted
+	cd $(LIBSSH2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-mbedtls-size_t.patch
 	echo 1 > $@
 
-# Patch submitted upstream: https://github.com/libssh2/libssh2/pull/148
-# Remove the patch here once we're using a version of libssh2 that includes the upstream patch
-$(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-encryptedpem.patch-applied
-	cd $(SRCCACHE)/$(LIBSSH2_SRC_DIR) && patch -p0 -f < $(SRCDIR)/patches/libssh2-netinet-in.patch
-	echo 1 > $@
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: \
+	$(LIBSSH2_SRC_PATH)/libssh2-mbedtls-size_t.patch-applied
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/source-extracted $(SRCCACHE)/$(LIBSSH2_SRC_DIR)/libssh2-netinet-in.patch-applied
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
-	$(MAKE) -C $(dir $<) libssh2
+	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
@@ -56,7 +60,7 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libssh2.$$(SHLIB_EXT) $$(build_shlibdir)/libssh2.$$(SHLIB_EXT)))
 
 clean-libssh2:
-	-rm $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
+	-rm -f $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) clean
 
 
@@ -66,3 +70,9 @@ configure-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
 compile-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
 fastcheck-libssh2: check-libssh2
 check-libssh2: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked
+
+else # USE_BINARYBUILDER_LIBSSH2
+
+$(eval $(call bb-install,libssh2,LIBSSH2,false))
+
+endif

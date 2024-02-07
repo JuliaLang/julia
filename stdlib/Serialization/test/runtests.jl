@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Random, Serialization
+using Test, Random, Serialization, Base64
 
 # Check that serializer hasn't gone out-of-frame
 @test Serialization.sertag(Symbol) == 1
@@ -235,7 +235,7 @@ create_serialization_stream() do s # small 1d array
     arr4 = reshape([true, false, false, false, true, false, false, false, true], 3, 3)
     serialize(s, arr4)       # boolean array
 
-    arr5 = Vector{TA1}(uninitialized, 3)
+    arr5 = Vector{TA1}(undef, 3)
     arr5[2] = TA1(0x01)
     serialize(s, arr5)
 
@@ -255,7 +255,7 @@ end
 create_serialization_stream() do s # slices
     slc1 = view(UInt8[1,1,1,1], 2:3)
     serialize(s, slc1)
-    slc2 = view(repmat(UInt8[1,2,3,4], 1, 4), 1, 2:4)
+    slc2 = view(repeat(UInt8[1,2,3,4], 1, 4), 1, 2:4)
     serialize(s, slc2)
 
     seek(s, 0)
@@ -289,8 +289,12 @@ let A = rand(3,4)
 end
 
 # Function
-serialize_test_function() = 1
-serialize_test_function2 = ()->1
+module DefinitelyNotMain
+    serialize_test_function() = 1
+    serialize_test_function2 = ()->1
+end
+serialize_test_function = DefinitelyNotMain.serialize_test_function
+serialize_test_function2 = DefinitelyNotMain.serialize_test_function2
 create_serialization_stream() do s # Base generic function
     serialize(s, sin)
     serialize(s, typeof)
@@ -300,8 +304,12 @@ create_serialization_stream() do s # Base generic function
     seek(s, 0)
     @test deserialize(s) === sin
     @test deserialize(s) === typeof
-    @test deserialize(s)() === 1
-    @test deserialize(s)() === 1
+    f1 = deserialize(s)
+    f2 = deserialize(s)
+    @test first(methods(f1)).module === DefinitelyNotMain
+    @test first(methods(f2)).module === DefinitelyNotMain
+    @test f1() === 1
+    @test f2() === 1
 end
 
 # Anonymous Functions
@@ -309,16 +317,23 @@ main_ex = quote
     using Serialization
     $create_serialization_stream() do s
         local g() = :magic_token_anon_fun_test
+        local gkw(; kw=:thekw) = kw
         serialize(s, g)
         serialize(s, g)
+        serialize(s, gkw)
 
         seekstart(s)
         ds = Serializer(s)
         local g2 = deserialize(ds)
-        $Test.@test g2 !== g
-        $Test.@test g2() == :magic_token_anon_fun_test
-        $Test.@test g2() == :magic_token_anon_fun_test
-        $Test.@test deserialize(ds) === g2
+        @test g2 !== g
+        $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
+        $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
+        deserialize(ds) === g2
+
+        local gkw2 = deserialize(s)
+        $Test.@test gkw2 !== gkw
+        $Test.@test Base.invokelatest(gkw2) === :thekw
+        $Test.@test Base.invokelatest(gkw2, kw="kwtest") === "kwtest"
 
         # issue #21793
         y = x -> (() -> x)
@@ -326,35 +341,37 @@ main_ex = quote
         serialize(s, y)
         seekstart(s)
         y2 = deserialize(s)
-        x2 = y2(2)
-        $Test.@test x2() == 2
+        $Test.@test Base.invokelatest() do
+            x2 = y2(2)
+            x2()
+        end === 2
     end
 end
 # This needs to be run on `Main` since the serializer treats it differently.
-eval(Main, main_ex)
+Core.eval(Main, main_ex)
 
 # Task
 create_serialization_stream() do s # user-defined type array
     f = () -> begin task_local_storage(:v, 2); return 1+1 end
     t = Task(f)
-    Base._wait(schedule(t))
+    Base.wait(schedule(t))
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
     @test r.storage[:v] == 2
-    @test r.state == :done
+    @test r.state === :done
     @test r.exception === nothing
 end
 
 struct MyErrorTypeTest <: Exception end
 create_serialization_stream() do s # user-defined type array
     t = Task(()->throw(MyErrorTypeTest()))
-    @test_throws MyErrorTypeTest Base._wait(schedule(t))
+    @test_throws TaskFailedException(t) Base.wait(schedule(t))
+    @test isa(t.exception, MyErrorTypeTest)
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
-    @test r.state == :failed
-    @test isa(t.exception, MyErrorTypeTest)
+    @test r.state === :failed
 end
 
 # corner case: undefined inside immutable struct
@@ -375,11 +392,11 @@ end
 # cycles
 module CycleFoo
     echo(x)=x
-end
-create_serialization_stream() do s
-    echo(x) = x
     afunc = (x)->x
-    A = Any[1,2,3,abs,abs,afunc,afunc,echo,echo,CycleFoo.echo,CycleFoo.echo,4,5]
+end
+echo(x) = x
+create_serialization_stream() do s
+    A = Any[1,2,3,abs,abs,CycleFoo.afunc,CycleFoo.afunc,echo,echo,CycleFoo.echo,CycleFoo.echo,4,5]
     A[3] = A
     serialize(s, A)
     seekstart(s)
@@ -415,6 +432,17 @@ create_serialization_stream() do s
     @test C[1] === C[2]
 end
 
+mutable struct MSingle end
+create_serialization_stream() do s
+    x = MSingle()
+    A = [x, x, MSingle()]
+    serialize(s, A)
+    seekstart(s)
+    C = deserialize(s)
+    @test A[1] === x === A[2] !== A[3]
+    @test x !== C[1] === C[2] !== C[3]
+end
+
 # Regex
 create_serialization_stream() do s
     r1 = r"a?b.*"
@@ -442,8 +470,8 @@ using .Shell, .Instance1
 io = IOBuffer()
 serialize(io, foo)
 str = String(take!(io))
-@test !contains(str, "Instance1")
-@test contains(str, "Shell")
+@test !occursin("Instance1", str)
+@test occursin("Shell", str)
 
 end  # module Test13452
 
@@ -506,8 +534,8 @@ let x = T20324[T20324(1) for i = 1:2]
     @test y == x
 end
 
-# serializer header
-let io = IOBuffer()
+@testset "serializer header" begin
+    io = IOBuffer()
     serialize(io, ())
     seekstart(io)
     b = read(io)
@@ -518,4 +546,118 @@ let io = IOBuffer()
     @test ((b[5] & 0xc)>>2) == (sizeof(Int) == 8)
     @test (b[5] & 0xf0) == 0
     @test all(b[6:8] .== 0)
+
+    # Detection of incompatible binary serializations
+    function corrupt_header(bytes, offset, val)
+        b = copy(bytes)
+        b[offset] = val
+        IOBuffer(b)
+    end
+    @test_throws(
+        ErrorException("""Cannot read stream serialized with a newer version of Julia.
+                          Got data version 255 > current version $(Serialization.ser_version)"""),
+        deserialize(corrupt_header(b, 4, 0xff)))
+    @test_throws(ErrorException("Unknown word size flag in header"),
+                 deserialize(corrupt_header(b, 5, 2<<2)))
+    @test_throws(ErrorException("Unknown endianness flag in header"),
+                 deserialize(corrupt_header(b, 5, 2)))
+    other_wordsize = sizeof(Int) == 8 ? 4 : 8
+    other_endianness = bswap(ENDIAN_BOM)
+    @test_throws(ErrorException("Serialized byte order mismatch ($(repr(other_endianness)))"),
+                 deserialize(corrupt_header(b, 5, UInt8(ENDIAN_BOM != 0x01020304))))
+end
+
+# issue #26979
+let io = IOBuffer()
+    function gen_f(a::T) where T
+        f = x -> T(x)
+        return f
+    end
+    f = gen_f(1f0)
+    serialize(io, f)
+    seekstart(io)
+    f2 = deserialize(io)
+    @test f2(1) === 1f0
+end
+
+# using a filename; #30151
+let f = tempname(), x = [rand(2,2), :x, "hello"]
+    serialize(f, x)
+    @test deserialize(f) == x
+    rm(f)
+end
+
+let f_data
+    # a serialized function from v1.0/v1.1
+    if Int === Int64
+        f_data = "N0pMBwQAAAA0MxMAAAAAAAAAAAEFIyM1IzYiAAAAABBYH04BBE1haW6bRCIAAAAAIgAAAABNTEy+AQIjNRUAI+AjAQAAAAAAAAAfTgEETWFpbkQBAiM1AQdSRVBMWzNdvxBTH04BBE1haW6bRAMAAAAzLAAARkYiAAAAAE7BTBsVRuIWA1YkH04BBE1haW5EAQEq4SXhFgNWJB9OAQRNYWluRJ0o4CXiFgFVKOEVAAbiAQAAAAEAAAABAAAATuIVRuA0EAEMTGluZUluZm9Ob2RlH04BBE1haW6bRB9OAQRNYWluRAECIzUBB1JFUExbM13g3xXfFeIAAAAVRuKifX5MTExMTuIp"
+    else
+        f_data = "N0pMBwAAAAA0MxMAAAAAAAAAAAEFIyM1IzYiAAAAABBYH04BBE1haW6bRCIAAAAAIgAAAABNTEy+AQIjNRUAI78jAQAAAAAAAAAfTgEETWFpbkQBAiM1AQdSRVBMWzJdvxBTH04BBE1haW6bRAMAAAAzLAAARkYiAAAAAE7BTBsVRsEWA1YkH04BBE1haW5EAQEqwCXAFgNWJB9OAQRNYWluRJ0ovyXBFgFVKMAVAAbBAQAAAAEAAAABAAAATsEVRr80EAEMTGluZUluZm9Ob2RlH04BBE1haW6bRB9OAQRNYWluRAECIzUBB1JFUExbMl2/vhW+FcEAAAAVRsGifX5MTExMTsEp"
+    end
+    f = deserialize(IOBuffer(base64decode(f_data)))
+    @test f(10,3) == 23
+end
+
+# issue #33466, IdDict
+let d = IdDict([1] => 2, [3] => 4), io = IOBuffer()
+    serialize(io, d)
+    seekstart(io)
+    ds = deserialize(io)
+    @test Dict(d) == Dict(ds)
+    @test all([k in keys(ds) for k in keys(ds)])
+end
+
+# issue #35030, shared references to Strings
+let s = join(rand('a':'z', 1024)), io = IOBuffer()
+    serialize(io, (s, s))
+    seekstart(io)
+    s2 = deserialize(io)
+    @test Base.summarysize(s2) < 2*sizeof(s)
+end
+
+# issue #39895
+@eval Main begin
+    using Test, Serialization
+    let g = gensym(:g)
+        closure = eval(:(f -> $g(x) = f(x)))
+        inc(x) = x + 1
+        b = IOBuffer()
+        serialize(b, closure(inc))
+        seekstart(b)
+        f = deserialize(b)
+        # this should not crash
+        @test_broken f(1) == 2
+    end
+end
+
+let c1 = Threads.Condition()
+    c2 = Threads.Condition(c1.lock)
+    lock(c2)
+    t = @task nothing
+    Base._wait2(c1, t)
+    c3, c4 = deserialize(IOBuffer(sprint(serialize, [c1, c2])))::Vector{Threads.Condition}
+    @test c3.lock === c4.lock
+    @test islocked(c1)
+    @test !islocked(c3)
+    @test !isempty(c1.waitq)
+    @test isempty(c2.waitq)
+    @test isempty(c3.waitq)
+    @test isempty(c4.waitq)
+    notify(c1)
+    unlock(c2)
+    wait(t)
+end
+
+@testset "LazyString" begin
+    l1 = lazy"a $1 b $2"
+    l2 = deserialize(IOBuffer(sprint(serialize, l1)))
+    @test l2.str === l1.str
+    @test l2 == l1
+    @test l2.parts === ()
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Serialization)
+    @test_broken isempty(undoc)
+    @test undoc == [:AbstractSerializer, :Serializer]
 end
