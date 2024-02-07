@@ -191,7 +191,7 @@ See [`keys`](@ref keys(::RegexMatch)) for more information.
 `Tuple(m)`, `NamedTuple(m)`, and `Dict(m)` can be used to construct more flexible collection types from `RegexMatch` objects.
 
 !!! compat "Julia 1.11"
-    Converting to NamedTuples and Dicts requires Julia 1.11
+    Constructing NamedTuples and Dicts from RegexMatches requires Julia 1.11
 
 # Examples
 ```jldoctest
