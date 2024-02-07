@@ -206,7 +206,7 @@ struct NoPivot <: PivotingStrategy end
 
 First non-zero element in the remaining rows is chosen as the pivot element.
 
-Note that the [element type](@ref eltype) of the matrix must support the [`iszero`](@ref)
+Note that the [element type](@ref eltype) of the matrix must admit an [`iszero`](@ref)
 method.
 """
 struct RowNonZero <: PivotingStrategy end
@@ -216,8 +216,8 @@ struct RowNonZero <: PivotingStrategy end
 
 The maximum element in the remaining rows is chosen as the pivot element.
 
-Note that the [element type](@ref eltype) of the matrix must support the [`abs`](@ref)
-and [`<`](@ref) methods.
+Note that the [element type](@ref eltype) of the matrix must admit an [`abs`](@ref) method,
+whose result type must admit a [`<`](@ref) method.
 """
 struct RowMaximum <: PivotingStrategy end
 
@@ -226,8 +226,8 @@ struct RowMaximum <: PivotingStrategy end
 
 The column with the maximum norm is used for subsequent computation.
 
-Note that the [element type](@ref eltype) of the matrix must support the [`norm`](@ref),
-[`abs`](@ref), and [`<`](@ref) methods.
+Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref) and
+[`abs`](@ref) methods, whose respective result types must admit a [`<`](@ref) method.
 """
 struct ColumnNorm <: PivotingStrategy end
 
