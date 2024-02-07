@@ -17,59 +17,21 @@ reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a)
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 
-function reduced_indices(inds::Indices{N}, d::Int) where N
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    if d == 1
-        return (reduced_index(inds[1]), tail(inds)...)::typeof(inds)
-    elseif 1 < d <= N
-        return tuple(inds[1:d-1]..., oftype(inds[d], reduced_index(inds[d])), inds[d+1:N]...)::typeof(inds)
-    else
-        return inds
-    end
+function reduced_indices(axs::Indices{N}, region) where N
+    _check_valid_region(region)
+    ntuple(d -> d in region ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
-function reduced_indices0(inds::Indices{N}, d::Int) where N
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    if d <= N
-        ind = inds[d]
-        rd = isempty(ind) ? ind : reduced_index(inds[d])
-        if d == 1
-            return (rd, tail(inds)...)::typeof(inds)
-        else
-            return tuple(inds[1:d-1]..., oftype(inds[d], rd), inds[d+1:N]...)::typeof(inds)
-        end
-    else
-        return inds
-    end
+function reduced_indices0(axs::Indices{N}, region) where N
+    _check_valid_region(region)
+    ntuple(d -> d in region && !isempty(axs[d]) ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
-function reduced_indices(inds::Indices{N}, region) where N
-    rinds = collect(inds)
-    for i in region
-        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            rinds[d] = reduced_index(rinds[d])
-        end
+function _check_valid_region(region)
+    for d in region
+        isa(d, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
+        Int(d) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
     end
-    tuple(rinds...)::typeof(inds)
-end
-
-function reduced_indices0(inds::Indices{N}, region) where N
-    rinds = collect(inds)
-    for i in region
-        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            rind = rinds[d]
-            rinds[d] = isempty(rind) ? rind : reduced_index(rind)
-        end
-    end
-    tuple(rinds...)::typeof(inds)
 end
 
 ###### Generic reduction functions #####
@@ -146,16 +108,18 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
             T = _realtype(f, promote_union(eltype(A)))
             Tr = v0 isa T ? T : typeof(v0)
 
-            # but NaNs and missing need to be avoided as initial values
+            # but NaNs, missing and unordered values need to be avoided as initial values
             if v0 isa Number && isnan(v0)
                 # v0 is NaN
                 v0 = oftype(v0, $initval)
             elseif isunordered(v0)
                 # v0 is missing or a third-party unordered value
                 Tnm = nonmissingtype(Tr)
-                # TODO: Some types, like BigInt, don't support typemin/typemax.
-                # So a Matrix{Union{BigInt, Missing}} can still error here.
-                v0 = $typeextreme(Tnm)
+                if Tnm <: Union{BitInteger, IEEEFloat, BigFloat}
+                    v0 = $typeextreme(Tnm)
+                elseif !all(isunordered, A1)
+                    v0 = mapreduce(f, $f2, Iterators.filter(!isunordered, A1))
+                end
             end
             # v0 may have changed type.
             Tr = v0 isa T ? T : typeof(v0)
@@ -186,12 +150,18 @@ function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray
 
     # but NaNs and missing need to be avoided as initial values
     if v0[1] isa Number && isnan(v0[1])
+        # v0 is NaN
         v0 = oftype(v0[1], Inf), oftype(v0[2], -Inf)
     elseif isunordered(v0[1])
         # v0 is missing or a third-party unordered value
-        # TODO: Some types, like BigInt, don't support typemin/typemax.
-        # So a Matrix{Union{BigInt, Missing}} can still error here.
-        v0 = typemax(nonmissingtype(Tmin)), typemin(nonmissingtype(Tmax))
+        Tminnm = nonmissingtype(Tmin)
+        Tmaxnm = nonmissingtype(Tmax)
+        if Tminnm <: Union{BitInteger, IEEEFloat, BigFloat} &&
+            Tmaxnm <: Union{BitInteger, IEEEFloat, BigFloat}
+            v0 = (typemax(Tminnm), typemin(Tmaxnm))
+        elseif !all(isunordered, A1)
+            v0 = reverse(mapreduce(f, op, Iterators.filter(!isunordered, A1)))
+        end
     end
     # v0 may have changed type.
     Tmin = v0[1] isa T ? T : typeof(v0[1])
@@ -211,8 +181,8 @@ reducedim_init(f, op::typeof(|), A::AbstractArrayOrBroadcasted, region) = reduce
 let
     BitIntFloat = Union{BitInteger, IEEEFloat}
     T = Union{
-        [AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
-        [AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
+        Any[AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
+        Any[AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
 
     global function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::T, region)
         z = zero(f(zero(eltype(A))))
@@ -372,7 +342,7 @@ _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 """
-    reduce(f, A; dims=:, [init])
+    reduce(f, A::AbstractArray; dims=:, [init])
 
 Reduce 2-argument function `f` along dimensions of `A`. `dims` is a vector specifying the
 dimensions to reduce, and the keyword argument `init` is the initial value to use in the
@@ -447,6 +417,8 @@ _count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_s
 
 Count the number of elements in `A` for which `f` returns `true` over the
 singleton dimensions of `r`, writing the result into `r` in-place.
+
+$(_DOCS_ALIASING_WARNING)
 
 !!! compat "Julia 1.5"
     inplace `count!` was added in Julia 1.5.
@@ -526,6 +498,8 @@ sum(f, A::AbstractArray; dims)
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -598,6 +572,8 @@ prod(f, A::AbstractArray; dims)
     prod!(r, A)
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -676,6 +652,8 @@ maximum(f, A::AbstractArray; dims)
 
 Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -753,6 +731,8 @@ minimum(f, A::AbstractArray; dims)
 
 Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -817,6 +797,8 @@ extrema(f, A::AbstractArray; dims)
     extrema!(r, A)
 
 Compute the minimum and maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+$(_DOCS_ALIASING_WARNING)
 
 !!! compat "Julia 1.8"
     This method requires Julia 1.8 or later.
@@ -893,6 +875,8 @@ all(::Function, ::AbstractArray; dims)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
@@ -966,6 +950,8 @@ any(::Function, ::AbstractArray; dims)
 Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
 results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
@@ -1027,7 +1013,7 @@ end
 ##### findmin & findmax #####
 # The initial values of Rval are not used if the corresponding indices in Rind are 0.
 #
-function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
+function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind
     lsiz = check_reducedims(Rval, A)
     for i = 1:N
@@ -1048,8 +1034,8 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             tmpRi = Rind[i1,IR]
             for i in axes(A,1)
                 k, kss = y::Tuple
-                tmpAv = A[i,IA]
-                if tmpRi == zi || f(tmpRv, tmpAv)
+                tmpAv = f(A[i,IA])
+                if tmpRi == zi || op(tmpRv, tmpAv)
                     tmpRv = tmpAv
                     tmpRi = k
                 end
@@ -1063,10 +1049,10 @@ function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
             IR = Broadcast.newindex(IA, keep, Idefault)
             for i in axes(A, 1)
                 k, kss = y::Tuple
-                tmpAv = A[i,IA]
+                tmpAv = f(A[i,IA])
                 tmpRv = Rval[i,IR]
                 tmpRi = Rind[i,IR]
-                if tmpRi == zi || f(tmpRv, tmpAv)
+                if tmpRi == zi || op(tmpRv, tmpAv)
                     Rval[i,IR] = tmpAv
                     Rind[i,IR] = k
                 end
@@ -1083,10 +1069,12 @@ end
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as less than all other values except `missing`.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    findminmax!(identity, isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
 end
 
 """
@@ -1110,16 +1098,40 @@ julia> findmin(A, dims=2)
 ```
 """
 findmin(A::AbstractArray; dims=:) = _findmin(A, dims)
+_findmin(A, dims) = _findmin(identity, A, dims)
 
-function _findmin(A, region)
+"""
+    findmin(f, A; dims) -> (f(x), index)
+
+For an array input, returns the value in the codomain and index of the corresponding value
+which minimize `f` over the given dimensions.
+
+# Examples
+```jldoctest
+julia> A = [-1.0 1; -0.5 2]
+2×2 Matrix{Float64}:
+ -1.0  1.0
+ -0.5  2.0
+
+julia> findmin(abs2, A, dims=1)
+([0.25 1.0], CartesianIndex{2}[CartesianIndex(2, 1) CartesianIndex(1, 2)])
+
+julia> findmin(abs2, A, dims=2)
+([1.0; 0.25;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1);;])
+```
+"""
+findmin(f, A::AbstractArray; dims=:) = _findmin(f, A, dims)
+
+function _findmin(f, A, region)
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        (similar(A, ri), zeros(eltype(keys(A)), ri))
+        similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
     else
-        findminmax!(isgreater, fill!(similar(A, ri), first(A)),
+        fA = f(first(A))
+        findminmax!(f, isgreater, fill!(similar(A, _findminmax_inittype(f, A), ri), fA),
                     zeros(eltype(keys(A)), ri), A)
     end
 end
@@ -1130,10 +1142,12 @@ end
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as greater than all other values except `missing`.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    findminmax!(identity, isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
 end
 
 """
@@ -1157,18 +1171,52 @@ julia> findmax(A, dims=2)
 ```
 """
 findmax(A::AbstractArray; dims=:) = _findmax(A, dims)
+_findmax(A, dims) = _findmax(identity, A, dims)
 
-function _findmax(A, region)
+"""
+    findmax(f, A; dims) -> (f(x), index)
+
+For an array input, returns the value in the codomain and index of the corresponding value
+which maximize `f` over the given dimensions.
+
+# Examples
+```jldoctest
+julia> A = [-1.0 1; -0.5 2]
+2×2 Matrix{Float64}:
+ -1.0  1.0
+ -0.5  2.0
+
+julia> findmax(abs2, A, dims=1)
+([1.0 4.0], CartesianIndex{2}[CartesianIndex(1, 1) CartesianIndex(2, 2)])
+
+julia> findmax(abs2, A, dims=2)
+([1.0; 4.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 2);;])
+```
+"""
+findmax(f, A::AbstractArray; dims=:) = _findmax(f, A, dims)
+
+function _findmax(f, A, region)
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0
             throw(ArgumentError("collection slices must be non-empty"))
         end
-        similar(A, ri), zeros(eltype(keys(A)), ri)
+        similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
     else
-        findminmax!(isless, fill!(similar(A, ri), first(A)),
+        fA = f(first(A))
+        findminmax!(f, isless, fill!(similar(A, _findminmax_inittype(f, A), ri), fA),
                     zeros(eltype(keys(A)), ri), A)
     end
+end
+
+function _findminmax_inittype(f, A::AbstractArray)
+    T = _realtype(f, promote_union(eltype(A)))
+    v0 = f(first(A))
+    # First conditional: T is >: typeof(v0), so return it
+    # Second conditional: handle missing specifically, as most often, f(missing) = missing;
+    # certainly, some predicate functions return Bool, but not all.
+    # Else, return the type of the transformation.
+    Tr = v0 isa T ? T : Missing <: eltype(A) ? Union{Missing, typeof(v0)} : typeof(v0)
 end
 
 reducedim1(R, A) = length(axes1(R)) == 1

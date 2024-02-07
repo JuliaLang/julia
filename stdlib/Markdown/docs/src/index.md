@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Markdown/docs/src/index.md"
+```
+
 # [Markdown](@id markdown_stdlib)
 
 This section describes Julia's markdown syntax, which is enabled by the
@@ -75,7 +79,7 @@ the text enclosed in square brackets, `[ ]`, is the name of the link and the tex
 parentheses, `( )`, is the URL.
 
 ```
-A paragraph containing a link to [Julia](http://www.julialang.org).
+A paragraph containing a link to [Julia](https://www.julialang.org).
 ```
 
 It's also possible to add cross-references to other documented functions/methods/variables within
@@ -153,8 +157,8 @@ A header line can contain any inline syntax in the same way as a paragraph can.
 
 ### Code blocks
 
-Source code can be displayed as a literal block using an indent of four spaces as shown in the
-following example.
+Source code can be displayed as a literal block using an indent of four spaces or one tab as shown
+in the following example.
 
 ```
 This is a paragraph.
@@ -298,7 +302,8 @@ aside from the `:` character that is appended to the footnote label.
 
 [^note]:
 
-    Named footnote text containing several toplevel elements.
+    Named footnote text containing several toplevel elements
+    indented by 4 spaces or one tab.
 
       * item one
       * item two
@@ -357,6 +362,7 @@ They can be defined using the following `!!!` syntax:
 !!! note
 
     This is the content of the note.
+    It is indented by 4 spaces. A tab would work as well.
 
 !!! warning "Beware!"
 
@@ -396,3 +402,17 @@ complex features (such as references) without cluttering the basic syntax.
 
 In principle, the Markdown parser itself can also be arbitrarily extended by packages, or an entirely
 custom flavour of Markdown can be used, but this should generally be unnecessary.
+
+## [Markdown String Literals](@id stdlib-markdown-literals)
+
+Markdown strings can be constructed using the string literal syntax `md"..."`.
+
+## [API reference](@id stdlib-markdown-api)
+
+```@docs
+Markdown.MD
+Markdown.@md_str
+Markdown.@doc_str
+Markdown.html
+Markdown.latex
+```

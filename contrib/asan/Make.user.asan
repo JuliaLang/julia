@@ -22,3 +22,6 @@ override JULIA_BUILD_MODE=debug
 # Enable Julia assertions and LLVM assertions
 FORCE_ASSERTIONS=1
 LLVM_ASSERTIONS=1
+
+# Build a minimal system image
+JULIA_PRECOMPILE=0

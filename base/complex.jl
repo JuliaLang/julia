@@ -120,6 +120,7 @@ Float64
 real(T::Type) = typeof(real(zero(T)))
 real(::Type{T}) where {T<:Real} = T
 real(C::Type{<:Complex}) = fieldtype(C, 1)
+real(::Type{Union{}}, slurp...) = Union{}(im)
 
 """
     isreal(x) -> Bool
@@ -132,6 +133,9 @@ is true.
 ```jldoctest
 julia> isreal(5.)
 true
+
+julia> isreal(1 - 3im)
+false
 
 julia> isreal(Inf + 0im)
 true
@@ -174,7 +178,7 @@ complex(x::Real, y::Real) = Complex(x, y)
     complex(T::Type)
 
 Return an appropriate type which can represent a value of type `T` as a complex number.
-Equivalent to `typeof(complex(zero(T)))`.
+Equivalent to `typeof(complex(zero(T)))` if `T` does not contain `Missing`.
 
 # Examples
 ```jldoctest
@@ -183,6 +187,9 @@ Complex{Int64}
 
 julia> complex(Int)
 Complex{Int64}
+
+julia> complex(Union{Int, Missing})
+Union{Missing, Complex{Int64}}
 ```
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
@@ -192,7 +199,7 @@ flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
 function show(io::IO, z::Complex)
     r, i = reim(z)
-    compact = get(io, :compact, false)
+    compact = get(io, :compact, false)::Bool
     show(io, r)
     if signbit(i) && !isnan(i)
         print(io, compact ? "-" : " - ")
@@ -241,7 +248,9 @@ bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 ==(z::Complex, x::Real) = isreal(z) && real(z) == x
 ==(x::Real, z::Complex) = isreal(z) && real(z) == x
 
-isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
+isequal(z::Complex, w::Complex) = isequal(real(z),real(w))::Bool & isequal(imag(z),imag(w))::Bool
+isequal(z::Complex, w::Real) = isequal(real(z),w)::Bool & isequal(imag(z),zero(w))::Bool
+isequal(z::Real, w::Complex) = isequal(z,real(w))::Bool & isequal(zero(z),imag(w))::Bool
 
 in(x::Complex, r::AbstractRange{<:Real}) = isreal(x) && real(x) in r
 
@@ -469,9 +478,13 @@ function inv(z::Complex{T}) where T<:Union{Float16,Float32}
 end
 function inv(w::ComplexF64)
     c, d = reim(w)
-    (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
     absc, absd = abs(c), abs(d)
-    cd = ifelse(absc>absd, absc, absd) # cheap `max`: don't need sign- and nan-checks here
+    cd, dc = ifelse(absc>absd, (absc, absd), (absd, absc))
+    # no overflow from abs2
+    if sqrt(floatmin(Float64)/2) <= cd <= sqrt(floatmax(Float64)/2)
+        return conj(w) / muladd(cd, cd, dc*dc)
+    end
+    (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
 
     ϵ  = eps(Float64)
     bs = 2/(ϵ*ϵ)
@@ -490,12 +503,13 @@ function inv(w::ComplexF64)
     else
         q, p = robust_cinv(-d, -c)
     end
-    return ComplexF64(p*s, q*s) # undo scaling
+    return ComplexF64(p*s, q*s)
 end
 function robust_cinv(c::Float64, d::Float64)
     r = d/c
-    p = inv(muladd(d, r, c))
-    q = -r*p
+    z = muladd(d, r, c)
+    p = 1.0/z
+    q = -r/z
     return p, q
 end
 
@@ -556,7 +570,7 @@ end
 """
     cis(x)
 
-More efficient method for `exp(im*x)` by using Euler's formula: ``cos(x) + i sin(x) = \\exp(i x)``.
+More efficient method for `exp(im*x)` by using Euler's formula: ``\\cos(x) + i \\sin(x) = \\exp(i x)``.
 
 See also [`cispi`](@ref), [`sincos`](@ref), [`exp`](@ref), [`angle`](@ref).
 
@@ -591,7 +605,7 @@ julia> cispi(10000)
 1.0 + 0.0im
 
 julia> cispi(0.25 + 1im)
-0.030556854645952924 + 0.030556854645952924im
+0.030556854645954562 + 0.03055685464595456im
 ```
 
 !!! compat "Julia 1.6"
@@ -601,8 +615,9 @@ function cispi end
 cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
 
 function cispi(z::Complex)
-    sipi, copi = sincospi(z)
-    return complex(real(copi) - imag(sipi), imag(copi) + real(sipi))
+    v = exp(-(pi*imag(z)))
+    s, c = sincospi(real(z))
+    Complex(v * c, v * s)
 end
 
 """
@@ -610,7 +625,10 @@ end
 
 Compute the phase angle in radians of a complex number `z`.
 
-See also: [`atan`](@ref), [`cis`](@ref).
+Returns a number `-pi ≤ angle(z) ≤ pi`, and is thus discontinuous
+along the negative real axis.
+
+See also: [`atan`](@ref), [`cis`](@ref), [`rad2deg`](@ref).
 
 # Examples
 ```jldoctest
@@ -620,8 +638,11 @@ julia> rad2deg(angle(1 + im))
 julia> rad2deg(angle(1 - im))
 -45.0
 
-julia> rad2deg(angle(-1 - im))
--135.0
+julia> rad2deg(angle(-1 + 1e-20im))
+180.0
+
+julia> rad2deg(angle(-1 - 1e-20im))
+-180.0
 ```
 """
 angle(z::Complex) = atan(imag(z), real(z))
@@ -738,7 +759,7 @@ function log1p(z::Complex{T}) where T
         # allegedly due to Kahan, only modified to handle real(u) <= 0
         # differently to avoid inaccuracy near z==-2 and for correct branch cut
         u = one(float(T)) + z
-        u == 1 ? convert(typeof(u), z) : real(u) <= 0 ? log(u) : log(u)*z/(u-1)
+        u == 1 ? convert(typeof(u), z) : real(u) <= 0 ? log(u) : log(u)*(z/(u-1))
     elseif isnan(zr)
         Complex(zr, zr)
     elseif isfinite(zi)
@@ -1063,18 +1084,32 @@ end
 #Requires two different RoundingModes for the real and imaginary components
 """
     round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]])
-    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; digits=, base=10)
-    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; sigdigits=, base=10)
+    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; digits=0, base=10)
+    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; sigdigits, base=10)
 
 Return the nearest integral value of the same type as the complex-valued `z` to `z`,
 breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
 
+
+`RoundingModeReal` and `RoundingModeImaginary` default to [`RoundNearest`](@ref),
+which rounds to the nearest integer, with ties (fractional values of 0.5)
+being rounded to the nearest even integer.
+
 # Example
 ```jldoctest
 julia> round(3.14 + 4.5im)
 3.0 + 4.0im
+
+julia> round(3.14 + 4.5im, RoundUp, RoundNearestTiesUp)
+4.0 + 5.0im
+
+julia> round(3.14159 + 4.512im; digits = 1)
+3.1 + 4.5im
+
+julia> round(3.14159 + 4.512im; sigdigits = 3)
+3.14 + 4.51im
 ```
 """
 function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; kwargs...)

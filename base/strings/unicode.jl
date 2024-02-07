@@ -11,7 +11,7 @@ import Base: show, ==, hash, string, Symbol, isless, length, eltype,
 """
     isvalid(value) -> Bool
 
-Returns `true` if the given value is valid for its type, which currently can be either
+Return `true` if the given value is valid for its type, which currently can be either
 `AbstractChar` or `String` or `SubString{String}`.
 
 # Examples
@@ -31,7 +31,7 @@ isvalid(value)
 """
     isvalid(T, value) -> Bool
 
-Returns `true` if the given value is valid for that type. Types currently can
+Return `true` if the given value is valid for that type. Types currently can
 be either `AbstractChar` or `String`. Values for `AbstractChar` can be of type `AbstractChar` or [`UInt32`](@ref).
 Values for `String` can be of that type, `SubString{String}`, `Vector{UInt8}`,
 or a contiguous subarray thereof.
@@ -179,6 +179,7 @@ const _julia_charmap = Dict{UInt32,UInt32}(
     0x00B7 => 0x22C5,
     0x0387 => 0x22C5,
     0x2212 => 0x002D,
+    0x210F => 0x0127,
 )
 
 utf8proc_map(s::AbstractString, flags::Integer, chartransform=identity) = utf8proc_map(String(s), flags, chartransform)
@@ -270,10 +271,64 @@ julia> textwidth("March")
 """
 textwidth(s::AbstractString) = mapreduce(textwidth, +, s; init=0)
 
+"""
+    lowercase(c::AbstractChar)
+
+Convert `c` to lowercase.
+
+See also [`uppercase`](@ref), [`titlecase`](@ref).
+
+# Examples
+```jldoctest
+julia> lowercase('A')
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+
+julia> lowercase('Ö')
+'ö': Unicode U+00F6 (category Ll: Letter, lowercase)
+```
+"""
 lowercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('A' <= c <= 'Z' ? c + 0x20 : c) :
     T(ccall(:utf8proc_tolower, UInt32, (UInt32,), c))
+
+"""
+    uppercase(c::AbstractChar)
+
+Convert `c` to uppercase.
+
+See also [`lowercase`](@ref), [`titlecase`](@ref).
+
+# Examples
+```jldoctest
+julia> uppercase('a')
+'A': ASCII/Unicode U+0041 (category Lu: Letter, uppercase)
+
+julia> uppercase('ê')
+'Ê': Unicode U+00CA (category Lu: Letter, uppercase)
+```
+"""
 uppercase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_toupper, UInt32, (UInt32,), c))
+
+"""
+    titlecase(c::AbstractChar)
+
+Convert `c` to titlecase. This may differ from uppercase for digraphs,
+compare the example below.
+
+See also [`uppercase`](@ref), [`lowercase`](@ref).
+
+# Examples
+```jldoctest
+julia> titlecase('a')
+'A': ASCII/Unicode U+0041 (category Lu: Letter, uppercase)
+
+julia> titlecase('ǆ')
+'ǅ': Unicode U+01C5 (category Lt: Letter, titlecase)
+
+julia> uppercase('ǆ')
+'Ǆ': Unicode U+01C4 (category Lu: Letter, uppercase)
+```
+"""
 titlecase(c::T) where {T<:AbstractChar} = isascii(c) ? ('a' <= c <= 'z' ? c - 0x20 : c) :
     T(ccall(:utf8proc_totitle, UInt32, (UInt32,), c))
 
@@ -367,6 +422,8 @@ end
 
 Tests whether a character is a decimal digit (0-9).
 
+See also: [`isletter`](@ref).
+
 # Examples
 ```jldoctest
 julia> isdigit('❤')
@@ -387,6 +444,8 @@ isdigit(c::AbstractChar) = (c >= '0') & (c <= '9')
 Test whether a character is a letter.
 A character is classified as a letter if it belongs to the Unicode general
 category Letter, i.e. a character whose category code begins with 'L'.
+
+See also: [`isdigit`](@ref).
 
 # Examples
 ```jldoctest
@@ -410,7 +469,7 @@ A character is classified as numeric if it belongs to the Unicode general catego
 i.e. a character whose category code begins with 'N'.
 
 Note that this broad category includes characters such as ¾ and ௰.
-Use [`isdigit`](@ref) to check whether a character a decimal digit between 0 and 9.
+Use [`isdigit`](@ref) to check whether a character is a decimal digit between 0 and 9.
 
 # Examples
 ```jldoctest

@@ -12,6 +12,8 @@ struct KeyError <: Exception
     key
 end
 
+KeyTypeError(K, key) = TypeError(:var"dict key", K, key)
+
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::AbstractDict, k) = in(k, keys(d))
@@ -217,6 +219,9 @@ Dict{Int64, Int64} with 3 entries:
 """
 function merge!(d::AbstractDict, others::AbstractDict...)
     for other in others
+        if haslength(d) && haslength(other)
+            sizehint!(d, length(d) + length(other); shrink = false)
+        end
         for (k,v) in other
             d[k] = v
         end
@@ -296,7 +301,7 @@ julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype(::Type{<:AbstractDict{K,V}}) where {K,V} = K
+keytype(::Type{<:AbstractDict{K}}) where {K} = K
 keytype(a::AbstractDict) = keytype(typeof(a))
 
 """
@@ -310,7 +315,7 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype(::Type{<:AbstractDict{K,V}}) where {K,V} = V
+valtype(::Type{<:AbstractDict{<:Any,V}}) where {V} = V
 valtype(a::AbstractDict) = valtype(typeof(a))
 
 """
@@ -521,6 +526,9 @@ function ==(l::AbstractDict, r::AbstractDict)
     return anymissing ? missing : true
 end
 
+# Fallback implementation
+sizehint!(d::AbstractDict, n) = d
+
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::AbstractDict, h::UInt)
     hv = hasha_seed
@@ -530,12 +538,12 @@ function hash(a::AbstractDict, h::UInt)
     hash(hv, h)
 end
 
-function getindex(t::AbstractDict, key)
+function getindex(t::AbstractDict{<:Any,V}, key) where V
     v = get(t, key, secret_table_token)
     if v === secret_table_token
         throw(KeyError(key))
     end
-    return v
+    return v::V
 end
 
 # t[k1,k2,ks...] is syntactic sugar for t[(k1,k2,ks...)].  (Note
@@ -545,21 +553,21 @@ setindex!(t::AbstractDict, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...
 
 get!(t::AbstractDict, key, default) = get!(() -> default, t, key)
 function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V
-    haskey(t, key) && return t[key]
-    val = default()
-    t[key] = val
-    return val
+    key = convert(K, key)
+    if haskey(t, key)
+        return t[key]
+    else
+        return t[key] = convert(V, default())
+    end
 end
 
 push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
-push!(t::AbstractDict, p::Pair, q::Pair) = push!(push!(t, p), q)
-push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
 # AbstractDicts are convertible
 convert(::Type{T}, x::T) where {T<:AbstractDict} = x
 
 function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
-    h = T(x)
+    h = T(x)::T
     if length(h) != length(x)
         error("key collision during dictionary conversion")
     end
@@ -567,7 +575,7 @@ function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
 end
 
 # hashing objects by identity
-_tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
+_tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<(top_set_bit(x-one(T)))
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 

@@ -1,8 +1,10 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(abspath $(SRCDIR)/..)
-include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
+
+# import LLVM_SHARED_LIB_NAME
+include $(JULIAHOME)/deps/llvm-ver.make
 
 TAGGED_RELEASE_BANNER := ""
 
@@ -58,6 +60,7 @@ else
 	@echo "const USE_GPL_LIBS = false" >> $@
 endif
 	@echo "const libllvm_version_string = \"$$($(LLVM_CONFIG_HOST) --version)\"" >> $@
+	@echo "const libllvm_name = \"$(LLVM_SHARED_LIB_NAME)\"" >> $@
 	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
 ifeq ($(OS),WINNT)
@@ -67,6 +70,7 @@ ifeq ($(OS),WINNT)
 	@printf 'const LIBDIR = "%s"\n' '$(subst /,\\,$(libdir_rel))' >> $@
 	@printf 'const LIBEXECDIR = "%s"\n' '$(subst /,\\,$(libexecdir_rel))' >> $@
 	@printf 'const PRIVATE_LIBDIR = "%s"\n' '$(subst /,\\,$(private_libdir_rel))' >> $@
+	@printf 'const PRIVATE_LIBEXECDIR = "%s"\n' '$(subst /,\\,$(private_libexecdir_rel))' >> $@
 	@printf 'const INCLUDEDIR = "%s"\n' '$(subst /,\\,$(includedir_rel))' >> $@
 else
 	@echo "const SYSCONFDIR = \"$(sysconfdir_rel)\"" >> $@
@@ -75,6 +79,7 @@ else
 	@echo "const LIBDIR = \"$(libdir_rel)\"" >> $@
 	@echo "const LIBEXECDIR = \"$(libexecdir_rel)\"" >> $@
 	@echo "const PRIVATE_LIBDIR = \"$(private_libdir_rel)\"" >> $@
+	@echo "const PRIVATE_LIBEXECDIR = \"$(private_libexecdir_rel)\"" >> $@
 	@echo "const INCLUDEDIR = \"$(includedir_rel)\"" >> $@
 endif
 ifeq ($(DARWIN_FRAMEWORK), 1)
@@ -82,6 +87,10 @@ ifeq ($(DARWIN_FRAMEWORK), 1)
 	@echo "const DARWIN_FRAMEWORK_NAME = \"$(FRAMEWORK_NAME)\"" >> $@
 else
 	@echo "const DARWIN_FRAMEWORK = false" >> $@
+endif
+ifeq ($(OS), Darwin)
+	@echo "const MACOS_PRODUCT_VERSION = \"$(shell sw_vers -productVersion)\"" >> $@
+	@echo "const MACOS_PLATFORM_VERSION = \"$(shell xcrun --show-sdk-version)\"" >> $@
 endif
 	@echo "const BUILD_TRIPLET = \"$(BB_TRIPLET_LIBGFORTRAN_CXXABI)\"" >> $@
 
@@ -169,7 +178,7 @@ $$(build_private_libdir)/$$(libname_$2):
 		REALPATH=$$(libpath_$2); \
 		$$(call resolve_path,REALPATH) && \
 		[ -e "$$$$REALPATH" ] && \
-		([ ! -e "$$@" ] || rm "$$@") && \
+		rm -f "$$@" && \
 		echo ln -sf "$$$$REALPATH" "$$@" && \
 		ln -sf "$$$$REALPATH" "$$@"; \
 	else \
@@ -193,8 +202,26 @@ endif
 
 $(build_bindir)/7z$(EXE):
 	[ -e "$(7Z_PATH)" ] && \
-	([ ! -e "$@" ] || rm "$@") && \
+	rm -f "$@" && \
 	ln -svf "$(7Z_PATH)" "$@"
+
+symlink_llvm_utils: $(build_depsbindir)/lld$(EXE) $(build_depsbindir)/dsymutil$(EXE)
+
+ifneq ($(USE_SYSTEM_LLD),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_llvm_utils
+LLD_PATH := $(shell which lld$(EXE))
+DSYMUTIL_PATH := $(shell which dsymutil$(EXE))
+endif
+
+$(build_depsbindir)/lld$(EXE):
+	[ -e "$(LLD_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(LLD_PATH)" "$@"
+
+$(build_depsbindir)/dsymutil$(EXE):
+	[ -e "$(DSYMUTIL_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(DSYMUTIL_PATH)" "$@"
 
 # the following excludes: libuv.a, libutf8proc.a
 
@@ -204,8 +231,18 @@ else ifneq ($(USE_SYSTEM_OPENLIBM),0)
 $(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
 endif
 
-ifeq ($(APPLE_ARCH),arm64)
+# On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
+# (-> libgfortran 5) on x86_64
+ifeq ($(OS),Darwin)
+ifeq ($(ARCH),aarch64)
 $(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
+ifeq ($(LIBGFORTRAN_VERSION),5)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
+$(eval $(call symlink_system_library,CSL,libgcc_s,1))
+endif
+endif
 else
 $(eval $(call symlink_system_library,CSL,libgcc_s,1))
 endif
@@ -258,7 +295,7 @@ $(build_private_libdir)/libLLVM.$(SHLIB_EXT):
 	REALPATH=$(LLVM_CONFIG_HOST_LIBS) && \
 	$(call resolve_path,REALPATH) && \
 	[ -e "$$REALPATH" ] && \
-	([ ! -e "$@" ] || rm "$@") && \
+	rm -f "$@" && \
 	echo ln -sf "$$REALPATH" "$@" && \
 	ln -sf "$$REALPATH" "$@"
 ifneq ($(USE_SYSTEM_LLVM),0)

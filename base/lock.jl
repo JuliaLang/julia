@@ -7,11 +7,11 @@ const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
     ReentrantLock()
 
 Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
-acquire the lock as many times as required. Each [`lock`](@ref) must be matched
-with an [`unlock`](@ref).
+acquire the lock as many times as required (this is what the "Reentrant" part
+of the name means). Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
-Calling 'lock' will also inhibit running of finalizers on that thread until the
-corresponding 'unlock'. Use of the standard lock pattern illustrated below
+Calling `lock` will also inhibit running of finalizers on that thread until the
+corresponding `unlock`. Use of the standard lock pattern illustrated below
 should naturally be supported, but beware of inverting the try/lock order or
 missing the try block entirely (e.g. attempting to return with the lock still
 held):
@@ -26,6 +26,9 @@ finally
     unlock(l)
 end
 ```
+
+If [`!islocked(lck::ReentrantLock)`](@ref islocked) holds, [`trylock(lck)`](@ref trylock)
+succeeds unless there are other tasks attempting to hold the lock "at the same time."
 """
 mutable struct ReentrantLock <: AbstractLock
     # offset = 16
@@ -52,10 +55,43 @@ assert_havelock(l::ReentrantLock) = assert_havelock(l, l.locked_by)
     islocked(lock) -> Status (Boolean)
 
 Check whether the `lock` is held by any task/thread.
-This should not be used for synchronization (see instead [`trylock`](@ref)).
+This function alone should not be used for synchronization. However, `islocked` combined
+with [`trylock`](@ref) can be used for writing the test-and-test-and-set or exponential
+backoff algorithms *if it is supported by the `typeof(lock)`* (read its documentation).
+
+# Extended help
+
+For example, an exponential backoff can be implemented as follows if the `lock`
+implementation satisfied the properties documented below.
+
+```julia
+nspins = 0
+while true
+    while islocked(lock)
+        GC.safepoint()
+        nspins += 1
+        nspins > LIMIT && error("timeout")
+    end
+    trylock(lock) && break
+    backoff()
+end
+```
+
+## Implementation
+
+A lock implementation is advised to define `islocked` with the following properties and note
+it in its docstring.
+
+* `islocked(lock)` is data-race-free.
+* If `islocked(lock)` returns `false`, an immediate invocation of `trylock(lock)` must
+  succeed (returns `true`) if there is no interference from other tasks.
 """
+function islocked end
+# Above docstring is a documentation for the abstract interface and not the one specific to
+# `ReentrantLock`.
+
 function islocked(rl::ReentrantLock)
-    return rl.havelock != 0
+    return (@atomic :monotonic rl.havelock) != 0
 end
 
 """
@@ -67,7 +103,15 @@ If the lock is already locked by a different task/thread,
 return `false`.
 
 Each successful `trylock` must be matched by an [`unlock`](@ref).
+
+Function `trylock` combined with [`islocked`](@ref) can be used for writing the
+test-and-test-and-set or exponential backoff algorithms *if it is supported by the
+`typeof(lock)`* (read its documentation).
 """
+function trylock end
+# Above docstring is a documentation for the abstract interface and not the one specific to
+# `ReentrantLock`.
+
 @inline function trylock(rl::ReentrantLock)
     ct = current_task()
     if rl.locked_by === ct
@@ -101,6 +145,7 @@ Each `lock` must be matched by an [`unlock`](@ref).
 """
 @inline function lock(rl::ReentrantLock)
     trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
+        Threads.lock_profiling() && Threads.inc_lock_conflict_count()
         c = rl.cond_wait
         lock(c.lock)
         try
@@ -176,6 +221,8 @@ available.
 When this function returns, the `lock` has been released, so the caller should
 not attempt to `unlock` it.
 
+See also: [`@lock`](@ref).
+
 !!! compat "Julia 1.7"
     Using a [`Channel`](@ref) as the second argument requires Julia 1.7 or later.
 """
@@ -214,6 +261,9 @@ end
 ```
 This is similar to using [`lock`](@ref) with a `do` block, but avoids creating a closure
 and thus can improve the performance.
+
+!!! compat
+    `@lock` was added in Julia 1.3, and exported in Julia 1.10.
 """
 macro lock(l, expr)
     quote
@@ -391,10 +441,10 @@ This provides an acquire & release memory ordering on notify/wait.
     The `autoreset` functionality and memory ordering guarantee requires at least Julia 1.8.
 """
 mutable struct Event
-    notify::Threads.Condition
-    autoreset::Bool
+    const notify::ThreadSynchronizer
+    const autoreset::Bool
     @atomic set::Bool
-    Event(autoreset::Bool=false) = new(Threads.Condition(), autoreset, false)
+    Event(autoreset::Bool=false) = new(ThreadSynchronizer(), autoreset, false)
 end
 
 function wait(e::Event)
@@ -437,8 +487,8 @@ end
 """
     reset(::Event)
 
-Reset an Event back into an un-set state. Then any future calls to `wait` will
-block until `notify` is called again.
+Reset an [`Event`](@ref) back into an un-set state. Then any future calls to `wait` will
+block until [`notify`](@ref) is called again.
 """
 function reset(e::Event)
     @atomic e.set = false # full barrier

@@ -7,16 +7,17 @@ Modules in Julia help organize code into coherent units. They are delimited synt
    allows the same name to be used for different functions or global variables without conflict, as long as they are in separate modules.
 
 2. Modules have facilities for detailed namespace management: each defines a set of names it
-   `export`s, and can import names from other modules with `using` and `import` (we explain these below).
+   `export`s and marks as `public`, and can import names from other modules with `using` and
+   `import` (we explain these below).
 
-3. Modules can be precompiled for faster loading, and contain code for runtime initialization.
+3. Modules can be precompiled for faster loading, and may contain code for runtime initialization.
 
 Typically, in larger Julia packages you will see module code organized into files, eg
 
 ```julia
 module SomeModule
 
-# export, using, import statements are usually here; we discuss these below
+# export, public, using, import statements are usually here; we discuss these below
 
 include("file1.jl")
 include("file2.jl")
@@ -78,7 +79,7 @@ module-local.
 ### Export lists
 
 Names (referring to functions, types, global variables, and constants) can be added to the
-*export list* of a module with `export`. Typically, they are at or near the top of the module definition
+*export list* of a module with `export`: these are the symbols that are imported when `using` the module. Typically, they are at or near the top of the module definition
 so that readers of the source code can find them easily, as in
 
 ```jldoctest module_manual
@@ -102,6 +103,12 @@ unlike other languages, Julia has no facilities for truly hiding module internal
 Also, some modules don't export names at all. This is usually done if they use common
 words, such as `derivative`, in their API, which could easily clash with the export lists of other
 modules. We will see how to manage name clashes below.
+
+To mark a name as public without exporting it into the namespace of folks who call `using NiceStuff`,
+one can use `public` instead of `export`. This marks the public name(s) as part of the public API,
+but does not have any namespace implications. The `public` keyword is only available in Julia 1.11
+and above. To maintain compatibility with Julia 1.10 and below, use the `@compat` macro from the
+[Compat](https://github.com/JuliaLang/Compat.jl) package.
 
 ### Standalone `using` and `import`
 
@@ -143,7 +150,7 @@ As we will see in the next section `import .NiceStuff` is equivalent to `using .
 You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, e.g.
 
 ```jldoctest module_manual
-julia> using LinearAlgebra, Statistics
+julia> using LinearAlgebra, Random
 ```
 
 ### `using` and `import` with specific identifiers, and adding methods
@@ -171,7 +178,7 @@ julia> using .NiceStuff: nice
 julia> struct Cat end
 
 julia> nice(::Cat) = "nice 😸"
-ERROR: error in method definition: function NiceStuff.nice must be explicitly imported to be extended
+ERROR: invalid method definition in Main: function NiceStuff.nice must be explicitly imported to be extended
 Stacktrace:
  [1] top-level scope
    @ none:0
@@ -281,7 +288,7 @@ julia> using .A, .B
 
 julia> f
 WARNING: both B and A export "f"; uses of it in module Main must be qualified
-ERROR: UndefVarError: f not defined
+ERROR: UndefVarError: `f` not defined in `Main`
 ```
 
 Here, Julia cannot decide which `f` you are referring to, so you have to make a choice. The following solutions are commonly used:
@@ -325,7 +332,17 @@ include(p) = Base.include(Mod, p)
 end
 ```
 
-If even `Core` is not wanted, a module that imports nothing and defines no names at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref).
+If even `Core` is not wanted, a module that imports nothing and defines no names at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref):
+```jldoctest
+julia> arithmetic = Module(:arithmetic, false, false)
+Main.arithmetic
+
+julia> @eval arithmetic add(x, y) = $(+)(x, y)
+add (generic function with 1 method)
+
+julia> arithmetic.add(12, 13)
+25
+```
 
 ### Standard modules
 
@@ -387,7 +404,7 @@ x = 0
 
 module Sub
 using ..TestPackage
-z = y # ERROR: UndefVarError: y not defined
+z = y # ERROR: UndefVarError: `y` not defined in `Main`
 end
 
 y = 1
@@ -403,7 +420,7 @@ For similar reasons, you cannot use a cyclic ordering:
 module A
 
 module B
-using ..C # ERROR: UndefVarError: C not defined
+using ..C # ERROR: UndefVarError: `C` not defined in `Main.A`
 end
 
 module C
@@ -419,22 +436,28 @@ Large modules can take several seconds to load because executing all of the stat
 often involves compiling a large amount of code.
 Julia creates precompiled caches of the module to reduce this time.
 
-The incremental precompiled module file are created and used automatically when using `import`
-or `using` to load a module.  This will cause it to be automatically compiled the first time
-it is imported. Alternatively, you can manually call [`Base.compilecache(Base.identify_package("modulename"))`](@ref). The resulting
-cache files will be stored in `DEPOT_PATH[1]/compiled/`. Subsequently, the module is automatically
-recompiled upon `using` or `import` whenever any of its dependencies change; dependencies are modules it
+Precompiled module files (sometimes called "cache files") are created and used automatically when `import` or `using` loads a module.  If the cache file(s) do not yet exist, the module will be compiled and saved for future reuse. You can also manually call [`Base.compilecache(Base.identify_package("modulename"))`](@ref) to create these files without loading the module. The resulting
+cache files will be stored in the `compiled` subfolder of `DEPOT_PATH[1]`. If nothing about your system changes,
+such cache files will be used when you load the module with `import` or `using`.
+
+Precompilation cache files store definitions of modules, types, methods, and constants. They may also store method specializations and the code generated for them, but this typically requires that the developer add explicit [`precompile`](@ref) directives or execute workloads that force compilation during the package build.
+
+However, if you update the module's dependencies or change its source code, the module is automatically
+recompiled upon `using` or `import`. Dependencies are modules it
 imports, the Julia build, files it includes, or explicit dependencies declared by [`include_dependency(path)`](@ref)
 in the module file(s).
 
-For file dependencies, a change is determined by examining whether the modification time (`mtime`)
-of each file loaded by `include` or added explicitly by `include_dependency` is unchanged, or equal
-to the modification time truncated to the nearest second (to accommodate systems that can't copy
-mtime with sub-second accuracy). It also takes into account whether the path to the file chosen
+For file dependencies loaded by `include`, a change is determined by examining whether the
+file size (`fsize`) or content (condensed into a hash) is unchanged.
+For file dependencies loaded by `include_dependency` a change is determined by examining whether the modification time (`mtime`)
+is unchanged, or equal to the modification time truncated to the nearest second
+(to accommodate systems that can't copy mtime with sub-second accuracy).
+It also takes into account whether the path to the file chosen
 by the search logic in `require` matches the path that had created the precompile file. It also takes
 into account the set of dependencies already loaded into the current process and won't recompile those
 modules, even if their files change or disappear, in order to avoid creating incompatibilities between
 the running system and the precompile cache.
+Finally, it takes account of changes in any [compile-time preferences](@ref preferences).
 
 If you know that a module is *not* safe to precompile
 (for example, for one of the reasons described below), you should
@@ -576,9 +599,19 @@ A few other points to be aware of:
    an error to do this, but you simply need to be prepared that the system will try to copy some
    of these and to create a single unique instance of others.
 
-It is sometimes helpful during module development to turn off incremental precompilation. The
-command line flag `--compiled-modules={yes|no}` enables you to toggle module precompilation on and
-off. When Julia is started with `--compiled-modules=no` the serialized modules in the compile cache
-are ignored when loading modules and module dependencies. `Base.compilecache` can still be called
-manually. The state of this command line flag is passed to `Pkg.build` to disable automatic
-precompilation triggering when installing, updating, and explicitly building packages.
+It is sometimes helpful during module development to turn off incremental precompilation.
+The command line flag `--compiled-modules={yes|no|existing}` enables you to toggle module
+precompilation on and off. When Julia is started with `--compiled-modules=no` the serialized
+modules in the compile cache are ignored when loading modules and module dependencies. In
+some cases, you may want to load existing precompiled modules, but not create new ones. This
+can be done by starting Julia with `--compiled-modules=existing`. More fine-grained control
+is available with `--pkgimages={yes|no|existing}`, which only affects native-code storage
+during precompilation. `Base.compilecache` can still be called manually. The state of this
+command line flag is passed to `Pkg.build` to disable automatic precompilation triggering
+when installing, updating, and explicitly building packages.
+
+You can also debug some precompilation failures with environment variables. Setting
+`JULIA_VERBOSE_LINKING=true` may help resolve failures in linking shared libraries of
+compiled native code. See the **Developer Documentation** part of the Julia manual, where
+you will find further details in the section documenting Julia's internals under "Package
+Images".

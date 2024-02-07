@@ -104,6 +104,28 @@ Random.seed!(1)
             @test LowerTriangular(C) == LowerTriangular(Cdense)
         end
     end
+
+    @testset "Matrix constructor for !isa(zero(T), T)" begin
+        # the following models JuMP.jl's VariableRef and AffExpr, resp.
+        struct TypeWithoutZero end
+        struct TypeWithZero end
+        Base.promote_rule(::Type{TypeWithoutZero}, ::Type{TypeWithZero}) = TypeWithZero
+        Base.convert(::Type{TypeWithZero}, ::TypeWithoutZero) = TypeWithZero()
+        Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
+        LinearAlgebra.symmetric(::TypeWithoutZero, ::Symbol) = TypeWithoutZero()
+        Base.transpose(::TypeWithoutZero) = TypeWithoutZero()
+        d  = fill(TypeWithoutZero(), 3)
+        du = fill(TypeWithoutZero(), 2)
+        dl = fill(TypeWithoutZero(), 2)
+        D  = Diagonal(d)
+        Bu = Bidiagonal(d, du, :U)
+        Bl = Bidiagonal(d, dl, :L)
+        Tri = Tridiagonal(dl, d, du)
+        Sym = SymTridiagonal(d, dl)
+        for M in (D, Bu, Bl, Tri, Sym)
+            @test Matrix(M) == zeros(TypeWithZero, 3, 3)
+        end
+    end
 end
 
 @testset "Binary ops among special types" begin
@@ -169,7 +191,7 @@ end
         push!(mats, SymTridiagonal(Vector{T}(diag), Vector{T}(offdiag)))
     end
 
-    for op in (+,*) # to do: fix when operation is - and the matrix has a range as the underlying representation and we get a step size of 0.
+    for op in (+,-,*)
         for A in mats
             for B in mats
                 @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))
@@ -184,20 +206,49 @@ end
             end
         end
     end
+    diag = [randn(ComplexF64, 2, 2) for _ in 1:3]
+    odiag = [randn(ComplexF64, 2, 2) for _ in 1:2]
+    for A in (Diagonal(diag),
+                Bidiagonal(diag, odiag, :U),
+                Bidiagonal(diag, odiag, :L),
+                Tridiagonal(odiag, diag, odiag),
+                SymTridiagonal(diag, odiag)), B in uniformscalingmats
+        @test (A + B)::typeof(A) == (B + A)::typeof(A)
+        @test (A - B)::typeof(A) == ((A + (-B))::typeof(A))
+        @test (B - A)::typeof(A) == ((B + (-A))::typeof(A))
+    end
 end
 
 
 @testset "Triangular Types and QR" begin
-    for typ in [UpperTriangular,LowerTriangular,LinearAlgebra.UnitUpperTriangular,LinearAlgebra.UnitLowerTriangular]
+    for typ in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         a = rand(n,n)
         atri = typ(a)
+        matri = Matrix(atri)
         b = rand(n,n)
-        qrb = qr(b, ColumnNorm())
-        @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        qrb = qr(b, NoPivot())
-        @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
+        for pivot in (ColumnNorm(), NoPivot())
+            qrb = qr(b, pivot)
+            @test atri * qrb.Q ≈ matri * qrb.Q
+            @test atri * qrb.Q' ≈ matri * qrb.Q'
+            @test qrb.Q * atri ≈ qrb.Q * matri
+            @test qrb.Q' * atri ≈ qrb.Q' * matri
+        end
+    end
+end
+
+@testset "Multiplication of Qs" begin
+    for pivot in (ColumnNorm(), NoPivot()), A in (rand(5, 3), rand(5, 5), rand(3, 5))
+        Q = qr(A, pivot).Q
+        m = size(A, 1)
+        C = Matrix{Float64}(undef, (m, m))
+        @test Q*Q ≈ (Q*I) * (Q*I) ≈ mul!(C, Q, Q)
+        @test size(Q*Q) == (m, m)
+        @test Q'Q ≈ (Q'*I) * (Q*I) ≈ mul!(C, Q', Q)
+        @test size(Q'Q) == (m, m)
+        @test Q*Q' ≈ (Q*I) * (Q'*I) ≈ mul!(C, Q, Q')
+        @test size(Q*Q') == (m, m)
+        @test Q'Q' ≈ (Q'*I) * (Q'*I) ≈ mul!(C, Q', Q')
+        @test size(Q'Q') == (m, m)
     end
 end
 
@@ -208,16 +259,16 @@ end
     bidiagmat = Bidiagonal(1:N, 1:(N-1), :U)
     tridiagmat = Tridiagonal(1:(N-1), 1:N, 1:(N-1))
     symtridiagmat = SymTridiagonal(1:N, 1:(N-1))
-    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat)
+    abstractq = qr(tridiagmat).Q
+    specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat, abstractq, zeros(Int,N,N))
     for specialmata in specialmats, specialmatb in specialmats
-        MA = Matrix(specialmata); MB = Matrix(specialmatb)
+        MA = collect(specialmata); MB = collect(specialmatb)
         @test hcat(specialmata, specialmatb) == hcat(MA, MB)
         @test vcat(specialmata, specialmatb) == vcat(MA, MB)
         @test hvcat((1,1), specialmata, specialmatb) == hvcat((1,1), MA, MB)
         @test cat(specialmata, specialmatb; dims=(1,2)) == cat(MA, MB; dims=(1,2))
     end
-    # Test concatenating pairwise combinations of special matrices with sparse matrices,
-    # dense matrices, or dense vectors
+    # Test concatenating pairwise combinations of special matrices with dense matrices or dense vectors
     densevec = fill(1., N)
     densemat = diagm(0 => densevec)
     for specialmat in specialmats
@@ -241,7 +292,7 @@ end
 @testset "concatenations of annotated types" begin
     N = 4
     # The tested annotation types
-    testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    testfull = Base.get_bool_env("JULIA_TESTFULL", false)
     utriannotations = (UpperTriangular, UnitUpperTriangular)
     ltriannotations = (LowerTriangular, UnitLowerTriangular)
     triannotations = (utriannotations..., ltriannotations...)
@@ -421,19 +472,18 @@ end
 end
 
 @testset "BiTriSym*Q' and Q'*BiTriSym" begin
-    dl = [1, 1, 1];
-    d = [1, 1, 1, 1];
-    Tri = Tridiagonal(dl, d, dl)
+    dl = [1, 1, 1]
+    d = [1, 1, 1, 1]
+    D = Diagonal(d)
     Bi = Bidiagonal(d, dl, :L)
+    Tri = Tridiagonal(dl, d, dl)
     Sym = SymTridiagonal(d, dl)
     F = qr(ones(4, 1))
     A = F.Q'
-    @test Tri*A ≈ Matrix(Tri)*A
-    @test A*Tri ≈ A*Matrix(Tri)
-    @test Bi*A ≈ Matrix(Bi)*A
-    @test A*Bi ≈ A*Matrix(Bi)
-    @test Sym*A ≈ Matrix(Sym)*A
-    @test A*Sym ≈ A*Matrix(Sym)
+    for A in (F.Q, F.Q'), B in (D, Bi, Tri, Sym)
+        @test B*A ≈ Matrix(B)*A
+        @test A*B ≈ A*Matrix(B)
+    end
 end
 
 @testset "Ops on SymTridiagonal ev has the same length as dv" begin
