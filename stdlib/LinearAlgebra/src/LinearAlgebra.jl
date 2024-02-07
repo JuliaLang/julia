@@ -197,7 +197,8 @@ abstract type PivotingStrategy end
     NoPivot
 
 Pivoting is not performed. Matrix factorizations such as the LU factorization
-may fail without pivoting.
+may fail without pivoting, and may also be numerically unstable for floating-point matrices in the face of roundoff error.
+This pivot strategy is mainly useful for pedagogical purposes.
 """
 struct NoPivot <: PivotingStrategy end
 
@@ -205,6 +206,11 @@ struct NoPivot <: PivotingStrategy end
     RowNonZero
 
 First non-zero element in the remaining rows is chosen as the pivot element.
+
+Beware that for floating-point matrices, the resulting LU algorithm is numerically unstable — this strategy
+is mainly useful for comparison to hand calculations (which typically use this strategy) or for other
+algebraic types (e.g. rational numbers) not susceptible to roundoff errors.   Otherwise, the default
+`RowMaximum` pivoting strategy should be generally preferred in Gaussian elimination.
 
 Note that the [element type](@ref eltype) of the matrix must admit an [`iszero`](@ref)
 method.
@@ -214,7 +220,9 @@ struct RowNonZero <: PivotingStrategy end
 """
     RowMaximum
 
-The maximum element in the remaining rows is chosen as the pivot element.
+The maximum-magnitude element in the remaining rows is chosen as the pivot element.
+This is the default strategy for LU factorization of floating-point matrices, and is sometimes
+referred to as the "partial pivoting" algorithm.
 
 Note that the [element type](@ref eltype) of the matrix must admit an [`abs`](@ref) method,
 whose result type must admit a [`<`](@ref) method.
@@ -224,7 +232,8 @@ struct RowMaximum <: PivotingStrategy end
 """
     ColumnNorm
 
-The column with the maximum norm is used for subsequent computation.
+The column with the maximum norm is used for subsequent computation.  This
+is used for pivoted QR factorization.
 
 Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref) and
 [`abs`](@ref) methods, whose respective result types must admit a [`<`](@ref) method.
