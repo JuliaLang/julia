@@ -140,3 +140,19 @@ d = "hello"
 a = 2
 b = 9.9
 """
+
+
+inline_dict = Dict("a" => [1,2], "b" => Dict("a" => "b"), "c" => "foo")
+d = Dict(
+    "x" => "y",
+    "y" => inline_dict,
+    "z" => [1,2,3],
+)
+inline_tables = Base.IdSet{Dict}()
+push!(inline_tables, inline_dict)
+@test toml_str(d; sorted=true, inline_tables) ==
+"""
+x = "y"
+y = {c = "foo", b = {a = "b"}, a = [1, 2]}
+z = [1, 2, 3]
+"""

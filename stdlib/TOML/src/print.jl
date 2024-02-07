@@ -141,11 +141,18 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
     indent::Int = 0,
     first_block::Bool = true,
     sorted::Bool = false,
+    inline_tables::Base.IdSet,
     by::Function = identity,
 )
+
+    if a in inline_tables
+        @invokelatest print_inline_table(f, io, a)
+        return
+    end
+
     akeys = keys(a)
     if sorted
-        akeys = sort!(collect(akeys); by=by)
+        akeys = sort!(collect(akeys); by)
     end
 
     # First print non-tabular entries
@@ -154,7 +161,9 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
         if !isa(value, TOMLValue)
             value = to_toml_value(f, value)
         end
-        is_tabular(value) && continue
+        if is_tabular(value) && !(value in inline_tables)
+            continue
+        end
 
         Base.print(io, ' '^4max(0,indent-1))
         printkey(io, [String(key)])
@@ -169,7 +178,7 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
         if !isa(value, TOMLValue)
             value = to_toml_value(f, value)
         end
-        if is_table(value)
+        if is_table(value) && !(value in inline_tables)
             push!(ks, String(key))
             _values = @invokelatest values(value)
             header = isempty(value) || !all(is_tabular(v) for v in _values)::Bool
@@ -183,7 +192,7 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
                 Base.print(io,"]\n")
             end
             # Use runtime dispatch here since the type of value seems not to be enforced other than as AbstractDict
-            @invokelatest print_table(f, io, value, ks; indent = indent + header, first_block = header, sorted=sorted, by=by)
+            @invokelatest print_table(f, io, value, ks; indent = indent + header, first_block = header, sorted, by, inline_tables)
             pop!(ks)
         elseif @invokelatest(is_array_of_tables(value))
             # print array of tables
@@ -197,7 +206,7 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
                 Base.print(io,"]]\n")
                 # TODO, nicer error here
                 !isa(v, AbstractDict) && error("array should contain only tables")
-                @invokelatest print_table(f, io, v, ks; indent = indent + 1, sorted=sorted, by=by)
+                @invokelatest print_table(f, io, v, ks; indent = indent + 1, sorted, by, inline_tables)
             end
             pop!(ks)
         end
@@ -209,7 +218,7 @@ end
 # API #
 #######
 
-print(f::MbyFunc, io::IO, a::AbstractDict; sorted::Bool=false, by=identity) = print_table(f, io, a; sorted=sorted, by=by)
-print(f::MbyFunc, a::AbstractDict; sorted::Bool=false, by=identity) = print(f, stdout, a; sorted=sorted, by=by)
-print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity) = print_table(nothing, io, a; sorted=sorted, by=by)
-print(a::AbstractDict; sorted::Bool=false, by=identity) = print(nothing, stdout, a; sorted=sorted, by=by)
+print(f::MbyFunc, io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::Base.IdSet{<:AbstractDict}=Base.IdSet{Dict{String}}()) = print_table(f, io, a; sorted, by, inline_tables)
+print(f::MbyFunc,         a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::Base.IdSet{<:AbstractDict}=Base.IdSet{Dict{String}}()) = print(f, stdout, a; sorted, by, inline_tables)
+print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::Base.IdSet{<:AbstractDict}=Base.IdSet{Dict{String}}()) = print_table(nothing, io, a; sorted, by, inline_tables)
+print(        a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::Base.IdSet{<:AbstractDict}=Base.IdSet{Dict{String}}()) = print(nothing, stdout, a; sorted, by, inline_tables)
