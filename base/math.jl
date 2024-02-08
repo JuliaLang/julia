@@ -5,12 +5,12 @@ module Math
 export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
        sech, csch, coth, asech, acsch, acoth,
-       sinpi, cospi, sincospi, sinc, cosc,
+       sinpi, cospi, sincospi, tanpi, sinc, cosc,
        cosd, cotd, cscd, secd, sind, tand, sincosd,
        acosd, acotd, acscd, asecd, asind, atand,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
-       cbrt, sqrt, significand,
+       cbrt, sqrt, fourthroot, significand,
        hypot, max, min, minmax, ldexp, frexp,
        clamp, clamp!, modf, ^, mod2pi, rem2pi,
        @evalpoly, evalpoly
@@ -31,7 +31,11 @@ using .Base: IEEEFloat
 
 @noinline function throw_complex_domainerror(f::Symbol, x)
     throw(DomainError(x,
-        LazyString(f," will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
+        LazyString(f," was called with a negative real argument but will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
+end
+@noinline function throw_complex_domainerror_neg1(f::Symbol, x)
+    throw(DomainError(x,
+        LazyString(f," was called with a real argument < -1 but will only return a complex result if called with a complex argument. Try ", f,"(Complex(x)).")))
 end
 @noinline function throw_exp_domainerror(x)
     throw(DomainError(x, LazyString(
@@ -41,6 +45,11 @@ end
 end
 
 # non-type specific math functions
+
+function two_mul(x::T, y::T) where {T<:Number}
+    xy = x*y
+    xy, fma(x, y, -xy)
+end
 
 @assume_effects :consistent @inline function two_mul(x::Float64, y::Float64)
     if Core.Intrinsics.have_fma(Float64)
@@ -295,14 +304,19 @@ end
 
 # polynomial evaluation using compensated summation.
 # much more accurate, especially when lo can be combined with other rounding errors
-Base.@assume_effects :terminates_locally @inline function exthorner(x, p::Tuple)
-    hi, lo = p[end], zero(x)
-    for i in length(p)-1:-1:1
-        pi = getfield(p, i) # needed to prove consistency
-        prod, err = two_mul(hi,x)
-        hi = pi+prod
-        lo = fma(lo, x, prod - (hi - pi) + err)
-    end
+@inline function exthorner(x::T, p::Tuple{T,T,T}) where T<:Union{Float32,Float64}
+    hi, lo = p[lastindex(p)], zero(x)
+    hi, lo = _exthorner(2, x, p, hi, lo)
+    hi, lo = _exthorner(1, x, p, hi, lo)
+    return hi, lo
+end
+
+@inline function _exthorner(i::Int, x::T, p::Tuple{T,T,T}, hi::T, lo::T) where T<:Union{Float32,Float64}
+    i == 2 || i == 1 || error("unexpected index")
+    pi = p[i]
+    prod, err = two_mul(hi,x)
+    hi = pi+prod
+    lo = fma(lo, x, prod - (hi - pi) + err)
     return hi, lo
 end
 
@@ -358,14 +372,14 @@ julia> log(4,2)
 
 julia> log(-2, 3)
 ERROR: DomainError with -2.0:
-log will only return a complex result if called with a complex argument. Try log(Complex(x)).
+log was called with a negative real argument but will only return a complex result if called with a complex argument. Try log(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
 
 julia> log(2, -3)
 ERROR: DomainError with -3.0:
-log will only return a complex result if called with a complex argument. Try log(Complex(x)).
+log was called with a negative real argument but will only return a complex result if called with a complex argument. Try log(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
@@ -439,7 +453,7 @@ tanh(x::Number)
 
 Compute the inverse tangent of `y` or `y/x`, respectively.
 
-For one argument, this is the angle in radians between the positive *x*-axis and the point
+For one real argument, this is the angle in radians between the positive *x*-axis and the point
 (1, *y*), returning a value in the interval ``[-\\pi/2, \\pi/2]``.
 
 For two arguments, this is the angle in radians between the positive *x*-axis and the
@@ -567,8 +581,11 @@ atanh(x::Number)
 """
     log(x)
 
-Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
-[`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
+Compute the natural logarithm of `x`.
+
+Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use complex arguments to obtain complex results.
+Has a branch cut along the negative real axis, for which `-0.0im` is taken to be below the axis.
 
 See also [`ℯ`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
@@ -579,10 +596,16 @@ julia> log(2)
 
 julia> log(-3)
 ERROR: DomainError with -3.0:
-log will only return a complex result if called with a complex argument. Try log(Complex(x)).
+log was called with a negative real argument but will only return a complex result if called with a complex argument. Try log(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
+
+julia> log(-3 + 0im)
+1.0986122886681098 + 3.141592653589793im
+
+julia> log(-3 - 0.0im)
+1.0986122886681098 - 3.141592653589793im
 
 julia> log.(exp.(-1:1))
 3-element Vector{Float64}:
@@ -611,7 +634,7 @@ julia> log2(10)
 
 julia> log2(-2)
 ERROR: DomainError with -2.0:
-log2 will only return a complex result if called with a complex argument. Try log2(Complex(x)).
+log2 was called with a negative real argument but will only return a complex result if called with a complex argument. Try log2(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(f::Symbol, x::Float64) at ./math.jl:31
 [...]
@@ -641,7 +664,7 @@ julia> log10(2)
 
 julia> log10(-2)
 ERROR: DomainError with -2.0:
-log10 will only return a complex result if called with a complex argument. Try log10(Complex(x)).
+log10 was called with a negative real argument but will only return a complex result if called with a complex argument. Try log10(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(f::Symbol, x::Float64) at ./math.jl:31
 [...]
@@ -665,7 +688,7 @@ julia> log1p(0)
 
 julia> log1p(-2)
 ERROR: DomainError with -2.0:
-log1p will only return a complex result if called with a complex argument. Try log1p(Complex(x)).
+log1p was called with a real argument < -1 but will only return a complex result if called with a complex argument. Try log1p(Complex(x)).
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
@@ -681,8 +704,13 @@ end
 """
     sqrt(x)
 
-Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
-Use complex negative arguments instead. The prefix operator `√` is equivalent to `sqrt`.
+Return ``\\sqrt{x}``.
+
+Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use complex negative arguments instead. Note that `sqrt` has a branch cut
+along the negative real axis.
+
+The prefix operator `√` is equivalent to `sqrt`.
 
 See also: [`hypot`](@ref).
 
@@ -701,6 +729,9 @@ Stacktrace:
 julia> sqrt(big(complex(-81)))
 0.0 + 9.0im
 
+julia> sqrt(-81 - 0.0im)  # -0.0im is below the branch cut
+0.0 - 9.0im
+
 julia> .√(1:4)
 4-element Vector{Float64}:
  1.0
@@ -710,6 +741,13 @@ julia> .√(1:4)
 ```
 """
 sqrt(x)
+
+"""
+    fourthroot(x)
+
+Return the fourth root of `x` by applying `sqrt` twice successively.
+"""
+fourthroot(x::Number) = sqrt(sqrt(x))
 
 """
     hypot(x, y)
@@ -737,7 +775,7 @@ julia> hypot(a, a)
 
 julia> √(a^2 + a^2) # a^2 overflows
 ERROR: DomainError with -2.914184810805068e18:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 
@@ -839,6 +877,20 @@ function _hypot(x::NTuple{N,<:Number}) where {N}
     else
         return maxabs * sqrt(sum(y -> abs2(y / maxabs), x))
     end
+end
+
+function _hypot(x::NTuple{N,<:IEEEFloat}) where {N}
+    T = eltype(x)
+    infT = convert(T, Inf)
+    x = abs.(x) # doesn't change result but enables computational shortcuts
+    # note: any() was causing this to not inline for N=3 but mapreduce() was not
+    mapreduce(==(infT), |, x) && return infT # return Inf even if an argument is NaN
+    maxabs = reinterpret(T, maximum(z -> reinterpret(Signed, z), x)) # for abs(::IEEEFloat) values, a ::BitInteger cast does not change the result
+    maxabs > zero(T) || return maxabs # catch NaN before the @fastmath below, but also shortcut 0 since we can (remove if no more @fastmath below)
+    scale,invscale = scaleinv(maxabs)
+     # @fastmath(+) to allow reassociation (see #48129)
+    add_fast(x, y) = Core.Intrinsics.add_float_fast(x, y) # @fastmath is not available during bootstrap
+    return scale * sqrt(mapreduce(y -> abs2(y * invscale), add_fast, x))
 end
 
 atan(y::Real, x::Real) = atan(promote(float(y),float(x))...)
@@ -949,27 +1001,28 @@ end
 ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 """
-    exponent(x) -> Int
+    exponent(x::Real) -> Int
 
 Returns the largest integer `y` such that `2^y ≤ abs(x)`.
-For a normalized floating-point number `x`, this corresponds to the exponent of `x`.
+
+Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
+For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
+
+See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref).
 
 # Examples
 ```jldoctest
 julia> exponent(8)
 3
 
-julia> exponent(64//1)
-6
-
 julia> exponent(6.5)
 2
 
-julia> exponent(16.0)
-4
+julia> exponent(-1//4)
+-2
 
-julia> exponent(3.142e-4)
--12
+julia> exponent(floatmin(Float32)), exponent(nextfloat(0.0f0))
+(-126, -149)
 ```
 """
 function exponent(x::T) where T<:IEEEFloat
@@ -1066,6 +1119,40 @@ function frexp(x::T) where T<:IEEEFloat
     return reinterpret(T, xu), k
 end
 
+"""
+    $(@__MODULE__).scaleinv(x)
+
+Compute `(scale, invscale)` where `scale` and `invscale` are non-subnormal
+(https://en.wikipedia.org/wiki/Subnormal_number) finite powers of two such that
+`scale * invscale == 1` and `scale` is roughly on the order of `abs(x)`.
+Inf, NaN, and zero inputs also result in finite nonzero outputs.
+These values are useful to scale computations to prevent overflow and underflow
+without round-off errors or division.
+
+UNSTABLE DETAIL: For `x isa IEEEFLoat`, `scale` is chosen to be the
+`prevpow(2,abs(x))` when possible, but is never less than floatmin(x) or greater
+than inv(floatmin(x)). `Inf` and `NaN` resolve to `inv(floatmin(x))`. This
+behavior is subject to change.
+
+# Examples
+```jldoctest
+julia> $(@__MODULE__).scaleinv(7.5)
+(4.0, 0.25)
+```
+"""
+function scaleinv(x::T) where T<:IEEEFloat
+    # by removing the sign and significand and restricting values to a limited range,
+    # we can invert a number using bit-twiddling instead of division
+    U = uinttype(T)
+    umin = reinterpret(U, floatmin(T))
+    umax = reinterpret(U, inv(floatmin(T)))
+    emask = exponent_mask(T) # used to strip sign and significand
+    u = clamp(reinterpret(U, x) & emask, umin, umax)
+    scale = reinterpret(T, u)
+    invscale = reinterpret(T, umin + umax - u) # inv(scale)
+    return scale, invscale
+end
+
 # NOTE: This `rem` method is adapted from the msun `remainder` and `remainderf`
 # functions, which are under the following license:
 #
@@ -1150,7 +1237,7 @@ end
 end
 
 @inline function pow_body(xu::UInt64, y::Float64)
-    logxhi,logxlo = Base.Math._log_ext(xu)
+    logxhi,logxlo = _log_ext(xu)
     xyhi, xylo = two_mul(logxhi,y)
     xylo = muladd(logxlo, y, xylo)
     hi = xyhi+xylo
@@ -1224,7 +1311,7 @@ end
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
     # double-double numbers and returns the high double. References:
-    # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
+    # [1] https://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
@@ -1278,7 +1365,8 @@ julia> rem2pi(7pi/4, RoundDown)
 """
 function rem2pi end
 function rem2pi(x::Float64, ::RoundingMode{:Nearest})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     abs(x) < pi && return x
 
@@ -1303,7 +1391,8 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
     end
 end
 function rem2pi(x::Float64, ::RoundingMode{:ToZero})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     ax = abs(x)
     ax <= 2*Float64(pi,RoundDown) && return x
@@ -1330,7 +1419,8 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     copysign(z,x)
 end
 function rem2pi(x::Float64, ::RoundingMode{:Down})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     if x < pi4o2_h
         if x >= 0
@@ -1361,7 +1451,8 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
     end
 end
 function rem2pi(x::Float64, ::RoundingMode{:Up})
-    isfinite(x) || return NaN
+    isnan(x) && return x
+    isinf(x) && return NaN
 
     if x > -pi4o2_h
         if x <= 0
@@ -1395,9 +1486,11 @@ end
 rem2pi(x::Float32, r::RoundingMode) = Float32(rem2pi(Float64(x), r))
 rem2pi(x::Float16, r::RoundingMode) = Float16(rem2pi(Float64(x), r))
 rem2pi(x::Int32, r::RoundingMode) = rem2pi(Float64(x), r)
-function rem2pi(x::Int64, r::RoundingMode)
-    fx = Float64(x)
-    fx == x || throw(ArgumentError("Int64 argument to rem2pi is too large: $x"))
+
+# general fallback
+function rem2pi(x::Integer, r::RoundingMode)
+    fx = float(x)
+    fx == x || throw(ArgumentError(LazyString(typeof(x), " argument to rem2pi is too large: ", x)))
     rem2pi(fx, r)
 end
 
@@ -1485,7 +1578,7 @@ include("special/log.jl")
 # Float16 definitions
 
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
+             :atanh,:log,:log2,:log10,:sqrt,:fourthroot,:log1p)
     @eval begin
         $func(a::Float16) = Float16($func(Float32(a)))
         $func(a::ComplexF16) = ComplexF16($func(ComplexF32(a)))
@@ -1503,7 +1596,7 @@ sincos(a::Float16) = Float16.(sincos(Float32(a)))
 for f in (:sin, :cos, :tan, :asin, :atan, :acos,
           :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
           :exp, :exp2, :exp10, :expm1, :log, :log2, :log10, :log1p,
-          :exponent, :sqrt, :cbrt)
+          :exponent, :sqrt, :cbrt, :sinpi, :cospi, :sincospi, :tanpi)
     @eval function ($f)(x::Real)
         xf = float(x)
         x === xf && throw(MethodError($f, (x,)))
@@ -1521,5 +1614,6 @@ end
 exp2(x::AbstractFloat) = 2^x
 exp10(x::AbstractFloat) = 10^x
 clamp(::Missing, lo, hi) = missing
+fourthroot(::Missing) = missing
 
 end # module

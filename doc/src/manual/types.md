@@ -57,9 +57,9 @@ kinds of programming, however, become clearer, simpler, faster and more robust w
 The `::` operator can be used to attach type annotations to expressions and variables in programs.
 There are two primary reasons to do this:
 
-1. As an assertion to help confirm that your program works the way you expect,
+1. As an assertion to help confirm that your program works the way you expect, and
 2. To provide extra type information to the compiler, which can then improve performance in some
-   cases
+   cases.
 
 When appended to an expression computing a value, the `::` operator is read as "is an instance
 of". It can be used anywhere to assert that the value of the expression on the left is an instance
@@ -713,10 +713,12 @@ For the default constructor, exactly one argument must be supplied for each fiel
 ```jldoctest pointtype
 julia> Point{Float64}(1.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64)
+The type `Point{Float64}` exists, but no method is defined for this combination of argument types when trying to construct it.
 [...]
 
-julia> Point{Float64}(1.0,2.0,3.0)
+julia> Point{Float64}(1.0, 2.0, 3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
+The type `Point{Float64}` exists, but no method is defined for this combination of argument types when trying to construct it.
 [...]
 ```
 
@@ -748,6 +750,7 @@ to `Point` have the same type. When this isn't the case, the constructor will fa
 ```jldoctest pointtype
 julia> Point(1,2.5)
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
+The type `Point` exists, but no method is defined for this combination of argument types when trying to construct it.
 
 Closest candidates are:
   Point(::T, !Matched::T) where T
@@ -978,24 +981,29 @@ alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` element
 
 Named tuples are instances of the [`NamedTuple`](@ref) type, which has two parameters: a tuple of
 symbols giving the field names, and a tuple type giving the field types.
+For convenience, `NamedTuple` types are printed using the [`@NamedTuple`](@ref) macro which provides a
+convenient `struct`-like syntax for declaring these types via `key::Type` declarations,
+where an omitted `::Type` corresponds to `::Any`.
+
 
 ```jldoctest
-julia> typeof((a=1,b="hello"))
-NamedTuple{(:a, :b), Tuple{Int64, String}}
+julia> typeof((a=1,b="hello")) # prints in macro form
+@NamedTuple{a::Int64, b::String}
+
+julia> NamedTuple{(:a, :b), Tuple{Int64, String}} # long form of the type
+@NamedTuple{a::Int64, b::String}
 ```
 
-The [`@NamedTuple`](@ref) macro provides a more convenient `struct`-like syntax for declaring
-`NamedTuple` types via `key::Type` declarations, where an omitted `::Type` corresponds to `::Any`.
+The `begin ... end` form of the `@NamedTuple` macro allows the declarations to be
+split across multiple lines (similar to a struct declaration), but is otherwise equivalent:
+
 
 ```jldoctest
-julia> @NamedTuple{a::Int, b::String}
-NamedTuple{(:a, :b), Tuple{Int64, String}}
-
 julia> @NamedTuple begin
            a::Int
            b::String
        end
-NamedTuple{(:a, :b), Tuple{Int64, String}}
+@NamedTuple{a::Int64, b::String}
 ```
 
 A `NamedTuple` type can be used as a constructor, accepting a single tuple argument.
@@ -1003,10 +1011,10 @@ The constructed `NamedTuple` type can be either a concrete type, with both param
 or a type that specifies only field names:
 
 ```jldoctest
-julia> @NamedTuple{a::Float32,b::String}((1,""))
+julia> @NamedTuple{a::Float32,b::String}((1, ""))
 (a = 1.0f0, b = "")
 
-julia> NamedTuple{(:a, :b)}((1,""))
+julia> NamedTuple{(:a, :b)}((1, ""))
 (a = 1, b = "")
 ```
 
@@ -1333,6 +1341,16 @@ type -- either [`Int32`](@ref) or [`Int64`](@ref).
 reflects the size of a native pointer on that machine, the floating point register sizes
 are specified by the IEEE-754 standard.)
 
+Type aliases may be parametrized:
+
+```jldoctest
+julia> const Family{T} = Set{T}
+Set
+
+julia> Family{Char} === Set{Char}
+true
+```
+
 ## Operations on Types
 
 Since types in Julia are themselves objects, ordinary functions can operate on them. Some functions
@@ -1398,6 +1416,8 @@ is raised:
 ```jldoctest; filter = r"Closest candidates.*"s
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
+The function `supertype` exists, but no method is defined for this combination of argument types.
+
 Closest candidates are:
 [...]
 ```

@@ -30,7 +30,7 @@ to implement indexing (and indexed assignment) with a single `Int` index;
 all other indexing expressions — including multidimensional accesses — will
 be recomputed to the linear index.  For example, if `A` were a `2×3` custom
 matrix with linear indexing, and we referenced `A[1, 3]`, this would be
-recomputed to the equivalent linear index and call `A[5]` since `2*1 + 3 = 5`.
+recomputed to the equivalent linear index and call `A[5]` since `1 + 2*(3 - 1) = 5`.
 
 See also [`IndexCartesian`](@ref).
 """
@@ -53,7 +53,7 @@ to implement indexing (and indexed assignment) with exactly `N` `Int` indices;
 all other indexing expressions — including linear indexing — will
 be recomputed to the equivalent Cartesian location.  For example, if `A` were a `2×3` custom
 matrix with cartesian indexing, and we referenced `A[5]`, this would be
-recomputed to the equivalent Cartesian index and call `A[1, 3]` since `5 = 2*1 + 3`.
+recomputed to the equivalent Cartesian index and call `A[1, 3]` since `5 = 1 + 2*(3 - 1)`.
 
 It is significantly more expensive to compute Cartesian indices from a linear index than it is
 to go the other way.  The former operation requires division — a very costly operation — whereas
@@ -92,7 +92,7 @@ particular, [`eachindex`](@ref) creates an iterator whose type depends
 on the setting of this trait.
 """
 IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
-IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{Union{}}, slurp...) = IndexLinear()
 IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
 IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
@@ -106,26 +106,49 @@ IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 
 promote_shape(::Tuple{}, ::Tuple{}) = ()
 
-function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
-    if a[1] != b[1]
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
+# Consistent error message for promote_shape mismatch, hiding type details like
+# OneTo. When b ≡ nothing, it is omitted; i can be supplied for an index.
+function throw_promote_shape_mismatch(a::Tuple, b::Union{Nothing,Tuple}, i = nothing)
+    if a isa Tuple{Vararg{Base.OneTo}} && (b === nothing || b isa Tuple{Vararg{Base.OneTo}})
+        a = map(lastindex, a)::Dims
+        b === nothing || (b = map(lastindex, b)::Dims)
     end
+    _has_axes = !(a isa Dims && (b === nothing || b isa Dims))
+    if _has_axes
+        _normalize(d) = map(x -> firstindex(x):lastindex(x), d)
+        a = _normalize(a)
+        b === nothing || (b = _normalize(b))
+        _things = "axes "
+    else
+        _things = "size "
+    end
+    msg = IOBuffer()
+    print(msg, "a has ", _things)
+    print(msg, a)
+    if b ≢ nothing
+        print(msg, ", b has ", _things)
+        print(msg, b)
+    end
+    if i ≢ nothing
+        print(msg, ", mismatch at dim ", i)
+    end
+    throw(DimensionMismatch(String(take!(msg))))
+end
+
+function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
+    a[1] != b[1] && throw_promote_shape_mismatch(a, b)
     return a
 end
 
 function promote_shape(a::Tuple{Int,Int}, b::Tuple{Int,})
-    if a[1] != b[1] || a[2] != 1
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
-    end
+    (a[1] != b[1] || a[2] != 1) && throw_promote_shape_mismatch(a, b)
     return a
 end
 
 promote_shape(a::Tuple{Int,}, b::Tuple{Int,Int}) = promote_shape(b, a)
 
 function promote_shape(a::Tuple{Int, Int}, b::Tuple{Int, Int})
-    if a[1] != b[1] || a[2] != b[2]
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
-    end
+    (a[1] != b[1] || a[2] != b[2]) && throw_promote_shape_mismatch(a, b)
     return a
 end
 
@@ -153,14 +176,10 @@ function promote_shape(a::Dims, b::Dims)
         return promote_shape(b, a)
     end
     for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
-        end
+        a[i] != b[i] && throw_promote_shape_mismatch(a, b, i)
     end
     for i=length(b)+1:length(a)
-        if a[i] != 1
-            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
-        end
+        a[i] != 1 && throw_promote_shape_mismatch(a, nothing, i)
     end
     return a
 end
@@ -174,14 +193,10 @@ function promote_shape(a::Indices, b::Indices)
         return promote_shape(b, a)
     end
     for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
-        end
+        a[i] != b[i] && throw_promote_shape_mismatch(a, b, i)
     end
     for i=length(b)+1:length(a)
-        if a[i] != 1:1
-            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
-        end
+        a[i] != 1:1 && throw_promote_shape_mismatch(a, nothing, i)
     end
     return a
 end
@@ -349,15 +364,8 @@ to_indices(A, I::Tuple{}) = ()
 to_indices(A, I::Tuple{Vararg{Int}}) = I
 to_indices(A, I::Tuple{Vararg{Integer}}) = (@inline; to_indices(A, (), I))
 to_indices(A, inds, ::Tuple{}) = ()
-function to_indices(A, inds, I::Tuple{Any, Vararg{Any}})
-    @inline
-    head = _to_indices1(A, inds, I[1])
-    rest = to_indices(A, _cutdim(inds, I[1]), tail(I))
-    (head..., rest...)
-end
-
-_to_indices1(A, inds, I1) = (to_index(A, I1),)
-_cutdim(inds, I1) = safe_tail(inds)
+to_indices(A, inds, I::Tuple{Any, Vararg}) =
+    (@inline; (to_index(A, I[1]), to_indices(A, safe_tail(inds), tail(I))...))
 
 """
     Slice(indices)
@@ -485,7 +493,7 @@ LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) whe
     LinearIndices(map(_convert2ind, inds))
 LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
-_convert2ind(i::Integer) = Base.OneTo(i)
+_convert2ind(i::Integer) = oneto(i)
 _convert2ind(ind::AbstractUnitRange) = first(ind):last(ind)
 
 function indices_promote_type(::Type{Tuple{R1,Vararg{R1,N}}}, ::Type{Tuple{R2,Vararg{R2,N}}}) where {R1,R2,N}
@@ -504,6 +512,7 @@ promote_rule(a::Type{IdentityUnitRange{T1}}, b::Type{IdentityUnitRange{T2}}) whe
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
 axes(iter::LinearIndices) = map(axes1, iter.indices)
 size(iter::LinearIndices) = map(length, iter.indices)
+isassigned(iter::LinearIndices, i::Int) = checkbounds(Bool, iter, i)
 function getindex(iter::LinearIndices, i::Int)
     @inline
     @boundscheck checkbounds(iter, i)

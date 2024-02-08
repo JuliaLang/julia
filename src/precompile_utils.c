@@ -120,7 +120,7 @@ static void _compile_all_union(jl_value_t *sig)
                 jl_svecset(p, i, ty);
             }
         }
-        methsig = (jl_value_t*)jl_apply_tuple_type(p);
+        methsig = jl_apply_tuple_type(p, 1);
         methsig = jl_rewrap_unionall(methsig, sig);
         _compile_all_tvar_union(methsig);
     }
@@ -132,6 +132,8 @@ static int compile_all_collect__(jl_typemap_entry_t *ml, void *env)
 {
     jl_array_t *allmeths = (jl_array_t*)env;
     jl_method_t *m = ml->func.method;
+    if (m->external_mt)
+        return 1;
     if (m->source) {
         // method has a non-generated definition; can be compiled generically
         jl_array_ptr_1d_push(allmeths, (jl_value_t*)m);
@@ -152,7 +154,7 @@ static void jl_compile_all_defs(jl_array_t *mis)
 
     jl_foreach_reachable_mtable(compile_all_collect_, allmeths);
 
-    size_t i, l = jl_array_len(allmeths);
+    size_t i, l = jl_array_nrows(allmeths);
     for (i = 0; i < l; i++) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(allmeths, i);
         if (jl_is_datatype(m->sig) && jl_isa_compileable_sig((jl_tupletype_t*)m->sig, jl_emptysvec, m)) {
@@ -184,8 +186,8 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
             jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
             if (inferred &&
                 inferred != jl_nothing &&
-                jl_ir_flag_inferred((jl_array_t*)inferred) &&
-                (jl_ir_inlining_cost((jl_array_t*)inferred) == UINT16_MAX)) {
+                jl_ir_flag_inferred(inferred) &&
+                (jl_ir_inlining_cost(inferred) == UINT16_MAX)) {
                 do_compile = 1;
             }
             else if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL || jl_atomic_load_relaxed(&codeinst->precompile)) {
@@ -204,18 +206,25 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
 static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *closure)
 {
     jl_method_t *m = def->func.method;
+    if (m->external_mt)
+        return 1;
     if ((m->name == jl_symbol("__init__") || m->ccallable) && jl_is_dispatch_tupletype(m->sig)) {
         // ensure `__init__()` and @ccallables get strongly-hinted, specialized, and compiled
         jl_method_instance_t *mi = jl_specializations_get_linfo(m, m->sig, jl_emptysvec);
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
     }
     else {
-        jl_svec_t *specializations = jl_atomic_load_relaxed(&def->func.method->specializations);
-        size_t i, l = jl_svec_len(specializations);
-        for (i = 0; i < l; i++) {
-            jl_value_t *mi = jl_svecref(specializations, i);
-            if (mi != jl_nothing)
-                precompile_enq_specialization_((jl_method_instance_t*)mi, closure);
+        jl_value_t *specializations = jl_atomic_load_relaxed(&def->func.method->specializations);
+        if (!jl_is_svec(specializations)) {
+            precompile_enq_specialization_((jl_method_instance_t*)specializations, closure);
+        }
+        else {
+            size_t i, l = jl_svec_len(specializations);
+            for (i = 0; i < l; i++) {
+                jl_value_t *mi = jl_svecref(specializations, i);
+                if (mi != jl_nothing)
+                    precompile_enq_specialization_((jl_method_instance_t*)mi, closure);
+            }
         }
     }
     if (m->ccallable)
@@ -234,7 +243,7 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
     jl_method_instance_t *mi = NULL;
     JL_GC_PUSH2(&m2, &mi);
     m2 = jl_alloc_vec_any(0);
-    for (size_t i = 0; i < jl_array_len(m); i++) {
+    for (size_t i = 0; i < jl_array_nrows(m); i++) {
         jl_value_t *item = jl_array_ptr_ref(m, i);
         if (jl_is_method_instance(item)) {
             mi = (jl_method_instance_t*)item;
@@ -251,7 +260,8 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
             jl_array_ptr_1d_push(m2, item);
         }
     }
-    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage);
+    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage,
+                                         jl_atomic_load_acquire(&jl_world_counter));
     JL_GC_POP();
     return native_code;
 }
@@ -269,7 +279,7 @@ static void *jl_precompile(int all)
     return native_code;
 }
 
-static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_methods, jl_array_t *new_specializations)
+static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_methods, jl_array_t *new_ext_cis)
 {
     if (!worklist)
         return NULL;
@@ -277,27 +287,32 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
     // type signatures that were inferred but haven't been compiled
     jl_array_t *m = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&m);
-    size_t i, n = jl_array_len(worklist);
+    size_t i, n = jl_array_nrows(worklist);
     for (i = 0; i < n; i++) {
         jl_module_t *mod = (jl_module_t*)jl_array_ptr_ref(worklist, i);
         assert(jl_is_module(mod));
         foreach_mtable_in_module(mod, precompile_enq_all_specializations_, m);
     }
-    n = jl_array_len(extext_methods);
+    n = jl_array_nrows(extext_methods);
     for (i = 0; i < n; i++) {
         jl_method_t *method = (jl_method_t*)jl_array_ptr_ref(extext_methods, i);
         assert(jl_is_method(method));
-        jl_svec_t *specializations = jl_atomic_load_relaxed(&method->specializations);
-        size_t j, l = jl_svec_len(specializations);
-        for (j = 0; j < l; j++) {
-            jl_value_t *mi = jl_svecref(specializations, j);
-            if (mi != jl_nothing)
-                precompile_enq_specialization_((jl_method_instance_t*)mi, m);
+        jl_value_t *specializations = jl_atomic_load_relaxed(&method->specializations);
+        if (!jl_is_svec(specializations)) {
+            precompile_enq_specialization_((jl_method_instance_t*)specializations, m);
+        }
+        else {
+            size_t j, l = jl_svec_len(specializations);
+            for (j = 0; j < l; j++) {
+                jl_value_t *mi = jl_svecref(specializations, j);
+                if (mi != jl_nothing)
+                    precompile_enq_specialization_((jl_method_instance_t*)mi, m);
+            }
         }
     }
-    n = jl_array_len(new_specializations);
+    n = jl_array_nrows(new_ext_cis);
     for (i = 0; i < n; i++) {
-        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_specializations, i);
+        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_ext_cis, i);
         precompile_enq_specialization_(ci->def, m);
     }
     void *native_code = jl_precompile_(m, 1);

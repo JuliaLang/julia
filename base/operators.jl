@@ -52,8 +52,9 @@ Generic equality operator. Falls back to [`===`](@ref).
 Should be implemented for all types with a notion of equality, based on the abstract value
 that an instance represents. For example, all numeric types are compared by numeric value,
 ignoring type. Strings are compared as sequences of characters, ignoring encoding.
-For collections, `==` is generally called recursively on all contents,
-though other properties (like the shape for arrays) may also be taken into account.
+Collections of the same type generally compare their key sets, and if those are `==`, then compare the values
+for each of those keys, returning true if all such pairs are `==`.
+Other properties are typically not taken into account (such as the exact type).
 
 This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` and
 `NaN != NaN`.
@@ -61,8 +62,8 @@ This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` a
 The result is of type `Bool`, except when one of the operands is [`missing`](@ref),
 in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic)).
-For collections, `missing` is returned if at least one of the operands contains
-a `missing` value and all non-missing values are equal.
+Collections generally implement three-valued logic akin to [`all`](@ref), returning
+missing if any operands contain missing values and all other pairs are equal.
 Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 
 # Implementation
@@ -79,7 +80,7 @@ also implement [`<`](@ref) to ensure consistency of comparisons.
 ==
 
 """
-    isequal(x, y)
+    isequal(x, y) -> Bool
 
 Similar to [`==`](@ref), except for the treatment of floating point numbers
 and of missing values. `isequal` treats all floating-point `NaN` values as equal
@@ -143,7 +144,7 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
     isless(x, y)
 
 Test whether `x` is less than `y`, according to a fixed total order (defined together with
-[`isequal`](@ref)). `isless` is not defined on all pairs of values `(x, y)`. However, if it
+[`isequal`](@ref)). `isless` is not defined for pairs `(x, y)` of all types. However, if it
 is defined, it is expected to satisfy the following:
 - If `isless(x, y)` is defined, then so is `isless(y, x)` and `isequal(x, y)`,
   and exactly one of those three yields `true`.
@@ -154,13 +155,13 @@ Values that are normally unordered, such as `NaN`,
 are ordered after regular values.
 [`missing`](@ref) values are ordered last.
 
-This is the default comparison used by [`sort`](@ref).
+This is the default comparison used by [`sort!`](@ref).
 
 # Implementation
 Non-numeric types with a total order should implement this function.
 Numeric types only need to implement it if they have special values such as `NaN`.
 Types with a partial order should implement [`<`](@ref).
-See the documentation on [Alternate orderings](@ref) for how to define alternate
+See the documentation on [Alternate Orderings](@ref) for how to define alternate
 ordering methods that can be used in sorting and related functions.
 
 # Examples
@@ -177,6 +178,13 @@ function isless end
 isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & (isnan(y) | signless(x, y))) | (x < y)
+
+# Performance optimization to reduce branching
+# This is useful for sorting tuples of integers
+# TODO: remove this when the compiler can optimize the generic version better
+# See #48724 and #48753
+isless(a::Tuple{BitInteger, BitInteger}, b::Tuple{BitInteger, BitInteger}) =
+    isless(a[1], b[1]) | (isequal(a[1], b[1]) & isless(a[2], b[2]))
 
 """
     isgreater(x, y)
@@ -328,6 +336,8 @@ New types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
 
+See also [`isunordered`](@ref).
+
 # Examples
 ```jldoctest
 julia> 'a' < 'b'
@@ -455,13 +465,17 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0
 """
     max(x, y, ...)
 
-Return the maximum of the arguments (with respect to [`isless`](@ref)). See also the [`maximum`](@ref) function
-to take the maximum element from a collection.
+Return the maximum of the arguments, with respect to [`isless`](@ref).
+If any of the arguments is [`missing`](@ref), return `missing`.
+See also the [`maximum`](@ref) function to take the maximum element from a collection.
 
 # Examples
 ```jldoctest
 julia> max(2, 5, 1)
 5
+
+julia> max(5, missing, 6)
+missing
 ```
 """
 max(x, y) = ifelse(isless(y, x), x, y)
@@ -469,13 +483,17 @@ max(x, y) = ifelse(isless(y, x), x, y)
 """
     min(x, y, ...)
 
-Return the minimum of the arguments (with respect to [`isless`](@ref)). See also the [`minimum`](@ref) function
-to take the minimum element from a collection.
+Return the minimum of the arguments, with respect to [`isless`](@ref).
+If any of the arguments is [`missing`](@ref), return `missing`.
+See also the [`minimum`](@ref) function to take the minimum element from a collection.
 
 # Examples
 ```jldoctest
 julia> min(2, 5, 1)
 1
+
+julia> min(4, missing, 6)
+missing
 ```
 """
 min(x,y) = ifelse(isless(y, x), y, x)
@@ -881,6 +899,7 @@ julia> widen(1.5f0)
 """
 widen(x::T) where {T} = convert(widen(T), x)
 widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
+widen(x::Type{Union{}}, slurp...) = throw(MethodError(widen, (Union{},)))
 
 # function pipelining
 
@@ -1277,17 +1296,22 @@ used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
 
-function in(x, itr)
-    anymissing = false
-    for y in itr
-        v = (y == x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function in(x, itr::$ItrT)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for y in itr
+            v = (y == x)
+            if ismissing(v)
+                anymissing = true
+            elseif v
+                return true
+            end
         end
+        return anymissing ? missing : false
     end
-    return anymissing ? missing : false
 end
 
 const ∈ = in
@@ -1322,7 +1346,7 @@ a function equivalent to `y -> item in y`.
 
 Determine whether an item is in the given collection, in the sense that it is
 [`==`](@ref) to one of the values generated by iterating over the collection.
-Returns a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
+Return a `Bool` value, except if `item` is [`missing`](@ref) or `collection`
 contains `missing` but not `item`, in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 matching the behavior of [`any`](@ref) and [`==`](@ref)).
@@ -1344,7 +1368,7 @@ corresponding position in `collection`. To get a vector indicating whether each 
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
 
-See also: [`∉`](@ref).
+See also: [`∉`](@ref), [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 
 # Examples
 ```jldoctest
@@ -1382,8 +1406,6 @@ julia> [1, 2] .∈ ([2, 3],)
  0
  1
 ```
-
-See also: [`insorted`](@ref), [`contains`](@ref), [`occursin`](@ref), [`issubset`](@ref).
 """
 in
 

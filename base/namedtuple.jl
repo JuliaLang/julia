@@ -69,6 +69,7 @@ The name-value pairs can also be provided by splatting a named tuple or any
 iterator that yields two-value collections holding each a symbol as first
 value:
 
+```jldoctest
 julia> keys = (:a, :b, :c); values = (1, 2, 3);
 
 julia> NamedTuple{keys}(values)
@@ -123,7 +124,10 @@ end
 function NamedTuple{names, T}(nt::NamedTuple) where {names, T <: Tuple}
     if @generated
         Expr(:new, :(NamedTuple{names, T}),
-             Any[ :(convert(fieldtype(T, $n), getfield(nt, $(QuoteNode(names[n]))))) for n in 1:length(names) ]...)
+             Any[ :(let Tn = fieldtype(T, $n),
+                      ntn = getfield(nt, $(QuoteNode(names[n])))
+                      ntn isa Tn ? ntn : convert(Tn, ntn)
+                  end) for n in 1:length(names) ]...)
     else
         NamedTuple{names, T}(map(Fix1(getfield, nt), names))
     end
@@ -137,7 +141,7 @@ function NamedTuple{names}(nt::NamedTuple) where {names}
     else
         length_names = length(names::Tuple)
         types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length_names)...}
-        NamedTuple{names, types}(map(Fix1(getfield, nt), names))
+        _new_NamedTuple(NamedTuple{names, types}, map(Fix1(getfield, nt), names))
     end
 end
 
@@ -150,6 +154,12 @@ NamedTuple(itr) = (; itr...)
 NamedTuple{names, Union{}}(itr::Tuple) where {names} = throw(MethodError(NamedTuple{names, Union{}}, (itr,)))
 
 end # if Base
+
+# Like NamedTuple{names, T} as a constructor, but omits the additional
+# `convert` call, when the types are known to match the fields
+@eval function _new_NamedTuple(T::Type{NamedTuple{NTN, NTT}} where {NTN, NTT}, args::Tuple)
+    $(Expr(:splatnew, :T, :args))
+end
 
 length(t::NamedTuple) = nfields(t)
 iterate(t::NamedTuple, iter=1) = iter > nfields(t) ? nothing : (getfield(t, iter), iter + 1)
@@ -170,17 +180,24 @@ empty(::NamedTuple) = NamedTuple()
 prevind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)-1
 nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
-convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tuple} = nt
-convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
+convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
+convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
 
 function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
     NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
 end
 
-if nameof(@__MODULE__) === :Base
-    Tuple(nt::NamedTuple) = (nt...,)
-    (::Type{T})(nt::NamedTuple) where {T <: Tuple} = convert(T, Tuple(nt))
+function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple{names}}
+    # converting abstract NT to an abstract Tuple type, to a concrete NT1, is not straightforward, so this could just be an error, but we define it anyways
+    # _tuple_error(NT, nt)
+    T1 = Tuple{ntuple(i -> fieldtype(NT, i), Val(length(names)))...}
+    NT1 = NamedTuple{names, T1}
+    return NT1(T1(nt))::NT1::NT
 end
+
+if nameof(@__MODULE__) === :Base
+Tuple(nt::NamedTuple) = (nt...,)
+(::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
 
 function show(io::IO, t::NamedTuple)
     n = nfields(t)
@@ -213,6 +230,7 @@ function show(io::IO, t::NamedTuple)
         end
         print(io, ")")
     end
+end
 end
 
 eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
@@ -250,8 +268,11 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
 
-@assume_effects :total function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
-    @nospecialize an bn
+filter(f, xs::NamedTuple) = xs[filter(k -> f(xs[k]), keys(xs))]
+
+function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_total_meta
     names = Symbol[an...]
     for n in bn
         if !sym_in(n, an)
@@ -261,24 +282,31 @@ end
     (names...,)
 end
 
-@assume_effects :total function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
-    @nospecialize names a b
+function merge_types(names::Tuple{Vararg{Symbol}}, a::Type{<:NamedTuple}, b::Type{<:NamedTuple})
+    @nospecialize
+    @_total_meta
     bn = _nt_names(b)
     return Tuple{Any[ fieldtype(sym_in(names[n], bn) ? b : a, names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :foldable function merge_fallback(@nospecialize(a::NamedTuple), @nospecialize(b::NamedTuple),
-        @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+function merge_fallback(a::NamedTuple, b::NamedTuple,
+                        an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_foldable_meta
     names = merge_names(an, bn)
     types = merge_types(names, typeof(a), typeof(b))
     n = length(names)
-    A = Vector{Any}(undef, n)
+    A = Memory{Any}(undef, n)
     for i=1:n
         n = names[i]
         A[i] = getfield(sym_in(n, bn) ? b : a, n)
     end
-    NamedTuple{names}((A...,))::NamedTuple{names, types}
+    _new_NamedTuple(NamedTuple{names, types}, (A...,))
 end
+
+# This is `Experimental.@max_methods 4 function merge end`, which is not
+# defined at this point in bootstrap.
+typeof(function merge end).name.max_methods = UInt8(4)
 
 """
     merge(a::NamedTuple, bs::NamedTuple...)
@@ -310,7 +338,7 @@ function merge(a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
         names = merge_names(an, bn)
         types = merge_types(names, a, b)
         vals = Any[ :(getfield($(sym_in(names[n], bn) ? :b : :a), $(QuoteNode(names[n])))) for n in 1:length(names) ]
-        :( NamedTuple{$names,$types}(($(vals...),)) )
+        :( _new_NamedTuple(NamedTuple{$names,$types}, ($(vals...),)) )
     else
         merge_fallback(a, b, an, bn)
     end
@@ -356,7 +384,7 @@ function merge(a::NamedTuple, itr)
     merge(a, NamedTuple{(names...,)}((vals...,)))
 end
 
-keys(nt::NamedTuple{names}) where {names} = names
+keys(nt::NamedTuple{names}) where {names} = names::Tuple{Vararg{Symbol}}
 values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
 get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = isdefined(nt, key) ? getfield(nt, key) : default
@@ -365,8 +393,9 @@ tail(t::NamedTuple{names}) where names = NamedTuple{tail(names::Tuple)}(t)
 front(t::NamedTuple{names}) where names = NamedTuple{front(names::Tuple)}(t)
 reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
 
-@assume_effects :total function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
-    @nospecialize an bn
+function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_total_meta
     names = Symbol[]
     for n in an
         if !sym_in(n, bn)
@@ -376,21 +405,25 @@ reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
     (names...,)
 end
 
-@assume_effects :foldable function diff_types(@nospecialize(a::NamedTuple), @nospecialize(names::Tuple{Vararg{Symbol}}))
+function diff_types(a::NamedTuple, names::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_foldable_meta
     return Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
 end
 
-@assume_effects :foldable function diff_fallback(@nospecialize(a::NamedTuple), @nospecialize(an::Tuple{Vararg{Symbol}}), @nospecialize(bn::Tuple{Vararg{Symbol}}))
+function diff_fallback(a::NamedTuple, an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
+    @nospecialize
+    @_foldable_meta
     names = diff_names(an, bn)
     isempty(names) && return (;)
     types = diff_types(a, names)
     n = length(names)
-    A = Vector{Any}(undef, n)
+    A = Memory{Any}(undef, n)
     for i=1:n
         n = names[i]
         A[i] = getfield(a, n)
     end
-    NamedTuple{names}((A...,))::NamedTuple{names, types}
+    _new_NamedTuple(NamedTuple{names, types}, (A...,))
 end
 
 """
@@ -406,7 +439,7 @@ function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{
         idx = Int[ fieldindex(a, names[n]) for n in 1:length(names) ]
         types = Tuple{Any[ fieldtype(a, idx[n]) for n in 1:length(idx) ]...}
         vals = Any[ :(getfield(a, $(idx[n]))) for n in 1:length(idx) ]
-        return :( NamedTuple{$names,$types}(($(vals...),)) )
+        return :( _new_NamedTuple(NamedTuple{$names,$types}, ($(vals...),)) )
     else
         return diff_fallback(a, an, bn)
     end
@@ -446,20 +479,20 @@ This macro gives a more convenient syntax for declaring `NamedTuple` types. It r
 type with the given keys and types, equivalent to `NamedTuple{(:key1, :key2, ...), Tuple{Type1,Type2,...}}`.
 If the `::Type` declaration is omitted, it is taken to be `Any`.   The `begin ... end` form allows the
 declarations to be split across multiple lines (similar to a `struct` declaration), but is otherwise
-equivalent.
+equivalent. The `NamedTuple` macro is used when printing `NamedTuple` types to e.g. the REPL.
 
-For example, the tuple `(a=3.1, b="hello")` has a type `NamedTuple{(:a, :b),Tuple{Float64,String}}`, which
+For example, the tuple `(a=3.1, b="hello")` has a type `NamedTuple{(:a, :b), Tuple{Float64, String}}`, which
 can also be declared via `@NamedTuple` as:
 
 ```jldoctest
 julia> @NamedTuple{a::Float64, b::String}
-NamedTuple{(:a, :b), Tuple{Float64, String}}
+@NamedTuple{a::Float64, b::String}
 
 julia> @NamedTuple begin
            a::Float64
            b::String
        end
-NamedTuple{(:a, :b), Tuple{Float64, String}}
+@NamedTuple{a::Float64, b::String}
 ```
 
 !!! compat "Julia 1.5"
@@ -474,6 +507,66 @@ macro NamedTuple(ex)
     vars = [QuoteNode(e isa Symbol ? e : e.args[1]) for e in decls]
     types = [esc(e isa Symbol ? :Any : e.args[2]) for e in decls]
     return :(NamedTuple{($(vars...),), Tuple{$(types...)}})
+end
+
+"""
+    @Kwargs{key1::Type1, key2::Type2, ...}
+
+This macro gives a convenient way to construct the type representation of keyword arguments
+from the same syntax as [`@NamedTuple`](@ref).
+For example, when we have a function call like `func([positional arguments]; kw1=1.0, kw2="2")`,
+we can use this macro to construct the internal type representation of the keyword arguments
+as `@Kwargs{kw1::Float64, kw2::String}`.
+The macro syntax is specifically designed to simplify the signature type of a keyword method
+when it is printed in the stack trace view.
+
+```julia
+julia> @Kwargs{init::Int} # the internal representation of keyword arguments
+Base.Pairs{Symbol, Int64, Tuple{Symbol}, @NamedTuple{init::Int64}}
+
+julia> sum("julia"; init=1)
+ERROR: MethodError: no method matching +(::Char, ::Char)
+The function `+` exists, but no method is defined for this combination of argument types.
+
+Closest candidates are:
+  +(::Any, ::Any, ::Any, ::Any...)
+   @ Base operators.jl:585
+  +(::Integer, ::AbstractChar)
+   @ Base char.jl:247
+  +(::T, ::Integer) where T<:AbstractChar
+   @ Base char.jl:237
+
+Stacktrace:
+  [1] add_sum(x::Char, y::Char)
+    @ Base ./reduce.jl:24
+  [2] BottomRF
+    @ Base ./reduce.jl:86 [inlined]
+  [3] _foldl_impl(op::Base.BottomRF{typeof(Base.add_sum)}, init::Int64, itr::String)
+    @ Base ./reduce.jl:62
+  [4] foldl_impl(op::Base.BottomRF{typeof(Base.add_sum)}, nt::Int64, itr::String)
+    @ Base ./reduce.jl:48 [inlined]
+  [5] mapfoldl_impl(f::typeof(identity), op::typeof(Base.add_sum), nt::Int64, itr::String)
+    @ Base ./reduce.jl:44 [inlined]
+  [6] mapfoldl(f::typeof(identity), op::typeof(Base.add_sum), itr::String; init::Int64)
+    @ Base ./reduce.jl:175 [inlined]
+  [7] mapreduce(f::typeof(identity), op::typeof(Base.add_sum), itr::String; kw::@Kwargs{init::Int64})
+    @ Base ./reduce.jl:307 [inlined]
+  [8] sum(f::typeof(identity), a::String; kw::@Kwargs{init::Int64})
+    @ Base ./reduce.jl:535 [inlined]
+  [9] sum(a::String; kw::@Kwargs{init::Int64})
+    @ Base ./reduce.jl:564 [inlined]
+ [10] top-level scope
+    @ REPL[12]:1
+```
+
+!!! compat "Julia 1.10"
+    This macro is available as of Julia 1.10.
+"""
+macro Kwargs(ex)
+    return :(let
+        NT = @NamedTuple $ex
+        Base.Pairs{keytype(NT),eltype(NT),typeof(NT.parameters[1]),NT}
+    end)
 end
 
 @constprop :aggressive function split_rest(t::NamedTuple{names}, n::Int, st...) where {names}

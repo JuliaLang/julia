@@ -18,6 +18,18 @@ const patterns = split("""
     *Makefile
 """)
 
+# Note: `git ls-files` gives `/` as a path separator on Windows,
+#   so we just use `/` for all platforms.
+allow_tabs(path) =
+    path == "Make.inc" ||
+    endswith(path, "Makefile") ||
+    endswith(path, ".make") ||
+    endswith(path, ".mk") ||
+    startswith(path, "src/support") ||
+    startswith(path, "src/flisp") ||
+    endswith(path, "test/syntax.jl") ||
+    endswith(path, "test/triplequote.jl")
+
 const errors = Set{Tuple{String,Int,String}}()
 
 for path in eachline(`git ls-files -- $patterns`)
@@ -32,6 +44,8 @@ for path in eachline(`git ls-files -- $patterns`)
         lineno += 1
         contains(line, '\r')   && file_err("non-UNIX line endings")
         contains(line, '\ua0') && line_err("non-breaking space")
+        allow_tabs(path) ||
+        contains(line, '\t')   && line_err("tab")
         endswith(line, '\n')   || line_err("no trailing newline")
         line = chomp(line)
         endswith(line, r"\s")  && line_err("trailing whitespace")

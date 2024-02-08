@@ -36,7 +36,7 @@ checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 ## xref: https://github.com/JuliaPackaging/Yggdrasil/blob/master/L/LibCURL/common.jl
 # Disable....almost everything
 CURL_CONFIGURE_FLAGS := $(CONFIGURE_COMMON) \
-	--without-ssl --without-gnutls --without-libidn2 --without-librtmp \
+	--without-gnutls --without-libidn2 --without-librtmp \
 	--without-nss --without-libpsl --without-libgsasl --without-fish-functions-dir \
 	--disable-ares --disable-manual --disable-ldap --disable-ldaps --disable-static \
 	--without-gssapi --without-brotli
@@ -57,7 +57,16 @@ CURL_TLS_CONFIGURE_FLAGS := --with-mbedtls=$(build_prefix)
 endif
 CURL_CONFIGURE_FLAGS += $(CURL_TLS_CONFIGURE_FLAGS)
 
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+$(BUILDDIR)/curl-$(CURL_VER)/source-extracted/curl-memdup.patch-applied: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
+	mkdir -p $(dir $@)
+	cd $(SRCCACHE)/curl-$(CURL_VER) && \
+		patch -p1 -f < $(SRCDIR)/patches/curl-memdup.patch
+	echo 1 > $@
+
+$(SRCCACHE)/curl-$(CURL_VER)/source-patched: $(BUILDDIR)/curl-$(CURL_VER)/source-extracted/curl-memdup.patch-applied
+	echo 1 > $@
+
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CURL_CONFIGURE_FLAGS) \

@@ -3,6 +3,9 @@ BUILDDIR := .
 JULIAHOME := $(abspath $(SRCDIR)/..)
 include $(JULIAHOME)/Make.inc
 
+# import LLVM_SHARED_LIB_NAME
+include $(JULIAHOME)/deps/llvm-ver.make
+
 TAGGED_RELEASE_BANNER := ""
 
 all: $(addprefix $(BUILDDIR)/,pcre_h.jl errno_h.jl build_h.jl.phony features_h.jl file_constants.jl uv_constants.jl version_git.jl.phony)
@@ -57,6 +60,7 @@ else
 	@echo "const USE_GPL_LIBS = false" >> $@
 endif
 	@echo "const libllvm_version_string = \"$$($(LLVM_CONFIG_HOST) --version)\"" >> $@
+	@echo "const libllvm_name = \"$(LLVM_SHARED_LIB_NAME)\"" >> $@
 	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
 ifeq ($(OS),WINNT)
@@ -66,6 +70,7 @@ ifeq ($(OS),WINNT)
 	@printf 'const LIBDIR = "%s"\n' '$(subst /,\\,$(libdir_rel))' >> $@
 	@printf 'const LIBEXECDIR = "%s"\n' '$(subst /,\\,$(libexecdir_rel))' >> $@
 	@printf 'const PRIVATE_LIBDIR = "%s"\n' '$(subst /,\\,$(private_libdir_rel))' >> $@
+	@printf 'const PRIVATE_LIBEXECDIR = "%s"\n' '$(subst /,\\,$(private_libexecdir_rel))' >> $@
 	@printf 'const INCLUDEDIR = "%s"\n' '$(subst /,\\,$(includedir_rel))' >> $@
 else
 	@echo "const SYSCONFDIR = \"$(sysconfdir_rel)\"" >> $@
@@ -74,6 +79,7 @@ else
 	@echo "const LIBDIR = \"$(libdir_rel)\"" >> $@
 	@echo "const LIBEXECDIR = \"$(libexecdir_rel)\"" >> $@
 	@echo "const PRIVATE_LIBDIR = \"$(private_libdir_rel)\"" >> $@
+	@echo "const PRIVATE_LIBEXECDIR = \"$(private_libexecdir_rel)\"" >> $@
 	@echo "const INCLUDEDIR = \"$(includedir_rel)\"" >> $@
 endif
 ifeq ($(DARWIN_FRAMEWORK), 1)
@@ -199,17 +205,23 @@ $(build_bindir)/7z$(EXE):
 	rm -f "$@" && \
 	ln -svf "$(7Z_PATH)" "$@"
 
-symlink_lld: $(build_bindir)/lld$(EXE)
+symlink_llvm_utils: $(build_depsbindir)/lld$(EXE) $(build_depsbindir)/dsymutil$(EXE)
 
 ifneq ($(USE_SYSTEM_LLD),0)
-SYMLINK_SYSTEM_LIBRARIES += symlink_lld
+SYMLINK_SYSTEM_LIBRARIES += symlink_llvm_utils
 LLD_PATH := $(shell which lld$(EXE))
+DSYMUTIL_PATH := $(shell which dsymutil$(EXE))
 endif
 
-$(build_bindir)/lld$(EXE):
+$(build_depsbindir)/lld$(EXE):
 	[ -e "$(LLD_PATH)" ] && \
 	rm -f "$@" && \
 	ln -svf "$(LLD_PATH)" "$@"
+
+$(build_depsbindir)/dsymutil$(EXE):
+	[ -e "$(DSYMUTIL_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(DSYMUTIL_PATH)" "$@"
 
 # the following excludes: libuv.a, libutf8proc.a
 

@@ -12,18 +12,20 @@ struct GC_Num
     freecall        ::Int64
     total_time      ::Int64
     total_allocd    ::Int64 # GC internal
-    since_sweep     ::Int64 # GC internal
     collect         ::Csize_t # GC internal
     pause           ::Cint
     full_sweep      ::Cint
     max_pause       ::Int64
     max_memory      ::Int64
-    time_to_safepoint             ::Int64
-    max_time_to_safepointp        ::Int64
+    time_to_safepoint           ::Int64
+    max_time_to_safepoint       ::Int64
+    total_time_to_safepoint     ::Int64
     sweep_time      ::Int64
     mark_time       ::Int64
     total_sweep_time  ::Int64
     total_mark_time   ::Int64
+    last_full_sweep ::Int64
+    last_incremental_sweep ::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
@@ -96,6 +98,13 @@ function gc_live_bytes()
     Int(ccall(:jl_gc_live_bytes, Int64, ())) + num.allocd + num.deferred_alloc
 end
 
+# must be kept in sync with the value from `src/julia_threads.h``
+const JL_GC_N_MAX_POOLS = 51
+function gc_page_utilization_data()
+    page_utilization_raw = cglobal(:jl_gc_page_utilization_stats, Float64)
+    return Base.unsafe_wrap(Array, page_utilization_raw, JL_GC_N_MAX_POOLS, own=false)
+end
+
 """
     Base.jit_total_bytes()
 
@@ -103,7 +112,7 @@ Return the total amount (in bytes) allocated by the just-in-time compiler
 for e.g. native code and data.
 """
 function jit_total_bytes()
-    return Int(ccall(:jl_jit_total_bytes, Csize_t, ()))
+    return ccall(:jl_jit_total_bytes, Csize_t, ())
 end
 
 # print elapsed time, return expression value
@@ -126,19 +135,50 @@ function padded_nonzero_print(value, str, always_print = true)
     end
 end
 
-function format_bytes(bytes) # also used by InteractiveUtils
-    bytes, mb = prettyprint_getunits(bytes, length(_mem_units), Int64(1024))
+"""
+    format_bytes(bytes; binary=true)
+
+Format a given number of bytes into a human-readable string.
+
+# Arguments
+- `bytes`: The number of bytes to format.
+- `binary=true`: If `true`, formats the bytes in binary units (powers of 1024). If `false`, uses decimal units (powers of 1000).
+
+# Returns
+`String`: A human-readable string representation of the bytes, formatted in either binary or decimal units based on the `binary` argument.
+
+# Examples
+```jldoctest
+julia> Base.format_bytes(1024)
+"1024 bytes"
+
+julia> Base.format_bytes(10000)
+"9.766 KiB"
+
+julia> Base.format_bytes(10000, binary=false)
+"10.000 kB"
+```
+"""
+function format_bytes(bytes; binary=true) # also used by InteractiveUtils
+    units = binary ? _mem_units : _cnt_units
+    factor = binary ? 1024 : 1000
+    bytes, mb = prettyprint_getunits(bytes, length(units), Int64(factor))
     if mb == 1
         return string(Int(bytes), " ", _mem_units[mb], bytes==1 ? "" : "s")
     else
-        return string(Ryu.writefixed(Float64(bytes), 3), " ", _mem_units[mb])
+        return string(Ryu.writefixed(Float64(bytes), 3), binary ? " $(units[mb])" : "$(units[mb])B")
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, recompile_time=0, newline=false, _lpad=true)
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false;
+                    msg::Union{String,Nothing}=nothing)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
-        _lpad && print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        if msg isa String
+            print(io, msg, ": ")
+        else
+            print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
+        end
         print(io, timestr, " seconds")
         parens = bytes != 0 || allocs != 0 || gctime > 0 || compile_time > 0
         parens && print(io, " (")
@@ -157,6 +197,10 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, re
             end
             print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
         end
+        if lock_conflicts > 0
+            plural = lock_conflicts == 1 ? "" : "s"
+            print(io, ", ", lock_conflicts, " lock conflict$plural")
+        end
         if compile_time > 0
             if bytes != 0 || allocs != 0 || gctime > 0
                 print(io, ", ")
@@ -169,16 +213,17 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, re
             print(io, ": ", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% of which was recompilation")
         end
         parens && print(io, ")")
+        newline && print(io, "\n")
     end
-    newline ? println(str) : print(str)
+    print(io, str)
     nothing
 end
 
-function timev_print(elapsedtime, diff::GC_Diff, compile_times, _lpad)
+function timev_print(elapsedtime, diff::GC_Diff, lock_conflicts, compile_times; msg::Union{String,Nothing}=nothing)
     allocs = gc_alloc_count(diff)
     compile_time = first(compile_times)
     recompile_time = last(compile_times)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true, _lpad)
+    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, lock_conflicts, compile_time, recompile_time, true; msg)
     padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -210,7 +255,8 @@ end
 A macro to execute an expression, printing the time it took to execute, the number of
 allocations, and the total number of bytes its execution caused to be allocated, before
 returning the value of the expression. Any time spent garbage collecting (gc), compiling
-new code, or recompiling invalidated code is shown as a percentage.
+new code, or recompiling invalidated code is shown as a percentage. Any lock conflicts
+where a [`ReentrantLock`](@ref) had to wait are shown as a count.
 
 Optionally provide a description string to print before the time report.
 
@@ -230,6 +276,9 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
     The option to add a description was introduced in Julia 1.8.
 
     Recompilation time being shown separately from compilation time was introduced in Julia 1.8
+
+!!! compat "Julia 1.11"
+    The reporting of any lock conflicts was added in Julia 1.11.
 
 ```julia-repl
 julia> x = rand(10,10);
@@ -265,22 +314,10 @@ macro time(ex)
 end
 macro time(msg, ex)
     quote
-        Experimental.@force_compile
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        cumulative_compile_timing(true)
-        local compile_elapsedtimes = cumulative_compile_time_ns()
-        local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
-            cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
-        )
-        local diff = GC_Diff(gc_num(), stats)
+        local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        local has_msg = !isnothing(_msg)
-        has_msg && print(_msg, ": ")
-        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
-        val
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg)
+        ret.value
     end
 end
 
@@ -349,22 +386,10 @@ macro timev(ex)
 end
 macro timev(msg, ex)
     quote
-        Experimental.@force_compile
-        local stats = gc_num()
-        local elapsedtime = time_ns()
-        cumulative_compile_timing(true)
-        local compile_elapsedtimes = cumulative_compile_time_ns()
-        local val = @__tryfinally($(esc(ex)),
-            (elapsedtime = time_ns() - elapsedtime;
-            cumulative_compile_timing(false);
-            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
-        )
-        local diff = GC_Diff(gc_num(), stats)
+        local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        local has_msg = !isnothing(_msg)
-        has_msg && print(_msg, ": ")
-        timev_print(elapsedtime, diff, compile_elapsedtimes, !has_msg)
-        val
+        timev_print(ret.time*1e9, ret.gcstats, ret.lock_conflicts, (ret.compile_time*1e9, ret.recompile_time*1e9); msg=_msg)
+        ret.value
     end
 end
 
@@ -458,18 +483,56 @@ macro allocations(ex)
 end
 
 """
+    @lock_conflicts
+
+A macro to evaluate an expression, discard the resulting value, and instead return the
+total number of lock conflicts during evaluation, where a lock attempt on a [`ReentrantLock`](@ref)
+resulted in a wait because the lock was already held.
+
+See also [`@time`](@ref), [`@timev`](@ref) and [`@timed`](@ref).
+
+```julia-repl
+julia> @lock_conflicts begin
+    l = ReentrantLock()
+    Threads.@threads for i in 1:Threads.nthreads()
+        lock(l) do
+        sleep(1)
+        end
+    end
+end
+5
+```
+
+!!! compat "Julia 1.11"
+    This macro was added in Julia 1.11.
+"""
+macro lock_conflicts(ex)
+    quote
+        Threads.lock_profiling(true)
+        local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
+        try
+            $(esc(ex))
+        finally
+            Threads.lock_profiling(false)
+        end
+        Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts
+    end
+end
+
+"""
     @timed
 
-A macro to execute an expression, and return the value of the expression, elapsed time,
-total bytes allocated, garbage collection time, and an object with various memory allocation
-counters.
+A macro to execute an expression, and return the value of the expression, elapsed time in seconds,
+total bytes allocated, garbage collection time, an object with various memory allocation
+counters, compilation time in seconds, and recompilation time in seconds. Any lock conflicts
+where a [`ReentrantLock`](@ref) had to wait are shown as a count.
 
 In some cases the system will look inside the `@timed` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
 compilation time will not be counted. To include this time you can run `@timed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref),
-[`@allocated`](@ref), and [`@allocations`](@ref).
+[`@allocated`](@ref), [`@allocations`](@ref), and [`@lock_conflicts`](@ref).
 
 ```julia-repl
 julia> stats = @timed rand(10^6);
@@ -488,19 +551,47 @@ julia> propertynames(stats.gcstats)
 
 julia> stats.gcstats.total_time
 5576500
+
+julia> stats.compile_time
+0.0
+
+julia> stats.recompile_time
+0.0
+
 ```
 
 !!! compat "Julia 1.5"
     The return type of this macro was changed from `Tuple` to `NamedTuple` in Julia 1.5.
+
+!!! compat "Julia 1.11"
+    The `lock_conflicts`, `compile_time`, and `recompile_time` fields were added in Julia 1.11.
 """
 macro timed(ex)
     quote
         Experimental.@force_compile
+        Threads.lock_profiling(true)
+        local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
         local stats = gc_num()
         local elapsedtime = time_ns()
-        local val = $(esc(ex))
-        elapsedtime = time_ns() - elapsedtime
+        cumulative_compile_timing(true)
+        local compile_elapsedtimes = cumulative_compile_time_ns()
+        local val = @__tryfinally($(esc(ex)),
+            (elapsedtime = time_ns() - elapsedtime;
+            cumulative_compile_timing(false);
+            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes;
+            lock_conflicts = Threads.LOCK_CONFLICT_COUNT[] - lock_conflicts;
+            Threads.lock_profiling(false))
+        )
         local diff = GC_Diff(gc_num(), stats)
-        (value=val, time=elapsedtime/1e9, bytes=diff.allocd, gctime=diff.total_time/1e9, gcstats=diff)
+        (
+            value=val,
+            time=elapsedtime/1e9,
+            bytes=diff.allocd,
+            gctime=diff.total_time/1e9,
+            gcstats=diff,
+            lock_conflicts=lock_conflicts,
+            compile_time=compile_elapsedtimes[1]/1e9,
+            recompile_time=compile_elapsedtimes[2]/1e9
+        )
     end
 end

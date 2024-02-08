@@ -20,9 +20,10 @@ Stack information representing execution context, with the following fields:
 
   The name of the function containing the execution context.
 
-- `linfo::Union{Core.MethodInstance, CodeInfo, Nothing}`
+- `linfo::Union{Core.MethodInstance, Method, Module, Core.CodeInfo, Nothing}`
 
-  The MethodInstance containing the execution context (if it could be found).
+  The MethodInstance or CodeInfo containing the execution context (if it could be found), \
+     or Module (for macro expansions)"
 
 - `file::Symbol`
 
@@ -52,8 +53,9 @@ struct StackFrame # this type should be kept platform-agnostic so that profiles 
     file::Symbol
     "the line number in the file containing the execution context"
     line::Int
-    "the MethodInstance or CodeInfo containing the execution context (if it could be found)"
-    linfo::Union{MethodInstance, CodeInfo, Nothing}
+    "the MethodInstance or CodeInfo containing the execution context (if it could be found), \
+     or Module (for macro expansions)"
+    linfo::Union{MethodInstance, Method, Module, CodeInfo, Nothing}
     "true if the code is from C"
     from_c::Bool
     "true if the code is from an inlined frame"
@@ -94,7 +96,6 @@ function hash(frame::StackFrame, h::UInt)
     h = hash(frame.inlined, h)
     return h
 end
-
 
 """
     lookup(pointer::Ptr{Cvoid}) -> Vector{StackFrame}
@@ -219,35 +220,49 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         else
             Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
         end
-    elseif linfo isa MethodInstance
-        def = linfo.def
-        if isa(def, Method)
-            sig = linfo.specTypes
-            argnames = Base.method_argnames(def)
-            if def.nkw > 0
-                # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...)
-                kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+def.nkw) ]
-                uw = Base.unwrap_unionall(sig)::DataType
-                pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(def.nkw+2):end]...}, sig)
-                kwnames = argnames[2:(def.nkw+1)]
-                for i = 1:length(kwnames)
-                    str = string(kwnames[i])::String
-                    if endswith(str, "...")
-                        kwnames[i] = Symbol(str[1:end-3])
-                    end
-                end
-                Base.show_tuple_as_call(io, def.name, pos_sig;
-                                        demangle=true,
-                                        kwargs=zip(kwnames, kwarg_types),
-                                        argnames=argnames[def.nkw+2:end])
-            else
-                Base.show_tuple_as_call(io, def.name, sig; demangle=true, argnames)
-            end
-        else
-            Base.show_mi(io, linfo, true)
-        end
     elseif linfo isa CodeInfo
         print(io, "top-level scope")
+    elseif linfo isa Module
+        Base.print_within_stacktrace(io, Base.demangle_function_name(string(frame.func)), bold=true)
+    elseif linfo isa MethodInstance
+        def = linfo.def
+        if def isa Module
+            Base.show_mi(io, linfo, #=from_stackframe=#true)
+        else
+            show_spec_sig(io, def, linfo.specTypes)
+        end
+    else
+        m = linfo::Method
+        show_spec_sig(io, m, m.sig)
+    end
+end
+
+function show_spec_sig(io::IO, m::Method, @nospecialize(sig::Type))
+    if get(io, :limit, :false)::Bool
+        if !haskey(io, :displaysize)
+            io = IOContext(io, :displaysize => displaysize(io))
+        end
+    end
+    argnames = Base.method_argnames(m)
+    argnames = replace(argnames, :var"#unused#" => :var"")
+    if m.nkw > 0
+        # rearrange call kw_impl(kw_args..., func, pos_args...) to func(pos_args...; kw_args)
+        kwarg_types = Any[ fieldtype(sig, i) for i = 2:(1+m.nkw) ]
+        uw = Base.unwrap_unionall(sig)::DataType
+        pos_sig = Base.rewrap_unionall(Tuple{uw.parameters[(m.nkw+2):end]...}, sig)
+        kwnames = argnames[2:(m.nkw+1)]
+        for i = 1:length(kwnames)
+            str = string(kwnames[i])::String
+            if endswith(str, "...")
+                kwnames[i] = Symbol(str[1:end-3])
+            end
+        end
+        Base.show_tuple_as_call(io, m.name, pos_sig;
+                                demangle=true,
+                                kwargs=zip(kwnames, kwarg_types),
+                                argnames=argnames[m.nkw+2:end])
+    else
+        Base.show_tuple_as_call(io, m.name, sig; demangle=true, argnames)
     end
 end
 
@@ -272,10 +287,18 @@ function Base.parentmodule(frame::StackFrame)
     linfo = frame.linfo
     if linfo isa MethodInstance
         def = linfo.def
-        return def isa Module ? def : parentmodule(def::Method)
+        if def isa Module
+            return def
+        else
+            return (def::Method).module
+        end
+    elseif linfo isa Method
+        return linfo.module
+    elseif linfo isa Module
+        return linfo
     else
-        # The module is not always available (common reasons include inlined
-        # frames and frames arising from the interpreter)
+        # The module is not always available (common reasons include
+        # frames arising from the interpreter)
         nothing
     end
 end

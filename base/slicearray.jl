@@ -40,7 +40,8 @@ unitaxis(::AbstractArray) = Base.OneTo(1)
 
 function Slices(A::P, slicemap::SM, ax::AX) where {P,SM,AX}
     N = length(ax)
-    S = Base._return_type(view, Tuple{P, map((a,l) -> l === (:) ? Colon : eltype(a), axes(A), slicemap)...})
+    argT = map((a,l) -> l === (:) ? Colon : eltype(a), axes(A), slicemap)
+    S = Base.promote_op(view, P, argT...)
     Slices{P,SM,AX,S,N}(A, slicemap, ax)
 end
 
@@ -77,7 +78,7 @@ end
     eachslice(A::AbstractArray; dims, drop=true)
 
 Create a [`Slices`](@ref) object that is an array of slices over dimensions `dims` of `A`, returning
-views that select all the data from the other dimensions in `A`. `dims` can either by an
+views that select all the data from the other dimensions in `A`. `dims` can either be an
 integer or a tuple of integers.
 
 If `drop = true` (the default), the outer `Slices` will drop the inner dimensions, and

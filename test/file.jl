@@ -355,7 +355,7 @@ chmod(file, filemode(file) | 0o222)
 @test filesize(file) == 0
 
 # issue #26685
-@test !isfile("http://google.com")
+@test !isfile("https://google.com")
 
 if Sys.iswindows()
     permissions = 0o444
@@ -597,6 +597,17 @@ close(s)
 #######################################################################
 # This section tests temporary file and directory creation.           #
 #######################################################################
+
+@testset "invalid read/write flags" begin
+    @test try
+        open("this file is not expected to exist", read=false, write=false)
+        false
+    catch e
+        isa(e, SystemError) || rethrow()
+        @test endswith(sprint(showerror, e), "Invalid argument")
+        true
+    end
+end
 
 @testset "quoting filenames" begin
     @test try
@@ -1253,7 +1264,7 @@ let f = open(file, "w")
     if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     else
-        f = RawFD(ccall(:open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
+        f = RawFD(ccall(:open, Cint, (Cstring, Cint, UInt32...), file, Base.Filesystem.JL_O_RDONLY))
     end
     test_LibcFILE(Libc.FILE(f, Libc.modestr(true, false)))
 end
@@ -1625,6 +1636,28 @@ end
     end
 end
 
+if Sys.isunix()
+    @testset "mkfifo" begin
+        mktempdir() do dir
+            path = Libc.mkfifo(joinpath(dir, "fifo"))
+            @sync begin
+                @async write(path, "hello")
+                cat_exec = `$(Base.julia_cmd()) --startup-file=no -e "write(stdout, read(ARGS[1]))"`
+                @test read(`$cat_exec $path`, String) == "hello"
+            end
+
+            existing_file = joinpath(dir, "existing")
+            write(existing_file, "")
+            @test_throws SystemError Libc.mkfifo(existing_file)
+        end
+    end
+else
+    @test_throws(
+        "mkfifo: Operation not supported",
+        Libc.mkfifo(joinpath(pwd(), "dummy_path")),
+    )
+end
+
 @testset "chmod/isexecutable" begin
     mktempdir() do dir
         mkdir(joinpath(dir, "subdir"))
@@ -1660,6 +1693,28 @@ if Sys.iswindows()
     tmp = mkdir(tempname("C:\\"))
     @test rm(tmp) === nothing
 end
+end
+
+# Unusually for structs, we test this explicitly because the fields of StatStruct
+# is part of its documentation, and therefore cannot change.
+@testset "StatStruct has promised fields" begin
+    f, io = mktemp()
+    s = stat(f)
+    @test s isa Base.StatStruct
+
+    @test s.desc isa Union{String, Base.OS_HANDLE}
+    @test s.size isa Int64
+    @test s.device isa UInt
+    @test s.inode isa UInt
+    @test s.mode isa UInt
+    @test s.nlink isa Int
+    @test s.uid isa UInt
+    @test s.gid isa UInt
+    @test s.rdev isa UInt
+    @test s.blksize isa Int64
+    @test s.blocks isa Int64
+    @test s.mtime isa Float64
+    @test s.ctime isa Float64
 end
 
 @testset "StatStruct show's extended details" begin
