@@ -441,7 +441,7 @@ end
 function find_ssavalue_uses!(e::PhiNode, uses::Vector{BitSet}, line::Int)
     values = e.values
     for i = 1:length(values)
-        isassigned(values) || continue
+        isassigned(values, i) || continue
         val = values[i]
         if isa(val, SSAValue)
             push!(uses[val.id], line)

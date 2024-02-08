@@ -23,6 +23,7 @@ let m = Meta.@lower 1 + 1
     src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
+    @assert !src.inferred
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
