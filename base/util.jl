@@ -582,7 +582,7 @@ macro kwdef(expr)
     # Only define a constructor if the type has fields, otherwise we'll get a stack
     # overflow on construction
     if !isempty(parameters)
-        T_no_esc,_ = strip_esc(T)
+        T_no_esc = Meta.unescape(T)
         if T_no_esc isa Symbol
             sig = Expr(:call, esc(T), Expr(:parameters, parameters...))
             body = Expr(:block, __source__, Expr(:call, esc(T), fieldnames...))
@@ -642,7 +642,7 @@ function def_name_defval_from_kwdef_fielddef(kwdef)
         return kwdef, kwdef, nothing
     elseif isexpr(kwdef, :(::))
         name, _ = kwdef.args
-        return kwdef, strip_esc(name)[1], nothing
+        return kwdef, Meta.unescape(name), nothing
     elseif isexpr(kwdef, :(=))
         lhs, rhs = kwdef.args
         def, name, _ = @something(def_name_defval_from_kwdef_fielddef(lhs), return nothing)
@@ -654,22 +654,6 @@ function def_name_defval_from_kwdef_fielddef(kwdef)
         def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
         return Expr(kwdef.head, def), name, isnothing(defval) ? defval : Expr(kwdef.head, defval)
     end
-end
-
-function strip_esc(expr)
-    count = 0
-    while isexpr(expr, :escape)
-        expr = expr.args[1]
-        count += 1
-    end
-    return (expr, count)
-end
-
-function wrap_esc(expr, count)
-    for _ = 1:count
-        expr = esc(expr)
-    end
-    return expr
 end
 
 # testing
