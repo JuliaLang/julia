@@ -28,12 +28,50 @@ include(mod, x) = Core.include(mod, x)
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
+macro _boundscheck() Expr(:boundscheck) end
+
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 
-# mostly used by compiler/methodtable.jl, but also by reflection.jl
+# These types are used by reflection.jl and expr.jl too, so declare them here.
+# Note that `@assume_effects` is available only after loading namedtuple.jl.
 abstract type MethodTableView end
 abstract type AbstractInterpreter end
+struct EffectsOverride
+    consistent::Bool
+    effect_free::Bool
+    nothrow::Bool
+    terminates_globally::Bool
+    terminates_locally::Bool
+    notaskstate::Bool
+    inaccessiblememonly::Bool
+    noub::Bool
+    noub_if_noinbounds::Bool
+end
+function EffectsOverride(
+    override::EffectsOverride =
+        EffectsOverride(false, false, false, false, false, false, false, false, false);
+    consistent::Bool = override.consistent,
+    effect_free::Bool = override.effect_free,
+    nothrow::Bool = override.nothrow,
+    terminates_globally::Bool = override.terminates_globally,
+    terminates_locally::Bool = override.terminates_locally,
+    notaskstate::Bool = override.notaskstate,
+    inaccessiblememonly::Bool = override.inaccessiblememonly,
+    noub::Bool = override.noub,
+    noub_if_noinbounds::Bool = override.noub_if_noinbounds)
+    return EffectsOverride(
+        consistent,
+        effect_free,
+        nothrow,
+        terminates_globally,
+        terminates_locally,
+        notaskstate,
+        inaccessiblememonly,
+        noub,
+        noub_if_noinbounds)
+end
+const NUM_EFFECTS_OVERRIDES = 9 # sync with julia.h
 
 # essential files and libraries
 include("essentials.jl")
@@ -87,7 +125,6 @@ function cld(x::T, y::T) where T<:Integer
     return d + (((x > 0) == (y > 0)) & (d * y != x))
 end
 
-
 # checked arithmetic
 const checked_add = +
 const checked_sub = -
@@ -105,6 +142,7 @@ include("strings/lazy.jl")
 
 # core array operations
 include("indices.jl")
+include("genericmemory.jl")
 include("array.jl")
 include("abstractarray.jl")
 
@@ -138,6 +176,20 @@ something(x::Any, y...) = x
 # compiler #
 ############
 
+if false
+    import Base: Base, @show
+else
+    macro show(ex...)
+        blk = Expr(:block)
+        for s in ex
+            push!(blk.args, :(println(stdout, $(QuoteNode(s)), " = ",
+                                              begin local value = $(esc(s)) end)))
+        end
+        isempty(ex) || push!(blk.args, :value)
+        blk
+    end
+end
+
 include("compiler/cicache.jl")
 include("compiler/methodtable.jl")
 include("compiler/effects.jl")
@@ -145,13 +197,10 @@ include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
 
-function argextype end # imported by EscapeAnalysis
-function stmt_effect_free end # imported by EscapeAnalysis
-function alloc_array_ndims end # imported by EscapeAnalysis
-function try_compute_field end # imported by EscapeAnalysis
 include("compiler/ssair/basicblock.jl")
 include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")
+include("compiler/ssair/tarjan.jl")
 
 include("compiler/abstractlattice.jl")
 include("compiler/inferenceresult.jl")

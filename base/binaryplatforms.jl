@@ -170,20 +170,18 @@ end
 
 
 # Allow us to easily serialize Platform objects
-function Base.repr(p::Platform; context=nothing)
-    str = string(
-        "Platform(",
-        repr(arch(p)),
-        ", ",
-        repr(os(p)),
-        "; ",
-        join(("$(k) = $(repr(v))" for (k, v) in tags(p) if k ∉ ("arch", "os")), ", "),
-        ")",
-    )
+function Base.show(io::IO, p::Platform)
+    print(io, "Platform(")
+    show(io, arch(p))
+    print(io, ", ")
+    show(io, os(p))
+    print(io, "; ")
+    join(io, ("$(k) = $(repr(v))" for (k, v) in tags(p) if k ∉ ("arch", "os")), ", ")
+    print(io, ")")
 end
 
 # Make showing the platform a bit more palatable
-function Base.show(io::IO, p::Platform)
+function Base.show(io::IO, ::MIME"text/plain", p::Platform)
     str = string(platform_name(p), " ", arch(p))
     # Add on all the other tags not covered by os/arch:
     other_tags = sort!(filter!(kv -> kv[1] ∉ ("os", "arch"), collect(tags(p))))
@@ -663,18 +661,12 @@ const libstdcxx_version_mapping = Dict{String,String}(
     "libstdcxx" => "-libstdcxx\\d+",
 )
 
-"""
-    parse(::Type{Platform}, triplet::AbstractString)
-
-Parses a string platform triplet back into a `Platform` object.
-"""
-function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = false)
+const triplet_regex = let
     # Helper function to collapse dictionary of mappings down into a regex of
     # named capture groups joined by "|" operators
     c(mapping) = string("(",join(["(?<$k>$v)" for (k, v) in mapping], "|"), ")")
 
-    # We're going to build a mondo regex here to parse everything:
-    triplet_regex = Regex(string(
+    Regex(string(
         "^",
         # First, the core triplet; arch/os/libc/call_abi
         c(arch_mapping),
@@ -689,7 +681,14 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
         "(?<tags>(?:-[^-]+\\+[^-]+)*)?",
         "\$",
     ))
+end
 
+"""
+    parse(::Type{Platform}, triplet::AbstractString)
+
+Parses a string platform triplet back into a `Platform` object.
+"""
+function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = false)
     m = match(triplet_regex, triplet)
     if m !== nothing
         # Helper function to find the single named field within the giant regex

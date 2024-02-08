@@ -5,6 +5,9 @@ using Test, Random
 function runtests(name, path, isolate=true; seed=nothing)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
     Test.TESTSET_PRINT_ENABLE[] = false
+    # remove all hint_handlers, so that errorshow tests are not changed by which packages have been loaded on this worker already
+    # packages that call register_error_hint should also call this again, and then re-add any hooks they want to test
+    empty!(Base.Experimental._hint_handlers)
     try
         if isolate
             # Simple enough to type and random enough so that no one will hard
@@ -25,6 +28,7 @@ function runtests(name, path, isolate=true; seed=nothing)
             original_depot_path = copy(Base.DEPOT_PATH)
             original_load_path = copy(Base.LOAD_PATH)
             original_env = copy(ENV)
+            original_project = Base.active_project()
 
             Base.include(m, "$path.jl")
 
@@ -62,6 +66,17 @@ function runtests(name, path, isolate=true; seed=nothing)
                     )
                     error(msg)
                 end
+            end
+            if Base.active_project() != original_project
+                msg = "The `$(name)` test set changed the active project and did not restore the original value"
+                @error(
+                    msg,
+                    original_project,
+                    Base.active_project(),
+                    testset_name = name,
+                    testset_path = path,
+                )
+                error(msg)
             end
         end
         rss = Sys.maxrss()

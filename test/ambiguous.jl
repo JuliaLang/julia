@@ -75,7 +75,7 @@ let io = IOBuffer()
     cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
     @test_throws(MethodError(ambig, (UInt8(1), Int(2)), get_world_counter()),
                  ccall(cf, Int, (UInt8, Int), 1, 2))
-    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
+    @test_throws("Calling invoke(f, t, args...) would throw:\nMethodError: no method matching ambig",
                  which(ambig, (UInt8, Int)))
     @test length(code_typed(ambig, (UInt8, Int))) == 0
 end

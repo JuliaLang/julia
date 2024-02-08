@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Since this code is in the startup-path, we go to some effort to
+# be easier on the compiler, such as using `map` over broadcasting.
+
 include("terminfo_data.jl")
 
 """
@@ -15,7 +18,7 @@ particular capabilities, solely based on `term(5)`.
 
 - `names::Vector{String}`: The names this terminal is known by.
 - `flags::BitVector`: A list of 0–$(length(TERM_FLAGS)) flag values.
-- `numbers::Union{Vector{UInt16}, Vector{UInt32}}`: A list of 0–$(length(TERM_NUMBERS))
+- `numbers::Union{Vector{Int16}, Vector{Int32}}`: A list of 0–$(length(TERM_NUMBERS))
   number values. A value of `typemax(eltype(numbers))` is used to skip over
   unspecified capabilities while ensuring value indices are correct.
 - `strings::Vector{Union{String, Nothing}}`: A list of 0–$(length(TERM_STRINGS))
@@ -30,9 +33,9 @@ See also: `TermInfo` and `TermCapability`.
 struct TermInfoRaw
     names::Vector{String}
     flags::BitVector
-    numbers::Union{Vector{UInt16}, Vector{UInt32}}
+    numbers::Vector{Int}
     strings::Vector{Union{String, Nothing}}
-    extended::Union{Nothing, Dict{Symbol, Union{Bool, Int, String}}}
+    extended::Union{Nothing, Dict{Symbol, Union{Bool, Int, String, Nothing}}}
 end
 
 """
@@ -59,59 +62,48 @@ See also: `TermInfoRaw` and `TermCapability`.
 """
 struct TermInfo
     names::Vector{String}
-    flags::Int
-    numbers::BitVector
-    strings::BitVector
-    extensions::Vector{Symbol}
-    capabilities::Dict{Symbol, Union{Bool, Int, String}}
+    flags::Dict{Symbol, Bool}
+    numbers::Dict{Symbol, Int}
+    strings::Dict{Symbol, String}
+    extensions::Union{Nothing, Set{Symbol}}
 end
 
-TermInfo() = TermInfo([], 0, [], [], [], Dict())
+TermInfo() = TermInfo([], Dict(), Dict(), Dict(), nothing)
 
 function read(data::IO, ::Type{TermInfoRaw})
     # Parse according to `term(5)`
     # Header
     magic = read(data, UInt16) |> ltoh
     NumInt = if magic == 0o0432
-        UInt16
+        Int16
     elseif magic == 0o01036
-        UInt32
+        Int32
     else
         throw(ArgumentError("Terminfo data did not start with the magic number 0o0432 or 0o01036"))
     end
-    name_bytes = read(data, UInt16) |> ltoh
-    flag_bytes = read(data, UInt16) |> ltoh
-    numbers_count = read(data, UInt16) |> ltoh
-    string_count = read(data, UInt16) |> ltoh
-    table_bytes = read(data, UInt16) |> ltoh
+    name_bytes, flag_bytes, numbers_count, string_count, table_bytes =
+        @ntuple 5 _->read(data, Int16) |> ltoh
     # Terminal Names
-    term_names = split(String(read(data, name_bytes - 1)), '|') .|> String
+    term_names = map(String, split(String(read(data, name_bytes - 1)), '|'))
     0x00 == read(data, UInt8) ||
         throw(ArgumentError("Terminfo data did not contain a null byte after the terminal names section"))
     # Boolean Flags
-    flags = read(data, flag_bytes) .== 0x01
+    flags = map(==(0x01), read(data, flag_bytes))
     if position(data) % 2 != 0
         0x00 == read(data, UInt8) ||
             throw(ArgumentError("Terminfo did not contain a null byte after the flag section, expected to position the start of the numbers section on an even byte"))
     end
     # Numbers, Strings, Table
-    numbers = reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))) .|> ltoh
-    string_indices = reinterpret(UInt16, read(data, string_count * sizeof(UInt16))) .|> ltoh
+    numbers = map(Int ∘ ltoh, reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))))
+    string_indices = map(ltoh, reinterpret(Int16, read(data, string_count * sizeof(Int16))))
     strings_table = read(data, table_bytes)
-    strings = map(string_indices) do idx
-        if idx ∉ (0xffff, 0xfffe)
-            len = findfirst(==(0x00), view(strings_table, 1+idx:length(strings_table)))
-            !isnothing(len) ||
-                throw(ArgumentError("Terminfo string table entry does not terminate with a null byte"))
-            String(strings_table[1+idx:idx+len-1])
-        end
-    end
+    strings = _terminfo_read_strings(strings_table, string_indices)
     TermInfoRaw(term_names, flags, numbers, strings,
-                if !eof(data) extendedterminfo(data; NumInt) end)
+                if !eof(data) extendedterminfo(data, NumInt) end)
 end
 
 """
-    extendedterminfo(data::IO; NumInt::Union{Type{UInt16}, Type{UInt32}})
+    extendedterminfo(data::IO; NumInt::Union{Type{Int16}, Type{Int32}})
 
 Read an extended terminfo section from `data`, with `NumInt` as the numbers type.
 
@@ -119,31 +111,56 @@ This will accept any terminfo content that conforms with `term(5)`.
 
 See also: `read(::IO, ::Type{TermInfoRaw})`
 """
-function extendedterminfo(data::IO; NumInt::Union{Type{UInt16}, Type{UInt32}})
+function extendedterminfo(data::IO, NumInt::Union{Type{Int16}, Type{Int32}})
     # Extended info
     if position(data) % 2 != 0
         0x00 == read(data, UInt8) ||
-            throw(ArgumentError("Terminfo did not contain a null byte before the extended section, expected to position the start on an even byte"))
+            throw(ArgumentError("Terminfo did not contain a null byte before the extended section; expected to position the start on an even byte"))
     end
     # Extended header
-    flag_bytes = read(data, UInt16) |> ltoh
-    numbers_count = read(data, UInt16) |> ltoh
-    string_count = read(data, UInt16) |> ltoh
-    table_count = read(data, UInt16) |> ltoh
-    table_bytes = read(data, UInt16) |> ltoh
+    flag_bytes, numbers_count, string_count, table_count, table_bytes =
+        @ntuple 5 _->read(data, Int16) |> ltoh
     # Extended flags/numbers/strings
-    flags = read(data, flag_bytes) .== 0x01
+    flags = map(==(0x01), read(data, flag_bytes))
     if flag_bytes % 2 != 0
         0x00 == read(data, UInt8) ||
-            throw(ArgumentError("Terminfo did not contain a null byte after the extended flag section, expected to position the start of the numbers section on an even byte"))
+            throw(ArgumentError("Terminfo did not contain a null byte after the extended flag section; expected to position the start of the numbers section on an even byte"))
     end
-    numbers = reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))) .|> ltoh
-    table_indices = reinterpret(UInt16, read(data, table_count * sizeof(UInt16))) .|> ltoh
-    table_strings = [String(readuntil(data, 0x00)) for _ in 1:length(table_indices)]
-    strings = table_strings[1:string_count]
-    labels = Symbol.(table_strings[string_count+1:end])
-    Dict{Symbol, Union{Bool, Int, String}}(
-        labels .=> vcat(flags, numbers, strings))
+    numbers = map(Int ∘ ltoh, reinterpret(NumInt, read(data, numbers_count * sizeof(NumInt))))
+    table_indices = map(ltoh, reinterpret(Int16, read(data, table_count * sizeof(Int16))))
+    table_data = read(data, table_bytes)
+    strings = _terminfo_read_strings(table_data, table_indices[1:string_count])
+    table_halfoffset = Int16(get(table_indices, string_count, 0) +
+        ncodeunits(something(get(strings, length(strings), ""), "")) + 1)
+    for index in string_count+1:lastindex(table_indices)
+        table_indices[index] += table_halfoffset
+    end
+    labels = map(Symbol, _terminfo_read_strings(table_data, table_indices[string_count+1:end]))
+    Dict{Symbol, Union{Bool, Int, String, Nothing}}(
+        zip(labels, Iterators.flatten((flags, numbers, strings))))
+end
+
+"""
+    _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{Int16})
+
+From `table`, read a string starting at each position in `indices`. Each string
+must be null-terminated. Should an index be -1 or -2, `nothing` is given instead
+of a string.
+"""
+function _terminfo_read_strings(table::Vector{UInt8}, indices::Vector{Int16})
+    strings = Vector{Union{Nothing, String}}(undef, length(indices))
+    map!(strings, indices) do idx
+        if idx >= 0
+            len = findfirst(==(0x00), view(table, 1+idx:length(table)))
+            !isnothing(len) ||
+                throw(ArgumentError("Terminfo table entry @$idx does not terminate with a null byte"))
+            String(table[1+idx:idx+len-1])
+        elseif idx ∈ (-1, -2)
+        else
+            throw(ArgumentError("Terminfo table index is invalid: -2 ≰ $idx"))
+        end
+    end
+    strings
 end
 
 """
@@ -155,45 +172,60 @@ NCurses 6.3, see `TERM_FLAGS`, `TERM_NUMBERS`, and `TERM_STRINGS`).
 function TermInfo(raw::TermInfoRaw)
     capabilities = Dict{Symbol, Union{Bool, Int, String}}()
     sizehint!(capabilities, 2 * (length(raw.flags) + length(raw.numbers) + length(raw.strings)))
+    flags = Dict{Symbol, Bool}()
+    numbers = Dict{Symbol, Int}()
+    strings = Dict{Symbol, String}()
+    extensions = nothing
     for (flag, value) in zip(TERM_FLAGS, raw.flags)
-        capabilities[flag.short] = value
-        capabilities[flag.long] = value
+        flags[flag.short] = value
+        flags[flag.long] = value
     end
     for (num, value) in zip(TERM_NUMBERS, raw.numbers)
-        if value != typemax(eltype(raw.numbers))
-            capabilities[num.short] = Int(value)
-            capabilities[num.long] = Int(value)
-        end
+        numbers[num.short] = Int(value)
+        numbers[num.long] = Int(value)
     end
     for (str, value) in zip(TERM_STRINGS, raw.strings)
         if !isnothing(value)
-            capabilities[str.short] = value
-            capabilities[str.long] = value
+            strings[str.short] = value
+            strings[str.long] = value
         end
     end
-    extensions = if !isnothing(raw.extended)
-        capabilities = merge(capabilities, raw.extended)
-        keys(raw.extended) |> collect
-    else
-        Symbol[]
+    if !isnothing(raw.extended)
+        extensions = Set{Symbol}()
+        for (key, value) in raw.extended
+            push!(extensions, key)
+            if value isa Bool
+                flags[key] = value
+            elseif value isa Int
+                numbers[key] = value
+            elseif value isa String
+                strings[key] = value
+            end
+        end
     end
-    TermInfo(raw.names, length(raw.flags),
-             raw.numbers .!= typemax(eltype(raw.numbers)),
-             map(!isnothing, raw.strings),
-             extensions, capabilities)
+    TermInfo(raw.names, flags, numbers, strings, extensions)
 end
 
-getindex(ti::TermInfo, key::Symbol) = ti.capabilities[key]
-get(ti::TermInfo, key::Symbol, default::D) where D<:Union{Bool, Int, String} =
-    get(ti.capabilities, key, default)::D
-get(ti::TermInfo, key::Symbol, default) = get(ti.capabilities, key, default)
-keys(ti::TermInfo) = keys(ti.capabilities)
-haskey(ti::TermInfo, key::Symbol) = haskey(ti.capabilities, key)
+get(ti::TermInfo, key::Symbol, default::Bool) = get(ti.flags, key, default)
+get(ti::TermInfo, key::Symbol, default::Int) = get(ti.numbers, key, default)
+get(ti::TermInfo, key::Symbol, default::String) = get(ti.strings, key, default)
+
+haskey(ti::TermInfo, key::Symbol) =
+    haskey(ti.flags, key) || haskey(ti.numbers, key) || haskey(ti.strings, key)
+
+function getindex(ti::TermInfo, key::Symbol)
+    haskey(ti.flags, key) && return ti.flags[key]
+    haskey(ti.numbers, key) && return ti.numbers[key]
+    haskey(ti.strings, key) && return ti.strings[key]
+    throw(KeyError(key))
+end
+
+keys(ti::TermInfo) = keys(ti.flags) ∪ keys(ti.numbers) ∪ keys(ti.strings)
 
 function show(io::IO, ::MIME"text/plain", ti::TermInfo)
-    print(io, "TermInfo(", ti.names, "; ", ti.flags, " flags, ",
-          sum(ti.numbers), " numbers, ", sum(ti.strings), " strings")
-    !isempty(ti.extensions) > 0 &&
+    print(io, "TermInfo(", ti.names, "; ", length(ti.flags), " flags, ",
+          length(ti.numbers), " numbers, ", length(ti.strings), " strings")
+    !isnothing(ti.extensions) &&
         print(io, ", ", length(ti.extensions), " extended capabilities")
     print(io, ')')
 end
@@ -213,13 +245,15 @@ function find_terminfo_file(term::String)
         [ENV["TERMINFO"]]
     elseif isdir(joinpath(homedir(), ".terminfo"))
         [joinpath(homedir(), ".terminfo")]
-    elseif haskey(ENV, "TERMINFO_DIRS")
-        split(ENV["TERMINFO_DIRS"], ':')
-    elseif Sys.isunix()
-        ["/usr/share/terminfo"]
     else
         String[]
     end
+    haskey(ENV, "TERMINFO_DIRS") &&
+        append!(terminfo_dirs,
+                replace(split(ENV["TERMINFO_DIRS"], ':'),
+                        "" => "/usr/share/terminfo"))
+    Sys.isunix() &&
+        push!(terminfo_dirs, "/etc/terminfo", "/lib/terminfo", "/usr/share/terminfo")
     for dir in terminfo_dirs
         if isfile(joinpath(dir, chr, term))
             return joinpath(dir, chr, term)

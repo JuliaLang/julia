@@ -8,6 +8,7 @@
     XX(jl_alloc_array_1d) \
     XX(jl_alloc_array_2d) \
     XX(jl_alloc_array_3d) \
+    XX(jl_alloc_array_nd) \
     XX(jl_alloc_string) \
     XX(jl_alloc_svec) \
     XX(jl_alloc_svec_uninit) \
@@ -21,36 +22,23 @@
     XX(jl_apply_type1) \
     XX(jl_apply_type2) \
     XX(jl_argument_datatype) \
-    XX(jl_arraylen) \
-    XX(jl_arrayref) \
-    XX(jl_arrayset) \
-    XX(jl_arrayunset) \
-    XX(jl_array_cconvert_cstring) \
-    XX(jl_array_copy) \
-    XX(jl_array_del_at) \
-    XX(jl_array_del_beg) \
     XX(jl_array_del_end) \
     XX(jl_array_eltype) \
-    XX(jl_array_grow_at) \
-    XX(jl_array_grow_beg) \
     XX(jl_array_grow_end) \
-    XX(jl_array_isassigned) \
     XX(jl_array_ptr) \
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
-    XX(jl_array_ptr_copy) \
+    XX(jl_genericmemory_owner) \
+    XX(jl_genericmemoryref) \
     XX(jl_array_rank) \
-    XX(jl_array_size) \
-    XX(jl_array_sizehint) \
     XX(jl_array_to_string) \
-    XX(jl_array_typetagdata) \
-    XX(jl_array_validate_dims) \
     XX(jl_atexit_hook) \
     XX(jl_atomic_bool_cmpswap_bits) \
     XX(jl_atomic_cmpswap_bits) \
     XX(jl_atomic_error) \
     XX(jl_atomic_new_bits) \
     XX(jl_atomic_store_bits) \
+    XX(jl_atomic_storeonce_bits) \
     XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
@@ -176,6 +164,7 @@
     XX(jl_gc_internal_obj_base_ptr) \
     XX(jl_gc_is_enabled) \
     XX(jl_gc_is_in_finalizer) \
+    XX(jl_gc_pool_live_bytes) \
     XX(jl_gc_live_bytes) \
     XX(jl_gc_managed_malloc) \
     XX(jl_gc_managed_realloc) \
@@ -216,6 +205,7 @@
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
+    XX(jl_cpu_has_fma) \
     XX(jl_get_current_task) \
     XX(jl_get_default_sysimg_path) \
     XX(jl_get_excstack) \
@@ -226,7 +216,6 @@
     XX(jl_get_JIT) \
     XX(jl_get_julia_bin) \
     XX(jl_get_julia_bindir) \
-    XX(jl_get_method_inferred) \
     XX(jl_get_module_compile) \
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
@@ -247,6 +236,8 @@
     XX(jl_get_world_counter) \
     XX(jl_get_zero_subnormals) \
     XX(jl_gf_invoke_lookup) \
+    XX(jl_method_lookup_by_tt) \
+    XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
     XX(jl_git_branch) \
     XX(jl_git_commit) \
@@ -291,6 +282,7 @@
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
     XX(jl_is_const) \
+    XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \
     XX(jl_is_foreign_type) \
     XX(jl_is_identifier) \
@@ -328,20 +320,20 @@
     XX(jl_methtable_lookup) \
     XX(jl_mi_cache_insert) \
     XX(jl_module_build_id) \
-    XX(jl_module_export) \
     XX(jl_module_exports_p) \
     XX(jl_module_globalref) \
     XX(jl_module_import) \
     XX(jl_module_name) \
     XX(jl_module_names) \
     XX(jl_module_parent) \
+    XX(jl_module_public) \
+    XX(jl_module_public_p) \
     XX(jl_module_use) \
     XX(jl_module_using) \
     XX(jl_module_usings) \
     XX(jl_module_uuid) \
     XX(jl_native_alignment) \
     XX(jl_nb_available) \
-    XX(jl_new_array) \
     XX(jl_new_bits) \
     XX(jl_new_codeinst) \
     XX(jl_new_code_info_uninit) \
@@ -392,7 +384,6 @@
     XX(jl_profile_maxlen_data) \
     XX(jl_profile_start_timer) \
     XX(jl_profile_stop_timer) \
-    XX(jl_ptrarrayref) \
     XX(jl_ptr_to_array) \
     XX(jl_ptr_to_array_1d) \
     XX(jl_queue_work) \
@@ -403,7 +394,6 @@
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
-    XX(jl_reshape_array) \
     XX(jl_resolve_globals_in_ir) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
@@ -414,6 +404,8 @@
     XX(jl_rethrow_other) \
     XX(jl_running_on_valgrind) \
     XX(jl_safe_printf) \
+    XX(jl_safepoint_suspend_thread) \
+    XX(jl_safepoint_resume_thread) \
     XX(jl_SC_CLK_TCK) \
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
@@ -457,7 +449,6 @@
     XX(jl_svec2) \
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
-    XX(jl_svec_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \
@@ -513,6 +504,7 @@
     XX(jl_uncompress_argname_n) \
     XX(jl_uncompress_ir) \
     XX(jl_undefined_var_error) \
+    XX(jl_unwrap_unionall) \
     XX(jl_has_no_field_error) \
     XX(jl_value_ptr) \
     XX(jl_ver_is_release) \
@@ -562,24 +554,8 @@
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
-    YY(jl_add_optimization_passes) \
     YY(jl_build_newpm_pipeline) \
     YY(jl_register_passbuilder_callbacks) \
-    YY(LLVMExtraAddLowerSimdLoopPass) \
-    YY(LLVMExtraAddFinalLowerGCPass) \
-    YY(LLVMExtraAddPropagateJuliaAddrspaces) \
-    YY(LLVMExtraAddRemoveJuliaAddrspacesPass) \
-    YY(LLVMExtraAddCombineMulAddPass) \
-    YY(LLVMExtraAddMultiVersioningPass) \
-    YY(LLVMExtraAddLowerExcHandlersPass) \
-    YY(LLVMExtraAddLateLowerGCFramePass) \
-    YY(LLVMExtraJuliaLICMPass) \
-    YY(LLVMExtraAddAllocOptPass) \
-    YY(LLVMExtraAddLowerPTLSPass) \
-    YY(LLVMExtraAddRemoveNIPass) \
-    YY(LLVMExtraAddGCInvariantVerifierPass) \
-    YY(LLVMExtraAddDemoteFloat16Pass) \
-    YY(LLVMExtraAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddCPUFeaturesPass) \
     YY(LLVMExtraMPMAddRemoveNIPass) \
     YY(LLVMExtraMPMAddMultiVersioningPass) \

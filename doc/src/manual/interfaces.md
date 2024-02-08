@@ -152,10 +152,10 @@ julia> collect(Iterators.reverse(Squares(4)))
 
 | Methods to implement | Brief description                |
 |:-------------------- |:-------------------------------- |
-| `getindex(X, i)`     | `X[i]`, indexed element access   |
-| `setindex!(X, v, i)` | `X[i] = v`, indexed assignment   |
+| `getindex(X, i)`     | `X[i]`, indexed access, non-scalar `i` should allocate a copy  |
+| `setindex!(X, v, i)` | `X[i] = v`, indexed assignment         |
 | `firstindex(X)`         | The first index, used in `X[begin]` |
-| `lastindex(X)`           | The last index, used in `X[end]` |
+| `lastindex(X)`           | The last index, used in `X[end]`   |
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
 it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
@@ -836,3 +836,51 @@ julia> p.r
 Finally, it is worth noting that adding instance properties like this is quite
 rarely done in Julia and should in general only be done if there is a good
 reason for doing so.
+
+## [Rounding](@id man-rounding-interface)
+
+| Methods to implement                          | Default definition        | Brief description                                                                                   |
+|:--------------------------------------------- |:------------------------- |:--------------------------------------------------------------------------------------------------- |
+| `round(x::ObjType, r::RoundingMode)`          | none                      | Round `x` and return the result. If possible, round should return an object of the same type as `x` |
+| `round(T::Type, x::ObjType, r::RoundingMode)` | `convert(T, round(x, r))` | Round `x`, returning the result as a `T`                                                            |
+
+To support rounding on a new type it is typically sufficient to define the single method
+`round(x::ObjType, r::RoundingMode)`. The passed rounding mode determines in which direction
+the value should be rounded. The most commonly used rounding modes are `RoundNearest`,
+`RoundToZero`, `RoundDown`, and `RoundUp`, as these rounding modes are used in the
+definitions of the one argument `round`, method, and `trunc`, `floor`, and `ceil`,
+respectively.
+
+In some cases, it is possible to define a three-argument `round` method that is more
+accurate or performant than the two-argument method followed by conversion. In this case it
+is acceptable to define the three argument method in addition to the two argument method.
+If it is impossible to represent the rounded result as an object of the type `T`,
+then the three argument method should throw an `InexactError`.
+
+For example, if we have an `Interval` type which represents a range of possible values
+similar to https://github.com/JuliaPhysics/Measurements.jl, we may define rounding on that
+type with the following
+
+```jldoctest
+julia> struct Interval{T}
+           min::T
+           max::T
+       end
+
+julia> Base.round(x::Interval, r::RoundingMode) = Interval(round(x.min, r), round(x.max, r))
+
+julia> x = Interval(1.7, 2.2)
+Interval{Float64}(1.7, 2.2)
+
+julia> round(x)
+Interval{Float64}(2.0, 2.0)
+
+julia> floor(x)
+Interval{Float64}(1.0, 2.0)
+
+julia> ceil(x)
+Interval{Float64}(2.0, 3.0)
+
+julia> trunc(x)
+Interval{Float64}(1.0, 2.0)
+```

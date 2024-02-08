@@ -335,3 +335,19 @@ const op_arg_restrict2 = @opaque (x::Tuple{Int64}, y::Base.RefValue{Int64})->x+y
 ccall_op_arg_restrict2_bad_args() = op_arg_restrict2((1.,), 2)
 
 @test_throws TypeError ccall_op_arg_restrict2_bad_args()
+
+# code_llvm for opaque closures
+let ir = Base.code_ircode((Int,Int)) do x, y
+        @noinline x * y
+    end |> only |> first
+    oc = Core.OpaqueClosure(ir)
+    io = IOBuffer()
+    code_llvm(io, oc, Tuple{Int,Int})
+    @test occursin("j_*_", String(take!(io)))
+    code_llvm(io, oc, (Int,Int))
+    @test occursin("j_*_", String(take!(io)))
+end
+
+foopaque() = Base.Experimental.@opaque(@noinline x::Int->println(x))(1)
+
+code_llvm(devnull,foopaque,()) #shouldn't crash

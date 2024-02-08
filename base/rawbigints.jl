@@ -5,15 +5,14 @@ Segment of raw words of bits interpreted as a big integer. Less
 significant words come first. Each word is in machine-native bit-order.
 """
 struct RawBigInt{T<:Unsigned}
-    d::Ptr{T}
+    d::String
     word_count::Int
 
-    function RawBigInt{T}(d::Ptr{T}, word_count::Int) where {T<:Unsigned}
+    function RawBigInt{T}(d::String, word_count::Int) where {T<:Unsigned}
         new{T}(d, word_count)
     end
 end
 
-RawBigInt(d::Ptr{T}, word_count::Int) where {T<:Unsigned} = RawBigInt{T}(d, word_count)
 elem_count(x::RawBigInt, ::Val{:words}) = x.word_count
 elem_count(x::Unsigned, ::Val{:bits}) = sizeof(x) * 8
 word_length(::RawBigInt{T}) where {T} = elem_count(zero(T), Val(:bits))
@@ -26,8 +25,10 @@ split_bit_index(x::RawBigInt, i::Int) = divrem(i, word_length(x), RoundToZero)
 `i` is the zero-based index of the wanted word in `x`, starting from
 the less significant words.
 """
-function get_elem(x::RawBigInt, i::Int, ::Val{:words}, ::Val{:ascending})
-    unsafe_load(x.d, i + 1)
+function get_elem(x::RawBigInt{T}, i::Int, ::Val{:words}, ::Val{:ascending}) where {T}
+    # `i` must be non-negative and less than `x.word_count`
+    d = x.d
+    (GC.@preserve d unsafe_load(Ptr{T}(pointer(d)), i + 1))::T
 end
 
 function get_elem(x, i::Int, v::Val, ::Val{:descending})

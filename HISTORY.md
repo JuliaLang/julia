@@ -37,6 +37,9 @@ Compiler/Runtime improvements
 * The mark phase of the garbage collector is now multi-threaded ([#48600]).
 * [JITLink](https://llvm.org/docs/JITLink.html) is enabled by default on Linux aarch64 when Julia is linked to LLVM 15 or later versions ([#49745]).
   This should resolve many segmentation faults previously observed on this platform.
+* The precompilation process now uses pidfile locks and orchestrates multiple julia processes to only have one process
+  spend effort precompiling while the others wait. Previously all would do the work and race to overwrite the cache files.
+  ([#49052])
 
 Command-line option changes
 ---------------------------
@@ -95,7 +98,7 @@ Standard library changes
   ([#46196]).
 * Adjoints and transposes of `Factorization` objects are no longer wrapped in `Adjoint`
   and `Transpose` wrappers, respectively. Instead, they are wrapped in
-  `AdjointFactorization` and `TranposeFactorization` types, which themselves subtype
+  `AdjointFactorization` and `TransposeFactorization` types, which themselves subtype
   `Factorization` ([#46874]).
 * New functions `hermitianpart` and `hermitianpart!` for extracting the Hermitian
   (real symmetric) part of a matrix ([#31836]).
@@ -5288,7 +5291,7 @@ Language tooling improvements
      talk](https://www.youtube.com/watch?v=e6-hcOHO0tc&list=PLP8iPy9hna6SQPwZUDtAM59-wPzCPyD_S&index=5)
      on Gallium shows off various features of the debugger.
 
-   * The [Juno IDE](http://junolab.org) has matured significantly, and now
+   * The [Juno IDE](https://junolab.org) has matured significantly, and now
      also includes support for plotting and debugging.
 
    * [Cxx.jl](https://github.com/Keno/Cxx.jl) provides a convenient FFI for
@@ -5686,7 +5689,7 @@ Library improvements
 
   * Other improvements
 
-    * You can now tab-complete emoji via their [short names](http://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
+    * You can now tab-complete emoji via their [short names](https://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
 
     * `gc_enable` subsumes `gc_disable`, and also returns the previous GC state.
 

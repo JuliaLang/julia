@@ -304,14 +304,19 @@ end
 
 # polynomial evaluation using compensated summation.
 # much more accurate, especially when lo can be combined with other rounding errors
-Base.@assume_effects :terminates_locally @inline function exthorner(x, p::Tuple)
-    hi, lo = p[end], zero(x)
-    for i in length(p)-1:-1:1
-        pi = getfield(p, i) # needed to prove consistency
-        prod, err = two_mul(hi,x)
-        hi = pi+prod
-        lo = fma(lo, x, prod - (hi - pi) + err)
-    end
+@inline function exthorner(x::T, p::Tuple{T,T,T}) where T<:Union{Float32,Float64}
+    hi, lo = p[lastindex(p)], zero(x)
+    hi, lo = _exthorner(2, x, p, hi, lo)
+    hi, lo = _exthorner(1, x, p, hi, lo)
+    return hi, lo
+end
+
+@inline function _exthorner(i::Int, x::T, p::Tuple{T,T,T}, hi::T, lo::T) where T<:Union{Float32,Float64}
+    i == 2 || i == 1 || error("unexpected index")
+    pi = p[i]
+    prod, err = two_mul(hi,x)
+    hi = pi+prod
+    lo = fma(lo, x, prod - (hi - pi) + err)
     return hi, lo
 end
 
@@ -448,7 +453,7 @@ tanh(x::Number)
 
 Compute the inverse tangent of `y` or `y/x`, respectively.
 
-For one argument, this is the angle in radians between the positive *x*-axis and the point
+For one real argument, this is the angle in radians between the positive *x*-axis and the point
 (1, *y*), returning a value in the interval ``[-\\pi/2, \\pi/2]``.
 
 For two arguments, this is the angle in radians between the positive *x*-axis and the
@@ -576,8 +581,11 @@ atanh(x::Number)
 """
     log(x)
 
-Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
-[`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
+Compute the natural logarithm of `x`.
+
+Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use complex arguments to obtain complex results.
+Has a branch cut along the negative real axis, for which `-0.0im` is taken to be below the axis.
 
 See also [`ℯ`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
@@ -592,6 +600,12 @@ log was called with a negative real argument but will only return a complex resu
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
+
+julia> log(-3 + 0im)
+1.0986122886681098 + 3.141592653589793im
+
+julia> log(-3 - 0.0im)
+1.0986122886681098 - 3.141592653589793im
 
 julia> log.(exp.(-1:1))
 3-element Vector{Float64}:
@@ -690,8 +704,13 @@ end
 """
     sqrt(x)
 
-Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
-Use complex negative arguments instead. The prefix operator `√` is equivalent to `sqrt`.
+Return ``\\sqrt{x}``.
+
+Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use complex negative arguments instead. Note that `sqrt` has a branch cut
+along the negative real axis.
+
+The prefix operator `√` is equivalent to `sqrt`.
 
 See also: [`hypot`](@ref).
 
@@ -709,6 +728,9 @@ Stacktrace:
 
 julia> sqrt(big(complex(-81)))
 0.0 + 9.0im
+
+julia> sqrt(-81 - 0.0im)  # -0.0im is below the branch cut
+0.0 - 9.0im
 
 julia> .√(1:4)
 4-element Vector{Float64}:
@@ -979,27 +1001,28 @@ end
 ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 """
-    exponent(x) -> Int
+    exponent(x::Real) -> Int
 
 Returns the largest integer `y` such that `2^y ≤ abs(x)`.
-For a normalized floating-point number `x`, this corresponds to the exponent of `x`.
+
+Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
+For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
+
+See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref).
 
 # Examples
 ```jldoctest
 julia> exponent(8)
 3
 
-julia> exponent(64//1)
-6
-
 julia> exponent(6.5)
 2
 
-julia> exponent(16.0)
-4
+julia> exponent(-1//4)
+-2
 
-julia> exponent(3.142e-4)
--12
+julia> exponent(floatmin(Float32)), exponent(nextfloat(0.0f0))
+(-126, -149)
 ```
 """
 function exponent(x::T) where T<:IEEEFloat
@@ -1214,7 +1237,7 @@ end
 end
 
 @inline function pow_body(xu::UInt64, y::Float64)
-    logxhi,logxlo = Base.Math._log_ext(xu)
+    logxhi,logxlo = _log_ext(xu)
     xyhi, xylo = two_mul(logxhi,y)
     xylo = muladd(logxlo, y, xylo)
     hi = xyhi+xylo
@@ -1288,7 +1311,7 @@ end
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
     # double-double numbers and returns the high double. References:
-    # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
+    # [1] https://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
@@ -1463,9 +1486,11 @@ end
 rem2pi(x::Float32, r::RoundingMode) = Float32(rem2pi(Float64(x), r))
 rem2pi(x::Float16, r::RoundingMode) = Float16(rem2pi(Float64(x), r))
 rem2pi(x::Int32, r::RoundingMode) = rem2pi(Float64(x), r)
-function rem2pi(x::Int64, r::RoundingMode)
-    fx = Float64(x)
-    fx == x || throw(ArgumentError("Int64 argument to rem2pi is too large: $x"))
+
+# general fallback
+function rem2pi(x::Integer, r::RoundingMode)
+    fx = float(x)
+    fx == x || throw(ArgumentError(LazyString(typeof(x), " argument to rem2pi is too large: ", x)))
     rem2pi(fx, r)
 end
 

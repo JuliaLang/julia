@@ -502,7 +502,7 @@ julia> round(Int8,127.4)
 127
 
 julia> round(Int8,127.6)
-ERROR: InexactError: trunc(Int8, 128.0)
+ERROR: InexactError: Int8(128.0)
 Stacktrace:
 [...]
 ```

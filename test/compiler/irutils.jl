@@ -1,4 +1,4 @@
-using Core: CodeInfo, ReturnNode, MethodInstance
+using Core.IR
 using Core.Compiler: IRCode, IncrementalCompact, singleton_type, VarState
 using Base.Meta: isexpr
 using InteractiveUtils: gen_call_with_extracted_types_and_kwargs
@@ -16,7 +16,8 @@ end
 # check if `x` is a statement with a given `head`
 isnew(@nospecialize x) = isexpr(x, :new)
 issplatnew(@nospecialize x) = isexpr(x, :splatnew)
-isreturn(@nospecialize x) = isa(x, ReturnNode)
+isreturn(@nospecialize x) = isa(x, ReturnNode) && isdefined(x, :val)
+isisdefined(@nospecialize x) = isexpr(x, :isdefined)
 
 # check if `x` is a dynamic call of a given function
 iscall(y) = @nospecialize(x) -> iscall(y, x)
@@ -42,25 +43,49 @@ fully_eliminated(@nospecialize args...; retval=(@__FILE__), kwargs...) =
 fully_eliminated(src::CodeInfo; retval=(@__FILE__)) = fully_eliminated(src.code; retval)
 fully_eliminated(ir::IRCode; retval=(@__FILE__)) = fully_eliminated(ir.stmts.stmt; retval)
 function fully_eliminated(code::Vector{Any}; retval=(@__FILE__), kwargs...)
-    if retval !== (@__FILE__)
-        (length(code) <= 2) || return false
-        for i = 1:(length(code) - 1)
-            code[i] === nothing || return false
-        end
-        isreturn(code[end]) || return false
-        val = code[end].val
-        if val isa QuoteNode
-            val = val.value
-        end
-        return val == retval
-    else
-        (length(code) <= 2) || return false
-        for i = 1:(length(code) - 1)
-            code[i] === nothing || return false
-        end
-        return isreturn(code[end])
+    length(code) == 1 || return false
+    retstmt = only(code)
+    isreturn(retstmt) || return false
+    retval === (@__FILE__) && return true
+    retval′ = retstmt.val
+    if retval′ isa QuoteNode
+        retval′ = retval′.value
     end
+    return retval′ == retval
 end
 macro fully_eliminated(ex0...)
     return gen_call_with_extracted_types_and_kwargs(__module__, :fully_eliminated, ex0)
+end
+
+let m = Meta.@lower 1 + 1
+    @assert Meta.isexpr(m, :thunk)
+    orig_src = m.args[1]::CodeInfo
+    global function make_codeinfo(code::Vector{Any};
+                                  ssavaluetypes::Union{Nothing,Vector{Any}}=nothing,
+                                  slottypes::Union{Nothing,Vector{Any}}=nothing)
+        src = copy(orig_src)
+        src.code = code
+        nstmts = length(src.code)
+        if ssavaluetypes === nothing
+            src.ssavaluetypes = nstmts
+        else
+            src.ssavaluetypes = ssavaluetypes
+        end
+        src.codelocs = fill(one(Int32), nstmts)
+        src.ssaflags = fill(zero(UInt32), nstmts)
+        if slottypes !== nothing
+            src.slottypes = slottypes
+            src.slotflags = fill(zero(UInt8), length(slottypes))
+        end
+        return src
+    end
+    global function make_ircode(code::Vector{Any};
+                                ssavaluetypes::Union{Nothing,Vector{Any}}=nothing,
+                                slottypes::Union{Nothing,Vector{Any}}=nothing,
+                                verify::Bool=true)
+        src = make_codeinfo(code; ssavaluetypes, slottypes)
+        ir = Core.Compiler.inflate_ir(src)
+        verify && Core.Compiler.verify_ir(ir)
+        return ir
+    end
 end

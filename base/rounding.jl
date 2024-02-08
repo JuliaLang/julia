@@ -131,15 +131,14 @@ rounds_away_from_zero(t::Tuple{Any,Bool}) = rounds_away_from_zero(t...)
 tie_breaker_is_to_even(t::Tuple{Any,Bool}) = tie_breaker_is_to_even(first(t))
 tie_breaker_rounds_away_from_zero(t::Tuple{Any,Bool}) = tie_breaker_rounds_away_from_zero(t...)
 
-abstract type RoundingIncrementHelper end
-struct FinalBit <: RoundingIncrementHelper end
-struct RoundBit <: RoundingIncrementHelper end
-struct StickyBit <: RoundingIncrementHelper end
+struct FinalBit end
+struct RoundBit end
+struct StickyBit end
 
 function correct_rounding_requires_increment(x, rounding_mode, sign_bit::Bool)
     r = (rounding_mode, sign_bit)
     f = let y = x
-        (z::RoundingIncrementHelper) -> y(z)::Bool
+        (z::Union{FinalBit,RoundBit,StickyBit}) -> y(z)::Bool
     end
     if rounds_to_nearest(r)
         if f(RoundBit())
@@ -283,6 +282,8 @@ function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T
     end
 end
 
+# Default definitions
+
 """
     set_zero_subnormals(yes::Bool) -> Bool
 
@@ -313,8 +314,8 @@ for IEEE arithmetic, and `true` if they might be converted to zeros.
 get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 
 end #module
+using .Rounding
 
-# Docstring listed here so it appears above the complex docstring.
 """
     round([T,] x, [r::RoundingMode])
     round(x, [r::RoundingMode]; digits::Integer=0, base = 10)
@@ -388,4 +389,83 @@ julia> round(357.913; sigdigits=4, base=2)
 
 To extend `round` to new numeric types, it is typically sufficient to define `Base.round(x::NewType, r::RoundingMode)`.
 """
-round(T::Type, x)
+function round end
+
+"""
+    trunc([T,] x)
+    trunc(x; digits::Integer= [, base = 10])
+    trunc(x; sigdigits::Integer= [, base = 10])
+
+`trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
+is less than or equal to the absolute value of `x`.
+
+`trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the truncated
+value is not representable a `T`.
+
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
+
+To support `trunc` for a new type, define `Base.round(x::NewType, ::RoundingMode{:ToZero})`.
+
+See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref), [`unsafe_trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> trunc(2.22)
+2.0
+
+julia> trunc(-2.22, digits=1)
+-2.2
+
+julia> trunc(Int, -2.22)
+-2
+```
+"""
+function trunc end
+
+"""
+    floor([T,] x)
+    floor(x; digits::Integer= [, base = 10])
+    floor(x; sigdigits::Integer= [, base = 10])
+
+`floor(x)` returns the nearest integral value of the same type as `x` that is less than or
+equal to `x`.
+
+`floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the floored
+value is not representable a `T`.
+
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
+
+To support `floor` for a new type, define `Base.round(x::NewType, ::RoundingMode{:Down})`.
+"""
+function floor end
+
+"""
+    ceil([T,] x)
+    ceil(x; digits::Integer= [, base = 10])
+    ceil(x; sigdigits::Integer= [, base = 10])
+
+`ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
+equal to `x`.
+
+`ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the ceiled
+value is not representable as a `T`.
+
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
+
+To support `ceil` for a new type, define `Base.round(x::NewType, ::RoundingMode{:Up})`.
+"""
+function ceil end
+
+trunc(x; kws...) = round(x, RoundToZero; kws...)
+floor(x; kws...) = round(x, RoundDown; kws...)
+ ceil(x; kws...) = round(x, RoundUp; kws...)
+round(x; kws...) = round(x, RoundNearest; kws...)
+
+trunc(::Type{T}, x) where T = round(T, x, RoundToZero)
+floor(::Type{T}, x) where T = round(T, x, RoundDown)
+ ceil(::Type{T}, x) where T = round(T, x, RoundUp)
+round(::Type{T}, x) where T = round(T, x, RoundNearest)
+
+round(::Type{T}, x, r::RoundingMode) where T = convert(T, round(x, r))
+
+round(x::Integer, r::RoundingMode) = x

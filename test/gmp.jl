@@ -11,6 +11,11 @@ ee = typemax(Int64)
     @test BigInt <: Signed
     @test big(1) isa Signed
 
+    if sizeof(Culong) >= 8
+        @test_throws OutOfMemoryError big(96608869069402268615522366320733234710)^16374500563449903721
+        @test_throws OutOfMemoryError 555555555555555555555555555555555555555555555555555^55555555555555555
+    end
+
     let x = big(1)
         @test signed(x) === x
         @test convert(Signed, x) === x
@@ -215,6 +220,8 @@ end
 end
 @testset "combinatorics" begin
     @test factorial(BigInt(40)) == parse(BigInt,"815915283247897734345611269596115894272000000000")
+    @test_throws DomainError factorial(BigInt(-1))
+    @test_throws DomainError factorial(BigInt(rand(-999:-2)))
     @test binomial(BigInt(1), -1) == BigInt(0)
     @test binomial(BigInt(1), 2)  == BigInt(0)
     @test binomial(BigInt(-53), 42) == parse(BigInt,"959509335087854414441273718")

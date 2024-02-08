@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Logging/docs/src/index.md"
+```
+
 # [Logging](@id man-logging)
 
 The [`Logging`](@ref Logging.Logging) module provides a way to record the history and progress of a
@@ -58,7 +62,7 @@ automatically extracted. Let's examine the user-defined data first:
 * The *log level* is a broad category for the message that is used for early
   filtering. There are several standard levels of type [`LogLevel`](@ref);
   user-defined levels are also possible.
-  Each is distinct in purpose:
+  Each built-in log level is distinct in purpose:
   - [`Logging.Debug`](@ref) (log level -1000) is information intended for the developer of
     the program. These events are disabled by default.
   - [`Logging.Info`](@ref) (log level 0) is for general information to the user.
@@ -69,6 +73,17 @@ automatically extracted. Let's examine the user-defined data first:
     be recovered, at least by this part of the code.
     Often this log-level is unneeded as throwing an exception can convey
     all the required information.
+
+    You can create logging macros for custom log levels. For instance:
+    ```julia-repl
+    julia> using Logging
+
+    julia> @create_log_macro MyLog 200 :magenta
+    @mylog (macro with 1 method)
+
+    julia> @mylog "hello"
+    [ MyLog: hello
+    ```
 
 * The *message*  is an object describing the event. By convention
   `AbstractString`s passed as messages are assumed to be in markdown format.
@@ -180,7 +195,7 @@ pattern match against the log event stream.
 
 ## Environment variables
 
-Message filtering can be influenced through the `JULIA_DEBUG` environment
+Message filtering can be influenced through the [`JULIA_DEBUG`](@ref JULIA_DEBUG) environment
 variable, and serves as an easy way to enable debug logging for a file or
 module. Loading julia with `JULIA_DEBUG=loading` will activate
 `@debug` log messages in `loading.jl`. For example, in Linux shells:
@@ -298,6 +313,7 @@ Logging.Debug
 Logging.Info
 Logging.Warn
 Logging.Error
+Logging.@create_log_macro
 ```
 
 ### [Processing events with AbstractLogger](@id AbstractLogger-interface)
