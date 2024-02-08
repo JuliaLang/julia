@@ -783,19 +783,19 @@ function _triukron!(C, A, B)
             Aij = A[i, j]
             inB = (i - 1) * n_B
             for l = 1:n_B
-                for k = 1:(l-1)
+                for k = 1:l
                     C[inB+k, jnB+l] = Aij * B[k, l]
+                end
+                for k = 1:(l-1)
                     C[inB+l, jnB+k] = zero(eltype(C))
                 end
-                C[inB+l, jnB+l] = Aij * B[l, l]
             end
         end
         Ajj = A[j, j]
         for l = 1:n_B
-            for k = 1:(l-1)
+            for k = 1:l
                 C[jnB+k, jnB+l] = Ajj * B[k, l]
             end
-            C[jnB+l, jnB+l] = Ajj * B[l, l]
         end
     end
 end
@@ -807,8 +807,7 @@ function _trilkron!(C, A, B)
         jnB = (j - 1) * n_B
         Ajj = A[j, j]
         for l = 1:n_B
-            C[jnB+l, jnB+l] = Ajj * B[l, l]
-            for k = (l+1):n_B
+            for k = l:n_B
                 C[jnB+k, jnB+l] = Ajj * B[k, l]
             end
         end
@@ -816,9 +815,10 @@ function _trilkron!(C, A, B)
             Aij = A[i, j]
             inB = (i - 1) * n_B
             for l = 1:n_B
-                C[inB+l, jnB+l] = Aij * B[l, l]
-                for k = (l+1):n_B
+                for k = l:n_B
                     C[inB+k, jnB+l] = Aij * B[k, l]
+                end
+                for k = (l+1):n_B
                     C[inB+l, jnB+k] = zero(eltype(C))
                 end
             end
