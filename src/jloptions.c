@@ -190,7 +190,7 @@ static const char opts[]  =
     "                            --bug-report=help.\n\n"
 
     " --heap-size-hint=<size>    Forces garbage collection if memory usage is greater than the given number of bytes.\n"
-    "                            The size may be specified with units like 500M (megabytes) or 2.5GB (gigabytes)\n\n"
+    "                            The memory hint might be specified in megabytes (e.g., 500M) or gigabytes (e.g., 1G)\n\n"
 ;
 
 static const char opts_hidden[]  =
