@@ -154,6 +154,11 @@ _maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val(1))
 _maybe_reshape_parent(A::AbstractArray{<:Any,1}, ::NTuple{1, Bool}) = reshape(A, Val(1))
 _maybe_reshape_parent(A::AbstractArray{<:Any,N}, ::NTuple{N, Bool}) where {N} = A
 _maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A, Val(N))
+# The trailing singleton indices could be eliminated after bounds checking.
+rm_singleton_indices(ndims::Tuple, J1, Js...) = (J1, rm_singleton_indices(IteratorsMD._splitrest(ndims, index_ndims(J1)), Js...)...)
+rm_singleton_indices(::Tuple{}, ::ScalarIndex, Js...) = rm_singleton_indices((), Js...)
+rm_singleton_indices(::Tuple) = ()
+
 """
     view(A, inds...)
 
@@ -200,15 +205,12 @@ julia> view(2:5, 2:3) # returns a range as type is immutable
 3:4
 ```
 """
-function view(A::AbstractArray{<:Any,N}, I::Vararg{Any,M}) where {N,M}
+function view(A::AbstractArray, I::Vararg{Any,M}) where {M}
     @inline
     J = map(i->unalias(A,i), to_indices(A, I))
     @boundscheck checkbounds(A, J...)
-    if length(J) > ndims(A) && J[N+1:end] isa Tuple{Vararg{Int}}
-        # view([1,2,3], :, 1) does not need to reshape
-        return unsafe_view(A, J[1:N]...)
-    end
-    unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
+    J′ = rm_singleton_indices(ntuple(Returns(true), Val(ndims(A))), J...)
+    unsafe_view(_maybe_reshape_parent(A, index_ndims(J′...)), J′...)
 end
 
 # Ranges implement getindex to return recomputed ranges; use that for views, too (when possible)
