@@ -3304,7 +3304,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             end
             if rt === Bottom
                 ssavaluetypes[currpc] = Bottom
-                # Special case: Union typed PhiNodes do not error (but must also be unused)
+                # Special case: Bottom-typed PhiNodes do not error (but must also be unused)
                 if isa(stmt, PhiNode)
                     continue
                 end
