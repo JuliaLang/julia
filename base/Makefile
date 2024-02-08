@@ -205,17 +205,23 @@ $(build_bindir)/7z$(EXE):
 	rm -f "$@" && \
 	ln -svf "$(7Z_PATH)" "$@"
 
-symlink_lld: $(build_bindir)/lld$(EXE)
+symlink_llvm_utils: $(build_depsbindir)/lld$(EXE) $(build_depsbindir)/dsymutil$(EXE)
 
 ifneq ($(USE_SYSTEM_LLD),0)
-SYMLINK_SYSTEM_LIBRARIES += symlink_lld
+SYMLINK_SYSTEM_LIBRARIES += symlink_llvm_utils
 LLD_PATH := $(shell which lld$(EXE))
+DSYMUTIL_PATH := $(shell which dsymutil$(EXE))
 endif
 
-$(build_bindir)/lld$(EXE):
+$(build_depsbindir)/lld$(EXE):
 	[ -e "$(LLD_PATH)" ] && \
 	rm -f "$@" && \
 	ln -svf "$(LLD_PATH)" "$@"
+
+$(build_depsbindir)/dsymutil$(EXE):
+	[ -e "$(DSYMUTIL_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(DSYMUTIL_PATH)" "$@"
 
 # the following excludes: libuv.a, libutf8proc.a
 
@@ -269,11 +275,9 @@ $(eval $(call symlink_system_library,LIBSUITESPARSE,libamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libcamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libccolamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libcholmod))
-$(eval $(call symlink_system_library,LIBSUITESPARSE,libcholmod_cuda))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libcolamd))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libumfpack))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libspqr))
-$(eval $(call symlink_system_library,LIBSUITESPARSE,libspqr_cuda))
 $(eval $(call symlink_system_library,LIBSUITESPARSE,libsuitesparseconfig))
 # EXCLUDED LIBRARIES (installed/used, but not vendored for use with dlopen):
 # libunwind

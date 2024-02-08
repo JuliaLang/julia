@@ -118,7 +118,7 @@ end
 
 CC.InferenceParams(interp::EscapeAnalyzer) = interp.inf_params
 CC.OptimizationParams(interp::EscapeAnalyzer) = interp.opt_params
-CC.get_world_counter(interp::EscapeAnalyzer) = interp.world
+CC.get_inference_world(interp::EscapeAnalyzer) = interp.world
 CC.get_inference_cache(interp::EscapeAnalyzer) = interp.inf_cache
 
 struct EscapeAnalyzerCacheView
@@ -127,7 +127,7 @@ struct EscapeAnalyzerCacheView
 end
 
 function CC.code_cache(interp::EscapeAnalyzer)
-    worlds = WorldRange(get_world_counter(interp))
+    worlds = WorldRange(CC.get_inference_world(interp))
     return WorldView(EscapeAnalyzerCacheView(interp.code_cache, interp.escape_cache), worlds)
 end
 CC.haskey(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance) = haskey(wvc.cache.code_cache.cache, mi)

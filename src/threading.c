@@ -316,6 +316,7 @@ int jl_all_tls_states_size;
 static uv_cond_t cond;
 // concurrent reads are permitted, using the same pattern as mtsmall_arraylist
 // it is implemented separately because the API of direct jl_all_tls_states use is already widely prevalent
+void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 // return calling thread's ID
 JL_DLLEXPORT int16_t jl_threadid(void)
@@ -379,9 +380,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     ptls->bt_data = bt_data;
     small_arraylist_new(&ptls->locks, 0);
     jl_init_thread_heap(ptls);
-
-    uv_mutex_init(&ptls->sleep_lock);
-    uv_cond_init(&ptls->wake_signal);
+    jl_init_thread_scheduler(ptls);
 
     uv_mutex_lock(&tls_lock);
     if (tid == -1)

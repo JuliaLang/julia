@@ -92,7 +92,7 @@ struct HashState{K}
 end
 HashState(key) = HashState(key, objectid(key), 0, 0)
 # Reconstruct
-function HashState(other::HashState, key)
+Base.@assume_effects :terminates_locally function HashState(other::HashState, key)
     h = HashState(key)
     while h.depth !== other.depth
         h = next(h)
@@ -103,7 +103,8 @@ end
 function next(h::HashState)
     depth = h.depth + 1
     shift = h.shift + BITS_PER_LEVEL
-    @assert h.shift <= MAX_SHIFT
+    # Assert disabled for effect precision
+    # @assert h.shift <= MAX_SHIFT
     if shift > MAX_SHIFT
         # Note we use `UInt(depth ÷ BITS_PER_LEVEL)` to seed the hash function
         # the hash docs, do we need to hash `UInt(depth ÷ BITS_PER_LEVEL)` first?
@@ -154,7 +155,7 @@ as the current `level`.
 If a copy function is provided `copyf` use the return `top` for the
 new persistent tree.
 """
-@inline function path(trie::HAMT{K,V}, key, h::HashState, copy=false) where {K, V}
+@inline @Base.assume_effects :noub :terminates_locally function path(trie::HAMT{K,V}, key, h::HashState, copy=false) where {K, V}
     if copy
         trie = top = HAMT{K,V}(Base.copy(trie.data), trie.bitmap)
     else
@@ -172,6 +173,7 @@ new persistent tree.
             end
             if copy
                 next = HAMT{K,V}(Base.copy(next.data), next.bitmap)
+                # :noub because entry_index is guaranteed to be inbounds for trie.data
                 @inbounds trie.data[i] = next
             end
             trie = next::HAMT{K,V}
@@ -187,7 +189,7 @@ end
 Internal function that given an obtained path, either set the value
 or grows the HAMT by inserting a new trie instead.
 """
-@inline function insert!(found, present, trie::HAMT{K,V}, i, bi, h, val) where {K,V}
+@inline @Base.assume_effects :terminates_locally function insert!(found, present, trie::HAMT{K,V}, i, bi, h, val) where {K,V}
     if found # we found a slot, just set it to the new leaf
         # replace or insert
         if present # replace

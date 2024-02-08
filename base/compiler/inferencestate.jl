@@ -170,6 +170,17 @@ function getindex(tpdum::TwoPhaseDefUseMap, idx::Int)
     return TwoPhaseVectorView(tpdum.data, nelems, range)
 end
 
+mutable struct LazyCFGReachability
+    ir::IRCode
+    reachability::CFGReachability
+    LazyCFGReachability(ir::IRCode) = new(ir)
+end
+function get!(x::LazyCFGReachability)
+    isdefined(x, :reachability) && return x.reachability
+    domtree = construct_domtree(x.ir.cfg.blocks)
+    return x.reachability = CFGReachability(x.ir.cfg, domtree)
+end
+
 mutable struct LazyGenericDomtree{IsPostDom}
     ir::IRCode
     domtree::GenericDomTree{IsPostDom}
@@ -205,8 +216,10 @@ const CACHE_MODE_VOLATILE = 0x01 << 2 # not cached, optimization allowed
 
 mutable struct TryCatchFrame
     exct
+    scopet
     const enter_idx::Int
-    TryCatchFrame(@nospecialize(exct), enter_idx::Int) = new(exct, enter_idx)
+    scope_uses::Vector{Int}
+    TryCatchFrame(@nospecialize(exct), @nospecialize(scopet), enter_idx::Int) = new(exct, scopet, enter_idx)
 end
 
 mutable struct InferenceState
@@ -264,7 +277,10 @@ mutable struct InferenceState
     function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
                             interp::AbstractInterpreter)
         linfo = result.linfo
-        world = get_world_counter(interp)
+        world = get_inference_world(interp)
+        if world == typemax(UInt)
+            error("Entering inference from a generated function with an invalid world")
+        end
         def = linfo.def
         mod = isa(def, Method) ? def.module : def
         sptypes = sptypes_from_meth_instance(linfo)
@@ -364,12 +380,14 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
         stmt = code[pc]
         if isa(stmt, EnterNode)
             l = stmt.catch_dest
-            push!(handlers, TryCatchFrame(Bottom, pc))
+            push!(handlers, TryCatchFrame(Bottom, isdefined(stmt, :scope) ? Bottom : nothing, pc))
             handler_id = length(handlers)
             handler_at[pc + 1] = (handler_id, 0)
             push!(ip, pc + 1)
-            handler_at[l] = (0, handler_id)
-            push!(ip, l)
+            if l != 0
+                handler_at[l] = (0, handler_id)
+                push!(ip, l)
+            end
         end
     end
 
@@ -400,7 +418,9 @@ function compute_trycatch(code::Vector{Any}, ip::BitSet)
                 l = stmt.catch_dest
                 # We assigned a handler number above. Here we just merge that
                 # with out current handler information.
-                handler_at[l] = (cur_stacks[1], handler_at[l][2])
+                if l != 0
+                    handler_at[l] = (cur_stacks[1], handler_at[l][2])
+                end
                 cur_stacks = (handler_at[pc´][1], cur_stacks[2])
             elseif isa(stmt, Expr)
                 head = stmt.head
@@ -470,10 +490,10 @@ end
 
 function InferenceState(result::InferenceResult, cache_mode::UInt8, interp::AbstractInterpreter)
     # prepare an InferenceState object for inferring lambda
-    world = get_world_counter(interp)
+    world = get_inference_world(interp)
     src = retrieve_code_info(result.linfo, world)
     src === nothing && return nothing
-    validate_code_in_debug_mode(result.linfo, src, "lowered")
+    maybe_validate_code(result.linfo, src, "lowered")
     return InferenceState(result, src, cache_mode, interp)
 end
 InferenceState(result::InferenceResult, cache_mode::Symbol, interp::AbstractInterpreter) =
@@ -738,7 +758,7 @@ mutable struct IRInterpretationState
     const sptypes::Vector{VarState}
     const tpdum::TwoPhaseDefUseMap
     const ssa_refined::BitSet
-    const lazydomtree::LazyDomtree
+    const lazyreachability::LazyCFGReachability
     valid_worlds::WorldRange
     const edges::Vector{Any}
     parent # ::Union{Nothing,AbsIntState}
@@ -758,12 +778,12 @@ mutable struct IRInterpretationState
         append!(ir.argtypes, given_argtypes)
         tpdum = TwoPhaseDefUseMap(length(ir.stmts))
         ssa_refined = BitSet()
-        lazydomtree = LazyDomtree(ir)
+        lazyreachability = LazyCFGReachability(ir)
         valid_worlds = WorldRange(min_world, max_world == typemax(UInt) ? get_world_counter() : max_world)
         edges = Any[]
         parent = nothing
         return new(method_info, ir, mi, world, curridx, argtypes_refined, ir.sptypes, tpdum,
-                   ssa_refined, lazydomtree, valid_worlds, edges, parent)
+                   ssa_refined, lazyreachability, valid_worlds, edges, parent)
     end
 end
 

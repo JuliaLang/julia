@@ -347,9 +347,9 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
                                      int8_t old_state)
 {
     jl_atomic_store_release(&ptls->gc_state, state);
-    // A safe point is required if we transition from GC-safe region to
-    // non GC-safe region.
-    if (old_state && !state)
+    if (state == JL_GC_STATE_SAFE && old_state == 0)
+        jl_gc_safepoint_(ptls);
+    if (state == 0 && old_state == JL_GC_STATE_SAFE)
         jl_gc_safepoint_(ptls);
     return old_state;
 }

@@ -64,6 +64,21 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         }
         return expr;
     }
+    else if (jl_is_enternode(expr)) {
+        jl_value_t *scope = jl_enternode_scope(expr);
+        if (scope) {
+            jl_value_t *val = resolve_globals(scope, module, sparam_vals, binding_effects, eager_resolve);
+            if (val != scope) {
+                intptr_t catch_dest = jl_enternode_catch_dest(expr);
+                JL_GC_PUSH1(&val);
+                expr = jl_new_struct_uninit(jl_enternode_type);
+                jl_enternode_catch_dest(expr) = catch_dest;
+                jl_enternode_scope(expr) = val;
+                JL_GC_POP();
+            }
+        }
+        return expr;
+    }
     else if (jl_is_gotoifnot(expr)) {
         jl_value_t *cond = resolve_globals(jl_gotoifnot_cond(expr), module, sparam_vals, binding_effects, eager_resolve);
         if (cond != jl_gotoifnot_cond(expr)) {
@@ -610,7 +625,9 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
 
     JL_TRY {
         ct->ptls->in_pure_callback = 1;
-        ct->world_age = def->primary_world;
+        ct->world_age = jl_atomic_load_relaxed(&def->primary_world);
+        if (ct->world_age > jl_atomic_load_acquire(&jl_world_counter) || jl_atomic_load_relaxed(&def->deleted_world) < ct->world_age)
+            jl_error("The generator method cannot run until it is added to a method table.");
 
         // invoke code generator
         jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
@@ -836,8 +853,8 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->recursion_relation = NULL;
     m->isva = 0;
     m->nargs = 0;
-    m->primary_world = 1;
-    m->deleted_world = ~(size_t)0;
+    jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
+    jl_atomic_store_relaxed(&m->deleted_world, 1);
     m->is_for_opaque_closure = 0;
     m->nospecializeinfer = 0;
     m->constprop = 0;
@@ -993,8 +1010,6 @@ JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGAT
     return method->external_mt ? (jl_methtable_t*)method->external_mt : jl_method_table_for(method->sig);
 }
 
-jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
-
 JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                                         jl_methtable_t *mt,
                                         jl_code_info_t *f,
@@ -1123,16 +1138,6 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     m->file = file;
     m->line = line;
     jl_method_set_source(m, f);
-
-#ifdef RECORD_METHOD_ORDER
-    if (jl_all_methods == NULL)
-        jl_all_methods = jl_alloc_vec_any(0);
-#endif
-    if (jl_all_methods != NULL) {
-        while (jl_array_nrows(jl_all_methods) < m->primary_world)
-            jl_array_ptr_1d_push(jl_all_methods, NULL);
-        jl_array_ptr_1d_push(jl_all_methods, (jl_value_t*)m);
-    }
 
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)

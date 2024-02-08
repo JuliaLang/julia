@@ -446,7 +446,7 @@ let effects = Base.infer_effects() do
     end
     @test !Core.Compiler.is_nothrow(effects)
 end
-@test_throws ErrorException setglobal!_nothrow_undefinedyet()
+@test_throws Union{ErrorException,TypeError} setglobal!_nothrow_undefinedyet() # TODO: what kind of error should this be?
 
 # Nothrow for setfield!
 mutable struct SetfieldNothrow
@@ -1340,3 +1340,45 @@ end
     end
     return res
 end |> Core.Compiler.is_terminates
+
+# https://github.com/JuliaLang/julia/issues/52531
+const a52531 = Core.Ref(1)
+@eval getref52531() = $(QuoteNode(a52531)).x
+@test !Core.Compiler.is_consistent(Base.infer_effects(getref52531))
+let
+    global set_a52531!, get_a52531
+    _a::Int             = -1
+    set_a52531!(a::Int) = (_a = a; return get_a52531())
+    get_a52531()        = _a
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(set_a52531!, (Int,)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(get_a52531, ()))
+@test get_a52531() == -1
+@test set_a52531!(1) == 1
+@test get_a52531() == 1
+
+let
+    global is_initialized52531, set_initialized52531!
+    _is_initialized                   = false
+    set_initialized52531!(flag::Bool) = (_is_initialized = flag)
+    is_initialized52531()             = _is_initialized
+end
+top_52531(_) = (set_initialized52531!(true); nothing)
+@test !Core.Compiler.is_consistent(Base.infer_effects(is_initialized52531))
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(set_initialized52531!, (Bool,)))
+@test !is_initialized52531()
+top_52531(0)
+@test is_initialized52531()
+
+const ref52843 = Ref{Int}()
+@eval func52843() = ($ref52843[] = 1; nothing)
+@test !Core.Compiler.is_foldable(Base.infer_effects(func52843))
+let; Base.Experimental.@force_compile; func52843(); end
+@test ref52843[] == 1
+
+@test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(identity∘identity, Tuple{Any}))
+@test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(()->Vararg, Tuple{}))
+
+# pointerref nothrow for invalid pointer
+@test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{Vector{Int64}}}, Int, Int])
+@test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{T}} where T, Int, Int])
