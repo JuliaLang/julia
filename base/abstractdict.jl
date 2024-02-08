@@ -579,7 +579,7 @@ _tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<(top_set_bit(x-one(
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 
-# validate the contents of this iterator by testing the iteration protocol (isiterable) on it
+# This error is thrown if `grow_to!` cannot validate the contents of the iterator argument to it, which it does by testing the iteration protocol (isiterable) on it each time it is about to start iteration on it
 _throw_dict_kv_error() = throw(ArgumentError("AbstractDict(kv): kv needs to be an iterator of 2-tuples or pairs"))
 
 function grow_to!(dest::AbstractDict, itr)
