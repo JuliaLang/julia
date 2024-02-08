@@ -8,7 +8,7 @@ using Test, LinearAlgebra
     ## Cholesky decomposition based
 
     # eigenvalue sorting
-    sf = x->(real(x),imag(x))
+    sf = x->(imag(x),real(x))
 
     ## Real valued
     A = Float64[1 1 0 0; 1 2 1 0; 0 1 3 1; 0 0 1 4]
@@ -40,6 +40,9 @@ using Test, LinearAlgebra
 end
 
 @testset "issue #49533" begin
+    # eigenvalue sorting
+    sf = x->(imag(x),real(x))
+
     ## Real valued
     A = Float64[1 1 0 0; 1 2 1 0; 0 1 3 1; 0 0 1 4]
     B = Matrix(Diagonal(Float64[1:4;]))
@@ -62,7 +65,6 @@ end
     B =  [2.0+2.0im 1.0+1.0im 4.0+4.0im 3.0+3.0im; 0 3.0+2.0im 1.0+1.0im 3.0+4.0im; 3.0+3.0im 1.0+4.0im 0 0; 0 1.0+2.0im 3.0+1.0im 1.0+1.0im]
     BH = B'B
     # eigen
-    sf = x->(real(x),imag(x))
     e1,v1 = eigen(A, Hermitian(BH))
     @test A*v1 ≈ Hermitian(BH)*v1*Diagonal(e1)
     e2,v2 = eigen(Hermitian(AH), B)
@@ -73,6 +75,80 @@ end
     @test eigvals(A, BH; sortby=sf) ≈ eigvals(A, Hermitian(BH); sortby=sf)
     @test eigvals(AH, B; sortby=sf) ≈ eigvals(Hermitian(AH), B; sortby=sf)
     @test eigvals(AH, BH; sortby=sf) ≈ eigvals(Hermitian(AH), Hermitian(BH); sortby=sf)
+end
+
+@testset "bk-lu-eigen-eigvals" begin
+    # Bunchkaufman decomposition based
+
+    # eigenvalue sorting
+    sf = x->(imag(x),real(x))
+
+    # Real-valued random matrix
+    N = 10
+    A = randn(N,N)
+    B = randn(N,N)
+    BH = (B+B')/2
+    # eigen
+    e0 = eigvals(A,BH; sortby=sf)
+    e,v = eigen(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+    e,v = eigen(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+    e,v = eigen(A,lu(Hermitian(BH,:L)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+    e,v = eigen(A,lu(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+    # eigvals
+    e0 = eigvals(A,BH; sortby=sf)
+    el = eigvals(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
+    eu = eigvals(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ el
+    @test e0 ≈ eu
+    el = eigvals(A,lu(Hermitian(BH,:L)); sortby=sf)
+    eu = eigvals(A,lu(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ el
+    @test e0 ≈ eu
+
+    # Complex-valued random matrix
+    N = 10
+    A = complex.(randn(N,N),randn(N,N))
+    B = complex.(randn(N,N),randn(N,N))
+    BH = (B+B')/2
+    # eigen
+    e0 = eigvals(A,BH; sortby=sf)
+    e,v = eigen(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+    e,v = eigen(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+    e,v = eigen(A,lu(Hermitian(BH,:L)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+    e,v = eigen(A,lu(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ e
+    @test A*v ≈ BH*v*Diagonal(e)
+    # eigvals
+    e0 = eigvals(A,BH; sortby=sf)
+    el = eigvals(A,bunchkaufman(Hermitian(BH,:L)); sortby=sf)
+    eu = eigvals(A,bunchkaufman(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ el
+    @test e0 ≈ eu
+    el = eigvals(A,lu(Hermitian(BH,:L)); sortby=sf)
+    eu = eigvals(A,lu(Hermitian(BH,:U)); sortby=sf)
+    @test e0 ≈ el
+    @test e0 ≈ eu
+end
+
+@testset "Hermitian tridiagonal eigen with Complex{Int} elements (#52801)" begin
+    dv, ev = fill(complex(2), 4), fill(3-4im, 3)
+    HT = Hermitian(Tridiagonal(ev, dv, ev))
+    λ, V = eigen(HT)
+    @test HT * V ≈ V * Diagonal(λ)
 end
 
 end # module TestSymmetricEigen

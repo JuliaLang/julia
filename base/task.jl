@@ -180,9 +180,18 @@ end
     elseif field === :exception
         # TODO: this field name should be deprecated in 2.0
         return t._isexception ? t.result : nothing
+    elseif field === :scope
+        error("Querying `scope` is disallowed. Use `current_scope` instead.")
     else
         return getfield(t, field)
     end
+end
+
+@inline function setproperty!(t::Task, field::Symbol, @nospecialize(v))
+    if field === :scope
+        istaskstarted(t) && error("Setting scope on a started task directly is disallowed.")
+    end
+    return @invoke setproperty!(t::Any, field::Symbol, v::Any)
 end
 
 """
@@ -457,7 +466,8 @@ const sync_varname = gensym(:sync)
 """
     @sync
 
-Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn), `@spawnat` and `@distributed`
+Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn),
+`Distributed.@spawnat` and `Distributed.@distributed`
 are complete. All exceptions thrown by enclosed async operations are collected and thrown as
 a [`CompositeException`](@ref).
 
@@ -693,7 +703,7 @@ end
 
 ## scheduler and work queue
 
-struct IntrusiveLinkedListSynchronized{T}
+mutable struct IntrusiveLinkedListSynchronized{T}
     queue::IntrusiveLinkedList{T}
     lock::Threads.SpinLock
     IntrusiveLinkedListSynchronized{T}() where {T} = new(IntrusiveLinkedList{T}(), Threads.SpinLock())
@@ -755,6 +765,7 @@ function workqueue_for(tid::Int)
         return @inbounds qs[tid]
     end
     # slow path to allocate it
+    @assert tid > 0
     l = Workqueues_lock
     @lock l begin
         qs = Workqueues
@@ -776,19 +787,27 @@ function enq_work(t::Task)
     # Sticky tasks go into their thread's work queue.
     if t.sticky
         tid = Threads.threadid(t)
-        if tid == 0 && !GC.in_finalizer()
+        if tid == 0
             # The task is not yet stuck to a thread. Stick it to the current
             # thread and do the same to the parent task (the current task) so
             # that the tasks are correctly co-scheduled (issue #41324).
             # XXX: Ideally we would be able to unset this.
-            tid = Threads.threadid()
-            ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
-            current_task().sticky = true
+            if GC.in_finalizer()
+                # The task was launched in a finalizer. There is no thread to sticky it
+                # to, so just allow it to run anywhere as if it had been non-sticky.
+                t.sticky = false
+                @goto not_sticky
+            else
+                tid = Threads.threadid()
+                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
+                current_task().sticky = true
+            end
         end
         push!(workqueue_for(tid), t)
     else
+        @label not_sticky
         tp = Threads.threadpool(t)
-        if Threads.threadpoolsize(tp) == 1
+        if tp === :foreign || Threads.threadpoolsize(tp) == 1
             # There's only one thread in the task's assigned thread pool;
             # use its work queue.
             tid = (tp === :interactive) ? 1 : Threads.threadpoolsize(:interactive)+1

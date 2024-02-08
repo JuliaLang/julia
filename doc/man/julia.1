@@ -21,7 +21,7 @@
 .\" - diagnostics
 .\" - notes
 
-.TH JULIA 1 2022-02-17 JULIA
+.TH JULIA 1 2023-09-01 JULIA
 
 .\" from the front page of https://julialang.org/
 .SH NAME
@@ -67,7 +67,7 @@ Print uncommon options not shown by `-h`
 
 .TP
 --project[=<dir>/@.]
-Set <dir> as the home project/environment. The default @. option will search
+Set <dir> as the active project/environment. The default @. option will search
 through parent directories until a Project.toml or JuliaProject.toml file is
 found.
 
@@ -93,8 +93,12 @@ Enable or disable Julia's default signal handlers
 Use native code from system image if available
 
 .TP
---compiled-modules={yes*|no}
-Enable or disable incremental precompilation of modules
+--compiled-modules={yes*|no|existing}
+Enable or disable incremental precompilation of modules.
+
+.TP
+--pkgimages={yes*|no|existing}
+Enable or disable usage of native code caching in the form of pkgimages
 
 .TP
 -e, --eval <expr>
@@ -119,9 +123,9 @@ process affinity is not configured, it uses the number of CPU
 threads.
 
 .TP
---gcthreads <n>
-Enable n GC threads; If unspecified is set to half of the
-compute worker threads.
+--gcthreads=N[,M]
+Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC.
+N is set to half of the number of compute threads and M is set to 0 if unspecified.
 
 .TP
 -p, --procs {N|auto}
@@ -277,6 +281,15 @@ See https://docs.julialang.org/en/v1/manual/environment-variables/
 Please report any bugs using the GitHub issue tracker:
 https://github.com/julialang/julia/issues?state=open
 
-
 .SH AUTHORS
 Contributors: https://github.com/JuliaLang/julia/graphs/contributors
+
+.SH INTERNET RESOURCES
+Website:  https://julialang.org/
+.br
+Documentation:  https://docs.julialang.org/
+.br
+Downloads:  https://julialang.org/downloads/
+
+.SH LICENSING
+Julia is an open-source project. It is made available under the MIT license.

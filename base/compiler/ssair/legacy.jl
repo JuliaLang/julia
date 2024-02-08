@@ -25,9 +25,8 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{A
             code[i] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Int32[block_for_inst(cfg, Int(edge)) for edge in stmt.edges], stmt.values)
-        elseif isexpr(stmt, :enter)
-            stmt.args[1] = block_for_inst(cfg, stmt.args[1]::Int)
-            code[i] = stmt
+        elseif isa(stmt, EnterNode)
+            code[i] = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest))
         end
     end
     nstmts = length(code)
@@ -72,7 +71,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode)
     resize!(ci.slotflags, nargs)
     resize!(ci.slottypes, nargs)
     stmts = ir.stmts
-    code = ci.code = stmts.inst
+    code = ci.code = stmts.stmt
     ssavaluetypes = ci.ssavaluetypes = stmts.type
     codelocs = ci.codelocs = stmts.line
     ssaflags = ci.ssaflags = stmts.flag
@@ -93,9 +92,8 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode)
             code[i] = GotoIfNot(stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Int32[edge == 0 ? 0 : last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
-        elseif isexpr(stmt, :enter)
-            stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]::Int].stmts)
-            code[i] = stmt
+        elseif isa(stmt, EnterNode)
+            code[i] = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : first(ir.cfg.blocks[stmt.catch_dest].stmts))
         end
     end
 end

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
-import Libdl
+using Libdl
 
 # these could fail on an embedded installation
 # but for now, we don't handle that case
@@ -26,8 +26,6 @@ end
 # library handle pointer must not be NULL
 @test_throws ArgumentError Libdl.dlsym(C_NULL, :foo)
 @test_throws ArgumentError Libdl.dlsym_e(C_NULL, :foo)
-
-cd(@__DIR__) do
 
 # Find the library directory by finding the path of libjulia-internal (or libjulia-internal-debug,
 # as the case may be) to get the private library directory
@@ -267,4 +265,73 @@ mktempdir() do dir
     end
 end
 
+## Tests for LazyLibrary
+@testset "LazyLibrary" begin; mktempdir() do dir
+    lclf_path = joinpath(private_libdir, "libccalllazyfoo.$(Libdl.dlext)")
+    lclb_path = joinpath(private_libdir, "libccalllazybar.$(Libdl.dlext)")
+
+    # Ensure that our modified copy of `libccalltest` is not currently loaded
+    @test !any(contains.(dllist(), lclf_path))
+    @test !any(contains.(dllist(), lclb_path))
+
+    # Create a `LazyLibrary` structure that loads `libccalllazybar`
+    global lclf_loaded = false
+    global lclb_loaded = false
+
+    # We don't provide `dlclose()` on `LazyLibrary`'s, you have to manage it yourself:
+    function close_libs()
+        global lclf_loaded = false
+        global lclb_loaded = false
+        if libccalllazybar.handle != C_NULL
+            dlclose(libccalllazybar.handle)
+        end
+        if libccalllazyfoo.handle != C_NULL
+            dlclose(libccalllazyfoo.handle)
+        end
+        @atomic libccalllazyfoo.handle = C_NULL
+        @atomic libccalllazybar.handle = C_NULL
+        @test !any(contains.(dllist(), lclf_path))
+        @test !any(contains.(dllist(), lclb_path))
+    end
+
+    global libccalllazyfoo = LazyLibrary(lclf_path; on_load_callback=() -> global lclf_loaded = true)
+    global libccalllazybar = LazyLibrary(lclb_path; dependencies=[libccalllazyfoo], on_load_callback=() -> global lclb_loaded = true)
+
+    # Creating `LazyLibrary` doesn't actually load anything
+    @test !lclf_loaded
+    @test !lclb_loaded
+
+    # Explicitly calling `dlopen()` does:
+    dlopen(libccalllazybar)
+    @test lclf_loaded
+    @test lclb_loaded
+    close_libs()
+
+    # Test that the library gets loaded when you use `ccall()`
+    @test ccall((:bar, libccalllazybar), Cint, (Cint,), 2) == 6
+    @test lclf_loaded
+    @test lclb_loaded
+    close_libs()
+
+    # Test that `@ccall` works:
+    @test @ccall(libccalllazybar.bar(2::Cint)::Cint) == 6
+    @test lclf_loaded
+    @test lclb_loaded
+    close_libs()
+
+    # Test that `dlpath()` works
+    @test dlpath(libccalllazybar) == realpath(string(libccalllazybar.path))
+    @test lclf_loaded
+    close_libs()
+
+    # Test that we can use lazily-evaluated library names:
+    libname = LazyLibraryPath(private_libdir, "libccalllazyfoo.$(Libdl.dlext)")
+    lazy_name_lazy_lib = LazyLibrary(libname)
+    @test dlpath(lazy_name_lazy_lib) == realpath(string(libname))
+end; end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Libdl)
+    @test_broken isempty(undoc)
+    @test undoc == [:Libdl]
 end

@@ -1168,6 +1168,17 @@ Base.@irrational i46051 4863.185427757 1548big(pi)
     # issue #46051
     @test sprint(show, "text/plain", i46051) == "i46051 = 4863.185427757..."
 end
+
+@testset "Irrational round, float, ceil" begin
+    using .MathConstants
+    @test round(π) === 3.0
+    @test round(Int, ℯ) === 3
+    @test floor(ℯ) === 2.0
+    @test floor(Int, φ) === 1
+    @test ceil(γ) === 1.0
+    @test ceil(Int, catalan) === 1
+end
+
 @testset "issue #6365" begin
     for T in (Float32, Float64)
         for i = 9007199254740992:9007199254740996
@@ -2675,7 +2686,7 @@ end
     @test divrem(a,-(a-20), RoundDown) == (div(a,-(a-20), RoundDown), rem(a,-(a-20), RoundDown))
 end
 
-@testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
+@testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat, Int8, Int16, Int32, Int64, Int128)
     @test rem2pi(T(1), RoundToZero)  == 1
     @test rem2pi(T(1), RoundNearest) == 1
     @test rem2pi(T(1), RoundDown)    == 1
@@ -2890,6 +2901,7 @@ end
     let float_types = Set()
         allsubtypes!(Base, AbstractFloat, float_types)
         allsubtypes!(Core, AbstractFloat, float_types)
+        filter!(!isequal(Core.BFloat16), float_types)   # defined externally
         @test !isempty(float_types)
 
         for T in float_types
@@ -3111,4 +3123,50 @@ end
         @test isequal(rem(-Float32(0x1p127), -Float32(0x3p-126)), -Float32(0x1p-125))
     end
 
+end
+
+@testset "FP(inf) == inf" begin
+    # Iterate through all pairs of FP types
+    fp_types = (Float16, Float32, Float64, BigFloat)
+    for F ∈ fp_types, G ∈ fp_types, f ∈ (typemin, typemax)
+        i = f(F)
+        @test i == G(i)
+    end
+end
+
+@testset "small int FP conversion" begin
+    fp_types = (Float16, Float32, Float64, BigFloat)
+    m = Int(maxintfloat(Float16))
+    for F ∈ fp_types, G ∈ fp_types, n ∈ (-m):m
+        @test n == G(F(n)) == F(G(n))
+    end
+end
+
+@testset "`precision`" begin
+    Fs = (Float16, Float32, Float64, BigFloat)
+
+    @testset "type vs instance" begin
+        @testset "F: $F" for F ∈ Fs
+            @test precision(F) == precision(one(F))
+            @test precision(F, base = 2) == precision(one(F), base = 2)
+            @test precision(F, base = 3) == precision(one(F), base = 3)
+        end
+    end
+
+    @testset "`precision` of `Union` shouldn't recur infinitely, #52909" begin
+        @testset "i: $i" for i ∈ eachindex(Fs)
+            @testset "j: $j" for j ∈ (i + 1):lastindex(Fs)
+                S = Fs[i]
+                T = Fs[j]
+                @test_throws MethodError precision(Union{S,T})
+                @test_throws MethodError precision(Union{S,T}, base = 3)
+            end
+        end
+    end
+end
+
+@testset "irrational special values" begin
+    for v ∈ (π, ℯ, γ, catalan, φ)
+        @test v === typemin(v) === typemax(v)
+    end
 end

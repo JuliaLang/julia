@@ -17,7 +17,81 @@ module REPL
 Base.Experimental.@optlevel 1
 Base.Experimental.@max_methods 1
 
-using Base.Meta, Sockets
+function UndefVarError_hint(io::IO, ex::UndefVarError)
+    var = ex.var
+    if var === :or
+        print(io, "\nSuggestion: Use `||` for short-circuiting boolean OR.")
+    elseif var === :and
+        print(io, "\nSuggestion: Use `&&` for short-circuiting boolean AND.")
+    elseif var === :help
+        println(io)
+        # Show friendly help message when user types help or help() and help is undefined
+        show(io, MIME("text/plain"), Base.Docs.parsedoc(Base.Docs.keywords[:help]))
+    elseif var === :quit
+        print(io, "\nSuggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.")
+    end
+    if isdefined(ex, :scope)
+        scope = ex.scope
+        if scope isa Module
+            bnd = ccall(:jl_get_module_binding, Any, (Any, Any, Cint), scope, var, true)::Core.Binding
+            if isdefined(bnd, :owner)
+                owner = bnd.owner
+                if owner === bnd
+                    print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
+                end
+            else
+                owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), scope, var)
+                if C_NULL == owner
+                    # No global of this name exists in this module.
+                    # This is the common case, so do not print that information.
+                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                    owner = bnd
+                else
+                    owner = unsafe_pointer_to_objref(owner)::Core.Binding
+                end
+            end
+            if owner !== bnd
+                # this could use jl_binding_dbgmodule for the exported location in the message too
+                print(io, "\nSuggestion: this global was defined as `$(owner.globalref)` but not assigned a value.")
+            end
+        elseif scope === :static_parameter
+            print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
+        elseif scope === :local
+            print(io, "\nSuggestion: check for an assignment to a local variable that shadows a global of the same name.")
+        end
+    else
+        scope = undef
+    end
+    if scope !== Base && !_UndefVarError_warnfor(io, Base, var)
+        warned = false
+        for m in Base.loaded_modules_order
+            m === Core && continue
+            m === Base && continue
+            m === Main && continue
+            m === scope && continue
+            warned |= _UndefVarError_warnfor(io, m, var)
+        end
+        warned ||
+            _UndefVarError_warnfor(io, Core, var) ||
+            _UndefVarError_warnfor(io, Main, var)
+    end
+    return nothing
+end
+
+function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
+    Base.isbindingresolved(m, var) || return false
+    (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
+    print(io, "\nHint: a global variable of this name also exists in $m.")
+    return true
+end
+
+function __init__()
+    Base.REPL_MODULE_REF[] = REPL
+    Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
+    return nothing
+end
+
+using Base.Meta, Sockets, StyledStrings
 import InteractiveUtils
 
 export
@@ -248,11 +322,9 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     return nothing
 end
 
-struct REPLDisplay{R<:AbstractREPL} <: AbstractDisplay
-    repl::R
+struct REPLDisplay{Repl<:AbstractREPL} <: AbstractDisplay
+    repl::Repl
 end
-
-==(a::REPLDisplay, b::REPLDisplay) = a.repl === b.repl
 
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
@@ -285,6 +357,19 @@ function print_response(repl::AbstractREPL, response, show_value::Bool, have_col
     end
     return nothing
 end
+
+function repl_display_error(errio::IO, @nospecialize errval)
+    # this will be set to true if types in the stacktrace are truncated
+    limitflag = Ref(false)
+    errio = IOContext(errio, :stacktrace_types_limited => limitflag)
+    Base.invokelatest(Base.display_error, errio, errval)
+    if limitflag[]
+        print(errio, "Some type information was truncated. Use `show(err)` to see complete types.")
+        println(errio)
+    end
+    return nothing
+end
+
 function print_response(errio::IO, response, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
@@ -294,7 +379,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
             if iserr
                 val = Base.scrub_repl_backtrace(val)
                 Base.istrivialerror(val) || setglobal!(Base.MainInclude, :err, val)
-                Base.invokelatest(Base.display_error, errio, val)
+                repl_display_error(errio, val)
             else
                 if val !== nothing && show_value
                     try
@@ -317,7 +402,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 try
                     excs = Base.scrub_repl_backtrace(current_exceptions())
                     setglobal!(Base.MainInclude, :err, excs)
-                    Base.invokelatest(Base.display_error, errio, excs)
+                    repl_display_error(errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
@@ -505,6 +590,8 @@ end
 active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
 active_module(::AbstractREPL) = Main
 active_module(d::REPLDisplay) = active_module(d.repl)
+
+setmodifiers!(c::CompletionProvider, m::LineEdit.Modifiers) = nothing
 
 setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
 
@@ -1098,6 +1185,31 @@ function setup_interface(
                 edit_insert(s, '?')
             end
         end,
+        ']' => function (s::MIState,o...)
+            if isempty(s) || position(LineEdit.buffer(s)) == 0
+                pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
+                if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
+                    Pkg = Base.require(pkgid)
+                    # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
+                    pkg_mode = nothing
+                    for mode in repl.interface.modes
+                        if mode isa LineEdit.Prompt && mode.complete isa Pkg.REPLMode.PkgCompletionProvider
+                            pkg_mode = mode
+                            break
+                        end
+                    end
+                    # TODO: Cache the `pkg_mode`?
+                    if pkg_mode !== nothing
+                        buf = copy(LineEdit.buffer(s))
+                        transition(s, pkg_mode) do
+                            LineEdit.state(s, pkg_mode).input_buffer = buf
+                        end
+                        return
+                    end
+                end
+            end
+            edit_insert(s, ']')
+        end,
 
         # Bracketed Paste Mode
         "\e[200~" => (s::MIState,o...)->begin
@@ -1367,10 +1479,80 @@ ends_with_semicolon(code::AbstractString) = ends_with_semicolon(String(code))
 ends_with_semicolon(code::Union{String,SubString{String}}) =
     contains(_rm_strings_and_comments(code), r";\s*$")
 
+function banner(io::IO = stdout; short = false)
+    if Base.GIT_VERSION_INFO.tagged_commit
+        commit_string = Base.TAGGED_RELEASE_BANNER
+    elseif isempty(Base.GIT_VERSION_INFO.commit)
+        commit_string = ""
+    else
+        days = Int(floor((ccall(:jl_clock_now, Float64, ()) - Base.GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+        days = max(0, days)
+        unit = days == 1 ? "day" : "days"
+        distance = Base.GIT_VERSION_INFO.fork_master_distance
+        commit = Base.GIT_VERSION_INFO.commit_short
+
+        if distance == 0
+            commit_string = "Commit $(commit) ($(days) $(unit) old master)"
+        else
+            branch = Base.GIT_VERSION_INFO.branch
+            commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
+        end
+    end
+
+    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
+
+    if get(io, :color, false)::Bool
+        c = Base.text_colors
+        tx = c[:normal] # text
+        jl = c[:normal] # julia
+        d1 = c[:bold] * c[:blue]    # first dot
+        d2 = c[:bold] * c[:red]     # second dot
+        d3 = c[:bold] * c[:green]   # third dot
+        d4 = c[:bold] * c[:magenta] # fourth dot
+
+        if short
+            print(io,"""
+              $(d3)o$(tx)  | Version $(VERSION)$(commit_date)
+             $(d2)o$(tx) $(d4)o$(tx) | $(commit_string)
+            """)
+        else
+            print(io,"""               $(d3)_$(tx)
+               $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
+              $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+               $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
+              $(jl)| | | | | | |/ _` |$(tx)  |
+              $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+             $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
+            $(jl)|__/$(tx)                   |
+
+            """)
+        end
+    else
+        if short
+            print(io,"""
+              o  |  Version $(VERSION)$(commit_date)
+             o o |  $(commit_string)
+            """)
+        else
+            print(io,"""
+                           _
+               _       _ _(_)_     |  Documentation: https://docs.julialang.org
+              (_)     | (_) (_)    |
+               _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
+              | | | | | | |/ _` |  |
+              | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+             _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
+            |__/                   |
+
+            """)
+        end
+    end
+end
+
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     repl.frontend_task = current_task()
     have_color = hascolor(repl)
-    Base.banner(repl.stream)
+    banner(repl.stream)
     d = REPLDisplay(repl)
     dopushdisplay = !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
@@ -1492,5 +1674,14 @@ Base.MainInclude.Out
 end
 
 import .Numbered.numbered_prompt!
+
+# this assignment won't survive precompilation,
+# but will stick if REPL is baked into a sysimg.
+# Needs to occur after this module is finished.
+Base.REPL_MODULE_REF[] = REPL
+
+if Base.generating_output()
+    include("precompile.jl")
+end
 
 end # module

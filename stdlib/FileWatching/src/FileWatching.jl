@@ -164,10 +164,13 @@ mutable struct _FDWatcher
         @static if Sys.isunix()
             _FDWatcher(fd::RawFD, mask::FDEvent) = _FDWatcher(fd, mask.readable, mask.writable)
             function _FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
-                if !readable && !writable
+                fdnum = Core.Intrinsics.bitcast(Int32, fd) + 1
+                if fdnum <= 0
+                    throw(ArgumentError("Passed file descriptor fd=$(fd) is not a valid file descriptor"))
+                elseif !readable && !writable
                     throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
                 end
-                fdnum = Core.Intrinsics.bitcast(Int32, fd) + 1
+
                 iolock_begin()
                 if fdnum > length(FDWatchers)
                     old_len = length(FDWatchers)
@@ -232,12 +235,19 @@ mutable struct _FDWatcher
     @static if Sys.iswindows()
         _FDWatcher(fd::RawFD, mask::FDEvent) = _FDWatcher(fd, mask.readable, mask.writable)
         function _FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
+            fdnum = Core.Intrinsics.bitcast(Int32, fd) + 1
+            if fdnum <= 0
+                throw(ArgumentError("Passed file descriptor fd=$(fd) is not a valid file descriptor"))
+            end
+
             handle = Libc._get_osfhandle(fd)
             return _FDWatcher(handle, readable, writable)
         end
         _FDWatcher(fd::WindowsRawSocket, mask::FDEvent) = _FDWatcher(fd, mask.readable, mask.writable)
         function _FDWatcher(fd::WindowsRawSocket, readable::Bool, writable::Bool)
-            if !readable && !writable
+            if fd == Base.INVALID_OS_HANDLE
+                throw(ArgumentError("Passed file descriptor fd=$(fd) is not a valid file descriptor"))
+            elseif !readable && !writable
                 throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
             end
 
@@ -727,7 +737,7 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
                     end
                 end
             catch ex
-                ex isa EOFError() || rethrow()
+                ex isa EOFError || rethrow()
                 return FDEvent()
             end
         else

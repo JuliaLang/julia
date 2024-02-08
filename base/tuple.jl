@@ -28,10 +28,9 @@ firstindex(@nospecialize t::Tuple) = 1
 lastindex(@nospecialize t::Tuple) = length(t)
 size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
-@eval getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, $(Expr(:boundscheck)))
-@eval getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), $(Expr(:boundscheck)))
-__inbounds_getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, false)
-__inbounds_getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), false)
+getindex(@nospecialize(t::Tuple), i::Int) = getfield(t, i, @_boundscheck)
+getindex(@nospecialize(t::Tuple), i::Integer) = getfield(t, convert(Int, i), @_boundscheck)
+__safe_getindex(@nospecialize(t::Tuple), i::Int) = (@_nothrow_noub_meta; getfield(t, i, false))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = (eltype(t)[t[ri] for ri in r]...,)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t, findall(b)) : throw(BoundsError(t, b))
 getindex(t::Tuple, c::Colon) = t
@@ -42,9 +41,9 @@ get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 # returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
-    setindex(c::Tuple, v, i::Integer)
+    setindex(t::Tuple, v, i::Integer)
 
-Creates a new tuple similar to `x` with the value at index `i` set to `v`.
+Creates a new tuple similar to `t` with the value at index `i` set to `v`.
 Throws a `BoundsError` when out of bounds.
 
 # Examples
@@ -73,6 +72,74 @@ function iterate(@nospecialize(t::Tuple), i::Int=1)
 end
 
 keys(@nospecialize t::Tuple) = OneTo(length(t))
+
+"""
+    prevind(A, i)
+
+Return the index before `i` in `A`. The returned index is often equivalent to `i
+- 1` for an integer `i`. This function can be useful for generic code.
+
+!!! warning
+    The returned index might be out of bounds. Consider using
+    [`checkbounds`](@ref).
+
+See also: [`nextind`](@ref).
+
+# Examples
+```jldoctest
+julia> x = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> prevind(x, 4) # valid result
+3
+
+julia> prevind(x, 1) # invalid result
+0
+
+julia> prevind(x, CartesianIndex(2, 2)) # valid result
+CartesianIndex(1, 2)
+
+julia> prevind(x, CartesianIndex(1, 1)) # invalid result
+CartesianIndex(2, 0)
+```
+"""
+function prevind end
+
+"""
+    nextind(A, i)
+
+Return the index after `i` in `A`. The returned index is often equivalent to `i
++ 1` for an integer `i`. This function can be useful for generic code.
+
+!!! warning
+    The returned index might be out of bounds. Consider using
+    [`checkbounds`](@ref).
+
+See also: [`prevind`](@ref).
+
+# Examples
+```jldoctest
+julia> x = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> nextind(x, 1) # valid result
+2
+
+julia> nextind(x, 4) # invalid result
+5
+
+julia> nextind(x, CartesianIndex(1, 1)) # valid result
+CartesianIndex(2, 1)
+
+julia> nextind(x, CartesianIndex(2, 2)) # invalid result
+CartesianIndex(1, 3)
+```
+"""
+function nextind end
 
 prevind(@nospecialize(t::Tuple), i::Integer) = Int(i)-1
 nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
@@ -199,41 +266,31 @@ first(t::Tuple) = t[1]
 # eltype
 
 eltype(::Type{Tuple{}}) = Bottom
-function eltype(t::Type{<:Tuple{Vararg{E}}}) where {E}
-    if @isdefined(E)
-        return E
-    else
-        # TODO: need to guard against E being miscomputed by subtyping (ref #23017)
-        # and compute the result manually in this case
-        return _compute_eltype(t)
-    end
-end
+# the <: here makes the runtime a bit more complicated (needing to check isdefined), but really helps inference
+eltype(t::Type{<:Tuple{Vararg{E}}}) where {E} = @isdefined(E) ? (E isa Type ? E : Union{}) : _compute_eltype(t)
 eltype(t::Type{<:Tuple}) = _compute_eltype(t)
-function _tuple_unique_fieldtypes(@nospecialize t)
+function _compute_eltype(@nospecialize t)
     @_total_meta
-    types = IdSet()
+    has_free_typevars(t) && return Any
     t´ = unwrap_unionall(t)
     # Given t = Tuple{Vararg{S}} where S<:Real, the various
     # unwrapping/wrapping/va-handling here will return Real
     if t´ isa Union
-        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.a, t)))
-        union!(types, _tuple_unique_fieldtypes(rewrap_unionall(t´.b, t)))
-    else
-        for ti in (t´::DataType).parameters
-            push!(types, rewrap_unionall(unwrapva(ti), t))
-        end
+        return promote_typejoin(_compute_eltype(rewrap_unionall(t´.a, t)),
+                                _compute_eltype(rewrap_unionall(t´.b, t)))
     end
-    return Core.svec(types...)
-end
-function _compute_eltype(@nospecialize t)
-    @_total_meta # TODO: the compiler shouldn't need this
-    types = _tuple_unique_fieldtypes(t)
-    return afoldl(types...) do a, b
-        # if we've already reached Any, it can't widen any more
-        a === Any && return Any
-        b === Any && return Any
-        return promote_typejoin(a, b)
+    p = (t´::DataType).parameters
+    length(p) == 0 && return Union{}
+    elt = rewrap_unionall(unwrapva(p[1]), t)
+    elt isa Type || return Union{} # Tuple{2} is legal as a Type, but the eltype is Union{} since it is uninhabited
+    r = elt
+    for i in 2:length(p)
+        r === Any && return r # if we've already reached Any, it can't widen any more
+        elt = rewrap_unionall(unwrapva(p[i]), t)
+        elt isa Type || return Union{} # Tuple{2} is legal as a Type, but the eltype is Union{} since it is uninhabited
+        r = promote_typejoin(elt, r)
     end
+    return r
 end
 
 # We'd like to be able to infer eltype(::Tuple), which needs to be able to
@@ -250,6 +307,13 @@ end
 # [4] eltype(t::Type{<:Tuple})
 #  @ tuple.jl:209
 typeof(function eltype end).name.max_methods = UInt8(4)
+
+# key/val types
+keytype(@nospecialize t::Tuple) = keytype(typeof(t))
+keytype(@nospecialize T::Type{<:Tuple}) = Int
+
+valtype(@nospecialize t::Tuple) = valtype(typeof(t))
+valtype(@nospecialize T::Type{<:Tuple}) = eltype(T)
 
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
@@ -332,7 +396,7 @@ end
 # n argument function
 heads(ts::Tuple...) = map(t -> t[1], ts)
 tails(ts::Tuple...) = map(tail, ts)
-map(f, ::Tuple{}...) = ()
+map(f, ::Tuple{}, ::Tuple{}...) = ()
 anyempty(x::Tuple{}, xs...) = true
 anyempty(x::Tuple, xs...) = anyempty(xs...)
 anyempty() = false
@@ -428,6 +492,7 @@ _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 _totuple(::Type{Tuple}, itr::Array) = (itr...,)
 _totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
 _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
+_totuple(::Type{Tuple}, p::Pair) = (p.first, p.second)
 _totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
 
 end
@@ -606,7 +671,7 @@ any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
-function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
+function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
     @noinline
     @_total_meta
     for y in itr
@@ -614,7 +679,7 @@ function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
     end
     return false
 end
-in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
+in(x::Symbol, itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
 
 
 """
@@ -625,4 +690,4 @@ Return an empty tuple, `()`.
 empty(@nospecialize x::Tuple) = ()
 
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
-foreach(f, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itrs...), init=nothing)
+foreach(f, itr::Tuple, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itr, itrs...), init=nothing)

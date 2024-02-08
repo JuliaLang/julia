@@ -163,11 +163,8 @@ Arrays:
 
 ```c
 jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims);
-jl_array_t *jl_new_arrayv(jl_value_t *atype, ...);
 jl_array_t *jl_alloc_array_1d(jl_value_t *atype, size_t nr);
-jl_array_t *jl_alloc_array_2d(jl_value_t *atype, size_t nr, size_t nc);
-jl_array_t *jl_alloc_array_3d(jl_value_t *atype, size_t nr, size_t nc, size_t z);
-jl_array_t *jl_alloc_vec_any(size_t n);
+jl_array_t *jl_alloc_array_nd(jl_value_t *atype, size_t *dims, size_t ndims);
 ```
 
 Note that many of these have alternative allocation functions for various special-purposes. The

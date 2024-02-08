@@ -188,6 +188,7 @@ end
             @test exp10(x) ≈ exp10(big(x))
             @test exp2(x) ≈ exp2(big(x))
             @test expm1(x) ≈ expm1(big(x))
+            @test expm1(T(-1.1)) ≈ expm1(big(T(-1.1)))
             @test hypot(x,y) ≈ hypot(big(x),big(y))
             @test hypot(x,x,y) ≈ hypot(hypot(big(x),big(x)),big(y))
             @test hypot(x,x,y,y) ≈ hypot(hypot(big(x),big(x)),hypot(big(y),big(y)))
@@ -1540,21 +1541,65 @@ end
     @test (@allocated f44336()) == 0
 end
 
-# test constant-foldability
-for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt, :fourthroot,
-           :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
-           :exp, :exp2, :exp10, :expm1
-           )
-    for T in (Float16, Float32, Float64)
-        f = getfield(@__MODULE__, fn)
-        eff = Base.infer_effects(f, (T,))
-        @test Core.Compiler.is_foldable(eff)
+@testset "constant-foldability of core math functions" begin
+    for T = Any[Float16, Float32, Float64]
+        @testset let T = T
+            for f = Any[sin, cos, tan, log, log2, log10, log1p, exponent, sqrt, cbrt, fourthroot,
+                        asin, atan, acos, sinh, cosh, tanh, asinh, acosh, atanh, exp, exp2, exp10, expm1]
+                @testset let f = f
+                    @test Base.infer_return_type(f, (T,)) != Union{}
+                    @test Core.Compiler.is_foldable(Base.infer_effects(f, (T,)))
+                end
+            end
+            @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
+            @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
+        end
     end
+end;
+@testset "removability of core math functions" begin
+    for T = Any[Float16, Float32, Float64]
+        @testset let T = T
+            for f = Any[exp, exp2, exp10, expm1]
+                @testset let f = f
+                    @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+                end
+            end
+        end
+    end
+end;
+@testset "exception type inference of core math functions" begin
+    MathErrorT = Union{DomainError, InexactError}
+    for T = (Float16, Float32, Float64)
+        @testset let T = T
+            for f = Any[sin, cos, tan, log, log2, log10, log1p, exponent, sqrt, cbrt, fourthroot,
+                        asin, atan, acos, sinh, cosh, tanh, asinh, acosh, atanh, exp, exp2, exp10, expm1]
+                @testset let f = f
+                    @test Base.infer_exception_type(f, (T,)) <: MathErrorT
+                end
+            end
+            @test Base.infer_exception_type(^, (T,Int)) <: MathErrorT
+            @test Base.infer_exception_type(^, (T,T)) <: MathErrorT
+        end
+    end
+end;
+@test Base.infer_return_type((Int,)) do x
+    local r = nothing
+    try
+        r = sin(x)
+    catch err
+        if err isa DomainError
+            r = 0.0
+        end
+    end
+    return r
+end === Float64
+
+@testset "BigInt Rationals with special funcs" begin
+    @test sinpi(big(1//1)) == big(0.0)
+    @test tanpi(big(1//1)) == big(0.0)
+    @test cospi(big(1//1)) == big(-1.0)
 end
-for T in (Float16, Float32, Float64)
-    for f in (exp, exp2, exp10)
-        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
-    end
-    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
-    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(MathConstants))
 end

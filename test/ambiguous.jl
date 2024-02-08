@@ -75,7 +75,7 @@ let io = IOBuffer()
     cf = @eval @cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
     @test_throws(MethodError(ambig, (UInt8(1), Int(2)), get_world_counter()),
                  ccall(cf, Int, (UInt8, Int), 1, 2))
-    @test_throws(ErrorException("no unique matching method found for the specified argument types"),
+    @test_throws("Calling invoke(f, t, args...) would throw:\nMethodError: no method matching ambig",
                  which(ambig, (UInt8, Int)))
     @test length(code_typed(ambig, (UInt8, Int))) == 0
 end
@@ -288,6 +288,30 @@ for f in (Ambig8.f, Ambig8.g)
     @test f(Int8(0)) == 4
     @test_throws MethodError f(0)
     @test_throws MethodError f(pi)
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, 10, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 2
+        @test ambig[] == 1
+    end
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 2
+        @test ambig[] == 1
+    end
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, 10, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 3
+        @test ambig[] == 1
+    end
+    let ambig = Ref{Int32}(0)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        @test ms isa Vector
+        @test length(ms) == 3
+        @test ambig[] == 1
+    end
 end
 
 module Ambig9

@@ -63,6 +63,8 @@ function close(s::IOStream)
     systemerror("close", bad)
 end
 
+closewrite(s::IOStream) = nothing
+
 function flush(s::IOStream)
     sigatomic_begin()
     bad = @_lock_ios s ccall(:ios_flush, Cint, (Ptr{Cvoid},), s.ios) != 0
@@ -452,7 +454,7 @@ function readline(s::IOStream; keep::Bool=false)
 end
 
 function copyuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
-    ensureroom(out, 16)
+    ensureroom(out, 1) # make sure we can read at least 1 byte, for iszero(n) check below
     ptr = (out.append ? out.size+1 : out.ptr)
     d = out.data
     len = length(d)
