@@ -269,6 +269,9 @@ end
     end
 end
 
+_conjugation(::Symmetric) = transpose
+_conjugation(::Hermitian) = adjoint
+
 diag(A::Symmetric) = symmetric.(diag(parent(A)), sym_uplo(A.uplo))
 diag(A::Hermitian) = hermitian.(diag(parent(A)), sym_uplo(A.uplo))
 
@@ -280,15 +283,15 @@ function applytri(f, A::HermOrSym)
     end
 end
 
-function applytri(f, A::HermOrSym, B::HermOrSym, adjAf=identity, adjBf=identity)
+function applytri(f, A::HermOrSym, B::HermOrSym)
     if A.uplo == B.uplo == 'U'
         f(UpperTriangular(A.data), UpperTriangular(B.data))
     elseif A.uplo == B.uplo == 'L'
         f(LowerTriangular(A.data), LowerTriangular(B.data))
     elseif A.uplo == 'U'
-        f(UpperTriangular(A.data), UpperTriangular(adjBf(B.data)))
+        f(UpperTriangular(A.data), UpperTriangular(_conjugation(B)(B.data)))
     else # A.uplo == 'L'
-        f(UpperTriangular(adjAf(A.data)), UpperTriangular(B.data))
+        f(UpperTriangular(_conjugation(A)(A.data)), UpperTriangular(B.data))
     end
 end
 parentof_applytri(f, args...) = applytri(parent ∘ f, args...)
@@ -522,17 +525,9 @@ end
 (-)(A::Hermitian) = Hermitian(parentof_applytri(-, A), sym_uplo(A.uplo))
 
 ## Addition/subtraction
-for f ∈ (:+, :-), (Wrapper, conjugation) ∈ ((:Hermitian, :adjoint), (:Symmetric, :transpose))
-    @eval begin
-        function $f(A::$Wrapper, B::$Wrapper)
-            if A.uplo == B.uplo
-                return $Wrapper(parentof_applytri($f, A, B), sym_uplo(A.uplo))
-            elseif A.uplo == 'U'
-                return $Wrapper(parentof_applytri($f, A, B, identity, $conjugation), :U)
-            else
-                return $Wrapper(parentof_applytri($f, A, B, $conjugation, identity), :U)
-            end
-        end
+for f ∈ (:+, :-), Wrapper ∈ (:Hermitian, :Symmetric)
+    @eval function $f(A::$Wrapper, B::$Wrapper)
+        $Wrapper(parentof_applytri($f, A, B), sym_uplo(A.uplo))
     end
 end
 
