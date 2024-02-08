@@ -1073,13 +1073,6 @@ end
     @test errors_not_signals(`$exename --heap-size-hint -e "exit(0)"`)
     @testset "--heap-size-hint=$str" for str in ["asdf","","0","1.2vb","b","GB","1.2gb2","42gigabytes","5gig","2GiB","NaNt"]
         @test errors_not_signals(`$exename --heap-size-hint=$str -e "exit(0)"`)
-        if !errors_not_signals(`$exename --heap-size-hint=$str -e "exit(0)"`)
-            @show str
-            try
-                run(`$exename --heap-size-hint=$str -e "exit(0)"`)
-            catch
-            end
-        end
     end
     k = 1024
     m = 1024k
