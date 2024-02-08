@@ -253,7 +253,7 @@ function find_terminfo_file(term::String)
                 replace(split(ENV["TERMINFO_DIRS"], ':'),
                         "" => "/usr/share/terminfo"))
     Sys.isunix() &&
-        push!(terminfo_dirs, "/etc/terminfo", "/usr/share/terminfo")
+        push!(terminfo_dirs, "/etc/terminfo", "/lib/terminfo", "/usr/share/terminfo")
     for dir in terminfo_dirs
         if isfile(joinpath(dir, chr, term))
             return joinpath(dir, chr, term)
