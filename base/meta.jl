@@ -496,7 +496,7 @@ function unescape(@nospecialize ex)
 end
 
 """
-    uncurly(expr)
+    Meta.uncurly(expr)
 
 Turn `T{P...}` into just `T`.
 """
