@@ -1026,8 +1026,6 @@ function remove_linenums!(@nospecialize ex)
     end
 end
 
-public remove_linenums!
-
 replace_linenums!(ex, ln::LineNumberNode) = ex
 function replace_linenums!(ex::Expr, ln::LineNumberNode)
     if ex.head === :block || ex.head === :quote
