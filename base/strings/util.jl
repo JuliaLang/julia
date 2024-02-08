@@ -224,7 +224,8 @@ end
     chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex}) -> SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
-For case-insensitive comparison of the prefix, e.g. for shortening regular URLs, you can use a suitable `Regex` for `prefix`.
+Note that `prefix` can also be a regular expression, which makes this quite powerful. For example, one can
+use such to make the prefix comparison case-insensitive, with the i-modifier, see below.
 
 See also [`chopsuffix`](@ref).
 
@@ -269,7 +270,8 @@ end
     chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex}) -> SubString
 
 Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
-Note, for case-insensitive, e.g. for chopping off file endings like .EXE or .jl, use with a Regex.
+Note that `suffix` can also be a regular expression, which makes this quite powerful. For example, one can
+use such to make the suffix comparison case-insensitive, with the i-modifier, see below.
 
 See also [`chopprefix`](@ref).
 
