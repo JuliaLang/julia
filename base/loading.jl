@@ -1780,13 +1780,11 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
     if _track_dependencies[]
         @lock require_lock begin
             if track_content
-                @assert isfile(path) "can only hash files"
+                hash = isdir(path) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r")
                 # use mtime=-1.0 here so that fsize==0 && mtime==0.0 corresponds to a missing include_dependency
-                push!(_require_dependencies,
-                      (mod, path, filesize(path), open(_crc32c, path, "r"), -1.0))
+                push!(_require_dependencies, (mod, path, filesize(path), hash, -1.0))
             else
-                push!(_require_dependencies,
-                      (mod, path, UInt64(0), UInt32(0), mtime(path)))
+                push!(_require_dependencies, (mod, path, UInt64(0), UInt32(0), mtime(path)))
             end
         end
     end
@@ -1794,17 +1792,22 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
 end
 
 """
-    include_dependency(path::AbstractString)
+    include_dependency(path::AbstractString; track_content::Bool=false)
 
 In a module, declare that the file, directory, or symbolic link specified by `path`
 (relative or absolute) is a dependency for precompilation; that is, the module will need
-to be recompiled if the modification time of `path` changes.
+to be recompiled if the modification time `mtime` of `path` changes.
+If `track_content=true` recompilation is triggered when the content of `path` changes
+(if `path` is a directory the content equals `join(readdir(path))`).
 
 This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
+
+!!! compat "Julia 1.11"
+    Keyword argument `track_content` requires at least Julia 1.11.
 """
-function include_dependency(path::AbstractString)
-    _include_dependency(Main, path, track_content=false)
+function include_dependency(path::AbstractString; track_content::Bool=false)
+    _include_dependency(Main, path, track_content=track_content)
     return nothing
 end
 
@@ -2754,7 +2757,7 @@ end
 function resolve_depot(inc::AbstractString)
     startswith(inc, string("@depot", Filesystem.pathsep())) || return :not_relocatable
     for depot in DEPOT_PATH
-        isfile(restore_depot_path(inc, depot)) && return depot
+        ispath(restore_depot_path(inc, depot)) && return depot
     end
     return :no_depot_found
 end
@@ -3480,7 +3483,7 @@ end
                         record_reason(reasons, "include_dependency fsize change")
                         return true
                     end
-                    hash = open(_crc32c, f, "r")
+                    hash = isdir(f) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
                     if hash != hash_req
                         @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
                         record_reason(reasons, "include_dependency fhash change")
