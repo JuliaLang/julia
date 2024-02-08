@@ -1799,7 +1799,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     modules, init_order, external_methods, new_ext_cis, new_method_roots, external_targets, edges = sv
-    m = only(external_methods)
+    m = only(external_methods).func::Method
     @test m.name == :repl_cmd && m.nargs < 2
     @test new_ext_cis === nothing || any(new_ext_cis) do ci
         mi = ci.def

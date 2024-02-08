@@ -301,7 +301,7 @@ julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype(::Type{<:AbstractDict{K,V}}) where {K,V} = K
+keytype(::Type{<:AbstractDict{K}}) where {K} = K
 keytype(a::AbstractDict) = keytype(typeof(a))
 
 """
@@ -315,7 +315,7 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype(::Type{<:AbstractDict{K,V}}) where {K,V} = V
+valtype(::Type{<:AbstractDict{<:Any,V}}) where {V} = V
 valtype(a::AbstractDict) = valtype(typeof(a))
 
 """

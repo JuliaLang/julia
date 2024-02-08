@@ -7,20 +7,31 @@ New language features
   API. Symbols marked with `export` are now also treated as public API. The
   difference between `public` and `export` is that `public` names do not become
   available when `using` a package/module ([#50105]).
-* `ScopedValue` implement dynamic scope with inheritance across tasks ([#50958]).
+* `ScopedValue` implements dynamic scope with inheritance across tasks ([#50958]).
 * The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
   but allows to add keyword arguments to the function call ([#51501]).
 * Support for Unicode 15.1 ([#51799]).
-* A new `AbstractString` type, `AnnotatedString`, is introduced that allows for
-  regional annotations to be attached to an underlying string. This type is
-  particularly useful for holding styling information, and is used extensively
-  in the new `StyledStrings` standard library. There is also a new `AnnotatedChar`
-  type, that is the equivalent new `AbstractChar` type.
+* Three new types around the idea of text with "annotations" (`Pair{Symbol, Any}`
+  entries, e.g. `:lang => "en"` or `:face => :magenta`). These annotations
+  are preserved across operations (e.g. string concatenation with `*`) when
+  possible.
+  * `AnnotatedString` is a new `AbstractString` type. It wraps an underlying
+    string and allows for annotations to be attached to regions of the string.
+    This type is used extensively in the new `StyledStrings` standard library to
+    hold styling information.
+  * `AnnotatedChar` is a new `AbstractChar` type. It wraps another char and
+    holds a list of annotations that apply to it.
+  * `AnnotatedIOBuffer` is a new `IO` type that mimics an `IOBuffer`, but has
+    specialised `read`/`write` methods for annotated content. This can be
+    thought of both as a "string builder" of sorts and also as glue between
+    annotated and unannotated content.
 * `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
   to be preferentially picked up by the given julia version. i.e. in the same folder,
   a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
   version. This makes managing environments for multiple julia versions at the same time
   easier ([#43845]).
+* `@time` now reports a count of any lock conflicts where a `ReentrantLock` had to wait, plus a new macro
+  `@lock_conflicts` which returns that count ([#52883]).
 
 Language changes
 ----------------
@@ -30,7 +41,7 @@ Language changes
   wants to begin exiting.
 * Code coverage and malloc tracking is no longer generated during the package precompilation stage.
   Further, during these modes pkgimage caches are now used for packages that are not being tracked.
-  Meaning that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
+  This means that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
   pkgimage caches for all other packages than the package being tested, likely meaning faster test
   execution. ([#52123])
 
@@ -42,7 +53,7 @@ Compiler/Runtime improvements
 * Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
 * A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
   loads, primarily to be used within JLLs ([#50074]).
-* Added a support for annotating `Base.@assume_effects` on code block ([#52400]).
+* Added support for annotating `Base.@assume_effects` on code blocks ([#52400]).
 
 Command-line option changes
 ---------------------------
@@ -60,6 +71,8 @@ difference between defining a `main` function and executing the code directly at
 Multi-threading changes
 -----------------------
 
+* `Threads.@threads` now supports the `:greedy` scheduler, intended for non-uniform workloads ([#52096]).
+
 Build system changes
 --------------------
 
@@ -68,12 +81,11 @@ New library functions
 
 * `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not.
 * The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
-* `hardlink(src, dst)` can be used to create hard links ([#41639]).
-* `diskstat(path=pwd())` can be used to return statistics about the disk ([#42248]).
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 * `eachrsplit(string, pattern)` iterates split substrings right to left.
 * `Sys.username()` can be used to return the current user's username ([#51897]).
-* `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` which is the safe counterpart to `unsafe_wrap` ([#52049]).
+* `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` is the safe counterpart to `unsafe_wrap` ([#52049]).
+* `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
 
 New library features
 --------------------
@@ -93,6 +105,8 @@ New library features
   content is fully written, then call `closewrite` manually to avoid
   data-races. Or use the callback form of `open` to have all that handled
   automatically.
+* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `filter` can now act on a `NamedTuple` ([#50795]).
 
 Standard library changes
 ------------------------
@@ -107,6 +121,12 @@ Standard library changes
   styled content ([#49586]).
 * The new `@styled_str` string macro provides a convenient way of creating a
   `AnnotatedString` with various faces or other attributes applied ([#49586]).
+
+#### JuliaSyntaxHighlighting
+
+* A new standard library for applying syntax highlighting to Julia code, this
+  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
+  that creates an `AnnotatedString` with syntax highlighting applied.
 
 #### Package Manager
 
@@ -139,7 +159,14 @@ Standard library changes
 #### REPL
 
 * Tab complete hints now show in lighter text while typing in the repl. To disable
-  set `Base.active_repl.options.hint_tab_completes = false` ([#51229]).
+  set `Base.active_repl.options.hint_tab_completes = false` interactively, or in startup.jl:
+  ```
+  if VERSION >= v"1.11.0-0"
+    atreplinit() do repl
+        repl.options.hint_tab_completes = false
+    end
+  end
+  ``` ([#51229]).
 * Meta-M with an empty prompt now toggles the contextual module between the previous non-Main
   contextual module and Main so that switching back and forth is simple. ([#51616], [#52670])
 
@@ -151,6 +178,8 @@ Standard library changes
 #### Test
 
 #### Dates
+
+The undocumented function `adjust` is no longer exported but is now documented
 
 #### Statistics
 
@@ -170,6 +199,8 @@ Standard library changes
 
 Deprecated or removed
 ---------------------
+
+* `Base.map`, `Iterators.map`, and `foreach` lost their single-argument methods ([#52631]).
 
 
 External dependencies

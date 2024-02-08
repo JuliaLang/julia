@@ -756,6 +756,7 @@ export
     swapproperty!,
     modifyproperty!,
     replaceproperty!,
+    setpropertyonce!,
     fieldoffset,
     fieldname,
     fieldnames,
@@ -1036,6 +1037,7 @@ export
     @elapsed,
     @allocated,
     @allocations,
+    @lock_conflicts,
 
     # tasks
     @sync,
@@ -1064,6 +1066,7 @@ export
     @atomic,
     @atomicswap,
     @atomicreplace,
+    @atomiconce,
     @__dot__,
     @enum,
     @label,
@@ -1134,6 +1137,7 @@ public
     summarysize,
     isexported,
     ispublic,
+    remove_linenums!,
 
 # Opperators
     operator_associativity,
@@ -1165,6 +1169,7 @@ public
     TTY,
     # functions
     reseteof,
+    link_pipe!,
 
 # misc
     notnothing,
