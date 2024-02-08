@@ -527,7 +527,8 @@ end
 ## Addition/subtraction
 for f ∈ (:+, :-), Wrapper ∈ (:Hermitian, :Symmetric)
     @eval function $f(A::$Wrapper, B::$Wrapper)
-        $Wrapper(parentof_applytri($f, A, B), sym_uplo(A.uplo))
+        uplo = A.uplo == B.uplo ? sym_uplo(A.uplo) : (:U)
+        $Wrapper(parentof_applytri($f, A, B), uplo)
     end
 end
 
