@@ -165,8 +165,7 @@ constructor.
 Such a definition might look like this:
 
 ```julia
-import Base: convert
-convert(::Type{MyType}, x) = MyType(x)
+Base.convert(::Type{MyType}, x) = MyType(x)
 ```
 
 The type of the first argument of this method is [`Type{MyType}`](@ref man-typet-type),
@@ -182,7 +181,7 @@ For example, this definition states that it's valid to `convert` any `Number` ty
 any other by calling a 1-argument constructor:
 
 ```julia
-convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
+Base.convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 ```
 
 This means that new `Number` types only need to define constructors, since this
@@ -191,7 +190,7 @@ An identity conversion is also provided to handle the case where the argument is
 already of the requested type:
 
 ```julia
-convert(::Type{T}, x::T) where {T<:Number} = x
+Base.convert(::Type{T}, x::T) where {T<:Number} = x
 ```
 
 Similar definitions exist for `AbstractString`, [`AbstractArray`](@ref), and [`AbstractDict`](@ref).
@@ -294,8 +293,7 @@ another type object, such that instances of the argument types will be promoted 
 type. Thus, by defining the rule:
 
 ```julia
-import Base: promote_rule
-promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
+Base.promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 ```
 
 one declares that when 64-bit and 32-bit floating-point values are promoted together, they should
@@ -303,8 +301,8 @@ be promoted to 64-bit floating-point. The promotion type does not need to be one
 types. For example, the following promotion rules both occur in Julia Base:
 
 ```julia
-promote_rule(::Type{BigInt}, ::Type{Float64}) = BigFloat
-promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
+Base.promote_rule(::Type{BigInt}, ::Type{Float64}) = BigFloat
+Base.promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 ```
 
 In the latter case, the result type is [`BigInt`](@ref) since `BigInt` is the only type
@@ -340,10 +338,9 @@ Finally, we finish off our ongoing case study of Julia's rational number type, w
 sophisticated use of the promotion mechanism with the following promotion rules:
 
 ```julia
-import Base: promote_rule
-promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
-promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
-promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)
+Base.promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
+Base.promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
+Base.promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)
 ```
 
 The first rule says that promoting a rational number with any other integer type promotes to a
