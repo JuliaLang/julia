@@ -62,6 +62,36 @@ const S_IWOTH = 0o0002  # write by other
 const S_IXOTH = 0o0001  # execute by other
 const S_IRWXO = 0o0007  # mask for other permissions
 
+"""
+    S_IRUSR
+    S_IWUSR
+    S_IXUSR
+    S_IRGRP
+    S_IWGRP
+    S_IXGRP
+    S_IROTH
+    S_IWOTH
+    S_IXOTH
+
+Constants for file access permission bits.
+The general structure is `S_I[permission][class]`
+where `permission` is `R` for read, `W` for write, and `X` for execute,
+and `class` is `USR` for user/owner, `GRP` for group, and `OTH` for other.
+"""
+(S_IRUSR, S_IWUSR, S_IXUSR, S_IRGRP, S_IWGRP, S_IXGRP, S_IROTH, S_IWOTH, S_IXOTH)
+
+"""
+    S_IRWXU
+    S_IRWXG
+    S_IRWXO
+
+Constants for file access permission masks, i.e. the combination of read, write,
+and execute permissions for a class.
+The general structure is `S_IRWX[class]`
+where `class` is `U` for user/owner, `G` for group, and `O` for other.
+"""
+(S_IRWXU, S_IRWXG, S_IRWXO)
+
 export File,
        StatStruct,
        # open,

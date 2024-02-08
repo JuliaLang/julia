@@ -44,5 +44,5 @@ end
 @testset "Base.Filesystem docstrings" begin
   undoc = Docs.undocumented_names(Base.Filesystem)
   @test_broken isempty(undoc)
-  @test undoc == [:File, :Filesystem, :S_IRGRP, :S_IROTH, :S_IRUSR, :S_IRWXG, :S_IRWXO, :S_IRWXU, :S_IWGRP, :S_IWOTH, :S_IWUSR, :S_IXGRP, :S_IXOTH, :S_IXUSR, :cptree, :futime, :rename, :sendfile, :unlink]
+  @test undoc == [:File, :Filesystem, :cptree, :futime, :rename, :sendfile, :unlink]
 end
