@@ -164,3 +164,7 @@ end
     @test length(Base.manifest_names) == n
     @test length(Base.preferences_names) == n
 end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Artifacts))
+end
