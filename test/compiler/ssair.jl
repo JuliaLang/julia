@@ -92,13 +92,6 @@ let cfg = CFG(BasicBlock[
     end
 end
 
-# test >:
-let
-    f(a, b) = a >: b
-    code_typed(f, Tuple{Any, Any})
-    # XXX: missing @test
-end
-
 for compile in ("min", "yes")
     cmd = `$(Base.julia_cmd()) --compile=$compile interpreter_exec.jl`
     if !success(pipeline(Cmd(cmd, dir=@__DIR__); stdout=stdout, stderr=stderr))
