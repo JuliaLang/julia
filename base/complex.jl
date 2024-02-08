@@ -178,7 +178,7 @@ complex(x::Real, y::Real) = Complex(x, y)
     complex(T::Type)
 
 Return an appropriate type which can represent a value of type `T` as a complex number.
-Equivalent to `typeof(complex(zero(T)))`.
+Equivalent to `typeof(complex(zero(T)))` if `T` does not contain `Missing`.
 
 # Examples
 ```jldoctest
@@ -187,6 +187,9 @@ Complex{Int64}
 
 julia> complex(Int)
 Complex{Int64}
+
+julia> complex(Union{Int, Missing})
+Union{Missing, Complex{Int64}}
 ```
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
@@ -567,7 +570,7 @@ end
 """
     cis(x)
 
-More efficient method for `exp(im*x)` by using Euler's formula: ``cos(x) + i sin(x) = \\exp(i x)``.
+More efficient method for `exp(im*x)` by using Euler's formula: ``\\cos(x) + i \\sin(x) = \\exp(i x)``.
 
 See also [`cispi`](@ref), [`sincos`](@ref), [`exp`](@ref), [`angle`](@ref).
 
@@ -622,7 +625,10 @@ end
 
 Compute the phase angle in radians of a complex number `z`.
 
-See also: [`atan`](@ref), [`cis`](@ref).
+Returns a number `-pi ≤ angle(z) ≤ pi`, and is thus discontinuous
+along the negative real axis.
+
+See also: [`atan`](@ref), [`cis`](@ref), [`rad2deg`](@ref).
 
 # Examples
 ```jldoctest
@@ -632,8 +638,11 @@ julia> rad2deg(angle(1 + im))
 julia> rad2deg(angle(1 - im))
 -45.0
 
-julia> rad2deg(angle(-1 - im))
--135.0
+julia> rad2deg(angle(-1 + 1e-20im))
+180.0
+
+julia> rad2deg(angle(-1 - 1e-20im))
+-180.0
 ```
 """
 angle(z::Complex) = atan(imag(z), real(z))

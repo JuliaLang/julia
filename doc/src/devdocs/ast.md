@@ -601,10 +601,9 @@ for important details on how to modify these fields safely.
 
   * `sparam_vals`
 
-    The values of the static parameters in `specTypes` indexed by `def.sparam_syms`. For the
-    `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`. But for a
-    runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and
-    indexable.
+    The values of the static parameters in `specTypes`.
+    For the `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`.
+    But for a runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and indexable.
 
   * `uninferred`
 
@@ -690,15 +689,8 @@ A (usually temporary) container for holding lowered source code.
 
   * `ssaflags`
 
-    Statement-level flags for each expression in the function. Many of these are reserved, but not yet implemented:
-
-    * 0x01 << 0 = statement is marked as `@inbounds`
-    * 0x01 << 1 = statement is marked as `@inline`
-    * 0x01 << 2 = statement is marked as `@noinline`
-    * 0x01 << 3 = statement is within a block that leads to `throw` call
-    * 0x01 << 4 = statement may be removed if its result is unused, in particular it is thus be both pure and effect free
-    * 0x01 << 5-6 = <unused>
-    * 0x01 << 7 = <reserved> has out-of-band info
+    Statement-level 32 bits flags for each expression in the function.
+    See the definition of `jl_code_info_t` in julia.h for more details.
 
   * `linetable`
 

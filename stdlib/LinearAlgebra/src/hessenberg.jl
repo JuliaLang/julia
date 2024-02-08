@@ -56,13 +56,15 @@ UpperHessenberg(A::AbstractMatrix) = UpperHessenberg{eltype(A),typeof(A)}(A)
 Matrix(H::UpperHessenberg{T}) where {T} = Matrix{T}(H)
 Array(H::UpperHessenberg) = Matrix(H)
 size(H::UpperHessenberg) = size(H.data)
+axes(H::UpperHessenberg) = axes(H.data)
 parent(H::UpperHessenberg) = H.data
 
 # similar behaves like UpperTriangular
 similar(H::UpperHessenberg, ::Type{T}) where {T} = UpperHessenberg(similar(H.data, T))
 similar(H::UpperHessenberg, ::Type{T}, dims::Dims{N}) where {T,N} = similar(H.data, T, dims)
 
-AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg(AbstractMatrix{T}(H.data))
+AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg{T}(H)
+AbstractMatrix{T}(H::UpperHessenberg{T}) where {T} = copy(H)
 
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
 real(H::UpperHessenberg{<:Real}) = H
@@ -82,10 +84,10 @@ end
 Base.isassigned(H::UpperHessenberg, i::Int, j::Int) =
     i <= j+1 ? isassigned(H.data, i, j) : true
 
-getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
+Base.@propagate_inbounds getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)
 
-function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
+Base.@propagate_inbounds function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
     if i > j+1
         x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
             "($i, $j) of an UpperHessenberg matrix to a nonzero value ($x)"))
@@ -131,29 +133,29 @@ for T = (:Number, :UniformScaling, :Diagonal)
 end
 
 function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
-    HH = mul!(_initarray(*, eltype(H), eltype(U), H), H, U)
+    HH = mul!(matprod_dest(H, U, promote_op(matprod, eltype(H), eltype(U))), H, U)
     UpperHessenberg(HH)
 end
 function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
-    HH = mul!(_initarray(*, eltype(U), eltype(H), H), U, H)
+    HH = mul!(matprod_dest(U, H, promote_op(matprod, eltype(U), eltype(H))), U, H)
     UpperHessenberg(HH)
 end
 
 function /(H::UpperHessenberg, U::UpperTriangular)
-    HH = _rdiv!(_initarray(/, eltype(H), eltype(U), H), H, U)
+    HH = _rdiv!(matprod_dest(H, U, promote_op(/, eltype(H), eltype(U))), H, U)
     UpperHessenberg(HH)
 end
 function /(H::UpperHessenberg, U::UnitUpperTriangular)
-    HH = _rdiv!(_initarray(/, eltype(H), eltype(U), H), H, U)
+    HH = _rdiv!(matprod_dest(H, U, promote_op(/, eltype(H), eltype(U))), H, U)
     UpperHessenberg(HH)
 end
 
 function \(U::UpperTriangular, H::UpperHessenberg)
-    HH = ldiv!(_initarray(\, eltype(U), eltype(H), H), U, H)
+    HH = ldiv!(matprod_dest(U, H, promote_op(\, eltype(U), eltype(H))), U, H)
     UpperHessenberg(HH)
 end
 function \(U::UnitUpperTriangular, H::UpperHessenberg)
-    HH = ldiv!(_initarray(\, eltype(U), eltype(H), H), U, H)
+    HH = ldiv!(matprod_dest(U, H, promote_op(\, eltype(U), eltype(H))), U, H)
     UpperHessenberg(HH)
 end
 

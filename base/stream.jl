@@ -436,7 +436,10 @@ end
 
 function closewrite(s::LibuvStream)
     iolock_begin()
-    check_open(s)
+    if !iswritable(s)
+        iolock_end()
+        return
+    end
     req = Libc.malloc(_sizeof_uv_shutdown)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     err = ccall(:uv_shutdown, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -740,19 +743,28 @@ mutable struct Pipe <: AbstractPipe
 end
 
 """
-Construct an uninitialized Pipe object.
+    Pipe()
 
-The appropriate end of the pipe will be automatically initialized if
-the object is used in process spawning. This can be useful to easily
-obtain references in process pipelines, e.g.:
+Construct an uninitialized Pipe object, especially for IO communication between multiple processes.
+
+The appropriate end of the pipe will be automatically initialized if the object is used in
+process spawning. This can be useful to easily obtain references in process pipelines, e.g.:
 
 ```
 julia> err = Pipe()
 
 # After this `err` will be initialized and you may read `foo`'s
-# stderr from the `err` pipe.
+# stderr from the `err` pipe, or pass `err` to other pipelines.
 julia> run(pipeline(pipeline(`foo`, stderr=err), `cat`), wait=false)
+
+# Now destroy the write half of the pipe, so that the read half will get EOF
+julia> closewrite(err)
+
+julia> read(err, String)
+"stderr messages"
 ```
+
+See also `Base.link_pipe!`.
 """
 Pipe() = Pipe(PipeEndpoint(), PipeEndpoint())
 pipe_reader(p::Pipe) = p.out
@@ -1489,7 +1501,7 @@ closewrite(s::BufferStream) = close(s)
 function close(s::BufferStream)
     lock(s.cond) do
         s.status = StatusClosed
-        notify(s.cond)
+        notify(s.cond) # aka flush
         nothing
     end
 end
@@ -1549,6 +1561,7 @@ stop_reading(s::BufferStream) = nothing
 write(s::BufferStream, b::UInt8) = write(s, Ref{UInt8}(b))
 function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt)
     nwrite = lock(s.cond) do
+        check_open(s)
         rv = unsafe_write(s.buffer, p, nb)
         s.buffer_writes || notify(s.cond)
         rv
@@ -1569,9 +1582,18 @@ end
 buffer_writes(s::BufferStream, bufsize=0) = (s.buffer_writes = true; s)
 function flush(s::BufferStream)
     lock(s.cond) do
+        check_open(s)
         notify(s.cond)
         nothing
     end
 end
 
 skip(s::BufferStream, n) = skip(s.buffer, n)
+
+function reseteof(x::BufferStream)
+    lock(s.cond) do
+        s.status = StatusOpen
+        nothing
+    end
+    nothing
+end

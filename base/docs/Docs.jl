@@ -3,7 +3,7 @@
 """
     Docs
 
-The `Docs` module provides the `@doc` macro which can be used to set and retrieve
+The `Docs` module provides the [`@doc`](@ref) macro which can be used to set and retrieve
 documentation metadata for Julia objects.
 
 Please see the manual section on [documentation](@ref man-documentation) for more
@@ -65,7 +65,7 @@ import .Base: Callable, with_output_color
 using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 
-export doc
+export doc, hasdoc, undocumented_names
 
 # Basic API / Storage
 
@@ -535,7 +535,7 @@ function docm(source::LineNumberNode, mod::Module, ex)
     elseif isassigned(Base.REPL_MODULE_REF)
         # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
         REPL = Base.REPL_MODULE_REF[]
-        return REPL.lookup_doc(ex)
+        return invokelatest(REPL.lookup_doc, ex)
     end
     return nothing
 end
@@ -650,9 +650,72 @@ function loaddocs(docs::Vector{Core.SimpleVector})
     nothing
 end
 
+# FIXME: formatdoc, parsedoc, apropos, and doc are defined here (but only doc is exported)
+# for historical reasons (#25738), but are *implemented* in REPL/src/docview.jl, while
+# apropos is *exported* by InteractiveUtils and doc is exported by Docs.  Seems
+# like a more sensible refactoring should be possible.
+
 function formatdoc end
 function parsedoc end
+
+"""
+    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
+
+Search available docstrings for entries containing `pattern`.
+
+When `pattern` is a string, case is ignored. Results are printed to `io`.
+
+`apropos` can be called from the help mode in the REPL by wrapping the query in double quotes:
+```
+help?> "pattern"
+```
+"""
 function apropos end
+
+"""
+    Docs.doc(binding, sig)
+
+Return all documentation that matches both `binding` and `sig`.
+
+If `getdoc` returns a non-`nothing` result on the value of the binding, then a
+dynamic docstring is returned instead of one based on the binding itself.
+"""
 function doc end
+
+"""
+    Docs.hasdoc(mod::Module, sym::Symbol)::Bool
+
+Return `true` if `sym` in `mod` has a docstring and `false` otherwise.
+"""
+hasdoc(mod::Module, sym::Symbol) = hasdoc(Docs.Binding(mod, sym))
+function hasdoc(binding::Docs.Binding, sig::Type = Union{})
+    # this function is based on the Base.Docs.doc method implemented
+    # in REPL/src/docview.jl.  TODO: refactor and unify these methods.
+    defined(binding) && !isnothing(getdoc(resolve(binding), sig)) && return true
+    for mod in modules
+        dict = meta(mod; autoinit=false)
+        !isnothing(dict) && haskey(dict, binding) && return true
+    end
+    alias = aliasof(binding)
+    return alias == binding ? false : hasdoc(alias, sig)
+end
+
+
+"""
+    undocumented_names(mod::Module; private=false)
+
+Return a sorted vector of undocumented symbols in `module` (that is, lacking docstrings).
+`private=false` (the default) returns only identifiers declared with `public` and/or
+`export`, whereas `private=true` returns all symbols in the module (excluding
+compiler-generated hidden symbols starting with `#`).
+
+See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.ispublic`](@ref).
+"""
+function undocumented_names(mod::Module; private::Bool=false)
+    filter!(names(mod; all=true)) do sym
+        !hasdoc(mod, sym) && !startswith(string(sym), '#') &&
+            (private || Base.ispublic(mod, sym))
+    end
+end
 
 end

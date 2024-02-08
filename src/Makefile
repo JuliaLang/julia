@@ -42,9 +42,9 @@ endif
 
 SRCS := \
 	jltypes gf typemap smallintset ast builtins module interpreter symbol \
-	dlload sys init task array staticdata toplevel jl_uv datatype \
-	simplevector runtime_intrinsics precompile jloptions \
-	threading partr stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler method \
+	dlload sys init task array genericmemory staticdata toplevel jl_uv datatype \
+	simplevector runtime_intrinsics precompile jloptions mtarraylist \
+	threading scheduler stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler gc-page-profiler method \
 	jlapi signal-handling safepoint timing subtype rtutils gc-heap-snapshot \
 	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall
 
@@ -77,7 +77,10 @@ else
 # JULIACODEGEN != LLVM
 endif
 
-RT_LLVM_LIBS := support
+RT_LLVM_LIBS := support # for APMath and some other useful ADT
+ifneq ($(LLVM_VER_MAJ),15)
+RT_LLVM_LIBS += targetparser # for getHostCPUName on LLVM 16+
+endif
 
 ifeq ($(OS),WINNT)
 SRCS += win32_ucontext
@@ -109,6 +112,10 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 
 LLVM_LDFLAGS := $(shell $(LLVM_CONFIG_HOST) --ldflags)
 LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG_HOST) --cxxflags)
+
+ifeq ($(OS)_$(BINARY),WINNT_32)
+LLVM_CXXFLAGS += -I$(SRCDIR)/support/win32-clang-ABI-bug
+endif
 
 # llvm-config --cxxflags does not return -DNDEBUG
 ifeq ($(shell $(LLVM_CONFIG_HOST) --assertion-mode),OFF)
@@ -302,7 +309,7 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliase
 $(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj: $(SRCDIR)/intrinsics.h
 $(BUILDDIR)/aotcompile.o $(BUILDDIR)/aotcompile.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/processor.h
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
-$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/iddict.c $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/iddict.c $(SRCDIR)/idset.c $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
 	intrinsics.cpp jitlayers.h intrinsics.h llvm-codegen-shared.h cgutils.cpp ccall.cpp abi_*.cpp processor.h builtin_proto.h)
 $(BUILDDIR)/datatype.o $(BUILDDIR)/datatype.dbg.obj: $(SRCDIR)/support/htable.h $(SRCDIR)/support/htable.inc
@@ -336,7 +343,7 @@ $(BUILDDIR)/processor.o $(BUILDDIR)/processor.dbg.obj: $(addprefix $(SRCDIR)/,pr
 $(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: $(addprefix $(SRCDIR)/,signals-*.c)
 $(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj: $(SRCDIR)/staticdata_utils.c $(SRCDIR)/precompile_utils.c $(SRCDIR)/processor.h $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj: $(SRCDIR)/builtin_proto.h
-$(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj: $(SRCDIR)/serialize.h
+$(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj: $(SRCDIR)/serialize.h $(SRCDIR)/common_symbols1.inc $(SRCDIR)/common_symbols2.inc
 $(BUILDDIR)/pipeline.o $(BUILDDIR)/pipeline.dbg.obj: $(SRCDIR)/passes.h $(SRCDIR)/jitlayers.h
 
 $(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc.o gc.dbg.obj init.c init.dbg.obj task.o task.dbg.obj): $(addprefix $(SRCDIR)/,threading.h)
@@ -489,8 +496,6 @@ SA_EXCEPTIONS-jloptions.c                   := -Xanalyzer -analyzer-config -Xana
 SA_EXCEPTIONS-subtype.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core.uninitialized.Assign;core.UndefinedBinaryOperatorResult"
 SA_EXCEPTIONS-codegen.c                     := -Xanalyzer -analyzer-config -Xanalyzer silence-checkers="core"
  # these need to be annotated (and possibly fixed)
-SKIP_IMPLICIT_ATOMICS := staticdata.c
- # these need to be annotated (and possibly fixed)
 SKIP_GC_CHECK := codegen.cpp rtutils.c
 
 # make sure LLVM's invariant information is not discarded with -DNDEBUG
@@ -536,7 +541,7 @@ $(addprefix clang-sagc-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPOR
 $(addprefix clang-tidy-,$(CODEGEN_SRCS)): DEBUGFLAGS_CLANG += -DJL_LIBRARY_EXPORTS_CODEGEN
 
 # Add C files as a target of `analyzesrc` and `analyzegc` and `tidysrc`
-tidysrc: $(addprefix clang-tidy-,$(filter-out $(basename $(SKIP_IMPLICIT_ATOMICS)),$(CODEGEN_SRCS) $(SRCS)))
+tidysrc: $(addprefix clang-tidy-,$(CODEGEN_SRCS) $(SRCS))
 analyzesrc: $(addprefix clang-sa-,$(CODEGEN_SRCS) $(SRCS))
 analyzegc: $(addprefix clang-sagc-,$(filter-out $(basename $(SKIP_GC_CHECK)),$(CODEGEN_SRCS) $(SRCS)))
 analyze: analyzesrc analyzegc tidysrc

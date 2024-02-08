@@ -24,7 +24,7 @@ const TESTNAMES = [
         "some", "meta", "stacktraces", "docs", "gc",
         "misc", "threads", "stress", "binaryplatforms", "atexit",
         "enums", "cmdlineargs", "int", "interpreter",
-        "checked", "bitset", "floatfuncs", "precompile",
+        "checked", "bitset", "floatfuncs", "precompile", "relocatedepot",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
@@ -151,15 +151,14 @@ function choosetests(choices = [])
 
     filtertests!(tests, "unicode", ["unicode/utf8"])
     filtertests!(tests, "strings", ["strings/basic", "strings/search", "strings/util",
-                   "strings/io", "strings/types"])
+                   "strings/io", "strings/types", "strings/annotated"])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
     filtertests!(tests, "compiler", [
         "compiler/datastructures", "compiler/inference", "compiler/effects",
-        "compiler/validation", "compiler/ssair", "compiler/irpasses",
-        "compiler/codegen", "compiler/inline", "compiler/contextual",
-        "compiler/invalidation", "compiler/AbstractInterpreter",
-        "compiler/EscapeAnalysis/EscapeAnalysis"])
+        "compiler/validation", "compiler/ssair", "compiler/irpasses", "compiler/tarjan",
+        "compiler/codegen", "compiler/inline", "compiler/contextual", "compiler/invalidation",
+        "compiler/AbstractInterpreter", "compiler/EscapeAnalysis/EscapeAnalysis"])
     filtertests!(tests, "compiler/EscapeAnalysis", [
         "compiler/EscapeAnalysis/EscapeAnalysis"])
     filtertests!(tests, "stdlib", STDLIBS)

@@ -34,6 +34,10 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_external_alloc(jl_gc_cb_notify_external_al
 JL_DLLEXPORT void jl_gc_set_cb_notify_external_free(jl_gc_cb_notify_external_free_t cb,
         int enable);
 
+// Memory pressure callback
+typedef void (*jl_gc_cb_notify_gc_pressure_t)(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t cb, int enable);
+
 // Types for custom mark and sweep functions.
 typedef uintptr_t (*jl_markfunc_t)(jl_ptls_t, jl_value_t *obj);
 typedef void (*jl_sweepfunc_t)(jl_value_t *obj);

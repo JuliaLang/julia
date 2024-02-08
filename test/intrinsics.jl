@@ -180,28 +180,12 @@ end
     @test_intrinsic Core.Intrinsics.fptoui UInt Float16(3.3) UInt(3)
 end
 
-if Sys.ARCH == :aarch64 ||  Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
-    # On AArch64 we are following the `_Float16` ABI. Buthe these functions expect `Int16`.
-    # TODO: SHould we have `Chalf == Int16` and `Cfloat16 == Float16`?
-    extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (UInt16,), reinterpret(UInt16, x))
-    gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (UInt16,), reinterpret(UInt16, x))
-    truncsfhf2(x::Float32) = reinterpret(Float16, ccall("extern __truncsfhf2", llvmcall, UInt16, (Float32,), x))
-    gnu_f2h_ieee(x::Float32) = reinterpret(Float16, ccall("extern __gnu_f2h_ieee", llvmcall, UInt16, (Float32,), x))
-    truncdfhf2(x::Float64) = reinterpret(Float16, ccall("extern __truncdfhf2", llvmcall, UInt16, (Float64,), x))
-else
-    extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (Float16,), x)
-    gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (Float16,), x)
-    truncsfhf2(x::Float32) = ccall("extern __truncsfhf2", llvmcall, Float16, (Float32,), x)
-    gnu_f2h_ieee(x::Float32) = ccall("extern __gnu_f2h_ieee", llvmcall, Float16, (Float32,), x)
-    truncdfhf2(x::Float64) = ccall("extern __truncdfhf2", llvmcall, Float16, (Float64,), x)
-end
-
 @testset "Float16 intrinsics (crt)" begin
-    @test extendhfsf2(Float16(3.3)) == 3.3007812f0
+    gnu_h2f_ieee(x::Float16) = ccall("julia__gnu_h2f_ieee", Float32, (Float16,), x)
+    gnu_f2h_ieee(x::Float32) = ccall("julia__gnu_f2h_ieee", Float16, (Float32,), x)
+
     @test gnu_h2f_ieee(Float16(3.3)) == 3.3007812f0
-    @test truncsfhf2(3.3f0) == Float16(3.3)
     @test gnu_f2h_ieee(3.3f0) == Float16(3.3)
-    @test truncdfhf2(3.3) == Float16(3.3)
 end
 
 using Base.Experimental: @force_compile

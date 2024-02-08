@@ -69,6 +69,37 @@ $$latex literal$$
 """
 function break_me_docs end
 
+
+# `hasdoc` returns `true` on a name with a docstring.
+@test Docs.hasdoc(Base, :map)
+# `hasdoc` returns `false` on a name without a docstring.
+@test !isdefined(Base, :_this_name_doesnt_exist_) && !Docs.hasdoc(Base, :_this_name_doesnt_exist_)
+@test isdefined(Base, :_typed_vcat) && !Docs.hasdoc(Base, :_typed_vcat)
+
+"This module has names without documentation."
+module _ModuleWithUndocumentedNames
+export f
+public ⨳, @foo
+f() = 1
+g() = 2
+⨳(a,b) = a * b
+macro foo(); nothing; end
+⊕(a,b) = a + b
+end
+
+"This module has some documentation."
+module _ModuleWithSomeDocumentedNames
+export f
+"f() is 1."
+f() = 1
+g() = 2
+end
+
+@test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [Symbol("@foo"), :f, :⨳]
+@test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:eval, :g, :include]
+
+
 # issue #11548
 
 module ModuleMacroDoc
@@ -1028,7 +1059,7 @@ struct $(curmod_prefix)Undocumented.st3{T<:Integer, N}
 
 # Fields
 ```
-a :: Tuple{Vararg{T<:Integer, N}}
+a :: NTuple{N, T<:Integer}
 b :: Array{Int64, N}
 c :: Int64
 ```
@@ -1052,7 +1083,7 @@ struct $(curmod_prefix)Undocumented.st4{T, N}
 # Fields
 ```
 a :: T
-b :: Tuple{Vararg{T, N}}
+b :: NTuple{N, T}
 ```
 
 # Supertype Hierarchy
@@ -1517,3 +1548,17 @@ struct S41727
 end
 @test S41727(1) isa S41727
 @test string(@repl S41727.x) == "x is 4\n"
+
+"ensure we can document ccallable functions"
+Base.@ccallable c51586_short()::Int = 2
+"ensure we can document ccallable functions"
+Base.@ccallable c51586_long()::Int = 3
+
+@test docstrings_equal(@doc(c51586_short()), doc"ensure we can document ccallable functions")
+@test docstrings_equal(@doc(c51586_long()), doc"ensure we can document ccallable functions")
+
+@testset "Docs docstrings" begin
+    undoc = Docs.undocumented_names(Docs)
+    @test_broken isempty(undoc)
+    @test undoc == [Symbol("@var")]
+end

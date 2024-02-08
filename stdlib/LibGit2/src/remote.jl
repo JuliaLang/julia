@@ -64,6 +64,19 @@ function GitRemoteAnon(repo::GitRepo, url::AbstractString)
 end
 
 """
+    GitRemoteDetached(url::AbstractString) -> GitRemote
+
+Create a remote without a connected local repo.
+"""
+function GitRemoteDetached(url::AbstractString)
+    ensure_initialized()
+    rmt_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
+    @check ccall((:git_remote_create_detached, libgit2), Cint,
+                 (Ptr{Ptr{Cvoid}}, Cstring), rmt_ptr_ptr, url)
+    return GitRemote(rmt_ptr_ptr[])
+end
+
+"""
     lookup_remote(repo::GitRepo, remote_name::AbstractString) -> Union{GitRemote, Nothing}
 
 Determine if the `remote_name` specified exists within the `repo`. Return
@@ -413,4 +426,66 @@ function set_remote_url(path::AbstractString, remote_name::AbstractString, url::
     with(GitRepo, path) do repo
         set_remote_url(repo, remote_name, url)
     end
+end
+
+function connect(rmt::GitRemote, direction::Consts.GIT_DIRECTION,
+                 callbacks::RemoteCallbacks)
+    @check ccall((:git_remote_connect, libgit2),
+                 Cint, (Ptr{Cvoid}, Cint, Ref{RemoteCallbacks}, Ptr{Cvoid}, Ptr{Cvoid}),
+                 rmt.ptr, direction, callbacks, C_NULL, C_NULL)
+    return rmt
+end
+
+"""
+    connected(rmt::GitRemote)
+
+Check whether the remote is connected
+"""
+function connected(rmt::GitRemote)
+    return ccall((:git_remote_connected, libgit2), Cint, (Ptr{Cvoid},), rmt.ptr) != 0
+end
+
+"""
+    disconnect(rmt::GitRemote)
+
+Close the connection to the remote.
+"""
+function disconnect(rmt::GitRemote)
+    @check ccall((:git_remote_disconnect, libgit2), Cint, (Ptr{Cvoid},), rmt.ptr)
+    return
+end
+
+"""
+    default_branch(rmt::GitRemote)
+
+Retrieve the name of the remote's default branch.
+
+This function must only be called after connecting (See [`connect`](@ref)).
+"""
+function default_branch(rmt::GitRemote)
+    buf_ref = Ref(Buffer())
+    @check ccall((:git_remote_default_branch, libgit2), Cint,
+                 (Ptr{Buffer}, Ptr{Cvoid}), buf_ref, rmt.ptr)
+    buf = buf_ref[]
+    str = unsafe_string(buf.ptr, buf.size)
+    free(buf_ref)
+    return str
+end
+
+"""
+    ls(rmt::GitRemote) -> Vector{GitRemoteHead}
+
+Get the remote repository's reference advertisement list.
+
+This function must only be called after connecting (See [`connect`](@ref)).
+"""
+function ls(rmt::GitRemote)
+    nheads = Ref{Csize_t}()
+    head_refs = Ref{Ptr{Ptr{_GitRemoteHead}}}()
+    @check ccall((:git_remote_ls, libgit2), Cint,
+                 (Ptr{Ptr{Ptr{_GitRemoteHead}}}, Ptr{Csize_t}, Ptr{Cvoid}),
+                 head_refs, nheads, rmt.ptr)
+    head_ptr = head_refs[]
+    return [GitRemoteHead(unsafe_load(unsafe_load(head_ptr, i)))
+            for i in 1:nheads[]]
 end

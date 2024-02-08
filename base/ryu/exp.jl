@@ -7,7 +7,7 @@ function writeexp(buf, pos, v::T,
     pos = append_sign(x, plus, space, buf, pos)
 
     # special cases
-    if x == 0
+    if iszero(x)
         @inbounds buf[pos] = UInt8('0')
         pos += 1
         if precision > 0 && !trimtrailingzeros
@@ -42,7 +42,7 @@ function writeexp(buf, pos, v::T,
     mant = bits & MANTISSA_MASK
     exp = Int((bits >> 52) & EXP_MASK)
 
-    if exp == 0
+    if iszero(exp)
         e2 = 1 - 1023 - 52
         m2 = mant
     else
@@ -51,7 +51,7 @@ function writeexp(buf, pos, v::T,
     end
     nonzero = false
     precision += 1
-    digits = 0
+    digits = zero(UInt32)
     printedDigits = 0
     availableDigits = 0
     e = 0
@@ -64,14 +64,14 @@ function writeexp(buf, pos, v::T,
             j = p10bits - e2
             #=@inbounds=# mula, mulb, mulc = POW10_SPLIT[POW10_OFFSET[idx + 1] + i + 1]
             digits = mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
-            if printedDigits != 0
+            if !iszero(printedDigits)
                 if printedDigits + 9 > precision
                     availableDigits = 9
                     break
                 end
                 pos = append_nine_digits(digits, buf, pos)
                 printedDigits += 9
-            elseif digits != 0
+            elseif !iszero(digits)
                 availableDigits = decimallength(digits)
                 e = i * 9 + availableDigits - 1
                 if availableDigits > precision
@@ -93,26 +93,26 @@ function writeexp(buf, pos, v::T,
             i -= 1
         end
     end
-    if e2 < 0 && availableDigits == 0
+    if e2 < 0 && iszero(availableDigits)
         idx = div(-e2, 16)
-        i = MIN_BLOCK_2[idx + 1]
+        i = Int(MIN_BLOCK_2[idx + 1])
         while i < 200
             j = 120 + (-e2 - 16 * idx)
             p = POW10_OFFSET_2[idx + 1] + i - MIN_BLOCK_2[idx + 1]
             if p >= POW10_OFFSET_2[idx + 2]
-                digits = 0
+                digits = zero(UInt32)
             else
                 #=@inbounds=# mula, mulb, mulc = POW10_SPLIT_2[p + 1]
                 digits = mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
             end
-            if printedDigits != 0
+            if !iszero(printedDigits)
                 if printedDigits + 9 > precision
                     availableDigits = 9
                     break
                 end
                 pos = append_nine_digits(digits, buf, pos)
                 printedDigits += 9
-            elseif digits != 0
+            elseif !iszero(digits)
                 availableDigits = decimallength(digits)
                 e = -(i + 1) * 9 + availableDigits - 1
                 if availableDigits > precision
@@ -135,14 +135,14 @@ function writeexp(buf, pos, v::T,
         end
     end
     maximum = precision - printedDigits
-    if availableDigits == 0
-        digits = 0
+    if iszero(availableDigits)
+        digits = zero(UInt32)
     end
-    lastDigit = 0
+    lastDigit = zero(UInt32)
     if availableDigits > maximum
         for k = 0:(availableDigits - maximum - 1)
-            lastDigit = digits % 10
-            digits = div(digits, 10)
+            lastDigit = digits % UInt32(10)
+            digits = div(digits, UInt32(10))
         end
     end
     roundUp = 0
@@ -159,8 +159,8 @@ function writeexp(buf, pos, v::T,
         end
         roundUp = trailingZeros ? 2 : 1
     end
-    if printedDigits != 0
-        if digits == 0
+    if !iszero(printedDigits)
+        if iszero(digits)
             for _ = 1:maximum
                 @inbounds buf[pos] = UInt8('0')
                 pos += 1
@@ -180,7 +180,7 @@ function writeexp(buf, pos, v::T,
             end
         end
     end
-    if roundUp != 0
+    if !iszero(roundUp)
         roundPos = pos
         while true
             roundPos -= 1
@@ -197,7 +197,7 @@ function writeexp(buf, pos, v::T,
                 roundUp = 1
                 continue
             else
-                if roundUp == 2 && UInt8(c) % 2 == 0
+                if roundUp == 2 && iseven(c)
                     break
                 end
                 @inbounds buf[roundPos] = c + 1
@@ -224,7 +224,7 @@ function writeexp(buf, pos, v::T,
         pos += 1
     end
     if e >= 100
-        c = e % 10
+        c = (e % 10) % UInt8
         @inbounds d100 = DIGIT_TABLE16[div(e, 10) + 1]
         @inbounds buf[pos] = d100 % UInt8
         @inbounds buf[pos + 1] = (d100 >> 0x8) % UInt8

@@ -76,7 +76,7 @@ Base.iterate(S::LU, ::Val{:done}) = nothing
 adjoint(F::LU{<:Real}) = TransposeFactorization(F)
 transpose(F::LU{<:Real}) = TransposeFactorization(F)
 
-# the following method is meant to catch calls to lu!(A::LAPACKArray) without a pivoting stategy
+# the following method is meant to catch calls to lu!(A::LAPACKArray) without a pivoting strategy
 lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
 function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
     lpt = LAPACK.getrf!(A; check)
@@ -494,28 +494,32 @@ inv!(A::LU{T,<:StridedMatrix}) where {T} =
 inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 
 # Tridiagonal
-
-# See dgttrf.f
 function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T,V}
-    # Extract values
     n = size(A, 1)
-
-    # Initialize variables
-    info = 0
-    ipiv = Vector{BlasInt}(undef, n)
-    dl = A.dl
-    d = A.d
-    du = A.du
-    if dl === du
-        throw(ArgumentError("off-diagonals of `A` must not alias"))
-    end
-    # Check if Tridiagonal matrix already has du2 for pivoting
     has_du2_defined = isdefined(A, :du2) && length(A.du2) == max(0, n-2)
     if has_du2_defined
         du2 = A.du2::V
     else
-        du2 = similar(d, max(0, n-2))::V
+        du2 = similar(A.d, max(0, n-2))::V
     end
+    _lu_tridiag!(A.dl, A.d, A.du, du2, Vector{BlasInt}(undef, n), pivot, check)
+end
+function lu!(F::LU{<:Any,<:Tridiagonal}, A::Tridiagonal, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true)
+    B = F.factors
+    size(B) == size(A) || throw(DimensionMismatch())
+    copyto!(B, A)
+    _lu_tridiag!(B.dl, B.d, B.du, B.du2, F.ipiv, pivot, check)
+end
+# See dgttrf.f
+@inline function _lu_tridiag!(dl, d, du, du2, ipiv, pivot, check)
+    T = eltype(d)
+    V = typeof(d)
+
+    # Extract values
+    n = length(d)
+
+    # Initialize variables
+    info = 0
     fill!(du2, 0)
 
     @inbounds begin
@@ -571,9 +575,8 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(
             end
         end
     end
-    B = has_du2_defined ? A : Tridiagonal{T,V}(dl, d, du, du2)
     check && checknonsingular(info, pivot)
-    return LU{T,Tridiagonal{T,V},typeof(ipiv)}(B, ipiv, convert(BlasInt, info))
+    return LU{T,Tridiagonal{T,V},typeof(ipiv)}(Tridiagonal{T,V}(dl, d, du, du2), ipiv, convert(BlasInt, info))
 end
 
 factorize(A::Tridiagonal) = lu(A)

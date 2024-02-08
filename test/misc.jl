@@ -265,6 +265,9 @@ let
     stats = @timed sin(1)
     @test stats.value == sin(1)
     @test isa(stats.time, Real) && stats.time >= 0
+    @test isa(stats.compile_time, Real) && stats.compile_time >= 0
+    @test isa(stats.recompile_time, Real) && stats.recompile_time >= 0
+    @test stats.compile_time <= stats.time
 
     # The return type of gcstats was changed in Julia 1.4 (# 34147)
     # Test that the 1.0 API still works
@@ -1058,7 +1061,7 @@ Base.setindex!(xs::InvokeXs2, @nospecialize(v::Any), idx::Int) = xs.xs[idx] = v
         @test @invoke(f2(1::Real)) === Integer
     end
 
-    # when argment's type annotation is omitted, it should be specified as `Core.Typeof(x)`
+    # when argument's type annotation is omitted, it should be specified as `Core.Typeof(x)`
     let f(_) = Any
         f(x::Integer) = Integer
         @test f(1) === Integer
@@ -1300,6 +1303,11 @@ end
     @test sort([a, b]) == [b, a]
 end
 
+@testset "UUID display" begin
+    a = Base.UUID("dbd321ed-e87e-4f33-9511-65b7d01cdd55")
+    @test repr(a) == "$(Base.UUID)(\"dbd321ed-e87e-4f33-9511-65b7d01cdd55\")"
+end
+
 @testset "Libc.rand" begin
     low, high = extrema(Libc.rand(Float64) for i=1:10^4)
     # these fail with probability 2^(-10^4) ≈ 5e-3011
@@ -1335,8 +1343,10 @@ end
         open(tmppath, "w") do tmpio
             redirect_stderr(tmpio) do
                 GC.enable_logging(true)
+                @test GC.logging_enabled()
                 GC.gc()
                 GC.enable_logging(false)
+                @test !GC.logging_enabled()
             end
         end
         @test occursin("GC: pause", read(tmppath, String))
@@ -1353,7 +1363,7 @@ end
 end
 
 # Test that read fault on a prot-none region does not incorrectly give
-# ReadOnlyMemoryEror, but rather crashes the program
+# ReadOnlyMemoryError, but rather crashes the program
 const MAP_ANONYMOUS_PRIVATE = Sys.isbsd() ? 0x1002 : 0x22
 let script = :(
         let ptr = Ptr{Cint}(ccall(:jl_mmap, Ptr{Cvoid},
@@ -1382,10 +1392,40 @@ end
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
 
-    # sanity check `@allocations` returns what we expect in some very simple cases
-    @test (@allocations "a") == 0
-    @test (@allocations "a" * "b") == 0 # constant propagation
-    @test (@allocations "a" * Base.inferencebarrier("b")) == 1
+    # sanity check `@allocations` returns what we expect in some very simple cases.
+    # These are inside functions because `@allocations` uses `Experimental.@force_compile`
+    # so can be affected by other code in the same scope.
+    @test (() -> @allocations "a")() == 0
+    @test (() -> @allocations "a" * "b")() == 0 # constant propagation
+    @test (() -> @allocations "a" * Base.inferencebarrier("b"))() == 1
+
+    _lock_conflicts, _nthreads = eval(Meta.parse(read(`$(Base.julia_cmd()) -tauto -E '
+        _lock_conflicts = @lock_conflicts begin
+            l = ReentrantLock()
+            Threads.@threads for i in 1:Threads.nthreads()
+                 lock(l) do
+                    sleep(1)
+                end
+            end
+        end
+        _lock_conflicts,Threads.nthreads()
+    '`, String)))
+    @test _lock_conflicts > 0 skip=(_nthreads < 2) # can only test if the worker can multithread
+end
+
+#TODO: merge with `@testset "Base/timing.jl"` once https://github.com/JuliaLang/julia/issues/52948 is resolved
+@testset "Base/timing.jl2" begin
+    # Test the output of `format_bytes()`
+    inputs = [(factor * (Int64(1000)^e),binary) for binary in (false,true), factor in (1,2), e in 0:6][:]
+    expected_output = ["1 byte", "1 byte", "2 bytes", "2 bytes", "1000 bytes", "1000 bytes", "2.000 kB", "1.953 KiB",
+                        "1000.000 kB", "976.562 KiB", "2.000 MB", "1.907 MiB", "1000.000 MB", "953.674 MiB",
+                        "2.000 GB", "1.863 GiB", "1000.000 GB", "931.323 GiB", "2.000 TB", "1.819 TiB",
+                        "1000.000 TB", "909.495 TiB", "2.000 PB", "1.776 PiB", "1000.000 PB", "888.178 PiB",
+                        "2000.000 PB", "1776.357 PiB"]
+
+    for ((n, binary), expected) in zip(inputs, expected_output)
+        @test Base.format_bytes(n; binary) == expected
+    end
 end
 
 @testset "in_finalizer" begin
@@ -1401,4 +1441,14 @@ end
     end)
     GC.gc(true); yield()
     @test in_fin[]
+end
+
+@testset "Base docstrings" begin
+    undoc = Docs.undocumented_names(Base)
+    @test_broken isempty(undoc)
+    @test undoc == [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :Sort, :TTY]
+end
+
+@testset "Base.Libc docstrings" begin
+    @test isempty(Docs.undocumented_names(Libc))
 end

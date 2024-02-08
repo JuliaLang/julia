@@ -173,7 +173,8 @@ function eigen!(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true, sortb
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     ishermitian(A) && return eigen!(Hermitian(A), sortby=sortby)
-    eval, evec = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]
+    E = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
+    eval, evec = E[2], E[4]
     return Eigen(sorteig!(eval, evec, sortby)...)
 end
 
@@ -235,22 +236,23 @@ true
 ```
 """
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
-    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
-    ishermitian(A) && return eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
-    AA = eigencopy_oftype(A, eigtype(T))
-    return eigen!(AA; permute, scale, sortby)
+    _eigen(A; permute, scale, sortby)
 end
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
-    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
-    E = if ishermitian(A)
-        eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
-    else
-        eigen!(eigencopy_oftype(A, eigtype(T)); permute, scale, sortby)
-    end
+    E = _eigen(A; permute, scale, sortby)
     values = convert(AbstractVector{isreal(E.values) ? Float16 : Complex{Float16}}, E.values)
     vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
     return Eigen(values, vectors)
 end
+function _eigen(A::AbstractMatrix{T}; permute=true, scale=true, sortby=eigsortby) where {T}
+    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
+    if ishermitian(A)
+        eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
+    else
+        eigen!(eigencopy_oftype(A, eigtype(T)); permute, scale, sortby)
+    end
+end
+
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
 """
