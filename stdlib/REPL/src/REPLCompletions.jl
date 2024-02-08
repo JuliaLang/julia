@@ -535,16 +535,14 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
-    code_cache::CC.InternalCodeCache
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
                                  aggressive_constant_propagation=true,
                                  unoptimize_throw_blocks=false),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
-                             inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
-                             code_cache::CC.InternalCodeCache = CC.InternalCodeCache(REPLCacheToken()))
-        return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache, code_cache)
+                             inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
+        return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache)
     end
 end
 CC.InferenceParams(interp::REPLInterpreter) = interp.inf_params
@@ -552,7 +550,6 @@ CC.OptimizationParams(interp::REPLInterpreter) = interp.opt_params
 CC.get_inference_world(interp::REPLInterpreter) = interp.world
 CC.get_inference_cache(interp::REPLInterpreter) = interp.inf_cache
 CC.cache_owner(::REPLInterpreter) = REPLCacheToken()
-CC.code_cache(interp::REPLInterpreter) = CC.WorldView(interp.code_cache, CC.WorldRange(interp.world))
 
 # REPLInterpreter is only used for type analysis, so it should disable optimization entirely
 CC.may_optimize(::REPLInterpreter) = false

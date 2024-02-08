@@ -368,7 +368,7 @@ let NoinlineModule = Module()
     # it should work for cached results
     method = only(methods(inlined_usually, (Float64,Float64,Float64,)))
     mi = CC.specialize_method(method, Tuple{typeof(inlined_usually),Float64,Float64,Float64}, Core.svec())
-    @test CC.haskey(CC.WorldView(interp.code_cache, interp.world), mi)
+    @test CC.haskey(CC.code_cache(interp), mi)
     let src = code_typed1((Float64,Float64,Float64); interp) do x, y, z
             inlined_usually(x, y, z)
         end

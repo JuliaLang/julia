@@ -7,25 +7,20 @@ include("irutils.jl")
 
 using Test
 const CC = Core.Compiler
-import Core: MethodInstance, CodeInstance
-import .CC: WorldRange, WorldView
 
 struct InvalidationTesterToken end
-const INVALIDATION_TESTER_CACHE = Core.Compiler.InternalCodeCache(InvalidationTesterToken())
 
 struct InvalidationTester <: CC.AbstractInterpreter
     world::UInt
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
-    code_cache::Core.Compiler.InternalCodeCache
     function InvalidationTester(;
                                 world::UInt = Base.get_world_counter(),
                                 inf_params::CC.InferenceParams = CC.InferenceParams(),
                                 opt_params::CC.OptimizationParams = CC.OptimizationParams(),
-                                inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
-                                code_cache::Core.Compiler.InternalCodeCache = INVALIDATION_TESTER_CACHE)
-        return new(world, inf_params, opt_params, inf_cache, code_cache)
+                                inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
+        return new(world, inf_params, opt_params, inf_cache)
     end
 end
 
@@ -34,7 +29,6 @@ CC.OptimizationParams(interp::InvalidationTester) = interp.opt_params
 CC.get_inference_world(interp::InvalidationTester) = interp.world
 CC.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
 CC.cache_owner(::InvalidationTester) = InvalidationTesterToken()
-CC.code_cache(interp::InvalidationTester) = WorldView(interp.code_cache, interp.world)
 
 # basic functionality test
 # ------------------------

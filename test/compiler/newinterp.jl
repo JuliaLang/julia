@@ -20,21 +20,18 @@ macro newinterp(InterpName)
             inf_params::$CC.InferenceParams
             opt_params::$CC.OptimizationParams
             inf_cache::Vector{$CC.InferenceResult}
-            code_cache::$CC.InternalCodeCache
             function $InterpName(meta = nothing;
                                  world::UInt = Base.get_world_counter(),
                                  inf_params::$CC.InferenceParams = $CC.InferenceParams(),
                                  opt_params::$CC.OptimizationParams = $CC.OptimizationParams(),
-                                 inf_cache::Vector{$CC.InferenceResult} = $CC.InferenceResult[],
-                                 code_cache::$CC.InternalCodeCache = $CC.InternalCodeCache($InterpCacheName))
-                return new(meta, world, inf_params, opt_params, inf_cache, code_cache)
+                                 inf_cache::Vector{$CC.InferenceResult} = $CC.InferenceResult[])
+                return new(meta, world, inf_params, opt_params, inf_cache)
             end
         end
         $CC.InferenceParams(interp::$InterpName) = interp.inf_params
         $CC.OptimizationParams(interp::$InterpName) = interp.opt_params
         $CC.get_inference_world(interp::$InterpName) = interp.world
         $CC.get_inference_cache(interp::$InterpName) = interp.inf_cache
-        $CC.code_cache(interp::$InterpName) = $CC.WorldView(interp.code_cache, $CC.WorldRange(interp.world))
         $CC.cache_owner(::$InterpName) = $InterpCacheName
     end
 end

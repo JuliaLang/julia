@@ -17,8 +17,6 @@ function setindex!(cache::InternalCodeCache, ci::CodeInstance, mi::MethodInstanc
     return cache
 end
 
-const GLOBAL_CI_CACHE = InternalCodeCache(nothing)
-
 struct WorldRange
     min_world::UInt
     max_world::UInt
@@ -72,4 +70,10 @@ end
 function setindex!(wvc::WorldView{InternalCodeCache}, ci::CodeInstance, mi::MethodInstance)
     setindex!(wvc.cache, ci, mi)
     return wvc
+end
+
+function code_cache(interp::AbstractInterpreter)
+    cache = InternalCodeCache(cache_owner(interp))
+    worlds = WorldRange(get_inference_world(interp))
+    return WorldView(cache, worlds)
 end
