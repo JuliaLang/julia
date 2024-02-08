@@ -1190,7 +1190,7 @@ function print_test_results(ts::AbstractTestSet, depth_pad=0)
     fail_width   = dig_fail   > 0 ? max(length("Fail"),   dig_fail)   : 0
     error_width  = dig_error  > 0 ? max(length("Error"),  dig_error)  : 0
     broken_width = dig_broken > 0 ? max(length("Broken"), dig_broken) : 0
-    total_width  = max(length("Total"),  dig_total)
+    total_width  = max(textwidth("Total"),  dig_total)
     duration_width = max(textwidth("Time"), textwidth(tc.duration))
     # Calculate the alignment of the test result counts by
     # recursively walking the tree of test sets
