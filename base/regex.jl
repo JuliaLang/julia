@@ -364,8 +364,10 @@ function endswith(s::SubString{String}, r::Regex)
 end
 
 function chopprefix(s::AbstractString, prefix::Regex)
+    pattern = prefix.pattern
+    
     # fast path for letter-only regexes
-    all(isletter, prefix.pattern) && startswith(s, prefix.pattern) && return chopprefix(s, prefix.pattern)
+    all(isletter, pattern) && startswith(s, pattern) && return chopprefix(s, pattern)
 
     m = match(prefix, s, firstindex(s), PCRE.ANCHORED)
     m === nothing && return SubString(s)
@@ -373,11 +375,13 @@ function chopprefix(s::AbstractString, prefix::Regex)
 end
 
 function chopsuffix(s::AbstractString, suffix::Regex)
-    # fast path for letter-only regexes
-    all(isletter, suffix.pattern) && endswith(s, prefix.pattern) && return chopsuffix(s, prefix.pattern)
+    pattern = suffix.pattern
     
+    # fast path for letter-only regexes
+    all(isletter, pattern) && endswith(s, pattern) && return chopsuffix(s, pattern)
+           
     # fast path for regexes meant for file endings
-    startswith(raw"\.", suffix.pattern) && all(isletter, suffix.pattern[3:end]) && endswith(s, prefix.pattern[2:end]) && return chopsuffix(s, prefix.pattern)
+    startswith(pattern, raw"\.",) && all(isletter, @view pattern[3:end]) && endswith(s, @view pattern[2:end]) && return chopsuffix(s, pattern)
 
     m = match(suffix, s, firstindex(s), PCRE.ENDANCHORED)
     m === nothing && return SubString(s)
