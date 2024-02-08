@@ -662,25 +662,6 @@ JL_DLLEXPORT int jl_fs_read(uv_os_fd_t handle, char *data, size_t len)
     return ret;
 }
 
-JL_DLLEXPORT int jl_fs_read_byte(uv_os_fd_t handle)
-{
-    uv_fs_t req;
-    unsigned char c;
-    uv_buf_t buf[1];
-    buf[0].base = (char*)&c;
-    buf[0].len = 1;
-    int ret = uv_fs_read(unused_uv_loop_arg, &req, handle, buf, 1, -1, NULL);
-    uv_fs_req_cleanup(&req);
-    switch (ret) {
-    case -1: return ret;
-    case  0: jl_eof_error();
-    case  1: return (int)c;
-    default:
-        assert(0 && "jl_fs_read_byte: Invalid return value from uv_fs_read");
-        return -1;
-    }
-}
-
 JL_DLLEXPORT int jl_fs_close(uv_os_fd_t handle)
 {
     uv_fs_t req;
