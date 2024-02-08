@@ -130,7 +130,9 @@ let l = ReentrantLock()
 end
 
 # Lockable{T, L<:AbstractLock}
+using Base.Lockable
 let
+    @test_broken Base.isexported(Base, :Lockable)
     lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
     # note field access is non-public
     @test lockable.value["foo"] == "hello"
