@@ -489,6 +489,10 @@ end
                 inds2 = 3:2:5
                 d1 = @view a1[inds2]
                 @test d1[axes(d1,1)] == d1[:] == a1[inds2]
+
+                if a1 isa SubArray
+                    @test_throws MethodError a1[Base.IdentityUnitRange(2:3)]
+                end
             end
         end
 
