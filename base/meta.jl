@@ -16,10 +16,7 @@ export quot,
        ispostfixoperator,
        replace_sourceloc!,
        show_sexpr,
-       @dump,
-       unblock,
-       unescape,
-       uncurly
+       @dump
 
 using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
 import Base: isexpr
