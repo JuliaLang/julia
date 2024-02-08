@@ -224,7 +224,7 @@ end
     chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex}) -> SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
-Note, for case-insensitive, e.g. for shortening regular URLs, use with a Regex.
+For case-insensitive comparison of the prefix, e.g. for shortening regular URLs, you can use a suitable `Regex` for `prefix`.
 
 See also [`chopsuffix`](@ref).
 
