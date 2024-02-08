@@ -122,6 +122,7 @@ end
     @test read(seek(aio, 1), Base.AnnotatedString) == Base.AnnotatedString("ello world", [(1:4, :tag => 1), (6:10, :tag => 2)])
     @test read(seek(aio, 4), Base.AnnotatedString) == Base.AnnotatedString("o world", [(1:1, :tag => 1), (3:7, :tag => 2)])
     @test read(seek(aio, 5), Base.AnnotatedString) == Base.AnnotatedString(" world", [(2:6, :tag => 2)])
+    @test read(aio, Base.AnnotatedString) == Base.AnnotatedString("")
     @test read(seekstart(truncate(deepcopy(aio), 5)), Base.AnnotatedString) == Base.AnnotatedString("hello", [(1:5, :tag => 1)])
     @test read(seekstart(truncate(deepcopy(aio), 6)), Base.AnnotatedString) == Base.AnnotatedString("hello ", [(1:5, :tag => 1)])
     @test read(seekstart(truncate(deepcopy(aio), 7)), Base.AnnotatedString) == Base.AnnotatedString("hello w", [(1:5, :tag => 1), (7:7, :tag => 2)])

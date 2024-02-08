@@ -1744,10 +1744,11 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name,
 // constructors
 JL_DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, const void *src);
 JL_DLLEXPORT jl_value_t *jl_atomic_new_bits(jl_value_t *dt, const char *src);
-JL_DLLEXPORT void jl_atomic_store_bits(char *dst, const jl_value_t *src, int nb);
+JL_DLLEXPORT void jl_atomic_store_bits(char *dst, const jl_value_t *src, int nb) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_atomic_swap_bits(jl_value_t *dt, char *dst, const jl_value_t *src, int nb);
-JL_DLLEXPORT int jl_atomic_bool_cmpswap_bits(char *dst, const jl_value_t *expected, const jl_value_t *src, int nb);
-JL_DLLEXPORT jl_value_t *jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_datatype_t *rettype, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb);
+JL_DLLEXPORT int jl_atomic_bool_cmpswap_bits(char *dst, const jl_value_t *expected, const jl_value_t *src, int nb) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_atomic_cmpswap_bits(jl_datatype_t *dt, jl_value_t *y, char *dst, const jl_value_t *expected, const jl_value_t *src, int nb) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl_value_t *src, int nb) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na);
 JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup);
@@ -1875,17 +1876,17 @@ JL_DLLEXPORT jl_genericmemory_t *jl_pchar_to_memory(const char *str, size_t len)
 JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_t len);
 JL_DLLEXPORT jl_genericmemory_t *jl_alloc_memory_any(size_t n);
 JL_DLLEXPORT jl_value_t *jl_genericmemoryref(jl_genericmemory_t *m, size_t i);  // 0-indexed
-JL_DLLEXPORT void jl_genericmemoryset(jl_genericmemory_t *m JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, size_t i);  // 0-indexed
-JL_DLLEXPORT void jl_genericmemoryunset(jl_genericmemory_t *m, size_t i);  // 0-indexed
-JL_DLLEXPORT int jl_genericmemory_isassigned(jl_genericmemory_t *m, size_t i);  // 0-indexed
 
 JL_DLLEXPORT jl_genericmemoryref_t *jl_new_memoryref(jl_value_t *typ, jl_genericmemory_t *mem, void *data);
-JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m JL_PROPAGATES_ROOT);
+JL_DLLEXPORT jl_value_t *jl_memoryrefget(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, int isatomic);
 JL_DLLEXPORT jl_value_t *jl_ptrmemoryrefget(jl_genericmemoryref_t m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m) JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_value_t *jl_memoryref_isassigned(jl_genericmemoryref_t m, int isatomic) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_genericmemoryref_t jl_memoryrefindex(jl_genericmemoryref_t m JL_PROPAGATES_ROOT, size_t idx) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
-JL_DLLEXPORT void jl_memoryrefunset(jl_genericmemoryref_t m);
+JL_DLLEXPORT void jl_memoryrefset(jl_genericmemoryref_t m JL_ROOTING_ARGUMENT, jl_value_t *v JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, int isatomic);
+JL_DLLEXPORT jl_value_t *jl_memoryrefswap(jl_genericmemoryref_t m, jl_value_t *v, int isatomic);
+JL_DLLEXPORT jl_value_t *jl_memoryrefmodify(jl_genericmemoryref_t m, jl_value_t *op, jl_value_t *v, int isatomic);
+JL_DLLEXPORT jl_value_t *jl_memoryrefreplace(jl_genericmemoryref_t m, jl_value_t *expected, jl_value_t *v, int isatomic);
+JL_DLLEXPORT jl_value_t *jl_memoryrefsetonce(jl_genericmemoryref_t m, jl_value_t *v, int isatomic);
 
 // strings
 JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s);
@@ -1925,6 +1926,10 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs);
+JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *op, jl_value_t *rhs);
+JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
 JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);

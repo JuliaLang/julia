@@ -991,13 +991,13 @@ __safe_setindex!(A::Vector{T}, x,    i::Int) where {T} = (@inline;
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     @_propagate_inbounds_meta
     @boundscheck setindex_shape_check(X, length(I))
+    @boundscheck checkbounds(A, I)
     require_one_based_indexing(X)
     X′ = unalias(A, X)
     I′ = unalias(A, I)
     count = 1
     for i in I′
-        @inbounds x = X′[count]
-        A[i] = x
+        @inbounds A[i] = X′[count]
         count += 1
     end
     return A

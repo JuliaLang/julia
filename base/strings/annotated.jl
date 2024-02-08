@@ -112,7 +112,7 @@ AnnotatedString(s::AnnotatedString, annots::Vector{Tuple{UnitRange{Int}, Pair{Sy
     AnnotatedString(s.string, vcat(s.annotations, annots))
 
 AnnotatedChar(c::AnnotatedChar, annots::Vector{Pair{Symbol, Any}}) =
-    AnnotatedChar(c.char, vcat(s.annotations, annots))
+    AnnotatedChar(c.char, vcat(c.annotations, annots))
 
 String(s::AnnotatedString{String}) = s.string # To avoid pointless overhead
 
@@ -486,7 +486,7 @@ function read(io::AnnotatedIOBuffer, ::Type{AnnotatedString{T}}) where {T <: Abs
     if (start = position(io)) == 0
         AnnotatedString(read(io.io, T), copy(io.annotations))
     else
-        annots = [(max(1, first(region) - start):last(region)-start, val)
+        annots = [(UnitRange{Int}(max(1, first(region) - start), last(region)-start), val)
                   for (region, val) in io.annotations if last(region) > start]
         AnnotatedString(read(io.io, T), annots)
     end

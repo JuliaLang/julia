@@ -39,7 +39,7 @@ end
 
 CC.InferenceParams(interp::InvalidationTester) = interp.inf_params
 CC.OptimizationParams(interp::InvalidationTester) = interp.opt_params
-CC.get_world_counter(interp::InvalidationTester) = interp.world
+CC.get_inference_world(interp::InvalidationTester) = interp.world
 CC.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
 CC.code_cache(interp::InvalidationTester) = WorldView(InvalidationTesterCacheView(interp.code_cache.dict), WorldRange(interp.world))
 CC.get(wvc::WorldView{InvalidationTesterCacheView}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
