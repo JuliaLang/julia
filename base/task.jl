@@ -369,34 +369,54 @@ end
 waitany(tasks) = _wait_multiple(tasks)
 waitall(tasks; failfast=false) = _wait_multiple(tasks; all=true, failfast=failfast)
 
-function _wait_multiple(waiting_tasks::Union{AbstractVector{Task},Set{Task},Tuple{Task}}; all=false, failfast=false)::NTuple{2,Vector{Task}}
-    tasks = [waiting_tasks...]
+function _wait_multiple(waiting_tasks::Union{AbstractVector{Task},AbstractSet{Task},Tuple{Task}}; all=false, failfast=false)::NTuple{2,Vector{Task}}
+    chan = Channel{Tuple{Int,Task}}(Inf)
+    tasks = Task[]
+    done_mask = Bool[]
+    exception = false
+    nremaining::Int = 0
 
-    n = length(tasks)
-    i = 1
-
-    while i <= n
-        exception = false
-        i0 = i
-
-        # Ensure at least one task has been done
-        while i == i0
-            for j in i:n
-                if istaskdone(tasks[j])
-                    exception |= istaskfailed(tasks[j])
-                    tasks[i], tasks[j] = tasks[j], tasks[i]
-                    i += 1
-                end
-            end
-            yield()
-        end
-
-        if !all || (failfast && exception)
-            return tasks[1:i-1], tasks[i:end]
+    for (i, t) in enumerate(waiting_tasks)
+        push!(tasks, t)
+        if istaskdone(t)
+            push!(done_mask, true)
+            exception |= istaskfailed(t)
+        else
+            nremaining += 1
+            push!(done_mask, false)
+            schedule(Task(() -> begin
+                _wait(t)
+                put!(chan, (i, t))
+            end))
         end
     end
 
-    return tasks, Task[]
+    if nremaining == 0
+        close(chan)
+        return tasks, Task[]
+    elseif any(done_mask) && (!all || (failfast && exception))
+        close(chan)
+        return tasks[done_mask], tasks[.~done_mask]
+    end
+
+    while true
+        i, t = take!(chan)
+        done_mask[i] = true
+        exception |= istaskfailed(t)
+        nremaining -= 1
+
+        if nremaining == 0 || failfast && exception
+            break
+        end
+    end
+
+    close(chan)
+
+    if nremaining == 0
+        return tasks, Task[]
+    else
+        return tasks[done_mask], tasks[.~done_mask]
+    end
 end
 
 """
