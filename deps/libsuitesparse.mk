@@ -1,39 +1,43 @@
 ## LIBSUITESPARSE ##
 include $(SRCDIR)/libsuitesparse.version
 
-ifeq ($(USE_BLAS64), 1)
-UMFPACK_CONFIG := -DLONGBLAS='long long'
-CHOLMOD_CONFIG := -DLONGBLAS='long long'
-SPQR_CONFIG := -DLONGBLAS='long long'
-UMFPACK_CONFIG += -DSUN64
-CHOLMOD_CONFIG += -DSUN64
-SPQR_CONFIG += -DSUN64
-endif
-
-# Disable linking to libmetis
-CHOLMOD_CONFIG += -DNPARTITION
-
 ifneq ($(USE_BINARYBUILDER_LIBSUITESPARSE), 1)
 
-LIBSUITESPARSE_PROJECTS := AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR
-LIBSUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd btf camd ccolamd colamd cholmod klu ldl umfpack rbio spqr)
+LIBSUITESPARSE_PROJECTS := "suitesparse_config;amd;btf;camd;ccolamd;colamd;cholmod;klu;ldl;umfpack;rbio;spqr"
+LIBSUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig $(subst ;, ,$(LIBSUITESPARSE_PROJECTS)))
 
-SUITESPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(LIBSUITESPARSE_VER)/lib"
-ifeq ($(OS), Darwin)
-SUITESPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
-endif
-LIBSUITESPARSE_MFLAGS := CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" F77="$(FC)" \
-	  AR="$(AR)" RANLIB="$(RANLIB)" \
-	  BLAS="-L$(build_shlibdir) -lblastrampoline" \
-	  LAPACK="-L$(build_shlibdir) -lblastrampoline" \
-	  LDFLAGS="$(SUITESPARSE_LIB) $(SANITIZE_LDFLAGS)" CFOPENMP="" CUDA=no CUDA_PATH="" \
-	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" \
-	  CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" \
-	  SPQR_CONFIG="$(SPQR_CONFIG)"
 ifeq ($(OS),WINNT)
-LIBSUITESPARSE_MFLAGS += UNAME=Windows
+BLAS_LIB_NAME_NO_EXT:=blastrampoline-5
 else
-LIBSUITESPARSE_MFLAGS += UNAME=$(OS)
+BLAS_LIB_NAME_NO_EXT:=blastrampoline
+endif
+
+LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_COMMON) \
+	  -DCMAKE_BUILD_TYPE=Release \
+	  -DBUILD_STATIC_LIBS=OFF \
+	  -DBUILD_TESTING=OFF \
+	  -DSUITESPARSE_ENABLE_PROJECTS=$(LIBSUITESPARSE_PROJECTS) \
+	  -DSUITESPARSE_DEMOS=OFF \
+	  -DSUITESPARSE_USE_STRICT=ON \
+	  -DSUITESPARSE_USE_CUDA=OFF \
+	  -DSUITESPARSE_USE_FORTRAN=OFF \
+	  -DSUITESPARSE_USE_OPENMP=OFF \
+	  -DCHOLMOD_PARTITION=ON \
+	  -DBLAS_FOUND=1 \
+	  -DBLAS_LIBRARIES="$(build_shlibdir)/lib$(BLAS_LIB_NAME_NO_EXT).$(SHLIB_EXT)" \
+	  -DBLAS_LINKER_FLAGS="$(BLAS_LIB_NAME_NO_EXT)" \
+	  -DBLA_VENDOR="$(BLAS_LIB_NAME_NO_EXT)" \
+	  -DLAPACK_LIBRARIES="$(build_shlibdir)/lib$(BLAS_LIB_NAME_NO_EXT).$(SHLIB_EXT)" \
+	  -DLAPACK_LINKER_FLAGS="${BLAS_LIB_NAME_NO_EXT}"
+
+ifeq ($(BINARY),64)
+LIBSUITESPARSE_CMAKE_FLAGS += -DBLAS64_SUFFIX="_64" -DSUITESPARSE_USE_64BIT_BLAS=YES
+else
+LIBSUITESPARSE_CMAKE_FLAGS += -DSUITESPARSE_USE_64BIT_BLAS=NO
+endif
+
+ifneq (,$(findstring $(OS),Linux FreeBSD))
+LIBSUITESPARSE_CMAKE_FLAGS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz: | $(SRCCACHE)
@@ -48,20 +52,15 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted: $(SRCCACHE)/Suit
 checksum-libsuitesparse: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
 
-$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/SuiteSparse-shlib.patch-applied: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
-	cd $(dir $@) && patch -p1 < $(SRCDIR)/patches/SuiteSparse-shlib.patch
+$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
 	echo 1 > $@
-$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/SuiteSparse-shlib.patch-applied
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/blastrampoline
 
-$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
-	$(MAKE) -C $(dir $<)SuiteSparse_config library config $(LIBSUITESPARSE_MFLAGS)
-	$(INSTALL_NAME_CMD)libsuitesparseconfig.$(SHLIB_EXT) $(dir $<)lib/libsuitesparseconfig.$(SHLIB_EXT)
-	for PROJ in $(LIBSUITESPARSE_PROJECTS); do \
-		$(MAKE) -C $(dir $<)$${PROJ} library $(LIBSUITESPARSE_MFLAGS) || exit 1; \
-		$(INSTALL_NAME_CMD)lib`echo $${PROJ} | tr A-Z a-z`.$(SHLIB_EXT) $(dir $<)lib/lib`echo $${PROJ} | tr A-Z a-z`.$(SHLIB_EXT) || exit 1; \
-	done
+$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
+	cd $(dir $<) && $(CMAKE) . $(LIBSUITESPARSE_CMAKE_FLAGS)
+	make -C $(dir $<)
+	make -C $(dir $<) install
 	echo 1 > $@
 
 ifeq ($(OS),WINNT)
@@ -70,19 +69,14 @@ else
 LIBSUITESPARSE_SHLIB_ENV:=LD_LIBRARY_PATH="$(build_shlibdir)"
 endif
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
-	for PROJ in $(LIBSUITESPARSE_PROJECTS); do \
+	for PROJ in $(shell echo $(subst ;, ,$(LIBSUITESPARSE_PROJECTS))); do \
 		$(LIBSUITESPARSE_SHLIB_ENV) $(MAKE) -C $(dir $<)$${PROJ} default $(LIBSUITESPARSE_MFLAGS) || exit 1; \
 	done
 	echo 1 > $@
 
-UNINSTALL_suitesparse := $(LIBSUITESPARSE_VER) manual_suitesparse $(LIBSUITESPARSE_LIBS)
+UNINSTALL_libsuitesparse := $(LIBSUITESPARSE_VER) manual_libsuitesparse $(LIBSUITESPARSE_LIBS)
 
 $(build_prefix)/manifest/libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled | $(build_prefix)/manifest $(build_shlibdir)
-	for lib in $(LIBSUITESPARSE_LIBS); do \
-		cp -a $(dir $<)lib/lib$${lib} $(build_shlibdir) || exit 1; \
-	done
-	#cp -a $(dir $<)lib/* $(build_shlibdir)
-	#cp -a $(dir $<)include/* $(build_includedir)
 	echo $(UNINSTALL_libsuitesparse) > $@
 
 clean-libsuitesparse: uninstall-libsuitesparse

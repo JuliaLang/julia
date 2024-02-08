@@ -18,6 +18,9 @@ using .Main.InfiniteArrays
 isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
 using .Main.FillArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+
 const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
@@ -47,6 +50,13 @@ Random.seed!(1)
         DI = Diagonal([1,2,3,4])
         @test Diagonal(DI) === DI
         @test isa(Diagonal{elty}(DI), Diagonal{elty})
+
+        # diagonal matrices may be converted to Diagonal
+        local A = [1 0; 0 2]
+        local DA = convert(Diagonal{Float32,Vector{Float32}}, A)
+        @test DA isa Diagonal{Float32,Vector{Float32}}
+        @test DA == A
+
         # issue #26178
         @test_throws MethodError convert(Diagonal, [1,2,3,4])
         @test_throws DimensionMismatch convert(Diagonal, [1 2 3 4])
@@ -54,7 +64,9 @@ Random.seed!(1)
     end
 
     @testset "Basic properties" begin
-        @test_throws ArgumentError size(D,0)
+        @test_throws BoundsError size(D,0)
+        @test size(D,1) == size(D,2) == length(dd)
+        @test size(D,3) == 1
         @test typeof(convert(Diagonal{ComplexF32},D)) <: Diagonal{ComplexF32}
         @test typeof(convert(AbstractMatrix{ComplexF32},D)) <: Diagonal{ComplexF32}
 
@@ -78,6 +90,9 @@ Random.seed!(1)
         @test !istril(D, -1)
         @test istril(D, 1)
         @test istril(Diagonal(zero(diag(D))), -1)
+        @test Base.isstored(D,1,1)
+        @test !Base.isstored(D,1,2)
+        @test_throws BoundsError Base.isstored(D, n + 1, 1)
         if elty <: Real
             @test ishermitian(D)
         end
@@ -103,6 +118,12 @@ Random.seed!(1)
         for func in (det, tr)
             @test func(D) ≈ func(DM) atol=n^2*eps(relty)*(1+(elty<:Complex))
         end
+
+        if eltype(D) <: Real
+            @test minimum(D) ≈ minimum(DM)
+            @test maximum(D) ≈ maximum(DM)
+        end
+
         if relty <: BlasFloat
             for func in (exp, cis, sinh, cosh, tanh, sech, csch, coth)
                 @test func(D) ≈ func(DM) atol=n^3*eps(relty)
@@ -457,6 +478,12 @@ Random.seed!(1)
     end
 end
 
+@testset "axes" begin
+    v = OffsetArray(1:3)
+    D = Diagonal(v)
+    @test axes(D) isa NTuple{2,typeof(axes(v,1))}
+end
+
 @testset "rdiv! (#40887)" begin
     @test rdiv!(Matrix(Diagonal([2.0, 3.0])), Diagonal(2:3)) == Diagonal([1.0, 1.0])
     @test rdiv!(fill(3.0, 3, 3), 3.0I(3)) == ones(3,3)
@@ -761,6 +788,33 @@ end
         D = Diagonal(fill(M, n))
         @test D == Matrix{eltype(D)}(D)
     end
+
+    S = SizedArray{(2,3)}(reshape([1:6;],2,3))
+    D = Diagonal(fill(S,3))
+    @test D * fill(S,2,3)' == fill(S * S', 3, 2)
+    @test fill(S,3,2)' * D == fill(S' * S, 2, 3)
+end
+
+@testset "Eigensystem for block diagonal (issue #30681)" begin
+    I2 = Matrix(I, 2,2)
+    D = Diagonal([2.0*I2, 3.0*I2])
+    eigD = eigen(D)
+    evals = [ 2.0, 2.0, 3.0, 3.0 ]
+    evecs = [ [[ 1.0, 0.0 ]]  [[ 0.0, 1.0 ]]  [[ 0.0, 0.0 ]]  [[ 0.0, 0.0 ]];
+              [[ 0.0, 0.0 ]]  [[ 0.0, 0.0 ]]  [[ 1.0, 0.0 ]]  [[ 0.0, 1.0 ]] ]
+    @test eigD.values == evals
+    @test eigD.vectors == evecs
+    @test D * eigD.vectors ≈ eigD.vectors * Diagonal(eigD.values)
+
+    I3 = Matrix(I, 3,3)
+    D = Diagonal([[0.0 -1.0; 1.0 0.0], 2.0*I3])
+    eigD = eigen(D)
+    evals = [ -1.0im, 1.0im, 2.0, 2.0, 2.0 ]
+    evecs = [ [[ 1/sqrt(2)+0im, 1/sqrt(2)*im ]]  [[ 1/sqrt(2)+0im, -1/sqrt(2)*im ]]  [[ 0.0, 0.0 ]]       [[ 0.0, 0.0 ]]      [[ 0.0, 0.0]];
+              [[ 0.0, 0.0, 0.0 ]]                [[ 0.0, 0.0, 0.0 ]]                 [[ 1.0, 0.0, 0.0 ]]  [[ 0.0, 1.0, 0.0 ]] [[ 0.0, 0.0, 1.0]] ]
+    @test eigD.values == evals
+    @test eigD.vectors ≈ evecs
+    @test D * eigD.vectors ≈ eigD.vectors * Diagonal(eigD.values)
 end
 
 @testset "linear solve for block diagonal matrices" begin
@@ -1178,6 +1232,38 @@ end
 
     # currently falls back to two-term *
     @test *(Diagonal(ones(n)), Diagonal(1:n), Diagonal(ones(n)), Diagonal(1:n)) isa Diagonal
+end
+
+@testset "diagind" begin
+    D = Diagonal(1:4)
+    M = Matrix(D)
+    @testset for k in -4:4
+        @test D[diagind(D,k)] == M[diagind(M,k)]
+    end
+end
+
+@testset "avoid matmul ambiguities with ::MyMatrix * ::AbstractMatrix" begin
+    A = [i+j for i in 1:2, j in 1:2]
+    S = SizedArrays.SizedArray{(2,2)}(A)
+    D = Diagonal([1:2;])
+    @test S * D == A * D
+    @test D * S == D * A
+    C1, C2 = zeros(2,2), zeros(2,2)
+    @test mul!(C1, S, D) == mul!(C2, A, D)
+    @test mul!(C1, S, D, 1, 2) == mul!(C2, A, D, 1 ,2)
+    @test mul!(C1, D, S) == mul!(C2, D, A)
+    @test mul!(C1, D, S, 1, 2) == mul!(C2, D, A, 1 ,2)
+
+    v = [i for i in 1:2]
+    sv = SizedArrays.SizedArray{(2,)}(v)
+    @test D * sv == D * v
+    C1, C2 = zeros(2), zeros(2)
+    @test mul!(C1, D, sv) == mul!(C2, D, v)
+    @test mul!(C1, D, sv, 1, 2) == mul!(C2, D, v, 1 ,2)
+end
+
+@testset "copy" begin
+    @test copy(Diagonal(1:5)) === Diagonal(1:5)
 end
 
 end # module TestDiagonal

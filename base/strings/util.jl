@@ -369,6 +369,7 @@ function lstrip(f, s::AbstractString)
 end
 lstrip(s::AbstractString) = lstrip(isspace, s)
 lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
+lstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments are strings. The second argument should be a `Char` or collection of `Char`s"))
 
 """
     rstrip([pred=isspace,] str::AbstractString) -> SubString
@@ -402,6 +403,8 @@ function rstrip(f, s::AbstractString)
 end
 rstrip(s::AbstractString) = rstrip(isspace, s)
 rstrip(s::AbstractString, chars::Chars) = rstrip(in(chars), s)
+rstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments are strings. The second argument should be a `Char` or collection of `Char`s"))
+
 
 """
     strip([pred=isspace,] str::AbstractString) -> SubString
@@ -429,6 +432,7 @@ julia> strip("{3, 5}\\n", ['{', '}', '\\n'])
 """
 strip(s::AbstractString) = lstrip(rstrip(s))
 strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
+strip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments are strings. The second argument should be a `Char` or collection of `Char`s"))
 strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
 
 ## string padding functions ##
@@ -454,13 +458,15 @@ function lpad(
     s::Union{AbstractChar,AbstractString},
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
-) :: String
+)
+    stringfn = if _isannotated(s) || _isannotated(p)
+        annotatedstring else string end
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
-    m ≤ 0 && return string(s)
+    m ≤ 0 && return stringfn(s)
     l = textwidth(p)
     q, r = divrem(m, l)
-    r == 0 ? string(p^q, s) : string(p^q, first(p, r), s)
+    r == 0 ? stringfn(p^q, s) : stringfn(p^q, first(p, r), s)
 end
 
 """
@@ -484,13 +490,15 @@ function rpad(
     s::Union{AbstractChar,AbstractString},
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
-) :: String
+)
+    stringfn = if _isannotated(s) || _isannotated(p)
+        annotatedstring else string end
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
-    m ≤ 0 && return string(s)
+    m ≤ 0 && return stringfn(s)
     l = textwidth(p)
     q, r = divrem(m, l)
-    r == 0 ? string(s, p^q) : string(s, p^q, first(p, r))
+    r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, first(p, r))
 end
 
 """
@@ -567,6 +575,8 @@ end
 
 # Specialization for partition(s,n) to return a SubString
 eltype(::Type{PartitionIterator{T}}) where {T<:AbstractString} = SubString{T}
+# SubStrings do not nest
+eltype(::Type{PartitionIterator{T}}) where {T<:SubString} = T
 
 function iterate(itr::PartitionIterator{<:AbstractString}, state = firstindex(itr.c))
     state > ncodeunits(itr.c) && return nothing
@@ -587,6 +597,101 @@ eachsplit(str::T, splitter::AbstractChar; limit::Integer=0, keepempty=true) wher
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 eachsplit(str::AbstractString; limit::Integer=0, keepempty=false) =
     eachsplit(str, isspace; limit, keepempty)
+
+"""
+    eachrsplit(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
+    eachrsplit(str::AbstractString; limit::Integer=0, keepempty::Bool=false)
+
+Return an iterator over `SubString`s of `str`, produced when splitting on
+the delimiter(s) `dlm`, and yielded in reverse order (from right to left).
+`dlm` can be any of the formats allowed by [`findprev`](@ref)'s first argument
+(i.e. a string, a single character or a function), or a collection of characters.
+
+If `dlm` is omitted, it defaults to [`isspace`](@ref), and `keepempty` default to `false`.
+
+The optional keyword arguments are:
+ - If `limit > 0`, the iterator will split at most `limit - 1` times before returning
+   the rest of the string unsplit. `limit < 1` implies no cap to splits (default).
+ - `keepempty`: whether empty fields should be returned when iterating
+   Default is `false` without a `dlm` argument, `true` with a `dlm` argument.
+
+Note that unlike [`split`](@ref), [`rsplit`](@ref) and [`eachsplit`](@ref), this
+function iterates the substrings right to left as they occur in the input.
+
+See also [`eachsplit`](@ref), [`rsplit`](@ref).
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+# Examples
+```jldoctest
+julia> a = "Ma.r.ch";
+
+julia> collect(eachrsplit(a, ".")) == ["ch", "r", "Ma"]
+true
+
+julia> collect(eachrsplit(a, "."; limit=2)) == ["ch", "Ma.r"]
+true
+```
+"""
+function eachrsplit end
+
+struct RSplitIterator{S <: AbstractString, F}
+    str::S
+    splitter::F
+    limit::Int
+    keepempty::Bool
+end
+
+eltype(::Type{<:RSplitIterator{T}}) where T = SubString{T}
+eltype(::Type{<:RSplitIterator{<:SubString{T}}}) where T = SubString{T}
+
+IteratorSize(::Type{<:RSplitIterator}) = SizeUnknown()
+
+eachrsplit(str::T, splitter; limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString} =
+    RSplitIterator(str, splitter, limit, keepempty)
+
+eachrsplit(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
+          limit::Integer=0, keepempty=true) where {T<:AbstractString} =
+    eachrsplit(str, in(splitter); limit, keepempty)
+
+eachrsplit(str::T, splitter::AbstractChar; limit::Integer=0, keepempty=true) where {T<:AbstractString} =
+    eachrsplit(str, isequal(splitter); limit, keepempty)
+
+# a bit oddball, but standard behavior in Perl, Ruby & Python:
+eachrsplit(str::AbstractString; limit::Integer=0, keepempty=false) =
+    eachrsplit(str, isspace; limit, keepempty)
+
+function Base.iterate(it::RSplitIterator, (to, remaining_splits)=(lastindex(it.str), it.limit-1))
+    to < 0 && return nothing
+    from = 1
+    next_to = -1
+    while !iszero(remaining_splits)
+        pos = findprev(it.splitter, it.str, to)
+        # If no matches: It returns the rest of the string, then the iterator stops.
+        if pos === nothing
+            from = 1
+            next_to = -1
+            break
+        else
+            from = nextind(it.str, last(pos))
+            # pos can be empty if we search for a zero-width delimiter, in which
+            # case pos is to:to-1.
+            # In this case, next_to must be to - 1, except if to is 0 or 1, in
+            # which case, we must stop iteration for some reason.
+            next_to = (isempty(pos) & (to < 2)) ? -1 : prevind(it.str, first(pos))
+
+            # If the element we emit is empty, discard it based on keepempty
+            if from > to && !(it.keepempty)
+                to = next_to
+                continue
+            end
+            break
+        end
+    end
+    from > to && !(it.keepempty) && return nothing
+    return (SubString(it.str, from, to), (next_to, remaining_splits-1))
+end
 
 """
     split(str::AbstractString, dlm; limit::Integer=0, keepempty::Bool=true)
@@ -656,37 +761,15 @@ julia> rsplit(a, "."; limit=2)
  "h"
 ```
 """
-function rsplit end
-
 function rsplit(str::T, splitter;
-                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    _rsplit(str, splitter, limit, keepempty, T <: SubString ? T[] : SubString{T}[])
-end
-function rsplit(str::T, splitter::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}};
-                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    _rsplit(str, in(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
-end
-function rsplit(str::T, splitter::AbstractChar;
-                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    _rsplit(str, isequal(splitter), limit, keepempty, T <: SubString ? T[] : SubString{T}[])
+               limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
+    reverse!(collect(eachrsplit(str, splitter; limit, keepempty)))
 end
 
-function _rsplit(str::AbstractString, splitter, limit::Integer, keepempty::Bool, strs::Array)
-    n = lastindex(str)::Int
-    r = something(findlast(splitter, str)::Union{Nothing,Int,UnitRange{Int}}, 0)
-    j, k = first(r), last(r)
-    while j > 0 && k > 0 && length(strs) != limit-1
-        (keepempty || k < n) && pushfirst!(strs, @inbounds SubString(str,nextind(str,k)::Int,n))
-        n = prevind(str, j)::Int
-        r = something(findprev(splitter,str,n)::Union{Nothing,Int,UnitRange{Int}}, 0)
-        j, k = first(r), last(r)
-    end
-    (keepempty || n > 0) && pushfirst!(strs, SubString(str,1,n))
-    return strs
-end
+# a bit oddball, but standard behavior in Perl, Ruby & Python:
 rsplit(str::AbstractString;
       limit::Integer=0, keepempty::Bool=false) =
-    rsplit(str, isspace; limit=limit, keepempty=keepempty)
+    rsplit(str, isspace; limit, keepempty)
 
 _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
@@ -700,12 +783,11 @@ _free_pat_replacer(x) = nothing
 _pat_replacer(x::AbstractChar) = isequal(x)
 _pat_replacer(x::Union{Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}) = in(x)
 
-function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(Int)) where N
-    count == 0 && return str
+# note: leave str untyped here to make it easier for packages like StringViews to hook in
+function _replace_init(str, pat_repl::NTuple{N, Pair}, count::Int) where N
     count < 0 && throw(DomainError(count, "`count` must be non-negative."))
-    n = 1
-    e1 = nextind(str, lastindex(str)) # sizeof(str)
-    i = a = firstindex(str)
+    e1 = nextind(str, lastindex(str)) # sizeof(str)+1
+    a = firstindex(str)
     patterns = map(p -> _pat_replacer(first(p)), pat_repl)
     replaces = map(last, pat_repl)
     rs = map(patterns) do p
@@ -716,11 +798,14 @@ function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(I
         r isa Int && (r = r:r) # findnext / performance fix
         return r
     end
-    if all(>(e1), map(first, rs))
-        foreach(_free_pat_replacer, patterns)
-        return str
-    end
-    out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
+    return e1, patterns, replaces, rs, all(>(e1), map(first, rs))
+end
+
+# note: leave str untyped here to make it easier for packages like StringViews to hook in
+function _replace_finish(io::IO, str, count::Int,
+                         e1::Int, patterns::Tuple, replaces::Tuple, rs::Tuple)
+    n = 1
+    i = a = firstindex(str)
     while true
         p = argmin(map(first, rs)) # TODO: or argmin(rs), to pick the shortest first match ?
         r = rs[p]
@@ -728,9 +813,9 @@ function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(I
         j > e1 && break
         if i == a || i <= k
             # copy out preserved portion
-            GC.@preserve str unsafe_write(out, pointer(str, i), UInt(j-i))
+            GC.@preserve str unsafe_write(io, pointer(str, i), UInt(j-i))
             # copy out replacement string
-            _replace(out, replaces[p], str, r, patterns[p])
+            _replace(io, replaces[p], str, r, patterns[p])
         end
         if k < j
             i = j
@@ -755,13 +840,39 @@ function replace(str::String, pat_repl::Vararg{Pair,N}; count::Integer=typemax(I
         n += 1
     end
     foreach(_free_pat_replacer, patterns)
-    write(out, SubString(str, i))
-    return String(take!(out))
+    write(io, SubString(str, i))
+    return io
 end
 
+# note: leave str untyped here to make it easier for packages like StringViews to hook in
+function _replace_(io::IO, str, pat_repl::NTuple{N, Pair}, count::Int) where N
+    if count == 0
+        write(io, str)
+        return io
+    end
+    e1, patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
+    if notfound
+        foreach(_free_pat_replacer, patterns)
+        write(io, str)
+        return io
+    end
+    return _replace_finish(io, str, count, e1, patterns, replaces, rs)
+end
+
+# note: leave str untyped here to make it easier for packages like StringViews to hook in
+function _replace_(str, pat_repl::NTuple{N, Pair}, count::Int) where N
+    count == 0 && return String(str)
+    e1, patterns, replaces, rs, notfound = _replace_init(str, pat_repl, count)
+    if notfound
+        foreach(_free_pat_replacer, patterns)
+        return String(str)
+    end
+    out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
+    return String(take!(_replace_finish(out, str, count, e1, patterns, replaces, rs)))
+end
 
 """
-    replace(s::AbstractString, pat=>r, [pat2=>r2, ...]; [count::Integer])
+    replace([io::IO], s::AbstractString, pat=>r, [pat2=>r2, ...]; [count::Integer])
 
 Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
 If `count` is provided, replace at most `count` occurrences.
@@ -774,12 +885,20 @@ If `pat` is a regular expression and `r` is a [`SubstitutionString`](@ref), then
 references in `r` are replaced with the corresponding matched text.
 To remove instances of `pat` from `string`, set `r` to the empty `String` (`""`).
 
+The return value is a new string after the replacements.  If the `io::IO` argument
+is supplied, the transformed string is instead written to `io` (returning `io`).
+(For example, this can be used in conjunction with an [`IOBuffer`](@ref) to re-use
+a pre-allocated buffer array in-place.)
+
 Multiple patterns can be specified, and they will be applied left-to-right
 simultaneously, so only one pattern will be applied to any character, and the
 patterns will only be applied to the input text, not the replacements.
 
 !!! compat "Julia 1.7"
     Support for multiple patterns requires version 1.7.
+
+!!! compat "Julia 1.10"
+    The `io::IO` argument requires version 1.10.
 
 # Examples
 ```jldoctest
@@ -799,8 +918,12 @@ julia> replace("abcabc", "a" => "b", "b" => "c", r".+" => "a")
 "bca"
 ```
 """
+replace(io::IO, s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
+    _replace_(io, String(s), pat_f, Int(count))
+
 replace(s::AbstractString, pat_f::Pair...; count=typemax(Int)) =
-    replace(String(s), pat_f..., count=count)
+    _replace_(String(s), pat_f, Int(count))
+
 
 # TODO: allow transform as the first argument to replace?
 

@@ -9,6 +9,9 @@ using Base: Experimental
 
 include("choosetests.jl")
 include("testenv.jl")
+include("buildkitetestjson.jl")
+
+using .BuildKiteTestJSON
 
 (; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
 tests = unique(tests)
@@ -84,12 +87,14 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Shuffle LinearAlgebra tests to the front, because they take a while, so we might
+# Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
 # as well get them all started early.
-linalg_test_ids = findall(x->occursin("LinearAlgebra", x), tests)
-linalg_tests = tests[linalg_test_ids]
-deleteat!(tests, linalg_test_ids)
-prepend!(tests, linalg_tests)
+for prependme in ["LinearAlgebra", "Pkg"]
+    prependme_test_ids = findall(x->occursin(prependme, x), tests)
+    prependme_tests = tests[prependme_test_ids]
+    deleteat!(tests, prependme_test_ids)
+    prepend!(tests, prependme_tests)
+end
 
 import LinearAlgebra
 cd(@__DIR__) do
@@ -124,6 +129,7 @@ cd(@__DIR__) do
 
     println("""
         Running parallel tests with:
+          getpid() = $(getpid())
           nworkers() = $(nworkers())
           nthreads() = $(Threads.threadpoolsize())
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
@@ -421,6 +427,13 @@ cd(@__DIR__) do
         Test.record(o_ts, fake)
         Test.pop_testset()
     end
+
+    if Base.get_bool_env("CI", false)
+        testresults = joinpath(@__DIR__, "results.json")
+        @info "Writing test result data to $testresults"
+        open(io -> write_testset_json(io, o_ts), testresults, "w")
+    end
+
     Test.TESTSET_PRINT_ENABLE[] = true
     println()
     # o_ts.verbose = true # set to true to show all timings when successful
