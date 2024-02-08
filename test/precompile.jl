@@ -1744,7 +1744,7 @@ precompile_test_harness("AbstractInterpreter caching") do load_path
 
                 CC.InferenceParams(interp::InvalidationTester) = interp.inf_params
                 CC.OptimizationParams(interp::InvalidationTester) = interp.opt_params
-                CC.get_world_counter(interp::InvalidationTester) = interp.world
+                CC.get_inference_world(interp::InvalidationTester) = interp.world
                 CC.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
                 CC.cache_owner(::InvalidationTester) = InvalidationTesterToken()
             end
