@@ -1,5 +1,11 @@
 // f{<:Union{...}}(...) is a common pattern
 // and expanding the Union may give a leaf function
+#include "arraylist.h"
+#include "htable.h"
+#include "julia.h"
+#include "julia_atomics.h"
+#include "julia_internal.h"
+#include "ptrhash.h"
 static void _compile_all_tvar_union(jl_value_t *methsig)
 {
     int tvarslen = jl_subtype_env_size(methsig);
@@ -318,4 +324,47 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
     void *native_code = jl_precompile_(m, 1);
     JL_GC_POP();
     return native_code;
+}
+
+static void *jl_precompile_small_image(void)
+{
+    // array of MethodInstances and ccallable aliases to include in the output
+    jl_array_t *m = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&m);
+    jl_method_instance_t *mi;
+    while (1)
+    {
+        mi = (jl_method_instance_t*)arraylist_pop(jl_precompile_mis);
+        if (mi == NULL)
+            break;
+        assert(jl_is_method_instance(mi));
+
+        jl_array_ptr_1d_push(m, (jl_value_t*)mi);
+        jl_value_t *ccallable = (jl_value_t *)mi->def.method->ccallable;
+        if (ccallable)
+            jl_array_ptr_1d_push(m, ccallable);
+    }
+    void *native_code = jl_create_native(m, NULL, NULL, 0, 1, 0,
+                                         jl_atomic_load_acquire(&jl_world_counter));
+    JL_GC_POP();
+    return native_code;
+}
+
+static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
+{
+    size_t i;
+    for (i = 0; i < MIs->len; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)MIs->items[i];
+        jl_method_t *m = mi->def.method;
+        jl_sym_t * name = jl_method_get_table(m)->name;
+        jl_methtable_t *old_mt = jl_method_get_table(m);
+        if (!ptrhash_has(mtables, old_mt))
+            ptrhash_put(mtables, old_mt, jl_new_method_table(name, m->module));
+        jl_methtable_t *mt = (jl_methtable_t*)ptrhash_get(mtables, old_mt);
+        size_t min_world = 0;
+        size_t max_world = ~(size_t)0;
+        if (jl_gf_invoke_lookup_worlds(m->sig, (jl_value_t *)mt, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world) == jl_nothing)
+            jl_method_table_insert(mt, m, NULL);
+    }
+
 }

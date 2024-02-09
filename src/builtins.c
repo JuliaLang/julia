@@ -2375,6 +2375,12 @@ static void add_builtin(const char *name, jl_value_t *v)
 jl_fptr_args_t jl_get_builtin_fptr(jl_datatype_t *dt)
 {
     assert(jl_subtype((jl_value_t*)dt, (jl_value_t*)jl_builtin_type));
+    if (dt->name->mt == NULL){
+        jl_safe_printf("could not find builtin mt for ");
+        jl_(dt);
+        abort();
+    }
+
     jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_atomic_load_relaxed(&dt->name->mt->defs);
     jl_method_instance_t *mi = jl_atomic_load_relaxed(&entry->func.method->unspecialized);
     jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);

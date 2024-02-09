@@ -16,6 +16,8 @@
 extern "C" {
 #endif
 
+int small_image = 0;
+
 JL_DLLEXPORT int jl_generating_output(void)
 {
     return jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputji || jl_options.outputasm;
@@ -104,7 +106,6 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");
         return;
     }
-
     jl_array_t *worklist = jl_module_init_order;
     jl_array_t *udeps = NULL;
     JL_GC_PUSH2(&worklist, &udeps);
@@ -116,8 +117,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         if (f) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
             int setting = jl_get_module_compile((jl_module_t*)m);
-            if (setting != JL_OPTIONS_COMPILE_OFF &&
-                setting != JL_OPTIONS_COMPILE_MIN) {
+            if (setting != JL_OPTIONS_COMPILE_OFF && (small_image ||
+                (setting != JL_OPTIONS_COMPILE_MIN))) {
                 // TODO: this would be better handled if moved entirely to jl_precompile
                 // since it's a slightly duplication of effort
                 jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
@@ -189,6 +190,9 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         }
     }
     JL_GC_POP();
+    if (small_image){
+        exit(0); // Some finalizers need to run and we've blown up the bindings table
+    }
     jl_gc_enable_finalizers(ct, 1);
 }
 

@@ -106,6 +106,17 @@ void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
+void jl_get_llvm_mis_impl(void *native_code, arraylist_t* MIs)
+{
+    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
+    auto map = data->jl_fvar_map;
+    for (auto &ci : map) {
+        jl_method_instance_t *mi = ci.first->def;
+        arraylist_push(MIs, mi);
+    }
+}
+
+extern "C" JL_DLLEXPORT_CODEGEN
 void jl_get_llvm_gvs_impl(void *native_code, arraylist_t *gvs)
 {
     // map a memory location (jl_value_t or jl_binding_t) to a GlobalVariable

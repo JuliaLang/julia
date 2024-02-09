@@ -6,6 +6,7 @@
     bitvector_*;
     ios_*;
     arraylist_grow;
+    arraylist_push;
     small_arraylist_grow;
     jl_*;
     ijl_*;

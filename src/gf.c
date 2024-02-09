@@ -2844,6 +2844,13 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
     jl_atomic_store_relaxed(&mi->precompiled, 1);
     if (jl_generating_output()) {
         jl_compile_now(mi);
+        if (small_image){
+            jl_safe_printf("adding code root from jl_compile_method_instance\n for:");
+            jl_(mi);
+            jl_safe_printf("from module: ");
+            jl_(mi->def.method->module);
+            arraylist_push(jl_precompile_mis, mi);
+        }
         // In addition to full compilation of the compilation-signature, if `types` is more specific (e.g. due to nospecialize),
         // also run inference now on the original `types`, since that may help us guide inference to find
         // additional useful methods that should be compiled
@@ -2857,6 +2864,13 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
             jl_method_instance_t *mi2 = jl_specializations_get_linfo(mi->def.method, (jl_value_t*)types2, tpenv2);
             JL_GC_POP();
             jl_atomic_store_relaxed(&mi2->precompiled, 1);
+            if (small_image){
+                jl_safe_printf("adding code root from jl_compile_method_instance\n for:");
+                jl_(mi2);
+                jl_safe_printf("from module: ");
+                jl_(mi2->def.method->module);
+                arraylist_push(jl_precompile_mis, mi2);
+            }
             if (jl_rettype_inferred(mi2, world, world) == jl_nothing)
                 (void)jl_type_infer(mi2, world, 1);
             if (jl_typeinf_func && jl_atomic_load_relaxed(&mi->def.method->primary_world) <= tworld) {
@@ -3067,6 +3081,22 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         // if no method was found in the associative cache, check the full cache
         JL_TIMING(METHOD_LOOKUP_FAST, METHOD_LOOKUP_FAST);
         mt = jl_gf_mtable(F);
+        if (mt == NULL) {
+            jl_safe_printf("missing methtable for :");
+            jl_(((((jl_datatype_t *)jl_to_typeof(
+       ((((jl_taggedvalue_t *)((char *)(F) - sizeof(jl_taggedvalue_t)))->header) &
+        ~(uintptr_t)15)))
+      ->name)));
+            jl_safe_printf("tried calling: ");
+            jl_static_show(JL_STDOUT, F);
+            jl_printf(JL_STDOUT, "(");
+            for(size_t i=0; i < nargs-1; i++) {
+                if (i > 0) jl_printf(JL_STDOUT, ", ");
+                jl_static_show(JL_STDOUT, jl_typeof(args[i]));
+            }
+            jl_printf(JL_STDOUT, ")");
+            abort();
+        }
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
         entry = NULL;
         if (leafcache != (jl_genericmemory_t*)jl_an_empty_memory_any &&
