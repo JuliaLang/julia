@@ -332,6 +332,10 @@ Multiple conditions are taken as signifying truecolor support, specifically any 
     unable to resolve the fragmentation in the terminal ecosystem.
 """
 function ttyhastruecolor()
+    @static if Sys.iswindows()
+        is_windows_console = ccall( (:GetConsoleWindow, "kernel32"), stdcall, UInt32, () ) != UInt32(0) # See <https://learn.microsoft.com/en-us/windows/console/getconsolewindow>
+        return Sys.windows_version() ≥ v"10.0.14931" && is_windows_console # See <https://devblogs.microsoft.com/commandline/24-bit-color-in-the-windows-console/>
+    end
     # Lasciate ogne speranza, voi ch'intrate
     get(ENV, "COLORTERM", "") ∈ ("truecolor", "24bit") ||
         get(current_terminfo, :RGB, false) || get(current_terminfo, :Tc, false) ||
