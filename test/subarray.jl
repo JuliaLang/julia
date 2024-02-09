@@ -1031,3 +1031,28 @@ end
     av2 = view(av, 2:2, 2:2, 1:1)
     @test parentindices(av2) === (view(inds[1], 2:2, 2:2, 1:1),)
 end
+
+@testset "isassigned" begin
+    a = Vector{BigFloat}(undef, 5)
+    a[2] = 0
+    for v in (view(a, 2:3), # FastContiguousSubArray
+               view(a, 2:2:4), # FastSubArray
+               view(a, [2:2:4;]), # SlowSubArray
+            )
+        @test !isassigned(v, 0) # out-of-bounds
+        @test isassigned(v, 1) # inbounds and assigned
+        @test !isassigned(v, 2) # inbounds but not assigned
+        @test !isassigned(v, 4) # out-of-bounds
+    end
+
+    a = Array{BigFloat}(undef,3,3,3)
+    a[1,1,1] = 0
+    for v in (view(a, :, 1:3, 1), # FastContiguousSubArray
+               view(a, 1, :, 1:2), # FastSubArray
+            )
+        @test !isassigned(v, 0, 0) # out-of-bounds
+        @test isassigned(v, 1, 1)
+        @test !isassigned(v, 1, 2) # inbounds but not assigned
+        @test !isassigned(v, 3, 3) # out-of-bounds
+    end
+end
