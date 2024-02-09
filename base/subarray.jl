@@ -408,34 +408,24 @@ end
 @inline setindex!(V::FastSubArray, x, i::Colon) = setindex!(V, x, to_indices(V, (i,))...)
 
 function isassigned(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
-    @inline
-    @boundscheck checkbounds(Bool, V, I...) || return false
-    @inbounds r = isassigned(V.parent, reindex(V.indices, I)...)
-    r
+    @_propagate_inbounds_meta
+    isassigned(V.parent, reindex(V.indices, I)...)
 end
 function isassigned(V::FastSubArray, i::Int)
-    @inline
-    @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + V.stride1*i)
-    r
+    @_propagate_inbounds_meta
+    isassigned(V.parent, V.offset1 + V.stride1*i)
 end
 function isassigned(V::FastContiguousSubArray, i::Int)
-    @inline
-    @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + i)
-    r
+    @_propagate_inbounds_meta
+    isassigned(V.parent, V.offset1 + i)
 end
 function isassigned(V::FastSubArray{<:Any, 1}, i::Int)
-    @inline
-    @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + V.stride1*i)
-    r
+    @_propagate_inbounds_meta
+    isassigned(V.parent, V.offset1 + V.stride1*i)
 end
 function isassigned(V::FastContiguousSubArray{<:Any, 1}, i::Int)
-    @inline
-    @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + i)
-    r
+    @_propagate_inbounds_meta
+    isassigned(V.parent, V.offset1 + i)
 end
 
 IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
