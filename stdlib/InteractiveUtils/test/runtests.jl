@@ -726,7 +726,5 @@ end
 @test Base.infer_effects(sin, (Int,)) == InteractiveUtils.@infer_effects sin(42)
 
 @testset "Docstrings" begin
-    undoc = Docs.undocumented_names(InteractiveUtils)
-    @test_broken isempty(undoc)
-    @test undoc == [:InteractiveUtils]
+    @test isempty(Docs.undocumented_names(InteractiveUtils))
 end

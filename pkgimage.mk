@@ -28,11 +28,11 @@ all-release: $(addprefix cache-release-, $(STDLIBS))
 all-debug:   $(addprefix cache-debug-, $(STDLIBS))
 
 define stdlib_builder
-ifneq ($(filter $(1),$(INDEPENDENT_STDLIBS)),)
+ifneq ($(filter $(1),$(INDEPENDENT_STDLIBS) $(PKG_EXTS)),)
 # Define target-specific export for `JULIA_CPU_TARGET`
 $$(BUILDDIR)/stdlib/$1.release.image: export JULIA_CPU_TARGET=$(JULIA_CPU_TARGET)
 $$(BUILDDIR)/stdlib/$1.debug.image: export JULIA_CPU_TARGET=$(JULIA_CPU_TARGET)
-
+ifneq ($(filter $(1),$(INDEPENDENT_STDLIBS)),)
 $$(BUILDDIR)/stdlib/$1.release.image: $$($1_SRCS) $$(addsuffix .release.image,$$(addprefix $$(BUILDDIR)/stdlib/,$2)) $(build_private_libdir)/sys.$(SHLIB_EXT)
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
@@ -41,6 +41,19 @@ $$(BUILDDIR)/stdlib/$1.debug.image: $$($1_SRCS) $$(addsuffix .debug.image,$$(add
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'Base.compilecache(Base.identify_package("$1"))')
 	@$$(call PRINT_JULIA, $$(call spawn,$$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.compilecache(Base.identify_package("$1"))')
 	touch $$@
+endif
+ifneq ($(filter $(1),$(PKG_EXTS)),)
+# This is weird. It set up for multiple Pkg exts because that suits the structure here better
+# but it hard codes the deps and `import REPL, Pkg`
+$$(BUILDDIR)/stdlib/REPLExt.release.image: $$(REPLExt_SRCS) $$(BUILDDIR)/stdlib/Pkg.release.image $$(BUILDDIR)/stdlib/REPL.release.image
+	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'using REPL; using Pkg')
+	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e 'using REPL; using Pkg')
+	touch $$@
+$$(BUILDDIR)/stdlib/REPLExt.debug.image: $$(REPLExt_SRCS) $(BUILDDIR)/stdlib/Pkg.debug.image $$(BUILDDIR)/stdlib/REPL.debug.image
+	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no --check-bounds=yes -e 'using REPL; using Pkg')
+	@$$(call PRINT_JULIA, $$(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e 'using REPL; using Pkg')
+	touch $$@
+endif
 else
 ifneq ($(filter $(1),$(STDLIBS_WITHIN_SYSIMG)),)
 $$(BUILDDIR)/stdlib/$1.release.image:
@@ -55,6 +68,9 @@ cache-release-$1: $$(BUILDDIR)/stdlib/$1.release.image
 cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
 .SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image
 endef
+
+# Note: you can check for the correctness of this tree by running `JULIA_DEBUG=nested_precomp make` and looking
+# out for `Debug: Nested precompilation` logs.
 
 # no dependencies
 $(eval $(call stdlib_builder,MozillaCACerts_jll,))
@@ -130,6 +146,7 @@ $(eval $(call stdlib_builder,Pkg, Artifacts Dates Downloads FileWatching LibGit2
 
 # 7-depth packages
 $(eval $(call stdlib_builder,LazyArtifacts,Artifacts Pkg))
+$(eval $(call stdlib_builder,REPLExt,Pkg REPL))
 
 $(eval $(call stdlib_builder,SparseArrays,Libdl LinearAlgebra Random Serialization SuiteSparse_jll))
 $(eval $(call stdlib_builder,Statistics,LinearAlgebra SparseArrays))

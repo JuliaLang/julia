@@ -60,7 +60,7 @@ function.
 
 include("bindings.jl")
 
-import .Base.Meta: quot, isexpr
+import .Base.Meta: quot, isexpr, unblock, unescape, uncurly
 import .Base: Callable, with_output_color
 using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
@@ -284,29 +284,6 @@ catdoc() = nothing
 catdoc(xs...) = vcat(xs...)
 
 const keywords = Dict{Symbol, DocStr}()
-
-function unblock(@nospecialize ex)
-    while isexpr(ex, :var"hygienic-scope")
-        isexpr(ex.args[1], :escape) || break
-        ex = ex.args[1].args[1]
-    end
-    isexpr(ex, :block) || return ex
-    exs = filter(ex -> !(isa(ex, LineNumberNode) || isexpr(ex, :line)), ex.args)
-    length(exs) == 1 || return ex
-    return unblock(exs[1])
-end
-
-# peek through ex to figure out what kind of expression it may eventually act like
-# but ignoring scopes and line numbers
-function unescape(@nospecialize ex)
-    ex = unblock(ex)
-    while isexpr(ex, :escape) || isexpr(ex, :var"hygienic-scope")
-       ex = unblock(ex.args[1])
-    end
-    return ex
-end
-
-uncurly(@nospecialize ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
 namify(@nospecialize x) = astname(x, isexpr(x, :macro))::Union{Symbol,Expr,GlobalRef}
 

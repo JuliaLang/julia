@@ -923,15 +923,22 @@ end
 
 @testset "issue #41221: view(::Vector, :, 1)" begin
     v = randn(3)
-    @test view(v,:,1) == v
-    @test parent(view(v,:,1)) === v
-    @test parent(view(v,2:3,1,1)) === v
+    @test @inferred(view(v,:,1)) == v
+    @test parent(@inferred(view(v,:,1))) === v
+    @test parent(@inferred(view(v,2:3,1,1))) === v
     @test_throws BoundsError view(v,:,2)
     @test_throws BoundsError view(v,:,1,2)
 
     m = randn(4,5).+im
     @test view(m, 1:2, 3, 1, 1) == m[1:2, 3]
     @test parent(view(m, 1:2, 3, 1, 1)) === m
+end
+
+@testset "issue #53209: avoid invalid elimination of singleton indices" begin
+    A = randn(4,5)
+    @test A[CartesianIndices(()), :, 3] == @inferred(view(A, CartesianIndices(()), :, 3))
+    @test parent(@inferred(view(A, :, 3, 1, CartesianIndices(()), 1))) === A
+    @test_throws BoundsError view(A, :, 3, 2, CartesianIndices(()), 1)
 end
 
 @testset "replace_in_print_matrix" begin
@@ -998,4 +1005,29 @@ end
     false
 catch err
     err isa ErrorException && startswith(err.msg, "syntax:")
+end
+
+
+@testset "avoid allocating in reindex" begin
+    a = reshape(1:16, 4, 4)
+    inds = ([2,3], [3,4])
+    av = view(a, inds...)
+    av2 = view(av, 1, 1)
+    @test parentindices(av2) === (2,3)
+    av2 = view(av, 2:2, 2:2)
+    @test parentindices(av2) === (view(inds[1], 2:2), view(inds[2], 2:2))
+
+    inds = (reshape([eachindex(a);], size(a)),)
+    av = view(a, inds...)
+    av2 = view(av, 1, 1)
+    @test parentindices(av2) === (1,)
+    av2 = view(av, 2:2, 2:2)
+    @test parentindices(av2) === (view(inds[1], 2:2, 2:2),)
+
+    inds = (reshape([eachindex(a);], size(a)..., 1),)
+    av = view(a, inds...)
+    av2 = view(av, 1, 1, 1)
+    @test parentindices(av2) === (1,)
+    av2 = view(av, 2:2, 2:2, 1:1)
+    @test parentindices(av2) === (view(inds[1], 2:2, 2:2, 1:1),)
 end

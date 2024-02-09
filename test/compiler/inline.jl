@@ -1005,6 +1005,14 @@ end
         end |> only |> first
         @test count(iscall((src,UnionAll)), src.code) == 0
     end
+    # test >:
+    let src = code_typed((Any,Any)) do x, y
+            x >: y
+        end |> only |> first
+        idx = findfirst(iscall((src,<:)), src.code)
+        @test idx !== nothing
+        @test src.code[idx].args[2:3] == Any[#=y=#Argument(3), #=x=#Argument(2)]
+    end
 end
 
 # have_fma elimination inside ^

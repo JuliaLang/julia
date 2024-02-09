@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+The `InteractiveUtils` module provides utilities for interactive use of Julia,
+such as code introspection and clipboard access.
+It is intended for interactive work and is loaded automatically in interactive mode.
+"""
 module InteractiveUtils
 
 Base.Experimental.@optlevel 1

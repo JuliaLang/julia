@@ -1190,10 +1190,11 @@ function setup_interface(
                 pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
                 if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
                     Pkg = Base.require(pkgid)
+                    REPLExt = Base.get_extension(Pkg, :REPLExt)
                     # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
                     pkg_mode = nothing
                     for mode in repl.interface.modes
-                        if mode isa LineEdit.Prompt && mode.complete isa Pkg.REPLMode.PkgCompletionProvider
+                        if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
                             pkg_mode = mode
                             break
                         end

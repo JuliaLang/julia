@@ -373,6 +373,8 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
+    int last_pure = ct->ptls->in_pure_callback;
+    ct->ptls->in_pure_callback = 0;
     size_t last_age = ct->world_age;
     ct->world_age = jl_typeinf_world;
     mi->inInference = 1;
@@ -409,6 +411,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     }
     ct->world_age = last_age;
     ct->reentrant_timing -= 0b10;
+    ct->ptls->in_pure_callback = last_pure;
     mi->inInference = 0;
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
