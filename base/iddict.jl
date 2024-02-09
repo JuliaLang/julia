@@ -4,11 +4,12 @@
     IdDict([itr])
 
 `IdDict{K,V}()` constructs a hash table using [`objectid`](@ref) as hash and
-`===` as equality with keys of type `K` and values of type `V`.
+`===` as equality with keys of type `K` and values of type `V`. See [`Dict`](@ref)
+for further help and [`IdSet`](@ref) for the set version of this.
 
-See [`Dict`](@ref) for further help. In the example below, The `Dict`
-keys are all `isequal` and therefore get hashed the same, so they get overwritten.
-The `IdDict` hashes by object-id, and thus preserves the 3 different keys.
+In the example below, the `Dict` keys are all `isequal` and therefore get hashed
+the same, so they get overwritten. The `IdDict` hashes by object-id, and thus
+preserves the 3 different keys.
 
 # Examples
 ```julia-repl
