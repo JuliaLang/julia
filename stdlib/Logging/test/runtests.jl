@@ -6,6 +6,10 @@ import Logging: min_enabled_level, shouldlog, handle_message
 
 @noinline func1() = backtrace()
 
+# see "custom log macro" testset
+@create_log_macro CustomLog1 -500 :magenta
+@create_log_macro CustomLog2 1500 1
+
 @testset "Logging" begin
 
 @testset "Core" begin
@@ -257,6 +261,49 @@ end
     \e[36m\e[1m└ \e[22m\e[39m\e[90mSUFFIX\e[39m
     """
 
+end
+
+@testset "exported names" begin
+    m = Module(:ExportedLoggingNames)
+    include_string(m, """
+        using Logging
+        function run()
+            BelowMinLevel === Logging.BelowMinLevel &&
+            Debug === Logging.Debug &&
+            Info === Logging.Info &&
+            Warn === Logging.Warn &&
+            Error === Logging.Error &&
+            AboveMaxLevel === Logging.AboveMaxLevel
+        end
+        """)
+    @test m.run()
+end
+
+@testset "custom log macro" begin
+    llevel = LogLevel(-500)
+
+    @test_logs (llevel, "foo") min_level=llevel @customlog1 "foo"
+
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize=>(30,80), :color=>false)
+    logger = ConsoleLogger(io, llevel)
+
+    with_logger(logger) do
+        @customlog1 "foo"
+    end
+    @test occursin("CustomLog1: foo", String(take!(buf)))
+
+
+    with_logger(logger) do
+        @customlog2 "hello"
+    end
+    @test occursin("CustomLog2: hello", String(take!(buf)))
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Logging)
+    @test_broken isempty(undoc)
+    @test undoc == [:AboveMaxLevel, :BelowMinLevel]
 end
 
 end

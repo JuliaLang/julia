@@ -6,11 +6,12 @@ mutable struct Process <: AbstractPipe
     in::IO
     out::IO
     err::IO
+    syncd::Vector{Task}
     exitcode::Int64
     termsignal::Int32
     exitnotify::ThreadSynchronizer
-    function Process(cmd::Cmd, handle::Ptr{Cvoid})
-        this = new(cmd, handle, devnull, devnull, devnull,
+    function Process(cmd::Cmd, handle::Ptr{Cvoid}, syncd::Vector{Task})
+        this = new(cmd, handle, devnull, devnull, devnull, syncd,
                    typemin(fieldtype(Process, :exitcode)),
                    typemin(fieldtype(Process, :termsignal)),
                    ThreadSynchronizer())
@@ -35,12 +36,25 @@ end
 pipe_reader(p::ProcessChain) = p.out
 pipe_writer(p::ProcessChain) = p.in
 
+# a lightweight pair of a child OS_HANDLE and associated Task that will
+# complete only after all content has been read from it for synchronizing
+# state without the kernel to aide
+struct SyncCloseFD
+    fd
+    t::Task
+end
+rawhandle(io::SyncCloseFD) = rawhandle(io.fd)
+
 # release ownership of the libuv handle
 function uvfinalize(proc::Process)
     if proc.handle != C_NULL
-        disassociate_julia_struct(proc.handle)
-        ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
-        proc.handle = C_NULL
+        iolock_begin()
+        if proc.handle != C_NULL
+            disassociate_julia_struct(proc.handle)
+            ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
+            proc.handle = C_NULL
+        end
+        iolock_end()
     end
     nothing
 end
@@ -52,6 +66,7 @@ function uv_return_spawn(p::Ptr{Cvoid}, exit_status::Int64, termsignal::Int32)
     proc = unsafe_pointer_to_objref(data)::Process
     proc.exitcode = exit_status
     proc.termsignal = termsignal
+    disassociate_julia_struct(proc.handle) # ensure that data field is set to C_NULL
     ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), proc.handle)
     proc.handle = C_NULL
     lock(proc.exitnotify)
@@ -65,61 +80,85 @@ end
 
 # called when the libuv handle is destroyed
 function _uv_hook_close(proc::Process)
-    proc.handle = C_NULL
+    Libc.free(@atomicswap :not_atomic proc.handle = C_NULL)
     nothing
 end
 
-const SpawnIOs = Vector{Any} # convenience name for readability
+const SpawnIO  = Union{IO, RawFD, OS_HANDLE, SyncCloseFD} # internal copy of Redirectable, removing FileRedirect and adding SyncCloseFD
+const SpawnIOs = Memory{SpawnIO} # convenience name for readability (used for dispatch also to clearly distinguish from Vector{Redirectable})
+
+function as_cpumask(cpus::Vector{UInt16})
+    n = max(Int(maximum(cpus)), Int(ccall(:uv_cpumask_size, Cint, ())))
+    cpumask = zeros(Bool, n)
+    for i in cpus
+        cpumask[i] = true
+    end
+    return cpumask
+end
 
 # handle marshalling of `Cmd` arguments from Julia to C
 @noinline function _spawn_primitive(file, cmd::Cmd, stdio::SpawnIOs)
     loop = eventloop()
-    iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
-        let h = rawhandle(io)
-            h === C_NULL     ? (0x00, UInt(0)) :
-            h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
-            h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
-            error("invalid spawn handle $h from $io")
+    cpumask = cmd.cpus
+    cpumask === nothing || (cpumask = as_cpumask(cpumask))
+    GC.@preserve stdio begin
+        iohandles = Tuple{Cint, UInt}[ # assuming little-endian layout
+            let h = rawhandle(io)
+                h === C_NULL     ? (0x00, UInt(0)) :
+                h isa OS_HANDLE  ? (0x02, UInt(cconvert(@static(Sys.iswindows() ? Ptr{Cvoid} : Cint), h))) :
+                h isa Ptr{Cvoid} ? (0x04, UInt(h)) :
+                error("invalid spawn handle $h from $io")
+            end
+            for io in stdio]
+        syncd = Task[io.t for io in stdio if io isa SyncCloseFD]
+        handle = Libc.malloc(_sizeof_uv_process)
+        disassociate_julia_struct(handle)
+        (; exec, flags, env, dir) = cmd
+        iolock_begin()
+        err = ccall(:jl_spawn, Int32,
+                  (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
+                   Ptr{Tuple{Cint, UInt}}, Int,
+                   UInt32, Ptr{Cstring}, Cstring, Ptr{Bool}, Csize_t, Ptr{Cvoid}),
+            file, exec, loop, handle,
+            iohandles, length(iohandles),
+            flags,
+            env === nothing ? C_NULL : env,
+            isempty(dir) ? C_NULL : dir,
+            cpumask === nothing ? C_NULL : cpumask,
+            cpumask === nothing ? 0 : length(cpumask),
+            @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
+        if err == 0
+            pp = Process(cmd, handle, syncd)
+            associate_julia_struct(handle, pp)
+        else
+            ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
         end
-        for io in stdio]
-    handle = Libc.malloc(_sizeof_uv_process)
-    disassociate_julia_struct(handle) # ensure that data field is set to C_NULL
-    err = ccall(:jl_spawn, Int32,
-              (Cstring, Ptr{Cstring}, Ptr{Cvoid}, Ptr{Cvoid},
-               Ptr{Tuple{Cint, UInt}}, Int,
-               UInt32, Ptr{Cstring}, Cstring, Ptr{Cvoid}),
-        file, cmd.exec, loop, handle,
-        iohandles, length(iohandles),
-        cmd.flags,
-        cmd.env === nothing ? C_NULL : cmd.env,
-        isempty(cmd.dir) ? C_NULL : cmd.dir,
-        @cfunction(uv_return_spawn, Cvoid, (Ptr{Cvoid}, Int64, Int32)))
+        iolock_end()
+    end
     if err != 0
-        ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), handle) # will call free on handle eventually
         throw(_UVError("could not spawn " * repr(cmd), err))
     end
-    pp = Process(cmd, handle)
-    associate_julia_struct(handle, pp)
     return pp
 end
 
-_spawn(cmds::AbstractCmd) = _spawn(cmds, Any[])
+_spawn(cmds::AbstractCmd) = _spawn(cmds, SpawnIOs())
+
+function _spawn(cmd::AbstractCmd, stdios::Vector{Redirectable})
+    pp = setup_stdios(stdios) do stdios
+        return _spawn(cmd, stdios)
+    end
+    return pp
+end
 
 # optimization: we can spawn `Cmd` directly without allocating the ProcessChain
 function _spawn(cmd::Cmd, stdios::SpawnIOs)
     isempty(cmd.exec) && throw(ArgumentError("cannot spawn empty command"))
-    pp = setup_stdios(stdios) do stdios
-        return _spawn_primitive(cmd.exec[1], cmd, stdios)
-    end
-    return pp
+    return _spawn_primitive(cmd.exec[1], cmd, stdios)
 end
 
 # assume that having a ProcessChain means that the stdio are setup
 function _spawn(cmds::AbstractCmd, stdios::SpawnIOs)
-    pp = setup_stdios(stdios) do stdios
-        return _spawn(cmds, stdios, ProcessChain())
-    end
-    return pp
+    return _spawn(cmds, stdios, ProcessChain())
 end
 
 # helper function for making a copy of a SpawnIOs, with replacement
@@ -185,9 +224,9 @@ end
 
 
 # open the child end of each element of `stdios`, and initialize the parent end
-function setup_stdios(f, stdios::SpawnIOs)
+function setup_stdios(f, stdios::Vector{Redirectable})
     nstdio = length(stdios)
-    open_io = Vector{Any}(undef, nstdio)
+    open_io = SpawnIOs(undef, nstdio)
     close_io = falses(nstdio)
     try
         for i in 1:nstdio
@@ -209,10 +248,10 @@ function setup_stdio(stdio::PipeEndpoint, child_readable::Bool)
         rd, wr = link_pipe(!child_readable, child_readable)
         try
             open_pipe!(stdio, child_readable ? wr : rd)
-        catch ex
+        catch
             close_pipe_sync(rd)
             close_pipe_sync(wr)
-            rethrow(ex)
+            rethrow()
         end
         child = child_readable ? rd : wr
         return (child, true)
@@ -251,46 +290,43 @@ function setup_stdio(stdio::FileRedirect, child_readable::Bool)
     return (io, true)
 end
 
-# incrementally move data between an IOBuffer and a system Pipe
+# incrementally move data between an arbitrary IO and a system Pipe,
+# including copying the EOF (shutdown) when finished
 # TODO: probably more efficient (when valid) to use `stdio` directly as the
 #       PipeEndpoint buffer field in some cases
-function setup_stdio(stdio::Union{IOBuffer, BufferStream}, child_readable::Bool)
+function setup_stdio(stdio::IO, child_readable::Bool)
     parent = PipeEndpoint()
     rd, wr = link_pipe(!child_readable, child_readable)
     try
         open_pipe!(parent, child_readable ? wr : rd)
-    catch ex
+    catch
         close_pipe_sync(rd)
         close_pipe_sync(wr)
-        rethrow(ex)
+        rethrow()
     end
     child = child_readable ? rd : wr
     try
         let in = (child_readable ? parent : stdio),
-            out = (child_readable ? stdio : parent)
-            @async try
+            out = (child_readable ? stdio : parent),
+            t = @async try
                 write(in, out)
             catch ex
-                @warn "Process error" exception=(ex, catch_backtrace())
+                @warn "Process I/O error" exception=(ex, catch_backtrace())
+                rethrow()
             finally
                 close(parent)
             end
+            return (SyncCloseFD(child, t), true)
         end
-    catch ex
+    catch
         close_pipe_sync(child)
-        rethrow(ex)
+        rethrow()
     end
-    return (child, true)
 end
 
-function setup_stdio(io, child_readable::Bool)
-    # if there is no specialization,
-    # assume that rawhandle is defined for it
-    return (io, false)
-end
-
-close_stdio(stdio::OS_HANDLE) = close_pipe_sync(stdio)
 close_stdio(stdio) = close(stdio)
+close_stdio(stdio::OS_HANDLE) = close_pipe_sync(stdio)
+close_stdio(stdio::SyncCloseFD) = close_stdio(stdio.fd)
 
 # INTERNAL
 # pad out stdio to have at least three elements,
@@ -302,19 +338,19 @@ close_stdio(stdio) = close(stdio)
 #   - An Filesystem.File or IOStream object to redirect the output to
 #   - A FileRedirect, containing a string specifying a filename to be opened for the child
 
-spawn_opts_swallow(stdios::StdIOSet) = Any[stdios...]
-spawn_opts_inherit(stdios::StdIOSet) = Any[stdios...]
+spawn_opts_swallow(stdios::StdIOSet) = Redirectable[stdios...]
+spawn_opts_inherit(stdios::StdIOSet) = Redirectable[stdios...]
 spawn_opts_swallow(in::Redirectable=devnull, out::Redirectable=devnull, err::Redirectable=devnull) =
-    Any[in, out, err]
+    Redirectable[in, out, err]
 # pass original descriptors to child processes by default, because we might
 # have already exhausted and closed the libuv object for our standard streams.
 # ref issue #8529
 spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::Redirectable=RawFD(2)) =
-    Any[in, out, err]
+    Redirectable[in, out, err]
 
 function eachline(cmd::AbstractCmd; keep::Bool=false)
     out = PipeEndpoint()
-    processes = _spawn(cmd, Any[devnull, out, stderr])
+    processes = _spawn(cmd, Redirectable[devnull, out, stderr])
     # if the user consumes all the data, also check process exit status for success
     ondone = () -> (success(processes) || pipeline_error(processes); nothing)
     return EachLine(out, keep=keep, ondone=ondone)::EachLine
@@ -362,20 +398,20 @@ function open(cmds::AbstractCmd, stdio::Redirectable=devnull; write::Bool=false,
         stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in read-write mode"))
         in = PipeEndpoint()
         out = PipeEndpoint()
-        processes = _spawn(cmds, Any[in, out, stderr])
+        processes = _spawn(cmds, Redirectable[in, out, stderr])
         processes.in = in
         processes.out = out
     elseif read
         out = PipeEndpoint()
-        processes = _spawn(cmds, Any[stdio, out, stderr])
+        processes = _spawn(cmds, Redirectable[stdio, out, stderr])
         processes.out = out
     elseif write
         in = PipeEndpoint()
-        processes = _spawn(cmds, Any[in, stdio, stderr])
+        processes = _spawn(cmds, Redirectable[in, stdio, stderr])
         processes.in = in
     else
         stdio === devnull || throw(ArgumentError("no stream can be specified for `stdio` in no-access mode"))
-        processes = _spawn(cmds, Any[devnull, devnull, stderr])
+        processes = _spawn(cmds, Redirectable[devnull, devnull, stderr])
     end
     return processes
 end
@@ -383,20 +419,53 @@ end
 """
     open(f::Function, command, args...; kwargs...)
 
-Similar to `open(command, args...; kwargs...)`, but calls `f(stream)` on the resulting process
-stream, then closes the input stream and waits for the process to complete.
-Returns the value returned by `f`.
+Similar to `open(command, args...; kwargs...)`, but calls `f(stream)` on the
+resulting process stream, then closes the input stream and waits for the process
+to complete. Return the value returned by `f` on success. Throw an error if the
+process failed, or if the process attempts to print anything to stdout.
 """
 function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
     P = open(cmds, args...; kwargs...)
+    function waitkill(P::Union{Process,ProcessChain})
+        close(P)
+        # shortly after we hope it starts cleanup and dies (from closing
+        # stdio), we kill the process with SIGTERM (15) so that we can proceed
+        # with throwing the error and hope it will exit soon from that
+        local t = Timer(2) do t
+            process_running(P) && kill(P)
+        end
+        # pass false to indicate that we do not care about data-races on the
+        # Julia stdio objects after this point, since we already know this is
+        # an error path and the state of them is fairly unpredictable anyways
+        # in that case. Since we closed P some of those should come crumbling
+        # down already, and we don't want to throw that error here either.
+        wait(P, false)
+        close(t)
+    end
     ret = try
         f(P)
     catch
-        kill(P)
+        waitkill(P)
         rethrow()
-    finally
-        close(P.in)
     end
+    close(P.in)
+    closestdio = @async begin
+        # wait for P to complete (including sync'd), then mark the output streams for EOF (if applicable to that stream type)
+        wait(P)
+        err = P.err
+        applicable(closewrite, err) && closewrite(err)
+        out = P.out
+        applicable(closewrite, out) && closewrite(out)
+        nothing
+    end
+    # now verify that the output stream is at EOF, and the user didn't fail to consume it successfully
+    # (we do not currently verify the user dealt with the stderr stream)
+    if !(eof(P.out)::Bool)
+        waitkill(P)
+        throw(_UVError("open(do)", UV_EPIPE))
+    end
+    # make sure to closestdio is completely done to avoid data-races later
+    wait(closestdio)
     success(P) || pipeline_error(P)
     return ret
 end
@@ -410,7 +479,7 @@ function read(cmd::AbstractCmd)
     procs = open(cmd, "r", devnull)
     bytes = read(procs.out)
     success(procs) || pipeline_error(procs)
-    return bytes
+    return bytes::Vector{UInt8}
 end
 
 """
@@ -426,6 +495,9 @@ read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))::String
 Run a command object, constructed with backticks (see the [Running External Programs](@ref)
 section in the manual). Throws an error if anything goes wrong, including the process
 exiting with a non-zero status (when `wait` is true).
+
+The `args...` allow you to pass through file descriptors to the command, and are ordered
+like regular unix file descriptors (eg `stdin, stdout, stderr, FD(3), FD(4)...`).
 
 If `wait` is false, the process runs asynchronously. You can later wait for it and check
 its exit status by calling `success` on the returned process object.
@@ -570,10 +642,10 @@ Get the child process ID, if it still exists.
     This function requires at least Julia 1.1.
 """
 function Libc.getpid(p::Process)
-    # TODO: due to threading, this method is no longer synchronized with the user application
+    # TODO: due to threading, this method is only weakly synchronized with the user application
     iolock_begin()
     ppid = Int32(0)
-    if p.handle != C_NULL
+    if p.handle != C_NULL # e.g. process_running
         ppid = ccall(:jl_uv_process_pid, Int32, (Ptr{Cvoid},), p.handle)
     end
     iolock_end()
@@ -610,26 +682,31 @@ function process_status(s::Process)
            error("process status error")
 end
 
-function wait(x::Process)
-    process_exited(x) && return
-    iolock_begin()
+function wait(x::Process, syncd::Bool=true)
     if !process_exited(x)
-        preserve_handle(x)
-        lock(x.exitnotify)
-        iolock_end()
-        try
-            wait(x.exitnotify)
-        finally
-            unlock(x.exitnotify)
-            unpreserve_handle(x)
+        iolock_begin()
+        if !process_exited(x)
+            preserve_handle(x)
+            lock(x.exitnotify)
+            iolock_end()
+            try
+                wait(x.exitnotify)
+            finally
+                unlock(x.exitnotify)
+                unpreserve_handle(x)
+            end
+        else
+            iolock_end()
         end
-    else
-        iolock_end()
+    end
+    # and make sure all sync'd Tasks are complete too
+    syncd && for t in x.syncd
+        wait(t)
     end
     nothing
 end
 
-wait(x::ProcessChain) = foreach(wait, x.processes)
+wait(x::ProcessChain, syncd::Bool=true) = foreach(p -> wait(p, syncd), x.processes)
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 
@@ -637,6 +714,7 @@ show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p),
 for f in (:length, :firstindex, :lastindex, :keys, :first, :last, :iterate)
     @eval $f(cmd::Cmd) = $f(cmd.exec)
 end
+Iterators.reverse(cmd::Cmd) = Iterators.reverse(cmd.exec)
 eltype(::Type{Cmd}) = eltype(fieldtype(Cmd, :exec))
 for f in (:iterate, :getindex)
     @eval $f(cmd::Cmd, i) = $f(cmd.exec, i)

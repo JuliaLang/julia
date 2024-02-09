@@ -13,67 +13,77 @@
 static void **HTNAME##_lookup_bp_r(htable_t *h, void *key, void *ctx)   \
 {                                                                       \
     uint_t hv;                                                          \
-    size_t i, orig, index, iter;                                        \
+    size_t i, orig, index, iter, empty_slot;                            \
     size_t newsz, sz = hash_size(h);                                    \
     size_t maxprobe = max_probe(sz);                                    \
     void **tab = h->table;                                              \
     void **ol;                                                          \
                                                                         \
     hv = HFUNC((uintptr_t)key, ctx);                                    \
- retry_bp:                                                              \
-    iter = 0;                                                           \
-    index = (size_t)(hv & (sz-1)) * 2;                                  \
-    sz *= 2;                                                            \
-    orig = index;                                                       \
+    while (1) {                                                         \
+        iter = 0;                                                       \
+        index = (size_t)(hv & (sz-1)) * 2;                              \
+        sz *= 2;                                                        \
+        orig = index;                                                   \
+        empty_slot = -1;                                                \
                                                                         \
-    do {                                                                \
-        if (tab[index+1] == HT_NOTFOUND) {                              \
-            tab[index] = key;                                           \
-            return &tab[index+1];                                       \
+        do {                                                            \
+            if (tab[index] == HT_NOTFOUND) {                            \
+                if (empty_slot == -1)                                   \
+                    empty_slot = index;                                 \
+                break;                                                  \
+            }                                                           \
+            if (tab[index+1] == HT_NOTFOUND) {                          \
+                if (empty_slot == -1)                                   \
+                    empty_slot = index;                                 \
+            }                                                           \
+                                                                        \
+            if (EQFUNC(key, tab[index], ctx))                           \
+                return &tab[index+1];                                   \
+                                                                        \
+            index = (index+2) & (sz-1);                                 \
+            iter++;                                                     \
+            if (iter > maxprobe)                                        \
+                break;                                                  \
+        } while (index != orig);                                        \
+                                                                        \
+        if (empty_slot != -1) {                                         \
+            tab[empty_slot] = key;                                      \
+            return &tab[empty_slot+1];                                  \
         }                                                               \
                                                                         \
-        if (EQFUNC(key, tab[index], ctx))                               \
-            return &tab[index+1];                                       \
-                                                                        \
-        index = (index+2) & (sz-1);                                     \
-        iter++;                                                         \
-        if (iter > maxprobe)                                            \
-            break;                                                      \
-    } while (index != orig);                                            \
-                                                                        \
-    /* table full */                                                    \
-    /* quadruple size, rehash, retry the insert */                      \
-    /* it's important to grow the table really fast; otherwise we waste */ \
-    /* lots of time rehashing all the keys over and over. */            \
-    sz = h->size;                                                       \
-    ol = h->table;                                                      \
-    if (sz < HT_N_INLINE)                                              \
-        newsz = HT_N_INLINE;                                            \
-    else if (sz >= (1<<19) || (sz <= (1<<8)))                           \
-        newsz = sz<<1;                                                  \
-    else                                                                \
-        newsz = sz<<2;                                                  \
-    /*printf("trying to allocate %d words.\n", newsz); fflush(stdout);*/ \
-    tab = (void**)LLT_ALLOC(newsz*sizeof(void*));                       \
-    if (tab == NULL)                                                    \
-        return NULL;                                                    \
-    for(i=0; i < newsz; i++)                                            \
-        tab[i] = HT_NOTFOUND;                                           \
-    h->table = tab;                                                     \
-    h->size = newsz;                                                    \
-    for(i=0; i < sz; i+=2) {                                            \
-        if (ol[i+1] != HT_NOTFOUND) {                                   \
-            (*HTNAME##_lookup_bp_r(h, ol[i], ctx)) = ol[i+1];           \
+        /* table full */                                                \
+        /* quadruple size, rehash, retry the insert */                  \
+        /* it's important to grow the table really fast; otherwise we waste */ \
+        /* lots of time rehashing all the keys over and over. */        \
+        sz = h->size;                                                   \
+        ol = h->table;                                                  \
+        if (sz < HT_N_INLINE)                                           \
+            newsz = HT_N_INLINE;                                        \
+        else if (sz >= (1<<19) || (sz <= (1<<8)))                       \
+            newsz = sz<<1;                                              \
+        else                                                            \
+            newsz = sz<<2;                                              \
+        /*printf("trying to allocate %d words.\n", newsz); fflush(stdout);*/ \
+        tab = (void**)LLT_ALLOC(newsz*sizeof(void*));                   \
+        if (tab == NULL)                                                \
+            return NULL;                                                \
+        for (i = 0; i < newsz; i++)                                     \
+            tab[i] = HT_NOTFOUND;                                       \
+        h->table = tab;                                                 \
+        h->size = newsz;                                                \
+        for (i = 0; i < sz; i += 2) {                                   \
+            if (ol[i+1] != HT_NOTFOUND) {                               \
+                (*HTNAME##_lookup_bp_r(h, ol[i], ctx)) = ol[i+1];       \
+            }                                                           \
         }                                                               \
+        if (ol != &h->_space[0])                                        \
+            LLT_FREE(ol);                                               \
+                                                                        \
+        sz = hash_size(h);                                              \
+        maxprobe = max_probe(sz);                                       \
+        tab = h->table;                                                 \
     }                                                                   \
-    if (ol != &h->_space[0])                                            \
-        LLT_FREE(ol);                                                   \
-                                                                        \
-    sz = hash_size(h);                                                  \
-    maxprobe = max_probe(sz);                                           \
-    tab = h->table;                                                     \
-                                                                        \
-    goto retry_bp;                                                      \
                                                                         \
     return NULL;                                                        \
 }                                                                       \

@@ -4,7 +4,19 @@
 
 const shell_special = "#{}()[]<>|&*?~;"
 
-# strips the end but respects the space when the string ends with "\\ "
+@doc raw"""
+    rstrip_shell(s::AbstractString)
+
+Strip trailing whitespace from a shell command string, while respecting a trailing backslash followed by a space ("\\ ").
+
+```jldoctest
+julia> Base.rstrip_shell("echo 'Hello World' \\ ")
+"echo 'Hello World' \\ "
+
+julia> Base.rstrip_shell("echo 'Hello World'    ")
+"echo 'Hello World'"
+```
+""" ->
 function rstrip_shell(s::AbstractString)
     c_old = nothing
     for (i, c) in Iterators.reverse(pairs(s))
@@ -18,12 +30,11 @@ end
 
 function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="", filename="none")
-    s = SubString(str, firstindex(str))
+    last_arg = firstindex(str) # N.B.: This is used by REPLCompletions
+    s = SubString(str, last_arg)
     s = rstrip_shell(lstrip(s))
 
-    # N.B.: This is used by REPLCompletions
-    last_parse = 0:-1
-    isempty(s) && return interpolate ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
+    isempty(s) && return interpolate ? (Expr(:tuple,:()), last_arg) : ([], last_arg)
 
     in_single_quotes = false
     in_double_quotes = false
@@ -32,6 +43,7 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     arg = []
     i = firstindex(s)
     st = Iterators.Stateful(pairs(s))
+    update_last_arg = false # true after spaces or interpolate
 
     function push_nonempty!(list, x)
         if !isa(x,AbstractString) || !isempty(x)
@@ -49,22 +61,25 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
         empty!(innerlist)
     end
 
+    C = eltype(str)
+    P = Pair{Int,C}
     for (j, c) in st
-        j, c = j::Int, c::eltype(str)
+        j, c = j::Int, c::C
         if !in_single_quotes && !in_double_quotes && isspace(c)
+            update_last_arg = true
             i = consume_upto!(arg, s, i, j)
             append_2to1!(args, arg)
             while !isempty(st)
                 # We've made sure above that we don't end in whitespace,
                 # so updating `i` here is ok
-                (i, c) = peek(st)::Pair{Int,eltype(str)}
+                (i, c) = peek(st)::P
                 isspace(c) || break
                 popfirst!(st)
             end
         elseif interpolate && !in_single_quotes && c == '$'
             i = consume_upto!(arg, s, i, j)
             isempty(st) && error("\$ right before end of command")
-            stpos, c = popfirst!(st)::Pair{Int,eltype(str)}
+            stpos, c = popfirst!(st)::P
             isspace(c) && error("space not allowed right after \$")
             if startswith(SubString(s, stpos), "var\"")
                 # Disallow var"#" syntax in cmd interpolations.
@@ -75,27 +90,42 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                 # use parseatom instead of parse to respect filename (#28188)
                 ex, j = Meta.parseatom(s, stpos, filename=filename)
             end
-            last_parse = (stpos:prevind(s, j)) .+ s.offset
-            push_nonempty!(arg, ex)
+            last_arg = stpos + s.offset
+            update_last_arg = true
+            push!(arg, ex)
             s = SubString(s, j)
             Iterators.reset!(st, pairs(s))
             i = firstindex(s)
         else
+            if update_last_arg
+                last_arg = i + s.offset
+                update_last_arg = false
+            end
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes
                 i = consume_upto!(arg, s, i, j)
             elseif !in_single_quotes && c == '"'
                 in_double_quotes = !in_double_quotes
                 i = consume_upto!(arg, s, i, j)
-            elseif c == '\\'
-                if in_double_quotes
+            elseif !in_single_quotes && c == '\\'
+                if !isempty(st) && (peek(st)::P)[2] in ('\n', '\r')
+                    i = consume_upto!(arg, s, i, j) + 1
+                    if popfirst!(st)[2] == '\r' && (peek(st)::P)[2] == '\n'
+                        i += 1
+                        popfirst!(st)
+                    end
+                    while !isempty(st) && (peek(st)::P)[2] in (' ', '\t')
+                        i = nextind(str, i)
+                        _ = popfirst!(st)
+                    end
+                elseif in_double_quotes
                     isempty(st) && error("unterminated double quote")
-                    k, c′ = peek(st)
+                    k, c′ = peek(st)::P
                     if c′ == '"' || c′ == '$' || c′ == '\\'
                         i = consume_upto!(arg, s, i, j)
                         _ = popfirst!(st)
                     end
-                elseif !in_single_quotes
+                else
                     isempty(st) && error("dangling backslash")
                     i = consume_upto!(arg, s, i, j)
                     _ = popfirst!(st)
@@ -112,16 +142,31 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
     push_nonempty!(arg, s[i:end])
     append_2to1!(args, arg)
 
-    interpolate || return args, last_parse
+    interpolate || return args, last_arg
 
     # construct an expression
     ex = Expr(:tuple)
     for arg in args
         push!(ex.args, Expr(:tuple, arg...))
     end
-    return ex, last_parse
+    return ex, last_arg
 end
 
+"""
+    shell_split(command::AbstractString)
+
+Split a shell command string into its individual components.
+
+# Examples
+```jldoctest
+julia> Base.shell_split("git commit -m 'Initial commit'")
+4-element Vector{String}:
+ "git"
+ "commit"
+ "-m"
+ "Initial commit"
+```
+"""
 function shell_split(s::AbstractString)
     parsed = shell_parse(s, false)[1]
     args = String[]
@@ -199,12 +244,12 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         first || print(io, ' ')
         # avoid printing quotes around simple enough strings
         # that any (reasonable) shell will definitely never consider them to be special
-        have_single = false
-        have_double = false
+        have_single::Bool = false
+        have_double::Bool = false
         function isword(c::AbstractChar)
             if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
                 # word characters
-            elseif c == '_' || c == '/' || c == '+' || c == '-'
+            elseif c == '_' || c == '/' || c == '+' || c == '-' || c == '.'
                 # other common characters
             elseif c == '\''
                 have_single = true
@@ -251,6 +296,53 @@ julia> Base.shell_escape_posixly("echo", "this", "&&", "that")
 shell_escape_posixly(args::AbstractString...) =
     sprint(print_shell_escaped_posixly, args...)
 
+"""
+    shell_escape_csh(args::Union{Cmd,AbstractString...})
+    shell_escape_csh(io::IO, args::Union{Cmd,AbstractString...})
+
+This function quotes any metacharacters in the string arguments such
+that the string returned can be inserted into a command-line for
+interpretation by the Unix C shell (csh, tcsh), where each string
+argument will form one word.
+
+In contrast to a POSIX shell, csh does not support the use of the
+backslash as a general escape character in double-quoted strings.
+Therefore, this function wraps strings that might contain
+metacharacters in single quotes, except for parts that contain single
+quotes, which it wraps in double quotes instead. It switches between
+these types of quotes as needed. Linefeed characters are escaped with
+a backslash.
+
+This function should also work for a POSIX shell, except if the input
+string contains a linefeed (`"\\n"`) character.
+
+See also: [`shell_escape_posixly`](@ref)
+"""
+function shell_escape_csh(io::IO, args::AbstractString...)
+    first = true
+    for arg in args
+        first || write(io, ' ')
+        first = false
+        i = 1
+        while true
+            for (r,e) = (r"^[A-Za-z0-9/\._-]+\z"sa => "",
+                         r"^[^']*\z"sa => "'", r"^[^\$\`\"]*\z"sa => "\"",
+                         r"^[^']+"sa  => "'", r"^[^\$\`\"]+"sa  => "\"")
+                if ((m = match(r, SubString(arg, i))) !== nothing)
+                    write(io, e)
+                    write(io, replace(m.match, '\n' => "\\\n"))
+                    write(io, e)
+                    i += ncodeunits(m.match)
+                    break
+                end
+            end
+            i <= lastindex(arg) || break
+        end
+    end
+end
+shell_escape_csh(args::AbstractString...) =
+    sprint(shell_escape_csh, args...;
+           sizehint = sum(sizeof.(args)) + length(args) * 3)
 
 """
     shell_escape_wincmd(s::AbstractString)
@@ -285,11 +377,11 @@ This function may be useful in concert with the `windows_verbatim` flag to
 
 ```julia
 wincmd(c::String) =
-   run(Cmd(Cmd(["cmd.exe", "/s /c \" \$c \""]);
+   run(Cmd(Cmd(["cmd.exe", "/s /c \\" \$c \\""]);
            windows_verbatim=true))
 wincmd_echo(s::String) =
    wincmd("echo " * Base.shell_escape_wincmd(s))
-wincmd_echo("hello \$(ENV["USERNAME"]) & the \"whole\" world! (=^I^=)")
+wincmd_echo("hello \$(ENV["USERNAME"]) & the \\"whole\\" world! (=^I^=)")
 ```
 
 But take note that if the input string `s` contains a `%`, the argument list
@@ -302,12 +394,12 @@ cmdargs = Base.shell_escape_wincmd("Passing args with %cmdargs% works 100%!")
 run(setenv(`cmd /C echo %cmdargs%`, "cmdargs" => cmdargs))
 ```
 
-!warning
+!!! warning
     The argument parsing done by CMD when calling batch files (either inside
     `.bat` files or as arguments to them) is not fully compatible with the
     output of this function. In particular, the processing of `%` is different.
 
-!important
+!!! important
     Due to a peculiar behavior of the CMD parser/interpreter, each command
     after a literal `|` character (indicating a command pipeline) must have
     `shell_escape_wincmd` applied twice since it will be parsed twice by CMD.
@@ -316,13 +408,13 @@ run(setenv(`cmd /C echo %cmdargs%`, "cmdargs" => cmdargs))
     ```julia
     to_print = "All for 1 & 1 for all!"
     to_print_esc = Base.shell_escape_wincmd(Base.shell_escape_wincmd(to_print))
-    run(Cmd(Cmd(["cmd", "/S /C \" break | echo \$(to_print_esc) \""]), windows_verbatim=true))
+    run(Cmd(Cmd(["cmd", "/S /C \\" break | echo \$(to_print_esc) \\""]), windows_verbatim=true))
     ```
 
 With an I/O stream parameter `io`, the result will be written there,
 rather than returned as a string.
 
-See also: [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref)
+See also [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref).
 
 # Example
 ```jldoctest
@@ -332,7 +424,7 @@ julia> Base.shell_escape_wincmd("a^\\"^o\\"^u\\"")
 """
 function shell_escape_wincmd(io::IO, s::AbstractString)
     # https://stackoverflow.com/a/4095133/1990689
-    occursin(r"[\r\n\0]", s) &&
+    occursin(r"[\r\n\0]"sa, s) &&
         throw(ArgumentError("control character unsupported by CMD.EXE"))
     i = 1
     len = ncodeunits(s)
@@ -376,7 +468,7 @@ It joins command-line arguments to be passed to a Windows
 C/C++/Julia application into a command line, escaping or quoting the
 meta characters space, TAB, double quote and backslash where needed.
 
-See also: [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref)
+See also [`shell_escape_wincmd`](@ref), [`escape_raw_string`](@ref).
 """
 function escape_microsoft_c_args(io::IO, args::AbstractString...)
     # http://daviddeley.com/autohotkey/parameters/parameters.htm#WINCRULES
@@ -387,7 +479,7 @@ function escape_microsoft_c_args(io::IO, args::AbstractString...)
         else
             write(io, ' ')  # separator
         end
-        if isempty(arg) || occursin(r"[ \t\"]", arg)
+        if isempty(arg) || occursin(r"[ \t\"]"sa, arg)
             # Julia raw strings happen to use the same escaping convention
             # as the argv[] parser in Microsoft's C runtime library.
             write(io, '"')

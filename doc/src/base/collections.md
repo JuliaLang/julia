@@ -36,15 +36,15 @@ Fully implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `Number`
+  * [`Tuple`](@ref)
+  * [`Number`](@ref)
   * [`AbstractArray`](@ref)
   * [`BitSet`](@ref)
   * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
   * `EachLine`
-  * `AbstractString`
+  * [`AbstractString`](@ref)
   * [`Set`](@ref)
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
@@ -64,22 +64,24 @@ Base.LinRange
 
 ```@docs
 Base.isempty
+Base.isdone
 Base.empty!
 Base.length
+Base.checked_length
 ```
 
 Fully implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `Number`
+  * [`Tuple`](@ref)
+  * [`Number`](@ref)
   * [`AbstractArray`](@ref)
   * [`BitSet`](@ref)
   * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
-  * `AbstractString`
+  * [`AbstractString`](@ref)
   * [`Set`](@ref)
   * [`NamedTuple`](@ref)
 
@@ -88,12 +90,15 @@ Fully implemented by:
 ```@docs
 Base.in
 Base.:∉
+Base.hasfastin
 Base.eltype
 Base.indexin
 Base.unique
 Base.unique!
 Base.allunique
+Base.allequal
 Base.reduce(::Any, ::Any)
+Base.reduce(::Any, ::AbstractArray)
 Base.foldl(::Any, ::Any)
 Base.foldr(::Any, ::Any)
 Base.maximum
@@ -101,6 +106,7 @@ Base.maximum!
 Base.minimum
 Base.minimum!
 Base.extrema
+Base.extrema!
 Base.argmax
 Base.argmin
 Base.findmax
@@ -118,8 +124,6 @@ Base.all(::Any)
 Base.all(::AbstractArray, ::Any)
 Base.all!
 Base.count
-Base.any(::Any, ::Any)
-Base.all(::Any, ::Any)
 Base.foreach
 Base.map
 Base.map!
@@ -139,6 +143,7 @@ Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
 Base.rest
+Base.split_rest
 ```
 
 ## Indexable Collections
@@ -161,8 +166,8 @@ Partially implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `AbstractString`
+  * [`Tuple`](@ref)
+  * [`AbstractString`](@ref)
   * [`Dict`](@ref)
   * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
@@ -199,6 +204,7 @@ Base.Dict
 Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
+Base.PersistentDict
 Base.haskey
 Base.get
 Base.get!
@@ -231,6 +237,7 @@ Partially implemented by:
   * [`Array`](@ref)
   * [`BitArray`](@ref)
   * [`ImmutableDict`](@ref Base.ImmutableDict)
+  * [`PersistentDict`](@ref Base.PersistentDict)
   * [`Iterators.Pairs`](@ref)
 
 ## Set-Like Collections
@@ -248,6 +255,7 @@ Base.symdiff
 Base.symdiff!
 Base.intersect!
 Base.issubset
+Base.in!
 Base.:⊈
 Base.:⊊
 Base.issetequal
@@ -273,6 +281,7 @@ Base.pushfirst!
 Base.popfirst!
 Base.insert!
 Base.deleteat!
+Base.keepat!
 Base.splice!
 Base.resize!
 Base.append!

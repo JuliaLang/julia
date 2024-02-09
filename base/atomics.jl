@@ -20,7 +20,7 @@ export
 # - LLVM doesn't currently support atomics on floats for ppc64
 #   C++20 is adding limited support for atomics on float, but as of
 #   now Clang does not support that yet.
-if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
+if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
    Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     const inttypes = (Int8, Int16, Int32, Int64,
                       UInt8, UInt16, UInt32, UInt64)
@@ -79,6 +79,13 @@ mutable struct Atomic{T<:AtomicTypes}
 end
 
 Atomic() = Atomic{Int}()
+
+const LOCK_PROFILING = Atomic{Int}(0)
+lock_profiling(state::Bool) = state ? atomic_add!(LOCK_PROFILING, 1) : atomic_sub!(LOCK_PROFILING, 1)
+lock_profiling() = LOCK_PROFILING[] > 0
+
+const LOCK_CONFLICT_COUNT = Atomic{Int}(0);
+inc_lock_conflict_count() = atomic_add!(LOCK_CONFLICT_COUNT, 1)
 
 """
     Threads.atomic_cas!(x::Atomic{T}, cmp::T, newval::T) where T
@@ -356,13 +363,13 @@ for typ in atomictypes
     rt = "$lt, $lt*"
     irt = "$ilt, $ilt*"
     @eval getindex(x::Atomic{$typ}) =
-        llvmcall($"""
+        GC.@preserve x llvmcall($"""
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                  %rv = load atomic $rt %ptr acquire, align $(gc_alignment(typ))
                  ret $lt %rv
                  """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
     @eval setindex!(x::Atomic{$typ}, v::$typ) =
-        llvmcall($"""
+        GC.@preserve x llvmcall($"""
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                  store atomic $lt %1, $lt* %ptr release, align $(gc_alignment(typ))
                  ret void
@@ -371,7 +378,7 @@ for typ in atomictypes
     # Note: atomic_cas! succeeded (i.e. it stored "new") if and only if the result is "cmp"
     if typ <: Integer
         @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-            llvmcall($"""
+            GC.@preserve x llvmcall($"""
                      %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                      %rs = cmpxchg $lt* %ptr, $lt %1, $lt %2 acq_rel acquire
                      %rv = extractvalue { $lt, i1 } %rs, 0
@@ -380,7 +387,7 @@ for typ in atomictypes
                      unsafe_convert(Ptr{$typ}, x), cmp, new)
     else
         @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-            llvmcall($"""
+            GC.@preserve x llvmcall($"""
                      %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
                      %icmp = bitcast $lt %1 to $ilt
                      %inew = bitcast $lt %2 to $ilt
@@ -403,7 +410,7 @@ for typ in atomictypes
         if rmwop in arithmetic_ops && !(typ <: ArithmeticTypes) continue end
         if typ <: Integer
             @eval $fn(x::Atomic{$typ}, v::$typ) =
-                llvmcall($"""
+                GC.@preserve x llvmcall($"""
                          %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                          %rv = atomicrmw $rmw $lt* %ptr, $lt %1 acq_rel
                          ret $lt %rv
@@ -411,7 +418,7 @@ for typ in atomictypes
         else
             rmwop === :xchg || continue
             @eval $fn(x::Atomic{$typ}, v::$typ) =
-                llvmcall($"""
+                GC.@preserve x llvmcall($"""
                          %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
                          %ival = bitcast $lt %1 to $ilt
                          %irv = atomicrmw $rmw $ilt* %iptr, $ilt %ival acq_rel

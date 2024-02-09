@@ -22,6 +22,7 @@ using Dates
         @test isa(Set(sin(x) for x = 1:3), Set{Float64})
         @test isa(Set(f17741(x) for x = 1:3), Set{Int})
         @test isa(Set(f17741(x) for x = -1:1), Set{Integer})
+        @test isa(Set(f17741(x) for x = 1:0), Set{Integer})
     end
     let s1 = Set(["foo", "bar"]), s2 = Set(s1)
         @test s1 == s2
@@ -114,7 +115,7 @@ end
     @test in(2,s)
     @test length(s) == 2
     @test_throws KeyError pop!(s,1)
-    @test pop!(s,1,:foo) == :foo
+    @test pop!(s,1,:foo) === :foo
     @test length(delete!(s,2)) == 1
     @test !in(1,s)
     @test !in(2,s)
@@ -123,7 +124,40 @@ end
     @test isempty(s)
     @test_throws ArgumentError pop!(s)
     @test length(Set(['x',120])) == 2
+
+    # Test that pop! returns the element in the set, not the query
+    s = Set{Any}(Any[0x01, UInt(2), 3, 4.0])
+    @test pop!(s, 1) === 0x01
+    @test pop!(s, 2) === UInt(2)
+    @test pop!(s, 3) === 3
+    @test pop!(s, 4) === 4.0
+    @test_throws KeyError pop!(s, 5)
 end
+
+@testset "in!" begin
+    s = Set()
+    @test !(in!(0x01, s))
+    @test !(in!(Int32(2), s))
+    @test in!(1, s)
+    @test in!(2.0, s)
+    (a, b, c...) = sort!(collect(s))
+    @test a === 0x01
+    @test b === Int32(2)
+    @test isempty(c)
+
+    # in! will convert to the right type automatically
+    s = Set{Int32}()
+    @test !(in!(1, s))
+    @test only(s) === Int32(1)
+    @test_throws Exception in!("hello", s)
+
+    # Other set types
+    s = BitSet()
+    @test !(in!(13, s))
+    @test in!(UInt16(13), s)
+    @test only(s) === 13
+end
+
 @testset "copy" begin
     data_in = (1,2,9,8,4)
     s = Set(data_in)
@@ -138,6 +172,10 @@ end
     @test !in(200,s)
 end
 
+@testset "copy(::KeySet) (issue #41537)" begin
+    @test union(keys(Dict(1=>2, 3=>4))) == copy(keys(Dict(1=>2, 3=>4))) == Set([1,3])
+end
+
 @testset "copy!" begin
     for S = (Set, BitSet)
         s = S([1, 2])
@@ -146,6 +184,9 @@ end
             @test s === copy!(s, BitSet(a)) == S(a)
         end
     end
+    s = Set([1, 2])
+    s2 = copy(s)
+    @test copy!(s, s) == s2
 end
 
 @testset "sizehint, empty" begin
@@ -156,6 +197,19 @@ end
     sizehint!(s2, 10)
     @test s2 == GenericSet(s)
 end
+
+@testset "shrinking" begin # Similar test as for the underlying Dict
+    d = Set(i for i = 1:1000)
+    filter!(x -> x < 10, d)
+    sizehint!(d, 10)
+    @test length(d.dict.slots) < 100
+    sizehint!(d, 1000)
+    sizehint!(d, 1; shrink = false)
+    @test length(d.dict.slots) >= 1000
+    sizehint!(d, 1; shrink = true)
+    @test length(d.dict.slots) < 1000
+end
+
 @testset "rehash!" begin
     # Use a pointer type to have defined behavior for uninitialized
     # array element
@@ -220,6 +274,16 @@ end
     s2 = Set([nothing])
     union!(s2, [nothing])
     @test s2 == Set([nothing])
+
+    @testset "promotion" begin
+        ints = [1:5, [1, 2], Set([1, 2])]
+        floats = [2:0.1:3, [2.0, 3.5], Set([2.0, 3.5])]
+
+        for a in ints, b in floats
+            @test eltype(union(a, b)) == Float64
+            @test eltype(union(b, a)) == Float64
+        end
+    end
 end
 
 @testset "intersect" begin
@@ -227,6 +291,9 @@ end
         s = S([1,2]) ∩ S([3,4])
         @test s == S()
         s = intersect(S([5,6,7,8]), S([7,8,9]))
+        slong = S(collect(3:63))
+        # test #36339 length/order short-cut
+        @test intersect(S([5,6,7,8]), slong) == intersect(slong, S([5,6,7,8]))
         @test s == S([7,8])
         @test intersect(S([2,3,1]), S([4,2,3]), S([5,4,3,2])) == S([2,3])
         let s1 = S([1,2,3])
@@ -238,7 +305,9 @@ end
         end
     end
     @test intersect(Set([1]), BitSet()) isa Set{Int}
-    @test intersect(BitSet([1]), Set()) isa BitSet
+    @test intersect(BitSet([1]), Set()) isa Set{Any}
+    @test intersect(BitSet([1]), Set([1])) isa BitSet
+    @test intersect(BitSet([1]), Set([1]), Set([1])) isa BitSet
     @test intersect([1], BitSet()) isa Vector{Int}
     # intersect must uniquify
     @test intersect([1, 2, 1]) == intersect!([1, 2, 1]) == [1, 2]
@@ -249,7 +318,22 @@ end
     y = () ∩ (42,)
     @test isempty(x)
     @test isempty(y)
-    @test eltype(x) == eltype(y) == Union{}
+
+    # Discussed in PR#41769
+    @testset "promotion" begin
+        ints = [1:5, [1, 2], Set([1, 2])]
+        floats = [2:0.1:3, [2.0, 3.5], Set([2.0, 3.5])]
+
+        for a in ints, b in floats
+            @test eltype(intersect(a, b)) == Float64
+            @test eltype(intersect(b, a)) == Float64
+            @test eltype(intersect(a, a, b)) == Float64
+        end
+    end
+
+    # 3-argument version is correctly covered
+    @test intersect(Set([1,2]), Set([2]), Set([1,2,3])) == Set([2])
+    @test intersect(Set([1,2]), Set([2]), Set([1.,2,3])) == Set([2.])
 end
 
 @testset "setdiff" begin
@@ -326,7 +410,9 @@ end
             @test issubset(intersect(l,r), r)
             @test issubset(l, union(l,r))
             @test issubset(r, union(l,r))
+            @test issubset(union(l,r))(r)
             @test isdisjoint(l,l) == isempty(l)
+            @test isdisjoint(l)(l) == isempty(l)
             @test isdisjoint(l,r) == isempty(intersect(l,r))
             if S === Vector
                 @test sort(union(intersect(l,r),symdiff(l,r))) == sort(union(l,r))
@@ -343,6 +429,15 @@ end
             @test ⊋(S([1,2]), S([1]))
             @test !⊋(S([1]), S([1]))
             @test ⊉(S([1]), S([2]))
+
+            @test ⊆(S([1,2]))(S([1]))
+            @test ⊊(S([1,2]))(S([1]))
+            @test !⊊(S([1]))(S([1]))
+            @test ⊈(S([2]))(S([1]))
+            @test ⊇(S([1]))(S([1,2]))
+            @test ⊋(S([1]))(S([1,2]))
+            @test !⊋(S([1]))(S([1]))
+            @test ⊉(S([2]))(S([1]))
         end
         let s1 = S([1,2,3,4])
             @test s1 !== symdiff(s1) == s1
@@ -355,9 +450,10 @@ end
     @test symdiff(Set([1]), BitSet()) isa Set{Int}
     @test symdiff(BitSet([1]), Set{Int}()) isa BitSet
     @test symdiff([1], BitSet()) isa Vector{Int}
-    # symdiff must NOT uniquify
-    @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [2]
-    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [2]
+    #symdiff does uniquify
+    @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [1,2]
+    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
+    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
 
     # Base.hasfastin
     @test all(Base.hasfastin, Any[Dict(1=>2), Set(1), BitSet(1), 1:9, 1:2:9,
@@ -381,6 +477,48 @@ end
     @test issubset(Set(Bool[]), rand(Bool, 100)) == true
     # neither has a fast in, right doesn't have a length
     @test isdisjoint([1, 3, 5, 7, 9], Iterators.filter(iseven, 1:10))
+
+    # range fast-path
+    for (truth, a, b) in (
+                   # Integers
+                   (true, 1:10, 11:20), # not overlapping
+                   (false, 1:10, 5:20), # partial overlap
+                   (false, 5:9, 1:10), # complete overlap
+                   # complete overlap, unequal steps
+                   (false, 3:6:60, 9:9:60),
+                   (true, 4:6:60, 9:9:60),
+                   (true, 0:6:12, 9:9:60),
+                   (false, 6:6:18, 9:9:60),
+                   (false, 12:6:18, 9:9:60),
+                   (false, 18:6:18, 9:9:60),
+                   (true, 1:2:3, 2:3:5),
+                   (true, 1:4:5, 2:1:4),
+                   (false, 4:12:124, 1:1:8),
+                   # potential overflow
+                   (false, 0x1:0x3:0x4, 0x4:0x3:0x4),
+                   (true, 0x3:0x3:0x6, 0x4:0x3:0x4),
+                   (false, typemax(Int8):Int8(3):typemax(Int8), typemin(Int8):Int8(3):typemax(Int8)),
+                   # Chars
+                   (true, 'a':'l', 'o':'p'), # not overlapping
+                   (false, 'a':'l', 'h':'p'), # partial overlap
+                   (false, 'a':'l', 'c':'e'), # complete overlap
+                   # Floats
+                   (true, 1.:10., 11.:20.), # not overlapping
+                   (false, 1.:10., 5.:20.), # partial overlap
+                   (false, 5.:9., 1.:10.), # complete overlap
+                   # Inputs that may hang
+                   (false, -6011687643038262928:3545293653953105048, -6446834672754204848:3271267329311042532),
+                   )
+        @test isdisjoint(a, b) == truth
+        @test isdisjoint(b, a) == truth
+        @test isdisjoint(a, reverse(b)) == truth
+        @test isdisjoint(reverse(a), b) == truth
+        @test isdisjoint(b, reverse(a)) == truth
+        @test isdisjoint(reverse(b), a) == truth
+    end
+    @test isdisjoint(10:9, 1:10) # empty range
+    @test !isdisjoint(1e-100:.1:1, 0:.1:1)
+    @test !isdisjoint(eps()/4:.1:.71, 0:.1:1)
 end
 
 @testset "unique" begin
@@ -388,6 +526,9 @@ end
     @test in(1, u)
     @test in(2, u)
     @test length(u) == 2
+    @test unique(iseven, []) == []
+    # type promotion
+    @test unique(x -> x^2, [1, 3.]) == [1, 3.]
     @test @inferred(unique(iseven, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])) == [5, 8]
     @test @inferred(unique(x->x^2, Integer[3, -4, 5, 4])) == Integer[3, -4, 5]
     @test @inferred(unique(iseven, Integer[3, -4, 5, 4]; seen=Set{Bool}())) == Integer[3, -4]
@@ -410,6 +551,8 @@ end
 end
 
 @testset "unique!" begin
+    u = []
+    @test unique!(u) === u
     u = [1,1,3,2,1]
     @inferred(unique!(u))
     @test u == [1,3,2]
@@ -456,10 +599,26 @@ end
     @test allunique([])
     @test allunique(Set())
     @test allunique([1,2,3])
+    @test allunique([1 2; 3 4])
     @test allunique([:a,:b,:c])
     @test allunique(Set([1,2,3]))
     @test !allunique([1,1,2])
     @test !allunique([:a,:b,:c,:a])
+    @test allunique(unique(randn(100)))  # longer than 32
+    @test allunique(collect(1:100)) # sorted/unique && longer than 32
+    @test allunique(collect(100:-1:1)) # sorted/unique && longer than 32
+    @test !allunique(fill(1,100)) # sorted/repeating && longer than 32
+    @test allunique(collect('A':'z')) # 58-element Vector{Char}
+    @test !allunique(repeat(1:99, 1, 2))
+    @test !allunique(vcat(pi, randn(1998), pi))  # longer than 1000
+    @test allunique(eachrow(hcat(1:10, 1:10)))
+    @test allunique(x for x in 'A':'Z' if randn()>0)
+    @test !allunique(x for x in repeat(1:2000, 3) if true)
+    @test allunique([0.0, -0.0])
+    @test allunique(x for x in [0.0, -0.0] if true)
+    @test !allunique([NaN, NaN])
+    @test !allunique(x for x in [NaN, NaN] if true)
+    # ranges
     @test allunique(4:7)
     @test allunique(1:1)
     @test allunique(4.0:0.3:7.0)
@@ -468,6 +627,7 @@ end
     @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
     @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
     @test allunique(('a':1:'c')[1:2]) == true
+    @test allunique(collect(1:1001))
     for r = (Base.OneTo(-1), Base.OneTo(0), Base.OneTo(1), Base.OneTo(5),
              1:0, 1:1, 1:2, 1:10, 1:.5:.5, 1:.5:1, 1:.5:10, 3:-2:5, 3:-2:3, 3:-2:1,
              StepRangeLen(1.0, 2.0, 0), StepRangeLen(1.0, 2.0, 2), StepRangeLen(1.0, 2.0, 3),
@@ -475,7 +635,43 @@ end
              LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
         @test allunique(r) == invoke(allunique, Tuple{Any}, r)
     end
+    # tuples
+    @test allunique(())
+    @test allunique((1,2,3))
+    @test allunique(ntuple(identity, 40))
+    @test !allunique((1,2,3,4,3))
+    @test allunique((0.0, -0.0))
+    @test !allunique((NaN, NaN))
 end
+
+@testset "allequal" begin
+    @test allequal(Set())
+    @test allequal(Set(1))
+    @test !allequal(Set([1, 2]))
+    @test allequal(Dict())
+    @test allequal(Dict(:a => 1))
+    @test !allequal(Dict(:a => 1, :b => 2))
+    @test allequal([])
+    @test allequal([1])
+    @test allequal([1, 1])
+    @test !allequal([1, 1, 2])
+    @test allequal([:a, :a])
+    @test !allequal([:a, :b])
+    @test !allequal(1:2)
+    @test allequal(1:1)
+    @test !allequal(4.0:0.3:7.0)
+    @test allequal(4:-1:5)       # empty range
+    @test !allequal(7:-1:1)       # negative step
+    @test !allequal(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
+    @test !allequal(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
+    @test allequal(StepRangeLen(1.0, 0.0, 2))
+    @test !allequal(StepRangeLen(1.0, 1.0, 2))
+    @test allequal(LinRange(1, 1, 0))
+    @test allequal(LinRange(1, 1, 1))
+    @test allequal(LinRange(1, 1, 2))
+    @test !allequal(LinRange(1, 2, 2))
+end
+
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
     @test s !== filter( isodd, s) == S([1,3])
@@ -640,8 +836,7 @@ end
     x = @inferred replace([1, 2], 2=>missing)
     @test isequal(x, [1, missing]) && x isa Vector{Union{Int, Missing}}
 
-    @test_broken @inferred replace([1, missing], missing=>2)
-    x = replace([1, missing], missing=>2)
+    x = @inferred replace([1, missing], missing=>2)
     @test x == [1, 2] && x isa Vector{Int}
     x = @inferred replace([1, missing], missing=>2, count=1)
     @test x == [1, 2] && x isa Vector{Union{Int, Missing}}
@@ -675,6 +870,28 @@ end
     @test replace((NaN, 1.0), NaN=>0.0) === (0.0, 1.0)
     @test replace([1, missing], missing=>0) == [1, 0]
     @test replace((1, missing), missing=>0) === (1, 0)
+
+    # test that MethodError is thrown for pairs
+    @test_throws MethodError replace(identity, 1=>2)
+    @test_throws MethodError replace(identity, 1=>2, 3=>4)
+    @test_throws MethodError replace!(identity, 1=>2)
+    @test_throws MethodError replace!(identity, 1=>2, 3=>4)
+
+    # test replace and friends for AbstractDicts
+    d1 = GenericDict(Dict(1=>2, 3=>4))
+    d2 = replace(d1, (1=>2) => (1=>"a"))
+    @test d2 == Dict(1=>"a", 3=>4)
+    @test d2 isa Dict{Int, Any}
+    @test d1 === replace!(d1, (1=>2) => (1=>-2))
+    @test d1 == Dict(1=>-2, 3=>4)
+
+    dd = Dict(1=>2, 3=>1, 5=>1, 7=>1)
+    for d1 in (dd, GenericDict(dd))
+        @test replace(d1, (1=>2) => (1=>"a"), count=0) == d1
+        d2 = replace(kv->(kv[2] == 1 ? kv[1]=>2 : kv), d1, count=2)
+        @test count(==(2), values(d2)) == 3
+        @test count(==(1), values(d2)) == 1
+    end
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
@@ -702,6 +919,8 @@ end
         @test !(B ⊉ A)
         @test !issetequal(A, B)
         @test !issetequal(B, A)
+        @test !issetequal(B)(A)
+        @test !issetequal(A)(B)
         for T = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
             @test issetequal(A, T(A))
             @test issetequal(B, T(B))
@@ -755,4 +974,47 @@ Base.IteratorSize(::Type{<:OpenInterval}) = Base.SizeUnknown()
     i = OpenInterval(2, 4)
     @test 3 ∈ i
     @test issubset(3, i)
+end
+
+@testset "IdSet" begin
+    a = [1]
+    b = [2]
+    c = [3]
+    d = [4]
+    e = [5]
+    A = Base.IdSet{Vector{Int}}([a, b, c, d])
+    @test !isempty(A)
+    B = copy(A)
+    @test A ⊆ B
+    @test B ⊆ A
+    A = filter!(x->isodd(x[1]), A)
+    @test A ⊆ B
+    @test !(B ⊆ A)
+    @test !isempty(A)
+    a_ = pop!(A, a)
+    @test a_ === a
+    @test !isempty(A)
+    e_ = pop!(A, a, e)
+    @test e_ === e
+    @test !isempty(A)
+    A = empty!(A)
+    @test isempty(A)
+end
+
+@testset "⊊, ⊋" begin
+    @test !((1, 2) ⊊ (1, 2, 2))
+    @test !((1, 2, 2) ⊋ (1, 2))
+end
+
+@testset "AbstractSet & Fallback" begin
+    mutable struct TestSet{T} <: AbstractSet{T}
+        set::Set{T}
+        function TestSet{T}() where T
+            new{T}(Set{T}())
+        end
+    end
+    set = TestSet{Any}()
+    @test sizehint!(set, 1) === set
+    @test sizehint!(set, 1; shrink = true) === set
+    @test sizehint!(set, 1; shrink = false) === set
 end

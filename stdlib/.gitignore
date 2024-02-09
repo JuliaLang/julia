@@ -1,4 +1,6 @@
 /srccache
+/DelimitedFiles-*
+/DelimitedFiles
 /Pkg-*
 /Pkg
 /Statistics-*
@@ -13,5 +15,20 @@
 /Tar
 /NetworkOptions-*
 /NetworkOptions
+/SuiteSparse-*
+/SuiteSparse
+/SparseArrays-*
+/SparseArrays
+/SHA-*
+/SHA
+/LazyArtifacts-*
+/LazyArtifacts
+/Distributed-*
+/Distributed
+/StyledStrings-*
+/StyledStrings
+/JuliaSyntaxHighlighting-*
+/JuliaSyntaxHighlighting
 /*_jll/StdlibArtifacts.toml
 /*/Manifest.toml
+/*.image

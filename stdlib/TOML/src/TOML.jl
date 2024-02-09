@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+TOML.jl is a Julia standard library for parsing and writing TOML v1.0 files.
+This module provides functions to parse TOML strings and files into Julia data structures
+and to serialize Julia data structures to TOML format.
+"""
 module TOML
 
 module Internals
@@ -38,7 +43,7 @@ const Parser = Internals.Parser
 Parse file `f` and return the resulting table (dictionary). Throw a
 [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.tryparsefile`](@ref)
+See also [`TOML.tryparsefile`](@ref).
 """
 parsefile(f::AbstractString) =
     Internals.parse(Parser(readstring(f); filepath=abspath(f)))
@@ -52,7 +57,7 @@ parsefile(p::Parser, f::AbstractString) =
 Parse file `f` and return the resulting table (dictionary). Return a
 [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.parsefile`](@ref)
+See also [`TOML.parsefile`](@ref).
 """
 tryparsefile(f::AbstractString) =
     Internals.tryparse(Parser(readstring(f); filepath=abspath(f)))
@@ -66,7 +71,7 @@ tryparsefile(p::Parser, f::AbstractString) =
 Parse the string  or stream `x`, and return the resulting table (dictionary).
 Throw a [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.tryparse`](@ref)
+See also [`TOML.tryparse`](@ref).
 """
 parse(str::AbstractString) =
     Internals.parse(Parser(String(str)))
@@ -82,7 +87,7 @@ parse(p::Parser, io::IO) = parse(p, read(io, String))
 Parse the string or stream `x`, and return the resulting table (dictionary).
 Return a [`ParserError`](@ref) upon failure.
 
-See also: [`TOML.parse`](@ref)
+See also [`TOML.parse`](@ref).
 """
 tryparse(str::AbstractString) =
     Internals.tryparse(Parser(String(str)))
@@ -105,12 +110,13 @@ const ParserError = Internals.ParserError
 
 
 """
-    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sorted=false, by=identity)
+    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sorted=false, by=identity, inline_tables::Base.IdSet{<:AbstractDict})
 
 Write `data` as TOML syntax to the stream `io`. If the keyword argument `sorted` is set to `true`,
-sort tables according to the function given by the keyword argument `by`.
+sort tables according to the function given by the keyword argument `by`. If the keyword argument
+`inline_tables` is given, it should be a set of tables that should be printed "inline".
 
-The following data types are supported: `AbstractDict`, `Integer`, `AbstractFloat`, `Bool`,
+The following data types are supported: `AbstractDict`, `AbstractVector`, `AbstractString`, `Integer`, `AbstractFloat`, `Bool`,
 `Dates.DateTime`, `Dates.Time`, `Dates.Date`. Note that the integers and floats
 need to be convertible to `Float64` and `Int64` respectively. For other data types,
 pass the function `to_toml` that takes the data types and returns a value of a

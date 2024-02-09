@@ -3,12 +3,30 @@
 if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
+    const env_dict = Dict{String, Vector{Cwchar_t}}()
+    const env_lock = ReentrantLock()
+
+    function memoized_env_lookup(str::AbstractString)
+        # Windows environment variables have a different format from Linux / MacOS, and previously
+        # incurred allocations because we had to convert a String to a Vector{Cwchar_t} each time
+        # an environment variable was looked up. This function memoizes that lookup process, storing
+        # the String => Vector{Cwchar_t} pairs in env_dict
+        @lock env_lock begin
+            var = get(env_dict, str, nothing)
+            if isnothing(var)
+                var = cwstring(str)
+                env_dict[str] = var
+            end
+            return var
+        end
+    end
+
     _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
     _hasenv(s::Vector{UInt16}) = _getenvlen(s) != 0 || Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND
-    _hasenv(s::AbstractString) = _hasenv(cwstring(s))
+    _hasenv(s::AbstractString) = _hasenv(memoized_env_lookup(s))
 
     function access_env(onError::Function, str::AbstractString)
-        var = cwstring(str)
+        var = memoized_env_lookup(str)
         len = _getenvlen(var)
         if len == 0
             return Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND ? "" : onError(str)
@@ -21,7 +39,7 @@ if Sys.iswindows()
     end
 
     function _setenv(svar::AbstractString, sval::AbstractString, overwrite::Bool=true)
-        var = cwstring(svar)
+        var = memoized_env_lookup(svar)
         val = cwstring(sval)
         if overwrite || !_hasenv(var)
             ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,val)
@@ -30,7 +48,7 @@ if Sys.iswindows()
     end
 
     function _unsetenv(svar::AbstractString)
-        var = cwstring(svar)
+        var = memoized_env_lookup(svar)
         ret = ccall(:SetEnvironmentVariableW,stdcall,Int32,(Ptr{UInt16},Ptr{UInt16}),var,C_NULL)
         windowserror(:setenv, ret == 0 && Libc.GetLastError() != ERROR_ENVVAR_NOT_FOUND)
     end
@@ -73,12 +91,84 @@ variables.
 all keys to uppercase for display, iteration, and copying. Portable code should not rely on the
 ability to distinguish variables by case, and should beware that setting an ostensibly lowercase
 variable may result in an uppercase `ENV` key.)
+
+!!! warning
+    Mutating the environment is not thread-safe.
+
+# Examples
+```julia-repl
+julia> ENV
+Base.EnvDict with "50" entries:
+  "SECURITYSESSIONID"            => "123"
+  "USER"                         => "username"
+  "MallocNanoZone"               => "0"
+  ⋮                              => ⋮
+
+julia> ENV["JULIA_EDITOR"] = "vim"
+"vim"
+
+julia> ENV["JULIA_EDITOR"]
+"vim"
+```
+
+See also: [`withenv`](@ref), [`addenv`](@ref).
 """
 const ENV = EnvDict()
+
+const get_bool_env_truthy = (
+    "t", "T",
+    "true", "True", "TRUE",
+    "y", "Y",
+    "yes", "Yes", "YES",
+    "1")
+const get_bool_env_falsy = (
+    "f", "F",
+    "false", "False", "FALSE",
+    "n", "N",
+    "no", "No", "NO",
+    "0")
+
+"""
+    Base.get_bool_env(name::String, default::Bool; throw=false)::Union{Bool,Nothing}
+    Base.get_bool_env(f_default::Callable, name::String; throw=false)::Union{Bool,Nothing}
+
+Evaluate whether the value of environnment variable `name` is a truthy or falsy string,
+and return `nothing` (or throw if `throw=true`) if it is not recognized as either. If
+the variable is not set, or is set to "", return `default` or the result of executing `f_default()`.
+
+Recognized values are the following, and their Capitalized and UPPERCASE forms:
+    truthy: "t", "true", "y", "yes", "1"
+    falsy:  "f", "false", "n", "no", "0"
+"""
+get_bool_env(name::String, default::Bool; kwargs...) = get_bool_env(Returns(default), name; kwargs...)
+function get_bool_env(f_default::Callable, name::String; kwargs...)
+    if haskey(ENV, name)
+        val = ENV[name]
+        if !isempty(val)
+            return parse_bool_env(name, val; kwargs...)
+        end
+    end
+    return f_default()
+end
+function parse_bool_env(name::String, val::String = ENV[name]; throw::Bool=false)
+    if val in get_bool_env_truthy
+        return true
+    elseif val in get_bool_env_falsy
+        return false
+    elseif throw
+        Base.throw(ArgumentError("Value for environment variable `$name` could not be parsed as Boolean: $(repr(val))"))
+    else
+        return nothing
+    end
+end
 
 getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvDict, k::AbstractString, def) = access_env(Returns(def), k)
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
+function get!(default::Callable, ::EnvDict, k::AbstractString)
+    haskey(ENV, k) && return ENV[k]
+    ENV[k] = default()
+end
 in(k::AbstractString, ::KeySet{String, EnvDict}) = _hasenv(k)
 pop!(::EnvDict, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
@@ -117,7 +207,7 @@ if Sys.iswindows()
                 m = nothing
             end
             if m === nothing
-                @warn "malformed environment entry: $env"
+                @warn "malformed environment entry" env
                 continue
             end
             return (Pair{String,String}(winuppercase(env[1:prevind(env, m)]), env[nextind(env, m):end]), (pos, blk))
@@ -131,8 +221,8 @@ else # !windows
             env = env::String
             m = findfirst('=', env)
             if m === nothing
-                @warn "malformed environment entry: $env"
-                nothing
+                @warn "malformed environment entry" env
+                continue
             end
             return (Pair{String,String}(env[1:prevind(env, m)], env[nextind(env, m):end]), i+1)
         end
@@ -155,15 +245,19 @@ function show(io::IO, ::EnvDict)
 end
 
 """
-    withenv(f::Function, kv::Pair...)
+    withenv(f, kv::Pair...)
 
 Execute `f` in an environment that is temporarily modified (not replaced as in `setenv`)
 by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 `withenv(kv...) do ... end` syntax. A value of `nothing` can be used to temporarily unset an
 environment variable (if it is set). When `withenv` returns, the original environment has
 been restored.
+
+!!! warning
+    Changing the environment is not thread-safe. For running external commands with a different
+    environment from the parent process, prefer using [`addenv`](@ref) over `withenv`.
 """
-function withenv(f::Function, keyvals::Pair{T}...) where T<:AbstractString
+function withenv(f, keyvals::Pair{T}...) where T<:AbstractString
     old = Dict{T,Any}()
     for (key,val) in keyvals
         old[key] = get(ENV,key,nothing)
@@ -176,4 +270,4 @@ function withenv(f::Function, keyvals::Pair{T}...) where T<:AbstractString
         end
     end
 end
-withenv(f::Function) = f() # handle empty keyvals case; see #10853
+withenv(f) = f() # handle empty keyvals case; see #10853
