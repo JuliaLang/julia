@@ -8,7 +8,7 @@ IdSet{T}() constructs a set (see [Set](@ref)) using
 `===` as equality with values of type `V`.
 
 In the example below, the values are all `isequal` so they get overwritten.
-The `IdDict` compares by `===` so preserves the 3 different keys.
+The `IdSet` compares by `===` so preserves the 3 different keys.
 
 Examples
 ≡≡≡≡≡≡≡≡
