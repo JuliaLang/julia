@@ -156,14 +156,6 @@ struct PartialTypeVar
     PartialTypeVar(tv::TypeVar, lb_certain::Bool, ub_certain::Bool) = new(tv, lb_certain, ub_certain)
 end
 
-# Wraps a type and represents that the value may also be undef at this point.
-# (only used in optimize, not abstractinterpret)
-# N.B. in the lattice, this is epsilon bigger than `typ` (even Any)
-struct MaybeUndef
-    typ
-    MaybeUndef(@nospecialize(typ)) = new(typ)
-end
-
 struct StateUpdate
     var::SlotNumber
     vtype::VarState
@@ -232,7 +224,7 @@ struct NotFound end
 
 const NOT_FOUND = NotFound()
 
-const CompilerTypes = Union{MaybeUndef, Const, Conditional, MustAlias, NotFound, PartialStruct}
+const CompilerTypes = Union{Const, Conditional, MustAlias, NotFound, PartialStruct}
 ==(x::CompilerTypes, y::CompilerTypes) = x === y
 ==(x::Type, y::CompilerTypes) = false
 ==(x::CompilerTypes, y::Type) = false
@@ -331,7 +323,7 @@ end
 
 @nospecializeinfer function isalreadyconst(@nospecialize t)
     isa(t, Const) && return true
-    isa(t, DataType) && isdefined(t, :instance) && return true
+    issingletontype(t) && return true
     return isconstType(t)
 end
 
@@ -418,16 +410,6 @@ ignorelimited(typ::LimitedAccuracy) = typ.typ
     # a and b's unlimited types are equal.
     isa(a, LimitedAccuracy) || return false # b is limited, so ε smaller
     return b.causes ⊆ a.causes
-end
-
-@nospecializeinfer function ⊑(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, MaybeUndef)
-        isa(b, MaybeUndef) || return false
-        a, b = a.typ, b.typ
-    elseif isa(b, MaybeUndef)
-        b = b.typ
-    end
-    return ⊑(widenlattice(lattice), a, b)
 end
 
 @nospecializeinfer function ⊑(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b))
@@ -560,14 +542,6 @@ end
     return is_lattice_equal(widenlattice(lattice), a, b)
 end
 
-@nospecializeinfer function is_lattice_equal(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, MaybeUndef) || isa(b, MaybeUndef)
-        # TODO: Unwrap these and recurse to is_lattice_equal
-        return ⊑(lattice, a, b) && ⊑(lattice, b, a)
-    end
-    return is_lattice_equal(widenlattice(lattice), a, b)
-end
-
 @nospecializeinfer function is_lattice_equal(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b))
     ConditionalT = isa(lattice, ConditionalsLattice) ? Conditional : InterConditional
     if isa(a, ConditionalT) || isa(b, ConditionalT)
@@ -633,7 +607,7 @@ end
         if ti === widev
             return v
         end
-        valid_as_lattice(ti) || return Bottom
+        valid_as_lattice(ti, true) || return Bottom
         if widev <: Tuple
             new_fields = Vector{Any}(undef, length(v.fields))
             for i = 1:length(new_fields)
@@ -657,7 +631,7 @@ end
             return v
         end
         ti = typeintersect(widev, t)
-        valid_as_lattice(ti) || return Bottom
+        valid_as_lattice(ti, true) || return Bottom
         return PartialOpaque(ti, v.env, v.parent, v.source)
     end
     return tmeet(widenlattice(lattice), v, t)
@@ -709,12 +683,6 @@ end
     return tmeet(widenlattice(𝕃), v, t)
 end
 
-@nospecializeinfer function tmeet(lattice::OptimizerLattice, @nospecialize(v), @nospecialize(t::Type))
-    # TODO: This can probably happen and should be handled
-    @assert !isa(v, MaybeUndef)
-    tmeet(widenlattice(lattice), v, t)
-end
-
 """
     widenconst(x) -> t::Type
 
@@ -723,7 +691,6 @@ Widens extended lattice element `x` to native `Type` representation.
 widenconst(::AnyConditional) = Bool
 widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
 widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
-widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
@@ -790,24 +757,6 @@ function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable)
         end
     end
     return changed
-end
-
-function stupdate1!(lattice::AbstractLattice, state::VarTable, change::StateUpdate)
-    changeid = slot_id(change.var)
-    for i = 1:length(state)
-        invalidated = invalidate_slotwrapper(state[i], changeid, change.conditional)
-        if invalidated !== nothing
-            state[i] = invalidated
-        end
-    end
-    # and update the type of it
-    newtype = change.vtype
-    oldtype = state[changeid]
-    if schanged(lattice, newtype, oldtype)
-        state[changeid] = smerge(lattice, oldtype, newtype)
-        return true
-    end
-    return false
 end
 
 function stoverwrite!(state::VarTable, newstate::VarTable)

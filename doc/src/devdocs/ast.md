@@ -254,11 +254,6 @@ types exist in lowered form:
     Identifies arguments and local variables by consecutive numbering. It has an
     integer-valued `id` field giving the slot index.
     The types of these slots can be found in the `slottypes` field of their `CodeInfo` object.
-    When a slot has different types at different uses and thus requires per-use type annotations,
-    they are converted to temporary `Core.Compiler.TypedSlot` object. This object has an
-    additional `typ` field as well as the `id` field. Note that `Core.Compiler.TypedSlot`
-    only appears in an unoptimized lowered form that is scheduled for optimization,
-    and it never appears elsewhere.
 
   * `Argument`
 
@@ -438,10 +433,6 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
     Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
 
-  * `undefcheck`
-
-    Temporary node inserted by the compiler and will be processed in `type_lift_pass!`.
-
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
@@ -610,10 +601,9 @@ for important details on how to modify these fields safely.
 
   * `sparam_vals`
 
-    The values of the static parameters in `specTypes` indexed by `def.sparam_syms`. For the
-    `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`. But for a
-    runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and
-    indexable.
+    The values of the static parameters in `specTypes`.
+    For the `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`.
+    But for a runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and indexable.
 
   * `uninferred`
 
@@ -699,15 +689,8 @@ A (usually temporary) container for holding lowered source code.
 
   * `ssaflags`
 
-    Statement-level flags for each expression in the function. Many of these are reserved, but not yet implemented:
-
-    * 0x01 << 0 = statement is marked as `@inbounds`
-    * 0x01 << 1 = statement is marked as `@inline`
-    * 0x01 << 2 = statement is marked as `@noinline`
-    * 0x01 << 3 = statement is within a block that leads to `throw` call
-    * 0x01 << 4 = statement may be removed if its result is unused, in particular it is thus be both pure and effect free
-    * 0x01 << 5-6 = <unused>
-    * 0x01 << 7 = <reserved> has out-of-band info
+    Statement-level 32 bits flags for each expression in the function.
+    See the definition of `jl_code_info_t` in julia.h for more details.
 
   * `linetable`
 
