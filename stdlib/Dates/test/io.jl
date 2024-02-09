@@ -47,7 +47,7 @@ end
 end
 
 @testset "DateTime parsing" begin
-    # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
+    # Useful reference for different locales: https://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
     # Allow parsing of strings which are not representable as a TimeType
     str = "02/15/1996 25:00"

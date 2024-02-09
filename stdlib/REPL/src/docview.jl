@@ -9,7 +9,7 @@ using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, 
 
 import Base.Docs: doc, formatdoc, parsedoc, apropos
 
-using Base: with_output_color, mapany
+using Base: with_output_color, mapany, isdeprecated, isexported
 
 import REPL
 
@@ -20,20 +20,28 @@ using Unicode: normalize
 ## Help mode ##
 
 # This is split into helpmode and _helpmode to easier unittest _helpmode
-helpmode(io::IO, line::AbstractString, mod::Module=Main) = :($REPL.insert_hlines($io, $(REPL._helpmode(io, line, mod))))
+function helpmode(io::IO, line::AbstractString, mod::Module=Main)
+    internal_accesses = Set{Pair{Module,Symbol}}()
+    quote
+        docs = $REPL.insert_hlines($(REPL._helpmode(io, line, mod, internal_accesses)))
+        $REPL.insert_internal_warning(docs, $internal_accesses)
+    end
+end
 helpmode(line::AbstractString, mod::Module=Main) = helpmode(stdout, line, mod)
 
+# A hack to make the line entered at the REPL available at trimdocs without
+# passing the string through the entire mechanism.
 const extended_help_on = Ref{Any}(nothing)
 
-function _helpmode(io::IO, line::AbstractString, mod::Module=Main)
+function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing)
     line = strip(line)
     ternary_operator_help = (line == "?" || line == "?:")
     if startswith(line, '?') && !ternary_operator_help
         line = line[2:end]
-        extended_help_on[] = line
+        extended_help_on[] = nothing
         brief = false
     else
-        extended_help_on[] = nothing
+        extended_help_on[] = line
         brief = true
     end
     # interpret anything starting with # or #= as asking for help on comments
@@ -47,7 +55,7 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main)
     x = Meta.parse(line, raise = false, depwarn = false)
     assym = Symbol(line)
     expr =
-        if haskey(keywords, Symbol(line)) || Base.isoperator(assym) || isexpr(x, :error) ||
+        if haskey(keywords, assym) || Base.isoperator(assym) || isexpr(x, :error) ||
             isexpr(x, :invalid) || isexpr(x, :incomplete)
             # Docs for keywords must be treated separately since trying to parse a single
             # keyword such as `function` would throw a parse error due to the missing `end`.
@@ -64,12 +72,12 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main)
         end
     # the following must call repl(io, expr) via the @repl macro
     # so that the resulting expressions are evaluated in the Base.Docs namespace
-    :($REPL.@repl $io $expr $brief $mod)
+    :($REPL.@repl $io $expr $brief $mod $internal_accesses)
 end
 _helpmode(line::AbstractString, mod::Module=Main) = _helpmode(stdout, line, mod)
 
-# Print vertical lines along each docstring if there are multiple docs
-function insert_hlines(io::IO, docs)
+# Print horizontal lines between each docstring if there are multiple docs
+function insert_hlines(docs)
     if !isa(docs, Markdown.MD) || !haskey(docs.meta, :results) || isempty(docs.meta[:results])
         return docs
     end
@@ -148,14 +156,48 @@ end
 
 _trimdocs(md, brief::Bool) = md, false
 
-"""
-    Docs.doc(binding, sig)
 
-Return all documentation that matches both `binding` and `sig`.
+is_tuple(expr) = false
+is_tuple(expr::Expr) = expr.head == :tuple
 
-If `getdoc` returns a non-`nothing` result on the value of the binding, then a
-dynamic docstring is returned instead of one based on the binding itself.
-"""
+struct Logged{F}
+    f::F
+    mod::Module
+    collection::Set{Pair{Module,Symbol}}
+end
+function (la::Logged)(m::Module, s::Symbol)
+    m !== la.mod && Base.isdefined(m, s) && !Base.ispublic(m, s) && push!(la.collection, m => s)
+    la.f(m, s)
+end
+(la::Logged)(args...) = la.f(args...)
+
+function log_nonpublic_access(expr::Expr, mod::Module, internal_access::Set{Pair{Module,Symbol}})
+    if expr.head === :. && length(expr.args) == 2 && !is_tuple(expr.args[2])
+        Expr(:call, Logged(getproperty, mod, internal_access), log_nonpublic_access.(expr.args, (mod,), (internal_access,))...)
+    elseif expr.head === :call && expr.args[1] === Base.Docs.Binding
+        Expr(:call, Logged(Base.Docs.Binding, mod, internal_access), log_nonpublic_access.(expr.args[2:end], (mod,), (internal_access,))...)
+    else
+        Expr(expr.head, log_nonpublic_access.(expr.args, (mod,), (internal_access,))...)
+    end
+end
+log_nonpublic_access(expr, ::Module, _) = expr
+
+function insert_internal_warning(md::Markdown.MD, internal_access::Set{Pair{Module,Symbol}})
+    if !isempty(internal_access)
+        items = Any[Any[Markdown.Paragraph(Any[Markdown.Code("", s)])] for s in sort!(["$mod.$sym" for (mod, sym) in internal_access])]
+        admonition = Markdown.Admonition("warning", "Warning", Any[
+            Markdown.Paragraph(Any["The following bindings may be internal; they may change or be removed in future versions:"]),
+            Markdown.List(items, -1, false)])
+        pushfirst!(md.content, admonition)
+    end
+    md
+end
+function insert_internal_warning(other, internal_access::Set{Pair{Module,Symbol}})
+    # We don't know how to insert an internal symbol warning into non-markdown
+    # content, so we don't.
+    other
+end
+
 function doc(binding::Binding, sig::Type = Union{})
     if defined(binding)
         result = getdoc(resolve(binding), sig)
@@ -250,7 +292,13 @@ function summarize(binding::Binding, sig)
     io = IOBuffer()
     if defined(binding)
         binding_res = resolve(binding)
-        !isa(binding_res, Module) && println(io, "No documentation found.\n")
+        if !isa(binding_res, Module)
+            if Base.ispublic(binding.mod, binding.var)
+                println(io, "No documentation found for public symbol.\n")
+            else
+                println(io, "No documentation found for private symbol.\n")
+            end
+        end
         summarize(io, binding_res, binding)
     else
         println(io, "No documentation found.\n")
@@ -342,16 +390,17 @@ function find_readme(m::Module)::Union{String, Nothing}
 end
 function summarize(io::IO, m::Module, binding::Binding; nlines::Int = 200)
     readme_path = find_readme(m)
+    public = Base.ispublic(binding.mod, binding.var) ? "public" : "internal"
     if isnothing(readme_path)
-        println(io, "No docstring or readme file found for module `$m`.\n")
+        println(io, "No docstring or readme file found for $public module `$m`.\n")
     else
-        println(io, "No docstring found for module `$m`.")
+        println(io, "No docstring found for $public module `$m`.")
     end
     exports = filter!(!=(nameof(m)), names(m))
     if isempty(exports)
-        println(io, "Module does not export any names.")
+        println(io, "Module does not have any public names.")
     else
-        println(io, "# Exported names")
+        println(io, "# Public names")
         print(io, "  `")
         join(io, exports, "`, `")
         println(io, "`\n")
@@ -375,8 +424,31 @@ end
 
 # repl search and completions for help
 
+# This type is returned from `accessible` and denotes a binding that is accessible within
+# some context. It differs from `Base.Docs.Binding`, which is also used by the REPL, in
+# that it doesn't track the defining module for a symbol unless the symbol is public but
+# not exported, i.e. it's accessible but requires qualification. Using this type rather
+# than `Base.Docs.Binding` simplifies things considerably, partially because REPL searching
+# is based on `String`s, which this type stores, but `Base.Docs.Binding` stores a module
+# and symbol and does not have any notion of the context from which the binding is accessed.
+struct AccessibleBinding
+    source::Union{String,Nothing}
+    name::String
+end
+
+function AccessibleBinding(mod::Module, name::Symbol)
+    m = isexported(mod, name) ? nothing : String(nameof(mod))
+    return AccessibleBinding(m, String(name))
+end
+AccessibleBinding(name::Symbol) = AccessibleBinding(nothing, String(name))
+
+function Base.show(io::IO, b::AccessibleBinding)
+    b.source === nothing || print(io, b.source, '.')
+    print(io, b.name)
+end
 
 quote_spaces(x) = any(isspace, x) ? "'" * x * "'" : x
+quote_spaces(x::AccessibleBinding) = AccessibleBinding(x.source, quote_spaces(x.name))
 
 function repl_search(io::IO, s::Union{Symbol,String}, mod::Module)
     pre = "search:"
@@ -472,9 +544,9 @@ end
 repl_latex(s::String) = repl_latex(stdout, s)
 
 macro repl(ex, brief::Bool=false, mod::Module=Main) repl(ex; brief, mod) end
-macro repl(io, ex, brief, mod) repl(io, ex; brief, mod) end
+macro repl(io, ex, brief, mod, internal_accesses) repl(io, ex; brief, mod, internal_accesses) end
 
-function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main)
+function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing)
     str = string(s)
     quote
         repl_latex($io, $str)
@@ -483,19 +555,19 @@ function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main)
                # n.b. we call isdefined for the side-effect of resolving the binding, if possible
                :(repl_corrections($io, $str, $mod))
           end)
-        $(_repl(s, brief))
+        $(_repl(s, brief, mod, internal_accesses))
     end
 end
 isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isempty(x.args[3])
 
-repl(io::IO, ex::Expr; brief::Bool=true, mod::Module=Main) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex, brief)
-repl(io::IO, str::AbstractString; brief::Bool=true, mod::Module=Main) = :(apropos($io, $str))
-repl(io::IO, other; brief::Bool=true, mod::Module=Main) = esc(:(@doc $other))
+repl(io::IO, ex::Expr; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex, brief, mod, internal_accesses)
+repl(io::IO, str::AbstractString; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = :(apropos($io, $str))
+repl(io::IO, other; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = esc(:(@doc $other)) # TODO: track internal_accesses
 #repl(io::IO, other) = lookup_doc(other) # TODO
 
 repl(x; brief::Bool=true, mod::Module=Main) = repl(stdout, x; brief, mod)
 
-function _repl(x, brief::Bool=true)
+function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing)
     if isexpr(x, :call)
         x = x::Expr
         # determine the types of the values
@@ -561,6 +633,7 @@ function _repl(x, brief::Bool=true)
     else
         docs
     end
+    docs = log_nonpublic_access(macroexpand(mod, docs), mod, internal_accesses)
     :(REPL.trimdocs($docs, $brief))
 end
 
@@ -584,8 +657,9 @@ function fielddoc(binding::Binding, field::Symbol)
             end
         end
     end
-    fields = join(["`$f`" for f in fieldnames(resolve(binding))], ", ", ", and ")
-    fields = isempty(fields) ? "no fields" : "fields $fields"
+    fs = fieldnames(resolve(binding))
+    fields = isempty(fs) ? "no fields" : (length(fs) == 1 ? "field " : "fields ") *
+                                          join(("`$f`" for f in fs), ", ", ", and ")
     Markdown.parse("`$(resolve(binding))` has $fields.")
 end
 
@@ -618,28 +692,80 @@ function matchinds(needle, haystack; acronym::Bool = false)
     return is
 end
 
+matchinds(needle, (; name)::AccessibleBinding; acronym::Bool=false) =
+    matchinds(needle, name; acronym)
+
 longer(x, y) = length(x) ≥ length(y) ? (x, true) : (y, false)
 
 bestmatch(needle, haystack) =
     longer(matchinds(needle, haystack, acronym = true),
            matchinds(needle, haystack))
 
-avgdistance(xs) =
-    isempty(xs) ? 0 :
-    (xs[end] - xs[1] - length(xs)+1)/length(xs)
-
-function fuzzyscore(needle, haystack)
-    score = 0.
-    is, acro = bestmatch(needle, haystack)
-    score += (acro ? 2 : 1)*length(is) # Matched characters
-    score -= 2(length(needle)-length(is)) # Missing characters
-    !acro && (score -= avgdistance(is)/10) # Contiguous
-    !isempty(is) && (score -= sum(is)/length(is)/100) # Closer to beginning
-    return score
+# Optimal string distance: Counts the minimum number of insertions, deletions,
+# transpositions or substitutions to go from one string to the other.
+function string_distance(a::AbstractString, lena::Integer, b::AbstractString, lenb::Integer)
+    if lena > lenb
+        a, b = b, a
+        lena, lenb = lenb, lena
+    end
+    start = 0
+    for (i, j) in zip(a, b)
+        if a == b
+            start += 1
+        else
+            break
+        end
+    end
+    start == lena && return lenb - start
+    vzero = collect(1:(lenb - start))
+    vone = similar(vzero)
+    prev_a, prev_b = first(a), first(b)
+    current = 0
+    for (i, ai) in enumerate(a)
+        i > start || (prev_a = ai; continue)
+        left = i - start - 1
+        current = i - start
+        transition_next = 0
+        for (j, bj) in enumerate(b)
+            j > start || (prev_b = bj; continue)
+            # No need to look beyond window of lower right diagonal
+            above = current
+            this_transition = transition_next
+            transition_next = vone[j - start]
+            vone[j - start] = current = left
+            left = vzero[j - start]
+            if ai != bj
+                # Minimum between substitution, deletion and insertion
+                current = min(current + 1, above + 1, left + 1)
+                if i > start + 1 && j > start + 1 && ai == prev_b && prev_a == bj
+                    current = min(current, (this_transition += 1))
+                end
+            end
+            vzero[j - start] = current
+            prev_b = bj
+        end
+        prev_a = ai
+    end
+    current
 end
 
-function fuzzysort(search::String, candidates::Vector{String})
-    scores = map(cand -> (fuzzyscore(search, cand), -Float64(levenshtein(search, cand))), candidates)
+function fuzzyscore(needle::AbstractString, haystack::AbstractString)
+    lena, lenb = length(needle), length(haystack)
+    1 - (string_distance(needle, lena, haystack, lenb) / max(lena, lenb))
+end
+
+function fuzzyscore(needle::AbstractString, haystack::AccessibleBinding)
+    score = fuzzyscore(needle, haystack.name)
+    haystack.source === nothing && return score
+    # Apply a "penalty" of half an edit if the comparator binding is public but not
+    # exported so that exported/local names that exactly match the search query are
+    # listed first
+    penalty = 1 / (2 * max(length(needle), length(haystack.name)))
+    return max(score - penalty, 0)
+end
+
+function fuzzysort(search::String, candidates::Vector{AccessibleBinding})
+    scores = map(cand -> fuzzyscore(search, cand), candidates)
     candidates[sortperm(scores)] |> reverse
 end
 
@@ -663,12 +789,14 @@ function levenshtein(s1, s2)
     return d[m+1, n+1]
 end
 
-function levsort(search::String, candidates::Vector{String})
-    scores = map(cand -> (Float64(levenshtein(search, cand)), -fuzzyscore(search, cand)), candidates)
+function levsort(search::String, candidates::Vector{AccessibleBinding})
+    scores = map(candidates) do cand
+        (Float64(levenshtein(search, cand.name)), -fuzzyscore(search, cand))
+    end
     candidates = candidates[sortperm(scores)]
     i = 0
     for outer i = 1:length(candidates)
-        levenshtein(search, candidates[i]) > 3 && break
+        levenshtein(search, candidates[i].name) > 3 && break
     end
     return candidates[1:i]
 end
@@ -686,24 +814,39 @@ function printmatch(io::IO, word, match)
     end
 end
 
+function printmatch(io::IO, word, match::AccessibleBinding)
+    match.source === nothing || print(io, match.source, '.')
+    printmatch(io, word, match.name)
+end
+
+function matchlength(x::AccessibleBinding)
+    n = length(x.name)
+    if x.source !== nothing
+        n += length(x.source) + 1  # the +1 is for the `.` separator
+    end
+    return n
+end
+matchlength(x) = length(x)
+
 function printmatches(io::IO, word, matches; cols::Int = _displaysize(io)[2])
     total = 0
     for match in matches
-        total + length(match) + 1 > cols && break
-        fuzzyscore(word, match) < 0 && break
+        ml = matchlength(match)
+        total + ml + 1 > cols && break
+        fuzzyscore(word, match) < 0.5 && break
         print(io, " ")
         printmatch(io, word, match)
-        total += length(match) + 1
+        total += ml + 1
     end
 end
 
 printmatches(args...; cols::Int = _displaysize(stdout)[2]) = printmatches(stdout, args..., cols = cols)
 
-function print_joined_cols(io::IO, ss::Vector{String}, delim = "", last = delim; cols::Int = _displaysize(io)[2])
+function print_joined_cols(io::IO, ss::Vector{AccessibleBinding}, delim = "", last = delim; cols::Int = _displaysize(io)[2])
     i = 0
     total = 0
     for outer i = 1:length(ss)
-        total += length(ss[i])
+        total += matchlength(ss[i])
         total + max(i-2,0)*length(delim) + (i>1 ? 1 : 0)*length(last) > cols && (i-=1; break)
     end
     join(io, ss[1:i], delim, last)
@@ -725,27 +868,31 @@ print_correction(word, mod::Module) = print_correction(stdout, word, mod)
 
 # Completion data
 
-
 moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 
-filtervalid(names) = filter(x->!occursin(r"#", x), map(string, names))
-
-accessible(mod::Module) =
-    Symbol[filter!(s -> !Base.isdeprecated(mod, s), names(mod, all=true, imported=true));
-           map(names, moduleusings(mod))...;
-           collect(keys(Base.Docs.keywords))] |> unique |> filtervalid
+function accessible(mod::Module)
+    bindings = Set(AccessibleBinding(s) for s in names(mod; all=true, imported=true)
+                   if !isdeprecated(mod, s))
+    for used in moduleusings(mod)
+        union!(bindings, (AccessibleBinding(used, s) for s in names(used)
+                          if !isdeprecated(used, s)))
+    end
+    union!(bindings, (AccessibleBinding(k) for k in keys(Base.Docs.keywords)))
+    filter!(b -> !occursin('#', b.name), bindings)
+    return collect(bindings)
+end
 
 function doc_completions(name, mod::Module=Main)
     res = fuzzysort(name, accessible(mod))
 
     # to insert an entry like `raw""` for `"@raw_str"` in `res`
-    ms = match.(r"^@(.*?)_str$", res)
+    ms = map(c -> match(r"^@(.*?)_str$", c.name), res)
     idxs = findall(!isnothing, ms)
 
     # avoid messing up the order while inserting
-    for i in reverse(idxs)
+    for i in reverse!(idxs)
         c = only((ms[i]::AbstractMatch).captures)
-        insert!(res, i, "$(c)\"\"")
+        insert!(res, i, AccessibleBinding(res[i].source, "$(c)\"\""))
     end
     res
 end
@@ -822,18 +969,6 @@ stripmd(x::Markdown.Footnote) = "$(stripmd(x.id)) $(stripmd(x.text))"
 stripmd(x::Markdown.Table) =
     join([join(map(stripmd, r), " ") for r in x.rows], " ")
 
-"""
-    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
-
-Search available docstrings for entries containing `pattern`.
-
-When `pattern` is a string, case is ignored. Results are printed to `io`.
-
-`apropos` can be called from the help mode in the REPL by wrapping the query in double quotes:
-```
-help?> "pattern"
-```
-"""
 apropos(string) = apropos(stdout, string)
 apropos(io::IO, string) = apropos(io, Regex("\\Q$string", "i"))
 

@@ -284,3 +284,17 @@ end
         end
     end
 end
+
+@testset "+= with indexing (#47241)" begin
+    i = 0
+    x = zeros(2)
+    @fastmath x[i += 1] += 1
+    @fastmath x[end] += 1
+    @test x == [1, 1]
+    @test i == 1
+end
+
+@testset "@fastmath-related crash (#49907)" begin
+    x = @fastmath maximum(Float16[1,2,3]; init = Float16(0))
+    @test x == Float16(3)
+end

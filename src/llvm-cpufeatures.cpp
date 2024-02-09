@@ -21,7 +21,6 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/PassManager.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Support/Debug.h>
@@ -44,14 +43,14 @@ Optional<bool> always_have_fma(Function &intr, const Triple &TT) JL_NOTSAFEPOINT
         auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
         return typ == "f32" || typ == "f64";
     } else {
-        return {};
+        return None;
     }
 }
 
 static bool have_fma(Function &intr, Function &caller, const Triple &TT) JL_NOTSAFEPOINT {
     auto unconditional = always_have_fma(intr, TT);
-    if (unconditional.hasValue())
-        return unconditional.getValue();
+    if (unconditional)
+        return *unconditional;
 
     auto intr_name = intr.getName();
     auto typ = intr_name.substr(strlen("julia.cpu.have_fma."));
@@ -60,7 +59,7 @@ static bool have_fma(Function &intr, Function &caller, const Triple &TT) JL_NOTS
     StringRef FS =
         FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
 
-    SmallVector<StringRef, 6> Features;
+    SmallVector<StringRef, 128> Features;
     FS.split(Features, ',');
     for (StringRef Feature : Features)
     if (TT.isARM()) {
@@ -68,7 +67,7 @@ static bool have_fma(Function &intr, Function &caller, const Triple &TT) JL_NOTS
         return typ == "f32" || typ == "f64";
       else if (Feature == "+vfp4sp")
         return typ == "f32";
-    } else {
+    } else if (TT.isX86()) {
       if (Feature == "+fma" || Feature == "+fma4")
         return typ == "f32" || typ == "f64";
     }
@@ -110,7 +109,7 @@ bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
             I->eraseFromParent();
         }
 #ifdef JL_VERIFY_PASSES
-        assert(!verifyModule(M, &errs()));
+        assert(!verifyLLVMIR(M));
 #endif
         return true;
     } else {
@@ -118,39 +117,10 @@ bool lowerCPUFeatures(Module &M) JL_NOTSAFEPOINT
     }
 }
 
-PreservedAnalyses CPUFeatures::run(Module &M, ModuleAnalysisManager &AM)
+PreservedAnalyses CPUFeaturesPass::run(Module &M, ModuleAnalysisManager &AM)
 {
     if (lowerCPUFeatures(M)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
-}
-
-namespace {
-struct CPUFeaturesLegacy : public ModulePass {
-    static char ID;
-    CPUFeaturesLegacy() JL_NOTSAFEPOINT : ModulePass(ID) {};
-
-    bool runOnModule(Module &M)
-    {
-        return lowerCPUFeatures(M);
-    }
-};
-
-char CPUFeaturesLegacy::ID = 0;
-static RegisterPass<CPUFeaturesLegacy>
-        Y("CPUFeatures",
-          "Lower calls to CPU feature testing intrinsics.",
-          false,
-          false);
-}
-
-Pass *createCPUFeaturesPass()
-{
-    return new CPUFeaturesLegacy();
-}
-
-extern "C" JL_DLLEXPORT void LLVMExtraAddCPUFeaturesPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createCPUFeaturesPass());
 }

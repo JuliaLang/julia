@@ -803,6 +803,84 @@ function _atthreads_dynamic_with_error(a)
 end
 @test_throws "user error in the loop body" _atthreads_dynamic_with_error(zeros(threadpoolsize()))
 
+####
+# :greedy
+###
+
+function _atthreads_greedy_schedule(n)
+    inc = Threads.Atomic{Int}(0)
+    flags = zeros(Int, n)
+    Threads.@threads :greedy for i = 1:n
+        Threads.atomic_add!(inc, 1)
+        flags[i] = 1
+    end
+    return inc[], flags
+end
+@test _atthreads_greedy_schedule(threadpoolsize()) == (threadpoolsize(), ones(threadpoolsize()))
+@test _atthreads_greedy_schedule(1) == (1, ones(1))
+@test _atthreads_greedy_schedule(10) == (10, ones(10))
+@test _atthreads_greedy_schedule(threadpoolsize() * 2) == (threadpoolsize() * 2, ones(threadpoolsize() * 2))
+
+# nested greedy schedule
+function _atthreads_greedy_greedy_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :greedy for _ = 1:threadpoolsize()
+        Threads.@threads :greedy for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_greedy_greedy_schedule() == threadpoolsize() * threadpoolsize()
+
+function _atthreads_greedy_dynamic_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :greedy for _ = 1:threadpoolsize()
+        Threads.@threads :dynamic for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_greedy_dynamic_schedule() == threadpoolsize() * threadpoolsize()
+
+function _atthreads_dymamic_greedy_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :dynamic for _ = 1:threadpoolsize()
+        Threads.@threads :greedy for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_dymamic_greedy_schedule() == threadpoolsize() * threadpoolsize()
+
+function _atthreads_static_greedy_schedule()
+    ids = zeros(Int, threadpoolsize())
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :static for i = 1:threadpoolsize()
+        ids[i] = Threads.threadid()
+        Threads.@threads :greedy for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return ids, inc[]
+end
+@test _atthreads_static_greedy_schedule() == (1:threadpoolsize(), threadpoolsize() * threadpoolsize())
+
+# errors inside @threads :greedy
+function _atthreads_greedy_with_error(a)
+    Threads.@threads :greedy for i in eachindex(a)
+        error("user error in the loop body")
+    end
+    a
+end
+@test_throws "user error in the loop body" _atthreads_greedy_with_error(zeros(threadpoolsize()))
+
+####
+# multi-argument loop
+####
+
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
 catch ex
@@ -1070,4 +1148,42 @@ end
     end
 end
 
+# issue #49746, thread safety in `atexit(f)`
+@testset "atexit thread safety" begin
+    f = () -> nothing
+    before_len = length(Base.atexit_hooks)
+    @sync begin
+        for _ in 1:1_000_000
+            Threads.@spawn begin
+                atexit(f)
+            end
+        end
+    end
+    @test length(Base.atexit_hooks) == before_len + 1_000_000
+    @test all(hook -> hook === f, Base.atexit_hooks[1 : 1_000_000])
+
+    # cleanup
+    Base.@lock Base._atexit_hooks_lock begin
+        deleteat!(Base.atexit_hooks, 1:1_000_000)
+    end
+end
+
+#Thread safety of threacall
+function threadcall_threads()
+    Threads.@threads for i = 1:8
+        ptr = @threadcall(:jl_malloc, Ptr{Cint}, (Csize_t,), sizeof(Cint))
+        @test ptr != C_NULL
+        unsafe_store!(ptr, 3)
+        @test unsafe_load(ptr) == 3
+        ptr = @threadcall(:jl_realloc, Ptr{Cint}, (Ptr{Cint}, Csize_t,), ptr, 2 * sizeof(Cint))
+        @test ptr != C_NULL
+        unsafe_store!(ptr, 4, 2)
+        @test unsafe_load(ptr, 1) == 3
+        @test unsafe_load(ptr, 2) == 4
+        @threadcall(:jl_free, Cvoid, (Ptr{Cint},), ptr)
+    end
+end
+@testset "threadcall + threads" begin
+    threadcall_threads() #Shouldn't crash!
+end
 end # main testset

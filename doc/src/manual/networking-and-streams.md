@@ -1,9 +1,10 @@
 # Networking and Streams
 
 Julia provides a rich interface to deal with streaming I/O objects such as terminals, pipes and
-TCP sockets. This interface, though asynchronous at the system level, is presented in a synchronous
-manner to the programmer and it is usually unnecessary to think about the underlying asynchronous
-operation. This is achieved by making heavy use of Julia cooperative threading ([coroutine](@ref man-tasks))
+TCP sockets.
+These objects allow data to be sent and received in a stream-like fashion, which means that data is processed sequentially as it becomes available.
+This interface, though asynchronous at the system level, is presented in a synchronous manner to the programmer.
+This is achieved by making heavy use of Julia cooperative threading ([coroutine](@ref man-tasks))
 functionality.
 
 ## Basic Stream I/O
@@ -66,8 +67,8 @@ abcd
 "abcd"
 ```
 
-Note that depending on your terminal settings, your TTY may be line buffered and might thus require
-an additional enter before the data is sent to Julia.
+Note that depending on your terminal settings, your TTY ("teletype terminal") may be line buffered and might thus require an additional enter before `stdin` data is sent to Julia.
+When running Julia from the command line in a TTY, output is sent to the console by default, and standard input is read from the keyboard.
 
 To read every line from [`stdin`](@ref) you can use [`eachline`](@ref):
 
@@ -120,7 +121,28 @@ of common properties.
 
 ## Working with Files
 
-Like many other environments, Julia has an [`open`](@ref) function, which takes a filename and
+You can write content to a file with the `write(filename::String, content)` method:
+
+```julia-repl
+julia> write("hello.txt", "Hello, World!")
+13
+```
+
+_(`13` is the number of bytes written.)_
+
+You can read the contents of a file with the `read(filename::String)` method, or `read(filename::String, String)`
+to the contents as a string:
+
+```julia-repl
+julia> read("hello.txt", String)
+"Hello, World!"
+```
+
+
+### Advanced: streaming files
+
+The `read` and `write` methods above allow you to read and write file contents. Like many other
+environments, Julia also has an [`open`](@ref) function, which takes a filename and
 returns an [`IOStream`](@ref) object that you can use to read and write things from the file. For example,
 if we have a file, `hello.txt`, whose contents are `Hello, World!`:
 
@@ -183,6 +205,24 @@ julia> open("hello.txt") do f
        end
 "HELLO AGAIN."
 ```
+
+If you want to redirect stdout to a file
+
+```# Open file for writing
+out_file = open("output.txt", "w")
+
+# Redirect stdout to file
+redirect_stdout(out_file) do
+    # Your code here
+    println("This output goes to `out_file` via the `stdout` variable.")
+end
+
+# Close file
+close(out_file)
+
+```
+
+Redirecting stdout to a file can help you save and analyze program output, automate processes, and meet compliance requirements.
 
 ## A simple TCP example
 
@@ -315,7 +355,6 @@ ip"74.125.226.225"
 
 ## Asynchronous I/O
 
-
 All I/O operations exposed by [`Base.read`](@ref) and [`Base.write`](@ref) can be performed
 asynchronously through the use of [coroutines](@ref man-tasks). You can create a new coroutine to
 read from or write to a stream using the [`@async`](@ref) macro:
@@ -397,6 +436,7 @@ close(socket)
 This example gives the same functionality as the previous program, but uses IPv6 as the network-layer protocol.
 
 Listener:
+
 ```julia
 using Sockets
 group = Sockets.IPv6("ff05::5:6:7")
@@ -409,6 +449,7 @@ close(socket)
 ```
 
 Sender:
+
 ```julia
 using Sockets
 group = Sockets.IPv6("ff05::5:6:7")

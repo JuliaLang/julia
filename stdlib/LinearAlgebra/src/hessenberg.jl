@@ -55,15 +55,16 @@ UpperHessenberg{T}(H::UpperHessenberg) where {T} = UpperHessenberg{T}(H.data)
 UpperHessenberg(A::AbstractMatrix) = UpperHessenberg{eltype(A),typeof(A)}(A)
 Matrix(H::UpperHessenberg{T}) where {T} = Matrix{T}(H)
 Array(H::UpperHessenberg) = Matrix(H)
-size(H::UpperHessenberg, d) = size(H.data, d)
 size(H::UpperHessenberg) = size(H.data)
+axes(H::UpperHessenberg) = axes(H.data)
 parent(H::UpperHessenberg) = H.data
 
 # similar behaves like UpperTriangular
 similar(H::UpperHessenberg, ::Type{T}) where {T} = UpperHessenberg(similar(H.data, T))
 similar(H::UpperHessenberg, ::Type{T}, dims::Dims{N}) where {T,N} = similar(H.data, T, dims)
 
-AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg(AbstractMatrix{T}(H.data))
+AbstractMatrix{T}(H::UpperHessenberg) where {T} = UpperHessenberg{T}(H)
+AbstractMatrix{T}(H::UpperHessenberg{T}) where {T} = copy(H)
 
 copy(H::UpperHessenberg) = UpperHessenberg(copy(H.data))
 real(H::UpperHessenberg{<:Real}) = H
@@ -80,10 +81,13 @@ function Matrix{T}(H::UpperHessenberg) where T
     return triu!(copyto!(Matrix{T}(undef, m, n), H.data), -1)
 end
 
-getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
+Base.isassigned(H::UpperHessenberg, i::Int, j::Int) =
+    i <= j+1 ? isassigned(H.data, i, j) : true
+
+Base.@propagate_inbounds getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)
 
-function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
+Base.@propagate_inbounds function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
     if i > j+1
         x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
             "($i, $j) of an UpperHessenberg matrix to a nonzero value ($x)"))
@@ -129,41 +133,29 @@ for T = (:Number, :UniformScaling, :Diagonal)
 end
 
 function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
-    T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
-    HH = copy_similar(H, T)
-    rmul!(HH, U)
+    HH = mul!(matprod_dest(H, U, promote_op(matprod, eltype(H), eltype(U))), H, U)
     UpperHessenberg(HH)
 end
 function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
-    T = typeof(oneunit(eltype(H))*oneunit(eltype(U)))
-    HH = copy_similar(H, T)
-    lmul!(U, HH)
+    HH = mul!(matprod_dest(U, H, promote_op(matprod, eltype(U), eltype(H))), U, H)
     UpperHessenberg(HH)
 end
 
 function /(H::UpperHessenberg, U::UpperTriangular)
-    T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
-    HH = copy_similar(H, T)
-    rdiv!(HH, U)
+    HH = _rdiv!(matprod_dest(H, U, promote_op(/, eltype(H), eltype(U))), H, U)
     UpperHessenberg(HH)
 end
 function /(H::UpperHessenberg, U::UnitUpperTriangular)
-    T = typeof(oneunit(eltype(H))/oneunit(eltype(U)))
-    HH = copy_similar(H, T)
-    rdiv!(HH, U)
+    HH = _rdiv!(matprod_dest(H, U, promote_op(/, eltype(H), eltype(U))), H, U)
     UpperHessenberg(HH)
 end
 
 function \(U::UpperTriangular, H::UpperHessenberg)
-    T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
-    HH = copy_similar(H, T)
-    ldiv!(U, HH)
+    HH = ldiv!(matprod_dest(U, H, promote_op(\, eltype(U), eltype(H))), U, H)
     UpperHessenberg(HH)
 end
 function \(U::UnitUpperTriangular, H::UpperHessenberg)
-    T = typeof(oneunit(eltype(U))\oneunit(eltype(H)))
-    HH = copy_similar(H, T)
-    ldiv!(U, HH)
+    HH = ldiv!(matprod_dest(U, H, promote_op(\, eltype(U), eltype(H))), U, H)
     UpperHessenberg(HH)
 end
 
@@ -458,8 +450,7 @@ julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
 
 julia> F = hessenberg(A)
 Hessenberg{Float64, UpperHessenberg{Float64, Matrix{Float64}}, Matrix{Float64}, Vector{Float64}, Bool}
-Q factor:
-3×3 LinearAlgebra.HessenbergQ{Float64, Matrix{Float64}, Vector{Float64}, false}
+Q factor: 3×3 LinearAlgebra.HessenbergQ{Float64, Matrix{Float64}, Vector{Float64}, false}
 H factor:
 3×3 UpperHessenberg{Float64, Matrix{Float64}}:
   4.0      -11.3137       -1.41421
@@ -486,7 +477,7 @@ function show(io::IO, mime::MIME"text/plain", F::Hessenberg)
     if !iszero(F.μ)
         print("\nwith shift μI for μ = ", F.μ)
     end
-    println(io, "\nQ factor:")
+    print(io, "\nQ factor: ")
     show(io, mime, F.Q)
     println(io, "\nH factor:")
     show(io, mime, F.H)
@@ -610,7 +601,6 @@ function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:Any,<:A
 end
 
 ldiv!(F::AdjointFactorization{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
-rdiv!(B::AbstractMatrix, F::AdjointFactorization{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 
 det(F::Hessenberg) = det(F.H; shift=F.μ)
 logabsdet(F::Hessenberg) = logabsdet(F.H; shift=F.μ)

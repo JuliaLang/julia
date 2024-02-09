@@ -90,7 +90,7 @@ function getalladdrinfo(host::String)
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || Base.list_deletefirst!(ct.queue, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later
@@ -122,10 +122,20 @@ end
 getalladdrinfo(host::AbstractString) = getalladdrinfo(String(host))
 
 """
-    getaddrinfo(host::AbstractString, IPAddr=IPv4) -> IPAddr
+    getaddrinfo(host::AbstractString, IPAddr) -> IPAddr
 
 Gets the first IP address of the `host` of the specified `IPAddr` type.
-Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
+Uses the operating system's underlying getaddrinfo implementation, which may do
+a DNS lookup.
+
+# Examples
+```julia-repl
+julia> getaddrinfo("localhost", IPv6)
+ip"::1"
+
+julia> getaddrinfo("localhost", IPv4)
+ip"127.0.0.1"
+```
 """
 function getaddrinfo(host::String, T::Type{<:IPAddr})
     addrs = getalladdrinfo(host)
@@ -137,6 +147,14 @@ function getaddrinfo(host::String, T::Type{<:IPAddr})
     throw(DNSError(host, UV_EAI_NONAME))
 end
 getaddrinfo(host::AbstractString, T::Type{<:IPAddr}) = getaddrinfo(String(host), T)
+
+"""
+    getaddrinfo(host::AbstractString) -> IPAddr
+
+Gets the first available IP address of `host`, which may be either an `IPv4` or
+`IPv6` address. Uses the operating system's underlying getaddrinfo
+implementation, which may do a DNS lookup.
+"""
 function getaddrinfo(host::AbstractString)
     addrs = getalladdrinfo(String(host))
     if !isempty(addrs)
@@ -205,7 +223,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || Base.list_deletefirst!(ct.queue, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later

@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+#
 
 module BaseDocs
 
@@ -52,12 +53,26 @@ kw"import"
 """
     export
 
-`export` is used within modules to tell Julia which functions should be
+`export` is used within modules to tell Julia which names should be
 made available to the user. For example: `export foo` makes the name
 `foo` available when [`using`](@ref) the module.
 See the [manual section about modules](@ref modules) for details.
 """
 kw"export"
+
+"""
+    public
+
+`public` is used within modules to tell Julia which names are part of the
+public API of the module . For example: `public foo` indicates that the name
+`foo` is public, without making it available when [`using`](@ref)
+the module. See the [manual section about modules](@ref modules) for details.
+
+!!! compat "Julia 1.11"
+    The public keyword was added in Julia 1.11. Prior to this the notion
+    of publicness was less explicit.
+"""
+kw"public"
 
 """
     as
@@ -101,7 +116,7 @@ kw"abstract type", kw"abstract"
 
 `module` declares a [`Module`](@ref), which is a separate global variable workspace. Within a
 module, you can control which names from other modules are visible (via importing), and
-specify which of your names are intended to be public (via exporting).
+specify which of your names are intended to be public (via `export` and `public`).
 Modules allow you to create top-level definitions without worrying about name conflicts
 when your code is used together with somebody else’s.
 See the [manual section about modules](@ref modules) for more details.
@@ -151,7 +166,7 @@ kw"__init__"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base` or local definitions of
-[`eval`](@ref Base.MainInclude.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+[`eval`](@ref Main.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
 module Mod
@@ -203,7 +218,7 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling [`eval`](@ref Base.MainInclude.eval),
+Macros are a way to run generated code without calling [`eval`](@ref Main.eval),
 since the generated code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
@@ -1315,7 +1330,11 @@ a tuple of types. All types, as well as the LLVM code, should be specified as li
 not as variables or expressions (it may be necessary to use `@eval` to generate these
 literals).
 
-See `test/llvmcall.jl` for usage examples.
+[Opaque pointers](https://llvm.org/docs/OpaquePointers.html) (written as `ptr`) are not allowed in the LLVM code.
+
+See
+[`test/llvmcall.jl`](https://github.com/JuliaLang/julia/blob/v$VERSION/test/llvmcall.jl)
+for usage examples.
 """
 Core.Intrinsics.llvmcall
 
@@ -1744,6 +1763,12 @@ Create a `Task` (i.e. coroutine) to execute the given function `func` (which
 must be callable with no arguments). The task exits when this function returns.
 The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
 
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
+
 # Examples
 ```jldoctest
 julia> a() = sum(i for i in 1:1000);
@@ -1794,14 +1819,14 @@ In these examples, `a` is a [`Rational`](@ref), which has two fields.
 nfields
 
 """
-    UndefVarError(var::Symbol)
+    UndefVarError(var::Symbol, [scope])
 
 A symbol in the current scope is not defined.
 
 # Examples
 ```jldoctest
 julia> a
-ERROR: UndefVarError: `a` not defined
+ERROR: UndefVarError: `a` not defined in `Main`
 
 julia> a = 1;
 
@@ -2211,11 +2236,14 @@ setfield!
     swapfield!(value, name::Symbol, x, [order::Symbol])
     swapfield!(value, i::Int, x, [order::Symbol])
 
-These atomically perform the operations to simultaneously get and set a field:
+Atomically perform the operations to simultaneously get and set a field:
 
     y = getfield(value, name)
     setfield!(value, name, x)
     return y
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 swapfield!
 
@@ -2223,7 +2251,7 @@ swapfield!
     modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
     modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
 
-These atomically perform the operations to get and set a field after applying
+Atomically perform the operations to get and set a field after applying
 the function `op`.
 
     y = getfield(value, name)
@@ -2233,6 +2261,9 @@ the function `op`.
 
 If supported by the hardware (for example, atomic increment), this may be
 optimized to the appropriate hardware instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 modifyfield!
 
@@ -2242,7 +2273,7 @@ modifyfield!
     replacefield!(value, i::Int, expected, desired,
                   [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
 
-These atomically perform the operations to get and conditionally set a field to
+Atomically perform the operations to get and conditionally set a field to
 a given value.
 
     y = getfield(value, name, fail_order)
@@ -2254,8 +2285,29 @@ a given value.
 
 If supported by the hardware, this may be optimized to the appropriate hardware
 instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 replacefield!
+
+"""
+    setfieldonce!(value, name::Union{Int,Symbol}, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> success::Bool
+
+Atomically perform the operations to set a field to
+a given value, only if it was previously not set.
+
+    ok = !isdefined(value, name, fail_order)
+    if ok
+        setfield!(value, name, desired, success_order)
+    end
+    return ok
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+setfieldonce!
 
 """
     getglobal(module::Module, name::Symbol, [order::Symbol=:monotonic])
@@ -2297,6 +2349,7 @@ julia> getglobal(M, :a)
 """
 getglobal
 
+
 """
     setglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
 
@@ -2322,7 +2375,8 @@ See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
 julia> module M end;
 
 julia> M.a  # same as `getglobal(M, :a)`
-ERROR: UndefVarError: `a` not defined
+ERROR: UndefVarError: `a` not defined in `M`
+Suggestion: check for spelling errors or missing imports.
 
 julia> setglobal!(M, :a, 1)
 1
@@ -2332,6 +2386,81 @@ julia> M.a
 ```
 """
 setglobal!
+
+"""
+    Core.get_binding_type(module::Module, name::Symbol)
+
+Retrieve the declared type of the binding `name` from the module `module`.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+"""
+Core.get_binding_type
+
+"""
+    Core.set_binding_type!(module::Module, name::Symbol, [type::Type])
+
+Set the declared type of the binding `name` in the module `module` to `type`. Error if the
+binding already has a type that is not equivalent to `type`. If the `type` argument is
+absent, set the binding type to `Any` if unset, but do not error.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+"""
+Core.set_binding_type!
+
+"""
+    swapglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
+
+Atomically perform the operations to simultaneously get and set a global.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`swapproperty!`](@ref Base.swapproperty!) and [`setglobal!`](@ref).
+"""
+swapglobal!
+
+"""
+    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic]) -> Pair
+
+Atomically perform the operations to get and set a global after applying
+the function `op`.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`modifyproperty!`](@ref Base.modifyproperty!) and [`setglobal!`](@ref).
+"""
+modifyglobal!
+
+"""
+    replaceglobal!(module::Module, name::Symbol, expected, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+
+Atomically perform the operations to get and conditionally set a global to
+a given value.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`replaceproperty!`](@ref Base.replaceproperty!) and [`setglobal!`](@ref).
+"""
+replaceglobal!
+
+"""
+    setglobalonce!(module::Module, name::Symbol, value,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> success::Bool
+
+Atomically perform the operations to set a global to
+a given value, only if it was previously not set.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@ref).
+"""
+setglobalonce!
 
 """
     typeof(x)
@@ -2396,6 +2525,42 @@ false
 """
 isdefined
 
+"""
+    Memory{T}(undef, n)
+
+Construct an uninitialized [`Memory{T}`](@ref) of length `n`. All Memory
+objects of length 0 might alias, since there is no reachable mutable content
+from them.
+
+# Examples
+```julia-repl
+julia> Memory{Float64}(undef, 3)
+3-element Memory{Float64}:
+ 6.90966e-310
+ 6.90966e-310
+ 6.90966e-310
+```
+"""
+Memory{T}(::UndefInitializer, n)
+
+"""
+    MemoryRef(memory)
+
+Construct a MemoryRef from a memory object. This does not fail, but the
+resulting memory may point out-of-bounds if the memory is empty.
+"""
+MemoryRef(::Memory)
+
+"""
+    MemoryRef(::Memory, index::Integer)
+    MemoryRef(::MemoryRef, index::Integer)
+
+Construct a MemoryRef from a memory object and an offset index (1-based) which
+can also be negative. This always returns an inbounds object, and will throw an
+error if that is not possible (because the index would result in a shift
+out-of-bounds of the underlying memory).
+"""
+MemoryRef(::Union{Memory,MemoryRef}, ::Integer)
 
 """
     Vector{T}(undef, n)
@@ -2797,23 +2962,33 @@ kw"Union{}", Base.Bottom
 """
     Union{Types...}
 
-A type union is an abstract type which includes all instances of any of its argument types. The empty
-union [`Union{}`](@ref) is the bottom type of Julia.
+A `Union` type is an abstract type which includes all instances of any of its argument types.
+This means that `T <: Union{T,S}` and `S <: Union{T,S}`.
+
+Like other abstract types, it cannot be instantiated, even if all of its arguments are non
+abstract.
 
 # Examples
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
 Union{Int64, AbstractString}
 
-julia> 1 isa IntOrString
+julia> 1 isa IntOrString # instance of Int is included in the union
 true
 
-julia> "Hello!" isa IntOrString
+julia> "Hello!" isa IntOrString # String is also included
 true
 
-julia> 1.0 isa IntOrString
+julia> 1.0 isa IntOrString # Float64 is not included because it is neither Int nor AbstractString
 false
 ```
+
+# Extended Help
+
+Unlike most other parametric types, unions are covariant in their parameters. For example,
+`Union{Real, String}` is a subtype of `Union{Number, AbstractString}`.
+
+The empty union [`Union{}`](@ref) is the bottom type of Julia.
 """
 Union
 
@@ -2822,7 +2997,7 @@ Union
     UnionAll
 
 A union of types over all values of a type parameter. `UnionAll` is used to describe parametric types
-where the values of some parameters are not known.
+where the values of some parameters are not known. See the manual section on [UnionAll Types](@ref).
 
 # Examples
 ```jldoctest
@@ -3090,13 +3265,29 @@ Base.modifyproperty!
     replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
 
 Perform a compare-and-swap operation on `x.f` from `expected` to `desired`, per
-egal. The syntax `@atomic_replace! x.f expected => desired` can be used instead
+egal. The syntax `@atomicreplace x.f expected => desired` can be used instead
 of the function call form.
 
 See also [`replacefield!`](@ref Core.replacefield!)
-and [`setproperty!`](@ref Base.setproperty!).
+[`setproperty!`](@ref Base.setproperty!),
+[`setpropertyonce!`](@ref Base.setpropertyonce!).
 """
 Base.replaceproperty!
+
+"""
+    setpropertyonce!(x, f::Symbol, value, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+
+Perform a compare-and-swap operation on `x.f` to set it to `value` if previously unset.
+The syntax `@atomiconce x.f = value` can be used instead of the function call form.
+
+See also [`setfieldonce!`](@ref Core.replacefield!),
+[`setproperty!`](@ref Base.setproperty!),
+[`replaceproperty!`](@ref Base.replaceproperty!).
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+Base.setpropertyonce!
 
 
 """
@@ -3228,11 +3419,20 @@ See also [`"`](@ref \")
 kw"\"\"\""
 
 """
+Unsafe pointer operations are compatible with loading and storing pointers declared with
+`_Atomic` and `std::atomic` type in C11 and C++23 respectively. An error may be thrown if
+there is not support for atomically loading the Julia type `T`.
+
+See also: [`unsafe_load`](@ref), [`unsafe_modify!`](@ref), [`unsafe_replace!`](@ref), [`unsafe_store!`](@ref), [`unsafe_swap!`](@ref)
+"""
+kw"atomic"
+
+"""
     Base.donotdelete(args...)
 
 This function prevents dead-code elimination (DCE) of itself and any arguments
 passed to it, but is otherwise the lightest barrier possible. In particular,
-it is not a GC safepoint, does model an observable heap effect, does not expand
+it is not a GC safepoint, does not model an observable heap effect, does not expand
 to any code itself and may be re-ordered with respect to other side effects
 (though the total number of executions may not change).
 
@@ -3249,6 +3449,14 @@ unused and delete the entire benchmark code).
     `donotdelete` does not affect constant folding. For example, in
     `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
     the code is semantically equivalent to `donotdelete(2).`
+
+!!! note
+    This intrinsic does not affect the semantics of code that is dead because it is
+    *unreachable*. For example, the body of the function `f(x) = false && donotdelete(x)`
+    may be deleted in its entirety. The semantics of this intrinsic only guarantee that
+    *if* the intrinsic is semantically executed, then there is some program state at
+    which the value of the arguments of this intrinsic were available (in a register,
+    in memory, etc.).
 
 # Examples
 
@@ -3268,11 +3476,9 @@ Base.donotdelete
 """
     Base.compilerbarrier(setting::Symbol, val)
 
-This function puts a barrier at a specified compilation phase.
-It is supposed to only influence the compilation behavior according to `setting`,
-and its runtime semantics is just to return the second argument `val` (except that
-this function will perform additional checks on `setting` in a case when `setting`
-isn't known precisely at compile-time.)
+This function acts a compiler barrier at a specified compilation phase.
+The dynamic semantics of this intrinsic are to return the `val` argument, unmodified.
+However, depending on the `setting`, the compiler is prevented from assuming this behavior.
 
 Currently either of the following `setting`s is allowed:
 - Barriers on abstract interpretation:
@@ -3285,9 +3491,9 @@ Currently either of the following `setting`s is allowed:
 - Any barriers on optimization aren't implemented yet
 
 !!! note
-    This function is supposed to be used _with `setting` known precisely at compile-time_.
-    Note that in a case when the `setting` isn't known precisely at compile-time, the compiler
-    currently will put the most strongest barrier(s) rather than emitting a compile-time warning.
+    This function is expected to be used with `setting` known precisely at compile-time.
+    If the `setting` is not known precisely at compile-time, the compiler will emit the
+    strongest barrier(s). No compile-time warning is issued.
 
 # Examples
 
@@ -3341,5 +3547,7 @@ The current differences are:
 - `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
+
+Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end

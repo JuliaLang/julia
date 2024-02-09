@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random, LinearAlgebra, SparseArrays
+using Random, LinearAlgebra
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
@@ -8,7 +8,8 @@ types = Any[
     Bool,
     Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
     Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
-    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}
+    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64},
+    BigFloat, BigInt, Rational{BigInt}
 ]
 vals = vcat(
     typemin(Int64),
@@ -51,8 +52,7 @@ let collides = 0
             collides += eq
         end
     end
-    # each pair of types has one collision for these values
-    @test collides <= (length(types) - 1)^2
+    @test collides <= 516
 end
 @test hash(0.0) != hash(-0.0)
 
@@ -92,9 +92,8 @@ vals = Any[
     Dict(x => x for x in 1:10),
     Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1),
     [], [1], [2], [1, 1], [1, 2], [1, 3], [2, 2], [1, 2, 2], [1, 3, 3],
-    zeros(2, 2), spzeros(2, 2), Matrix(1.0I, 2, 2), sparse(1.0I, 2, 2),
-    sparse(fill(1., 2, 2)), fill(1., 2, 2), sparse([0 0; 1 0]), [0 0; 1 0],
-    [-0. 0; -0. 0.], SparseMatrixCSC(2, 2, [1, 3, 3], [1, 2], [-0., -0.]),
+    zeros(2, 2), Matrix(1.0I, 2, 2), fill(1., 2, 2),
+    [-0. 0; -0. 0.],
     # issue #16364
     1:4, 1:1:4, 1:-1:0, 1.0:4.0, 1.0:1.0:4.0, range(1, stop=4, length=4),
     # issue #35597, when `LinearIndices` does not begin at 1
@@ -141,13 +140,6 @@ vals = Any[
     [5 1; 0 0], [1 1; 0 1], [0 2; 3 0], [0 2; 4 6], [4 0; 0 1],
     [0 0 0; 0 0 0], [1 0 0; 0 0 1], [0 0 2; 3 0 0], [0 0 7; 6 1 2],
     [4 0 0; 3 0 1], [0 2 4; 6 0 0],
-    # various stored zeros patterns
-    sparse([1], [1], [0]), sparse([1], [1], [-0.0]),
-    sparse([1, 2], [1, 1], [-0.0, 0.0]), sparse([1, 2], [1, 1], [0.0, -0.0]),
-    sparse([1, 2], [1, 1], [-0.0, 0.0], 3, 1), sparse([1, 2], [1, 1], [0.0, -0.0], 3, 1),
-    sparse([1, 3], [1, 1], [-0.0, 0.0], 3, 1), sparse([1, 3], [1, 1], [0.0, -0.0], 3, 1),
-    sparse([1, 2, 3], [1, 1, 1], [-1, 0, 1], 3, 1), sparse([1, 2, 3], [1, 1, 1], [-1.0, -0.0, 1.0], 3, 1),
-    sparse([1, 3], [1, 1], [-1, 0], 3, 1), sparse([1, 2], [1, 1], [-1, 0], 3, 1)
 ]
 
 for a in vals
@@ -155,7 +147,6 @@ for a in vals
     @test hash(convert(Array{Any}, a)) == hash(b)
     @test hash(convert(Array{supertype(eltype(a))}, a)) == hash(b)
     @test hash(convert(Array{Float64}, a)) == hash(b)
-    @test hash(sparse(a)) == hash(b)
     if !any(x -> isequal(x, -0.0), a)
         @test hash(convert(Array{Int}, a)) == hash(b)
         if all(x -> typemin(Int8) <= x <= typemax(Int8), a)
@@ -168,20 +159,6 @@ end
 @test hash(Any[Int8(1), Int8(2), 255]) == hash([1, 2, 255])
 @test hash(Any[Int8(127), Int8(-128), 129, 130]) ==
     hash([127, -128, 129, 130]) != hash([127,  128, 129, 130])
-
-# Test hashing sparse matrix with type which does not support -
-struct CustomHashReal
-    x::Float64
-end
-Base.hash(x::CustomHashReal, h::UInt) = hash(x.x, h)
-Base.:(==)(x::CustomHashReal, y::Number) = x.x == y
-Base.:(==)(x::Number, y::CustomHashReal) = x == y.x
-Base.zero(::Type{CustomHashReal}) = CustomHashReal(0.0)
-Base.zero(x::CustomHashReal) = zero(CustomHashReal)
-
-let a = sparse([CustomHashReal(0), CustomHashReal(3), CustomHashReal(3)])
-    @test hash(a) == hash(Array(a))
-end
 
 vals = Any[
     0.0:0.1:0.3, 0.3:-0.1:0.0,
@@ -295,3 +272,35 @@ if Sys.WORD_SIZE >= 64
         objectid(s)
     end
 end
+
+# Issue #49620
+let t1 = Tuple{AbstractVector,AbstractVector{<:Integer},UnitRange{<:Integer}},
+    t2 = Tuple{AbstractVector,AbstractVector{<:Integer},UnitRange{<:Integer}}
+    @test hash(t1) == hash(t2)
+    @test length(Set{Type}([t1, t2])) == 1
+end
+
+struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
+@test AUnionParam.body.hash == 0
+@test Type{AUnionParam}.hash != 0
+@test Type{AUnionParam{<:Union{Float32,Float64}}}.hash == 0
+@test Type{AUnionParam{<:Union{Nothing,Float32,Float64}}} === Type{AUnionParam}
+@test Type{AUnionParam.body}.hash == 0
+@test Type{Base.Broadcast.Broadcasted}.hash != 0
+
+
+@testset "issue 50628" begin
+    # test hashing of rationals that equal floats are equal to the float hash
+    @test hash(5//2) == hash(big(5)//2) == hash(2.5)
+    # test hashing of rational that are integers hash to the integer
+    @test hash(Int64(5)^25) == hash(big(5)^25) == hash(Int64(5)^25//1) == hash(big(5)^25//1)
+    # test integer/rational that don't fit in Float64 don't hash as Float64
+    @test hash(Int64(5)^25) != hash(5.0^25)
+    @test hash((Int64(5)//2)^25) == hash(big(5//2)^25)
+    # test integer/rational that don't fit in Float64 don't hash as Float64
+    @test hash((Int64(5)//2)^25) != hash(2.5^25)
+    # test hashing of rational with odd denominator
+    @test hash(5//3) == hash(big(5)//3)
+end
+
+@test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))

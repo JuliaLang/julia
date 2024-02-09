@@ -41,6 +41,8 @@ enum {
     JL_TARGET_CLONE_CPU = 1 << 8,
     // Clone when the function uses fp16
     JL_TARGET_CLONE_FLOAT16 = 1 << 9,
+    // Clone when the function uses bf16
+    JL_TARGET_CLONE_BFLOAT16 = 1 << 10,
 };
 
 #define JL_FEATURE_DEF_NAME(name, bit, llvmver, str) JL_FEATURE_DEF(name, bit, llvmver)
@@ -63,31 +65,30 @@ static const uint32_t jl_sysimg_tag_mask = 0x80000000u;
 static const uint32_t jl_sysimg_val_mask = ~((uint32_t)0x80000000u);
 
 typedef struct _jl_image_fptrs_t {
-    // base function pointer
-    const char *base;
     // number of functions
-    uint32_t noffsets;
-    // function pointer offsets
-    const int32_t *offsets;
+    uint32_t nptrs;
+    // function pointers
+    void **ptrs;
 
     // Following fields contains the information about the selected target.
     // All of these fields are 0 if the selected targets have all the functions cloned.
-    // Instead the offsets are stored in `noffsets` and `offsets`.
+    // Instead the offsets are stored in `nptrs` and `ptrs`.
 
     // number of cloned functions
     uint32_t nclones;
-    // function pointer offsets of cloned functions
-    const int32_t *clone_offsets;
+    // function pointer of cloned functions
+    void **clone_ptrs;
     // sorted indices of the cloned functions (including the tag bit)
     const uint32_t *clone_idxs;
 } jl_image_fptrs_t;
 
 typedef struct {
     uint64_t base;
-    uintptr_t *gvars_base;
+    const char *gvars_base;
     const int32_t *gvars_offsets;
     uint32_t ngvars;
     jl_image_fptrs_t fptrs;
+    void **jl_small_typeof;
 } jl_image_t;
 
 // The header for each image
@@ -106,31 +107,25 @@ typedef struct {
 
 // Per-shard data for image shards. Each image contains header->nshards of these.
 typedef struct {
-
-    // This is the base function pointer
-    // (all other function pointers are stored as offsets to this address)
-    const char *fvar_base;
-    // The array of function pointer offsets (`int32_t`) from the base pointer.
+    // The array of function pointers (`void*`).
     // This includes all julia functions in sysimg as well as all other functions that are cloned.
     // The default function pointer is used if the function is cloned.
-    // The first element is the size of the array, which should **NOT** be used as the number
+    // The first element is the size of the array, which should **NOT** be used is the number
     // of julia functions in the sysimg.
     // Each entry in this array uniquely identifies a function we are interested in
     // (the function may have multiple function pointers corresponding to different versions).
-    // In other sysimg info, all references to functions are stored as their `uint32_t` index
-    // in this array.
-    const int32_t *fvar_offsets;
+    const uintptr_t *fvar_count;
+    void **fvar_ptrs;
     // This is the mapping of shard function index -> global function index
     // staticdata.c relies on the same order of functions in the global function array being
     // the same as what it saw when serializing the global function array. However, partitioning
     // into multiple shards will cause functions to be reordered. This array is used to map
     // back to the original function array for loading.
     const uint32_t *fvar_idxs;
-    // This is the base data pointer
-    // (all other data pointers in this shard are stored as offsets to this address)
-    uintptr_t *gvar_base;
     // This array of global variable offsets (`int32_t`) from the base pointer.
     // Similar to fvar_offsets, but for gvars
+    // This is also the base data pointer
+    // (all data pointers in this shard are stored as offsets to this address)
     const int32_t *gvar_offsets;
     // This is the mapping of shard global variable index -> global global variable index
     // Similar to fvar_idxs, but for gvars
@@ -158,14 +153,12 @@ typedef struct {
     //  this array as the original/base function offsets.
     //  For other targets, this variable contains an offset array with the length defined in
     //  `jl_dispatch_fvars_idxs`. Tagged indices need relocations.
-    const int32_t *clone_offsets;
+    void **clone_ptrs;
     //  Target-specific function indices.
     //  For each target, this includes a tagged `uint32_t` length, an optional `uint32_t` index
     //  of the base target followed by an array of tagged function indices.
     //  The base target index is required to be smaller than the index of the current target
     //  and must be the default (`0`) or a `clone_all` target.
-    //  If it's not `0`, the function pointer array for the `clone_all` target will be used as
-    //  the base function pointer offsets instead.
     //  The tag bits for both the length and the indices are the top bit.
     //  A tagged length indicates that all of the functions are cloned and the indices follows
     //  are the ones that requires relocation. The base target index is omitted in this case.
@@ -174,10 +167,8 @@ typedef struct {
     //  all other cloned functions that requires relocation.
     //  A tagged index means that the function pointer should be filled into the GOT slots
     //  identified by `jl_dispatch_reloc_slots`. There could be more than one slot per function.
-    //  (Note that a tagged index could corresponds to a functions pointer that's the same as
+    //  (Note that a tagged index could corresponds to a function's pointer that's the same as
     //  the base one since this is the only way we currently represent relocations.)
-    //  A tagged length implicitly tags all the indices and the indices will not have the tag bit
-    //  set. The lengths in this variable is needed to decode `jl_dispatch_fvars_offsets`.
     const uint32_t *clone_idxs;
 } jl_image_shard_t;
 
@@ -194,8 +185,10 @@ typedef struct {
     const jl_image_header_t *header;
     // The shard table, contains per-shard data
     const jl_image_shard_t *shards; // points to header->nshards length array
-    // The TLS data
+    // The TLS data pointer
     const jl_image_ptls_t *ptls;
+    // A copy of jl_small_typeof[]
+    void **jl_small_typeof;
 
     //  serialized target data
     //  This contains the number of targets
@@ -218,10 +211,14 @@ jl_image_t jl_init_processor_pkgimg(void *hdl);
 
 // Return the name of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
+// Return the features of the host CPU as a julia string.
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void);
 // Dump the name and feature set of the host CPU
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits);
+// Check if the CPU has native FMA instructions;
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);
-JL_DLLEXPORT void jl_check_pkgimage_clones(char* data);
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char* data);
 
 JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);
 JL_DLLEXPORT int32_t jl_get_zero_subnormals(void);
@@ -235,14 +232,14 @@ JL_DLLEXPORT int32_t jl_get_default_nans(void);
 #include <vector>
 
 extern JL_DLLEXPORT bool jl_processor_print_help;
-
+// NOLINTBEGIN(clang-diagnostic-return-type-c-linkage)
 /**
  * Returns the CPU name and feature string to be used by LLVM JIT.
  *
  * If the detected/specified CPU name is not available on the LLVM version specified,
  * a fallback CPU name will be used. Unsupported features will be ignored.
  */
-extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags) JL_NOTSAFEPOINT;
 
 /**
  * Returns the CPU name and feature string to be used by LLVM disassembler.
@@ -257,7 +254,7 @@ struct jl_target_spec_t {
     // LLVM feature string
     std::string cpu_features;
     // serialized identification data
-    std::vector<uint8_t> data;
+    llvm::SmallVector<uint8_t, 0> data;
     // Clone condition.
     uint32_t flags;
     // Base target index.
@@ -266,9 +263,16 @@ struct jl_target_spec_t {
 /**
  * Return the list of targets to clone
  */
-extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void) JL_NOTSAFEPOINT;
-std::string jl_get_cpu_name_llvm(void) JL_NOTSAFEPOINT;
-std::string jl_get_cpu_features_llvm(void) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void) JL_NOTSAFEPOINT;
+// NOLINTEND(clang-diagnostic-return-type-c-linkage)
+struct FeatureName {
+    const char *name;
+    uint32_t bit; // bit index into a `uint32_t` array;
+    uint32_t llvmver; // 0 if it is available on the oldest LLVM version we support
+};
+
+extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets();
+extern "C" JL_DLLEXPORT void jl_reflect_feature_names(const FeatureName **feature_names, size_t *nfeatures);
 #endif
 
 #endif

@@ -41,6 +41,7 @@ has_nondefault_cmd_flags(c::Cmd) =
 
 """
     Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide, env, dir)
+    Cmd(exec::Vector{String})
 
 Construct a new `Cmd` object, representing an external program and arguments, from `cmd`,
 while changing the settings of the optional keyword arguments:
@@ -70,8 +71,15 @@ while changing the settings of the optional keyword arguments:
 * `dir::AbstractString`: Specify a working directory for the command (instead
   of the current directory).
 
-For any keywords that are not specified, the current settings from `cmd` are used. Normally,
-to create a `Cmd` object in the first place, one uses backticks, e.g.
+For any keywords that are not specified, the current settings from `cmd` are used.
+
+Note that the `Cmd(exec)` constructor does not create a copy of `exec`. Any subsequent changes to `exec` will be reflected in the `Cmd` object.
+
+The most common way to construct a `Cmd` object is with command literals (backticks), e.g.
+
+    `ls -l`
+
+This can then be passed to the `Cmd` constructor to modify its settings, e.g.
 
     Cmd(`echo "Hello world"`, ignorestatus=true, detach=false)
 """
@@ -471,6 +479,12 @@ function cmd_gen(parsed)
         end
         return Cmd(args)
     end
+end
+
+@assume_effects :effect_free :terminates_globally :noub function cmd_gen(
+    parsed::Tuple{Vararg{Tuple{Vararg{Union{String, SubString{String}}}}}}
+)
+    return @invoke cmd_gen(parsed::Any)
 end
 
 """

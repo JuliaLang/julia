@@ -107,6 +107,11 @@ end
     @test taskref[].sticky == false
     @test collect(c) == [0]
 end
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no channel_threadpool.jl`
+    new_env = copy(ENV)
+    new_env["JULIA_NUM_THREADS"] = "1,1"
+    run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
+end
 
 @testset "multiple concurrent put!/take! on a channel for different sizes" begin
     function testcpt(sz)
@@ -452,8 +457,8 @@ end
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
         close(async) # and close
         @test !isopen(async)
-        @test tc[] == 2
-        @test tc[] == 2
+        @test tc[] == 3
+        @test tc[] == 3
         yield() # consume event & then close
         @test tc[] == 3
         sleep(0.1) # no further events
@@ -474,7 +479,7 @@ end
         close(async)
         @test !isopen(async)
         Base.process_events() # and close
-        @test tc[] == 0
+        @test tc[] == 1
         yield() # consume event & then close
         @test tc[] == 1
         sleep(0.1) # no further events
@@ -554,7 +559,7 @@ end
     e = @elapsed for i = 1:5
         wait(t)
     end
-    @test 1.5 > e >= 0.4
+    @test e >= 0.4
     @test a[] == 0
     nothing
 end
@@ -625,21 +630,4 @@ end
                                 try wait(t2) catch end
         @test n_avail(c) == 0
     end
-end
-
-# Issue #49507: stackoverflow in type inference caused by close(::Channel, ::Exception)
-@testset "close(::Channel, ::StackOverflowError)" begin
-    ch = let result = Channel()
-        foo() = try
-            foo()
-        catch e;
-            close(result, e)
-        end
-
-        foo()  # This shouldn't fail with an internal stackoverflow error in inference.
-
-        result
-    end
-
-    @test (try take!(ch) catch e; e; end) isa StackOverflowError
 end

@@ -13,8 +13,8 @@ export p7zip
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-p7zip_path = ""
+artifact_dir::String = ""
+p7zip_path::String = ""
 if Sys.iswindows()
     const p7zip_exe = "7z.exe"
 else

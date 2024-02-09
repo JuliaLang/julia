@@ -1,5 +1,20 @@
-# RUN: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
-# RUN: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=0"
+
+# RUNx: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
+# RUNx: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
+
+# RUN: julia --startup-file=no -O2 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
+# RUN: julia --startup-file=no -O3 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
+
+# RUN: julia --startup-file=no -O2 --check-bounds=auto %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_AUTO
+# RUN: julia --startup-file=no -O3 --check-bounds=auto %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_AUTO
+
+# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=1"
+
+# RUNx: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
+# RUNx: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
 
 # RUN: julia --startup-file=no -O2 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
 # RUN: julia --startup-file=no -O3 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
@@ -76,21 +91,21 @@ end
 # COM: memset checks
 
 # COM: INT64
-# ALL-LABEL: define nonnull {} addrspace(10)* @julia_zeros
+# ALL: define {{.*}} @julia_zeros
 # ALL-NOT: bounds_error
 # COM: memset is not used with bounds checks on (too late in the pipeline)
 # BC_OFF: llvm.memset
 # BC_AUTO: llvm.memset
 
 # COM: INT32
-# ALL-LABEL: define nonnull {} addrspace(10)* @julia_zeros
+# ALL: define {{.*}} @julia_zeros
 # ALL-NOT: bounds_error
 # COM: memset is not used with bounds checks on (too late in the pipeline)
 # BC_OFF: llvm.memset
 # BC_AUTO: llvm.memset
 
 # COM: INT16
-# ALL-LABEL: define nonnull {} addrspace(10)* @julia_zeros
+# ALL: define {{.*}} @julia_zeros
 # ALL-NOT: bounds_error
 # COM: memset is not used with bounds checks on (too late in the pipeline)
 # BC_OFF: llvm.memset
