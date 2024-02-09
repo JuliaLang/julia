@@ -98,8 +98,10 @@ is_valid_lattice_norec(::InferenceLattice, @nospecialize(elem)) = isa(elem, Limi
 """
     tmeet(𝕃::AbstractLattice, a, b::Type)
 
-Compute the lattice meet of lattice elements `a` and `b` over the lattice `𝕃`.
-If `𝕃` is `JLTypeLattice`, this is equivalent to type intersection.
+Compute the lattice meet of lattice elements `a` and `b` over the lattice `𝕃`,
+dropping any results that will not be inhabited at runtime.
+If `𝕃` is `JLTypeLattice`, this is equivalent to type intersection plus the
+elimination of results that have no concrete subtypes.
 Note that currently `b` is restricted to being a type
 (interpreted as a lattice element in the `JLTypeLattice` sub-lattice of `𝕃`).
 """
@@ -107,7 +109,7 @@ function tmeet end
 
 function tmeet(::JLTypeLattice, @nospecialize(a::Type), @nospecialize(b::Type))
     ti = typeintersect(a, b)
-    valid_as_lattice(ti) || return Bottom
+    valid_as_lattice(ti, true) || return Bottom
     return ti
 end
 
@@ -258,7 +260,7 @@ end
 Appropriately converts inferred type of a return value `rt` to such a type
 that we know we can store in the cache and is valid and good inter-procedurally,
 E.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
-or the other cachable lattice element.
+or the other cacheable lattice element.
 
 External lattice `𝕃ᵢ::ExternalLattice` may overload:
 - `widenreturn(𝕃ᵢ::ExternalLattice, @nospecialize(rt), info::BestguessInfo)`
@@ -283,9 +285,12 @@ has_extended_unionsplit(::AnyMustAliasesLattice) = true
 has_extended_unionsplit(::JLTypeLattice) = false
 
 # Curried versions
-⊑(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊑(lattice, a, b)
-⊏(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊏(lattice, a, b)
-⋤(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⋤(lattice, a, b)
+⊑(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊑(𝕃, a, b)
+⊏(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊏(𝕃, a, b)
+⋤(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⋤(𝕃, a, b)
+partialorder(𝕃::AbstractLattice) = ⊑(𝕃)
+strictpartialorder(𝕃::AbstractLattice) = ⊏(𝕃)
+strictneqpartialorder(𝕃::AbstractLattice) = ⋤(𝕃)
 
 # Fallbacks for external packages using these methods
 const fallback_lattice = InferenceLattice(BaseInferenceLattice.instance)

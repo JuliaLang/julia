@@ -76,6 +76,7 @@ Applying it to any other types of arguments will result in a [`MethodError`](@re
 ```jldoctest fofxy
 julia> f(2.0, 3)
 ERROR: MethodError: no method matching f(::Float64, ::Int64)
+The function `f` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   f(::Float64, !Matched::Float64)
@@ -86,6 +87,7 @@ Stacktrace:
 
 julia> f(Float32(2.0), 3.0)
 ERROR: MethodError: no method matching f(::Float32, ::Float64)
+The function `f` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   f(!Matched::Float64, ::Float64)
@@ -96,6 +98,7 @@ Stacktrace:
 
 julia> f(2.0, "3.0")
 ERROR: MethodError: no method matching f(::Float64, ::String)
+The function `f` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   f(::Float64, !Matched::Float64)
@@ -106,6 +109,7 @@ Stacktrace:
 
 julia> f("2.0", "3.0")
 ERROR: MethodError: no method matching f(::String, ::String)
+The function `f` exists, but no method is defined for this combination of argument types.
 ```
 
 As you can see, the arguments must be precisely of type [`Float64`](@ref). Other numeric
@@ -164,6 +168,7 @@ and applying it will still result in a [`MethodError`](@ref):
 ```jldoctest fofxy
 julia> f("foo", 3)
 ERROR: MethodError: no method matching f(::String, ::Int64)
+The function `f` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   f(!Matched::Number, ::Number)
@@ -174,6 +179,7 @@ Stacktrace:
 
 julia> f()
 ERROR: MethodError: no method matching f()
+The function `f` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   f(!Matched::Float64, !Matched::Float64)
@@ -334,10 +340,11 @@ Stacktrace:
 [...]
 ```
 
-Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
-method, and neither is more specific than the other. In such cases, Julia raises a [`MethodError`](@ref)
-rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate
-method for the intersection case:
+Here the call `g(2.0, 3.0)` could be handled by either the `g(::Float64, ::Any)` or the
+`g(::Any, ::Float64)` method. The order in which the methods are defined does not matter and
+neither is more specific than the other. In such cases, Julia raises a
+[`MethodError`](@ref) rather than arbitrarily picking a method. You can avoid method
+ambiguities by specifying an appropriate method for the intersection case:
 
 ```jldoctest gofxy
 julia> g(x::Float64, y::Float64) = 2x + 2y
@@ -406,7 +413,20 @@ Here's an example where the method type parameter `T` is used as the type parame
 type `Vector{T}` in the method signature:
 
 ```jldoctest
-julia> myappend(v::Vector{T}, x::T) where {T} = [v..., x]
+julia> function myappend(v::Vector{T}, x::T) where {T}
+           return [v..., x]
+       end
+myappend (generic function with 1 method)
+```
+
+The type parameter `T` in this example ensures that the added element `x` is a subtype of the
+existing eltype of the vector `v`.
+The `where` keyword introduces a list of those constraints after the method signature definition.
+This works the same for one-line definitions, as seen above, and must appear _before_ the [return
+type declaration](@ref man-functions-return-type), if present, as illustrated below:
+
+```jldoctest
+julia> (myappend(v::Vector{T}, x::T)::Vector) where {T} = [v..., x]
 myappend (generic function with 1 method)
 
 julia> myappend([1,2,3],4)
@@ -418,6 +438,7 @@ julia> myappend([1,2,3],4)
 
 julia> myappend([1,2,3],2.5)
 ERROR: MethodError: no method matching myappend(::Vector{Int64}, ::Float64)
+The function `myappend` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   myappend(::Vector{T}, !Matched::T) where T
@@ -435,6 +456,7 @@ julia> myappend([1.0,2.0,3.0],4.0)
 
 julia> myappend([1.0,2.0,3.0],4)
 ERROR: MethodError: no method matching myappend(::Vector{Float64}, ::Int64)
+The function `myappend` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   myappend(::Vector{T}, !Matched::T) where T
@@ -444,9 +466,9 @@ Stacktrace:
 [...]
 ```
 
-As you can see, the type of the appended element must match the element type of the vector it
-is appended to, or else a [`MethodError`](@ref) is raised. In the following example, the method type parameter
-`T` is used as the return value:
+If the type of the appended element does not match the element type of the vector it is appended to,
+a [`MethodError`](@ref) is raised.
+In the following example, the method's type parameter `T` is used as the return value:
 
 ```jldoctest
 julia> mytypeof(x::T) where {T} = T
@@ -480,6 +502,7 @@ true
 
 julia> same_type_numeric("foo", 2.0)
 ERROR: MethodError: no method matching same_type_numeric(::String, ::Float64)
+The function `same_type_numeric` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   same_type_numeric(!Matched::T, ::T) where T<:Number
@@ -492,6 +515,7 @@ Stacktrace:
 
 julia> same_type_numeric("foo", "bar")
 ERROR: MethodError: no method matching same_type_numeric(::String, ::String)
+The function `same_type_numeric` exists, but no method is defined for this combination of argument types.
 
 julia> same_type_numeric(Int32(1), Int64(2))
 false
@@ -874,6 +898,7 @@ bar (generic function with 1 method)
 
 julia> bar(1,2,3)
 ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64)
+The function `bar` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   bar(::Any, ::Any, ::Any, !Matched::Any)
@@ -887,6 +912,7 @@ julia> bar(1,2,3,4)
 
 julia> bar(1,2,3,4,5)
 ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
+The function `bar` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   bar(::Any, ::Any, ::Any, ::Any)

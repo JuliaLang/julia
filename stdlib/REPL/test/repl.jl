@@ -6,6 +6,10 @@ using Random
 import REPL.LineEdit
 using Markdown
 
+empty!(Base.Experimental._hint_handlers) # unregister error hints so they can be tested separately
+
+@test isassigned(Base.REPL_MODULE_REF)
+
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :FakePTYs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FakePTYs.jl"))
 import .Main.FakePTYs: with_fake_pty
@@ -15,7 +19,6 @@ include(joinpath(BASE_TEST_PATH, "testenv.jl"))
 
 include("FakeTerminals.jl")
 import .FakeTerminals.FakeTerminal
-
 
 function kill_timer(delay)
     # Give ourselves a generous timer here, just to prevent
@@ -1164,7 +1167,7 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-help_result(line, mod::Module=Base) = Core.eval(mod, REPL._helpmode(IOBuffer(), line))
+help_result(line, mod::Module=Base) = Core.eval(mod, REPL._helpmode(IOBuffer(), line, mod))
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
@@ -1249,6 +1252,7 @@ let emptyH1 = Markdown.parse("# "),
 end
 
 module BriefExtended
+public f, f_plain
 """
     f()
 
@@ -1489,7 +1493,7 @@ fake_repl() do stdin_write, stdout_read, repl
     # generate top-level error
     write(stdin_write, "foobar\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined"
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined in `Main`"
     @test readline(stdout_read) == ""
     readuntil(stdout_read, "julia> ", keep=true)
     # check that top-level error did not change `err`
@@ -1504,13 +1508,13 @@ fake_repl() do stdin_write, stdout_read, repl
     readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "foo()\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined"
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined in `Main`"
     readuntil(stdout_read, "julia> ", keep=true)
     # check that deeper error did set `err`
     write(stdin_write, "err\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0m1-element ExceptionStack:"
-    @test readline(stdout_read) == "UndefVarError: `foobar` not defined"
+    @test readline(stdout_read) == "UndefVarError: `foobar` not defined in `Main`"
     @test readline(stdout_read) == "Stacktrace:"
     readuntil(stdout_read, "\n\n", keep=true)
     readuntil(stdout_read, "julia> ", keep=true)
@@ -1669,4 +1673,106 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, '\x04')
     wait(repltask)
     @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
+end
+
+try # test the functionality of `UndefVarError_hint` against `Base.remove_linenums!`
+    @assert isempty(Base.Experimental._hint_handlers)
+    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
+
+    # check the requirement to trigger the hint via `UndefVarError_hint`
+    @test !isdefined(Main, :remove_linenums!) && Base.ispublic(Base, :remove_linenums!)
+
+    fake_repl() do stdin_write, stdout_read, repl
+        backend = REPL.REPLBackend()
+        repltask = @async REPL.run_repl(repl; backend)
+        write(stdin_write,
+              "remove_linenums!\n\"ZZZZZ\"\n")
+        txt = readuntil(stdout_read, "ZZZZZ")
+        write(stdin_write, '\x04')
+        wait(repltask)
+        @test occursin("Hint: a global variable of this name also exists in Base.", txt)
+    end
+finally
+    empty!(Base.Experimental._hint_handlers)
+end
+
+# Hints for tab completes
+
+fake_repl() do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "reada")
+    s1 = readuntil(stdout_read, "reada") # typed
+    s2 = readuntil(stdout_read, "vailable") # partial hint
+
+    write(stdin_write, "x") # "readax" doesn't tab complete so no hint
+    # we can't use readuntil given this doesn't print, so just wait for the hint state to be reset
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    write(stdin_write, "\b") # only tab complete while typing forward
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    write(stdin_write, "v")
+    s3 = readuntil(stdout_read, "ailable") # partial hint
+
+    write(stdin_write, "\t")
+    s4 = readuntil(stdout_read, "readavailable") # full completion is reprinted
+
+    write(stdin_write, "\x15")
+    write(stdin_write, "x") # single chars shouldn't hint e.g. `x` shouldn't hint at `xor`
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    # issue #52376
+    write(stdin_write, "\x15")
+    write(stdin_write, "\\_ailuj")
+    while LineEdit.state(repl.mistate).hint !== nothing
+        sleep(0.1)
+    end
+    @test LineEdit.state(repl.mistate).hint === nothing
+    s5 = readuntil(stdout_read, "\\_ailuj")
+    write(stdin_write, "\t")
+    s6 = readuntil(stdout_read, "ₐᵢₗᵤⱼ")
+
+    write(stdin_write, "\x15\x04")
+    Base.wait(repltask)
+end
+## hints disabled
+fake_repl(options=REPL.Options(confirm_exit=false,hascolor=true,hint_tab_completes=false)) do stdin_write, stdout_read, repl
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+    write(stdin_write, "reada")
+    s1 = readuntil(stdout_read, "reada") # typed
+    @test LineEdit.state(repl.mistate).hint === nothing
+
+    write(stdin_write, "\x15\x04")
+    Base.wait(repltask)
+    @test !occursin("vailable", String(readavailable(stdout_read)))
+end
+
+# banner
+let io = IOBuffer()
+    @test REPL.banner(io) === nothing
+    seek(io, 0)
+    @test countlines(io) == 9
+    take!(io)
+    @test REPL.banner(io; short=true) === nothing
+    seek(io, 0)
+    @test countlines(io) == 2
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(REPL)
+    @test_broken isempty(undoc)
+    @test undoc == [:AbstractREPL, :BasicREPL, :LineEditREPL, :StreamREPL]
 end

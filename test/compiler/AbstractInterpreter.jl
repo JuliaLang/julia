@@ -6,14 +6,22 @@ const CC = Core.Compiler
 include("irutils.jl")
 include("newinterp.jl")
 
+
 # OverlayMethodTable
 # ==================
 
 using Base.Experimental: @MethodTable, @overlay
 
+# @overlay method with return type annotation
+@MethodTable RT_METHOD_DEF
+@overlay RT_METHOD_DEF Base.sin(x::Float64)::Float64 = cos(x)
+@overlay RT_METHOD_DEF function Base.sin(x::T)::T where T<:AbstractFloat
+    cos(x)
+end
+
 @newinterp MTOverlayInterp
 @MethodTable OverlayedMT
-CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
+CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_inference_world(interp), OverlayedMT)
 
 function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
     if interp.meta !== nothing
@@ -47,7 +55,8 @@ callstrange(::Float64) = strangesin(x)
 callstrange(::Nothing) = Core.compilerbarrier(:type, nothing) # trigger inference bail out
 callstrange_entry(x) = callstrange(x) # needs to be defined here because of world age
 let interp = MTOverlayInterp(Set{Any}())
-    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp)).matches
+    matches = Core.Compiler.findall(Tuple{typeof(callstrange),Any}, Core.Compiler.method_table(interp))
+    @test matches !== nothing
     @test Core.Compiler.length(matches) == 2
     if Core.Compiler.getindex(matches, 1).method == which(callstrange, (Nothing,))
         @test Base.infer_effects(callstrange_entry, (Any,); interp) |> !Core.Compiler.is_nonoverlayed
@@ -84,9 +93,9 @@ end |> only === Union{Nothing,Missing}
 @test Base.return_types(; interp=MTOverlayInterp()) do
     isbitstype(Int) ? nothing : missing
 end |> only === Nothing
-Base.@assume_effects :terminates_globally function issue41694(x)
+Base.@assume_effects :terminates_locally function issue41694(x)
     res = 1
-    1 < x < 20 || throw("bad")
+    0 ≤ x < 20 || error("bad fact")
     while x > 1
         res *= x
         x -= 1
@@ -111,7 +120,7 @@ end |> only === Nothing
 # https://github.com/JuliaLang/julia/issues/48097
 @newinterp Issue48097Interp
 @MethodTable Issue48097MT
-CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_world_counter(interp), Issue48097MT)
+CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), Issue48097MT)
 CC.InferenceParams(::Issue48097Interp) = CC.InferenceParams(; unoptimize_throw_blocks=false)
 function CC.concrete_eval_eligible(interp::Issue48097Interp,
     @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
@@ -125,14 +134,14 @@ function CC.concrete_eval_eligible(interp::Issue48097Interp,
 end
 @overlay Issue48097MT @noinline Core.throw_inexacterror(f::Symbol, ::Type{T}, val) where {T} = return
 issue48097(; kwargs...) = return 42
-@test fully_eliminated(; interp=Issue48097Interp(), retval=42) do
+@test_broken fully_eliminated(; interp=Issue48097Interp(), retval=42) do
     issue48097(; a=1f0, b=1.0)
 end
 
 # Should not concrete-eval overlayed methods in semi-concrete interpretation
 @newinterp OverlaySinInterp
 @MethodTable OverlaySinMT
-CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlaySinMT)
+CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_inference_world(interp), OverlaySinMT)
 overlay_sin1(x) = error("Not supposed to be called.")
 @overlay OverlaySinMT overlay_sin1(x) = cos(x)
 @overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = overlay_sin1(x)
@@ -321,19 +330,17 @@ function CC.abstract_call(interp::NoinlineInterpreter,
     ret = @invoke CC.abstract_call(interp::CC.AbstractInterpreter,
         arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
     if sv.mod in noinline_modules(interp)
-        return CC.CallMeta(ret.rt, ret.effects, NoinlineCallInfo(ret.info))
+        return CC.CallMeta(ret.rt, ret.exct, ret.effects, NoinlineCallInfo(ret.info))
     end
     return ret
 end
 function CC.inlining_policy(interp::NoinlineInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt8, mi::MethodInstance,
-    argtypes::Vector{Any})
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(info, NoinlineCallInfo)
         return nothing
     end
     return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter,
-        src::Any, info::CallInfo, stmt_flag::UInt8, mi::MethodInstance,
-        argtypes::Vector{Any})
+        src::Any, info::CallInfo, stmt_flag::UInt32)
 end
 
 @inline function inlined_usually(x, y, z)
@@ -391,3 +398,73 @@ end
 # to properly give error messages for basic kwargs...
 Core.eval(Core.Compiler, quote f(;a=1) = a end)
 @test_throws MethodError Core.Compiler.f(;b=2)
+
+
+# Custom lookup function
+# ======================
+
+# In the following test with `ConstInvokeInterp`, we use a custom lookup function that
+# uses const-prop'ed source if available, and check if LLVM emits code using it.
+
+using Core: MethodInstance, CodeInstance
+using Base: CodegenParams
+using InteractiveUtils
+
+@newinterp ConstInvokeInterp
+function CC.concrete_eval_eligible(interp::ConstInvokeInterp,
+    @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+    ret = @invoke CC.concrete_eval_eligible(interp::CC.AbstractInterpreter,
+        f::Any, result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+    if ret === :semi_concrete_eval
+        return :none # disable semi-concrete interpretation
+    end
+    return ret
+end
+Base.@constprop :aggressive @noinline function custom_lookup_target(c::Bool, x::Int)
+    if c
+        y = sin(x)
+        z = nothing
+    else
+        y = cos(x)
+        z = missing
+    end
+    return y, z
+end
+custom_lookup_context(x::Int) = custom_lookup_target(true, x)
+
+const CONST_INVOKE_INTERP_WORLD = Base.get_world_counter()
+const CONST_INVOKE_INTERP = ConstInvokeInterp(; world=CONST_INVOKE_INTERP_WORLD)
+function custom_lookup(mi::MethodInstance, min_world::UInt, max_world::UInt)
+    for inf_result in CONST_INVOKE_INTERP.inf_cache
+        if inf_result.linfo === mi
+            if CC.any(inf_result.overridden_by_const)
+                return CodeInstance(CONST_INVOKE_INTERP, inf_result, inf_result.valid_worlds)
+            end
+        end
+    end
+    return CONST_INVOKE_INTERP.code_cache.dict[mi]
+end
+
+let # generate cache
+    code_typed(custom_lookup_context; world=CONST_INVOKE_INTERP_WORLD, interp=CONST_INVOKE_INTERP)
+
+    # check if the lookup function works as expected
+    target_mi = CC.specialize_method(only(methods(custom_lookup_target)), Tuple{typeof(custom_lookup_target),Bool,Int}, Core.svec())
+    target_ci = custom_lookup(target_mi, CONST_INVOKE_INTERP_WORLD, CONST_INVOKE_INTERP_WORLD)
+    @test target_ci.rettype == Tuple{Float64,Nothing} # constprop'ed source
+    # display(@ccall jl_uncompress_ir(target_ci.def.def::Any, C_NULL::Ptr{Cvoid}, target_ci.inferred::Any)::Any)
+
+    raw = false
+    lookup = @cfunction(custom_lookup, Any, (Any,Csize_t,Csize_t))
+    params = CodegenParams(;
+        debug_info_kind=Cint(0),
+        debug_info_level=Cint(2),
+        safepoint_on_entry=raw,
+        gcstack_arg=raw,
+        lookup)
+    io = IOBuffer()
+    code_llvm(io, custom_lookup_target, (Bool,Int,); params)
+    s = String(take!(io))
+    @test  occursin("j_sin_", s)
+    @test !occursin("j_cos_", s)
+end

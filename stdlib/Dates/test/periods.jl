@@ -329,6 +329,14 @@ end
     @test Dates.default(Dates.Nanosecond) == zero(Dates.Nanosecond)
 end
 @testset "Conversions" begin
+    @test Dates.toms(1499 * us) == 1
+    @test Dates.toms(501 * us) == 1
+    @test Dates.toms(us) == 0
+
+    @test Dates.toms(1_499_999 * ns) == 1
+    @test Dates.toms(500_001 * ns) == 1
+    @test Dates.toms(ns) == 0
+
     @test Dates.toms(ms) == Dates.value(Dates.Millisecond(ms)) == 1
     @test Dates.toms(s)  == Dates.value(Dates.Millisecond(s)) == 1000
     @test Dates.toms(mi) == Dates.value(Dates.Millisecond(mi)) == 60000
