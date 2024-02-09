@@ -364,7 +364,7 @@ function endswith(s::SubString{String}, r::Regex)
 end
 
 
-_isASCIIletter(c) = ('A' <= c) & ((reinterpret(Int32, c) & -33) <= Int32('Z'))
+_isASCIIletter(c) = ('A' <= c) & (bitrotate(reinterpret(Int32, c) & xor(32 << (32-8), -1), -32+8) <= Int32('Z'))
 
 function chopprefix(s::AbstractString, prefix::Regex)
     pattern = prefix.pattern
