@@ -227,8 +227,8 @@ fallbacks to the latest compatible BugReporting.jl if not. For more information,
 
 .TP
 --heap-size-hint=<size>
-Forces garbage collection if memory usage is higher than that value. The memory hint might be
-specified in megabytes (500M) or gigabytes (1.5G)
+Forces garbage collection if memory usage is higher than the given number of bytes.
+The size may be specified with units (e.g., 2500M or 2.5gb both specify 2.5 gigabytes)
 
 .TP
 --compile={yes*|no|all|min}

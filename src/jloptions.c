@@ -189,8 +189,8 @@ static const char opts[]  =
     "                            fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
     "                            --bug-report=help.\n\n"
 
-    " --heap-size-hint=<size>    Forces garbage collection if memory usage is greater than the given number of bytes.\n"
-    "                            The memory hint might be specified in megabytes (e.g., 500M) or gigabytes (e.g., 1G)\n\n"
+    " --heap-size-hint=<size>    Forces garbage collection if memory usage is higher than the given number of bytes.\n"
+    "                            The size may be specified with units (e.g., 2500M or 2.5gb both specify 2.5 gigabytes)\n\n"
 ;
 
 static const char opts_hidden[]  =
