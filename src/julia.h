@@ -448,6 +448,9 @@ typedef struct _jl_code_instance_t {
     //     uint8_t inaccessiblememonly : 2;
     jl_value_t *analysis_results; // Analysis results about this code (IPO-safe)
 
+    // Extra info managed by jl_value_t *owner
+    _Atomic(jl_value_t) *extra_info;
+
     // compilation state cache
     _Atomic(uint8_t) specsigflags; // & 0b001 == specptr is a specialized function signature for specTypes->rettype
                                    // & 0b010 == invokeptr matches specptr

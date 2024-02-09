@@ -535,6 +535,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     jl_atomic_store_relaxed(&codeinst->purity_bits, effects);
     codeinst->analysis_results = analysis_results;
     codeinst->relocatability = relocatability;
+    jl_atomic_store_relaxed(&codeinst->extra_info, jl_nothing);
     return codeinst;
 }
 
