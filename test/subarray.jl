@@ -1051,7 +1051,7 @@ end
                view(a, 1, :, 1:2), # FastSubArray
             )
         @test !isassigned(v, 0, 0) # out-of-bounds
-        @test isassigned(v, 1, 1)
+        @test isassigned(v, 1, 1) # inbounds and assigned
         @test !isassigned(v, 1, 2) # inbounds but not assigned
         @test !isassigned(v, 3, 3) # out-of-bounds
     end
