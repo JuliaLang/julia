@@ -199,7 +199,7 @@ jl_ptls_t* gc_all_tls_states;
 gc_heapstatus_t gc_heap_stats = {0};
 int next_sweep_full = 0;
 const uint64_t _jl_buff_tag[3] = {0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull}; // aka 0xHEADER00
-JL_DLLEXPORT uintptr_t jl_get_buff_tag(void)
+JL_DLLEXPORT uintptr_t jl_get_buff_tag(void) JL_NOTSAFEPOINT
 {
     return jl_buff_tag;
 }
@@ -1659,18 +1659,32 @@ int gc_sweep_prescan(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_sc
 void gc_sweep_wake_all(jl_ptls_t ptls, jl_gc_padded_page_stack_t *new_gc_allocd_scratch)
 {
     int parallel_sweep_worthwhile = gc_sweep_prescan(ptls, new_gc_allocd_scratch);
-    jl_atomic_store(&gc_allocd_scratch, new_gc_allocd_scratch);
-    if (!parallel_sweep_worthwhile) {
+    if (parallel_sweep_worthwhile && !page_profile_enabled) {
+        jl_atomic_store(&gc_allocd_scratch, new_gc_allocd_scratch);
+        uv_mutex_lock(&gc_threads_lock);
+        for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[i];
+            assert(ptls2 != NULL); // should be a GC thread
+            jl_atomic_fetch_add(&ptls2->gc_sweeps_requested, 1);
+        }
+        uv_cond_broadcast(&gc_threads_cond);
+        uv_mutex_unlock(&gc_threads_lock);
         return;
     }
-    uv_mutex_lock(&gc_threads_lock);
-    for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        assert(ptls2 != NULL); // should be a GC thread
-        jl_atomic_fetch_add(&ptls2->gc_sweeps_requested, 1);
+    if (page_profile_enabled) {
+        // we need to ensure that no threads are running sweeping when
+        // collecting a page profile.
+        // wait for all to leave in order to ensure that a straggler doesn't
+        // try to enter sweeping after we set `gc_allocd_scratch` below.
+        for (int i = gc_first_tid; i < gc_first_tid + jl_n_markthreads; i++) {
+            jl_ptls_t ptls2 = gc_all_tls_states[i];
+            assert(ptls2 != NULL); // should be a GC thread
+            while (jl_atomic_load_acquire(&ptls2->gc_sweeps_requested) != 0) {
+                jl_cpu_pause();
+            }
+        }
     }
-    uv_cond_broadcast(&gc_threads_cond);
-    uv_mutex_unlock(&gc_threads_lock);
+    jl_atomic_store(&gc_allocd_scratch, new_gc_allocd_scratch);
 }
 
 // wait for all threads to finish sweeping
@@ -1813,8 +1827,7 @@ static void gc_sweep_pool(void)
     }
 
     // the actual sweeping
-    jl_gc_padded_page_stack_t *new_gc_allocd_scratch = (jl_gc_padded_page_stack_t *) malloc_s(n_threads * sizeof(jl_gc_padded_page_stack_t));
-    memset(new_gc_allocd_scratch, 0, n_threads * sizeof(jl_gc_padded_page_stack_t));
+    jl_gc_padded_page_stack_t *new_gc_allocd_scratch = (jl_gc_padded_page_stack_t *) calloc_s(n_threads * sizeof(jl_gc_padded_page_stack_t));
     jl_ptls_t ptls = jl_current_task->ptls;
     gc_sweep_wake_all(ptls, new_gc_allocd_scratch);
     gc_sweep_pool_parallel(ptls);
