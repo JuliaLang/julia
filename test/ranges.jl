@@ -2612,7 +2612,6 @@ end
     @test logrange(1, 10^9, 19)[1:2:end] ≈ 10 .^ (0:9)
 
     # negative & complex
-    @test logrange(-1, -4, 3) == [-1, -2, -4]
     @test logrange(1, -1+0.0im, 3) ≈ [1, im, -1]  # branch cut first arg
     @test logrange(1, -1-0.0im, 3) ≈ [1, -im, -1]
     @test logrange(-1+1e-10im, 1, 3) ≈ [-1, im, 1]  # branch cut second arg
@@ -2628,10 +2627,8 @@ end
     @test logrange(nextfloat(0f0), floatmax(Float32), typemax(Int))[end] === floatmax(Float32)
     @test logrange(nextfloat(Float16(0)), floatmax(Float16), 66_000)[end] === floatmax(Float16)
     @test first(logrange(pi, 2pi, 3000)) === logrange(pi, 2pi, 3000)[1] === Float64(pi)
-    @test last(logrange(-0.01, -0.1, 3000)) === last(logrange(-0.01, -0.1, 3000))[end] === -0.1
     if Int == Int64
         @test logrange(0.1, 1000, 2^54)[end] === 1000.0
-        @test logrange(-0.1, -1000, 2^55)[end] === -1000.0
     end
 
     # empty, only, NaN, Inf
@@ -2645,18 +2642,12 @@ end
     @test isnan(logrange(1f0, NaN32, 3)[2])
     @test isnan(logrange(NaN32, 2f0, 3)[2])
     @test isnan(logrange(0, 2, 3)[1])
-    @test isnan(logrange(0, -2, 3)[1])
     @test isnan(logrange(-0.0, +2.0, 3)[1])
     @test isnan(logrange(0f0, 2f0, 3)[1])
-    @test isnan(logrange(0f0, -2f0, 3)[1])
-    @test isnan(logrange(-0f0, 2f0, 3)[1])
     @test isinf(logrange(1, Inf, 3)[2])
-    @test -Inf === logrange(-1, -Inf, 3)[2]
     @test isinf(logrange(1f0, Inf32, 3)[2])
-    @test -Inf32 === logrange(-1f0, -Inf32, 3)[2]
     # constant
     @test logrange(1, 1, 3) == fill(1.0, 3)
-    @test logrange(-1f0, -1f0, 3) == fill(-1f0, 3)
     @test all(isnan, logrange(0.0, -0.0, 3))
     @test all(isnan, logrange(-0f0, 0f0, 3))
 
@@ -2684,6 +2675,7 @@ end
     @test_throws ArgumentError logrange(1, 10, -1)  # negative length
     @test_throws ArgumentError logrange(1, 10, 1) # endpoints must not differ
     @test_throws DomainError logrange(1, -1, 3)   # needs complex numbers
+    @test_throws DomainError logrange(-1, -2, 3)  # not supported, for now
     @test_throws ArgumentError logrange(1, 10, 2)[true]  # bad index
     @test_throws BoundsError logrange(1, 10, 2)[3]
     @test_throws ArgumentError Base.LogRange{Int}(1,4,5)  # no integer ranges

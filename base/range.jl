@@ -1527,10 +1527,6 @@ julia> logrange(1f0, 32f0, 11)
 
 julia> logrange(1, 1000, length=4) ≈ 10 .^ (0:3)
 true
-
-julia> logrange(-27, -3, length=7)  # allows negative numbers
-7-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
- -27.0, -18.7208, -12.9802, -9.0, -6.24025, -4.32675, -3.0
 ```
 
 See the [`LogRange`](@ref Base.LogRange) type for further details.
@@ -1555,18 +1551,15 @@ provided, but intermediate values may have small floating-point errors.
 These are calculated using the logs of the endpoints, which are
 stored on construction, often in higher precision than `T`.
 
-Negative values of `start` and `stop` are allowed, but both must have the
-same sign. All values are then negative.
-
 # Examples
 ```jldoctest
 julia> logrange(1, 4, length=5)
 5-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
  1.0, 1.41421, 2.0, 2.82843, 4.0
 
-julia> Base.LogRange{Float16}(-1, -4, 5)
+julia> Base.LogRange{Float16}(1, 4, 5)
 5-element Base.LogRange{Float16, Float64}:
- -1.0, -1.414, -2.0, -2.828, -4.0
+ 1.0, 1.414, 2.0, 2.828, 4.0
 
 julia> logrange(1e-310, 1e-300, 11)[1:2:end]
 6-element Vector{Float64}:
@@ -1664,8 +1657,7 @@ struct LogRange{T<:Number,X} <: AbstractArray{T,1}
         elseif len == 1 && start != stop
             throw(ArgumentError(LazyString(
                 "LogRange(", start, ", ", stop, ", ", len, "): endpoints differ, while length is 1")))
-        elseif iszero(start) || iszero(stop)
-        elseif T <: Real && (start<0) ⊻ (stop<0)
+        elseif T <: Real && ((start<0) || (stop<0))
             throw(DomainError((start, stop),
                 "LogRange will only return complex results if called with a complex argument"))
         end
@@ -1673,11 +1665,7 @@ struct LogRange{T<:Number,X} <: AbstractArray{T,1}
             # LogRange{Int}(1, 512, 4) produces InexactError: Int64(7.999999999999998)
             throw(ArgumentError("LogRange{T} does not support integer types"))
         end
-        ex = if T <: Real && start + stop < 0  # start+stop allows for LogRange(-0.0, -2, 3)
-            _logrange_extra(-a, -b, len)
-        else
-            _logrange_extra(a, b, len)
-        end
+        ex = _logrange_extra(a, b, len)
         new{T,typeof(ex[1])}(a, b, len, ex)
     end
 end
