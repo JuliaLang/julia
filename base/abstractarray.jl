@@ -3396,7 +3396,7 @@ end
 """
     map!(function, array)
 
-Like [`map`](@ref), but stores the result in the same array. 
+Like [`map`](@ref), but stores the result in the same array.
 
 # Examples
 ```jldoctest
