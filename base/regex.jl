@@ -363,11 +363,14 @@ function endswith(s::SubString{String}, r::Regex)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
 
+
+_isASCIIletter(c) = ('A' <= c) & ((reinterpret(Int32, c) & -33) <= Int32('Z'))
+
 function chopprefix(s::AbstractString, prefix::Regex)
     pattern = prefix.pattern
-    
-    # fast path for letter-only regexes
-    all(isletter, pattern) && startswith(s, pattern) && return chopprefix(s, pattern)
+
+    # fast path for ASCII-letter-only regexes
+    all(_isASCIIletter, pattern) && startswith(s, pattern) && return chopprefix(s, pattern)
 
     m = match(prefix, s, firstindex(s), PCRE.ANCHORED)
     m === nothing && return SubString(s)
@@ -376,12 +379,12 @@ end
 
 function chopsuffix(s::AbstractString, suffix::Regex)
     pattern = suffix.pattern
-    
-    # fast path for letter-only regexes
-    all(isletter, pattern) && endswith(s, pattern) && return chopsuffix(s, pattern)
-           
+
+    # fast path for ASCII-letter-only regexes
+    all(_isASCIIletter, pattern) && endswith(s, pattern) && return chopsuffix(s, pattern)
+
     # fast path for regexes meant for file endings
-    startswith(pattern, raw"\.",) && all(isletter, @view pattern[3:end]) && endswith(s, @view pattern[2:end]) && return chopsuffix(s, pattern)
+    startswith(pattern, raw"\.",) && all(_isASCIIletter, @view pattern[3:end]) && endswith(s, @view pattern[2:end]) && return chopsuffix(s, pattern)
 
     m = match(suffix, s, firstindex(s), PCRE.ENDANCHORED)
     m === nothing && return SubString(s)
