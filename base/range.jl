@@ -1393,7 +1393,7 @@ sort!(r::AbstractUnitRange) = r
 
 sort(r::AbstractRange) = issorted(r) ? r : reverse(r)
 
-sortperm(r::AbstractUnitRange) = eachindex(x)
+sortperm(r::AbstractUnitRange) = eachindex(r)
 sortperm(r::AbstractRange) = issorted(r) ? (firstindex(r):1:lastindex(r)) : (lastindex(r):-1:firstindex(r))
 
 function sum(r::AbstractRange{<:Real})
