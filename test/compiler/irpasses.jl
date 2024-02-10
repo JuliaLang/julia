@@ -1386,15 +1386,21 @@ end
 # ifelse folding
 @test Core.Compiler.is_removable_if_unused(Base.infer_effects(exp, (Float64,)))
 @test !Core.Compiler.is_inlineable(code_typed1(exp, (Float64,)))
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return Core.ifelse(true, x, exp(x))
 end
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(true, x, exp(x)) # the optimization should be applied to post-inlining IR too
 end
-fully_eliminated(; retval=Core.Argument(2)) do x::Float64
+@test fully_eliminated(; retval=Core.Argument(2)) do x::Float64
     return ifelse(isa(x, Float64), x, exp(x))
 end
+func_coreifelse(c, x) = Core.ifelse(c, x, x)
+func_ifelse(c, x) = ifelse(c, x, x)
+@test fully_eliminated(func_coreifelse, (Bool,Float64); retval=Core.Argument(3))
+@test !fully_eliminated(func_coreifelse, (Any,Float64))
+@test fully_eliminated(func_ifelse, (Bool,Float64); retval=Core.Argument(3))
+@test !fully_eliminated(func_ifelse, (Any,Float64))
 
 # PhiC fixup of compact! with cfg modification
 @inline function big_dead_throw_catch()
@@ -1561,7 +1567,10 @@ function persistent_dict_elim_multiple()
     return b[:a]
 end
 @test_broken fully_eliminated(persistent_dict_elim_multiple)
-@test code_typed(persistent_dict_elim_multiple)[1][1].code[end] == Core.ReturnNode(1)
+let code = code_typed(persistent_dict_elim_multiple)[1][1].code
+    @test count(x->isexpr(x, :invoke), code) == 0
+    @test code[end] == Core.ReturnNode(1)
+end
 
 function persistent_dict_elim_multiple_phi(c::Bool)
     if c
@@ -1740,3 +1749,41 @@ end
     return 0
 end
 @test code_typed(f52703)[1][2] === Int
+
+# Issue #52858 - compaction gets confused by pending node
+let code = Any[
+    # Block 1
+    GotoIfNot(true, 6),
+    # Block 2
+    Expr(:call, println, 1),
+    Expr(:call, Base.inferencebarrier, true),
+    GotoIfNot(SSAValue(3), 6),
+    # Block 3
+    nothing,
+    # Block 4
+    PhiNode(Int32[1, 4, 5], Any[1, 2, 3]),
+    ReturnNode(SSAValue(6))
+]
+    ir = make_ircode(code)
+    Core.Compiler.insert_node!(ir, SSAValue(5),
+        Core.Compiler.NewInstruction(
+            Expr(:call, println, 2), Nothing, Int32(1)),
+            #= attach_after = =# true)
+    ir = Core.Compiler.compact!(ir, true)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    @test count(x->isa(x, GotoIfNot), ir.stmts.stmt) == 1
+end
+
+# Issue #52857 - Affinity of sroa definedness check
+let code = Any[
+    Expr(:new, ImmutableRef{Any}),
+    GotoIfNot(Argument(1), 4),
+    Expr(:call, GlobalRef(Base, :getfield), SSAValue(1), 1), # Will throw
+    ReturnNode(1)
+]
+    ir = make_ircode(code; ssavaluetypes = Any[ImmutableRef{Any}, Any, Any, Any], slottypes=Any[Bool], verify=true)
+    ir = Core.Compiler.sroa_pass!(ir)
+    @test Core.Compiler.verify_ir(ir) === nothing
+    @test !any(iscall((ir, getfield)), ir.stmts.stmt)
+    @test length(ir.cfg.blocks[end].stmts) == 1
+end

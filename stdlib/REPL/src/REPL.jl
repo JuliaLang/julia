@@ -14,27 +14,84 @@ REPL.run_repl(repl)
 """
 module REPL
 
-const PRECOMPILE_STATEMENTS = Vector{String}()
-
-function __init__()
-    Base.REPL_MODULE_REF[] = REPL
-    # We can encounter the situation where the sub-ordinate process used
-    # during precompilation of REPL, can load a valid cache-file.
-    # We need to replay the statements such that the parent process
-    # can also include those. See JuliaLang/julia#51532
-    if Base.JLOptions().trace_compile !== C_NULL && !isempty(PRECOMPILE_STATEMENTS)
-        for statement in PRECOMPILE_STATEMENTS
-            ccall(:jl_write_precompile_statement, Cvoid, (Cstring,), statement)
-        end
-    else
-        empty!(PRECOMPILE_STATEMENTS)
-    end
-end
-
 Base.Experimental.@optlevel 1
 Base.Experimental.@max_methods 1
 
-using Base.Meta, Sockets
+function UndefVarError_hint(io::IO, ex::UndefVarError)
+    var = ex.var
+    if var === :or
+        print(io, "\nSuggestion: Use `||` for short-circuiting boolean OR.")
+    elseif var === :and
+        print(io, "\nSuggestion: Use `&&` for short-circuiting boolean AND.")
+    elseif var === :help
+        println(io)
+        # Show friendly help message when user types help or help() and help is undefined
+        show(io, MIME("text/plain"), Base.Docs.parsedoc(Base.Docs.keywords[:help]))
+    elseif var === :quit
+        print(io, "\nSuggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.")
+    end
+    if isdefined(ex, :scope)
+        scope = ex.scope
+        if scope isa Module
+            bnd = ccall(:jl_get_module_binding, Any, (Any, Any, Cint), scope, var, true)::Core.Binding
+            if isdefined(bnd, :owner)
+                owner = bnd.owner
+                if owner === bnd
+                    print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
+                end
+            else
+                owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), scope, var)
+                if C_NULL == owner
+                    # No global of this name exists in this module.
+                    # This is the common case, so do not print that information.
+                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                    owner = bnd
+                else
+                    owner = unsafe_pointer_to_objref(owner)::Core.Binding
+                end
+            end
+            if owner !== bnd
+                # this could use jl_binding_dbgmodule for the exported location in the message too
+                print(io, "\nSuggestion: this global was defined as `$(owner.globalref)` but not assigned a value.")
+            end
+        elseif scope === :static_parameter
+            print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
+        elseif scope === :local
+            print(io, "\nSuggestion: check for an assignment to a local variable that shadows a global of the same name.")
+        end
+    else
+        scope = undef
+    end
+    if scope !== Base && !_UndefVarError_warnfor(io, Base, var)
+        warned = false
+        for m in Base.loaded_modules_order
+            m === Core && continue
+            m === Base && continue
+            m === Main && continue
+            m === scope && continue
+            warned |= _UndefVarError_warnfor(io, m, var)
+        end
+        warned ||
+            _UndefVarError_warnfor(io, Core, var) ||
+            _UndefVarError_warnfor(io, Main, var)
+    end
+    return nothing
+end
+
+function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
+    Base.isbindingresolved(m, var) || return false
+    (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
+    print(io, "\nHint: a global variable of this name also exists in $m.")
+    return true
+end
+
+function __init__()
+    Base.REPL_MODULE_REF[] = REPL
+    Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
+    return nothing
+end
+
+using Base.Meta, Sockets, StyledStrings
 import InteractiveUtils
 
 export
@@ -1133,10 +1190,11 @@ function setup_interface(
                 pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
                 if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
                     Pkg = Base.require(pkgid)
+                    REPLExt = Base.get_extension(Pkg, :REPLExt)
                     # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
                     pkg_mode = nothing
                     for mode in repl.interface.modes
-                        if mode isa LineEdit.Prompt && mode.complete isa Pkg.REPLMode.PkgCompletionProvider
+                        if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
                             pkg_mode = mode
                             break
                         end

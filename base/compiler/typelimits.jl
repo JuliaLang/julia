@@ -312,7 +312,7 @@ union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 function issimpleenoughtype(@nospecialize t)
     ut = unwrap_unionall(t)
     ut isa DataType && ut.name.wrapper == t && return true
-    return unionlen(t) + union_count_abstract(t) <= MAX_TYPEUNION_LENGTH &&
+    return max(unionlen(t), union_count_abstract(t) + 1) <= MAX_TYPEUNION_LENGTH &&
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
 
@@ -807,6 +807,7 @@ end
                         end
                         if usep
                             widen = rewrap_unionall(wr{p...}, wr)
+                            widen <: wr || (widen = wr) # sometimes there are cross-constraints on wr that we may lose in this process, but that would cause future calls to this to need to return Any, which is undesirable
                         end
                         simplify[j] = !usep
                     end

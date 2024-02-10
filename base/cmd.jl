@@ -14,7 +14,7 @@ struct Cmd <: AbstractCmd
     env::Union{Vector{String},Nothing}
     dir::String
     cpus::Union{Nothing,Vector{UInt16}}
-    Cmd(exec::Vector{String}) =
+    Cmd(exec::Vector{<:AbstractString}) =
         new(exec, false, 0x00, nothing, "", nothing)
     Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing) =
         new(cmd.exec, ignorestatus, flags, env,

@@ -1,29 +1,28 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning,CPUFeatures' -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning,CPUFeatures' -S %s | FileCheck %s --allow-unused-prefixes=false --check-prefixes=CHECK,TYPED
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning,CPUFeatures' -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning,CPUFeatures' -S %s | FileCheck %s --allow-unused-prefixes=false --check-prefixes=CHECK,OPAQUE
+
 
 ; COM: This test checks that multiversioning actually happens from start to finish
 ; COM: We need the fvars for a proper test
 
 
 
-; CHECK: @jl_fvar_idxs = hidden constant [5 x i32] [i32 0, i32 1, i32 2, i32 3, i32 4], align 16
-; CHECK: @jl_gvar_idxs = hidden constant [0 x i32] zeroinitializer, align 16
+; TYPED: @jl_gvar_ptrs = global [0 x i64*] zeroinitializer, align 8
+; OPAQUE: @jl_gvar_ptrs = global [0 x ptr] zeroinitializer, align 8
+; CHECK: @jl_fvar_idxs = hidden constant [5 x i32] [i32 0, i32 1, i32 2, i32 3, i32 4], align 8
+; CHECK: @jl_gvar_idxs = hidden constant [0 x i32] zeroinitializer, align 8
 ; TYPED: @simd_test.reloc_slot = hidden global i32 (<4 x i32>)* null
 ; OPAQUE: @simd_test.reloc_slot = hidden global ptr null
-; TYPED: @jl_fvar_offsets = hidden constant [6 x i32] [i32 5, i32 0, i32 trunc (i64 sub (i64 ptrtoint (float (float, float)* @fastmath_test to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (i32 (i32)* @loop_test to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (i32 (<4 x i32>)* @simd_test to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (i32 (<4 x i32>)* @simd_test_call to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32)]
-; OPAQUE: @jl_fvar_offsets = hidden constant [6 x i32] [i32 5, i32 0, i32 trunc (i64 sub (i64 ptrtoint (ptr @fastmath_test to i64), i64 ptrtoint (ptr @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (ptr @loop_test to i64), i64 ptrtoint (ptr @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (ptr @simd_test to i64), i64 ptrtoint (ptr @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (ptr @simd_test_call to i64), i64 ptrtoint (ptr @boring to i64)) to i32)]
-; CHECK: @jl_gvar_base = hidden constant i64 0
-; CHECK: @jl_gvar_offsets = hidden constant [1 x i32] zeroinitializer
-; TYPED: @jl_clone_slots = hidden constant [3 x i32] [i32 1, i32 3, i32 trunc (i64 sub (i64 ptrtoint (i32 (<4 x i32>)** @simd_test.reloc_slot to i64), i64 ptrtoint (i64* @jl_gvar_base to i64)) to i32)]
-; OPAQUE: @jl_clone_slots = hidden constant [3 x i32] [i32 1, i32 3, i32 trunc (i64 sub (i64 ptrtoint (ptr @simd_test.reloc_slot to i64), i64 ptrtoint (ptr @jl_gvar_base to i64)) to i32)]
+; TYPED: @jl_fvar_ptrs = hidden global [5 x i64*] [i64* bitcast (i32 (i32)* @boring to i64*), i64* bitcast (float (float, float)* @fastmath_test to i64*), i64* bitcast (i32 (i32)* @loop_test to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test_call to i64*)]
+; OPAQUE: @jl_fvar_ptrs = hidden global [5 x ptr] [ptr @boring, ptr @fastmath_test, ptr @loop_test, ptr @simd_test, ptr @simd_test_call]
+; TYPED: @jl_clone_slots = hidden constant [3 x i32] [i32 1, i32 3, i32 trunc (i64 sub (i64 ptrtoint (i32 (<4 x i32>)** @simd_test.reloc_slot to i64), i64 ptrtoint ([3 x i32]* @jl_clone_slots to i64)) to i32)]
+; OPAQUE: @jl_clone_slots = hidden constant [3 x i32] [i32 1, i32 3, i32 trunc (i64 sub (i64 ptrtoint (ptr @simd_test.reloc_slot to i64), i64 ptrtoint (ptr @jl_clone_slots to i64)) to i32)]
 ; CHECK: @jl_clone_idxs = hidden constant [10 x i32] [i32 -2147483647, i32 3, i32 -2147483647, i32 3, i32 4, i32 1, i32 1, i32 2, i32 -2147483645, i32 4]
-; TYPED: @jl_clone_offsets = hidden constant [9 x i32] [i32 trunc (i64 sub (i64 ptrtoint (i32 (i32)* @boring.1 to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (float (float, float)* @fastmath_test.1 to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (i32 (i32)* @loop_test.1 to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (i32 (<4 x i32>)* @simd_test.1 to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (i32 (<4 x i32>)* @simd_test_call.1 to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (float (float, float)* @fastmath_test.2 to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (i32 (i32)* @loop_test.2 to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (i32 (<4 x i32>)* @simd_test.2 to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (i32 (<4 x i32>)* @simd_test_call.2 to i64), i64 ptrtoint (i32 (i32)* @boring to i64)) to i32)]
-; OPAQUE: @jl_clone_offsets = hidden constant [9 x i32] [i32 trunc (i64 sub (i64 ptrtoint (ptr @boring.1 to i64), i64 ptrtoint (ptr @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (ptr @fastmath_test.1 to i64), i64 ptrtoint (ptr @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (ptr @loop_test.1 to i64), i64 ptrtoint (ptr @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (ptr @simd_test.1 to i64), i64 ptrtoint (ptr @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (ptr @simd_test_call.1 to i64), i64 ptrtoint (ptr @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (ptr @fastmath_test.2 to i64), i64 ptrtoint (ptr @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (ptr @loop_test.2 to i64), i64 ptrtoint (ptr @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (ptr @simd_test.2 to i64), i64 ptrtoint (ptr @boring to i64)) to i32), i32 trunc (i64 sub (i64 ptrtoint (ptr @simd_test_call.2 to i64), i64 ptrtoint (ptr @boring to i64)) to i32)]
-; TYPED: @jl_fvar_base = hidden alias i64, bitcast (i32 (i32)* @boring to i64*)
-; OPAQUE: @jl_fvar_base = hidden alias i64, ptr @boring
+; TYPED: @jl_clone_ptrs = hidden constant [9 x i64*] [i64* bitcast (i32 (i32)* @boring.1 to i64*), i64* bitcast (float (float, float)* @fastmath_test.1 to i64*), i64* bitcast (i32 (i32)* @loop_test.1 to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test.1 to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test_call.1 to i64*), i64* bitcast (float (float, float)* @fastmath_test.2 to i64*), i64* bitcast (i32 (i32)* @loop_test.2 to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test.2 to i64*), i64* bitcast (i32 (<4 x i32>)* @simd_test_call.2 to i64*)]
+; OPAQUE: @jl_clone_ptrs = hidden constant [9 x ptr] [ptr @boring.1, ptr @fastmath_test.1, ptr @loop_test.1, ptr @simd_test.1, ptr @simd_test_call.1, ptr @fastmath_test.2, ptr @loop_test.2, ptr @simd_test.2, ptr @simd_test_call.2]
 
 
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128-ni:10:11:12:13"
@@ -34,10 +33,10 @@ target triple = "x86_64-linux-gnu"
                                i64* bitcast (i32 (i32)* @loop_test to i64*),
                                i64* bitcast (i32 (<4 x i32>)* @simd_test to i64*),
                                i64* bitcast (i32 (<4 x i32>)* @simd_test_call to i64*)
-                              ], align 16
-@jl_gvars = global [0 x i64*] zeroinitializer, align 16
-@jl_fvar_idxs = hidden constant [5 x i32] [i32 0, i32 1, i32 2, i32 3, i32 4], align 16
-@jl_gvar_idxs = hidden constant [0 x i32] zeroinitializer, align 16
+                              ], align 8
+@jl_gvar_ptrs = global [0 x i64*] zeroinitializer, align 8
+@jl_fvar_idxs = hidden constant [5 x i32] [i32 0, i32 1, i32 2, i32 3, i32 4], align 8
+@jl_gvar_idxs = hidden constant [0 x i32] zeroinitializer, align 8
 
 declare i1 @julia.cpu.have_fma.f32()
 

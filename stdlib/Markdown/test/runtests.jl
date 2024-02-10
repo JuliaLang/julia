@@ -1293,3 +1293,7 @@ end
     # see issue #42139
     @test md"<一轮红日初升>" |> html == """<p>&lt;一轮红日初升&gt;</p>\n"""
 end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Markdown))
+end

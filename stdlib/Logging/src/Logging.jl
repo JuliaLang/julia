@@ -8,6 +8,8 @@ and available by default.
 """
 module Logging
 
+using StyledStrings
+
 # Import the CoreLogging implementation into Logging as new const bindings.
 # Doing it this way (rather than with import) makes these symbols accessible to
 # tab completion.
@@ -31,13 +33,11 @@ for sym in [
 end
 
 """
-    @create_log_macro(name::Symbol, level::Int, color::Union{Int,Symbol})
+    @create_log_macro(name::Symbol, level::Int, face::Union{Symbol, StyledStrings.Face})
 
-Creates a custom log macro like `@info`, `@warn` etc. with a given `name`, `level` and
-`color`. The macro created is named with the lowercase form of `name` but the given form
-is used for the printing.
-
-The available color keys can be seen by typing `Base.text_colors` in the help mode of the REPL
+Creates a custom log macro like `@info`, `@warn` etc. with a given `name`,
+`level` to be displayed with `face`. The macro created is named with the
+lowercase form of `name` but the given form is used for the printing.
 
 ```julia-repl
 julia> @create_log_macro(:MyLog, 200, :magenta)

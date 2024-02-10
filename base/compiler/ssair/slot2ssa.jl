@@ -229,7 +229,7 @@ Run iterated dominance frontier.
 The algorithm we have here essentially follows LLVM, which itself is a
 a cleaned up version of the linear-time algorithm described in [^SG95].
 
-The algorithm here, is quite straightforward. Suppose we have a CFG:
+The algorithm here is quite straightforward. Suppose we have a CFG:
 
     A -> B -> D -> F
      \\-> C ------>/

@@ -262,4 +262,13 @@ function enable_logging(on::Bool=true)
     ccall(:jl_enable_gc_logging, Cvoid, (Cint,), on)
 end
 
+"""
+    GC.logging_enabled()
+
+Return whether GC logging has been enabled via [`GC.enable_logging`](@ref).
+"""
+function logging_enabled()
+    ccall(:jl_is_gc_logging_enabled, Cint, ()) != 0
+end
+
 end # module GC

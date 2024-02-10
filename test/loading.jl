@@ -1113,6 +1113,24 @@ end
             cmd_proj_ext = addenv(cmd_proj_ext, "JULIA_LOAD_PATH" => join([joinpath(proj, "HasExtensions.jl"), joinpath(proj, "EnvWithDeps")], sep))
             run(cmd_proj_ext)
         end
+
+        # Sysimage extensions
+        # The test below requires that LinearAlgebra is in the sysimage and that it has not been loaded yet.
+        # if it gets moved out, this test will need to be updated.
+        # We run this test in a new process so we are not vulnerable to a previous test having loaded LinearAlgebra
+        sysimg_ext_test_code = """
+            uuid_key = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
+            Base.in_sysimage(uuid_key) || error("LinearAlgebra not in sysimage")
+            haskey(Base.explicit_loaded_modules, uuid_key) && error("LinearAlgebra already loaded")
+            using HasExtensions
+            Base.get_extension(HasExtensions, :LinearAlgebraExt) === nothing || error("unexpectedly got an extension")
+            using LinearAlgebra
+            haskey(Base.explicit_loaded_modules, uuid_key) || error("LinearAlgebra not loaded")
+            Base.get_extension(HasExtensions, :LinearAlgebraExt) isa Module || error("expected extension to load")
+        """
+        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
+        run(cmd)
     finally
         try
             rm(depot_path, force=true, recursive=true)
@@ -1484,5 +1502,33 @@ end
         @test occursin(r"Loading object cache file .+ for Child", log)
         @test occursin(r"Generating object cache file for Parent", log)
         @test occursin(r"Loading object cache file .+ for Parent", log)
+    end
+end
+
+@testset "including non-existent file throws proper error #52462" begin
+    mktempdir() do depot
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+
+        # Create a `Foo.jl` package
+        foo_path = joinpath(depot, "dev", "Foo52462")
+        mkpath(joinpath(foo_path, "src"))
+        open(joinpath(foo_path, "src", "Foo52462.jl"); write=true) do io
+            println(io, """
+            module Foo52462
+            include("non-existent.jl")
+            end
+            """)
+        end
+        open(joinpath(foo_path, "Project.toml"); write=true) do io
+            println(io, """
+            name = "Foo52462"
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+        end
+
+        file = joinpath(depot, "dev", "non-existent.jl")
+        @test_throws SystemError("opening file $(repr(file))") include(file)
     end
 end

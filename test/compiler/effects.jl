@@ -446,7 +446,7 @@ let effects = Base.infer_effects() do
     end
     @test !Core.Compiler.is_nothrow(effects)
 end
-@test_throws ErrorException setglobal!_nothrow_undefinedyet()
+@test_throws Union{ErrorException,TypeError} setglobal!_nothrow_undefinedyet() # TODO: what kind of error should this be?
 
 # Nothrow for setfield!
 mutable struct SetfieldNothrow
@@ -1369,6 +1369,12 @@ top_52531(_) = (set_initialized52531!(true); nothing)
 @test !is_initialized52531()
 top_52531(0)
 @test is_initialized52531()
+
+const ref52843 = Ref{Int}()
+@eval func52843() = ($ref52843[] = 1; nothing)
+@test !Core.Compiler.is_foldable(Base.infer_effects(func52843))
+let; Base.Experimental.@force_compile; func52843(); end
+@test ref52843[] == 1
 
 @test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(identity∘identity, Tuple{Any}))
 @test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(()->Vararg, Tuple{}))

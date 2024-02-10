@@ -331,7 +331,7 @@ end
 add_tfunc(Core.ifelse, 3, 3, ifelse_tfunc, 1)
 
 @nospecs function ifelse_nothrow(𝕃::AbstractLattice, cond, x, y)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     return cond ⊑ Bool
 end
 
@@ -380,7 +380,7 @@ function isdefined_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any})
     return isdefined_nothrow(𝕃, argtypes[1], argtypes[2])
 end
 @nospecs function isdefined_nothrow(𝕃::AbstractLattice, x, name)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     isvarargtype(x) && return false
     isvarargtype(name) && return false
     if hasintersect(widenconst(x), Module)
@@ -600,7 +600,8 @@ add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVec
     end
     return TypeVar
 end
-@nospecs function typebound_nothrow(b)
+@nospecs function typebound_nothrow(𝕃::AbstractLattice, b)
+    ⊑ = partialorder(𝕃)
     b = widenconst(b)
     (b ⊑ TypeVar) && return true
     if isType(b)
@@ -609,10 +610,10 @@ end
     return false
 end
 @nospecs function typevar_nothrow(𝕃::AbstractLattice, n, lb, ub)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     n ⊑ Symbol || return false
-    typebound_nothrow(lb) || return false
-    typebound_nothrow(ub) || return false
+    typebound_nothrow(𝕃, lb) || return false
+    typebound_nothrow(𝕃, ub) || return false
     return true
 end
 add_tfunc(Core._typevar, 3, 3, typevar_tfunc, 100)
@@ -813,7 +814,7 @@ end
 add_tfunc(typeassert, 2, 2, typeassert_tfunc, 4)
 
 @nospecs function typeassert_nothrow(𝕃::AbstractLattice, v, t)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     # ty, exact = instanceof_tfunc(t, true)
     # return exact && v ⊑ ty
     if (isType(t) && !has_free_typevars(t) && v ⊑ t.parameters[1]) ||
@@ -859,7 +860,7 @@ end
 add_tfunc(isa, 2, 2, isa_tfunc, 1)
 
 @nospecs function isa_nothrow(𝕃::AbstractLattice, obj, typ)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     return typ ⊑ Type
 end
 
@@ -882,7 +883,7 @@ end
 add_tfunc(<:, 2, 2, subtype_tfunc, 10)
 
 @nospecs function subtype_nothrow(𝕃::AbstractLattice, lty, rty)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     return lty ⊑ Type && rty ⊑ Type
 end
 
@@ -981,7 +982,7 @@ end
         isa(name, Const) || return false
     end
 
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
 
     # If we have s00 being a const, we can potentially refine our type-based analysis above
     if isa(s00, Const) || isconstType(s00)
@@ -1340,7 +1341,6 @@ end
     return setfield!_nothrow(𝕃, s00, name, v)
 end
 @nospecs function setfield!_nothrow(𝕃::AbstractLattice, s00, name, v)
-    ⊑ = Core.Compiler.:⊑(𝕃)
     s0 = widenconst(s00)
     s = unwrap_unionall(s0)
     if isa(s, Union)
@@ -1357,45 +1357,94 @@ end
         isconst(s, field) && return false
         isfieldatomic(s, field) && return false # TODO: currently we're only testing for ordering === :not_atomic
         v_expected = fieldtype(s0, field)
+        ⊑ = partialorder(𝕃)
         return v ⊑ v_expected
     end
     return false
 end
 
-@nospecs function swapfield!_tfunc(𝕃::AbstractLattice, o, f, v, order)
+@nospecs function swapfield!_tfunc(𝕃::AbstractLattice, o, f, v, order=Symbol)
+    setfield!_tfunc(𝕃, o, f, v) === Bottom && return Bottom
     return getfield_tfunc(𝕃, o, f)
 end
-@nospecs function swapfield!_tfunc(𝕃::AbstractLattice, o, f, v)
-    return getfield_tfunc(𝕃, o, f)
-end
-@nospecs function modifyfield!_tfunc(𝕃::AbstractLattice, o, f, op, v, order)
-    return modifyfield!_tfunc(𝕃, o, f, op, v)
-end
-@nospecs function modifyfield!_tfunc(𝕃::AbstractLattice, o, f, op, v)
+@nospecs function modifyfield!_tfunc(𝕃::AbstractLattice, o, f, op, v, order=Symbol)
     T = _fieldtype_tfunc(𝕃, o, f, isconcretetype(o))
     T === Bottom && return Bottom
     PT = Const(Pair)
     return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T, T), true)[1]
 end
-function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
+@nospecs function replacefield!_tfunc(𝕃::AbstractLattice, o, f, x, v, success_order=Symbol, failure_order=Symbol)
+    T = _fieldtype_tfunc(𝕃, o, f, isconcretetype(o))
+    T === Bottom && return Bottom
+    PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
+    return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T), true)[1]
+end
+@nospecs function setfieldonce!_tfunc(𝕃::AbstractLattice, o, f, v, success_order=Symbol, failure_order=Symbol)
+    setfield!_tfunc(𝕃, o, f, v) === Bottom && return Bottom
+    isdefined_tfunc(𝕃, o, f) === Const(true) && return Const(false)
+    return Bool
+end
+
+@nospecs function abstract_modifyop!(interp::AbstractInterpreter, ff, argtypes::Vector{Any}, si::StmtInfo, sv::AbsIntState)
+    if ff === modifyfield!
+        minargs = 5
+        maxargs = 6
+        op_argi = 4
+        v_argi = 5
+    elseif ff === Core.modifyglobal!
+        minargs = 5
+        maxargs = 6
+        op_argi = 4
+        v_argi = 5
+    elseif ff === Core.memoryrefmodify!
+        minargs = 6
+        maxargs = 6
+        op_argi = 3
+        v_argi = 4
+    elseif ff === atomic_pointermodify
+        minargs = 5
+        maxargs = 5
+        op_argi = 3
+        v_argi = 4
+    else
+        @assert false "unreachable"
+    end
+
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
-        nargs - 1 <= 6 || return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
-        nargs > 3 || return CallMeta(Any, Any, Effects(), NoCallInfo())
+        nargs - 1 <= maxargs || return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+        nargs + 1 >= op_argi || return CallMeta(Any, Any, Effects(), NoCallInfo())
     else
-        5 <= nargs <= 6 || return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
+        minargs <= nargs <= maxargs || return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
     end
     𝕃ᵢ = typeinf_lattice(interp)
-    o = unwrapva(argtypes[2])
-    f = unwrapva(argtypes[3])
-    RT = modifyfield!_tfunc(𝕃ᵢ, o, f, Any, Any)
+    if ff === modifyfield!
+        o = unwrapva(argtypes[2])
+        f = unwrapva(argtypes[3])
+        RT = modifyfield!_tfunc(𝕃ᵢ, o, f, Any, Any, Symbol)
+        TF = getfield_tfunc(𝕃ᵢ, o, f)
+    elseif ff === Core.modifyglobal!
+        o = unwrapva(argtypes[2])
+        f = unwrapva(argtypes[3])
+        RT = modifyglobal!_tfunc(𝕃ᵢ, o, f, Any, Any, Symbol)
+        TF = getglobal_tfunc(𝕃ᵢ, o, f, Symbol)
+    elseif ff === Core.memoryrefmodify!
+        o = unwrapva(argtypes[2])
+        RT = memoryrefmodify!_tfunc(𝕃ᵢ, o, Any, Any, Symbol, Bool)
+        TF = memoryrefget_tfunc(𝕃ᵢ, o, Symbol, Bool)
+    elseif ff === atomic_pointermodify
+        o = unwrapva(argtypes[2])
+        RT = atomic_pointermodify_tfunc(𝕃ᵢ, o, Any, Any, Symbol)
+        TF = atomic_pointerref_tfunc(𝕃ᵢ, o, Symbol)
+    else
+        @assert false "unreachable"
+    end
     info = NoCallInfo()
-    if nargs >= 5 && RT !== Bottom
+    if nargs >= v_argi && RT !== Bottom
         # we may be able to refine this to a PartialStruct by analyzing `op(o.f, v)::T`
         # as well as compute the info for the method matches
-        op = unwrapva(argtypes[4])
-        v = unwrapva(argtypes[5])
-        TF = getfield_tfunc(𝕃ᵢ, o, f)
+        op = unwrapva(argtypes[op_argi])
+        v = unwrapva(argtypes[v_argi])
         callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true), sv, #=max_methods=#1)
         TF2 = tmeet(callinfo.rt, widenconst(TF))
         if TF2 === Bottom
@@ -1403,35 +1452,23 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
             RT = PartialStruct(RT, Any[TF, TF2])
         end
-        info = ModifyFieldInfo(callinfo.info)
+        info = ModifyOpInfo(callinfo.info)
     end
     return CallMeta(RT, Any, Effects(), info)
-end
-@nospecs function replacefield!_tfunc(𝕃::AbstractLattice, o, f, x, v, success_order, failure_order)
-    return replacefield!_tfunc(𝕃, o, f, x, v)
-end
-@nospecs function replacefield!_tfunc(𝕃::AbstractLattice, o, f, x, v, success_order)
-    return replacefield!_tfunc(𝕃, o, f, x, v)
-end
-@nospecs function replacefield!_tfunc(𝕃::AbstractLattice, o, f, x, v)
-    T = _fieldtype_tfunc(𝕃, o, f, isconcretetype(o))
-    T === Bottom && return Bottom
-    PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
-    return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T), true)[1]
 end
 
 # we could use tuple_tfunc instead of widenconst, but `o` is mutable, so that is unlikely to be beneficial
 
 add_tfunc(getfield, 2, 4, getfield_tfunc, 1)
 add_tfunc(setfield!, 3, 4, setfield!_tfunc, 3)
-
 add_tfunc(swapfield!, 3, 4, swapfield!_tfunc, 3)
 add_tfunc(modifyfield!, 4, 5, modifyfield!_tfunc, 3)
 add_tfunc(replacefield!, 4, 6, replacefield!_tfunc, 3)
+add_tfunc(setfieldonce!, 3, 5, setfieldonce!_tfunc, 3)
 
 @nospecs function fieldtype_nothrow(𝕃::AbstractLattice, s0, name)
     s0 === Bottom && return true # unreachable
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
         # We have no idea
         return false
@@ -1975,19 +2012,45 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
 end
 
 @nospecs function memoryrefget_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
-    return _memoryrefget_tfunc(𝕃, mem, order, boundscheck)
-end
-@nospecs function _memoryrefget_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
     memoryref_builtin_common_errorcheck(mem, order, boundscheck) || return Bottom
     return memoryref_elemtype(mem)
 end
-add_tfunc(memoryrefget, 3, 3, memoryrefget_tfunc, 20)
-
 @nospecs function memoryrefset!_tfunc(𝕃::AbstractLattice, mem, item, order, boundscheck)
-    hasintersect(widenconst(item), _memoryrefget_tfunc(𝕃, mem, order, boundscheck)) || return Bottom
-    return mem
+    hasintersect(widenconst(item), memoryrefget_tfunc(𝕃, mem, order, boundscheck)) || return Bottom
+    return item
 end
-add_tfunc(memoryrefset!, 4, 4, memoryrefset!_tfunc, 20)
+@nospecs function memoryrefswap!_tfunc(𝕃::AbstractLattice, mem, v, order, boundscheck)
+    memoryrefset!_tfunc(𝕃, mem, v, order, boundscheck) === Bottom && return Bottom
+    return memoryrefget_tfunc(𝕃, mem, order, boundscheck)
+end
+@nospecs function memoryrefmodify!_tfunc(𝕃::AbstractLattice, mem, op, v, order, boundscheck)
+    memoryrefget_tfunc(𝕃, mem, order, boundscheck) === Bottom && return Bottom
+    T = _memoryref_elemtype(mem)
+    T === Bottom && return Bottom
+    PT = Const(Pair)
+    return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T, T), true)[1]
+end
+@nospecs function memoryrefreplace!_tfunc(𝕃::AbstractLattice, mem, x, v, success_order, failure_order, boundscheck)
+    memoryrefset!_tfunc(𝕃, mem, v, success_order, boundscheck) === Bottom && return Bottom
+    hasintersect(widenconst(failure_order), Symbol) || return Bottom
+    T = _memoryref_elemtype(mem)
+    T === Bottom && return Bottom
+    PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
+    return instanceof_tfunc(apply_type_tfunc(𝕃, PT, T), true)[1]
+end
+@nospecs function memoryrefsetonce!_tfunc(𝕃::AbstractLattice, mem, v, success_order, failure_order, boundscheck)
+    memoryrefset!_tfunc(𝕃, mem, v, success_order, boundscheck) === Bottom && return Bottom
+    hasintersect(widenconst(failure_order), Symbol) || return Bottom
+    return Bool
+end
+
+add_tfunc(Core.memoryrefget, 3, 3, memoryrefget_tfunc, 20)
+add_tfunc(Core.memoryrefset!, 4, 4, memoryrefset!_tfunc, 20)
+add_tfunc(Core.memoryrefswap!, 4, 4, memoryrefswap!_tfunc, 20)
+add_tfunc(Core.memoryrefmodify!, 5, 5, memoryrefmodify!_tfunc, 20)
+add_tfunc(Core.memoryrefreplace!, 6, 6, memoryrefreplace!_tfunc, 20)
+add_tfunc(Core.memoryrefsetonce!, 5, 5, memoryrefsetonce!_tfunc, 20)
+
 
 @nospecs function memoryref_isassigned_tfunc(𝕃::AbstractLattice, mem, order, boundscheck)
     return _memoryref_isassigned_tfunc(𝕃, mem, order, boundscheck)
@@ -2038,7 +2101,7 @@ add_tfunc(memoryrefoffset, 1, 1, memoryrefoffset_tfunc, 5)
     return true
 end
 
-function memoryref_elemtype(@nospecialize mem)
+@nospecs function memoryref_elemtype(@nospecialize mem)
     m = widenconst(mem)
     if !has_free_typevars(m) && m <: GenericMemoryRef
         m0 = m
@@ -2052,6 +2115,23 @@ function memoryref_elemtype(@nospecialize mem)
         end
     end
     return Any
+end
+
+@nospecs function _memoryref_elemtype(@nospecialize mem)
+    m = widenconst(mem)
+    if !has_free_typevars(m) && m <: GenericMemoryRef
+        m0 = m
+        if isa(m, UnionAll)
+            m = unwrap_unionall(m0)
+        end
+        if isa(m, DataType)
+            T = m.parameters[2]
+            valid_as_lattice(T, true) || return Bottom
+            has_free_typevars(T) || return Const(T)
+            return rewrap_unionall(Type{T}, m0)
+        end
+    end
+    return Type
 end
 
 @nospecs function opaque_closure_tfunc(𝕃::AbstractLattice, arg, lb, ub, source, env::Vector{Any}, linfo::MethodInstance)
@@ -2084,12 +2164,13 @@ function array_type_undefable(@nospecialize(arytype))
     return true
 end
 
-@nospecs function memoryset_typecheck(memtype, elemtype)
+@nospecs function memoryset_typecheck(𝕃::AbstractLattice, memtype, elemtype)
     # Check that we can determine the element type
     isa(memtype, DataType) || return false
     elemtype_expected = memoryref_elemtype(memtype)
     elemtype_expected === Union{} && return false
     # Check that the element type is compatible with the element we're assigning
+    ⊑ = partialorder(𝕃)
     elemtype ⊑ elemtype_expected || return false
     return true
 end
@@ -2122,17 +2203,17 @@ function memoryref_builtin_common_nothrow(argtypes::Vector{Any})
     end
 end
 
-function memoryrefop_builtin_common_nothrow(argtypes::Vector{Any}, @nospecialize f)
+function memoryrefop_builtin_common_nothrow(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize f)
     ismemoryset = f === memoryrefset!
     nargs = ismemoryset ? 4 : 3
     length(argtypes) == nargs || return false
     order = argtypes[2 + ismemoryset]
     boundscheck = argtypes[3 + ismemoryset]
     memtype = widenconst(argtypes[1])
-    memoryref_builtin_common_typecheck(boundscheck, memtype, order) || return false
+    memoryref_builtin_common_typecheck(𝕃, boundscheck, memtype, order) || return false
     if ismemoryset
         # Additionally check element type compatibility
-        memoryset_typecheck(memtype, argtypes[2]) || return false
+        memoryset_typecheck(𝕃, memtype, argtypes[2]) || return false
     elseif f === memoryrefget
         # If we could potentially throw undef ref errors, bail out now.
         array_type_undefable(memtype) && return false
@@ -2147,13 +2228,14 @@ function memoryrefop_builtin_common_nothrow(argtypes::Vector{Any}, @nospecialize
     return false
 end
 
-@nospecs function memoryref_builtin_common_typecheck(boundscheck, memtype, order)
+@nospecs function memoryref_builtin_common_typecheck(𝕃::AbstractLattice, boundscheck, memtype, order)
+    ⊑ = partialorder(𝕃)
     return boundscheck ⊑ Bool && memtype ⊑ GenericMemoryRef && order ⊑ Symbol
 end
 
 # Query whether the given builtin is guaranteed not to throw given the argtypes
 @nospecs function _builtin_nothrow(𝕃::AbstractLattice, f, argtypes::Vector{Any}, rt)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     if f === memoryref
         return memoryref_builtin_common_nothrow(argtypes)
     elseif f === memoryrefoffset
@@ -2161,11 +2243,11 @@ end
         memtype = widenconst(argtypes[1])
         return memtype ⊑ GenericMemoryRef
     elseif f === memoryrefset!
-        return memoryrefop_builtin_common_nothrow(argtypes, f)
+        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryrefget
-        return memoryrefop_builtin_common_nothrow(argtypes, f)
+        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === memoryref_isassigned
-        return memoryrefop_builtin_common_nothrow(argtypes, f)
+        return memoryrefop_builtin_common_nothrow(𝕃, argtypes, f)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
@@ -3056,6 +3138,8 @@ end
     elseif !(hasintersect(widenconst(M), Module) && hasintersect(widenconst(s), Symbol))
         return Bottom
     end
+    T = get_binding_type_tfunc(𝕃, M, s)
+    T isa Const && return T.val
     return Any
 end
 @nospecs function setglobal!_tfunc(𝕃::AbstractLattice, M, s, v, order=Symbol)
@@ -3064,8 +3148,39 @@ end
     end
     return v
 end
-add_tfunc(getglobal, 2, 3, getglobal_tfunc, 1)
-add_tfunc(setglobal!, 3, 4, setglobal!_tfunc, 3)
+@nospecs function swapglobal!_tfunc(𝕃::AbstractLattice, M, s, v, order=Symbol)
+    setglobal!_tfunc(𝕃, M, s, v) === Bottom && return Bottom
+    return getglobal_tfunc(𝕃, M, s)
+end
+@nospecs function modifyglobal!_tfunc(𝕃::AbstractLattice, M, s, op, v, order=Symbol)
+    T = get_binding_type_tfunc(𝕃, M, s)
+    T === Bottom && return Bottom
+    T isa Const || return Pair
+    T = T.val
+    return Pair{T, T}
+end
+@nospecs function replaceglobal!_tfunc(𝕃::AbstractLattice, M, s, x, v, success_order=Symbol, failure_order=Symbol)
+    v = setglobal!_tfunc(𝕃, M, s, v)
+    v === Bottom && return Bottom
+    T = get_binding_type_tfunc(𝕃, M, s)
+    T === Bottom && return Bottom
+    T isa Const || return ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
+    T = T.val
+    return ccall(:jl_apply_cmpswap_type, Any, (Any,), T)
+end
+@nospecs function setglobalonce!_tfunc(𝕃::AbstractLattice, M, s, v, success_order=Symbol, failure_order=Symbol)
+    setglobal!_tfunc(𝕃, M, s, v) === Bottom && return Bottom
+    return Bool
+end
+
+add_tfunc(Core.getglobal, 2, 3, getglobal_tfunc, 1)
+add_tfunc(Core.setglobal!, 3, 4, setglobal!_tfunc, 3)
+add_tfunc(Core.swapglobal!, 3, 4, swapglobal!_tfunc, 3)
+add_tfunc(Core.modifyglobal!, 4, 5, modifyglobal!_tfunc, 3)
+add_tfunc(Core.replaceglobal!, 4, 6, replaceglobal!_tfunc, 3)
+add_tfunc(Core.setglobalonce!, 3, 5, setglobalonce!_tfunc, 3)
+
+
 @nospecs function setglobal!_nothrow(M, s, newty, o)
     global_order_nothrow(o, #=loading=#false, #=storing=#true) || return false
     return setglobal!_nothrow(M, s, newty)
@@ -3106,7 +3221,7 @@ end
 add_tfunc(Core.get_binding_type, 2, 2, get_binding_type_tfunc, 0)
 
 @nospecs function get_binding_type_nothrow(𝕃::AbstractLattice, M, s)
-    ⊑ = Core.Compiler.:⊑(𝕃)
+    ⊑ = partialorder(𝕃)
     return M ⊑ Module && s ⊑ Symbol
 end
 
@@ -3125,6 +3240,8 @@ function foreigncall_effects(@specialize(abstract_eval), e::Expr)
     if name === :jl_alloc_genericmemory
         nothrow = new_genericmemory_nothrow(abstract_eval, args)
         return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
+    elseif name === :jl_genericmemory_copy_slice
+        return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow=false)
     end
     return EFFECTS_UNKNOWN
 end
