@@ -89,7 +89,7 @@ since it is not idiomatic to explicitly mark names from `Main` as public.
     `names` will return symbols marked with `public` or `export`, even if
     they are not defined in the module.
 
-See also: [`isexported`](@ref), [`ispublic`](@ref), [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
+See also: [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =
     sort!(unsorted_names(m; all, imported))
