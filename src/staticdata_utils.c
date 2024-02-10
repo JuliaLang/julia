@@ -634,6 +634,32 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
     return flags >= current_flags;
 }
 
+// return char* from String field in Base.GIT_VERSION_INFO
+static const char *git_info_string(const char *fld)
+{
+    static jl_value_t *GIT_VERSION_INFO = NULL;
+    if (!GIT_VERSION_INFO)
+        GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
+    jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
+    assert(jl_is_string(f));
+    return jl_string_data(f);
+}
+
+static const char *jl_git_branch(void)
+{
+    static const char *branch = NULL;
+    if (!branch) branch = git_info_string("branch");
+    return branch;
+}
+
+static const char *jl_git_commit(void)
+{
+    static const char *commit = NULL;
+    if (!commit) commit = git_info_string("commit");
+    return commit;
+}
+
+
 // "magic" string and version header of .ji file
 static const int JI_FORMAT_VERSION = 12;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
