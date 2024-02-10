@@ -415,15 +415,15 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
         if isa(e, SSAValue)
             push!(uses[e.id], line)
         elseif isa(e, Expr)
-            find_ssavalue_uses(e, uses, line)
+            find_ssavalue_uses!(uses, e, line)
         elseif isa(e, PhiNode)
-            find_ssavalue_uses(e, uses, line)
+            find_ssavalue_uses!(uses, e, line)
         end
     end
     return uses
 end
 
-function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
+function find_ssavalue_uses!(uses::Vector{BitSet}, e::Expr, line::Int)
     head = e.head
     is_meta_expr_head(head) && return
     skiparg = (head === :(=))
@@ -433,13 +433,16 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
         elseif isa(a, SSAValue)
             push!(uses[a.id], line)
         elseif isa(a, Expr)
-            find_ssavalue_uses(a, uses, line)
+            find_ssavalue_uses!(uses, a, line)
         end
     end
 end
 
-function find_ssavalue_uses(e::PhiNode, uses::Vector{BitSet}, line::Int)
-    for val in e.values
+function find_ssavalue_uses!(uses::Vector{BitSet}, e::PhiNode, line::Int)
+    values = e.values
+    for i = 1:length(values)
+        isassigned(values, i) || continue
+        val = values[i]
         if isa(val, SSAValue)
             push!(uses[val.id], line)
         end
