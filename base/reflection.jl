@@ -1061,7 +1061,7 @@ fieldtypes(T::Type) = (@_foldable_meta; ntupleany(i -> fieldtype(T, i), fieldcou
 Return a collection of all instances of the given type, if applicable. Mostly used for
 enumerated types (see `@enum`).
 
-# Example
+# Examples
 ```jldoctest
 julia> @enum Color red blue green
 
@@ -1555,7 +1555,7 @@ internals.
 - `interp::Core.Compiler.AbstractInterpreter = Core.Compiler.NativeInterpreter(world)`:
   optional, controls the abstract interpreter to use, use the native interpreter if not specified.
 
-# Example
+# Examples
 
 One can put the argument types in a tuple to get the corresponding `code_typed`.
 
@@ -1663,7 +1663,7 @@ internals.
   If it is an integer, it specifies the number of passes to run.
   If it is `nothing` (default), all passes are run.
 
-# Example
+# Examples
 
 One can put the argument types in a tuple to get the corresponding `code_ircode`.
 
@@ -1761,7 +1761,7 @@ candidates for `f` and `types` (see also [`methods(f, types)`](@ref methods).
   methods matching with the given `f` and `types`. The list's order matches the order
   returned by `methods(f, types)`.
 
-# Example
+# Examples
 
 ```julia
 julia> Base.return_types(sum, Tuple{Vector{Int}})
@@ -1830,7 +1830,7 @@ Returns an inferred return type of the function call specified by `f` and `types
     It returns a single return type, taking into account all potential outcomes of
     any function call entailed by the given signature type.
 
-# Example
+# Examples
 
 ```julia
 julia> checksym(::Symbol) = :symbol;
@@ -1901,7 +1901,7 @@ It works like [`Base.return_types`](@ref), but it infers the exception types ins
   methods matching with the given `f` and `types`. The list's order matches the order
   returned by `methods(f, types)`.
 
-# Example
+# Examples
 
 ```julia
 julia> throw_if_number(::Number) = error("number is given");
@@ -1984,7 +1984,7 @@ Returns the type of exception potentially thrown by the function call specified 
     It returns a single exception type, taking into account all potential outcomes of
     any function call entailed by the given signature type.
 
-# Example
+# Examples
 
 ```julia
 julia> f1(x) = x * 2;
@@ -2068,7 +2068,7 @@ Returns the possible computation effects of the function call specified by `f` a
     It returns a single effect, taking into account all potential outcomes of any function
     call entailed by the given signature type.
 
-# Example
+# Examples
 
 ```julia
 julia> f1(x) = x * 2;

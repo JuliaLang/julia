@@ -416,7 +416,7 @@ end
 Update `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
-# Example
+# Examples
 ```jldoctest
 julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
 Dict{Int64, String} with 3 entries:
