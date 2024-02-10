@@ -108,6 +108,8 @@ New library features
   automatically.
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
 * `filter` can now act on a `NamedTuple` ([#50795]).
+* `Iterators.cycle(iter, n)` runs over `iter` a fixed number of times, instead of forever ([#47354])
+
 
 Standard library changes
 ------------------------
