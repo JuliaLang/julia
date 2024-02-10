@@ -962,8 +962,8 @@ When `iter` is empty, so are `cycle(iter)` and `cycle(iter, n)`.
 `Iterators.cycle(iter, n)` is the lazy equivalent of [`Base.repeat`](@ref)`(vector, n)`,
 while [`Iterators.repeated`](@ref)`(iter, n)` is the lazy [`Base.fill`](@ref)`(item, n)`.
 
-!!! compat "Julia 1.9"
-    The method `cycle(iter, n)` was added in Julia 1.9.
+!!! compat "Julia 1.11"
+    The method `cycle(iter, n)` was added in Julia 1.11.
 
 # Examples
 ```jldoctest
