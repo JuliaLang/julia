@@ -436,7 +436,10 @@ end
 
 function closewrite(s::LibuvStream)
     iolock_begin()
-    check_open(s)
+    if !iswritable(s)
+        iolock_end()
+        return
+    end
     req = Libc.malloc(_sizeof_uv_shutdown)
     uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
     err = ccall(:uv_shutdown, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
@@ -740,24 +743,42 @@ mutable struct Pipe <: AbstractPipe
 end
 
 """
-Construct an uninitialized Pipe object.
+    Pipe()
 
-The appropriate end of the pipe will be automatically initialized if
-the object is used in process spawning. This can be useful to easily
-obtain references in process pipelines, e.g.:
+Construct an uninitialized Pipe object, especially for IO communication between multiple processes.
+
+The appropriate end of the pipe will be automatically initialized if the object is used in
+process spawning. This can be useful to easily obtain references in process pipelines, e.g.:
 
 ```
 julia> err = Pipe()
 
 # After this `err` will be initialized and you may read `foo`'s
-# stderr from the `err` pipe.
+# stderr from the `err` pipe, or pass `err` to other pipelines.
 julia> run(pipeline(pipeline(`foo`, stderr=err), `cat`), wait=false)
+
+# Now destroy the write half of the pipe, so that the read half will get EOF
+julia> closewrite(err)
+
+julia> read(err, String)
+"stderr messages"
 ```
+
+See also [`Base.link_pipe!`](@ref).
 """
 Pipe() = Pipe(PipeEndpoint(), PipeEndpoint())
 pipe_reader(p::Pipe) = p.out
 pipe_writer(p::Pipe) = p.in
 
+"""
+    link_pipe!(pipe; reader_supports_async=false, writer_supports_async=false)
+
+Initialize `pipe` and link the `in` endpoint to the `out` endpoint. The keyword
+arguments `reader_supports_async`/`writer_supports_async` correspond to
+`OVERLAPPED` on Windows and `O_NONBLOCK` on POSIX systems. They should be `true`
+unless they'll be used by an external program (e.g. the output of a command
+executed with [`run`](@ref)).
+"""
 function link_pipe!(pipe::Pipe;
                     reader_supports_async = false,
                     writer_supports_async = false)
@@ -1273,7 +1294,7 @@ the pipe.
 
 !!! note
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
-    `Pipe`, socket, or `devnull`.
+    [`Pipe`](@ref), socket, or `devnull`.
 
 See also [`redirect_stdio`](@ref).
 """
@@ -1286,7 +1307,7 @@ Like [`redirect_stdout`](@ref), but for [`stderr`](@ref).
 
 !!! note
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
-    `Pipe`, socket, or `devnull`.
+    [`Pipe`](@ref), socket, or `devnull`.
 
 See also [`redirect_stdio`](@ref).
 """
@@ -1300,7 +1321,7 @@ Note that the direction of the stream is reversed.
 
 !!! note
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
-    `Pipe`, socket, or `devnull`.
+    [`Pipe`](@ref), socket, or `devnull`.
 
 See also [`redirect_stdio`](@ref).
 """
@@ -1310,7 +1331,8 @@ redirect_stdin
     redirect_stdio(;stdin=stdin, stderr=stderr, stdout=stdout)
 
 Redirect a subset of the streams `stdin`, `stderr`, `stdout`.
-Each argument must be an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
+Each argument must be an `IOStream`, `TTY`, [`Pipe`](@ref), socket, or
+`devnull`.
 
 !!! compat "Julia 1.7"
     `redirect_stdio` requires Julia 1.7 or later.
@@ -1330,7 +1352,7 @@ call `f()` and restore each stream.
 Possible values for each stream are:
 * `nothing` indicating the stream should not be redirected.
 * `path::AbstractString` redirecting the stream to the file at `path`.
-* `io` an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
+* `io` an `IOStream`, `TTY`, [`Pipe`](@ref), socket, or `devnull`.
 
 # Examples
 ```julia-repl
@@ -1489,7 +1511,7 @@ closewrite(s::BufferStream) = close(s)
 function close(s::BufferStream)
     lock(s.cond) do
         s.status = StatusClosed
-        notify(s.cond)
+        notify(s.cond) # aka flush
         nothing
     end
 end
@@ -1549,6 +1571,7 @@ stop_reading(s::BufferStream) = nothing
 write(s::BufferStream, b::UInt8) = write(s, Ref{UInt8}(b))
 function unsafe_write(s::BufferStream, p::Ptr{UInt8}, nb::UInt)
     nwrite = lock(s.cond) do
+        check_open(s)
         rv = unsafe_write(s.buffer, p, nb)
         s.buffer_writes || notify(s.cond)
         rv
@@ -1569,9 +1592,18 @@ end
 buffer_writes(s::BufferStream, bufsize=0) = (s.buffer_writes = true; s)
 function flush(s::BufferStream)
     lock(s.cond) do
+        check_open(s)
         notify(s.cond)
         nothing
     end
 end
 
 skip(s::BufferStream, n) = skip(s.buffer, n)
+
+function reseteof(x::BufferStream)
+    lock(s.cond) do
+        s.status = StatusOpen
+        nothing
+    end
+    nothing
+end

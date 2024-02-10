@@ -136,6 +136,44 @@ function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
     a
 end
 
+# Row and column permutations for AbstractMatrix
+permutecols!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _permute!(a, p, Base.swapcols!)
+permuterows!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _permute!(a, p, Base.swaprows!)
+@inline function _permute!(a::AbstractMatrix, p::AbstractVector{<:Integer}, swapfun!::F) where {F}
+    require_one_based_indexing(a, p)
+    p .= .-p
+    for i in 1:length(p)
+        p[i] > 0 && continue
+        j = i
+        in = p[j] = -p[j]
+        while p[in] < 0
+            swapfun!(a, in, j)
+            j = in
+            in = p[in] = -p[in]
+        end
+    end
+    a
+end
+invpermutecols!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _invpermute!(a, p, Base.swapcols!)
+invpermuterows!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _invpermute!(a, p, Base.swaprows!)
+@inline function _invpermute!(a::AbstractMatrix, p::AbstractVector{<:Integer}, swapfun!::F) where {F}
+    require_one_based_indexing(a, p)
+    p .= .-p
+    for i in 1:length(p)
+        p[i] > 0 && continue
+        j = p[i] = -p[i]
+        while j != i
+           swapfun!(a, j, i)
+           j = p[j] = -p[j]
+        end
+     end
+    a
+end
+
 """
     permute!(v, p)
 
@@ -241,7 +279,7 @@ julia> B[invperm(v)]
 """
 function invperm(a::AbstractVector)
     require_one_based_indexing(a)
-    b = zero(a) # similar vector of zeros
+    b = fill!(similar(a), zero(eltype(a))) # mutable vector of zeros
     n = length(a)
     @inbounds for (i, j) in enumerate(a)
         ((1 <= j <= n) && b[j] == 0) ||

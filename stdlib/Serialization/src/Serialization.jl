@@ -1448,16 +1448,9 @@ function deserialize_typename(s::AbstractSerializer, number)
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
             kws = handle_deserialize(s, tag)
-            if makenew
-                if kws isa Vector{Method}
-                    for def in kws
-                        kwmt = typeof(Core.kwcall).name.mt
-                        ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, def, C_NULL)
-                    end
-                else
-                    # old object format -- try to forward from old to new
-                    @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
-                end
+            if makenew && !(kws isa Vector{Method})
+                # old object format -- try to forward from old to new
+                @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
             end
         end
     elseif makenew

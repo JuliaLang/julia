@@ -70,7 +70,7 @@ Small unions of concrete types are usually not a concern, so these are highlight
 
 Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
 
-See [`@code_warntype`](@ref man-code-warntype) for more information.
+See the [`@code_warntype`](@ref man-code-warntype) section in the Performance Tips page of the manual for more information.
 
 See also: [`@code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref), [`code_native`](@ref).
 """

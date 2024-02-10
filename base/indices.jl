@@ -106,26 +106,49 @@ IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 
 promote_shape(::Tuple{}, ::Tuple{}) = ()
 
-function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
-    if a[1] != b[1]
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
+# Consistent error message for promote_shape mismatch, hiding type details like
+# OneTo. When b ≡ nothing, it is omitted; i can be supplied for an index.
+function throw_promote_shape_mismatch(a::Tuple, b::Union{Nothing,Tuple}, i = nothing)
+    if a isa Tuple{Vararg{Base.OneTo}} && (b === nothing || b isa Tuple{Vararg{Base.OneTo}})
+        a = map(lastindex, a)::Dims
+        b === nothing || (b = map(lastindex, b)::Dims)
     end
+    _has_axes = !(a isa Dims && (b === nothing || b isa Dims))
+    if _has_axes
+        _normalize(d) = map(x -> firstindex(x):lastindex(x), d)
+        a = _normalize(a)
+        b === nothing || (b = _normalize(b))
+        _things = "axes "
+    else
+        _things = "size "
+    end
+    msg = IOBuffer()
+    print(msg, "a has ", _things)
+    print(msg, a)
+    if b ≢ nothing
+        print(msg, ", b has ", _things)
+        print(msg, b)
+    end
+    if i ≢ nothing
+        print(msg, ", mismatch at dim ", i)
+    end
+    throw(DimensionMismatch(String(take!(msg))))
+end
+
+function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
+    a[1] != b[1] && throw_promote_shape_mismatch(a, b)
     return a
 end
 
 function promote_shape(a::Tuple{Int,Int}, b::Tuple{Int,})
-    if a[1] != b[1] || a[2] != 1
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
-    end
+    (a[1] != b[1] || a[2] != 1) && throw_promote_shape_mismatch(a, b)
     return a
 end
 
 promote_shape(a::Tuple{Int,}, b::Tuple{Int,Int}) = promote_shape(b, a)
 
 function promote_shape(a::Tuple{Int, Int}, b::Tuple{Int, Int})
-    if a[1] != b[1] || a[2] != b[2]
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
-    end
+    (a[1] != b[1] || a[2] != b[2]) && throw_promote_shape_mismatch(a, b)
     return a
 end
 
@@ -153,14 +176,10 @@ function promote_shape(a::Dims, b::Dims)
         return promote_shape(b, a)
     end
     for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
-        end
+        a[i] != b[i] && throw_promote_shape_mismatch(a, b, i)
     end
     for i=length(b)+1:length(a)
-        if a[i] != 1
-            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
-        end
+        a[i] != 1 && throw_promote_shape_mismatch(a, nothing, i)
     end
     return a
 end
@@ -174,14 +193,10 @@ function promote_shape(a::Indices, b::Indices)
         return promote_shape(b, a)
     end
     for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
-        end
+        a[i] != b[i] && throw_promote_shape_mismatch(a, b, i)
     end
     for i=length(b)+1:length(a)
-        if a[i] != 1:1
-            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
-        end
+        a[i] != 1:1 && throw_promote_shape_mismatch(a, nothing, i)
     end
     return a
 end
@@ -349,15 +364,8 @@ to_indices(A, I::Tuple{}) = ()
 to_indices(A, I::Tuple{Vararg{Int}}) = I
 to_indices(A, I::Tuple{Vararg{Integer}}) = (@inline; to_indices(A, (), I))
 to_indices(A, inds, ::Tuple{}) = ()
-function to_indices(A, inds, I::Tuple{Any, Vararg{Any}})
-    @inline
-    head = _to_indices1(A, inds, I[1])
-    rest = to_indices(A, _cutdim(inds, I[1]), tail(I))
-    (head..., rest...)
-end
-
-_to_indices1(A, inds, I1) = (to_index(A, I1),)
-_cutdim(inds, I1) = safe_tail(inds)
+to_indices(A, inds, I::Tuple{Any, Vararg}) =
+    (@inline; (to_index(A, I[1]), to_indices(A, safe_tail(inds), tail(I))...))
 
 """
     Slice(indices)

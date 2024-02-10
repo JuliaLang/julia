@@ -75,14 +75,19 @@ end
 """
     names(x::Module; all::Bool = false, imported::Bool = false)
 
-Get an array of the public names of a `Module`, excluding deprecated names.
+Get a vector of the public names of a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-public names defined in the module,
 deprecated names, and compiler-generated names.
 If `imported` is true, then names explicitly imported from other modules
-are also included.
+are also included. Names are returned in sorted order.
 
 As a special case, all names defined in `Main` are considered \"public\",
 since it is not idiomatic to explicitly mark names from `Main` as public.
+
+!!! note
+    `sym ∈ names(SomeModule)` does *not* imply `isdefined(SomeModule, sym)`.
+    `names` will return symbols marked with `public` or `export`, even if
+    they are not defined in the module.
 
 See also: [`isexported`](@ref), [`ispublic`](@ref), [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
@@ -850,6 +855,17 @@ function isabstracttype(@nospecialize(t))
     return isa(t, DataType) && (t.name.flags & 0x1) == 0x1
 end
 
+function is_datatype_layoutopaque(dt::DataType)
+    datatype_nfields(dt) == 0 && !datatype_pointerfree(dt)
+end
+
+function is_valid_intrinsic_elptr(@nospecialize(ety))
+    ety === Any && return true
+    isconcretetype(ety) || return false
+    ety <: Array && return false
+    return !is_datatype_layoutopaque(ety)
+end
+
 """
     Base.issingletontype(T)
 
@@ -1107,6 +1123,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     world = get_world_counter()
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     return map(method_instances(f, t, world)) do m
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
@@ -2176,7 +2193,17 @@ See also: [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which),
 """
 function which(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
-    return which(tt)
+    world = get_world_counter()
+    match, _ = Core.Compiler._findsup(tt, nothing, world)
+    if match === nothing
+        me = MethodError(f, t, world)
+        ee = ErrorException(sprint(io -> begin
+            println(io, "Calling invoke(f, t, args...) would throw:");
+            Base.showerror(io, me);
+        end))
+        throw(ee)
+    end
+    return match.method
 end
 
 """
@@ -2303,6 +2330,7 @@ end
 
 function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
     @nospecialize
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     isempty(kwnames) && return hasmethod(f, t; world)
     t = to_tuple_type(t)
     ft = Core.Typeof(f)
@@ -2496,7 +2524,11 @@ function delete_method(m::Method)
 end
 
 function get_methodtable(m::Method)
-    return ccall(:jl_method_get_table, Any, (Any,), m)::Core.MethodTable
+    mt = ccall(:jl_method_get_table, Any, (Any,), m)
+    if mt === nothing
+        return nothing
+    end
+    return mt::Core.MethodTable
 end
 
 """
@@ -2520,7 +2552,21 @@ min_world(m::Core.CodeInstance) = m.min_world
 max_world(m::Core.CodeInstance) = m.max_world
 min_world(m::Core.CodeInfo) = m.min_world
 max_world(m::Core.CodeInfo) = m.max_world
+
+"""
+    get_world_counter()
+
+Returns the current maximum world-age counter. This counter is global and monotonically
+increasing.
+"""
 get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
+
+"""
+    tls_world_age()
+
+Returns the world the [current_task()](@ref) is executing within.
+"""
+tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 
 """
     propertynames(x, private=false)

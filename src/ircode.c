@@ -104,6 +104,8 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
 {
     rle_reference rr;
 
+    if (jl_is_string(v))
+        v = jl_as_global_root(v, 1);
     literal_val_id(&rr, s, v);
     int id = rr.index;
     assert(id >= 0);
@@ -155,7 +157,7 @@ static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, 
     }
     else {
         ios_write(s->s, (char*)mem->ptr + offset * layout->size, len * layout->size);
-        if (jl_genericmemory_isbitsunion(mem))
+        if (layout->flags.arrayelem_isunion)
             ios_write(s->s, jl_genericmemory_typetagdata(mem) + offset, len);
     }
 }
@@ -392,7 +394,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         if (layout->flags.arrayelem_isunion || layout->size == 0)
             offset = (uintptr_t)ar->ref.ptr_or_offset;
         else
-            offset = (char*)ar->ref.ptr_or_offset - (char*)ar->ref.mem->ptr;
+            offset = ((char*)ar->ref.ptr_or_offset - (char*)ar->ref.mem->ptr) / layout->size;
         jl_encode_memory_slice(s, ar->ref.mem, offset, l);
     }
     else if (as_literal && jl_is_genericmemory(v)) {
@@ -974,8 +976,9 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
     if (metadata) {
-        code->min_world = metadata->min_world;
-        code->max_world = metadata->max_world;
+        code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
+        // n.b. this should perhaps be capped to jl_world_counter max here, since we don't have backedges on it after return
+        code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
         code->rettype = metadata->rettype;
         code->parent = metadata->def;
     }

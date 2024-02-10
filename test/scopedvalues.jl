@@ -69,11 +69,11 @@ end
 @testset "show" begin
     @test sprint(show, ScopedValue{Int}()) == "ScopedValue{$Int}(undefined)"
     @test sprint(show, sval) == "ScopedValue{$Int}(1)"
-    @test sprint(show, ScopedValues.current_scope()) == "nothing"
+    @test sprint(show, Core.current_scope()) == "nothing"
     with(sval => 2.0) do
         @test sprint(show, sval) == "ScopedValue{$Int}(2)"
         objid = sprint(show, Base.objectid(sval))
-        @test sprint(show, ScopedValues.current_scope()) == "Base.ScopedValues.Scope(ScopedValue{$Int}@$objid => 2)"
+        @test sprint(show, Core.current_scope()) == "Base.ScopedValues.Scope(ScopedValue{$Int}@$objid => 2)"
     end
 end
 
@@ -125,4 +125,28 @@ end
         @test sval[] == 1
         @test sval_float[] == 1.0
     end
+end
+
+@testset "isassigned" begin
+    sv = ScopedValue(1)
+    @test isassigned(sv)
+    sv = ScopedValue{Int}()
+    @test !isassigned(sv)
+    with(sv => 2) do
+        @test isassigned(sv)
+    end
+end
+
+# Test that the `@with` macro doesn't introduce unnecessary PhiC nodes
+# (which can be hard for the optimizer to remove).
+function with_macro_slot_cross()
+    a = 1
+    @with sval=>1 begin
+        a = sval_float[]
+    end
+    return a
+end
+
+let code = code_typed(with_macro_slot_cross)[1][1].code
+    @test !any(x->isa(x, Core.PhiCNode), code)
 end

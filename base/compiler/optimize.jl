@@ -23,29 +23,60 @@ const IR_FLAG_INBOUNDS    = one(UInt32) << 0
 const IR_FLAG_INLINE      = one(UInt32) << 1
 # This statement is marked as @noinline by user
 const IR_FLAG_NOINLINE    = one(UInt32) << 2
+# This statement is on a code path that eventually `throw`s.
 const IR_FLAG_THROW_BLOCK = one(UInt32) << 3
-# This statement was proven :effect_free
-const IR_FLAG_EFFECT_FREE = one(UInt32) << 4
-# This statement was proven not to throw
-const IR_FLAG_NOTHROW     = one(UInt32) << 5
-# This is :consistent
-const IR_FLAG_CONSISTENT  = one(UInt32) << 6
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
-const IR_FLAG_REFINED     = one(UInt32) << 7
-# This is :noub == ALWAYS_TRUE
-const IR_FLAG_NOUB        = one(UInt32) << 8
-
+const IR_FLAG_REFINED     = one(UInt32) << 4
+# This statement is proven :consistent
+const IR_FLAG_CONSISTENT  = one(UInt32) << 5
+# This statement is proven :effect_free
+const IR_FLAG_EFFECT_FREE = one(UInt32) << 6
+# This statement is proven :nothrow
+const IR_FLAG_NOTHROW     = one(UInt32) << 7
+# This statement is proven :terminates
+const IR_FLAG_TERMINATES  = one(UInt32) << 8
+# This statement is proven :noub
+const IR_FLAG_NOUB        = one(UInt32) << 9
 # TODO: Both of these should eventually go away once
-# This is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
-const IR_FLAG_EFIIMO      = one(UInt32) << 9
-# This is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
-const IR_FLAG_INACCESSIBLE_OR_ARGMEM = one(UInt32) << 10
+# This statement is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+const IR_FLAG_EFIIMO      = one(UInt32) << 10
+# This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
+const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 11
 
-const IR_FLAGS_EFFECTS = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_CONSISTENT | IR_FLAG_NOUB
+const NUM_IR_FLAGS = 12 # sync with julia.h
+
+const IR_FLAGS_EFFECTS =
+    IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW | IR_FLAG_NOUB
+
+const IR_FLAGS_REMOVABLE = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+
+const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
 
 has_flag(curr::UInt32, flag::UInt32) = (curr & flag) == flag
+
+function flags_for_effects(effects::Effects)
+    flags = zero(UInt32)
+    if is_consistent(effects)
+        flags |= IR_FLAG_CONSISTENT
+    end
+    if is_effect_free(effects)
+        flags |= IR_FLAG_EFFECT_FREE
+    elseif is_effect_free_if_inaccessiblememonly(effects)
+        flags |= IR_FLAG_EFIIMO
+    end
+    if is_nothrow(effects)
+        flags |= IR_FLAG_NOTHROW
+    end
+    if is_inaccessiblemem_or_argmemonly(effects)
+        flags |= IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM
+    end
+    if is_noub(effects)
+        flags |= IR_FLAG_NOUB
+    end
+    return flags
+end
 
 const TOP_TUPLE = GlobalRef(Core, :tuple)
 
@@ -103,7 +134,7 @@ function InliningState(sv::InferenceState, interp::AbstractInterpreter)
     return InliningState(edges, sv.world, interp)
 end
 function InliningState(interp::AbstractInterpreter)
-    return InliningState(Any[], get_world_counter(interp), interp)
+    return InliningState(Any[], get_inference_world(interp), interp)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
@@ -162,7 +193,7 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, interp::Abstrac
     return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, cfg, unreachable, bb_vartables, false)
 end
 function OptimizationState(linfo::MethodInstance, interp::AbstractInterpreter)
-    world = get_world_counter(interp)
+    world = get_inference_world(interp)
     src = retrieve_code_info(linfo, world)
     src === nothing && return nothing
     return OptimizationState(linfo, src, interp)
@@ -184,7 +215,7 @@ function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src) = opt
     src = ir_to_codeinf!(src, opt.ir::IRCode)
     opt.ir = nothing
-    validate_code_in_debug_mode(linfo, src, "optimized")
+    maybe_validate_code(linfo, src, "optimized")
     return src
 end
 
@@ -261,9 +292,9 @@ end
 
 """
     stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
-        (consistent::Bool, effect_free_and_nothrow::Bool, nothrow::Bool)
+        (consistent::Bool, removable::Bool, nothrow::Bool)
 
-Returns a tuple of `(:consistent, :effect_free_and_nothrow, :nothrow)` flags for a given statement.
+Returns a tuple of `(:consistent, :removable, :nothrow)` flags for a given statement.
 """
 function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
     # TODO: We're duplicating analysis from inference here.
@@ -307,7 +338,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
-            return (consistent, effect_free & nothrow, nothrow)
+            removable = effect_free & nothrow
+            return (consistent, removable, nothrow)
         elseif head === :new
             return new_expr_effect_flags(𝕃ₒ, args, src)
         elseif head === :foreigncall
@@ -317,7 +349,8 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
-            return (consistent, effect_free & nothrow, nothrow)
+            removable = effect_free & nothrow
+            return (consistent, removable, nothrow)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
             typ = argextype(args[1], src)
@@ -342,6 +375,29 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
     end
     isa(stmt, SlotNumber) && error("unexpected IR elements")
     return (true, true, true)
+end
+
+function recompute_effects_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt),
+                                 src::Union{IRCode,IncrementalCompact})
+    flag = IR_FLAG_NULL
+    (consistent, removable, nothrow) = stmt_effect_flags(𝕃ₒ, stmt, rt, src)
+    if consistent
+        flag |= IR_FLAG_CONSISTENT
+    end
+    if removable
+        flag |= IR_FLAGS_REMOVABLE
+    elseif nothrow
+        flag |= IR_FLAG_NOTHROW
+    end
+    if !(isexpr(stmt, :call) || isexpr(stmt, :invoke))
+        # There is a bit of a subtle point here, which is that some non-call
+        # statements (e.g. PiNode) can be UB:, however, we consider it
+        # illegal to introduce such statements that actually cause UB (for any
+        # input). Ideally that'd be handled at insertion time (TODO), but for
+        # the time being just do that here.
+        flag |= IR_FLAG_NOUB
+    end
+    return flag
 end
 
 """
@@ -383,7 +439,7 @@ function argextype(
         return Const(x.value)
     elseif isa(x, GlobalRef)
         return abstract_eval_globalref_type(x)
-    elseif isa(x, PhiNode)
+    elseif isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
         return Any
     elseif isa(x, PiNode)
         return x.typ
@@ -470,8 +526,8 @@ function visit_bb_phis!(callback, ir::IRCode, bb::Int)
 end
 
 function any_stmt_may_throw(ir::IRCode, bb::Int)
-    for stmt in ir.cfg.blocks[bb].stmts
-        if has_flag(ir[SSAValue(stmt)], IR_FLAG_NOTHROW)
+    for idx in ir.cfg.blocks[bb].stmts
+        if !has_flag(ir[SSAValue(idx)], IR_FLAG_NOTHROW)
             return true
         end
     end
@@ -692,8 +748,6 @@ function is_conditional_noub(inst::Instruction, sv::PostOptAnalysisState)
     return true
 end
 
-const IR_FLAGS_NEEDS_EA = IR_FLAG_EFIIMO | IR_FLAG_INACCESSIBLE_OR_ARGMEM
-
 function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
     flag = inst[:flag]
     # If we can prove that the argmem does not escape the current function, we can
@@ -811,13 +865,14 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
 end
 
 function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
-    scan!(ScanStmt(sv), scanner, false)
-    complete!(sv.tpdum); push!(scanner.bb_ip, 1)
-    populate_def_use_map!(sv.tpdum, scanner)
-
     (; ir, inconsistent, tpdum) = sv
+
+    scan!(ScanStmt(sv), scanner, false)
+    complete!(tpdum); push!(scanner.bb_ip, 1)
+    populate_def_use_map!(tpdum, scanner)
+
     stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
-    for def in sv.inconsistent
+    for def in inconsistent
         for use in tpdum[def]
             if !(use in inconsistent)
                 push!(inconsistent, use)
@@ -825,6 +880,7 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
             end
         end
     end
+    lazydomtree = LazyDomtree(ir)
     while !isempty(stmt_ip)
         idx = popfirst!(stmt_ip)
         inst = ir[SSAValue(idx)]
@@ -841,12 +897,11 @@ function check_inconsistentcy!(sv::PostOptAnalysisState, scanner::BBScanner)
             any_non_boundscheck_inconsistent || continue
         elseif isa(stmt, ReturnNode)
             sv.all_retpaths_consistent = false
-        else isa(stmt, GotoIfNot)
+        elseif isa(stmt, GotoIfNot)
             bb = block_for_inst(ir, idx)
             cfg = ir.cfg
             blockliveness = BlockLiveness(cfg.blocks[bb].succs, nothing)
-            domtree = construct_domtree(cfg.blocks)
-            for succ in iterated_dominance_frontier(cfg, blockliveness, domtree)
+            for succ in iterated_dominance_frontier(cfg, blockliveness, get!(lazydomtree))
                 visit_bb_phis!(ir, succ) do phiidx::Int
                     push!(inconsistent, phiidx)
                     push!(stmt_ip, phiidx)
@@ -932,8 +987,11 @@ function run_passes_ipo_safe(
     if made_changes
         @pass "compact 3" ir = compact!(ir, true)
     end
-    if JLOptions().debug_level == 2
-        @timeit "verify 3" (verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp)); verify_linetable(ir.linetable))
+    if is_asserts()
+        @timeit "verify 3" begin
+            verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp))
+            verify_linetable(ir.linetable)
+        end
     end
     @label __done__  # used by @pass
     return ir
@@ -976,7 +1034,16 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 catchdest = expr.catch_dest
                 if catchdest in sv.unreachable
                     cfg_delete_edge!(sv.cfg, block_for_inst(sv.cfg, i), block_for_inst(sv.cfg, catchdest))
-                    code[i] = nothing
+                    if isdefined(expr, :scope)
+                        # We've proven that nothing inside the enter region throws,
+                        # but we don't yet know whether something might read the scope,
+                        # so we need to retain this enter for the time being. However,
+                        # we use the special marker `0` to indicate that setting up
+                        # the try/catch frame is not required.
+                        code[i] = EnterNode(expr, 0)
+                    else
+                        code[i] = nothing
+                    end
                 end
             end
         end
@@ -1045,7 +1112,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                     ssaflags[block_end] = IR_FLAG_NOTHROW
 
                     # Verify that type-inference did its job
-                    if JLOptions().debug_level == 2
+                    if is_asserts()
                         for i = (oldidx + 1):last(sv.cfg.blocks[block].stmts)
                             @assert i in sv.unreachable
                         end
@@ -1362,11 +1429,18 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
             end
         elseif isa(el, EnterNode)
             tgt = el.catch_dest
-            was_deleted = labelchangemap[tgt] == typemin(Int)
-            if was_deleted
-                body[i] = nothing
-            else
-                body[i] = EnterNode(el, tgt + labelchangemap[tgt])
+            if tgt != 0
+                was_deleted = labelchangemap[tgt] == typemin(Int)
+                if was_deleted
+                    @assert !isdefined(el, :scope)
+                    body[i] = nothing
+                else
+                    if isdefined(el, :scope) && isa(el.scope, SSAValue)
+                        body[i] = EnterNode(tgt + labelchangemap[tgt], SSAValue(el.scope.id + ssachangemap[el.scope.id]))
+                    else
+                        body[i] = EnterNode(el, tgt + labelchangemap[tgt])
+                    end
+                end
             end
         elseif isa(el, Expr)
             if el.head === :(=) && el.args[2] isa Expr

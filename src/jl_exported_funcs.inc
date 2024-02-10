@@ -29,6 +29,7 @@
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
     XX(jl_genericmemory_owner) \
+    XX(jl_genericmemoryref) \
     XX(jl_array_rank) \
     XX(jl_array_to_string) \
     XX(jl_atexit_hook) \
@@ -37,6 +38,7 @@
     XX(jl_atomic_error) \
     XX(jl_atomic_new_bits) \
     XX(jl_atomic_store_bits) \
+    XX(jl_atomic_storeonce_bits) \
     XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
@@ -110,7 +112,6 @@
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
     XX(jl_environ) \
-    XX(jl_eof_error) \
     XX(jl_eqtable_get) \
     XX(jl_eqtable_pop) \
     XX(jl_eqtable_put) \
@@ -234,9 +235,9 @@
     XX(jl_get_world_counter) \
     XX(jl_get_zero_subnormals) \
     XX(jl_gf_invoke_lookup) \
+    XX(jl_method_lookup_by_tt) \
+    XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
-    XX(jl_git_branch) \
-    XX(jl_git_commit) \
     XX(jl_global_event_loop) \
     XX(jl_has_empty_intersection) \
     XX(jl_has_free_typevars) \
@@ -278,6 +279,7 @@
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
     XX(jl_is_const) \
+    XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \
     XX(jl_is_foreign_type) \
     XX(jl_is_identifier) \
@@ -349,7 +351,6 @@
     XX(jl_new_typevar) \
     XX(jl_next_from_addrinfo) \
     XX(jl_normalize_to_compilable_sig) \
-    XX(jl_write_precompile_statement) \
     XX(jl_no_exc_handler) \
     XX(jl_object_id) \
     XX(jl_object_id_) \
@@ -432,7 +433,6 @@
     XX(jl_stderr_obj) \
     XX(jl_stderr_stream) \
     XX(jl_stdin_stream) \
-    XX(jl_stdout_obj) \
     XX(jl_stdout_stream) \
     XX(jl_stored_inline) \
     XX(jl_string_ptr) \
@@ -445,7 +445,6 @@
     XX(jl_svec2) \
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
-    XX(jl_svec_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \
     XX(jl_symbol) \
@@ -513,7 +512,6 @@
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
     XX(jl_write_compiler_output) \
-    XX(jl_yield) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
     XX(jl_setjmp) \

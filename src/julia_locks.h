@@ -96,6 +96,11 @@ static inline void jl_mutex_init(jl_mutex_t *lock, const char *name) JL_NOTSAFEP
 #define JL_LOCK_NOGC(m) jl_mutex_lock_nogc(m)
 #define JL_UNLOCK_NOGC(m) jl_mutex_unlock_nogc(m)
 
+JL_DLLEXPORT void jl_lock_value(jl_mutex_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_unlock_value(jl_mutex_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_lock_field(jl_mutex_t *v) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_unlock_field(jl_mutex_t *v) JL_NOTSAFEPOINT;
+
 #ifdef __cplusplus
 }
 #endif
