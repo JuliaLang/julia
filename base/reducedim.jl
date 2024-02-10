@@ -241,7 +241,7 @@ copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
 function mapfirst!(f::F, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N, F}
     lsiz = check_reducedims(R, A)
     t = _firstreducedslice(axes(R), axes(A))
-    map!(f, R, view(A, t...))
+    @inbounds map!(f, R, view(A, t...))
 end
 # We know that the axes of R and A are compatible, but R might have a different number of
 # dimensions than A, which is trickier than it seems due to offset arrays and type stability
