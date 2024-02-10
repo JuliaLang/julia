@@ -337,6 +337,7 @@ function ttyhastruecolor()
         get(current_terminfo, :RGB, false) || get(current_terminfo, :Tc, false) ||
         (haskey(current_terminfo, :setrgbf) && haskey(current_terminfo, :setrgbb)) ||
         @static if Sys.isunix() get(current_terminfo, :colors, 0) > 256 else false end ||
+        (Sys.iswindows() && Sys.windows_version() ≥ v"10.0.14931") || # See <https://devblogs.microsoft.com/commandline/24-bit-color-in-the-windows-console/>
         something(tryparse(Int, get(ENV, "VTE_VERSION", "")), 0) >= 3600 || # Per GNOME bug #685759 <https://bugzilla.gnome.org/show_bug.cgi?id=685759>
         haskey(ENV, "XTERM_VERSION") ||
         get(ENV, "TERMINAL_PROGRAM", "") == "iTerm.app" || # Why does Apple need to be special?
