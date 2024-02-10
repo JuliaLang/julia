@@ -45,50 +45,86 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
 extern uv_mutex_t safepoint_lock;
-extern uv_cond_t safepoint_cond;
+extern uv_cond_t safepoint_cond_begin;
+
+// see jl_safepoint_wait_thread_resume
+void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2)
+{
+    // must be called with uv_mutex_lock(&safepoint_lock) and uv_mutex_lock(&ptls2->sleep_lock) held (in that order)
+    for (size_t i = 0; i < suspended_threads.len; i++) {
+        uintptr_t item = (uintptr_t)suspended_threads.items[i];
+        int16_t tid = (int16_t)item;
+        int8_t gc_state = (int8_t)(item >> 8);
+        if (tid != tid2)
+            continue;
+        jl_atomic_store_release(&ptls2->gc_state, gc_state);
+        thread_resume(pthread_mach_thread_np(ptls2->system_id));
+        suspended_threads.items[i] = suspended_threads.items[--suspended_threads.len];
+        break;
+    }
+    // thread hadn't actually reached a jl_mach_gc_wait call where we suspended it
+}
+
 void jl_mach_gc_end(void)
 {
-    // Requires the safepoint lock to be held
+    // must be called with uv_mutex_lock(&safepoint_lock) held
+    size_t j = 0;
     for (size_t i = 0; i < suspended_threads.len; i++) {
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
         int8_t gc_state = (int8_t)(item >> 8);
         jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-        jl_atomic_store_release(&ptls2->gc_state, gc_state);
-        thread_resume(pthread_mach_thread_np(ptls2->system_id));
+        uv_mutex_lock(&ptls2->sleep_lock);
+        if (jl_atomic_load_relaxed(&ptls2->suspend_count) == 0) {
+            jl_atomic_store_release(&ptls2->gc_state, gc_state);
+            thread_resume(pthread_mach_thread_np(ptls2->system_id));
+        }
+        else {
+            // this is the check for jl_safepoint_wait_thread_resume
+            suspended_threads.items[j++] = (void*)item;
+        }
+        uv_mutex_unlock(&ptls2->sleep_lock);
     }
-    suspended_threads.len = 0;
+    suspended_threads.len = j;
 }
 
-// Suspend the thread and return `1` if the GC is running.
-// Otherwise return `0`
-static int jl_mach_gc_wait(jl_ptls_t ptls2,
-                           mach_port_t thread, int16_t tid)
+// implement jl_set_gc_and_wait from a different thread
+static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
 {
+    // relaxed, since we don't mind missing one--we will hit another soon (immediately probably)
     uv_mutex_lock(&safepoint_lock);
-    if (!jl_atomic_load_relaxed(&jl_gc_running)) {
-        // relaxed, since gets set to zero only while the safepoint_lock was held
-        // this means we can tell if GC is done before we got the message or
-        // the safepoint was enabled for SIGINT.
-        uv_mutex_unlock(&safepoint_lock);
-        return 0;
+    // Since this gets set to zero only while the safepoint_lock was held this
+    // means we can tell for sure if GC is done before we got the message or
+    // the safepoint was enabled for SIGINT instead.
+    int doing_gc = jl_atomic_load_relaxed(&jl_gc_running);
+    int do_suspend = doing_gc;
+    int relaxed_suspend_count = !doing_gc && jl_atomic_load_relaxed(&ptls2->suspend_count) != 0;
+    if (relaxed_suspend_count) {
+        uv_mutex_lock(&ptls2->sleep_lock);
+        do_suspend = jl_atomic_load_relaxed(&ptls2->suspend_count) != 0;
+        // only do_suspend while holding the sleep_lock, otherwise we might miss a resume
     }
-    // Otherwise, set the gc state of the thread, suspend and record it
-    // TODO: TSAN will complain that it never saw the faulting task do an
-    // atomic release (it was in the kernel). And our attempt here does
-    // nothing, since we are a different thread, and it is not transitive).
-    //
-    // This also means we are not making this thread available for GC work.
-    // Eventually, we should probably release this signal to the original
-    // thread, (return KERN_FAILURE instead of KERN_SUCCESS) so that it
-    // triggers a SIGSEGV and gets handled by the usual codepath for unix.
-    int8_t gc_state = ptls2->gc_state;
-    jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
-    uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
-    arraylist_push(&suspended_threads, (void*)item);
-    thread_suspend(thread);
+    if (do_suspend) {
+        // Set the gc state of the thread, suspend and record it
+        //
+        // TODO: TSAN will complain that it never saw the faulting task do an
+        // atomic release (it was in the kernel). And our attempt here does
+        // nothing, since we are a different thread, and it is not transitive).
+        //
+        // This also means we are not making this thread available for GC work.
+        // Eventually, we should probably release this signal to the original
+        // thread, (return KERN_FAILURE instead of KERN_SUCCESS) so that it
+        // triggers a SIGSEGV and gets handled by the usual codepath for unix.
+        int8_t gc_state = ptls2->gc_state;
+        jl_atomic_store_release(&ptls2->gc_state, JL_GC_STATE_WAITING);
+        uintptr_t item = tid | (((uintptr_t)gc_state) << 16);
+        arraylist_push(&suspended_threads, (void*)item);
+        thread_suspend(thread);
+    }
+    if (relaxed_suspend_count)
+        uv_mutex_unlock(&ptls2->sleep_lock);
+    uv_cond_broadcast(&safepoint_cond_begin);
     uv_mutex_unlock(&safepoint_lock);
-    return 1;
 }
 
 static mach_port_t segv_port = 0;
@@ -179,13 +215,14 @@ static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
 #else
 #error "julia: throw-in-context not supported on this platform"
 #endif
-    if (ptls2 == NULL || ptls2->signal_stack == NULL || is_addr_on_sigstack(ptls2, (void*)rsp)) {
+    if (ptls2 == NULL || is_addr_on_sigstack(ptls2, (void*)rsp)) {
         rsp = (rsp - 256) & ~(uintptr_t)15; // redzone and re-alignment
     }
     else {
-        rsp = (uintptr_t)ptls2->signal_stack + sig_stack_size;
+        rsp = (uintptr_t)ptls2->signal_stack + (ptls2->signal_stack_size ? ptls2->signal_stack_size : sig_stack_size);
     }
     assert(rsp % 16 == 0);
+    rsp -= 16;
 
 #ifdef _CPU_X86_64_
     rsp -= sizeof(void*);
@@ -314,8 +351,7 @@ kern_return_t catch_mach_exception_raise(
     kern_return_t ret = thread_get_state(thread, HOST_EXCEPTION_STATE, (thread_state_t)&exc_state, &exc_count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
     if (jl_addr_is_safepoint(fault_addr) && !is_write_fault(exc_state)) {
-        if (jl_mach_gc_wait(ptls2, thread, tid))
-            return KERN_SUCCESS;
+        jl_mach_gc_wait(ptls2, thread, tid);
         if (ptls2->tid != 0)
             return KERN_SUCCESS;
         if (ptls2->defer_signal) {
@@ -376,7 +412,7 @@ kern_return_t catch_mach_exception_raise_state_identity(
 static void attach_exception_port(thread_port_t thread, int segv_only)
 {
     kern_return_t ret;
-    // http://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
+    // https://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
     exception_mask_t mask = EXC_MASK_BAD_ACCESS;
     if (!segv_only)
         mask |= EXC_MASK_ARITHMETIC;

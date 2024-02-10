@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+`Base.TOML` is an undocumented internal part of Julia's TOML parser
+implementation.  Users should call the the documented interface in the
+TOML.jl standard library instead (by `import TOML` or `using TOML`).
+"""
 module TOML
 
 using Base: IdSet
@@ -80,7 +85,7 @@ mutable struct Parser
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
 
-    # Get's populated with the Dates stdlib if it exists
+    # Gets populated with the Dates stdlib if it exists
     Dates::Union{Module, Nothing}
 end
 
@@ -367,7 +372,7 @@ end
 @inline peek(l::Parser) = l.current_char
 
 # Return true if the character was accepted. When a character
-# is accepted it get's eaten and we move to the next character
+# is accepted it gets eaten and we move to the next character
 @inline function accept(l::Parser, f::Union{Function, Char})::Bool
     c = peek(l)
     c == EOF_CHAR && return false
@@ -611,7 +616,7 @@ function _parse_key(l::Parser)
     else
         set_marker!(l)
         if accept_batch(l, isvalid_barekey_char)
-            if !(peek(l) == '.' || peek(l) == ' ' || peek(l) == ']' || peek(l) == '=')
+            if !(peek(l) == '.' || iswhitespace(peek(l)) || peek(l) == ']' || peek(l) == '=')
                 c = eat_char(l)
                 return ParserError(ErrInvalidBareKeyCharacter, c)
             end
@@ -665,7 +670,7 @@ end
 #########
 
 function push!!(v::Vector, el)
-    # Since these types are typically non-inferrable, they are a big invalidation risk,
+    # Since these types are typically non-inferable, they are a big invalidation risk,
     # and since it's used by the package-loading infrastructure the cost of invalidation
     # is high. Therefore, this is written to reduce the "exposed surface area": e.g., rather
     # than writing `T[el]` we write it as `push!(Vector{T}(undef, 1), el)` so that there

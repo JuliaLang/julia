@@ -79,6 +79,7 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
  *
  * * load
  * * `pointer_from_objref`
+ * * `gc_loaded`
  * * Any real llvm intrinsics
  * * gc preserve intrinsics
  * * `ccall` gcroot array (`jl_roots` operand bundle)
@@ -94,7 +95,6 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
  * TODO:
  * * Return twice
  * * Handle phi node.
- * * Look through `pointer_from_objref`.
  * * Handle jl_box*
  */
 
@@ -135,12 +135,13 @@ private:
     // insert llvm.lifetime.* calls for `ptr` with size `sz` based on the use of `orig`.
     void insertLifetime(Value *ptr, Constant *sz, Instruction *orig);
 
-    void checkInst(Instruction *I);
+    void checkInst(CallInst *I);
 
     void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
                                  Instruction *orig_i, Instruction *new_i);
     void removeAlloc(CallInst *orig_inst);
-    void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref);
+    void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocFnKind allockind);
+    void initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, AllocFnKind allockind);
     void splitOnStack(CallInst *orig_inst);
     void optimizeTag(CallInst *orig_inst);
 
@@ -288,7 +289,7 @@ void Optimizer::optimizeAll()
                 << "GC allocation moved to stack " << ore::NV("GC Allocation", orig);
         });
         // The object has no fields with mix reference access
-        moveToStack(orig, sz, has_ref);
+        moveToStack(orig, sz, has_ref, use_info.allockind);
     }
 }
 
@@ -310,7 +311,9 @@ bool Optimizer::isSafepoint(Instruction *inst)
         return false;
     if (auto callee = call->getCalledFunction()) {
         // Known functions emitted in codegen that are not safepoints
-        if (callee == pass.pointer_from_objref_func || callee->getName() == "memcmp") {
+        if (callee == pass.pointer_from_objref_func
+            || callee == pass.gc_loaded_func
+            || callee->getName() == "memcmp") {
             return false;
         }
     }
@@ -353,7 +356,7 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     return -1;
 }
 
-void Optimizer::checkInst(Instruction *I)
+void Optimizer::checkInst(CallInst *I)
 {
     LLVM_DEBUG(dbgs() << "Running escape analysis on " << *I << "\n");
     jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, pass, *pass.DL};
@@ -475,7 +478,7 @@ void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
     // within the BB.
     // If some successors are live and others are dead, it's the first instruction in
     // the successors that are dead.
-    std::vector<Instruction*> first_dead;
+    SmallVector<Instruction*, 0> first_dead;
     for (auto bb: bbs) {
         bool has_use = false;
         for (auto succ: successors(bb)) {
@@ -566,7 +569,7 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     auto oldfType = call->getFunctionType();
     auto newfType = FunctionType::get(
             oldfType->getReturnType(),
-            makeArrayRef(argTys).slice(0, oldfType->getNumParams()),
+            ArrayRef<Type*>(argTys).slice(0, oldfType->getNumParams()),
             oldfType->isVarArg());
 
     // Accumulate an array of overloaded types for the given intrinsic
@@ -596,9 +599,25 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     call->eraseFromParent();
 }
 
+void Optimizer::initializeAlloca(IRBuilder<> &prolog_builder, AllocaInst *buff, AllocFnKind allockind)
+{
+    if ((allockind & AllocFnKind::Uninitialized) != AllocFnKind::Unknown)
+        return;
+    assert(!buff->isArrayAllocation());
+    Type *T = buff->getAllocatedType();
+    Value *Init = UndefValue::get(T);
+    if ((allockind & AllocFnKind::Zeroed) != AllocFnKind::Unknown)
+        Init = Constant::getNullValue(T); // zero, as described
+    else if (allockind == AllocFnKind::Unknown)
+        Init = Constant::getNullValue(T); // assume zeroed since we didn't find the attribute
+    else
+        Init = prolog_builder.CreateFreeze(UndefValue::get(T)); // assume freeze, since LLVM does not natively support this case
+    prolog_builder.CreateStore(Init, buff);
+}
+
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
-void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
+void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocFnKind allockind)
 {
     ++RemovedAllocs;
     ++StackAllocs;
@@ -641,9 +660,11 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, Type::getInt8PtrTy(prolog_builder.getContext(), buff->getType()->getPointerAddressSpace())));
     }
     insertLifetime(ptr, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz), orig_inst);
+    if (sz != 0 && !has_ref) { // TODO: fix has_ref case too
+        IRBuilder<> builder(orig_inst);
+        initializeAlloca(builder, buff, allockind);
+    }
     Instruction *new_inst = cast<Instruction>(prolog_builder.CreateBitCast(ptr, JuliaType::get_pjlvalue_ty(prolog_builder.getContext(), buff->getType()->getPointerAddressSpace())));
-    if (orig_inst->getModule()->getDataLayout().getAllocaAddrSpace() != 0)
-        new_inst = cast<Instruction>(prolog_builder.CreateAddrSpaceCast(new_inst, JuliaType::get_pjlvalue_ty(prolog_builder.getContext(), orig_inst->getType()->getPointerAddressSpace())));
     new_inst->takeName(orig_inst);
 
     auto simple_replace = [&] (Instruction *orig_i, Instruction *new_i) {
@@ -691,10 +712,15 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         else if (auto call = dyn_cast<CallInst>(user)) {
             auto callee = call->getCalledOperand();
             if (pass.pointer_from_objref_func == callee) {
-                call->replaceAllUsesWith(new_i);
+                call->replaceAllUsesWith(prolog_builder.CreateAddrSpaceCast(new_i, call->getCalledFunction()->getReturnType()));
                 call->eraseFromParent();
                 return;
             }
+            //if (pass.gc_loaded_func == callee) {
+            //    call->replaceAllUsesWith(new_i);
+            //    call->eraseFromParent();
+            //    return;
+            //}
             if (pass.typeof_func == callee) {
                 ++RemovedTypeofs;
                 call->replaceAllUsesWith(tag);
@@ -922,8 +948,10 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             allocty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), field.size);
         }
         slot.slot = prolog_builder.CreateAlloca(allocty);
+        IRBuilder<> builder(orig_inst);
         insertLifetime(prolog_builder.CreateBitCast(slot.slot, Type::getInt8PtrTy(prolog_builder.getContext())),
                        ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), field.size), orig_inst);
+        initializeAlloca(builder, slot.slot, use_info.allockind);
         slots.push_back(std::move(slot));
     }
     const auto nslots = slots.size();
@@ -1166,7 +1194,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             for (auto &bundle: bundles) {
                 if (bundle.getTag() != "jl_roots")
                     continue;
-                std::vector<Value*> operands;
+                SmallVector<Value*, 0> operands;
                 for (auto op: bundle.inputs()) {
                     if (op == orig_i || isa<Constant>(op))
                         continue;

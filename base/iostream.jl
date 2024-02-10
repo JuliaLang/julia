@@ -63,6 +63,8 @@ function close(s::IOStream)
     systemerror("close", bad)
 end
 
+closewrite(s::IOStream) = nothing
+
 function flush(s::IOStream)
     sigatomic_begin()
     bad = @_lock_ios s ccall(:ios_flush, Cint, (Ptr{Cvoid},), s.ios) != 0

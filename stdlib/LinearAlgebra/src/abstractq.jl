@@ -8,6 +8,7 @@ end
 
 parent(adjQ::AdjointQ) = adjQ.Q
 eltype(::Type{<:AbstractQ{T}}) where {T} = T
+Base.eltypeof(Q::AbstractQ) = eltype(Q)
 ndims(::AbstractQ) = 2
 
 # inversion/adjoint/transpose
@@ -129,6 +130,16 @@ function copyto!(dest::PermutedDimsArray{T,2,perm}, src::AbstractQ) where {T,per
     end
     return dest
 end
+# used in concatenations: Base.__cat_offset1!
+Base._copy_or_fill!(A, inds, Q::AbstractQ) = (A[inds...] = collect(Q))
+# overloads of helper functions
+Base.cat_size(A::AbstractQ) = size(A)
+Base.cat_size(A::AbstractQ, d) = size(A, d)
+Base.cat_length(a::AbstractQ) = prod(size(a))
+Base.cat_ndims(a::AbstractQ) = ndims(a)
+Base.cat_indices(A::AbstractQ, d) = axes(A, d)
+Base.cat_similar(A::AbstractQ, T::Type, shape::Tuple) = Array{T}(undef, shape)
+Base.cat_similar(A::AbstractQ, T::Type, shape::Vector) = Array{T}(undef, shape...)
 
 function show(io::IO, ::MIME{Symbol("text/plain")}, Q::AbstractQ)
     print(io, Base.dims2string(size(Q)), ' ', summary(Q))
@@ -145,6 +156,9 @@ qsize_check(A::AbstractVecOrMat, Q::AbstractQ) =
 qsize_check(Q::AbstractQ, P::AbstractQ) =
     size(Q, 2) == size(P, 1) ||
         throw(DimensionMismatch("second dimension of A, $(size(Q,2)), must coincide with first dimension of B, $(size(P,1))"))
+
+# mimic the AbstractArray fallback
+*(Q::AbstractQ{<:Number}) = Q
 
 (*)(Q::AbstractQ, J::UniformScaling) = Q*J.λ
 function (*)(Q::AbstractQ, b::Number)

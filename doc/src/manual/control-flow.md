@@ -139,7 +139,7 @@ julia> test(1,2)
 x is less than y.
 
 julia> test(2,1)
-ERROR: UndefVarError: `relation` not defined
+ERROR: UndefVarError: `relation` not defined in local scope
 Stacktrace:
  [1] test(::Int64, ::Int64) at ./none:7
 ```
@@ -414,48 +414,10 @@ julia> for i = 1:3
 3
 ```
 
-Here the `1:3` is a range object, representing the sequence of numbers 1, 2, 3. The `for`
-loop iterates through these values, assigning each one in turn to the variable `i`. One rather
-important distinction between the previous `while` loop form and the `for` loop form is the scope
-during which the variable is visible. A `for` loop always introduces a new iteration variable in
-its body, regardless of whether a variable of the same name exists in the enclosing scope.
-This implies that on the one hand `i` need not be declared before the loop. On the other hand it
-will not be visible outside the loop, nor will an outside variable of the same name be affected.
-You'll either need a new interactive session instance or a different variable
-name to test this:
-
-```jldoctest
-julia> for j = 1:3
-           println(j)
-       end
-1
-2
-3
-
-julia> j
-ERROR: UndefVarError: `j` not defined
-```
-
-```jldoctest
-julia> j = 0;
-
-julia> for j = 1:3
-           println(j)
-       end
-1
-2
-3
-
-julia> j
-0
-```
-
-Use `for outer` to modify the latter behavior and reuse an existing local variable.
-
-See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope, [`outer`](@ref), and how it works in
-Julia.
-
-In general, the `for` loop construct can iterate over any container. In these cases, the alternative
+Here the `1:3` is a [`range`](@ref) object, representing the sequence of numbers 1, 2, 3. The `for`
+loop iterates through these values, assigning each one in turn to the variable `i`.
+In general, the `for` construct can loop over any "iterable" object (or "container"), from a  range like `1:3` or `1:3:13` (a [`StepRange`](@ref) indicating every 3rd integer 1, 4, 7, …, 13) to more generic containers like arrays, including [iterators defined by user code](@ref man-interface-iteration)
+or external packages. For containers other than ranges, the alternative
 (but fully equivalent) keyword `in` or `∈` is typically used instead of `=`, since it makes
 the code read more clearly:
 
@@ -477,6 +439,46 @@ baz
 
 Various types of iterable containers will be introduced and discussed in later sections of the
 manual (see, e.g., [Multi-dimensional Arrays](@ref man-multi-dim-arrays)).
+
+One rather
+important distinction between the previous `while` loop form and the `for` loop form is the scope
+during which the variable is visible. A `for` loop always introduces a new iteration variable in
+its body, regardless of whether a variable of the same name exists in the enclosing scope.
+This implies that on the one hand `i` need not be declared before the loop. On the other hand it
+will not be visible outside the loop, nor will an outside variable of the same name be affected.
+You'll either need a new interactive session instance or a different variable
+name to test this:
+
+```jldoctest
+julia> for j = 1:3
+           println(j)
+       end
+1
+2
+3
+
+julia> j
+ERROR: UndefVarError: `j` not defined in `Main`
+```
+
+```jldoctest
+julia> j = 0;
+
+julia> for j = 1:3
+           println(j)
+       end
+1
+2
+3
+
+julia> j
+0
+```
+
+Use `for outer` to modify the latter behavior and reuse an existing local variable.
+
+See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope, [`outer`](@ref), and how it works in
+Julia.
 
 It is sometimes convenient to terminate the repetition of a `while` before the test condition
 is falsified or stop iterating in a `for` loop before the end of the iterable object is reached.
@@ -860,7 +862,8 @@ end
            else
                foo
            end
-    ERROR: UndefVarError: `foo` not defined
+    ERROR: UndefVarError: `foo` not defined in `Main`
+    Suggestion: check for spelling errors or missing imports.
     ```
     Use the [`local` keyword](@ref local-scope) outside the `try` block to make the variable
     accessible from anywhere within the outer scope.

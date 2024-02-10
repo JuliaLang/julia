@@ -231,9 +231,16 @@ end
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         iA = inv(A)
-        A, ipiv = LAPACK.getrf!(A)
+        A, ipiv, info = LAPACK.getrf!(A)
         A = LAPACK.getri!(A, ipiv)
         @test A ≈ iA
+
+        B = rand(elty,10,10)
+        iB = inv(B)
+        ipiv = rand(BlasInt,10)
+        B, ipiv, info = LAPACK.getrf!(B, ipiv)
+        B = LAPACK.getri!(B, ipiv)
+        @test B ≈ iB
     end
 end
 
@@ -674,6 +681,19 @@ end
             if c == 'V'
                 @test Q*T*Q' ≈ A
             end
+        end
+    end
+end
+
+@testset "lacpy!" begin
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        n = 10
+        A = rand(elty, n, n)
+        for uplo in ('L', 'U', 'N')
+            B = zeros(elty, n, n)
+            LinearAlgebra.LAPACK.lacpy!(B, A, uplo)
+            C = uplo == 'L' ? tril(A) : (uplo == 'U' ? triu(A) : A)
+            @test B ≈ C
         end
     end
 end
