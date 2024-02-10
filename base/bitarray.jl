@@ -462,7 +462,7 @@ copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integ
     _copyto_int!(dest, Int(doffs), src, Int(soffs), Int(n))
 function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, soffs::Int, n::Int)
     n == 0 && return dest
-    n < 0 && throw(ArgumentError("Number of elements to copy must be nonnegative."))
+    n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
     soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
@@ -807,7 +807,7 @@ prepend!(B::BitVector, items) = prepend!(B, BitArray(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
 function sizehint!(B::BitVector, sz::Integer)
-    ccall(:jl_array_sizehint, Cvoid, (Any, UInt), B.chunks, num_bit_chunks(sz))
+    sizehint!(B.chunks, num_bit_chunks(sz))
     return B
 end
 

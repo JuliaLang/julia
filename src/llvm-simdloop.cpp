@@ -11,7 +11,6 @@
 //    as independent of each other.
 //
 // The pass hinges on a call to a marker function that has metadata attached to it.
-// To construct the pass call `createLowerSimdLoopPass`.
 
 #include "support/dtypes.h"
 
@@ -22,7 +21,6 @@
 #include <llvm/Analysis/LoopPass.h>
 #include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/Analysis/MemorySSA.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Verifier.h>
@@ -193,7 +191,7 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
     LLVM_DEBUG(dbgs() << "LSL: simd: " << simd << " ivdep: " << ivdep << "\n");
     if (!simd && !ivdep)
         return false;
-
+    ++TotalMarkedLoops;
     LLVMContext &Context = L.getHeader()->getContext();
     LoopID = MDNode::get(Context, MDs);
     // Set operand 0 to refer to the loop id itself
@@ -233,7 +231,11 @@ static bool processLoop(Loop &L, OptimizationRemarkEmitter &ORE, ScalarEvolution
         }
 
         if (SE)
+#if JL_LLVM_VERSION >= 160000
+            SE->forgetLoopDispositions();
+#else
             SE->forgetLoopDispositions(&L);
+#endif
     }
 
 #ifdef JL_VERIFY_PASSES
@@ -267,43 +269,4 @@ PreservedAnalyses LowerSIMDLoopPass::run(Loop &L, LoopAnalysisManager &AM,
     }
 
     return PreservedAnalyses::all();
-}
-
-namespace {
-class LowerSIMDLoopLegacy : public LoopPass {
-
-public:
-    static char ID;
-
-    LowerSIMDLoopLegacy() : LoopPass(ID) {
-    }
-
-    bool runOnLoop(Loop *L, LPPassManager &LPM) override
-    {
-        OptimizationRemarkEmitter ORE(L->getHeader()->getParent());
-        return processLoop(*L, ORE, nullptr);
-    }
-
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
-        getLoopAnalysisUsage(AU);
-    }
-};
-
-} // end anonymous namespace
-
-char LowerSIMDLoopLegacy::ID = 0;
-
-static RegisterPass<LowerSIMDLoopLegacy> X("LowerSIMDLoop", "LowerSIMDLoop Pass",
-                                     false /* Only looks at CFG */,
-                                     false /* Analysis Pass */);
-
-Pass *createLowerSimdLoopPass()
-{
-    return new LowerSIMDLoopLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddLowerSimdLoopPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createLowerSimdLoopPass());
 }

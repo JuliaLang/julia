@@ -14,7 +14,7 @@ struct Cmd <: AbstractCmd
     env::Union{Vector{String},Nothing}
     dir::String
     cpus::Union{Nothing,Vector{UInt16}}
-    Cmd(exec::Vector{String}) =
+    Cmd(exec::Vector{<:AbstractString}) =
         new(exec, false, 0x00, nothing, "", nothing)
     Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing) =
         new(cmd.exec, ignorestatus, flags, env,
@@ -479,6 +479,12 @@ function cmd_gen(parsed)
         end
         return Cmd(args)
     end
+end
+
+@assume_effects :effect_free :terminates_globally :noub function cmd_gen(
+    parsed::Tuple{Vararg{Tuple{Vararg{Union{String, SubString{String}}}}}}
+)
+    return @invoke cmd_gen(parsed::Any)
 end
 
 """

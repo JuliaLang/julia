@@ -24,7 +24,7 @@ for i in 1:n
         uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
     end
     Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
-    FDmax = Sys.iswindows() ? 0x7fff : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
+    FDmax = Sys.iswindows() ? typemax(Int32) : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
     fd_in_limits =
         0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
         0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
@@ -443,8 +443,17 @@ unwatch_folder(dir)
 rm(file)
 rm(dir)
 
+# Test that creating a FDWatcher with a (probably) negative FD fails
+@test_throws ArgumentError FDWatcher(RawFD(-1), true, true)
+
 @testset "Pidfile" begin
     include("pidfile.jl")
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(FileWatching)
+    @test_broken isempty(undoc)
+    @test undoc == [:FDWatcher, :FileMonitor, :FolderMonitor, :PollingFileWatcher]
 end
 
 end # testset

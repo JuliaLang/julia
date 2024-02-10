@@ -59,10 +59,10 @@ name `δ` can be entered by typing `\delta`-*tab*, or even `α̂⁽²⁾` by `\a
 that you don't know how to type, the REPL help will tell you: just type `?` and
 then paste the symbol.)
 
-Julia will even let you redefine built-in constants and functions if needed (although
-this is not recommended to avoid potential confusions):
+Julia will even let you shadow existing exported constants and functions with local ones
+(although this is not recommended to avoid potential confusions):
 
-```jldoctest
+```jldoctest; filter = r"with \d+ methods"
 julia> pi = 3
 3
 
@@ -71,6 +71,12 @@ julia> pi
 
 julia> sqrt = 4
 4
+
+julia> length() = 5
+length (generic function with 1 method)
+
+julia> Base.length
+length (generic function with 79 methods)
 ```
 
 However, if you try to redefine a built-in constant or function already in use, Julia will give
@@ -209,9 +215,11 @@ julia> b   # b refers to the original array object, which has been mutated
 That is, `a[i] = value` (an alias for [`setindex!`](@ref)) *mutates* an existing array object
 in memory, accessible via either `a` or `b`.  Subsequently setting `a = 3.14159`
 does not change this array, it simply binds `a` to a different object; the array is still
-accessible via `b`. The other common syntax to mutate an existing object is
+accessible via `b`. Another common syntax to mutate an existing object is
 `a.field = value` (an alias for [`setproperty!`](@ref)), which can be used to change
-a [`mutable struct`](@ref).
+a [`mutable struct`](@ref).  There is also mutation via dot assignment, for example
+`b .= 5:7` (which mutates our array `b` in-place to contain `[5,6,7]`), as part of Julia's
+[vectorized "dot" syntax](@ref man-dot-operators).
 
 When you call a [function](@ref man-functions) in Julia, it behaves as if you *assigned*
 the argument values to new variable names corresponding to the function arguments, as discussed

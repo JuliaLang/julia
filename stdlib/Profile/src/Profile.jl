@@ -1,9 +1,41 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Profiling support, main entry point is the [`@profile`](@ref) macro.
+    Profile
+
+Profiling support.
+
+## CPU profiling
+- `@profile foo()` to profile a specific call.
+- `Profile.print()` to print the report.
+- `Profile.clear()` to clear the buffer.
+- Send a $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") signal to the process to automatically trigger a profile and print.
+
+## Memory profiling
+- `Profile.Allocs.@profile [sample_rate=0.1] foo()` to sample allocations within a specific call. A sample rate of 1.0 will record everything; 0.0 will record nothing.
+- `Profile.Allocs.print()` to print the report.
+- `Profile.Allocs.clear()` to clear the buffer.
+
+## Heap profiling
+- `Profile.take_heap_snapshot()` to record a `.heapsnapshot` record of the heap.
+- Set `JULIA_PROFILE_PEEK_HEAP_SNAPSHOT=true` to capture a heap snapshot when signal $(Sys.isbsd() ? "SIGINFO (ctrl-t)" : "SIGUSR1") is sent.
 """
 module Profile
+
+global print
+public @profile,
+    clear,
+    print,
+    fetch,
+    retrieve,
+    add_fake_meta,
+    flatten,
+    callers,
+    init,
+    take_heap_snapshot,
+    take_page_profile,
+    clear_malloc_data,
+    Allocs
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
 
@@ -201,6 +233,13 @@ The keyword arguments can be any combination of:
 
  - `tasks::Union{Int,AbstractVector{Int}}` -- Specify which tasks to include snapshots from in the report. Note that this
     does not control which tasks samples are collected within.
+
+!!! compat "Julia 1.8"
+    The `groupby`, `threads`, and `tasks` keyword arguments were introduced in Julia 1.8.
+
+!!! note
+    Profiling on windows is limited to the main thread. Other threads have not been sampled and will not show in the report.
+
 """
 function print(io::IO,
         data::Vector{<:Unsigned} = fetch(),
@@ -220,7 +259,7 @@ function print(io::IO,
 
     pf = ProfileFormat(;C, combine, maxdepth, mincount, noisefloor, sortedby, recur)
     if groupby === :none
-        print(io, data, lidict, pf, format, threads, tasks, false)
+        print_group(io, data, lidict, pf, format, threads, tasks, false)
     else
         if !in(groupby, [:thread, :task, [:task, :thread], [:thread, :task]])
             error(ArgumentError("Unrecognized groupby option: $groupby. Options are :none (default), :task, :thread, [:task, :thread], or [:thread, :task]"))
@@ -244,7 +283,7 @@ function print(io::IO,
                     printstyled(io, "Task $(Base.repr(taskid))$nl"; bold=true, color=Base.debug_color())
                     for threadid in threadids
                         printstyled(io, " Thread $threadid "; bold=true, color=Base.info_color())
-                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
@@ -262,7 +301,7 @@ function print(io::IO,
                     printstyled(io, "Thread $threadid$nl"; bold=true, color=Base.info_color())
                     for taskid in taskids
                         printstyled(io, " Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
-                        nosamples = print(io, data, lidict, pf, format, threadid, taskid, true)
+                        nosamples = print_group(io, data, lidict, pf, format, threadid, taskid, true)
                         nosamples && (any_nosamples = true)
                         println(io)
                     end
@@ -274,7 +313,7 @@ function print(io::IO,
             isempty(taskids) && (any_nosamples = true)
             for taskid in taskids
                 printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
-                nosamples = print(io, data, lidict, pf, format, threads, taskid, true)
+                nosamples = print_group(io, data, lidict, pf, format, threads, taskid, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
@@ -284,7 +323,7 @@ function print(io::IO,
             isempty(threadids) && (any_nosamples = true)
             for threadid in threadids
                 printstyled(io, "Thread $threadid "; bold=true, color=Base.info_color())
-                nosamples = print(io, data, lidict, pf, format, threadid, tasks, true)
+                nosamples = print_group(io, data, lidict, pf, format, threadid, tasks, true)
                 nosamples && (any_nosamples = true)
                 println(io)
             end
@@ -306,7 +345,7 @@ See `Profile.print([io], data)` for an explanation of the valid keyword argument
 print(data::Vector{<:Unsigned} = fetch(), lidict::Union{LineInfoDict, LineInfoFlatDict} = getdict(data); kwargs...) =
     print(stdout, data, lidict; kwargs...)
 
-function print(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
+function print_group(io::IO, data::Vector{<:Unsigned}, lidict::Union{LineInfoDict, LineInfoFlatDict}, fmt::ProfileFormat,
                 format::Symbol, threads::Union{Int,AbstractVector{Int}}, tasks::Union{UInt,AbstractVector{UInt}},
                 is_subsection::Bool = false)
     cols::Int = Base.displaysize(io)[2]
@@ -859,7 +898,6 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
     ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
     ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
     widthfile = 2*ntext÷5 # min 12
-    widthfunc = 3*ntext÷5 # min 18
     strs = Vector{String}(undef, length(frames))
     showextra = false
     if level > nindent
@@ -901,11 +939,12 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                     ":",
                     li.line == -1 ? "?" : string(li.line),
                     "; ",
-                    ltruncto(fname, widthfunc))
+                    fname)
             end
         else
             strs[i] = string(stroverhead, "╎", base, strcount, " [unknown stackframe]")
         end
+        strs[i] = ltruncto(strs[i], cols)
     end
     return strs
 end
@@ -1161,17 +1200,17 @@ end
 
 # Utilities
 function rtruncto(str::String, w::Int)
-    if length(str) <= w
+    if textwidth(str) <= w
         return str
     else
-        return string("...", str[prevind(str, end, w-4):end])
+        return string("…", str[prevind(str, end, w-2):end])
     end
 end
 function ltruncto(str::String, w::Int)
-    if length(str) <= w
+    if textwidth(str) <= w
         return str
     else
-        return string(str[1:nextind(str, 1, w-4)], "...")
+        return string(str[1:nextind(str, 1, w-2)], "…")
     end
 end
 
@@ -1213,9 +1252,8 @@ end
 
 
 """
-    Profile.take_heap_snapshot(io::IOStream, all_one::Bool=false)
-    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
-    Profile.take_heap_snapshot(all_one::Bool=false; dir::String)
+    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false, streaming=false)
+    Profile.take_heap_snapshot(all_one::Bool=false; dir::String, streaming=false)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
 Devtools Heap Snapshot viewer (.heapsnapshot extension) to a file
@@ -1225,15 +1263,66 @@ full file path, or IO stream.
 
 If `all_one` is true, then report the size of every object as one so they can be easily
 counted. Otherwise, report the actual size.
+
+If `streaming` is true, we will stream the snapshot data out into four files, using filepath
+as the prefix, to avoid having to hold the entire snapshot in memory. This option should be
+used for any setting where your memory is constrained. These files can then be reassembled
+by calling Profile.HeapSnapshot.assemble_snapshot(), which can
+be done offline.
+
+NOTE: We strongly recommend setting streaming=true for performance reasons. Reconstructing
+the snapshot from the parts requires holding the entire snapshot in memory, so if the
+snapshot is large, you can run out of memory while processing it. Streaming allows you to
+reconstruct the snapshot offline, after your workload is done running.
+If you do attempt to collect a snapshot with streaming=false (the default, for
+backwards-compatibility) and your process is killed, note that this will always save the
+parts in the same directory as your provided filepath, so you can still reconstruct the
+snapshot after the fact, via `assemble_snapshot()`.
 """
-function take_heap_snapshot(io::IOStream, all_one::Bool=false)
-    Base.@_lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
-end
-function take_heap_snapshot(filepath::String, all_one::Bool=false)
-    open(filepath, "w") do io
-        take_heap_snapshot(io, all_one)
+function take_heap_snapshot(filepath::AbstractString, all_one::Bool=false; streaming::Bool=false)
+    if streaming
+        _stream_heap_snapshot(filepath, all_one)
+    else
+        # Support the legacy, non-streaming mode, by first streaming the parts, then
+        # reassembling it after we're done.
+        prefix = filepath
+        _stream_heap_snapshot(prefix, all_one)
+        Profile.HeapSnapshot.assemble_snapshot(prefix, filepath)
     end
     return filepath
+end
+function take_heap_snapshot(io::IO, all_one::Bool=false)
+    # Support the legacy, non-streaming mode, by first streaming the parts to a tempdir,
+    # then reassembling it after we're done.
+    dir = tempdir()
+    prefix = joinpath(dir, "snapshot")
+    _stream_heap_snapshot(prefix, all_one)
+    Profile.HeapSnapshot.assemble_snapshot(prefix, io)
+end
+function _stream_heap_snapshot(prefix::AbstractString, all_one::Bool)
+    # Nodes and edges are binary files
+    open("$prefix.nodes", "w") do nodes
+        open("$prefix.edges", "w") do edges
+            open("$prefix.strings", "w") do strings
+                # The following file is json data
+                open("$prefix.metadata.json", "w") do json
+                    Base.@_lock_ios(nodes,
+                    Base.@_lock_ios(edges,
+                    Base.@_lock_ios(strings,
+                    Base.@_lock_ios(json,
+                        ccall(:jl_gc_take_heap_snapshot,
+                            Cvoid,
+                            (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}, Cchar),
+                            nodes.handle, edges.handle, strings.handle, json.handle,
+                            Cchar(all_one))
+                    )
+                    )
+                    )
+                    )
+                end
+            end
+        end
+    end
 end
 function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) where {S <: AbstractString}
     fname = "$(getpid())_$(time_ns()).heapsnapshot"
@@ -1253,8 +1342,24 @@ function take_heap_snapshot(all_one::Bool=false; dir::Union{Nothing,S}=nothing) 
     return take_heap_snapshot(fpath, all_one)
 end
 
+"""
+    Profile.take_page_profile(io::IOStream)
+    Profile.take_page_profile(filepath::String)
+
+Write a JSON snapshot of the pages from Julia's pool allocator, printing for every pool allocated object, whether it's garbage, or its type.
+"""
+function take_page_profile(io::IOStream)
+    Base.@_lock_ios(io, ccall(:jl_gc_take_page_profile, Cvoid, (Ptr{Cvoid},), io.handle))
+end
+function take_page_profile(filepath::String)
+    open(filepath, "w") do io
+        take_page_profile(io)
+    end
+    return filepath
+end
 
 include("Allocs.jl")
+include("heapsnapshot_reassemble.jl")
 include("precompile.jl")
 
 end # module

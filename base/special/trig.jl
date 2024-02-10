@@ -1065,7 +1065,7 @@ isinf_real(x::Number) = false
 """
     sinc(x)
 
-Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
+Compute normalized sinc function ``\\operatorname{sinc}(x) = \\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 
 See also [`cosc`](@ref), its derivative.
 """
@@ -1084,6 +1084,8 @@ _sinc(x::ComplexF16) = ComplexF16(_sinc(ComplexF32(x)))
 
 Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and ``0`` if
 ``x = 0``. This is the derivative of `sinc(x)`.
+
+See also [`sinc`](@ref).
 """
 cosc(x::Number) = _cosc(float(x))
 function _cosc(x::Number)

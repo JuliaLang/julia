@@ -194,7 +194,7 @@ function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_de
     for jsrc in jr_src
         jdest = first(jr_dest)
         for isrc in ir_src
-            B[idest,jdest] = A[isrc,jsrc]
+            B[idest,jdest] = transpose(A[isrc,jsrc])
             jdest += step(jr_dest)
         end
         idest += step(ir_dest)
@@ -209,4 +209,14 @@ end
 function copy_similar(A::TransposeAbsMat, ::Type{T}) where {T}
     C = similar(A, T, size(A))
     transpose!(C, parent(A))
+end
+
+function Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractMatrix, srcstyle::IndexCartesian, src::AdjOrTransAbsMat)
+    if axes(dest) == axes(src)
+        f! = inplace_adj_or_trans(src)
+        f!(dest, parent(src))
+    else
+        @invoke Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    end
+    return dest
 end

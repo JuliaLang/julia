@@ -2,8 +2,7 @@
 
 # tests for accurate updating of method tables
 
-using Base: get_world_counter
-tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
+using Base: get_world_counter, tls_world_age
 @test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
 # test simple method replacement
@@ -419,3 +418,40 @@ ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
     which(mc48954, (AbstractFloat, Int)),
     "jl_method_table_insert"
 ]
+
+# issue #50091 -- missing invoke edge affecting nospecialized dispatch
+module ExceptionUnwrapping
+@nospecialize
+unwrap_exception(@nospecialize(e)) = e
+unwrap_exception(e::Base.TaskFailedException) = e.task.exception
+@noinline function _summarize_task_exceptions(io::IO, exc, prefix = nothing)
+    _summarize_exception((;prefix,), io, exc)
+    nothing
+end
+@noinline function _summarize_exception(kws, io::IO, e::TaskFailedException)
+    _summarize_task_exceptions(io, e.task, kws.prefix)
+end
+# This is the overload that prints the actual exception that occurred.
+result = Bool[]
+@noinline function _summarize_exception(kws, io::IO, @nospecialize(exc))
+    global result
+    push!(result, unwrap_exception(exc) === exc)
+    if unwrap_exception(exc) !== exc # something uninferrable
+        return _summarize_exception(kws, io, unwrap_exception(exc))
+    end
+end
+struct X; x; end
+end
+let e = ExceptionUnwrapping.X(nothing)
+    @test ExceptionUnwrapping.unwrap_exception(e) === e
+    ExceptionUnwrapping._summarize_task_exceptions(devnull, e)
+    @test ExceptionUnwrapping.result == [true]
+    empty!(ExceptionUnwrapping.result)
+end
+ExceptionUnwrapping.unwrap_exception(e::ExceptionUnwrapping.X) = e.x
+let e = ExceptionUnwrapping.X(nothing)
+    @test !(ExceptionUnwrapping.unwrap_exception(e) === e)
+    ExceptionUnwrapping._summarize_task_exceptions(devnull, e)
+    @test ExceptionUnwrapping.result == [false, true]
+    empty!(ExceptionUnwrapping.result)
+end

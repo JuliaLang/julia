@@ -1144,7 +1144,7 @@ Version numbers can easily be expressed with non-standard string literals of the
 Version number literals create [`VersionNumber`](@ref) objects which follow the
 specifications of [semantic versioning](https://semver.org/),
 and therefore are composed of major, minor and patch numeric values, followed by pre-release and
-build alpha-numeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
+build alphanumeric annotations. For example, `v"0.2.1-rc1+win64"` is broken into major version
 `0`, minor version `2`, patch version `1`, pre-release `rc1` and build `win64`. When entering
 a version literal, everything except the major version number is optional, therefore e.g.  `v"0.2"`
 is equivalent to `v"0.2.0"` (with empty pre-release/build annotations), `v"2"` is equivalent to
@@ -1203,3 +1203,51 @@ Notice that the first two backslashes appear verbatim in the output, since they 
 precede a quote character.
 However, the next backslash character escapes the backslash that follows it, and the
 last backslash escapes a quote, since these backslashes appear before a quote.
+
+
+## [Annotated Strings](@id man-annotated-strings)
+
+It is sometimes useful to be able to hold metadata relating to regions of a
+string. A [`AnnotatedString`](@ref Base.AnnotatedString) wraps another string and
+allows for regions of it to be annotated with labelled values (`:label => value`).
+All generic string operations are applied to the underlying string. However,
+when possible, styling information is preserved. This means you can manipulate a
+[`AnnotatedString`](@ref Base.AnnotatedString) —taking substrings, padding them,
+concatenating them with other strings— and the metadata annotations will "come
+along for the ride".
+
+This string type is fundamental to the [StyledStrings stdlib](@ref
+stdlib-styledstrings), which uses `:face`-labelled annotations to hold styling
+information.
+
+When concatenating a [`AnnotatedString`](@ref Base.AnnotatedString), take care to use
+[`annotatedstring`](@ref Base.annotatedstring) instead of [`string`](@ref) if you want
+to keep the string annotations.
+
+```jldoctest
+julia> str = Base.AnnotatedString("hello there",
+               [(1:5, :word => :greeting), (7:11, :label => 1)])
+"hello there"
+
+julia> length(str)
+11
+
+julia> lpad(str, 14)
+"   hello there"
+
+julia> typeof(lpad(str, 7))
+Base.AnnotatedString{String}
+
+julia> str2 = Base.AnnotatedString(" julia", [(2:6, :face => :magenta)])
+" julia"
+
+julia> Base.annotatedstring(str, str2)
+"hello there julia"
+
+julia> str * str2 == Base.annotatedstring(str, str2) # *-concatenation still works
+true
+```
+
+The annotations of a [`AnnotatedString`](@ref Base.AnnotatedString) can be accessed
+and modified via the [`annotations`](@ref Base.annotations) and
+[`annotate!`](@ref Base.annotate!) functions.
