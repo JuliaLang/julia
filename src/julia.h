@@ -391,7 +391,6 @@ struct _jl_method_instance_t {
     jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sig
     _Atomic(jl_value_t*) uninferred; // cached uncompressed code, for generated functions, top-level thunks, or the interpreter
     jl_array_t *backedges; // list of method-instances which call this method-instance; `invoke` records (invokesig, caller) pairs
-    jl_array_t *callbacks; // list of callback functions to inform external caches about invalidations
     _Atomic(struct _jl_code_instance_t*) cache;
     uint8_t inInference; // flags to tell if inference is running on this object
     uint8_t cache_with_orig; // !cache_with_specTypes
@@ -412,6 +411,7 @@ typedef struct _jl_opaque_closure_t {
 typedef struct _jl_code_instance_t {
     JL_DATA_TYPE
     jl_method_instance_t *def; // method this is specialized from
+    jl_value_t *owner; // Compiler token this belongs to, `jl_nothing` is reserved for native
     _Atomic(struct _jl_code_instance_t*) next; // pointer to the next cache entry
 
     // world range for which this object is valid to use
@@ -2545,7 +2545,7 @@ typedef struct {
     int gcstack_arg; // Pass the ptls value as an argument with swiftself
 
     int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
-    // Cache access. Default: jl_rettype_inferred.
+    // Cache access. Default: jl_rettype_inferred_native.
     jl_codeinstance_lookup_t lookup;
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;

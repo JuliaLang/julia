@@ -326,7 +326,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
         end
     end
     # relocatability = isa(inferred_result, String) ? inferred_result[end] : UInt8(0)
-    return CodeInstance(result.linfo,
+    return CodeInstance(result.linfo, cache_owner(interp),
         widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
         # TODO: Actually do something with non-IPO effects

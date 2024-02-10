@@ -321,25 +321,6 @@ function iterate(iter::BackedgeIterator, i::Int=1)
     return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
 end
 
-"""
-    add_invalidation_callback!(callback, mi::MethodInstance)
-
-Register `callback` to be triggered upon the invalidation of `mi`.
-`callback` should a function taking two arguments, `callback(replaced::MethodInstance, max_world::UInt32)`,
-and it will be recursively invoked on `MethodInstance`s within the invalidation graph.
-"""
-function add_invalidation_callback!(@nospecialize(callback), mi::MethodInstance)
-    if !isdefined(mi, :callbacks)
-        callbacks = mi.callbacks = Any[callback]
-    else
-        callbacks = mi.callbacks::Vector{Any}
-        if !any(@nospecialize(cb)->cb===callback, callbacks)
-            push!(callbacks, callback)
-        end
-    end
-    return callbacks
-end
-
 #########
 # types #
 #########
