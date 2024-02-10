@@ -195,9 +195,13 @@ end
 
 function read(f::File, ::Type{UInt8})
     check_open(f)
-    ret = ccall(:jl_fs_read_byte, Int32, (OS_HANDLE,), f.handle)
+    p = Ref{UInt8}()
+    ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
+                f.handle, p, 1)
     uv_error("read", ret)
-    return ret % UInt8
+    @assert ret <= sizeof(p) == 1
+    ret < 1 && throw(EOFError())
+    return p[] % UInt8
 end
 
 function read(f::File, ::Type{Char})

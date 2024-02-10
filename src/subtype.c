@@ -805,7 +805,7 @@ static int subtype_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int R, int pa
 // check that a type is concrete or quasi-concrete (Type{T}).
 // this is used to check concrete typevars:
 // issubtype is false if the lower bound of a concrete type var is not concrete.
-static int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
+int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (v == jl_bottom_type)
         return 1;
@@ -1997,7 +1997,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                     if (var_occurs_invariant(body, (jl_tvar_t*)b))
                         return 0;
                 }
-                if (nparams_expanded_x > npy && jl_is_typevar(b) && concrete_min(a1) > 1) {
+                if (nparams_expanded_x > npy && jl_is_typevar(b) && is_leaf_typevar((jl_tvar_t *)b) && concrete_min(a1) > 1) {
                     // diagonal rule for 2 or more elements: they must all be concrete on the LHS
                     *subtype = 0;
                     return 1;
@@ -2008,7 +2008,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                 }
                 for (; i < nparams_expanded_x; i++) {
                     jl_value_t *a = (vx != JL_VARARG_NONE && i >= npx - 1) ? vxt : jl_tparam(x, i);
-                    if (i > npy && jl_is_typevar(b)) { // i == npy implies a == a1
+                    if (i > npy && jl_is_typevar(b) && is_leaf_typevar((jl_tvar_t *)b)) { // i == npy implies a == a1
                         // diagonal rule: all the later parameters are also constrained to be type-equal to the first
                         jl_value_t *a2 = a;
                         jl_value_t *au = jl_unwrap_unionall(a);
@@ -4460,19 +4460,18 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         jl_value_t *newbody = insert_nondiagonal(body, troot, widen2ub);
         if (v) v->var = var; // And restore it after inner insertation.
         jl_value_t *newvar = NULL;
-        JL_GC_PUSH2(&newbody, &newvar);
+        JL_GC_PUSH3(&newbody, &newvar, &type);
         if (body == newbody || jl_has_typevar(newbody, var)) {
             if (body != newbody)
-                newbody = jl_new_struct(jl_unionall_type, var, newbody);
+                type = jl_new_struct(jl_unionall_type, var, newbody);
             // n.b. we do not widen lb, since that would be the wrong direction
             newvar = insert_nondiagonal(var->ub, troot, widen2ub);
             if (newvar != var->ub) {
                 newvar = (jl_value_t*)jl_new_typevar(var->name, var->lb, newvar);
-                newbody = jl_apply_type1(newbody, newvar);
-                newbody = jl_type_unionall((jl_tvar_t*)newvar, newbody);
+                newbody = jl_apply_type1(type, newvar);
+                type = jl_type_unionall((jl_tvar_t*)newvar, newbody);
             }
         }
-        type = newbody;
         JL_GC_POP();
     }
     else if (jl_is_uniontype(type)) {

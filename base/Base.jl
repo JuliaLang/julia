@@ -91,6 +91,36 @@ function replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol
     val = desired isa ty ? desired : convert(ty, desired)
     return Core.replacefield!(x, f, expected, val, success_order, fail_order)
 end
+function setpropertyonce!(x, f::Symbol, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = fieldtype(typeof(x), f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.setfieldonce!(x, f, val, success_order, fail_order)
+end
+
+function swapproperty!(x::Module, f::Symbol, v, order::Symbol=:not_atomic)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = v isa ty ? v : convert(ty, v)
+    return Core.swapglobal!(x, f, val, order)
+end
+function modifyproperty!(x::Module, f::Symbol, op, v, order::Symbol=:not_atomic)
+    @inline
+    return Core.modifyglobal!(x, f, op, v, order)
+end
+function replaceproperty!(x::Module, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.replaceglobal!(x, f, expected, val, success_order, fail_order)
+end
+function setpropertyonce!(x::Module, f::Symbol, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.setglobalonce!(x, f, val, success_order, fail_order)
+end
+
 
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
@@ -627,6 +657,7 @@ function __init__()
     init_load_path()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
+    empty!(explicit_loaded_modules)
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
     end

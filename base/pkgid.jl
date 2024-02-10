@@ -23,7 +23,7 @@ function hash(pkg::PkgId, h::UInt)
     return h
 end
 
-show(io::IO, pkg::PkgId) =
+show(io::IO,  ::MIME"text/plain", pkg::PkgId) =
     print(io, pkg.name, " [", pkg.uuid === nothing ? "top-level" : pkg.uuid, "]")
 
 function binpack(pkg::PkgId)

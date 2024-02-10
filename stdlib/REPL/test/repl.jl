@@ -1675,6 +1675,27 @@ fake_repl() do stdin_write, stdout_read, repl
     @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
 end
 
+try # test the functionality of `UndefVarError_hint` against `Base.remove_linenums!`
+    @assert isempty(Base.Experimental._hint_handlers)
+    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
+
+    # check the requirement to trigger the hint via `UndefVarError_hint`
+    @test !isdefined(Main, :remove_linenums!) && Base.ispublic(Base, :remove_linenums!)
+
+    fake_repl() do stdin_write, stdout_read, repl
+        backend = REPL.REPLBackend()
+        repltask = @async REPL.run_repl(repl; backend)
+        write(stdin_write,
+              "remove_linenums!\n\"ZZZZZ\"\n")
+        txt = readuntil(stdout_read, "ZZZZZ")
+        write(stdin_write, '\x04')
+        wait(repltask)
+        @test occursin("Hint: a global variable of this name also exists in Base.", txt)
+    end
+finally
+    empty!(Base.Experimental._hint_handlers)
+end
+
 # Hints for tab completes
 
 fake_repl() do stdin_write, stdout_read, repl
@@ -1748,4 +1769,10 @@ let io = IOBuffer()
     @test REPL.banner(io; short=true) === nothing
     seek(io, 0)
     @test countlines(io) == 2
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(REPL)
+    @test_broken isempty(undoc)
+    @test undoc == [:AbstractREPL, :BasicREPL, :LineEditREPL, :StreamREPL]
 end

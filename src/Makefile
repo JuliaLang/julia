@@ -77,10 +77,9 @@ else
 # JULIACODEGEN != LLVM
 endif
 
-RT_LLVM_LIBS := support
-
-ifeq ($(LLVM_VER_MAJ),16)
-RT_LLVM_LIBS += targetparser
+RT_LLVM_LIBS := support # for APMath and some other useful ADT
+ifneq ($(LLVM_VER_MAJ),15)
+RT_LLVM_LIBS += targetparser # for getHostCPUName on LLVM 16+
 endif
 
 ifeq ($(OS),WINNT)
@@ -113,6 +112,10 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 
 LLVM_LDFLAGS := $(shell $(LLVM_CONFIG_HOST) --ldflags)
 LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG_HOST) --cxxflags)
+
+ifeq ($(OS)_$(BINARY),WINNT_32)
+LLVM_CXXFLAGS += -I$(SRCDIR)/support/win32-clang-ABI-bug
+endif
 
 # llvm-config --cxxflags does not return -DNDEBUG
 ifeq ($(shell $(LLVM_CONFIG_HOST) --assertion-mode),OFF)

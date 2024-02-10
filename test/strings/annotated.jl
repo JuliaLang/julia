@@ -34,8 +34,9 @@
         Base.AnnotatedString("ab", [(1:1, :a => 1), (2:2, :b => 2)])
     let allstrings =
         ['a', Base.AnnotatedChar('a'), Base.AnnotatedChar('a', [:aaa => 0x04]),
-        "a string", Base.AnnotatedString("a string"),
-        Base.AnnotatedString("a string", [(1:2, :hmm => '%')])]
+         "a string", Base.AnnotatedString("a string"),
+         Base.AnnotatedString("a string", [(1:2, :hmm => '%')]),
+         SubString(Base.AnnotatedString("a string", [(1:2, :hmm => '%')]), 1:1)]
         for str1 in repeat(allstrings, 2)
             for str2 in repeat(allstrings, 2)
                 @test String(str1 * str2) ==
@@ -105,4 +106,59 @@ end
     @test repeat(str1[1], 3) == Base.AnnotatedString("ttt", [(1:3, :label => 5)])
     @test reverse(str1) == Base.AnnotatedString("tset", [(1:4, :label => 5)])
     @test reverse(str2) == Base.AnnotatedString("esac", [(2:3, :label => "oomph")])
+end
+
+@testset "AnnotatedIOBuffer" begin
+    aio = Base.AnnotatedIOBuffer()
+    # Append-only writing
+    @test write(aio, Base.AnnotatedString("hello", [(1:5, :tag => 1)])) == 5
+    @test write(aio, ' ') == 1
+    @test write(aio, Base.AnnotatedString("world", [(1:5, :tag => 2)])) == 5
+    @test Base.annotations(aio) == [(1:5, :tag => 1), (7:11, :tag => 2)]
+    # Reading
+    @test read(seekstart(deepcopy(aio.io)), String) == "hello world"
+    @test read(seekstart(deepcopy(aio)), String) == "hello world"
+    @test read(seek(aio, 0), Base.AnnotatedString) == Base.AnnotatedString("hello world", [(1:5, :tag => 1), (7:11, :tag => 2)])
+    @test read(seek(aio, 1), Base.AnnotatedString) == Base.AnnotatedString("ello world", [(1:4, :tag => 1), (6:10, :tag => 2)])
+    @test read(seek(aio, 4), Base.AnnotatedString) == Base.AnnotatedString("o world", [(1:1, :tag => 1), (3:7, :tag => 2)])
+    @test read(seek(aio, 5), Base.AnnotatedString) == Base.AnnotatedString(" world", [(2:6, :tag => 2)])
+    @test read(aio, Base.AnnotatedString) == Base.AnnotatedString("")
+    @test read(seekstart(truncate(deepcopy(aio), 5)), Base.AnnotatedString) == Base.AnnotatedString("hello", [(1:5, :tag => 1)])
+    @test read(seekstart(truncate(deepcopy(aio), 6)), Base.AnnotatedString) == Base.AnnotatedString("hello ", [(1:5, :tag => 1)])
+    @test read(seekstart(truncate(deepcopy(aio), 7)), Base.AnnotatedString) == Base.AnnotatedString("hello w", [(1:5, :tag => 1), (7:7, :tag => 2)])
+    @test read(seek(aio, 0), Base.AnnotatedChar) == Base.AnnotatedChar('h', [:tag => 1])
+    @test read(seek(aio, 5), Base.AnnotatedChar) == Base.AnnotatedChar(' ', Pair{Symbol, Any}[])
+    @test read(seek(aio, 6), Base.AnnotatedChar) == Base.AnnotatedChar('w', [:tag => 2])
+    # Check method compatibility with IOBuffer
+    @test position(aio) == 7
+    @test seek(aio, 4) === aio
+    @test skip(aio, 2) === aio
+    @test Base.annotations(copy(aio)) == Base.annotations(aio)
+    @test take!(copy(aio).io) == take!(copy(aio.io))
+    # Writing into the middle of the buffer
+    @test write(seek(aio, 6), "alice") == 5 # Replace 'world' with 'alice'
+    @test read(seekstart(aio), String) == "hello alice"
+    @test Base.annotations(aio) == [(1:5, :tag => 1), (7:11, :tag => 2)] # Should be unchanged
+    @test write(seek(aio, 0), Base.AnnotatedString("hey-o", [(1:5, :hey => 'o')])) == 5
+    @test read(seekstart(aio), String) == "hey-o alice"
+    @test Base.annotations(aio) == [(1:5, :hey => 'o'), (7:11, :tag => 2)] # First annotation should have been entirely replaced
+    @test write(seek(aio, 7), Base.AnnotatedString("bbi", [(1:3, :hey => 'a')])) == 3 # a[lic => bbi]e ('alice' => 'abbie')
+    @test read(seekstart(aio), String) == "hey-o abbie"
+    @test Base.annotations(aio) == [(1:5, :hey => 'o'), (7:7, :tag => 2), (8:10, :hey => 'a'), (11:11, :tag => 2)]
+    @test write(seek(aio, 0), Base.AnnotatedString("ab")) == 2 # Check first annotation's region is adjusted correctly
+    @test read(seekstart(aio), String) == "aby-o abbie"
+    @test Base.annotations(aio) == [(3:5, :hey => 'o'), (7:7, :tag => 2), (8:10, :hey => 'a'), (11:11, :tag => 2)]
+    @test write(seek(aio, 3), Base.AnnotatedString("ss")) == 2
+    @test read(seekstart(aio), String) == "abyss abbie"
+    @test Base.annotations(aio) == [(3:3, :hey => 'o'), (7:7, :tag => 2), (8:10, :hey => 'a'), (11:11, :tag => 2)]
+    # Writing one buffer to another
+    newaio = Base.AnnotatedIOBuffer()
+    @test write(newaio, seekstart(aio)) == 11
+    @test read(seekstart(newaio), String) == "abyss abbie"
+    @test Base.annotations(newaio) == Base.annotations(aio)
+    @test write(seek(newaio, 5), seek(aio, 5)) == 6
+    @test Base.annotations(newaio) == Base.annotations(aio)
+    @test write(newaio, seek(aio, 5)) == 6
+    @test read(seekstart(newaio), String) == "abyss abbie abbie"
+    @test Base.annotations(newaio) == vcat(Base.annotations(aio), [(13:13, :tag => 2), (14:16, :hey => 'a'), (17:17, :tag => 2)])
 end

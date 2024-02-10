@@ -37,24 +37,26 @@ $(addprefix revise-, $(TESTS)): revise-% :
 relocatedepot:
 	@rm -rf $(SRCDIR)/relocatedepot
 	@cd $(SRCDIR) && \
-	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
+	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
 	@mkdir $(SRCDIR)/relocatedepot
 	@cp -R $(build_datarootdir)/julia $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
+	@cp -R $(SRCDIR)/RelocationTestPkg3 $(SRCDIR)/relocatedepot
 	@cd $(SRCDIR) && \
-	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading RELOCATEDEPOT="" JULIA_DEPOT_PATH=$(SRCDIR)/relocatedepot/julia $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
+	$(call PRINT_JULIA, $(call spawn,RELOCATEDEPOT="" $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl $@)
 
 revise-relocatedepot: revise-% :
 	@rm -rf $(SRCDIR)/relocatedepot
 	@cd $(SRCDIR) && \
-	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
+	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
 	@mkdir $(SRCDIR)/relocatedepot
 	@cp -R $(build_datarootdir)/julia $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg1 $(SRCDIR)/relocatedepot
 	@cp -R $(SRCDIR)/RelocationTestPkg2 $(SRCDIR)/relocatedepot
+	@cp -R $(SRCDIR)/RelocationTestPkg3 $(SRCDIR)/relocatedepot
 	@cd $(SRCDIR) && \
-	$(call PRINT_JULIA, $(call spawn,JULIA_DEBUG=loading RELOCATEDEPOT="" JULIA_DEPOT_PATH=$(SRCDIR)/relocatedepot/julia $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
+	$(call PRINT_JULIA, $(call spawn,RELOCATEDEPOT="" $(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no --depwarn=error ./runtests.jl --revise $*)
 
 embedding:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(EMBEDDING_ARGS)

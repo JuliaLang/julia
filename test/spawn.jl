@@ -1032,3 +1032,10 @@ let effects = Base.infer_effects(x -> `a $x`, (Any,))
     @test !Core.Compiler.is_noub(effects)
     @test !Core.Compiler.is_consistent(effects)
 end
+
+# Test that Cmd accepts various AbstractStrings
+@testset "AbstractStrings" begin
+    args = split("-l /tmp")
+    @assert eltype(args) != String
+    @test Cmd(["ls", args...]) == `ls -l /tmp`
+end

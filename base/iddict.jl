@@ -53,18 +53,7 @@ IdDict(ps::Pair{K}...)             where {K}   = IdDict{K,Any}(ps)
 IdDict(ps::(Pair{K,V} where K)...) where {V}   = IdDict{Any,V}(ps)
 IdDict(ps::Pair...)                            = IdDict{Any,Any}(ps)
 
-function IdDict(kv)
-    try
-        dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
-    catch
-        if !applicable(iterate, kv) || !all(x->isa(x,Union{Tuple,Pair}),kv)
-            throw(ArgumentError(
-                "IdDict(kv): kv needs to be an iterator of tuples or pairs"))
-        else
-            rethrow()
-        end
-    end
-end
+IdDict(kv) = dict_with_eltype((K, V) -> IdDict{K, V}, kv, eltype(kv))
 
 empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
 

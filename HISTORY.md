@@ -5291,7 +5291,7 @@ Language tooling improvements
      talk](https://www.youtube.com/watch?v=e6-hcOHO0tc&list=PLP8iPy9hna6SQPwZUDtAM59-wPzCPyD_S&index=5)
      on Gallium shows off various features of the debugger.
 
-   * The [Juno IDE](http://junolab.org) has matured significantly, and now
+   * The [Juno IDE](https://junolab.org) has matured significantly, and now
      also includes support for plotting and debugging.
 
    * [Cxx.jl](https://github.com/Keno/Cxx.jl) provides a convenient FFI for
@@ -5689,7 +5689,7 @@ Library improvements
 
   * Other improvements
 
-    * You can now tab-complete emoji via their [short names](http://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
+    * You can now tab-complete emoji via their [short names](https://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
 
     * `gc_enable` subsumes `gc_disable`, and also returns the previous GC state.
 
