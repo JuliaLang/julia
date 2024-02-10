@@ -130,7 +130,7 @@ let l = ReentrantLock()
 end
 
 # Lockable{T, L<:AbstractLock}
-using Base.Lockable
+using Base: Lockable
 let
     @test_broken Base.isexported(Base, :Lockable)
     lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
