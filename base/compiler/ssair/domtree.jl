@@ -82,6 +82,8 @@ struct DFSTree
     # (preorder number -> preorder number)
     # Storing it this way saves a few lookups in the snca_compress! algorithm
     to_parent_pre::Vector{PreNumber}
+
+    _worklist::Vector{Tuple{BBNumber, PreNumber, Bool}}
 end
 
 function DFSTree(n_blocks::Int)
@@ -89,14 +91,16 @@ function DFSTree(n_blocks::Int)
                    Vector{BBNumber}(undef, n_blocks),
                    zeros(PostNumber, n_blocks),
                    Vector{BBNumber}(undef, n_blocks),
-                   zeros(PreNumber, n_blocks))
+                   zeros(PreNumber, n_blocks),
+                   Vector{Tuple{BBNumber, PreNumber, Bool}}())
 end
 
 copy(D::DFSTree) = DFSTree(copy(D.to_pre),
                            copy(D.from_pre),
                            copy(D.to_post),
                            copy(D.from_post),
-                           copy(D.to_parent_pre))
+                           copy(D.to_parent_pre),
+                           copy(D._worklist))
 
 function copy!(dst::DFSTree, src::DFSTree)
     copy!(dst.to_pre, src.to_pre)
@@ -106,17 +110,26 @@ function copy!(dst::DFSTree, src::DFSTree)
     copy!(dst.to_parent_pre, src.to_parent_pre)
     return dst
 end
+function resize!(D::DFSTree, n::Integer)
+    resize!(D.to_pre, n)
+    resize!(D.from_pre, n)
+    resize!(D.to_post, n)
+    resize!(D.from_post, n)
+    resize!(D.to_parent_pre, n)
+end
 
 length(D::DFSTree) = length(D.from_pre)
 
 function DFS!(D::DFSTree, blocks::Vector{BasicBlock}, is_post_dominator::Bool)
-    copy!(D, DFSTree(length(blocks)))
+    resize!(D, length(blocks))
+    fill!(D.to_pre, 0)
+    to_visit = D._worklist # always starts empty
     if is_post_dominator
         # TODO: We're using -1 as the virtual exit node here. Would it make
         #       sense to actually have a real BB for the exit always?
-        to_visit = Tuple{BBNumber, PreNumber, Bool}[(-1, 0, false)]
+        push!(to_visit, (-1, 0, false))
     else
-        to_visit = Tuple{BBNumber, PreNumber, Bool}[(1, 0, false)]
+        push!(to_visit, (1, 0, false))
     end
     pre_num = is_post_dominator ? 0 : 1
     post_num = 1
@@ -596,7 +609,7 @@ dominates(domtree::DomTree, bb1::BBNumber, bb2::BBNumber) =
     _dominates(domtree, bb1, bb2)
 
 """
-    postdominates(domtree::DomTree, bb1::Int, bb2::Int) -> Bool
+    postdominates(domtree::PostDomTree, bb1::Int, bb2::Int) -> Bool
 
 Checks if `bb1` post-dominates `bb2`.
 `bb1` and `bb2` are indexes into the `CFG` blocks.

@@ -156,14 +156,6 @@ struct PartialTypeVar
     PartialTypeVar(tv::TypeVar, lb_certain::Bool, ub_certain::Bool) = new(tv, lb_certain, ub_certain)
 end
 
-# Wraps a type and represents that the value may also be undef at this point.
-# (only used in optimize, not abstractinterpret)
-# N.B. in the lattice, this is epsilon bigger than `typ` (even Any)
-struct MaybeUndef
-    typ
-    MaybeUndef(@nospecialize(typ)) = new(typ)
-end
-
 struct StateUpdate
     var::SlotNumber
     vtype::VarState
@@ -232,7 +224,7 @@ struct NotFound end
 
 const NOT_FOUND = NotFound()
 
-const CompilerTypes = Union{MaybeUndef, Const, Conditional, MustAlias, NotFound, PartialStruct}
+const CompilerTypes = Union{Const, Conditional, MustAlias, NotFound, PartialStruct}
 ==(x::CompilerTypes, y::CompilerTypes) = x === y
 ==(x::Type, y::CompilerTypes) = false
 ==(x::CompilerTypes, y::Type) = false
@@ -244,7 +236,7 @@ const CompilerTypes = Union{MaybeUndef, Const, Conditional, MustAlias, NotFound,
 # slot wrappers
 # =============
 
-function assert_nested_slotwrapper(@nospecialize t)
+@nospecializeinfer function assert_nested_slotwrapper(@nospecialize t)
     @assert !(t isa Conditional)      "found nested Conditional"
     @assert !(t isa InterConditional) "found nested InterConditional"
     @assert !(t isa MustAlias)        "found nested MustAlias"
@@ -252,7 +244,7 @@ function assert_nested_slotwrapper(@nospecialize t)
     return t
 end
 
-function widenslotwrapper(@nospecialize typ)
+@nospecializeinfer function widenslotwrapper(@nospecialize typ)
     if isa(typ, AnyConditional)
         return widenconditional(typ)
     elseif isa(typ, AnyMustAlias)
@@ -261,7 +253,7 @@ function widenslotwrapper(@nospecialize typ)
     return typ
 end
 
-function widenwrappedslotwrapper(@nospecialize typ)
+@nospecializeinfer function widenwrappedslotwrapper(@nospecialize typ)
     if isa(typ, LimitedAccuracy)
         return LimitedAccuracy(widenslotwrapper(typ.typ), typ.causes)
     end
@@ -271,7 +263,7 @@ end
 # Conditional
 # ===========
 
-function widenconditional(@nospecialize typ)
+@nospecializeinfer function widenconditional(@nospecialize typ)
     if isa(typ, AnyConditional)
         if typ.thentype === Union{}
             return Const(false)
@@ -285,7 +277,7 @@ function widenconditional(@nospecialize typ)
     end
     return typ
 end
-function widenwrappedconditional(@nospecialize typ)
+@nospecializeinfer function widenwrappedconditional(@nospecialize typ)
     if isa(typ, LimitedAccuracy)
         return LimitedAccuracy(widenconditional(typ.typ), typ.causes)
     end
@@ -294,7 +286,7 @@ end
 
 # `Conditional` and `InterConditional` are valid in opposite contexts
 # (i.e. local inference and inter-procedural call), as such they will never be compared
-function issubconditional(lattice::AbstractLattice, a::C, b::C) where {C<:AnyConditional}
+@nospecializeinfer function issubconditional(lattice::AbstractLattice, a::C, b::C) where {C<:AnyConditional}
     if is_same_conditionals(a, b)
         if ⊑(lattice, a.thentype, b.thentype)
             if ⊑(lattice, a.elsetype, b.elsetype)
@@ -307,7 +299,7 @@ end
 
 is_same_conditionals(a::C, b::C) where C<:AnyConditional = a.slot == b.slot
 
-is_lattice_bool(lattice::AbstractLattice, @nospecialize(typ)) = typ !== Bottom && ⊑(lattice, typ, Bool)
+@nospecializeinfer is_lattice_bool(lattice::AbstractLattice, @nospecialize(typ)) = typ !== Bottom && ⊑(lattice, typ, Bool)
 
 maybe_extract_const_bool(c::Const) = (val = c.val; isa(val, Bool)) ? val : nothing
 function maybe_extract_const_bool(c::AnyConditional)
@@ -315,12 +307,12 @@ function maybe_extract_const_bool(c::AnyConditional)
     (c.elsetype === Bottom && !(c.thentype === Bottom)) && return true
     nothing
 end
-maybe_extract_const_bool(@nospecialize c) = nothing
+@nospecializeinfer maybe_extract_const_bool(@nospecialize c) = nothing
 
 # MustAlias
 # =========
 
-function widenmustalias(@nospecialize typ)
+@nospecializeinfer function widenmustalias(@nospecialize typ)
     if isa(typ, AnyMustAlias)
         return typ.fldtyp
     elseif isa(typ, LimitedAccuracy)
@@ -329,13 +321,13 @@ function widenmustalias(@nospecialize typ)
     return typ
 end
 
-function isalreadyconst(@nospecialize t)
+@nospecializeinfer function isalreadyconst(@nospecialize t)
     isa(t, Const) && return true
-    isa(t, DataType) && isdefined(t, :instance) && return true
+    issingletontype(t) && return true
     return isconstType(t)
 end
 
-function maybe_const_fldidx(@nospecialize(objtyp), @nospecialize(fldval))
+@nospecializeinfer function maybe_const_fldidx(@nospecialize(objtyp), @nospecialize(fldval))
     t = widenconst(objtyp)
     if isa(fldval, Int)
         fldidx = fldval
@@ -352,7 +344,7 @@ function maybe_const_fldidx(@nospecialize(objtyp), @nospecialize(fldval))
     return fldidx
 end
 
-function form_mustalias_conditional(alias::MustAlias, @nospecialize(thentype), @nospecialize(elsetype))
+@nospecializeinfer function form_mustalias_conditional(alias::MustAlias, @nospecialize(thentype), @nospecialize(elsetype))
     (; slot, vartyp, fldidx) = alias
     if isa(vartyp, PartialStruct)
         fields = vartyp.fields
@@ -401,7 +393,7 @@ ignorelimited(typ::LimitedAccuracy) = typ.typ
 # lattice order
 # =============
 
-function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
+@nospecializeinfer function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
     r = ⊑(widenlattice(lattice), ignorelimited(a), ignorelimited(b))
     r || return false
     isa(b, LimitedAccuracy) || return true
@@ -420,17 +412,7 @@ function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
     return b.causes ⊆ a.causes
 end
 
-function ⊑(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, MaybeUndef)
-        isa(b, MaybeUndef) || return false
-        a, b = a.typ, b.typ
-    elseif isa(b, MaybeUndef)
-        b = b.typ
-    end
-    return ⊑(widenlattice(lattice), a, b)
-end
-
-function ⊑(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b))
+@nospecializeinfer function ⊑(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b))
     # Fast paths for common cases
     b === Any && return true
     a === Any && return false
@@ -450,7 +432,7 @@ function ⊑(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b)
     return ⊑(widenlattice(lattice), a, b)
 end
 
-function ⊑(𝕃::AnyMustAliasesLattice, @nospecialize(a), @nospecialize(b))
+@nospecializeinfer function ⊑(𝕃::AnyMustAliasesLattice, @nospecialize(a), @nospecialize(b))
     MustAliasT = isa(𝕃, MustAliasesLattice) ? MustAlias : InterMustAlias
     if isa(a, MustAliasT)
         if isa(b, MustAliasT)
@@ -463,7 +445,7 @@ function ⊑(𝕃::AnyMustAliasesLattice, @nospecialize(a), @nospecialize(b))
     return ⊑(widenlattice(𝕃), a, b)
 end
 
-function ⊑(lattice::PartialsLattice, @nospecialize(a), @nospecialize(b))
+@nospecializeinfer function ⊑(lattice::PartialsLattice, @nospecialize(a), @nospecialize(b))
     if isa(a, PartialStruct)
         if isa(b, PartialStruct)
             if !(length(a.fields) == length(b.fields) && a.typ <: b.typ)
@@ -526,7 +508,7 @@ function ⊑(lattice::PartialsLattice, @nospecialize(a), @nospecialize(b))
     return ⊑(widenlattice(lattice), a, b)
 end
 
-function ⊑(lattice::ConstsLattice, @nospecialize(a), @nospecialize(b))
+@nospecializeinfer function ⊑(lattice::ConstsLattice, @nospecialize(a), @nospecialize(b))
     if isa(a, Const)
         if isa(b, Const)
             return a.val === b.val
@@ -548,7 +530,7 @@ function ⊑(lattice::ConstsLattice, @nospecialize(a), @nospecialize(b))
     return ⊑(widenlattice(lattice), a, b)
 end
 
-function is_lattice_equal(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
+@nospecializeinfer function is_lattice_equal(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
     if isa(a, LimitedAccuracy)
         isa(b, LimitedAccuracy) || return false
         a.causes == b.causes || return false
@@ -560,15 +542,7 @@ function is_lattice_equal(lattice::InferenceLattice, @nospecialize(a), @nospecia
     return is_lattice_equal(widenlattice(lattice), a, b)
 end
 
-function is_lattice_equal(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, MaybeUndef) || isa(b, MaybeUndef)
-        # TODO: Unwrap these and recurse to is_lattice_equal
-        return ⊑(lattice, a, b) && ⊑(lattice, b, a)
-    end
-    return is_lattice_equal(widenlattice(lattice), a, b)
-end
-
-function is_lattice_equal(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b))
+@nospecializeinfer function is_lattice_equal(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b))
     ConditionalT = isa(lattice, ConditionalsLattice) ? Conditional : InterConditional
     if isa(a, ConditionalT) || isa(b, ConditionalT)
         # TODO: Unwrap these and recurse to is_lattice_equal
@@ -577,7 +551,7 @@ function is_lattice_equal(lattice::AnyConditionalsLattice, @nospecialize(a), @no
     return is_lattice_equal(widenlattice(lattice), a, b)
 end
 
-function is_lattice_equal(lattice::PartialsLattice, @nospecialize(a), @nospecialize(b))
+@nospecializeinfer function is_lattice_equal(lattice::PartialsLattice, @nospecialize(a), @nospecialize(b))
     if isa(a, PartialStruct)
         isa(b, PartialStruct) || return false
         length(a.fields) == length(b.fields) || return false
@@ -600,7 +574,7 @@ function is_lattice_equal(lattice::PartialsLattice, @nospecialize(a), @nospecial
     return is_lattice_equal(widenlattice(lattice), a, b)
 end
 
-function is_lattice_equal(lattice::ConstsLattice, @nospecialize(a), @nospecialize(b))
+@nospecializeinfer function is_lattice_equal(lattice::ConstsLattice, @nospecialize(a), @nospecialize(b))
     a === b && return true
     if a isa Const
         if issingletontype(b)
@@ -625,7 +599,7 @@ end
 # lattice operations
 # ==================
 
-function tmeet(lattice::PartialsLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(lattice::PartialsLattice, @nospecialize(v), @nospecialize(t::Type))
     if isa(v, PartialStruct)
         has_free_typevars(t) && return v
         widev = widenconst(v)
@@ -633,7 +607,7 @@ function tmeet(lattice::PartialsLattice, @nospecialize(v), @nospecialize(t::Type
         if ti === widev
             return v
         end
-        valid_as_lattice(ti) || return Bottom
+        valid_as_lattice(ti, true) || return Bottom
         if widev <: Tuple
             new_fields = Vector{Any}(undef, length(v.fields))
             for i = 1:length(new_fields)
@@ -657,13 +631,13 @@ function tmeet(lattice::PartialsLattice, @nospecialize(v), @nospecialize(t::Type
             return v
         end
         ti = typeintersect(widev, t)
-        valid_as_lattice(ti) || return Bottom
+        valid_as_lattice(ti, true) || return Bottom
         return PartialOpaque(ti, v.env, v.parent, v.source)
     end
     return tmeet(widenlattice(lattice), v, t)
 end
 
-function tmeet(lattice::ConstsLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(lattice::ConstsLattice, @nospecialize(v), @nospecialize(t::Type))
     if isa(v, Const)
         if !has_free_typevars(t) && !isa(v.val, t)
             return Bottom
@@ -673,7 +647,7 @@ function tmeet(lattice::ConstsLattice, @nospecialize(v), @nospecialize(t::Type))
     tmeet(widenlattice(lattice), widenconst(v), t)
 end
 
-function tmeet(lattice::ConditionalsLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(lattice::ConditionalsLattice, @nospecialize(v), @nospecialize(t::Type))
     if isa(v, Conditional)
         if !(Bool <: t)
             return Bottom
@@ -683,36 +657,30 @@ function tmeet(lattice::ConditionalsLattice, @nospecialize(v), @nospecialize(t::
     tmeet(widenlattice(lattice), v, t)
 end
 
-function tmeet(𝕃::MustAliasesLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(𝕃::MustAliasesLattice, @nospecialize(v), @nospecialize(t::Type))
     if isa(v, MustAlias)
         v = widenmustalias(v)
     end
     return tmeet(widenlattice(𝕃), v, t)
 end
 
-function tmeet(lattice::InferenceLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(lattice::InferenceLattice, @nospecialize(v), @nospecialize(t::Type))
     # TODO: This can probably happen and should be handled
     @assert !isa(v, LimitedAccuracy)
     tmeet(widenlattice(lattice), v, t)
 end
 
-function tmeet(lattice::InterConditionalsLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(lattice::InterConditionalsLattice, @nospecialize(v), @nospecialize(t::Type))
     # TODO: This can probably happen and should be handled
     @assert !isa(v, AnyConditional)
     tmeet(widenlattice(lattice), v, t)
 end
 
-function tmeet(𝕃::InterMustAliasesLattice, @nospecialize(v), @nospecialize(t::Type))
+@nospecializeinfer function tmeet(𝕃::InterMustAliasesLattice, @nospecialize(v), @nospecialize(t::Type))
     if isa(v, InterMustAlias)
         v = widenmustalias(v)
     end
     return tmeet(widenlattice(𝕃), v, t)
-end
-
-function tmeet(lattice::OptimizerLattice, @nospecialize(v), @nospecialize(t::Type))
-    # TODO: This can probably happen and should be handled
-    @assert !isa(v, MaybeUndef)
-    tmeet(widenlattice(lattice), v, t)
 end
 
 """
@@ -723,11 +691,10 @@ Widens extended lattice element `x` to native `Type` representation.
 widenconst(::AnyConditional) = Bool
 widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
 widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
-widenconst(m::MaybeUndef) = widenconst(m.typ)
 widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
-widenconst(t::Type) = t
+@nospecializeinfer widenconst(@nospecialize t::Type) = t
 widenconst(::TypeVar) = error("unhandled TypeVar")
 widenconst(::TypeofVararg) = error("unhandled Vararg")
 widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
@@ -743,7 +710,7 @@ function smerge(lattice::AbstractLattice, sa::Union{NotFound,VarState}, sb::Unio
     return VarState(tmerge(lattice, sa.typ, sb.typ), sa.undef | sb.undef)
 end
 
-@inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o)) =
+@nospecializeinfer @inline schanged(lattice::AbstractLattice, @nospecialize(n), @nospecialize(o)) =
     (n !== o) && (o === NOT_FOUND || (n !== NOT_FOUND && !(n.undef <= o.undef && ⊑(lattice, n.typ, o.typ))))
 
 # remove any lattice elements that wrap the reassigned slot object from the vartable
@@ -790,24 +757,6 @@ function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable)
         end
     end
     return changed
-end
-
-function stupdate1!(lattice::AbstractLattice, state::VarTable, change::StateUpdate)
-    changeid = slot_id(change.var)
-    for i = 1:length(state)
-        invalidated = invalidate_slotwrapper(state[i], changeid, change.conditional)
-        if invalidated !== nothing
-            state[i] = invalidated
-        end
-    end
-    # and update the type of it
-    newtype = change.vtype
-    oldtype = state[changeid]
-    if schanged(lattice, newtype, oldtype)
-        state[changeid] = smerge(lattice, oldtype, newtype)
-        return true
-    end
-    return false
 end
 
 function stoverwrite!(state::VarTable, newstate::VarTable)

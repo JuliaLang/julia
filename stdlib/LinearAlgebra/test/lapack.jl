@@ -231,9 +231,16 @@ end
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
         A = rand(elty,10,10)
         iA = inv(A)
-        A, ipiv = LAPACK.getrf!(A)
+        A, ipiv, info = LAPACK.getrf!(A)
         A = LAPACK.getri!(A, ipiv)
         @test A ≈ iA
+
+        B = rand(elty,10,10)
+        iB = inv(B)
+        ipiv = rand(BlasInt,10)
+        B, ipiv, info = LAPACK.getrf!(B, ipiv)
+        B = LAPACK.getri!(B, ipiv)
+        @test B ≈ iB
     end
 end
 
@@ -678,6 +685,19 @@ end
     end
 end
 
+@testset "lacpy!" begin
+    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
+        n = 10
+        A = rand(elty, n, n)
+        for uplo in ('L', 'U', 'N')
+            B = zeros(elty, n, n)
+            LinearAlgebra.LAPACK.lacpy!(B, A, uplo)
+            C = uplo == 'L' ? tril(A) : (uplo == 'U' ? triu(A) : A)
+            @test B ≈ C
+        end
+    end
+end
+
 @testset "Julia vs LAPACK" begin
     # Test our own linear algebra functionality against LAPACK
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
@@ -719,5 +739,14 @@ end
 a = zeros(2,0), zeros(0)
 @test LinearAlgebra.LAPACK.geqrf!(a...) === a
 @test LinearAlgebra.LAPACK.gerqf!(a...) === a
+
+# Issue #49489: https://github.com/JuliaLang/julia/issues/49489
+# Dimension mismatch between A and ipiv causes segfaults
+@testset "issue #49489" begin
+    A = randn(23,23)
+    b = randn(23)
+    ipiv = collect(1:20)
+    @test_throws DimensionMismatch LinearAlgebra.LAPACK.getrs!('N', A, ipiv, b)
+end
 
 end # module TestLAPACK

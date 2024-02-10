@@ -182,7 +182,7 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
     Expected = ErrorException("task switch not allowed from inside staged nor pure functions")
     @test_throws Expected gf_err()
     @test_throws Expected gf_err()
-    @test gf_err_ref[] == 4
+    @test gf_err_ref[] < 1000
 end
 
 gf_err_ref[] = 0
@@ -308,6 +308,8 @@ end
 @generated function f33243()
     :(global x33243 = 2)
 end
+@test_throws ErrorException f33243()
+global x33243
 @test f33243() === 2
 @test x33243 === 2
 
@@ -343,4 +345,33 @@ let world = Base.get_world_counter()
     src = only(code_lowered(sin_generated, (Int,)))
     @test all(lin->lin.method === :sin, src.linetable)
     @test sin_generated(42) == sin(42)
+end
+
+# Allow passing unreachable insts in generated codeinfo
+let
+    dummy() = return
+    dummy_m = which(dummy, Tuple{})
+
+    src = Base.uncompressed_ir(dummy_m)
+    src.code = Any[
+        # block 1
+        Core.ReturnNode(nothing),
+        # block 2
+        Core.ReturnNode(),
+    ]
+    nstmts = length(src.code)
+    nslots = 1
+    src.ssavaluetypes = nstmts
+    src.codelocs = fill(Int32(1), nstmts)
+    src.ssaflags = fill(Int32(0), nstmts)
+    src.slotflags = fill(0, nslots)
+    src.slottypes = Any[Any]
+
+    @eval function f_unreachable()
+        $(Expr(:meta, :generated, Returns(src)))
+        $(Expr(:meta, :generated_only))
+    end
+
+    ir, _ = Base.code_ircode(f_unreachable, ()) |> only
+    @test length(ir.cfg.blocks) == 1
 end

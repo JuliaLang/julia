@@ -1,6 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <llvm/ADT/MapVector.h>
+#include <llvm/ADT/StringSet.h>
+#include <llvm/Support/AllocatorBase.h>
 
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Constants.h>
@@ -8,6 +10,7 @@
 #include <llvm/IR/Value.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/PassTimingInfo.h>
 
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
@@ -22,9 +25,10 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "platform.h"
-
+#include "llvm-codegen-shared.h"
 #include <stack>
 #include <queue>
+
 
 // As of LLVM 13, there are two runtime JIT linker implementations, the older
 // RuntimeDyld (used via orc::RTDyldObjectLinkingLayer) and the newer JITLink
@@ -41,7 +45,7 @@
 // However, JITLink is a relatively young library and lags behind in platform
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
-// for Mac/aarch64.
+// for Mac/aarch64 and Linux/aarch64.
 // #define JL_FORCE_JITLINK
 
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
@@ -49,19 +53,13 @@
 #endif
 // The sanitizers don't play well with our memory manager
 
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK) || JL_LLVM_VERSION >= 150000 && defined(HAS_SANITIZER)
-# if JL_LLVM_VERSION < 130000
-#  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
-# endif
+#if defined(JL_FORCE_JITLINK) || defined(_CPU_AARCH64_) || defined(HAS_SANITIZER)
 # define JL_USE_JITLINK
 #endif
 
-#ifdef JL_USE_JITLINK
 # include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
-#else
 # include <llvm/ExecutionEngine/RTDyldMemoryManager.h>
 # include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
-#endif
 
 using namespace llvm;
 
@@ -71,8 +69,6 @@ DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeCont
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
 
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis) JL_NOTSAFEPOINT;
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool lower_intrinsics=true, bool dump_native=false, bool external_use=false) JL_NOTSAFEPOINT;
-void addMachinePasses(legacy::PassManagerBase *PM, int optlevel) JL_NOTSAFEPOINT;
 void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src) JL_NOTSAFEPOINT;
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
@@ -86,32 +82,41 @@ struct OptimizationOptions {
     bool dump_native;
     bool external_use;
     bool llvm_only;
+    bool always_inline;
+    bool enable_early_simplifications;
+    bool enable_early_optimizations;
+    bool enable_scalar_optimizations;
+    bool enable_loop_optimizations;
+    bool enable_vector_pipeline;
+    bool remove_ni;
+    bool cleanup;
 
     static constexpr OptimizationOptions defaults(
         bool lower_intrinsics=true,
         bool dump_native=false,
         bool external_use=false,
-        bool llvm_only=false) {
-        return {lower_intrinsics, dump_native, external_use, llvm_only};
+        bool llvm_only=false,
+        bool always_inline=true,
+        bool enable_early_simplifications=true,
+        bool enable_early_optimizations=true,
+        bool enable_scalar_optimizations=true,
+        bool enable_loop_optimizations=true,
+        bool enable_vector_pipeline=true,
+        bool remove_ni=true,
+        bool cleanup=true) {
+        return {lower_intrinsics, dump_native, external_use, llvm_only,
+                always_inline, enable_early_simplifications,
+                enable_early_optimizations, enable_scalar_optimizations,
+                enable_loop_optimizations, enable_vector_pipeline,
+                remove_ni, cleanup};
     }
 };
 
-// LLVM's new pass manager is scheduled to replace the legacy pass manager
-// for middle-end IR optimizations. However, we have not qualified the new
-// pass manager on our optimization pipeline yet, so this remains an optional
-// define
-#if defined(HAS_SANITIZER) && JL_LLVM_VERSION >= 150000
-#define JL_USE_NEW_PM
-#endif
-
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
-    StandardInstrumentations SI;
-    std::unique_ptr<PassInstrumentationCallbacks> PIC;
-    PassBuilder PB;
-    ModulePassManager MPM;
     OptimizationLevel O;
-
+    OptimizationOptions options;
+    TimePassesHandler TimePasses;
     NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options = OptimizationOptions::defaults()) JL_NOTSAFEPOINT;
     ~NewPM() JL_NOTSAFEPOINT;
 
@@ -178,7 +183,8 @@ typedef struct _jl_llvm_functions_t {
 } jl_llvm_functions_t;
 
 struct jl_returninfo_t {
-    llvm::Function *decl;
+    llvm::FunctionCallee decl;
+    llvm::AttributeList attrs;
     enum CallingConv {
         Boxed = 0,
         Register,
@@ -192,9 +198,18 @@ struct jl_returninfo_t {
     unsigned return_roots;
 };
 
-typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool> jl_codegen_call_target_t;
+struct jl_codegen_call_target_t {
+    jl_returninfo_t::CallingConv cc;
+    unsigned return_roots;
+    llvm::Function *decl;
+    bool specsig;
+};
 
-typedef struct _jl_codegen_params_t {
+typedef SmallVector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>, 0> jl_workqueue_t;
+// TODO DenseMap?
+typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_compiled_functions_t;
+
+struct jl_codegen_params_t {
     orc::ThreadSafeContext tsctx;
     orc::ThreadSafeContext::Lock tsctx_lock;
     DataLayout DL;
@@ -205,8 +220,9 @@ typedef struct _jl_codegen_params_t {
     }
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
-    std::vector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> workqueue;
-    std::map<void*, GlobalVariable*> globals;
+    jl_workqueue_t workqueue;
+    jl_compiled_functions_t compiled_functions;
+    std::map<void*, GlobalVariable*> global_targets;
     std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
@@ -235,11 +251,12 @@ typedef struct _jl_codegen_params_t {
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
     bool external_linkage = false;
-    bool imaging;
-    _jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
+    bool imaging_mode;
+    int debug_level;
+    jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple)
         : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()),
-            DL(std::move(DL)), TargetTriple(std::move(triple)), imaging(imaging_default()) {}
-} jl_codegen_params_t;
+            DL(std::move(DL)), TargetTriple(std::move(triple)), imaging_mode(imaging_default()) {}
+};
 
 jl_llvm_functions_t jl_emit_code(
         orc::ThreadSafeModule &M,
@@ -259,11 +276,7 @@ enum CompilationPolicy {
     Extern = 1,
 };
 
-typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_workqueue_t;
-
 void jl_compile_workqueue(
-    jl_workqueue_t &emitted,
-    Module &original,
     jl_codegen_params_t &params,
     CompilationPolicy policy);
 
@@ -289,6 +302,46 @@ static const inline char *name_from_method_instance(jl_method_instance_t *li) JL
     return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
 }
 
+template <size_t offset = 0>
+class MaxAlignedAllocImpl
+    : public AllocatorBase<MaxAlignedAllocImpl<offset>> {
+
+public:
+    MaxAlignedAllocImpl() JL_NOTSAFEPOINT = default;
+
+    static Align alignment(size_t Size) JL_NOTSAFEPOINT {
+        // Define the maximum alignment we expect to require, from offset bytes off
+        // the returned pointer, this is >= alignof(std::max_align_t), which is too
+        // small often to actually use.
+        const size_t MaxAlignment = JL_CACHE_BYTE_ALIGNMENT;
+        if (Size <= offset)
+            return Align(1);
+        return Align(std::min((size_t)llvm::PowerOf2Ceil(Size - offset), MaxAlignment));
+    }
+
+    LLVM_ATTRIBUTE_RETURNS_NONNULL void *Allocate(size_t Size, Align Alignment) {
+        Align MaxAlign = alignment(Size);
+        assert(Alignment < MaxAlign); (void)Alignment;
+        return jl_gc_perm_alloc(Size, 0, MaxAlign.value(), offset);
+    }
+
+    inline LLVM_ATTRIBUTE_RETURNS_NONNULL
+    void * Allocate(size_t Size, size_t Alignment) {
+        return Allocate(Size, Align(Alignment));
+    }
+
+    // Pull in base class overloads.
+    using AllocatorBase<MaxAlignedAllocImpl>::Allocate;
+
+    void Deallocate(const void *Ptr, size_t Size, size_t /*Alignment*/) { abort(); }
+
+    // Pull in base class overloads.
+    using AllocatorBase<MaxAlignedAllocImpl>::Deallocate;
+
+private:
+};
+using MaxAlignedAlloc = MaxAlignedAllocImpl<>;
+
 typedef JITSymbol JL_JITSymbol;
 // The type that is similar to SymbolInfo on LLVM 4.0 is actually
 // `JITEvaluatedSymbol`. However, we only use this type when a JITSymbol
@@ -297,6 +350,7 @@ typedef JITSymbol JL_SymbolInfo;
 
 using CompilerResultT = Expected<std::unique_ptr<llvm::MemoryBuffer>>;
 using OptimizerResultT = Expected<orc::ThreadSafeModule>;
+using SharedBytesT = StringSet<MaxAlignedAllocImpl<sizeof(StringSet<>::MapEntryTy)>>;
 
 class JuliaOJIT {
 public:
@@ -312,6 +366,7 @@ public:
 
         void emit(std::unique_ptr<orc::MaterializationResponsibility> R,
                             std::unique_ptr<MemoryBuffer> O) override {
+            JL_TIMING(LLVM_JIT, JIT_Link);
 #ifndef JL_USE_JITLINK
             std::lock_guard<std::mutex> lock(EmissionMutex);
 #endif
@@ -322,13 +377,16 @@ public:
         std::mutex EmissionMutex;
     };
     typedef orc::IRCompileLayer CompileLayerT;
+    typedef orc::IRTransformLayer JITPointersLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
+    typedef orc::IRTransformLayer OptSelLayerT;
+    typedef orc::IRTransformLayer DepsVerifyLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
     template
     <typename ResourceT, size_t max = 0,
         typename BackingT = std::stack<ResourceT,
             std::conditional_t<max == 0,
-                SmallVector<ResourceT>,
+                SmallVector<ResourceT, 0>,
                 SmallVector<ResourceT, max>
             >
         >
@@ -382,7 +440,7 @@ public:
             }
             private:
             ResourcePool &pool;
-            llvm::Optional<ResourceT> resource;
+            Optional<ResourceT> resource;
         };
 
         OwningResource operator*() JL_NOTSAFEPOINT {
@@ -434,30 +492,8 @@ public:
 
         std::unique_ptr<WNMutex> mutex;
     };
-    struct PipelineT {
-        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel, std::vector<std::function<void()>> &PrintLLVMTimers);
-        CompileLayerT CompileLayer;
-        OptimizeLayerT OptimizeLayer;
-    };
 
-    struct OptSelLayerT : orc::IRLayer {
-
-        template<size_t N>
-        OptSelLayerT(const std::array<std::unique_ptr<PipelineT>, N> &optimizers) JL_NOTSAFEPOINT
-            : orc::IRLayer(optimizers[0]->OptimizeLayer.getExecutionSession(),
-                optimizers[0]->OptimizeLayer.getManglingOptions()),
-            optimizers(optimizers.data()),
-            count(N) {
-            static_assert(N > 0, "Expected array with at least one optimizer!");
-        }
-        ~OptSelLayerT() JL_NOTSAFEPOINT = default;
-
-        void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
-
-        private:
-        const std::unique_ptr<PipelineT> * const optimizers;
-        size_t count;
-    };
+    struct DLSymOptimizer;
 
 private:
     // Custom object emission notification handler for the JuliaOJIT
@@ -478,6 +514,16 @@ public:
     orc::SymbolStringPtr mangle(StringRef Name) JL_NOTSAFEPOINT;
     void addGlobalMapping(StringRef Name, uint64_t Addr) JL_NOTSAFEPOINT;
     void addModule(orc::ThreadSafeModule M) JL_NOTSAFEPOINT;
+
+    //Methods for the C API
+    Error addExternalModule(orc::JITDylib &JD, orc::ThreadSafeModule TSM,
+                            bool ShouldOptimize = false) JL_NOTSAFEPOINT;
+    Error addObjectFile(orc::JITDylib &JD,
+                        std::unique_ptr<MemoryBuffer> Obj) JL_NOTSAFEPOINT;
+    Expected<JITEvaluatedSymbol> findExternalJDSymbol(StringRef Name, bool ExternalJDOnly) JL_NOTSAFEPOINT;
+    orc::IRCompileLayer &getIRCompileLayer() JL_NOTSAFEPOINT { return ExternalCompileLayer; };
+    orc::ExecutionSession &getExecutionSession() JL_NOTSAFEPOINT { return ES; }
+    orc::JITDylib &getExternalJITDylib() JL_NOTSAFEPOINT { return ExternalJD; }
 
     JL_JITSymbol findSymbol(StringRef Name, bool ExportedSymbolsOnly) JL_NOTSAFEPOINT;
     JL_JITSymbol findUnmangledSymbol(StringRef Name) JL_NOTSAFEPOINT;
@@ -516,10 +562,13 @@ public:
     jl_locked_stream &get_dump_llvm_opt_stream() JL_NOTSAFEPOINT {
         return dump_llvm_opt_stream;
     }
-private:
     std::string getMangledName(StringRef Name) JL_NOTSAFEPOINT;
     std::string getMangledName(const GlobalValue *GV) JL_NOTSAFEPOINT;
-    void shareStrings(Module &M) JL_NOTSAFEPOINT;
+
+    // Note that this is a safepoint due to jl_get_library_ and jl_dlsym calls
+    void optimizeDLSyms(Module &M);
+
+private:
 
     const std::unique_ptr<TargetMachine> TM;
     const DataLayout DL;
@@ -527,18 +576,22 @@ private:
     orc::ExecutionSession ES;
     orc::JITDylib &GlobalJD;
     orc::JITDylib &JD;
-
+    orc::JITDylib &ExternalJD;
     //Map and inc are guarded by RLST_mutex
     std::mutex RLST_mutex{};
     int RLST_inc = 0;
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
+    SharedBytesT SharedBytes;
+
+    std::unique_ptr<DLSymOptimizer> DLSymOpt;
 
     //Compilation streams
     jl_locked_stream dump_emitted_mi_name_stream;
     jl_locked_stream dump_compiles_stream;
     jl_locked_stream dump_llvm_opt_stream;
 
-    std::vector<std::function<void()>> PrintLLVMTimers;
+    std::mutex llvm_printing_mutex{};
+    SmallVector<std::function<void()>, 0> PrintLLVMTimers;
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
@@ -550,46 +603,32 @@ private:
 #endif
     ObjLayerT ObjectLayer;
     LockLayerT LockLayer;
-    const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
+    CompileLayerT CompileLayer;
+    JITPointersLayerT JITPointersLayer;
+    OptimizeLayerT OptimizeLayer;
     OptSelLayerT OptSelLayer;
+    DepsVerifyLayerT DepsVerifyLayer;
+    CompileLayerT ExternalCompileLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT;
-inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT {
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT;
+inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT {
     auto lock = ctx.getLock();
-    return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), imaging_mode, DL, triple), ctx);
+    return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), DL, triple), ctx);
 }
 
 Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     if (!_shared_module) {
-        _shared_module = jl_create_llvm_module("globals", getContext(), imaging, DL, TargetTriple);
+        _shared_module = jl_create_llvm_module("globals", getContext(), DL, TargetTriple);
     }
     return *_shared_module;
 }
+void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
+void SetOpaquePointer(LLVMContext &ctx) JL_NOTSAFEPOINT;
 
-Pass *createLowerPTLSPass(bool imaging_mode) JL_NOTSAFEPOINT;
-Pass *createCombineMulAddPass() JL_NOTSAFEPOINT;
-Pass *createFinalLowerGCPass() JL_NOTSAFEPOINT;
-Pass *createLateLowerGCFramePass() JL_NOTSAFEPOINT;
-Pass *createLowerExcHandlersPass() JL_NOTSAFEPOINT;
-Pass *createGCInvariantVerifierPass(bool Strong) JL_NOTSAFEPOINT;
-Pass *createPropagateJuliaAddrspaces() JL_NOTSAFEPOINT;
-Pass *createRemoveJuliaAddrspacesPass() JL_NOTSAFEPOINT;
-Pass *createRemoveNIPass() JL_NOTSAFEPOINT;
-Pass *createJuliaLICMPass() JL_NOTSAFEPOINT;
-Pass *createMultiVersioningPass(bool external_use) JL_NOTSAFEPOINT;
-Pass *createAllocOptPass() JL_NOTSAFEPOINT;
-Pass *createDemoteFloat16Pass() JL_NOTSAFEPOINT;
-Pass *createCPUFeaturesPass() JL_NOTSAFEPOINT;
-Pass *createLowerSimdLoopPass() JL_NOTSAFEPOINT;
+void optimizeDLSyms(Module &M);
 
 // NewPM
 #include "passes.h"
-
-// Whether the Function is an llvm or julia intrinsic.
-static inline bool isIntrinsicFunction(Function *F) JL_NOTSAFEPOINT
-{
-    return F->isIntrinsic() || F->getName().startswith("julia.");
-}
 
 CodeGenOpt::Level CodeGenOptLevelFor(int optlevel) JL_NOTSAFEPOINT;

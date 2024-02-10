@@ -6,10 +6,19 @@ using Core.Intrinsics, Core.IR
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
-const _included_files = Array{Tuple{Module,String},1}()
+# start this big so that we don't have to resize before we have defined how to grow an array
+const _included_files = Array{Tuple{Module,String},1}(Core.undef, 400)
+setfield!(_included_files, :size, (1,))
 function include(mod::Module, path::String)
-    ccall(:jl_array_grow_end, Cvoid, (Any, UInt), _included_files, UInt(1))
-    Core.arrayset(true, _included_files, (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)), arraylen(_included_files))
+    len = getfield(_included_files.size, 1)
+    memlen = _included_files.ref.mem.length
+    lenp1 = Core.add_int(len, 1)
+    if len === memlen # by the time this is true we hopefully will have defined _growend!
+        _growend!(_included_files, UInt(1))
+    else
+        setfield!(_included_files, :size, (lenp1,))
+    end
+    Core.memoryrefset!(Core.memoryref(_included_files.ref, lenp1), (mod, ccall(:jl_prepend_cwd, Any, (Any,), path)), :not_atomic, true)
     Core.println(path)
     ccall(:jl_uv_flush, Nothing, (Ptr{Nothing},), Core.io_pointer(Core.stdout))
     Core.include(mod, path)
@@ -25,12 +34,15 @@ ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
+macro _boundscheck() Expr(:boundscheck) end
+
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
 getproperty(x::Module, f::Symbol) = (@inline; getglobal(x, f))
 getproperty(x::Type, f::Symbol) = (@inline; getfield(x, f))
 setproperty!(x::Type, f::Symbol, v) = error("setfield! fields of Types should not be changed")
+setproperty!(x::Array, f::Symbol, v) = error("setfield! fields of Array should not be changed")
 getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
 setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
@@ -79,6 +91,36 @@ function replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol
     val = desired isa ty ? desired : convert(ty, desired)
     return Core.replacefield!(x, f, expected, val, success_order, fail_order)
 end
+function setpropertyonce!(x, f::Symbol, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = fieldtype(typeof(x), f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.setfieldonce!(x, f, val, success_order, fail_order)
+end
+
+function swapproperty!(x::Module, f::Symbol, v, order::Symbol=:not_atomic)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = v isa ty ? v : convert(ty, v)
+    return Core.swapglobal!(x, f, val, order)
+end
+function modifyproperty!(x::Module, f::Symbol, op, v, order::Symbol=:not_atomic)
+    @inline
+    return Core.modifyglobal!(x, f, op, v, order)
+end
+function replaceproperty!(x::Module, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.replaceglobal!(x, f, expected, val, success_order, fail_order)
+end
+function setpropertyonce!(x::Module, f::Symbol, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.setglobalonce!(x, f, val, success_order, fail_order)
+end
+
 
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
@@ -114,6 +156,12 @@ Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 start_base_include = time_ns()
+
+# A warning to be interpolated in the docstring of every dangerous mutating function in Base, see PR #50824
+const _DOCS_ALIASING_WARNING = """
+!!! warning
+    Behavior can be unexpected when any mutated argument shares memory with any other argument.
+"""
 
 ## Load essential files and libraries
 include("essentials.jl")
@@ -163,6 +211,7 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
+include("cmem.jl")
 include("refpointer.jl")
 
 # now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
@@ -185,23 +234,22 @@ include("strings/lazy.jl")
 
 # array structures
 include("indices.jl")
+include("genericmemory.jl")
 include("array.jl")
 include("abstractarray.jl")
 include("subarray.jl")
 include("views.jl")
 include("baseext.jl")
 
+include("c.jl")
 include("ntuple.jl")
-
 include("abstractdict.jl")
 include("iddict.jl")
 include("idset.jl")
-
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
 using .Iterators: Stateful    # compat (was formerly used in reinterpretarray.jl)
-
 include("namedtuple.jl")
 
 # For OS specific stuff
@@ -217,12 +265,23 @@ function strcat(x::String, y::String)
 end
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
+# Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
+# a slightly more verbose fashion than usual, because we're running so early.
+const DL_LOAD_PATH = String[]
+let os = ccall(:jl_get_UNAME, Any, ())
+    if os === :Darwin || os === :Apple
+        if Base.DARWIN_FRAMEWORK
+            push!(DL_LOAD_PATH, "@loader_path/Frameworks")
+        end
+        push!(DL_LOAD_PATH, "@loader_path")
+    end
+end
 
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
-using .Rounding
 include("div.jl")
+include("rawbigints.jl")
 include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
@@ -264,24 +323,24 @@ include("set.jl")
 
 # Strings
 include("char.jl")
+function array_new_memory(mem::Memory{UInt8}, newlen::Int)
+    # add an optimization to array_new_memory for StringVector
+    if (@assume_effects :total @ccall jl_genericmemory_owner(mem::Any,)::Any) isa String
+        # If data is in a String, keep it that way.
+        # When implemented, this could use jl_gc_expand_string(oldstr, newlen) as an optimization
+        str = _string_n(newlen)
+        return (@assume_effects :total !:consistent @ccall jl_string_to_genericmemory(str::Any,)::Memory{UInt8})
+    else
+        # TODO: when implemented, this should use a memory growing call
+        return typeof(mem)(undef, newlen)
+    end
+end
 include("strings/basic.jl")
 include("strings/string.jl")
 include("strings/substring.jl")
-
-# Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
-# a slightly more verbose fashion than usual, because we're running so early.
-const DL_LOAD_PATH = String[]
-let os = ccall(:jl_get_UNAME, Any, ())
-    if os === :Darwin || os === :Apple
-        if Base.DARWIN_FRAMEWORK
-            push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-        end
-        push!(DL_LOAD_PATH, "@loader_path")
-    end
-end
+include("strings/cstring.jl")
 
 include("osutils.jl")
-include("c.jl")
 
 # Core I/O
 include("io.jl")
@@ -313,30 +372,38 @@ include("missing.jl")
 # version
 include("version.jl")
 
+# Concurrency (part 1)
+include("linked_list.jl")
+include("condition.jl")
+include("threads.jl")
+include("lock.jl")
+
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
-using .Libc: getpid, gethostname, time
+using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
 # These used to be in build_h.jl and are retained for backwards compatibility.
 # NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
 const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
 const liblapack_name = libblas_name
 
-# Logging
-include("logging.jl")
-using .CoreLogging
-
-# Concurrency
-include("linked_list.jl")
-include("condition.jl")
-include("threads.jl")
-include("lock.jl")
+# Concurrency (part 2)
+# Note that `atomics.jl` here should be deprecated
+Core.eval(Threads, :(include("atomics.jl")))
 include("channels.jl")
 include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
+
+# ScopedValues
+include("scopedvalues.jl")
+using .ScopedValues
+
+# Logging
+include("logging.jl")
+using .CoreLogging
 
 include("env.jl")
 
@@ -353,7 +420,7 @@ include("filesystem.jl")
 using .Filesystem
 include("cmd.jl")
 include("process.jl")
-include("ttyhascolor.jl")
+include("terminfo.jl")
 include("secretbuffer.jl")
 
 # core math functions
@@ -444,6 +511,7 @@ include("summarysize.jl")
 include("errorshow.jl")
 
 include("initdefs.jl")
+Filesystem.__postinit__()
 
 # worker threads
 include("threadcall.jl")
@@ -487,6 +555,10 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 # nicer stacktraces. Modifications here have to be backported there
 include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
 include(mapexpr::Function, mod::Module, _path::AbstractString) = _include(mapexpr, mod, _path)
+
+# External libraries vendored into Base
+Core.println("JuliaSyntax/src/JuliaSyntax.jl")
+include(@__MODULE__, string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "JuliaSyntax/src/JuliaSyntax.jl")) # include($BUILDROOT/base/JuliaSyntax/JuliaSyntax.jl)
 
 end_base_include = time_ns()
 
@@ -553,14 +625,12 @@ if is_primary_base_module
 # Profiling helper
 # triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
 # Needs to be in Base because Profile is no longer loaded on boot
-const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
-function profile_printing_listener()
+function profile_printing_listener(cond::Base.AsyncCondition)
     profile = nothing
     try
-        while true
-            wait(PROFILE_PRINT_COND[])
-            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))
-
+        while _trywait(cond)
+            # this call to require is mostly legal, only because Profile has no dependencies and is usually in LOAD_PATH
+            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))::Module
             invokelatest(profile.peek_report[])
             if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
@@ -573,10 +643,13 @@ function profile_printing_listener()
             @error "Profile printing listener crashed" exception=ex,catch_backtrace()
         end
     end
+    nothing
 end
 
 function __init__()
     # Base library init
+    global _atexit_hooks_finished = false
+    Filesystem.__postinit__()
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
@@ -584,6 +657,7 @@ function __init__()
     init_load_path()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
+    empty!(explicit_loaded_modules)
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
     end
@@ -592,9 +666,26 @@ function __init__()
         # triggering a profile via signals is not implemented on windows
         cond = Base.AsyncCondition()
         Base.uv_unref(cond.handle)
-        PROFILE_PRINT_COND[] = cond
-        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
-        errormonitor(Threads.@spawn(profile_printing_listener()))
+        t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
+        atexit() do
+            # destroy this callback when exiting
+            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+            # this will prompt any ongoing or pending event to flush also
+            close(cond)
+            # error-propagation is not needed, since the errormonitor will handle printing that better
+            _wait(t)
+        end
+        finalizer(cond) do c
+            # if something goes south, still make sure we aren't keeping a reference in C to this
+            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        end
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
+    end
+    _require_world_age[] = get_world_counter()
+    # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
+    delete!(ENV, "JULIA_WAIT_FOR_TRACY")
+    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
+        JuliaSyntax.enable_in_core!()
     end
     nothing
 end
@@ -604,5 +695,8 @@ end
 
 end
 
+# Ensure this file is also tracked
+@assert !isassigned(_included_files, 1)
+_included_files[1] = (parentmodule(Base), abspath(@__FILE__))
 
 end # baremodule Base

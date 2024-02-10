@@ -41,7 +41,7 @@ hello
 ```
 
 The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). If the external command fails to run
-successfully, the run method throws an [`ErrorException`](@ref).
+successfully, the run method throws an [`ProcessFailedException`](@ref).
 
 If you want to read the output of the external command, [`read`](@ref) or [`readchomp`](@ref)
 can be used instead:

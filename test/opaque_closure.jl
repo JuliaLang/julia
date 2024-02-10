@@ -4,6 +4,7 @@ using Core: OpaqueClosure
 using Base.Experimental: @opaque
 
 const_int() = 1
+const_int_barrier() = Base.inferencebarrier(1)::typeof(1)
 
 const lno = LineNumberNode(1, :none)
 
@@ -177,7 +178,7 @@ mk_va_opaque() = @opaque (x...)->x
 @test mk_va_opaque()(1,2) == (1,2)
 
 # OpaqueClosure show method
-@test repr(@opaque x->1) == "(::Any)::Any->◌"
+@test repr(@opaque x->Base.inferencebarrier(1)) == "(::Any)::Any->◌"
 
 # Opaque closure in CodeInfo returned from generated functions
 let ci = @code_lowered const_int()
@@ -275,3 +276,78 @@ let src = code_typed((Int,Int)) do x, y...
         @test_throws MethodError oc(1,2,3)
     end
 end
+
+# Check for correct handling in case of broken return type.
+eval_oc_dyn(oc) = Base.inferencebarrier(oc)()
+eval_oc_spec(oc) = oc()
+for f in (const_int, const_int_barrier)
+    ci = code_lowered(f, Tuple{})[1]
+    for compiled in (true, false)
+        oc_expr = Expr(:new_opaque_closure, Tuple{}, Union{}, Float64,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci))
+        oc_mismatch = let ci = code_lowered(f, Tuple{})[1]
+            if compiled
+                eval(:((()->$oc_expr)()))
+            else
+                eval(oc_expr)
+            end
+        end
+        @test isa(oc_mismatch, OpaqueClosure{Tuple{}, Union{}})
+        @test_throws TypeError eval_oc_dyn(oc_mismatch)
+        @test_throws TypeError eval_oc_spec(oc_mismatch)
+    end
+end
+
+
+# Attempting to construct an opaque closure backtrace after the oc is GC'ed
+f_oc_throws() = error("oops")
+@noinline function make_oc_and_collect_bt()
+    did_gc = Ref{Bool}(false)
+    bt = let ir = first(only(Base.code_ircode(f_oc_throws, ())))
+        sentinel = Ref{Any}(nothing)
+        oc = OpaqueClosure(ir, sentinel)
+        finalizer(sentinel) do x
+            did_gc[] = true
+        end
+        try
+            oc()
+            @test false
+        catch e
+            bt = catch_backtrace()
+            @test isa(e, ErrorException)
+            bt
+        end
+    end
+    return bt, did_gc
+end
+let (bt, did_gc) = make_oc_and_collect_bt()
+    GC.gc(true); GC.gc(true); GC.gc(true);
+    @test did_gc[]
+    @test any(stacktrace(bt)) do frame
+        isa(frame.linfo, Core.MethodInstance) || return false
+        isa(frame.linfo.def, Method) || return false
+        return frame.linfo.def.is_for_opaque_closure
+    end
+end
+
+# Opaque closure with mismatch struct argtype
+const op_arg_restrict2 = @opaque (x::Tuple{Int64}, y::Base.RefValue{Int64})->x+y
+ccall_op_arg_restrict2_bad_args() = op_arg_restrict2((1.,), 2)
+
+@test_throws TypeError ccall_op_arg_restrict2_bad_args()
+
+# code_llvm for opaque closures
+let ir = Base.code_ircode((Int,Int)) do x, y
+        @noinline x * y
+    end |> only |> first
+    oc = Core.OpaqueClosure(ir)
+    io = IOBuffer()
+    code_llvm(io, oc, Tuple{Int,Int})
+    @test occursin("j_*_", String(take!(io)))
+    code_llvm(io, oc, (Int,Int))
+    @test occursin("j_*_", String(take!(io)))
+end
+
+foopaque() = Base.Experimental.@opaque(@noinline x::Int->println(x))(1)
+
+code_llvm(devnull,foopaque,()) #shouldn't crash

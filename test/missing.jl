@@ -80,7 +80,7 @@ end
     @test isapprox(missing, 1.0, atol=1e-6) === missing
     @test isapprox(1.0, missing, rtol=1e-6) === missing
 
-    @test !any(T -> T === Union{Missing,Bool}, Base.return_types(isequal, Tuple{Any,Any}))
+    @test all(==(Bool), Base.return_types(isequal, Tuple{Any,Any}))
 end
 
 @testset "arithmetic operators" begin
@@ -596,7 +596,7 @@ end
     @test @coalesce(missing) === missing
 
     @test @coalesce(1, error("failed")) === 1
-    @test_throws ErrorException @coalesce(missing, error("failed"))
+    @test_throws ErrorException("failed") @coalesce(missing, error("failed"))
 end
 
 mutable struct Obj; x; end
@@ -615,8 +615,7 @@ mutable struct Obj; x; end
 end
 
 @testset "showerror missing function" begin
-    me = try missing(1) catch e e end
-    @test sprint(showerror, me) == "MethodError: objects of type Missing are not callable"
+    @test_throws "MethodError: objects of type Missing are not callable" missing(1)
 end
 
 @testset "sort and sortperm with $(eltype(X))" for (X, P, RP) in
@@ -643,4 +642,37 @@ end
     @test isequal(sort(X, alg=MergeSort, rev=true), XRP)
 end
 
-sortperm(reverse([NaN, missing, NaN, missing]))
+@test (sortperm(reverse([NaN, missing, NaN, missing])); true)
+
+# use LazyString for MissingException to get the better effects
+for func in (round, ceil, floor, trunc)
+    @testset let func = func
+        @test Core.Compiler.is_foldable(Base.infer_effects(func, (Type{Int},Union{Int,Missing})))
+    end
+end
+
+@testset "Custom Missing type" begin
+    struct NewMissing end
+    Base.ismissing(::NewMissing) = true
+    Base.coalesce(x::NewMissing, y...) = coalesce(y...)
+    Base.isless(::NewMissing, ::NewMissing) = false
+    Base.isless(::NewMissing, ::Any) = false
+    Base.isless(::Any, ::NewMissing) = true
+    Base.isequal(::NewMissing, ::Missing) = true
+    Base.isequal(::Missing, ::NewMissing) = true
+    arr = [missing 1 2 3 missing 10 11 12 missing]
+    newarr = Union{Int, NewMissing}[ismissing(v) ? NewMissing() : v for v in arr]
+
+    @test all(skipmissing(arr) .== skipmissing(newarr))
+    @test all(eachindex(skipmissing(arr)) .== eachindex(skipmissing(newarr)))
+    @test all(keys(skipmissing(arr)) .== keys(skipmissing(newarr)))
+    @test_broken sum(skipmissing(arr)) == sum(skipmissing(newarr))
+    @test filter(>(10), skipmissing(arr)) == filter(>(10), skipmissing(newarr))
+    @test isequal(sort(vec(arr)), sort(vec(newarr)))
+
+    @test_throws MissingException skipmissing(newarr)[findfirst(ismissing, newarr)]
+    @test coalesce(NewMissing(), 1) == coalesce(NewMissing(), NewMissing(), 1) == 1
+    @test coalesce(NewMissing()) === coalesce(NewMissing(), NewMissing()) === missing
+    @test @coalesce(NewMissing(), 1) == @coalesce(NewMissing(), NewMissing(), 1) == 1
+    @test @coalesce(NewMissing()) === @coalesce(NewMissing(), NewMissing()) === missing
+end

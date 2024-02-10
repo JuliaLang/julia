@@ -1,5 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+Artifacts.jl is a Julia module that is used for managing and accessing
+artifacts in Julia packages. Artifacts are containers for
+platform-specific binaries, datasets, text, or any other kind of data
+that would be convenient to place within an immutable, life-cycled datastore.
+"""
 module Artifacts
 
 import Base: get, SHA1
@@ -18,7 +24,7 @@ function parse_toml(path::String)
     Base.parsed_toml(path)
 end
 
-# keep in sync with Base.project_names and Base.manifest_names
+# keep in sync with Base.project_names
 const artifact_names = ("JuliaArtifacts.toml", "Artifacts.toml")
 
 const ARTIFACTS_DIR_OVERRIDE = Ref{Union{String,Nothing}}(nothing)
@@ -56,6 +62,23 @@ function artifacts_dirs(args...)
     end
 end
 
+# Recursive function, let's not make this a closure because it then has to
+# be boxed.
+function parse_mapping(mapping::String, name::String, override_file::String)
+    if !isabspath(mapping) && !isempty(mapping)
+        mapping = tryparse(Base.SHA1, mapping)
+        if mapping === nothing
+            @error("Invalid override in '$(override_file)': entry '$(name)' must map to an absolute path or SHA1 hash!")
+        end
+    end
+    return mapping
+end
+function parse_mapping(mapping::Dict{String, Any}, name::String, override_file::String)
+    return Dict{String, Any}(k => parse_mapping(v, name, override_file) for (k, v) in mapping)
+end
+# Fallthrough for invalid Overrides.toml files
+parse_mapping(mapping, name::String, override_file::String) = nothing
+
 """
     ARTIFACT_OVERRIDES
 
@@ -79,7 +102,7 @@ overriding to another artifact by its content-hash.
 const ARTIFACT_OVERRIDES = Ref{Union{Dict{Symbol,Any},Nothing}}(nothing)
 function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
     if ARTIFACT_OVERRIDES[] !== nothing && !force
-        return ARTIFACT_OVERRIDES[]
+        return ARTIFACT_OVERRIDES[]::Dict{Symbol,Any}
     end
 
     # We organize our artifact location overrides into two camps:
@@ -89,13 +112,8 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
     # Overrides per UUID/bound name are intercepted upon Artifacts.toml load, and new
     # entries within the "hash" overrides are generated on-the-fly.  Thus, all redirects
     # mechanistically happen through the "hash" overrides.
-    overrides = Dict{Symbol,Any}(
-        # Overrides by UUID
-        :UUID => Dict{Base.UUID,Dict{String,Union{String,SHA1}}}(),
-
-        # Overrides by hash
-        :hash => Dict{SHA1,Union{String,SHA1}}(),
-    )
+    overrides_uuid = Dict{Base.UUID,Dict{String,Union{String,SHA1}}}()
+    overrides_hash = Dict{SHA1,Union{String,SHA1}}()
 
     for override_file in reverse(artifacts_dirs("Overrides.toml"))
         !isfile(override_file) && continue
@@ -103,24 +121,9 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
         # Load the toml file
         depot_override_dict = parse_toml(override_file)
 
-        function parse_mapping(mapping::String, name::String)
-            if !isabspath(mapping) && !isempty(mapping)
-                mapping = tryparse(Base.SHA1, mapping)
-                if mapping === nothing
-                    @error("Invalid override in '$(override_file)': entry '$(name)' must map to an absolute path or SHA1 hash!")
-                end
-            end
-            return mapping
-        end
-        function parse_mapping(mapping::Dict, name::String)
-            return Dict(k => parse_mapping(v, name) for (k, v) in mapping)
-        end
-        # Fallthrough for invalid Overrides.toml files
-        parse_mapping(mapping, name::String) = nothing
-
         for (k, mapping) in depot_override_dict
             # First, parse the mapping. Is it an absolute path, a valid SHA1-hash, or neither?
-            mapping = parse_mapping(mapping, k)
+            mapping = parse_mapping(mapping, k, override_file)
             if mapping === nothing
                 @error("Invalid override in '$(override_file)': failed to parse entry `$(k)`")
                 continue
@@ -129,7 +132,6 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
             # Next, determine if this is a hash override or a UUID/name override
             if isa(mapping, String) || isa(mapping, SHA1)
                 # if this mapping is a direct mapping (e.g. a String), store it as a hash override
-                local hash_str
                 hash = tryparse(Base.SHA1, k)
                 if hash === nothing
                     @error("Invalid override in '$(override_file)': Invalid SHA1 hash '$(k)'")
@@ -137,12 +139,12 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
                 end
 
                 # If this mapping is the empty string, un-override it
-                if mapping == ""
-                    delete!(overrides[:hash], hash)
+                if mapping isa String && isempty(mapping)
+                    delete!(overrides_hash, hash)
                 else
-                    overrides[:hash][hash] = mapping
+                    overrides_hash[hash] = mapping
                 end
-            elseif isa(mapping, Dict)
+            elseif isa(mapping, Dict{String, Any})
                 # Convert `k` into a uuid
                 uuid = tryparse(Base.UUID, k)
                 if uuid === nothing
@@ -151,19 +153,18 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
                 end
 
                 # If this mapping is itself a dict, store it as a set of UUID/artifact name overrides
-                ovruuid = overrides[:UUID]::Dict{Base.UUID,Dict{String,Union{String,SHA1}}}
-                if !haskey(ovruuid, uuid)
-                    ovruuid[uuid] = Dict{String,Union{String,SHA1}}()
+                if !haskey(overrides_uuid, uuid)
+                    overrides_uuid[uuid] = Dict{String,Union{String,SHA1}}()
                 end
 
                 # For each name in the mapping, update appropriately
                 for (name, override_value) in mapping
                     # If the mapping for this name is the empty string, un-override it
-                    if override_value == ""
-                        delete!(ovruuid[uuid], name)
+                    if override_value isa String && isempty(override_value)
+                        delete!(overrides_uuid[uuid], name)
                     else
                         # Otherwise, store it!
-                        ovruuid[uuid][name] = override_value
+                        overrides_uuid[uuid][name] = override_value::Union{Base.SHA1, String}
                     end
                 end
             else
@@ -171,6 +172,14 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
             end
         end
     end
+
+    overrides = Dict{Symbol,Any}(
+        # Overrides by UUID
+        :UUID => overrides_uuid,
+
+        # Overrides by hash
+        :hash => overrides_hash
+    )
 
     ARTIFACT_OVERRIDES[] = overrides
     return overrides
@@ -188,11 +197,13 @@ Query the loaded `<DEPOT>/artifacts/Overrides.toml` settings for artifacts that 
 redirected to a particular path or another content-hash.
 """
 function query_override(hash::SHA1; overrides::Dict{Symbol,Any} = load_overrides())
-    return map_override_path(get(overrides[:hash], hash, nothing))
+    overrides_hash = overrides[:hash]::Dict{SHA1,Union{String,SHA1}}
+    return map_override_path(get(overrides_hash, hash, nothing))
 end
 function query_override(pkg::Base.UUID, artifact_name::String; overrides::Dict{Symbol,Any} = load_overrides())
-    if haskey(overrides[:UUID], pkg)
-        return map_override_path(get(overrides[:UUID][pkg], artifact_name, nothing))
+    overrides_uuid = overrides[:UUID]::Dict{Base.UUID,Dict{String,Union{String,SHA1}}}
+    if haskey(overrides_uuid, pkg)
+        return map_override_path(get(overrides_uuid[pkg], artifact_name, nothing))
     end
     return nothing
 end
@@ -282,7 +293,7 @@ function unpack_platform(entry::Dict{String,Any}, name::String,
     delete!(tags, "os")
     delete!(tags, "arch")
     delete!(tags, "git-tree-sha1")
-    return Platform(entry["arch"], entry["os"], tags)
+    return Platform(entry["arch"]::String, entry["os"]::String, tags)
 end
 
 function pack_platform!(meta::Dict, p::AbstractPlatform)
@@ -324,8 +335,11 @@ function process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
     # Insert just-in-time hash overrides by looking up the names of anything we need to
     # override for this UUID, and inserting new overrides for those hashes.
     overrides = load_overrides()
-    if haskey(overrides[:UUID], pkg_uuid)
-        pkg_overrides = overrides[:UUID][pkg_uuid]::Dict{String, <:Any}
+    overrides_uuid = overrides[:UUID]::Dict{Base.UUID,Dict{String,Union{String,SHA1}}}
+    overrides_hash = overrides[:hash]::Dict{SHA1,Union{String,SHA1}}
+
+    if haskey(overrides_uuid, pkg_uuid)
+        pkg_overrides = overrides_uuid[pkg_uuid]::Dict{String, <:Any}
 
         for name in keys(artifact_dict)
             # Skip names that we're not overriding
@@ -334,14 +348,16 @@ function process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
             end
 
             # If we've got a platform-specific friend, override all hashes:
-            if isa(artifact_dict[name], Array)
-                for entry in artifact_dict[name]
-                    hash = SHA1(entry["git-tree-sha1"])
-                    overrides[:hash][hash] = overrides[:UUID][pkg_uuid][name]
+            artifact_dict_name = artifact_dict[name]
+            if isa(artifact_dict_name, Array)
+                for entry in artifact_dict_name
+                    entry = entry::Dict{String,Any}
+                    hash = SHA1(entry["git-tree-sha1"]::String)
+                    overrides_hash[hash] = overrides_uuid[pkg_uuid][name]
                 end
-            elseif isa(artifact_dict[name], Dict)
-                hash = SHA1(artifact_dict[name]["git-tree-sha1"])
-                overrides[:hash][hash] = overrides[:UUID][pkg_uuid][name]
+            elseif isa(artifact_dict_name, Dict{String, Any})
+                hash = SHA1(artifact_dict_name["git-tree-sha1"]::String)
+                overrides_hash[hash] = overrides_uuid[pkg_uuid][name]
             end
         end
     end
@@ -386,7 +402,7 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
     if isa(meta, Vector)
         dl_dict = Dict{AbstractPlatform,Dict{String,Any}}()
         for x in meta
-            x::Dict{String}
+            x = x::Dict{String, Any}
             dl_dict[unpack_platform(x, name, artifacts_toml)] = x
         end
         meta = select_platform(dl_dict, platform)
@@ -397,9 +413,12 @@ function artifact_meta(name::String, artifact_dict::Dict, artifacts_toml::String
     end
 
     # This is such a no-no, we are going to call it out right here, right now.
-    if meta !== nothing && !haskey(meta, "git-tree-sha1")
-        @error("Invalid artifacts file at $(artifacts_toml): artifact '$name' contains no `git-tree-sha1`!")
-        return nothing
+    if meta !== nothing
+        meta = meta::Dict{String, Any}
+        if !haskey(meta, "git-tree-sha1")
+            @error("Invalid artifacts file at $(artifacts_toml): artifact '$name' contains no `git-tree-sha1`!")
+            return nothing
+        end
     end
 
     # Return the full meta-dict.
@@ -546,7 +565,7 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
             if nameof(lazyartifacts) in (:Pkg, :Artifacts)
                 Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
             end
-            return jointail(lazyartifacts.ensure_artifact_installed(string(name), artifacts_toml; platform), path_tail)
+            return jointail(lazyartifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform), path_tail)
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
     end
@@ -652,18 +671,13 @@ access a single file/directory within an artifact.  Example:
 !!! compat "Julia 1.6"
     Slash-indexing requires at least Julia 1.6.
 """
-macro artifact_str(name, platform=nothing, artifacts_toml_path=nothing)
+macro artifact_str(name, platform=nothing)
     # Find Artifacts.toml file we're going to load from
     srcfile = string(__source__.file)
     if ((isinteractive() && startswith(srcfile, "REPL[")) || (!isinteractive() && srcfile == "none")) && !isfile(srcfile)
         srcfile = pwd()
     end
-    # Sometimes we know the exact path to the Artifacts.toml file, so we can save some lookups
-    local artifacts_toml = if artifacts_toml_path === nothing || artifacts_toml_path == :(nothing)
-        find_artifacts_toml(srcfile)
-    else
-        eval(artifacts_toml_path)
-    end
+    local artifacts_toml = find_artifacts_toml(srcfile)
     if artifacts_toml === nothing
         error(string(
             "Cannot locate '(Julia)Artifacts.toml' file when attempting to use artifact '",
@@ -693,7 +707,7 @@ macro artifact_str(name, platform=nothing, artifacts_toml_path=nothing)
 
     # If `name` is a constant, (and we're using the default `Platform`) we can actually load
     # and parse the `Artifacts.toml` file now, saving the work from runtime.
-    if isa(name, AbstractString) && (platform === nothing || platform == :(nothing))
+    if isa(name, AbstractString) && platform === nothing
         # To support slash-indexing, we need to split the artifact name from the path tail:
         platform = HostPlatform()
         artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
@@ -743,5 +757,8 @@ artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml:
 precompile(load_artifacts_toml, (String,))
 precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
 precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
+precompile(parse_mapping, (String, String, String))
+precompile(parse_mapping, (Dict{String, Any}, String, String))
+
 
 end # module Artifacts

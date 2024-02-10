@@ -46,7 +46,7 @@ may trip up Julia users accustomed to MATLAB:
   * A Julia script may contain any number of functions, and all definitions will be externally visible
     when the file is loaded. Function definitions can be loaded from files outside the current working
     directory.
-  * In Julia, reductions such as [`sum`](@ref), [`prod`](@ref), and [`max`](@ref) are performed
+  * In Julia, reductions such as [`sum`](@ref), [`prod`](@ref), and [`maximum`](@ref) are performed
     over every element of an array when called with a single argument, as in `sum(A)`, even if `A`
     has more than one dimension.
   * In Julia, parentheses must be used to call a function with zero arguments, like in [`rand()`](@ref).
@@ -250,7 +250,8 @@ For users coming to Julia from R, these are some noteworthy differences:
   * There are no classes in Julia. Instead there are structures (mutable or immutable), containing data but no methods.
   * Calling a method of a class instance in Python (`x = MyClass(*args); x.f(y)`) corresponds to a function call in Julia, e.g. `x = MyType(args...); f(x, y)`. In general, multiple dispatch is more flexible and powerful than the Python class system.
   * Julia structures may have exactly one abstract supertype, whereas Python classes can inherit from one or more (abstract or concrete) superclasses.
-  * The logical Julia program structure (Packages and Modules) is independent of the file structure (`include` for additional files), whereas the Python code structure is defined by directories (Packages) and files (Modules).
+  * The logical Julia program structure (Packages and Modules) is independent of the file structure, whereas the Python code structure is defined by directories (Packages) and files (Modules).
+  * In Julia, it is idiomatic to split the text of large modules into multiple files, without introducing a new module per file. The code is reassembled inside a single module in a main file via `include`. While the Python equivalent (`exec`) is not typical for this use (it will silently clobber prior definitions), Julia programs are defined as a unit at the `module` level with `using` or `import`, which will only get executed once when first needed--like `include` in Python. Within those modules, the individual files that make up that module are loaded with `include` by listing them once in the intended order.
   * The ternary operator `x > 0 ? 1 : -1` in Julia corresponds to a conditional expression in Python `1 if x > 0 else -1`.
   * In Julia the `@` symbol refers to a macro, whereas in Python it refers to a decorator.
   * Exception handling in Julia is done using `try` — `catch` — `finally`, instead of `try` — `except` — `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia (compared with Python, Julia is faster at ordinary control flow but slower at exception-catching).
@@ -352,7 +353,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     it's more general than that since methods are dispatched on every argument type, not only `this`,
     using the most-specific-declaration rule).
 
-### Julia &hArr; C/C++: Namespaces
+### Julia ⇔ C/C++: Namespaces
   * C/C++ `namespace`s correspond roughly to Julia `module`s.
   * There are no private globals or fields in Julia.  Everything is publicly accessible
     through fully qualified paths (or relative paths, if desired).
@@ -364,7 +365,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * Caveat: `import`/`using` (Julia) works only at the global scope level (`module`s)
     * In C++, `using namespace X` works within arbitrary scopes (ex: function scope).
 
-### Julia &hArr; C/C++: Module loading
+### Julia ⇔ C/C++: Module loading
   * When you think of a C/C++ "**library**", you are likely looking for a Julia "**package**".
     * Caveat: C/C++ libraries often house multiple "software modules" whereas Julia
       "packages" typically house one.
@@ -392,10 +393,10 @@ For users coming to Julia from R, these are some noteworthy differences:
     paths to the `Base.LOAD_PATH` array.
     * Packages from directory-based repositories do not require the `Pkg.add()` tool prior to
       being loaded with `import` or `using`. They are simply available to the project.
-    * Directory-based package repositories are the **quickest solution** to developping local
+    * Directory-based package repositories are the **quickest solution** to developing local
       libraries of "software modules".
 
-### Julia &hArr; C/C++: Assembling modules
+### Julia ⇔ C/C++: Assembling modules
   * In C/C++, `.c`/`.cpp` files are compiled & added to a library with build/`make` scripts.
     * In Julia, `import [PkgName]`/`using [PkgName]` statements load `[PkgName].jl` located
       in a package's `[PkgName]/src/` subdirectory.
@@ -412,20 +413,21 @@ For users coming to Julia from R, these are some noteworthy differences:
       Julia package* ("software module"). It is therefore relatively straightforward to ensure
       file are `include`d only once (No `#ifdef` confusion).
 
-### Julia &hArr; C/C++: Module interface
-  * C++ exposes interfaces using "public" `.h`/`.hpp` files whereas Julia `module`s `export`
-    symbols that are intended for their users.
+### Julia ⇔ C/C++: Module interface
+  * C++ exposes interfaces using "public" `.h`/`.hpp` files whereas Julia `module`s mark
+    specific symbols that are intended for their users as `public`or `export`ed.
     * Often, Julia `module`s simply add functionality by generating new "methods" to existing
       functions (ex: `Base.push!`).
     * Developers of Julia packages therefore cannot rely on header files for interface
       documentation.
     * Interfaces for Julia packages are typically described using docstrings, README.md,
       static web pages, ...
-  * Some developers choose not to `export` all symbols required to use their package/module.
+  * Some developers choose not to `export` all symbols required to use their package/module,
+    but should still mark unexported user facing symbols as `public`.
     * Users might be expected to access these components by qualifying functions/structs/...
       with the package/module name (ex: `MyModule.run_this_task(...)`).
 
-### Julia &hArr; C/C++: Quick reference
+### Julia ⇔ C/C++: Quick reference
 
 | Software Concept   | Julia | C/C++ |
 | :---               | :---  | :---  |

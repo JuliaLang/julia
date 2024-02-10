@@ -7,16 +7,16 @@ functionality.
 """
 module LinearAlgebra
 
-import Base: \, /, *, ^, +, -, ==
+import Base: \, /, //, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!,
-    copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
-    getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!,
-    length, log, map, ndims, one, oneunit, parent, permutedims, power_by_squaring,
-    print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar, sin,
-    sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc, typed_hcat,
-    vec, view, zero
-using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
+    asin, asinh, atan, atanh, axes, big, broadcast, cbrt, ceil, cis, collect, conj, convert,
+    copy, copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
+    getindex, hcat, getproperty, imag, inv, invpermuterows!, isapprox, isequal, isone, iszero,
+    IndexStyle, kron, kron!, length, log, map, ndims, one, oneunit, parent, permutecols!,
+    permutedims, permuterows!, power_by_squaring, promote_rule, real, sec, sech, setindex!,
+    show, similar, sin, sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc,
+    typed_hcat, vec, view, zero
+using Base: IndexLinear, promote_eltype, promote_op, promote_typeof, print_matrix,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
 using Base.Broadcast: Broadcasted, broadcasted
@@ -27,132 +27,135 @@ import Libdl
 
 export
 # Modules
-    LAPACK,
     BLAS,
+    LAPACK,
 
 # Types
     Adjoint,
-    Transpose,
-    SymTridiagonal,
-    Tridiagonal,
     Bidiagonal,
-    Factorization,
     BunchKaufman,
     Cholesky,
     CholeskyPivoted,
     ColumnNorm,
+    Diagonal,
     Eigen,
+    Factorization,
     GeneralizedEigen,
     GeneralizedSVD,
     GeneralizedSchur,
+    Hermitian,
     Hessenberg,
-    LU,
     LDLt,
+    LQ,
+    LU,
+    LowerTriangular,
     NoPivot,
-    RowNonZero,
     QR,
     QRPivoted,
-    LQ,
-    Schur,
-    SVD,
-    Hermitian,
     RowMaximum,
+    RowNonZero,
+    SVD,
+    Schur,
+    SymTridiagonal,
     Symmetric,
-    LowerTriangular,
-    UpperTriangular,
+    Transpose,
+    Tridiagonal,
+    UniformScaling,
     UnitLowerTriangular,
     UnitUpperTriangular,
     UpperHessenberg,
-    Diagonal,
-    UniformScaling,
+    UpperTriangular,
+
 
 # Functions
-    axpy!,
+    adjoint!,
+    adjoint,
     axpby!,
-    bunchkaufman,
+    axpy!,
     bunchkaufman!,
-    cholesky,
+    bunchkaufman,
     cholesky!,
+    cholesky,
     cond,
     condskeel,
-    copyto!,
     copy_transpose!,
+    copyto!,
+    copytrito!,
     cross,
-    adjoint,
-    adjoint!,
     det,
     diag,
     diagind,
     diagm,
     dot,
-    eigen,
     eigen!,
+    eigen,
     eigmax,
     eigmin,
-    eigvals,
     eigvals!,
+    eigvals,
     eigvecs,
     factorize,
     givens,
-    hermitianpart,
     hermitianpart!,
-    hessenberg,
+    hermitianpart,
     hessenberg!,
+    hessenberg,
     isdiag,
     ishermitian,
-    isposdef,
     isposdef!,
+    isposdef,
     issuccess,
     issymmetric,
     istril,
     istriu,
-    kron,
     kron!,
+    kron,
     ldiv!,
     ldlt!,
     ldlt,
+    lmul!,
     logabsdet,
     logdet,
-    lowrankdowndate,
     lowrankdowndate!,
-    lowrankupdate,
+    lowrankdowndate,
     lowrankupdate!,
-    lu,
+    lowrankupdate,
+    lq!,
+    lq,
     lu!,
+    lu,
     lyap,
     mul!,
-    lmul!,
-    rmul!,
     norm,
-    normalize,
     normalize!,
+    normalize,
     nullspace,
+    opnorm,
     ordschur!,
     ordschur,
     pinv,
-    qr,
     qr!,
-    lq,
-    lq!,
-    opnorm,
+    qr,
     rank,
     rdiv!,
     reflect!,
+    rmul!,
     rotate!,
-    schur,
     schur!,
-    svd,
+    schur,
     svd!,
+    svd,
     svdvals!,
     svdvals,
     sylvester,
     tr,
-    transpose,
     transpose!,
-    tril,
-    triu,
+    transpose,
     tril!,
+    tril,
     triu!,
+    triu,
+
 
 # Operators
     \,
@@ -160,6 +163,17 @@ export
 
 # Constants
     I
+
+# not exported, but public names
+public AbstractTriangular,
+        Givens,
+        checksquare,
+        hermitian,
+        hermitian_type,
+        isbanded,
+        peakflops,
+        symmetric,
+        symmetric_type
 
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
@@ -457,6 +471,38 @@ const ⋅ = dot
 const × = cross
 export ⋅, ×
 
+wrapper_char(::AbstractArray) = 'N'
+wrapper_char(::Adjoint) = 'C'
+wrapper_char(::Adjoint{<:Real}) = 'T'
+wrapper_char(::Transpose) = 'T'
+wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
+wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
+wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
+
+Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
+    # merge the result of this before return, so that we can type-assert the return such
+    # that even if the tmerge is inaccurate, inference can still identify that the
+    # `_generic_matmatmul` signature still matches and doesn't require missing backedges
+    B = if tA == 'N'
+        A
+    elseif tA == 'T'
+        transpose(A)
+    elseif tA == 'C'
+        adjoint(A)
+    elseif tA == 'H'
+        Hermitian(A, :U)
+    elseif tA == 'h'
+        Hermitian(A, :L)
+    elseif tA == 'S'
+        Symmetric(A, :U)
+    else # tA == 's'
+        Symmetric(A, :L)
+    end
+    return B::AbstractVecOrMat
+end
+
+_unwrap(A::AbstractVecOrMat) = A
+
 ## convenience methods
 ## return only the solution of a least squares problem while avoiding promoting
 ## vectors to matrices.
@@ -481,6 +527,17 @@ _makevector(x::AbstractVector) = Vector(x)
 _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
 
+# destination type for matmul
+matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS) = similar(B, TS, size(B))
+matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
+matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
+matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
+matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
+matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
+matprod_dest(A::HermOrSym, B::Diagonal, TS) = similar(A, TS, size(A))
+matprod_dest(A::Diagonal, B::HermOrSym, TS) = similar(B, TS, size(B))
+
+# TODO: remove once not used anymore in SparseArrays.jl
 # some trait like this would be cool
 # onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
 # but we are actually asking for oneunit(T), that is, however, defined for generic T as
@@ -557,13 +614,19 @@ end
     ldiv(F, B)
 
 """
-    LinearAlgebra.peakflops(n::Integer=2000; parallel::Bool=false)
+    LinearAlgebra.peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
 
 `peakflops` computes the peak flop rate of the computer by using double precision
 [`gemm!`](@ref LinearAlgebra.BLAS.gemm!). By default, if no arguments are specified, it
-multiplies a matrix of size `n x n`, where `n = 2000`. If the underlying BLAS is using
+multiplies two `Float64` matrices of size `n x n`, where `n = 4096`. If the underlying BLAS is using
 multiple threads, higher flop rates are realized. The number of BLAS threads can be set with
 [`BLAS.set_num_threads(n)`](@ref).
+
+If the keyword argument `eltype` is provided, `peakflops` will construct matrices with elements
+of type `eltype` for calculating the peak flop rate.
+
+By default, `peakflops` will use the best timing from 3 trials. If the `ntrials` keyword argument
+is provided, `peakflops` will use those many trials for picking the best timing.
 
 If the keyword argument `parallel` is set to `true`, `peakflops` is run in parallel on all
 the worker processors. The flop rate of the entire parallel computer is returned. When
@@ -574,19 +637,23 @@ of the problem that is solved on each processor.
     This function requires at least Julia 1.1. In Julia 1.0 it is available from
     the standard library `InteractiveUtils`.
 """
-function peakflops(n::Integer=2000; parallel::Bool=false)
-    a = fill(1.,100,100)
-    t = @elapsed a2 = a*a
-    a = fill(1.,n,n)
-    t = @elapsed a2 = a*a
-    @assert a2[1,1] == n
+function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
+    t = zeros(Float64, ntrials)
+    for i=1:ntrials
+        a = ones(eltype,n,n)
+        t[i] = @elapsed a2 = a*a
+        @assert a2[1,1] == n
+    end
+
     if parallel
         let Distributed = Base.require(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            return sum(Distributed.pmap(peakflops, fill(n, Distributed.nworkers())))
+            nworkers = @invokelatest Distributed.nworkers()
+            results = @invokelatest Distributed.pmap(peakflops, fill(n, nworkers))
+            return sum(results)
         end
     else
-        return 2*Float64(n)^3 / t
+        return 2*Float64(n)^3 / minimum(t)
     end
 end
 
@@ -642,7 +709,8 @@ end
 
 function __init__()
     try
-        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
+        verbose = parse(Bool, get(ENV, "LBT_VERBOSE", "false"))
+        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true, verbose)
         BLAS.check()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")

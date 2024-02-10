@@ -77,7 +77,7 @@ end
     @test 1234 === @test_nowarn(1234)
     @test 5678 === @test_warn("WARNING: foo", begin println(stderr, "WARNING: foo"); 5678; end)
     let a
-        @test_throws UndefVarError(:a) a
+        @test_throws UndefVarError(:a, :local) a
         @test_nowarn a = 1
         @test a === 1
     end
@@ -468,11 +468,11 @@ end
     end
     @testset "ts results" begin
         @test isa(ts, Test.DefaultTestSet)
-        passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = Test.get_test_counts(ts)
-        total_pass   = passes + c_passes
-        total_fail   = fails  + c_fails
-        total_error  = errors + c_errors
-        total_broken = broken + c_broken
+        tc = Test.get_test_counts(ts)
+        total_pass   = tc.passes + tc.cumulative_passes
+        total_fail   = tc.fails  + tc.cumulative_fails
+        total_error  = tc.errors + tc.cumulative_errors
+        total_broken = tc.broken + tc.cumulative_broken
         @test total_pass   == 24
         @test total_fail   == 6
         @test total_error  == 6
@@ -659,15 +659,15 @@ end
 @test tss.foo == 3
 
 # test @inferred
-uninferrable_function(i) = (1, "1")[i]
-uninferrable_small_union(i) = (1, nothing)[i]
-@test_throws ErrorException @inferred(uninferrable_function(1))
+uninferable_function(i) = (1, "1")[i]
+uninferable_small_union(i) = (1, nothing)[i]
+@test_throws ErrorException @inferred(uninferable_function(1))
 @test @inferred(identity(1)) == 1
-@test @inferred(Nothing, uninferrable_small_union(1)) === 1
-@test @inferred(Nothing, uninferrable_small_union(2)) === nothing
-@test_throws ErrorException @inferred(Missing, uninferrable_small_union(1))
-@test_throws ErrorException @inferred(Missing, uninferrable_small_union(2))
-@test_throws ArgumentError @inferred(nothing, uninferrable_small_union(1))
+@test @inferred(Nothing, uninferable_small_union(1)) === 1
+@test @inferred(Nothing, uninferable_small_union(2)) === nothing
+@test_throws ErrorException @inferred(Missing, uninferable_small_union(1))
+@test_throws ErrorException @inferred(Missing, uninferable_small_union(2))
+@test_throws ArgumentError @inferred(nothing, uninferable_small_union(1))
 
 # Ensure @inferred only evaluates the arguments once
 inferred_test_global = 0
@@ -692,12 +692,12 @@ end
 
 # Issue #17105
 # @inferred with kwargs
-inferrable_kwtest(x; y=1) = 2x
-uninferrable_kwtest(x; y=1) = 2x+y
-@test (@inferred inferrable_kwtest(1)) == 2
-@test (@inferred inferrable_kwtest(1; y=1)) == 2
-@test (@inferred uninferrable_kwtest(1)) == 3
-@test (@inferred uninferrable_kwtest(1; y=2)) == 4
+inferable_kwtest(x; y=1) = 2x
+uninferable_kwtest(x; y=1) = 2x+y
+@test (@inferred inferable_kwtest(1)) == 2
+@test (@inferred inferable_kwtest(1; y=1)) == 2
+@test (@inferred uninferable_kwtest(1)) == 3
+@test (@inferred uninferable_kwtest(1; y=2)) == 4
 
 @test_throws ErrorException @testset "$(error())" for i in 1:10
 end
@@ -720,6 +720,115 @@ end
     @test occursin("at " * f * ":3", msg)
     @test occursin("at " * f * ":4", msg)
     rm(f; force=true)
+end
+
+@testset "provide informative location in backtrace for test failures" begin
+    win2unix(filename) = replace(filename, "\\" => '/')
+    utils = win2unix(tempname())
+    write(utils,
+    """
+    function test_properties2(value)
+        @test isodd(value)
+    end
+    """)
+
+    included = win2unix(tempname())
+    write(included,
+    """
+    @testset "Other tests" begin
+        @test 1 + 1 == 3
+        test_properties2(2)
+    end
+    test_properties2(8)
+
+    # Test calls to `@test` and `@testset` with no file/lineno information (__source__ == nothing).
+    eval(Expr(:macrocall, Symbol("@test"), nothing, :false))
+    eval(Expr(:macrocall, Symbol("@testset"), nothing, "Testset without source", quote
+        @test false
+        @test error("failed")
+    end))
+    """)
+
+    runtests = win2unix(tempname())
+    write(runtests,
+    """
+    using Test
+
+    include("$utils")
+
+    function test_properties(value)
+        @test isodd(value)
+    end
+
+    @testset "Tests" begin
+        test_properties(8)
+        @noinline test_properties(8)
+        test_properties2(8)
+
+        include("$included")
+    end
+    """)
+    msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
+    msg = win2unix(msg)
+    regex = r"((?:Tests|Other tests|Testset without source): Test Failed (?:.|\n)*?)\n\nStacktrace:(?:.|\n)*?(?=\n(?:Tests|Other tests))"
+    failures = map(eachmatch(regex, msg)) do m
+        m = match(r"(Tests|Other tests|Testset without source): .*? at (.*?)\n  Expression: (.*)(?:.|\n)*\n+Stacktrace:\n((?:.|\n)*)", m.match)
+        (; testset = m[1], source = m[2], ex = m[3], stacktrace = m[4])
+    end
+    @test length(failures) == 8 # 8 failed tests
+    @test count(contains("Error During Test"), split(msg, '\n')) == 1 # 1 error
+    test_properties_macro_source = runtests * ":6"
+    test_properties2_macro_source = utils * ":2"
+
+    fail = failures[1]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Tests" && fail.source == test_properties_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 2 # @testset + test
+
+    fail = failures[2]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Tests" && fail.source == test_properties_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":11"), lines) == 1 # test
+
+    fail = failures[3]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":12"), lines) == 1 # test
+
+    fail = failures[4]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 5
+    @test fail.testset == "Other tests" && fail.source == included * ":2" && fail.ex == "1 + 1 == 3"
+    @test count(contains(included * ":2"), lines) == 2 # @testset + test
+    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+
+    fail = failures[5]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 6
+    @test fail.testset == "Other tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(included * ":2"), lines) == 1 # @testset
+    @test count(contains(included * ":3"), lines) == 1 # test
+    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+
+    fail = failures[6]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 8
+    @test fail.testset == "Tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":14"), lines) == 1 # include
+    @test count(contains(included * ":5"), lines) == 1 # test
+
+    fail = failures[7]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 9
+    @test fail.testset == "Tests" && fail.source == "none:0" && fail.ex == "false"
+    @test count(contains(runtests * ":10"), lines) == 1 # @testset
+    @test count(contains(runtests * ":14"), lines) == 1 # include
+    @test count(contains(included * ":8"), lines) == 1 # test
+
+    fail = failures[8]; lines = split(fail.stacktrace, '\n')
+    @test length(lines)/2 ≤ 5
+    @test fail.testset == "Testset without source" && fail.source == included * ":10" && fail.ex == "false"
+    @test count(contains(included * ":10"), lines) == 2 # @testset + test
+    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
 end
 
 let io = IOBuffer()
@@ -923,6 +1032,7 @@ end
     # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_SEED)` block
     seed = rand(UInt128)
     Random.seed!(seed)
+    seeded_state = copy(Random.default_rng())
     a = rand()
     @testset begin
         # global RNG must re-seeded at the beginning of @testset
@@ -934,30 +1044,81 @@ end
     # the @testset's above must have no consequence for rand() below
     b = rand()
     Random.seed!(seed)
+    @test Random.default_rng() == seeded_state
     @test a == rand()
     @test b == rand()
 
     # Even when seed!() is called within a testset A, subsequent testsets
     # should start with the same "global RNG state" as what A started with,
     # such that the test `refvalue == rand(Int)` below succeeds.
-    # Currently, this means that Random.GLOBAL_SEED has to be restored,
+    # Currently, this means that `Random.get_tls_seed()` has to be restored,
     # in addition to the state of Random.default_rng().
-    GLOBAL_SEED_orig = Random.GLOBAL_SEED
+    tls_seed_orig = copy(Random.get_tls_seed())
     local refvalue
-    @testset "GLOBAL_SEED is also preserved (setup)" begin
-        @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
+    @testset "TLS seed is also preserved (setup)" begin
+        @test tls_seed_orig == Random.get_tls_seed()
         refvalue = rand(Int)
         Random.seed!()
-        @test GLOBAL_SEED_orig != Random.GLOBAL_SEED
+        @test tls_seed_orig != Random.get_tls_seed()
     end
-    @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
-    @testset "GLOBAL_SEED is also preserved (forloop)" for _=1:3
+    @test tls_seed_orig == Random.get_tls_seed()
+    @testset "TLS seed is also preserved (forloop)" for _=1:3
         @test refvalue == rand(Int)
         Random.seed!()
     end
-    @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
-    @testset "GLOBAL_SEED is also preserved (beginend)" begin
+    @test tls_seed_orig == Random.get_tls_seed()
+    @testset "TLS seed is also preserved (beginend)" begin
         @test refvalue == rand(Int)
+    end
+
+    # @testset below is not compatible with e.g. v1.9, but it still fails there (at "main task")
+    # when deleting lines using get_tls_seed() or GLOBAL_SEED
+    @testset "TLS seed and concurrency" begin
+        # Even with multi-tasking, the TLS seed must stay consistent: the default_rng() state
+        # is reset to the "global seed" at the beginning, and the "global seed" is reset to what
+        # it was at the end of the testset; make sure that distinct tasks don't see the mutation
+        # of this "global seed" (iow, it's task-local)
+        seed = rand(UInt128)
+        Random.seed!(seed)
+        seeded_state = copy(Random.default_rng())
+        a = rand()
+
+        ch = Channel{Nothing}()
+        @sync begin
+            @async begin
+                @testset "task 1" begin
+                    # tick 1
+                    # this task didn't call seed! explicitly (yet), so its TaskLocalRNG() should have been
+                    # reset to `Random.GLOBAL_SEED` at the beginning of `@testset`
+                    @test Random.GLOBAL_SEED == Random.default_rng()
+                    Random.seed!()
+                    put!(ch, nothing) # tick 1 -> tick 2
+                    take!(ch) # tick 3
+                end
+                put!(ch, nothing) # tick 3 -> tick 4
+            end
+            @async begin
+                take!(ch) # tick 2
+                # @testset below will record the current TLS "seed" and reset default_rng() to
+                # this value;
+                # it must not be affected by the fact that "task 1" called `seed!()` first
+                @test Random.get_tls_seed() == Random.GLOBAL_SEED
+
+                @testset "task 2" begin
+                    @test Random.GLOBAL_SEED == Random.default_rng()
+                    Random.seed!()
+                    put!(ch, nothing) # tick 2 -> tick 3
+                    take!(ch) # tick 4
+                end
+                # when `@testset` of task 2 finishes, which is after `@testset` from task 1,
+                # it resets `get_tls_seed()` to what it was before starting:
+                @test Random.get_tls_seed() == Random.GLOBAL_SEED
+            end
+        end
+        @testset "main task" begin
+            @test Random.default_rng() == seeded_state
+            @test a == rand()
+        end
     end
 end
 
@@ -1032,7 +1193,7 @@ h25835(;x=1,y=1) = x isa Int ? x*y : (rand(Bool) ? 1.0 : 1)
     @test @inferred(f25835(x=nothing)) == ()
     @test @inferred(f25835(x=1)) == (1,)
 
-    # A global argument should make this uninferrable
+    # A global argument should make this uninferable
     global y25835 = 1
     @test f25835(x=y25835) == (1,)
     @test_throws ErrorException @inferred((()->f25835(x=y25835))()) == (1,)
@@ -1419,5 +1580,133 @@ let
         for i in 1:3
             @test tret.results[2+i].description == "i = $i"
         end
+    end
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Test))
+end
+
+module CustomTestSetModule
+    using Test
+    struct CustomTestSet <: Test.AbstractTestSet
+        description::String
+    end
+    Test.record(::CustomTestSet, result) = result
+    Test.finish(cts::CustomTestSet) = cts
+end
+
+@testset "Unexported custom TestSet" begin
+    using .CustomTestSetModule
+    let res = @testset CustomTestSetModule.CustomTestSet begin
+                @test true
+            end
+        @test res isa CustomTestSetModule.CustomTestSet
+    end
+end
+
+struct CustomPrintingTestSet <: AbstractTestSet
+    description::String
+    passes::Int
+    errors::Int
+    fails::Int
+    broken::Int
+end
+
+function Test.finish(cpts::CustomPrintingTestSet)
+    if Test.get_testset_depth() != 0
+        push!(Test.get_current_testset(), cpts)
+        # printing is handled by the parent
+        return cpts
+    end
+
+    Test.print_testset_results(cpts)
+    cpts
+end
+
+@testset "Custom testsets participate in printing" begin
+    mktemp() do f, _
+        write(f,
+        """
+        using Test
+
+        mutable struct CustomPrintingTestSet <: Test.AbstractTestSet
+            description::String
+            passes::Int
+            fails::Int
+            errors::Int
+            broken::Int
+        end
+        CustomPrintingTestSet(desc::String) = CustomPrintingTestSet(desc, 0,0,0,0)
+
+        Test.record(cpts::CustomPrintingTestSet, ::Test.Pass) = cpts.passes += 1
+        Test.record(cpts::CustomPrintingTestSet, ::Test.Error) = cpts.errors += 1
+        Test.record(cpts::CustomPrintingTestSet, ::Test.Fail) = cpts.fails += 1
+        Test.record(cpts::CustomPrintingTestSet, ::Test.Broken) = cpts.broken += 1
+        Test.get_test_counts(ts::CustomPrintingTestSet) = Test.TestCounts(
+                                                                true,
+                                                                ts.passes,
+                                                                ts.fails,
+                                                                ts.errors,
+                                                                ts.broken,
+                                                                0,
+                                                                0,
+                                                                0,
+                                                                0,
+                                                                Test.format_duration(ts))
+
+        function Test.finish(cpts::CustomPrintingTestSet)
+            if Test.get_testset_depth() != 0
+                Test.record(Test.get_testset(), cpts)
+                # printing is handled by the parent
+                return cpts
+            end
+
+            Test.print_test_results(cpts)
+            cpts
+        end
+
+        struct NonRecordingTestSet <: Test.AbstractTestSet
+            description::String
+        end
+        Test.record(nrts::NonRecordingTestSet, ::Test.Result) = nrts
+        Test.finish(nrts::NonRecordingTestSet) = Test.record(Test.get_testset(), nrts)
+
+         @testset "outer" begin
+            @testset "a" begin
+                @test true
+            end
+            @testset CustomPrintingTestSet "custom" begin
+                @test false
+                @test true
+                @test_broken false
+                @test error()
+            end
+            @testset NonRecordingTestSet "no-record" begin
+                @test false
+                @test true
+                @test_broken false
+                @test error()
+            end
+            @testset "b" begin
+                @test true
+            end
+        end
+        """)
+
+        # this tests both the `TestCounts` parts as well as the fallback `x`s
+        expected = r"""
+                    Test Summary: | Pass  Fail  Error  Broken  Total  Time
+                    outer         |    3     1      1       1      6  \s*\d*.\ds
+                      a           |    1                           1  \s*\d*.\ds
+                      custom      |    1     1      1       1      4  \s*?s
+                      no-record   |    x     x      x       x      ?  \s*?s
+                      b           |    1                           1  \s*\d*.\ds
+                    ERROR: Some tests did not pass: 3 passed, 1 failed, 1 errored, 1 broken.
+                    """
+
+        cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+        result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+        @test occursin(expected, result)
     end
 end

@@ -9,7 +9,7 @@ not ship with a precompiled system image file, one can be generated from the sou
 in Julia's `DATAROOTDIR/julia/base` folder.
 
 Julia will by default generate its system image on half of the available system threads. This
-may be controlled by the [`JULIA_IMAGE_THREADS`](@ref env-image-threads) environment variable.
+may be controlled by the [`JULIA_IMAGE_THREADS`](@ref JULIA_IMAGE_THREADS) environment variable.
 
 This operation is useful for multiple reasons.  A user may:
 
@@ -34,13 +34,16 @@ based on available CPU features.
 ### Specifying multiple system image targets
 
 A multi-microarchitecture system image can be enabled by passing multiple targets
-during system image compilation. This can be done either with the `JULIA_CPU_TARGET` make option
+during system image compilation. This can be done either with the [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) make option
 or with the `-C` command line option when running the compilation command manually.
 Multiple targets are separated by `;` in the option string.
 The syntax for each target is a CPU name followed by multiple features separated by `,`.
 All features supported by LLVM are supported and a feature can be disabled with a `-` prefix.
 (`+` prefix is also allowed and ignored to be consistent with LLVM syntax).
 Additionally, a few special features are supported to control the function cloning behavior.
+
+!!! note
+    It is good practice to specify either `clone_all` or `base(<n>)` for every target apart from the first one. This makes it explicit which targets have all functions cloned, and which targets are based on other targets. If this is not done, the default behavior is to not clone every function, and to use the first target's function definition as the fallback when not cloning a function.
 
 1. `clone_all`
 

@@ -10,6 +10,7 @@ and any additional information (`call.info`) for a given generic call.
 """
 struct CallMeta
     rt::Any
+    exct::Any
     effects::Effects
     info::CallInfo
 end
@@ -74,6 +75,14 @@ struct SemiConcreteResult <: ConstResult
     mi::MethodInstance
     ir::IRCode
     effects::Effects
+end
+
+# XXX Technically this does not represent a result of constant inference, but rather that of
+#     regular edge inference. It might be more appropriate to rename `ConstResult` and
+#     `ConstCallInfo` to better reflect the fact that they represent either of local or
+#     volatile inference result.
+struct VolatileInferenceResult <: ConstResult
+    inf_result::InferenceResult
 end
 
 """
@@ -213,13 +222,18 @@ struct FinalizerInfo <: CallInfo
 end
 
 """
-    info::ModifyFieldInfo <: CallInfo
+    info::ModifyOpInfo <: CallInfo
 
-Represents a resolved all of `modifyfield!(obj, name, op, x, [order])`.
-`info.info` wraps the call information of `op(getfield(obj, name), x)`.
+Represents a resolved call of one of:
+ - `modifyfield!(obj, name, op, x, [order])`
+ - `modifyglobal!(mod, var, op, x, order)`
+ - `memoryrefmodify!(memref, op, x, order, boundscheck)`
+ - `Intrinsics.atomic_pointermodify(ptr, op, x, order)`
+
+`info.info` wraps the call information of `op(getval(), x)`.
 """
-struct ModifyFieldInfo <: CallInfo
-    info::CallInfo # the callinfo for the `op(getfield(obj, name), x)` call
+struct ModifyOpInfo <: CallInfo
+    info::CallInfo # the callinfo for the `op(getval(), x)` call
 end
 
 @specialize

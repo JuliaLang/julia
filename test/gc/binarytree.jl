@@ -49,5 +49,6 @@ end #module
 
 using .BinaryTreeMutable
 
-BinaryTreeMutable.binary_trees(devnull, 20)
+# Memory usage is 466MB
+BinaryTreeMutable.binary_trees(devnull, 16)
 GC.gc()
