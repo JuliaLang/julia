@@ -145,6 +145,7 @@ Each `lock` must be matched by an [`unlock`](@ref).
 """
 @inline function lock(rl::ReentrantLock)
     trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
+        Threads.lock_profiling() && Threads.inc_lock_conflict_count()
         c = rl.cond_wait
         lock(c.lock)
         try
@@ -260,6 +261,9 @@ end
 ```
 This is similar to using [`lock`](@ref) with a `do` block, but avoids creating a closure
 and thus can improve the performance.
+
+!!! compat
+    `@lock` was added in Julia 1.3, and exported in Julia 1.10.
 """
 macro lock(l, expr)
     quote

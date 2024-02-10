@@ -2,3 +2,7 @@
 
 using Test
 using Future
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Future))
+end

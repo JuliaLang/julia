@@ -52,8 +52,9 @@ Generic equality operator. Falls back to [`===`](@ref).
 Should be implemented for all types with a notion of equality, based on the abstract value
 that an instance represents. For example, all numeric types are compared by numeric value,
 ignoring type. Strings are compared as sequences of characters, ignoring encoding.
-For collections, `==` is generally called recursively on all contents,
-though other properties (like the shape for arrays) may also be taken into account.
+Collections of the same type generally compare their key sets, and if those are `==`, then compare the values
+for each of those keys, returning true if all such pairs are `==`.
+Other properties are typically not taken into account (such as the exact type).
 
 This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` and
 `NaN != NaN`.
@@ -61,8 +62,8 @@ This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` a
 The result is of type `Bool`, except when one of the operands is [`missing`](@ref),
 in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic)).
-For collections, `missing` is returned if at least one of the operands contains
-a `missing` value and all non-missing values are equal.
+Collections generally implement three-valued logic akin to [`all`](@ref), returning
+missing if any operands contain missing values and all other pairs are equal.
 Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 
 # Implementation

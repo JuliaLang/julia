@@ -34,7 +34,10 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :throw_undef_if_not => 2:2,
     :aliasscope => 0:0,
     :popaliasscope => 0:0,
-    :new_opaque_closure => 4:typemax(Int)
+    :new_opaque_closure => 4:typemax(Int),
+    :import => 1:typemax(Int),
+    :using => 1:typemax(Int),
+    :export => 1:typemax(Int),
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this
@@ -61,9 +64,8 @@ struct InvalidCodeError <: Exception
 end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 
-function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind::String)
-    if JLOptions().debug_level == 2
-        # this is a debug build of julia, so let's validate linfo
+function maybe_validate_code(linfo::MethodInstance, src::CodeInfo, kind::String)
+    if is_asserts()
         errors = validate_code(linfo, src)
         if !isempty(errors)
             for e in errors
@@ -75,6 +77,7 @@ function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind:
                             linfo.def, ": ", e)
                 end
             end
+            error("")
         end
     end
 end
@@ -253,7 +256,7 @@ end
 
 function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
-    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call, :invoke, :invoke_modify, :foreigncall, :cfunction, :gc_preserve_begin, :copyast)
+    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call, :invoke, :invoke_modify, :foreigncall, :cfunction, :gc_preserve_begin, :copyast, :new_opaque_closure)
         return true
     end
     return false

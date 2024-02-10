@@ -253,6 +253,32 @@ macro _terminates_globally_meta()
         #=:noub=#false,
         #=:noub_if_noinbounds=#false))
 end
+# can be used in place of `@assume_effects :terminates_globally :notaskstate` (supposed to be used for bootstrapping)
+macro _terminates_globally_notaskstate_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#false,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#true,
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#false,
+        #=:noub=#false,
+        #=:noub_if_noinbounds=#false))
+end
+# can be used in place of `@assume_effects :terminates_globally :noub` (supposed to be used for bootstrapping)
+macro _terminates_globally_noub_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#false,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#true,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false,
+        #=:noub=#true,
+        #=:noub_if_noinbounds=#false))
+end
 # can be used in place of `@assume_effects :effect_free :terminates_locally` (supposed to be used for bootstrapping)
 macro _effect_free_terminates_locally_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
@@ -279,6 +305,45 @@ macro _nothrow_noub_meta()
         #=:noub=#true,
         #=:noub_if_noinbounds=#false))
 end
+# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
+macro _nothrow_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#true,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false,
+        #=:noub=#false,
+        #=:noub_if_noinbounds=#false))
+end
+# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
+macro _noub_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#false,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false,
+        #=:noub=#true,
+        #=:noub_if_noinbounds=#false))
+end
+# can be used in place of `@assume_effects :notaskstate` (supposed to be used for bootstrapping)
+macro _notaskstate_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#false,
+        #=:effect_free=#false,
+        #=:nothrow=#false,
+        #=:terminates_globally=#false,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#false,
+        #=:noub=#false,
+        #=:noub_if_noinbounds=#false))
+end
 # can be used in place of `@assume_effects :noub_if_noinbounds` (supposed to be used for bootstrapping)
 macro _noub_if_noinbounds_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
@@ -301,9 +366,14 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
-getindex(A::GenericMemory{:not_atomic}, i::Int) = (@_noub_if_noinbounds_meta;
-    memoryrefget(memoryref(memoryref(A), i, @_boundscheck), :not_atomic, false))
-getindex(A::GenericMemoryRef{:not_atomic}) = memoryrefget(A, :not_atomic, @_boundscheck)
+default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
+default_access_order(a::GenericMemory{:atomic}) = :monotonic
+default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
+default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
+
+getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
+    memoryrefget(memoryref(memoryref(A), i, @_boundscheck), default_access_order(A), false))
+getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 function iterate end
 
@@ -824,8 +894,8 @@ function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     return A
 end
 setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryref(memoryref(A), i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
-setindex!(A::MemoryRef{T}, x) where {T} = memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck)
-setindex!(A::MemoryRef{Any}, @nospecialize(x)) = memoryrefset!(A, x, :not_atomic, @_boundscheck)
+setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
+setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
 
 # SimpleVector
 

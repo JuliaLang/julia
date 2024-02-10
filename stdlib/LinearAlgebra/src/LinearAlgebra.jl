@@ -7,7 +7,7 @@ functionality.
 """
 module LinearAlgebra
 
-import Base: \, /, *, ^, +, -, ==
+import Base: \, /, //, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
     asin, asinh, atan, atanh, axes, big, broadcast, cbrt, ceil, cis, collect, conj, convert,
     copy, copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
@@ -480,21 +480,25 @@ wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
 wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
 
 Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
-    if tA == 'N'
-        return A
+    # merge the result of this before return, so that we can type-assert the return such
+    # that even if the tmerge is inaccurate, inference can still identify that the
+    # `_generic_matmatmul` signature still matches and doesn't require missing backedges
+    B = if tA == 'N'
+        A
     elseif tA == 'T'
-        return transpose(A)
+        transpose(A)
     elseif tA == 'C'
-        return adjoint(A)
+        adjoint(A)
     elseif tA == 'H'
-        return Hermitian(A, :U)
+        Hermitian(A, :U)
     elseif tA == 'h'
-        return Hermitian(A, :L)
+        Hermitian(A, :L)
     elseif tA == 'S'
-        return Symmetric(A, :U)
+        Symmetric(A, :U)
     else # tA == 's'
-        return Symmetric(A, :L)
+        Symmetric(A, :L)
     end
+    return B::AbstractVecOrMat
 end
 
 _unwrap(A::AbstractVecOrMat) = A
@@ -523,6 +527,17 @@ _makevector(x::AbstractVector) = Vector(x)
 _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
 
+# destination type for matmul
+matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS) = similar(B, TS, size(B))
+matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
+matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
+matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
+matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
+matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
+matprod_dest(A::HermOrSym, B::Diagonal, TS) = similar(A, TS, size(A))
+matprod_dest(A::Diagonal, B::HermOrSym, TS) = similar(B, TS, size(B))
+
+# TODO: remove once not used anymore in SparseArrays.jl
 # some trait like this would be cool
 # onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
 # but we are actually asking for oneunit(T), that is, however, defined for generic T as

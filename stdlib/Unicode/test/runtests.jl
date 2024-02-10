@@ -534,3 +534,7 @@ isequal_normalized_naive(s1, s2; kws...) = normalize(s1; kws...) == normalize(s2
         @test !isequal_normalized("x\u0334\u0335", "x\u0335\u0334")
     end
 end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Unicode))
+end

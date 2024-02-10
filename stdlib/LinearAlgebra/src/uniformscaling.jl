@@ -270,6 +270,7 @@ end
 /(v::AbstractVector, J::UniformScaling) = reshape(v, length(v), 1) / J
 
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
+//(J::UniformScaling, x::Number) = UniformScaling(J.λ//x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
