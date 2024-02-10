@@ -309,7 +309,7 @@ holding the lock.
 ## Example
 
 ```jldoctest
-julia> locked_list = Lockable(Int[]);
+julia> locked_list = Base.Lockable(Int[]);
 
 julia> @lock(locked_list, push!(locked_list[], 1)) # must hold the lock to access the value
 1-element Vector{Int64}:
@@ -339,7 +339,6 @@ not attempt to `unlock` it.
 
 !!! compat "Julia 1.11"
     Requires at least Julia 1.11.
-
 """
 function lock(f, l::Lockable)
     lock(l.lock) do
