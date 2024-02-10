@@ -379,6 +379,8 @@ The type `Point` exists, but no method is defined for this combination of argume
 Closest candidates are:
   Point(::T, !Matched::T) where T<:Real
    @ Main none:1
+  Point(!Matched::Int64, !Matched::Float64)
+   @ Main none:1
 
 Stacktrace:
 [...]
