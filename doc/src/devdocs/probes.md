@@ -137,6 +137,9 @@ fib(x) = x <= 1 ? 1 : fib(x-1) + fib(x-2)
 beaver = @spawn begin
     while true
         fib(30)
+        # A manual safepoint is necessary since otherwise this loop
+        # may never yield to GC. 
+        GC.safepoint()
     end
 end
 
