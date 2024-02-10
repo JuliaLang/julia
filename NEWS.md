@@ -54,6 +54,7 @@ Compiler/Runtime improvements
 * A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
   loads, primarily to be used within JLLs ([#50074]).
 * Added support for annotating `Base.@assume_effects` on code blocks ([#52400]).
+* The libuv library has been updated from a base of v1.44.2 to v1.48.0 ([#49937]).
 
 Command-line option changes
 ---------------------------
