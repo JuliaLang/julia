@@ -1165,7 +1165,7 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
                         if ex === nothing
                             ex = arg
                         else
-                            ex = Expr(:., out, QuoteNode(arg))
+                            ex = Expr(:., ex, QuoteNode(arg))
                         end
                     else # invalid expression
                         ex = nothing
