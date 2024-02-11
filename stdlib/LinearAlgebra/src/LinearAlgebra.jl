@@ -78,6 +78,7 @@ export
     cholesky,
     cond,
     condskeel,
+    copy_adjoint!,
     copy_transpose!,
     copyto!,
     copytrito!,

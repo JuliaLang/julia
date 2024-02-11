@@ -601,6 +601,7 @@ LinearAlgebra.checksquare
 LinearAlgebra.peakflops
 LinearAlgebra.hermitianpart
 LinearAlgebra.hermitianpart!
+LinearAlgebra.copy_adjoint!
 LinearAlgebra.copy_transpose!
 ```
 

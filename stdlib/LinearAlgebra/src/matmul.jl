@@ -694,20 +694,21 @@ parameter `tM` as follows:
 | --- | :--- | :--- |
 | `'N'` | `B[ir_dest, jr_dest]` | `M[ir_src, jr_src]` |
 | `'T'` | `B[ir_dest, jr_dest]` | `transpose(M)[ir_src, jr_src]` |
-| `'C'` | `B[ir_dest, jr_dest]` | `conj(transpose(M))[ir_src, jr_src]` |
+| `'C'` | `B[ir_dest, jr_dest]` | `adjoint(M)[ir_src, jr_src]` |
 
 The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore, the index range
 parameters must satisfy `length(ir_dest) == length(ir_src)` and
 `length(jr_dest) == length(jr_src)`.
 
-See also [`copy_transpose!`](@ref).
+See also [`copy_transpose!`](@ref) and [`copy_adjoint!`](@ref).
 """
 function copyto!(B::AbstractVecOrMat, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
         copyto!(B, ir_dest, jr_dest, M, ir_src, jr_src)
+    elseif tM == 'T'
+        copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
     else
-        LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
-        tM == 'C' && conj!(@view B[ir_dest, jr_dest])
+        copy_adjoint!(B, ir_dest, jr_dest, M, jr_src, ir_src)
     end
     B
 end
@@ -730,11 +731,11 @@ The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore, the index
 range parameters must satisfy `length(ir_dest) == length(jr_src)` and
 `length(jr_dest) == length(ir_src)`.
 
-See also [`copyto!`](@ref).
+See also [`copyto!`](@ref) and [`copy_adjoint!`](@ref).
 """
 function copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
-        LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
+        copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
         copyto!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         tM == 'C' && conj!(@view B[ir_dest, jr_dest])
