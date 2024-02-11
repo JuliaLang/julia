@@ -2147,7 +2147,7 @@ Binary format is 1 sign, 8 exponent, 23 fraction bits.
 
 The exponent for scientific notation should be entered as lower-case `f`,
 thus `2f3 === 2.0f0 * 10^3 === Float32(2_000)`.
-For arrays literals and comprehensions, the element type can be specified before
+For array literals and comprehensions, the element type can be specified before
 the square brackets: `Float32[1,4,9] == Float32[i^2 for i in 1:3]`.
 
 See also [`Inf32`](@ref), [`NaN32`](@ref), [`Float16`](@ref), [`exponent`](@ref), [`frexp`](@ref).
@@ -2998,7 +2998,7 @@ which by default then calls `(x*y) * z * ...` starting from the left.
 Juxtaposition such as `2pi` also calls `*(2, pi)`. Note that this operation
 has higher precedence than a literal `*`. Note also that juxtaposition "0x..."
 (integer zero times a variable whose name starts with `x`) is forbidden as
-it clashes with unsigned integers literals: `0x01 isa UInt8`.
+it clashes with unsigned integer literals: `0x01 isa UInt8`.
 
 Note that overflow is possible for most integer types, including the default `Int`,
 when multiplying large numbers.
