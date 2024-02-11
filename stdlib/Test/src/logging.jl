@@ -55,7 +55,7 @@ most `n` times.
 
 See also: [`LogRecord`](@ref).
 
-## Example
+## Examples
 
 ```jldoctest
 julia> using Test, Logging

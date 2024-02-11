@@ -608,7 +608,7 @@ end
 
 Execute `function`, directing all log messages to `logger`.
 
-# Example
+# Examples
 
 ```julia
 function test(x)

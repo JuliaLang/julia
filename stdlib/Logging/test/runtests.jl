@@ -302,8 +302,7 @@ end
 
 @testset "Docstrings" begin
     undoc = Docs.undocumented_names(Logging)
-    @test_broken isempty(undoc)
-    @test undoc == [:AboveMaxLevel, :BelowMinLevel]
+    @test isempty(undoc)
 end
 
 end
