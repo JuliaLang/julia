@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Random
-
 mainres = ([4, 5, 3],
            [1, 5, 3])
 bitres = ([true, true, false],
@@ -270,8 +269,9 @@ end
 end
 
 """
-Basic tests for Base.copy!
+    Basic tests for Base.copy!
 """
+
 using Test
 using Future
 
