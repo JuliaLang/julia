@@ -2063,7 +2063,7 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
                 # use mtime=-1.0 here so that fsize==0 && mtime==0.0 corresponds to a missing include_dependency
                 push!(_require_dependencies, (mod, path, filesize(path), hash, -1.0))
             else
-                isfile(path) || throw(ArgumentError("$(repr(path)) is not a readable file"))
+                ispath(path) || throw(ArgumentError("$(repr(path)): No such file or directory"))
                 push!(_require_dependencies, (mod, path, UInt64(0), UInt32(0), mtime(path)))
             end
         end
