@@ -115,6 +115,12 @@ end
     @test write(aio, ' ') == 1
     @test write(aio, Base.AnnotatedString("world", [(1:5, :tag => 2)])) == 5
     @test Base.annotations(aio) == [(1:5, :tag => 1), (7:11, :tag => 2)]
+    # Check `annotate!`, including region sorting
+    @test truncate(aio, 0).io.size == 0
+    @test write(aio, "hello world") == ncodeunits("hello world")
+    @test Base.annotate!(aio, 7:11, :tag => 2) === aio
+    @test Base.annotate!(aio, 1:5, :tag => 1) === aio
+    @test Base.annotations(aio) == [(1:5, :tag => 1), (7:11, :tag => 2)]
     # Reading
     @test read(seekstart(deepcopy(aio.io)), String) == "hello world"
     @test read(seekstart(deepcopy(aio)), String) == "hello world"

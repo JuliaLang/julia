@@ -314,6 +314,20 @@ reverse(s::SubString{<:AnnotatedString}) = reverse(AnnotatedString(s))
 
 ## End AbstractString interface ##
 
+function _annotate!(annlist::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any}))
+    label, val = labelval
+    if val === nothing
+        indices = searchsorted(annlist, (range,), by=first)
+        labelindex = filter(i -> first(annlist[i][2]) === label, indices)
+        for index in Iterators.reverse(labelindex)
+            deleteat!(annlist, index)
+        end
+    else
+        sortedindex = searchsortedlast(annlist, (range,), by=first) + 1
+        insert!(annlist, sortedindex, (range, Pair{Symbol, Any}(label, val)))
+    end
+end
+
 """
     annotate!(str::AnnotatedString, [range::UnitRange{Int}], label::Symbol => value)
     annotate!(str::SubString{AnnotatedString}, [range::UnitRange{Int}], label::Symbol => value)
@@ -321,20 +335,8 @@ reverse(s::SubString{<:AnnotatedString}) = reverse(AnnotatedString(s))
 Annotate a `range` of `str` (or the entire string) with a labeled value (`label` => `value`).
 To remove existing `label` annotations, use a value of `nothing`.
 """
-function annotate!(s::AnnotatedString, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any}))
-    label, val = labelval
-    if val === nothing
-        indices = searchsorted(s.annotations, (range,), by=first)
-        labelindex = filter(i -> first(s.annotations[i][2]) === label, indices)
-        for index in Iterators.reverse(labelindex)
-            deleteat!(s.annotations, index)
-        end
-    else
-        sortedindex = searchsortedlast(s.annotations, (range,), by=first) + 1
-        insert!(s.annotations, sortedindex, (range, Pair{Symbol, Any}(label, val)))
-    end
-    s
-end
+annotate!(s::AnnotatedString, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any})) =
+    (_annotate!(s.annotations, range, labelval); s)
 
 annotate!(ss::AnnotatedString, @nospecialize(labelval::Pair{Symbol, <:Any})) =
     annotate!(ss, firstindex(ss):lastindex(ss), labelval)
@@ -415,6 +417,9 @@ skip(io::AnnotatedIOBuffer, n::Integer) = (skip(io.io, n); io)
 copy(io::AnnotatedIOBuffer) = AnnotatedIOBuffer(copy(io.io), copy(io.annotations))
 
 annotations(io::AnnotatedIOBuffer) = io.annotations
+
+annotate!(io::AnnotatedIOBuffer, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any})) =
+    (_annotate!(io.annotations, range, labelval); io)
 
 function write(io::AnnotatedIOBuffer, astr::Union{AnnotatedString, SubString{<:AnnotatedString}})
     astr = AnnotatedString(astr)
