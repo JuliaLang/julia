@@ -880,6 +880,9 @@ issingletontype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && isdefined
 
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
 smallest such type or one close to it.
+
+A special case where exact behavior is guaranteed: when `T <: S`,
+`typeintersect(S, T) == T == typeintersect(T, S)`.
 """
 typeintersect(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type_intersection, Any, (Any, Any), a::Type, b::Type))
 
