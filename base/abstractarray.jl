@@ -1759,8 +1759,10 @@ cat_indices(A::AbstractArray, d) = axes(A, d)
 cat_similar(A, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
 cat_similar(A, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
 cat_similar(A::Array, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
+cat_similar(A::Array, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
 cat_similar(A::Array, ::Type{T}, shape::Vector, ::Val{N}) where {T, N} = Array{T, N}(undef, shape...)
 cat_similar(A::AbstractArray, T::Type, shape::Tuple) = similar(A, T, shape)
+cat_similar(A::AbstractArray, T::Type, shape::Vector) = similar(A, T, shape...)
 cat_similar(A::AbstractArray, T::Type, shape::Vector, ::Val{N}) where N = similar(A, T, shape...)
 
 # These are for backwards compatibility (even though internal)
@@ -2083,30 +2085,33 @@ julia> hvcat((2,2,2), a,b,c,d,e,f) == hvcat(2, a,b,c,d,e,f)
 true
 ```
 """
-hvcat(::Tuple{}) = []
-hvcat(::Tuple{}, xs...) = []
+hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where {T} = typed_hvcat(T, rows, xs...)
 
-hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number = typed_hvcat(T, rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVector...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
-hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where T = typed_hvcat(T, rows, xs...)
+typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T = typed_hvncat(T, (rows, (sum(rows),)), true, as...)
 
-# dispatch to hvncat methods when it performs better
-rows_to_dimshape(rows::Tuple{Vararg{Int}}) = all(==(rows[1]), rows) ? (length(rows), rows[1]) : (rows, (sum(rows),))
-hvcat(rows::Tuple{Vararg{Int}}, xs...) = _hvncat(rows_to_dimshape(rows), true, xs...)
+hvcat(rows::Tuple{Vararg{Int}}) = []
+typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}) where {T} = Vector{T}()
 
-typed_hvcat(::Type{T}, ::Tuple{}) where T = Vector{T}()
-typed_hvcat(::Type{T}, ::Tuple{}, xs...) where T = Vector{T}()
-
-function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
+function hvcat(rows::Tuple{Vararg{Int}}, xs::T...) where T<:Number
     nr = length(rows)
     nc = rows[1]
-    for i = 2:nr
+
+    a = Matrix{T}(undef, nr, nc)
+    if length(a) != length(xs)
+        throw(ArgumentError("argument count does not match specified shape (expected $(length(a)), got $(length(xs)))"))
+    end
+    k = 1
+    @inbounds for i=1:nr
         if nc != rows[i]
-            throw(ArgumentError("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
+            throw(DimensionMismatch("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
+        end
+        for j=1:nc
+            a[i,j] = xs[k]
+            k += 1
         end
     end
-    hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
+    a
 end
 
 function hvcat_fill!(a::Array, xs::Tuple)
@@ -2125,52 +2130,23 @@ function hvcat_fill!(a::Array, xs::Tuple)
     a
 end
 
-function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVector...) where T
-    nbr = length(rows)  # number of block rows
+hvcat(rows::Tuple{Vararg{Int}}, xs::Number...) = typed_hvcat(promote_typeof(xs...), rows, xs...)
+hvcat(rows::Tuple{Vararg{Int}}, xs...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
+# the following method is needed to provide a more specific one compared to LinearAlgebra/uniformscaling.jl
+hvcat(rows::Tuple{Vararg{Int}}, xs::Union{AbstractArray,Number}...) = typed_hvcat(promote_eltypeof(xs...), rows, xs...)
 
-    nc = 0
-    for i=1:rows[1]
-        nc += size(as[i],2)
-    end
-
-    nr = 0
-    a = 1
-    for i = 1:nbr
-        nr += size(as[a],1)
-        a += rows[i]
-    end
-
-    out = similar(as[1], T, nr, nc)
-
-    a = 1
-    r = 1
-    for i = 1:nbr
-        c = 1
-        szi = size(as[a],1)
-        for j = 1:rows[i]
-            Aj = as[a+j-1]
-            szj = size(Aj,2)
-            if size(Aj,1) != szi
-                throw(DimensionMismatch("mismatched height in block row $(i) (expected $szi, got $(size(Aj,1)))"))
-            end
-            if c-1+szj > nc
-                throw(DimensionMismatch("block row $(i) has mismatched number of columns (expected $nc, got $(c-1+szj))"))
-            end
-            out[r:r-1+szi, c:c-1+szj] = Aj
-            c += szj
+function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
+    nr = length(rows)
+    nc = rows[1]
+    for i = 2:nr
+        if nc != rows[i]
+            throw(DimensionMismatch("row $(i) has mismatched number of columns (expected $nc, got $(rows[i]))"))
         end
-        if c != nc+1
-            throw(DimensionMismatch("block row $(i) has mismatched number of columns (expected $nc, got $(c-1))"))
-        end
-        r += szi
-        a += rows[i]
     end
-    out
+    hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
 end
 
-typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs...) = _typed_hvncat(T, rows_to_dimshape(rows), true, xs...)
-
-function _typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
+function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
     nbr = length(rows)  # number of block rows
     rs = Vector{Any}(undef, nbr)
     a = 1
@@ -2307,7 +2283,7 @@ end
 function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     N < 0 &&
         throw(ArgumentError("concatenation dimension must be non-negative"))
-    A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)))
+    A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)), Val(N))
     hvncat_fill!(A, false, xs)
     return A
 end
@@ -2336,7 +2312,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
         end
     end
 
-    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...))
+    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...), Val(nd))
     k = 1
     for a ∈ as
         for i ∈ eachindex(a)
@@ -2621,7 +2597,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     # @assert all(==(0), blockcounts)
 
     # copy into final array
-    A = cat_similar(as[1], T, outdims, Val(length(outdims)))
+    A = cat_similar(as[1], T, outdims, Val(nd))
     hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
     return A
 end
