@@ -15,6 +15,7 @@ Compiler/Runtime improvements
 
 Command-line option changes
 ---------------------------
+* `--project=@temp` starts Julia with a temporary environment.
 
 Multi-threading changes
 -----------------------
