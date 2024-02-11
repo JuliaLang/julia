@@ -2003,7 +2003,7 @@ AbstractFloat
 """
     Integer <: Real
 
-Abstract supertype for all integers, [`Signed`](@ref), [`Unsigned`](@ref) or [`Bool`](@ref).
+Abstract supertype for all integers (e.g. [`Signed`](@ref), [`Unsigned`](@ref), and [`Bool`](@ref)).
 
 See also [`isinteger`](@ref), [`trunc`](@ref), [`div`](@ref).
 
@@ -2077,7 +2077,7 @@ julia> false .* (NaN, Inf, -Inf)
 Branches via [`if`](@ref) and other conditionals only accept `Bool`.
 There are no "truthy" values in Julia.
 
-Comparisons return `Bool`, and broadcasted comparisons may
+Comparisons typically return `Bool`, and broadcasted comparisons may
 return [`BitArray`](@ref) instead of an `Array{Bool}`.
 
 ```jldoctest
