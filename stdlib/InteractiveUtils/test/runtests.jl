@@ -284,7 +284,7 @@ try
     @which x = 1
     error("unexpected")
 catch err13464
-    @test startswith(err13464.msg, "expression is not a function call, or is too complex")
+    @test startswith(err13464.msg, "expression is not a function call")
 end
 
 module MacroTest

@@ -4,6 +4,45 @@
 
 module Filesystem
 
+"""
+    JL_O_APPEND
+    JL_O_ASYNC
+    JL_O_CLOEXEC
+    JL_O_CREAT
+    JL_O_DIRECT
+    JL_O_DIRECTORY
+    JL_O_DSYNC
+    JL_O_EXCL
+    JL_O_FSYNC
+    JL_O_LARGEFILE
+    JL_O_NDELAY
+    JL_O_NOATIME
+    JL_O_NOCTTY
+    JL_O_NOFOLLOW
+    JL_O_NONBLOCK
+    JL_O_PATH
+    JL_O_RANDOM
+    JL_O_RDONLY
+    JL_O_RDWR
+    JL_O_RSYNC
+    JL_O_SEQUENTIAL
+    JL_O_SHORT_LIVED
+    JL_O_SYNC
+    JL_O_TEMPORARY
+    JL_O_TMPFILE
+    JL_O_TRUNC
+    JL_O_WRONLY
+
+Enum constant for the `open` syscall, where `JL_O_*` corresponds to the `O_*` constant.
+See [the libuv docs](https://docs.libuv.org/en/v1.x/fs.html#file-open-constants) for more details.
+"""
+(:JL_O_APPEND, :JL_O_ASYNC, :JL_O_CLOEXEC, :JL_O_CREAT, :JL_O_DIRECT,
+ :JL_O_DIRECTORY, :JL_O_DSYNC, :JL_O_EXCL, :JL_O_FSYNC, :JL_O_LARGEFILE,
+ :JL_O_NOATIME, :JL_O_NOCTTY, :JL_O_NDELAY, :JL_O_NOFOLLOW, :JL_O_NONBLOCK,
+ :JL_O_PATH, :JL_O_RANDOM, :JL_O_RDONLY, :JL_O_RDWR, :JL_O_RSYNC,
+ :JL_O_SEQUENTIAL, :JL_O_SHORT_LIVED, :JL_O_SYNC, :JL_O_TEMPORARY,
+ :JL_O_TMPFILE, :JL_O_TRUNC, :JL_O_WRONLY)
+
 const S_IFDIR  = 0o040000  # directory
 const S_IFCHR  = 0o020000  # character device
 const S_IFBLK  = 0o060000  # block device
@@ -31,6 +70,36 @@ const S_IWOTH = 0o0002  # write by other
 const S_IXOTH = 0o0001  # execute by other
 const S_IRWXO = 0o0007  # mask for other permissions
 
+"""
+    S_IRUSR
+    S_IWUSR
+    S_IXUSR
+    S_IRGRP
+    S_IWGRP
+    S_IXGRP
+    S_IROTH
+    S_IWOTH
+    S_IXOTH
+
+Constants for file access permission bits.
+The general structure is `S_I[permission][class]`
+where `permission` is `R` for read, `W` for write, and `X` for execute,
+and `class` is `USR` for user/owner, `GRP` for group, and `OTH` for other.
+"""
+(:S_IRUSR, :S_IWUSR, :S_IXUSR, :S_IRGRP, :S_IWGRP, :S_IXGRP, :S_IROTH, :S_IWOTH, :S_IXOTH)
+
+"""
+    S_IRWXU
+    S_IRWXG
+    S_IRWXO
+
+Constants for file access permission masks, i.e. the combination of read, write,
+and execute permissions for a class.
+The general structure is `S_IRWX[class]`
+where `class` is `U` for user/owner, `G` for group, and `O` for other.
+"""
+(:S_IRWXU, :S_IRWXG, :S_IRWXO)
+
 export File,
        StatStruct,
        # open,
@@ -47,7 +116,6 @@ export File,
        JL_O_SHORT_LIVED,
        JL_O_SEQUENTIAL,
        JL_O_RANDOM,
-       JL_O_NOCTTY,
        JL_O_NOCTTY,
        JL_O_NONBLOCK,
        JL_O_NDELAY,
