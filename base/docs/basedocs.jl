@@ -2196,10 +2196,9 @@ end
 
 Sys.WORD_SIZE-bit signed integer type, `Int <: Signed <: Integer <: Real`.
 
-This is the default type of most integer literals, on computers for which `Sys.WORDSIZE == $(Sys.WORD_SIZE)`,
-and has an alias `Int`. It is the type returned by functions such as [`length`](@ref), and the
-standard type for indexing arrays. The default (and the alias) may be 32 or 64 bits on different
-computers, indicated by `Sys.WORD_SIZE`.
+This is the default type of most integer literals and is an ailias for either `Int32` 
+or `Int64`, depending on `Sys.WORD_SIZE`. It is the type returned by functions such as 
+[`length`](@ref), and the standard type for indexing arrays.
 
 Note that integers overflow without warning, thus `typemax(Int) + 1 < 0` and `10^19 < 0`.
 Overflow can be avoided by using [`BigInt`](@ref).
