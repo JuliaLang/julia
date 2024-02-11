@@ -90,7 +90,7 @@ f(y) = [x for x in y]
     standard ones) on type-inference. Use [`Base.@nospecializeinfer`](@ref) together with
     `@nospecialize` to additionally suppress inference.
 
-# Example
+# Examples
 
 ```julia
 julia> f(A::AbstractArray) = g(A)

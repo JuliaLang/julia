@@ -44,5 +44,5 @@ end
 @testset "Base.Filesystem docstrings" begin
   undoc = Docs.undocumented_names(Base.Filesystem)
   @test_broken isempty(undoc)
-  @test undoc == [:File, :Filesystem, :JL_O_APPEND, :JL_O_ASYNC, :JL_O_CLOEXEC, :JL_O_CREAT, :JL_O_DIRECT, :JL_O_DIRECTORY, :JL_O_DSYNC, :JL_O_EXCL, :JL_O_FSYNC, :JL_O_LARGEFILE, :JL_O_NDELAY, :JL_O_NOATIME, :JL_O_NOCTTY, :JL_O_NOFOLLOW, :JL_O_NONBLOCK, :JL_O_PATH, :JL_O_RANDOM, :JL_O_RDONLY, :JL_O_RDWR, :JL_O_RSYNC, :JL_O_SEQUENTIAL, :JL_O_SHORT_LIVED, :JL_O_SYNC, :JL_O_TEMPORARY, :JL_O_TMPFILE, :JL_O_TRUNC, :JL_O_WRONLY, :S_IRGRP, :S_IROTH, :S_IRUSR, :S_IRWXG, :S_IRWXO, :S_IRWXU, :S_IWGRP, :S_IWOTH, :S_IWUSR, :S_IXGRP, :S_IXOTH, :S_IXUSR, :cptree, :futime, :rename, :sendfile, :unlink]
+  @test undoc == [:File, :Filesystem, :cptree, :futime, :rename, :sendfile, :unlink]
 end

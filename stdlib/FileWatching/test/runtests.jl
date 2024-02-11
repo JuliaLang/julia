@@ -161,7 +161,7 @@ test2_12992()
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
-F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple()  # platforms where F_GETPATH is available
+F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple() || Sys.isfreebsd() # platforms where F_GETPATH is available
 F_PATH = F_GETPATH ? "afile.txt" : ""
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")

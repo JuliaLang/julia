@@ -201,7 +201,7 @@ end
     unique(itr)
 
 Return an array containing only the unique elements of collection `itr`,
-as determined by [`isequal`](@ref), in the order that the first of each
+as determined by [`isequal`](@ref) and [`hash`](@ref), in the order that the first of each
 set of equivalent elements originally appears. The element type of the
 input is preserved.
 
@@ -436,7 +436,7 @@ end
 """
     unique!(A::AbstractVector)
 
-Remove duplicate items as determined by [`isequal`](@ref), then return the modified `A`.
+Remove duplicate items as determined by [`isequal`](@ref) and [`hash`](@ref), then return the modified `A`.
 `unique!` will return the elements of `A` in the order that they occur. If you do not care
 about the order of the returned data, then calling `(sort!(A); unique!(A))` will be much
 more efficient as long as the elements of `A` can be sorted.

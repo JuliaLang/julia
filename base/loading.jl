@@ -1124,10 +1124,10 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     end
 
     if ocachepath !== nothing
-        @debug "Loading object cache file $ocachepath for $pkg"
+        @debug "Loading object cache file $ocachepath for $(repr("text/plain", pkg))"
         sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachepath, depmods, false, pkg.name, ignore_native)
     else
-        @debug "Loading cache file $path for $pkg"
+        @debug "Loading cache file $path for $(repr("text/plain", pkg))"
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), path, depmods, false, pkg.name)
     end
     if isa(sv, Exception)
@@ -1160,7 +1160,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
             return M
         end
     end
-    return ErrorException("Required dependency $pkg failed to load from a cache file.")
+    return ErrorException("Required dependency $(repr("text/plain", pkg)) failed to load from a cache file.")
 
     finally
         timing_imports && cumulative_compile_timing(false)
@@ -1780,13 +1780,11 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
     if _track_dependencies[]
         @lock require_lock begin
             if track_content
-                @assert isfile(path) "can only hash files"
+                hash = isdir(path) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r")
                 # use mtime=-1.0 here so that fsize==0 && mtime==0.0 corresponds to a missing include_dependency
-                push!(_require_dependencies,
-                      (mod, path, filesize(path), open(_crc32c, path, "r"), -1.0))
+                push!(_require_dependencies, (mod, path, filesize(path), hash, -1.0))
             else
-                push!(_require_dependencies,
-                      (mod, path, UInt64(0), UInt32(0), mtime(path)))
+                push!(_require_dependencies, (mod, path, UInt64(0), UInt32(0), mtime(path)))
             end
         end
     end
@@ -1794,17 +1792,22 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
 end
 
 """
-    include_dependency(path::AbstractString)
+    include_dependency(path::AbstractString; track_content::Bool=false)
 
 In a module, declare that the file, directory, or symbolic link specified by `path`
 (relative or absolute) is a dependency for precompilation; that is, the module will need
-to be recompiled if the modification time of `path` changes.
+to be recompiled if the modification time `mtime` of `path` changes.
+If `track_content=true` recompilation is triggered when the content of `path` changes
+(if `path` is a directory the content equals `join(readdir(path))`).
 
 This is only needed if your module depends on a path that is not used via [`include`](@ref). It has
 no effect outside of compilation.
+
+!!! compat "Julia 1.11"
+    Keyword argument `track_content` requires at least Julia 1.11.
 """
-function include_dependency(path::AbstractString)
-    _include_dependency(Main, path, track_content=false)
+function include_dependency(path::AbstractString; track_content::Bool=false)
+    _include_dependency(Main, path, track_content=track_content)
     return nothing
 end
 
@@ -2101,7 +2104,7 @@ function _require(pkg::PkgId, env=nothing)
         path = locate_package(pkg, env)
         if path === nothing
             throw(ArgumentError("""
-                Package $pkg is required but does not seem to be installed:
+                Package $(repr("text/plain", pkg)) is required but does not seem to be installed:
                  - Run `Pkg.instantiate()` to install all recorded dependencies.
                 """))
         end
@@ -2118,12 +2121,16 @@ function _require(pkg::PkgId, env=nothing)
             end
         end
 
+        if JLOptions().use_compiled_modules == 3
+            error("Precompiled image $pkg not available with flags $(CacheFlags())")
+        end
+
         # if the module being required was supposed to have a particular version
         # but it was not handled by the precompile loader, complain
         for (concrete_pkg, concrete_build_id) in _concrete_dependencies
             if pkg == concrete_pkg
                 @warn """Module $(pkg.name) with build ID $((UUID(concrete_build_id))) is missing from the cache.
-                     This may mean $pkg does not support precompilation but is imported by a module that does."""
+                     This may mean $(repr("text/plain", pkg)) does not support precompilation but is imported by a module that does."""
                 if JLOptions().incremental != 0
                     # during incremental precompilation, this should be fail-fast
                     throw(PrecompilableError())
@@ -2157,16 +2164,16 @@ function _require(pkg::PkgId, env=nothing)
                 elseif isa(cachefile, Exception)
                     if precompilableerror(cachefile)
                         verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-                        @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $pkg." exception=m
+                        @logmsg verbosity "Skipping precompilation due to precompilable error. Importing $(repr("text/plain", pkg))." exception=m
                     else
-                        @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
+                        @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=m
                     end
                     # fall-through to loading the file locally if not incremental
                 else
                     cachefile, ocachefile = cachefile::Tuple{String, Union{Nothing, String}}
                     m = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
                     if !isa(m, Module)
-                        @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
+                        @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=m
                     else
                         return m
                     end
@@ -2328,7 +2335,7 @@ and return the value of the last expression.
 The optional `args` argument can be used to set the input arguments of the script (i.e. the global `ARGS` variable).
 Note that definitions (e.g. methods, globals) are evaluated in the anonymous module and do not affect the current module.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> write("testfile.jl", \"\"\"
@@ -2393,7 +2400,7 @@ function check_src_module_wrap(pkg::PkgId, srcpath::String)
         inside_string && continue
         if contains(s, module_rgx)
             if load_seen
-                throw(ErrorException("Package $pkg source file $srcpath has a using/import before a module declaration."))
+                throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath has a using/import before a module declaration."))
             end
             return true
         end
@@ -2401,7 +2408,7 @@ function check_src_module_wrap(pkg::PkgId, srcpath::String)
             load_seen = true
         end
     end
-    throw(ErrorException("Package $pkg source file $srcpath does not contain a module declaration."))
+    throw(ErrorException("Package $(repr("text/plain", pkg)) source file $srcpath does not contain a module declaration."))
 end
 
 # this is called in the external process that generates precompiled package files
@@ -2480,12 +2487,12 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     end
 
     if output_o !== nothing
-        @debug "Generating object cache file for $pkg"
+        @debug "Generating object cache file for $(repr("text/plain", pkg))"
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         opt_level = Base.JLOptions().opt_level
         opts = `-O$(opt_level) --output-o $(output_o) --output-ji $(output) --output-incremental=yes`
     else
-        @debug "Generating cache file for $pkg"
+        @debug "Generating cache file for $(repr("text/plain", pkg))"
         cpu_target = nothing
         opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
@@ -2505,12 +2512,25 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
+        Base.track_nested_precomp($(vcat(Base.precompilation_stack, pkg)))
         Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
     close(io.in)
     return io
+end
+
+const precompilation_stack = Vector{PkgId}()
+# Helpful for debugging when precompilation is unexpectedly nested.
+# Enable with `JULIA_DEBUG=nested_precomp`. Note that it expected to be nested in classical code-load precompilation
+# TODO: Add detection if extension precompilation is nested and error / return early?
+function track_nested_precomp(pkgs::Vector{PkgId})
+    append!(precompilation_stack, pkgs)
+    if length(precompilation_stack) > 1
+        list() = join(map(p->p.name, precompilation_stack), " > ")
+        @debug "Nested precompilation: $(list())" _group=:nested_precomp
+    end
 end
 
 function compilecache_dir(pkg::PkgId)
@@ -2553,7 +2573,7 @@ for important notes.
 function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
     @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
-    path === nothing && throw(ArgumentError("$pkg not found during precompilation"))
+    path === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
     return compilecache(pkg, path, internal_stderr, internal_stdout; reasons)
 end
 
@@ -2577,7 +2597,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     end
     # run the expression and cache the result
     verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
-    @logmsg verbosity "Precompiling $pkg $(list_reasons(reasons))"
+    @logmsg verbosity "Precompiling $(repr("text/plain", pkg)) $(list_reasons(reasons))"
 
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
@@ -2621,7 +2641,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             # append extra crc to the end of the .ji file:
             open(tmppath, "r+") do f
                 if iszero(isvalid_cache_header(f))
-                    error("Invalid header for $pkg in new cache file $(repr(tmppath)).")
+                    error("Invalid header for $(repr("text/plain", pkg)) in new cache file $(repr(tmppath)).")
                 end
                 seekend(f)
                 write(f, crc_so)
@@ -2692,7 +2712,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     if p.exitcode == 125
         return PrecompilableError()
     else
-        error("Failed to precompile $pkg to $(repr(tmppath)).")
+        error("Failed to precompile $(repr("text/plain", pkg)) to $(repr(tmppath)).")
     end
 end
 
@@ -2754,7 +2774,7 @@ end
 function resolve_depot(inc::AbstractString)
     startswith(inc, string("@depot", Filesystem.pathsep())) || return :not_relocatable
     for depot in DEPOT_PATH
-        isfile(restore_depot_path(inc, depot)) && return depot
+        ispath(restore_depot_path(inc, depot)) && return depot
     end
     return :no_depot_found
 end
@@ -3283,9 +3303,9 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilec
             pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
             verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
             if isempty(hostname) || hostname == gethostname()
-                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $pkg. Pidfile: $pidfile"
+                @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $(repr("text/plain", pkg)). Pidfile: $pidfile"
             else
-                @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $pkg. Pidfile: $pidfile"
+                @logmsg verbosity "Waiting for another machine (hostname: $hostname, pid: $pid) to finish precompiling $(repr("text/plain", pkg)). Pidfile: $pidfile"
             end
             # wait until the lock is available, but don't actually acquire it
             # returning nothing indicates a process waited for another
@@ -3438,7 +3458,7 @@ end
                 # verify that `require(modkey, name(req_modkey))` ==> `req_modkey`
                 pkg = identify_package(modkey, req_modkey.name)
                 if pkg != req_modkey
-                    @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed, expected $modkey => $pkg"
+                    @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed, expected $modkey => $(repr("text/plain", pkg))"
                     record_reason(reasons, "dep uuid changed")
                     return true
                 end
@@ -3480,7 +3500,7 @@ end
                         record_reason(reasons, "include_dependency fsize change")
                         return true
                     end
-                    hash = open(_crc32c, f, "r")
+                    hash = isdir(f) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
                     if hash != hash_req
                         @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
                         record_reason(reasons, "include_dependency fhash change")
@@ -3533,9 +3553,32 @@ end
 """
     @__DIR__ -> String
 
-Expand to a string with the absolute path to the directory of the file
-containing the macrocall.
-Return the current working directory if run from a REPL or if evaluated by `julia -e <expr>`.
+Macro to obtain the absolute path of the current directory as a string.
+
+If in a script, returns the directory of the script containing the `@__DIR__` macrocall. If run from a
+REPL or if evaluated by `julia -e <expr>`, returns the current working directory.
+
+# Examples
+
+The example illustrates the difference in the behaviors of `@__DIR__` and `pwd()`, by creating
+a simple script in a different directory than the current working one and executing both commands:
+
+```julia-repl
+julia> cd("/home/JuliaUser") # working directory
+
+julia> # create script at /home/JuliaUser/Projects
+       open("/home/JuliaUser/Projects/test.jl","w") do io
+           print(io, \"\"\"
+               println("@__DIR__ = ", @__DIR__)
+               println("pwd() = ", pwd())
+           \"\"\")
+       end
+
+julia> # outputs script directory and current working directory
+       include("/home/JuliaUser/Projects/test.jl")
+@__DIR__ = /home/JuliaUser/Projects
+pwd() = /home/JuliaUser
+```
 """
 macro __DIR__()
     __source__.file === nothing && return nothing

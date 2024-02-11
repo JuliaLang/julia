@@ -483,13 +483,13 @@ eval(Core, quote
 end)
 
 function CodeInstance(
-    mi::MethodInstance, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
+    mi::MethodInstance, owner, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
     ipo_effects::UInt32, effects::UInt32, @nospecialize(analysis_results),
     relocatability::UInt8)
     return ccall(:jl_new_codeinst, Ref{CodeInstance},
-        (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
-        mi, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
+        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
+        mi, owner, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
         ipo_effects, effects, analysis_results,
         relocatability)
 end
@@ -958,7 +958,7 @@ struct Pair{A, B}
 end
 
 function _hasmethod(@nospecialize(tt)) # this function has a special tfunc
-    world = ccall(:jl_get_tls_world_age, UInt, ())
+    world = ccall(:jl_get_tls_world_age, UInt, ()) # tls_world_age()
     return Intrinsics.not_int(ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world) === nothing)
 end
 

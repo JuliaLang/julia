@@ -681,7 +681,7 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
     # access it directly instead (to avoid regeneration).
-    world = get_world_counter(interp)
+    world = get_inference_world(interp)
     callee_method2 = method_for_inference_heuristics(method, sig, sparams, world) # Union{Method, Nothing}
 
     inf_method2 = method_for_inference_limit_heuristics(frame) # limit only if user token match
@@ -935,7 +935,7 @@ function concrete_eval_call(interp::AbstractInterpreter,
         pushfirst!(args, f, invokecall.types)
         f = invoke
     end
-    world = get_world_counter(interp)
+    world = get_inference_world(interp)
     edge = result.edge::MethodInstance
     value = try
         Core._call_in_world_total(world, f, args...)
@@ -3304,6 +3304,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             end
             if rt === Bottom
                 ssavaluetypes[currpc] = Bottom
+                # Special case: Bottom-typed PhiNodes do not error (but must also be unused)
+                if isa(stmt, PhiNode)
+                    continue
+                end
                 @goto find_next_bb
             end
             if changes !== nothing

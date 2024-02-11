@@ -831,7 +831,7 @@ end
 Tells the compiler to infer `f` using the declared types of `@nospecialize`d arguments.
 This can be used to limit the number of compiler-generated specializations during inference.
 
-# Example
+# Examples
 
 ```julia
 julia> f(A::AbstractArray) = g(A)
@@ -1025,8 +1025,6 @@ function remove_linenums!(@nospecialize ex)
         return ex
     end
 end
-
-public remove_linenums!
 
 replace_linenums!(ex, ln::LineNumberNode) = ex
 function replace_linenums!(ex::Expr, ln::LineNumberNode)

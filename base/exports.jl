@@ -65,6 +65,7 @@ export
     Missing,
     NTuple,
     IdDict,
+    IdSet,
     OrdinalRange,
     Pair,
     PartialQuickSort,
@@ -1137,6 +1138,7 @@ public
     summarysize,
     isexported,
     ispublic,
+    remove_linenums!,
 
 # Opperators
     operator_associativity,
@@ -1168,6 +1170,7 @@ public
     TTY,
     # functions
     reseteof,
+    link_pipe!,
 
 # misc
     notnothing,
