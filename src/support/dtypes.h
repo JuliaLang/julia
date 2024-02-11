@@ -96,7 +96,6 @@ typedef intptr_t ssize_t;
 #include <endian.h>
 #define LITTLE_ENDIAN  __LITTLE_ENDIAN
 #define BIG_ENDIAN     __BIG_ENDIAN
-#define PDP_ENDIAN     __PDP_ENDIAN
 #define BYTE_ORDER     __BYTE_ORDER
 #endif
 
@@ -104,19 +103,16 @@ typedef intptr_t ssize_t;
 #include <machine/endian.h>
 #define __LITTLE_ENDIAN  LITTLE_ENDIAN
 #define __BIG_ENDIAN     BIG_ENDIAN
-#define __PDP_ENDIAN     PDP_ENDIAN
 #define __BYTE_ORDER     BYTE_ORDER
 #endif
 
 #ifdef _OS_WINDOWS_
 #define __LITTLE_ENDIAN    1234
 #define __BIG_ENDIAN       4321
-#define __PDP_ENDIAN       3412
 #define __BYTE_ORDER       __LITTLE_ENDIAN
 #define __FLOAT_WORD_ORDER __LITTLE_ENDIAN
 #define LITTLE_ENDIAN      __LITTLE_ENDIAN
 #define BIG_ENDIAN         __BIG_ENDIAN
-#define PDP_ENDIAN         __PDP_ENDIAN
 #define BYTE_ORDER         __BYTE_ORDER
 #endif
 
@@ -338,6 +334,23 @@ STATIC_INLINE void jl_store_unaligned_i32(void *ptr, uint32_t val) JL_NOTSAFEPOI
 STATIC_INLINE void jl_store_unaligned_i16(void *ptr, uint16_t val) JL_NOTSAFEPOINT
 {
     memcpy(ptr, &val, 2);
+}
+
+STATIC_INLINE void *calloc_s(size_t sz) JL_NOTSAFEPOINT {
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
+    void *p = calloc(sz == 0 ? 1 : sz, 1);
+    if (p == NULL) {
+        perror("(julia) calloc");
+        abort();
+    }
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
+    return p;
 }
 
 STATIC_INLINE void *malloc_s(size_t sz) JL_NOTSAFEPOINT {

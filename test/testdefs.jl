@@ -5,6 +5,9 @@ using Test, Random
 function runtests(name, path, isolate=true; seed=nothing)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
     Test.TESTSET_PRINT_ENABLE[] = false
+    # remove all hint_handlers, so that errorshow tests are not changed by which packages have been loaded on this worker already
+    # packages that call register_error_hint should also call this again, and then re-add any hooks they want to test
+    empty!(Base.Experimental._hint_handlers)
     try
         if isolate
             # Simple enough to type and random enough so that no one will hard
@@ -25,6 +28,7 @@ function runtests(name, path, isolate=true; seed=nothing)
             original_depot_path = copy(Base.DEPOT_PATH)
             original_load_path = copy(Base.LOAD_PATH)
             original_env = copy(ENV)
+            original_project = Base.active_project()
 
             Base.include(m, "$path.jl")
 
@@ -51,25 +55,38 @@ function runtests(name, path, isolate=true; seed=nothing)
                 error(msg)
             end
             if copy(ENV) != original_env
-                msg = "The `$(name)` test set mutated ENV and did not restore the original values"
-                @error(
-                    msg,
-                    testset_name = name,
-                    testset_path = path,
-                )
                 throw_error_str = get(ENV, "JULIA_TEST_CHECK_MUTATED_ENV", "true")
                 throw_error_b = parse(Bool, throw_error_str)
                 if throw_error_b
+                    msg = "The `$(name)` test set mutated ENV and did not restore the original values"
+                    @error(
+                        msg,
+                        testset_name = name,
+                        testset_path = path,
+                    )
                     error(msg)
                 end
+            end
+            if Base.active_project() != original_project
+                msg = "The `$(name)` test set changed the active project and did not restore the original value"
+                @error(
+                    msg,
+                    original_project,
+                    Base.active_project(),
+                    testset_name = name,
+                    testset_path = path,
+                )
+                error(msg)
             end
         end
         rss = Sys.maxrss()
         #res_and_time_data[1] is the testset
         ts = res_and_time_data[1]
-        passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = Test.get_test_counts(ts)
+        tc = Test.get_test_counts(ts)
         # simplify our stored data to just contain the counts
-        res_and_time_data = (TestSetException(passes+c_passes, fails+c_fails, errors+c_errors, broken+c_broken, Test.filter_errors(ts)),
+        res_and_time_data = (TestSetException(tc.passes+tc.cumulative_passes, tc.fails+tc.cumulative_fails,
+                             tc.errors+tc.cumulative_errors, tc.broken+tc.cumulative_broken,
+                             Test.filter_errors(ts)),
                              res_and_time_data[2],
                              res_and_time_data[3],
                              res_and_time_data[4],

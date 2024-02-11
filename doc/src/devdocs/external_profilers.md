@@ -13,7 +13,7 @@ you add it to `JL_TIMING_OWNERS` (and possibly `JL_TIMING_EVENTS`).
 
 ### Dynamically Enabling and Disabling Zones
 
-The `JULIA_TIMING_SUBSYSTEMS` environment variable allows you to enable or disable zones for a specific Julia run. For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable the `INFERENCE`
+The [`JULIA_TIMING_SUBSYSTEMS`](@ref JULIA_TIMING_SUBSYSTEMS) environment variable allows you to enable or disable zones for a specific Julia run. For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable the `INFERENCE`
 zones.
 
 ## Tracy Profiler
@@ -39,7 +39,13 @@ run(TracyProfiler_jll.tracy())
 !!! note
     On macOS, you may want to set the `TRACY_DPI_SCALE` environment variable to `1.0` if the UI elements in the profiler appear excessively large.
 
-To run a "headless" instance that saves the trace to disk, use `TracyProfiler_jll.capture() -o mytracefile.tracy` instead.
+To run a "headless" instance that saves the trace to disk, use
+
+```julia
+run(`$(TracyProfiler_jll.capture()) -o mytracefile.tracy`)
+```
+
+instead.
 
 For information on using the Tracy UI, refer to the Tracy manual.
 
@@ -52,6 +58,19 @@ JULIA_WAIT_FOR_TRACY=1 ./julia -e '...'
 ```
 
 The environment variable ensures that Julia waits until it has successfully connected to the Tracy profiler before continuing execution. Afterward, use the Tracy profiler UI, click `Connect`, and Julia execution should resume and profiling should start.
+
+### Profiling package precompilation with Tracy
+
+To profile a package precompilation process it is easiest to explicitly call into `Base.compilecache` with the package you want to precompile:
+
+```julia
+pkg = Base.identify_package("SparseArrays")
+withenv("JULIA_WAIT_FOR_TRACY" => 1, "TRACY_PORT" => 9001) do
+    Base.compilecache(pkg)
+end
+```
+
+Here, we use a custom port for tracy which makes it easier to find the correct client in the Tracy UI to connect to.
 
 ### Adding metadata to zones
 

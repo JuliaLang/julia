@@ -15,6 +15,9 @@ using .Main.OffsetArrays
 isdefined(Main, :DualNumbers) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "DualNumbers.jl"))
 using .Main.DualNumbers
 
+isdefined(Main, :FillArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "FillArrays.jl"))
+using .Main.FillArrays
+
 Random.seed!(123)
 
 n = 5 # should be odd
@@ -77,6 +80,17 @@ n = 5 # should be odd
         X = fill(x, 1, 1)
         @test logabsdet(x)[1] ≈ logabsdet(X)[1]
         @test logabsdet(x)[2] ≈ logabsdet(X)[2]
+        # Diagonal, upper, and lower triangular matrices
+        chksign(s1, s2) = if elty <: Real s1 == s2 else s1 ≈ s2 end
+        D = Matrix(Diagonal(A))
+        v, s = logabsdet(D)
+        @test v ≈ log(abs(det(D))) && chksign(s, sign(det(D)))
+        R = triu(A)
+        v, s = logabsdet(R)
+        @test v ≈ log(abs(det(R))) && chksign(s, sign(det(R)))
+        L = tril(A)
+        v, s = logabsdet(L)
+        @test v ≈ log(abs(det(L))) && chksign(s, sign(det(L)))
     end
 
     @testset "det with nonstandard Number type" begin
@@ -558,7 +572,7 @@ end
 end
 
 @testset "peakflops" begin
-    @test LinearAlgebra.peakflops() > 0
+    @test LinearAlgebra.peakflops(1024, eltype=Float32, ntrials=2) > 0
 end
 
 @testset "NaN handling: Issue 28972" begin
@@ -592,6 +606,12 @@ end
     end
 end
 
+@testset "avoid stackoverflow in dot" begin
+    @test_throws "cannot evaluate dot recursively" dot('a', 'c')
+    @test_throws "cannot evaluate dot recursively" dot('a', 'b':'c')
+    @test_throws "x and y are of different lengths" dot(1, 1:2)
+end
+
 @testset "generalized dot #32739" begin
     for elty in (Int, Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat})
         n = 10
@@ -623,6 +643,27 @@ end
 @testset "condskeel #34512" begin
     A = rand(3, 3)
     @test condskeel(A) ≈ condskeel(A, [8,8,8])
+end
+
+@testset "copytrito!" begin
+    n = 10
+    A = rand(n, n)
+    for uplo in ('L', 'U')
+        B = zeros(n, n)
+        copytrito!(B, A, uplo)
+        C = uplo == 'L' ? tril(A) : triu(A)
+        @test B ≈ C
+    end
+end
+
+@testset "immutable arrays" begin
+    A = FillArrays.Fill(big(3), (4, 4))
+    M = Array(A)
+    @test triu(A) == triu(M)
+    @test triu(A, -1) == triu(M, -1)
+    @test tril(A) == tril(M)
+    @test tril(A, 1) == tril(M, 1)
+    @test det(A) == det(M)
 end
 
 end # module TestGeneric

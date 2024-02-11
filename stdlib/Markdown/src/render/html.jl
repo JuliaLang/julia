@@ -182,6 +182,21 @@ htmlinline(io::IO, x) = tohtml(io, x)
 
 export html
 
+"""
+    html([io::IO], md)
+
+Output the contents of the Markdown object `md` in HTML format, either
+writing to an (optional) `io` stream or returning a string.
+
+One can alternatively use `show(io, "text/html", md)` or `repr("text/html", md)`, which
+differ in that they wrap the output in a `<div class="markdown"> ... </div>` element.
+
+# Example
+```jldoctest
+julia> html(md"hello _world_")
+"<p>hello <em>world</em></p>\\n"
+```
+"""
 html(md) = sprint(html, md)
 
 function show(io::IO, ::MIME"text/html", md::MD)

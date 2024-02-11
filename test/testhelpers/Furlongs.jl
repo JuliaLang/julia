@@ -74,7 +74,7 @@ for op in (:+, :-)
     end
 end
 for op in (:(==), :(!=), :<, :<=, :isless, :isequal)
-    @eval $op(x::Furlong{p}, y::Furlong{p}) where {p} = $op(x.val, y.val)
+    @eval $op(x::Furlong{p}, y::Furlong{p}) where {p} = $op(x.val, y.val)::Bool
 end
 for (f,op) in ((:_plus,:+),(:_minus,:-),(:_times,:*),(:_div,://))
     @eval function $f(v::T, ::Furlong{p}, ::Union{Furlong{q},Val{q}}) where {T,p,q}
@@ -99,5 +99,6 @@ for op in (:rem, :mod)
     end
 end
 Base.sqrt(x::Furlong) = _div(sqrt(x.val), x, Val(2))
+Base.muladd(x::Furlong, y::Furlong, z::Furlong) = x*y + z
 
 end

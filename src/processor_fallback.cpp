@@ -2,6 +2,9 @@
 
 // Fallback processor detection and dispatch
 
+static constexpr FeatureName *feature_names = nullptr;
+static constexpr uint32_t nfeature_names = 0;
+
 namespace Fallback {
 
 static inline const std::string &host_cpu_name()
@@ -10,7 +13,7 @@ static inline const std::string &host_cpu_name()
     return name;
 }
 
-static const std::vector<TargetData<1>> &get_cmdline_targets(void)
+static const llvm::SmallVector<TargetData<1>, 0> &get_cmdline_targets(void)
 {
     auto feature_cb = [] (const char*, size_t, FeatureList<1>&) {
         return false;
@@ -18,7 +21,7 @@ static const std::vector<TargetData<1>> &get_cmdline_targets(void)
     return ::get_cmdline_targets<1>(feature_cb);
 }
 
-static std::vector<TargetData<1>> jit_targets;
+static llvm::SmallVector<TargetData<1>, 0> jit_targets;
 
 static TargetData<1> arg_target_data(const TargetData<1> &arg, bool require_host)
 {
@@ -33,7 +36,7 @@ static TargetData<1> arg_target_data(const TargetData<1> &arg, bool require_host
     return res;
 }
 
-static uint32_t sysimg_init_cb(const void *id)
+static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     // First see what target is requested for the JIT.
     auto &cmdline = get_cmdline_targets();
@@ -51,7 +54,7 @@ static uint32_t sysimg_init_cb(const void *id)
     return best_idx;
 }
 
-static uint32_t pkgimg_init_cb(const void *id)
+static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     TargetData<1> target = jit_targets.front();
     // Find the last name match or use the default one.
@@ -85,13 +88,13 @@ static void ensure_jit_target(bool imaging)
     }
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_noext(const TargetData<1> &data)
 {
-    return std::make_pair(data.name, std::vector<std::string>{});
+    return std::make_pair(data.name, llvm::SmallVector<std::string, 0>{});
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_vec(const TargetData<1> &data)
 {
     auto res0 = get_llvm_target_noext(data);
@@ -128,7 +131,7 @@ jl_image_t jl_init_processor_pkgimg(void *hdl)
     return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
-std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags)
 {
     ensure_jit_target(imaging);
     flags = jit_targets[0].en.flags;
@@ -142,11 +145,11 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
     return res;
 }
 
-extern "C" std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
-    std::vector<jl_target_spec_t> res;
+    llvm::SmallVector<jl_target_spec_t, 0> res;
     for (auto &target: jit_targets) {
         jl_target_spec_t ele;
         std::tie(ele.cpu_name, ele.cpu_features) = get_llvm_target_str(target);
@@ -159,9 +162,9 @@ extern "C" std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
     return res;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 {
-    return jl_cstr_to_string(host_cpu_name().c_str());
+    return jl_false; // Match behaviour of have_fma in src/llvm-cpufeatures.cpp (assume false)
 }
 
 JL_DLLEXPORT void jl_dump_host_cpu(void)
@@ -170,9 +173,15 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
     jl_safe_printf("Features: %s\n", jl_get_cpu_features_llvm().c_str());
 }
 
-JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
 {
-    pkgimg_init_cb(data);
+    jl_value_t *rejection_reason = NULL;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    JL_GC_POP();
+    if (match_idx == (uint32_t)-1)
+        return rejection_reason;
+    return jl_nothing;
 }
 
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t)

@@ -188,7 +188,7 @@ JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags
         dlopen = (dlopen_prototype*)dlsym(RTLD_NEXT, "dlopen");
         if (!dlopen)
             return NULL;
-        void *libdl_handle = dlopen("libdl.so", RTLD_NOW | RTLD_NOLOAD);
+        void *libdl_handle = dlopen("libdl.so.2", RTLD_NOW | RTLD_NOLOAD);
         assert(libdl_handle);
         dlopen = (dlopen_prototype*)dlsym(libdl_handle, "dlopen");
         dlclose(libdl_handle);
@@ -284,7 +284,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 
     JL_TIMING(DL_OPEN, DL_OPEN);
     if (!(flags & JL_RTLD_NOLOAD))
-        jl_timing_puts(JL_TIMING_CURRENT_BLOCK, modname);
+        jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, modname);
 
     // Detect if our `modname` is something like `@rpath/libfoo.dylib`
 #ifdef _OS_DARWIN_
@@ -312,7 +312,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? jl_atomic_load_relaxed(&b->value) : NULL);
         if (DL_LOAD_PATH != NULL) {
             size_t j;
-            for (j = 0; j < jl_array_len(DL_LOAD_PATH); j++) {
+            for (j = 0; j < jl_array_nrows(DL_LOAD_PATH); j++) {
                 char *dl_path = jl_string_data(jl_array_ptr_data(DL_LOAD_PATH)[j]);
                 size_t len = strlen(dl_path);
                 if (len == 0)
@@ -342,7 +342,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 #endif
                         handle = jl_dlopen(path, flags);
                         if (handle && !(flags & JL_RTLD_NOLOAD))
-                            jl_timing_puts(JL_TIMING_CURRENT_BLOCK, jl_pathname_for_handle(handle));
+                            jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, jl_pathname_for_handle(handle));
                         if (handle)
                             return handle;
 #ifdef _OS_WINDOWS_
@@ -364,7 +364,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         handle = jl_dlopen(path, flags);
         if (handle && !(flags & JL_RTLD_NOLOAD))
-            jl_timing_puts(JL_TIMING_CURRENT_BLOCK, jl_pathname_for_handle(handle));
+            jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, jl_pathname_for_handle(handle));
         if (handle)
             return handle;
 #ifdef _OS_WINDOWS_
@@ -435,13 +435,20 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
 // Look for symbols in internal libraries
 JL_DLLEXPORT const char *jl_dlfind(const char *f_name)
 {
-    void * dummy;
-    if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))
+#ifdef _OS_FREEBSD_
+    // This is a workaround for FreeBSD <= 13.2 which do not have
+    // https://cgit.freebsd.org/src/commit/?id=21a52f99440c9bec7679f3b0c5c9d888901c3694
+    // (See https://github.com/JuliaLang/julia/issues/50846)
+    if (strcmp(f_name, "dl_iterate_phdr") == 0)
         return JL_EXE_LIBNAME;
+#endif
+    void * dummy;
     if (jl_dlsym(jl_libjulia_internal_handle, f_name, &dummy, 0))
         return JL_LIBJULIA_INTERNAL_DL_LIBNAME;
     if (jl_dlsym(jl_libjulia_handle, f_name, &dummy, 0))
         return JL_LIBJULIA_DL_LIBNAME;
+    if (jl_dlsym(jl_exe_handle, f_name, &dummy, 0))
+        return JL_EXE_LIBNAME;
 #ifdef _OS_WINDOWS_
     if (jl_dlsym(jl_kernel32_handle, f_name, &dummy, 0))
         return "kernel32";

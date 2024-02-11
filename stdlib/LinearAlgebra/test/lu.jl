@@ -97,7 +97,9 @@ dimg  = randn(n)/2
             dlu = convert.(eltya, [1, 1])
             dia = convert.(eltya, [-2, -2, -2])
             tri = Tridiagonal(dlu, dia, dlu)
-            @test_throws ArgumentError lu!(tri)
+            L = lu(tri)
+            @test lu!(tri) == L
+            @test UpperTriangular(tri) == L.U
         end
     end
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
@@ -243,9 +245,13 @@ end
     @test_throws ZeroPivotException lu!(copy(A), NoPivot(); check = true)
     @test !issuccess(lu(A, NoPivot(); check = false))
     @test !issuccess(lu!(copy(A), NoPivot(); check = false))
-    F = lu(A; check = false)
+    F = lu(A, NoPivot(); check = false)
     @test sprint((io, x) -> show(io, "text/plain", x), F) ==
         "Failed factorization of type $(typeof(F))"
+    F2 = lu(A; allowsingular = true)
+    @test !issuccess(F2)
+    @test issuccess(F2, allowsingular = true)
+    @test occursin("U factor (rank-deficient)", sprint((io, x) -> show(io, "text/plain", x), F2))
 end
 
 @testset "conversion" begin
@@ -301,7 +307,7 @@ end
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
         seekstart(bf)
         @test String(take!(bf)) == """
-LinearAlgebra.LU{Float64, Matrix{Float64}, Vector{$Int}}
+$(LinearAlgebra.LU){Float64, Matrix{Float64}, Vector{$Int}}
 L factor:
 4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
@@ -391,6 +397,15 @@ end
         B = randn(elty, 5, 5)
         @test rdiv!(transform(A), transform(lu(B))) ≈ transform(C) / transform(B)
     end
+    for elty in (Float32, Float64, ComplexF64), transF in (identity, transpose),
+            transB in (transpose, adjoint), transT in (identity, complex)
+        A = randn(elty, 5, 5)
+        F = lu(A)
+        b = randn(transT(elty), 5)
+        @test rdiv!(transB(copy(b)), transF(F)) ≈ transB(b) / transF(F) ≈ transB(b) / transF(A)
+        B = randn(transT(elty), 5, 5)
+        @test rdiv!(copy(B), transF(F)) ≈ B / transF(F) ≈ B / transF(A)
+    end
 end
 
 @testset "transpose(A) / lu(B)' should not overwrite A (#36657)" begin
@@ -462,6 +477,13 @@ end
     Asub2 = @view(B[[2,3],[2,3]])
     F2 = lu!(Asub2)
     @test Matrix(F1) ≈ Matrix(F2) ≈ C
+end
+
+@testset "matrix with Nonfinite" begin
+    lu(fill(NaN, 2, 2), check=false)
+    lu(fill(Inf, 2, 2), check=false)
+    LinearAlgebra.generic_lufact!(fill(NaN, 2, 2), check=false)
+    LinearAlgebra.generic_lufact!(fill(Inf, 2, 2), check=false)
 end
 
 end # module TestLU

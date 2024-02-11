@@ -134,13 +134,6 @@ jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
 
-JL_DLLEXPORT jl_code_instance_t* jl_new_codeinst(
-        jl_method_instance_t *mi, jl_value_t *rettype,
-        jl_value_t *inferred_const, jl_value_t *inferred,
-        int32_t const_flags, size_t min_world, size_t max_world,
-        uint32_t ipo_effects, uint32_t effects, jl_value_t *argescapes,
-        uint8_t relocatability);
-
 JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
     jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env, int do_compile)
 {
@@ -153,12 +146,15 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
     root = jl_new_struct(jl_linenumbernode_type, root, file);
     jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, ci, isva);
     root = (jl_value_t*)meth;
-    meth->primary_world = jl_current_task->world_age;
+    size_t world = jl_current_task->world_age;
+    // these are only legal in the current world since they are not in any tables
+    jl_atomic_store_release(&meth->primary_world, world);
+    jl_atomic_store_release(&meth->deleted_world, world);
 
     sigtype = jl_argtype_with_function(env, (jl_value_t*)argt);
     jl_method_instance_t *mi = jl_specializations_get_linfo((jl_method_t*)root, sigtype, jl_emptysvec);
-    inst = jl_new_codeinst(mi, rt_ub, NULL, (jl_value_t*)ci,
-        0, meth->primary_world, -1, 0, 0, jl_nothing, 0);
+    inst = jl_new_codeinst(mi, jl_nothing, rt_ub, (jl_value_t*)jl_any_type, NULL, (jl_value_t*)ci,
+        0, world, world, 0, 0, jl_nothing, 0);
     jl_mi_cache_insert(mi, inst);
 
     jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, root, env, do_compile);

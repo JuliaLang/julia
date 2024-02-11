@@ -12,13 +12,13 @@
 
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len, ios_t *s) UNAVAILABLE
+        ios_t *z, ios_t *s) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
 
 JL_DLLEXPORT void jl_extern_c_fallback(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
-        char raw_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
+        char emit_mc, char getwrapper, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir_fallback(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvmf_defn_fallback(jl_llvmf_dump_t *dump, jl_method_instance_t *linfo, size_t world, char getwrapper, char optimize, const jl_cgparams_t params) UNAVAILABLE
 
@@ -83,9 +83,9 @@ JL_DLLEXPORT void jl_dump_llvm_opt_fallback(void *s)
 {
 }
 
-JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm_fallback(uint64_t fptr, char raw_mc, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
+JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm_fallback(uint64_t fptr, char emit_mc, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
 
-JL_DLLEXPORT jl_value_t *jl_dump_function_asm_fallback(jl_llvmf_dump_t* dump, char raw_mc, const char* asm_variant, const char *debuginfo, char binary) UNAVAILABLE
+JL_DLLEXPORT jl_value_t *jl_dump_function_asm_fallback(jl_llvmf_dump_t* dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw) UNAVAILABLE
 
 JL_DLLEXPORT void jl_get_function_id_fallback(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx) UNAVAILABLE
@@ -107,34 +107,45 @@ JL_DLLEXPORT uint64_t jl_getUnwindInfo_fallback(uint64_t dwAddr)
     return 0;
 }
 
-JL_DLLEXPORT void jl_add_optimization_passes_fallback(void *PM, int opt_level, int lower_intrinsics) UNAVAILABLE
+JL_DLLEXPORT void jl_build_newpm_pipeline_fallback(void *MPM, void *PB, void *config) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraAddLowerSimdLoopPass_fallback(void *PM) UNAVAILABLE
+JL_DLLEXPORT void jl_register_passbuilder_callbacks_fallback(void *PB) { }
 
-JL_DLLEXPORT void LLVMExtraAddFinalLowerGCPass_fallback(void *PM) UNAVAILABLE
+#define MODULE_PASS(NAME, CLASS, CREATE_PASS) \
+    JL_DLLEXPORT void LLVMExtraMPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
+#define CGSCC_PASS(NAME, CLASS, CREATE_PASS) \
+    JL_DLLEXPORT void LLVMExtraCGPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
+#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS) \
+    JL_DLLEXPORT void LLVMExtraFPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
+#define LOOP_PASS(NAME, CLASS, CREATE_PASS) \
+    JL_DLLEXPORT void LLVMExtraLPMAdd##CLASS##_fallback(void *PM) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraAddPropagateJuliaAddrspaces_fallback(void *PM) UNAVAILABLE
+#include "llvm-julia-passes.inc"
 
-JL_DLLEXPORT void LLVMExtraAddRemoveJuliaAddrspacesPass_fallback(void *PM) UNAVAILABLE
+#undef MODULE_PASS
+#undef CGSCC_PASS
+#undef FUNCTION_PASS
+#undef LOOP_PASS
 
-JL_DLLEXPORT void LLVMExtraAddCombineMulAddPass_fallback(void *PM) UNAVAILABLE
+//LLVM C api to the julia JIT
+JL_DLLEXPORT void* JLJITGetLLVMOrcExecutionSession_fallback(void* JIT) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass_fallback(void *PM) UNAVAILABLE
+JL_DLLEXPORT void* JLJITGetJuliaOJIT_fallback(void) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraAddLowerExcHandlersPass_fallback(void *PM) UNAVAILABLE
+JL_DLLEXPORT void* JLJITGetExternalJITDylib_fallback(void* JIT) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraAddLateLowerGCFramePass_fallback(void *PM) UNAVAILABLE
+JL_DLLEXPORT void* JLJITAddObjectFile_fallback(void* JIT, void* JD, void* ObjBuffer) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraJuliaLICMPass_fallback(void *PM) UNAVAILABLE
+JL_DLLEXPORT void* JLJITAddLLVMIRModule_fallback(void* JIT, void* JD, void* TSM) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraAddAllocOptPass_fallback(void *PM) UNAVAILABLE
+JL_DLLEXPORT void* JLJITLookup_fallback(void* JIT, void* Result, const char *Name) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraAddLowerPTLSPass_fallback(void *PM, bool_t imaging_mode) UNAVAILABLE
+JL_DLLEXPORT void* JLJITMangleAndIntern_fallback(void* JIT, const char *Name) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraAddRemoveNIPass_fallback(void *PM) UNAVAILABLE
+JL_DLLEXPORT const char *JLJITGetTripleString_fallback(void* JIT) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_fallback(void *PM, bool_t Strong) UNAVAILABLE
+JL_DLLEXPORT const char JLJITGetGlobalPrefix_fallback(void* JIT) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraAddDemoteFloat16Pass_fallback(void *PM) UNAVAILABLE
+JL_DLLEXPORT const char *JLJITGetDataLayoutString_fallback(void* JIT) UNAVAILABLE
 
-JL_DLLEXPORT void LLVMExtraAddCPUFeaturesPass_fallback(void *PM) UNAVAILABLE
+JL_DLLEXPORT void* JLJITGetIRCompileLayer_fallback(void* JIT) UNAVAILABLE

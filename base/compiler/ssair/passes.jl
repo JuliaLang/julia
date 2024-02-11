@@ -6,6 +6,13 @@ function is_known_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,I
     return singleton_type(ft) === func
 end
 
+function is_known_invoke_or_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
+    isinvoke = isexpr(x, :invoke)
+    (isinvoke || isexpr(x, :call)) || return false
+    ft = argextype(x.args[isinvoke ? 2 : 1], ir)
+    return singleton_type(ft) === func
+end
+
 struct SSAUse
     kind::Symbol
     idx::Int
@@ -64,7 +71,7 @@ function try_compute_field(ir::Union{IncrementalCompact,IRCode}, @nospecialize(f
 end
 
 # assume `stmt` is a call of `getfield`/`setfield!`/`isdefined`
-function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, typ::DataType)
+function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::Expr, @nospecialize(typ))
     field = try_compute_field(ir, stmt.args[3])
     return try_compute_fieldidx(typ, field)
 end
@@ -79,12 +86,11 @@ function find_curblock(domtree::DomTree, allblocks::BitSet, curblock::Int)
 end
 
 function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
-    ex = ir[SSAValue(def)][:inst]
+    ex = ir[SSAValue(def)][:stmt]
     if isexpr(ex, :new)
         return ex.args[1+fidx]
     else
-        @assert isa(ex, Expr)
-        # The use is whatever the setfield was
+        @assert is_known_call(ex, setfield!, ir)
         return ex.args[4]
     end
 end
@@ -176,19 +182,33 @@ function find_def_for_use(
     return def, useblock, curblock
 end
 
-function collect_leaves(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typeconstraint), 𝕃ₒ::AbstractLattice)
+function collect_leaves(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typeconstraint), 𝕃ₒ::AbstractLattice,
+                        predecessors = ((@nospecialize(def), compact::IncrementalCompact) -> isa(def, PhiNode) ? def.values : nothing))
     if isa(val, Union{OldSSAValue, SSAValue})
         val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
     end
-    return walk_to_defs(compact, val, typeconstraint, 𝕃ₒ)
+    return walk_to_defs(compact, val, typeconstraint, predecessors, 𝕃ₒ)
 end
 
-function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#),
-                     callback = (@nospecialize(pi), @nospecialize(idx)) -> false)
+function trivial_walker(@nospecialize(pi), @nospecialize(idx))
+    return nothing
+end
+
+function pi_walker(@nospecialize(pi), @nospecialize(idx))
+    if isa(pi, PiNode)
+        return LiftedValue(pi.val)
+    end
+    return nothing
+end
+
+function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#), callback=trivial_walker)
     while true
         if isa(defssa, OldSSAValue)
             if already_inserted(compact, defssa)
                 rename = compact.ssa_rename[defssa.id]
+                if isa(rename, Refined)
+                    rename = rename.val
+                end
                 if isa(rename, AnySSAValue)
                     defssa = rename
                     continue
@@ -196,28 +216,27 @@ function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSA
                 return rename
             end
         end
-        def = compact[defssa][:inst]
-        if isa(def, PiNode)
-            if callback(def, defssa)
-                return defssa
-            end
-            def = def.val
-            if isa(def, SSAValue)
-                is_old(compact, defssa) && (def = OldSSAValue(def.id))
-            else
-                return def
-            end
-            defssa = def
-        elseif isa(def, AnySSAValue)
+        def = compact[defssa][:stmt]
+        if isa(def, AnySSAValue)
             callback(def, defssa)
             if isa(def, SSAValue)
                 is_old(compact, defssa) && (def = OldSSAValue(def.id))
             end
             defssa = def
-        elseif isa(def, Union{PhiNode, PhiCNode, Expr, GlobalRef})
+        elseif isa(def, Union{PhiNode, PhiCNode, GlobalRef})
             return defssa
         else
-            return def
+            new_def = callback(def, defssa)
+            if new_def === nothing
+                return defssa
+            end
+            new_def = new_def.val
+            if !isa(new_def, AnySSAValue)
+                return new_def
+            elseif isa(new_def, SSAValue)
+                is_old(compact, defssa) && (new_def = OldSSAValue(new_def.id))
+            end
+            defssa = new_def
         end
     end
 end
@@ -227,24 +246,30 @@ function simple_walk_constraint(compact::IncrementalCompact, @nospecialize(defss
     callback = function (@nospecialize(pi), @nospecialize(idx))
         if isa(pi, PiNode)
             typeconstraint = typeintersect(typeconstraint, widenconst(pi.typ))
+            return LiftedValue(pi.val)
         end
-        return false
+        return nothing
     end
     def = simple_walk(compact, defssa, callback)
     return Pair{Any, Any}(def, typeconstraint)
 end
 
 """
-    walk_to_defs(compact, val, typeconstraint)
+    walk_to_defs(compact, val, typeconstraint, predecessors)
 
 Starting at `val` walk use-def chains to get all the leaves feeding into this `val`
-(pruning those leaves rules out by path conditions).
+(pruning those leaves ruled out by path conditions).
+
+`predecessors(def, compact)` is a callback which should return the set of possible
+predecessors for a "phi-like" node (PhiNode or Core.ifelse) or `nothing` otherwise.
 """
-function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), 𝕃ₒ::AbstractLattice)
-    visited_phinodes = AnySSAValue[]
-    isa(defssa, AnySSAValue) || return Any[defssa], visited_phinodes
-    def = compact[defssa][:inst]
-    isa(def, PhiNode) || return Any[defssa], visited_phinodes
+function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), predecessors, 𝕃ₒ::AbstractLattice)
+    visited_philikes = AnySSAValue[]
+    isa(defssa, AnySSAValue) || return Any[defssa], visited_philikes
+    def = compact[defssa][:stmt]
+    if predecessors(def, compact) === nothing
+        return Any[defssa], visited_philikes
+    end
     visited_constraints = IdDict{AnySSAValue, Any}()
     worklist_defs = AnySSAValue[]
     worklist_constraints = Any[]
@@ -255,13 +280,17 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
         defssa = pop!(worklist_defs)
         typeconstraint = pop!(worklist_constraints)
         visited_constraints[defssa] = typeconstraint
-        def = compact[defssa][:inst]
-        if isa(def, PhiNode)
-            push!(visited_phinodes, defssa)
+        def = compact[defssa][:stmt]
+        values = predecessors(def, compact)
+        if values !== nothing
+            if isa(def, PhiNode) || length(values) > 1
+                push!(visited_philikes, defssa)
+            end
             possible_predecessors = Int[]
-            for n in 1:length(def.edges)
-                isassigned(def.values, n) || continue
-                val = def.values[n]
+
+            for n in 1:length(values)
+                isassigned(values, n) || continue
+                val = values[n]
                 if is_old(compact, defssa) && isa(val, SSAValue)
                     val = OldSSAValue(val.id)
                 end
@@ -270,8 +299,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                 push!(possible_predecessors, n)
             end
             for n in possible_predecessors
-                pred = def.edges[n]
-                val = def.values[n]
+                val = values[n]
                 if is_old(compact, defssa) && isa(val, SSAValue)
                     val = OldSSAValue(val.id)
                 end
@@ -306,7 +334,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
             push!(leaves, defssa)
         end
     end
-    return leaves, visited_phinodes
+    return leaves, visited_philikes
 end
 
 function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compact::IncrementalCompact)
@@ -320,17 +348,23 @@ function record_immutable_preserve!(new_preserves::Vector{Any}, def::Expr, compa
 end
 
 function already_inserted(compact::IncrementalCompact, old::OldSSAValue)
-    id = old.id
-    if id < length(compact.ir.stmts)
-        return id < compact.idx
+    already_inserted_ssa(compact, compact.idx-1)(0, old)
+end
+
+function already_inserted_ssa(compact::IncrementalCompact, processed_idx::Int)
+    return function did_already_insert(phi_arg::Int, old::OldSSAValue)
+        id = old.id
+        if id <= length(compact.ir.stmts)
+            return id <= processed_idx
+        end
+        id -= length(compact.ir.stmts)
+        if id <= length(compact.ir.new_nodes)
+            return did_already_insert(phi_arg, OldSSAValue(compact.ir.new_nodes.info[id].pos))
+        end
+        id -= length(compact.ir.new_nodes)
+        @assert id <= length(compact.pending_nodes)
+        return !(id in compact.pending_perm)
     end
-    id -= length(compact.ir.stmts)
-    if id < length(compact.ir.new_nodes)
-        return already_inserted(compact, OldSSAValue(compact.ir.new_nodes.info[id].pos))
-    end
-    id -= length(compact.ir.new_nodes)
-    @assert id <= length(compact.pending_nodes)
-    return !(id in compact.pending_perm)
 end
 
 function is_pending(compact::IncrementalCompact, old::OldSSAValue)
@@ -353,10 +387,11 @@ struct LiftedValue
     LiftedValue(@nospecialize val) = new(val)
 end
 const LiftedLeaves = IdDict{Any, Union{Nothing,LiftedValue}}
+const LiftedDefs = IdDict{Any, Bool}
 
 # try to compute lifted values that can replace `getfield(x, field)` call
 # where `x` is an immutable struct that are defined at any of `leaves`
-function lift_leaves(compact::IncrementalCompact, @nospecialize(result_t), field::Int,
+function lift_leaves(compact::IncrementalCompact, field::Int,
                      leaves::Vector{Any}, 𝕃ₒ::AbstractLattice)
     # For every leaf, the lifted value
     lifted_leaves = LiftedLeaves()
@@ -372,7 +407,9 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(result_t), field
             elseif isexpr(def, :new)
                 typ = unwrap_unionall(widenconst(types(compact)[leaf]))
                 (isa(typ, DataType) && !isabstracttype(typ)) || return nothing
-                @assert !ismutabletype(typ)
+                if ismutabletype(typ)
+                    isconst(typ, field) || return nothing
+                end
                 if length(def.args) < 1+field
                     if field > fieldcount(typ)
                         return nothing
@@ -386,15 +423,6 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(result_t), field
                         continue
                     end
                     return nothing
-                    # Expand the Expr(:new) to include it's element Expr(:new) nodes up until the one we want
-                    compact[leaf] = nothing
-                    for i = (length(def.args) + 1):(1+field)
-                        ftyp = fieldtype(typ, i - 1)
-                        isbitstype(ftyp) || return nothing
-                        ninst = effect_free(NewInstruction(Expr(:new, ftyp), result_t))
-                        push!(def.args, insert_node!(compact, leaf, ninst))
-                    end
-                    compact[leaf] = def
                 end
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
@@ -402,7 +430,7 @@ function lift_leaves(compact::IncrementalCompact, @nospecialize(result_t), field
             #      `:new` expressions by the inlinear
             # elseif isexpr(def, :splatnew) && length(def.args) == 2 && isa(def.args[2], AnySSAValue)
             #     tplssa = def.args[2]::AnySSAValue
-            #     tplexpr = compact[tplssa][:inst]
+            #     tplexpr = compact[tplssa][:stmt]
             #     if is_known_call(tplexpr, tuple, compact) && 1 ≤ field < length(tplexpr.args)
             #         lift_arg!(compact, tplssa, cache_key, tplexpr, 1+field, lifted_leaves)
             #         continue
@@ -463,16 +491,15 @@ function lift_arg!(
     if is_old(compact, leaf) && isa(lifted, SSAValue)
         lifted = OldSSAValue(lifted.id)
         if already_inserted(compact, lifted)
-            lifted = compact.ssa_rename[lifted.id]
-        end
-    end
-    if isa(lifted, GlobalRef) || isa(lifted, Expr)
-        lifted = insert_node!(compact, leaf, effect_free(NewInstruction(lifted, argextype(lifted, compact))))
-        compact[leaf] = nothing
-        stmt.args[argidx] = lifted
-        compact[leaf] = stmt
-        if isa(leaf, SSAValue) && leaf.id < compact.result_idx
-            push!(compact.late_fixup, leaf.id)
+            new_lifted = compact.ssa_rename[lifted.id]
+            if isa(new_lifted, Refined)
+                new_lifted = new_lifted.val
+            end
+            # Special case: If lifted happens to be the statement we're currently processing,
+            # leave it as old SSAValue in case we decide to handle this in the renamer
+            if !isa(new_lifted, SSAValue) || new_lifted != SSAValue(compact.result_idx-1)
+                lifted = new_lifted
+            end
         end
     end
     lifted_leaves[cache_key] = LiftedValue(lifted)
@@ -482,23 +509,24 @@ end
 function walk_to_def(compact::IncrementalCompact, @nospecialize(leaf))
     if isa(leaf, OldSSAValue) && already_inserted(compact, leaf)
         leaf = compact.ssa_rename[leaf.id]
+        if isa(leaf, Refined)
+            leaf = leaf.val
+        end
         if isa(leaf, AnySSAValue)
             leaf = simple_walk(compact, leaf)
         end
         if isa(leaf, AnySSAValue)
-            def = compact[leaf][:inst]
+            def = compact[leaf][:stmt]
         else
             def = leaf
         end
     elseif isa(leaf, AnySSAValue)
-        def = compact[leaf][:inst]
+        def = compact[leaf][:stmt]
     else
         def = leaf
     end
     return Pair{Any, Any}(def, leaf)
 end
-
-make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
 
 """
     lift_comparison!(cmp, compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
@@ -516,8 +544,7 @@ end
 function lift_comparison! end
 
 function lift_comparison!(::typeof(===), compact::IncrementalCompact,
-    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice)
+    idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     lhs, rhs = args[2], args[3]
@@ -533,40 +560,44 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     else
         return
     end
-    lift_comparison_leaves!(egal_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
+    lift_comparison_leaves!(egal_tfunc, compact, val, cmp, idx, 𝕃ₒ)
 end
 
 function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
-    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice)
+    idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     val = args[2]
-    lift_comparison_leaves!(isa_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
+    lift_comparison_leaves!(isa_tfunc, compact, val, cmp, idx, 𝕃ₒ)
 end
 
 function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
-    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice)
+    idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     isa(cmp, Const) || return # `isdefined_tfunc` won't return Const
     val = args[2]
-    lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
+    lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, idx, 𝕃ₒ)
+end
+
+function phi_or_ifelse_predecessors(@nospecialize(def), compact::IncrementalCompact)
+    isa(def, PhiNode) && return def.values
+    is_known_call(def, Core.ifelse, compact) && return def.args[3:4]
+    return nothing
 end
 
 function lift_comparison_leaves!(@specialize(tfunc),
     compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
-    lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int,
-    𝕃ₒ::AbstractLattice)
+    idx::Int, 𝕃ₒ::AbstractLattice)
     typeconstraint = widenconst(argextype(val, compact))
     if isa(val, Union{OldSSAValue, SSAValue})
         val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
     end
     isa(typeconstraint, Union) || return # bail out if there won't be a good chance for lifting
-    leaves, visited_phinodes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ)
+
+    leaves, visited_philikes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ, phi_or_ifelse_predecessors)
     length(leaves) ≤ 1 && return # bail out if we don't have multiple leaves
 
     # check if we can evaluate the comparison for each one of the leaves
@@ -585,33 +616,150 @@ function lift_comparison_leaves!(@specialize(tfunc),
     end
 
     # perform lifting
-    lifted_val = perform_lifting!(compact,
-        visited_phinodes, cmp, lifting_cache, Bool,
-        lifted_leaves::LiftedLeaves, val, nothing)::LiftedValue
+    (lifted_val, nest) = perform_lifting!(compact,
+        visited_philikes, cmp, Bool, lifted_leaves::LiftedLeaves, val, nothing)
 
-    compact[idx] = lifted_val.val
+    compact[idx] = (lifted_val::LiftedValue).val
+
+    finish_phi_nest!(compact, nest)
 end
 
-struct LiftedPhi
+struct IfElseCall
+    call::Expr
+end
+
+# An intermediate data structure used for lifting expressions through a
+# "phi-like" instruction (either a PhiNode or a call to Core.ifelse)
+struct LiftedPhilike
     ssa::AnySSAValue
-    node::PhiNode
+    node::Union{PhiNode,IfElseCall}
     need_argupdate::Bool
 end
 
+struct SkipToken end; const SKIP_TOKEN = SkipToken()
+
+function lifted_value(compact::IncrementalCompact, @nospecialize(old_node_ssa#=::AnySSAValue=#), @nospecialize(old_value),
+                      lifted_philikes::Vector{LiftedPhilike}, lifted_leaves::Union{LiftedLeaves, LiftedDefs}, reverse_mapping::IdDict{AnySSAValue, Int},
+                      walker_callback)
+    val = old_value
+    if is_old(compact, old_node_ssa) && isa(val, SSAValue)
+        val = OldSSAValue(val.id)
+    end
+    if isa(val, AnySSAValue)
+        val = simple_walk(compact, val, def_walker(lifted_leaves, reverse_mapping, walker_callback))
+    end
+    if val in keys(lifted_leaves)
+        lifted_val = lifted_leaves[val]
+        if isa(lifted_leaves, LiftedDefs)
+            return lifted_val
+        end
+        lifted_val === nothing && return UNDEF_TOKEN
+        val = lifted_val.val
+        if isa(val, AnySSAValue)
+            val = simple_walk(compact, val, pi_walker)
+        end
+        return val
+    elseif isa(val, AnySSAValue) && val in keys(reverse_mapping)
+        return lifted_philikes[reverse_mapping[val]].ssa
+    else
+        return SKIP_TOKEN # Probably ignored by path condition, skip this
+    end
+end
+
 function is_old(compact, @nospecialize(old_node_ssa))
-    isa(old_node_ssa, OldSSAValue) &&
-        !is_pending(compact, old_node_ssa) &&
-        !already_inserted(compact, old_node_ssa)
+    isa(old_node_ssa, OldSSAValue) || return false
+    is_pending(compact, old_node_ssa) && return false
+    already_inserted(compact, old_node_ssa) && return false
+    return true
+end
+
+struct PhiNest{C}
+    visited_philikes::Vector{AnySSAValue}
+    lifted_philikes::Vector{LiftedPhilike}
+    lifted_leaves::Union{LiftedLeaves, LiftedDefs}
+    reverse_mapping::IdDict{AnySSAValue, Int}
+    walker_callback::C
+end
+
+function finish_phi_nest!(compact::IncrementalCompact, nest::PhiNest)
+    (;visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping, walker_callback) = nest
+    nphilikes = length(lifted_philikes)
+    # Fix up arguments
+    for i = 1:nphilikes
+        (old_node_ssa, lf) = visited_philikes[i], lifted_philikes[i]
+        lf.need_argupdate || continue
+        should_count = !isa(lf.ssa, OldSSAValue) || already_inserted(compact, lf.ssa)
+
+        lfnode = lf.node
+        if isa(lfnode, PhiNode)
+            old_node = compact[old_node_ssa][:stmt]::PhiNode
+            new_node = lfnode
+            for i = 1:length(old_node.values)
+                isassigned(old_node.values, i) || continue
+                val = lifted_value(compact, old_node_ssa, old_node.values[i],
+                                   lifted_philikes, lifted_leaves, reverse_mapping, walker_callback)
+                val !== SKIP_TOKEN && push!(new_node.edges, old_node.edges[i])
+                if val === UNDEF_TOKEN
+                    resize!(new_node.values, length(new_node.values)+1)
+                elseif val !== SKIP_TOKEN
+                    should_count && _count_added_node!(compact, val)
+                    push!(new_node.values, val)
+                end
+            end
+        elseif isa(lfnode, IfElseCall)
+            old_node = compact[old_node_ssa][:stmt]::Expr
+            then_result, else_result = old_node.args[3], old_node.args[4]
+
+            then_result = lifted_value(compact, old_node_ssa, then_result,
+                                       lifted_philikes, lifted_leaves, reverse_mapping, walker_callback)
+            else_result = lifted_value(compact, old_node_ssa, else_result,
+                                       lifted_philikes, lifted_leaves, reverse_mapping, walker_callback)
+
+            # In cases where the Core.ifelse condition is statically-known, e.g., thanks
+            # to a PiNode from a guarding conditional, replace with the remaining branch.
+            if then_result === SKIP_TOKEN || else_result === SKIP_TOKEN
+                only_result = (then_result === SKIP_TOKEN) ? else_result : then_result
+
+                # Replace Core.ifelse(%cond, %a, %b) with %a
+                compact[lf.ssa] = only_result
+
+                # Note: Core.ifelse(%cond, %a, %b) has observable effects (!nothrow), but since
+                # we have not deleted the preceding statement that this was derived from, this
+                # replacement is safe, i.e. it will not affect the effects observed.
+                continue
+            end
+
+            @assert then_result !== SKIP_TOKEN && then_result !== UNDEF_TOKEN
+            @assert else_result !== SKIP_TOKEN && else_result !== UNDEF_TOKEN
+
+            if should_count
+                _count_added_node!(compact, then_result)
+                _count_added_node!(compact, else_result)
+            end
+
+            push!(lfnode.call.args, then_result)
+            push!(lfnode.call.args, else_result)
+        end
+    end
+end
+
+function def_walker(lifted_leaves::Union{LiftedLeaves, LiftedDefs}, reverse_mapping::IdDict{AnySSAValue, Int}, walker_callback)
+    function (@nospecialize(walk_def), @nospecialize(defssa))
+        if (defssa in keys(lifted_leaves)) || (isa(defssa, AnySSAValue) && defssa in keys(reverse_mapping))
+            return nothing
+        end
+        isa(walk_def, PiNode) && return LiftedValue(walk_def.val)
+        return walker_callback(walk_def, defssa)
+    end
 end
 
 function perform_lifting!(compact::IncrementalCompact,
-        visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
-        lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-        @nospecialize(result_t), lifted_leaves::LiftedLeaves, @nospecialize(stmt_val),
-        lazydomtree::Union{LazyDomtree,Nothing})
+        visited_philikes::Vector{AnySSAValue}, @nospecialize(cache_key),
+        @nospecialize(result_t), lifted_leaves::Union{LiftedLeaves, LiftedDefs}, @nospecialize(stmt_val),
+        lazydomtree::Union{LazyDomtree,Nothing}, walker_callback = trivial_walker)
     reverse_mapping = IdDict{AnySSAValue, Int}()
-    for id in 1:length(visited_phinodes)
-        reverse_mapping[visited_phinodes[id]] = id
+    for id in 1:length(visited_philikes)
+        reverse_mapping[visited_philikes[id]] = id
     end
 
     # Check if all the lifted leaves are the same
@@ -627,108 +775,89 @@ function perform_lifting!(compact::IncrementalCompact,
         end
     end
 
-    the_leaf_val = isa(the_leaf, LiftedValue) ? the_leaf.val : nothing
-    if !isa(the_leaf_val, SSAValue)
-        all_same = false
-    end
-
-    if all_same
+    if all_same && isa(the_leaf, LiftedValue)
         dominates_all = true
-        if lazydomtree !== nothing
-            domtree = get!(lazydomtree)
-            for item in visited_phinodes
-                if !dominates_ssa(compact, domtree, the_leaf_val, item)
-                    dominates_all = false
-                    break
+        the_leaf_val = the_leaf.val
+        if isa(the_leaf_val, AnySSAValue)
+            if lazydomtree === nothing
+                # Must conservatively assume this
+                dominates_all = false
+            else
+                # This code guards against the possibility of accidentally forwarding a value from a
+                # previous iteration. Consider for example:
+                #
+                # %p = phi(%arg, %t)
+                # %b = <...>
+                # %c = getfield(%p, 1)
+                # %t = tuple(%b)
+                #
+                # It would be incorrect to replace `%c` by `%b`, because that would read the value of
+                # `%b` in the *current* iteration, while the value of `%b` that comes in via `%p` is
+                # that of the previous iteration.
+                domtree = get!(lazydomtree)
+                for item in visited_philikes
+                    if !dominates_ssa(compact, domtree, the_leaf_val, item)
+                        dominates_all = false
+                        break
+                    end
                 end
             end
-            if dominates_all
-                return the_leaf
+        end
+        if dominates_all
+            if isa(the_leaf_val, OldSSAValue)
+                the_leaf = LiftedValue(simple_walk(compact, the_leaf_val))
             end
+            return Pair{Any, PhiNest}(the_leaf, PhiNest(visited_philikes, Vector{LiftedPhilike}(undef, 0), lifted_leaves, reverse_mapping, walker_callback))
         end
     end
 
     # Insert PhiNodes
-    nphis = length(visited_phinodes)
-    lifted_phis = Vector{LiftedPhi}(undef, nphis)
-    for i = 1:nphis
-        item = visited_phinodes[i]
-        # FIXME this cache is broken somehow
-        # ckey = Pair{AnySSAValue, Any}(item, cache_key)
-        # cached = ckey in keys(lifting_cache)
-        cached = false
-        if cached
-            ssa = lifting_cache[ckey]
-            lifted_phis[i] = LiftedPhi(ssa, compact[ssa][:inst]::PhiNode, false)
-            continue
-        end
-        n = PhiNode()
-        ssa = insert_node!(compact, item, effect_free(NewInstruction(n, result_t)))
-        # lifting_cache[ckey] = ssa
-        lifted_phis[i] = LiftedPhi(ssa, n, true)
-    end
+    nphilikes = length(visited_philikes)
+    lifted_philikes = Vector{LiftedPhilike}(undef, nphilikes)
+    for i = 1:nphilikes
+        old_ssa = visited_philikes[i]
+        old_inst = compact[old_ssa]
+        old_node = old_inst[:stmt]::Union{PhiNode,Expr}
+        if isa(old_node, PhiNode)
+            new_node = PhiNode()
+            ssa = insert_node!(compact, old_ssa, removable_if_unused(NewInstruction(new_node, result_t)))
+            lifted_philikes[i] = LiftedPhilike(ssa, new_node, true)
+        else
+            @assert is_known_call(old_node, Core.ifelse, compact)
+            ifelse_func, condition = old_node.args
+            if is_old(compact, old_ssa) && isa(condition, SSAValue)
+                condition = OldSSAValue(condition.id)
+            end
 
-    # Fix up arguments
-    for i = 1:nphis
-        (old_node_ssa, lf) = visited_phinodes[i], lifted_phis[i]
-        old_node = compact[old_node_ssa][:inst]::PhiNode
-        new_node = lf.node
-        should_count = !isa(lf.ssa, OldSSAValue) || already_inserted(compact, lf.ssa)
-        lf.need_argupdate || continue
-        for i = 1:length(old_node.edges)
-            edge = old_node.edges[i]
-            isassigned(old_node.values, i) || continue
-            val = old_node.values[i]
-            if is_old(compact, old_node_ssa) && isa(val, SSAValue)
-                val = OldSSAValue(val.id)
-            end
-            if isa(val, AnySSAValue)
-                val = simple_walk(compact, val)
-            end
-            if val in keys(lifted_leaves)
-                push!(new_node.edges, edge)
-                lifted_val = lifted_leaves[val]
-                if lifted_val === nothing
-                    resize!(new_node.values, length(new_node.values)+1)
-                    continue
-                end
-                val = lifted_val.val
-                if isa(val, AnySSAValue)
-                    callback = (@nospecialize(pi), @nospecialize(idx)) -> true
-                    val = simple_walk(compact, val, callback)
-                end
-                should_count && _count_added_node!(compact, val)
-                push!(new_node.values, val)
-            elseif isa(val, AnySSAValue) && val in keys(reverse_mapping)
-                push!(new_node.edges, edge)
-                newval = lifted_phis[reverse_mapping[val]].ssa
-                should_count && _count_added_node!(compact, newval)
-                push!(new_node.values, newval)
-            else
-                # Probably ignored by path condition, skip this
-            end
+            new_node = Expr(:call, ifelse_func, condition) # Renamed then_result, else_result added below
+            new_inst = NewInstruction(new_node, result_t, NoCallInfo(), old_inst[:line], old_inst[:flag])
+
+            ssa = insert_node!(compact, old_ssa, new_inst, #= attach_after =# true)
+            lifted_philikes[i] = LiftedPhilike(ssa, IfElseCall(new_node), true)
         end
     end
 
     # Fixup the stmt itself
     if isa(stmt_val, Union{SSAValue, OldSSAValue})
-        stmt_val = simple_walk(compact, stmt_val)
+        stmt_val = simple_walk(compact, stmt_val, def_walker(lifted_leaves, reverse_mapping, walker_callback))
     end
 
     if stmt_val in keys(lifted_leaves)
-        return lifted_leaves[stmt_val]
+        stmt_val = lifted_leaves[stmt_val]
     elseif isa(stmt_val, AnySSAValue) && stmt_val in keys(reverse_mapping)
-        return LiftedValue(lifted_phis[reverse_mapping[stmt_val]].ssa)
+        stmt_val = LiftedValue(lifted_philikes[reverse_mapping[stmt_val]].ssa)
+    else
+        error()
     end
 
-    return stmt_val # N.B. should never happen
+    return Pair{Any, PhiNest}(stmt_val, PhiNest(visited_philikes, lifted_philikes, lifted_leaves, reverse_mapping, walker_callback))
 end
 
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
-    length(stmt.args) != 4 && return
+    length(stmt.args) != 3 && return
 
-    vec = stmt.args[3]
-    val = stmt.args[4]
+    vec = stmt.args[2]
+    val = stmt.args[3]
     valT = argextype(val, compact)
     (isa(valT, Const) && isa(valT.val, Int)) || return
     valI = valT.val::Int
@@ -738,7 +867,7 @@ function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
         valI <= length(vec) || return
         compact[idx] = quoted(vec[valI])
     elseif isa(vec, SSAValue)
-        def = compact[vec][:inst]
+        def = compact[vec][:stmt]
         if is_known_call(def, Core.svec, compact)
             valI <= length(def.args) - 1 || return
             compact[idx] = def.args[valI+1]
@@ -752,7 +881,112 @@ function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
     return
 end
 
-# TODO: We could do the whole lifing machinery here, but really all
+function lift_leaves_keyvalue(compact::IncrementalCompact, @nospecialize(key),
+                             leaves::Vector{Any}, 𝕃ₒ::AbstractLattice)
+    # For every leaf, the lifted value
+    lifted_leaves = LiftedLeaves()
+    for i = 1:length(leaves)
+        leaf = leaves[i]
+        cache_key = leaf
+        if isa(leaf, AnySSAValue)
+            (def, leaf) = walk_to_def(compact, leaf)
+            if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
+                @assert isexpr(def, :invoke)
+                if length(def.args) in (5, 6)
+                    set_key = def.args[end-1]
+                    set_val_idx = length(def.args)
+                elseif length(def.args) == 4
+                    # Key is deleted
+                    # TODO: Model this
+                    return nothing
+                elseif length(def.args) == 3
+                    # The whole collection is deleted
+                    # TODO: Model this
+                    return nothing
+                else
+                    return nothing
+                end
+                if set_key === key || (egal_tfunc(𝕃ₒ, argextype(key, compact), argextype(set_key, compact)) == Const(true))
+                    lift_arg!(compact, leaf, cache_key, def, set_val_idx, lifted_leaves)
+                    continue
+                end
+            end
+        end
+        return nothing
+    end
+    return lifted_leaves
+end
+
+function keyvalue_predecessors(@nospecialize(key), 𝕃ₒ::AbstractLattice)
+    function(@nospecialize(def), compact::IncrementalCompact)
+        if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
+            @assert isexpr(def, :invoke)
+            if length(def.args) in (5, 6)
+                collection = def.args[end-2]
+                set_key = def.args[end-1]
+                set_val_idx = length(def.args)
+            elseif length(def.args) == 4
+                collection = def.args[end-1]
+                # Key is deleted
+                # TODO: Model this
+                return nothing
+            elseif length(def.args) == 3
+                collection = def.args[end]
+                # The whole collection is deleted
+                # TODO: Model this
+                return nothing
+            else
+                return nothing
+            end
+            if set_key === key || (egal_tfunc(𝕃ₒ, argextype(key, compact), argextype(set_key, compact)) == Const(true))
+                # This is an actual def
+                return nothing
+            end
+            return Any[collection]
+        end
+        return phi_or_ifelse_predecessors(def, compact)
+    end
+end
+
+function lift_keyvalue_get!(compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
+    collection = stmt.args[end-1]
+    key = stmt.args[end]
+
+    leaves, visited_philikes = collect_leaves(compact, collection, Any, 𝕃ₒ, keyvalue_predecessors(key, 𝕃ₒ))
+    isempty(leaves) && return
+
+    lifted_leaves = lift_leaves_keyvalue(compact, key, leaves, 𝕃ₒ)
+    lifted_leaves === nothing && return
+
+    result_t = Union{}
+    for v in values(lifted_leaves)
+        v === nothing && return
+        result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
+    end
+
+    function keyvalue_walker(@nospecialize(def), _)
+        if is_known_invoke_or_call(def, Core.OptimizedGenerics.KeyValue.set, compact)
+            @assert length(def.args) in (5, 6)
+            return LiftedValue(def.args[end-2])
+        end
+        return nothing
+    end
+    (lifted_val, nest) = perform_lifting!(compact,
+        visited_philikes, key, result_t, lifted_leaves, collection, nothing,
+        keyvalue_walker)
+
+    compact[idx] = lifted_val === nothing ? nothing : Expr(:call, GlobalRef(Core, :tuple), lifted_val.val)
+    finish_phi_nest!(compact, nest)
+    if lifted_val !== nothing
+        if !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], tuple_tfunc(𝕃ₒ, Any[result_t]))
+            add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
+        end
+    end
+
+    return
+end
+
+# TODO: We could do the whole lifting machinery here, but really all
 # we want to do is clean this up when it got inserted by inlining,
 # which always targets simple `svec` call or `_compute_sparams`,
 # so this specialized lifting would be enough
@@ -773,22 +1007,22 @@ end
     length(sig.parameters) >= 1 || return nothing
 
     i = let sig=sig
-        findfirst(j->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
+        findfirst(j::Int->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
     end
     i === nothing && return nothing
     let sig=sig
-        any(j->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
+        any(j::Int->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
     end && return nothing
 
     arg = sig.parameters[i]
 
     rarg = def.args[2 + i]
     isa(rarg, SSAValue) || return nothing
-    argdef = compact[rarg][:inst]
+    argdef = compact[rarg][:stmt]
     if isexpr(argdef, :new)
         rarg = argdef.args[1]
         isa(rarg, SSAValue) || return nothing
-        argdef = compact[rarg][:inst]
+        argdef = compact[rarg][:stmt]
     else
         isType(arg) || return nothing
         arg = arg.parameters[1]
@@ -821,9 +1055,115 @@ end
     return nothing
 end
 
+struct IsEgal <: Function
+    x::Any
+    IsEgal(@nospecialize(x)) = new(x)
+end
+(x::IsEgal)(@nospecialize(y)) = x.x === y
+
+# This tries to match patterns of the form
+#  %ft   = typeof(%farg)
+#  %Targ = apply_type(Foo, ft)
+#  %x    = new(%Targ, %farg)
+#
+# and if possible refines the nothrowness of the new expr based on it.
+function pattern_match_typeof(compact::IncrementalCompact, typ::DataType, fidx::Int,
+                              @nospecialize(Targ), @nospecialize(farg))
+    isa(Targ, SSAValue) || return false
+
+    Tdef = compact[Targ][:stmt]
+    is_known_call(Tdef, Core.apply_type, compact) || return false
+    length(Tdef.args) ≥ 2 || return false
+
+    applyT = argextype(Tdef.args[2], compact)
+    isa(applyT, Const) || return false
+
+    applyT = applyT.val
+    tvars = Any[]
+    while isa(applyT, UnionAll)
+        applyTvar = applyT.var
+        applyT = applyT.body
+        push!(tvars, applyTvar)
+    end
+
+    @assert applyT.name === typ.name
+    fT = fieldtype(applyT, fidx)
+    idx = findfirst(IsEgal(fT), tvars)
+    idx === nothing && return false
+    checkbounds(Bool, Tdef.args, 2+idx) || return false
+    valarg = Tdef.args[2+idx]
+    isa(valarg, SSAValue) || return false
+    valdef = compact[valarg][:stmt]
+    is_known_call(valdef, typeof, compact) || return false
+
+    return valdef.args[2] === farg
+end
+
+function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
+    inst = compact[SSAValue(idx)]
+    if has_flag(inst, IR_FLAGS_REMOVABLE)
+        return # already accurate
+    end
+    (consistent, removable, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
+    if consistent
+        add_flag!(inst, IR_FLAG_CONSISTENT)
+    end
+    if removable
+        add_flag!(inst, IR_FLAGS_REMOVABLE)
+    elseif nothrow
+        add_flag!(inst, IR_FLAG_NOTHROW)
+    end
+    return nothing
+end
+
+function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
+    length(stmt.args) == 4 || return false
+    condarg = stmt.args[2]
+    condtyp = argextype(condarg, compact)
+    if isa(condtyp, Const)
+        if condtyp.val === true
+            compact[idx] = stmt.args[3]
+            return true
+        elseif condtyp.val === false
+            compact[idx] = stmt.args[4]
+            return true
+        end
+    elseif ⊑(𝕃ₒ, condtyp, Bool) && stmt.args[3] === stmt.args[4]
+        compact[idx] = stmt.args[3]
+        return true
+    end
+    return false
+end
+
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
 # which can be very large sometimes, and program counters in question are often very sparse
 const SPCSet = IdSet{Int}
+
+struct IntermediaryCollector
+    intermediaries::SPCSet
+end
+function (this::IntermediaryCollector)(@nospecialize(pi), @nospecialize(ssa))
+    if !isa(pi, Expr)
+        push!(this.intermediaries, ssa.id)
+    end
+    return nothing
+end
+
+function update_scope_mapping!(scope_mapping, bb, val)
+    current_mapping = scope_mapping[bb]
+    if current_mapping != SSAValue(0)
+        if val == SSAValue(0)
+            # Unreachable bbs will have SSAValue(0), but can branch into
+            # try/catch regions. We could validate with the domtree, but that's
+            # quite expensive for a debug check, so simply allow this without
+            # making any changes to mapping.
+            return
+        end
+        @assert current_mapping == val
+        return
+    end
+    scope_mapping[bb] = val
+end
 
 """
     sroa_pass!(ir::IRCode) -> newir::IRCode
@@ -844,16 +1184,54 @@ In a case when all usages are fully eliminated, `struct` allocation may also be 
 a result of succeeding dead code elimination.
 """
 function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
-    𝕃ₒ = inlining === nothing ? OptimizerLattice() : optimizer_lattice(inlining.interp)
+    𝕃ₒ = inlining === nothing ? SimpleInferenceLattice.instance : optimizer_lattice(inlining.interp)
     compact = IncrementalCompact(ir)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
-    lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
     # initialization of domtree is delayed to avoid the expensive computation in many cases
     lazydomtree = LazyDomtree(ir)
-    for ((_, idx), stmt) in compact
+    scope_mapping::Union{Vector{SSAValue}, Nothing} = nothing
+    for ((old_idx, idx), stmt) in compact
+        # If we encounter any EnterNode with set :scope, propagate the current scope for all basic blocks, so
+        # we have easy access for current_scope folding below.
+        if !isa(stmt, Expr)
+            bb = compact.active_result_bb - 1
+            if scope_mapping !== nothing && did_just_finish_bb(compact)
+                this_scope = scope_mapping[bb]
+                if isa(stmt, GotoIfNot)
+                    update_scope_mapping!(scope_mapping, stmt.dest, this_scope)
+                    update_scope_mapping!(scope_mapping, bb+1, this_scope)
+                elseif isa(stmt, GotoNode)
+                    update_scope_mapping!(scope_mapping, stmt.label, this_scope)
+                elseif isa(stmt, EnterNode)
+                    if stmt.catch_dest != 0
+                        update_scope_mapping!(scope_mapping, stmt.catch_dest, this_scope)
+                    end
+                    isdefined(stmt, :scope) || update_scope_mapping!(scope_mapping, bb+1, this_scope)
+                elseif !isa(stmt, ReturnNode)
+                    update_scope_mapping!(scope_mapping, bb+1, this_scope)
+                end
+            end
+            if isa(stmt, EnterNode)
+                if isdefined(stmt, :scope)
+                    if scope_mapping === nothing
+                        scope_mapping = SSAValue[SSAValue(0) for i = 1:length(compact.cfg_transform.result_bbs)]
+                    end
+                    update_scope_mapping!(scope_mapping, bb+1, SSAValue(idx))
+                end
+            end
+            continue
+        end
+        if scope_mapping !== nothing && did_just_finish_bb(compact)
+            bb = compact.active_result_bb - 1
+            bbs = scope_mapping[bb]
+            if isexpr(stmt, :leave) && bbs != SSAValue(0)
+                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[block_for_inst(compact, bbs)])
+            else
+                update_scope_mapping!(scope_mapping, bb+1, bbs)
+            end
+        end
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
-        isa(stmt, Expr) || continue
-        is_setfield = is_isdefined = is_finalizer = false
+        is_setfield = is_isdefined = is_finalizer = is_keyvalue_get = false
         field_ordering = :unspecified
         if is_known_call(stmt, setfield!, compact)
             4 <= length(stmt.args) <= 5 || continue
@@ -896,14 +1274,10 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 preserved_arg = stmt.args[pidx]
                 isa(preserved_arg, SSAValue) || continue
                 let intermediaries = SPCSet()
-                    callback = function (@nospecialize(pi), @nospecialize(ssa))
-                        push!(intermediaries, ssa.id)
-                        return false
-                    end
-                    def = simple_walk(compact, preserved_arg, callback)
+                    def = simple_walk(compact, preserved_arg, IntermediaryCollector(intermediaries))
                     isa(def, SSAValue) || continue
                     defidx = def.id
-                    def = compact[def][:inst]
+                    def = compact[def][:stmt]
                     if is_known_call(def, tuple, compact)
                         record_immutable_preserve!(new_preserves, def, compact)
                         push!(preserved, preserved_arg.id)
@@ -938,9 +1312,24 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             elseif is_known_call(stmt, Core._svec_ref, compact)
                 lift_svec_ref!(compact, idx, stmt)
             elseif is_known_call(stmt, (===), compact)
-                lift_comparison!(===, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+                lift_comparison!(===, compact, idx, stmt, 𝕃ₒ)
             elseif is_known_call(stmt, isa, compact)
-                lift_comparison!(isa, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+                lift_comparison!(isa, compact, idx, stmt, 𝕃ₒ)
+            elseif is_known_call(stmt, Core.ifelse, compact)
+                fold_ifelse!(compact, idx, stmt, 𝕃ₒ)
+            elseif is_known_invoke_or_call(stmt, Core.OptimizedGenerics.KeyValue.get, compact)
+                2 == (length(stmt.args) - (isexpr(stmt, :invoke) ? 2 : 1)) || continue
+                lift_keyvalue_get!(compact, idx, stmt, 𝕃ₒ)
+            elseif is_known_call(stmt, Core.current_scope, compact)
+                length(stmt.args) == 1 || continue
+                scope_mapping !== nothing || continue
+                bb = compact.active_result_bb
+                did_just_finish_bb(compact) && (bb -= 1)
+                enter_ssa = scope_mapping[bb]
+                enter_ssa == SSAValue(0) && continue
+                compact[SSAValue(idx)] = (compact[enter_ssa][:stmt]::EnterNode).scope
+            elseif isexpr(stmt, :new)
+                refine_new_effects!(𝕃ₒ, compact, idx, stmt)
             end
             continue
         end
@@ -951,31 +1340,27 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             # analyze `getfield` / `isdefined` / `setfield!` call
             val = stmt.args[2]
         end
-
-        struct_typ = unwrap_unionall(widenconst(argextype(val, compact)))
-        if isa(struct_typ, Union) && struct_typ <: Tuple
-            struct_typ = unswitchtupleunion(struct_typ)
-        end
-        if isa(struct_typ, Union) && is_isdefined
-            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
+        struct_typ = widenconst(argextype(val, compact))
+        struct_argtyp = argument_datatype(struct_typ)
+        if struct_argtyp === nothing
+            if isa(struct_typ, Union) && is_isdefined
+                lift_comparison!(isdefined, compact, idx, stmt, 𝕃ₒ)
+            end
             continue
         end
-        isa(struct_typ, DataType) || continue
+        struct_typ_name = struct_argtyp.name
 
-        struct_typ.name.atomicfields == C_NULL || continue # TODO: handle more
+        struct_typ_name.atomicfields == C_NULL || continue # TODO: handle more
         if !((field_ordering === :unspecified) ||
              (field_ordering isa Const && field_ordering.val === :not_atomic))
             continue
         end
 
         # analyze this mutable struct here for the later pass
-        if ismutabletype(struct_typ)
+        if ismutabletypename(struct_typ_name)
             isa(val, SSAValue) || continue
             let intermediaries = SPCSet()
-                callback = function (@nospecialize(pi), @nospecialize(ssa))
-                    push!(intermediaries, ssa.id)
-                    return false
-                end
+                callback = IntermediaryCollector(intermediaries)
                 def = simple_walk(compact, val, callback)
                 # Mutable stuff here
                 isa(def, SSAValue) || continue
@@ -1002,36 +1387,74 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
 
         # perform SROA on immutable structs here on
-
         field = try_compute_fieldidx_stmt(compact, stmt, struct_typ)
         field === nothing && continue
 
-        leaves, visited_phinodes = collect_leaves(compact, val, struct_typ, 𝕃ₒ)
+        leaves, visited_philikes = collect_leaves(compact, val, struct_typ, 𝕃ₒ, phi_or_ifelse_predecessors)
         isempty(leaves) && continue
 
-        result_t = argextype(SSAValue(idx), compact)
-        lifted_result = lift_leaves(compact, result_t, field, leaves, 𝕃ₒ)
+        lifted_result = lift_leaves(compact, field, leaves, 𝕃ₒ)
         lifted_result === nothing && continue
         lifted_leaves, any_undef = lifted_result
 
-        if any_undef
-            result_t = make_MaybeUndef(result_t)
+        result_t = Union{}
+        for v in values(lifted_leaves)
+            v === nothing && continue
+            result_t = tmerge(𝕃ₒ, result_t, argextype(v.val, compact))
         end
 
-        val = perform_lifting!(compact,
-            visited_phinodes, field, lifting_cache, result_t, lifted_leaves, val, lazydomtree)
+        (lifted_val, nest) = perform_lifting!(compact,
+            visited_philikes, field, result_t, lifted_leaves, val, lazydomtree)
+
+        should_delete_node = false
+        line = compact[SSAValue(idx)][:line]
+        if lifted_val !== nothing && !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
+            compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
+            add_flag!(compact[SSAValue(idx)], IR_FLAG_REFINED)
+        elseif lifted_val === nothing || isa(lifted_val.val, AnySSAValue)
+            # Save some work in a later compaction, by inserting this into the renamer now,
+            # but only do this if we didn't set the REFINED flag, to save work for irinterp
+            # in revisiting only the renamings that came through *this* idx.
+            compact.ssa_rename[old_idx] = lifted_val === nothing ? nothing : lifted_val.val
+            should_delete_node = true
+        else
+            compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
+        end
+
+        finish_phi_nest!(compact, nest)
 
         # Insert the undef check if necessary
-        if any_undef && val === nothing
-            insert_node!(compact, SSAValue(idx), non_effect_free(NewInstruction(
-                Expr(:throw_undef_if_not, Symbol("##getfield##"), false), Nothing)))
+        if any_undef
+            if lifted_val === nothing
+                def_val = false
+            else
+                lifted_leaves_def = LiftedDefs()
+                for (k, v) in pairs(lifted_leaves)
+                    lifted_leaves_def[k] = v === nothing ? false : true
+                end
+                (def_val, nest) = perform_lifting!(compact,
+                    visited_philikes, field, Bool, lifted_leaves_def, val, lazydomtree)
+                def_val = (def_val::LiftedValue).val
+                finish_phi_nest!(compact, nest)
+            end
+            throw_expr = Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val)
+            if should_delete_node
+                # Replace the node we already have rather than deleting/re-inserting.
+                # This way it is easier to handle BB boundary corner cases.
+                compact[SSAValue(idx)] = throw_expr
+                compact[SSAValue(idx)][:type] = Nothing
+                compact[SSAValue(idx)][:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_CONSISTENT | IR_FLAG_NOUB
+                should_delete_node = false
+            else
+                ni = NewInstruction(throw_expr, Nothing, line)
+                insert_node!(compact, SSAValue(idx), ni)
+            end
         else
             # val must be defined
-            @assert val !== nothing
+            @assert lifted_val !== nothing
         end
 
-        compact[idx] = val === nothing ? nothing : val.val
-        compact[SSAValue(idx)][:flag] |= IR_FLAG_REFINED
+        should_delete_node && delete_inst_here!(compact)
     end
 
     non_dce_finish!(compact)
@@ -1060,7 +1483,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     mi::MethodInstance, @nospecialize(info::CallInfo), inlining::InliningState,
     attach_after::Bool)
     code = get(code_cache(inlining), mi, nothing)
-    et = InliningEdgeTracker(inlining.et)
+    et = InliningEdgeTracker(inlining)
     if code isa CodeInstance
         if use_const_api(code)
             # No code in the function - Nothing to do
@@ -1072,7 +1495,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         src = nothing
     end
 
-    src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL, mi, Any[])
+    src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL)
     src === nothing && return false
     src = retrieve_ir_for_inlining(mi, src)
 
@@ -1084,29 +1507,27 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
 
     # TODO: Should there be a special line number node for inlined finalizers?
     inlined_at = ir[SSAValue(idx)][:line]
-    ((sp_ssa, argexprs), linetable_offset) = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir,
-        ir.linetable, src, mi.sparam_vals, mi, inlined_at, argexprs)
+    ssa_substitute = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir, src, mi, inlined_at, argexprs)
 
     # TODO: Use the actual inliner here rather than open coding this special purpose inliner.
-    spvals = mi.sparam_vals
     ssa_rename = Vector{Any}(undef, length(src.stmts))
     for idx′ = 1:length(src.stmts)
         inst = src[SSAValue(idx′)]
-        stmt′ = inst[:inst]
+        stmt′ = inst[:stmt]
         isa(stmt′, ReturnNode) && continue
         stmt′ = ssamap(stmt′) do ssa::SSAValue
             ssa_rename[ssa.id]
         end
-        stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, argexprs, mi.specTypes, mi.sparam_vals, sp_ssa, :default)
+        stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, ssa_substitute)
         ssa_rename[idx′] = insert_node!(ir, idx,
-            NewInstruction(inst; stmt=stmt′, line=inst[:line]+linetable_offset),
+            NewInstruction(inst; stmt=stmt′, line=inst[:line]+ssa_substitute.linetable_offset),
             attach_after)
     end
 
     return true
 end
 
-is_nothrow(ir::IRCode, ssa::SSAValue) = (ir[ssa][:flag] & IR_FLAG_NOTHROW) ≠ 0
+is_nothrow(ir::IRCode, ssa::SSAValue) = has_flag(ir[ssa], IR_FLAG_NOTHROW)
 
 function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Union{Nothing,Int} = nothing)
     worklist = Int[from_bb]
@@ -1216,13 +1637,13 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     end
 
     # Ok, legality check complete. Figure out the exact statement where we're
-    # gonna inline the finalizer.
+    # going to inline the finalizer.
     loc = bb_insert_idx === nothing ? first(ir.cfg.blocks[bb_insert_block].stmts) : bb_insert_idx::Int
     attach_after = bb_insert_idx !== nothing
 
-    finalizer_stmt = ir[SSAValue(finalizer_idx)][:inst]
+    finalizer_stmt = ir[SSAValue(finalizer_idx)][:stmt]
     argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
-    flags = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
+    flag = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
         if inline === nothing
@@ -1232,18 +1653,21 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
             if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, mi, info, inlining, attach_after)
                 # the finalizer body has been inlined
             else
-                insert_node!(ir, loc, with_flags(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flags), attach_after)
+                newinst = add_flag(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flag)
+                insert_node!(ir, loc, newinst, attach_after)
             end
         end
     else
-        insert_node!(ir, loc, with_flags(NewInstruction(Expr(:call, argexprs...), Nothing), flags), attach_after)
+        newinst = add_flag(NewInstruction(Expr(:call, argexprs...), Nothing), flag)
+        insert_node!(ir, loc, newinst, attach_after)
     end
     # Erase the call to `finalizer`
-    ir[SSAValue(finalizer_idx)][:inst] = nothing
+    ir[SSAValue(finalizer_idx)][:stmt] = nothing
     return nothing
 end
 
 function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, lazydomtree::LazyDomtree, inlining::Union{Nothing, InliningState})
+    𝕃ₒ = inlining === nothing ? SimpleInferenceLattice.instance : optimizer_lattice(inlining.interp)
     lazypostdomtree = LazyPostDomtree(ir)
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
@@ -1259,7 +1683,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         nuses_total = used_ssas[idx] + nuses - length(intermediaries)
         nleaves == nuses_total || continue
         # Find the type for this allocation
-        defexpr = ir[SSAValue(idx)][:inst]
+        defexpr = ir[SSAValue(idx)][:stmt]
         isexpr(defexpr, :new) || continue
         newidx = idx
         typ = unwrap_unionall(ir.stmts[newidx][:type])
@@ -1292,7 +1716,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 end
                 continue
             end
-            stmt = ir[SSAValue(use.idx)][:inst] # == `getfield`/`isdefined` call
+            stmt = ir[SSAValue(use.idx)][:stmt] # == `getfield`/`isdefined` call
             # We may have discovered above that this use is dead
             # after the getfield elim of immutables. In that case,
             # it would have been deleted. That's fine, just ignore
@@ -1306,7 +1730,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             push!(fielddefuse[field].uses, use)
         end
         for def in defuse.defs
-            stmt = ir[SSAValue(def)][:inst]::Expr # == `setfield!` call
+            stmt = ir[SSAValue(def)][:stmt]::Expr # == `setfield!` call
             field = try_compute_fieldidx_stmt(ir, stmt, typ)
             field === nothing && @goto skip
             isconst(typ, field) && @goto skip # we discovered an attempt to mutate a const field, which must error
@@ -1335,7 +1759,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     use = du.uses[i]
                     if use.kind === :isdefined
                         if has_safe_def(ir, get!(lazydomtree), allblocks, du, newidx, use.idx)
-                            ir[SSAValue(use.idx)][:inst] = true
+                            ir[SSAValue(use.idx)][:stmt] = true
                         else
                             all_eliminated = false
                         end
@@ -1353,7 +1777,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 for i = 1:length(du.uses)
                     use = du.uses[i]
                     if use.kind === :isdefined
-                        ir[SSAValue(use.idx)][:inst] = true
+                        ir[SSAValue(use.idx)][:stmt] = true
                     end
                 end
             end
@@ -1377,9 +1801,10 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 # Now go through all uses and rewrite them
                 for use in du.uses
                     if use.kind === :getfield
-                        ir[SSAValue(use.idx)][:inst] = compute_value_for_use(ir, domtree, allblocks,
+                        inst = ir[SSAValue(use.idx)]
+                        inst[:stmt] = compute_value_for_use(ir, domtree, allblocks,
                             du, phinodes, fidx, use.idx)
-                        ir[SSAValue(use.idx)][:flag] |= IR_FLAG_REFINED
+                        add_flag!(inst, IR_FLAG_REFINED)
                     elseif use.kind === :isdefined
                         continue # already rewritten if possible
                     elseif use.kind === :nopreserve
@@ -1398,12 +1823,15 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     end
                 end
                 for b in phiblocks
-                    n = ir[phinodes[b]][:inst]::PhiNode
+                    n = ir[phinodes[b]][:stmt]::PhiNode
+                    result_t = Bottom
                     for p in ir.cfg.blocks[b].preds
                         push!(n.edges, p)
-                        push!(n.values, compute_value_for_block(ir, domtree,
-                            allblocks, du, phinodes, fidx, p))
+                        v = compute_value_for_block(ir, domtree, allblocks, du, phinodes, fidx, p)
+                        push!(n.values, v)
+                        result_t = tmerge(𝕃ₒ, result_t, argextype(v, ir))
                     end
+                    ir[phinodes[b]][:type] = result_t
                 end
             end
             all_eliminated || continue
@@ -1414,8 +1842,16 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 idx == newidx && continue # this is allocation
                 # verify this statement won't throw, otherwise it can't be eliminated safely
                 ssa = SSAValue(idx)
-                is_nothrow(ir, ssa) || continue
-                ir[ssa][:inst] = nothing
+                if is_nothrow(ir, ssa)
+                    ir[ssa][:stmt] = nothing
+                else
+                    # We can't eliminate this statement, because it might still
+                    # throw an error, but we can mark it as effect-free since we
+                    # know we have removed all uses of the mutable allocation.
+                    # As a result, if we ever do prove nothrow, we can delete
+                    # this statement then.
+                    add_flag!(ir[ssa], IR_FLAG_EFFECT_FREE)
+                end
             end
         end
         preserve_uses === nothing && continue
@@ -1427,7 +1863,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         end
         # Insert the new preserves
         for (useidx, new_preserves) in preserve_uses
-            ir[SSAValue(useidx)][:inst] = form_new_preserves(ir[SSAValue(useidx)][:inst]::Expr,
+            ir[SSAValue(useidx)][:stmt] = form_new_preserves(ir[SSAValue(useidx)][:stmt]::Expr,
                 intermediaries, new_preserves)
         end
 
@@ -1478,7 +1914,7 @@ end
 
 function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, in_worklist::Bool)
     # return whether this made a change
-    if isa(compact.result[idx][:inst], PhiNode)
+    if isa(compact.result[idx][:stmt], PhiNode)
         return maybe_erase_unused!(compact, idx, in_worklist, extra_worklist) do val::SSAValue
             phi_uses[val.id] -= 1
         end
@@ -1493,10 +1929,10 @@ function mark_phi_cycles!(compact::IncrementalCompact, safe_phis::SPCSet, phi::I
     while !isempty(worklist)
         phi = pop!(worklist)
         push!(safe_phis, phi)
-        for ur in userefs(compact.result[phi][:inst])
+        for ur in userefs(compact.result[phi][:stmt])
             val = ur[]
             isa(val, SSAValue) || continue
-            isa(compact[val][:inst], PhiNode) || continue
+            isa(compact[val][:stmt], PhiNode) || continue
             (val.id in safe_phis) && continue
             push!(worklist, val.id)
         end
@@ -1504,13 +1940,12 @@ function mark_phi_cycles!(compact::IncrementalCompact, safe_phis::SPCSet, phi::I
 end
 
 function is_some_union(@nospecialize(t))
-    isa(t, MaybeUndef) && (t = t.typ)
     return isa(t, Union)
 end
 
 function is_union_phi(compact::IncrementalCompact, idx::Int)
     inst = compact.result[idx]
-    isa(inst[:inst], PhiNode) || return false
+    isa(inst[:stmt], PhiNode) || return false
     return is_some_union(inst[:type])
 end
 
@@ -1558,11 +1993,12 @@ the `typeassert` elimination depends on the transformation by `canonicalize_type
 within `sroa_pass!` which redirects references of `typeassert`ed value to the corresponding `PiNode`.
 """
 function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
-    𝕃ₒ = inlining === nothing ? OptimizerLattice() : optimizer_lattice(inlining.interp)
+    𝕃ₒ = inlining === nothing ? SimpleInferenceLattice.instance : optimizer_lattice(inlining.interp)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
     unionphis = Pair{Int,Any}[] # sorted
-    compact = IncrementalCompact(ir)
+    compact = IncrementalCompact(ir, true)
+    made_changes = false
     for ((_, idx), stmt) in compact
         if isa(stmt, PhiNode)
             push!(all_phis, idx)
@@ -1582,9 +2018,9 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         else
             if is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
                 # nullify safe `typeassert` calls
-                ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact))
+                ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact), true)
                 if isexact && ⊑(𝕃ₒ, argextype(stmt.args[2], compact), ty)
-                    compact[idx] = nothing
+                    delete_inst_here!(compact)
                     continue
                 end
             end
@@ -1602,11 +2038,11 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     non_dce_finish!(compact)
     for phi in all_phis
         inst = compact.result[phi]
-        for ur in userefs(inst[:inst]::PhiNode)
+        for ur in userefs(inst[:stmt]::PhiNode)
             use = ur[]
             if isa(use, SSAValue)
                 phi_uses[use.id] += 1
-                stmt = compact.result[use.id][:inst]
+                stmt = compact.result[use.id][:stmt]
                 if isa(stmt, PhiNode)
                     r = searchsorted(unionphis, use.id; by=first)
                     if !isempty(r)
@@ -1624,8 +2060,9 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         phi = unionphi[1]
         t = unionphi[2]
         if t === Union{}
-            stmt = compact[SSAValue(phi)][:inst]::PhiNode
+            stmt = compact[SSAValue(phi)][:stmt]::PhiNode
             kill_phi!(compact, phi_uses, 1:length(stmt.values), SSAValue(phi), stmt, true)
+            made_changes = true
             continue
         elseif t === Any
             continue
@@ -1633,7 +2070,7 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             continue
         end
         to_drop = Int[]
-        stmt = compact[SSAValue(phi)][:inst]
+        stmt = compact[SSAValue(phi)][:stmt]
         stmt === nothing && continue
         stmt = stmt::PhiNode
         for i = 1:length(stmt.values)
@@ -1647,16 +2084,17 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         end
         compact.result[phi][:type] = t
         kill_phi!(compact, phi_uses, to_drop, SSAValue(phi), stmt, false)
+        made_changes = true
     end
     # Perform simple DCE for unused values
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         idx >= compact.result_idx && break
         nused == 0 || continue
-        adce_erase!(phi_uses, extra_worklist, compact, idx, false)
+        made_changes |= adce_erase!(phi_uses, extra_worklist, compact, idx, false)
     end
     while !isempty(extra_worklist)
-        adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
+        made_changes |= adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
     end
     # Go back and erase any phi cycles
     changed = true
@@ -1677,163 +2115,18 @@ function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         while !isempty(extra_worklist)
             if adce_erase!(phi_uses, extra_worklist, compact, pop!(extra_worklist), true)
                 changed = true
+                made_changes = true
             end
         end
     end
-    return complete(compact)
-end
 
-function type_lift_pass!(ir::IRCode)
-    lifted_undef = IdDict{Int, Any}()
-    insts = ir.stmts
-    for idx in 1:length(insts)
-        stmt = insts[idx][:inst]
-        stmt isa Expr || continue
-        if (stmt.head === :isdefined || stmt.head === :undefcheck)
-            # after optimization, undef can only show up by being introduced in
-            # a phi node (or an UpsilonNode() argument to a PhiC node), so lift
-            # all these nodes that have maybe undef values
-            val = stmt.args[(stmt.head === :isdefined) ? 1 : 2]
-            if stmt.head === :isdefined && (val isa GlobalRef || isexpr(val, :static_parameter) ||
-                                            val isa Argument || val isa Symbol)
-                # this is a legal node, so assume it was not introduced by
-                # slot2ssa (at worst, we might leave in a runtime check that
-                # shouldn't have been there)
-                continue
-            end
-            # otherwise, we definitely have a corrupt node from slot2ssa, and
-            # must fix or delete that now
-            processed = IdDict{Int, Union{SSAValue, Bool}}()
-            def = val
-            while true
-                # peek through PiNodes
-                isa(val, SSAValue) || break
-                def = insts[val.id][:inst]
-                isa(def, PiNode) || break
-                val = def.val
-            end
-            if !isa(val, SSAValue) || (!isa(def, PhiNode) && !isa(def, PhiCNode))
-                # in most cases, reaching this statement implies we had a value
-                if stmt.head === :undefcheck
-                    insts[idx][:inst] = nothing
-                else
-                    insts[idx][:inst] = true
-                end
-                continue
-            end
-            stmt_id = val.id
-            worklist = Tuple{Int, Int, SSAValue, Int}[(stmt_id, 0, SSAValue(0), 0)]
-            if !haskey(lifted_undef, stmt_id)
-                first = true
-                while !isempty(worklist)
-                    item, w_up_id, which, use = pop!(worklist)
-                    def = insts[item][:inst]
-                    if isa(def, PhiNode)
-                        edges = copy(def.edges)
-                        values = Vector{Any}(undef, length(edges))
-                        new_phi = if length(values) == 0
-                            false
-                        else
-                            insert_node!(ir, item, NewInstruction(PhiNode(edges, values), Bool))
-                        end
-                    else
-                        def = def::PhiCNode
-                        values = Vector{Any}(undef, length(def.values))
-                        new_phi = if length(values) == 0
-                            false
-                        else
-                            insert_node!(ir, item, NewInstruction(PhiCNode(values), Bool))
-                        end
-                    end
-                    processed[item] = new_phi
-                    if first
-                        lifted_undef[stmt_id] = new_phi
-                        first = false
-                    end
-                    local id::Int = 0
-                    all_same = true
-                    local last_val
-                    for i = 1:length(values)
-                        if !isassigned(def.values, i)
-                            val = false
-                        elseif !isa(def.values[i], SSAValue)
-                            val = true
-                        else
-                            up_id = id = (def.values[i]::SSAValue).id
-                            @label restart
-                            if !isa(ir.stmts[id][:type], MaybeUndef)
-                                val = true
-                            else
-                                node = insts[id][:inst]
-                                if isa(node, UpsilonNode)
-                                    if !isdefined(node, :val)
-                                        val = false
-                                    elseif !isa(node.val, SSAValue)
-                                        val = true
-                                    else
-                                        id = (node.val::SSAValue).id
-                                        @goto restart
-                                    end
-                                else
-                                    while isa(node, PiNode)
-                                        id = (node.val::SSAValue).id
-                                        node = insts[id][:inst]
-                                    end
-                                    if isa(node, Union{PhiNode, PhiCNode})
-                                        if haskey(processed, id)
-                                            val = processed[id]
-                                        else
-                                            # TODO: Re-check after convergence whether all the values are the same
-                                            all_same = false
-                                            push!(worklist, (id, up_id, new_phi::SSAValue, i))
-                                            continue
-                                        end
-                                    else
-                                        val = true
-                                    end
-                                end
-                            end
-                        end
-                        if isa(def, PhiNode)
-                            if !@isdefined(last_val)
-                                last_val = val
-                            elseif all_same
-                                all_same &= last_val === val
-                            end
-                            values[i] = val
-                        else
-                            values[i] = insert_node!(ir, up_id, NewInstruction(UpsilonNode(val), Bool))
-                        end
-                    end
-                    if all_same && @isdefined(last_val)
-                        # Decay the PhiNode back to the single value
-                        ir[new_phi][:inst] = last_val
-                        isa(last_val, Bool) && (processed[item] = last_val)
-                    end
-                    if which !== SSAValue(0)
-                        phi = ir[which][:inst]
-                        if isa(phi, PhiNode)
-                            phi.values[use] = new_phi
-                        elseif isa(phi, PhiCNode)
-                            phi.values[use] = insert_node!(ir, w_up_id, NewInstruction(UpsilonNode(new_phi), Bool))
-                        end
-                    end
-                end
-            end
-            inst = lifted_undef[stmt_id]
-            if stmt.head === :undefcheck
-                inst = Expr(:throw_undef_if_not, stmt.args[1], inst)
-            end
-            insts[idx][:inst] = inst
-        end
-    end
-    ir
+    return Pair{IRCode, Bool}(complete(compact), made_changes)
 end
 
 function is_bb_empty(ir::IRCode, bb::BasicBlock)
     isempty(bb.stmts) && return true
     if length(bb.stmts) == 1
-        stmt = ir[SSAValue(first(bb.stmts))][:inst]
+        stmt = ir[SSAValue(first(bb.stmts))][:stmt]
         return stmt === nothing || isa(stmt, GotoNode)
     end
     return false
@@ -1843,14 +2136,6 @@ end
 function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
     # For the time being, don't drop the first bb, because it has special predecessor semantics.
     bbidx == 1 && return false
-    # If the block we're going to is the same as the fallthrow, it's always legal to drop
-    # the block.
-    length(bb.stmts) == 0 && return true
-    if length(bb.stmts) == 1
-        stmt = ir[SSAValue(first(bb.stmts))][:inst]
-        stmt === nothing && return true
-        ((stmt::GotoNode).label == bbidx + 1) && return true
-    end
     return true
 end
 
@@ -1863,23 +2148,23 @@ function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vec
         dbi -= 1
     end
     last_fallthrough_term_ssa = SSAValue(last(bbs[last_fallthrough].stmts))
-    terminator = ir[last_fallthrough_term_ssa][:inst]
+    terminator = ir[last_fallthrough_term_ssa][:stmt]
     if isa(terminator, GotoIfNot)
         if terminator.dest != bbidx
             # The previous terminator's destination matches our fallthrough.
             # If we're also a fallthrough terminator, then we just have
             # to delete the GotoIfNot.
-            our_terminator = ir[SSAValue(last(bb.stmts))][:inst]
+            our_terminator = ir[SSAValue(last(bb.stmts))][:stmt]
             if terminator.dest != (isa(our_terminator, GotoNode) ? our_terminator.label : bbidx + 1)
                 return false
             end
         end
         ir[last_fallthrough_term_ssa] = nothing
         kill_edge!(bbs, last_fallthrough, terminator.dest)
-    elseif isexpr(terminator, :enter)
-        return false
     elseif isa(terminator, GotoNode)
         return true
+    elseif isterminator(terminator)
+        return false
     end
     # Hack, but effective. If we have a predecessor with a fall-through terminator, change the
     # instruction numbering to merge the blocks now such that below processing will properly
@@ -1888,45 +2173,86 @@ function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vec
     return true
 end
 
-is_terminator(@nospecialize(inst)) = isa(inst, GotoNode) || isa(inst, GotoIfNot) || isexpr(inst, :enter)
+function follow_map(map::Vector{Int}, idx::Int)
+    while map[idx] ≠ 0
+        idx = map[idx]
+    end
+    return idx
+end
+
+function ascend_eliminated_preds(bbs::Vector{BasicBlock}, pred::Int)
+    pred == 0 && return pred
+    while pred != 1 && length(bbs[pred].preds) == 1 && length(bbs[pred].succs) == 1
+        pred = bbs[pred].preds[1]
+    end
+    return pred
+end
+
+# Compute (renamed) successors and predecessors given (renamed) block
+function compute_succs(merged_succ::Vector{Int}, bbs::Vector{BasicBlock}, result_bbs::Vector{Int}, bb_rename_succ::Vector{Int}, i::Int)
+    orig_bb = follow_map(merged_succ, result_bbs[i])
+    return Int[bb_rename_succ[i] for i in bbs[orig_bb].succs]
+end
+
+function compute_preds(bbs::Vector{BasicBlock}, result_bbs::Vector{Int}, bb_rename_pred::Vector{Int}, i::Int)
+    orig_bb = result_bbs[i]
+    preds = copy(bbs[orig_bb].preds)
+    res = Int[]
+    while !isempty(preds)
+        pred = popfirst!(preds)
+        if pred == 0
+            push!(res, 0)
+            continue
+        end
+        r = bb_rename_pred[pred]
+        (r == -2 || r == -1) && continue
+        if r == -3
+            prepend!(preds, bbs[pred].preds)
+        else
+            push!(res, r)
+        end
+    end
+    return res
+end
+
+function add_preds!(all_new_preds::Vector{Int32}, bbs::Vector{BasicBlock}, bb_rename_pred::Vector{Int}, old_edge::Int32)
+    preds = copy(bbs[old_edge].preds)
+    while !isempty(preds)
+        old_edge′ = popfirst!(preds)
+        if old_edge′ == 0
+            push!(all_new_preds, old_edge′)
+            continue
+        end
+        new_edge = bb_rename_pred[old_edge′]
+        if new_edge > 0 && new_edge ∉ all_new_preds
+            push!(all_new_preds, Int32(new_edge))
+        elseif new_edge == -3
+            prepend!(preds, bbs[old_edge′].preds)
+        end
+    end
+end
 
 function cfg_simplify!(ir::IRCode)
     bbs = ir.cfg.blocks
     merge_into = zeros(Int, length(bbs))
     merged_succ = zeros(Int, length(bbs))
     dropped_bbs = Vector{Int}() # sorted
-    function follow_merge_into(idx::Int)
-        while merge_into[idx] != 0
-            idx = merge_into[idx]
-        end
-        return idx
-    end
-    function follow_merged_succ(idx::Int)
-        while merged_succ[idx] != 0
-            idx = merged_succ[idx]
-        end
-        return idx
-    end
-    function ascend_eliminated_preds(pred)
-        while pred != 1 && length(bbs[pred].preds) == 1 && length(bbs[pred].succs) == 1
-            pred = bbs[pred].preds[1]
-        end
-        return pred
-    end
 
     # Walk the CFG from the entry block and aggressively combine blocks
     for (idx, bb) in enumerate(bbs)
         if length(bb.succs) == 1
             succ = bb.succs[1]
             if length(bbs[succ].preds) == 1 && succ != 1
-                # Can't merge blocks with :enter terminator even if they
-                # only have one successor.
-                if isexpr(ir[SSAValue(last(bb.stmts))][:inst], :enter)
+                # Can't merge blocks with a non-GotoNode terminator, even if they
+                # only have one successor, because it would not be legal to have that
+                # terminator in the middle of a basic block.
+                terminator = ir[SSAValue(last(bb.stmts))][:stmt]
+                if !isa(terminator, GotoNode) && isterminator(terminator)
                     continue
                 end
                 # Prevent cycles by making sure we don't end up back at `idx`
                 # by following what is to be merged into `succ`
-                if follow_merged_succ(succ) != idx
+                if follow_map(merged_succ, succ) != idx
                     merge_into[succ] = idx
                     merged_succ[idx] = succ
                 end
@@ -1934,13 +2260,13 @@ function cfg_simplify!(ir::IRCode)
                 # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
                 # reference our predecessors.
                 found_interference = false
-                preds = Int[ascend_eliminated_preds(pred) for pred in bb.preds]
+                preds = Int[ascend_eliminated_preds(bbs, pred) for pred in bb.preds]
                 for idx in bbs[succ].stmts
-                    stmt = ir[SSAValue(idx)][:inst]
+                    stmt = ir[SSAValue(idx)][:stmt]
                     stmt === nothing && continue
                     isa(stmt, PhiNode) || break
                     for edge in stmt.edges
-                        edge = ascend_eliminated_preds(edge)
+                        edge = ascend_eliminated_preds(bbs, Int(edge))
                         for pred in preds
                             if pred == edge
                                 found_interference = true
@@ -1959,14 +2285,14 @@ function cfg_simplify!(ir::IRCode)
 
     # Assign new BB numbers in DFS order, dropping unreachable blocks
     max_bb_num = 1
-    bb_rename_succ = fill(0, length(bbs))
+    bb_rename_succ = zeros(Int, length(bbs))
     worklist = BitSetBoundedMinPrioritySet(length(bbs))
     push!(worklist, 1)
     while !isempty(worklist)
         i = popfirst!(worklist)
         # Drop blocks that will be merged away
         if merge_into[i] != 0
-            bb_rename_succ[i] = -1
+            bb_rename_succ[i] = typemin(Int)
         end
         # Mark dropped blocks for fixup
         if !isempty(searchsorted(dropped_bbs, i))
@@ -1986,20 +2312,21 @@ function cfg_simplify!(ir::IRCode)
                 # we have to schedule that block next
                 while merged_succ[curr] != 0
                     if bb_rename_succ[curr] == 0
-                        bb_rename_succ[curr] = -1
+                        bb_rename_succ[curr] = typemin(Int)
                     end
                     curr = merged_succ[curr]
                 end
-                terminator = ir.stmts[ir.cfg.blocks[curr].stmts[end]][:inst]
+                terminator = ir[SSAValue(ir.cfg.blocks[curr].stmts[end])][:stmt]
                 if isa(terminator, GotoNode) || isa(terminator, ReturnNode)
                     break
                 elseif isa(terminator, GotoIfNot)
                     if bb_rename_succ[terminator.dest] == 0
                         push!(worklist, terminator.dest)
                     end
-                elseif isexpr(terminator, :enter)
-                    if bb_rename_succ[terminator.args[1]] == 0
-                        push!(worklist, terminator.args[1])
+                elseif isa(terminator, EnterNode)
+                    catchbb = terminator.catch_dest
+                    if bb_rename_succ[catchbb] == 0
+                        push!(worklist, catchbb)
                     end
                 end
                 ncurr = curr + 1
@@ -2025,9 +2352,9 @@ function cfg_simplify!(ir::IRCode)
         resolved_all = true
         for bb in dropped_bbs
             obb = bb_rename_succ[bb]
-            if obb < -1
+            if obb < 0 && obb != typemin(Int)
                 nsucc = bb_rename_succ[-obb]
-                if nsucc == -1
+                if nsucc == typemin(Int)
                     nsucc = -merge_into[-obb]
                 end
                 bb_rename_succ[bb] = nsucc
@@ -2040,8 +2367,10 @@ function cfg_simplify!(ir::IRCode)
     bb_rename_pred = zeros(Int, length(bbs))
     for i = 1:length(bbs)
         if bb_rename_succ[i] == 0
-            bb_rename_succ[i] = -1
+            bb_rename_succ[i] = -2
             bb_rename_pred[i] = -2
+        elseif bb_rename_succ[i] == typemin(Int)
+            bb_rename_succ[i] = -2
         end
     end
 
@@ -2085,7 +2414,7 @@ function cfg_simplify!(ir::IRCode)
         elseif is_multi
             bb_rename_pred[i] = -3
         else
-            bbnum = follow_merge_into(pred)
+            bbnum = follow_map(merge_into, pred)
             bb_rename_pred[i] = bb_rename_succ[bbnum]
         end
     end
@@ -2107,59 +2436,23 @@ function cfg_simplify!(ir::IRCode)
         bb_starts[i+1] = bb_starts[i] + result_bbs_lengths[i]
     end
 
-    cresult_bbs = let result_bbs = result_bbs,
-                      merged_succ = merged_succ,
-                      merge_into = merge_into,
-                      bbs = bbs,
-                      bb_rename_succ = bb_rename_succ
-
-        # Compute (renamed) successors and predecessors given (renamed) block
-        function compute_succs(i)
-            orig_bb = follow_merged_succ(result_bbs[i])
-            return Int[bb_rename_succ[i] for i in bbs[orig_bb].succs]
-        end
-        function compute_preds(i)
-            orig_bb = result_bbs[i]
-            preds = bbs[orig_bb].preds
-            res = Int[]
-            function scan_preds!(preds)
-                for pred in preds
-                    if pred == 0
-                        push!(res, 0)
-                        continue
-                    end
-                    r = bb_rename_pred[pred]
-                    (r == -2 || r == -1) && continue
-                    if r == -3
-                        scan_preds!(bbs[pred].preds)
-                    else
-                        push!(res, r)
-                    end
-                end
-            end
-            scan_preds!(preds)
-            return res
-        end
-
-        BasicBlock[
-            BasicBlock(StmtRange(bb_starts[i],
-                                 i+1 > length(bb_starts) ?
-                                    length(compact.result) : bb_starts[i+1]-1),
-                       compute_preds(i),
-                       compute_succs(i))
-            for i = 1:length(result_bbs)]
-    end
+    cresult_bbs = BasicBlock[
+        BasicBlock(StmtRange(bb_starts[i],
+                             i+1 > length(bb_starts) ? length(compact.result) : bb_starts[i+1]-1),
+                   compute_preds(bbs, result_bbs, bb_rename_pred, i),
+                   compute_succs(merged_succ, bbs, result_bbs, bb_rename_succ, i))
+        for i = 1:length(result_bbs)]
 
     # Fixup terminators for any blocks that would have caused double edges
     for (bbidx, (new_bb, old_bb)) in enumerate(zip(cresult_bbs, result_bbs))
         @assert length(new_bb.succs) <= 2
         length(new_bb.succs) <= 1 && continue
         if new_bb.succs[1] == new_bb.succs[2]
-            old_bb2 = findfirst(x->x==bbidx, bb_rename_pred)
+            old_bb2 = findfirst(x::Int->x==bbidx, bb_rename_pred)::Int
             terminator = ir[SSAValue(last(bbs[old_bb2].stmts))]
-            @assert terminator[:inst] isa GotoIfNot
+            @assert terminator[:stmt] isa GotoIfNot
             # N.B.: The dest will be renamed in process_node! below
-            terminator[:inst] = GotoNode(terminator[:inst].dest)
+            terminator[:stmt] = GotoNode(terminator[:stmt].dest::Int)
             pop!(new_bb.succs)
             new_succ = cresult_bbs[new_bb.succs[1]]
             for (i, nsp) in enumerate(new_succ.preds)
@@ -2174,24 +2467,32 @@ function cfg_simplify!(ir::IRCode)
     # Run instruction compaction to produce the result,
     # but we're messing with the CFG
     # so we don't want compaction to do so independently
-    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ))
+    compact = IncrementalCompact(ir, CFGTransformState(true, false, cresult_bbs, bb_rename_pred, bb_rename_succ, nothing))
     result_idx = 1
     for (idx, orig_bb) in enumerate(result_bbs)
         ms = orig_bb
+        bb_start = true
         while ms != 0
-            for i in bbs[ms].stmts
+            old_bb_stmts = bbs[ms].stmts
+            for i in old_bb_stmts
                 node = ir.stmts[i]
                 compact.result[compact.result_idx] = node
-                if isa(node[:inst], GotoNode) && merged_succ[ms] != 0
+                stmt = node[:stmt]
+                if isa(stmt, GotoNode) && merged_succ[ms] != 0
                     # If we merged a basic block, we need remove the trailing GotoNode (if any)
-                    compact.result[compact.result_idx][:inst] = nothing
-                elseif isa(node[:inst], PhiNode)
-                    phi = node[:inst]
+                    compact.result[compact.result_idx][:stmt] = nothing
+                elseif isa(stmt, PhiNode)
+                    phi = stmt
                     values = phi.values
                     (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
                     ssa_rename[i] = SSAValue(compact.result_idx)
-                    processed_idx = i
-                    renamed_values = process_phinode_values(values, late_fixup, processed_idx, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true)
+                    already_inserted = function (i::Int, val::OldSSAValue)
+                        if val.id in old_bb_stmts
+                            return val.id <= i
+                        end
+                        return bb_rename_pred[phi.edges[i]] < idx
+                    end
+                    renamed_values = process_phinode_values(values, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                     edges = Int32[]
                     values = Any[]
                     sizehint!(edges, length(phi.edges)); sizehint!(values, length(renamed_values))
@@ -2205,20 +2506,16 @@ function cfg_simplify!(ir::IRCode)
                             else
                                 resize!(values, length(values)+1)
                             end
+                        elseif new_edge == -1
+                            @assert length(phi.edges) == 1
+                            if isassigned(renamed_values, old_index)
+                                push!(edges, -1)
+                                push!(values, renamed_values[old_index])
+                            end
                         elseif new_edge == -3
                             # Multiple predecessors, we need to expand out this phi
                             all_new_preds = Int32[]
-                            function add_preds!(old_edge)
-                                for old_edge′ in bbs[old_edge].preds
-                                    new_edge = bb_rename_pred[old_edge′]
-                                    if new_edge > 0 && !in(new_edge, all_new_preds)
-                                        push!(all_new_preds, new_edge)
-                                    elseif new_edge == -3
-                                        add_preds!(old_edge′)
-                                    end
-                                end
-                            end
-                            add_preds!(old_edge)
+                            add_preds!(all_new_preds, bbs, bb_rename_pred, old_edge)
                             append!(edges, all_new_preds)
                             if isassigned(renamed_values, old_index)
                                 val = renamed_values[old_index]
@@ -2236,13 +2533,20 @@ function cfg_simplify!(ir::IRCode)
                             isassigned(renamed_values, old_index) && kill_current_use!(compact, renamed_values[old_index])
                         end
                     end
-                    compact.result[compact.result_idx][:inst] = PhiNode(edges, values)
+                    if length(edges) == 0 || (length(edges) == 1 && !isassigned(values, 1))
+                        compact.result[compact.result_idx][:stmt] = nothing
+                    elseif length(edges) == 1 && !bb_start
+                        compact.result[compact.result_idx][:stmt] = values[1]
+                    else
+                        @assert bb_start
+                        compact.result[compact.result_idx][:stmt] = PhiNode(edges, values)
+                    end
                 else
                     ri = process_node!(compact, compact.result_idx, node, i, i, ms, true)
                     if ri == compact.result_idx
                         # process_node! wanted this statement dropped. We don't do this,
                         # but we still need to erase the node
-                        compact.result[compact.result_idx][:inst] = nothing
+                        compact.result[compact.result_idx][:stmt] = nothing
                     end
                 end
                 # We always increase the result index to ensure a predicatable
@@ -2250,6 +2554,7 @@ function cfg_simplify!(ir::IRCode)
                 compact.result_idx += 1
             end
             ms = merged_succ[ms]
+            bb_start = false
         end
     end
     compact.idx = length(ir.stmts)

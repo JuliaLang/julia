@@ -87,7 +87,7 @@ end
 
 # This is @assume_effects :effect_free :nothrow :terminates_globally @ccall jl_alloc_string(n::Csize_t)::Ref{String},
 # but the macro is not available at this time in bootstrap, so we write it manually.
-@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String}, Expr(:call, Expr(:core, :svec), :Csize_t), 1, QuoteNode((:ccall,0xe)), :(convert(Csize_t, n))))
+@eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String}, Expr(:call, Expr(:core, :svec), :Csize_t), 1, QuoteNode((:ccall,0x000e)), :(convert(Csize_t, n))))
 
 """
     String(s::AbstractString)
@@ -127,7 +127,11 @@ end
 
 _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}) = _memcmp(a, b, min(sizeof(a), sizeof(b)))
 function _memcmp(a::Union{Ptr{UInt8},AbstractString}, b::Union{Ptr{UInt8},AbstractString}, len::Int)
-    ccall(:memcmp, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), a, b, len % Csize_t) % Int
+    GC.@preserve a b begin
+        pa = unsafe_convert(Ptr{UInt8}, a)
+        pb = unsafe_convert(Ptr{UInt8}, b)
+        memcmp(pa, pb, len % Csize_t) % Int
+    end
 end
 
 function cmp(a::String, b::String)
@@ -153,15 +157,18 @@ typemin(::String) = typemin(String)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
     @inbounds b = codeunit(s, i)
     (b & 0xc0 == 0x80) & (i-1 > 0) || return i
-    @inbounds b = codeunit(s, i-1)
-    between(b, 0b11000000, 0b11110111) && return i-1
-    (b & 0xc0 == 0x80) & (i-2 > 0) || return i
-    @inbounds b = codeunit(s, i-2)
-    between(b, 0b11100000, 0b11110111) && return i-2
-    (b & 0xc0 == 0x80) & (i-3 > 0) || return i
-    @inbounds b = codeunit(s, i-3)
-    between(b, 0b11110000, 0b11110111) && return i-3
-    return i
+    (@noinline function _thisind_continued(s, i, n) # mark the rest of the function as a slow-path
+        local b
+        @inbounds b = codeunit(s, i-1)
+        between(b, 0b11000000, 0b11110111) && return i-1
+        (b & 0xc0 == 0x80) & (i-2 > 0) || return i
+        @inbounds b = codeunit(s, i-2)
+        between(b, 0b11100000, 0b11110111) && return i-2
+        (b & 0xc0 == 0x80) & (i-3 > 0) || return i
+        @inbounds b = codeunit(s, i-3)
+        between(b, 0b11110000, 0b11110111) && return i-3
+        return i
+    end)(s, i, n)
 end
 
 @propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
@@ -172,23 +179,31 @@ end
     n = ncodeunits(s)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
     @inbounds l = codeunit(s, i)
-    (l < 0x80) | (0xf8 ≤ l) && return i+1
-    if l < 0xc0
-        i′ = @inbounds thisind(s, i)
-        return i′ < i ? @inbounds(nextind(s, i′)) : i+1
-    end
-    # first continuation byte
-    (i += 1) > n && return i
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 ≠ 0x80 && return i
-    ((i += 1) > n) | (l < 0xe0) && return i
-    # second continuation byte
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 ≠ 0x80 && return i
-    ((i += 1) > n) | (l < 0xf0) && return i
-    # third continuation byte
-    @inbounds b = codeunit(s, i)
-    ifelse(b & 0xc0 ≠ 0x80, i, i+1)
+    between(l, 0x80, 0xf7) || return i+1
+    (@noinline function _nextind_continued(s, i, n, l) # mark the rest of the function as a slow-path
+        if l < 0xc0
+            # handle invalid codeunit index by scanning back to the start of this index
+            # (which may be the same as this index)
+            i′ = @inbounds thisind(s, i)
+            i′ >= i && return i+1
+            i = i′
+            @inbounds l = codeunit(s, i)
+            (l < 0x80) | (0xf8 ≤ l) && return i+1
+            @assert l >= 0xc0
+        end
+        # first continuation byte
+        (i += 1) > n && return i
+        @inbounds b = codeunit(s, i)
+        b & 0xc0 ≠ 0x80 && return i
+        ((i += 1) > n) | (l < 0xe0) && return i
+        # second continuation byte
+        @inbounds b = codeunit(s, i)
+        b & 0xc0 ≠ 0x80 && return i
+        ((i += 1) > n) | (l < 0xf0) && return i
+        # third continuation byte
+        @inbounds b = codeunit(s, i)
+        return ifelse(b & 0xc0 ≠ 0x80, i, i+1)
+    end)(s, i, n, l)
 end
 
 ## checking UTF-8 & ACSII validity ##
@@ -243,7 +258,7 @@ end
 
            Shifts | 0  4 10 14 18 24  8 20 12 26
 
-    The shifts that represent each state were derived using teh SMT solver Z3, to ensure when encoded into
+    The shifts that represent each state were derived using the SMT solver Z3, to ensure when encoded into
     the rows the correct shift was a result.
 
     Each character class row is encoding 10 states with shifts as defined above. By shifting the bitsof a row by
@@ -400,7 +415,8 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     return iterate_continued(s, i, u)
 end
 
-function iterate_continued(s::String, i::Int, u::UInt32)
+# duck-type s so that external UTF-8 string packages like StringViews can hook in
+function iterate_continued(s, i::Int, u::UInt32)
     u < 0xc0000000 && (i += 1; @goto ret)
     n = ncodeunits(s)
     # first continuation byte
@@ -429,7 +445,8 @@ end
     return getindex_continued(s, i, u)
 end
 
-function getindex_continued(s::String, i::Int, u::UInt32)
+# duck-type s so that external UTF-8 string packages like StringViews can hook in
+function getindex_continued(s, i::Int, u::UInt32)
     if u < 0xc0000000
         # called from `getindex` which checks bounds
         @inbounds isvalid(s, i) && @goto ret
@@ -542,7 +559,7 @@ function repeat(c::AbstractChar, r::Integer)
     s = _string_n(n*r)
     p = pointer(s)
     GC.@preserve s if n == 1
-        ccall(:memset, Ptr{Cvoid}, (Ptr{UInt8}, Cint, Csize_t), p, u % UInt8, r)
+        memset(p, u % UInt8, r)
     elseif n == 2
         p16 = reinterpret(Ptr{UInt16}, p)
         for i = 1:r

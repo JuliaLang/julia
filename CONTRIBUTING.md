@@ -185,7 +185,14 @@ At the moment, this should always be done with the following `compat` admonition
 
 *By contributing code to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
 
-The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR). You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready for merging. This will prevent accidental merging of work that is in progress.
+The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR).
+
+Issues and pull requests should have self explanatory titles such that they can be understood from the list of PRs and Issues.
+i.e. `Add {feature}` and `Fix {bug}` are good, `Fix #12345. Corrects the bug.` is bad.
+
+You can make pull requests for incomplete features to get code review. The convention is to open these a draft PRs and prefix
+the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready
+for merging. This will prevent accidental merging of work that is in progress.
 
 Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse forum](https://discourse.julialang.org) or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
 
@@ -325,7 +332,7 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
  - use lower case with underscores for method names
  - it is generally preferred to use ASCII operators and identifiers over
    Unicode equivalents whenever possible
- - in docstring refer to the language as "Julia" and the executable as "`julia`"
+ - in docstrings refer to the language as "Julia" and the executable as "`julia`"
 
 #### General Formatting Guidelines For C code contributions
 
@@ -340,7 +347,7 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
 ### Git Recommendations For Pull Requests
 
  - Avoid working from the `master` branch of your fork, creating a new branch will make it easier if Julia's `master` changes and you need to update your pull request.
- - Try to [squash](http://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) together small commits that make repeated changes to the same section of code so your pull request is easier to review. A reasonable number of separate well-factored commits is fine, especially for larger changes.
+ - Try to [squash](https://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) together small commits that make repeated changes to the same section of code so your pull request is easier to review. A reasonable number of separate well-factored commits is fine, especially for larger changes.
  - If any conflicts arise due to changes in Julia's `master`, prefer updating your pull request branch with `git rebase` versus `git merge` or `git pull`, since the latter will introduce merge commits that clutter the git history with noise that makes your changes more difficult to review.
  - Descriptive commit messages are good.
  - Using `git add -p` or `git add -i` can be useful to avoid accidentally committing unrelated changes.
