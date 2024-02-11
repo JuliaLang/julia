@@ -2335,7 +2335,7 @@ and return the value of the last expression.
 The optional `args` argument can be used to set the input arguments of the script (i.e. the global `ARGS` variable).
 Note that definitions (e.g. methods, globals) are evaluated in the anonymous module and do not affect the current module.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> write("testfile.jl", \"\"\"
@@ -3558,7 +3558,7 @@ Macro to obtain the absolute path of the current directory as a string.
 If in a script, returns the directory of the script containing the `@__DIR__` macrocall. If run from a
 REPL or if evaluated by `julia -e <expr>`, returns the current working directory.
 
-# Example
+# Examples
 
 The example illustrates the difference in the behaviors of `@__DIR__` and `pwd()`, by creating
 a simple script in a different directory than the current working one and executing both commands:

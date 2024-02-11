@@ -54,6 +54,7 @@ Compiler/Runtime improvements
 * A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
   loads, primarily to be used within JLLs ([#50074]).
 * Added support for annotating `Base.@assume_effects` on code blocks ([#52400]).
+* The libuv library has been updated from a base of v1.44.2 to v1.48.0 ([#49937]).
 
 Command-line option changes
 ---------------------------
@@ -86,6 +87,7 @@ New library functions
 * `Sys.username()` can be used to return the current user's username ([#51897]).
 * `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` is the safe counterpart to `unsafe_wrap` ([#52049]).
 * `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
+* `IdSet` is now exported from Base and considered public ([#53262]).
 
 New library features
 --------------------

@@ -191,7 +191,7 @@ writing to an (optional) `io` stream or returning a string.
 One can alternatively use `show(io, "text/html", md)` or `repr("text/html", md)`, which
 differ in that they wrap the output in a `<div class="markdown"> ... </div>` element.
 
-# Example
+# Examples
 ```jldoctest
 julia> html(md"hello _world_")
 "<p>hello <em>world</em></p>\\n"
