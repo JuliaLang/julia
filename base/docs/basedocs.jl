@@ -2196,7 +2196,7 @@ end
 
 Sys.WORD_SIZE-bit signed integer type, `Int <: Signed <: Integer <: Real`.
 
-This is the default type of most integer literals and is an ailias for either `Int32`
+This is the default type of most integer literals and is an alias for either `Int32`
 or `Int64`, depending on `Sys.WORD_SIZE`. It is the type returned by functions such as
 [`length`](@ref), and the standard type for indexing arrays.
 

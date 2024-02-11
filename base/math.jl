@@ -1010,10 +1010,7 @@ Returns the largest integer `y` such that `2^y ≤ abs(x)`.
 Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
 For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
 
-See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref).
-
-See also [`significand`](@ref), [`exponent`](@ref), [`ldexp`](@ref).
-
+See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref), [`ldexp`](@ref).
 # Examples
 ```jldoctest
 julia> exponent(8)
