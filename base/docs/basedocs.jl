@@ -2163,7 +2163,6 @@ Binary format is 1 sign, 5 exponent, 10 fraction bits.
 Float16
 
 for bit in (8, 16, 32, 64, 128)
-    Sys.WORD_SIZE == bit && continue  # Int & UInt have separate, more detailed, descriptions
     type = Symbol(:Int, bit)
     srange = bit > 31 ? "" : "Represents numbers `n ∈ " * repr(eval(:(typemin($type):typemax($type)))) * "`.\n"
     unshow = repr(eval(Symbol(:UInt, bit))(bit-1))
@@ -2192,40 +2191,38 @@ for bit in (8, 16, 32, 64, 128)
     end
 end
 
-@eval begin
-    """
-        $Int
+"""
+    Int
 
-    $(Sys.WORD_SIZE)-bit signed integer type, `$Int <: Signed <: Integer <: Real`.
+Sys.WORD_SIZE-bit signed integer type, `Int <: Signed <: Integer <: Real`.
 
-    This is the default type of most integer literals, on computers for which `Sys.WORDSIZE == $(Sys.WORD_SIZE)`,
-    and has an alias `Int`. It is the type returned by functions such as [`length`](@ref), and the
-    standard type for indexing arrays. The default (and the alias) may be 32 or 64 bits on different
-    computers, indicated by `Sys.WORD_SIZE`.
+This is the default type of most integer literals, on computers for which `Sys.WORDSIZE == $(Sys.WORD_SIZE)`,
+and has an alias `Int`. It is the type returned by functions such as [`length`](@ref), and the
+standard type for indexing arrays. The default (and the alias) may be 32 or 64 bits on different
+computers, indicated by `Sys.WORD_SIZE`.
 
-    Note that integers overflow without warning, thus `typemax(Int) + 1 < 0` and `10^19 < 0`.
-    Overflow can be avoided by using [`BigInt`](@ref).
-    Very large integer literals will use a wider type, for instance `10_000_000_000_000_000_000 isa Int128`.
+Note that integers overflow without warning, thus `typemax(Int) + 1 < 0` and `10^19 < 0`.
+Overflow can be avoided by using [`BigInt`](@ref).
+Very large integer literals will use a wider type, for instance `10_000_000_000_000_000_000 isa Int128`.
 
-    Integer division is [`div`](@ref) alias `÷`,
-    whereas [`/`](@ref) acting on integers returns [`Float64`](@ref).
+Integer division is [`div`](@ref) alias `÷`,
+whereas [`/`](@ref) acting on integers returns [`Float64`](@ref).
 
-    See also [`$(Symbol("Int", 96 - Sys.WORD_SIZE))`](@ref), [`widen`](@ref), [`typemax`](@ref), [`bitstring`](@ref).
-    """
-    $(Symbol(Int))
+See also [`$(Symbol("Int", Sys.WORD_SIZE))`](@ref), [`widen`](@ref), [`typemax`](@ref), [`bitstring`](@ref).
+"""
+Int
 
-    """
-        $UInt
+"""
+    UInt
 
-    $(Sys.WORD_SIZE)-bit unsigned integer type, `$UInt <: Unsigned <: Integer`.
+Sys.WORD_SIZE-bit unsigned integer type, `UInt <: Unsigned <: Integer`.
 
-    Like [`Int`](@ref $Int), the alias `UInt` may point to either `UInt32` or `UInt64`,
-    according to the value of `Sys.WORD_SIZE` on a given computer.
+Like [`Int`](@ref Int), the alias `UInt` may point to either `UInt32` or `UInt64`,
+according to the value of `Sys.WORD_SIZE` on a given computer.
 
-    Printed and parsed in hexadecimal: `UInt(15) === $(repr(UInt(15)))`.
-    """
-    $(Symbol(UInt))
-end
+Printed and parsed in hexadecimal: `UInt(15) === $(repr(UInt(15)))`.
+"""
+UInt
 
 """
     Symbol
