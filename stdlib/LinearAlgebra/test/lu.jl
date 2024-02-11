@@ -245,9 +245,13 @@ end
     @test_throws ZeroPivotException lu!(copy(A), NoPivot(); check = true)
     @test !issuccess(lu(A, NoPivot(); check = false))
     @test !issuccess(lu!(copy(A), NoPivot(); check = false))
-    F = lu(A; check = false)
+    F = lu(A, NoPivot(); check = false)
     @test sprint((io, x) -> show(io, "text/plain", x), F) ==
         "Failed factorization of type $(typeof(F))"
+    F2 = lu(A; allowsingular = true)
+    @test !issuccess(F2)
+    @test issuccess(F2, allowsingular = true)
+    @test occursin("U factor (rank-deficient)", sprint((io, x) -> show(io, "text/plain", x), F2))
 end
 
 @testset "conversion" begin

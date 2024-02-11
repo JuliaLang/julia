@@ -2,8 +2,7 @@
 
 # tests for accurate updating of method tables
 
-using Base: get_world_counter
-tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
+using Base: get_world_counter, tls_world_age
 @test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
 # test simple method replacement

@@ -20,13 +20,18 @@ let m = Meta.@lower 1 + 1
         ReturnNode(SSAValue(6)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
+    @test !src.inferred
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
+    compile_mode = @ccall jl_get_module_compile(@__MODULE__()::Module)::Cint
+    if compile_mode == 3
+        # implies `Base.Experimental.@compiler_options compile=min`
+        @test !src.inferred
+    end
     global test29262 = false
     @test :b === @eval $m
 end
@@ -61,13 +66,19 @@ let m = Meta.@lower 1 + 1
         ReturnNode(SSAValue(18)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
+    @test !src.inferred
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test (:b, :a, :c, :c) === @eval $m
+    compile_mode = @ccall jl_get_module_compile(@__MODULE__()::Module)::Cint
+    if compile_mode == 3
+        # implies `Base.Experimental.@compiler_options compile=min`
+        @test !src.inferred
+    end
+    src.ssavaluetypes = nstmts
     global test29262 = false
     @test (:b, :a, :c, :b) === @eval $m
 end
@@ -98,27 +109,18 @@ let m = Meta.@lower 1 + 1
         ReturnNode(SSAValue(11)),
     ]
     nstmts = length(src.code)
-    src.ssavaluetypes = Any[ Any for _ = 1:nstmts ]
+    src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
-    src.inferred = true
+    @test !src.inferred
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
+    compile_mode = @ccall jl_get_module_compile(@__MODULE__()::Module)::Cint
+    if compile_mode == 3
+        # implies `Base.Experimental.@compiler_options compile=min`
+        @test !src.inferred
+    end
     global test29262 = false
     @test :b === @eval $m
 end
-
-# https://github.com/JuliaLang/julia/issues/47065
-# `Core.Compiler.sort!` should be able to handle a big list
-let n = 1000
-    ex = :(return 1)
-    for _ in 1:n
-        ex = :(rand() < .1 && $(ex))
-    end
-    @eval global function f_1000_blocks()
-        $ex
-        return 0
-    end
-end
-@test f_1000_blocks() == 0

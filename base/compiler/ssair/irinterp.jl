@@ -17,7 +17,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
     if (is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1) &&
         (is_nonoverlayed(interp) || is_nonoverlayed(effects)))
         args = collect_const_args(argtypes, #=start=#1)
-        value = let world = get_world_counter(interp)
+        value = let world = get_inference_world(interp)
             try
                 Core._call_in_world_total(world, args...)
             catch

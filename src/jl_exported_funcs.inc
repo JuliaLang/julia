@@ -28,11 +28,8 @@
     XX(jl_array_ptr) \
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
-    XX(jl_genericmemory_isassigned) \
     XX(jl_genericmemory_owner) \
     XX(jl_genericmemoryref) \
-    XX(jl_genericmemoryset) \
-    XX(jl_genericmemoryunset) \
     XX(jl_array_rank) \
     XX(jl_array_to_string) \
     XX(jl_atexit_hook) \
@@ -41,6 +38,7 @@
     XX(jl_atomic_error) \
     XX(jl_atomic_new_bits) \
     XX(jl_atomic_store_bits) \
+    XX(jl_atomic_storeonce_bits) \
     XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
@@ -114,7 +112,6 @@
     XX(jl_enter_handler) \
     XX(jl_enter_threaded_region) \
     XX(jl_environ) \
-    XX(jl_eof_error) \
     XX(jl_eqtable_get) \
     XX(jl_eqtable_pop) \
     XX(jl_eqtable_put) \
@@ -241,8 +238,6 @@
     XX(jl_method_lookup_by_tt) \
     XX(jl_method_lookup) \
     XX(jl_gf_invoke_lookup_worlds) \
-    XX(jl_git_branch) \
-    XX(jl_git_commit) \
     XX(jl_global_event_loop) \
     XX(jl_has_empty_intersection) \
     XX(jl_has_free_typevars) \
@@ -438,7 +433,6 @@
     XX(jl_stderr_obj) \
     XX(jl_stderr_stream) \
     XX(jl_stdin_stream) \
-    XX(jl_stdout_obj) \
     XX(jl_stdout_stream) \
     XX(jl_stored_inline) \
     XX(jl_string_ptr) \
@@ -518,7 +512,6 @@
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
     XX(jl_write_compiler_output) \
-    XX(jl_yield) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
     XX(jl_setjmp) \

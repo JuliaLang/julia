@@ -270,10 +270,11 @@ julia> addprocs(2)
 Module [`Distributed`](@ref man-distributed) must be explicitly loaded on the master process before invoking [`addprocs`](@ref).
 It is automatically made available on the worker processes.
 
-Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
-their global state (such as global variables, new method definitions, and loaded modules) with any
-of the other running processes. You may use `addprocs(exeflags="--project")` to initialize a worker with
-a particular environment, and then `@everywhere using <modulename>` or `@everywhere include("file.jl")`.
+!!! note
+    Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
+    their global state (such as command-line switches, global variables, new method definitions, and loaded modules) with any
+    of the other running processes. You may use `addprocs(exeflags="--project")` to initialize a worker with
+    a particular environment, and then `@everywhere using <modulename>` or `@everywhere include("file.jl")`.
 
 Other types of clusters can be supported by writing your own custom `ClusterManager`, as described
 below in the [ClusterManagers](@ref) section.
@@ -813,16 +814,18 @@ will always operate on copies of arguments.
 
 ## [Shared Arrays](@id man-shared-arrays)
 
-Shared Arrays use system shared memory to map the same array across many processes. While there
-are some similarities to a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl), the
-behavior of a [`SharedArray`](@ref) is quite different. In a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl),
-each process has local access to just a chunk of the data, and no two processes share the same
-chunk; in contrast, in a [`SharedArray`](@ref) each "participating" process has access to the
-entire array.  A [`SharedArray`](@ref) is a good choice when you want to have a large amount of
-data jointly accessible to two or more processes on the same machine.
+Shared Arrays use system shared memory to map the same array across many processes. A
+[`SharedArray`](@ref) is a good choice when you want to have a large amount of data jointly
+accessible to two or more processes on the same machine. Shared Array support is available via the
+module `SharedArrays`, which must be explicitly loaded on all participating workers.
 
-Shared Array support is available via module `SharedArrays` which must be explicitly loaded on
-all participating workers.
+A complementary data structure is provided by the external package
+[`DistributedArrays.jl`](https://github.com/JuliaParallel/DistributedArrays.jl) in the form of a
+`DArray`. While there are some similarities to a [`SharedArray`](@ref), the behavior of a
+[`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl) is quite different. In a
+[`SharedArray`](@ref), each "participating" process has access to the entire array; in contrast, in
+a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl), each process has local access
+to just a chunk of the data, and no two processes share the same chunk.
 
 [`SharedArray`](@ref) indexing (assignment and accessing values) works just as with regular arrays,
 and is efficient because the underlying memory is available to the local process. Therefore,
@@ -1326,8 +1329,11 @@ in future releases.
 ## Noteworthy external packages
 
 Outside of Julia parallelism there are plenty of external packages that should be mentioned.
-For example [MPI.jl](https://github.com/JuliaParallel/MPI.jl) is a Julia wrapper for the `MPI` protocol, [Dagger.jl](https://github.com/JuliaParallel/Dagger.jl) provides functionality similar to Python's [Dask](https://dask.org/), and
-[DistributedArrays.jl](https://github.com/JuliaParallel/Distributedarrays.jl) provides array operations distributed across workers, as presented in [Shared Arrays](@ref).
+For example, [`MPI.jl`](https://github.com/JuliaParallel/MPI.jl) is a Julia wrapper for the `MPI`
+protocol, [`Dagger.jl`](https://github.com/JuliaParallel/Dagger.jl) provides functionality similar to
+Python's [Dask](https://dask.org/), and
+[`DistributedArrays.jl`](https://github.com/JuliaParallel/Distributedarrays.jl) provides array
+operations distributed across workers, as [outlined above](@ref man-shared-arrays).
 
 A mention must be made of Julia's GPU programming ecosystem, which includes:
 

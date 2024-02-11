@@ -470,6 +470,42 @@ end
     end
 end
 
+@testset "non-isbits algebra" begin
+    for ST in (Symmetric, Hermitian), uplo in (:L, :U)
+        M = Matrix{Complex{BigFloat}}(undef,2,2)
+        M[1,1] = rand()
+        M[2,2] = rand()
+        M[1+(uplo==:L), 1+(uplo==:U)] = rand(ComplexF64)
+        S = ST(M, uplo)
+        MS = Matrix(S)
+        @test real(S) == real(MS)
+        @test imag(S) == imag(MS)
+        @test conj(S) == conj(MS)
+        @test conj!(copy(S)) == conj(MS)
+        @test -S == -MS
+        @test S + S == MS + MS
+        @test S - S == MS - MS
+        @test S*2 == 2*S == 2*MS
+        @test S/2 == MS/2
+    end
+    @testset "mixed uplo" begin
+        Mu = Matrix{Complex{BigFloat}}(undef,2,2)
+        Mu[1,1] = Mu[2,2] = 3
+        Mu[1,2] = 2 + 3im
+        Ml = Matrix{Complex{BigFloat}}(undef,2,2)
+        Ml[1,1] = Ml[2,2] = 4
+        Ml[2,1] = 4 + 5im
+        for ST in (Symmetric, Hermitian)
+            Su = ST(Mu, :U)
+            MSu = Matrix(Su)
+            Sl = ST(Ml, :L)
+            MSl = Matrix(Sl)
+            @test Su + Sl == Sl + Su == MSu + MSl
+            @test Su - Sl == -(Sl - Su) == MSu - MSl
+        end
+    end
+end
+
 # bug identified in PR #52318: dot products of quaternionic Hermitian matrices,
 # or any number type where conj(a)*conj(b) ≠ conj(a*b):
 @testset "dot Hermitian quaternion #52318" begin
@@ -930,6 +966,13 @@ end
         @test A isa Matrix{Matrix{Int}}
         @test A == H
     end
+end
+
+@testset "conj for immutable" begin
+    S = Symmetric(reshape((1:16)*im, 4, 4))
+    @test conj(S) == conj(Array(S))
+    H = Hermitian(reshape((1:16)*im, 4, 4))
+    @test conj(H) == conj(Array(H))
 end
 
 end # module TestSymmetric

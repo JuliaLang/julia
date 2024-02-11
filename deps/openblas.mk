@@ -20,9 +20,6 @@ endif
 # don't touch scheduler affinity since we manage this ourselves
 OPENBLAS_BUILD_OPTS += NO_AFFINITY=1
 
-# Build BFloat16 kernels
-OPENBLAS_BUILD_OPTS += BUILD_BFLOAT16=1
-
 # Build for all architectures - required for distribution
 ifeq ($(SANITIZE_MEMORY),1)
 OPENBLAS_BUILD_OPTS += TARGET=GENERIC
