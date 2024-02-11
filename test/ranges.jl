@@ -235,9 +235,23 @@ end
             @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
         end
     end
+    @testset "high precision of varying types" begin
+        x = Float32(π)
+        y = Float64(Base.MathConstants.γ)
+        @test Base.mul12(x, y)[1] ≈ Base.mul12(Float64(π), y)[1] rtol=1e-6
+        @test Base.mul12(x, y)[2] ≈ Base.mul12(Float64(π), y)[2] atol=1e-15
+        @test Base.div12(x, y)[1] ≈ Base.div12(Float64(π), y)[1] rtol=1e-6
+        @test Base.div12(x, y)[2] ≈ Base.div12(Float64(π), y)[2] atol=1e-15
+        xtp = Base.TwicePrecision{Float32}(π)
+        ytp = Base.TwicePrecision{Float64}(Base.MathConstants.γ)
+        @test Float32(xtp + ytp) ≈ Float32(Base.TwicePrecision{Float64}(π) + ytp)
+    end
 
     x1 = Base.TwicePrecision{Float64}(1)
     x0 = Base.TwicePrecision{Float64}(0)
+    @test eltype(x1) == Float64
+    @test eltype(typeof(x1)) == Float64
+    @test zero(typeof(x1)) === x0
     xinf = Base.TwicePrecision{Float64}(Inf)
     @test Float64(x1+x0)  == 1
     @test Float64(x1+0)   == 1
