@@ -96,6 +96,7 @@ New library features
 * `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
 * `replace(string, pattern...)` now supports an optional `IO` argument to
   write the output to a stream rather than returning a string ([#48625]).
+* New methods `allequal(f, itr)` and `allunique(f, itr)` taking a predicate function ([#47679]).
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
 * New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
 * New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
