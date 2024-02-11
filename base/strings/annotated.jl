@@ -410,7 +410,7 @@ pipe_writer(io::AnnotatedIOBuffer) = io.io
 # Useful `IOBuffer` methods that we don't get from `AbstractPipe`
 position(io::AnnotatedIOBuffer) = position(io.io)
 seek(io::AnnotatedIOBuffer, n::Integer) = (seek(io.io, n); io)
-seekend(io::AnnotatedIOBuffer) = seekend(io.io)
+seekend(io::AnnotatedIOBuffer) = (seekend(io.io); io)
 skip(io::AnnotatedIOBuffer, n::Integer) = (skip(io.io, n); io)
 copy(io::AnnotatedIOBuffer) = AnnotatedIOBuffer(copy(io.io), copy(io.annotations))
 
