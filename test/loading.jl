@@ -650,9 +650,9 @@ end
 # normalization of paths by include (#26424)
 @test begin
     exc = try; include("./notarealfile.jl"); "unexpectedly reached!"; catch exc; exc; end
-    @test exc isa SystemError
-    exc.prefix
-end == "opening file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
+    @test exc isa ArgumentError
+    exc.msg
+end == "$(repr(joinpath(@__DIR__, "notarealfile.jl"))): No such file or directory"
 
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")
@@ -1549,7 +1549,7 @@ end
         end
 
         file = joinpath(depot, "dev", "non-existent.jl")
-        @test_throws SystemError("opening file $(repr(file))") include(file)
+        @test_throws ArgumentError("$(repr(file)): No such file or directory") include(file)
     end
 end
 
