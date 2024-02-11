@@ -313,6 +313,8 @@ Logging.Debug
 Logging.Info
 Logging.Warn
 Logging.Error
+Logging.BelowMinLevel
+Logging.AboveMaxLevel
 Logging.@create_log_macro
 ```
 

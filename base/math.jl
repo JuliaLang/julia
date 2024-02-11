@@ -177,7 +177,7 @@ a Goertzel-like [^DK62] algorithm if `x` is complex.
 !!! compat "Julia 1.4"
     This function requires Julia 1.4 or later.
 
-# Example
+# Examples
 ```jldoctest
 julia> evalpoly(2, (1, 2, 3))
 17

@@ -899,8 +899,8 @@ end
     b = [2, 3, 1, 3]
     ua = unique(a)
     ub = unique(b)
-    for TA in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
-        TB in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+    for TA in (Tuple, identity, Set, BitSet, IdSet{Int}),
+        TB in (Tuple, identity, Set, BitSet, IdSet{Int}),
         uA = false:true,
         uB = false:true
         A = TA(uA ? ua : a)
@@ -921,7 +921,7 @@ end
         @test !issetequal(B, A)
         @test !issetequal(B)(A)
         @test !issetequal(A)(B)
-        for T = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
+        for T = (Tuple, identity, Set, BitSet, IdSet{Int})
             @test issetequal(A, T(A))
             @test issetequal(B, T(B))
         end
@@ -982,7 +982,7 @@ end
     c = [3]
     d = [4]
     e = [5]
-    A = Base.IdSet{Vector{Int}}([a, b, c, d])
+    A = IdSet{Vector{Int}}([a, b, c, d])
     @test !isempty(A)
     B = copy(A)
     @test A ⊆ B
