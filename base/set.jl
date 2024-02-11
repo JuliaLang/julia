@@ -428,12 +428,15 @@ end
     allunique(f, itr) -> Bool
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
-Or if all `f(x) for x in itr` are distinct, for `allunique(f, itr)`.
+Or if all of `[f(x) for x in itr]` are distinct, for the second method.
+
+Note that `allunique(f, itr)` may call `f` fewer than `length(itr)` times.
+The precise number of calls is regarded as an implementation detail.
 
 See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
 
-!!! compat "Julia 1.10"
-    The method `allunique(f, itr)` requires at least Julia 1.10.
+!!! compat "Julia 1.11"
+    The method `allunique(f, itr)` requires at least Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -523,15 +526,18 @@ end
     allequal(f, itr) -> Bool
 
 Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
-Or if all `f(x) for x in itr` are equal, for `allequal(f, itr)`.
+Or if all of `[f(x) for x in itr]` are equal, for the second method.
+
+Note that `allequal(f, itr)` may call `f` fewer than `length(itr)` times.
+The precise number of calls is regarded as an implementation detail.
 
 See also: [`unique`](@ref), [`allunique`](@ref).
 
 !!! compat "Julia 1.8"
     The `allequal` function requires at least Julia 1.8.
 
-!!! compat "Julia 1.10"
-    The method `allequal(f, itr)` requires at least Julia 1.10.
+!!! compat "Julia 1.11"
+    The method `allequal(f, itr)` requires at least Julia 1.11.
 
 # Examples
 ```jldoctest
