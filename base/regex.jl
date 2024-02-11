@@ -370,8 +370,8 @@ _is_regex_escape(c) = in(c, raw"()[{*+.$^\|?")
 function chopprefix(s::AbstractString, prefix::Regex)
     pattern = prefix.pattern
 
-    # fast path for ASCII-letter-only regexes
-    any(!_is_regex_escape, pattern) && startswith(s, pattern) && return chopprefix(s, pattern)
+    # fast path
+    startswith(s, pattern) && any(!_is_regex_escape, pattern) && return chopprefix(s, pattern)
 
     m = match(prefix, s, firstindex(s), PCRE.ANCHORED)
     m === nothing && return SubString(s)
@@ -381,18 +381,17 @@ end
 function chopsuffix(s::AbstractString, suffix::Regex)
     pattern = suffix.pattern
 
-    # fast path for letter-only regexes
-    any(!_is_regex_escape, pattern) && endswith(s, pattern) && return chopsuffix(s, pattern)
-
     # fast path for regexes meant for file endings
-    startswith(pattern, raw"\.",) && any(!_is_regex_escape, @view pattern[3:end]) && endswith(s, @view pattern[2:end]) && return chopsuffix(s, @view pattern[2:end])
+    startswith(pattern, raw"\.") && any(!_is_regex_escape, @view pattern[3:end]) && endswith(s, @view pattern[2:end]) && return chopsuffix(s, @view pattern[2:end])
+
+    # more general fast path
+    endswith(s, pattern) && any(!_is_regex_escape, pattern) && return chopsuffix(s, pattern)
 
     m = match(suffix, s, firstindex(s), PCRE.ENDANCHORED)
     m === nothing && return SubString(s)
     isempty(m.match) && return SubString(s)
     return SubString(s, firstindex(s), prevind(s, m.offset))
 end
-
 
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
