@@ -364,13 +364,14 @@ function endswith(s::SubString{String}, r::Regex)
 end
 
 
-_isASCIIletter(c) = ('A' <= c) & (bitrotate(reinterpret(Int32, c) & xor(32 << (32-8), -1), -32+8) <= Int32('Z'))
+# https://stackoverflow.com/questions/5663987/how-to-properly-escape-characters-in-regexp
+_is_regex_escape(c) = in(c, raw"()[{*+.$^\|?")
 
 function chopprefix(s::AbstractString, prefix::Regex)
     pattern = prefix.pattern
 
     # fast path for ASCII-letter-only regexes
-    all(_isASCIIletter, pattern) && startswith(s, pattern) && return chopprefix(s, pattern)
+    any(!_is_regex_escape, pattern) && startswith(s, pattern) && return chopprefix(s, pattern)
 
     m = match(prefix, s, firstindex(s), PCRE.ANCHORED)
     m === nothing && return SubString(s)
@@ -380,11 +381,11 @@ end
 function chopsuffix(s::AbstractString, suffix::Regex)
     pattern = suffix.pattern
 
-    # fast path for ASCII-letter-only regexes
-    all(_isASCIIletter, pattern) && endswith(s, pattern) && return chopsuffix(s, pattern)
+    # fast path for letter-only regexes
+    any(!_is_regex_escape, pattern) && endswith(s, pattern) && return chopsuffix(s, pattern)
 
     # fast path for regexes meant for file endings
-    startswith(pattern, raw"\.",) && all(_isASCIIletter, @view pattern[3:end]) && endswith(s, @view pattern[2:end]) && return chopsuffix(s, pattern)
+    startswith(pattern, raw"\.",) && any(!_is_regex_escape, @view pattern[3:end]) && endswith(s, @view pattern[2:end]) && return chopsuffix(s, @view pattern[2:end])
 
     m = match(suffix, s, firstindex(s), PCRE.ENDANCHORED)
     m === nothing && return SubString(s)
