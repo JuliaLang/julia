@@ -101,7 +101,7 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
 end
 
 print(io::IO, u::UUID) = print(io, string(u))
-show(io::IO, u::UUID) = print(io, "UUID(\"", u, "\")")
+show(io::IO, u::UUID) = print(io, UUID, "(\"", u, "\")")
 
 isless(a::UUID, b::UUID) = isless(a.value, b.value)
 

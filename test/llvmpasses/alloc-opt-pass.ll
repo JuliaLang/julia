@@ -1,9 +1,7 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=0 --opaque-pointers=0 -load libjulia-codegen%shlibext -AllocOpt -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
 ; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(AllocOpt)' -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
 
-; RUN: opt -enable-new-pm=0 --opaque-pointers=1 -load libjulia-codegen%shlibext -AllocOpt -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 ; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(AllocOpt)' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 @tag = external addrspace(10) global {}
@@ -83,6 +81,7 @@ L3:
 ; CHECK-LABEL: @legal_int_types
 ; CHECK: alloca [12 x i8]
 ; CHECK-NOT: alloca i96
+; CHECK: store [12 x i8] zeroinitializer,
 ; CHECK: ret void
 define void @legal_int_types() {
   %pgcstack = call {}*** @julia.get_pgcstack()
@@ -145,6 +144,7 @@ L2:
 ; CHECK: alloca
 ; CHECK-NOT: call token(...) @llvm.julia.gc_preserve_begin
 ; CHECK: call void @llvm.lifetime.start
+; CHECK: store [8 x i8] zeroinitializer,
 ; CHECK-NOT: call void @llvm.lifetime.end
 define void @lifetime_no_preserve_end({}* noalias nocapture noundef nonnull sret({}) %0) {
   %pgcstack = call {}*** @julia.get_pgcstack()
@@ -162,3 +162,39 @@ define void @lifetime_no_preserve_end({}* noalias nocapture noundef nonnull sret
   ret void
 }
 ; CHECK-LABEL: }{{$}}
+
+
+; CHECK-LABEL: @initializers
+; CHECK: alloca [1 x i8]
+; CHECK-DAG: alloca [2 x i8]
+; CHECK-DAG: alloca [3 x i8]
+; CHECK-DAG: freeze [1 x i8] undef
+; CHECK-DAG: store [1 x i8] %
+; CHECK-DAG: store [3 x i8] zeroinitializer,
+; CHECK-NOT: store
+; CHECK-NOT: zeroinitializer
+; CHECK: ret void
+define void @initializers() {
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %ptls = call {}*** @julia.ptls_states()
+  %ptls_i8 = bitcast {}*** %ptls to i8*
+
+  %var1 = call {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, i64 1, {} addrspace(10)* @tag) #0
+  %var2 = addrspacecast {} addrspace(10)* %var1 to {} addrspace(11)*
+  %var3 = call {}* @julia.pointer_from_objref({} addrspace(11)* %var2)
+
+  %var4 = call {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, i64 2, {} addrspace(10)* @tag) #1
+  %var5 = addrspacecast {} addrspace(10)* %var4 to {} addrspace(11)*
+  %var6 = call {}* @julia.pointer_from_objref({} addrspace(11)* %var5)
+
+  %var7 = call {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, i64 3, {} addrspace(10)* @tag) #2
+  %var8 = addrspacecast {} addrspace(10)* %var7 to {} addrspace(11)*
+  %var9 = call {}* @julia.pointer_from_objref({} addrspace(11)* %var8)
+
+  ret void
+}
+; CHECK-LABEL: }{{$}}
+
+attributes #0 = { allockind("alloc") }
+attributes #1 = { allockind("alloc,uninitialized") }
+attributes #2 = { allockind("alloc,zeroed") }

@@ -10,7 +10,7 @@ OPENBLAS_BUILD_OPTS := CC="$(CC) $(SANITIZE_OPTS)" FC="$(FC) $(SANITIZE_OPTS)" L
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
 OPENBLAS_BUILD_OPTS += USE_THREAD=1
-OPENBLAS_BUILD_OPTS += GEMM_MULTITHREADING_THRESHOLD=50
+OPENBLAS_BUILD_OPTS += GEMM_MULTITHREADING_THRESHOLD=400
 # Maximum number of threads for parallelism
 OPENBLAS_BUILD_OPTS += NUM_THREADS=512
 else
@@ -95,12 +95,22 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied: $(BUILDDIR)/
 		patch -p1 -f < $(SRCDIR)/patches/openblas-ofast-power.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-avx512bf-kernels.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-ofast-power.patch-applied
 	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
-		patch -p1 -f < $(SRCDIR)/patches/neoverse-generic-kernels.patch
+		patch -p1 -f < $(SRCDIR)/patches/openblas-avx512bf-kernels.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/neoverse-generic-kernels.patch-applied
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-gemv-multithreading.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-avx512bf-kernels.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-gemv-multithreading.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-darwin-sve.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-gemv-multithreading.patch-applied
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && \
+		patch -p1 -f < $(SRCDIR)/patches/openblas-darwin-sve.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-darwin-sve.patch-applied
 	echo 1 > $@
 
 $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-configured

@@ -17,6 +17,21 @@ mul_wrappers = [
     m -> adjoint(m),
     m -> transpose(m)]
 
+@testset "wrap" begin
+    f(A) = LinearAlgebra.wrap(A, 'N')
+    A = ones(1,1)
+    @test @inferred(f(A)) === A
+    g(A) = LinearAlgebra.wrap(A, 'T')
+    @test @inferred(g(A)) === transpose(A)
+    # https://github.com/JuliaLang/julia/issues/52202
+    @test Base.infer_return_type((Vector{Float64},)) do v
+        LinearAlgebra.wrap(v, 'N')
+    end == Vector{Float64}
+    h(A) = LinearAlgebra.wrap(LinearAlgebra._unwrap(A), LinearAlgebra.wrapper_char(A))
+    @test @inferred(h(transpose(A))) === transpose(A)
+    @test @inferred(h(adjoint(A))) === transpose(A)
+end
+
 @testset "matrices with zero dimensions" begin
     for (dimsA, dimsB, dimsC) in (
         ((0, 5), (5, 3), (0, 3)),
@@ -119,7 +134,7 @@ end
         @test mul!(C, transpose(A), B) == A' * B
         @test mul!(C, A, transpose(B)) == A * B'
         @test mul!(C, transpose(A), transpose(B)) == A' * B'
-        @test LinearAlgebra.mul!(C, adjoint(A), transpose(B)) == A' * transpose(B)
+        @test mul!(C, adjoint(A), transpose(B)) == A' * transpose(B)
 
         # Inplace multiply-add
         α = rand(-10:10)
@@ -135,8 +150,8 @@ end
         @test mul!(C0(), adjoint(A), transpose(B), α, β) == α * A' * transpose(B) .+ βC
 
         #test DimensionMismatch for generic_matmatmul
-        @test_throws DimensionMismatch LinearAlgebra.mul!(C, adjoint(A), transpose(fill(1, 4, 4)))
-        @test_throws DimensionMismatch LinearAlgebra.mul!(C, adjoint(fill(1, 4, 4)), transpose(B))
+        @test_throws DimensionMismatch mul!(C, adjoint(A), transpose(fill(1, 4, 4)))
+        @test_throws DimensionMismatch mul!(C, adjoint(fill(1, 4, 4)), transpose(B))
     end
     vv = [1, 2]
     CC = Matrix{Int}(undef, 2, 2)
@@ -219,7 +234,7 @@ end
     @test C == AB
     mul!(C, A, B, 2, -1)
     @test C == AB
-    LinearAlgebra._generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(2, -1))
+    LinearAlgebra.generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(2, -1))
     @test C == AB
 end
 
@@ -228,9 +243,9 @@ end
     BB = rand(Float64, 6, 6)
     CC = zeros(Float64, 6, 6)
     for A in (copy(AA), view(AA, 1:6, 1:6)), B in (copy(BB), view(BB, 1:6, 1:6)), C in (copy(CC), view(CC, 1:6, 1:6))
-        @test LinearAlgebra.mul!(C, transpose(A), transpose(B)) == transpose(A) * transpose(B)
-        @test LinearAlgebra.mul!(C, A, adjoint(B)) == A * transpose(B)
-        @test LinearAlgebra.mul!(C, adjoint(A), B) == transpose(A) * B
+        @test mul!(C, transpose(A), transpose(B)) == transpose(A) * transpose(B)
+        @test mul!(C, A, adjoint(B)) == A * transpose(B)
+        @test mul!(C, adjoint(A), B) == transpose(A) * B
 
         # Inplace multiply-add
         α = rand(Float64)
@@ -245,15 +260,57 @@ end
     end
 end
 
+@testset "allocations in BLAS-mul" begin
+    for n in (2, 3, 6)
+        A = rand(Float64, n, n)
+        B = rand(Float64, n, n)
+        C = zeros(Float64, n, n)
+        # gemm
+        for t in (identity, adjoint, transpose)
+            At = t(A)
+            Bt = t(B)
+            mul!(C, At, B)
+            @test 0 == @allocations mul!(C, At, B)
+            mul!(C, A, Bt)
+            @test 0 == @allocations mul!(C, A, Bt)
+            mul!(C, At, Bt)
+            @test 0 == @allocations mul!(C, At, Bt)
+        end
+        # syrk/herk
+        @test 0 == @allocations mul!(C, transpose(A), A)
+        @test 0 == @allocations mul!(C, adjoint(A), A)
+        @test 0 == @allocations mul!(C, A, transpose(A))
+        @test 0 == @allocations mul!(C, A, adjoint(A))
+        # complex times real
+        Cc = complex(C)
+        Ac = complex(A)
+        for t in (identity, adjoint, transpose)
+            Bt = t(B)
+            @test 0 == @allocations mul!(Cc, Ac, Bt)
+        end
+    end
+end
+
 @testset "mixed Blas-non-Blas matmul" begin
     AA = rand(-10:10, 6, 6)
-    BB = rand(Float64, 6, 6)
+    BB = ones(Float64, 6, 6)
     CC = zeros(Float64, 6, 6)
     for A in (copy(AA), view(AA, 1:6, 1:6)), B in (copy(BB), view(BB, 1:6, 1:6)), C in (copy(CC), view(CC, 1:6, 1:6))
-        @test LinearAlgebra.mul!(C, A, B) == A * B
-        @test LinearAlgebra.mul!(C, transpose(A), transpose(B)) == transpose(A) * transpose(B)
-        @test LinearAlgebra.mul!(C, A, adjoint(B)) == A * transpose(B)
-        @test LinearAlgebra.mul!(C, adjoint(A), B) == transpose(A) * B
+        @test mul!(C, A, B) == A * B
+        @test mul!(C, transpose(A), transpose(B)) == transpose(A) * transpose(B)
+        @test mul!(C, A, adjoint(B)) == A * transpose(B)
+        @test mul!(C, adjoint(A), B) == transpose(A) * B
+    end
+end
+
+@testset "allocations in mixed Blas-non-Blas matmul" begin
+    for n in (2, 3, 6)
+        A = rand(-10:10, n, n)
+        B = ones(Float64, n, n)
+        C = zeros(Float64, n, n)
+        @test 0 == @allocations mul!(C, A, B)
+        @test 0 == @allocations mul!(C, A, transpose(B))
+        @test 0 == @allocations mul!(C, adjoint(A), B)
     end
 end
 
@@ -659,12 +716,9 @@ end
 import Base: *, adjoint, transpose
 import LinearAlgebra: Adjoint, Transpose
 (*)(x::RootInt, y::RootInt) = x.i * y.i
+(*)(x::RootInt, y::Integer) = x.i * y
 adjoint(x::RootInt) = x
 transpose(x::RootInt) = x
-Adjoint(x::RootInt) = x
-Transpose(x::RootInt) = x
-# TODO once Adjoint/Transpose constructors call adjoint/transpose recursively
-# rather than Adjoint/Transpose, the additional definitions should become unnecessary
 
 @test Base.promote_op(*, RootInt, RootInt) === Int
 
@@ -682,7 +736,7 @@ Transpose(x::RootInt) = x
     @test A * a == [56]
 end
 
-function test_mul(C, A, B)
+function test_mul(C, A, B, S)
     mul!(C, A, B)
     @test Array(A) * Array(B) ≈ C
     @test A * B ≈ C
@@ -691,10 +745,10 @@ function test_mul(C, A, B)
     # but consider all number types involved:
     rtol = max(rtoldefault.(real.(eltype.((C, A, B))))...)
 
-    rand!(C)
+    rand!(C, S)
     T = promote_type(eltype.((A, B))...)
-    α = rand(T)
-    β = rand(T)
+    α = T <: AbstractFloat ? rand(T) : rand(T(-10):T(10))
+    β = T <: AbstractFloat ? rand(T) : rand(T(-10):T(10))
     βArrayC = β * Array(C)
     βC = β * C
     mul!(C, A, B, α, β)
@@ -703,7 +757,7 @@ function test_mul(C, A, B)
 end
 
 @testset "mul! vs * for special types" begin
-    eltypes = [Float32, Float64, Int64]
+    eltypes = [Float32, Float64, Int64(-100):Int64(100)]
     for k in [3, 4, 10]
         T = rand(eltypes)
         bi1 = Bidiagonal(rand(T, k), rand(T, k - 1), rand([:U, :L]))
@@ -716,26 +770,26 @@ end
         specialmatrices = (bi1, bi2, tri1, tri2, stri1, stri2)
         for A in specialmatrices
             B = specialmatrices[rand(1:length(specialmatrices))]
-            test_mul(C, A, B)
+            test_mul(C, A, B, T)
         end
         for S in specialmatrices
             l = rand(1:6)
             B = randn(k, l)
             C = randn(k, l)
-            test_mul(C, S, B)
+            test_mul(C, S, B, T)
             A = randn(l, k)
             C = randn(l, k)
-            test_mul(C, A, S)
+            test_mul(C, A, S, T)
         end
     end
     for T in eltypes
         A = Bidiagonal(rand(T, 2), rand(T, 1), rand([:U, :L]))
         B = Bidiagonal(rand(T, 2), rand(T, 1), rand([:U, :L]))
         C = randn(2, 2)
-        test_mul(C, A, B)
+        test_mul(C, A, B, T)
         B = randn(2, 9)
         C = randn(2, 9)
-        test_mul(C, A, B)
+        test_mul(C, A, B, T)
     end
     let
         tri44 = Tridiagonal(randn(3), randn(4), randn(3))
@@ -863,7 +917,7 @@ end
     # Just in case dispatching on the surface API `mul!` is changed in the future,
     # let's test the function where the tiled multiplication is defined.
     fill!(C, 0)
-    LinearAlgebra._generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(-1, 0))
+    LinearAlgebra.generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(-1, 0))
     @test D ≈ C
 end
 

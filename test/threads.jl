@@ -327,3 +327,17 @@ end
     @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
     @test_throws ArgumentError @macroexpand(@threads if true 1 end) # arg doesn't start with for
 end
+
+@testset "rand_ptls underflow" begin
+    @test Base.Partr.cong(UInt32(0)) == 0
+end
+
+@testset "num_stack_mappings metric" begin
+    @test @ccall(jl_get_num_stack_mappings()::Cint) >= 1
+    # There must be at least two: one for the root test task and one for the async task:
+    @test fetch(@async(@ccall(jl_get_num_stack_mappings()::Cint))) >= 2
+end
+
+@testset "Base.Threads docstrings" begin
+    @test isempty(Docs.undocumented_names(Threads))
+end

@@ -1185,7 +1185,7 @@ Base.show(io::IO, ::Struct49454) =
 
 let buf = IOBuffer()
     ctx = IOContext(buf, :color => true, :displaysize => (displaysize(buf)[1], 10))
-    show(stdout, MIME("text/plain"), md"""
+    show(ctx, MIME("text/plain"), md"""
     text without $(Struct49454()) underline.
     """)
     lines = split(String(take!(buf)), '\n')
@@ -1292,4 +1292,8 @@ end
     @test md"<mailto foo@bar.com>" |> html == """<p>&lt;mailto foo@bar.com&gt;</p>\n"""
     # see issue #42139
     @test md"<一轮红日初升>" |> html == """<p>&lt;一轮红日初升&gt;</p>\n"""
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Markdown))
 end

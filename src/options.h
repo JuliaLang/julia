@@ -33,11 +33,6 @@
 // delete julia IR for non-inlineable functions after they're codegen'd
 #define JL_DELETE_NON_INLINEABLE 1
 
-// fill in the jl_all_methods in world-counter order
-// so that it is possible to map (in a debugger) from
-// an inferred world validity range back to the offending definition
-// #define RECORD_METHOD_ORDER
-
 // GC options -----------------------------------------------------------------
 
 // debugging options
@@ -64,6 +59,10 @@
 #endif
 #endif
 
+// GC_ASSERT_PARENT_VALIDITY will check whether an object is valid when **pushing**
+// it to the mark queue
+// #define GC_ASSERT_PARENT_VALIDITY
+
 // profiling options
 
 // GC_FINAL_STATS prints total GC stats at exit
@@ -77,6 +76,11 @@
 
 // OBJPROFILE counts objects by type
 // #define OBJPROFILE
+
+// pool allocator configuration options
+
+// GC_SMALL_PAGE allocates objects in 4k pages
+// #define GC_SMALL_PAGE
 
 
 // method dispatch profiling --------------------------------------------------
@@ -105,12 +109,14 @@
 
 // When not using COPY_STACKS the task-system is less memory efficient so
 // you probably want to choose a smaller default stack size (factor of 8-10)
+#if !defined(JL_STACK_SIZE)
 #if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
 #define JL_STACK_SIZE (64*1024*1024)
 #elif defined(_P64)
 #define JL_STACK_SIZE (4*1024*1024)
 #else
 #define JL_STACK_SIZE (2*1024*1024)
+#endif
 #endif
 
 // allow a suspended Task to restart on a different thread
@@ -137,26 +143,6 @@
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0
-
-// partr -- parallel tasks runtime options ------------------------------------
-
-// multiq
-    // number of heaps = MULTIQ_HEAP_C * nthreads
-#define MULTIQ_HEAP_C                   4
-    // how many in each heap
-#define MULTIQ_TASKS_PER_HEAP           129
-
-// parfor
-    // tasks = niters / (GRAIN_K * nthreads)
-#define GRAIN_K                         4
-
-// synchronization
-    // narrivers = ((GRAIN_K * nthreads) ^ ARRIVERS_P) + 1
-    // limit for number of recursive parfors
-#define ARRIVERS_P                      2
-    // nreducers = narrivers * REDUCERS_FRAC
-#define REDUCERS_FRAC                   1
-
 
 // sanitizer defaults ---------------------------------------------------------
 

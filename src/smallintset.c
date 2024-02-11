@@ -24,87 +24,103 @@
 extern "C" {
 #endif
 
-static inline size_t jl_intref(const jl_array_t *arr, size_t idx) JL_NOTSAFEPOINT
+static inline size_t ignore_tombstone(size_t val, size_t tombstone) JL_NOTSAFEPOINT
 {
-    jl_value_t *el = jl_tparam0(jl_typeof(arr));
-    if (el == (jl_value_t*)jl_uint8_type)
-        return jl_atomic_load_relaxed(&((_Atomic(uint8_t)*)jl_array_data(arr))[idx]);
-    else if (el == (jl_value_t*)jl_uint16_type)
-        return jl_atomic_load_relaxed(&((_Atomic(uint16_t)*)jl_array_data(arr))[idx]);
-    else if (el == (jl_value_t*)jl_uint32_type)
-        return jl_atomic_load_relaxed(&((_Atomic(uint32_t)*)jl_array_data(arr))[idx]);
+    return val == tombstone ? 0 : val;
+}
+static inline size_t jl_intref(const jl_genericmemory_t *arr, size_t idx) JL_NOTSAFEPOINT
+{
+    jl_value_t *el = (jl_value_t*)jl_typetagof(arr);
+    if (el == jl_memory_uint8_type)
+        return ignore_tombstone(jl_atomic_load_relaxed(&((_Atomic(uint8_t)*)arr->ptr)[idx]), (uint8_t)-1);
+    else if (el == jl_memory_uint16_type)
+        return ignore_tombstone(jl_atomic_load_relaxed(&((_Atomic(uint16_t)*)arr->ptr)[idx]), (uint16_t)-1);
+    else if (el == jl_memory_uint32_type)
+        return ignore_tombstone(jl_atomic_load_relaxed(&((_Atomic(uint32_t)*)arr->ptr)[idx]), (uint32_t)-1);
     else
         abort();
 }
 
-static inline size_t jl_intref_acquire(const jl_array_t *arr, size_t idx) JL_NOTSAFEPOINT
+static inline size_t acquire_tombstone(size_t val, size_t tombstone) JL_NOTSAFEPOINT
 {
-    jl_value_t *el = jl_tparam0(jl_typeof(arr));
-    if (el == (jl_value_t*)jl_uint8_type)
-        return jl_atomic_load_acquire(&((_Atomic(uint8_t)*)jl_array_data(arr))[idx]);
-    else if (el == (jl_value_t*)jl_uint16_type)
-        return jl_atomic_load_acquire(&((_Atomic(uint16_t)*)jl_array_data(arr))[idx]);
-    else if (el == (jl_value_t*)jl_uint32_type)
-        return jl_atomic_load_acquire(&((_Atomic(uint32_t)*)jl_array_data(arr))[idx]);
+    return val == tombstone ? (size_t)-1 : val;
+}
+static inline size_t jl_intref_acquire(const jl_genericmemory_t *arr, size_t idx) JL_NOTSAFEPOINT
+{
+    jl_value_t *el = (jl_value_t*)jl_typetagof(arr);
+    if (el == jl_memory_uint8_type)
+        return acquire_tombstone(jl_atomic_load_acquire(&((_Atomic(uint8_t)*)arr->ptr)[idx]), (uint8_t)-1);
+    else if (el == jl_memory_uint16_type)
+        return acquire_tombstone(jl_atomic_load_acquire(&((_Atomic(uint16_t)*)arr->ptr)[idx]), (uint16_t)-1);
+    else if (el == jl_memory_uint32_type)
+        return acquire_tombstone(jl_atomic_load_acquire(&((_Atomic(uint32_t)*)arr->ptr)[idx]), (uint32_t)-1);
     else
         abort();
 }
 
-static inline void jl_intset_release(const jl_array_t *arr, size_t idx, size_t val) JL_NOTSAFEPOINT
+static inline void jl_intset_release(const jl_genericmemory_t *arr, size_t idx, size_t val) JL_NOTSAFEPOINT
 {
-    jl_value_t *el = jl_tparam0(jl_typeof(arr));
-    if (el == (jl_value_t*)jl_uint8_type)
-        jl_atomic_store_release(&((_Atomic(uint8_t)*)jl_array_data(arr))[idx], val);
-    else if (el == (jl_value_t*)jl_uint16_type)
-        jl_atomic_store_release(&((_Atomic(uint16_t)*)jl_array_data(arr))[idx], val);
-    else if (el == (jl_value_t*)jl_uint32_type)
-        jl_atomic_store_release(&((_Atomic(uint32_t)*)jl_array_data(arr))[idx], val);
+    jl_value_t *el = (jl_value_t*)jl_typetagof(arr);
+    if (el == jl_memory_uint8_type)
+        jl_atomic_store_release(&((_Atomic(uint8_t)*)arr->ptr)[idx], val);
+    else if (el == jl_memory_uint16_type)
+        jl_atomic_store_release(&((_Atomic(uint16_t)*)arr->ptr)[idx], val);
+    else if (el == jl_memory_uint32_type)
+        jl_atomic_store_release(&((_Atomic(uint32_t)*)arr->ptr)[idx], val);
     else
         abort();
 }
 
-static inline size_t jl_max_int(const jl_array_t *arr)
+static inline size_t jl_max_int(const jl_genericmemory_t *arr) JL_NOTSAFEPOINT
 {
-    jl_value_t *el = jl_tparam0(jl_typeof(arr));
-    if (el == (jl_value_t*)jl_uint8_type)
+    jl_value_t *el = (jl_value_t*)jl_typetagof(arr);
+    if (el == jl_memory_uint8_type)
         return 0xFF;
-    else if (el == (jl_value_t*)jl_uint16_type)
+    else if (el == jl_memory_uint16_type)
         return 0xFFFF;
-    else if (el == (jl_value_t*)jl_uint32_type)
+    else if (el == jl_memory_uint32_type)
         return 0xFFFFFFFF;
-    else if (el == (jl_value_t*)jl_any_type)
+    else if (el == jl_memory_any_type)
         return 0;
     else
         abort();
 }
 
-static jl_array_t *jl_alloc_int_1d(size_t np, size_t len)
+void smallintset_empty(const jl_genericmemory_t *a) JL_NOTSAFEPOINT
+{
+    size_t elsize;
+    jl_value_t *el = (jl_value_t*)jl_typetagof(a);
+    if (el == jl_memory_uint8_type)
+        elsize = sizeof(uint8_t);
+    else if (el == jl_memory_uint16_type)
+        elsize = sizeof(uint16_t);
+    else if (el == jl_memory_uint32_type)
+        elsize = sizeof(uint32_t);
+    else if (el == jl_memory_any_type)
+        elsize = 0;
+    else
+        abort();
+    memset(a->ptr, 0, a->length * elsize);
+}
+
+static jl_genericmemory_t *jl_alloc_int_1d(size_t np, size_t len)
 {
     jl_value_t *ty;
-    if (np < 0xFF) {
-        ty = jl_array_uint8_type;
-     }
-    else if (np < 0xFFFF) {
-        static jl_value_t *int16 JL_ALWAYS_LEAFTYPE = NULL;
-        if (int16 == NULL)
-            int16 = jl_apply_array_type((jl_value_t*)jl_uint16_type, 1);
-        ty = int16;
-    }
-    else {
-        assert(np < 0x7FFFFFFF);
-        static jl_value_t *int32 JL_ALWAYS_LEAFTYPE = NULL;
-        if (int32 == NULL)
-            int32 = jl_apply_array_type((jl_value_t*)jl_uint32_type, 1);
-        ty = int32;
-    }
-    jl_array_t *a = jl_alloc_array_1d(ty, len);
-    memset(a->data, 0, len * a->elsize);
+    if (np < 0xFF)
+        ty = jl_memory_uint8_type;
+    else if (np < 0xFFFF)
+        ty = jl_memory_uint16_type;
+    else
+        ty = jl_memory_uint32_type;
+    assert(np < 0x7FFFFFFF);
+    jl_genericmemory_t *a = jl_alloc_genericmemory(ty, len);
+    smallintset_empty(a);
     return a;
 }
 
-ssize_t jl_smallintset_lookup(jl_array_t *cache, smallintset_eq eq, const void *key, jl_svec_t *data, uint_t hv)
+ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop)
 {
-    size_t sz = jl_array_len(cache);
+    size_t sz = cache->length;
     if (sz == 0)
         return -1;
     JL_GC_PUSH1(&cache);
@@ -118,8 +134,10 @@ ssize_t jl_smallintset_lookup(jl_array_t *cache, smallintset_eq eq, const void *
             JL_GC_POP();
             return -1;
         }
-        if (eq(val1 - 1, key, data, hv)) {
+        if (val1 != -1 && eq(val1 - 1, key, data, hv)) {
             JL_GC_POP();
+            if (pop)
+                jl_intset_release(cache, index, (size_t)-1); // replace with tombstone
             return val1 - 1;
         }
         index = (index + 1) & (sz - 1);
@@ -129,9 +147,9 @@ ssize_t jl_smallintset_lookup(jl_array_t *cache, smallintset_eq eq, const void *
     return -1;
 }
 
-static int smallintset_insert_(jl_array_t *a, uint_t hv, size_t val1)
+static int smallintset_insert_(jl_genericmemory_t *a, uint_t hv, size_t val1) JL_NOTSAFEPOINT
 {
-    size_t sz = jl_array_len(a);
+    size_t sz = a->length;
     if (sz <= 1)
         return 0;
     size_t orig, index, iter;
@@ -149,16 +167,17 @@ static int smallintset_insert_(jl_array_t *a, uint_t hv, size_t val1)
     } while (iter <= maxprobe && index != orig);
     return 0;
 }
+//}
 
-static void smallintset_rehash(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np);
-
-void jl_smallintset_insert(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_svec_t *data)
+void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, smallintset_hash hash, size_t val, jl_value_t *data)
 {
-    jl_array_t *a = jl_atomic_load_relaxed(pcache);
-    if (val + 1 >  jl_max_int(a))
-        smallintset_rehash(pcache, parent, hash, data, jl_array_len(a), val + 1);
+    jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
+    if (val + 1 >= jl_max_int(a)) {
+        a = smallintset_rehash(a, hash, data, a->length, val + 1);
+        jl_atomic_store_release(pcache, a);
+        if (parent) jl_gc_wb(parent, a);
+    }
     while (1) {
-        a = jl_atomic_load_relaxed(pcache);
         if (smallintset_insert_(a, hash(val, data), val + 1))
             return;
 
@@ -168,21 +187,22 @@ void jl_smallintset_insert(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, sma
         /* lots of time rehashing all the keys over and over. */
         size_t newsz;
         a = jl_atomic_load_relaxed(pcache);
-        size_t sz = jl_array_len(a);
+        size_t sz = a->length;
         if (sz < HT_N_INLINE)
             newsz = HT_N_INLINE;
         else if (sz >= (1 << 19) || (sz <= (1 << 8)))
             newsz = sz << 1;
         else
             newsz = sz << 2;
-        smallintset_rehash(pcache, parent, hash, data, newsz, 0);
+        a = smallintset_rehash(a, hash, data, newsz, 0);
+        jl_atomic_store_release(pcache, a);
+        if (parent) jl_gc_wb(parent, a);
     }
 }
 
-static void smallintset_rehash(_Atomic(jl_array_t*) *pcache, jl_value_t *parent, smallintset_hash hash, jl_svec_t *data, size_t newsz, size_t np)
+jl_genericmemory_t* smallintset_rehash(jl_genericmemory_t* a, smallintset_hash hash, jl_value_t *data, size_t newsz, size_t np)
 {
-    jl_array_t *a = jl_atomic_load_relaxed(pcache);
-    size_t sz = jl_array_len(a);
+    size_t sz = a->length;
     size_t i;
     for (i = 0; i < sz; i += 1) {
         size_t val = jl_intref(a, i);
@@ -190,7 +210,7 @@ static void smallintset_rehash(_Atomic(jl_array_t*) *pcache, jl_value_t *parent,
             np = val;
     }
     while (1) {
-        jl_array_t *newa = jl_alloc_int_1d(np, newsz);
+        jl_genericmemory_t *newa = jl_alloc_int_1d(np + 1, newsz);
         JL_GC_PUSH1(&newa);
         for (i = 0; i < sz; i += 1) {
             size_t val1 = jl_intref(a, i);
@@ -201,15 +221,11 @@ static void smallintset_rehash(_Atomic(jl_array_t*) *pcache, jl_value_t *parent,
             }
         }
         JL_GC_POP();
-        if (i == sz) {
-            jl_atomic_store_release(pcache, newa);
-            jl_gc_wb(parent, newa);
-            return;
-        }
+        if (i == sz)
+            return newa;
         newsz <<= 1;
     }
 }
-
 
 #ifdef __cplusplus
 }

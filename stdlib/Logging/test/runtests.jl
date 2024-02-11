@@ -6,6 +6,10 @@ import Logging: min_enabled_level, shouldlog, handle_message
 
 @noinline func1() = backtrace()
 
+# see "custom log macro" testset
+@create_log_macro CustomLog1 -500 :magenta
+@create_log_macro CustomLog2 1500 1
+
 @testset "Logging" begin
 
 @testset "Core" begin
@@ -50,24 +54,24 @@ end
 
     @testset "Default metadata formatting" begin
         @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
-            (:blue,      "Debug:",   "@ Base ~/somefile.jl:42")
+            (:log_debug, "Debug:",   "@ Base ~/somefile.jl:42")
         @test Logging.default_metafmt(Logging.Info,  Main, :g, :i, "a.jl", 1) ==
-            (:cyan,      "Info:",    "")
+            (:log_info,  "Info:",    "")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2) ==
-            (:yellow,    "Warning:", "@ Main b.jl:2")
+            (:log_warn,  "Warning:", "@ Main b.jl:2")
         @test Logging.default_metafmt(Logging.Error, Main, :g, :i, "", 0) ==
-            (:light_red, "Error:",   "@ Main :0")
+            (:log_error, "Error:",   "@ Main :0")
         # formatting of nothing
         @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, "b.jl", 2) ==
-            (:yellow,    "Warning:", "@ b.jl:2")
+            (:log_warn,  "Warning:", "@ b.jl:2")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, nothing, 2) ==
-            (:yellow,    "Warning:", "@ Main")
+            (:log_warn,  "Warning:", "@ Main")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", nothing) ==
-            (:yellow,    "Warning:", "@ Main b.jl")
+            (:log_warn,  "Warning:", "@ Main b.jl")
         @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, nothing, 2) ==
-            (:yellow,    "Warning:", "")
+            (:log_warn,  "Warning:", "")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2:5) ==
-            (:yellow,    "Warning:", "@ Main b.jl:2-5")
+            (:log_warn,  "Warning:", "@ Main b.jl:2-5")
     end
 
     function dummy_metafmt(level, _module, group, id, file, line)
@@ -252,9 +256,9 @@ end
     # Basic colorization test
     @test genmsg("line1\nline2", color=true) ==
     """
-    \e[36m\e[1m┌ \e[22m\e[39m\e[36m\e[1mPREFIX \e[22m\e[39mline1
-    \e[36m\e[1m│ \e[22m\e[39mline2
-    \e[36m\e[1m└ \e[22m\e[39m\e[90mSUFFIX\e[39m
+    \e[36m\e[1m┌\e[39m\e[22m \e[36m\e[1mPREFIX\e[39m\e[22m line1
+    \e[36m\e[1m│\e[39m\e[22m line2
+    \e[36m\e[1m└\e[39m\e[22m \e[90mSUFFIX\e[39m
     """
 
 end
@@ -273,6 +277,33 @@ end
         end
         """)
     @test m.run()
+end
+
+@testset "custom log macro" begin
+    llevel = LogLevel(-500)
+
+    @test_logs (llevel, "foo") min_level=llevel @customlog1 "foo"
+
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize=>(30,80), :color=>false)
+    logger = ConsoleLogger(io, llevel)
+
+    with_logger(logger) do
+        @customlog1 "foo"
+    end
+    @test occursin("CustomLog1: foo", String(take!(buf)))
+
+
+    with_logger(logger) do
+        @customlog2 "hello"
+    end
+    @test occursin("CustomLog2: hello", String(take!(buf)))
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Logging)
+    @test_broken isempty(undoc)
+    @test undoc == [:AboveMaxLevel, :BelowMinLevel]
 end
 
 end
