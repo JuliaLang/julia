@@ -28,7 +28,7 @@ debug && println("Test basic type functionality")
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 @testset for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
     # Begin loop for first Triangular matrix
-    for (t1, uplo1) in ((UpperTriangular, :U),
+    @testset for (t1, uplo1) in ((UpperTriangular, :U),
                         (UnitUpperTriangular, :U),
                         (LowerTriangular, :L),
                         (UnitLowerTriangular, :L))
@@ -338,8 +338,8 @@ debug && println("Test basic type functionality")
         @test ((A1\A1)::t1) ≈ Matrix(A1) \ Matrix(A1)
 
         # Begin loop for second Triangular matrix
-        for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
-            for (t2, uplo2) in ((UpperTriangular, :U),
+        @testset for elty2 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
+            @testset for (t2, uplo2) in ((UpperTriangular, :U),
                                 (UnitUpperTriangular, :U),
                                 (LowerTriangular, :L),
                                 (UnitLowerTriangular, :L))
