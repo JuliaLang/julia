@@ -1229,7 +1229,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
             ci.max_world = reinterpret(UInt, deserialize(s))
         end
     end
-    #ci.inferred = deserialize(s)
+    if format_version(s) <= 26
+        deserialize(s) # inferred
+    end
     if format_version(s) < 22
         inlining_cost = deserialize(s)
         if isa(inlining_cost, Bool)

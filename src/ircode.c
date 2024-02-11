@@ -842,15 +842,11 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     // by the various jl_ir_ accessors. Make sure to adjust those if you change
     // the data layout.
 
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < 5; i++) {
         int copy = 1;
         if (i == 1) { // skip codelocs
             assert(jl_field_offset(jl_code_info_type, i) == offsetof(jl_code_info_t, codelocs));
             continue;
-        }
-        if (i == 4) { // don't copy contents of method_for_inference_limit_heuristics field
-            assert(jl_field_offset(jl_code_info_type, i) == offsetof(jl_code_info_t, method_for_inference_limit_heuristics));
-            copy = 0;
         }
         jl_encode_value_(&s, jl_get_nth_field((jl_value_t*)code, i), copy);
     }
@@ -934,7 +930,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_string_t *data)
     code->slotflags = jl_alloc_array_1d(jl_array_uint8_type, nslots);
     ios_readall(s.s, jl_array_data(code->slotflags, char), nslots);
 
-    for (i = 0; i < 6; i++) {
+    for (i = 0; i < 5; i++) {
         if (i == 1)  // skip codelocs
             continue;
         assert(jl_field_isptr(jl_code_info_type, i));
