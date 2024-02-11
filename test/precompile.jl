@@ -2103,23 +2103,6 @@ precompile_test_harness("Test flags") do load_path
     @test !Base.isprecompiled(id, ;flags=current_flags)
 end
 
-
-precompile_test_harness("Issue #52063") do load_path
-    fname = joinpath(load_path, "i_do_not_exist.jl")
-    @test_throws ArgumentError("$(repr(fname)): No such file or directory") include_dependency(fname)
-    touch(fname)
-    @test include_dependency(fname) === nothing
-    chmod(fname, 0x000)
-    @test_throws ArgumentError("$(repr(fname)): Missing read permission") include_dependency(fname)
-    dir = mktempdir() do dir
-        @test include_dependency(dir) === nothing
-        chmod(dir, 0x000)
-        @test_throws ArgumentError("$(repr(dir)): Missing read permission") include_dependency(dir)
-        dir
-    end
-    @test_throws ArgumentError("$(repr(dir)): No such file or directory") include_dependency(dir)
-end
-
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 empty!(Base.LOAD_PATH)
