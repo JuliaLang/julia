@@ -889,7 +889,7 @@ in their implementations, other arrays — like [`Diagonal`](@ref) — need the
 full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
 introspect which is which).
 
-!!! warnings
+!!! warning
 
     When iterating over all the indices for an array, it is
     better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.

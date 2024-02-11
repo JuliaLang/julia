@@ -416,7 +416,7 @@ rather than returned as a string.
 
 See also [`escape_microsoft_c_args`](@ref), [`shell_escape_posixly`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> Base.shell_escape_wincmd("a^\\"^o\\"^u\\"")
 "a^^\\"^o\\"^^u^\\""
