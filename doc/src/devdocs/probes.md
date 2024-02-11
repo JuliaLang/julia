@@ -138,7 +138,7 @@ beaver = @spawn begin
     while true
         fib(30)
         # A manual safepoint is necessary since otherwise this loop
-        # may never yield to GC. 
+        # may never yield to GC.
         GC.safepoint()
     end
 end
