@@ -3311,7 +3311,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             //"absolute_max",
                             "ipo_purity_bits", "purity_bits",
                             "analysis_results",
-                            "isspecsig", "precompile", "relocatability",
+                            "specsigflags", "precompile", "relocatability",
                             "invoke", "specptr"), // function object decls
                         jl_svec(17,
                             jl_method_instance_type,
