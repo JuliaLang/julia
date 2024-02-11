@@ -412,6 +412,7 @@ Other sparse solvers are available as Julia packages.
 
 ```@docs
 Base.:*(::AbstractMatrix, ::AbstractMatrix)
+Base.:*(::AbstractMatrix, ::AbstractMatrix, ::AbstractVector)
 Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
 Base.:/(::AbstractVecOrMat, ::AbstractVecOrMat)
 LinearAlgebra.SingularException
