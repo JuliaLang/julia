@@ -45,7 +45,7 @@ AnnotatedString(s::S<:AbstractString, annotations::Vector{Tuple{UnitRange{Int}, 
 A AnnotatedString can also be created with [`annotatedstring`](@ref), which acts much
 like [`string`](@ref) but preserves any annotations present in the arguments.
 
-# Example
+# Examples
 
 ```julia-repl
 julia> AnnotatedString("this is an example annotated string",

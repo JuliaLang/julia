@@ -375,7 +375,7 @@ then the user can enter just a newline character to select the `default`.
 
 See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
 
-# Example
+# Examples
 
 ```julia-repl
 julia> your_name = Base.prompt("Enter your name");

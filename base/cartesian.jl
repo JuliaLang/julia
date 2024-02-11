@@ -115,7 +115,7 @@ Generate a function call expression with keyword arguments `kw...`. As
 in the case of [`@ncall`](@ref), `sym` represents any number of function arguments, the
 last of which may be an anonymous-function expression and is expanded into `N` arguments.
 
-# Example
+# Examples
 ```jldoctest
 julia> using Base.Cartesian
 
