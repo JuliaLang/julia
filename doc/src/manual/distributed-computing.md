@@ -270,10 +270,11 @@ julia> addprocs(2)
 Module [`Distributed`](@ref man-distributed) must be explicitly loaded on the master process before invoking [`addprocs`](@ref).
 It is automatically made available on the worker processes.
 
-Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
-their global state (such as global variables, new method definitions, and loaded modules) with any
-of the other running processes. You may use `addprocs(exeflags="--project")` to initialize a worker with
-a particular environment, and then `@everywhere using <modulename>` or `@everywhere include("file.jl")`.
+!!! note
+    Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
+    their global state (such as command-line switches, global variables, new method definitions, and loaded modules) with any
+    of the other running processes. You may use `addprocs(exeflags="--project")` to initialize a worker with
+    a particular environment, and then `@everywhere using <modulename>` or `@everywhere include("file.jl")`.
 
 Other types of clusters can be supported by writing your own custom `ClusterManager`, as described
 below in the [ClusterManagers](@ref) section.
