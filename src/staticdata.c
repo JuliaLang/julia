@@ -963,18 +963,16 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 //record_field_change((jl_value_t **)((jl_method_t*)v)->roots, jl_emptysvec);
             } else if (jl_typetagis(v, jl_typename_type)) {
                 jl_typename_t *tn = (jl_typename_t*)v;
-                if (!(tn->mt->frozen)){
+                if (tn->mt != NULL && !(tn->mt->frozen)){
                 // if (strcmp(jl_symbol_name(tn->name), "#main") == 0  || (strcmp(jl_symbol_name(tn->name), "#__init__") == 0 ) ||
                 //     (strcmp(jl_symbol_name(tn->name), "#_str_sizehint") == 0 ) || (strcmp(jl_symbol_name(tn->name), "#print") == 0 )
                 //     || (strcmp(jl_symbol_name(tn->name), "#join") == 0 ) || (strcmp(jl_symbol_name(tn->name), "#showerror_nostdio") == 0 ) || (strcmp(jl_symbol_name(tn->name), "#!") == 0 )
                 //     || (strcmp(jl_symbol_name(tn->name), "#get_binding_type") == 0 ))
-                    if (tn->mt != NULL) {
-                        jl_methtable_t * new_methtable = (jl_methtable_t *)ptrhash_get(&new_methtables, tn->mt);
-                        if (new_methtable != HT_NOTFOUND)
-                            record_field_change((jl_value_t **)&tn->mt, (jl_value_t*)new_methtable);
-                        else
-                            record_field_change((jl_value_t **)&tn->mt, NULL);
-                    }
+                    jl_methtable_t * new_methtable = (jl_methtable_t *)ptrhash_get(&new_methtables, tn->mt);
+                    if (new_methtable != HT_NOTFOUND)
+                        record_field_change((jl_value_t **)&tn->mt, (jl_value_t*)new_methtable);
+                    else
+                        record_field_change((jl_value_t **)&tn->mt, NULL);
                 }
             }
         }
