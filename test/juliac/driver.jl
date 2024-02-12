@@ -71,7 +71,7 @@ else
 end
 result.exitcode == 0 || error("Failed to compile $file")
 
-run(`cc $(cflags) -g -c -o $init_path init.c`)
+run(`cc $(cflags) -g -c -o $init_path $(joinpath(@__DIR__, "init.c"))`)
 
 if !shared_lib
     run(`cc $(allflags) -o ./test-o -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path -ljulia -ljulia-internal`)
