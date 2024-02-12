@@ -237,7 +237,7 @@ end
 
 function copy_similar(A::AdjOrTransAbsMat, ::Type{T}) where {T}
     Ap = parent(A)
-    f! = inplace_adj_or_trans(src)
+    f! = inplace_adj_or_trans(A)
     return f!(similar(Ap, T, reverse(axes(Ap))), Ap)
 end
 
