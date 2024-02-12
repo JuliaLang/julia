@@ -325,13 +325,16 @@ function identify_package_env(where::PkgId, name::String)
     elseif where.uuid === nothing
         pkg_env = identify_package_env(name) # ignore `where`
     else
-        for env in load_path()
-            pkgid = manifest_deps_get(env, where, name)
-            pkgid === nothing && continue # not found--keep looking
-            if pkgid.uuid !== nothing
-                pkg_env = pkgid, env # found in explicit environment--use it
+        for use_weakdeps in (false,true)
+            for env in load_path()
+                pkgid = manifest_deps_get(env, where, name, use_weakdeps)
+                pkgid === nothing && continue # not found--keep looking
+                if pkgid.uuid !== nothing
+                    pkg_env = pkgid, env # found in explicit environment--use it
+                end
+                break # found in implicit environment--return "not found"
             end
-            break # found in implicit environment--return "not found"
+            pkg_env === nothing || break
         end
     end
     if isnothing(pkg_env) && haskey(EXT_PRIMED, where)
@@ -624,7 +627,7 @@ function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
     return nothing
 end
 
-function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothing,PkgId}
+function manifest_deps_get(env::String, where::PkgId, name::String, implicit_use_weakdeps::Bool=false)::Union{Nothing,PkgId}
     uuid = where.uuid
     @assert uuid !== nothing
     project_file = env_project_file(env)
@@ -658,7 +661,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
         return explicit_manifest_deps_get(project_file, where, name)
     elseif project_file
         # if env names a directory, search it
-        return implicit_manifest_deps_get(env, where, name)
+        return implicit_manifest_deps_get(env, where, name, implicit_use_weakdeps)
     end
     return nothing
 end
@@ -801,7 +804,7 @@ end
 
 # find project file root or deps `name => uuid` mapping
 # return `nothing` if `name` is not found
-function explicit_project_deps_get(project_file::String, name::String)::Union{Nothing,UUID}
+function explicit_project_deps_get(project_file::String, name::String, use_weakdeps::Bool=false)::Union{Nothing,UUID}
     d = parsed_toml(project_file)
     root_uuid = dummy_uuid(project_file)
     if get(d, "name", nothing)::Union{String, Nothing} === name
@@ -815,6 +818,7 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
         @debug "Explicitly checked project deps:" name uuid
         uuid === nothing || return UUID(uuid)
     end
+    use_weakdeps || return nothing
     # check weakdeps in case extensions need to resolve from parent package
     weakdeps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
     if weakdeps !== nothing
@@ -1006,14 +1010,14 @@ end
 # look for an entry-point for `name`, check that UUID matches
 # if there's a project file, look up `name` in its deps and return that
 # otherwise return `nothing` to indicate the caller should keep searching
-function implicit_manifest_deps_get(dir::String, where::PkgId, name::String)::Union{Nothing,PkgId}
+function implicit_manifest_deps_get(dir::String, where::PkgId, name::String, use_weakdeps::Bool=false)::Union{Nothing,PkgId}
     @assert where.uuid !== nothing
     project_file = entry_point_and_project_file(dir, where.name)[2]
     project_file === nothing && return nothing # a project file is mandatory for a package with a uuid
     proj = project_file_name_uuid(project_file, where.name)
     proj == where || return nothing # verify that this is the correct project file
     # this is the correct project, so stop searching here
-    pkg_uuid = explicit_project_deps_get(project_file, name)
+    pkg_uuid = explicit_project_deps_get(project_file, name, use_weakdeps)
     return PkgId(pkg_uuid, name)
 end
 
