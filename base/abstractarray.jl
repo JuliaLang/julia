@@ -1760,10 +1760,8 @@ cat_similar(A, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
 cat_similar(A, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
 cat_similar(A::Array, ::Type{T}, shape::Tuple) where T = Array{T}(undef, shape)
 cat_similar(A::Array, ::Type{T}, shape::Vector) where T = Array{T}(undef, shape...)
-cat_similar(A::Array, ::Type{T}, shape::Vector, ::Val{N}) where {T, N} = Array{T, N}(undef, shape...)
 cat_similar(A::AbstractArray, T::Type, shape::Tuple) = similar(A, T, shape)
 cat_similar(A::AbstractArray, T::Type, shape::Vector) = similar(A, T, shape...)
-cat_similar(A::AbstractArray, T::Type, shape::Vector, ::Val{N}) where N = similar(A, T, shape...)
 
 # These are for backwards compatibility (even though internal)
 cat_shape(dims, shape::Tuple{Vararg{Int}}) = shape
@@ -2283,7 +2281,7 @@ end
 function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     N < 0 &&
         throw(ArgumentError("concatenation dimension must be non-negative"))
-    A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)), Val(N))
+    A = cat_similar(xs[1], T, (ntuple(x -> 1, Val(N - 1))..., length(xs)))
     hvncat_fill!(A, false, xs)
     return A
 end
@@ -2312,7 +2310,7 @@ function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
         end
     end
 
-    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...), Val(nd))
+    A = cat_similar(as[1], T, (ntuple(d -> size(as[1], d), N - 1)..., Ndim, ntuple(x -> 1, nd - N)...))
     k = 1
     for a ∈ as
         for i ∈ eachindex(a)
@@ -2503,7 +2501,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         throw(DimensionMismatch("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
     # copy into final array
-    A = cat_similar(as[1], T, outdims, Val(N))
+    A = cat_similar(as[1], T, ntuple(i -> outdims[i], N))
     # @assert all(==(0), currentdims)
     outdims .= 0
     hvncat_fill!(A, currentdims, outdims, d1, d2, as)
@@ -2597,7 +2595,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     # @assert all(==(0), blockcounts)
 
     # copy into final array
-    A = cat_similar(as[1], T, outdims, Val(nd))
+    A = cat_similar(as[1], T, ntuple(i -> outdims[i], nd))
     hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
     return A
 end
