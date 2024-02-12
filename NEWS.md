@@ -73,6 +73,7 @@ Multi-threading changes
 -----------------------
 
 * `Threads.@threads` now supports the `:greedy` scheduler, intended for non-uniform workloads ([#52096]).
+* A new exported struct `Lockable{T, L<:AbstractLock}` makes it easy to bundle a resource and its lock together ([#52898]).
 
 Build system changes
 --------------------
