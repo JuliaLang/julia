@@ -119,6 +119,12 @@ julia> A
 """
 conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 conj!(x::AbstractArray{<:Real}) = x
+function conj!(A::AbstractArray{<:AbstractArray})
+    foreach(A) do ai
+        conj!(ai)
+    end
+    return A
+end
 
 """
     conj(A::AbstractArray)
