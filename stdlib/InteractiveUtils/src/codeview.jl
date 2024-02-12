@@ -76,9 +76,13 @@ See also: [`@code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref)
 """
 function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt(f));
                        debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
+    code_warntype(io, code_typed(f, t; optimize, kwargs...))
+end
+
+function code_warntype(io::IO, code_typed_output::Vector{Any})
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
-    for (src, rettype) in code_typed(f, t; optimize, kwargs...)
+    for (src, rettype) in code_typed_output
         if !(src isa Core.CodeInfo)
             println(io, src)
             println(io, "  failed to infer")
