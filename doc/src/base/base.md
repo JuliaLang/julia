@@ -1,4 +1,4 @@
-#replacefield Essentials
+# Essentials
 
 ## Introduction
 
@@ -468,7 +468,6 @@ Core.swapglobal!
 Core.setglobalonce!
 Core.replaceglobal!
 ```
-
 
 ## Documentation
 (See also the [documentation](@ref man-documentation) chapter.)
