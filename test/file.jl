@@ -1658,23 +1658,44 @@ else
     )
 end
 
-@testset "chmod/isexecutable" begin
+@testset "chmod/isexecutable/isreadable/iswriteable/exists" begin
     mktempdir() do dir
-        mkdir(joinpath(dir, "subdir"))
+        subdir = joinpath(dir, "subdir")
         fpath = joinpath(dir, "subdir", "foo")
 
-        # Test that we can actually set the executable bit on all platforms.
+        @test !Sys.exists(subdir)
+        mkdir(joinpath(dir, "subdir"))
+        @test Sys.exists(subdir)
+
+        @test !Sys.exists(fpath)
         touch(fpath)
+        @test Sys.exists(fpath)
+
+        # Test that we can actually set the executable/readable/writeable bit on all platforms.
         chmod(fpath, 0o644)
         @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswriteable(fpath)
         chmod(fpath, 0o755)
         @test Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswriteable(fpath)
+        chmod(fpath, 0o444)
+        @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test !Sys.iswriteable(fpath)
+        chmod(fpath, 0o244)
+        @test !Sys.isexecutable(fpath)
+        @test !Sys.isreadable(fpath)
+        @test Sys.iswriteable(fpath)
 
         # Ensure that, on Windows, where inheritance is default,
         # chmod still behaves as we expect.
         if Sys.iswindows()
             chmod(joinpath(dir, "subdir"), 0o666)
             @test Sys.isexecutable(fpath)
+            @test Sys.isreadable(fpath)
+            @test Sys.iswriteable(fpath)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.
