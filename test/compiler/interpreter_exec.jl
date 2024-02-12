@@ -63,10 +63,11 @@ let m = Meta.@lower 1 + 1
     src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
     src.codelocs = fill(Int32(1), nstmts)
+    m.args[1] = copy(src)
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test (:b, :a, :c, :c) === @eval $m
-    src.ssavaluetypes = nstmts
+    m.args[1] = copy(src)
     global test29262 = false
     @test (:b, :a, :c, :b) === @eval $m
 end
