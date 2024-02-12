@@ -37,7 +37,7 @@ show_index(io::IO, x::Colon) = print(io, ':')
 
 _bounds_setdiff(r, s) = setdiff(r, s)
 _bounds_setdiff(r::AbstractUnitRange, s::OneTo) = last(r) ≤ last(s) ? Int[] : (max(last(s) + 1, first(r)) : last(r))
-    
+
 function showerror(io::IO, ex::Meta.ParseError)
     if isnothing(ex.detail)
         print(io, "ParseError(", repr(ex.msg), ")")
