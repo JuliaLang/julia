@@ -880,23 +880,23 @@ uncolon(::Tuple{}) = Slice(OneTo(1))
 uncolon(inds::Tuple) = Slice(inds[1])
 
 """
-    _checked_iterate(iter[, state])
+    _prechecked_iterate(iter[, state])
 
 Internal function used to eliminate the dead branch in `iterate`.
 Fallback to `iterate` by default, but optimized for indices type in `Base`.
 """
-@propagate_inbounds _checked_iterate(iter) = iterate(iter)
-@propagate_inbounds _checked_iterate(iter, state) = iterate(iter, state)
+@propagate_inbounds _prechecked_iterate(iter) = iterate(iter)
+@propagate_inbounds _prechecked_iterate(iter, state) = iterate(iter, state)
 
-_checked_iterate(iter::AbstractUnitRange, i = first(iter)) = i, convert(eltype(iter), i + step(iter))
-_checked_iterate(iter::LinearIndices, i = first(iter)) = i, i + 1
-_checked_iterate(iter::CartesianIndices) = first(iter), first(iter)
-function _checked_iterate(iter::CartesianIndices, i)
+_prechecked_iterate(iter::AbstractUnitRange, i = first(iter)) = i, convert(eltype(iter), i + step(iter))
+_prechecked_iterate(iter::LinearIndices, i = first(iter)) = i, i + 1
+_prechecked_iterate(iter::CartesianIndices) = first(iter), first(iter)
+function _prechecked_iterate(iter::CartesianIndices, i)
     i′ = IteratorsMD.inc(i.I, iter.indices)
     return i′, i′
 end
-_checked_iterate(iter::SCartesianIndices2) = first(iter), first(iter)
-function _checked_iterate(iter::SCartesianIndices2{K}, (;i, j)) where {K}
+_prechecked_iterate(iter::SCartesianIndices2) = first(iter), first(iter)
+function _prechecked_iterate(iter::SCartesianIndices2{K}, (;i, j)) where {K}
     I = i < K ? SCartesianIndex2{K}(i + 1, j) : SCartesianIndex2{K}(1, j + 1)
     return I, I
 end
@@ -932,11 +932,11 @@ function _generate_unsafe_getindex!_body(N::Int)
     quote
         @inline
         D = eachindex(dest)
-        Dy = _checked_iterate(D)
+        Dy = _prechecked_iterate(D)
         @inbounds @nloops $N j d->I[d] begin
             (idx, state) = Dy::NTuple{2,Any}
             dest[idx] = @ncall $N getindex src j
-            Dy = _checked_iterate(D, state)
+            Dy = _prechecked_iterate(D, state)
         end
         return dest
     end
@@ -973,11 +973,11 @@ function _generate_unsafe_setindex!_body(N::Int)
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check x′ (d->idxlens[d])
         X = eachindex(x′)
-        Xy = _checked_iterate(X)
+        Xy = _prechecked_iterate(X)
         @inbounds @nloops $N i d->I_d begin
             (idx, state) = Xy::NTuple{2,Any}
             @ncall $N setindex! A x′[idx] i
-            Xy = _checked_iterate(X, state)
+            Xy = _prechecked_iterate(X, state)
         end
         A
     end
