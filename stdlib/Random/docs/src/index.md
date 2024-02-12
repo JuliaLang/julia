@@ -22,9 +22,8 @@ The PRNGs (pseudorandom number generators) exported by the `Random` package are:
 Most functions related to random generation accept an optional `AbstractRNG` object as first argument.
 Some also accept dimension specifications `dims...` (which can also be given as a tuple) to generate
 arrays of random values.
-In a multi-threaded program, you should generally use different RNG objects from different threads
-or tasks in order to be thread-safe. However, the default RNG is thread-safe as of Julia 1.3
-(using a per-thread RNG up to version 1.6, and per-task thereafter).
+
+The default global RNG is thread-safe as of Julia 1.3 (using a per-thread RNG up to version 1.6, and per-task thereafter). The global RNG refers to per-thread RNG instances; If you instantiate a non-global RNG, you should create a new RNG instance for each thread to avoid possible data-races. That is, even if using the `Xoshiro`, the manually created RNG must be done per thread (the global RNG is thread-safe not via `Xoshiro itself, but by the details of the global RNG handling).
 
 The provided RNGs can generate uniform random numbers of the following types:
 [`Float16`](@ref), [`Float32`](@ref), [`Float64`](@ref), [`BigFloat`](@ref), [`Bool`](@ref),
