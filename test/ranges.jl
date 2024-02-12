@@ -2611,16 +2611,6 @@ end
     @test logrange(1000, 1, 4) ≈ [1000, 100, 10, 1]
     @test logrange(1, 10^9, 19)[1:2:end] ≈ 10 .^ (0:9)
 
-    # negative & complex
-    @test logrange(1, -1+0.0im, 3) ≈ [1, im, -1]  # branch cut first arg
-    @test logrange(1, -1-0.0im, 3) ≈ [1, -im, -1]
-    @test logrange(-1+1e-10im, 1, 3) ≈ [-1, im, 1]  # branch cut second arg
-    @test logrange(-1-1e-10im, 1, 3) ≈ [-1, -im, 1]
-    @test logrange(im + 1e-10, -im + 1e-10, 3) ≈ [im, 1, -im]  # no branch cut here
-    @test logrange(im - 1e-10, -im - 1e-10, 3) ≈ [im, 1, -im]
-    @test logrange(1+im, -1-im, 5) ≈ [1+im, sqrt(2), 1-im, -sqrt(2)*im, -1-im]
-    @test logrange(-1+im, -1-im, 3) ≈ [-1+im, sqrt(2), -1-im]
-
     # endpoints
     @test logrange(0.1f0, 100, 33)[1] === 0.1f0
     @test logrange(0.789, 123_456, 135_790)[[begin, end]] == [0.789, 123_456]
@@ -2660,8 +2650,6 @@ end
     @test eltype(logrange(1, 10, Int32(3))) == Float64
     @test eltype(logrange(1, 10f0, 3)) == Float32
     @test eltype(logrange(1f0, 10, 3)) == Float32
-    @test eltype(logrange(1f0, 10+im, 3)) == ComplexF32
-    @test eltype(logrange(1f0, 10.0+im, 3)) == ComplexF64
     @test eltype(logrange(1, big(10), 3)) == BigFloat
     @test logrange(big"0.3", big(pi), 50)[1] == big"0.3"
     @test logrange(big"0.3", big(pi), 50)[end] == big(pi)
@@ -2676,6 +2664,7 @@ end
     @test_throws ArgumentError logrange(1, 10, 1) # endpoints must not differ
     @test_throws DomainError logrange(1, -1, 3)   # needs complex numbers
     @test_throws DomainError logrange(-1, -2, 3)  # not supported, for now
+    @test_throws MethodError logrange(1, 2+3im, length=4)  # not supported, for now
     @test_throws ArgumentError logrange(1, 10, 2)[true]  # bad index
     @test_throws BoundsError logrange(1, 10, 2)[3]
     @test_throws ArgumentError Base.LogRange{Int}(1,4,5)  # no integer ranges

@@ -1536,8 +1536,8 @@ See also [`range`](@ref) for linearly spaced points.
 !!! compat "Julia 1.11"
     This function requires at least Julia 1.11.
 """
-logrange(start::Number, stop::Number, length::Integer) = LogRange(start, stop, Int(length))
-logrange(start::Number, stop::Number; length::Integer) = LogRange(start, stop, Int(length))
+logrange(start::Real, stop::Real, length::Integer) = LogRange(start, stop, Int(length))
+logrange(start::Real, stop::Real; length::Integer) = logrange(start, stop, length)
 
 
 """
@@ -1594,58 +1594,15 @@ julia> 2 .^ (0:3:9) |> println
 [1, 8, 64, 512]
 ```
 
-For complex `T`, all points lie on the same branch of [`log`](@ref) as is used by `log(start)`
-and `log(stop)`. That is, all branch cuts are on the negative real axis.
-
-Other branches can be used by adjusting the arguments. For instance `start * logrange(1, stop/start, length)`
-places the cut where `stop/start` is negative real, i.e. where [`angle`](@ref)`(stop/start) ≈ pi`.
-
-```jldoctest
-julia> Base.LogRange{ComplexF32}(1, -1+0im, 5) |> collect
-5-element Vector{ComplexF32}:
-         1.0f0 + 0.0f0im
-  0.70710677f0 + 0.70710677f0im
-  6.123234f-17 + 1.0f0im
- -0.70710677f0 + 0.70710677f0im
-        -1.0f0 + 0.0f0im
-
-julia> ans ≈ cis.(LinRange{Float32}(0, pi, 5))
-true
-
-julia> lo = -1+0.01f0im; hi = -1-0.01f0im;
-
-julia> angle(lo), angle(hi)  # either side of branch cut
-(3.131593f0, -3.131593f0)
-
-julia> logrange(lo, hi, 5) |> collect  # goes near to +1
-5-element Vector{ComplexF32}:
-         -1.0f0 + 0.01f0im
- 0.0050000623f0 + 1.0000376f0im
-      1.00005f0 + 0.0f0im
- 0.0050000623f0 - 1.0000376f0im
-         -1.0f0 - 0.01f0im
-
-julia> lo .* logrange(1, hi/lo, 5)  # stays near -1
-5-element Vector{ComplexF32}:
-       -1.0f0 + 0.01f0im
- -1.0000374f0 + 0.0050000628f0im
-   -1.00005f0 + 0.0f0im
- -1.0000376f0 - 0.0050000623f0im
-       -1.0f0 - 0.009999999f0im
-
-julia> angle(hi/lo)  # far from branch cut
-0.01999933f0
-```
-
 !!! compat "Julia 1.11"
     This type requires at least Julia 1.11.
 """
-struct LogRange{T<:Number,X} <: AbstractArray{T,1}
+struct LogRange{T<:Real,X} <: AbstractArray{T,1}
     start::T
     stop::T
     len::Int
     extra::Tuple{X,X}
-    function LogRange{T}(start::T, stop::T, length::Int) where {T<:Number}
+    function LogRange{T}(start::T, stop::T, length::Int) where {T<:Real}
         # LogRange(0, 1, 100) could be == [0,0,0,0,...,1], that's the limit start -> 0,
         # but seems more likely to give silent surprises than returning NaN.
         a = iszero(start) ? T(NaN) : T(start)
@@ -1657,11 +1614,11 @@ struct LogRange{T<:Number,X} <: AbstractArray{T,1}
         elseif len == 1 && start != stop
             throw(ArgumentError(LazyString(
                 "LogRange(", start, ", ", stop, ", ", len, "): endpoints differ, while length is 1")))
-        elseif T <: Real && ((start<0) || (stop<0))
+        elseif start < 0 || stop < 0
             throw(DomainError((start, stop),
-                "LogRange will only return complex results if called with a complex argument"))
+                "LogRange(start, stop, length) does not accept negative numbers"))
         end
-        if T <: Integer || T <: Complex{<:Integer}
+        if T <: Integer
             # LogRange{Int}(1, 512, 4) produces InexactError: Int64(7.999999999999998)
             throw(ArgumentError("LogRange{T} does not support integer types"))
         end
@@ -1670,10 +1627,10 @@ struct LogRange{T<:Number,X} <: AbstractArray{T,1}
     end
 end
 
-function LogRange{T}(start::Number, stop::Number, len::Integer) where {T}
+function LogRange{T}(start::Real, stop::Real, len::Integer) where {T}
     LogRange{T}(convert(T, start), convert(T, stop), convert(Int, len))
 end
-function LogRange(start::Number, stop::Number, len::Integer)
+function LogRange(start::Real, stop::Real, len::Integer)
     T = float(promote_type(typeof(start), typeof(stop)))
     LogRange{T}(convert(T, start), convert(T, stop), convert(Int, len))
 end
@@ -1684,7 +1641,7 @@ length(r::LogRange) = r.len
 first(r::LogRange) = r.start
 last(r::LogRange) = r.stop
 
-function _logrange_extra(a::Number, b::Number, len::Int)
+function _logrange_extra(a::Real, b::Real, len::Int)
     loga = log(1.0 * a)  # widen to at least Float64
     logb = log(1.0 * b)
     (loga/(len-1), logb/(len-1))
@@ -1708,7 +1665,7 @@ function getindex(r::LogRange{T}, i::Int) where {T}
     # accurate, nor does it handle NaN/Inf as desired, hence the cases above.
     logx = (r.len-i) * r.extra[1] + (i-1) * r.extra[2]
     x = _exp_allowing_twice64(logx)
-    return T <: Real ? copysign(T(x), r.start) : T(x)
+    return T(x)
 end
 
 function show(io::IO, r::LogRange{T}) where {T}
