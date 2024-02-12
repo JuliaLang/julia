@@ -1602,12 +1602,15 @@ struct LogRange{T<:Real,X} <: AbstractArray{T,1}
     stop::T
     len::Int
     extra::Tuple{X,X}
-    function LogRange{T}(start::T, stop::T, length::Int) where {T<:Real}
+    function LogRange{T}(start::T, stop::T, len::Int) where {T<:Real}
+        if T <: Integer
+            # LogRange{Int}(1, 512, 4) produces InexactError: Int64(7.999999999999998)
+            throw(ArgumentError("LogRange{T} does not support integer types"))
+        end
         # LogRange(0, 1, 100) could be == [0,0,0,0,...,1], that's the limit start -> 0,
         # but seems more likely to give silent surprises than returning NaN.
         a = iszero(start) ? T(NaN) : T(start)
         b = iszero(stop) ? T(NaN) : T(stop)
-        len = Int(length)
         if len < 0
             throw(ArgumentError(LazyString(
                 "LogRange(", start, ", ", stop, ", ", len, "): can't have negative length")))
@@ -1615,12 +1618,9 @@ struct LogRange{T<:Real,X} <: AbstractArray{T,1}
             throw(ArgumentError(LazyString(
                 "LogRange(", start, ", ", stop, ", ", len, "): endpoints differ, while length is 1")))
         elseif start < 0 || stop < 0
+            # log would throw, but _log_twice64_unchecked does not
             throw(DomainError((start, stop),
                 "LogRange(start, stop, length) does not accept negative numbers"))
-        end
-        if T <: Integer
-            # LogRange{Int}(1, 512, 4) produces InexactError: Int64(7.999999999999998)
-            throw(ArgumentError("LogRange{T} does not support integer types"))
         end
         ex = _logrange_extra(a, b, len)
         new{T,typeof(ex[1])}(a, b, len, ex)
