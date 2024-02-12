@@ -1,10 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# build (and start inferring) the inference frame for the linfo
-function typeinf(interp::AbstractInterpreter, result::InferenceResult, cached::Bool)
-    frame = InferenceState(result, cached, interp)
+# Tracking of newly-inferred CodeInstances during precompilation
+const track_newly_inferred = RefValue{Bool}(false)
+const newly_inferred = CodeInstance[]
+
+# build (and start inferring) the inference frame for the top-level MethodInstance
+function typeinf(interp::AbstractInterpreter, result::InferenceResult, cache_mode::Symbol)
+    frame = InferenceState(result, cache_mode, interp)
     frame === nothing && return false
-    cached && lock_mi_inference(interp, result.linfo)
+    cache_mode === :global && lock_mi_inference(interp, result.linfo)
     return typeinf(interp, frame)
 end
 
@@ -25,7 +29,7 @@ using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inlin
 struct InferenceFrameInfo
     mi::Core.MethodInstance
     world::UInt64
-    sptypes::Vector{Any}
+    sptypes::Vector{Core.Compiler.VarState}
     slottypes::Vector{Any}
     nargs::Int
 end
@@ -36,10 +40,12 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
         frame.world,
         copy(frame.sptypes),
         copy(frame.slottypes),
-        frame.nargs,
+        length(frame.result.argtypes),
     )
     return mi_info
 end
+
+_typeinf_identifier(frame::InferenceFrameInfo) = frame
 
 """
     Core.Compiler.Timing(mi_info, start_time, ...)
@@ -83,7 +89,7 @@ function reset_timings()
     empty!(_timings)
     push!(_timings, Timing(
         # The MethodInstance for ROOT(), and default empty values for other fields.
-        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1),
+        InferenceFrameInfo(ROOTmi, 0x0, Core.Compiler.VarState[], Any[Core.Const(ROOT)], 1),
         _time_ns()))
     return nothing
 end
@@ -198,8 +204,9 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = fill(false)
 
-# Wrapper around _typeinf that optionally records the exclusive time for each invocation.
-function typeinf(interp::AbstractInterpreter, frame::InferenceState)
+# Wrapper around `_typeinf` that optionally records the exclusive time for
+# each inference performed by `NativeInterpreter`.
+function typeinf(interp::NativeInterpreter, frame::InferenceState)
     if __measure_typeinf__[]
         Timings.enter_new_timer(frame)
         v = _typeinf(interp, frame)
@@ -209,17 +216,30 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
         return _typeinf(interp, frame)
     end
 end
+typeinf(interp::AbstractInterpreter, frame::InferenceState) = _typeinf(interp, frame)
 
-function finish!(interp::AbstractInterpreter, caller::InferenceResult)
-    # If we didn't transform the src for caching, we may have to transform
-    # it anyway for users like typeinf_ext. Do that here.
-    opt = caller.src
-    if may_optimize(interp) && opt isa OptimizationState
-        if opt.ir !== nothing
-            caller.src = ir_to_codeinf!(opt)
-        end
+function finish!(interp::AbstractInterpreter, caller::InferenceState)
+    result = caller.result
+    valid_worlds = result.valid_worlds
+    if last(valid_worlds) >= get_world_counter()
+        # if we aren't cached, we don't need this edge
+        # but our caller might, so let's just make it anyways
+        store_backedges(result, caller.stmt_edges[1])
     end
-    return caller.src
+    opt = result.src
+    if opt isa OptimizationState
+        result.src = opt = ir_to_codeinf!(opt)
+    end
+    if opt isa CodeInfo
+        opt.min_world = first(valid_worlds)
+        opt.max_world = last(valid_worlds)
+        caller.src = opt
+    else
+        # In this case `caller.src` is invalid for clients (such as `typeinf_ext`) to use
+        # but that is what's permitted by `caller.cache_mode`.
+        # This is hopefully unreachable from such clients using `NativeInterpreter`.
+    end
+    return nothing
 end
 
 function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
@@ -236,64 +256,37 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     end
     for caller in frames
         caller.valid_worlds = valid_worlds
-        finish(caller, interp)
-        # finalize and record the linfo result
-        caller.inferred = true
+        finish(caller, caller.interp)
     end
-    # collect results for the new expanded frame
-    results = Tuple{InferenceResult, Vector{Any}, Bool}[
-            ( frames[i].result,
-              frames[i].stmt_edges[1],
-              frames[i].cached )
-        for i in 1:length(frames) ]
+    for caller in frames
+        opt = caller.result.src
+        if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
+            optimize(caller.interp, opt, caller.result)
+        end
+    end
+    for caller in frames
+        finish!(caller.interp, caller)
+        if is_cached(caller)
+            cache_result!(caller.interp, caller.result)
+        end
+    end
     empty!(frames)
-    for (caller, _, _) in results
-        opt = caller.src
-        if may_optimize(interp) && opt isa OptimizationState
-            result_type = caller.result
-            @assert !(result_type isa LimitedAccuracy)
-            optimize(interp, opt, OptimizationParams(interp), result_type)
-            if opt.const_api
-                # XXX: The work in ir_to_codeinf! is essentially wasted. The only reason
-                # we're doing it is so that code_llvm can return the code
-                # for the `return ...::Const` (which never runs anyway). We should do this
-                # as a post processing step instead.
-                ir_to_codeinf!(opt)
-                if result_type isa Const
-                    caller.src = result_type
-                else
-                    @assert isconstType(result_type)
-                    caller.src = Const(result_type.parameters[1])
-                end
-            end
-            caller.valid_worlds = opt.inlining.et.valid_worlds[]
-        end
-    end
-    for (caller, edges, cached) in results
-        valid_worlds = caller.valid_worlds
-        if last(valid_worlds) >= get_world_counter()
-            # if we aren't cached, we don't need this edge
-            # but our caller might, so let's just make it anyways
-            store_backedges(caller, edges)
-        end
-        if cached
-            cache_result!(interp, caller)
-        end
-        finish!(interp, caller)
-    end
     return true
 end
 
-function CodeInstance(result::InferenceResult, @nospecialize(inferred_result::Any),
+function is_result_constabi_eligible(result::InferenceResult)
+    result_type = result.result
+    return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
+end
+function CodeInstance(interp::AbstractInterpreter, result::InferenceResult,
                       valid_worlds::WorldRange)
     local const_flags::Int32
     result_type = result.result
-    @assert !(result_type isa LimitedAccuracy)
-    if inferred_result isa Const
+    @assert !(result_type === nothing || result_type isa LimitedAccuracy)
+    if is_result_constabi_eligible(result)
         # use constant calling convention
-        rettype_const = (result.src::Const).val
+        rettype_const = result_type.val
         const_flags = 0x3
-        inferred_result = nothing
     else
         if isa(result_type, Const)
             rettype_const = result_type.val
@@ -310,40 +303,51 @@ function CodeInstance(result::InferenceResult, @nospecialize(inferred_result::An
         elseif isa(result_type, InterConditional)
             rettype_const = result_type
             const_flags = 0x2
+        elseif isa(result_type, InterMustAlias)
+            rettype_const = result_type
+            const_flags = 0x2
         else
             rettype_const = nothing
             const_flags = 0x00
         end
     end
-    return CodeInstance(result.linfo,
-        widenconst(result_type), rettype_const, inferred_result,
-        const_flags, first(valid_worlds), last(valid_worlds))
+    relocatability = 0x0
+    if const_flags == 0x3 && may_discard_trees(interp)
+        inferred_result = nothing
+        relocatability = 0x1
+    else
+        inferred_result = transform_result_for_cache(interp, result.linfo, valid_worlds, result)
+        if isa(inferred_result, String)
+            t = @_gc_preserve_begin inferred_result
+            relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
+            @_gc_preserve_end t
+        elseif inferred_result === nothing
+            relocatability = 0x1
+        end
+    end
+    # relocatability = isa(inferred_result, String) ? inferred_result[end] : UInt8(0)
+    return CodeInstance(result.linfo, cache_owner(interp),
+        widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
+        const_flags, first(valid_worlds), last(valid_worlds),
+        # TODO: Actually do something with non-IPO effects
+        encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.analysis_results,
+        relocatability)
 end
-
-# For the NativeInterpreter, we don't need to do an actual cache query to know
-# if something was already inferred. If we reach this point, but the inference
-# flag has been turned off, then it's in the cache. This is purely a performance
-# optimization.
-already_inferred_quick_test(interp::NativeInterpreter, mi::MethodInstance) =
-    !mi.inInference
-already_inferred_quick_test(interp::AbstractInterpreter, mi::MethodInstance) =
-    false
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
     def = linfo.def
-    toplevel = !isa(def, Method)
-    if toplevel
-        return ci
+    isa(def, Method) || return ci # don't compress toplevel code
+    if may_discard_trees(interp)
+        cache_the_tree = ci.inferred && (is_inlineable(ci) || isa_compileable_sig(linfo.specTypes, linfo.sparam_vals, def))
+    else
+        cache_the_tree = true
     end
-    cache_the_tree = !may_discard_trees(interp) || (ci.inferred &&
-        (ci.inlineable ||
-        ccall(:jl_isa_compileable_sig, Int32, (Any, Any), linfo.specTypes, def) != 0))
     if cache_the_tree
         if may_compress(interp)
             nslots = length(ci.slotflags)
-            resize!(ci.slottypes, nslots)
+            resize!(ci.slottypes::Vector{Any}, nslots)
             resize!(ci.slotnames, nslots)
-            return ccall(:jl_compress_ir, Any, (Any, Any), def, ci)
+            return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
         else
             return ci
         end
@@ -352,26 +356,16 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
     end
 end
 
-function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodInstance,
-                                    valid_worlds::WorldRange, @nospecialize(inferred_result))
-    local const_flags::Int32
-    # If we decided not to optimize, drop the OptimizationState now.
-    # External interpreters can override as necessary to cache additional information
-    if inferred_result isa OptimizationState
-        opt = inferred_result
-        if isa(opt.src, CodeInfo)
-            inferred_result = ir_to_codeinf!(opt)
-        else
-            inferred_result = opt.src
-        end
-    end
+function transform_result_for_cache(interp::AbstractInterpreter,
+    linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
+    inferred_result = result.src
     if inferred_result isa CodeInfo
-        inferred_result.min_world = first(valid_worlds)
-        inferred_result.max_world = last(valid_worlds)
+        uncompressed = inferred_result
         inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result)
+        result.is_src_volatile |= uncompressed !== inferred_result
     end
     # The global cache can only handle objects that codegen understands
-    if !isa(inferred_result, Union{CodeInfo, Vector{UInt8}, Const})
+    if !isa(inferred_result, MaybeCompressed)
         inferred_result = nothing
     end
     return inferred_result
@@ -386,17 +380,23 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     end
     # check if the existing linfo metadata is also sufficient to describe the current inference result
     # to decide if it is worth caching this
-    already_inferred = already_inferred_quick_test(interp, result.linfo)
-    if !already_inferred && haskey(WorldView(code_cache(interp), valid_worlds), result.linfo)
+    mi = result.linfo
+    already_inferred = already_inferred_quick_test(interp, mi)
+    if !already_inferred && haskey(WorldView(code_cache(interp), valid_worlds), mi)
         already_inferred = true
     end
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        inferred_result = transform_result_for_cache(interp, result.linfo, valid_worlds, result.src)
-        code_cache(interp)[result.linfo] = CodeInstance(result, inferred_result, valid_worlds)
+        code_cache(interp)[mi] = ci = CodeInstance(interp, result, valid_worlds)
+        if track_newly_inferred[]
+            m = mi.def
+            if isa(m, Method) && m.module != Core
+                ccall(:jl_push_newly_inferred, Cvoid, (Any,), ci)
+            end
+        end
     end
-    unlock_mi_inference(interp, result.linfo)
+    unlock_mi_inference(interp, mi)
     nothing
 end
 
@@ -422,14 +422,104 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
+function adjust_effects(ipo_effects::Effects, def::Method)
+    # override the analyzed effects using manually annotated effect settings
+    override = decode_effects_override(def.purity)
+    if is_effect_overridden(override, :consistent)
+        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+    end
+    if is_effect_overridden(override, :effect_free)
+        ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
+    end
+    if is_effect_overridden(override, :nothrow)
+        ipo_effects = Effects(ipo_effects; nothrow=true)
+    end
+    if is_effect_overridden(override, :terminates_globally)
+        ipo_effects = Effects(ipo_effects; terminates=true)
+    end
+    if is_effect_overridden(override, :notaskstate)
+        ipo_effects = Effects(ipo_effects; notaskstate=true)
+    end
+    if is_effect_overridden(override, :inaccessiblememonly)
+        ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
+    end
+    if is_effect_overridden(override, :noub)
+        ipo_effects = Effects(ipo_effects; noub=ALWAYS_TRUE)
+    elseif is_effect_overridden(override, :noub_if_noinbounds) && ipo_effects.noub !== ALWAYS_TRUE
+        ipo_effects = Effects(ipo_effects; noub=NOUB_IF_NOINBOUNDS)
+    end
+    return ipo_effects
+end
+
+function adjust_effects(sv::InferenceState)
+    ipo_effects = sv.ipo_effects
+
+    # refine :consistent-cy effect using the return type information
+    # TODO this adjustment tries to compromise imprecise :consistent-cy information,
+    # that is currently modeled in a flow-insensitive way: ideally we want to model it
+    # with a proper dataflow analysis instead
+    rt = sv.bestguess
+    if rt === Bottom
+        # always throwing an error counts or never returning both count as consistent
+        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+    end
+    if sv.exc_bestguess === Bottom
+        # if the exception type of this frame is known to be `Bottom`,
+        # this frame is known to be safe
+        ipo_effects = Effects(ipo_effects; nothrow=true)
+    end
+    if is_inaccessiblemem_or_argmemonly(ipo_effects) && all(1:narguments(sv, #=include_va=#true)) do i::Int
+            return is_mutation_free_argtype(sv.slottypes[i])
+        end
+        ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
+    end
+    if is_consistent_if_notreturned(ipo_effects) && is_identity_free_argtype(rt)
+        # in a case when the :consistent-cy here is only tainted by mutable allocations
+        # (indicated by `CONSISTENT_IF_NOTRETURNED`), we may be able to refine it if the return
+        # type guarantees that the allocations are never returned
+        consistent = ipo_effects.consistent & ~CONSISTENT_IF_NOTRETURNED
+        ipo_effects = Effects(ipo_effects; consistent)
+    end
+    if is_consistent_if_inaccessiblememonly(ipo_effects)
+        if is_inaccessiblememonly(ipo_effects)
+            consistent = ipo_effects.consistent & ~CONSISTENT_IF_INACCESSIBLEMEMONLY
+            ipo_effects = Effects(ipo_effects; consistent)
+        elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
+        else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
+            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_FALSE)
+        end
+    end
+    if is_effect_free_if_inaccessiblememonly(ipo_effects)
+        if is_inaccessiblememonly(ipo_effects)
+            effect_free = ipo_effects.effect_free & ~EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+            ipo_effects = Effects(ipo_effects; effect_free)
+        elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
+        else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
+            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_FALSE)
+        end
+    end
+
+    # override the analyzed effects using manually annotated effect settings
+    def = sv.linfo.def
+    if isa(def, Method)
+        ipo_effects = adjust_effects(ipo_effects, def)
+    end
+
+    return ipo_effects
+end
+
+function refine_exception_type(@nospecialize(exc_bestguess), ipo_effects::Effects)
+    ipo_effects.nothrow && return Bottom
+    return exc_bestguess
+end
+
 # inference completed on `me`
 # update the MethodInstance
 function finish(me::InferenceState, interp::AbstractInterpreter)
     # prepare to run optimization passes on fulltree
     s_edges = me.stmt_edges[1]
     if s_edges === nothing
-        s_edges = []
-        me.stmt_edges[1] = s_edges
+        s_edges = me.stmt_edges[1] = []
     end
     for edges in me.stmt_edges
         edges === nothing && continue
@@ -438,16 +528,17 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         empty!(edges)
     end
     if me.src.edges !== nothing
-        append!(s_edges, me.src.edges)
+        append!(s_edges, me.src.edges::Vector)
         me.src.edges = nothing
     end
     # inspect whether our inference had a limited result accuracy,
     # else it may be suitable to cache
-    me.bestguess = cycle_fix_limited(me.bestguess, me)
-    limited_ret = me.bestguess isa LimitedAccuracy
+    bestguess = me.bestguess = cycle_fix_limited(me.bestguess, me)
+    exc_bestguess = me.exc_bestguess = cycle_fix_limited(me.exc_bestguess, me)
+    limited_ret = bestguess isa LimitedAccuracy || exc_bestguess isa LimitedAccuracy
     limited_src = false
     if !limited_ret
-        gt = me.src.ssavaluetypes
+        gt = me.ssavaluetypes
         for j = 1:length(gt)
             gt[j] = gtj = cycle_fix_limited(gt[j], me)
             if gtj isa LimitedAccuracy && me.parent !== nothing
@@ -456,136 +547,76 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
             end
         end
     end
+    me.result.valid_worlds = me.valid_worlds
+    me.result.result = bestguess
+    ipo_effects = me.result.ipo_effects = me.ipo_effects = adjust_effects(me)
+    me.result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
+
     if limited_ret
         # a parent may be cached still, but not this intermediate work:
         # we can throw everything else away now
         me.result.src = nothing
-        me.cached = false
-        me.src.inlineable = false
+        me.cache_mode = CACHE_MODE_NULL
+        set_inlineable!(me.src, false)
         unlock_mi_inference(interp, me.linfo)
     elseif limited_src
         # a type result will be cached still, but not this intermediate work:
         # we can throw everything else away now
         me.result.src = nothing
-        me.src.inlineable = false
+        set_inlineable!(me.src, false)
     else
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
-        doopt = (me.cached || me.parent !== nothing)
-        type_annotate!(me, doopt)
-        if doopt
-            me.result.src = OptimizationState(me, OptimizationParams(interp), interp)
+        type_annotate!(interp, me)
+        doopt = (me.cache_mode != CACHE_MODE_NULL || me.parent !== nothing)
+        # Disable the optimizer if we've already determined that there's nothing for
+        # it to do.
+        if may_discard_trees(interp) && is_result_constabi_eligible(me.result)
+            doopt = false
+        end
+        if doopt && may_optimize(interp)
+            me.result.src = OptimizationState(me, interp)
         else
-            me.result.src = me.src::CodeInfo # stash a convenience copy of the code (e.g. for reflection)
+            me.result.src = me.src # for reflection etc.
         end
     end
-    me.result.valid_worlds = me.valid_worlds
-    me.result.result = me.bestguess
+
+    maybe_validate_code(me.linfo, me.src, "inferred")
     nothing
 end
 
 # record the backedges
-function store_backedges(frame::InferenceResult, edges::Vector{Any})
-    toplevel = !isa(frame.linfo.def, Method)
-    if !toplevel
-        store_backedges(frame.linfo, edges)
-    end
-    nothing
-end
-
+store_backedges(caller::InferenceResult, edges::Vector{Any}) = store_backedges(caller.linfo, edges)
 function store_backedges(caller::MethodInstance, edges::Vector{Any})
-    i = 1
-    while i <= length(edges)
-        to = edges[i]
-        if isa(to, MethodInstance)
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
-            i += 1
+    isa(caller.def, Method) || return nothing # don't add backedges to toplevel method instance
+    for itr in BackedgeIterator(edges)
+        callee = itr.caller
+        if isa(callee, MethodInstance)
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), callee, itr.sig, caller)
         else
-            typeassert(to, Core.MethodTable)
-            typ = edges[i + 1]
-            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
-            i += 2
+            typeassert(callee, MethodTable)
+            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, itr.sig, caller)
         end
     end
-end
-
-# widen all Const elements in type annotations
-function widen_all_consts!(src::CodeInfo)
-    for i = 1:length(src.ssavaluetypes)
-        src.ssavaluetypes[i] = widenconst(src.ssavaluetypes[i])
-    end
-
-    for i = 1:length(src.code)
-        x = src.code[i]
-        if isa(x, PiNode)
-            src.code[i] = PiNode(x.val, widenconst(x.typ))
-        end
-    end
-
-    src.rettype = widenconst(src.rettype)
-
-    return src
-end
-
-function annotate_slot_load!(e::Expr, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
-    head = e.head
-    i0 = 1
-    if is_meta_expr_head(head) || head === :const
-        return
-    end
-    if head === :(=) || head === :method
-        i0 = 2
-    end
-    for i = i0:length(e.args)
-        subex = e.args[i]
-        if isa(subex, Expr)
-            annotate_slot_load!(subex, vtypes, sv, undefs)
-        elseif isa(subex, Slot)
-            e.args[i] = visit_slot_load!(subex, vtypes, sv, undefs)
-        end
-    end
-end
-
-function annotate_slot_load(@nospecialize(e), vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
-    if isa(e, Expr)
-        annotate_slot_load!(e, vtypes, sv, undefs)
-    elseif isa(e, Slot)
-        return visit_slot_load!(e, vtypes, sv, undefs)
-    end
-    return e
-end
-
-function visit_slot_load!(sl::Slot, vtypes::VarTable, sv::InferenceState, undefs::Array{Bool,1})
-    id = slot_id(sl)
-    s = vtypes[id]
-    vt = widenconditional(ignorelimited(s.typ))
-    if s.undef
-        # find used-undef variables
-        undefs[id] = true
-    end
-    # add type annotations where needed
-    if !(sv.slottypes[id] ⊑ vt)
-        return TypedSlot(id, vt)
-    end
-    return sl
+    return nothing
 end
 
 function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
     # and union the set of types stored there
     # to compute a lower bound on the storage required
-    states = sv.stmt_types
     body = sv.src.code::Vector{Any}
     slottypes = sv.slottypes::Vector{Any}
+    ssavaluetypes = sv.ssavaluetypes
     for i = 1:length(body)
         expr = body[i]
-        st_i = states[i]
         # find all reachable assignments to locals
-        if isa(st_i, VarTable) && isa(expr, Expr) && expr.head === :(=)
+        if was_reached(sv, i) && isexpr(expr, :(=))
             lhs = expr.args[1]
-            rhs = expr.args[2]
-            if isa(lhs, Slot)
-                vt = widenconst(sv.src.ssavaluetypes[i])
+            if isa(lhs, SlotNumber)
+                typ = ssavaluetypes[i]
+                @assert typ !== NOT_FOUND "active slot in unreached region"
+                vt = widenconst(typ)
                 if vt !== Bottom
                     id = slot_id(lhs)
                     otherTy = slottypes[id]
@@ -600,101 +631,85 @@ function record_slot_assign!(sv::InferenceState)
             end
         end
     end
+    sv.src.slottypes = slottypes
+    return nothing
 end
 
-# annotate types of all symbols in AST
-function type_annotate!(sv::InferenceState, run_optimizer::Bool)
-    # as an optimization, we delete dead statements immediately if we're going to run the optimizer
-    # (otherwise, we'll perhaps run the optimization passes later, outside of inference)
+function record_bestguess!(sv::InferenceState)
+    bestguess = sv.bestguess
+    @assert !(bestguess isa LimitedAccuracy)
+    sv.src.rettype = bestguess
+    return nothing
+end
 
-    # remove all unused ssa values
-    gt = sv.src.ssavaluetypes
-    for j = 1:length(gt)
-        if gt[j] === NOT_FOUND
-            gt[j] = Union{}
-        end
-        gt[j] = widenconditional(gt[j])
+# find the dominating assignment to the slot `id` in the block containing statement `idx`,
+# returns `nothing` otherwise
+function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
+    block = block_for_inst(sv.cfg, idx)
+    for pc in reverse(sv.cfg.blocks[block].stmts) # N.B. reverse since the last assignment is dominating this block
+        pc < idx || continue # N.B. needs pc ≠ idx as `id` can be assigned at `idx`
+        stmt = sv.src.code[pc]
+        isexpr(stmt, :(=)) || continue
+        lhs = stmt.args[1]
+        isa(lhs, SlotNumber) || continue
+        slot_id(lhs) == id || continue
+        return pc
+    end
+    return nothing
+end
+
+# annotate types of all symbols in AST, preparing for optimization
+function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
+    # widen `Conditional`s from `slottypes`
+    slottypes = sv.slottypes
+    for i = 1:length(slottypes)
+        slottypes[i] = widenconditional(slottypes[i])
     end
 
     # compute the required type for each slot
     # to hold all of the items assigned into it
     record_slot_assign!(sv)
-    sv.src.slottypes = sv.slottypes
-    @assert !(sv.bestguess isa LimitedAccuracy)
-    sv.src.rettype = sv.bestguess
+
+    record_bestguess!(sv)
 
     # annotate variables load types
-    # remove dead code optimization
-    # and compute which variables may be used undef
     src = sv.src
-    states = sv.stmt_types
-    nargs = sv.nargs
-    nslots = length(states[1]::VarTable)
-    undefs = fill(false, nslots)
-    body = src.code::Array{Any,1}
-    nexpr = length(body)
+    stmts = src.code
+    nstmt = length(stmts)
+    ssavaluetypes = sv.ssavaluetypes
+    nslots = length(src.slotflags)
 
-    # replace GotoIfNot with its condition if the branch target is unreachable
-    for i = 1:nexpr
-        expr = body[i]
-        if isa(expr, GotoIfNot)
-            if !isa(states[expr.dest], VarTable)
-                body[i] = expr.cond
-            end
-        end
-    end
-
-    i = 1
-    oldidx = 0
-    changemap = fill(0, nexpr)
-
-    while i <= nexpr
-        oldidx += 1
-        st_i = states[i]
-        expr = body[i]
-        if isa(st_i, VarTable)
-            # st_i === nothing  =>  unreached statement  (see issue #7836)
-            if isa(expr, Expr)
-                annotate_slot_load!(expr, st_i, sv, undefs)
-            elseif isa(expr, ReturnNode) && isdefined(expr, :val)
-                body[i] = ReturnNode(annotate_slot_load(expr.val, st_i, sv, undefs))
-            elseif isa(expr, GotoIfNot)
-                body[i] = GotoIfNot(annotate_slot_load(expr.cond, st_i, sv, undefs), expr.dest)
-            elseif isa(expr, Slot)
-                body[i] = visit_slot_load!(expr, st_i, sv, undefs)
-            end
-        else
-            if isa(expr, Expr) && is_meta_expr_head(expr.head)
-                # keep any lexically scoped expressions
-            elseif run_optimizer
-                deleteat!(body, i)
-                deleteat!(states, i)
-                deleteat!(src.ssavaluetypes, i)
-                deleteat!(src.codelocs, i)
-                deleteat!(sv.stmt_info, i)
-                nexpr -= 1
-                if oldidx < length(changemap)
-                    changemap[oldidx + 1] = -1
-                end
-                continue
+    # widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
+    # and mark any unreachable statements by wrapping them in Const(...), to distinguish them from
+    # must-throw statements which also have type Bottom
+    for i = 1:nstmt
+        expr = stmts[i]
+        if was_reached(sv, i)
+            ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 3
+        else # i.e. any runtime execution will never reach this statement
+            push!(sv.unreachable, i)
+            if is_meta_expr(expr) # keep any lexically scoped expressions
+                ssavaluetypes[i] = Any # 3
             else
-                body[i] = Const(expr) # annotate that this statement actually is dead
+                ssavaluetypes[i] = Bottom # 3
+                # annotate that this statement actually is dead
+                stmts[i] = Const(expr)
             end
         end
-        i += 1
     end
 
-    if run_optimizer
-        renumber_ir_elements!(body, changemap)
-    end
-
-    # finish marking used-undef variables
-    for j = 1:nslots
-        if undefs[j]
-            src.slotflags[j] |= SLOT_USEDUNDEF | SLOT_STATICUNDEF
+    # widen slot wrappers (`Conditional` and `MustAlias`) in `bb_vartables`
+    for varstate in sv.bb_vartables
+        if varstate !== nothing
+            for slot in 1:nslots
+                vt = varstate[slot]
+                widened_type = widenslotwrapper(ignorelimited(vt.typ))
+                varstate[slot] = VarState(widened_type, vt.undef)
+            end
         end
     end
-    nothing
+
+    return nothing
 end
 
 # at the end, all items in b's cycle
@@ -716,95 +731,121 @@ function union_caller_cycle!(a::InferenceState, b::InferenceState)
     return
 end
 
-function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState)
+function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, ancestor::InferenceState, child::InferenceState)
     # add backedge of parent <- child
     # then add all backedges of parent <- parent.parent
     # and merge all of the callers into ancestor.callers_in_cycle
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     while true
-        add_cycle_backedge!(child, parent, parent.currpc)
+        add_cycle_backedge!(parent, child, parent.currpc)
         union_caller_cycle!(ancestor, child)
         child = parent
         child === ancestor && break
-        parent = child.parent::InferenceState
+        parent = frame_parent(child)
+        while !isa(parent, InferenceState)
+            # XXX we may miss some edges here?
+            parent = frame_parent(parent::IRInterpretationState)
+        end
+        parent = parent::InferenceState
     end
 end
 
-function is_same_frame(interp::AbstractInterpreter, linfo::MethodInstance, frame::InferenceState)
-    return linfo === frame.linfo
+function is_same_frame(interp::AbstractInterpreter, mi::MethodInstance, frame::InferenceState)
+    return mi === frame_instance(frame)
 end
 
-function poison_callstack(infstate::InferenceState, topmost::InferenceState)
+function poison_callstack!(infstate::InferenceState, topmost::InferenceState)
     push!(infstate.pclimitations, topmost)
     nothing
 end
 
-# Walk through `linfo`'s upstream call chain, starting at `parent`. If a parent
-# frame matching `linfo` is encountered, then there is a cycle in the call graph
-# (i.e. `linfo` is a descendant callee of itself). Upon encountering this cycle,
+# Walk through `mi`'s upstream call chain, starting at `parent`. If a parent
+# frame matching `mi` is encountered, then there is a cycle in the call graph
+# (i.e. `mi` is a descendant callee of itself). Upon encountering this cycle,
 # we "resolve" it by merging the call chain, which entails unioning each intermediary
 # frame's `callers_in_cycle` field and adding the appropriate backedges. Finally,
-# we return `linfo`'s pre-existing frame. If no cycles are found, `nothing` is
+# we return `mi`'s pre-existing frame. If no cycles are found, `nothing` is
 # returned instead.
-function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance, parent::InferenceState)
+function resolve_call_cycle!(interp::AbstractInterpreter, mi::MethodInstance, parent::AbsIntState)
+    # TODO (#48913) implement a proper recursion handling for irinterp:
+    # This works just because currently the `:terminate` condition guarantees that
+    # irinterp doesn't fail into unresolved cycles, but it's not a good solution.
+    # We should revisit this once we have a better story for handling cycles in irinterp.
+    isa(parent, InferenceState) || return false
     frame = parent
     uncached = false
     while isa(frame, InferenceState)
-        uncached |= !frame.cached # ensure we never add an uncached frame to a cycle
-        if is_same_frame(interp, linfo, frame)
+        uncached |= !is_cached(frame) # ensure we never add an uncached frame to a cycle
+        if is_same_frame(interp, mi, frame)
             if uncached
                 # our attempt to speculate into a constant call lead to an undesired self-cycle
                 # that cannot be converged: poison our call-stack (up to the discovered duplicate frame)
                 # with the limited flag and abort (set return type to Any) now
-                poison_callstack(parent, frame)
+                poison_callstack!(parent, frame)
                 return true
             end
-            merge_call_chain!(parent, frame, frame)
+            merge_call_chain!(interp, parent, frame, frame)
             return frame
         end
-        for caller in frame.callers_in_cycle
-            if is_same_frame(interp, linfo, caller)
+        for caller in callers_in_cycle(frame)
+            if is_same_frame(interp, mi, caller)
                 if uncached
-                    poison_callstack(parent, frame)
+                    poison_callstack!(parent, frame)
                     return true
                 end
-                merge_call_chain!(parent, frame, caller)
+                merge_call_chain!(interp, parent, frame, caller)
                 return caller
             end
         end
-        frame = frame.parent
+        frame = frame_parent(frame)
     end
     return false
 end
 
+ipo_effects(code::CodeInstance) = decode_effects(code.ipo_purity_bits)
+
+struct EdgeCallResult
+    rt
+    exct
+    edge::Union{Nothing,MethodInstance}
+    effects::Effects
+    volatile_inf_result::Union{Nothing,VolatileInferenceResult}
+    function EdgeCallResult(@nospecialize(rt), @nospecialize(exct),
+                            edge::Union{Nothing,MethodInstance},
+                            effects::Effects,
+                            volatile_inf_result::Union{Nothing,VolatileInferenceResult} = nothing)
+        return new(rt, exct, edge, effects, volatile_inf_result)
+    end
+end
+
 # compute (and cache) an inferred AST and return the current best estimate of the result type
-function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, caller::InferenceState)
-    mi = specialize_method(method, atypes, sparams)::MethodInstance
+function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState)
+    mi = specialize_method(method, atype, sparams)::MethodInstance
     code = get(code_cache(interp), mi, nothing)
+    force_inline = is_stmt_inline(get_curr_ssaflag(caller))
     if code isa CodeInstance # return existing rettype if the code is already inferred
-        update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
-        rettype = code.rettype
-        if isdefined(code, :rettype_const)
-            rettype_const = code.rettype_const
-            if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-                return PartialStruct(rettype, rettype_const), mi
-            elseif rettype <: Core.OpaqueClosure && isa(rettype_const, PartialOpaque)
-                return rettype_const, mi
-            elseif isa(rettype_const, InterConditional)
-                return rettype_const, mi
-            else
-                return Const(rettype_const), mi
-            end
+        inferred = @atomic :monotonic code.inferred
+        if inferred === nothing && force_inline
+            # we already inferred this edge before and decided to discard the inferred code,
+            # nevertheless we re-infer it here again in order to propagate the re-inferred
+            # source to the inliner as a volatile result
+            cache_mode = CACHE_MODE_VOLATILE
         else
-            return rettype, mi
+            rt = cached_return_type(code)
+            effects = ipo_effects(code)
+            update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
+            return EdgeCallResult(rt, code.exctype, mi, effects)
         end
+    else
+        cache_mode = CACHE_MODE_GLOBAL # cache edge targets globally by default
     end
-    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
-        return Any, nothing
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
+        add_remark!(interp, caller, "Inference is disabled for the target module")
+        return EdgeCallResult(Any, Any, nothing, Effects())
     end
-    if !caller.cached && caller.parent === nothing
+    if !is_cached(caller) && frame_parent(caller) === nothing
         # this caller exists to return to the user
-        # (if we asked resolve_call_cyle, it might instead detect that there is a cycle that it can't merge)
+        # (if we asked resolve_call_cycle!, it might instead detect that there is a cycle that it can't merge)
         frame = false
     else
         frame = resolve_call_cycle!(interp, mi, caller)
@@ -812,175 +853,277 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     if frame === false
         # completely new
         lock_mi_inference(interp, mi)
-        result = InferenceResult(mi)
-        frame = InferenceState(result, #=cached=#true, interp) # always use the cache for edge targets
+        result = InferenceResult(mi, typeinf_lattice(interp))
+        frame = InferenceState(result, cache_mode, interp) # always use the cache for edge targets
         if frame === nothing
+            add_remark!(interp, caller, "Failed to retrieve source")
             # can't get the source for this, so we know nothing
             unlock_mi_inference(interp, mi)
-            return Any, nothing
+            return EdgeCallResult(Any, Any, nothing, Effects())
         end
-        if caller.cached || caller.parent !== nothing # don't involve uncached functions in cycle resolution
+        if is_cached(caller) || frame_parent(caller) !== nothing # don't involve uncached functions in cycle resolution
             frame.parent = caller
         end
         typeinf(interp, frame)
-        update_valid_age!(frame, caller)
-        return frame.bestguess, frame.inferred ? mi : nothing
+        update_valid_age!(caller, frame.valid_worlds)
+        isinferred = is_inferred(frame)
+        edge = isinferred ? mi : nothing
+        effects = isinferred ? frame.result.ipo_effects : adjust_effects(Effects(), method) # effects are adjusted already within `finish` for ipo_effects
+        exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
+        # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
+        # note that this result is cached globally exclusively, we can use this local result destructively
+        volatile_inf_result = isinferred && let inferred_src = result.src
+                isa(inferred_src, CodeInfo) && (is_inlineable(inferred_src) || force_inline)
+            end ? VolatileInferenceResult(result) : nothing
+        return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects, volatile_inf_result)
     elseif frame === true
         # unresolvable cycle
-        return Any, nothing
+        return EdgeCallResult(Any, Any, nothing, Effects())
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
-    update_valid_age!(frame, caller)
-    return frame.bestguess, nothing
+    update_valid_age!(caller, frame.valid_worlds)
+    effects = adjust_effects(Effects(), method)
+    exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
+    return EdgeCallResult(frame.bestguess, exc_bestguess, nothing, effects)
+end
+
+function cached_return_type(code::CodeInstance)
+    rettype = code.rettype
+    isdefined(code, :rettype_const) || return rettype
+    rettype_const = code.rettype_const
+    # the second subtyping/egal conditions are necessary to distinguish usual cases
+    # from rare cases when `Const` wrapped those extended lattice type objects
+    if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
+        return PartialStruct(rettype, rettype_const)
+    elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
+        return rettype_const
+    elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
+        return rettype_const
+    elseif isa(rettype_const, InterMustAlias) && rettype !== InterMustAlias
+        return rettype_const
+    else
+        return Const(rettype_const)
+    end
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
 
+function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, worlds::WorldRange, @nospecialize(val))
+    method = mi.def::Method
+    tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
+    tree.code = Any[ ReturnNode(quoted(val)) ]
+    nargs = Int(method.nargs)
+    tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
+    tree.slotflags = fill(0x00, nargs)
+    tree.ssavaluetypes = 1
+    tree.codelocs = Int32[1]
+    tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
+    tree.ssaflags = UInt32[0]
+    set_inlineable!(tree, true)
+    tree.parent = mi
+    tree.rettype = Core.Typeof(val)
+    tree.min_world = worlds.min_world
+    tree.max_world = worlds.max_world
+    tree.inferred = true
+    return tree
+end
+
+result_is_constabi(interp::AbstractInterpreter, run_optimizer::Bool, result::InferenceResult) =
+    run_optimizer && may_discard_trees(interp) && is_result_constabi_eligible(result)
+
 # compute an inferred AST and return type
-function typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector, run_optimizer::Bool)
-    mi = specialize_method(method, atypes, sparams)::MethodInstance
-    ccall(:jl_typeinf_begin, Cvoid, ())
-    result = InferenceResult(mi)
-    frame = InferenceState(result, false, interp)
-    frame === nothing && return (nothing, Any)
-    if typeinf(interp, frame) && run_optimizer
-        opt_params = OptimizationParams(interp)
-        result.src = OptimizationState(frame, opt_params, interp)
-        optimize(interp, result.src, opt_params, ignorelimited(result.result))
-        frame.src = finish!(interp, result)
+typeinf_code(interp::AbstractInterpreter, match::MethodMatch, run_optimizer::Bool) =
+    typeinf_code(interp, specialize_method(match), run_optimizer)
+typeinf_code(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector,
+             run_optimizer::Bool) =
+    typeinf_code(interp, specialize_method(method, atype, sparams), run_optimizer)
+function typeinf_code(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
+    frame = typeinf_frame(interp, mi, run_optimizer)
+    frame === nothing && return nothing, Any
+    is_inferred(frame) || return nothing, Any
+    if result_is_constabi(interp, run_optimizer, frame.result)
+        rt = frame.result.result::Const
+        return codeinfo_for_const(interp, frame.linfo, frame.result.valid_worlds, rt.val), widenconst(rt)
     end
-    ccall(:jl_typeinf_end, Cvoid, ())
-    frame.inferred || return (nothing, Any)
-    return (frame.src, widenconst(ignorelimited(result.result)))
+    code = frame.src
+    rt = widenconst(ignorelimited(frame.result.result))
+    return code, rt
+end
+
+"""
+    typeinf_ircode(interp::AbstractInterpreter, match::MethodMatch,
+                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+    typeinf_ircode(interp::AbstractInterpreter,
+                   method::Method, atype, sparams::SimpleVector,
+                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+    typeinf_ircode(interp::AbstractInterpreter, mi::MethodInstance,
+                   optimize_until::Union{Integer,AbstractString,Nothing}) -> (ir::Union{IRCode,Nothing}, returntype::Type)
+
+Infer a `method` and return an `IRCode` with inferred `returntype` on success.
+"""
+typeinf_ircode(interp::AbstractInterpreter, match::MethodMatch,
+               optimize_until::Union{Integer,AbstractString,Nothing}) =
+    typeinf_ircode(interp, specialize_method(match), optimize_until)
+typeinf_ircode(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector,
+               optimize_until::Union{Integer,AbstractString,Nothing}) =
+    typeinf_ircode(interp, specialize_method(method, atype, sparams), optimize_until)
+function typeinf_ircode(interp::AbstractInterpreter, mi::MethodInstance,
+                        optimize_until::Union{Integer,AbstractString,Nothing})
+    start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
+    frame = typeinf_frame(interp, mi, false)
+    if frame === nothing
+        ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+        return nothing, Any
+    end
+    (; result) = frame
+    opt = OptimizationState(frame, interp)
+    ir = run_passes_ipo_safe(opt.src, opt, result, optimize_until)
+    rt = widenconst(ignorelimited(result.result))
+    ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+    return ir, rt
+end
+
+# compute an inferred frame
+typeinf_frame(interp::AbstractInterpreter, match::MethodMatch, run_optimizer::Bool) =
+    typeinf_frame(interp, specialize_method(match), run_optimizer)
+typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector,
+              run_optimizer::Bool) =
+    typeinf_frame(interp, specialize_method(method, atype, sparams), run_optimizer)
+function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_optimizer::Bool)
+    start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
+    result = InferenceResult(mi, typeinf_lattice(interp))
+    cache_mode = run_optimizer ? :global : :no
+    frame = InferenceState(result, cache_mode, interp)
+    frame === nothing && return nothing
+    typeinf(interp, frame)
+    ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+    return frame
 end
 
 # compute (and cache) an inferred AST and return type
 function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     method = mi.def::Method
-    for i = 1:2 # test-and-lock-and-test
-        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
-        code = get(code_cache(interp), mi, nothing)
-        if code isa CodeInstance
-            # see if this code already exists in the cache
-            inf = code.inferred
-            if invoke_api(code) == 2
-                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
-                rettype_const = code.rettype_const
-                tree.code = Any[ ReturnNode(quoted(rettype_const)) ]
-                nargs = Int(method.nargs)
-                tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
-                tree.slotflags = fill(0x00, nargs)
-                tree.ssavaluetypes = 1
-                tree.codelocs = Int32[1]
-                tree.linetable = [LineInfoNode(method.module, method.name, method.file, Int(method.line), 0)]
-                tree.inferred = true
-                tree.ssaflags = UInt8[0]
-                tree.pure = true
-                tree.inlineable = true
-                tree.parent = mi
-                tree.rettype = Core.Typeof(rettype_const)
-                tree.min_world = code.min_world
-                tree.max_world = code.max_world
-                return tree
-            elseif isa(inf, CodeInfo)
-                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                if !(inf.min_world == code.min_world &&
-                     inf.max_world == code.max_world &&
-                     inf.rettype === code.rettype)
-                    inf = copy(inf)
-                    inf.min_world = code.min_world
-                    inf.max_world = code.max_world
-                    inf.rettype = code.rettype
-                end
-                return inf
-            elseif isa(inf, Vector{UInt8})
-                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-                inf = _uncompressed_ir(code, inf)
-                return inf
+    start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
+    code = get(code_cache(interp), mi, nothing)
+    if code isa CodeInstance
+        # see if this code already exists in the cache
+        inf = @atomic :monotonic code.inferred
+        if use_const_api(code)
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+            return codeinfo_for_const(interp, mi, WorldRange(code.min_world, code.max_world), code.rettype_const)
+        elseif isa(inf, CodeInfo)
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+            if !(inf.min_world == code.min_world &&
+                    inf.max_world == code.max_world &&
+                    inf.rettype === code.rettype)
+                inf = copy(inf)
+                inf.min_world = code.min_world
+                inf.max_world = code.max_world
+                inf.rettype = code.rettype
             end
+            return inf
+        elseif isa(inf, String)
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+            inf = _uncompressed_ir(code, inf)
+            return inf
         end
     end
-    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
-        return retrieve_code_info(mi)
+    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_output(#=incremental=#false)
+        return retrieve_code_info(mi, get_inference_world(interp))
     end
     lock_mi_inference(interp, mi)
-    frame = InferenceState(InferenceResult(mi), #=cached=#true, interp)
+    result = InferenceResult(mi, typeinf_lattice(interp))
+    frame = InferenceState(result, #=cache_mode=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
-    ccall(:jl_typeinf_end, Cvoid, ())
+    ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+    if result_is_constabi(interp, true, frame.result)
+        return codeinfo_for_const(interp, frame.linfo, frame.result.valid_worlds, frame.result.result.val)
+    end
     frame.src.inferred || return nothing
     return frame.src
 end
 
 # compute (and cache) an inferred AST and return the inferred return type
-function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize(atypes), sparams::SimpleVector)
-    if contains_is(unwrap_unionall(atypes).parameters, Union{})
+function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector)
+    if contains_is(unwrap_unionall(atype).parameters, Union{})
         return Union{} # don't ask: it does weird and unnecessary things, if it occurs during bootstrap
     end
-    mi = specialize_method(method, atypes, sparams)::MethodInstance
-    for i = 1:2 # test-and-lock-and-test
-        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
-        code = get(code_cache(interp), mi, nothing)
-        if code isa CodeInstance
-            # see if this rettype already exists in the cache
-            i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
-            return code.rettype
-        end
+    return typeinf_type(interp, specialize_method(method, atype, sparams))
+end
+typeinf_type(interp::AbstractInterpreter, match::MethodMatch) =
+    typeinf_type(interp, specialize_method(match))
+function typeinf_type(interp::AbstractInterpreter, mi::MethodInstance)
+    start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
+    code = get(code_cache(interp), mi, nothing)
+    if code isa CodeInstance
+        # see if this rettype already exists in the cache
+        ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+        return code.rettype
     end
-    frame = InferenceResult(mi)
-    typeinf(interp, frame, true)
-    ccall(:jl_typeinf_end, Cvoid, ())
-    frame.result isa InferenceState && return nothing
-    return widenconst(ignorelimited(frame.result))
+    result = InferenceResult(mi, typeinf_lattice(interp))
+    typeinf(interp, result, :global)
+    ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+    is_inferred(result) || return nothing
+    return widenconst(ignorelimited(result.result))
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()`
 typeinf_ext_toplevel(mi::MethodInstance, world::UInt) = typeinf_ext_toplevel(NativeInterpreter(world), mi)
-function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance)
-    if isa(linfo.def, Method)
+function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance)
+    if isa(mi.def, Method)
         # method lambda - infer this specialization via the method cache
-        src = typeinf_ext(interp, linfo)
+        src = typeinf_ext(interp, mi)
     else
-        src = linfo.uninferred::CodeInfo
+        src = mi.uninferred::CodeInfo
         if !src.inferred
             # toplevel lambda - infer directly
-            ccall(:jl_typeinf_begin, Cvoid, ())
+            start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
             if !src.inferred
-                result = InferenceResult(linfo)
-                frame = InferenceState(result, src, #=cached=#true, interp)
+                result = InferenceResult(mi, typeinf_lattice(interp))
+                frame = InferenceState(result, src, #=cache_mode=#:global, interp)
                 typeinf(interp, frame)
-                @assert frame.inferred # TODO: deal with this better
+                @assert is_inferred(frame) # TODO: deal with this better
                 src = frame.src
             end
-            ccall(:jl_typeinf_end, Cvoid, ())
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
         end
     end
     return src
 end
 
-
-function return_type(@nospecialize(f), @nospecialize(t))
-    world = ccall(:jl_get_tls_world_age, UInt, ())
-    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), Any[_return_type, f, t, world], 4)
+function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
+    world = tls_world_age()
+    args = Any[_return_type, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
 end
 
-_return_type(@nospecialize(f), @nospecialize(t), world) = _return_type(NativeInterpreter(world), f, t)
+function return_type(@nospecialize(f), t::DataType, world::UInt)
+    return return_type(Tuple{Core.Typeof(f), t.parameters...}, world)
+end
 
-function _return_type(interp::AbstractInterpreter, @nospecialize(f), @nospecialize(t))
+function return_type(t::DataType)
+    world = tls_world_age()
+    return return_type(t, world)
+end
+
+function return_type(t::DataType, world::UInt)
+    args = Any[_return_type, NativeInterpreter(world), t]
+    return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
+end
+
+function _return_type(interp::AbstractInterpreter, t::DataType)
     rt = Union{}
+    f = singleton_type(t.parameters[1])
     if isa(f, Builtin)
-        rt = builtin_tfunction(interp, f, Any[t.parameters...], nothing)
-        if isa(rt, TypeVar)
-            rt = rt.ub
-        else
-            rt = widenconst(rt)
-        end
+        args = Any[t.parameters...]
+        popfirst!(args)
+        rt = builtin_tfunction(interp, f, args, nothing)
+        rt = widenconst(rt)
     else
-        for match in _methods(f, t, -1, get_world_counter(interp))::Vector
-            match = match::Core.MethodMatch
-            ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
+        for match in _methods_by_ftype(t, -1, get_inference_world(interp))::Vector
+            ty = typeinf_type(interp, match::MethodMatch)
             ty === nothing && return Any
             rt = tmerge(rt, ty)
             rt === Any && break

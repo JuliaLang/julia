@@ -16,7 +16,7 @@ function killjob(d)
     end
     if @isdefined(SIGINFO)
         ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
-        sleep(1)
+        sleep(5) # Allow time for profile to collect and print before killing
     end
     ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
     nothing
@@ -136,7 +136,7 @@ defaultport = rand(2000:4000)
                 write(sock, "Hello World\n")
 
                 # test "locked" println to a socket
-                @Experimental.sync begin
+                Experimental.@sync begin
                     for i in 1:100
                         @async println(sock, "a", 1)
                     end
@@ -196,6 +196,31 @@ end
 
 
 @testset "getnameinfo on some unroutable IP addresses (RFC 5737)" begin
+    try
+        getnameinfo(ip"192.0.2.1")
+        getnameinfo(ip"198.51.100.1")
+        getnameinfo(ip"203.0.113.1")
+        getnameinfo(ip"0.1.1.1")
+        getnameinfo(ip"::ffff:0.1.1.1")
+        getnameinfo(ip"::ffff:192.0.2.1")
+        getnameinfo(ip"2001:db8::1")
+    catch
+        # NOTE: Default Ubuntu installations contain a faulty DNS configuration
+        # that returns `EAI_AGAIN` instead of `EAI_NONAME`.  To fix this, try
+        # installing `libnss-resolve`, which installs the `systemd-resolve`
+        # backend for NSS, which should fix it.
+        #
+        # If you are running tests inside Docker, you'll need to install
+        # `libnss-resolve` both outside Docker (i.e. on the host machine) and
+        # inside the Docker container.
+        if Sys.islinux()
+            error_msg = string(
+                "`getnameinfo` failed on an unroutable IP address. ",
+                "If your DNS setup seems to be working, try installing libnss-resolve",
+            )
+            @error(error_msg)
+        end
+    end
     @test getnameinfo(ip"192.0.2.1") == "192.0.2.1"
     @test getnameinfo(ip"198.51.100.1") == "198.51.100.1"
     @test getnameinfo(ip"203.0.113.1") == "203.0.113.1"
@@ -282,7 +307,7 @@ end
         bind(a, ip"127.0.0.1", randport)
         bind(b, ip"127.0.0.1", randport + 1)
 
-        @Experimental.sync begin
+        Experimental.@sync begin
             let i = 0
                 for _ = 1:30
                     @async let msg = String(recv(a))
@@ -362,7 +387,7 @@ end
         # connect to it
         client_sock = connect(addr, port)
         test_done = false
-        @Experimental.sync begin
+        Experimental.@sync begin
             @async begin
                 Base.wait_readnb(client_sock, 1)
                 test_done || error("Client disconnected prematurely.")
@@ -526,17 +551,54 @@ end
         r = @async close(s)
         @test_throws Base._UVError("connect", Base.UV_ECANCELED) Sockets.wait_connected(s)
         fetch(r)
+        close(srv)
     end
 end
 
 @testset "iswritable" begin
     let addr = Sockets.InetAddr(ip"127.0.0.1", 4445)
         srv = listen(addr)
-        s = Sockets.TCPSocket()
-        Sockets.connect!(s, addr)
-        @test iswritable(s)
-        close(s)
-        @test !iswritable(s)
+        let s = Sockets.TCPSocket()
+            Sockets.connect!(s, addr)
+            @test iswritable(s) broken=Sys.iswindows()
+            close(s)
+            @test !iswritable(s)
+        end
+        let s = Sockets.connect(addr)
+            @test iswritable(s)
+            closewrite(s)
+            @test !iswritable(s)
+            close(s)
+        end
+        close(srv)
+        srv = listen(addr)
+        let s = Sockets.connect(addr)
+            let c = accept(srv)
+                Base.errormonitor(@async try; write(c, c); finally; close(c); end)
+            end
+            @test iswritable(s)
+            write(s, "hello world\n")
+            closewrite(s)
+            @test !iswritable(s)
+            @test isreadable(s)
+            @test read(s, String) == "hello world\n"
+            @test !isreadable(s)
+            @test !isopen(s)
+            close(s)
+        end
+        close(srv)
+    end
+end
+
+@testset "TCPSocket RawFD constructor" begin
+    if Sys.islinux()
+        let fd = ccall(:socket, Int32, (Int32, Int32, Int32),
+                       2, # AF_INET
+                       1, # SOCK_STREAM
+                       0)
+            s = Sockets.TCPSocket(RawFD(fd))
+            close(s)
+        end
     end
 end
 
@@ -620,3 +682,7 @@ end
 
 
 close(sockets_watchdog_timer)
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Sockets))
+end

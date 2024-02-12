@@ -1,4 +1,8 @@
-# Logging
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Logging/docs/src/index.md"
+```
+
+# [Logging](@id man-logging)
 
 The [`Logging`](@ref Logging.Logging) module provides a way to record the history and progress of a
 computation as a log of events.  Events are created by inserting a logging
@@ -58,17 +62,28 @@ automatically extracted. Let's examine the user-defined data first:
 * The *log level* is a broad category for the message that is used for early
   filtering. There are several standard levels of type [`LogLevel`](@ref);
   user-defined levels are also possible.
-  Each is distinct in purpose:
-  - `Debug` is information intended for the developer of the program.
-    These events are disabled by default.
-  - `Info` is for general information to the user.
+  Each built-in log level is distinct in purpose:
+  - [`Logging.Debug`](@ref) (log level -1000) is information intended for the developer of
+    the program. These events are disabled by default.
+  - [`Logging.Info`](@ref) (log level 0) is for general information to the user.
     Think of it as an alternative to using `println` directly.
-  - `Warn` means something is wrong and action is likely required
-    but that for now the program is still working.
-  - `Error` means something is wrong and it is unlikely to be recovered,
-    at least by this part of the code.
+  - [`Logging.Warn`](@ref) (log level 1000) means something is wrong and action is likely
+    required but that for now the program is still working.
+  - [`Logging.Error`](@ref) (log level 2000) means something is wrong and it is unlikely to
+    be recovered, at least by this part of the code.
     Often this log-level is unneeded as throwing an exception can convey
     all the required information.
+
+    You can create logging macros for custom log levels. For instance:
+    ```julia-repl
+    julia> using Logging
+
+    julia> @create_log_macro MyLog 200 :magenta
+    @mylog (macro with 1 method)
+
+    julia> @mylog "hello"
+    [ MyLog: hello
+    ```
 
 * The *message*  is an object describing the event. By convention
   `AbstractString`s passed as messages are assumed to be in markdown format.
@@ -180,10 +195,10 @@ pattern match against the log event stream.
 
 ## Environment variables
 
-Message filtering can be influenced through the `JULIA_DEBUG` environment
+Message filtering can be influenced through the [`JULIA_DEBUG`](@ref JULIA_DEBUG) environment
 variable, and serves as an easy way to enable debug logging for a file or
-module. For example, loading julia with `JULIA_DEBUG=loading` will activate
-`@debug` log messages in `loading.jl`:
+module. Loading julia with `JULIA_DEBUG=loading` will activate
+`@debug` log messages in `loading.jl`. For example, in Linux shells:
 
 ```
 $ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
@@ -194,6 +209,9 @@ $ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
 └ @ Base loading.jl:1328
 ...
 ```
+
+On windows, the same can be achieved in `CMD` via first running `set JULIA_DEBUG="loading"` and in `Powershell` via
+`$env:JULIA_DEBUG="loading"`.
 
 Similarly, the environment variable can be used to enable debug logging of
 modules, such as `Pkg`, or module roots (see [`Base.moduleroot`](@ref)). To
@@ -217,7 +235,12 @@ julia> foo()
 
 ```
 
-## Writing log events to a file
+Use a comma separator to enable debug for multiple
+modules: `JULIA_DEBUG=loading,Main`.
+
+## Examples
+
+### Example: Writing log events to a file
 
 Sometimes it can be useful to write log events to a file. Here is an example
 of how to use a task-local and global logger to write information to a text
@@ -254,6 +277,25 @@ julia> @info("a global log message")
 julia> close(io)
 ```
 
+### Example: Enable debug-level messages
+
+Here is an example of creating a [`ConsoleLogger`](@ref) that lets through any messages
+with log level higher than, or equal, to [`Logging.Debug`](@ref).
+
+```julia-repl
+julia> using Logging
+
+# Create a ConsoleLogger that prints any log messages with level >= Debug to stderr
+julia> debuglogger = ConsoleLogger(stderr, Logging.Debug)
+
+# Enable debuglogger for a task
+julia> with_logger(debuglogger) do
+           @debug "a context specific log message"
+       end
+
+# Set the global logger
+julia> global_logger(debuglogger)
+```
 
 ## Reference
 
@@ -267,6 +309,13 @@ Logging.Logging
 ```@docs
 Logging.@logmsg
 Logging.LogLevel
+Logging.Debug
+Logging.Info
+Logging.Warn
+Logging.Error
+Logging.BelowMinLevel
+Logging.AboveMaxLevel
+Logging.@create_log_macro
 ```
 
 ### [Processing events with AbstractLogger](@id AbstractLogger-interface)
