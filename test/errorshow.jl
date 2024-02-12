@@ -9,6 +9,8 @@ include("testenv.jl")
 Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
+Base.Experimental.register_error_hint(Base.nonsetable_number_hint_handler, MethodError)
+
 
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
@@ -743,6 +745,13 @@ let err_str
     # issue 40478
     err_str = @except_str ANumber()(3 + 4) MethodError
     @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
+end
+
+let err_str
+    a = [1 2; 3 4]; 
+    err_str = @except_str (a[1][2] = 5) MethodError
+    @test occursin("\nAre you trying to index into an array? Separate each index with commas: ", err_str)
+    @test occursin("a[1, 2]", err_str)
 end
 
 # Execute backtrace once before checking formatting, see #38858
