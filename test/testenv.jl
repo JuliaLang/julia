@@ -35,15 +35,21 @@ if !@isdefined(testenv_defined)
         const rr_exename = ``
     end
 
+    const test_relocated_depot = haskey(ENV, "RELOCATEDEPOT")
+
     function addprocs_with_testenv(X; rr_allowed=true, kwargs...)
         exename = rr_allowed ? `$rr_exename $test_exename` : test_exename
+        if X isa Integer
+            heap_size=round(Int,(Sys.total_memory()/(1024^2)/(X+1)))
+            push!(test_exeflags.exec, "--heap-size-hint=$(heap_size)M")
+        end
         addprocs(X; exename=exename, exeflags=test_exeflags, kwargs...)
     end
 
     const curmod = @__MODULE__
     const curmod_name = fullname(curmod)
     const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
-    const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+    const curmod_prefix = curmod === Main ? "" : "$(["$m." for m in curmod_name]...)"
 
     # platforms that support cfunction with closures
     # (requires LLVM back-end support for trampoline intrinsics)

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 mutable struct Pager{C} <: _ConfiguredMenu{C}
     lines::Vector{String}
     pagesize::Int

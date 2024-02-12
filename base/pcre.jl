@@ -24,26 +24,36 @@ function create_match_context()
     return ctx
 end
 
-const THREAD_MATCH_CONTEXTS = Ptr{Cvoid}[C_NULL]
+THREAD_MATCH_CONTEXTS::Vector{Ptr{Cvoid}} = [C_NULL]
 
 PCRE_COMPILE_LOCK = nothing
 
-_tid() = Int(ccall(:jl_threadid, Int16, ())+1)
-_nth() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
+_tid() = Int(ccall(:jl_threadid, Int16, ())) + 1
+_mth() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
 
 function get_local_match_context()
     tid = _tid()
-    ctx = @inbounds THREAD_MATCH_CONTEXTS[tid]
+    ctxs = THREAD_MATCH_CONTEXTS
+    if length(ctxs) < tid
+        # slow path to allocate it
+        l = PCRE_COMPILE_LOCK::Threads.SpinLock
+        lock(l)
+        try
+            ctxs = THREAD_MATCH_CONTEXTS
+            if length(ctxs) < tid
+                global THREAD_MATCH_CONTEXTS = ctxs = copyto!(fill(C_NULL, length(ctxs) + _mth()), ctxs)
+            end
+        finally
+            unlock(l)
+        end
+    end
+    ctx = @inbounds ctxs[tid]
     if ctx == C_NULL
-        @inbounds THREAD_MATCH_CONTEXTS[tid] = ctx = create_match_context()
+        # slow path to allocate it
+        ctx = create_match_context()
+        THREAD_MATCH_CONTEXTS[tid] = ctx
     end
     return ctx
-end
-
-function __init__()
-    resize!(THREAD_MATCH_CONTEXTS, _nth())
-    fill!(THREAD_MATCH_CONTEXTS, C_NULL)
-    global PCRE_COMPILE_LOCK = Threads.SpinLock()
 end
 
 # supported options for different use cases
@@ -186,10 +196,12 @@ function err_message(errno::Integer)
     return GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
-function exec(re, subject, offset, options, match_data)
-    if !(subject isa Union{String,SubString{String}})
-        subject = String(subject)
-    end
+exec(re, subject::Union{String,SubString{String}}, offset, options, match_data) =
+    _exec(re, subject, offset, options, match_data)
+exec(re, subject, offset, options, match_data) =
+    _exec(re, String(subject), offset, options, match_data)
+
+function _exec(re, subject, offset, options, match_data)
     rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
                (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, UInt32, Ptr{Cvoid}, Ptr{Cvoid}),
                re, subject, ncodeunits(subject), offset, options, match_data, get_local_match_context())

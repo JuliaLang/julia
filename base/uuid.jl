@@ -32,6 +32,11 @@ end
 UInt128(u::UUID) = u.value
 
 let
+    uuid_hash_seed = UInt === UInt64 ? 0xd06fa04f86f11b53 : 0x96a1f36d
+    Base.hash(uuid::UUID, h::UInt) = hash(uuid_hash_seed, hash(convert(NTuple{2, UInt64}, uuid), h))
+end
+
+let
 @inline function uuid_kernel(s, i, u)
     _c = UInt32(@inbounds codeunit(s, i))
     d = __convert_digit(_c, UInt32(16))
@@ -96,7 +101,7 @@ let groupings = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
 end
 
 print(io::IO, u::UUID) = print(io, string(u))
-show(io::IO, u::UUID) = print(io, "UUID(\"", u, "\")")
+show(io::IO, u::UUID) = print(io, UUID, "(\"", u, "\")")
 
 isless(a::UUID, b::UUID) = isless(a.value, b.value)
 

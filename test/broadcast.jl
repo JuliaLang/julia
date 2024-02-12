@@ -49,9 +49,9 @@ ci(x) = CartesianIndex(x)
 @test @inferred(newindex(ci((2,2)), (true, false), (-1,-1)))  == ci((2,-1))
 @test @inferred(newindex(ci((2,2)), (false, true), (-1,-1)))  == ci((-1,2))
 @test @inferred(newindex(ci((2,2)), (false, false), (-1,-1))) == ci((-1,-1))
-@test @inferred(newindex(ci((2,2)), (true,), (-1,-1)))   == ci((2,))
-@test @inferred(newindex(ci((2,2)), (true,), (-1,)))   == ci((2,))
-@test @inferred(newindex(ci((2,2)), (false,), (-1,))) == ci((-1,))
+@test @inferred(newindex(ci((2,2)), (true,), (-1,-1))) == 2
+@test @inferred(newindex(ci((2,2)), (true,), (-1,)))   == 2
+@test @inferred(newindex(ci((2,2)), (false,), (-1,)))  == -1
 @test @inferred(newindex(ci((2,2)), (), ())) == ci(())
 
 end
@@ -516,7 +516,7 @@ Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
     @test a .+ 1 .* 2  == @inferred(fadd2(aa))
     @test a .* a' == @inferred(fprod(aa))
     @test isequal(a .+ [missing; 1:9], fadd3(aa))
-    @test Core.Compiler.return_type(fadd3, (typeof(aa),)) <: Array19745{<:Union{Float64, Missing}}
+    @test Core.Compiler.return_type(fadd3, Tuple{typeof(aa),}) <: Array19745{<:Union{Float64, Missing}}
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .+ 1 .* 2, Array19745)
     @test isa(aa .* aa', Array19745)
@@ -589,6 +589,16 @@ end
         @test a isa Array{String}
         @test a == ["false"]
         @test f.([true, false]) == [true, "false"]
+    end
+end
+
+@testset "convert behavior of logical broadcast" begin
+    a = mod.(1:4, 2)
+    @test !isa(a, BitArray)
+    for T in (Array{Bool}, BitArray)
+        la = T(a)
+        la .= mod.(0:3, 2)
+        @test la == [false; true; false; true]
     end
 end
 
@@ -691,16 +701,19 @@ end
     @test a == [1 1; 2 2; 3 3]
 end
 
-@testset "scalar .=" begin
-    A = [[1,2,3],4:5,6]
+@testset "scalar .= and promotion" begin
+    A = [[1, 2, 3], 4:5, 6]
+    @test A isa Vector{Any}
     A[1] .= 0
-    @test A[1] == [0,0,0]
-    @test_throws ErrorException A[2] .= 0
+    @test A[1] == [0, 0, 0]
+    @test_throws Base.CanonicalIndexError A[2] .= 0
     @test_throws MethodError A[3] .= 0
-    A = [[1,2,3],4:5]
+    A = [[1, 2, 3], 4:5]
     A[1] .= 0
+    @test A[1] isa Vector{Int}
+    @test A[2] isa UnitRange
     @test A[1] == [0,0,0]
-    @test_throws ErrorException A[2] .= 0
+    @test_throws Base.CanonicalIndexError A[2] .= 0
 end
 
 # Issue #22180
@@ -771,14 +784,27 @@ let X = zeros(2, 3)
 end
 
 # issue #27988: inference of Broadcast.flatten
-using .Broadcast: Broadcasted
+using .Broadcast: Broadcasted, cat_nested
 let
     bc = Broadcasted(+, (Broadcasted(*, (1, 2)), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
-    @test @inferred(Broadcast.cat_nested(bc)) == (1,2,3,4,5)
+    @test @inferred(cat_nested(bc)) == (1,2,3,4,5)
     @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 62
     bc = Broadcasted(+, (Broadcasted(*, (1, Broadcasted(/, (2.0, 2.5)))), Broadcasted(*, (Broadcasted(*, (3, 4)), 5))))
-    @test @inferred(Broadcast.cat_nested(bc)) == (1,2.0,2.5,3,4,5)
+    @test @inferred(cat_nested(bc)) == (1,2.0,2.5,3,4,5)
     @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 60.8
+    # 1 .* 1 .- 1 .* 1 .^2 .+ 1 .* 1 .+ 1 .^ 3
+    bc = Broadcasted(+, (Broadcasted(+, (Broadcasted(-, (Broadcasted(*, (1, 1)), Broadcasted(*, (1, Broadcasted(Base.literal_pow, (Ref(^), 1, Ref(Val(2)))))))), Broadcasted(*, (1, 1)))), Broadcasted(Base.literal_pow, (Base.RefValue{typeof(^)}(^), 1, Base.RefValue{Val{3}}(Val{3}())))))
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == @inferred(Broadcast.materialize(bc)) == 2
+    # @. 1 + 1 * (1 + 1 + 1 + 1)
+    bc = Broadcasted(+, (1, Broadcasted(*, (1, Broadcasted(+, (1, 1, 1, 1))))))
+    @test @inferred(cat_nested(bc)) == (1, 1, 1, 1, 1, 1) # `cat_nested` failed to infer this
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == Broadcast.materialize(bc)
+    # @. 1 + (1 + 1) + 1 + (1 + 1) + 1 + (1 + 1) + 1
+    bc = Broadcasted(+, (1, Broadcasted(+, (1, 1)), 1, Broadcasted(+, (1, 1)), 1, Broadcasted(+, (1, 1)), 1))
+    @test @inferred(cat_nested(bc)) == (1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == Broadcast.materialize(bc)
+    bc = Broadcasted(Float32, (Broadcasted(+, (1, 1)),))
+    @test @inferred(Broadcast.materialize(Broadcast.flatten(bc))) == Broadcast.materialize(bc)
 end
 
 let
@@ -852,6 +878,39 @@ let
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 end
 
+# issue 43847: collect preserves shape of broadcasted
+let
+    bc = Broadcast.broadcasted(*, [1 2; 3 4], 2)
+    @test collect(Iterators.product(bc, bc)) == collect(Iterators.product(copy(bc), copy(bc)))
+
+    a1 = AD1(rand(2,3))
+    bc1 = Broadcast.broadcasted(*, a1, 2)
+    @test collect(Iterators.product(bc1, bc1)) == collect(Iterators.product(copy(bc1), copy(bc1)))
+
+    # using ndims of second arg
+    bc2 = Broadcast.broadcasted(*, 2, a1)
+    @test collect(Iterators.product(bc2, bc2)) == collect(Iterators.product(copy(bc2), copy(bc2)))
+
+    # >2 args
+    bc3 = Broadcast.broadcasted(*, a1, 3, a1)
+    @test collect(Iterators.product(bc3, bc3)) == collect(Iterators.product(copy(bc3), copy(bc3)))
+
+    # including a tuple and custom array type
+    bc4 = Broadcast.broadcasted(*, (1,2,3), AD1(rand(3)))
+    @test collect(Iterators.product(bc4, bc4)) == collect(Iterators.product(copy(bc4), copy(bc4)))
+
+    # testing ArrayConflict
+    @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{Broadcast.ArrayConflict}
+    @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{<:Broadcast.AbstractArrayStyle{Any}}
+
+    @test @inferred(Base.IteratorSize(Broadcast.broadcasted(+, (1,2,3), a1, zeros(3,3,3)))) === Base.HasShape{3}()
+
+    # inference on nested
+    bc = Base.broadcasted(+, AD1(randn(3)), AD1(randn(3)))
+    bc_nest = Base.broadcasted(+, bc , bc)
+    @test @inferred(Base.IteratorSize(bc_nest)) === Base.HasShape{1}()
+ end
+
 # issue #31295
 let a = rand(5), b = rand(5), c = copy(a)
     view(identity(a), 1:3) .+= view(b, 1:3)
@@ -914,6 +973,12 @@ end
     # hit the `foldl` branch:
     @test IndexStyle(bcraw) == IndexCartesian()
     @test reduce(paren, bcraw) == foldl(paren, xs)
+
+    # issue #41055
+    bc = Broadcast.instantiate(Broadcast.broadcasted(Base.literal_pow, Ref(^), [1,2], Ref(Val(2))))
+    @test sum(bc, dims=1, init=0) == [5]
+    bc = Broadcast.instantiate(Broadcast.broadcasted(*, ['a','b'], 'c'))
+    @test prod(bc, dims=1, init="") == ["acbc"]
 end
 
 # treat Pair as scalar:
@@ -985,10 +1050,6 @@ end
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
         Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
-    @test isequal([1, 2] + [3.0, missing], [4.0, missing])
-    @test Core.Compiler.return_type(+, Tuple{Vector{Int},
-                                             Vector{Union{Float64, Missing}}}) ==
-        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
         Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
@@ -1009,6 +1070,8 @@ end
     @test typeof.([iszero, iszero]) == [typeof(iszero), typeof(iszero)]
     @test isequal(identity.(Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
                   [[1, 2],[missing, 1]])
+    @test broadcast(i -> ((x=i, y=(i==1 ? 1 : "a")), 3), 1:4) isa
+        Vector{Tuple{NamedTuple{(:x, :y)}, Int}}
 end
 
 @testset "Issue #28382: eltype inconsistent with getindex" begin
@@ -1045,6 +1108,89 @@ end
     end
 end
 
-# issue 40309
-@test Base.broadcasted_kwsyntax(+, [1], [2]) isa Broadcast.Broadcasted{<:Any, <:Any, typeof(+)}
-@test Broadcast.BroadcastFunction(+)(2:3, 2:3) === 4:2:6
+@testset "Issue #40309: still gives a range after #40320" begin
+    @test Base.broadcasted_kwsyntax(+, [1], [2]) isa Broadcast.Broadcasted{<:Any, <:Any, typeof(+)}
+    @test Broadcast.BroadcastFunction(+)(2:3, 2:3) == 4:2:6
+    @test Broadcast.BroadcastFunction(+)(2:3, 2:3) isa AbstractRange
+end
+
+@testset "#42063" begin
+    buf = IOBuffer()
+    @test println.(buf, [1,2,3]) == [nothing, nothing, nothing]
+    @test String(take!(buf)) == "1\n2\n3\n"
+end
+
+@testset "Memory allocation inconsistency in broadcasting #41565" begin
+    function test(y)
+        y .= 0 .- y ./ (y.^2) # extra allocation
+        return y
+    end
+    arr = rand(1000)
+    @allocated test(arr)
+    @test (@allocated test(arr)) <= 16
+end
+
+@testset "Fix type unstable .&& #43470" begin
+    function test(x, y)
+        return (x .> 0.0) .&& (y .> 0.0)
+    end
+    x = randn(2)
+    y = randn(2)
+    @inferred(test(x, y)) == [0, 0]
+end
+
+@testset "issue #45903, in place broadcast into a bit-masked bitmatrix" begin
+    A = BitArray(ones(3,3))
+    pos = randn(3,3)
+    A[pos .< 0] .= false
+    @test all(>=(0), pos[A])
+    @test count(A) == count(>=(0), pos)
+end
+
+@testset "issue #38432: make CartesianIndex a broadcast scalar" begin
+    @test CartesianIndex(1,2) .+ (CartesianIndex(3,4), CartesianIndex(5,6)) == (CartesianIndex(4, 6), CartesianIndex(6, 8))
+    @test CartesianIndex(1,2) .+ [CartesianIndex(3,4), CartesianIndex(5,6)] == [CartesianIndex(4, 6), CartesianIndex(6, 8)]
+end
+
+struct MyBroadcastStyleWithField <: Broadcast.BroadcastStyle
+    i::Int
+end
+# asymmetry intended
+Base.BroadcastStyle(a::MyBroadcastStyleWithField, b::MyBroadcastStyleWithField) = a
+
+@testset "issue #50937: styles that have fields" begin
+    @test Broadcast.result_style(MyBroadcastStyleWithField(1), MyBroadcastStyleWithField(1)) ==
+        MyBroadcastStyleWithField(1)
+    @test_throws ErrorException Broadcast.result_style(MyBroadcastStyleWithField(1),
+                                                       MyBroadcastStyleWithField(2))
+    dest = [0, 0]
+    dest .= Broadcast.Broadcasted(MyBroadcastStyleWithField(1), +, (1:2, 2:3))
+    @test dest == [3, 5]
+end
+
+# test that `Broadcast` definition is defined as total and eligible for concrete evaluation
+import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
+@test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
+    Core.Compiler.is_foldable
+
+f51129(v, x) = (1 .- (v ./ x) .^ 2)
+@test @inferred(f51129([13.0], 6.5)) == [-3.0]
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Broadcast)
+    @test_broken isempty(undoc)
+    @test undoc == [:dotview]
+end
+
+@testset "broadcast for `AbstractArray` without `CartesianIndex` support" begin
+    struct BVec52775 <: AbstractVector{Int}
+        a::Vector{Int}
+    end
+    Base.size(a::BVec52775) = size(a.a)
+    Base.getindex(a::BVec52775, i::Real) = a.a[i]
+    Base.getindex(a::BVec52775, i) = error("unsupported index!")
+    a = BVec52775([1,2,3])
+    bc = Base.broadcasted(identity, a)
+    @test bc[1] == bc[CartesianIndex(1)] == bc[1, CartesianIndex()]
+    @test a .+ [1 2] == a.a .+ [1 2]
+end

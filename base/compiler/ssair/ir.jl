@@ -1,9 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-@inline isexpr(@nospecialize(stmt), head::Symbol) = isa(stmt, Expr) && stmt.head === head
 Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
-isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode)
+isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, EnterNode) || isexpr(stmt, :leave)
 
 struct CFG
     blocks::Vector{BasicBlock}
@@ -24,17 +23,28 @@ function cfg_delete_edge!(cfg::CFG, from::Int, to::Int)
     preds = cfg.blocks[to].preds
     succs = cfg.blocks[from].succs
     # Assumes that blocks appear at most once in preds and succs
-    deleteat!(preds, findfirst(x->x === from, preds)::Int)
-    deleteat!(succs, findfirst(x->x === to, succs)::Int)
+    deleteat!(preds, findfirst(x::Int->x==from, preds)::Int)
+    deleteat!(succs, findfirst(x::Int->x==to, succs)::Int)
     nothing
+end
+
+function bb_ordering()
+    lt = (<=)
+    by = x::BasicBlock -> first(x.stmts)
+    ord(lt, by, nothing, Forward)
 end
 
 function block_for_inst(index::Vector{Int}, inst::Int)
     return searchsortedfirst(index, inst, lt=(<=))
 end
+
+function block_for_inst(index::Vector{BasicBlock}, inst::Int)
+    return searchsortedfirst(index, BasicBlock(StmtRange(inst, inst)), bb_ordering())-1
+end
+
 block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
 
-function basic_blocks_starts(stmts::Vector{Any})
+@inline function basic_blocks_starts(stmts::Vector{Any})
     jump_dests = BitSet()
     push!(jump_dests, 1) # function entry point
     # First go through and compute jump destinations
@@ -50,16 +60,18 @@ function basic_blocks_starts(stmts::Vector{Any})
             # This is a fake dest to force the next stmt to start a bb
             idx < length(stmts) && push!(jump_dests, idx+1)
             push!(jump_dests, stmt.label)
+        elseif isa(stmt, EnterNode)
+            # :enter starts/ends a BB
+            push!(jump_dests, idx)
+            push!(jump_dests, idx+1)
+            # The catch block is a jump dest
+            if stmt.catch_dest != 0
+                push!(jump_dests, stmt.catch_dest)
+            end
         elseif isa(stmt, Expr)
             if stmt.head === :leave
                 # :leave terminates a BB
                 push!(jump_dests, idx+1)
-            elseif stmt.head === :enter
-                # :enter starts/ends a BB
-                push!(jump_dests, idx)
-                push!(jump_dests, idx+1)
-                # The catch block is a jump dest
-                push!(jump_dests, stmt.args[1]::Int)
             end
         end
         if isa(stmt, PhiNode)
@@ -70,7 +82,7 @@ function basic_blocks_starts(stmts::Vector{Any})
             end
         end
     end
-    # and add add one more basic block start after the last statement
+    # and add one more basic block start after the last statement
     for i = length(stmts):-1:1
         if stmts[i] !== nothing
             push!(jump_dests, i+1)
@@ -81,15 +93,14 @@ function basic_blocks_starts(stmts::Vector{Any})
 end
 
 function compute_basic_blocks(stmts::Vector{Any})
-    bb_starts = basic_blocks_starts(stmts)
     # Compute ranges
+    bb_starts = basic_blocks_starts(stmts) # ::BitSet and already sorted
     pop!(bb_starts, 1)
-    basic_block_index = collect(bb_starts)
-    blocks = BasicBlock[]
-    sizehint!(blocks, length(basic_block_index))
+    basic_block_index = Int[bb for bb in bb_starts]
+    blocks = Vector{BasicBlock}(undef, length(basic_block_index))
     let first = 1
-        for last in basic_block_index
-            push!(blocks, BasicBlock(StmtRange(first, last - 1)))
+        for (i, last) in enumerate(basic_block_index)
+            blocks[i] = BasicBlock(StmtRange(first, last - 1))
             first = last
         end
     end
@@ -116,15 +127,12 @@ function compute_basic_blocks(stmts::Vector{Any})
                 push!(blocks[block′].preds, num)
                 push!(b.succs, block′)
             end
-        elseif isa(terminator, Expr)
-            if terminator.head === :enter
-                # :enter gets a virtual edge to the exception handler and
-                # the exception handler gets a virtual edge from outside
-                # the function.
-                # See the devdocs on exception handling in SSA form (or
-                # bug Keno to write them, if you're reading this and they
-                # don't exist)
-                block′ = block_for_inst(basic_block_index, terminator.args[1]::Int)
+        elseif isa(terminator, EnterNode)
+            # :enter gets a virtual edge to the exception handler and
+            # the exception handler gets a virtual edge from outside
+            # the function.
+            if terminator.catch_dest != 0
+                block′ = block_for_inst(basic_block_index, terminator.catch_dest)
                 push!(blocks[block′].preds, num)
                 push!(blocks[block′].preds, 0)
                 push!(b.succs, block′)
@@ -140,74 +148,90 @@ function compute_basic_blocks(stmts::Vector{Any})
 end
 
 # this function assumes insert position exists
-function first_insert_for_bb(code, cfg::CFG, block::Int)
-    for idx in cfg.blocks[block].stmts
+function is_valid_phiblock_stmt(@nospecialize(stmt))
+    isa(stmt, PhiNode) && return true
+    isa(stmt, Union{UpsilonNode, PhiCNode, SSAValue}) && return false
+    isa(stmt, Expr) && return is_value_pos_expr_head(stmt.head)
+    return true
+end
+
+function first_insert_for_bb(code::Vector{Any}, cfg::CFG, block::Int)
+    stmts = cfg.blocks[block].stmts
+    lastnonphiidx = first(stmts)
+    for idx in stmts
         stmt = code[idx]
         if !isa(stmt, PhiNode)
-            return idx
+            if !is_valid_phiblock_stmt(stmt)
+                return lastnonphiidx
+            end
+        else
+            lastnonphiidx = idx + 1
         end
     end
-    error("any insert position isn't found")
+    if lastnonphiidx > last(stmts)
+        error("any insert position isn't found")
+    end
+    return lastnonphiidx
 end
+
+# SSA values that need renaming
+struct OldSSAValue
+    id::Int
+end
+
+## TODO: This description currently omits the use of NewSSAValue during slot2ssa,
+## which doesn't use IncrementalCompact, but does something similar and also uses
+## NewSSAValue to refer to new_nodes. Ideally that use of NewSSAValue would go away
+## during a refactor.
+"""
+    struct NewSSAValue
+
+`NewSSAValue`s occur in the context of IncrementalCompact. Their meaning depends
+on where they appear:
+
+1. In already-compacted nodes,
+    i. a `NewSSAValue` with positive `id` has the same meaning as a regular SSAValue.
+    ii. a `NewSSAValue` with negative `id` refers to post-compaction `new_node` node.
+
+2. In non-compacted nodes,
+    i. a `NewSSAValue` with positive `id` refers to the index of an already-compacted instructions.
+    ii. a `NewSSAValue` with negative `id` has the same meaning as in compacted nodes.
+"""
+struct NewSSAValue
+    id::Int
+end
+
+const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
+
 
 # SSA-indexed nodes
-
-struct NewInstruction
-    stmt::Any
-    type::Any
-    info::Any
-    # If nothing, copy the line from previous statement
-    # in the insertion location
-    line::Union{Int32, Nothing}
-    flag::UInt8
-
-    ## Insertion options
-
-    # The IR_FLAG_EFFECT_FREE flag has already been computed (or forced).
-    # Don't bother redoing so on insertion.
-    effect_free_computed::Bool
-    NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info),
-            line::Union{Int32, Nothing}, flag::UInt8, effect_free_computed::Bool) =
-        new(stmt, type, info, line, flag, effect_free_computed)
-end
-NewInstruction(@nospecialize(stmt), @nospecialize(type)) =
-    NewInstruction(stmt, type, nothing)
-NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Nothing, Int32}) =
-    NewInstruction(stmt, type, nothing, line, 0x00, false)
-
-effect_free(inst::NewInstruction) =
-    NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | IR_FLAG_EFFECT_FREE, true)
-non_effect_free(inst::NewInstruction) =
-    NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag & ~IR_FLAG_EFFECT_FREE, true)
-
-
 struct InstructionStream
-    inst::Vector{Any}
+    stmt::Vector{Any}
     type::Vector{Any}
-    info::Vector{Any}
+    info::Vector{CallInfo}
     line::Vector{Int32}
-    flag::Vector{UInt8}
+    flag::Vector{UInt32}
 end
 function InstructionStream(len::Int)
-    insts = Array{Any}(undef, len)
-    types = Array{Any}(undef, len)
-    info = Array{Any}(undef, len)
-    fill!(info, nothing)
+    stmts = Vector{Any}(undef, len)
+    types = Vector{Any}(undef, len)
+    info = Vector{CallInfo}(undef, len)
+    fill!(info, NoCallInfo())
     lines = fill(Int32(0), len)
-    flags = fill(0x00, len)
-    return InstructionStream(insts, types, info, lines, flags)
+    flags = fill(IR_FLAG_NULL, len)
+    return InstructionStream(stmts, types, info, lines, flags)
 end
 InstructionStream() = InstructionStream(0)
-length(is::InstructionStream) = length(is.inst)
-isempty(is::InstructionStream) = isempty(is.inst)
-function add!(is::InstructionStream)
+length(is::InstructionStream) = length(is.stmt)
+isempty(is::InstructionStream) = isempty(is.stmt)
+function add_new_idx!(is::InstructionStream)
     ninst = length(is) + 1
     resize!(is, ninst)
     return ninst
 end
 function copy(is::InstructionStream)
     return InstructionStream(
-        copy_exprargs(is.inst),
+        copy_exprargs(is.stmt),
         copy(is.type),
         copy(is.info),
         copy(is.line),
@@ -215,15 +239,15 @@ function copy(is::InstructionStream)
 end
 function resize!(stmts::InstructionStream, len)
     old_length = length(stmts)
-    resize!(stmts.inst, len)
+    resize!(stmts.stmt, len)
     resize!(stmts.type, len)
     resize!(stmts.info, len)
     resize!(stmts.line, len)
     resize!(stmts.flag, len)
     for i in (old_length + 1):len
         stmts.line[i] = 0
-        stmts.flag[i] = 0x00
-        stmts.info[i] = nothing
+        stmts.flag[i] = IR_FLAG_NULL
+        stmts.info[i] = NoCallInfo()
     end
     return stmts
 end
@@ -232,30 +256,40 @@ struct Instruction
     data::InstructionStream
     idx::Int
 end
-Instruction(is::InstructionStream) = Instruction(is, add!(is))
+Instruction(is::InstructionStream) = Instruction(is, add_new_idx!(is))
 
 @inline function getindex(node::Instruction, fld::Symbol)
+    (fld === :inst) && (fld = :stmt) # deprecated
     isdefined(node, fld) && return getfield(node, fld)
     return getfield(getfield(node, :data), fld)[getfield(node, :idx)]
 end
 @inline function setindex!(node::Instruction, @nospecialize(val), fld::Symbol)
+    (fld === :inst) && (fld = :stmt) # deprecated
     getfield(getfield(node, :data), fld)[getfield(node, :idx)] = val
     return node
 end
 
 @inline getindex(is::InstructionStream, idx::Int) = Instruction(is, idx)
 function setindex!(is::InstructionStream, newval::Instruction, idx::Int)
-    is.inst[idx] = newval[:inst]
+    is.stmt[idx] = newval[:stmt]
     is.type[idx] = newval[:type]
     is.info[idx] = newval[:info]
     is.line[idx] = newval[:line]
     is.flag[idx] = newval[:flag]
     return is
 end
+function setindex!(is::InstructionStream, newval::Union{AnySSAValue, Nothing}, idx::Int)
+    is.stmt[idx] = newval
+    return is
+end
 function setindex!(node::Instruction, newval::Instruction)
     node.data[node.idx] = newval
     return node
 end
+
+has_flag(inst::Instruction, flag::UInt32) = has_flag(inst[:flag], flag)
+add_flag!(inst::Instruction, flag::UInt32) = inst[:flag] |= flag
+sub_flag!(inst::Instruction, flag::UInt32) = inst[:flag] &= ~flag
 
 struct NewNodeInfo
     # Insertion position (interpretation depends on which array this is in)
@@ -270,30 +304,97 @@ end
 NewNodeStream(len::Int=0) = NewNodeStream(InstructionStream(len), fill(NewNodeInfo(0, false), len))
 length(new::NewNodeStream) = length(new.stmts)
 isempty(new::NewNodeStream) = isempty(new.stmts)
-function add!(new::NewNodeStream, pos::Int, attach_after::Bool)
+function add_inst!(new::NewNodeStream, pos::Int, attach_after::Bool)
     push!(new.info, NewNodeInfo(pos, attach_after))
     return Instruction(new.stmts)
 end
 copy(nns::NewNodeStream) = NewNodeStream(copy(nns.stmts), copy(nns.info))
 
+struct NewInstruction
+    stmt::Any
+    type::Any
+    info::CallInfo
+    line::Union{Int32,Nothing} # if nothing, copy the line from previous statement in the insertion location
+    flag::Union{UInt32,Nothing} # if nothing, IR flags will be recomputed on insertion
+    function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
+                            line::Union{Int32,Nothing}, flag::Union{UInt32,Nothing})
+        return new(stmt, type, info, line, flag)
+    end
+end
+function NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Int32,Nothing}=nothing)
+    return NewInstruction(stmt, type, NoCallInfo(), line, nothing)
+end
+@nospecialize
+function NewInstruction(newinst::NewInstruction;
+    stmt::Any=newinst.stmt,
+    type::Any=newinst.type,
+    info::CallInfo=newinst.info,
+    line::Union{Int32,Nothing}=newinst.line,
+    flag::Union{UInt32,Nothing}=newinst.flag)
+    return NewInstruction(stmt, type, info, line, flag)
+end
+function NewInstruction(inst::Instruction;
+    stmt::Any=inst[:stmt],
+    type::Any=inst[:type],
+    info::CallInfo=inst[:info],
+    line::Union{Int32,Nothing}=inst[:line],
+    flag::Union{UInt32,Nothing}=inst[:flag])
+    return NewInstruction(stmt, type, info, line, flag)
+end
+@specialize
+removable_if_unused(newinst::NewInstruction) = add_flag(newinst, IR_FLAGS_REMOVABLE)
+function add_flag(newinst::NewInstruction, newflag::UInt32)
+    flag = newinst.flag
+    if flag === nothing
+        flag = newflag
+    else
+        flag |= newflag
+    end
+    return NewInstruction(newinst; flag)
+end
+function sub_flag(newinst::NewInstruction, newflag::UInt32)
+    flag = newinst.flag
+    if flag === nothing
+        flag = IR_FLAG_NULL
+    else
+        flag &= ~newflag
+    end
+    return NewInstruction(newinst; flag)
+end
+
 struct IRCode
     stmts::InstructionStream
     argtypes::Vector{Any}
-    sptypes::Vector{Any}
+    sptypes::Vector{VarState}
     linetable::Vector{LineInfoNode}
     cfg::CFG
     new_nodes::NewNodeStream
-    meta::Vector{Any}
+    meta::Vector{Expr}
 
-    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Any}, sptypes::Vector{Any})
+    function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState})
         return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
         return new(stmts, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
     end
-    global copy
-    copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
+    global copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
         copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
+end
+
+"""
+    IRCode()
+
+Create an empty IRCode object with a single `return nothing` statement. This method is mostly intended
+for debugging and unit testing of IRCode APIs. The compiler itself should generally obtain an IRCode
+from the frontend or one of the caches.
+"""
+function IRCode()
+    ir = IRCode(InstructionStream(1), CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), LineInfoNode[], Any[], Expr[], VarState[])
+    ir[SSAValue(1)][:stmt] = ReturnNode(nothing)
+    ir[SSAValue(1)][:type] = Nothing
+    ir[SSAValue(1)][:flag] = 0x00
+    ir[SSAValue(1)][:line] = Int32(0)
+    return ir
 end
 
 function block_for_inst(ir::IRCode, inst::Int)
@@ -303,254 +404,262 @@ function block_for_inst(ir::IRCode, inst::Int)
     block_for_inst(ir.cfg, inst)
 end
 
-function getindex(x::IRCode, s::SSAValue)
-    if s.id <= length(x.stmts)
-        return x.stmts[s.id][:inst]
+function getindex(ir::IRCode, s::SSAValue)
+    nstmts = length(ir.stmts)
+    if s.id <= nstmts
+        return ir.stmts[s.id]
     else
-        return x.new_nodes.stmts[s.id - length(x.stmts)][:inst]
+        return ir.new_nodes.stmts[s.id - nstmts]
     end
 end
 
-function setindex!(x::IRCode, @nospecialize(repl), s::SSAValue)
+function setindex!(x::IRCode, repl::Union{Instruction, Nothing, AnySSAValue}, s::SSAValue)
     if s.id <= length(x.stmts)
-        x.stmts[s.id][:inst] = repl
+        x.stmts[s.id] = repl
     else
-        x.new_nodes.stmts[s.id - length(x.stmts)][:inst] = repl
+        x.new_nodes.stmts[s.id - length(x.stmts)] = repl
     end
     return x
 end
 
-# SSA values that need renaming
-struct OldSSAValue
-    id::Int
-end
-
-# SSA values that are in `new_new_nodes` of an `IncrementalCompact` and are to
-# be actually inserted next time (they become `new_nodes` next time)
-struct NewSSAValue
-    id::Int
-end
-
-const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
-
-mutable struct UseRef
+mutable struct UseRefIterator
     stmt::Any
-    op::Int
-    UseRef(@nospecialize(a)) = new(a, 0)
-    UseRef(@nospecialize(a), op::Int) = new(a, op)
-end
-struct UseRefIterator
-    use::Tuple{UseRef, Nothing}
     relevant::Bool
-    UseRefIterator(@nospecialize(a), relevant::Bool) = new((UseRef(a), nothing), relevant)
+    UseRefIterator(@nospecialize(a), relevant::Bool) = new(a, relevant)
 end
-getindex(it::UseRefIterator) = it.use[1].stmt
+getindex(it::UseRefIterator) = it.stmt
 
-# TODO: stack-allocation
-#struct UseRef
-#    urs::UseRefIterator
-#    use::Int
-#end
-
-struct OOBToken
+struct UseRef
+    urs::UseRefIterator
+    op::Int
+    UseRef(urs::UseRefIterator) = new(urs, 0)
+    UseRef(urs::UseRefIterator, op::Int) = new(urs, op)
 end
 
-struct UndefToken
-end
-const undef_token = UndefToken()
+struct OOBToken end; const OOB_TOKEN = OOBToken()
+struct UndefToken end; const UNDEF_TOKEN = UndefToken()
 
-
-function getindex(x::UseRef)
-    stmt = x.stmt
+@noinline function _useref_getindex(@nospecialize(stmt), op::Int)
     if isa(stmt, Expr) && stmt.head === :(=)
         rhs = stmt.args[2]
         if isa(rhs, Expr)
             if is_relevant_expr(rhs)
-                x.op > length(rhs.args) && return OOBToken()
-                return rhs.args[x.op]
+                op > length(rhs.args) && return OOB_TOKEN
+                return rhs.args[op]
             end
         end
-        x.op == 1 || return OOBToken()
+        op == 1 || return OOB_TOKEN
         return rhs
     elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
-        x.op > length(stmt.args) && return OOBToken()
-        return stmt.args[x.op]
+        op > length(stmt.args) && return OOB_TOKEN
+        return stmt.args[op]
     elseif isa(stmt, GotoIfNot)
-        x.op == 1 || return OOBToken()
+        op == 1 || return OOB_TOKEN
         return stmt.cond
     elseif isa(stmt, ReturnNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        op == 1 || return OOB_TOKEN
         return stmt.val
+    elseif isa(stmt, EnterNode)
+        isdefined(stmt, :scope) || return OOB_TOKEN
+        op == 1 || return OOB_TOKEN
+        return stmt.scope
     elseif isa(stmt, PiNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        op == 1 || return OOB_TOKEN
         return stmt.val
+    elseif isa(stmt, Union{AnySSAValue, GlobalRef})
+        op == 1 || return OOB_TOKEN
+        return stmt
     elseif isa(stmt, UpsilonNode)
-        isdefined(stmt, :val) || return OOBToken()
-        x.op == 1 || return OOBToken()
+        isdefined(stmt, :val) || return OOB_TOKEN
+        op == 1 || return OOB_TOKEN
         return stmt.val
     elseif isa(stmt, PhiNode)
-        x.op > length(stmt.values) && return OOBToken()
-        isassigned(stmt.values, x.op) || return UndefToken()
-        return stmt.values[x.op]
+        op > length(stmt.values) && return OOB_TOKEN
+        isassigned(stmt.values, op) || return UNDEF_TOKEN
+        return stmt.values[op]
     elseif isa(stmt, PhiCNode)
-        x.op > length(stmt.values) && return OOBToken()
-        isassigned(stmt.values, x.op) || return UndefToken()
-        return stmt.values[x.op]
+        op > length(stmt.values) && return OOB_TOKEN
+        isassigned(stmt.values, op) || return UNDEF_TOKEN
+        return stmt.values[op]
     else
-        return OOBToken()
+        return OOB_TOKEN
     end
 end
+@inline getindex(x::UseRef) = _useref_getindex(x.urs.stmt, x.op)
 
 function is_relevant_expr(e::Expr)
-    return e.head in (:call, :invoke, :new, :splatnew, :(=), :(&),
+    return e.head in (:call, :invoke, :invoke_modify,
+                      :new, :splatnew, :(=), :(&),
                       :gc_preserve_begin, :gc_preserve_end,
                       :foreigncall, :isdefined, :copyast,
-                      :undefcheck, :throw_undef_if_not,
+                      :throw_undef_if_not,
                       :cfunction, :method, :pop_exception,
+                      :leave,
                       :new_opaque_closure)
 end
 
-function setindex!(x::UseRef, @nospecialize(v))
-    stmt = x.stmt
+@noinline function _useref_setindex!(@nospecialize(stmt), op::Int, @nospecialize(v))
     if isa(stmt, Expr) && stmt.head === :(=)
         rhs = stmt.args[2]
         if isa(rhs, Expr)
             if is_relevant_expr(rhs)
-                x.op > length(rhs.args) && throw(BoundsError())
-                rhs.args[x.op] = v
-                return v
+                op > length(rhs.args) && throw(BoundsError())
+                rhs.args[op] = v
+                return stmt
             end
         end
-        x.op == 1 || throw(BoundsError())
+        op == 1 || throw(BoundsError())
         stmt.args[2] = v
     elseif isa(stmt, Expr) # @assert is_relevant_expr(stmt)
-        x.op > length(stmt.args) && throw(BoundsError())
-        stmt.args[x.op] = v
+        op > length(stmt.args) && throw(BoundsError())
+        stmt.args[op] = v
     elseif isa(stmt, GotoIfNot)
-        x.op == 1 || throw(BoundsError())
-        x.stmt = GotoIfNot(v, stmt.dest)
+        op == 1 || throw(BoundsError())
+        stmt = GotoIfNot(v, stmt.dest)
     elseif isa(stmt, ReturnNode)
-        x.op == 1 || throw(BoundsError())
-        x.stmt = typeof(stmt)(v)
+        op == 1 || throw(BoundsError())
+        stmt = ReturnNode(v)
+    elseif isa(stmt, EnterNode)
+        op == 1 || throw(BoundsError())
+        stmt = EnterNode(stmt.catch_dest, v)
+    elseif isa(stmt, Union{AnySSAValue, GlobalRef})
+        op == 1 || throw(BoundsError())
+        stmt = v
     elseif isa(stmt, UpsilonNode)
-        x.op == 1 || throw(BoundsError())
-        x.stmt = typeof(stmt)(v)
+        op == 1 || throw(BoundsError())
+        stmt = UpsilonNode(v)
     elseif isa(stmt, PiNode)
-        x.op == 1 || throw(BoundsError())
-        x.stmt = typeof(stmt)(v, stmt.typ)
+        op == 1 || throw(BoundsError())
+        stmt = PiNode(v, stmt.typ)
     elseif isa(stmt, PhiNode)
-        x.op > length(stmt.values) && throw(BoundsError())
-        isassigned(stmt.values, x.op) || throw(BoundsError())
-        stmt.values[x.op] = v
+        op > length(stmt.values) && throw(BoundsError())
+        isassigned(stmt.values, op) || throw(BoundsError())
+        stmt.values[op] = v
     elseif isa(stmt, PhiCNode)
-        x.op > length(stmt.values) && throw(BoundsError())
-        isassigned(stmt.values, x.op) || throw(BoundsError())
-        stmt.values[x.op] = v
+        op > length(stmt.values) && throw(BoundsError())
+        isassigned(stmt.values, op) || throw(BoundsError())
+        stmt.values[op] = v
     else
         throw(BoundsError())
     end
+    return stmt
+end
+
+@inline function setindex!(x::UseRef, @nospecialize(v))
+    x.urs.stmt = _useref_setindex!(x.urs.stmt, x.op, v)
     return x
 end
 
 function userefs(@nospecialize(x))
     relevant = (isa(x, Expr) && is_relevant_expr(x)) ||
-        isa(x, GotoIfNot) || isa(x, ReturnNode) ||
-        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode)
+        isa(x, GotoIfNot) || isa(x, ReturnNode) || isa(x, SSAValue) || isa(x, OldSSAValue) || isa(x, NewSSAValue) ||
+        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode)
     return UseRefIterator(x, relevant)
 end
 
-iterate(it::UseRefIterator) = (it.use[1].op = 0; iterate(it, nothing))
-@noinline function iterate(it::UseRefIterator, ::Nothing)
-    it.relevant || return nothing
-    use = it.use[1]
+@noinline function _advance(@nospecialize(stmt), op)
     while true
-        use.op += 1
-        y = use[]
-        y === OOBToken() && return nothing
-        y === UndefToken() || return it.use
+        op += 1
+        y = _useref_getindex(stmt, op)
+        y === OOB_TOKEN && return nothing
+        y === UNDEF_TOKEN || return op
     end
+end
+
+@inline function iterate(it::UseRefIterator, op::Int=0)
+    it.relevant || return nothing
+    op = _advance(it.stmt, op)
+    op === nothing && return nothing
+    return (UseRef(it, op), op)
 end
 
 # This function is used from the show code, which may have a different
 # `push!`/`used` type since it's in Base.
-function scan_ssa_use!(push!, used, @nospecialize(stmt))
-    if isa(stmt, SSAValue)
-        push!(used, stmt.id)
-    end
-    for useref in userefs(stmt)
-        val = useref[]
-        if isa(val, SSAValue)
-            push!(used, val.id)
-        end
-    end
-end
+scan_ssa_use!(@specialize(push!), used, @nospecialize(stmt)) = foreachssa(ssa::SSAValue -> push!(used, ssa.id), stmt)
 
 # Manually specialized copy of the above with push! === Compiler.push!
-function scan_ssa_use!(used::IdSet, @nospecialize(stmt))
-    if isa(stmt, SSAValue)
-        push!(used, stmt.id)
-    end
-    for useref in userefs(stmt)
-        val = useref[]
-        if isa(val, SSAValue)
-            push!(used, val.id)
-        end
-    end
-end
+scan_ssa_use!(used::IdSet, @nospecialize(stmt)) = foreachssa(ssa::SSAValue -> push!(used, ssa.id), stmt)
 
-function ssamap(f, @nospecialize(stmt))
-    urs = userefs(stmt)
-    for op in urs
-        val = op[]
-        if isa(val, SSAValue)
-            op[] = f(val)
+function insert_node!(ir::IRCode, pos::SSAValue, newinst::NewInstruction, attach_after::Bool=false)
+    posid = pos.id
+    if pos.id > length(ir.stmts)
+        if attach_after
+            info = ir.new_nodes.info[pos.id-length(ir.stmts)];
+            posid = info.pos
+            attach_after = info.attach_after
+        else
+            error("Cannot attach before a pending node.")
         end
     end
-    return urs[]
-end
-
-function foreachssa(f, @nospecialize(stmt))
-    for op in userefs(stmt)
-        val = op[]
-        if isa(val, SSAValue)
-            f(val)
-        end
-    end
-end
-
-function insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::Bool=false)
-    node = add!(ir.new_nodes, pos, attach_after)
-    node[:line] = something(inst.line, ir.stmts[pos][:line])
-    flag = inst.flag
-    if !inst.effect_free_computed
-        if stmt_effect_free(inst.stmt, inst.type, ir, ir.sptypes)
-            flag |= IR_FLAG_EFFECT_FREE
-        end
-    end
-    node[:inst], node[:type], node[:flag] = inst.stmt, inst.type, flag
+    node = add_inst!(ir.new_nodes, posid, attach_after)
+    newline = something(newinst.line, ir[pos][:line])
+    newflag = recompute_newinst_flag(newinst, ir)
+    node = inst_from_newinst!(node, newinst, newline, newflag)
     return SSAValue(length(ir.stmts) + node.idx)
 end
+insert_node!(ir::IRCode, pos::Int, newinst::NewInstruction, attach_after::Bool=false) =
+    insert_node!(ir, SSAValue(pos), newinst, attach_after)
 
-# For bootstrapping
-function my_sortperm(v)
-    p = Vector{Int}(undef, length(v))
-    for i = 1:length(v)
-        p[i] = i
+struct CFGTransformState
+    cfg_transforms_enabled::Bool
+    fold_constant_branches::Bool
+    result_bbs::Vector{BasicBlock}
+    bb_rename_pred::Vector{Int}
+    bb_rename_succ::Vector{Int}
+    domtree::Union{Nothing, DomTree}
+end
+
+# N.B.: Takes ownership of the CFG array
+function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bool=false)
+    if allow_cfg_transforms
+        bb_rename = Vector{Int}(undef, length(blocks))
+        cur_bb = 1
+        domtree = construct_domtree(blocks)
+        for i = 1:length(bb_rename)
+            if bb_unreachable(domtree, i)
+                bb_rename[i] = -1
+            else
+                bb_rename[i] = cur_bb
+                cur_bb += 1
+            end
+        end
+        for i = 1:length(bb_rename)
+            bb_rename[i] == -1 && continue
+            preds, succs = blocks[i].preds, blocks[i].succs
+            # Rename preds
+            for j = 1:length(preds)
+                if preds[j] != 0
+                    preds[j] = bb_rename[preds[j]]
+                end
+            end
+            # Dead blocks get removed from the predecessor list
+            filter!(x::Int->x≠-1, preds)
+            # Rename succs
+            for j = 1:length(succs)
+                succs[j] = bb_rename[succs[j]]
+            end
+        end
+        let blocks = blocks, bb_rename = bb_rename
+            result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
+        end
+        # TODO: This could be done by just renaming the domtree
+        domtree = construct_domtree(result_bbs)
+    else
+        bb_rename = Vector{Int}()
+        result_bbs = blocks
+        domtree = nothing
     end
-    sort!(p, Sort.DEFAULT_UNSTABLE, Order.Perm(Sort.Forward,v))
-    p
+    return CFGTransformState(allow_cfg_transforms, allow_cfg_transforms, result_bbs, bb_rename, bb_rename, domtree)
 end
 
 mutable struct IncrementalCompact
     ir::IRCode
     result::InstructionStream
-    result_bbs::Vector{BasicBlock}
 
+    cfg_transform::CFGTransformState
     ssa_rename::Vector{Any}
-    bb_rename_pred::Vector{Int}
-    bb_rename_succ::Vector{Int}
 
     used_ssas::Vector{Int}
     late_fixup::Vector{Int}
@@ -558,89 +667,55 @@ mutable struct IncrementalCompact
     new_nodes_idx::Int
     # This supports insertion while compacting
     new_new_nodes::NewNodeStream  # New nodes that were before the compaction point at insertion time
-    # TODO: Switch these two to a min-heap of some sort
+    new_new_used_ssas::Vector{Int}
     pending_nodes::NewNodeStream  # New nodes that were after the compaction point at insertion time
-    pending_perm::Vector{Int}
+    pending_perm::Vector{Int} # pending_nodes.info[pending_perm] is in min-heap order by pos
 
     # State
     idx::Int
     result_idx::Int
+    active_bb::Int
     active_result_bb::Int
     renamed_new_nodes::Bool
-    cfg_transforms_enabled::Bool
-    fold_constant_branches::Bool
 
-    function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
+    function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState)
         # Sort by position with attach after nodes after regular ones
-        perm = my_sortperm(Int[let new_node = code.new_nodes.info[i]
-            (new_node.pos * 2 + Int(new_node.attach_after))
-            end for i in 1:length(code.new_nodes)])
-        new_len = length(code.stmts) + length(code.new_nodes)
+        info = code.new_nodes.info
+        perm = sort!(collect(eachindex(info)); by=i::Int->(2info[i].pos+info[i].attach_after, i))
+        new_len = length(code.stmts) + length(info)
         result = InstructionStream(new_len)
         used_ssas = fill(0, new_len)
+        new_new_used_ssas = Vector{Int}()
         blocks = code.cfg.blocks
-        if allow_cfg_transforms
-            bb_rename = Vector{Int}(undef, length(blocks))
-            cur_bb = 1
-            domtree = construct_domtree(blocks)
-            for i = 1:length(bb_rename)
-                if bb_unreachable(domtree, i)
-                    bb_rename[i] = -1
-                else
-                    bb_rename[i] = cur_bb
-                    cur_bb += 1
-                end
-            end
-            for i = 1:length(bb_rename)
-                bb_rename[i] == -1 && continue
-                preds, succs = blocks[i].preds, blocks[i].succs
-                # Rename preds
-                for j = 1:length(preds)
-                    if preds[j] != 0
-                        preds[j] = bb_rename[preds[j]]
-                    end
-                end
-                # Dead blocks get removed from the predecessor list
-                filter!(x->x !== -1, preds)
-                # Rename succs
-                for j = 1:length(succs)
-                    succs[j] = bb_rename[succs[j]]
-                end
-            end
-            let blocks = blocks, bb_rename = bb_rename
-                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
-            end
-        else
-            bb_rename = Vector{Int}()
-            result_bbs = code.cfg.blocks
-        end
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         late_fixup = Vector{Int}()
         new_new_nodes = NewNodeStream()
         pending_nodes = NewNodeStream()
         pending_perm = Int[]
-        return new(code, result, result_bbs, ssa_rename, bb_rename, bb_rename, used_ssas, late_fixup, perm, 1,
-            new_new_nodes, pending_nodes, pending_perm,
-            1, 1, 1, false, allow_cfg_transforms, allow_cfg_transforms)
+        return new(code, result, cfg_transform, ssa_rename, used_ssas, late_fixup, perm, 1,
+            new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
+            1, 1, 1, 1, false)
     end
 
     # For inlining
     function IncrementalCompact(parent::IncrementalCompact, code::IRCode, result_offset)
-        perm = my_sortperm(Int[code.new_nodes.info[i].pos for i in 1:length(code.new_nodes)])
-        new_len = length(code.stmts) + length(code.new_nodes)
+        info = code.new_nodes.info
+        perm = sort!(collect(eachindex(info)); by=i::Int->(info[i].pos, i))
+        new_len = length(code.stmts) + length(info)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
-        used_ssas = fill(0, new_len)
-        late_fixup = Vector{Int}()
         bb_rename = Vector{Int}()
-        new_new_nodes = NewNodeStream()
         pending_nodes = NewNodeStream()
         pending_perm = Int[]
-        return new(code, parent.result,
-            parent.result_bbs, ssa_rename, bb_rename, bb_rename, parent.used_ssas,
-            late_fixup, perm, 1,
-            new_new_nodes, pending_nodes, pending_perm,
-            1, result_offset, parent.active_result_bb, false, false, false)
+        return new(code, parent.result, CFGTransformState(false, false, parent.cfg_transform.result_bbs, bb_rename, bb_rename, nothing),
+            ssa_rename, parent.used_ssas,
+            parent.late_fixup, perm, 1,
+            parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
+            1, result_offset, 1, parent.active_result_bb, false)
     end
+end
+
+function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
+    return IncrementalCompact(code, CFGTransformState!(code.cfg.blocks, allow_cfg_transforms))
 end
 
 struct TypesView{T}
@@ -648,74 +723,176 @@ struct TypesView{T}
 end
 types(ir::Union{IRCode, IncrementalCompact}) = TypesView(ir)
 
-function getindex(compact::IncrementalCompact, idx::Int)
-    if idx < compact.result_idx
-        return compact.result[idx][:inst]
-    else
-        return compact.ir.stmts[idx][:inst]
-    end
-end
-
 function getindex(compact::IncrementalCompact, ssa::SSAValue)
     @assert ssa.id < compact.result_idx
-    return compact.result[ssa.id][:inst]
+    return compact.result[ssa.id]
 end
 
 function getindex(compact::IncrementalCompact, ssa::OldSSAValue)
     id = ssa.id
-    if id <= length(compact.ir.stmts)
-        return compact.ir.stmts[id][:inst]
+    if id < compact.idx
+        new_idx = compact.ssa_rename[id]::Int
+        return compact.result[new_idx]
+    elseif id <= length(compact.ir.stmts)
+        return compact.ir.stmts[id]
     end
     id -= length(compact.ir.stmts)
     if id <= length(compact.ir.new_nodes)
-        return compact.ir.new_nodes.stmts[id][:inst]
+        return compact.ir.new_nodes.stmts[id]
     end
     id -= length(compact.ir.new_nodes)
-    return compact.pending_nodes.stmts[id][:inst]
+    return compact.pending_nodes.stmts[id]
 end
 
 function getindex(compact::IncrementalCompact, ssa::NewSSAValue)
-    return compact.new_new_nodes.stmts[ssa.id][:inst]
+    if ssa.id < 0
+        return compact.new_new_nodes.stmts[-ssa.id]
+    else
+        return compact[SSAValue(ssa.id)]
+    end
+end
+
+function block_for_inst(compact::IncrementalCompact, idx::SSAValue)
+    id = idx.id
+    if id < compact.result_idx # if ssa within result
+        return searchsortedfirst(compact.cfg_transform.result_bbs, BasicBlock(StmtRange(id, id)),
+            1, compact.active_result_bb, bb_ordering())-1
+    else
+        return block_for_inst(compact.ir.cfg, id)
+    end
+end
+
+function block_for_inst(compact::IncrementalCompact, idx::OldSSAValue)
+    id = idx.id
+    if id < compact.idx # if ssa within result
+        id = compact.ssa_rename[id]::Int
+        return block_for_inst(compact, SSAValue(id))
+    else
+        return block_for_inst(compact.ir.cfg, id)
+    end
+end
+
+function block_for_inst(compact::IncrementalCompact, idx::NewSSAValue)
+    if idx.id > 0
+        @assert idx.id < compact.result_idx
+        return block_for_inst(compact, SSAValue(idx.id))
+    else
+        return block_for_inst(compact, SSAValue(compact.new_new_nodes.info[-idx.id].pos))
+    end
+end
+
+function dominates_ssa(compact::IncrementalCompact, domtree::DomTree, x::AnySSAValue, y::AnySSAValue)
+    xb = block_for_inst(compact, x)
+    yb = block_for_inst(compact, y)
+    if xb == yb
+        if isa(compact[x][:stmt], PhiNode)
+            if isa(compact[y][:stmt], PhiNode)
+                # A node dominates another only if it dominates all uses of that note.
+                # Usually that is not a distinction. However, for phi nodes, the use
+                # occurs on the edge to the predecessor block. Thus, by definition, for
+                # any other PhiNode in the same BB there must be (at least) one edge
+                # that this phi node does not dominate.
+                return false
+            end
+        end
+        xinfo = yinfo = nothing
+        if isa(x, OldSSAValue)
+            x′ = compact.ssa_rename[x.id]::SSAValue
+        elseif isa(x, NewSSAValue)
+            if x.id > 0
+                x′ = SSAValue(x.id)
+            else
+                xinfo = compact.new_new_nodes.info[-x.id]
+                x′ = SSAValue(xinfo.pos)
+            end
+        else
+            x′ = x
+        end
+        if isa(y, OldSSAValue)
+            y′ = compact.ssa_rename[y.id]::SSAValue
+        elseif isa(y, NewSSAValue)
+            if y.id > 0
+                y′ = SSAValue(y.id)
+            else
+                yinfo = compact.new_new_nodes.info[-y.id]
+                y′ = SSAValue(yinfo.pos)
+            end
+        else
+            y′ = y
+        end
+        if x′.id == y′.id
+            if xinfo !== nothing && yinfo !== nothing
+                if xinfo.attach_after == yinfo.attach_after
+                    return x.id < y.id
+                end
+                return yinfo.attach_after
+            elseif xinfo !== nothing
+                return !xinfo.attach_after
+            elseif yinfo !== nothing
+                return yinfo.attach_after
+            end
+        end
+        return x′.id < y′.id
+    end
+    return dominates(domtree, xb, yb)
+end
+
+function _count_added_node!(compact::IncrementalCompact, @nospecialize(val))
+    if isa(val, SSAValue)
+        compact.used_ssas[val.id] += 1
+        return false
+    elseif isa(val, NewSSAValue)
+        @assert val.id < 0 # Newly added nodes should be canonicalized
+        compact.new_new_used_ssas[-val.id] += 1
+        return true
+    end
+    return false
 end
 
 function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
-    needs_late_fixup = isa(v, NewSSAValue)
-    if isa(v, SSAValue)
-        compact.used_ssas[v.id] += 1
-    else
-        for ops in userefs(v)
-            val = ops[]
-            if isa(val, SSAValue)
-                compact.used_ssas[val.id] += 1
-            elseif isa(val, NewSSAValue)
-                needs_late_fixup = true
-            end
-        end
+    needs_late_fixup = false
+    for ops in userefs(v)
+        needs_late_fixup |= _count_added_node!(compact, ops[])
     end
-    needs_late_fixup
+    return needs_late_fixup
 end
 
 function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
-    node = add!(compact.pending_nodes, pos, attach_after)
-    # TODO: switch this to `l = length(pending_nodes); splice!(pending_perm, searchsorted(pending_perm, l), l)`
-    push!(compact.pending_perm, length(compact.pending_nodes))
-    sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes.info[x].pos, Order.Forward))
+    node = add_inst!(compact.pending_nodes, pos, attach_after)
+    heappush!(compact.pending_perm, length(compact.pending_nodes), By(x::Int->compact.pending_nodes.info[x].pos))
     return node
 end
 
-function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction, attach_after::Bool=false)
-    @assert inst.effect_free_computed
+function inst_from_newinst!(node::Instruction, newinst::NewInstruction,
+    newline::Int32=newinst.line::Int32, newflag::UInt32=newinst.flag::UInt32)
+    node[:stmt] = newinst.stmt
+    node[:type] = newinst.type
+    node[:info] = newinst.info
+    node[:line] = newline
+    node[:flag] = newflag
+    return node
+end
+
+function recompute_newinst_flag(newinst::NewInstruction, src::Union{IRCode,IncrementalCompact})
+    flag = newinst.flag
+    flag !== nothing && return flag
+    return recompute_effects_flags(fallback_lattice, newinst.stmt, newinst.type, src)
+end
+
+function insert_node!(compact::IncrementalCompact, @nospecialize(before), newinst::NewInstruction, attach_after::Bool=false)
+    newflag = recompute_newinst_flag(newinst, compact)
     if isa(before, SSAValue)
         if before.id < compact.result_idx
-            count_added_node!(compact, inst.stmt)
-            line = something(inst.line, compact.result[before.id][:line])
-            node = add!(compact.new_new_nodes, before.id, attach_after)
-            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
-            return NewSSAValue(node.idx)
+            count_added_node!(compact, newinst.stmt)
+            newline = something(newinst.line, compact.result[before.id][:line])
+            node = add_inst!(compact.new_new_nodes, before.id, attach_after)
+            node = inst_from_newinst!(node, newinst, newline, newflag)
+            push!(compact.new_new_used_ssas, 0)
+            return NewSSAValue(-node.idx)
         else
-            line = something(inst.line, compact.ir.stmts[before.id][:line])
+            newline = something(newinst.line, compact.ir.stmts[before.id][:line])
             node = add_pending!(compact, before.id, attach_after)
-            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
+            node = inst_from_newinst!(node, newinst, newline, newflag)
             os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
             push!(compact.ssa_rename, os)
             push!(compact.used_ssas, 0)
@@ -723,56 +900,91 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
         end
     elseif isa(before, OldSSAValue)
         pos = before.id
-        if pos > length(compact.ir.stmts)
-            #@assert attach_after
-            info = compact.pending_nodes.info[pos - length(compact.ir.stmts) - length(compact.ir.new_nodes)]
-            pos, attach_after = info.pos, info.attach_after
+        if pos < compact.idx
+            renamed = compact.ssa_rename[pos]::AnySSAValue
+            count_added_node!(compact, newinst.stmt)
+            newline = something(newinst.line, compact.result[renamed.id][:line])
+            node = add_inst!(compact.new_new_nodes, renamed.id, attach_after)
+            node = inst_from_newinst!(node, newinst, newline, newflag)
+            push!(compact.new_new_used_ssas, 0)
+            return NewSSAValue(-node.idx)
+        else
+            if pos > length(compact.ir.stmts)
+                #@assert attach_after
+                info = compact.pending_nodes.info[pos - length(compact.ir.stmts) - length(compact.ir.new_nodes)]
+                pos, attach_after = info.pos, info.attach_after
+            end
+            newline = something(newinst.line, compact.ir.stmts[pos][:line])
+            node = add_pending!(compact, pos, attach_after)
+            node = inst_from_newinst!(node, newinst, newline, newflag)
+            os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
+            push!(compact.ssa_rename, os)
+            push!(compact.used_ssas, 0)
+            return os
         end
-        line = something(inst.line, compact.ir.stmts[pos][:line])
-        node = add_pending!(compact, pos, attach_after)
-        node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
-        os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
-        push!(compact.ssa_rename, os)
-        push!(compact.used_ssas, 0)
-        return os
     elseif isa(before, NewSSAValue)
-        before_entry = compact.new_new_nodes.info[before.id]
-        line = something(inst.line, compact.new_new_nodes.stmts[before.id][:line])
-        new_entry = add!(compact.new_new_nodes, before_entry.pos, attach_after)
-        new_entry[:inst], new_entry[:type], new_entry[:line], new_entry[:flag] = inst.stmt, inst.type, line, inst.flag
-        return NewSSAValue(new_entry.idx)
+        # As above, new_new_nodes must get counted. We don't visit them during our compact,
+        # so they're immediately considered reified.
+        count_added_node!(compact, newinst.stmt)
+        # TODO: This is incorrect and does not maintain ordering among the new nodes
+        before_entry = compact.new_new_nodes.info[-before.id]
+        newline = something(newinst.line, compact.new_new_nodes.stmts[-before.id][:line])
+        new_entry = add_inst!(compact.new_new_nodes, before_entry.pos, attach_after)
+        new_entry = inst_from_newinst!(new_entry, newinst, newline, newflag)
+        push!(compact.new_new_used_ssas, 0)
+        return NewSSAValue(-new_entry.idx)
     else
         error("Unsupported")
     end
 end
 
-function insert_node_here!(compact::IncrementalCompact, inst::NewInstruction, reverse_affinity::Bool=false)
-    @assert inst.line !== nothing
+function did_just_finish_bb(compact)
+    result_idx = compact.result_idx
+    result_bbs = compact.cfg_transform.result_bbs
+    (compact.active_result_bb == length(result_bbs) + 1) ||
+    result_idx == first(result_bbs[compact.active_result_bb].stmts)
+end
+
+function maybe_reopen_bb!(compact)
+    if did_just_finish_bb(compact)
+        compact.active_result_bb -= 1
+        return true
+    end
+    return false
+end
+
+function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction, reverse_affinity::Bool=false)
+    newline = newinst.line::Int32
     refinish = false
     result_idx = compact.result_idx
-    if reverse_affinity &&
-            ((compact.active_result_bb == length(compact.result_bbs) + 1) ||
-             result_idx == first(compact.result_bbs[compact.active_result_bb].stmts))
-        compact.active_result_bb -= 1
-        refinish = true
-    end
+    result_bbs = compact.cfg_transform.result_bbs
+    refinish = reverse_affinity && maybe_reopen_bb!(compact)
     if result_idx > length(compact.result)
         @assert result_idx == length(compact.result) + 1
         resize!(compact, result_idx)
     end
-    flag = inst.flag
-    if !inst.effect_free_computed && stmt_effect_free(inst.stmt, inst.type, compact, compact.ir.sptypes)
-        flag |= IR_FLAG_EFFECT_FREE
-    end
-    node = compact.result[result_idx]
-    node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, inst.line, flag
-    if count_added_node!(compact, inst.stmt)
-        push!(compact.late_fixup, result_idx)
-    end
+    newflag = recompute_newinst_flag(newinst, compact)
+    node = inst_from_newinst!(compact.result[result_idx], newinst, newline, newflag)
+    count_added_node!(compact, newinst.stmt) && push!(compact.late_fixup, result_idx)
     compact.result_idx = result_idx + 1
     inst = SSAValue(result_idx)
     refinish && finish_current_bb!(compact, 0)
     return inst
+end
+
+function delete_inst_here!(compact::IncrementalCompact)
+    # If we already closed this bb, reopen it for our modification
+    refinish = maybe_reopen_bb!(compact)
+
+    # Delete the statement, update refcounts etc
+    compact[SSAValue(compact.result_idx-1)] = nothing
+
+    # Pretend that we never compacted this statement in the first place
+    compact.result_idx -= 1
+
+    refinish && finish_current_bb!(compact, 0)
+
+    return nothing
 end
 
 function getindex(view::TypesView, v::OldSSAValue)
@@ -790,22 +1002,53 @@ function getindex(view::TypesView, v::OldSSAValue)
     return view.ir.pending_nodes.stmts[id][:type]
 end
 
-function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::SSAValue)
-    @assert idx.id < compact.result_idx
-    (compact.result[idx.id][:inst] === v) && return
+function kill_current_use!(compact::IncrementalCompact, @nospecialize(val))
+    if isa(val, SSAValue)
+        @assert compact.used_ssas[val.id] >= 1
+        compact.used_ssas[val.id] -= 1
+    elseif isa(val, NewSSAValue)
+        @assert val.id < 0
+        @assert compact.new_new_used_ssas[-val.id] >= 1
+        compact.new_new_used_ssas[-val.id] -= 1
+    end
+end
+
+function kill_current_uses!(compact::IncrementalCompact, @nospecialize(stmt))
+    for ops in userefs(stmt)
+        kill_current_use!(compact, ops[])
+    end
+end
+
+function setindex!(compact::IncrementalCompact, @nospecialize(v), ssa::Union{SSAValue, NewSSAValue})
+    (compact[ssa][:stmt] === v) && return compact
     # Kill count for current uses
-    for ops in userefs(compact.result[idx.id][:inst])
-        val = ops[]
-        if isa(val, SSAValue)
-            @assert compact.used_ssas[val.id] >= 1
-            compact.used_ssas[val.id] -= 1
-        end
-    end
-    compact.result[idx.id][:inst] = v
+    kill_current_uses!(compact, compact[ssa][:stmt])
+    compact[ssa][:stmt] = v
     # Add count for new use
-    if count_added_node!(compact, v)
-        push!(compact.late_fixup, idx.id)
+    count_added_node!(compact, v) && isa(ssa, SSAValue) && push!(compact.late_fixup, ssa.id)
+    return compact
+end
+
+function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::OldSSAValue)
+    id = idx.id
+    if id < compact.idx
+        new_idx = compact.ssa_rename[id]::Int
+        (compact.result[new_idx][:stmt] === v) && return compact
+        kill_current_uses!(compact, compact.result[new_idx][:stmt])
+        compact.result[new_idx][:stmt] = v
+        count_added_node!(compact, v) && push!(compact.late_fixup, new_idx)
+        return compact
+    elseif id <= length(compact.ir.stmts)  # ir.stmts, new_nodes, and pending_nodes uses aren't counted yet, so no need to adjust
+        compact.ir.stmts[id][:stmt] = v
+        return compact
     end
+    id -= length(compact.ir.stmts)
+    if id <= length(compact.ir.new_nodes)
+        compact.ir.new_nodes.stmts[id][:stmt] = v
+        return compact
+    end
+    id -= length(compact.ir.new_nodes)
+    compact.pending_nodes.stmts[id][:stmt] = v
     return compact
 end
 
@@ -813,9 +1056,72 @@ function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::Int)
     if idx < compact.result_idx
         compact[SSAValue(idx)] = v
     else
-        compact.ir.stmts[idx][:inst] = v
+        compact.ir.stmts[idx][:stmt] = v
     end
     return compact
+end
+
+__set_check_ssa_counts(onoff::Bool) = __check_ssa_counts__[] = onoff
+const __check_ssa_counts__ = fill(false)
+
+should_check_ssa_counts() = __check_ssa_counts__[]
+
+# specifically meant to be used with body1 = compact.result and body2 = compact.new_new_nodes, with nvals == length(compact.used_ssas)
+function find_ssavalue_uses1(compact::IncrementalCompact)
+    body1, body2 = compact.result.stmt, compact.new_new_nodes.stmts.stmt
+    nvals = length(compact.used_ssas)
+    nvalsnew = length(compact.new_new_used_ssas)
+    nbody1 = compact.result_idx
+    nbody2 = length(body2)
+
+    uses = zeros(Int, nvals)
+    usesnew = zeros(Int, nvalsnew)
+    function increment_uses(ssa::AnySSAValue)
+        if isa(ssa, NewSSAValue)
+            usesnew[-ssa.id] += 1
+        elseif isa(ssa, SSAValue)
+            uses[ssa.id] += 1
+        end
+    end
+
+    for line in 1:(nbody1 + nbody2)
+        # index into the right body
+        if line <= nbody1
+            isassigned(body1, line) || continue
+            e = body1[line]
+        else
+            line -= nbody1
+            isassigned(body2, line) || continue
+            e = body2[line]
+        end
+
+        foreach_anyssa(increment_uses, e)
+    end
+
+    return (uses, usesnew)
+end
+
+function _oracle_check(compact::IncrementalCompact)
+    (observed_used_ssas, observed_used_newssas) = find_ssavalue_uses1(compact)
+    for i = 1:length(observed_used_ssas)
+        if observed_used_ssas[i] != compact.used_ssas[i]
+            return (observed_used_ssas, observed_used_newssas, SSAValue(i))
+        end
+    end
+    for i = 1:length(observed_used_newssas)
+        if observed_used_newssas[i] != compact.new_new_used_ssas[i]
+            return (observed_used_ssas, observed_used_newssas, NewSSAValue(i))
+        end
+    end
+    return (nothing, nothing, 0)
+end
+
+function oracle_check(compact::IncrementalCompact)
+    (maybe_oracle_used_ssas, observed_used_newssas, oracle_error_ssa) = _oracle_check(compact)
+    if maybe_oracle_used_ssas !== nothing
+        @eval Main (compact = $compact; oracle_used_ssas = $maybe_oracle_used_ssas; observed_used_newssas = $observed_used_newssas; oracle_error_ssa = $(QuoteNode(oracle_error_ssa)))
+        error("Oracle check failed, inspect Main.{compact, oracle_used_ssas, observed_used_newssas, oracle_error_ssa}")
+    end
 end
 
 getindex(view::TypesView, idx::SSAValue) = getindex(view, idx.id)
@@ -839,40 +1145,53 @@ function getindex(view::TypesView, idx::Int)
 end
 
 function getindex(view::TypesView, idx::NewSSAValue)
-    if isa(view.ir, IncrementalCompact)
-        return view.ir.new_new_nodes.stmts[idx.id][:type]
-    else
-        return view.ir.new_nodes.stmts[idx.id][:type]
-    end
+    return view.ir[idx][:type]
 end
 
+# N.B.: Don't make this <: Function to avoid ::Function deopt
+struct Refiner
+    result_flags::Vector{UInt32}
+    result_idx::Int
+end
+(this::Refiner)() = (this.result_flags[this.result_idx] |= IR_FLAG_REFINED; nothing)
+
 function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int},
-                                processed_idx::Int, result_idx::Int,
+                                already_inserted, result_idx::Int,
                                 ssa_rename::Vector{Any}, used_ssas::Vector{Int},
-                                do_rename_ssa::Bool)
+                                new_new_used_ssas::Vector{Int},
+                                do_rename_ssa::Bool,
+                                mark_refined!::Union{Refiner, Nothing})
     values = Vector{Any}(undef, length(old_values))
     for i = 1:length(old_values)
         isassigned(old_values, i) || continue
         val = old_values[i]
         if isa(val, SSAValue)
             if do_rename_ssa
-                if val.id > processed_idx
+                if !already_inserted(i, OldSSAValue(val.id))
                     push!(late_fixup, result_idx)
                     val = OldSSAValue(val.id)
                 else
-                    val = renumber_ssa2(val, ssa_rename, used_ssas, do_rename_ssa)
+                    val = renumber_ssa2(val, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
                 end
             else
                 used_ssas[val.id] += 1
             end
         elseif isa(val, OldSSAValue)
-            if val.id > processed_idx
+            if !already_inserted(i, val)
                 push!(late_fixup, result_idx)
             else
                 # Always renumber these. do_rename_ssa applies only to actual SSAValues
-                val = renumber_ssa2(SSAValue(val.id), ssa_rename, used_ssas, true)
+                val = renumber_ssa2(SSAValue(val.id), ssa_rename, used_ssas, new_new_used_ssas, true, mark_refined!)
             end
         elseif isa(val, NewSSAValue)
+            if val.id < 0
+                new_new_used_ssas[-val.id] += 1
+            else
+                @assert do_rename_ssa
+                val = SSAValue(val.id)
+            end
+        end
+        if isa(val, NewSSAValue)
             push!(late_fixup, result_idx)
         end
         values[i] = val
@@ -880,31 +1199,48 @@ function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int}
     return values
 end
 
-function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{Int}, do_rename_ssa::Bool)
+function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{Int},
+        new_new_used_ssas::Vector{Int}, do_rename_ssa::Bool, mark_refined!::Union{Refiner, Nothing})
     id = val.id
-    if id > length(ssanums)
-        return val
-    end
     if do_rename_ssa
+        if id > length(ssanums)
+            return val
+        end
         val = ssanums[id]
     end
+    if isa(val, Refined)
+        val = val.val
+        mark_refined! !== nothing && mark_refined!()
+    end
     if isa(val, SSAValue)
-        if used_ssas !== nothing
-            used_ssas[val.id] += 1
-        end
+        used_ssas[val.id] += 1
+    elseif isa(val, NewSSAValue)
+        @assert val.id < 0
+        new_new_used_ssas[-val.id] += 1
     end
     return val
 end
 
-function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssas::Vector{Int}, late_fixup::Vector{Int}, result_idx::Int, do_rename_ssa::Bool)
+function renumber_ssa2(val::NewSSAValue, ssanums::Vector{Any}, used_ssas::Vector{Int},
+        new_new_used_ssas::Vector{Int}, do_rename_ssa::Bool, mark_refined!::Union{Refiner, Nothing})
+    if val.id < 0
+        new_new_used_ssas[-val.id] += 1
+        return val
+    else
+        used_ssas[val.id] += 1
+        return SSAValue(val.id)
+    end
+end
+
+function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssas::Vector{Int}, new_new_used_ssas::Vector{Int}, late_fixup::Vector{Int}, result_idx::Int, do_rename_ssa::Bool, mark_refined!::Union{Refiner, Nothing})
     urs = userefs(stmt)
     for op in urs
         val = op[]
         if isa(val, OldSSAValue) || isa(val, NewSSAValue)
             push!(late_fixup, result_idx)
         end
-        if isa(val, SSAValue)
-            val = renumber_ssa2(val, ssanums, used_ssas, do_rename_ssa)
+        if isa(val, Union{SSAValue, NewSSAValue})
+            val = renumber_ssa2(val, ssanums, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
         end
         if isa(val, OldSSAValue) || isa(val, NewSSAValue)
             push!(late_fixup, result_idx)
@@ -915,51 +1251,71 @@ function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssas::Ve
 end
 
 # Used in inlining before we start compacting - Only works at the CFG level
-function kill_edge!(bbs::Vector{BasicBlock}, from::Int, to::Int)
+function kill_edge!(bbs::Vector{BasicBlock}, from::Int, to::Int, callback=nothing)
     preds, succs = bbs[to].preds, bbs[from].succs
-    deleteat!(preds, findfirst(x->x === from, preds)::Int)
-    deleteat!(succs, findfirst(x->x === to, succs)::Int)
+    deleteat!(preds, findfirst(x::Int->x==from, preds)::Int)
+    deleteat!(succs, findfirst(x::Int->x==to, succs)::Int)
     if length(preds) == 0
         for succ in copy(bbs[to].succs)
-            kill_edge!(bbs, to, succ)
+            kill_edge!(bbs, to, succ, callback)
         end
     end
+    if callback !== nothing
+        callback(from, to)
+    end
+end
+
+function kill_edge!(ir::IRCode, from::Int, to::Int, callback=nothing)
+    kill_edge!(ir.cfg.blocks, from, to, callback)
 end
 
 # N.B.: from and to are non-renamed indices
 function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::Int)
-    # Note: We recursively kill as many edges as are obviously dead. However, this
-    # may leave dead loops in the IR. We kill these later in a CFG cleanup pass (or
-    # worstcase during codegen).
-    preds = compact.result_bbs[compact.bb_rename_succ[to]].preds
-    succs = compact.result_bbs[compact.bb_rename_pred[from]].succs
-    deleteat!(preds, findfirst(x->x === compact.bb_rename_pred[from], preds)::Int)
-    deleteat!(succs, findfirst(x->x === compact.bb_rename_succ[to], succs)::Int)
+    # Note: We recursively kill as many edges as are obviously dead.
+    (; bb_rename_pred, bb_rename_succ, result_bbs, domtree) = compact.cfg_transform
+    preds = result_bbs[bb_rename_succ[to]].preds
+    succs = result_bbs[bb_rename_pred[from]].succs
+    deleteat!(preds, findfirst(x::Int->x==bb_rename_pred[from], preds)::Int)
+    deleteat!(succs, findfirst(x::Int->x==bb_rename_succ[to], succs)::Int)
+    if domtree !== nothing
+        domtree_delete_edge!(domtree, result_bbs, bb_rename_pred[from], bb_rename_succ[to])
+    end
     # Check if the block is now dead
-    if length(preds) == 0
-        for succ in copy(compact.result_bbs[compact.bb_rename_succ[to]].succs)
-            kill_edge!(compact, active_bb, to, findfirst(x->x === succ, compact.bb_rename_pred)::Int)
+    if length(preds) == 0 || (domtree !== nothing && bb_unreachable(domtree, bb_rename_succ[to]))
+        to_succs = result_bbs[bb_rename_succ[to]].succs
+        for succ in copy(to_succs)
+            new_succ = findfirst(x::Int->x==succ, bb_rename_pred)
+            new_succ === nothing && continue
+            kill_edge!(compact, active_bb, to, new_succ)
         end
+        empty!(preds)
+        empty!(to_succs)
         if to < active_bb
             # Kill all statements in the block
-            stmts = compact.result_bbs[compact.bb_rename_succ[to]].stmts
+            stmts = result_bbs[bb_rename_succ[to]].stmts
             for stmt in stmts
-                compact.result[stmt][:inst] = nothing
+                compact.result[stmt][:stmt] = nothing
             end
-            compact.result[last(stmts)][:inst] = ReturnNode()
+            compact.result[last(stmts)][:stmt] = ReturnNode()
+        else
+            # Tell compaction to not schedule this block. A value of -2 here
+            # indicates that the block is not to be scheduled, but there should
+            # still be an (unreachable) BB inserted into the final IR to avoid
+            # disturbing the BB numbering.
+            bb_rename_succ[to] = -2
         end
     else
         # Remove this edge from all phi nodes in `to` block
         # NOTE: It is possible for `to` to contain only `nothing` statements,
         #       so we must be careful to stop at its last statement
         if to < active_bb
-            stmts = compact.result_bbs[compact.bb_rename_succ[to]].stmts
+            stmts = result_bbs[bb_rename_succ[to]].stmts
             idx = first(stmts)
             while idx <= last(stmts)
-                stmt = compact.result[idx][:inst]
+                stmt = compact.result[idx][:stmt]
                 stmt === nothing && continue
                 isa(stmt, PhiNode) || break
-                i = findfirst(x-> x == compact.bb_rename_pred[from], stmt.edges)
+                i = findfirst(x::Int32->x==bb_rename_pred[from], stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
                     deleteat!(stmt.values, i)
@@ -969,9 +1325,9 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
         else
             stmts = compact.ir.cfg.blocks[to].stmts
             for stmt in CompactPeekIterator(compact, first(stmts), last(stmts))
-                stmt === nothing && continue
-                isa(stmt, PhiNode) || break
-                i = findfirst(x-> x == from, stmt.edges)
+                is_valid_phiblock_stmt(stmt) || break
+                isa(stmt, PhiNode) || continue
+                i = findfirst(x::Int32->x==from, stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
                     deleteat!(stmt.values, i)
@@ -982,56 +1338,128 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
     nothing
 end
 
+struct Refined
+    val::Any
+    Refined(@nospecialize(val)) = new(val)
+end
+
 function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instruction, idx::Int, processed_idx::Int, active_bb::Int, do_rename_ssa::Bool)
-    stmt = inst[:inst]
-    result = compact.result
-    ssa_rename = compact.ssa_rename
-    late_fixup = compact.late_fixup
-    used_ssas = compact.used_ssas
-    ssa_rename[idx] = SSAValue(result_idx)
+    stmt = inst[:stmt]
+    (; result, ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
+    (; cfg_transforms_enabled, fold_constant_branches, bb_rename_succ, bb_rename_pred, result_bbs) = compact.cfg_transform
+    mark_refined! = Refiner(result.flag, result_idx)
+    already_inserted_phi_arg = already_inserted_ssa(compact, processed_idx)
     if stmt === nothing
         ssa_rename[idx] = stmt
     elseif isa(stmt, OldSSAValue)
         ssa_rename[idx] = ssa_rename[stmt.id]
-    elseif isa(stmt, GotoNode) && compact.cfg_transforms_enabled
-        result[result_idx][:inst] = GotoNode(compact.bb_rename_succ[stmt.label])
+    elseif isa(stmt, GotoNode) && cfg_transforms_enabled
+        label = bb_rename_succ[stmt.label]
+        @assert label > 0
+        ssa_rename[idx] = SSAValue(result_idx)
+        result[result_idx][:stmt] = GotoNode(label)
         result_idx += 1
-    elseif isa(stmt, GlobalRef) || isa(stmt, GotoNode)
-        result[result_idx][:inst] = stmt
+    elseif isa(stmt, GlobalRef)
+        total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE
+        flag = result[result_idx][:flag]
+        if has_flag(flag, total_flags)
+            ssa_rename[idx] = stmt
+        else
+            ssa_rename[idx] = SSAValue(result_idx)
+            result[result_idx][:stmt] = stmt
+            result_idx += 1
+        end
+    elseif isa(stmt, GotoNode)
+        ssa_rename[idx] = SSAValue(result_idx)
+        result[result_idx][:stmt] = stmt
         result_idx += 1
-    elseif isa(stmt, GotoIfNot) && compact.cfg_transforms_enabled
-        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::GotoIfNot
-        result[result_idx][:inst] = stmt
+    elseif isa(stmt, GotoIfNot) && cfg_transforms_enabled
+        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::GotoIfNot
+        result[result_idx][:stmt] = stmt
         cond = stmt.cond
-        if isa(cond, Bool) && compact.fold_constant_branches
+        if fold_constant_branches
+            if !isa(cond, Bool)
+                condT = widenconditional(argextype(cond, compact))
+                isa(condT, Const) || @goto bail
+                kill_current_use!(compact, cond)
+                cond = condT.val
+                isa(cond, Bool) || @goto bail
+            end
             if cond
-                result[result_idx][:inst] = nothing
+                ssa_rename[idx] = nothing
+                result[result_idx][:stmt] = nothing
                 kill_edge!(compact, active_bb, active_bb, stmt.dest)
                 # Don't increment result_idx => Drop this statement
             else
-                result[result_idx][:inst] = GotoNode(compact.bb_rename_succ[stmt.dest])
+                label = bb_rename_succ[stmt.dest]
+                @assert label > 0
+                ssa_rename[idx] = SSAValue(result_idx)
+                result[result_idx][:stmt] = GotoNode(label)
                 kill_edge!(compact, active_bb, active_bb, active_bb+1)
                 result_idx += 1
             end
         else
-            result[result_idx][:inst] = GotoIfNot(cond, compact.bb_rename_succ[stmt.dest])
+            @label bail
+            label = bb_rename_succ[stmt.dest]
+            @assert label > 0
+            ssa_rename[idx] = SSAValue(result_idx)
+            result[result_idx][:stmt] = GotoIfNot(cond, label)
             result_idx += 1
         end
-    elseif isa(stmt, Expr)
-        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::Expr
-        if compact.cfg_transforms_enabled && isexpr(stmt, :enter)
-            stmt.args[1] = compact.bb_rename_succ[stmt.args[1]::Int]
+    elseif cfg_transforms_enabled && isa(stmt, EnterNode)
+        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::EnterNode
+        if stmt.catch_dest != 0
+            label = bb_rename_succ[stmt.catch_dest]
+            @assert label > 0
+            result[result_idx][:stmt] = EnterNode(stmt, label)
+        else
+            result[result_idx][:stmt] = stmt
         end
-        result[result_idx][:inst] = stmt
+        ssa_rename[idx] = SSAValue(result_idx)
+        result_idx += 1
+    elseif isa(stmt, Expr)
+        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::Expr
+        if isexpr(stmt, :throw_undef_if_not)
+            cond = stmt.args[2]
+            if isa(cond, Bool) && cond === true
+                # cond was folded to true - this statement
+                # is dead.
+                ssa_rename[idx] = nothing
+                return result_idx
+            end
+        elseif isexpr(stmt, :leave)
+            let i = 1
+                while i <= length(stmt.args)
+                    if stmt.args[i] === nothing
+                        deleteat!(stmt.args, i)
+                    else
+                        i += 1
+                    end
+                end
+            end
+            if isempty(stmt.args)
+                # This :leave is dead
+                ssa_rename[idx] = nothing
+                return result_idx
+            end
+        end
+        typ = inst[:type]
+        if isa(typ, Const) && is_inlineable_constant(typ.val)
+            ssa_rename[idx] = quoted(typ.val)
+        else
+            ssa_rename[idx] = SSAValue(result_idx)
+        end
+        result[result_idx][:stmt] = stmt
         result_idx += 1
     elseif isa(stmt, PiNode)
         # As an optimization, we eliminate any trivial pinodes. For performance, we use ===
         # type equality. We may want to consider using == in either a separate pass or if
         # performance turns out ok
-        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)::PiNode
+        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::PiNode
         pi_val = stmt.val
         if isa(pi_val, SSAValue)
-            if stmt.typ === compact.result[pi_val.id][:type]
+            if stmt.typ === result[pi_val.id][:type]
+                used_ssas[pi_val.id] -= 1
                 ssa_rename[idx] = pi_val
                 return result_idx
             end
@@ -1041,21 +1469,29 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 return result_idx
             end
         elseif !isa(pi_val, AnySSAValue) && !isa(pi_val, GlobalRef)
-            valtyp = isa(pi_val, QuoteNode) ? typeof(pi_val.value) : typeof(pi_val)
-            if valtyp === stmt.typ
+            pi_val′ = isa(pi_val, QuoteNode) ? pi_val.value : pi_val
+            stmttyp = stmt.typ
+            if isa(stmttyp, Const) ? pi_val′ === stmttyp.val : typeof(pi_val′) === stmttyp
                 ssa_rename[idx] = pi_val
                 return result_idx
             end
         end
-        result[result_idx][:inst] = stmt
+        ssa_rename[idx] = SSAValue(result_idx)
+        result[result_idx][:stmt] = stmt
         result_idx += 1
-    elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode) || isa(stmt, GotoIfNot)
-        result[result_idx][:inst] = renumber_ssa2!(stmt, ssa_rename, used_ssas, late_fixup, result_idx, do_rename_ssa)
+    elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode) || isa(stmt, GotoIfNot) || isa(stmt, EnterNode)
+        ssa_rename[idx] = SSAValue(result_idx)
+        result[result_idx][:stmt] = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)
         result_idx += 1
     elseif isa(stmt, PhiNode)
-        if compact.cfg_transforms_enabled
+        # N.B.: For PhiNodes, this needs to be at the top, since PhiNodes
+        # can self-reference.
+        ssa_rename[idx] = SSAValue(result_idx)
+        if cfg_transforms_enabled
             # Rename phi node edges
-            map!(i -> compact.bb_rename_pred[i], stmt.edges, stmt.edges)
+            let bb_rename_pred=bb_rename_pred
+                map!(i::Int32->i == 0 ? 0 : bb_rename_pred[i], stmt.edges, stmt.edges)
+            end
 
             # Remove edges and values associated with dead blocks. Entries in
             # `values` can be undefined when the phi node refers to something
@@ -1068,11 +1504,12 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             # not a value we can copy), we copy only the edges and (defined)
             # values we want to keep to new arrays initialized with undefined
             # elements.
+
             edges = Vector{Int32}(undef, length(stmt.edges))
             values = Vector{Any}(undef, length(stmt.values))
             new_index = 1
             for old_index in 1:length(stmt.edges)
-                if stmt.edges[old_index] != -1
+                if stmt.edges[old_index] > 0
                     edges[new_index] = stmt.edges[old_index]
                     if isassigned(stmt.values, old_index)
                         values[new_index] = stmt.values[old_index]
@@ -1087,42 +1524,69 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             values = stmt.values
         end
 
-        values = process_phinode_values(values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa)
+        values = process_phinode_values(values, late_fixup, already_inserted_phi_arg, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
         # Don't remove the phi node if it is before the definition of its value
         # because doing so can create forward references. This should only
         # happen with dead loops, but can cause problems when optimization
         # passes look at all code, dead or not. This check should be
         # unnecessary when DCE can remove those dead loops entirely, so this is
         # just to be safe.
-        before_def = isassigned(values, 1) && isa(values[1], OldSSAValue) &&
-            idx < values[1].id
+        before_def = isassigned(values, 1) && (v = values[1]; isa(v, OldSSAValue)) && idx < v.id
         if length(edges) == 1 && isassigned(values, 1) && !before_def &&
-                length(compact.cfg_transforms_enabled ?
-                    compact.result_bbs[compact.bb_rename_succ[active_bb]].preds :
+                length(cfg_transforms_enabled ?
+                    result_bbs[bb_rename_succ[active_bb]].preds :
                     compact.ir.cfg.blocks[active_bb].preds) == 1
             # There's only one predecessor left - just replace it
-            ssa_rename[idx] = values[1]
+            v = values[1]
+            @assert !isa(v, NewSSAValue)
+            if isa(v, SSAValue)
+                used_ssas[v.id] -= 1
+            end
+            ssa_rename[idx] = v
         else
-            result[result_idx][:inst] = PhiNode(edges, values)
+            result[result_idx][:stmt] = PhiNode(edges, values)
             result_idx += 1
         end
     elseif isa(stmt, PhiCNode)
-        result[result_idx][:inst] = PhiCNode(process_phinode_values(stmt.values, late_fixup, processed_idx, result_idx, ssa_rename, used_ssas, do_rename_ssa))
-        result_idx += 1
-    elseif isa(stmt, SSAValue)
-        # identity assign, replace uses of this ssa value with its result
-        if do_rename_ssa
-            stmt = ssa_rename[stmt.id]
+        ssa_rename[idx] = SSAValue(result_idx)
+        values = stmt.values
+        if cfg_transforms_enabled
+            # Filter arguments that come from dead blocks
+            values = Any[]
+            for value in stmt.values
+                if isa(value, SSAValue)
+                    blk = block_for_inst(compact.ir.cfg, value.id)
+                    if bb_rename_pred[blk] < 0
+                        continue
+                    end
+                end
+                push!(values, value)
+            end
         end
-        ssa_rename[idx] = stmt
+        result[result_idx][:stmt] = PhiCNode(process_phinode_values(values, late_fixup, already_inserted_phi_arg, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
+        result_idx += 1
     else
-        # Constant assign, replace uses of this ssa value with its result
+        if isa(stmt, SSAValue)
+            # identity assign, replace uses of this ssa value with its result
+            if do_rename_ssa
+                stmt = ssa_rename[stmt.id]
+            end
+        elseif isa(stmt, NewSSAValue)
+            stmt = SSAValue(stmt.id)
+        else
+            # Constant assign, replace uses of this ssa value with its result
+        end
+        if has_flag(inst, IR_FLAG_REFINED) && !isa(stmt, Refined)
+            # If we're compacting away an instruction that was marked as refined,
+            # leave a marker in the ssa_rename, so we can taint any users.
+            stmt = Refined(stmt)
+        end
         ssa_rename[idx] = stmt
     end
     return result_idx
 end
 
-function resize!(compact::IncrementalCompact, nnewnodes)
+function resize!(compact::IncrementalCompact, nnewnodes::Int)
     old_length = length(compact.result)
     resize!(compact.result, nnewnodes)
     resize!(compact.used_ssas, nnewnodes)
@@ -1132,45 +1596,57 @@ function resize!(compact::IncrementalCompact, nnewnodes)
     return compact
 end
 
-function finish_current_bb!(compact::IncrementalCompact, active_bb, old_result_idx=compact.result_idx, unreachable=false)
-    if compact.active_result_bb > length(compact.result_bbs)
+function finish_current_bb!(compact::IncrementalCompact, active_bb::Int,
+                            old_result_idx::Int=compact.result_idx, unreachable::Bool=false)
+    (;result_bbs, cfg_transforms_enabled, bb_rename_succ) = compact.cfg_transform
+    if compact.active_result_bb > length(result_bbs)
         #@assert compact.bb_rename[active_bb] == -1
         return true
     end
-    bb = compact.result_bbs[compact.active_result_bb]
+    bb = result_bbs[compact.active_result_bb]
     # If this was the last statement in the BB and we decided to skip it, insert a
     # dummy `nothing` node, to prevent changing the structure of the CFG
     skipped = false
-    if !compact.cfg_transforms_enabled || active_bb == 0 || active_bb > length(compact.bb_rename_succ) || compact.bb_rename_succ[active_bb] != -1
+    if !cfg_transforms_enabled || active_bb == 0 || active_bb > length(bb_rename_succ) || bb_rename_succ[active_bb] != -1
         if compact.result_idx == first(bb.stmts)
             length(compact.result) < old_result_idx && resize!(compact, old_result_idx)
             node = compact.result[old_result_idx]
             if unreachable
-                node[:inst], node[:type], node[:line] = ReturnNode(), Union{}, 0
+                node[:stmt], node[:type], node[:line] = ReturnNode(), Union{}, 0
             else
-                node[:inst], node[:type], node[:line] = nothing, Nothing, 0
+                node[:stmt], node[:type], node[:line], node[:flag] = nothing, Nothing, 0, IR_FLAGS_EFFECTS
             end
             compact.result_idx = old_result_idx + 1
-        elseif compact.cfg_transforms_enabled && compact.result_idx - 1 == first(bb.stmts)
+        elseif cfg_transforms_enabled && compact.result_idx - 1 == first(bb.stmts)
             # Optimization: If this BB consists of only a branch, eliminate this bb
         end
-        compact.result_bbs[compact.active_result_bb] = BasicBlock(bb, StmtRange(first(bb.stmts), compact.result_idx-1))
+        result_bbs[compact.active_result_bb] = BasicBlock(bb, StmtRange(first(bb.stmts), compact.result_idx-1))
         compact.active_result_bb += 1
     else
         skipped = true
     end
-    if compact.active_result_bb <= length(compact.result_bbs)
-        new_bb = compact.result_bbs[compact.active_result_bb]
-        compact.result_bbs[compact.active_result_bb] = BasicBlock(new_bb,
+    if compact.active_result_bb <= length(result_bbs)
+        new_bb = result_bbs[compact.active_result_bb]
+        result_bbs[compact.active_result_bb] = BasicBlock(new_bb,
             StmtRange(compact.result_idx, last(new_bb.stmts)))
     end
     return skipped
 end
 
-function attach_after_stmt_after(compact::IncrementalCompact, idx::Int)
-    compact.new_nodes_idx > length(compact.perm) && return false
-    entry = compact.ir.new_nodes.info[compact.perm[compact.new_nodes_idx]]
-    return entry.pos == idx && entry.attach_after
+"""
+    stmts_awaiting_insertion(compact::IncrementalCompact, idx::Int)
+
+Returns true if there are new/pending instructions enqueued for insertion into
+`compact` on any instruction in the range `1:idx`. Otherwise, returns false.
+"""
+function stmts_awaiting_insertion(compact::IncrementalCompact, idx::Int)
+
+    new_node_waiting = compact.new_nodes_idx <= length(compact.perm) &&
+        compact.ir.new_nodes.info[compact.perm[compact.new_nodes_idx]].pos <= idx
+    pending_node_waiting = !isempty(compact.pending_perm) &&
+        compact.pending_nodes.info[compact.pending_perm[1]].pos <= idx
+
+    return new_node_waiting || pending_node_waiting
 end
 
 function process_newnode!(compact::IncrementalCompact, new_idx::Int, new_node_entry::Instruction, new_node_info::NewNodeInfo, idx::Int, active_bb::Int, do_rename_ssa::Bool)
@@ -1182,27 +1658,38 @@ function process_newnode!(compact::IncrementalCompact, new_idx::Int, new_node_en
     compact.result_idx = result_idx
     # If this instruction has reverse affinity and we were at the end of a basic block,
     # finish it now.
-    if new_node_info.attach_after && idx == last(bb.stmts)+1 && !attach_after_stmt_after(compact, idx-1)
+    if new_node_info.attach_after && idx == last(bb.stmts)+1 && !stmts_awaiting_insertion(compact, idx-1)
         active_bb += 1
         finish_current_bb!(compact, active_bb, old_result_idx)
     end
-    (old_result_idx == result_idx) && return iterate(compact, (idx, active_bb))
-    return Pair{Pair{Int, Int}, Any}(
-        Pair{Int,Int}(new_idx,old_result_idx),
-        compact.result[old_result_idx][:inst]), (idx, active_bb)
+    return (old_result_idx, result_idx, active_bb)
 end
 
 struct CompactPeekIterator
     compact::IncrementalCompact
     start_idx::Int
     end_idx::Int
+    include_stmts_before_start::Bool
 end
+CompactPeekIterator(compact::IncrementalCompact, start_idx::Int, end_idx::Int) =
+    CompactPeekIterator(compact, start_idx, end_idx, false)
+
 
 function CompactPeekIterator(compact::IncrementalCompact, start_idx::Int)
     return CompactPeekIterator(compact, start_idx, 0)
 end
 
-entry_at_idx(entry::NewNodeInfo, idx::Int) = entry.attach_after ? entry.pos == idx - 1 : entry.pos == idx
+function entry_at_idx(entry::NewNodeInfo, idx::Int, start_idx::Int, include_stmts_before_start::Bool)
+    if entry.attach_after
+        if !include_stmts_before_start
+            entry.pos >= start_idx || return false
+        end
+        return entry.pos == idx - 1
+    else
+        return entry.pos == idx
+    end
+end
+
 function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.start_idx, it.compact.new_nodes_idx, 1))
     if it.end_idx > 0 && idx > it.end_idx
         return nothing
@@ -1214,27 +1701,39 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
     if compact.new_nodes_idx <= length(compact.perm)
         new_nodes = compact.ir.new_nodes
         for eidx in aidx:length(compact.perm)
-            if entry_at_idx(new_nodes.info[compact.perm[eidx]], idx)
+            if entry_at_idx(new_nodes.info[compact.perm[eidx]], idx, it.start_idx, it.include_stmts_before_start)
                 entry = new_nodes.stmts[compact.perm[eidx]]
-                return (entry[:inst], (idx, eidx+1, bidx))
+                return (entry[:stmt], (idx, eidx+1, bidx))
             end
         end
     end
     if !isempty(compact.pending_perm)
         for eidx in bidx:length(compact.pending_perm)
-            if entry_at_idx(compact.pending_nodes.info[compact.pending_perm[eidx]], idx)
+            if entry_at_idx(compact.pending_nodes.info[compact.pending_perm[eidx]], idx, it.start_idx, it.include_stmts_before_start)
                 entry = compact.pending_nodes.stmts[compact.pending_perm[eidx]]
-                return (entry[:inst], (idx, aidx, eidx+1))
+                return (entry[:stmt], (idx, aidx, eidx+1))
             end
         end
     end
     idx > length(compact.ir.stmts) && return nothing
-    return (compact.ir.stmts[idx][:inst], (idx + 1, aidx, bidx))
+    return (compact.ir.stmts[idx][:stmt], (idx + 1, aidx, bidx))
 end
 
-function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=(compact.idx, 1))
+# the returned Union{Nothing, Pair{Pair{Int,Int},Any}} cannot be stack allocated,
+# so we inline this function into the caller
+@inline function iterate(compact::IncrementalCompact, state=nothing)
+    idxs = iterate_compact(compact)
+    idxs === nothing && return nothing
+    old_result_idx = idxs[2]
+    return Pair{Pair{Int,Int},Any}(idxs, compact.result[old_result_idx][:stmt]), nothing
+end
+
+function iterate_compact(compact::IncrementalCompact)
     # Create label to dodge recursion so that we don't stack overflow
     @label restart
+
+    idx = compact.idx
+    active_bb = compact.active_bb
 
     old_result_idx = compact.result_idx
     if idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
@@ -1244,7 +1743,8 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         resize!(compact, old_result_idx)
     end
     bb = compact.ir.cfg.blocks[active_bb]
-    if compact.cfg_transforms_enabled && active_bb > 1 && active_bb <= length(compact.bb_rename_succ) && compact.bb_rename_succ[active_bb] == -1
+    (; cfg_transforms_enabled, bb_rename_succ) = compact.cfg_transform
+    if cfg_transforms_enabled && active_bb > 1 && active_bb <= length(bb_rename_succ) && bb_rename_succ[active_bb] <= -1
         # Dead block, so kill the entire block.
         compact.idx = last(bb.stmts)
         # Pop any remaining insertion nodes
@@ -1260,14 +1760,15 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
             if !(info.attach_after ? info.pos <= compact.idx - 1 : info.pos <= compact.idx)
                 break
             end
-            popfirst!(compact.pending_perm)
+            heappop!(compact.pending_perm, By(x::Int -> compact.pending_nodes.info[x].pos))
         end
         # Move to next block
         compact.idx += 1
+        compact.active_bb += 1
         if finish_current_bb!(compact, active_bb, old_result_idx, true)
-            return iterate(compact, (compact.idx, active_bb + 1))
+            return iterate_compact(compact)
         else
-            return Pair{Pair{Int, Int}, Any}(Pair{Int,Int}(compact.idx-1, old_result_idx), compact.result[old_result_idx][:inst]), (compact.idx, active_bb + 1)
+            return Pair{Int,Int}(compact.idx-1, old_result_idx)
         end
     end
     if compact.new_nodes_idx <= length(compact.perm) &&
@@ -1278,148 +1779,185 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
         new_node_entry = compact.ir.new_nodes.stmts[new_idx]
         new_node_info = compact.ir.new_nodes.info[new_idx]
         new_idx += length(compact.ir.stmts)
-        return process_newnode!(compact, new_idx, new_node_entry, new_node_info, idx, active_bb, true)
+        (old_result_idx, result_idx, active_bb) =
+                process_newnode!(compact, new_idx, new_node_entry, new_node_info, idx, active_bb, true)
+        compact.active_bb = active_bb
+        old_result_idx == result_idx && @goto restart
+        return Pair{Int,Int}(new_idx, old_result_idx)
     elseif !isempty(compact.pending_perm) &&
         (info = compact.pending_nodes.info[compact.pending_perm[1]];
          info.attach_after ? info.pos == idx - 1 : info.pos == idx)
-        new_idx = popfirst!(compact.pending_perm)
+        new_idx = heappop!(compact.pending_perm, By(x::Int -> compact.pending_nodes.info[x].pos))
         new_node_entry = compact.pending_nodes.stmts[new_idx]
         new_node_info = compact.pending_nodes.info[new_idx]
         new_idx += length(compact.ir.stmts) + length(compact.ir.new_nodes)
-        return process_newnode!(compact, new_idx, new_node_entry, new_node_info, idx, active_bb, false)
+        (old_result_idx, result_idx, active_bb) =
+                process_newnode!(compact, new_idx, new_node_entry, new_node_info, idx, active_bb, false)
+        compact.active_bb = active_bb
+        old_result_idx == result_idx && @goto restart
+        return Pair{Int,Int}(new_idx, old_result_idx)
     end
     # This will get overwritten in future iterations if
     # result_idx is not, incremented, but that's ok and expected
     compact.result[old_result_idx] = compact.ir.stmts[idx]
     result_idx = process_node!(compact, old_result_idx, compact.ir.stmts[idx], idx, idx, active_bb, true)
-    stmt_if_any = old_result_idx == result_idx ? nothing : compact.result[old_result_idx][:inst]
     compact.result_idx = result_idx
-    if idx == last(bb.stmts) && !attach_after_stmt_after(compact, idx)
+    if idx == last(bb.stmts) && !stmts_awaiting_insertion(compact, idx)
         finish_current_bb!(compact, active_bb, old_result_idx)
         active_bb += 1
     end
     compact.idx = idx + 1
+    compact.active_bb = active_bb
     if old_result_idx == compact.result_idx
         idx += 1
         @goto restart
     end
-    @assert isassigned(compact.result.inst, old_result_idx)
-    return Pair{Pair{Int,Int}, Any}(Pair{Int,Int}(compact.idx-1, old_result_idx),
-        compact.result[old_result_idx][:inst]), (compact.idx, active_bb)
+    @assert isassigned(compact.result.stmt, old_result_idx)
+    return Pair{Int,Int}(compact.idx-1, old_result_idx)
 end
 
-function maybe_erase_unused!(extra_worklist, compact, idx, callback = x->nothing)
-    stmt = compact.result[idx][:inst]
+maybe_erase_unused!(compact::IncrementalCompact, idx::Int, in_worklist::Bool, extra_worklist::Vector{Int}) =
+    maybe_erase_unused!(null_dce_callback, compact, idx, in_worklist, extra_worklist)
+function maybe_erase_unused!(callback::Function, compact::IncrementalCompact, idx::Int,
+    in_worklist::Bool, extra_worklist::Vector{Int})
+    nresult = length(compact.result)
+    inst = idx ≤ nresult ? compact.result[idx] : compact.new_new_nodes.stmts[idx-nresult]
+    stmt = inst[:stmt]
     stmt === nothing && return false
-    if compact_exprtype(compact, SSAValue(idx)) === Bottom
-        effect_free = false
-    else
-        effect_free = compact.result[idx][:flag] & IR_FLAG_EFFECT_FREE != 0
-    end
-    if effect_free
-        for ops in userefs(stmt)
-            val = ops[]
-            # If the pass we ran inserted new nodes, it's possible for those
-            # to be outside our used_ssas count.
-            if isa(val, SSAValue) && val.id <= length(compact.used_ssas)
-                if compact.used_ssas[val.id] == 1
-                    if val.id < idx
-                        push!(extra_worklist, val.id)
-                    end
-                end
-                compact.used_ssas[val.id] -= 1
-                callback(val)
+    inst[:type] === Bottom && return false
+    has_flag(inst, IR_FLAGS_REMOVABLE) || return false
+    foreachssa(stmt) do val::SSAValue
+        if compact.used_ssas[val.id] == 1
+            if val.id < idx || in_worklist
+                push!(extra_worklist, val.id)
             end
         end
-        compact.result[idx][:inst] = nothing
-        return true
+        compact.used_ssas[val.id] -= 1
+        callback(val)
     end
-    return false
+    inst[:stmt] = nothing
+    return true
 end
 
-function fixup_phinode_values!(compact::IncrementalCompact, old_values::Vector{Any})
+struct FixedNode
+    node::Any
+    needs_fixup::Bool
+    FixedNode(@nospecialize(node), needs_fixup::Bool) = new(node, needs_fixup)
+end
+
+function fixup_phinode_values!(compact::IncrementalCompact, old_values::Vector{Any}, reify_new_nodes::Bool)
     values = Vector{Any}(undef, length(old_values))
+    fixup = false
     for i = 1:length(old_values)
         isassigned(old_values, i) || continue
-        val = old_values[i]
-        if isa(val, OldSSAValue)
-            val = compact.ssa_rename[val.id]
-            if isa(val, SSAValue)
-                compact.used_ssas[val.id] += 1
-            end
-        elseif isa(val, NewSSAValue)
-            val = SSAValue(length(compact.result) + val.id)
-        end
-        values[i] = val
+        (; node, needs_fixup) = fixup_node(compact, old_values[i], reify_new_nodes)
+        fixup |= needs_fixup
+        values[i] = node
     end
-    values
+    return (values, fixup)
 end
 
-function fixup_node(compact::IncrementalCompact, @nospecialize(stmt))
+function fixup_node(compact::IncrementalCompact, @nospecialize(stmt), reify_new_nodes::Bool)
     if isa(stmt, PhiNode)
-        return PhiNode(stmt.edges, fixup_phinode_values!(compact, stmt.values))
+        (node, needs_fixup) = fixup_phinode_values!(compact, stmt.values, reify_new_nodes)
+        return FixedNode(PhiNode(stmt.edges, node), needs_fixup)
     elseif isa(stmt, PhiCNode)
-        return PhiCNode(fixup_phinode_values!(compact, stmt.values))
+        (node, needs_fixup) = fixup_phinode_values!(compact, stmt.values, reify_new_nodes)
+        return FixedNode(PhiCNode(node), needs_fixup)
     elseif isa(stmt, NewSSAValue)
-        return SSAValue(length(compact.result) + stmt.id)
+        @assert stmt.id < 0
+        if reify_new_nodes
+            val = SSAValue(length(compact.result) - stmt.id)
+            return FixedNode(val, false)
+        else
+            return FixedNode(stmt, true)
+        end
     elseif isa(stmt, OldSSAValue)
-        return compact.ssa_rename[stmt.id]
+        node = compact.ssa_rename[stmt.id]
+        if isa(node, Refined)
+            node = node.val
+        end
+        needs_fixup = false
+        if isa(node, NewSSAValue)
+            (;node, needs_fixup) = fixup_node(compact, node, reify_new_nodes)
+        end
+        if isa(node, SSAValue)
+            compact.used_ssas[node.id] += 1
+        elseif isa(node, NewSSAValue)
+            compact.new_new_used_ssas[-node.id] += 1
+        elseif isa(node, OldSSAValue)
+            return fixup_node(compact, node, reify_new_nodes)
+        end
+        return FixedNode(node, needs_fixup)
     else
         urs = userefs(stmt)
+        fixup = false
         for ur in urs
             val = ur[]
-            if isa(val, NewSSAValue)
-                val = SSAValue(length(compact.result) + val.id)
-            elseif isa(val, OldSSAValue)
-                val = compact.ssa_rename[val.id]
+            if isa(val, Union{NewSSAValue, OldSSAValue})
+                (;node, needs_fixup) = fixup_node(compact, val, reify_new_nodes)
+                fixup |= needs_fixup
+                ur[] = node
             end
-            if isa(val, SSAValue) && val.id <= length(compact.used_ssas)
-                # If `val.id` is greater than the length of `compact.result` or
-                # `compact.used_ssas`, this SSA value is in `new_new_nodes`, so
-                # don't count the use
-                compact.used_ssas[val.id] += 1
-            end
-            ur[] = val
         end
-        return urs[]
+        return FixedNode(urs[], fixup)
     end
 end
 
-function just_fixup!(compact::IncrementalCompact)
-    for idx in compact.late_fixup
-        stmt = compact.result[idx][:inst]
-        new_stmt = fixup_node(compact, stmt)
-        (stmt === new_stmt) || (compact.result[idx][:inst] = new_stmt)
+function just_fixup!(compact::IncrementalCompact, new_new_nodes_offset::Union{Int, Nothing} = nothing, late_fixup_offset::Union{Int, Nothing} = nothing)
+    if new_new_nodes_offset === late_fixup_offset === nothing # only do this appending in non_dce_finish!
+        resize!(compact.used_ssas, length(compact.result))
+        append!(compact.used_ssas, compact.new_new_used_ssas)
+        empty!(compact.new_new_used_ssas)
     end
-    for idx in 1:length(compact.new_new_nodes)
-        node = compact.new_new_nodes.stmts[idx]
-        stmt = node[:inst]
-        new_stmt = fixup_node(compact, stmt)
-        if new_stmt !== stmt
-            node[:inst] = new_stmt
+    off = late_fixup_offset === nothing ? 1 : (late_fixup_offset+1)
+    set_off = off
+    for i in off:length(compact.late_fixup)
+        idx = compact.late_fixup[i]
+        stmt = compact.result[idx][:stmt]
+        (;node, needs_fixup) = fixup_node(compact, stmt, late_fixup_offset === nothing)
+        (stmt === node) || (compact.result[idx][:stmt] = node)
+        if needs_fixup
+            compact.late_fixup[set_off] = idx
+            set_off += 1
+        end
+    end
+    if late_fixup_offset !== nothing
+        resize!(compact.late_fixup, set_off-1)
+    end
+    off = new_new_nodes_offset === nothing ? 1 : (new_new_nodes_offset+1)
+    for idx in off:length(compact.new_new_nodes)
+        new_node = compact.new_new_nodes.stmts[idx]
+        stmt = new_node[:stmt]
+        (;node) = fixup_node(compact, stmt, late_fixup_offset === nothing)
+        if node !== stmt
+            new_node[:stmt] = node
         end
     end
 end
 
-function simple_dce!(compact::IncrementalCompact)
+simple_dce!(compact::IncrementalCompact) = simple_dce!(null_dce_callback, compact)
+function simple_dce!(callback::Function, compact::IncrementalCompact)
     # Perform simple DCE for unused values
+    @assert isempty(compact.new_new_used_ssas) # just_fixup! wasn't run?
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
-        idx >= compact.result_idx && break
         nused == 0 || continue
-        maybe_erase_unused!(extra_worklist, compact, idx)
+        maybe_erase_unused!(callback, compact, idx, false, extra_worklist)
     end
     while !isempty(extra_worklist)
-        maybe_erase_unused!(extra_worklist, compact, pop!(extra_worklist))
+        maybe_erase_unused!(callback, compact, pop!(extra_worklist), true, extra_worklist)
     end
 end
+
+null_dce_callback(x::SSAValue) = return
 
 function non_dce_finish!(compact::IncrementalCompact)
     result_idx = compact.result_idx
     resize!(compact.result, result_idx - 1)
     just_fixup!(compact)
-    bb = compact.result_bbs[end]
-    compact.result_bbs[end] = BasicBlock(bb,
+    bb = compact.cfg_transform.result_bbs[end]
+    compact.cfg_transform.result_bbs[end] = BasicBlock(bb,
                 StmtRange(first(bb.stmts), result_idx-1))
     compact.renamed_new_nodes = true
     nothing
@@ -1432,8 +1970,24 @@ function finish(compact::IncrementalCompact)
 end
 
 function complete(compact::IncrementalCompact)
-    result_bbs = resize!(compact.result_bbs, compact.active_result_bb-1)
+    result_bbs = resize!(compact.cfg_transform.result_bbs, compact.active_result_bb-1)
     cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
+    if should_check_ssa_counts()
+        oracle_check(compact)
+    end
+
+    # trim trailing undefined statements due to copy propagation
+    nundef = 0
+    for i in length(compact.result):-1:1
+        if isassigned(compact.result.stmt, i)
+            break
+        end
+        nundef += 1
+    end
+    if nundef > 0
+        resize!(compact.result, length(compact.result) - nundef)
+    end
+
     return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
 end
 
@@ -1459,3 +2013,18 @@ function iterate(x::BBIdxIter, (idx, bb)::Tuple{Int, Int}=(1, 1))
     end
     return (bb, idx), (idx + 1, next_bb)
 end
+
+# Inserters
+
+abstract type Inserter; end
+
+struct InsertHere <: Inserter
+    compact::IncrementalCompact
+end
+(i::InsertHere)(newinst::NewInstruction) = insert_node_here!(i.compact, newinst)
+
+struct InsertBefore{T<:Union{IRCode, IncrementalCompact}} <: Inserter
+    src::T
+    pos::SSAValue
+end
+(i::InsertBefore)(newinst::NewInstruction) = insert_node!(i.src, i.pos, newinst)
