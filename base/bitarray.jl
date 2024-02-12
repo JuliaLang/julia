@@ -22,25 +22,30 @@ the functions [`trues`](@ref) and [`falses`](@ref).
 
 """
 mutable struct BitArray{N} <: AbstractArray{Bool, N}
-    chunks::Vector{UInt64}
+    chunks::Vector{UInt64} # deprecate this in v2: make the fields const annotated
     len::Int
     dims::NTuple{N,Int}
-    function BitArray{N}(::UndefInitializer, dims::Vararg{Int,N}) where N
-        n = 1
-        i = 1
-        for d in dims
-            d >= 0 || throw(ArgumentError("dimension size must be ≥ 0, got $d for dimension $i"))
-            n *= d
-            i += 1
-        end
-        nc = num_bit_chunks(n)
-        chunks = Vector{UInt64}(undef, nc)
-        nc > 0 && (chunks[end] = UInt64(0))
-        b = new(chunks, n)
-        N != 1 && (b.dims = dims)
-        return b
-    end
+
+    # Unexported inner constructor of BitArray
+    global bitarray_internal(::Val{N}, chunks, len, dims) where {N} = new{N}(chunks, len, dims)
 end
+
+function BitArray{N}(::UndefInitializer, dims::Vararg{Int,N}) where N
+    n = 1
+    i = 1
+    for d in dims
+        d >= 0 || throw(ArgumentError("dimension size must be ≥ 0, got $d for dimension $i"))
+        n *= d
+        i += 1
+    end
+    nc = num_bit_chunks(n)
+    chunks = Vector{UInt64}(undef, nc)
+    nc > 0 && (chunks[end] = UInt64(0))
+    _dims = isone(N) ? (0,) : dims
+
+    return bitarray_internal(Val{N}(), chunks, n, _dims)
+end
+
 
 # note: the docs for the two signatures are unified, but only
 # the first one is recognized by the help system; it would be nice
@@ -481,13 +486,11 @@ function reshape(B::BitArray{N}, dims::NTuple{N,Int}) where N
 end
 reshape(B::BitArray, dims::Tuple{Vararg{Int}}) = _bitreshape(B, dims)
 function _bitreshape(B::BitArray, dims::NTuple{N,Int}) where N
-    prod(dims) == length(B) ||
+    dimsprod = prod(dims)
+    dimsprod == length(B) ||
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
-    Br = BitArray{N}(undef, ntuple(i->0,Val(N))...)
-    Br.chunks = B.chunks
-    Br.len = prod(dims)
-    N != 1 && (Br.dims = dims)
-    return Br
+    new_dims = isone(N) ? (0,) : dims
+    bitarray_internal(Val{N}(), B.chunks, dimsprod, new_dims)
 end
 
 ## Constructors ##
@@ -1861,7 +1864,6 @@ function hcat(A::Union{BitMatrix,BitVector}...)
     nargs = length(A)
     nrows = size(A[1], 1)
     ncols = 0
-    dense = true
     for j = 1:nargs
         Aj = A[j]
         nd = ndims(Aj)
