@@ -215,6 +215,13 @@ pub struct RootsWorkClosure {
         factory_ptr: *mut libc::c_void,
         renew: bool,
     ) -> RootsWorkBuffer<ObjectReference>,
+    pub report_tpinned_nodes_func: extern "C" fn(
+        buf: *mut ObjectReference,
+        size: usize,
+        cap: usize,
+        factory_ptr: *mut libc::c_void,
+        renew: bool,
+    ) -> RootsWorkBuffer<ObjectReference>,
     pub factory_ptr: *mut libc::c_void,
 }
 
@@ -262,10 +269,31 @@ impl RootsWorkClosure {
         }
     }
 
+    extern "C" fn report_tpinned_nodes<F: RootsWorkFactory<JuliaVMEdge>>(
+        buf: *mut ObjectReference,
+        size: usize,
+        cap: usize,
+        factory_ptr: *mut libc::c_void,
+        renew: bool,
+    ) -> RootsWorkBuffer<ObjectReference> {
+        if !buf.is_null() {
+            let buf = unsafe { Vec::<ObjectReference>::from_raw_parts(buf, size, cap) };
+            let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
+            factory.create_process_tpinning_roots_work(buf);
+        }
+
+        if renew {
+            RootsWorkBuffer::new()
+        } else {
+            RootsWorkBuffer::empty()
+        }
+    }
+
     pub fn from_roots_work_factory<F: RootsWorkFactory<JuliaVMEdge>>(factory: &mut F) -> Self {
         RootsWorkClosure {
             report_edges_func: Self::report_simple_edges::<F>,
             report_nodes_func: Self::report_nodes::<F>,
+            report_tpinned_nodes_func: Self::report_tpinned_nodes::<F>,
             factory_ptr: factory as *mut F as *mut libc::c_void,
         }
     }

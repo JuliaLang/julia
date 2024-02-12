@@ -23,12 +23,24 @@ impl Scanning<JuliaVM> for VMScanning {
         mut factory: impl RootsWorkFactory<JuliaVMEdge>,
     ) {
         // This allows us to reuse mmtk_scan_gcstack which expectes an EdgeVisitor
+        // Push the nodes as they need to be transitively pinned
         struct EdgeBuffer {
-            pub buffer: Vec<JuliaVMEdge>,
+            pub buffer: Vec<ObjectReference>,
         }
         impl mmtk::vm::EdgeVisitor<JuliaVMEdge> for EdgeBuffer {
             fn visit_edge(&mut self, edge: JuliaVMEdge) {
-                self.buffer.push(edge);
+                match edge {
+                    JuliaVMEdge::Simple(se) => {
+                        let slot = se.as_address();
+                        let object = unsafe { slot.load::<ObjectReference>() };
+                        if !object.is_null() {
+                            self.buffer.push(object);
+                        }
+                    }
+                    JuliaVMEdge::Offset(_) => {
+                        unimplemented!() // transitively pinned roots in Julia only come from the stack
+                    }
+                }
             }
         }
 
@@ -37,22 +49,44 @@ impl Scanning<JuliaVM> for VMScanning {
         use mmtk::util::Address;
 
         let ptls: &mut mmtk__jl_tls_states_t = unsafe { std::mem::transmute(mutator.mutator_tls) };
-        let mut edge_buffer = EdgeBuffer { buffer: vec![] };
+        let mut edge_buffer = EdgeBuffer { buffer: vec![] }; // need to be tpinned as they're all from the shadow stack
         let mut node_buffer = vec![];
 
         // Scan thread local from ptls: See gc_queue_thread_local in gc.c
-        let mut root_scan_task = |task: *const mmtk__jl_task_t| {
+        let mut root_scan_task = |task: *const mmtk__jl_task_t, task_is_root: bool| {
             if !task.is_null() {
                 unsafe {
                     crate::julia_scanning::mmtk_scan_gcstack(task, &mut edge_buffer);
                 }
-                node_buffer.push(ObjectReference::from_raw_address(Address::from_ptr(task)));
+                if task_is_root {
+                    // captures wrong root nodes before creating the work
+                    debug_assert!(
+                        Address::from_ptr(task).as_usize() % 16 == 0
+                            || Address::from_ptr(task).as_usize() % 8 == 0,
+                        "root node {:?} is not aligned to 8 or 16",
+                        Address::from_ptr(task)
+                    );
+
+                    node_buffer.push(ObjectReference::from_raw_address(Address::from_ptr(task)));
+                }
             }
         };
-        root_scan_task(ptls.root_task);
-        root_scan_task(ptls.current_task as *mut mmtk__jl_task_t);
-        root_scan_task(ptls.next_task);
-        root_scan_task(ptls.previous_task);
+        root_scan_task(ptls.root_task, true);
+
+        // need to iterate over live tasks as well to process their shadow stacks
+        // we should not set the task themselves as roots as we will know which ones are still alive after GC
+        let mut i = 0;
+        while i < ptls.heap.live_tasks.len {
+            let mut task_address = Address::from_ptr(ptls.heap.live_tasks.items);
+            task_address = task_address.shift::<Address>(i as isize);
+            let task = unsafe { task_address.load::<*const mmtk_jl_task_t>() };
+            root_scan_task(task, false);
+            i += 1;
+        }
+
+        root_scan_task(ptls.current_task as *mut mmtk__jl_task_t, true);
+        root_scan_task(ptls.next_task, true);
+        root_scan_task(ptls.previous_task, true);
         if !ptls.previous_exception.is_null() {
             node_buffer.push(ObjectReference::from_raw_address(Address::from_mut_ptr(
                 ptls.previous_exception,
@@ -71,6 +105,15 @@ impl Scanning<JuliaVM> for VMScanning {
             let njlvals = mmtk_jl_bt_num_jlvals(bt_entry);
             for j in 0..njlvals {
                 let bt_entry_value = mmtk_jl_bt_entry_jlvalue(bt_entry, j);
+
+                // captures wrong root nodes before creating the work
+                debug_assert!(
+                    bt_entry_value.to_raw_address().as_usize() % 16 == 0
+                        || bt_entry_value.to_raw_address().as_usize() % 8 == 0,
+                    "root node {:?} is not aligned to 8 or 16",
+                    bt_entry_value
+                );
+
                 node_buffer.push(bt_entry_value);
             }
             i += bt_entry_size;
@@ -80,12 +123,12 @@ impl Scanning<JuliaVM> for VMScanning {
 
         // Push work
         const CAPACITY_PER_PACKET: usize = 4096;
-        for edges in edge_buffer
+        for tpinning_roots in edge_buffer
             .buffer
             .chunks(CAPACITY_PER_PACKET)
             .map(|c| c.to_vec())
         {
-            factory.create_process_edge_roots_work(edges);
+            factory.create_process_tpinning_roots_work(tpinning_roots);
         }
         for nodes in node_buffer.chunks(CAPACITY_PER_PACKET).map(|c| c.to_vec()) {
             factory.create_process_pinning_roots_work(nodes);
@@ -111,11 +154,11 @@ impl Scanning<JuliaVM> for VMScanning {
         process_object(object, edge_visitor);
     }
     fn notify_initial_thread_scan_complete(_partial_scan: bool, _tls: VMWorkerThread) {
-        let sweep_malloced_arrays_work = SweepMallocedArrays::new();
+        let sweep_vm_specific_work = SweepVMSpecific::new();
         memory_manager::add_work_packet(
             &SINGLETON,
             WorkBucketStage::Compact,
-            sweep_malloced_arrays_work,
+            sweep_vm_specific_work,
         );
     }
     fn supports_return_barrier() -> bool {
@@ -150,20 +193,21 @@ pub fn process_object<EV: EdgeVisitor<JuliaVMEdge>>(object: ObjectReference, clo
 }
 
 // Sweep malloced arrays work
-pub struct SweepMallocedArrays {
+pub struct SweepVMSpecific {
     swept: bool,
 }
 
-impl SweepMallocedArrays {
+impl SweepVMSpecific {
     pub fn new() -> Self {
         Self { swept: false }
     }
 }
 
-impl<VM: VMBinding> GCWork<VM> for SweepMallocedArrays {
+impl<VM: VMBinding> GCWork<VM> for SweepVMSpecific {
     fn do_work(&mut self, _worker: &mut GCWorker<VM>, _mmtk: &'static MMTK<VM>) {
-        // call sweep malloced arrays from UPCALLS
+        // call sweep malloced arrays and sweep stack pools from UPCALLS
         unsafe { ((*UPCALLS).mmtk_sweep_malloced_array)() }
+        unsafe { ((*UPCALLS).mmtk_sweep_stack_pools)() }
         self.swept = true;
     }
 }

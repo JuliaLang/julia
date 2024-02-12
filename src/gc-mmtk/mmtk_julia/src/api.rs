@@ -483,3 +483,55 @@ pub extern "C" fn mmtk_get_obj_size(obj: ObjectReference) -> usize {
         addr_size.load::<u64>() as usize
     }
 }
+
+#[cfg(all(feature = "object_pinning", not(feature = "non_moving")))]
+#[no_mangle]
+pub extern "C" fn mmtk_pin_object(object: ObjectReference) -> bool {
+    if mmtk_object_is_managed_by_mmtk(object.to_raw_address().as_usize()) {
+        memory_manager::pin_object::<JuliaVM>(object)
+    } else {
+        warn!("Object is not managed by mmtk - (un)pinning it via this function isn't supported.");
+        false
+    }
+}
+
+#[cfg(all(feature = "object_pinning", not(feature = "non_moving")))]
+#[no_mangle]
+pub extern "C" fn mmtk_unpin_object(object: ObjectReference) -> bool {
+    if mmtk_object_is_managed_by_mmtk(object.to_raw_address().as_usize()) {
+        memory_manager::unpin_object::<JuliaVM>(object)
+    } else {
+        warn!("Object is not managed by mmtk - (un)pinning it via this function isn't supported.");
+        false
+    }
+}
+
+#[cfg(all(feature = "object_pinning", not(feature = "non_moving")))]
+#[no_mangle]
+pub extern "C" fn mmtk_is_pinned(object: ObjectReference) -> bool {
+    if mmtk_object_is_managed_by_mmtk(object.to_raw_address().as_usize()) {
+        memory_manager::is_pinned::<JuliaVM>(object)
+    } else {
+        warn!("Object is not managed by mmtk - checking via this function isn't supported.");
+        false
+    }
+}
+
+// If the `non-moving` feature is selected, pinning/unpinning is a noop and simply returns false
+#[cfg(all(feature = "object_pinning", feature = "non_moving"))]
+#[no_mangle]
+pub extern "C" fn mmtk_pin_object(_object: ObjectReference) -> bool {
+    false
+}
+
+#[cfg(all(feature = "object_pinning", feature = "non_moving"))]
+#[no_mangle]
+pub extern "C" fn mmtk_unpin_object(_object: ObjectReference) -> bool {
+    false
+}
+
+#[cfg(all(feature = "object_pinning", feature = "non_moving"))]
+#[no_mangle]
+pub extern "C" fn mmtk_is_pinned(_object: ObjectReference) -> bool {
+    false
+}

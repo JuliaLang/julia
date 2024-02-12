@@ -1,4 +1,5 @@
 use enum_map::Enum;
+use mmtk::util::ObjectReference;
 
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, Enum, PartialEq, Hash, Eq)]
@@ -141,5 +142,13 @@ pub extern "C" fn mmtk_julia_copy_stack_check(c_flag_is_defined: bool) {
     } else {
         #[cfg(feature = "julia_copy_stack")]
         panic!("COPY_STACK flag has not been defined in C, but `julia_copy_stack` feature has been set.")
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_get_possibly_forwared(object: ObjectReference) -> ObjectReference {
+    match object.get_forwarded_object() {
+        Some(forwarded) => forwarded,
+        None => object,
     }
 }

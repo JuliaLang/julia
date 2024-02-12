@@ -186,6 +186,9 @@ fn mark_finlist<T: ObjectTracer>(list: &mut ArrayListT, start: usize, tracer: &m
     let mut i = start;
     while i < list.len {
         let cur = list.get(i);
+        let cur_i = i;
+        let mut cur_tag: usize = 0;
+
         if cur.is_zero() {
             i += 1;
             continue;
@@ -195,6 +198,7 @@ fn mark_finlist<T: ObjectTracer>(list: &mut ArrayListT, start: usize, tracer: &m
             // Skip next
             i += 1;
             debug_assert!(i < list.len);
+            cur_tag = 1;
             gc_ptr_clear_tag(cur, 1)
         } else {
             ObjectReference::from_raw_address(cur)
@@ -205,10 +209,11 @@ fn mark_finlist<T: ObjectTracer>(list: &mut ArrayListT, start: usize, tracer: &m
         }
 
         let traced = tracer.trace_object(new_obj);
-        debug_assert_eq!(
-            traced, new_obj,
-            "Object is moved -- we need to save the new object back to the finalizer list"
-        );
+        // if object has moved, update the list applying the tag
+        list.set(cur_i, unsafe {
+            Address::from_usize(traced.to_raw_address() | cur_tag)
+        });
+
         i += 1;
     }
 }

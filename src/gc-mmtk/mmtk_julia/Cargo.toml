@@ -10,7 +10,7 @@ edition = "2018"
 [package.metadata.julia]
 # Our CI matches the following line and extract mmtk/julia. If this line is updated, please check ci yaml files and make sure it works.
 julia_repo = "https://github.com/mmtk/julia.git"
-julia_version = "22524a81f9920a8ecc70f195d53b145761de2fa0"
+julia_version = "861f151c7fbec1d8431a804795bd3d3598b77e3b"
 
 [lib]
 crate-type = ["cdylib"]
@@ -39,18 +39,20 @@ enum-map = ">=2.1"
 atomic = "0.4.6"
 chrono = "*"
 thread-id = "*"
+memoffset = "*"
 
 # ykstackmaps = { git = "https://github.com/udesou/ykstackmaps.git", branch = "udesou-master", version = "*" }
 
 [features]
-default = ["mmtk/vm_space", "julia_copy_stack"]
+default = ["mmtk/vm_space", "julia_copy_stack", "object_pinning"]
 
 # Plans
 nogc = []
-immix = ["non_moving_immix"]
-stickyimmix = ["non_moving_immix"]
+immix = []
+stickyimmix = ["mmtk/sticky_immix_non_moving_nursery", "mmtk/immix_smaller_block"]
 marksweep = []
+object_pinning = ["mmtk/object_pinning"]
 
-# TODO remove this when we properly support moving
-non_moving_immix = ["mmtk/immix_non_moving", "mmtk/immix_smaller_block"]
+# This feature disables moving
+non_moving = ["mmtk/immix_non_moving", "mmtk/immix_smaller_block"]
 julia_copy_stack = []

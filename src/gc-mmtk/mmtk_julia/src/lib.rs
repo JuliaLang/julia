@@ -102,6 +102,7 @@ pub struct Julia_Upcalls {
     pub mmtk_jl_run_finalizers: extern "C" fn(tls: OpaquePointer),
     pub jl_throw_out_of_memory_error: extern "C" fn(),
     pub mmtk_sweep_malloced_array: extern "C" fn(),
+    pub mmtk_sweep_stack_pools: extern "C" fn(),
     pub wait_in_a_safepoint: extern "C" fn(),
     pub exit_from_safepoint: extern "C" fn(old_state: i8),
     pub jl_hrtime: extern "C" fn() -> u64,
@@ -113,6 +114,7 @@ pub struct Julia_Upcalls {
     pub arraylist_grow: extern "C" fn(Address, usize),
     pub get_jl_gc_have_pending_finalizers: extern "C" fn() -> *mut i32,
     pub scan_vm_specific_roots: extern "C" fn(closure: *mut crate::edges::RootsWorkClosure),
+    pub update_inlined_array: extern "C" fn(to: Address, from: Address),
     pub prepare_to_collect: extern "C" fn(),
 }
 
