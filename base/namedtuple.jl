@@ -182,6 +182,7 @@ nextind(@nospecialize(t::NamedTuple), i::Integer) = Int(i)+1
 
 convert(::Type{NT}, nt::NT) where {names, NT<:NamedTuple{names}} = nt
 convert(::Type{NT}, nt::NT) where {names, T<:Tuple, NT<:NamedTuple{names,T}} = nt
+convert(::Type{NT}, t::Tuple) where {NT<:NamedTuple} = NT(t)
 
 function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
     NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
@@ -267,6 +268,8 @@ function map(f, nt::NamedTuple{names}, nts::NamedTuple...) where names
     end
     NamedTuple{names}(map(f, map(Tuple, (nt, nts...))...))
 end
+
+filter(f, xs::NamedTuple) = xs[filter(k -> f(xs[k]), keys(xs))]
 
 function merge_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize
@@ -524,6 +527,7 @@ Base.Pairs{Symbol, Int64, Tuple{Symbol}, @NamedTuple{init::Int64}}
 
 julia> sum("julia"; init=1)
 ERROR: MethodError: no method matching +(::Char, ::Char)
+The function `+` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   +(::Any, ::Any, ::Any, ::Any...)

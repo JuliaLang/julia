@@ -358,7 +358,7 @@ free_memory() = ccall(:uv_get_available_memory, UInt64, ())
 
 Get the total memory in RAM (including that which is currently used) in bytes.
 This amount may be constrained, e.g., by Linux control groups. For the unconstrained
-amount, see `Sys.physical_memory()`.
+amount, see `Sys.total_physical_memory()`.
 """
 function total_memory()
     constrained = ccall(:uv_get_constrained_memory, UInt64, ())
@@ -663,6 +663,8 @@ user = get(Sys.username, ENV, "USER")
 
 !!! compat "Julia 1.11"
     This function requires at least Julia 1.11.
+
+See also [`homedir`](@ref).
 """
 function username()
     pw = Libc.getpw()

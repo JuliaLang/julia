@@ -8,6 +8,9 @@ using .Main.InfiniteArrays
 isdefined(Main, :StructArrays) || @eval Main include("testhelpers/StructArrays.jl")
 using .Main.StructArrays
 
+isdefined(Main, :FillArrays) || @eval Main include("testhelpers/FillArrays.jl")
+using .Main.FillArrays
+
 A = rand(5,4,3)
 @testset "Bounds checking" begin
     @test checkbounds(Bool, A, 1, 1, 1) == true
@@ -1907,13 +1910,17 @@ end
 
 @testset "type-based offset axes check" begin
     a = randn(ComplexF64, 10)
+    b = randn(ComplexF64, 4, 4, 4, 4)
     ta = reinterpret(Float64, a)
     tb = reinterpret(Float64, view(a, 1:2:10))
     tc = reinterpret(Float64, reshape(view(a, 1:3:10), 2, 2, 1))
+    td = view(b, :, :, 1, 1)
     # Issue #44040
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(tc, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc, tb))
+    # Issue #49332
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(td, td, td))
     # Ranges && CartesianIndices
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(1:10, Base.OneTo(10), 1.0:2.0, LinRange(1.0, 2.0, 2), 1:2:10, CartesianIndices((1:2:10, 1:2:10))))
     # Remind us to call `any` in `Base.has_offset_axes` once our compiler is ready.
@@ -1931,4 +1938,26 @@ f45952(x) = [x;;]
     A = zeros(2,2)
     @test_throws "invalid index: true of type Bool" isassigned(A, 1, true)
     @test_throws "invalid index: true of type Bool" isassigned(A, true)
+end
+
+@testset "repeat for FillArrays" begin
+    f = FillArrays.Fill(3, (4,))
+    @test repeat(f, 2) === FillArrays.Fill(3, (8,))
+    @test repeat(f, 2, 3) === FillArrays.Fill(3, (8, 3))
+    @test repeat(f, inner=(1,2), outer=(3,1)) === repeat(f, 3, 2) === FillArrays.Fill(3, (12,2))
+    f = FillArrays.Fill(3, (4, 2))
+    @test repeat(f, 2, 3) === FillArrays.Fill(3, (8, 6))
+    @test repeat(f, 2, 3, 4) === FillArrays.Fill(3, (8, 6, 4))
+    @test repeat(f, inner=(1,2), outer=(3,1)) === FillArrays.Fill(3, (12, 4))
+end
+
+@testset "zero" begin
+    @test zero([1 2; 3 4]) isa Matrix{Int}
+    @test zero([1 2; 3 4]) == [0 0; 0 0]
+
+    @test zero([1.0]) isa Vector{Float64}
+    @test zero([1.0]) == [0.0]
+
+    @test zero([[2,2], [3,3,3]]) isa Vector{Vector{Int}}
+    @test zero([[2,2], [3,3,3]]) == [[0,0], [0, 0, 0]]
 end

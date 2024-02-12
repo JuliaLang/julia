@@ -126,6 +126,28 @@ Random.seed!(100)
                 @test BLAS.iamax(b) == findmax(fabs, b)[2] * (step(ind) >= 0)
             end
         end
+        @testset "nrm2 with non-finite elements" begin
+            # These tests would have caught <https://github.com/OpenMathLib/OpenBLAS/issues/2998>
+            # when running on appropriate hardware.
+            a = zeros(elty,n)
+            a[begin] = elty(-Inf)
+            @test BLAS.nrm2(a) === abs2(elty(Inf))
+            a[begin] = elty(NaN)
+            @test BLAS.nrm2(a) === abs2(elty(NaN))
+        end
+        @testset "deterministic mul!" begin
+            # mul! should be deterministic, see #53054
+            function tester_53054()
+                C = ComplexF32
+                mat = zeros(C, 1, 1)
+                for _ in 1:100
+                    v = [C(1-0.2im) C(2+0.3im)]
+                    mul!(mat, v, v', C(1+im), 1)
+                end
+                return mat
+            end
+            @test allequal(tester_53054() for _ in 1:10000)
+        end
         @testset "scal" begin
             α = rand(elty)
             a = rand(elty,n)

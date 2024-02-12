@@ -77,7 +77,7 @@ already work:
 - pycharm
 - bbedit
 
-# Example:
+# Examples
 
 The following defines the usage of terminal-based `emacs`:
 
@@ -223,7 +223,7 @@ Edit a file or directory optionally providing a line number to edit the file at.
 Return to the `julia` prompt when you quit the editor. The editor can be changed
 by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 
-See also [`define_editor`](@ref).
+See also [`InteractiveUtils.define_editor`](@ref).
 """
 function edit(path::AbstractString, line::Integer=0, column::Integer=0)
     path isa String || (path = convert(String, path))
@@ -255,7 +255,7 @@ method to edit. For modules, open the main source file. The module needs to be l
     `edit` on modules requires at least Julia 1.1.
 
 To ensure that the file can be opened at the given line, you may need to call
-`define_editor` first.
+`InteractiveUtils.define_editor` first.
 """
 function edit(@nospecialize f)
     ms = methods(f).ms

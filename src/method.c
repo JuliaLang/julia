@@ -488,7 +488,6 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     mi->sparam_vals = jl_emptysvec;
     jl_atomic_store_relaxed(&mi->uninferred, NULL);
     mi->backedges = NULL;
-    mi->callbacks = NULL;
     jl_atomic_store_relaxed(&mi->cache, NULL);
     mi->inInference = 0;
     mi->cache_with_orig = 0;
@@ -625,7 +624,9 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
 
     JL_TRY {
         ct->ptls->in_pure_callback = 1;
-        ct->world_age = def->primary_world;
+        ct->world_age = jl_atomic_load_relaxed(&def->primary_world);
+        if (ct->world_age > jl_atomic_load_acquire(&jl_world_counter) || jl_atomic_load_relaxed(&def->deleted_world) < ct->world_age)
+            jl_error("The generator method cannot run until it is added to a method table.");
 
         // invoke code generator
         jl_tupletype_t *ttdt = (jl_tupletype_t*)jl_unwrap_unionall(tt);
@@ -851,8 +852,8 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->recursion_relation = NULL;
     m->isva = 0;
     m->nargs = 0;
-    m->primary_world = 1;
-    m->deleted_world = ~(size_t)0;
+    jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
+    jl_atomic_store_relaxed(&m->deleted_world, 1);
     m->is_for_opaque_closure = 0;
     m->nospecializeinfer = 0;
     m->constprop = 0;
@@ -1008,8 +1009,6 @@ JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGAT
     return method->external_mt ? (jl_methtable_t*)method->external_mt : jl_method_table_for(method->sig);
 }
 
-jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
-
 JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                                         jl_methtable_t *mt,
                                         jl_code_info_t *f,
@@ -1138,16 +1137,6 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     m->file = file;
     m->line = line;
     jl_method_set_source(m, f);
-
-#ifdef RECORD_METHOD_ORDER
-    if (jl_all_methods == NULL)
-        jl_all_methods = jl_alloc_vec_any(0);
-#endif
-    if (jl_all_methods != NULL) {
-        while (jl_array_nrows(jl_all_methods) < m->primary_world)
-            jl_array_ptr_1d_push(jl_all_methods, NULL);
-        jl_array_ptr_1d_push(jl_all_methods, (jl_value_t*)m);
-    }
 
     jl_method_table_insert(mt, m, NULL);
     if (jl_newmeth_tracer)

@@ -41,9 +41,7 @@ using namespace llvm;
 # include <llvm/ExecutionEngine/Orc/DebuggerSupportPlugin.h>
 # include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
 # include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
-# if JL_LLVM_VERSION >= 150000
 # include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
-# endif
 # include <llvm/ExecutionEngine/SectionMemoryManager.h>
 
 #define DEBUG_TYPE "julia_jitlayers"
@@ -198,8 +196,11 @@ static jl_callptr_t _jl_compile_codeinst(
         start_time = jl_hrtime();
 
     assert(jl_is_code_instance(codeinst));
-    assert(codeinst->min_world <= world && (codeinst->max_world >= world || codeinst->max_world == 0) &&
+#ifndef NDEBUG
+    size_t max_world = jl_atomic_load_relaxed(&codeinst->max_world);
+    assert(jl_atomic_load_relaxed(&codeinst->min_world) <= world && (max_world >= world || max_world == 0) &&
         "invalid world for method-instance");
+#endif
 
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
 #ifdef USE_TRACY
@@ -588,7 +589,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         if (src) {
             assert(jl_is_code_info(src));
             ++UnspecFPtrCount;
-            _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext(), 0);
+            _jl_compile_codeinst(unspec, src, jl_atomic_load_relaxed(&unspec->min_world), *jl_ExecutionEngine->getContext(), 0);
         }
         jl_callptr_t null = nullptr;
         // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
@@ -1003,9 +1004,7 @@ public:
 // TODO: Port our memory management optimisations to JITLink instead of using the
 // default InProcessMemoryManager.
 std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() {
-#if JL_LLVM_VERSION < 150000
-    return cantFail(jitlink::InProcessMemoryManager::Create());
-#elif JL_LLVM_VERSION < 160000
+#if JL_LLVM_VERSION < 160000
     return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>());
 #else
     return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>(/*Reservation Granularity*/ 16 * 1024 * 1024));

@@ -22,4 +22,7 @@ Artifacts.artifact_meta
 Artifacts.artifact_hash
 Artifacts.find_artifacts_toml
 Artifacts.@artifact_str
+Artifacts.artifact_exists
+Artifacts.artifact_path
+Artifacts.select_downloadable_artifacts
 ```

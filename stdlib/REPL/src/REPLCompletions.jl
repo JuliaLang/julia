@@ -190,11 +190,14 @@ function complete_symbol(@nospecialize(ex), name::String, @nospecialize(ffunc), 
             append!(suggestions, filtered_mod_names(p, mod, name, true, false))
         end
     elseif val !== nothing # looking for a property of an instance
-        for property in propertynames(val, false)
-            # TODO: support integer arguments (#36872)
-            if property isa Symbol && startswith(string(property), name)
-                push!(suggestions, PropertyCompletion(val, property))
+        try
+            for property in propertynames(val, false)
+                # TODO: support integer arguments (#36872)
+                if property isa Symbol && startswith(string(property), name)
+                    push!(suggestions, PropertyCompletion(val, property))
+                end
             end
+        catch
         end
     elseif field_completion_eligible(t)
         # Looking for a member of a type
@@ -524,25 +527,7 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     return (startind:lastindex(s), method_name_end)
 end
 
-struct REPLInterpreterCache
-    dict::IdDict{MethodInstance,CodeInstance}
-end
-REPLInterpreterCache() = REPLInterpreterCache(IdDict{MethodInstance,CodeInstance}())
-const REPL_INTERPRETER_CACHE = REPLInterpreterCache()
-
-function get_code_cache()
-    # XXX Avoid storing analysis results into the cache that persists across precompilation,
-    #     as [sys|pkg]image currently doesn't support serializing externally created `CodeInstance`.
-    #     Otherwise, `CodeInstance`s created by `REPLInterpreter`, that are much less optimized
-    #     that those produced by `NativeInterpreter`, will leak into the native code cache,
-    #     potentially causing runtime slowdown.
-    #     (see https://github.com/JuliaLang/julia/issues/48453).
-    if Base.generating_output()
-        return REPLInterpreterCache()
-    else
-        return REPL_INTERPRETER_CACHE
-    end
-end
+struct REPLCacheToken end
 
 struct REPLInterpreter <: CC.AbstractInterpreter
     limit_aggressive_inference::Bool
@@ -550,32 +535,21 @@ struct REPLInterpreter <: CC.AbstractInterpreter
     inf_params::CC.InferenceParams
     opt_params::CC.OptimizationParams
     inf_cache::Vector{CC.InferenceResult}
-    code_cache::REPLInterpreterCache
     function REPLInterpreter(limit_aggressive_inference::Bool=false;
                              world::UInt = Base.get_world_counter(),
                              inf_params::CC.InferenceParams = CC.InferenceParams(;
                                  aggressive_constant_propagation=true,
                                  unoptimize_throw_blocks=false),
                              opt_params::CC.OptimizationParams = CC.OptimizationParams(),
-                             inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[],
-                             code_cache::REPLInterpreterCache = get_code_cache())
-        return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache, code_cache)
+                             inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
+        return new(limit_aggressive_inference, world, inf_params, opt_params, inf_cache)
     end
 end
 CC.InferenceParams(interp::REPLInterpreter) = interp.inf_params
 CC.OptimizationParams(interp::REPLInterpreter) = interp.opt_params
-CC.get_world_counter(interp::REPLInterpreter) = interp.world
+CC.get_inference_world(interp::REPLInterpreter) = interp.world
 CC.get_inference_cache(interp::REPLInterpreter) = interp.inf_cache
-CC.code_cache(interp::REPLInterpreter) = CC.WorldView(interp.code_cache, CC.WorldRange(interp.world))
-CC.get(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
-CC.getindex(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
-CC.haskey(wvc::CC.WorldView{REPLInterpreterCache}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
-function CC.setindex!(wvc::CC.WorldView{REPLInterpreterCache}, ci::CodeInstance, mi::MethodInstance)
-    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
-        delete!(wvc.cache.dict, replaced)
-    end
-    return setindex!(wvc.cache.dict, ci, mi)
-end
+CC.cache_owner(::REPLInterpreter) = REPLCacheToken()
 
 # REPLInterpreter is only used for type analysis, so it should disable optimization entirely
 CC.may_optimize(::REPLInterpreter) = false
@@ -1162,7 +1136,7 @@ function complete_identifiers!(suggestions::Vector{Completion}, @nospecialize(ff
                         if ex === nothing
                             ex = arg
                         else
-                            ex = Expr(:., out, QuoteNode(arg))
+                            ex = Expr(:., ex, QuoteNode(arg))
                         end
                     else # invalid expression
                         ex = nothing
@@ -1473,78 +1447,9 @@ function shell_completions(string, pos)
     return Completion[], 0:-1, false
 end
 
-function UndefVarError_hint(io::IO, ex::UndefVarError)
-    var = ex.var
-    if var === :or
-        print(io, "\nSuggestion: Use `||` for short-circuiting boolean OR.")
-    elseif var === :and
-        print(io, "\nSuggestion: Use `&&` for short-circuiting boolean AND.")
-    elseif var === :help
-        println(io)
-        # Show friendly help message when user types help or help() and help is undefined
-        show(io, MIME("text/plain"), Base.Docs.parsedoc(Base.Docs.keywords[:help]))
-    elseif var === :quit
-        print(io, "\nSuggestion: To exit Julia, use Ctrl-D, or type exit() and press enter.")
-    end
-    if isdefined(ex, :scope)
-        scope = ex.scope
-        if scope isa Module
-            bnd = ccall(:jl_get_module_binding, Any, (Any, Any, Cint), scope, var, true)::Core.Binding
-            if isdefined(bnd, :owner)
-                owner = bnd.owner
-                if owner === bnd
-                    print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
-                end
-            else
-                owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), scope, var)
-                if C_NULL == owner
-                    # No global of this name exists in this module.
-                    # This is the common case, so do not print that information.
-                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
-                    owner = bnd
-                else
-                    owner = unsafe_pointer_to_objref(owner)::Core.Binding
-                end
-            end
-            if owner !== bnd
-                # this could use jl_binding_dbgmodule for the exported location in the message too
-                print(io, "\nSuggestion: this global was defined as `$(owner.globalref)` but not assigned a value.")
-            end
-        elseif scope === :static_parameter
-            print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
-        elseif scope === :local
-            print(io, "\nSuggestion: check for an assignment to a local variable that shadows a global of the same name.")
-        end
-    else
-        scope = undef
-    end
-    if scope !== Base && !_UndefVarError_warnfor(io, Base, var)
-        warned = false
-        for m in Base.loaded_modules_order
-            m === Core && continue
-            m === Base && continue
-            m === Main && continue
-            m === scope && continue
-            warned |= _UndefVarError_warnfor(io, m, var)
-        end
-        warned ||
-            _UndefVarError_warnfor(io, Core, var) ||
-            _UndefVarError_warnfor(io, Main, var)
-    end
-    nothing
-end
-
-function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
-    Base.isbindingresolved(m, var) || return false
-    (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
-    print(io, "\nHint: a global variable of this name also exists in $m.")
-    return true
-end
-
 function __init__()
-    Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
     COMPLETION_WORLD[] = Base.get_world_counter()
-    nothing
+    return nothing
 end
 
 end # module

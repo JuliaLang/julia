@@ -80,7 +80,7 @@ function iterate(I::ANSIIterator, (i, m_st)=(1, iterate(I.captures)))
 end
 textwidth(I::ANSIIterator) = mapreduce(textwidth∘last, +, I; init=0)
 
-function _truncate_at_width_or_chars(ignore_ANSI::Bool, str, width, rpad=false, chars="\r\n", truncmark="…")
+function _truncate_at_width_or_chars(ignore_ANSI::Bool, str::AbstractString, width::Int, rpad::Bool=false, chars="\r\n", truncmark="…")
     truncwidth = textwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
     wid = truncidx = lastidx = 0
@@ -3174,7 +3174,7 @@ representing argument `x` in terms of its type. (The double-colon is
 omitted if `toplevel=true`.) However, you can
 specialize this function for specific types to customize printing.
 
-# Example
+# Examples
 
 A SubArray created as `view(a, :, 3, 2:5)`, where `a` is a
 3-dimensional Float64 array, has type
