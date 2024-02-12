@@ -817,7 +817,7 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     end
     # check weakdeps in case extensions need to resolve from parent package
     weakdeps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
-    if deps !== nothing
+    if weakdeps !== nothing
         uuid = get(weakdeps, name, nothing)::Union{String, Nothing}
         @debug "Explicitly checked project weak deps:" name uuid
         uuid === nothing || return UUID(uuid)
