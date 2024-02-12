@@ -23,14 +23,14 @@ A linear indexing style uses one integer index to describe the position in the a
 (even if it's a multidimensional array) and column-major
 ordering is used to efficiently access the elements. This means that
 requesting [`eachindex`](@ref) from an array that is `IndexLinear` will return
-a simple one-dimensional range, even if it is multidimensional.
+a simple one-dimensional range, even if it is multidimensional.
 
 A custom array that reports its `IndexStyle` as `IndexLinear` only needs
 to implement indexing (and indexed assignment) with a single `Int` index;
-all other indexing expressions — including multidimensional accesses — will
+all other indexing expressions — including multidimensional accesses — will
 be recomputed to the linear index.  For example, if `A` were a `2×3` custom
 matrix with linear indexing, and we referenced `A[1, 3]`, this would be
-recomputed to the equivalent linear index and call `A[5]` since `2*1 + 3 = 5`.
+recomputed to the equivalent linear index and call `A[5]` since `1 + 2*(3 - 1) = 5`.
 
 See also [`IndexCartesian`](@ref).
 """
@@ -50,13 +50,13 @@ a range of [`CartesianIndices`](@ref).
 
 A `N`-dimensional custom array that reports its `IndexStyle` as `IndexCartesian` needs
 to implement indexing (and indexed assignment) with exactly `N` `Int` indices;
-all other indexing expressions — including linear indexing — will
+all other indexing expressions — including linear indexing — will
 be recomputed to the equivalent Cartesian location.  For example, if `A` were a `2×3` custom
 matrix with cartesian indexing, and we referenced `A[5]`, this would be
-recomputed to the equivalent Cartesian index and call `A[1, 3]` since `5 = 2*1 + 3`.
+recomputed to the equivalent Cartesian index and call `A[1, 3]` since `5 = 1 + 2*(3 - 1)`.
 
 It is significantly more expensive to compute Cartesian indices from a linear index than it is
-to go the other way.  The former operation requires division — a very costly operation — whereas
+to go the other way.  The former operation requires division — a very costly operation — whereas
 the latter only uses multiplication and addition and is essentially free. This asymmetry means it
 is far more costly to use linear indexing with an `IndexCartesian` array than it is to use
 Cartesian indexing with an `IndexLinear` array.
@@ -92,7 +92,7 @@ particular, [`eachindex`](@ref) creates an iterator whose type depends
 on the setting of this trait.
 """
 IndexStyle(A::AbstractArray) = IndexStyle(typeof(A))
-IndexStyle(::Type{Union{}}) = IndexLinear()
+IndexStyle(::Type{Union{}}, slurp...) = IndexLinear()
 IndexStyle(::Type{<:AbstractArray}) = IndexCartesian()
 IndexStyle(::Type{<:Array}) = IndexLinear()
 IndexStyle(::Type{<:AbstractRange}) = IndexLinear()
@@ -106,26 +106,49 @@ IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 
 promote_shape(::Tuple{}, ::Tuple{}) = ()
 
-function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
-    if a[1] != b[1]
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
+# Consistent error message for promote_shape mismatch, hiding type details like
+# OneTo. When b ≡ nothing, it is omitted; i can be supplied for an index.
+function throw_promote_shape_mismatch(a::Tuple, b::Union{Nothing,Tuple}, i = nothing)
+    if a isa Tuple{Vararg{Base.OneTo}} && (b === nothing || b isa Tuple{Vararg{Base.OneTo}})
+        a = map(lastindex, a)::Dims
+        b === nothing || (b = map(lastindex, b)::Dims)
     end
+    _has_axes = !(a isa Dims && (b === nothing || b isa Dims))
+    if _has_axes
+        _normalize(d) = map(x -> firstindex(x):lastindex(x), d)
+        a = _normalize(a)
+        b === nothing || (b = _normalize(b))
+        _things = "axes "
+    else
+        _things = "size "
+    end
+    msg = IOBuffer()
+    print(msg, "a has ", _things)
+    print(msg, a)
+    if b ≢ nothing
+        print(msg, ", b has ", _things)
+        print(msg, b)
+    end
+    if i ≢ nothing
+        print(msg, ", mismatch at dim ", i)
+    end
+    throw(DimensionMismatch(String(take!(msg))))
+end
+
+function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
+    a[1] != b[1] && throw_promote_shape_mismatch(a, b)
     return a
 end
 
 function promote_shape(a::Tuple{Int,Int}, b::Tuple{Int,})
-    if a[1] != b[1] || a[2] != 1
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
-    end
+    (a[1] != b[1] || a[2] != 1) && throw_promote_shape_mismatch(a, b)
     return a
 end
 
 promote_shape(a::Tuple{Int,}, b::Tuple{Int,Int}) = promote_shape(b, a)
 
 function promote_shape(a::Tuple{Int, Int}, b::Tuple{Int, Int})
-    if a[1] != b[1] || a[2] != b[2]
-        throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b"))
-    end
+    (a[1] != b[1] || a[2] != b[2]) && throw_promote_shape_mismatch(a, b)
     return a
 end
 
@@ -153,14 +176,10 @@ function promote_shape(a::Dims, b::Dims)
         return promote_shape(b, a)
     end
     for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
-        end
+        a[i] != b[i] && throw_promote_shape_mismatch(a, b, i)
     end
     for i=length(b)+1:length(a)
-        if a[i] != 1
-            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
-        end
+        a[i] != 1 && throw_promote_shape_mismatch(a, nothing, i)
     end
     return a
 end
@@ -174,14 +193,10 @@ function promote_shape(a::Indices, b::Indices)
         return promote_shape(b, a)
     end
     for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match: a has dims $a, b has dims $b, mismatch at $i"))
-        end
+        a[i] != b[i] && throw_promote_shape_mismatch(a, b, i)
     end
     for i=length(b)+1:length(a)
-        if a[i] != 1:1
-            throw(DimensionMismatch("dimensions must match: a has dims $a, must have singleton at dim $i"))
-        end
+        a[i] != 1:1 && throw_promote_shape_mismatch(a, nothing, i)
     end
     return a
 end
@@ -320,20 +335,37 @@ which they index. To support those cases, `to_indices(A, I)` calls
 `to_indices(A, axes(A), I)`, which then recursively walks through both the
 given tuple of indices and the dimensional indices of `A` in tandem. As such,
 not all index types are guaranteed to propagate to `Base.to_index`.
+
+# Examples
+```jldoctest
+julia> A = zeros(1,2,3,4);
+
+julia> to_indices(A, (1,1,2,2))
+(1, 1, 2, 2)
+
+julia> to_indices(A, (1,1,2,20)) # no bounds checking
+(1, 1, 2, 20)
+
+julia> to_indices(A, (CartesianIndex((1,)), 2, CartesianIndex((3,4)))) # exotic index
+(1, 2, 3, 4)
+
+julia> to_indices(A, ([1,1], 1:2, 3, 4))
+([1, 1], 1:2, 3, 4)
+
+julia> to_indices(A, (1,2)) # no shape checking
+(1, 2)
+```
 """
-to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, axes(A), I))
-to_indices(A, I::Tuple{Any}) = (@_inline_meta; to_indices(A, (eachindex(IndexLinear(), A),), I))
+to_indices(A, I::Tuple) = (@inline; to_indices(A, axes(A), I))
+to_indices(A, I::Tuple{Any}) = (@inline; to_indices(A, (eachindex(IndexLinear(), A),), I))
 # In simple cases, we know that we don't need to use axes(A), optimize those.
 # Having this here avoids invalidations from multidimensional.jl: to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}})
 to_indices(A, I::Tuple{}) = ()
 to_indices(A, I::Tuple{Vararg{Int}}) = I
-to_indices(A, I::Tuple{Vararg{Integer}}) = (@_inline_meta; to_indices(A, (), I))
+to_indices(A, I::Tuple{Vararg{Integer}}) = (@inline; to_indices(A, (), I))
 to_indices(A, inds, ::Tuple{}) = ()
-to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
-    (@_inline_meta; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))
-
-_maybetail(::Tuple{}) = ()
-_maybetail(t::Tuple) = tail(t)
+to_indices(A, inds, I::Tuple{Any, Vararg}) =
+    (@inline; (to_index(A, I[1]), to_indices(A, safe_tail(inds), tail(I))...))
 
 """
     Slice(indices)
@@ -351,6 +383,8 @@ struct Slice{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
 Slice(S::Slice) = S
+Slice{T}(S::Slice) where {T<:AbstractUnitRange} = Slice{T}(T(S.indices))
+
 axes(S::Slice) = (IdentityUnitRange(S.indices),)
 axes1(S::Slice) = IdentityUnitRange(S.indices)
 axes(S::Slice{<:OneTo}) = (S.indices,)
@@ -360,12 +394,11 @@ first(S::Slice) = first(S.indices)
 last(S::Slice) = last(S.indices)
 size(S::Slice) = (length(S.indices),)
 length(S::Slice) = length(S.indices)
-getindex(S::Slice, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::Slice, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::Slice, i::Int) = (@inline; @boundscheck checkbounds(S, i); i)
+getindex(S::Slice, i::AbstractUnitRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
+getindex(S::Slice, i::StepRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::Slice) = print(io, "Base.Slice(", r.indices, ")")
 iterate(S::Slice, s...) = iterate(S.indices, s...)
-
 
 """
     IdentityUnitRange(range::AbstractUnitRange)
@@ -378,6 +411,8 @@ struct IdentityUnitRange{T<:AbstractUnitRange} <: AbstractUnitRange{Int}
     indices::T
 end
 IdentityUnitRange(S::IdentityUnitRange) = S
+IdentityUnitRange{T}(S::IdentityUnitRange) where {T<:AbstractUnitRange} = IdentityUnitRange{T}(T(S.indices))
+
 # IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
 axes(S::IdentityUnitRange) = (S,)
 axes1(S::IdentityUnitRange) = S
@@ -388,15 +423,15 @@ first(S::IdentityUnitRange) = first(S.indices)
 last(S::IdentityUnitRange) = last(S.indices)
 size(S::IdentityUnitRange) = (length(S.indices),)
 length(S::IdentityUnitRange) = length(S.indices)
-getindex(S::IdentityUnitRange, i::Int) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
-getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@_inline_meta; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::Int) = (@inline; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::AbstractUnitRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
+getindex(S::IdentityUnitRange, i::StepRange{<:Integer}) = (@inline; @boundscheck checkbounds(S, i); i)
 show(io::IO, r::IdentityUnitRange) = print(io, "Base.IdentityUnitRange(", r.indices, ")")
 iterate(S::IdentityUnitRange, s...) = iterate(S.indices, s...)
 
 # For OneTo, the values and indices of the values are identical, so this may be defined in Base.
 # In general such an indexing operation would produce offset ranges
-getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}}) = (@_inline_meta; @boundscheck checkbounds(S, I); I)
+getindex(S::OneTo, I::IdentityUnitRange{<:AbstractUnitRange{<:Integer}}) = (@inline; @boundscheck checkbounds(S, I); I)
 
 """
     LinearIndices(A::AbstractArray)
@@ -429,7 +464,7 @@ julia> extrema(b)
 
 Return a `LinearIndices` array with the specified shape or [`axes`](@ref).
 
-# Example
+# Examples
 
 The main purpose of this constructor is intuitive conversion
 from cartesian to linear indexing:
@@ -448,6 +483,8 @@ julia> linear[1,2]
 struct LinearIndices{N,R<:NTuple{N,AbstractUnitRange{Int}}} <: AbstractArray{Int,N}
     indices::R
 end
+convert(::Type{LinearIndices{N,R}}, inds::LinearIndices{N}) where {N,R<:NTuple{N,AbstractUnitRange{Int}}} =
+    LinearIndices{N,R}(convert(R, inds.indices))::LinearIndices{N,R}
 
 LinearIndices(::Tuple{}) = LinearIndices{0,typeof(())}(())
 LinearIndices(inds::NTuple{N,AbstractUnitRange{<:Integer}}) where {N} =
@@ -456,31 +493,33 @@ LinearIndices(inds::NTuple{N,Union{<:Integer,AbstractUnitRange{<:Integer}}}) whe
     LinearIndices(map(_convert2ind, inds))
 LinearIndices(A::Union{AbstractArray,SimpleVector}) = LinearIndices(axes(A))
 
-_convert2ind(i::Integer) = Base.OneTo(i)
+_convert2ind(i::Integer) = oneto(i)
 _convert2ind(ind::AbstractUnitRange) = first(ind):last(ind)
-
-promote_rule(::Type{LinearIndices{N,R1}}, ::Type{LinearIndices{N,R2}}) where {N,R1,R2} =
-    LinearIndices{N,indices_promote_type(R1,R2)}
 
 function indices_promote_type(::Type{Tuple{R1,Vararg{R1,N}}}, ::Type{Tuple{R2,Vararg{R2,N}}}) where {R1,R2,N}
     R = promote_type(R1, R2)
-    Tuple{R,Vararg{R,N}}
+    return Tuple{R, Vararg{R, N}}
 end
 
-convert(::Type{LinearIndices{N,R}}, inds::LinearIndices{N}) where {N,R} =
-    LinearIndices(convert(R, inds.indices))
+promote_rule(::Type{LinearIndices{N,R1}}, ::Type{LinearIndices{N,R2}}) where {N,R1,R2} =
+    LinearIndices{N,indices_promote_type(R1,R2)}
+promote_rule(a::Type{Slice{T1}}, b::Type{Slice{T2}}) where {T1,T2} =
+    el_same(promote_type(T1, T2), a, b)
+promote_rule(a::Type{IdentityUnitRange{T1}}, b::Type{IdentityUnitRange{T2}}) where {T1,T2} =
+    el_same(promote_type(T1, T2), a, b)
 
 # AbstractArray implementation
 IndexStyle(::Type{<:LinearIndices}) = IndexLinear()
 axes(iter::LinearIndices) = map(axes1, iter.indices)
 size(iter::LinearIndices) = map(length, iter.indices)
+isassigned(iter::LinearIndices, i::Int) = checkbounds(Bool, iter, i)
 function getindex(iter::LinearIndices, i::Int)
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(iter, i)
     i
 end
 function getindex(iter::LinearIndices, i::AbstractRange{<:Integer})
-    @_inline_meta
+    @inline
     @boundscheck checkbounds(iter, i)
     @inbounds isa(iter, LinearIndices{1}) ? iter.indices[1][i] : (first(iter):last(iter))[i]
 end
@@ -491,6 +530,6 @@ iterate(iter::LinearIndices, i=1) = i > length(iter) ? nothing : (i, i+1)
 
 # Needed since firstindex and lastindex are defined in terms of LinearIndices
 first(iter::LinearIndices) = 1
-first(iter::LinearIndices{1}) = (@_inline_meta; first(axes1(iter.indices[1])))
-last(iter::LinearIndices) = (@_inline_meta; length(iter))
-last(iter::LinearIndices{1}) = (@_inline_meta; last(axes1(iter.indices[1])))
+first(iter::LinearIndices{1}) = (@inline; first(axes1(iter.indices[1])))
+last(iter::LinearIndices) = (@inline; length(iter))
+last(iter::LinearIndices{1}) = (@inline; last(axes1(iter.indices[1])))

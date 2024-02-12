@@ -53,8 +53,6 @@ call. Finally, chains of comparisons have their own special expression structure
 | `a&&b`      | `(&& a b)`                |
 | `x += 1`    | `(+= x 1)`                |
 | `a ? 1 : 2` | `(if a 1 2)`              |
-| `a:b`       | `(: a b)`                 |
-| `a:b:c`     | `(: a b c)`               |
 | `a,b`       | `(tuple a b)`             |
 | `a==b`      | `(call == a b)`           |
 | `1<i<=n`    | `(comparison 1 < i <= n)` |
@@ -78,10 +76,10 @@ call. Finally, chains of comparisons have their own special expression structure
 | `[x y]`                  | `(hcat x y)`                                      |
 | `[x y; z t]`             | `(vcat (row x y) (row z t))`                      |
 | `[x;y;; z;t;;;]`         | `(ncat 3 (nrow 2 (nrow 1 x y) (nrow 1 z t)))`     |
-| `[x for y in z, a in b]` | `(comprehension x (= y z) (= a b))`               |
-| `T[x for y in z]`        | `(typed_comprehension T x (= y z))`               |
+| `[x for y in z, a in b]` | `(comprehension (generator x (= y z) (= a b)))`   |
+| `T[x for y in z]`        | `(typed_comprehension T (generator x (= y z)))`   |
 | `(a, b, c)`              | `(tuple a b c)`                                   |
-| `(a; b; c)`              | `(block a (block b c))`                           |
+| `(a; b; c)`              | `(block a b c)`                                   |
 
 ### Macros
 
@@ -130,11 +128,11 @@ instead of `:import`.
 Julia supports more number types than many scheme implementations, so not all numbers are represented
 directly as scheme numbers in the AST.
 
-| Input                   | AST                                                     |
-|:----------------------- |:------------------------------------------------------- |
-| `11111111111111111111`  | `(macrocall @int128_str (null) "11111111111111111111")` |
-| `0xfffffffffffffffff`   | `(macrocall @uint128_str (null) "0xfffffffffffffffff")` |
-| `1111...many digits...` | `(macrocall @big_str (null) "1111....")`                |
+| Input                   | AST                                                      |
+|:----------------------- |:-------------------------------------------------------- |
+| `11111111111111111111`  | `(macrocall @int128_str nothing "11111111111111111111")` |
+| `0xfffffffffffffffff`   | `(macrocall @uint128_str nothing "0xfffffffffffffffff")` |
+| `1111...many digits...` | `(macrocall @big_str nothing "1111....")`                |
 
 ### Block forms
 
@@ -157,7 +155,7 @@ parses as:
 ```
 (if a (block (line 2) b)
     (elseif (block (line 3) c) (block (line 4) d)
-            (block (line 5 e))))
+            (block (line 6 e))))
 ```
 
 A `while` loop parses as `(while condition body)`.
@@ -251,14 +249,11 @@ types exist in lowered form:
     While almost every part of a surface AST is represented by an `Expr`, the IR uses only a
     limited number of `Expr`s, mostly for calls and some top-level-only forms.
 
-  * `Slot`
+  * `SlotNumber`
 
-    Identifies arguments and local variables by consecutive numbering. `Slot` is an abstract type
-    with subtypes `SlotNumber` and `TypedSlot`. Both types have an integer-valued `id` field giving
-    the slot index. Most slots have the same type at all uses, and so are represented with `SlotNumber`.
-    The types of these slots are found in the `slottypes` field of their `CodeInfo` object.
-    Slots that require per-use type annotations are represented with `TypedSlot`, which has a `typ`
-    field.
+    Identifies arguments and local variables by consecutive numbering. It has an
+    integer-valued `id` field giving the slot index.
+    The types of these slots can be found in the `slottypes` field of their `CodeInfo` object.
 
   * `Argument`
 
@@ -324,7 +319,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `=`
 
-    Assignment. In the IR, the first argument is always a Slot or a GlobalRef.
+    Assignment. In the IR, the first argument is always a `SlotNumber` or a `GlobalRef`.
 
   * `method`
 
@@ -427,7 +422,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `splatnew`
 
     Similar to `new`, except field values are passed as a single tuple. Works similarly to
-    `Base.splat(new)` if `new` were a first-class function, hence the name.
+    `splat(new)` if `new` were a first-class function, hence the name.
 
   * `isdefined`
 
@@ -507,14 +502,45 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The calling convention for the call.
 
-      * `args[6:length(args[3])]` : arguments
+      * `args[6:5+length(args[3])]` : arguments
 
         The values for all the arguments (with types of each given in args[3]).
 
-      * `args[(length(args[3]) + 1):end]` : gc-roots
+      * `args[6+length(args[3])+1:end]` : gc-roots
 
         The additional objects that may need to be gc-rooted for the duration of the call.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
+
+  * `new_opaque_closure`
+
+    Constructs a new opaque closure. The fields are:
+
+      * `args[1]` : signature
+
+        The function signature of the opaque closure. Opaque closures don't participate in dispatch, but the input types can be restricted.
+
+      * `args[2]` : isva
+
+        Indicates whether the closure accepts varargs.
+
+      * `args[3]` : lb
+
+        Lower bound on the output type. (Defaults to `Union{}`)
+
+      * `args[4]` : ub
+
+        Upper bound on the output type. (Defaults to `Any`)
+
+      * `args[5]` : method
+
+        The actual method as an `opaque_closure_method` expression.
+
+      * `args[6:end]` : captures
+
+        The values captured by the opaque closure.
+
+    !!! compat "Julia 1.7"
+        Opaque closures were added in Julia 1.7
 
 
 ### [Method](@id ast-lowered-method)
@@ -548,7 +574,7 @@ A unique'd container describing the shared metadata for a single method.
     Pointers to non-AST things that have been interpolated into the AST, required by
     compression of the AST, type-inference, or the generation of native code.
 
-  * `nargs`, `isva`, `called`, `isstaged`, `pure`
+  * `nargs`, `isva`, `called`, `is_for_opaque_closure`,
 
     Descriptive bit-fields for the source code of this Method.
 
@@ -559,7 +585,8 @@ A unique'd container describing the shared metadata for a single method.
 
 ### MethodInstance
 
-A unique'd container describing a single callable signature for a Method. See especially [Proper maintenance and care of multi-threading locks](@ref)
+A unique'd container describing a single callable signature for a Method.
+See especially [Proper maintenance and care of multi-threading locks](@ref Proper-maintenance-and-care-of-multi-threading-locks)
 for important details on how to modify these fields safely.
 
   * `specTypes`
@@ -574,10 +601,9 @@ for important details on how to modify these fields safely.
 
   * `sparam_vals`
 
-    The values of the static parameters in `specTypes` indexed by `def.sparam_syms`. For the
-    `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`. But for a
-    runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and
-    indexable.
+    The values of the static parameters in `specTypes`.
+    For the `MethodInstance` at `Method.unspecialized`, this is the empty `SimpleVector`.
+    But for a runtime `MethodInstance` from the `MethodTable` cache, this will always be defined and indexable.
 
   * `uninferred`
 
@@ -601,6 +627,10 @@ for important details on how to modify these fields safely.
 
     The `MethodInstance` that this cache entry is derived from.
 
+  * `owner`
+
+    A token that represents the owner of this `CodeInstance`. Will use `jl_egal` to match.
+
 
   * `rettype`/`rettype_const`
 
@@ -621,7 +651,7 @@ for important details on how to modify these fields safely.
     The ABI to use when calling `fptr`. Some significant ones include:
 
       * 0 - Not compiled yet
-      * 1 - JL_CALLABLE `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
+      * 1 - `JL_CALLABLE` `jl_value_t *(*)(jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 2 - Constant (value stored in `rettype_const`)
       * 3 - With Static-parameters forwarded `jl_value_t *(*)(jl_svec_t *sparams, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
       * 4 - Run in interpreter `jl_value_t *(*)(jl_method_instance_t *meth, jl_function_t *f, jl_value_t *args[nargs], uint32_t nargs)`
@@ -649,10 +679,10 @@ A (usually temporary) container for holding lowered source code.
 
     A `UInt8` array of slot properties, represented as bit flags:
 
-      * 2  - assigned (only false if there are *no* assignment statements with this var on the left)
-      * 8  - const (currently unused for local variables)
-      * 16 - statically assigned once
-      * 32 - might be used before assigned. This flag is only valid after type inference.
+      * 0x02 - assigned (only false if there are *no* assignment statements with this var on the left)
+      * 0x08 - used (if there is any read or write of the slot)
+      * 0x10 - statically assigned once
+      * 0x20 - might be used before assigned. This flag is only valid after type inference.
 
   * `ssavaluetypes`
 
@@ -663,13 +693,8 @@ A (usually temporary) container for holding lowered source code.
 
   * `ssaflags`
 
-    Statement-level flags for each expression in the function. Many of these are reserved, but not yet implemented:
-
-    * 0 = inbounds
-    * 1,2 = <reserved> inlinehint,always-inline,noinline
-    * 3 = <reserved> strict-ieee (strictfp)
-    * 4-6 = <unused>
-    * 7 = <reserved> has out-of-band info
+    Statement-level 32 bits flags for each expression in the function.
+    See the definition of `jl_code_info_t` in julia.h for more details.
 
   * `linetable`
 
@@ -699,6 +724,10 @@ Optional Fields:
 
     The `MethodInstance` that "owns" this object (if applicable).
 
+  * `edges`
+
+    Forward edges to method instances that must be invalidated.
+
   * `min_world`/`max_world`
 
     The range of world ages for which this code was valid at the time when it had been inferred.
@@ -719,7 +748,22 @@ Boolean properties:
     Whether this should propagate `@inbounds` when inlined for the purpose of eliding
     `@boundscheck` blocks.
 
-  * `pure`
 
-    Whether this is known to be a pure function of its arguments, without respect to the
-    state of the method caches or other mutable global state.
+`UInt8` settings:
+
+  * `constprop`
+
+    * 0 = use heuristic
+    * 1 = aggressive
+    * 2 = none
+
+  * `purity`
+    Constructed from 5 bit flags:
+
+    * 0x01 << 0 = this method is guaranteed to return or terminate consistently (`:consistent`)
+    * 0x01 << 1 = this method is free from externally semantically visible side effects (`:effect_free`)
+    * 0x01 << 2 = this method is guaranteed to not throw an exception (`:nothrow`)
+    * 0x01 << 3 = this method is guaranteed to terminate (`:terminates_globally`)
+    * 0x01 << 4 = the syntactic control flow within this method is guaranteed to terminate (`:terminates_locally`)
+
+    See the documentation of `Base.@assume_effects` for more details.

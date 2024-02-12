@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Random/docs/src/index.md"
+```
+
 # Random Numbers
 
 ```@meta
@@ -8,9 +12,12 @@ Random number generation in Julia uses the [Xoshiro256++](https://prng.di.unimi.
 by default, with per-`Task` state.
 Other RNG types can be plugged in by inheriting the `AbstractRNG` type; they can then be used to
 obtain multiple streams of random numbers.
-Besides the default `TaskLocalRNG` type, the `Random` package also provides `MersenneTwister`,
-`RandomDevice` (which exposes OS-provided entropy), and `Xoshiro` (for explicitly-managed
-Xoshiro256++ streams).
+
+The PRNGs (pseudorandom number generators) exported by the `Random` package are:
+* `TaskLocalRNG`: a token that represents use of the currently active Task-local stream, deterministically seeded from the parent task, or by `RandomDevice` (with system randomness) at program start
+* `Xoshiro`: generates a high-quality stream of random numbers with a small state vector and high performance using the Xoshiro256++ algorithm
+* `RandomDevice`: for OS-provided entropy. This may be used for cryptographically secure random numbers (CS(P)RNG).
+* `MersenneTwister`: an alternate high-quality PRNG which was the default in older versions of Julia, and is also quite fast, but requires much more space to store the state vector and generate a random sequence.
 
 Most functions related to random generation accept an optional `AbstractRNG` object as first argument.
 Some also accept dimension specifications `dims...` (which can also be given as a tuple) to generate
@@ -29,6 +36,8 @@ unbounded integers, the interval must be specified (e.g. `rand(big.(1:6))`).
 
 Additionally, normal and exponential distributions are implemented for some `AbstractFloat` and
 `Complex` types, see [`randn`](@ref) and [`randexp`](@ref) for details.
+
+To generate random numbers from other distributions, see the [Distributions.jl](https://juliastats.org/Distributions.jl/stable/) package.
 
 !!! warning
     Because the precise way in which random numbers are generated is considered an implementation detail, bug fixes and speed improvements may change the stream of numbers that are generated after a version change. Relying on a specific seed or generated stream of numbers during unit testing is thus discouraged - consider testing properties of the methods in question instead.
@@ -67,6 +76,7 @@ Random.shuffle!
 ## Generators (creation and seeding)
 
 ```@docs
+Random.default_rng
 Random.seed!
 Random.AbstractRNG
 Random.TaskLocalRNG
@@ -75,7 +85,7 @@ Random.MersenneTwister
 Random.RandomDevice
 ```
 
-## Hooking into the `Random` API
+## [Hooking into the `Random` API](@id rand-api-hook)
 
 There are two mostly orthogonal ways to extend `Random` functionalities:
 1) generating random values of custom types
@@ -120,8 +130,8 @@ Random.SamplerSimple
 Decoupling pre-computation from actually generating the values is part of the API, and is also available to the user. As an example, assume that `rand(rng, 1:20)` has to be called repeatedly in a loop: the way to take advantage of this decoupling is as follows:
 
 ```julia
-rng = MersenneTwister()
-sp = Random.Sampler(rng, 1:20) # or Random.Sampler(MersenneTwister, 1:20)
+rng = Xoshiro()
+sp = Random.Sampler(rng, 1:20) # or Random.Sampler(Xoshiro, 1:20)
 for x in X
     n = rand(rng, sp) # similar to n = rand(rng, 1:20)
     # use n
@@ -151,22 +161,22 @@ Scalar and array methods for `Die` now work as expected:
 
 ```jldoctest Die; setup = :(Random.seed!(1))
 julia> rand(Die)
-Die(6)
+Die(5)
 
-julia> rand(MersenneTwister(0), Die)
-Die(11)
+julia> rand(Xoshiro(0), Die)
+Die(10)
 
 julia> rand(Die, 3)
 3-element Vector{Die}:
+ Die(9)
  Die(15)
- Die(19)
- Die(4)
+ Die(14)
 
 julia> a = Vector{Die}(undef, 3); rand!(a)
 3-element Vector{Die}:
+ Die(19)
+ Die(7)
  Die(17)
- Die(20)
- Die(15)
 ```
 
 #### A simple sampler without pre-computed data
@@ -183,9 +193,9 @@ julia> rand(Die(4))
 
 julia> rand(Die(4), 3)
 3-element Vector{Any}:
+ 2
  3
- 4
- 1
+ 3
 ```
 
 Given a collection type `S`, it's currently assumed that if `rand(::S)` is defined, an object of type `eltype(S)` will be produced. In the last example, a `Vector{Any}` is produced; the reason is that `eltype(Die) == Any`. The remedy is to define `Base.eltype(::Type{Die}) = Int`.
@@ -209,7 +219,7 @@ and that we *always* want to build an alias table, regardless of the number of v
 Random.eltype(::Type{<:DiscreteDistribution}) = Int
 
 function Random.Sampler(::Type{<:AbstractRNG}, distribution::DiscreteDistribution, ::Repetition)
-    SamplerSimple(disribution, make_alias_table(distribution.probabilities))
+    SamplerSimple(distribution, make_alias_table(distribution.probabilities))
 end
 ```
 should be defined to return a sampler with pre-computed data, then

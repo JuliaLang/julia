@@ -4,6 +4,45 @@
 
 module Filesystem
 
+"""
+    JL_O_APPEND
+    JL_O_ASYNC
+    JL_O_CLOEXEC
+    JL_O_CREAT
+    JL_O_DIRECT
+    JL_O_DIRECTORY
+    JL_O_DSYNC
+    JL_O_EXCL
+    JL_O_FSYNC
+    JL_O_LARGEFILE
+    JL_O_NDELAY
+    JL_O_NOATIME
+    JL_O_NOCTTY
+    JL_O_NOFOLLOW
+    JL_O_NONBLOCK
+    JL_O_PATH
+    JL_O_RANDOM
+    JL_O_RDONLY
+    JL_O_RDWR
+    JL_O_RSYNC
+    JL_O_SEQUENTIAL
+    JL_O_SHORT_LIVED
+    JL_O_SYNC
+    JL_O_TEMPORARY
+    JL_O_TMPFILE
+    JL_O_TRUNC
+    JL_O_WRONLY
+
+Enum constant for the `open` syscall, where `JL_O_*` corresponds to the `O_*` constant.
+See [the libuv docs](https://docs.libuv.org/en/v1.x/fs.html#file-open-constants) for more details.
+"""
+(:JL_O_APPEND, :JL_O_ASYNC, :JL_O_CLOEXEC, :JL_O_CREAT, :JL_O_DIRECT,
+ :JL_O_DIRECTORY, :JL_O_DSYNC, :JL_O_EXCL, :JL_O_FSYNC, :JL_O_LARGEFILE,
+ :JL_O_NOATIME, :JL_O_NOCTTY, :JL_O_NDELAY, :JL_O_NOFOLLOW, :JL_O_NONBLOCK,
+ :JL_O_PATH, :JL_O_RANDOM, :JL_O_RDONLY, :JL_O_RDWR, :JL_O_RSYNC,
+ :JL_O_SEQUENTIAL, :JL_O_SHORT_LIVED, :JL_O_SYNC, :JL_O_TEMPORARY,
+ :JL_O_TMPFILE, :JL_O_TRUNC, :JL_O_WRONLY)
+
 const S_IFDIR  = 0o040000  # directory
 const S_IFCHR  = 0o020000  # character device
 const S_IFBLK  = 0o060000  # block device
@@ -17,21 +56,49 @@ const S_ISUID = 0o4000  # set UID bit
 const S_ISGID = 0o2000  # set GID bit
 const S_ENFMT = S_ISGID # file locking enforcement
 const S_ISVTX = 0o1000  # sticky bit
-const S_IRWXU = 0o0700  # mask for owner permissions
-const S_IRUSR = 0o0400  # read by owner
 
-const S_IRUSR = 0o400
-const S_IWUSR = 0o200
-const S_IXUSR = 0o100
-const S_IRWXU = 0o700
-const S_IRGRP = 0o040
-const S_IWGRP = 0o020
-const S_IXGRP = 0o010
-const S_IRWXG = 0o070
-const S_IROTH = 0o004
-const S_IWOTH = 0o002
-const S_IXOTH = 0o001
-const S_IRWXO = 0o007
+const S_IRUSR = 0o0400  # read by owner
+const S_IWUSR = 0o0200  # write by owner
+const S_IXUSR = 0o0100  # execute by owner
+const S_IRWXU = 0o0700  # mask for owner permissions
+const S_IRGRP = 0o0040  # read by group
+const S_IWGRP = 0o0020  # write by group
+const S_IXGRP = 0o0010  # execute by group
+const S_IRWXG = 0o0070  # mask for group permissions
+const S_IROTH = 0o0004  # read by other
+const S_IWOTH = 0o0002  # write by other
+const S_IXOTH = 0o0001  # execute by other
+const S_IRWXO = 0o0007  # mask for other permissions
+
+"""
+    S_IRUSR
+    S_IWUSR
+    S_IXUSR
+    S_IRGRP
+    S_IWGRP
+    S_IXGRP
+    S_IROTH
+    S_IWOTH
+    S_IXOTH
+
+Constants for file access permission bits.
+The general structure is `S_I[permission][class]`
+where `permission` is `R` for read, `W` for write, and `X` for execute,
+and `class` is `USR` for user/owner, `GRP` for group, and `OTH` for other.
+"""
+(:S_IRUSR, :S_IWUSR, :S_IXUSR, :S_IRGRP, :S_IWGRP, :S_IXGRP, :S_IROTH, :S_IWOTH, :S_IXOTH)
+
+"""
+    S_IRWXU
+    S_IRWXG
+    S_IRWXO
+
+Constants for file access permission masks, i.e. the combination of read, write,
+and execute permissions for a class.
+The general structure is `S_IRWX[class]`
+where `class` is `U` for user/owner, `G` for group, and `O` for other.
+"""
+(:S_IRWXU, :S_IRWXG, :S_IRWXO)
 
 export File,
        StatStruct,
@@ -50,6 +117,21 @@ export File,
        JL_O_SEQUENTIAL,
        JL_O_RANDOM,
        JL_O_NOCTTY,
+       JL_O_NONBLOCK,
+       JL_O_NDELAY,
+       JL_O_SYNC,
+       JL_O_FSYNC,
+       JL_O_ASYNC,
+       JL_O_LARGEFILE,
+       JL_O_DIRECTORY,
+       JL_O_NOFOLLOW,
+       JL_O_CLOEXEC,
+       JL_O_DIRECT,
+       JL_O_NOATIME,
+       JL_O_PATH,
+       JL_O_TMPFILE,
+       JL_O_DSYNC,
+       JL_O_RSYNC,
        S_IRUSR, S_IWUSR, S_IXUSR, S_IRWXU,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
@@ -58,7 +140,7 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
+    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
 
 import .Base.RefValue
 
@@ -92,6 +174,7 @@ if OS_HANDLE !== RawFD
 end
 
 rawhandle(file::File) = file.handle
+setup_stdio(file::File, ::Bool) = (file, false)
 
 # Filesystem.open, not Base.open
 function open(path::AbstractString, flags::Integer, mode::Integer=0)
@@ -127,6 +210,8 @@ function close(f::File)
     end
     nothing
 end
+
+closewrite(f::File) = nothing
 
 # sendfile is the most efficient way to copy from a file descriptor
 function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
@@ -178,18 +263,23 @@ end
 
 function read(f::File, ::Type{UInt8})
     check_open(f)
-    ret = ccall(:jl_fs_read_byte, Int32, (OS_HANDLE,), f.handle)
+    p = Ref{UInt8}()
+    ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
+                f.handle, p, 1)
     uv_error("read", ret)
-    return ret % UInt8
+    @assert ret <= sizeof(p) == 1
+    ret < 1 && throw(EOFError())
+    return p[] % UInt8
 end
 
 function read(f::File, ::Type{Char})
     b0 = read(f, UInt8)
-    l = 8 * (4 - leading_ones(b0))
+    l = 0x08 * (0x04 - UInt8(leading_ones(b0)))
     c = UInt32(b0) << 24
-    if l < 24
+    if l ≤ 0x10
         s = 16
         while s ≥ l && !eof(f)
+            # this works around lack of peek(::File)
             p = position(f)
             b = read(f, UInt8)
             if b & 0xc0 != 0x80
@@ -263,5 +353,17 @@ end
 
 fd(f::File) = f.handle
 stat(f::File) = stat(f.handle)
+
+function touch(f::File)
+    @static if Sys.isunix()
+        ret = ccall(:futimes, Cint, (Cint, Ptr{Cvoid}), fd(f), C_NULL)
+        systemerror(:futimes, ret != 0)
+    else
+        t = time()
+        futime(f, t, t)
+    end
+    f
+end
+
 
 end

@@ -33,8 +33,12 @@ using .Main.OffsetArrays
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 2:5; init=10) == -4
-@test @inferred(mapfoldr(x -> x + 1, (x, y) -> (x, y...), (1, 2.0, '3');
-                         init = ())) == (2, 3.0, '4')
+for t in Any[(1, 2.0, '3'), (;a = 1, b = 2.0, c = '3')]
+    @test @inferred(mapfoldr(x -> x + 1, (x, y) -> (x, y...), t;
+                            init = ())) == (2, 3.0, '4')
+    @test @inferred(mapfoldl(x -> x + 1, (x, y) -> (x..., y), t;
+                            init = ())) == (2, 3.0, '4')
+end
 
 @test foldr((x, y) -> ('⟨' * x * '|' * y * '⟩'), "λ 🐨.α") == "⟨λ|⟨ |⟨🐨|⟨.|α⟩⟩⟩⟩" # issue #31780
 let x = rand(10)
@@ -49,8 +53,8 @@ end
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1:5; init=1000) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+, 1) == 1
-@test_throws ArgumentError reduce(*, ())
-@test_throws ArgumentError reduce(*, Union{}[])
+@test_throws "reducing over an empty collection is not allowed" reduce(*, ())
+@test_throws "reducing over an empty collection is not allowed" reduce(*, Union{}[])
 
 # mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
@@ -87,8 +91,9 @@ end
 @test mapreduce(abs2, *, Float64[]) === 1.0
 @test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
-@test_throws ArgumentError mapreduce(abs2, &, Float64[])
-@test_throws ArgumentError mapreduce(abs2, |, Float64[])
+@test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, &, Float64[])
+@test_throws str -> !occursin("Closest candidates are", str) mapreduce(abs2, &, Float64[])
+@test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, |, Float64[])
 
 # mapreduce() type stability
 @test typeof(mapreduce(*, +, Int8[10])) ===
@@ -138,8 +143,8 @@ fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
-@test_throws ArgumentError sum(Union{}[])
-@test_throws ArgumentError sum(sin, Int[])
+@test_throws "reducing over an empty collection is not allowed" sum(Union{}[])
+@test_throws "reducing over an empty collection is not allowed" sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
 a = sum(sin, z)
@@ -157,12 +162,14 @@ plus(x,y) = x + y
 sum3(A) = reduce(plus, A)
 sum4(itr) = invoke(reduce, Tuple{Function, Any}, plus, itr)
 sum5(A) = reduce(plus, A; init=0)
-sum6(itr) = invoke(Core.kwfunc(reduce), Tuple{NamedTuple{(:init,), Tuple{Int}}, typeof(reduce), Function, Any}, (init=0,), reduce, plus, itr)
+sum6(itr) = invoke(Core.kwcall, Tuple{NamedTuple{(:init,), Tuple{Int}}, typeof(reduce), Function, Any}, (init=0,), reduce, plus, itr)
+sum61(itr) = invoke(reduce, Tuple{Function, Any}, init=0, plus, itr)
 sum7(A) = mapreduce(x->x, plus, A)
 sum8(itr) = invoke(mapreduce, Tuple{Function, Function, Any}, x->x, plus, itr)
 sum9(A) = mapreduce(x->x, plus, A; init=0)
-sum10(itr) = invoke(Core.kwfunc(mapreduce), Tuple{NamedTuple{(:init,),Tuple{Int}}, typeof(mapreduce), Function, Function, Any}, (init=0,), mapreduce, x->x, plus, itr)
-for f in (sum2, sum5, sum6, sum9, sum10)
+sum10(itr) = invoke(Core.kwcall, Tuple{NamedTuple{(:init,),Tuple{Int}}, typeof(mapreduce), Function, Function, Any}, (init=0,), mapreduce, x->x, plus, itr)
+sum11(itr) = invoke(mapreduce, Tuple{Function, Function, Any}, init=0, x->x, plus, itr)
+for f in (sum2, sum5, sum6, sum61, sum9, sum10, sum11)
     @test sum(z) == f(z)
     @test sum(Int[]) == f(Int[]) == 0
     @test sum(Int[7]) == f(Int[7]) == 7
@@ -170,7 +177,7 @@ for f in (sum2, sum5, sum6, sum9, sum10)
 end
 for f in (sum3, sum4, sum7, sum8)
     @test sum(z) == f(z)
-    @test_throws ArgumentError f(Int[])
+    @test_throws "reducing over an empty" f(Int[])
     @test sum(Int[7]) == f(Int[7]) == 7
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
@@ -239,11 +246,17 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 # maximum & minimum & extrema
 
-@test_throws ArgumentError maximum(Int[])
-@test_throws ArgumentError minimum(Int[])
+@test_throws "reducing over an empty" maximum(Int[])
+@test_throws "reducing over an empty" minimum(Int[])
+@test_throws "reducing over an empty" extrema(Int[])
 
 @test maximum(Int[]; init=-1) == -1
 @test minimum(Int[]; init=-1) == -1
+@test extrema(Int[]; init=(1, -1)) == (1, -1)
+
+@test maximum(sin, []; init=-1) == -1
+@test minimum(sin, []; init=1) == 1
+@test extrema(sin, []; init=(1, -1)) == (1, -1)
 
 @test maximum(5) == 5
 @test minimum(5) == 5
@@ -385,6 +398,9 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
         @test maximum(x) === minimum(x) === missing
         @test extrema(x) === (missing, missing)
     end
+    # inputs containing both missing and NaN
+    minimum([NaN;zeros(255);missing]) === missing
+    maximum([NaN;zeros(255);missing]) === missing
 end
 
 # findmin, findmax, argmin, argmax
@@ -421,39 +437,39 @@ end
 
 # any & all
 
-@test @inferred any([]) == false
-@test @inferred any(Bool[]) == false
-@test @inferred any([true]) == true
-@test @inferred any([false, false]) == false
-@test @inferred any([false, true]) == true
-@test @inferred any([true, false]) == true
-@test @inferred any([true, true]) == true
-@test @inferred any([true, true, true]) == true
-@test @inferred any([true, false, true]) == true
-@test @inferred any([false, false, false]) == false
+@test @inferred(Union{Missing,Bool}, any([])) == false
+@test @inferred(any(Bool[])) == false
+@test @inferred(any([true])) == true
+@test @inferred(any([false, false])) == false
+@test @inferred(any([false, true])) == true
+@test @inferred(any([true, false])) == true
+@test @inferred(any([true, true])) == true
+@test @inferred(any([true, true, true])) == true
+@test @inferred(any([true, false, true])) == true
+@test @inferred(any([false, false, false])) == false
 
-@test @inferred all([]) == true
-@test @inferred all(Bool[]) == true
-@test @inferred all([true]) == true
-@test @inferred all([false, false]) == false
-@test @inferred all([false, true]) == false
-@test @inferred all([true, false]) == false
-@test @inferred all([true, true]) == true
-@test @inferred all([true, true, true]) == true
-@test @inferred all([true, false, true]) == false
-@test @inferred all([false, false, false]) == false
+@test @inferred(Union{Missing,Bool}, all([])) == true
+@test @inferred(all(Bool[])) == true
+@test @inferred(all([true])) == true
+@test @inferred(all([false, false])) == false
+@test @inferred(all([false, true])) == false
+@test @inferred(all([true, false])) == false
+@test @inferred(all([true, true])) == true
+@test @inferred(all([true, true, true])) == true
+@test @inferred(all([true, false, true])) == false
+@test @inferred(all([false, false, false])) == false
 
-@test @inferred any(x->x>0, []) == false
-@test @inferred any(x->x>0, Int[]) == false
-@test @inferred any(x->x>0, [-3]) == false
-@test @inferred any(x->x>0, [4]) == true
-@test @inferred any(x->x>0, [-3, 4, 5]) == true
+@test @inferred(Union{Missing,Bool}, any(x->x>0, [])) == false
+@test @inferred(any(x->x>0, Int[])) == false
+@test @inferred(any(x->x>0, [-3])) == false
+@test @inferred(any(x->x>0, [4])) == true
+@test @inferred(any(x->x>0, [-3, 4, 5])) == true
 
-@test @inferred all(x->x>0, []) == true
-@test @inferred all(x->x>0, Int[]) == true
-@test @inferred all(x->x>0, [-3]) == false
-@test @inferred all(x->x>0, [4]) == true
-@test @inferred all(x->x>0, [-3, 4, 5]) == false
+@test @inferred(Union{Missing,Bool}, all(x->x>0, [])) == true
+@test @inferred(all(x->x>0, Int[])) == true
+@test @inferred(all(x->x>0, [-3])) == false
+@test @inferred(all(x->x>0, [4])) == true
+@test @inferred(all(x->x>0, [-3, 4, 5])) == false
 
 @test reduce((a, b) -> a .| b, fill(trues(5), 24))  == trues(5)
 @test reduce((a, b) -> a .| b, fill(falses(5), 24)) == falses(5)
@@ -594,14 +610,22 @@ end
 # issue #18695
 test18695(r) = sum( t^2 for t in r )
 @test @inferred(test18695([1.0,2.0,3.0,4.0])) == 30.0
-@test_throws ArgumentError test18695(Any[])
+@test_throws str -> ( occursin("reducing over an empty", str) &&
+                      occursin("consider supplying `init`", str) &&
+                     !occursin("or defining", str)) test18695(Any[])
+
+# For Core.IntrinsicFunction
+@test_throws str -> ( occursin("reducing over an empty", str) &&
+                      occursin("consider supplying `init`", str) &&
+                     !occursin("or defining", str)) reduce(Base.xor_int, Int[])
 
 # issue #21107
 @test foldr(-,2:2) == 2
 
 # test neutral element not picked incorrectly for &, |
 @test @inferred(foldl(&, Int[1])) === 1
-@test_throws ArgumentError foldl(&, Int[])
+@test_throws ["reducing over an empty",
+              "consider supplying `init`"] foldl(&, Int[])
 
 # prod on Chars
 @test prod(Char[]) == ""
@@ -609,14 +633,14 @@ test18695(r) = sum( t^2 for t in r )
 @test prod(Char['a','b']) == "ab"
 
 @testset "optimized reduce(vcat/hcat, A) for arrays" begin
-    for args in ([1:2], [[1, 2]], [1:2, 3:4], [[3, 4, 5], 1:2], [1:2, [3.5, 4.5]],
+    for args in ([1:2], [[1, 2]], [1:2, 3:4], AbstractVector{Int}[[3, 4, 5], 1:2], AbstractVector[1:2, [3.5, 4.5]],
                  [[1 2], [3 4; 5 6]], [reshape([1, 2], 2, 1), 3:4])
         X = reduce(vcat, args)
         Y = vcat(args...)
         @test X == Y
         @test typeof(X) === typeof(Y)
     end
-    for args in ([1:2], [[1, 2]], [1:2, 3:4], [[3, 4, 5], 1:3], [1:2, [3.5, 4.5]],
+    for args in ([1:2], [[1, 2]], [1:2, 3:4], AbstractVector{Int}[[3, 4, 5], 1:3], AbstractVector[1:2, [3.5, 4.5]],
                  [[1 2; 3 4], [5 6; 7 8]], [1:2, [5 6; 7 8]], [[5 6; 7 8], [1, 2]])
         X = reduce(hcat, args)
         Y = hcat(args...)
@@ -650,9 +674,61 @@ end
 # issue #38627
 @testset "overflow in mapreduce" begin
     # at len = 16 and len = 1025 there is a change in codepath
-    for len in [0, 1, 15, 16, 1024, 1025, 2048, 2049]
+    for len in [1, 15, 16, 1024, 1025, 2048, 2049]
         oa = OffsetArray(repeat([1], len), typemax(Int)-len)
         @test sum(oa) == reduce(+, oa) == len
         @test mapreduce(+, +, oa, oa) == 2len
     end
+end
+
+# issue #45748
+@testset "foldl's stability for nested Iterators" begin
+    a = Iterators.flatten((1:3, 1:3))
+    b = (2i for i in a if i > 0)
+    c = Base.Generator(Float64, b)
+    d = (sin(i) for i in c if i > 0)
+    @test @inferred(sum(d)) == sum(collect(d))
+    @test @inferred(extrema(d)) == extrema(collect(d))
+    @test @inferred(maximum(c)) == maximum(collect(c))
+    @test @inferred(prod(b)) == prod(collect(b))
+    @test @inferred(minimum(a)) == minimum(collect(a))
+end
+
+function fold_alloc(a)
+    sum(a)
+    foldr(+, a)
+    max(@allocated(sum(a)), @allocated(foldr(+, a)))
+end
+let a = NamedTuple(Symbol(:x,i) => i for i in 1:33),
+    b = (a...,)
+    @test fold_alloc(a) == fold_alloc(b) == 0
+end
+
+@testset "concrete eval `[any|all](f, itr::Tuple)`" begin
+    intf = in((1,2,3)); Intf = typeof(intf)
+    symf = in((:one,:two,:three)); Symf = typeof(symf)
+    @test Core.Compiler.is_foldable(Base.infer_effects(intf, (Int,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(symf, (Symbol,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Intf,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Symf,Tuple{Symbol,Symbol,Symbol})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Intf,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Symf,Tuple{Symbol,Symbol,Symbol})))
+    @test Base.return_types() do
+        Val(all(in((1,2,3)), (1,2,3)))
+    end |> only == Val{true}
+    @test Base.return_types() do
+        Val(all(in((1,2,3)), (1,2,3,4)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(any(in((1,2,3)), (4,5,3)))
+    end |> only == Val{true}
+    @test Base.return_types() do
+        Val(any(in((1,2,3)), (4,5,6)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(all(in((:one,:two,:three)),(:three,:four)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(any(in((:one,:two,:three)),(:four,:three)))
+    end |> only == Val{true}
 end

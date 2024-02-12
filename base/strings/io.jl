@@ -15,7 +15,7 @@ avoid Julia-specific details.
 For example, `show` displays strings with quotes, and `print` displays strings
 without quotes.
 
-[`string`](@ref) returns the output of `print` as a string.
+See also [`println`](@ref), [`string`](@ref), [`printstyled`](@ref).
 
 # Examples
 ```jldoctest
@@ -54,8 +54,10 @@ end
 """
     println([io::IO], xs...)
 
-Print (using [`print`](@ref)) `xs` followed by a newline.
-If `io` is not supplied, prints to [`stdout`](@ref).
+Print (using [`print`](@ref)) `xs` to `io` followed by a newline.
+If `io` is not supplied, prints to the default output stream [`stdout`](@ref).
+
+See also [`printstyled`](@ref) to add colors etc.
 
 # Examples
 ```jldoctest
@@ -111,7 +113,7 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     else
         f(s, args...)
     end
-    String(resize!(s.data, s.size))
+    String(_unsafe_take!(s))
 end
 
 function _str_sizehint(x)
@@ -123,6 +125,10 @@ function _str_sizehint(x)
         return sizeof(x)
     elseif x isa Char
         return ncodeunits(x)
+    elseif x isa UInt64 || x isa UInt32
+        return ndigits(x)
+    elseif x isa Int64 || x isa Int32
+        return ndigits(x) + (x < zero(x))
     else
         return 8
     end
@@ -141,7 +147,7 @@ function print_to_string(xs...)
     for x in xs
         print(s, x)
     end
-    String(resize!(s.data, s.size))
+    String(_unsafe_take!(s))
 end
 
 function string_with_env(env, xs...)
@@ -158,7 +164,7 @@ function string_with_env(env, xs...)
     for x in xs
         print(env_io, x)
     end
-    String(resize!(s.data, s.size))
+    String(_unsafe_take!(s))
 end
 
 """
@@ -199,7 +205,7 @@ function show(
 )
     # compute limit in default case
     if limit === nothing
-        get(io, :limit, false) || return show(io, str)
+        get(io, :limit, false)::Bool || return show(io, str)
         limit = max(20, displaysize(io)[2])
         # one line in collection, seven otherwise
         get(io, :typeinfo, nothing) === nothing && (limit *= 7)
@@ -207,7 +213,7 @@ function show(
 
     # early out for short strings
     len = ncodeunits(str)
-    len ≤ limit - 2 && # quote chars
+    len ≤ limit - 2 && # quote chars
         return show(io, str)
 
     # these don't depend on string data
@@ -231,7 +237,7 @@ function show(
     if 4t ≤ n || t ≤ n && t ≤ length(str, head, tail-1)
         skip = skip_text(n)
         show(io, SubString(str, 1:prevind(str, head)))
-        print(io, skip) # TODO: bold styled
+        printstyled(io, skip; color=:light_yellow, bold=true)
         show(io, SubString(str, tail))
     else
         show(io, str)
@@ -347,9 +353,19 @@ function join(io::IO, iterator, delim="")
     end
 end
 
-join(iterator) = sprint(join, iterator)
-join(iterator, delim) = sprint(join, iterator, delim)
-join(iterator, delim, last) = sprint(join, iterator, delim, last)
+function _join_preserve_annotations(iterator, args...)
+    if _isannotated(eltype(iterator)) || any(_isannotated, args)
+        io = AnnotatedIOBuffer()
+        join(io, iterator, args...)
+        read(seekstart(io), AnnotatedString{String})
+    else
+        sprint(join, iterator, args...)
+    end
+end
+
+join(iterator) = _join_preserve_annotations(iterator)
+join(iterator, delim) = _join_preserve_annotations(iterator, delim)
+join(iterator, delim, last) = _join_preserve_annotations(iterator, delim, last)
 
 ## string escaping & unescaping ##
 
@@ -584,14 +600,14 @@ julia> println(raw"\\\\x \\\\\\"")
 macro raw_str(s); s; end
 
 """
-    escape_raw_string(s::AbstractString)
-    escape_raw_string(io, s::AbstractString)
+    escape_raw_string(s::AbstractString, delim='"') -> AbstractString
+    escape_raw_string(io, s::AbstractString, delim='"')
 
 Escape a string in the manner used for parsing raw string literals.
-For each double-quote (`"`) character in input string `s`, this
-function counts the number _n_ of preceding backslash (`\\`) characters,
-and then increases there the number of backslashes from _n_ to 2_n_+1
-(even for _n_ = 0). It also doubles a sequence of backslashes at the end
+For each double-quote (`"`) character in input string `s` (or `delim` if
+specified), this function counts the number _n_ of preceding backslash (`\\`)
+characters, and then increases there the number of backslashes from _n_ to
+2_n_+1 (even for _n_ = 0). It also doubles a sequence of backslashes at the end
 of the string.
 
 This escaping convention is used in raw strings and other non-standard
@@ -601,36 +617,41 @@ command-line string into the argv[] array.)
 
 See also [`escape_string`](@ref).
 """
-function escape_raw_string(io, str::AbstractString)
+function escape_raw_string(io::IO, str::AbstractString, delim::Char='"')
+    total = 0
     escapes = 0
     for c in str
         if c == '\\'
             escapes += 1
         else
-            if c == '"'
+            if c == delim
                 # if one or more backslashes are followed by
                 # a double quote then escape all backslashes
                 # and the double quote
-                escapes = escapes * 2 + 1
-            end
-            while escapes > 0
-                write(io, '\\')
-                escapes -= 1
+                escapes += 1
+                total += escapes
+                while escapes > 0
+                    write(io, '\\')
+                    escapes -= 1
+                end
             end
             escapes = 0
-            write(io, c)
         end
+        write(io, c)
     end
     # also escape any trailing backslashes,
     # so they do not affect the closing quote
+    total += escapes
     while escapes > 0
-        write(io, '\\')
         write(io, '\\')
         escapes -= 1
     end
+    total
 end
-escape_raw_string(str::AbstractString) = sprint(escape_raw_string, str;
-                                                sizehint = lastindex(str) + 2)
+function escape_raw_string(str::AbstractString, delim::Char='"')
+    total = escape_raw_string(devnull, str, delim) # check whether the string even needs to be copied and how much to allocate for it
+    return total == 0 ? str : sprint(escape_raw_string, str, delim; sizehint = sizeof(str) + total)
+end
 
 ## multiline strings ##
 
@@ -757,4 +778,27 @@ function String(chars::AbstractVector{<:AbstractChar})
             print(io, c)
         end
     end
+end
+
+function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
+    str = if C <: AnnotatedChar
+        String(getfield.(chars, :char))
+    else
+        sprint(sizehint=length(chars)) do io
+            for c in chars
+                print(io, c)
+            end
+        end
+    end
+    annots = Tuple{UnitRange{Int}, Pair{Symbol, Any}}[]
+    point = 1
+    for c in chars
+        if c isa AnnotatedChar
+            for annot in c.annotations
+                push!(annots, (point:point, annot))
+            end
+        end
+        point += ncodeunits(c)
+    end
+    AnnotatedString(str, annots)
 end

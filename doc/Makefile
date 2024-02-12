@@ -28,7 +28,7 @@ DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest) buildroot=$(call
 UNICODE_DATA_VERSION=13.0.0
 $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt:
 	@mkdir -p "$(SRCCACHE)"
-	$(JLDOWNLOAD) "$@" http://www.unicode.org/Public/$(UNICODE_DATA_VERSION)/ucd/UnicodeData.txt
+	$(JLDOWNLOAD) "$@" https://www.unicode.org/Public/$(UNICODE_DATA_VERSION)/ucd/UnicodeData.txt
 
 deps: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"
@@ -38,7 +38,7 @@ checksum-unicodedata: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"
 
 clean:
-	-rm -rf _build/* deps/* docbuild.log UnicodeData.txt
+	rm -rf _build/* deps/* docbuild.log UnicodeData.txt
 
 cleanall: clean
 

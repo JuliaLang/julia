@@ -79,13 +79,15 @@
         ((char? e) (string "'" e "'"))
         ((atom? e) (string e))
         ((eq? (car e) '|.|)
-         (string (deparse (cadr e)) '|.|
-                 (cond ((and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
-                        (deparse-colon-dot (cadr (caddr e))))
-                       ((and (pair? (caddr e)) (eq? (caaddr e) 'copyast))
-                        (deparse-colon-dot (cadr (cadr (caddr e)))))
-                       (else
-                        (string #\( (deparse (caddr e)) #\))))))
+         (if (length= e 2)
+             (string "(." (deparse (cadr e)) ")")
+             (string (deparse (cadr e)) '|.|
+                     (cond ((and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
+                            (deparse-colon-dot (cadr (caddr e))))
+                           ((and (pair? (caddr e)) (eq? (caaddr e) 'copyast))
+                            (deparse-colon-dot (cadr (cadr (caddr e)))))
+                           (else
+                            (string #\( (deparse (caddr e)) #\)))))))
         ((memq (car e) '(... |'|))
          (string (deparse (cadr e)) (car e)))
         ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|) (eq? (car e) '-->))
@@ -141,7 +143,7 @@
            ((typed_hcat)  (string (deparse (cadr e))
                                   (deparse (cons 'hcat (cddr e)))))
            ((ncat)        (string #\[ (deparse-arglist (cddr e) (string (deparse-semicolons (cadr e)) " "))
-                                      (if (= (length (cddr e)) 1)
+                                      (if (<= (length (cddr e)) 1)
                                           (deparse-semicolons (cadr e))
                                           "") #\]))
            ((typed_ncat)  (string (deparse (cadr e))
@@ -177,7 +179,7 @@
                   (cdr e)
                   (list e)))
             (deparse-block (string (car e) " " (deparse (cadr e)))
-                           (block-stmts (caddr e))
+                           (if (null? (cddr e)) '() (block-stmts (caddr e)))
                            ilvl))
            ((return)         (string "return " (deparse (cadr e))))
            ((break continue) (string (car e)))
@@ -209,6 +211,13 @@
                                 "\n"
                                 (indented-block (cdr (cadddr e)) ilvl))
                         "")
+                    (if (length> e 5)
+                        (let ((els (cadddddr e)))
+                          (if (and (pair? els) (eq? (car els) 'block))
+                              (string (string.rep "    " ilvl) "else\n"
+                                      (indented-block (cdr els) ilvl))
+                              ""))
+                        "")
                     (if (length> e 4)
                         (let ((fin (caddddr e)))
                           (if (and (pair? fin) (eq? (car fin) 'block))
@@ -217,13 +226,13 @@
                               ""))
                         "")
                     (string.rep "    " ilvl) "end"))
-	   ((do)
-	    (let ((call (cadr e))
-		  (args (cdr (cadr (caddr e))))
-		  (body (caddr (caddr e))))
-	      (deparse-block (string (deparse call) " do" (if (null? args) "" " ")
-				     (deparse-arglist args))
-			     (cdr body) ilvl)))
+           ((do)
+            (let ((call (cadr e))
+                  (args (cdr (cadr (caddr e))))
+                  (body (caddr (caddr e))))
+              (deparse-block (string (deparse call) " do" (if (null? args) "" " ")
+                                     (deparse-arglist args))
+                             (cdr body) ilvl)))
            ((struct)
             (string (if (equal? (cadr e) '(true)) "mutable " "")
                     "struct "
@@ -240,7 +249,7 @@
            ;; misc syntax forms
            ((import using)
             (string (car e) " " (string.join (map deparse-import-path (cdr e)) ", ")))
-           ((global local export) (string (car e) " " (string.join (map deparse (cdr e)) ", ")))
+           ((global local export public) (string (car e) " " (string.join (map deparse (cdr e)) ", ")))
            ((const)        (string "const " (deparse (cadr e))))
            ((top)          (deparse (cadr e)))
            ((core)         (string "Core." (deparse (cadr e))))
@@ -289,7 +298,7 @@
 ;; predicates and accessors
 
 (define (quoted? e)
-  (memq (car e) '(quote top core globalref outerref line break inert meta inbounds loopinfo)))
+  (memq (car e) '(quote top core globalref outerref line break inert meta inbounds inline noinline loopinfo)))
 (define (quotify e) `',e)
 (define (unquote e)
   (if (and (pair? e) (memq (car e) '(quote inert)))
@@ -320,8 +329,8 @@
         (else
          (case (car v)
            ((...)
-	    (arg-name (cadr v)) ;; to check for errors
-	    (decl-var (cadr v)))
+            (arg-name (cadr v)) ;; to check for errors
+            (decl-var (cadr v)))
            ((|::|)
             (if (not (symbol? (cadr v)))
                 (bad-formal-argument (cadr v)))
@@ -371,7 +380,7 @@
   (or (symbol? e) (decl? e)))
 
 (define (eventually-decl? e)
-  (or (decl? e) (and (pair? e) (eq? (car e) 'atomic) (symdecl? (cadr e)))))
+  (or (symbol? e) (and (pair? e) (memq (car e) '(|::| atomic const)) (eventually-decl? (cadr e)))))
 
 (define (make-decl n t) `(|::| ,n ,t))
 
@@ -438,7 +447,7 @@
   (if (dotop-named? e)
       (error (string "invalid function name \"" (deparse e) "\""))
       (if (pair? e)
-          (if (eq? (car e) '|.|)
+          (if (and (eq? (car e) '|.|) (length= e 3))
               (check-dotop (caddr e))
               (if (quoted? e)
                   (check-dotop (cadr e))))))
@@ -461,9 +470,6 @@
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
 (define (return? e) (and (pair? e) (eq? (car e) 'return)))
-(define (complex-return? e) (and (return? e)
-                                 (let ((x (cadr e)))
-                                   (not (simple-atom? x)))))
 
 (define (tuple-call? e)
   (and (length> e 1)
@@ -473,12 +479,13 @@
 (define (eq-sym? a b)
   (or (eq? a b) (and (ssavalue? a) (ssavalue? b) (eqv? (cdr a) (cdr b)))))
 
-(define (blockify e)
+(define (blockify e (lno #f))
+  (set! lno (if lno (list lno) '()))
   (if (and (pair? e) (eq? (car e) 'block))
       (if (null? (cdr e))
-          `(block (null))
-          e)
-      `(block ,e)))
+          `(block ,@lno (null))
+          (if (null? lno) e `(block ,@lno ,@(cdr e))))
+      `(block ,@lno ,e)))
 
 (define (make-var-info name) (list name '(core Any) 0))
 (define vinfo:name car)
@@ -516,6 +523,21 @@
 (define (nospecialize-meta? e (one #f))
   (and (if one (length= e 3) (length> e 2))
        (eq? (car e) 'meta) (memq (cadr e) '(nospecialize specialize))))
+
+(define (meta? e)
+  (and (length> e 1) (eq? (car e) 'meta)))
+
+(define (method-meta-sym? x)
+  (memq x '(inline noinline aggressive_constprop no_constprop propagate_inbounds)))
+
+(define (propagate-method-meta e)
+  `(meta ,@(filter (lambda (x)
+                     (or (method-meta-sym? x)
+                         (and (pair? x) (eq? (car x) 'purity))))
+                   (cdr e))))
+
+(define (argwide-nospecialize-meta? e)
+  (and (length= e 2) (eq? (car e) 'meta) (memq (cadr e) '(nospecialize specialize))))
 
 (define (if-generated? e)
   (and (length= e 4) (eq? (car e) 'if) (equal? (cadr e) '(generated))))
