@@ -500,28 +500,33 @@ function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular
     end
     return A
 end
+
+_triangularize!(::UpperOrUnitUpperTriangular) = triu!
+_triangularize!(::LowerOrUnitLowerTriangular) = tril!
+
 function copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
     if axes(dest) != axes(U)
         @invoke copyto!(dest::StridedMatrix, U::AbstractArray)
     else
-        U2 = Base.unalias(dest, U)
-        copyto_unaliased!(dest, U2)
+        _copyto!(dest, U)
     end
     return dest
 end
-_triangularize!(A, ::UpperOrUnitUpperTriangular) = triu!(A)
-_triangularize!(A, ::LowerOrUnitLowerTriangular) = tril!(A)
-function copyto_unaliased!(dest::StridedMatrix, U::UpperOrLowerTriangular)
-    copytrito!(dest, parent(U), U isa UpperOrUnitUpperTriangular ? 'U' : 'L')
-    _triangularize!(dest, U)
+function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
+    copyto!(dest, parent(U))
+    _triangularize!(U)(dest)
     if U isa Union{UnitUpperTriangular, UnitLowerTriangular}
-        for i in 1:size(dest,1)
-            dest[i,i] = U[i,i]
-        end
+        dest[diagind(dest)] .= @view U[diagind(U, IndexCartesian())]
     end
+    return dest
+end
+function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular{<:Any, <:StridedMatrix})
+    U2 = Base.unalias(dest, U)
+    copyto_unaliased!(dest, U2)
     return dest
 end
 # for strided matrices, we explicitly loop over the arrays to improve cache locality
+# This fuses the copytrito! and triu/l operations
 function copyto_unaliased!(dest::StridedMatrix, U::UpperOrUnitUpperTriangular{<:Any, <:StridedMatrix})
     isunit = U isa UnitUpperTriangular
     for col in axes(dest,2)
