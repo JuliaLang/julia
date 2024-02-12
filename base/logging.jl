@@ -132,6 +132,11 @@ isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
 -(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
 convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
+"""
+    BelowMinLevel
+
+Alias for [`LogLevel(-1_000_001)`](@ref LogLevel).
+"""
 const BelowMinLevel = LogLevel(-1000001)
 """
     Debug
@@ -157,6 +162,11 @@ const Warn          = LogLevel(    1000)
 Alias for [`LogLevel(2000)`](@ref LogLevel).
 """
 const Error         = LogLevel(    2000)
+"""
+    AboveMaxLevel
+
+Alias for [`LogLevel(1_000_001)`](@ref LogLevel).
+"""
 const AboveMaxLevel = LogLevel( 1000001)
 
 # Global log limiting mechanism for super fast but inflexible global log limiting.
