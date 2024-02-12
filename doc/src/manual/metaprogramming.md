@@ -630,16 +630,13 @@ julia> @showarg(1+1)
 julia> @showarg(println("Yo!"))
 :(println("Yo!"))
 
-# Numeric literal
-julia> @showarg(1)
+julia> @showarg(1)        # Numeric literal
 1
 
-# String literal
-julia> @showarg("Yo!")
+julia> @showarg("Yo!")    # String literal
 "Yo!"
 
-# String with interpolation is an Expr rather than a String
-julia> @showarg("Yo! $("hello")")
+julia> @showarg("Yo! $("hello")")    # String with interpolation is an Expr rather than a String
 :("Yo! $("hello")")
 ```
 
