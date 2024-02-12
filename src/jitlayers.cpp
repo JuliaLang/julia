@@ -200,8 +200,8 @@ static jl_callptr_t _jl_compile_codeinst(
     // emit the code in LLVM IR form
     jl_codegen_params_t params(std::move(context), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
     params.cache = true;
-    params.min_world = codeinst->min_world;
-    params.max_world = codeinst->max_world;
+    params.min_world = jl_atomic_load_relaxed(&codeinst->min_world);
+    params.max_world = jl_atomic_load_relaxed(&codeinst->max_world);
     params.imaging_mode = imaging_default();
     params.debug_level = jl_options.debug_level;
     {
