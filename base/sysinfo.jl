@@ -33,6 +33,9 @@ export BINDIR,
        iswindows,
        isjsvm,
        isexecutable,
+       isreadable,
+       iswriteable,
+       exists,
        username,
        which
 
@@ -569,6 +572,45 @@ function isexecutable(path::String)
     return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
 end
 isexecutable(path::AbstractString) = isexecutable(String(path))
+
+"""
+    Sys.isreadable(path::String)
+
+Return `true` if the given `path` has readable permissions.
+"""
+function isreadable(path::String)
+    # We use `access()` and `R_OK` to determine if a given path is
+    # executable by the current user.  `R_OK` comes from `unistd.h`.
+    R_OK = 0x04
+    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, R_OK) == 0
+end
+isreadable(path::AbstractString) = isreadable(String(path))
+
+"""
+    Sys.iswriteable(path::String)
+
+Return `true` if the given `path` has writeable permissions.
+"""
+function iswriteable(path::String)
+    # We use `access()` and `W_OK` to determine if a given path is
+    # executable by the current user.  `W_OK` comes from `unistd.h`.
+    W_OK = 0x02
+    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, W_OK) == 0
+end
+iswriteable(path::AbstractString) = iswriteable(String(path))
+
+"""
+    Sys.exists(path::String)
+
+Return `true` if the given `path` exists.
+"""
+function exists(path::String)
+    # We use `access()` and `F_OK` to determine if a given path is
+    # executable by the current user.  `F_OK` comes from `unistd.h`.
+    F_OK = 0x00
+    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, F_OK) == 0
+end
+exists(path::AbstractString) = exists(String(path))
 
 """
     Sys.which(program_name::String)
