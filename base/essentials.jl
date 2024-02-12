@@ -668,7 +668,7 @@ Change the type-interpretation of the binary data in the isbits value `x`
 to that of the isbits type `Out`.
 The size (ignoring padding) of `Out` has to be the same as that of the type of `x`.
 For example, `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
-[`Float32`](@ref). This operation is guaranteed to be reversible.
+[`Float32`](@ref). Note that `reinterpret(In, reinterpret(Out, x)) === x`
 
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
