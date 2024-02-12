@@ -7,8 +7,9 @@
 #include "julia_internal.h"
 
 #include <unistd.h>
-#include <ctype.h>
 #include <getopt.h>
+#include "utf8proc.h"
+
 #include "julia_assert.h"
 
 #ifdef _OS_WINDOWS_
@@ -803,11 +804,11 @@ restart_switch:
                 long double value = 0.0;
                 char unit[4] = {0};
                 int nparsed = sscanf(optarg, "%Lf%3s", &value, unit);
-                if (nparsed == 0 || strlen(unit) > 2 || (strlen(unit) == 2 && tolower(unit[1]) != 'b')) {
+                if (nparsed == 0 || strlen(unit) > 2 || (strlen(unit) == 2 && utf8proc_tolower(unit[1]) != 'b')) {
                     jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                 }
                 uint64_t multiplier = 1ull;
-                switch (tolower(unit[0])) {
+                switch (utf8proc_tolower(unit[0])) {
                     case '\0':
                     case 'b':
                         break;

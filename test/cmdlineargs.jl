@@ -1071,7 +1071,7 @@ end
 @testset "--heap-size-hint" begin
     exename = `$(Base.julia_cmd())`
     @test errors_not_signals(`$exename --heap-size-hint -e "exit(0)"`)
-    @testset "--heap-size-hint=$str" for str in ["asdf","","0","1.2vb","b","GB","1.2gb2","42gigabytes","5gig","2GiB","NaNt"]
+    @testset "--heap-size-hint=$str" for str in ["asdf","","0","1.2vb","b","GB","2.5GB̂","1.2gb2","42gigabytes","5gig","2GiB","NaNt"]
         @test errors_not_signals(`$exename --heap-size-hint=$str -e "exit(0)"`)
     end
     k = 1024
