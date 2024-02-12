@@ -334,6 +334,10 @@ function identify_package_env(where::PkgId, name::String)
             break # found in implicit environment--return "not found"
         end
     end
+    if isnothing(pkg_env) && haskey(EXT_PRIMED, where)
+        # search the parent package of an extension, useful in implicit envs
+        pkg_env = identify_package_env(EXT_PRIMED[where], name)
+    end
     if cache !== nothing
         cache.identified_where[(where, name)] = pkg_env
     end
@@ -802,11 +806,20 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     root_uuid = dummy_uuid(project_file)
     if get(d, "name", nothing)::Union{String, Nothing} === name
         uuid = get(d, "uuid", nothing)::Union{String, Nothing}
+        @debug "Explicitly checked project name:" name uuid
         return uuid === nothing ? root_uuid : UUID(uuid)
     end
     deps = get(d, "deps", nothing)::Union{Dict{String, Any}, Nothing}
     if deps !== nothing
         uuid = get(deps, name, nothing)::Union{String, Nothing}
+        @debug "Explicitly checked project deps:" name uuid
+        uuid === nothing || return UUID(uuid)
+    end
+    # check weakdeps in case extensions need to resolve from parent package
+    weakdeps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
+    if deps !== nothing
+        uuid = get(weakdeps, name, nothing)::Union{String, Nothing}
+        @debug "Explicitly checked project weak deps:" name uuid
         uuid === nothing || return UUID(uuid)
     end
     return nothing
