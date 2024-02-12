@@ -750,8 +750,9 @@ end
 let err_str
     a = [1 2; 3 4]; 
     err_str = @except_str (a[1][2] = 5) MethodError
-    @test occursin("\nAre you trying to index into an array? Separate each index with commas: ", err_str)
+    @test occursin("\nAre you trying to index into an array? Separate the indices with commas: ", err_str)
     @test occursin("a[1, 2]", err_str)
+    @test occursin("rather than a[1][2]", err_str)
 end
 
 # Execute backtrace once before checking formatting, see #38858
