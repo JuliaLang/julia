@@ -178,8 +178,41 @@ copy(::Union{Transpose,Adjoint})
 Base.copy(A::TransposeAbsMat) = transpose!(similar(A.parent, reverse(axes(A.parent))), A.parent)
 Base.copy(A::AdjointAbsMat) = adjoint!(similar(A.parent, reverse(axes(A.parent))), A.parent)
 
-function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
-                         A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
+"""
+    copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                    A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) -> B
+
+Efficiently copy elements of matrix `A` to `B` with transposition as follows:
+
+    B[ir_dest, jr_dest] = transpose(A)[jr_src, ir_src]
+
+The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore,
+the index range parameters must satisfy `length(ir_dest) == length(jr_src)` and
+`length(jr_dest) == length(ir_src)`.
+"""
+copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) =
+    _copy_adjtrans!(B, ir_dest, jr_dest, A, ir_src, jr_src, transpose)
+
+"""
+    copy_adjoint!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                    A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) -> B
+
+Efficiently copy elements of matrix `A` to `B` with adjunction as follows:
+
+    B[ir_dest, jr_dest] = adjoint(A)[jr_src, ir_src]
+
+The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore,
+the index range parameters must satisfy `length(ir_dest) == length(jr_src)` and
+`length(jr_dest) == length(ir_src)`.
+"""
+copy_adjoint!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+              A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) =
+    _copy_adjtrans!(B, ir_dest, jr_dest, A, ir_src, jr_src, adjoint)
+
+function _copy_adjtrans!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                         A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int},
+                         tfun::T) where {T}
     if length(ir_dest) != length(jr_src)
         throw(ArgumentError(LazyString("source and destination must have same size (got ",
                                    length(jr_src)," and ",length(ir_dest),")")))
@@ -194,7 +227,7 @@ function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_de
     for jsrc in jr_src
         jdest = first(jr_dest)
         for isrc in ir_src
-            B[idest,jdest] = transpose(A[isrc,jsrc])
+            B[idest,jdest] = tfun(A[isrc,jsrc])
             jdest += step(jr_dest)
         end
         idest += step(ir_dest)
@@ -202,13 +235,10 @@ function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_de
     return B
 end
 
-function copy_similar(A::AdjointAbsMat, ::Type{T}) where {T}
-    C = similar(A, T, size(A))
-    adjoint!(C, parent(A))
-end
-function copy_similar(A::TransposeAbsMat, ::Type{T}) where {T}
-    C = similar(A, T, size(A))
-    transpose!(C, parent(A))
+function copy_similar(A::AdjOrTransAbsMat, ::Type{T}) where {T}
+    Ap = parent(A)
+    f! = inplace_adj_or_trans(A)
+    return f!(similar(Ap, T, reverse(axes(Ap))), Ap)
 end
 
 function Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractMatrix, srcstyle::IndexCartesian, src::AdjOrTransAbsMat)
