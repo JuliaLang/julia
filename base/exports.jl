@@ -500,6 +500,7 @@ export
     pop!,
     popat!,
     prepend!,
+    push,
     push!,
     resize!,
     popfirst!,
