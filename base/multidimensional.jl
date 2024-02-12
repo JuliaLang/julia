@@ -1565,8 +1565,8 @@ end
     end
 end
 
-isassigned(a::AbstractArray, i::CartesianIndex) = isassigned(a, Tuple(i)...)
-function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
+@propagate_inbounds isassigned(a::AbstractArray, i::CartesianIndex) = isassigned(a, Tuple(i)...)
+@propagate_inbounds function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
     isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(to_indices(A, i)))
     @boundscheck checkbounds(Bool, A, i...) || return false
     S = IndexStyle(A)
