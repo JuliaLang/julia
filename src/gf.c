@@ -2561,12 +2561,16 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             return codeinst;
         }
 
+        JL_GC_PUSH1(&codeinst);
         jl_compile_codeinst(codeinst);
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
             // Something went wrong. Bail to the fallback path.
             codeinst = NULL;
+        } else {
+            record_precompile_statement(mi);
         }
+        JL_GC_POP();
     }
     if (!codeinst) {
         jl_method_instance_t *unspec = jl_get_unspecialized_from_mi(mi);
@@ -2605,9 +2609,6 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         codeinst->rettype_const = ucache->rettype_const;
         jl_atomic_store_release(&codeinst->invoke, ucache_invoke);
         jl_mi_cache_insert(mi, codeinst);
-    }
-    else {
-        record_precompile_statement(mi);
     }
     jl_atomic_store_relaxed(&codeinst->precompile, 1);
     jl_typeinf_timing_end(start, is_recompile);

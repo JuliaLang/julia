@@ -1975,17 +1975,18 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
     if (ci && ci != jl_nothing) {
         codeinst = (jl_code_instance_t*)ci;
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
+        jlrettype = codeinst->rettype;
     }
     if (!src || (jl_value_t*)src == jl_nothing) {
         codeinst = jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE);
         if (codeinst) {
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
+            jlrettype = codeinst->rettype;
         }
     }
     if (src) {
         if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
             src = jl_uncompress_ir(mi->def.method, (jl_value_t*)src);
-        jlrettype = codeinst->rettype;
     }
     codeinst = NULL; // not needed outside of this branch
 
