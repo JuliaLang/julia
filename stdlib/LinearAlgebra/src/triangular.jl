@@ -513,7 +513,7 @@ function copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
     return dest
 end
 function _copyto!(dest::StridedMatrix, U::UpperOrLowerTriangular)
-    copyto!(dest, parent(U))
+    copytrito!(dest, parent(U), U isa UpperOrUnitUpperTriangular ? 'U' : 'L')
     _triangularize!(U)(dest)
     if U isa Union{UnitUpperTriangular, UnitLowerTriangular}
         dest[diagind(dest)] .= @view U[diagind(U, IndexCartesian())]
