@@ -91,7 +91,7 @@ end
                                       (6:11, :other => 0x02)])
     str1 = Base.AnnotatedString("test", [(1:4, :label => 5)])
     str2 = Base.AnnotatedString("case", [(2:3, :label => "oomph")])
-    @test join([str1, str1], Base.AnnotatedString(" ")) ==
+    @test join([str1, str1], ' ') ==
         Base.AnnotatedString("test test",
                      [(1:4, :label => 5),
                       (6:9, :label => 5)])
@@ -122,7 +122,7 @@ end
     @test read(seek(aio, 1), Base.AnnotatedString) == Base.AnnotatedString("ello world", [(1:4, :tag => 1), (6:10, :tag => 2)])
     @test read(seek(aio, 4), Base.AnnotatedString) == Base.AnnotatedString("o world", [(1:1, :tag => 1), (3:7, :tag => 2)])
     @test read(seek(aio, 5), Base.AnnotatedString) == Base.AnnotatedString(" world", [(2:6, :tag => 2)])
-    @test read(aio, Base.AnnotatedString) == Base.AnnotatedString("")
+    @test read(seekend(aio), Base.AnnotatedString) == Base.AnnotatedString("")
     @test read(seekstart(truncate(deepcopy(aio), 5)), Base.AnnotatedString) == Base.AnnotatedString("hello", [(1:5, :tag => 1)])
     @test read(seekstart(truncate(deepcopy(aio), 6)), Base.AnnotatedString) == Base.AnnotatedString("hello ", [(1:5, :tag => 1)])
     @test read(seekstart(truncate(deepcopy(aio), 7)), Base.AnnotatedString) == Base.AnnotatedString("hello w", [(1:5, :tag => 1), (7:7, :tag => 2)])

@@ -1950,3 +1950,14 @@ end
     @test repeat(f, 2, 3, 4) === FillArrays.Fill(3, (8, 6, 4))
     @test repeat(f, inner=(1,2), outer=(3,1)) === FillArrays.Fill(3, (12, 4))
 end
+
+@testset "zero" begin
+    @test zero([1 2; 3 4]) isa Matrix{Int}
+    @test zero([1 2; 3 4]) == [0 0; 0 0]
+
+    @test zero([1.0]) isa Vector{Float64}
+    @test zero([1.0]) == [0.0]
+
+    @test zero([[2,2], [3,3,3]]) isa Vector{Vector{Int}}
+    @test zero([[2,2], [3,3,3]]) == [[0,0], [0, 0, 0]]
+end

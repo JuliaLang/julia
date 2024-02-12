@@ -73,6 +73,7 @@ Multi-threading changes
 -----------------------
 
 * `Threads.@threads` now supports the `:greedy` scheduler, intended for non-uniform workloads ([#52096]).
+* A new exported struct `Lockable{T, L<:AbstractLock}` makes it easy to bundle a resource and its lock together ([#52898]).
 
 Build system changes
 --------------------
@@ -96,6 +97,7 @@ New library features
 * `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
 * `replace(string, pattern...)` now supports an optional `IO` argument to
   write the output to a stream rather than returning a string ([#48625]).
+* New methods `allequal(f, itr)` and `allunique(f, itr)` taking a predicate function ([#47679]).
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
 * New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
 * New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
@@ -110,7 +112,7 @@ New library features
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
 * `filter` can now act on a `NamedTuple` ([#50795]).
 * `Iterators.cycle(iter, n)` runs over `iter` a fixed number of times, instead of forever ([#47354])
-
+* `zero(::AbstractArray)` now applies recursively, so `zero([[1,2],[3,4,5]])` now produces the additive identity `[[0,0],[0,0,0]]` rather than erroring ([#38064]).
 
 Standard library changes
 ------------------------
