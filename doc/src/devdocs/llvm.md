@@ -9,18 +9,36 @@ Julia dynamically links against LLVM by default. Build with `USE_LLVM_SHLIB=0` t
 
 The code for lowering Julia AST to LLVM IR or interpreting it directly is in directory `src/`.
 
-| File                | Description                                                |
-|:------------------- |:---------------------------------------------------------- |
-| `builtins.c`        | Builtin functions                                          |
-| `ccall.cpp`         | Lowering [`ccall`](@ref)                                   |
-| `cgutils.cpp`       | Lowering utilities, notably for array and tuple accesses   |
-| `codegen.cpp`       | Top-level of code generation, pass list, lowering builtins |
-| `debuginfo.cpp`     | Tracks debug information for JIT code                      |
-| `disasm.cpp`        | Handles native object file and JIT code diassembly         |
-| `gf.c`              | Generic functions                                          |
-| `intrinsics.cpp`    | Lowering intrinsics                                        |
-| `llvm-simdloop.cpp` | Custom LLVM pass for [`@simd`](@ref)                       |
-| `sys.c`             | I/O and operating system utility functions                 |
+| File                             | Description                                                        |
+|:-------------------------------- |:------------------------------------------------------------------ |
+| `aotcompile.cpp`                 | Compiler C-interface entry and object file emission           |
+| `builtins.c`                     | Builtin functions                                                  |
+| `ccall.cpp`                      | Lowering [`ccall`](@ref)                                           |
+| `cgutils.cpp`                    | Lowering utilities, notably for array and tuple accesses           |
+| `codegen.cpp`                    | Top-level of code generation, pass list, lowering builtins         |
+| `debuginfo.cpp`                  | Tracks debug information for JIT code                              |
+| `disasm.cpp`                     | Handles native object file and JIT code diassembly                 |
+| `gf.c`                           | Generic functions                                                  |
+| `intrinsics.cpp`                 | Lowering intrinsics                                                |
+| `jitlayers.cpp`                  | JIT-specific code, ORC compilation layers/utilities                |
+| `llvm-alloc-helpers.cpp`         | Julia-specific escape analysis                                     |
+| `llvm-alloc-opt.cpp`             | Custom LLVM pass to demote heap allocations to the stack           |
+| `llvm-cpufeatures.cpp`           | Custom LLVM pass to lower CPU-based functions (e.g. haveFMA)       |
+| `llvm-demote-float16.cpp`        | Custom LLVM pass to lower 16b float ops to 32b float ops           |
+| `llvm-final-gc-lowering.cpp`     | Custom LLVM pass to lower GC calls to their final form             |
+| `llvm-gc-invariant-verifier.cpp` | Custom LLVM pass to verify Julia GC invariants                     |
+| `llvm-julia-licm.cpp`            | Custom LLVM pass to hoist/sink Julia-specific intrinsics           |
+| `llvm-late-gc-lowering.cpp`      | Custom LLVM pass to root GC-tracked values                         |
+| `llvm-lower-handlers.cpp`        | Custom LLVM pass to lower try-catch blocks                         |
+| `llvm-muladd.cpp`                | Custom LLVM pass for fast-match FMA                                |
+| `llvm-multiversioning.cpp`       | Custom LLVM pass to generate sysimg code on multiple architectures |
+| `llvm-propagate-addrspaces.cpp`  | Custom LLVM pass to canonicalize addrspaces                        |
+| `llvm-ptls.cpp`                  | Custom LLVM pass to lower TLS operations                           |
+| `llvm-remove-addrspaces.cpp`     | Custom LLVM pass to remove Julia addrspaces                        |
+| `llvm-remove-ni.cpp`             | Custom LLVM pass to remove Julia non-integral addrspaces           |
+| `llvm-simdloop.cpp`              | Custom LLVM pass for [`@simd`](@ref)                               |
+| `pipeline.cpp`                   | New pass manager pipeline, pass pipeline parsing                   |
+| `sys.c`                          | I/O and operating system utility functions                         |
 
 Some of the `.cpp` files form a group that compile to a single object.
 
@@ -57,29 +75,74 @@ implies that option by default.
 
 ## Passing options to LLVM
 
-You can pass options to LLVM via the environment variable `JULIA_LLVM_ARGS`.
+You can pass options to LLVM via the environment variable [`JULIA_LLVM_ARGS`](@ref JULIA_LLVM_ARGS).
 Here are example settings using `bash` syntax:
 
   * `export JULIA_LLVM_ARGS=-print-after-all` dumps IR after each pass.
   * `export JULIA_LLVM_ARGS=-debug-only=loop-vectorize` dumps LLVM `DEBUG(...)` diagnostics for
     loop vectorizer. If you get warnings about "Unknown command line argument", rebuild LLVM with
     `LLVM_ASSERTIONS = 1`.
+  * `export JULIA_LLVM_ARGS=-help` shows a list of available options. `export JULIA_LLVM_ARGS=-help-hidden` shows even more.
+  * `export JULIA_LLVM_ARGS="-fatal-warnings -print-options"` is an example how to use multiple options.
+
+### Useful `JULIA_LLVM_ARGS` parameters
+  * `-print-after=PASS`: prints the IR after any execution of `PASS`, useful for checking changes done by a pass.
+  * `-print-before=PASS`: prints the IR before any execution of `PASS`, useful for checking the input to a pass.
+  * `-print-changed`: prints the IR whenever a pass changes the IR, useful for narrowing down which passes are causing problems.
+  * `-print-(before|after)=MARKER-PASS`: the Julia pipeline ships with a number of marker passes in the pipeline, which can be used to identify where problems or optimizations are occurring. A marker pass is defined as a pass which appears once in the pipeline and performs no transformations on the IR, and is only useful for targeting print-before/print-after. Currently, the following marker passes exist in the pipeline:
+    * BeforeOptimization
+    * BeforeEarlySimplification
+    * AfterEarlySimplification
+    * BeforeEarlyOptimization
+    * AfterEarlyOptimization
+    * BeforeLoopOptimization
+    * BeforeLICM
+    * AfterLICM
+    * BeforeLoopSimplification
+    * AfterLoopSimplification
+    * AfterLoopOptimization
+    * BeforeScalarOptimization
+    * AfterScalarOptimization
+    * BeforeVectorization
+    * AfterVectorization
+    * BeforeIntrinsicLowering
+    * AfterIntrinsicLowering
+    * BeforeCleanup
+    * AfterCleanup
+    * AfterOptimization
+  * `-time-passes`: prints the time spent in each pass, useful for identifying which passes are taking a long time.
+  * `-print-module-scope`: used in conjunction with `-print-(before|after)`, gets the entire module rather than the IR unit received by the pass
+  * `-debug`: prints out a lot of debugging information throughout LLVM
+  * `-debug-only=NAME`, prints out debugging statements from files with `DEBUG_TYPE` defined to `NAME`, useful for getting additional context about a problem
 
 ## Debugging LLVM transformations in isolation
 
 On occasion, it can be useful to debug LLVM's transformations in isolation from
 the rest of the Julia system, e.g. because reproducing the issue inside `julia`
 would take too long, or because one wants to take advantage of LLVM's tooling
-(e.g. bugpoint). To get unoptimized IR for the entire system image, pass the
+(e.g. bugpoint).
+
+To start with, you can install the developer tools to work with LLVM via:
+```
+make -C deps install-llvm-tools
+```
+
+To get unoptimized IR for the entire system image, pass the
 `--output-unopt-bc unopt.bc` option to the system image build process, which will
 output the unoptimized IR to an `unopt.bc` file. This file can then be passed to
 LLVM tools as usual. `libjulia` can function as an LLVM pass plugin and can be
 loaded into LLVM tools, to make julia-specific passes available in this
 environment. In addition, it exposes the `-julia` meta-pass, which runs the
 entire Julia pass-pipeline over the IR. As an example, to generate a system
-image, one could do:
+image with the old pass manager, one could do:
 ```
-opt -enable-new-pm=0 -load libjulia-codegen.so -julia -o opt.bc unopt.bc
+
+llc -o sys.o opt.bc
+cc -shared -o sys.so sys.o
+```
+To generate a system image with the new pass manager, one could do:
+```
+opt -load-pass-plugin=libjulia-codegen.so --passes='julia' -o opt.bc unopt.bc
 llc -o sys.o opt.bc
 cc -shared -o sys.so sys.o
 ```
@@ -91,11 +154,25 @@ using:
 fun, T = +, Tuple{Int,Int} # Substitute your function of interest here
 optimize = false
 open("plus.ll", "w") do file
-    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize, :default))
+    println(file, InteractiveUtils._dump_function(fun, T, false, false, false, true, :att, optimize, :default, false))
 end
 ```
 These files can be processed the same way as the unoptimized sysimg IR shown
 above.
+
+## Running the LLVM test suite
+
+To run the llvm tests locally, you need to first install the tools, build julia, then you
+can run the tests:
+```
+make -C deps install-llvm-tools
+make -j julia-src-release
+make -C test/llvmpasses
+```
+
+If you want to run the individual test files directly, via the commands at the top of each
+test file, the first step here will have installed the tools into `./usr/tools/opt`. Then
+you'll want to manually replace `%s` with the name of the test file.
 
 ## Improving LLVM optimizations for Julia
 
@@ -264,8 +341,8 @@ ccall(:foo, Cvoid, (Ptr{Float64},), A)
 In lowering, the compiler will insert a conversion from the array to the
 pointer which drops the reference to the array value. However, we of course
 need to make sure that the array does stay alive while we're doing the
-[`ccall`](@ref). To understand how this is done, first recall the lowering of the
-above code:
+[`ccall`](@ref). To understand how this is done, lets look at a hypothetical
+approximate possible lowering of the above code:
 ```julia
 return $(Expr(:foreigncall, :(:foo), Cvoid, svec(Ptr{Float64}), 0, :(:ccall), Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), 0, :(:ccall), :(A)), :(A)))
 ```

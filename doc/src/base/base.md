@@ -4,7 +4,8 @@
 
 Julia Base contains a range of functions and macros appropriate for performing
 scientific and numerical computing, but is also as broad as those of many general purpose programming
-languages.  Additional functionality is available from a growing collection of available packages.
+languages.  Additional functionality is available from a growing collection of
+[available packages](https://julialang.org/packages/).
 Functions are grouped by topic below.
 
 Some general notes:
@@ -29,7 +30,7 @@ Base.isinteractive
 Base.summarysize
 Base.__precompile__
 Base.include
-Base.MainInclude.include
+Main.include
 Base.include_string
 Base.include_dependency
 __init__
@@ -37,6 +38,7 @@ Base.which(::Any, ::Any)
 Base.methods
 Base.@show
 ans
+err
 Base.active_project
 Base.set_active_project
 ```
@@ -58,14 +60,18 @@ However, you can create variables with names:
 Finally:
 `where` is parsed as an infix operator for writing parametric method and type definitions;
 `in` and `isa` are parsed as infix operators;
-and `outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop.
-Creation of variables named `where`, `in`, `isa` or `outer` is allowed though.
+`public` is parsed as a keyword when beginning a toplevel statement;
+`outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop;
+and `as` is used as a keyword to rename an identifier brought into scope by `import` or `using`.
+Creation of variables named `where`, `in`, `isa`, `outer` and `as` is allowed, though.
 
 ```@docs
 module
 export
+public
 import
 using
+as
 baremodule
 function
 macro
@@ -125,6 +131,7 @@ Core.:(===)
 Core.isa
 Base.isequal
 Base.isless
+Base.isunordered
 Base.ifelse
 Core.typeassert
 Core.typeof
@@ -138,10 +145,18 @@ Base.copy
 Base.deepcopy
 Base.getproperty
 Base.setproperty!
+Base.replaceproperty!
+Base.swapproperty!
+Base.modifyproperty!
+Base.setpropertyonce!
 Base.propertynames
 Base.hasproperty
 Core.getfield
 Core.setfield!
+Core.modifyfield!
+Core.replacefield!
+Core.swapfield!
+Core.setfieldonce!
 Core.isdefined
 Base.@isdefined
 Base.convert
@@ -149,6 +164,7 @@ Base.promote
 Base.oftype
 Base.widen
 Base.identity
+Base.WeakRef
 ```
 
 ## Properties of Types
@@ -188,6 +204,7 @@ Base.fieldcount
 Base.hasfield
 Core.nfields
 Base.isconst
+Base.isfieldatomic
 ```
 
 ### Memory layout
@@ -227,6 +244,7 @@ Core.Tuple
 Core.NTuple
 Core.NamedTuple
 Base.@NamedTuple
+Base.@Kwargs
 Base.Val
 Core.Vararg
 Core.Nothing
@@ -258,7 +276,7 @@ new
 Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
-Base.Splat
+Base.splat
 Base.Fix1
 Base.Fix2
 ```
@@ -267,7 +285,7 @@ Base.Fix2
 
 ```@docs
 Core.eval
-Base.MainInclude.eval
+Main.eval
 Base.@eval
 Base.evalfile
 Base.esc
@@ -278,6 +296,8 @@ Base.@inline
 Base.@noinline
 Base.@nospecialize
 Base.@specialize
+Base.@nospecializeinfer
+Base.@constprop
 Base.gensym
 Base.@gensym
 var"name"
@@ -286,7 +306,6 @@ Base.@label
 Base.@simd
 Base.@polly
 Base.@generated
-Base.@pure
 Base.@assume_effects
 Base.@deprecate
 ```
@@ -332,6 +351,8 @@ Base.@timev
 Base.@timed
 Base.@elapsed
 Base.@allocated
+Base.@allocations
+Base.@lock_conflicts
 Base.EnvDict
 Base.ENV
 Base.Sys.STDLIB
@@ -347,10 +368,13 @@ Base.Sys.iswindows
 Base.Sys.windows_version
 Base.Sys.free_memory
 Base.Sys.total_memory
+Base.Sys.free_physical_memory
+Base.Sys.total_physical_memory
 Base.Sys.uptime
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
+Base.Sys.username
 Base.@static
 ```
 
@@ -431,10 +455,28 @@ Base.@__DIR__
 Base.@__LINE__
 Base.fullname
 Base.names
+Base.isexported
+Base.ispublic
 Base.nameof(::Function)
 Base.functionloc(::Any, ::Any)
 Base.functionloc(::Method)
 Base.@locals
+Core.getglobal
+Core.setglobal!
+Core.modifyglobal!
+Core.swapglobal!
+Core.setglobalonce!
+Core.replaceglobal!
+```
+
+## Documentation
+(See also the [documentation](@ref man-documentation) chapter.)
+```@docs
+Base.@doc
+Docs.HTML
+Docs.Text
+Docs.hasdoc
+Docs.undocumented_names
 ```
 
 ## Code loading
@@ -444,6 +486,8 @@ Base.identify_package
 Base.locate_package
 Base.require
 Base.compilecache
+Base.isprecompiled
+Base.get_extension
 ```
 
 ## Internals
@@ -454,6 +498,7 @@ Base.GC.enable
 Base.GC.@preserve
 Base.GC.safepoint
 Base.GC.enable_logging
+Base.GC.logging_enabled
 Meta.lower
 Meta.@lower
 Meta.parse(::AbstractString, ::Int)

@@ -100,6 +100,8 @@ end
     @test_throws ArgumentError broadcast!(+, copy(T), T, A) == Tridiagonal(broadcast(*, T, A))
     @test_throws ArgumentError broadcast!(+, copy(◣), ◣, A) == LowerTriangular(broadcast(*, ◣, A))
     @test_throws ArgumentError broadcast!(+, copy(◥), ◥, A) == UpperTriangular(broadcast(*, ◥, A))
+    @test_throws ArgumentError broadcast!(*, copy(◥), ◣, 2)
+    @test_throws ArgumentError broadcast!(*, copy(Bu), Bl, 2)
 end
 
 @testset "map[!] over combinations of structured matrices" begin
@@ -140,6 +142,11 @@ end
             @test map!(*, Z, X, Y) == broadcast(*, fX, fY)
         end
     end
+    # these would be valid for broadcast, but not for map
+    @test_throws DimensionMismatch map(+, D, Diagonal(rand(1)))
+    @test_throws DimensionMismatch map(+, D, Diagonal(rand(1)), D)
+    @test_throws DimensionMismatch map(+, D, D, Diagonal(rand(1)))
+    @test_throws DimensionMismatch map(+, Diagonal(rand(1)), D, D)
 end
 
 @testset "Issue #33397" begin

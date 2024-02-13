@@ -31,6 +31,7 @@
 
 ;; this is overwritten when we run in actual julia
 (define (defined-julia-global v) #f)
+(define (nothrow-julia-global v) #f)
 (define (julia-current-file) 'none)
 (define (julia-current-line) 0)
 
@@ -93,18 +94,38 @@
 
 ;; lowering entry points
 
+; find the first line number in this expression, before we might eliminate them
+(define (first-lineno blk)
+  (cond ((not (pair? blk)) #f)
+        ((eq? (car blk) 'line) blk)
+        ((and (eq? (car blk) 'hygienic-scope) (pair? (cdddr blk)) (pair? (cadddr blk)) (eq? (car (cadddr blk)) 'line))
+         (cadddr blk))
+        ((memq (car blk) '(escape hygienic-scope))
+         (first-lineno (cadr blk)))
+        ((memq (car blk) '(toplevel block))
+           (let loop ((xs (cdr blk)))
+             (and (pair? xs)
+               (let ((elt (first-lineno (car xs))))
+                 (or elt (loop (cdr xs)))))))
+        (else #f)))
+
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
 ;; toplevel expansion order (don't expand until stuff before is evaluated).
 (define (expand-toplevel-expr-- e file line)
-  (let ((ex0 (julia-expand-macroscope e)))
+  (let ((lno (first-lineno e))
+        (ex0 (julia-expand-macroscope e)))
+    (if (and lno (or (not (length= lno 3)) (not (atom? (caddr lno))))) (set! lno #f))
     (if (toplevel-only-expr? ex0)
-        ex0
-        (let* ((ex (julia-expand0 ex0 file line))
+        (if (and (pair? e) (memq (car ex0) '(error incomplete)))
+            ex0
+            (if lno `(toplevel ,lno ,ex0) ex0))
+        (let* ((linenode (if (and lno (or (= line 0) (eq? file 'none))) lno `(line ,line ,file)))
+               (ex (julia-expand0 ex0 linenode))
                (th (julia-expand1
                     `(lambda () ()
                              (scope-block
-                              ,(blockify ex)))
+                              ,(blockify ex lno)))
                     file line)))
           (if (and (null? (cdadr (caddr th)))
                    (and (length= (lam:body th) 2)
@@ -120,7 +141,7 @@
 
 (define (toplevel-only-expr? e)
   (and (pair? e)
-       (or (memq (car e) '(toplevel line module import using export
+       (or (memq (car e) '(toplevel line module import using export public
                                     error incomplete))
            (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
 
@@ -129,7 +150,7 @@
 (define (expand-toplevel-expr e file line)
   (cond ((or (atom? e) (toplevel-only-expr? e))
          (if (underscore-symbol? e)
-             (error "all-underscore identifier used as rvalue"))
+             (error "all-underscore identifiers are write-only and their values cannot be used in expressions"))
          e)
         (else
          (let ((last *in-expand*))
@@ -179,14 +200,9 @@
 
 ;; construct default definitions of `eval` for non-bare modules
 ;; called by jl_eval_module_expr
-(define (module-default-defs e)
+(define (module-default-defs name file line)
   (jl-expand-to-thunk
-   (let* ((name (caddr e))
-          (body (cadddr e))
-          (loc  (if (null? (cdr body)) () (cadr body)))
-          (loc  (if (and (pair? loc) (eq? (car loc) 'line))
-                    (list loc)
-                    '()))
+   (let* ((loc  (if (and (eq? file 'none) (eq? line 0)) '() `((line ,line ,file))))
           (x    (if (eq? name 'x) 'y 'x))
           (mex  (if (eq? name 'mapexpr) 'map_expr 'mapexpr)))
      `(block
@@ -202,7 +218,7 @@
           (block
            ,@loc
            (call (core _call_latest) (top include) ,mex ,name ,x)))))
-   'none 0))
+   file line))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)

@@ -28,25 +28,78 @@ using Test
     @test (1//typemax(Int)) / (1//typemax(Int)) == 1
     @test_throws OverflowError (1//2)^63
     @test inv((1+typemin(Int))//typemax(Int)) == -1
-    @test_throws ArgumentError inv(typemin(Int)//typemax(Int))
-    @test_throws ArgumentError Rational(0x1, typemin(Int32))
+    @test_throws OverflowError inv(typemin(Int)//typemax(Int))
+    @test_throws OverflowError Rational(0x1, typemin(Int32))
 
     @test @inferred(rationalize(Int, 3.0, 0.0)) === 3//1
     @test @inferred(rationalize(Int, 3.0, 0)) === 3//1
+    @test @inferred(rationalize(Int, 33//100; tol=0.1)) === 1//3 # because tol
+    @test @inferred(rationalize(Int, 3; tol=0.0)) === 3//1
+    @test @inferred(rationalize(Int8, 1000//333)) === Rational{Int8}(3//1)
+    @test @inferred(rationalize(Int8, 1000//3)) === Rational{Int8}(1//0)
+    @test @inferred(rationalize(Int8, 1000)) === Rational{Int8}(1//0)
     @test_throws OverflowError rationalize(UInt, -2.0)
     @test_throws ArgumentError rationalize(Int, big(3.0), -1.)
     # issue 26823
     @test_throws InexactError rationalize(Int, NaN)
     # issue 32569
-    @test_throws ArgumentError 1 // typemin(Int)
+    @test_throws OverflowError 1 // typemin(Int)
     @test_throws ArgumentError 0 // 0
     @test -2 // typemin(Int) == -1 // (typemin(Int) >> 1)
     @test 2 // typemin(Int) == 1 // (typemin(Int) >> 1)
+    # issue 32443
+    @test Int8(-128)//Int8(1) == -128
+    @test_throws OverflowError Int8(-128)//Int8(-1)
+    @test_throws OverflowError Int8(-1)//Int8(-128)
+    @test Int8(-128)//Int8(-2) == 64
+    # issue 51731
+    @test Rational{Int8}(-128) / Rational{Int8}(-128) === Rational{Int8}(1)
+    # issue 51731
+    @test Rational{Int8}(-128) / Rational{Int8}(0) === Rational{Int8}(-1, 0)
+    @test Rational{Int8}(0) / Rational{Int8}(-128) === Rational{Int8}(0, 1)
 
     @test_throws InexactError Rational(UInt(1), typemin(Int32))
     @test iszero(Rational{Int}(UInt(0), 1))
     @test Rational{BigInt}(UInt(1), Int(-1)) == -1
-    @test_broken Rational{Int64}(UInt(1), typemin(Int32)) == Int64(1) // Int64(typemin(Int32))
+    @test Rational{Int64}(UInt(1), typemin(Int32)) == Int64(1) // Int64(typemin(Int32))
+
+    @testset "Rational{T} constructor with concrete T" begin
+        test_types = [Bool, Int8, Int64, Int128, UInt8, UInt64, UInt128, BigInt]
+        test_values = Any[
+            Any[zero(T) for T in test_types];
+            Any[one(T) for T in test_types];
+            big(-1);
+            collect(Iterators.flatten(
+                (T(j) for T in (Int8, Int64, Int128)) for j in [-3:-1; -128:-126;]
+            ));
+            collect(Iterators.flatten(
+                (T(j) for T in (Int8, Int64, Int128, UInt8, UInt64, UInt128)) for j in [2:3; 126:127;]
+            ));
+            Any[typemax(T) for T in (Int64, Int128, UInt8, UInt64, UInt128)];
+            Any[typemax(T)-one(T) for T in (Int64, Int128, UInt8, UInt64, UInt128)];
+            Any[typemin(T) for T in (Int64, Int128)];
+            Any[typemin(T)+one(T) for T in (Int64, Int128)];
+        ]
+        for x in test_values, y in test_values
+            local big_r = iszero(x) && iszero(y) ? nothing : big(x) // big(y)
+            for T in test_types
+                if iszero(x) && iszero(y)
+                    @test_throws Exception Rational{T}(x, y)
+                elseif Base.hastypemax(T)
+                    local T_range = typemin(T):typemax(T)
+                    if numerator(big_r) ∈ T_range && denominator(big_r) ∈ T_range
+                        @test big_r == Rational{T}(x, y)
+                        @test Rational{T} == typeof(Rational{T}(x, y))
+                    else
+                        @test_throws Exception Rational{T}(x, y)
+                    end
+                else
+                    @test big_r == Rational{T}(x, y)
+                    @test Rational{T} == typeof(Rational{T}(x, y))
+                end
+            end
+        end
+    end
 
     for a = -5:5, b = -5:5
         if a == b == 0; continue; end
@@ -253,6 +306,10 @@ end
     rational2 = Rational(-4500, 9000)
     @test sprint(show, rational1) == "1465//8593"
     @test sprint(show, rational2) == "-1//2"
+    @test sprint(show, -2//2) == "-1//1"
+    @test sprint(show, [-2//2,]) == "Rational{$Int}[-1]"
+    @test sprint(show, MIME"text/plain"(), Union{Int, Rational{Int}}[7 3//6; 6//3 2]) ==
+        "2×2 Matrix{Union{Rational{$Int}, $Int}}:\n  7    1//2\n 2//1   2"
     let
         io1 = IOBuffer()
         write(io1, rational1)
@@ -264,6 +321,9 @@ end
         io2.ptr = 1
         @test read(io2, typeof(rational2)) == rational2
     end
+end
+@testset "abs overflow for Rational" begin
+    @test_throws OverflowError abs(typemin(Int) // 1)
 end
 @testset "parse" begin
     # Non-negative Int in which parsing is expected to work
@@ -525,6 +585,7 @@ end
              100798//32085
              103993//33102
              312689//99532 ]
+    @test rationalize(pi) === rationalize(BigFloat(pi))
 end
 
 @testset "issue #12536" begin
@@ -703,6 +764,19 @@ end
 
 @testset "Rational{T} with non-concrete T (issue #41222)" begin
     @test @inferred(Rational{Integer}(2,3)) isa Rational{Integer}
+    @test @inferred(Rational{Unsigned}(2,3)) isa Rational{Unsigned}
+    @test @inferred(Rational{Signed}(2,3)) isa Rational{Signed}
+    @test_throws InexactError Rational{Unsigned}(-1,1)
+    @test_throws InexactError Rational{Unsigned}(-1)
+    @test Rational{Unsigned}(Int8(-128), Int8(-128)) === Rational{Unsigned}(0x01, 0x01)
+    @test Rational{Unsigned}(Int8(-128), Int8(-1)) === Rational{Unsigned}(0x80, 0x01)
+    @test Rational{Unsigned}(Int8(0), Int8(-128)) === Rational{Unsigned}(0x00, 0x01)
+    # Numerator and denominator should have the same type.
+    @test Rational{Integer}(0x02) === Rational{Integer}(0x02, 0x01)
+    @test Rational{Integer}(Int16(3)) === Rational{Integer}(Int16(3), Int16(1))
+    @test Rational{Integer}(0x01,-1) === Rational{Integer}(-1, 1)
+    @test Rational{Integer}(-1, 0x01) === Rational{Integer}(-1, 1)
+    @test_throws InexactError Rational{Integer}(Int8(-1), UInt8(1))
 end
 
 @testset "issue #41489" begin
@@ -719,4 +793,11 @@ end
     @test rationalize(Int8, float(pi)im) == 0//1 + 22//7*im
     @test rationalize(1.192 + 2.233im) == 149//125 + 2233//1000*im
     @test rationalize(Int8, 1.192 + 2.233im) == 118//99 + 67//30*im
+end
+@testset "rationalize(Complex) with tol" begin
+    # test: rationalize(x::Complex; kvs...)
+    precise_next = 7205759403792795//72057594037927936
+    @assert Float64(precise_next) == nextfloat(0.1)
+    @test rationalize(Int64, nextfloat(0.1) * im; tol=0) == precise_next * im
+    @test rationalize(0.1im; tol=eps(0.1)) == rationalize(0.1im)
 end

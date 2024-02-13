@@ -106,6 +106,11 @@ norm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
 norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
+# Conservative assessment of types that have zero(T) defined for themselves
+haszero(::Type) = false
+haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
+@propagate_inbounds _zero(M::AbstractArray{T}, i, j) where {T} = haszero(T) ? zero(T) : zero(M[i,j])
+
 """
     triu!(M, k::Integer)
 
@@ -136,7 +141,7 @@ function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
-            M[i,j] = zero(M[i,j])
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     M
@@ -173,12 +178,13 @@ function tril!(M::AbstractMatrix, k::Integer)
     require_one_based_indexing(M)
     m, n = size(M)
     for j in max(1, k + 1):n
-        @inbounds for i in 1:min(j - k - 1, m)
-            M[i,j] = zero(M[i,j])
+        for i in 1:min(j - k - 1, m)
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     M
 end
+
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 """
@@ -198,13 +204,24 @@ function fillband!(A::AbstractMatrix{T}, x, l, u) where T
     return A
 end
 
-diagind(m::Integer, n::Integer, k::Integer=0) =
+diagind(m::Integer, n::Integer, k::Integer=0) = diagind(IndexLinear(), m, n, k)
+diagind(::IndexLinear, m::Integer, n::Integer, k::Integer=0) =
     k <= 0 ? range(1-k, step=m+1, length=min(m+k, n)) : range(k*m+1, step=m+1, length=min(m, n-k))
 
+function diagind(::IndexCartesian, m::Integer, n::Integer, k::Integer=0)
+    Cstart = CartesianIndex(1 + max(0,-k), 1 + max(0,k))
+    Cstep = CartesianIndex(1, 1)
+    length = max(0, k <= 0 ? min(m+k, n) : min(m, n-k))
+    StepRangeLen(Cstart, Cstep, length)
+end
+
 """
-    diagind(M, k::Integer=0)
+    diagind(M::AbstractMatrix, [k::Integer=0,] indstyle::IndexStyle = IndexLinear())
 
 An `AbstractRange` giving the indices of the `k`th diagonal of the matrix `M`.
+Optionally, an index style may be specified which determines the type of the range returned.
+If `indstyle isa IndexLinear` (default), this returns an `AbstractRange{Integer}`.
+On the other hand, if `indstyle isa IndexCartesian`, this returns an `AbstractRange{CartesianIndex{2}}`.
 
 See also: [`diag`](@ref), [`diagm`](@ref), [`Diagonal`](@ref).
 
@@ -220,10 +237,12 @@ julia> diagind(A,-1)
 2:4:6
 ```
 """
-function diagind(A::AbstractMatrix, k::Integer=0)
+function diagind(A::AbstractMatrix, k::Integer=0, indexstyle::IndexStyle = IndexLinear())
     require_one_based_indexing(A)
-    diagind(size(A,1), size(A,2), k)
+    diagind(indexstyle, size(A,1), size(A,2), k)
 end
+
+diagind(A::AbstractMatrix, indexstyle::IndexStyle) = diagind(A, 0, indexstyle)
 
 """
     diag(M, k::Integer=0)
@@ -246,7 +265,7 @@ julia> diag(A,1)
  6
 ```
 """
-diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
+diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A, k, IndexStyle(A))]
 
 """
     diagm(kv::Pair{<:Integer,<:AbstractVector}...)
@@ -344,7 +363,7 @@ diagm(m::Integer, n::Integer, v::AbstractVector) = diagm(m, n, 0 => v)
 function tr(A::Matrix{T}) where T
     n = checksquare(A)
     t = zero(T)
-    for i=1:n
+    @inbounds @simd for i in 1:n
         t += A[i,i]
     end
     t
@@ -490,7 +509,7 @@ end
 function schurpow(A::AbstractMatrix, p)
     if istriu(A)
         # Integer part
-        retmat = A ^ floor(p)
+        retmat = A ^ floor(Integer, p)
         # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrt(A)
@@ -501,7 +520,7 @@ function schurpow(A::AbstractMatrix, p)
     else
         S,Q,d = Schur{Complex}(schur(A))
         # Integer part
-        R = S ^ floor(p)
+        R = S ^ floor(Integer, p)
         # Real part
         if p - floor(p) == 0.5
             # special case: A^0.5 === sqrt(A)
@@ -591,10 +610,9 @@ julia> exp(A)
  0.0      2.71828
 ```
 """
-exp(A::StridedMatrix{<:BlasFloat}) = exp!(copy(A))
-exp(A::StridedMatrix{<:Union{Integer,Complex{<:Integer}}}) = exp!(float.(A))
-exp(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(exp(parent(A)))
-exp(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(exp(parent(A)))
+exp(A::AbstractMatrix) = exp!(copy_similar(A, eigtype(eltype(A))))
+exp(A::AdjointAbsMat) = adjoint(exp(parent(A)))
+exp(A::TransposeAbsMat) = transpose(exp(parent(A)))
 
 """
     cis(A::AbstractMatrix)
@@ -755,7 +773,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
 end
 
 ## Swap rows i and j and columns i and j in X
-function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
+function rcswap!(i::Integer, j::Integer, X::AbstractMatrix{<:Number})
     for k = 1:size(X,1)
         X[k,i], X[k,j] = X[k,j], X[k,i]
     end
@@ -765,7 +783,7 @@ function rcswap!(i::Integer, j::Integer, X::StridedMatrix{<:Number})
 end
 
 """
-    log(A::StridedMatrix)
+    log(A::AbstractMatrix)
 
 If `A` has no negative real eigenvalue, compute the principal matrix logarithm of `A`, i.e.
 the unique matrix ``X`` such that ``e^X = A`` and ``-\\pi < Im(\\lambda) < \\pi`` for all
@@ -796,7 +814,7 @@ julia> log(A)
  0.0  1.0
 ```
 """
-function log(A::StridedMatrix)
+function log(A::AbstractMatrix)
     # If possible, use diagonalization
     if ishermitian(A)
         logHermA = log(Hermitian(A))
@@ -824,8 +842,8 @@ function log(A::StridedMatrix)
     end
 end
 
-log(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(log(parent(A)))
-log(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(log(parent(A)))
+log(A::AdjointAbsMat) = adjoint(log(parent(A)))
+log(A::TransposeAbsMat) = transpose(log(parent(A)))
 
 """
     sqrt(A::AbstractMatrix)
@@ -873,10 +891,12 @@ julia> sqrt(A)
  0.0  2.0
 ```
 """
-sqrt(::StridedMatrix)
+sqrt(::AbstractMatrix)
 
-function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
-    if ishermitian(A)
+function sqrt(A::AbstractMatrix{T}) where {T<:Union{Real,Complex}}
+    if checksquare(A) == 0
+        return copy(A)
+    elseif ishermitian(A)
         sqrtHermA = sqrt(Hermitian(A))
         return ishermitian(sqrtHermA) ? copytri!(parent(sqrtHermA), 'U', true) : parent(sqrtHermA)
     elseif istriu(A)
@@ -903,19 +923,65 @@ function sqrt(A::StridedMatrix{T}) where {T<:Union{Real,Complex}}
     end
 end
 
-sqrt(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(sqrt(parent(A)))
-sqrt(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(sqrt(parent(A)))
+sqrt(A::AdjointAbsMat) = adjoint(sqrt(parent(A)))
+sqrt(A::TransposeAbsMat) = transpose(sqrt(parent(A)))
+
+"""
+    cbrt(A::AbstractMatrix{<:Real})
+
+Computes the real-valued cube root of a real-valued matrix `A`. If `T = cbrt(A)`, then
+we have `T*T*T ≈ A`, see example given below.
+
+If `A` is symmetric, i.e., of type `HermOrSym{<:Real}`, then ([`eigen`](@ref)) is used to
+find the cube root. Otherwise, a specialized version of the p-th root algorithm [^S03] is
+utilized, which exploits the real-valued Schur decomposition ([`schur`](@ref))
+to compute the cube root.
+
+[^S03]:
+
+    Matthew I. Smith, "A Schur Algorithm for Computing Matrix pth Roots",
+    SIAM Journal on Matrix Analysis and Applications, vol. 24, 2003, pp. 971–989.
+    [doi:10.1137/S0895479801392697](https://doi.org/10.1137/s0895479801392697)
+
+# Examples
+```jldoctest
+julia> A = [0.927524 -0.15857; -1.3677 -1.01172]
+2×2 Matrix{Float64}:
+  0.927524  -0.15857
+ -1.3677    -1.01172
+
+julia> T = cbrt(A)
+2×2 Matrix{Float64}:
+  0.910077  -0.151019
+ -1.30257   -0.936818
+
+julia> T*T*T ≈ A
+true
+```
+"""
+function cbrt(A::AbstractMatrix{<:Real})
+    if checksquare(A) == 0
+        return copy(A)
+    elseif issymmetric(A)
+        return cbrt(Symmetric(A, :U))
+    else
+        S = schur(A)
+        return S.Z * _cbrt_quasi_triu!(S.T) * S.Z'
+    end
+end
+
+# Cube roots of adjoint and transpose matrices
+cbrt(A::AdjointAbsMat) = adjoint(cbrt(parent(A)))
+cbrt(A::TransposeAbsMat) = transpose(cbrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
-    S = typeof((oneunit(T)*zero(T) + oneunit(T)*zero(T))/oneunit(T))
-    AA = convert(AbstractArray{S}, A)
-    if istriu(AA)
-        Ai = triu!(parent(inv(UpperTriangular(AA))))
-    elseif istril(AA)
-        Ai = tril!(parent(inv(LowerTriangular(AA))))
+    if istriu(A)
+        Ai = triu!(parent(inv(UpperTriangular(A))))
+    elseif istril(A)
+        Ai = tril!(parent(inv(LowerTriangular(A))))
     else
-        Ai = inv!(lu(AA))
+        Ai = inv!(lu(A))
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai
@@ -1341,7 +1407,7 @@ julia> factorize(A) # factorize will check to see that A is already factorized
 This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra functions
 (e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
 """
-function factorize(A::StridedMatrix{T}) where T
+function factorize(A::AbstractMatrix{T}) where T
     m, n = size(A)
     if m == n
         if m == 1 return A[1] end
@@ -1484,10 +1550,10 @@ function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(flo
         return B
     end
     SVD         = svd(A)
-    tol         = max(rtol*maximum(SVD.S), atol)
+    tol2        = max(rtol*maximum(SVD.S), atol)
     Stype       = eltype(SVD.S)
     Sinv        = fill!(similar(A, Stype, length(SVD.S)), 0)
-    index       = SVD.S .> tol
+    index       = SVD.S .> tol2
     Sinv[index] .= pinv.(view(SVD.S, index))
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
@@ -1543,7 +1609,7 @@ function nullspace(A::AbstractVecOrMat; atol::Real = 0.0, rtol::Real = (min(size
     SVD = svd(A; full=true)
     tol = max(atol, SVD.S[1]*rtol)
     indstart = sum(s -> s .> tol, SVD.S) + 1
-    return copy(SVD.Vt[indstart:end,:]')
+    return copy((@view SVD.Vt[indstart:end,:])')
 end
 
 """

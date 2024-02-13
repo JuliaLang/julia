@@ -52,6 +52,11 @@ end
     @test get!(ENV, key, "default") == "default"
     @test haskey(ENV, key)
     @test ENV[key] == "default"
+
+    key = randstring(25)
+    @test !haskey(ENV, key)
+    @test get!(ENV, key, 0) == 0
+    @test ENV[key] == "0"
 end
 @testset "#17956" begin
     @test length(ENV) > 1
@@ -122,8 +127,63 @@ if Sys.iswindows()
     end
 end
 
+@testset "get_bool_env" begin
+    @testset "truthy" begin
+        for v in ("t", "true", "y", "yes", "1")
+            for _v in (v, uppercasefirst(v), uppercase(v))
+                ENV["testing_gbe"] = _v
+                @test Base.get_bool_env("testing_gbe", false) == true
+                @test Base.get_bool_env(() -> false, "testing_gbe") == true
+                @test Base.get_bool_env("testing_gbe", true) == true
+                @test Base.get_bool_env(() -> true, "testing_gbe") == true
+            end
+        end
+    end
+    @testset "falsy" begin
+        for v in ("f", "false", "n", "no", "0")
+            for _v in (v, uppercasefirst(v), uppercase(v))
+                ENV["testing_gbe"] = _v
+                @test Base.get_bool_env("testing_gbe", true) == false
+                @test Base.get_bool_env(() -> true, "testing_gbe") == false
+                @test Base.get_bool_env("testing_gbe", false) == false
+                @test Base.get_bool_env(() -> false, "testing_gbe") == false
+            end
+        end
+    end
+    @testset "empty" begin
+        ENV["testing_gbe"] = ""
+        @test Base.get_bool_env("testing_gbe", true) == true
+        @test Base.get_bool_env(() -> true, "testing_gbe") == true
+        @test Base.get_bool_env("testing_gbe", false) == false
+        @test Base.get_bool_env(() -> false, "testing_gbe") == false
+    end
+    @testset "undefined" begin
+        delete!(ENV, "testing_gbe")
+        @test !haskey(ENV, "testing_gbe")
+        @test Base.get_bool_env("testing_gbe", true) == true
+        @test Base.get_bool_env(() -> true, "testing_gbe") == true
+        @test Base.get_bool_env("testing_gbe", false) == false
+        @test Base.get_bool_env(() -> false, "testing_gbe") == false
+    end
+    @testset "unrecognized" begin
+        for v in ("truw", "falls")
+            ENV["testing_gbe"] = v
+            @test Base.get_bool_env("testing_gbe", true) === nothing
+            @test_throws ArgumentError Base.get_bool_env("testing_gbe", true, throw=true)
+            @test Base.get_bool_env("testing_gbe", false) === nothing
+            @test_throws ArgumentError Base.get_bool_env("testing_gbe", false, throw=true)
+        end
+    end
+
+    # the "default" arg shouldn't have a default val, for clarity.
+    @test_throws MethodError Base.get_bool_env("testing_gbe")
+
+    delete!(ENV, "testing_gbe")
+    @test !haskey(ENV, "testing_gbe")
+end
+
 # Restore the original environment
-for k in keys(ENV)
+for k in collect(keys(ENV))
     if !haskey(original_env, k)
         delete!(ENV, k)
     end

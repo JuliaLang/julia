@@ -474,6 +474,32 @@ julia> trailing_ones(3)
 """
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
+"""
+    top_set_bit(x::Integer) -> Integer
+
+The number of bits in `x`'s binary representation, excluding leading zeros.
+
+Equivalently, the position of the most significant set bit in `x`'s binary
+representation, measured from the least significant side.
+
+Negative `x` are only supported when `x::BitSigned`.
+
+See also: [`ndigits0z`](@ref), [`ndigits`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.top_set_bit(4)
+3
+
+julia> Base.top_set_bit(0)
+0
+
+julia> Base.top_set_bit(-1)
+64
+```
+"""
+top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
+
 ## integer comparisons ##
 
 (< )(x::T, y::T) where {T<:BitUnsigned} = ult_int(x, y)
@@ -506,11 +532,11 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
-        if to.size < from.size
+        if Core.sizeof(to) < Core.sizeof(from)
             @eval rem(x::($from), ::Type{$to}) = trunc_int($to, x)
         elseif from === Bool
             @eval rem(x::($from), ::Type{$to}) = convert($to, x)
-        elseif from.size < to.size
+        elseif Core.sizeof(from) < Core.sizeof(to)
             if from <: Signed
                 @eval rem(x::($from), ::Type{$to}) = sext_int($to, x)
             else
@@ -570,8 +596,17 @@ if nameof(@__MODULE__) === :Base
 
         # Examples
         ```jldoctest
-        julia> 129 % Int8
+        julia> x = 129 % Int8
         -127
+
+        julia> typeof(x)
+        Int8
+
+        julia> x = 129 % BigInt
+        129
+
+        julia> typeof(x)
+        BigInt
         ```
         """ $fname(x::Integer, T::Type{<:Integer})
     end
@@ -585,70 +620,6 @@ rem(x::Integer, ::Type{Bool}) = ((x & 1) != 0)
 mod(x::Integer, ::Type{T}) where {T<:Integer} = rem(x, T)
 
 unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
-
-"""
-    trunc([T,] x)
-    trunc(x; digits::Integer= [, base = 10])
-    trunc(x; sigdigits::Integer= [, base = 10])
-
-`trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
-is less than or equal to the absolute value of `x`.
-
-`trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
-not representable.
-
-Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
-
-See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref), [`unsafe_trunc`](@ref).
-
-# Examples
-```jldoctest
-julia> trunc(2.22)
-2.0
-
-julia> trunc(-2.22, digits=1)
--2.2
-
-julia> trunc(Int, -2.22)
--2
-```
-"""
-function trunc end
-
-"""
-    floor([T,] x)
-    floor(x; digits::Integer= [, base = 10])
-    floor(x; sigdigits::Integer= [, base = 10])
-
-`floor(x)` returns the nearest integral value of the same type as `x` that is less than or
-equal to `x`.
-
-`floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
-not representable.
-
-Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
-"""
-function floor end
-
-"""
-    ceil([T,] x)
-    ceil(x; digits::Integer= [, base = 10])
-    ceil(x; sigdigits::Integer= [, base = 10])
-
-`ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
-equal to `x`.
-
-`ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is not
-representable.
-
-Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
-"""
-function ceil end
-
-round(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
-trunc(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
-floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
- ceil(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 
 ## integer construction ##
 
@@ -711,6 +682,15 @@ julia> big"_"
 ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
 [...]
 ```
+
+!!! warning
+    Using `@big_str` for constructing [`BigFloat`](@ref) values may not result
+    in the behavior that might be naively expected: as a macro, `@big_str`
+    obeys the global precision ([`setprecision`](@ref)) and rounding mode
+    ([`setrounding`](@ref)) settings as they are at *load time*. Thus, a
+    function like `() -> precision(big"0.3")` returns a constant whose value
+    depends on the value of the precision at the point when the function is
+    defined, **not** at the precision at the time when the function is called.
 """
 macro big_str(s)
     message = "invalid number format $s for BigInt or BigFloat"
@@ -764,13 +744,24 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 The lowest value representable by the given (real) numeric DataType `T`.
 
+See also: [`floatmin`](@ref), [`typemax`](@ref), [`eps`](@ref).
+
 # Examples
 ```jldoctest
+julia> typemin(Int8)
+-128
+
+julia> typemin(UInt32)
+0x00000000
+
 julia> typemin(Float16)
 -Inf16
 
 julia> typemin(Float32)
 -Inf32
+
+julia> nextfloat(-Inf32)  # smallest finite Float32 floating point number
+-3.4028235f38
 ```
 """
 function typemin end
@@ -793,7 +784,10 @@ julia> typemax(UInt32)
 julia> typemax(Float64)
 Inf
 
-julia> floatmax(Float32)  # largest finite floating point number
+julia> typemax(Float32)
+Inf32
+
+julia> floatmax(Float32)  # largest finite Float32 floating point number
 3.4028235f38
 ```
 """

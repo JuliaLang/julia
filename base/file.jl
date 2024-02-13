@@ -32,7 +32,7 @@ export
 # get and set current directory
 
 """
-    pwd() -> AbstractString
+    pwd() -> String
 
 Get the current working directory.
 
@@ -105,7 +105,7 @@ if Sys.iswindows()
     end
 else
     function cd(f::Function, dir::AbstractString)
-        fd = ccall(:open, Int32, (Cstring, Int32), :., 0)
+        fd = ccall(:open, Int32, (Cstring, Int32, UInt32...), :., 0)
         systemerror(:open, fd == -1)
         try
             cd(dir)
@@ -294,7 +294,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                     rm(joinpath(path, p), force=force, recursive=true)
                 end
             catch err
-                if !(force && isa(err, IOError) && err.code==Base.UV_EACCES)
+                if !(isa(err, IOError) && err.code==Base.UV_EACCES)
                     rethrow(err)
                 end
             end
@@ -303,7 +303,9 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             ret = ccall(:uv_fs_rmdir, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}), C_NULL, req, path, C_NULL)
             uv_fs_req_cleanup(req)
-            ret < 0 && uv_error("rm($(repr(path)))", ret)
+            if ret < 0 && !(force && ret == Base.UV_ENOENT)
+                uv_error("rm($(repr(path)))", ret)
+            end
             nothing
         finally
             Libc.free(req)
@@ -478,13 +480,26 @@ function tempdir()
         rc = ccall(:uv_os_tmpdir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0
             resize!(buf, sz[])
-            return String(buf)
+            break
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1)  # space for null-terminator implied by StringVector
         else
             uv_error("tempdir()", rc)
         end
     end
+    tempdir = String(buf)
+    try
+        s = stat(tempdir)
+        if !ispath(s)
+            @warn "tempdir path does not exist" tempdir
+        elseif !isdir(s)
+            @warn "tempdir path is not a directory" tempdir
+        end
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        @warn "accessing tempdir path failed" _exception=ex
+    end
+    return tempdir
 end
 
 """
@@ -502,13 +517,19 @@ function prepare_for_deletion(path::AbstractString)
         return
     end
 
-    try chmod(path, filemode(path) | 0o333)
-    catch; end
+    try
+        chmod(path, filemode(path) | 0o333)
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+    end
     for (root, dirs, files) in walkdir(path; onerror=x->())
         for dir in dirs
             dpath = joinpath(root, dir)
-            try chmod(dpath, filemode(dpath) | 0o333)
-            catch; end
+            try
+                chmod(dpath, filemode(dpath) | 0o333)
+            catch ex
+                ex isa IOError || ex isa SystemError || rethrow()
+            end
         end
     end
 end
@@ -519,34 +540,70 @@ const TEMP_CLEANUP = Dict{String,Bool}()
 const TEMP_CLEANUP_LOCK = ReentrantLock()
 
 function temp_cleanup_later(path::AbstractString; asap::Bool=false)
-    lock(TEMP_CLEANUP_LOCK)
+    @lock TEMP_CLEANUP_LOCK begin
     # each path should only be inserted here once, but if there
     # is a collision, let !asap win over asap: if any user might
     # still be using the path, don't delete it until process exit
     TEMP_CLEANUP[path] = get(TEMP_CLEANUP, path, true) & asap
     if length(TEMP_CLEANUP) > TEMP_CLEANUP_MAX[]
-        temp_cleanup_purge()
+        temp_cleanup_purge_prelocked(false)
         TEMP_CLEANUP_MAX[] = max(TEMP_CLEANUP_MIN[], 2*length(TEMP_CLEANUP))
     end
-    unlock(TEMP_CLEANUP_LOCK)
-    return nothing
+    end
+    nothing
 end
 
-function temp_cleanup_purge(; force::Bool=false)
-    need_gc = Sys.iswindows()
-    for (path, asap) in TEMP_CLEANUP
+function temp_cleanup_forget(path::AbstractString)
+    @lock TEMP_CLEANUP_LOCK delete!(TEMP_CLEANUP, path)
+    nothing
+end
+
+function temp_cleanup_purge_prelocked(force::Bool)
+    filter!(TEMP_CLEANUP) do (path, asap)
         try
-            if (force || asap) && ispath(path)
-                need_gc && GC.gc(true)
-                need_gc = false
+            ispath(path) || return false
+            if force || asap
                 prepare_for_deletion(path)
                 rm(path, recursive=true, force=true)
             end
-            !ispath(path) && delete!(TEMP_CLEANUP, path)
+            return ispath(path)
         catch ex
-            @warn "temp cleanup" _group=:file exception=(ex, catch_backtrace())
+            @warn """
+                Failed to clean up temporary path $(repr(path))
+                $ex
+                """ _group=:file
+            ex isa InterruptException && rethrow()
+            return true
         end
     end
+    nothing
+end
+
+function temp_cleanup_purge_all()
+    may_need_gc = false
+    @lock TEMP_CLEANUP_LOCK filter!(TEMP_CLEANUP) do (path, asap)
+        try
+            ispath(path) || return false
+            may_need_gc = true
+            return true
+        catch ex
+            ex isa InterruptException && rethrow()
+            return true
+        end
+    end
+    if may_need_gc
+        # this is only usually required on Sys.iswindows(), but may as well do it everywhere
+        GC.gc(true)
+    end
+    @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(true)
+    nothing
+end
+
+# deprecated internal function used by some packages
+temp_cleanup_purge(; force=false) = force ? temp_cleanup_purge_all() : @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(false)
+
+function __postinit__()
+    Base.atexit(temp_cleanup_purge_all)
 end
 
 const temp_prefix = "jl_"
@@ -629,7 +686,7 @@ end # os-test
 
 Generate a temporary file path. This function only returns a path; no file is
 created. The path is likely to be unique, but this cannot be guaranteed due to
-the very remote posibility of two simultaneous calls to `tempname` generating
+the very remote possibility of two simultaneous calls to `tempname` generating
 the same file name. The name is guaranteed to differ from all files already
 existing at the time of the call to `tempname`.
 
@@ -642,7 +699,7 @@ The `cleanup` option controls whether the process attempts to delete the
 returned path automatically when the process exits. Note that the `tempname`
 function does not create any file or directory at the returned location, so
 there is nothing to cleanup unless you create a file or directory there. If
-you do and `clean` is `true` it will be deleted upon process termination.
+you do and `cleanup` is `true` it will be deleted upon process termination.
 
 !!! compat "Julia 1.4"
     The `parent` and `cleanup` arguments were added in 1.4. Prior to Julia 1.4
@@ -675,8 +732,9 @@ mktemp(parent)
     mktempdir(parent=tempdir(); prefix=$(repr(temp_prefix)), cleanup=true) -> path
 
 Create a temporary directory in the `parent` directory with a name
-constructed from the given prefix and a random suffix, and return its path.
-Additionally, any trailing `X` characters may be replaced with random characters.
+constructed from the given `prefix` and a random suffix, and return its path.
+Additionally, on some platforms, any trailing `'X'` characters in `prefix` may be replaced
+with random characters.
 If `parent` does not exist, throw an error. The `cleanup` option controls whether
 the temporary directory is automatically deleted when the process exits.
 
@@ -727,10 +785,11 @@ temporary file upon completion.
 See also: [`mktempdir`](@ref).
 """
 function mktemp(fn::Function, parent::AbstractString=tempdir())
-    (tmp_path, tmp_io) = mktemp(parent, cleanup=false)
+    (tmp_path, tmp_io) = mktemp(parent)
     try
         fn(tmp_path, tmp_io)
     finally
+        temp_cleanup_forget(tmp_path)
         try
             close(tmp_io)
             ispath(tmp_path) && rm(tmp_path)
@@ -755,10 +814,11 @@ See also: [`mktemp`](@ref), [`mkdir`](@ref).
 """
 function mktempdir(fn::Function, parent::AbstractString=tempdir();
     prefix::AbstractString=temp_prefix)
-    tmpdir = mktempdir(parent; prefix=prefix, cleanup=false)
+    tmpdir = mktempdir(parent; prefix=prefix)
     try
         fn(tmpdir)
     finally
+        temp_cleanup_forget(tmpdir)
         try
             if ispath(tmpdir)
                 prepare_for_deletion(tmpdir)
@@ -840,7 +900,7 @@ julia> readdir("base", join=true)
  ⋮
  "base/version_git.sh"
  "base/views.jl"
- "base/weakkeydict.jl"```
+ "base/weakkeydict.jl"
 
 julia> readdir(abspath("base"), join=true)
 145-element Array{String,1}:
@@ -1109,7 +1169,7 @@ function symlink(target::AbstractString, link::AbstractString;
 end
 
 """
-    readlink(path::AbstractString) -> AbstractString
+    readlink(path::AbstractString) -> String
 
 Return the target location a symbolic link `path` points to.
 """

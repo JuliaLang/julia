@@ -12,8 +12,6 @@ using Base: uv_error, Experimental
 # Odd numbered pipes are tested for reads
 # Even numbered pipes are tested for timeouts
 # Writable ends are always tested for write-ability before a write
-ismacos_arm = ((Sys.ARCH == :aarch64) && (Sys.isapple())) #https://github.com/JuliaLang/julia/issues/46185
-ismacos_x86 = ((Sys.ARCH == :x86_64) && (Sys.isapple()))  #Used to disable the unreliable macos tests
 
 n = 20
 intvls = [2, .2, .1, .005, .00001]
@@ -26,7 +24,7 @@ for i in 1:n
         uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
     end
     Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
-    FDmax = Sys.iswindows() ? 0x7fff : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
+    FDmax = Sys.iswindows() ? typemax(Int32) : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
     fd_in_limits =
         0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
         0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
@@ -34,7 +32,7 @@ for i in 1:n
     if !fd_in_limits && Sys.islinux()
         run(`ls -la /proc/$(getpid())/fd`)
     end
-    if !ismacos_arm
+    if !Sys.isapple()
         @test fd_in_limits
     end
 end
@@ -76,7 +74,7 @@ end
 
 # Odd numbers trigger reads, even numbers timeout
 for (i, intvl) in enumerate(intvls)
-    @Experimental.sync begin
+    Experimental.@sync begin
         global ready = 0
         global ready_c = Condition()
         for idx in 1:n
@@ -163,7 +161,7 @@ test2_12992()
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
-F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple()  # platforms where F_GETPATH is available
+F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple() # platforms where F_GETPATH is available
 F_PATH = F_GETPATH ? "afile.txt" : ""
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
@@ -187,7 +185,7 @@ function test_init_afile()
     @test(watch_folder(dir) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME)))
     @test close(open(file, "w")) === nothing
     sleep(3)
-    if !ismacos_x86
+    if !Sys.isapple()
         let c
             c = watch_folder(dir, 0)
 
@@ -278,7 +276,7 @@ function test_dirmonitor_wait(tval)
             end
         end
         fname, events = wait(fm)::Pair
-        @test fname == F_PATH
+        @test fname == basename(file)
         @test events.changed && !events.timedout && !events.renamed
         close(fm)
     end
@@ -377,7 +375,7 @@ test_monitor_wait_poll()
 test_watch_file_timeout(0.2)
 test_watch_file_change(6)
 
-if !ismacos_x86
+if !Sys.isapple()
     test_dirmonitor_wait2(0.2)
     test_dirmonitor_wait2(0.2)
 
@@ -445,8 +443,17 @@ unwatch_folder(dir)
 rm(file)
 rm(dir)
 
+# Test that creating a FDWatcher with a (probably) negative FD fails
+@test_throws ArgumentError FDWatcher(RawFD(-1), true, true)
+
 @testset "Pidfile" begin
     include("pidfile.jl")
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(FileWatching)
+    @test_broken isempty(undoc)
+    @test undoc == [:FDWatcher, :FileMonitor, :FolderMonitor, :PollingFileWatcher]
 end
 
 end # testset
