@@ -3608,7 +3608,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
 
     if (collection == JL_GC_AUTO) {
         //If we aren't freeing enough or are seeing lots and lots of pointers let it increase faster
-        if(!not_freed_enough || large_frontier) {
+        if(not_freed_enough || large_frontier) {
             int64_t tot = 2 * (live_bytes + gc_num.since_sweep) / 3;
             if (gc_num.interval > tot) {
                 gc_num.interval = tot;
