@@ -24,9 +24,9 @@ static int codegen_imaging_mode(void)
 
 const int logdata_blocksize = 32; // target getting nearby lines in the same general cache area and reducing calls to malloc by chunking
 typedef uint64_t logdata_block[logdata_blocksize];
-typedef StringMap< std::vector<logdata_block*> > logdata_t;
+typedef StringMap< SmallVector<logdata_block*, 0> > logdata_t;
 
-static uint64_t *allocLine(std::vector<logdata_block*> &vec, int line)
+static uint64_t *allocLine(SmallVector<logdata_block*, 0> &vec, int line)
 {
     unsigned block = line / logdata_blocksize;
     line = line % logdata_blocksize;
@@ -63,7 +63,7 @@ extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char *filename_, size_
     StringRef filename = StringRef(filename_, len_filename);
     if (codegen_imaging_mode() || filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    std::vector<logdata_block*> &vec = coverageData[filename];
+    SmallVector<logdata_block*, 0> &vec = coverageData[filename];
     uint64_t *ptr = allocLine(vec, line);
     (*ptr)++;
 }
@@ -82,8 +82,8 @@ extern "C" JL_DLLEXPORT void jl_clear_malloc_data(void)
 {
     logdata_t::iterator it = mallocData.begin();
     for (; it != mallocData.end(); it++) {
-        std::vector<logdata_block*> &bytes = (*it).second;
-        std::vector<logdata_block*>::iterator itb;
+        SmallVector<logdata_block*, 0> &bytes = (*it).second;
+        SmallVector<logdata_block*, 0>::iterator itb;
         for (itb = bytes.begin(); itb != bytes.end(); itb++) {
             if (*itb) {
                 logdata_block &data = **itb;
@@ -104,7 +104,7 @@ static void write_log_data(logdata_t &logData, const char *extension)
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {
         std::string filename(it->first());
-        std::vector<logdata_block*> &values = it->second;
+        SmallVector<logdata_block*, 0> &values = it->second;
         if (!values.empty()) {
             if (!jl_isabspath(filename.c_str()))
                 filename = base + filename;
@@ -160,7 +160,7 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile)
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {
         StringRef filename = it->first();
-        const std::vector<logdata_block*> &values = it->second;
+        const SmallVector<logdata_block*, 0> &values = it->second;
         if (!values.empty()) {
             outf << "SF:" << filename.str() << '\n';
             size_t n_covered = 0;
@@ -192,7 +192,7 @@ static void write_lcov_data(logdata_t &logData, const std::string &outfile)
     outf.close();
 }
 
-extern "C" void jl_write_coverage_data(const char *output)
+extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
 {
     if (output) {
         StringRef output_pattern(output);

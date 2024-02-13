@@ -164,7 +164,11 @@ enum class CPU : uint32_t {
     apple_a12,
     apple_a13,
     apple_a14,
+    apple_a15,
+    apple_a16,
     apple_m1,
+    apple_m2,
+    apple_m3,
     apple_s4,
     apple_s5,
 
@@ -349,7 +353,11 @@ constexpr auto apple_a11 = armv8_2a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a12 = armv8_3a_crypto | get_feature_masks(fullfp16);
 constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16, sha3);
 constexpr auto apple_a14 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+constexpr auto apple_a15 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
+constexpr auto apple_a16 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 constexpr auto apple_m1 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
+constexpr auto apple_m2 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
+constexpr auto apple_m3 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 // Features based on https://github.com/llvm/llvm-project/blob/82507f1798768280cf5d5aab95caaafbc7fe6f47/llvm/include/llvm/Support/AArch64TargetParser.def
 // and sysctl -a hw.optional
 constexpr auto apple_s4 = apple_a12;
@@ -431,7 +439,11 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"apple-a12", CPU::apple_a12, CPU::generic, 100000, Feature::apple_a12},
     {"apple-a13", CPU::apple_a13, CPU::generic, 100000, Feature::apple_a13},
     {"apple-a14", CPU::apple_a14, CPU::apple_a13, 120000, Feature::apple_a14},
+    {"apple-a15", CPU::apple_a15, CPU::apple_a14, 160000, Feature::apple_a15},
+    {"apple-a16", CPU::apple_a16, CPU::apple_a14, 160000, Feature::apple_a16},
     {"apple-m1", CPU::apple_m1, CPU::apple_a14, 130000, Feature::apple_m1},
+    {"apple-m2", CPU::apple_m2, CPU::apple_m1, 160000, Feature::apple_m2},
+    {"apple-m3", CPU::apple_m3, CPU::apple_m2, 180000, Feature::apple_m3},
     {"apple-s4", CPU::apple_s4, CPU::generic, 100000, Feature::apple_s4},
     {"apple-s5", CPU::apple_s5, CPU::generic, 100000, Feature::apple_s5},
     {"thunderx3t110", CPU::marvell_thunderx3t110, CPU::cavium_thunderx2t99, 110000,
@@ -699,16 +711,17 @@ static inline const char *find_cpu_name(uint32_t cpu)
 
 static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 {
+    using namespace llvm;
     char buffer[128];
     size_t bufferlen = 128;
     sysctlbyname("machdep.cpu.brand_string",&buffer,&bufferlen,NULL,0);
-
-    if(strcmp(buffer,"Apple M1") == 0)
+    StringRef cpu_name(buffer);
+    if (cpu_name.find("M1") != StringRef ::npos)
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
-    else if(strcmp(buffer,"Apple M1 Max") == 0)
-        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
-    else if(strcmp(buffer,"Apple M1 Pro") == 0)
-        return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
+    else if (cpu_name.find("M2") != StringRef ::npos)
+        return std::make_pair((uint32_t)CPU::apple_m2, Feature::apple_m2);
+    else if (cpu_name.find("M3") != StringRef ::npos)
+        return std::make_pair((uint32_t)CPU::apple_m3, Feature::apple_m3);
     else
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
 }
@@ -1053,7 +1066,23 @@ static CPU get_cpu_name(CPUID cpuid)
             return CPU::apple_a14;
         case 0x22: // Icestorm m1
         case 0x23: // Firestorm m1
+        case 0x24:
+        case 0x25: // From https://github.com/AsahiLinux/m1n1/blob/3b9a71422e45209ef57c563e418f877bf54358be/src/chickens.c#L9
+        case 0x28:
+        case 0x29:
             return CPU::apple_m1;
+        case 0x30: // Blizzard m2
+        case 0x31: // Avalanche m2
+        case 0x32:
+        case 0x33:
+        case 0x34:
+        case 0x35:
+        case 0x38:
+        case 0x39:
+            return CPU::apple_m2;
+        case 0x49: // Everest m3
+        case 0x48: // Sawtooth m3
+            return CPU::apple_m3;
         default: return CPU::generic;
         }
     case 0x68: // 'h': Huaxintong Semiconductor
@@ -1195,7 +1224,7 @@ static bool check_cpu_arch_ver(uint32_t cpu, arm_arch arch)
     return true;
 }
 
-static void shrink_big_little(std::vector<std::pair<uint32_t,CPUID>> &list,
+static void shrink_big_little(llvm::SmallVectorImpl<std::pair<uint32_t,CPUID>> &list,
                               const CPU *cpus, uint32_t ncpu)
 {
     auto find = [&] (uint32_t name) {
@@ -1260,7 +1289,7 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
 #endif
 
     std::set<uint32_t> cpus;
-    std::vector<std::pair<uint32_t,CPUID>> list;
+    llvm::SmallVector<std::pair<uint32_t,CPUID>, 0> list;
     // Ideally the feature detection above should be enough.
     // However depending on the kernel version not all features are available
     // and it's also impossible to detect the ISA version which contains
@@ -1481,7 +1510,7 @@ static inline void disable_depends(FeatureList<n> &features)
     ::disable_depends(features, Feature::deps, sizeof(Feature::deps) / sizeof(FeatureDep));
 }
 
-static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
+static const llvm::SmallVector<TargetData<feature_sz>, 0> &get_cmdline_targets(void)
 {
     auto feature_cb = [] (const char *str, size_t len, FeatureList<feature_sz> &list) {
 #ifdef _CPU_AARCH64_
@@ -1507,7 +1536,7 @@ static const std::vector<TargetData<feature_sz>> &get_cmdline_targets(void)
     return targets;
 }
 
-static std::vector<TargetData<feature_sz>> jit_targets;
+static llvm::SmallVector<TargetData<feature_sz>, 0> jit_targets;
 
 static TargetData<feature_sz> arg_target_data(const TargetData<feature_sz> &arg, bool require_host)
 {
@@ -1561,7 +1590,7 @@ static int max_vector_size(const FeatureList<feature_sz> &features)
 #endif
 }
 
-static uint32_t sysimg_init_cb(const void *id)
+static uint32_t sysimg_init_cb(const void *id, jl_value_t **rejection_reason)
 {
     // First see what target is requested for the JIT.
     auto &cmdline = get_cmdline_targets();
@@ -1573,7 +1602,9 @@ static uint32_t sysimg_init_cb(const void *id)
             t.name = nname;
         }
     }
-    auto match = match_sysimg_targets(sysimg, target, max_vector_size);
+    auto match = match_sysimg_targets(sysimg, target, max_vector_size, rejection_reason);
+    if (match.best_idx == -1)
+        return match.best_idx;
     // Now we've decided on which sysimg version to use.
     // Make sure the JIT target is compatible with it and save the JIT target.
     if (match.vreg_size != max_vector_size(target.en.features) &&
@@ -1586,7 +1617,7 @@ static uint32_t sysimg_init_cb(const void *id)
     return match.best_idx;
 }
 
-static uint32_t pkgimg_init_cb(const void *id)
+static uint32_t pkgimg_init_cb(const void *id, jl_value_t **rejection_reason JL_REQUIRE_ROOTED_SLOT)
 {
     TargetData<feature_sz> target = jit_targets.front();
     auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
@@ -1595,8 +1626,7 @@ static uint32_t pkgimg_init_cb(const void *id)
             t.name = nname;
         }
     }
-    auto match = match_sysimg_targets(pkgimg, target, max_vector_size);
-
+    auto match = match_sysimg_targets(pkgimg, target, max_vector_size, rejection_reason);
     return match.best_idx;
 }
 
@@ -1647,7 +1677,7 @@ static void ensure_jit_target(bool imaging)
     }
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_noext(const TargetData<feature_sz> &data)
 {
     std::string name = data.name;
@@ -1670,7 +1700,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     if (name == "apple-a7")
         name = "cyclone";
 #endif
-    std::vector<std::string> feature_strs;
+    llvm::SmallVector<std::string, 0> feature_strs;
     for (auto &fename: feature_names) {
         if (fename.llvmver > JL_LLVM_VERSION)
             continue;
@@ -1738,7 +1768,7 @@ get_llvm_target_noext(const TargetData<feature_sz> &data)
     return std::make_pair(std::move(name), std::move(feature_strs));
 }
 
-static std::pair<std::string,std::vector<std::string>>
+static std::pair<std::string,llvm::SmallVector<std::string, 0>>
 get_llvm_target_vec(const TargetData<feature_sz> &data)
 {
     auto res0 = get_llvm_target_noext(data);
@@ -1797,9 +1827,20 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
                   cpus, ncpu_names);
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
+JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 {
-    return jl_cstr_to_string(host_cpu_name().c_str());
+#ifdef _CPU_AARCH64_
+    return jl_true;
+#else
+    TargetData<feature_sz> target = jit_targets.front();
+    FeatureList<feature_sz> features = target.en.features;
+    if (bits == 32 && test_nbit(features, Feature::vfp4sp))
+        return jl_true;
+    else if ((bits == 64 || bits == 32) && test_nbit(features, Feature::vfp4))
+        return jl_true;
+    else
+        return jl_false;
+#endif
 }
 
 jl_image_t jl_init_processor_sysimg(void *hdl)
@@ -1818,12 +1859,18 @@ jl_image_t jl_init_processor_pkgimg(void *hdl)
     return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
-JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
+JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)
 {
-    pkgimg_init_cb(data);
+    jl_value_t *rejection_reason = NULL;
+    JL_GC_PUSH1(&rejection_reason);
+    uint32_t match_idx = pkgimg_init_cb(data, &rejection_reason);
+    JL_GC_POP();
+    if (match_idx == (uint32_t)-1)
+        return rejection_reason;
+    return jl_nothing;
 }
 
-std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)
+std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags)
 {
     ensure_jit_target(imaging);
     flags = jit_targets[0].en.flags;
@@ -1843,11 +1890,11 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
     return res;
 }
 
-std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
-    std::vector<jl_target_spec_t> res;
+    llvm::SmallVector<jl_target_spec_t, 0> res;
     for (auto &target: jit_targets) {
         auto features_en = target.en.features;
         auto features_dis = target.dis.features;

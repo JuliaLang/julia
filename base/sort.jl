@@ -43,6 +43,7 @@ export # not exported by Base
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
+abstract type Algorithm end
 
 ## functions requiring only ordering ##
 
@@ -63,8 +64,8 @@ end
 """
     issorted(v, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Test whether a vector is in sorted order. The `lt`, `by` and `rev` keywords modify what
-order is considered to be sorted just as they do for [`sort`](@ref).
+Test whether a collection is in sorted order. The keywords modify what
+order is considered sorted, as described in the [`sort!`](@ref) documentation.
 
 # Examples
 ```jldoctest
@@ -79,6 +80,9 @@ false
 
 julia> issorted([(1, "b"), (2, "a")], by = x -> x[2], rev=true)
 true
+
+julia> issorted([1, 2, -2, 3], by=abs)
+true
 ```
 """
 issorted(itr;
@@ -86,7 +90,15 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    _sort!(v, InitialOptimizations(ScratchQuickSort(k)), o, (;))
+    # TODO move k from `alg` to `kw`
+    # Don't perform InitialOptimizations before Bracketing. The optimizations take O(n)
+    # time and so does the whole sort. But do perform them before recursive calls because
+    # that can cause significant speedups when the target range is large so the runtime is
+    # dominated by k log k and the optimizations runs in O(k) time.
+    _sort!(v, BoolOptimization(
+        Small{12}( # Very small inputs should go straight to insertion sort
+            BracketedSort(k))),
+        o, (;))
     maybeview(v, k)
 end
 
@@ -94,13 +106,16 @@ maybeview(v, k) = view(v, k)
 maybeview(v, k::Integer) = v[k]
 
 """
-    partialsort!(v, k; by=<transform>, lt=<comparison>, rev=false)
+    partialsort!(v, k; by=identity, lt=isless, rev=false)
 
-Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
-`rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
+Partially sort the vector `v` in place so that the value at index `k` (or
+range of adjacent values if `k` is a range) occurs
 at the position where it would appear if the array were fully sorted. If `k` is a single
 index, that value is returned; if `k` is a range, an array of values at those indices is
 returned. Note that `partialsort!` may not fully sort the input array.
+
+For the keyword arguments, see the documentation of [`sort!`](@ref).
+
 
 # Examples
 ```jldoctest
@@ -148,18 +163,18 @@ partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
     partialsort!(v, k, ord(lt,by,rev,order))
 
 """
-    partialsort(v, k, by=<transform>, lt=<comparison>, rev=false)
+    partialsort(v, k, by=identity, lt=isless, rev=false)
 
-Variant of [`partialsort!`](@ref) which copies `v` before partially sorting it, thereby returning the
+Variant of [`partialsort!`](@ref) that copies `v` before partially sorting it, thereby returning the
 same thing as `partialsort!` but leaving `v` unmodified.
 """
 partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
     partialsort!(copymutable(v), k; kws...)
 
 # reference on sorted binary search:
-#   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
+#   https://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
 
-# index of the first value of vector a that is greater than or equal to x;
+# index of the first value of vector a that is greater than or equivalent to x;
 # returns lastindex(v)+1 if x is greater than all values in v.
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     hi = hi + T(1)
@@ -178,7 +193,7 @@ function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::key
     return lo
 end
 
-# index of the last value of vector a that is less than or equal to x;
+# index of the last value of vector a that is less than or equivalent to x;
 # returns firstindex(v)-1 if x is less than all values of v.
 function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
     u = T(1)
@@ -195,7 +210,7 @@ function searchsortedlast(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keyt
     return lo
 end
 
-# returns the range of indices of v equal to x
+# returns the range of indices of v equivalent to x
 # if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
 function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRange{keytype(v)} where T<:Integer
@@ -217,7 +232,10 @@ function searchsorted(v::AbstractVector, x, ilo::T, ihi::T, o::Ordering)::UnitRa
     return (lo + 1) : (hi - 1)
 end
 
-function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
+
+const FastRangeOrderings = Union{DirectOrdering,Lt{typeof(<)},ReverseOrdering{Lt{typeof(<)}}}
+
+function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if lt(o, x, f)
@@ -230,7 +248,7 @@ function searchsortedlast(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering):
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if !lt(o, f, x)
@@ -243,7 +261,7 @@ function searchsortedfirst(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering)
     end
 end
 
-function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if lt(o, x, f)
@@ -251,7 +269,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     elseif h == 0 || !lt(o, x, l)
         length(a)
     else
-        if o isa ForwardOrdering
+        if !(o isa ReverseOrdering)
             fld(floor(Integer, x) - f, h) + 1
         else
             fld(ceil(Integer, x) - f, h) + 1
@@ -259,7 +277,7 @@ function searchsortedlast(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderin
     end
 end
 
-function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrdering)::keytype(a)
+function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::FastRangeOrderings)::keytype(a)
     require_one_based_indexing(a)
     f, h, l = first(a), step(a), last(a)
     if !lt(o, f, x)
@@ -267,7 +285,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     elseif h == 0 || lt(o, l, x)
         length(a) + 1
     else
-        if o isa ForwardOrdering
+        if !(o isa ReverseOrdering)
             cld(ceil(Integer, x) - f, h) + 1
         else
             cld(floor(Integer, x) - f, h) + 1
@@ -275,7 +293,7 @@ function searchsortedfirst(a::AbstractRange{<:Integer}, x::Real, o::DirectOrderi
     end
 end
 
-searchsorted(a::AbstractRange{<:Real}, x::Real, o::DirectOrdering) =
+searchsorted(a::AbstractRange{<:Real}, x::Real, o::FastRangeOrderings) =
     searchsortedfirst(a, x, o) : searchsortedlast(a, x, o)
 
 for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
@@ -288,16 +306,19 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
 end
 
 """
-    searchsorted(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsorted(v, x; by=identity, lt=isless, rev=false)
 
-Return the range of indices of `a` which compare as equal to `x` (using binary search)
-according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
-is already sorted in that order. Return an empty range located at the insertion point
-if `a` does not contain values equal to `x`.
+Return the range of indices in `v` where values are equivalent to `x`, or an
+empty range located at the insertion point if `v` does not contain values
+equivalent to `x`. The vector `v` must be sorted according to the order defined
+by the keywords. Refer to [`sort!`](@ref) for the meaning of the keywords and
+the definition of equivalence. Note that the `by` function is applied to the
+searched value `x` as well as the values in `v`.
 
-See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
+The range is generally found using binary search, but there are optimized
+implementations for some inputs.
 
-See also: [`insorted`](@ref), [`searchsortedfirst`](@ref), [`sort`](@ref), [`findall`](@ref).
+See also: [`searchsortedfirst`](@ref), [`sort!`](@ref), [`insorted`](@ref), [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -322,15 +343,19 @@ julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=firs
 """ searchsorted
 
 """
-    searchsortedfirst(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsortedfirst(v, x; by=identity, lt=isless, rev=false)
 
-Return the index of the first value in `a` greater than or equal to `x`, according to the
-specified order. Return `lastindex(a) + 1` if `x` is greater than all values in `a`.
-`a` is assumed to be sorted.
+Return the index of the first value in `v` that is not ordered before `x`.
+If all values in `v` are ordered before `x`, return `lastindex(v) + 1`.
 
-`insert!`ing `x` at this index will maintain sorted order.
+The vector `v` must be sorted according to the order defined by the keywords.
+`insert!`ing `x` at the returned index will maintain the sorted order.
+Refer to [`sort!`](@ref) for the meaning and use of the keywords.
+Note that the `by` function is applied to the searched value `x` as well as the
+values in `v`.
 
-See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
+The index is generally found using binary search, but there are optimized
+implementations for some inputs.
 
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
@@ -351,19 +376,25 @@ julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
 julia> searchsortedfirst([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 1
 
-julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # Compare the keys of the pairs
+julia> searchsortedfirst([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) # compare the keys of the pairs
 3
 ```
 """ searchsortedfirst
 
 """
-    searchsortedlast(a, x; by=<transform>, lt=<comparison>, rev=false)
+    searchsortedlast(v, x; by=identity, lt=isless, rev=false)
 
-Return the index of the last value in `a` less than or equal to `x`, according to the
-specified order. Return `firstindex(a) - 1` if `x` is less than all values in `a`. `a` is
-assumed to be sorted.
+Return the index of the last value in `v` that is not ordered after `x`.
+If all values in `v` are ordered after `x`, return `firstindex(v) - 1`.
 
-See [`sort!`](@ref) for an explanation of the keyword arguments `by`, `lt` and `rev`.
+The vector `v` must be sorted according to the order defined by the keywords.
+`insert!`ing `x` immediately after the returned index will maintain the sorted order.
+Refer to [`sort!`](@ref) for the meaning and use of the keywords.
+Note that the `by` function is applied to the searched value `x` as well as the
+values in `v`.
+
+The index is generally found using binary search, but there are optimized
+implementations for some inputs
 
 # Examples
 ```jldoctest
@@ -388,12 +419,16 @@ julia> searchsortedlast([1=>"one", 2=>"two", 4=>"four"], 3=>"three", by=first) #
 """ searchsortedlast
 
 """
-    insorted(x, a; by=<transform>, lt=<comparison>, rev=false) -> Bool
+    insorted(x, v; by=identity, lt=isless, rev=false) -> Bool
 
-Determine whether an item `x` is in the sorted collection `a`, in the sense that
-it is [`==`](@ref) to one of the values of the collection according to the order
-specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already
-sorted in that order, see [`sort`](@ref) for the keywords.
+Determine whether a vector `v` contains any value equivalent to `x`.
+The vector `v` must be sorted according to the order defined by the keywords.
+Refer to [`sort!`](@ref) for the meaning of the keywords and the definition of
+equivalence. Note that the `by` function is applied to the searched value `x`
+as well as the values in `v`.
+
+The check is generally done using binary search, but there are optimized
+implementations for some inputs.
 
 See also [`in`](@ref).
 
@@ -413,6 +448,9 @@ false
 
 julia> insorted(0, [1, 2, 4, 5, 5, 7]) # no match
 false
+
+julia> insorted(2=>"TWO", [1=>"one", 2=>"two", 4=>"four"], by=first) # compare the keys of the pairs
+true
 ```
 
 !!! compat "Julia 1.6"
@@ -435,7 +473,7 @@ for (sym, exp, type) in [
         (:mn, :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
         (:mx, :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
         (:scratch, nothing, :(Union{Nothing, Vector})), # could have different eltype
-        (:allow_legacy_dispatch, true, Bool)]
+        (:legacy_dispatch_entry, nothing, Union{Nothing, Algorithm})]
     usym = Symbol(:_, sym)
     @eval function $usym(v, o, kw)
         # using missing instead of nothing because scratch could === nothing.
@@ -498,8 +536,34 @@ internal or recursive calls.
 """
 function _sort! end
 
-abstract type Algorithm end
+# TODO: delete this optimization when views have no overhead.
+const UnwrappableSubArray = SubArray{T, 1, <:AbstractArray{T}, <:Tuple{AbstractUnitRange, Vararg{Number}}, true} where T
+"""
+    SubArrayOptimization(next) <: Algorithm
 
+Unwrap certain known SubArrays because views have a performance overhead 😢
+
+Specifically, unwraps some instances of the type
+
+    $UnwrappableSubArray
+"""
+struct SubArrayOptimization{T <: Algorithm} <: Algorithm
+    next::T
+end
+
+_sort!(v::AbstractVector, a::SubArrayOptimization, o::Ordering, kw) = _sort!(v, a.next, o, kw)
+function _sort!(v::UnwrappableSubArray, a::SubArrayOptimization, o::Ordering, kw)
+    @getkw lo hi
+    # @assert v.stride1 == 1
+    parent = v.parent
+    if parent isa Array && !(parent isa Vector) && hi - lo < 100
+        # vec(::Array{T, ≠1}) allocates and is therefore somewhat expensive.
+        # We don't want that for small inputs.
+        _sort!(v, a.next, o, kw)
+    else
+        _sort!(vec(parent), a.next, o, (;kw..., lo = lo + v.offset1, hi = hi + v.offset1))
+    end
+end
 
 """
     MissingOptimization(next) <: Algorithm
@@ -523,12 +587,12 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
         new{nonmissingtype(eltype(data)), typeof(data)}(data)
     end
 end
-Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i)
+Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
     out = v.data[i]
     @assert !(out isa Missing)
     out::eltype(v)
 end
-Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i)
+Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i::Integer)
     v.data[i] = x
     v
 end
@@ -589,8 +653,9 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
         # we can assume v is equal to eachindex(o.data) which allows a copying partition
         # without allocations.
         lo_i, hi_i = lo, hi
-        for i in eachindex(o.data) # equal to copy(v)
-            x = o.data[i]
+        cv = eachindex(o.data) # equal to copy(v)
+        for i in lo:hi
+            x = o.data[cv[i]]
             if ismissing(x) == (o.order == Reverse) # should x go at the beginning/end?
                 v[lo_i] = i
                 lo_i += 1
@@ -740,8 +805,8 @@ Insertion sort traverses the collection one element at a time, inserting
 each element into its correct, sorted position in the output vector.
 
 Characteristics:
-* *stable*: preserves the ordering of elements which compare equal
-(e.g. "a" and "A" in a sort of letters which ignores case).
+* *stable*: preserves the ordering of elements that compare equal
+(e.g. "a" and "A" in a sort of letters that ignores case).
 * *in-place* in memory.
 * *quadratic performance* in the number of elements to be sorted:
 it is well-suited to small collections but should not be used for large ones.
@@ -980,8 +1045,8 @@ is treated as the first or last index of the input, respectively.
 `lo` and `hi` may be specified together as an `AbstractUnitRange`.
 
 Characteristics:
-  * *stable*: preserves the ordering of elements which compare equal
-    (e.g. "a" and "A" in a sort of letters which ignores case).
+  * *stable*: preserves the ordering of elements that compare equal
+    (e.g. "a" and "A" in a sort of letters that ignores case).
   * *not in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`QuickSort`](@ref).
   * *linear runtime* if `length(lo:hi)` is constant
@@ -1006,7 +1071,7 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer
         v::AbstractVector, rev::Bool, pivot_dest::AbstractVector, pivot_index_offset::Integer)
     # Ideally we would use `pivot_index = rand(lo:hi)`, but that requires Random.jl
     # and would mutate the global RNG in sorting.
-    pivot_index = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + lo
+    pivot_index = mod(hash(lo), lo:hi)
     @inbounds begin
         pivot = v[pivot_index]
         while lo < pivot_index
@@ -1078,6 +1143,195 @@ function _sort!(v::AbstractVector, a::ScratchQuickSort, o::Ordering, kw;
     swap && copyto!(v, lo, t, lo+offset, hi-lo+1)
     rev && reverse!(v, lo, hi)
     _sort!(v, a.next, o, (;kw..., lo, hi))
+end
+
+
+"""
+    BracketedSort(target[, next::Algorithm]) <: Algorithm
+
+Perform a partialsort for the elements that fall into the indices specified by the `target`
+using BracketedSort with the `next` algorithm for subproblems.
+
+BracketedSort takes a random* sample of the input, estimates the quantiles of the input
+using the quantiles of the sample to find signposts that almost certainly bracket the target
+values, filters the value in the input that fall between the signpost values to the front of
+the input, and then, if that "almost certainly" turned out to be true, finds the target
+within the small chunk that are, by value, between the signposts and now by position, at the
+front of the vector. On small inputs or when target is close to the size of the input,
+BracketedSort falls back to the `next` algorithm directly. Otherwise, BracketedSort uses the
+`next` algorithm only to compute quantiles of the sample and to find the target within the
+small chunk.
+
+## Performance
+
+If the `next` algorithm has `O(n * log(n))` runtime and the input is not pathological then
+the runtime of this algorithm is `O(n + k * log(k))` where `n` is the length of the input
+and `k` is `length(target)`. On pathological inputs the asymptotic runtime is the same as
+the runtime of the `next` algorithm.
+
+BracketedSort itself does not allocate. If `next` is in-place then BracketedSort is also
+in-place. If `next` is not in place, and it's space usage increases monotonically with input
+length then BracketedSort's maximum space usage will never be more than the space usage
+of `next` on the input BracketedSort receives. For large nonpathological inputs and targets
+substantially smaller than the size of the input, BracketedSort's maximum memory usage will
+be much less than `next`'s. If the maximum additional space usage of `next` scales linearly
+then for small k the average* maximum additional space usage of BracketedSort will be
+`O(n^(2.3/3))`.
+
+By default, BracketedSort uses the `O(n)` space and `O(n + k log k)` runtime
+`ScratchQuickSort` algorithm recursively.
+
+*Sorting is unable to depend on Random.jl because Random.jl depends on sorting.
+ Consequently, we use `hash` as a source of randomness. The average runtime guarantees
+ assume that `hash(x::Int)` produces a random result. However, as this randomization is
+ deterministic, if you try hard enough you can find inputs that consistently reach the
+ worst case bounds. Actually constructing such inputs is an exercise left to the reader.
+ Have fun :).
+
+Characteristics:
+  * *unstable*: does not preserve the ordering of elements that compare equal
+    (e.g. "a" and "A" in a sort of letters that ignores case).
+  * *in-place* in memory if the `next` algorithm is in-place.
+  * *estimate-and-filter*: strategy
+  * *linear runtime* if `length(target)` is constant and `next` is reasonable
+  * *n + k log k* worst case runtime if `next` has that runtime.
+  * *pathological inputs* can significantly increase constant factors.
+"""
+struct BracketedSort{T, F} <: Algorithm
+    target::T
+    get_next::F
+end
+
+# TODO: this composition between BracketedSort and ScratchQuickSort does not bring me joy
+BracketedSort(k) = BracketedSort(k, k -> InitialOptimizations(ScratchQuickSort(k)))
+
+function bracket_kernel!(v::AbstractVector, lo, hi, lo_signpost, hi_signpost, o)
+    i = 0
+    count_below = 0
+    checkbounds(v, lo:hi)
+    for j in lo:hi
+        x = @inbounds v[j]
+        a = lo_signpost !== nothing && lt(o, x, lo_signpost)
+        b = hi_signpost === nothing || !lt(o, hi_signpost, x)
+        count_below += a
+        # if a != b # This branch is almost never taken, so making it branchless is bad.
+        #     @inbounds v[i], v[j] = v[j], v[i]
+        #     i += 1
+        # end
+        c = a != b # JK, this is faster.
+        k = i * c + j
+        # Invariant: @assert firstindex(v) ≤ lo ≤ i + j ≤ k ≤ j ≤ hi ≤ lastindex(v)
+        @inbounds v[j], v[k] = v[k], v[j]
+        i += c - 1
+    end
+    count_below, i+hi
+end
+
+function move!(v, target, source)
+    # This function never dominates runtime—only add `@inbounds` if you can demonstrate a
+    # performance improvement. And if you do, also double check behavior when `target`
+    # is out of bounds.
+    @assert length(target) == length(source)
+    if length(target) == 1 || isdisjoint(target, source)
+        for (i, j) in zip(target, source)
+            v[i], v[j] = v[j], v[i]
+        end
+    else
+        @assert minimum(source) <= minimum(target)
+        reverse!(v, minimum(source), maximum(target))
+        reverse!(v, minimum(target), maximum(target))
+    end
+end
+
+function _sort!(v::AbstractVector, a::BracketedSort, o::Ordering, kw)
+    @getkw lo hi scratch
+    # TODO for further optimization: reuse scratch between trials better, from signpost
+    # selection to recursive calls, and from the fallback (but be aware of type stability,
+    # especially when sorting IEEE floats.
+
+    # We don't need to bounds check target because that is done higher up in the stack
+    # However, we cannot assume the target is inbounds.
+    lo < hi || return scratch
+    ln = hi - lo + 1
+
+    # This is simply a precomputed short-circuit to avoid doing scalar math for small inputs.
+    # It does not change dispatch at all.
+    ln < 260 && return _sort!(v, a.get_next(a.target), o, kw)
+
+    target = a.target
+    k = cbrt(ln)
+    k2 = round(Int, k^2)
+    k2ln = k2/ln
+    offset = .15k*top_set_bit(k2) # TODO for further optimization: tune this
+    lo_signpost_i, hi_signpost_i =
+        (floor(Int, (tar - lo) * k2ln + lo + off) for (tar, off) in
+            ((minimum(target), -offset), (maximum(target), offset)))
+    lastindex_sample = lo+k2-1
+    expected_middle_ln = (min(lastindex_sample, hi_signpost_i) - max(lo, lo_signpost_i) + 1) / k2ln
+    # This heuristic is complicated because it fairly accurately reflects the runtime of
+    # this algorithm which is necessary to get good dispatch when both the target is large
+    # and the input are large.
+    # expected_middle_ln is a float and k2 is significantly below typemax(Int), so this will
+    # not overflow:
+    # TODO move target from alg to kw to avoid this ickyness:
+    ln <= 130 + 2k2 + 2expected_middle_ln && return _sort!(v, a.get_next(a.target), o, kw)
+
+    # We store the random sample in
+    #     sample = view(v, lo:lo+k2)
+    # but views are not quite as fast as using the input array directly,
+    # so we don't actually construct this view at runtime.
+
+    # TODO for further optimization: handle lots of duplicates better.
+    # Right now lots of duplicates rounds up when it could use some super fast optimizations
+    # in some cases.
+    # e.g.
+    #
+    # Target:                      |----|
+    # Sorted input: 000000000000000000011111112222223333333333
+    #
+    # Will filter all zeros and ones to the front when it could just take the first few
+    # it encounters. This optimization would be especially potent when `allequal(ans)` and
+    # equal elements are egal.
+
+    # 3 random trials should typically give us 0.99999 reliability; we can assume
+    # the input is pathological and abort to fallback if we fail three trials.
+    seed = hash(ln, Int === Int64 ? 0x85eb830e0216012d : 0xae6c4e15)
+    for attempt in 1:3
+        seed = hash(attempt, seed)
+        for i in lo:lo+k2-1
+            j = mod(hash(i, seed), i:hi) # TODO for further optimization: be sneaky and remove this division
+            v[i], v[j] = v[j], v[i]
+        end
+        count_below, lastindex_middle = if lo_signpost_i <= lo && lastindex_sample <= hi_signpost_i
+            # The heuristics higher up in this function that dispatch to the `next`
+            # algorithm should prevent this from happening.
+            # Specifically, this means that expected_middle_ln == ln, so
+            # ln <= ... + 2.0expected_middle_ln && return ...
+            # will trigger.
+            @assert false
+            # But if it does happen, the kernel reduces to
+            0, hi
+        elseif lo_signpost_i <= lo
+            _sort!(v, a.get_next(hi_signpost_i), o, (;kw..., hi=lastindex_sample))
+            bracket_kernel!(v, lo, hi, nothing, v[hi_signpost_i], o)
+        elseif lastindex_sample <= hi_signpost_i
+            _sort!(v, a.get_next(lo_signpost_i), o, (;kw..., hi=lastindex_sample))
+            bracket_kernel!(v, lo, hi, v[lo_signpost_i], nothing, o)
+        else
+            # TODO for further optimization: don't sort the middle elements
+            _sort!(v, a.get_next(lo_signpost_i:hi_signpost_i), o, (;kw..., hi=lastindex_sample))
+            bracket_kernel!(v, lo, hi, v[lo_signpost_i], v[hi_signpost_i], o)
+        end
+        target_in_middle = target .- count_below
+        if lo <= minimum(target_in_middle) && maximum(target_in_middle) <= lastindex_middle
+            scratch = _sort!(v, a.get_next(target_in_middle), o, (;kw..., hi=lastindex_middle))
+            move!(v, target, target_in_middle)
+            return scratch
+        end
+        # This line almost never runs.
+    end
+    # This line only runs on pathological inputs. Make sure it's covered by tests :)
+    _sort!(v, a.get_next(target), o, kw)
 end
 
 
@@ -1194,14 +1448,16 @@ future versions of Julia.
 If `next` is stable, then `InitialOptimizations(next)` is also stable.
 
 The specific optimizations attempted by `InitialOptimizations` are
-[`MissingOptimization`](@ref), [`BoolOptimization`](@ref), dispatch to
-[`InsertionSort`](@ref) for inputs with `length <= 10`, and [`IEEEFloatOptimization`](@ref).
+[`SubArrayOptimization`](@ref), [`MissingOptimization`](@ref), [`BoolOptimization`](@ref),
+dispatch to [`InsertionSort`](@ref) for inputs with `length <= 10`, and
+[`IEEEFloatOptimization`](@ref).
 """
-InitialOptimizations(next) = MissingOptimization(
-    BoolOptimization(
-        Small{10}(
-            IEEEFloatOptimization(
-                next))))
+InitialOptimizations(next) = SubArrayOptimization(
+    MissingOptimization(
+        BoolOptimization(
+            Small{10}(
+                IEEEFloatOptimization(
+                    next)))))
 """
     DEFAULT_STABLE
 
@@ -1269,7 +1525,7 @@ Next, we [`ConsiderCountingSort`](@ref). If the range the input is small compare
 length, we apply [`CountingSort`](@ref).
 
 Next, we [`ConsiderRadixSort`](@ref). This is similar to the dispatch to counting sort,
-but we conside rthe number of _bits_ in the range, rather than the range itself.
+but we consider the number of _bits_ in the range, rather than the range itself.
 Consequently, we apply [`RadixSort`](@ref) for any reasonably long inputs that reach this
 stage.
 
@@ -1329,16 +1585,54 @@ defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
 """
     sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Sort the vector `v` in place. A stable algorithm is used by default. You can select a
-specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) for
-available algorithms). The `by` keyword lets you provide a function that will be applied to
-each element before comparison; the `lt` keyword allows providing a custom "less than"
-function (note that for every `x` and `y`, only one of `lt(x,y)` and `lt(y,x)` can return
-`true`); use `rev=true` to reverse the sorting order. `rev=true` preserves forward stability:
-Elements that compare equal are not reversed. These options are independent and can
-be used together in all possible combinations: if both `by` and `lt` are specified, the `lt`
-function is applied to the result of the `by` function; `rev=true` reverses whatever
-ordering specified via the `by` and `lt` keywords.
+Sort the vector `v` in place. A stable algorithm is used by default: the
+ordering of elements that compare equal is preserved. A specific algorithm can
+be selected via the `alg` keyword (see [Sorting Algorithms](@ref) for available
+algorithms).
+
+Elements are first transformed with the function `by` and then compared
+according to either the function `lt` or the ordering `order`. Finally, the
+resulting order is reversed if `rev=true` (this preserves forward stability:
+elements that compare equal are not reversed). The current implementation applies
+the `by` transformation before each comparison rather than once per element.
+
+Passing an `lt` other than `isless` along with an `order` other than
+[`Base.Order.Forward`](@ref) or [`Base.Order.Reverse`](@ref) is not permitted,
+otherwise all options are independent and can be used together in all possible
+combinations. Note that `order` can also include a "by" transformation, in
+which case it is applied after that defined with the `by` keyword. For more
+information on `order` values see the documentation on [Alternate
+Orderings](@ref).
+
+Relations between two elements are defined as follows (with "less" and
+"greater" exchanged when `rev=true`):
+
+* `x` is less than `y` if `lt(by(x), by(y))` (or `Base.Order.lt(order, by(x), by(y))`) yields true.
+* `x` is greater than `y` if `y` is less than `x`.
+* `x` and `y` are equivalent if neither is less than the other ("incomparable"
+  is sometimes used as a synonym for "equivalent").
+
+The result of `sort!` is sorted in the sense that every element is greater than
+or equivalent to the previous one.
+
+The `lt` function must define a strict weak order, that is, it must be
+
+* irreflexive: `lt(x, x)` always yields `false`,
+* asymmetric: if `lt(x, y)` yields `true` then `lt(y, x)` yields `false`,
+* transitive: `lt(x, y) && lt(y, z)` implies `lt(x, z)`,
+* transitive in equivalence: `!lt(x, y) && !lt(y, x)` and `!lt(y, z) && !lt(z,
+  y)` together imply `!lt(x, z) && !lt(z, x)`. In words: if `x` and `y` are
+  equivalent and `y` and `z` are equivalent then `x` and `z` must be
+  equivalent.
+
+For example `<` is a valid `lt` function for `Int` values but `≤` is not: it
+violates irreflexivity. For `Float64` values even `<` is invalid as it violates
+the fourth condition: `1.0` and `NaN` are equivalent and so are `NaN` and `2.0`
+but `1.0` and `2.0` are not equivalent.
+
+See also [`sort`](@ref), [`sortperm`](@ref), [`sortslices`](@ref),
+[`partialsort!`](@ref), [`partialsortperm`](@ref), [`issorted`](@ref),
+[`searchsorted`](@ref), [`insorted`](@ref), [`Base.Order.ord`](@ref).
 
 # Examples
 ```jldoctest
@@ -1365,6 +1659,29 @@ julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
  (3, "a")
  (2, "b")
  (1, "c")
+
+julia> sort(0:3, by=x->x-2, order=Base.Order.By(abs)) # same as sort(0:3, by=abs(x->x-2))
+4-element Vector{Int64}:
+ 2
+ 1
+ 3
+ 0
+
+julia> sort([2, NaN, 1, NaN, 3]) # correct sort with default lt=isless
+5-element Vector{Float64}:
+   1.0
+   2.0
+   3.0
+ NaN
+ NaN
+
+julia> sort([2, NaN, 1, NaN, 3], lt=<) # wrong sort due to invalid lt. This behavior is undefined.
+5-element Vector{Float64}:
+   2.0
+ NaN
+   1.0
+ NaN
+   3.0
 ```
 """
 function sort!(v::AbstractVector{T};
@@ -1405,15 +1722,15 @@ sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...)
 ## partialsortperm: the permutation to sort the first k elements of an array ##
 
 """
-    partialsortperm(v, k; by=<transform>, lt=<comparison>, rev=false)
+    partialsortperm(v, k; by=ientity, lt=isless, rev=false)
 
 Return a partial permutation `I` of the vector `v`, so that `v[I]` returns values of a fully
 sorted version of `v` at index `k`. If `k` is a range, a vector of indices is returned; if
 `k` is an integer, a single index is returned. The order is specified using the same
-keywords as `sort!`. The permutation is stable, meaning that indices of equal elements
-appear in ascending order.
+keywords as `sort!`. The permutation is stable: the indices of equal elements
+will appear in ascending order.
 
-Note that this function is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
+This function is equivalent to, but more efficient than, calling `sortperm(...)[k]`.
 
 # Examples
 ```jldoctest
@@ -1439,7 +1756,7 @@ partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
     partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs...)
 
 """
-    partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false)
+    partialsortperm!(ix, v, k; by=identity, lt=isless, rev=false)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix` the same size as
 `v`, which is used to store (a permutation of) the indices of `v`.
@@ -1458,6 +1775,8 @@ v[ix[k]] == partialsort(v, k)
 
 The return value is the `k`th element of `ix` if `k` is an integer, or view into `ix` if `k` is
 a range.
+
+$(Base._DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -1505,7 +1824,7 @@ end
 Return a permutation vector or array `I` that puts `A[I]` in sorted order along the given dimension.
 If `A` has more than one dimension, then the `dims` keyword argument must be specified. The order is specified
 using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be stable even
-if the sorting algorithm is unstable, meaning that indices of equal elements appear in
+if the sorting algorithm is unstable: the indices of equal elements will appear in
 ascending order.
 
 See also [`sortperm!`](@ref), [`partialsortperm`](@ref), [`invperm`](@ref), [`indexin`](@ref).
@@ -1582,6 +1901,8 @@ end
 
 Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.
 `ix` is initialized to contain the values `LinearIndices(A)`.
+
+$(Base._DOCS_ALIASING_WARNING)
 
 !!! compat "Julia 1.9"
     The method accepting `dims` requires at least Julia 1.9.
@@ -1739,7 +2060,8 @@ end
     sort!(A; dims::Integer, alg::Algorithm=defalg(A), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the multidimensional array `A` along dimension `dims`.
-See [`sort!`](@ref) for a description of possible keyword arguments.
+See the one-dimensional version of [`sort!`](@ref) for a description of
+possible keyword arguments.
 
 To sort slices of an array, refer to [`sortslices`](@ref).
 
@@ -1771,24 +2093,37 @@ function sort!(A::AbstractArray{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward, # TODO stop eagerly over-allocating.
-               scratch::Union{Vector{T}, Nothing}=similar(A, size(A, dims))) where T
-    __sort!(A, Val(dims), maybe_apply_initial_optimizations(alg), ord(lt, by, rev, order), scratch)
-end
-function __sort!(A::AbstractArray{T}, ::Val{K},
-                alg::Algorithm,
-                order::Ordering,
-                scratch::Union{Vector{T}, Nothing}) where {K,T}
+               scratch::Union{Vector{T}, Nothing}=size(A, dims) < 10 ? nothing : Vector{T}(undef, size(A, dims))) where T
     nd = ndims(A)
+    1 <= dims <= nd || throw(ArgumentError("dimension out of range"))
+    alg2 = maybe_apply_initial_optimizations(alg)
+    order2 = ord(lt, by, rev, order)
+    foreach(ntuple(Val, nd)) do d
+        get_value(d) == dims || return
+        # We assume that an Integer between 1 and nd must be equal to one of the
+        # values 1:nd. If this assumption is false, then what's an integer? and
+        # also sort! will silently do nothing.
 
-    1 <= K <= nd || throw(ArgumentError("dimension out of range"))
-
-    remdims = ntuple(i -> i == K ? 1 : axes(A, i), nd)
-    for idx in CartesianIndices(remdims)
-        Av = view(A, ntuple(i -> i == K ? Colon() : idx[i], nd)...)
-        sort!(Av; alg, order, scratch)
+        idxs = CartesianIndices(ntuple(i -> i == get_value(d) ? 1 : axes(A, i), ndims(A)))
+        get_view(idx) = view(A, ntuple(i -> i == get_value(d) ? Colon() : idx[i], ndims(A))...)
+        if d == Val(1) || size(A, get_value(d)) < 30
+            for idx in idxs
+                sort!(get_view(idx); alg=alg2, order=order2, scratch)
+            end
+        else
+            v = similar(get_view(first(idxs)))
+            for idx in idxs
+                vw = get_view(idx)
+                v .= vw
+                sort!(v; alg=alg2, order=order2, scratch)
+                vw .= v
+            end
+        end
+        A
     end
     A
 end
+get_value(::Val{x}) where x = x
 
 
 ## uint mapping to allow radix sorting primitives other than UInts ##
@@ -1888,18 +2223,18 @@ struct MergeSortAlg     <: Algorithm end
 """
     PartialQuickSort{T <: Union{Integer,OrdinalRange}}
 
-Indicate that a sorting function should use the partial quick sort
-algorithm. Partial quick sort returns the smallest `k` elements sorted from smallest
-to largest, finding them and sorting them using [`QuickSort`](@ref).
+Indicate that a sorting function should use the partial quick sort algorithm.
+`PartialQuickSort(k)` is like `QuickSort`, but is only required to find and
+sort the elements that would end up in `v[k]` were `v` fully sorted.
 
 Characteristics:
-  * *not stable*: does not preserve the ordering of elements which
-    compare equal (e.g. "a" and "A" in a sort of letters which
+  * *not stable*: does not preserve the ordering of elements that
+    compare equal (e.g. "a" and "A" in a sort of letters that
     ignores case).
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
 
-  Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
+Note that `PartialQuickSort(k)` does not necessarily sort the whole array. For example,
 
 ```jldoctest
 julia> x = rand(100);
@@ -1931,8 +2266,8 @@ Indicate that a sorting function should use the quick sort
 algorithm, which is *not* stable.
 
 Characteristics:
-  * *not stable*: does not preserve the ordering of elements which
-    compare equal (e.g. "a" and "A" in a sort of letters which
+  * *not stable*: does not preserve the ordering of elements that
+    compare equal (e.g. "a" and "A" in a sort of letters that
     ignores case).
   * *in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
@@ -1950,8 +2285,8 @@ subcollection at each step, until the entire
 collection has been recombined in sorted form.
 
 Characteristics:
-  * *stable*: preserves the ordering of elements which compare
-    equal (e.g. "a" and "A" in a sort of letters which ignores
+  * *stable*: preserves the ordering of elements that compare
+    equal (e.g. "a" and "A" in a sort of letters that ignores
     case).
   * *not in-place* in memory.
   * *divide-and-conquer* sort strategy.
@@ -2111,25 +2446,25 @@ end
 # Support 3-, 5-, and 6-argument versions of sort! for calling into the internals in the old way
 sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, firstindex(v), lastindex(v), a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
-    _sort!(v, a, o, (; lo, hi, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, legacy_dispatch_entry=a))
     v
 end
 sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, _) = sort!(v, lo, hi, a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering, scratch::Vector)
-    _sort!(v, a, o, (; lo, hi, scratch, allow_legacy_dispatch=false))
+    _sort!(v, a, o, (; lo, hi, scratch, legacy_dispatch_entry=a))
     v
 end
 
 # Support dispatch on custom algorithms in the old way
 # sort!(::AbstractVector, ::Integer, ::Integer, ::MyCustomAlgorithm, ::Ordering) = ...
 function _sort!(v::AbstractVector, a::Algorithm, o::Ordering, kw)
-    @getkw lo hi scratch allow_legacy_dispatch
-    if allow_legacy_dispatch
+    @getkw lo hi scratch legacy_dispatch_entry
+    if legacy_dispatch_entry === a
+        # This error prevents infinite recursion for unknown algorithms
+        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o)), ::Any) is not defined"))
+    else
         sort!(v, lo, hi, a, o)
         scratch
-    else
-        # This error prevents infinite recursion for unknown algorithms
-        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o))) is not defined"))
     end
 end
 

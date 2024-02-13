@@ -57,9 +57,9 @@ kinds of programming, however, become clearer, simpler, faster and more robust w
 The `::` operator can be used to attach type annotations to expressions and variables in programs.
 There are two primary reasons to do this:
 
-1. As an assertion to help confirm that your program works the way you expect,
+1. As an assertion to help confirm that your program works the way you expect, and
 2. To provide extra type information to the compiler, which can then improve performance in some
-   cases
+   cases.
 
 When appended to an expression computing a value, the `::` operator is read as "is an instance
 of". It can be used anywhere to assert that the value of the expression on the left is an instance
@@ -713,10 +713,12 @@ For the default constructor, exactly one argument must be supplied for each fiel
 ```jldoctest pointtype
 julia> Point{Float64}(1.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64)
+The type `Point{Float64}` exists, but no method is defined for this combination of argument types when trying to construct it.
 [...]
 
-julia> Point{Float64}(1.0,2.0,3.0)
+julia> Point{Float64}(1.0, 2.0, 3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
+The type `Point{Float64}` exists, but no method is defined for this combination of argument types when trying to construct it.
 [...]
 ```
 
@@ -748,6 +750,7 @@ to `Point` have the same type. When this isn't the case, the constructor will fa
 ```jldoctest pointtype
 julia> Point(1,2.5)
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
+The type `Point` exists, but no method is defined for this combination of argument types when trying to construct it.
 
 Closest candidates are:
   Point(::T, !Matched::T) where T
@@ -1338,6 +1341,16 @@ type -- either [`Int32`](@ref) or [`Int64`](@ref).
 reflects the size of a native pointer on that machine, the floating point register sizes
 are specified by the IEEE-754 standard.)
 
+Type aliases may be parametrized:
+
+```jldoctest
+julia> const Family{T} = Set{T}
+Set
+
+julia> Family{Char} === Set{Char}
+true
+```
+
 ## Operations on Types
 
 Since types in Julia are themselves objects, ordinary functions can operate on them. Some functions
@@ -1403,6 +1416,8 @@ is raised:
 ```jldoctest; filter = r"Closest candidates.*"s
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
+The function `supertype` exists, but no method is defined for this combination of argument types.
+
 Closest candidates are:
 [...]
 ```

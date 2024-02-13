@@ -1,7 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Tools for working with the Markdown file format. Mainly for documentation.
+    Markdown
+
+Tools for working with the Markdown markup language for formatted text, used within Julia for documentation.
+The `Markdown` module provides the (internal) [`MD`](@ref) type as well as the string
+literals `md"..."` and `doc"..."`.
 """
 module Markdown
 
@@ -40,6 +44,22 @@ function docexpr(source::LineNumberNode, mod::Module, s, flavor = :julia)
     :($doc_str($(mdexpr(s, flavor)), $(QuoteNode(source)), $mod))
 end
 
+"""
+    @md_str -> MD
+
+Parse the given string as Markdown text and return a corresponding [`MD`](@ref) object.
+
+# Examples
+```jldoctest
+julia> s = md"# Hello, world!"
+  Hello, world!
+  ≡≡≡≡≡≡≡≡≡≡≡≡≡
+
+julia> typeof(s)
+Markdown.MD
+
+```
+"""
 macro md_str(s, t...)
     mdexpr(s, t...)
 end
@@ -51,6 +71,25 @@ function doc_str(md, source::LineNumberNode, mod::Module)
 end
 doc_str(md::AbstractString, source::LineNumberNode, mod::Module) = doc_str(parse(md), source, mod)
 
+"""
+    @doc_str -> MD
+
+Parse the given string as Markdown text, add line and module information and return a
+corresponding [`MD`](@ref) object.
+
+`@doc_str` can be used in conjunction with the [`Base.Docs`](@ref) module. Please also refer to
+the manual section on [documentation](@ref man-documentation) for more information.
+
+# Examples
+```
+julia> s = doc"f(x) = 2*x"
+  f(x) = 2*x
+
+julia> typeof(s)
+Markdown.MD
+
+```
+"""
 macro doc_str(s::AbstractString, t...)
     docexpr(__source__, __module__, s, t...)
 end

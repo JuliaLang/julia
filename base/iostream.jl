@@ -63,6 +63,8 @@ function close(s::IOStream)
     systemerror("close", bad)
 end
 
+closewrite(s::IOStream) = nothing
+
 function flush(s::IOStream)
     sigatomic_begin()
     bad = @_lock_ios s ccall(:ios_flush, Cint, (Ptr{Cvoid},), s.ios) != 0
@@ -443,9 +445,42 @@ end
 function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
+readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
+    delim ≤ '\x7f' ? readuntil_string(s, delim % UInt8, keep) :
+    String(unsafe_take!(copyuntil(IOBuffer(sizehint=70), s, delim; keep)))
 
 function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
+end
+
+function copyuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
+    ensureroom(out, 1) # make sure we can read at least 1 byte, for iszero(n) check below
+    while true
+        d = out.data
+        len = length(d)
+        ptr = (out.append ? out.size+1 : out.ptr)
+        GC.@preserve d @_lock_ios s n=
+            Int(ccall(:jl_readuntil_buf, Csize_t, (Ptr{Cvoid}, UInt8, Ptr{UInt8}, Csize_t),
+                s.ios, delim, pointer(d, ptr), (len - ptr + 1) % Csize_t))
+        iszero(n) && break
+        ptr += n
+        found = (d[ptr - 1] == delim)
+        found && !keep && (ptr -= 1)
+        out.size = max(out.size, ptr - 1)
+        out.append || (out.ptr = ptr)
+        found && break
+        (eof(s) || len == out.maxsize) && break
+        len = min(2len + 64, out.maxsize)
+        ensureroom(out, len)
+        @assert length(out.data) >= len
+    end
+    return out
+end
+
+function copyuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false)
+    @_lock_ios out @_lock_ios s ccall(:ios_copyuntil, Csize_t,
+        (Ptr{Cvoid}, Ptr{Cvoid}, UInt8, Cint), out.ios, s.ios, delim, keep)
+    return out
 end
 
 function readbytes_all!(s::IOStream,

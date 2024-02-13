@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "clang/AST/Type.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/StaticAnalyzer/Checkers/SValExplainer.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
@@ -14,6 +15,7 @@
 #include "clang/Tooling/Tooling.h"
 #include "clang/StaticAnalyzer/Frontend/CheckerRegistry.h"
 
+#include "llvm/Support/Debug.h"
 #include <iostream>
 #include <memory>
 
@@ -199,7 +201,7 @@ private:
   static bool isGCTracked(const Expr *E);
   bool isGloballyRootedType(QualType Type) const;
   static void dumpState(const ProgramStateRef &State);
-  static bool declHasAnnotation(const clang::Decl *D, const char *which);
+  static const AnnotateAttr *declHasAnnotation(const clang::Decl *D, const char *which);
   static bool isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const SourceManager &SM);
   static const SourceManager &getSM(CheckerContext &C) { return C.getSourceManager(); }
   bool isSafepoint(const CallEvent &Call, CheckerContext &C) const;
@@ -242,6 +244,18 @@ public:
   class GCBugVisitor : public BugReporterVisitor {
   public:
     GCBugVisitor() {}
+
+    void Profile(llvm::FoldingSetNodeID &ID) const override {
+      static int X = 0;
+      ID.AddPointer(&X);
+    }
+
+    PDP VisitNode(const ExplodedNode *N, BugReporterContext &BRC, PathSensitiveBugReport &BR) override;
+  };
+
+  class SafepointBugVisitor : public BugReporterVisitor {
+  public:
+    SafepointBugVisitor() {}
 
     void Profile(llvm::FoldingSetNodeID &ID) const override {
       static int X = 0;
@@ -360,6 +374,33 @@ PDP GCChecker::GCBugVisitor::VisitNode(const ExplodedNode *N,
     PathDiagnosticLocation Pos(getStmtForDiagnostics(N),
                                BRC.getSourceManager(), N->getLocationContext());
     return MakePDP(Pos, "GC enabledness changed here.");
+  }
+  return nullptr;
+}
+
+PDP GCChecker::SafepointBugVisitor::VisitNode(const ExplodedNode *N,
+                                       BugReporterContext &BRC, PathSensitiveBugReport &BR) {
+  const ExplodedNode *PrevN = N->getFirstPred();
+  unsigned NewSafepointDisabled = N->getState()->get<SafepointDisabledAt>();
+  unsigned OldSafepointDisabled = PrevN->getState()->get<SafepointDisabledAt>();
+  if (NewSafepointDisabled != OldSafepointDisabled) {
+    const Decl *D = &N->getCodeDecl();
+    const AnnotateAttr *Ann = declHasAnnotation(D, "julia_not_safepoint");
+    PathDiagnosticLocation Pos;
+    if (OldSafepointDisabled == (unsigned)-1) {
+      if (Ann) {
+        Pos = PathDiagnosticLocation{Ann->getLoc(), BRC.getSourceManager()};
+        return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+      } else {
+        PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
+            N->getLocationContext(), BRC.getSourceManager());
+        return MakePDP(Pos, "Tracking JL_NOT_SAFEPOINT annotation here.");
+      }
+    } else if (NewSafepointDisabled == (unsigned)-1) {
+      PathDiagnosticLocation Pos = PathDiagnosticLocation::createDeclBegin(
+          N->getLocationContext(), BRC.getSourceManager());
+      return MakePDP(Pos, "Safepoints re-enabled here");
+    }
   }
   return nullptr;
 }
@@ -712,12 +753,12 @@ void GCChecker::checkEndFunction(const clang::ReturnStmt *RS,
   }
 }
 
-bool GCChecker::declHasAnnotation(const clang::Decl *D, const char *which) {
+const AnnotateAttr *GCChecker::declHasAnnotation(const clang::Decl *D, const char *which) {
   for (const auto *Ann : D->specific_attrs<AnnotateAttr>()) {
     if (Ann->getAnnotation() == which)
-      return true;
+      return Ann;
   }
-  return false;
+  return nullptr;
 }
 
 bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD, const SourceManager &SM) {
@@ -767,6 +808,8 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.endswith_lower("jl_expr_t") ||
                    Name.endswith_lower("jl_code_info_t") ||
                    Name.endswith_lower("jl_array_t") ||
+                   Name.endswith_lower("jl_genericmemory_t") ||
+                   //Name.endswith_lower("jl_genericmemoryref_t") ||
                    Name.endswith_lower("jl_method_t") ||
                    Name.endswith_lower("jl_method_instance_t") ||
                    Name.endswith_lower("jl_tupletype_t") ||
@@ -853,9 +896,11 @@ bool GCChecker::isSafepoint(const CallEvent &Call, CheckerContext &C) const {
     if (!Decl || !FD) {
       if (Callee == nullptr) {
         isCalleeSafepoint = true;
-      } else if (const TypedefType *TDT = dyn_cast<TypedefType>(Callee->getType())) {
-        isCalleeSafepoint =
-            !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
+      } else if (const ElaboratedType *ET = dyn_cast<ElaboratedType>(Callee->getType())){
+        if (const TypedefType *TDT = dyn_cast<TypedefType>(ET->getNamedType())) {
+          isCalleeSafepoint =
+              !declHasAnnotation(TDT->getDecl(), "julia_not_safepoint");
+        }
       } else if (const CXXPseudoDestructorExpr *PDE =
                      dyn_cast<CXXPseudoDestructorExpr>(Callee)) {
         // A pseudo-destructor is an expression that looks like a member
@@ -900,7 +945,7 @@ bool GCChecker::processPotentialSafepoint(const CallEvent &Call,
             isGCTrackedType(ParmType->getPointeeType())) {
           // This is probably an out parameter. Find the value it refers to now.
           SVal Loaded =
-              State->getSVal(Call.getArgSVal(i).getAs<Loc>().getValue());
+              State->getSVal(*(Call.getArgSVal(i).getAs<Loc>()));
           SpeciallyRootedSymbol = Loaded.getAsSymbol();
           continue;
         }
@@ -1302,6 +1347,7 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
               Report->addNote(
                   "Tried to call method defined here",
                   PathDiagnosticLocation::create(FD, C.getSourceManager()));
+            Report->addVisitor(make_unique<SafepointBugVisitor>());
           },
           C, ("Calling potential safepoint as " +
               Call.getKindAsString() + " from function annotated JL_NOTSAFEPOINT").str());
@@ -1398,7 +1444,8 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
   } else if (name == "JL_GC_PUSH1" || name == "JL_GC_PUSH2" ||
              name == "JL_GC_PUSH3" || name == "JL_GC_PUSH4" ||
              name == "JL_GC_PUSH5" || name == "JL_GC_PUSH6" ||
-             name == "JL_GC_PUSH7" || name == "JL_GC_PUSH8") {
+             name == "JL_GC_PUSH7" || name == "JL_GC_PUSH8" ||
+             name == "JL_GC_PUSH9") {
     ProgramStateRef State = C.getState();
     // Transform slots to roots, transform values to rooted
     unsigned NumArgs = CE->getNumArgs();
@@ -1478,7 +1525,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
       }
     }
     if (FD) {
-      Loc ItemsLoc = State->getLValue(FD, ArrayList).getAs<Loc>().getValue();
+      Loc ItemsLoc = *(State->getLValue(FD, ArrayList).getAs<Loc>());
       SVal Items = State->getSVal(ItemsLoc);
       if (Items.isUnknown()) {
         Items = C.getSValBuilder().conjureSymbolVal(
@@ -1646,7 +1693,7 @@ void GCChecker::checkLocation(SVal SLoc, bool IsLoad, const Stmt *S,
   // better than this.
   if (IsLoad && (RS = State->get<GCRootMap>(SLoc.getAsRegion()))) {
     SymbolRef LoadedSym =
-        State->getSVal(SLoc.getAs<Loc>().getValue()).getAsSymbol();
+        State->getSVal(*SLoc.getAs<Loc>()).getAsSymbol();
     if (LoadedSym) {
       const ValueState *ValS = State->get<GCValueMap>(LoadedSym);
       if (!ValS || !ValS->isRooted() || ValS->RootDepth > RS->RootedAtDepth) {

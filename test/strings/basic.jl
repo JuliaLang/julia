@@ -176,8 +176,11 @@ end
     x = "abcdefg"
     @testset "basic unit range" begin
         @test SubString(x, 2:4) == "bcd"
-        @test view(x, 2:4) == "bcd"
-        @test view(x, 2:4) isa SubString
+        sx = view(x, 2:4)
+        @test sx == "bcd"
+        @test sx isa SubString
+        @test parent(sx) === x
+        @test parentindices(sx) == (2:4,)
         @test (@view x[4:end]) == "defg"
         @test (@view x[4:end]) isa SubString
     end
@@ -199,6 +202,12 @@ end
 
         @test (@views (x[3], x[1:2], x[[1,4]])) isa Tuple{Char, SubString, String}
         @test (@views (x[3], x[1:2], x[[1,4]])) == ('c', "ab", "ad")
+    end
+
+    @testset ":noshift constructor" begin
+        @test SubString("", 0, 0, Val(:noshift)) == ""
+        @test SubString("abcd", 0, 1, Val(:noshift)) == "a"
+        @test SubString("abcd", 0, 4, Val(:noshift)) == "abcd"
     end
 end
 
@@ -247,8 +256,6 @@ end
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
     @test Meta.lower(Main, sym) === sym
-    @test Meta.parse(string(Char(0xe0080)," = 1"), 1, raise=false)[1] ==
-        Expr(:error, "invalid character \"\Ue0080\" near column 1")
 end
 
 @testset "Symbol and gensym" begin
@@ -758,11 +765,6 @@ function getData(dic)
 end
 @test getData(Dict()) == ",,,,,,,,,,,,,,,,,,"
 
-@testset "unrecognized escapes in string/char literals" begin
-    @test_throws Meta.ParseError Meta.parse("\"\\.\"")
-    @test_throws Meta.ParseError Meta.parse("\'\\.\'")
-end
-
 @testset "thisind" begin
     let strs = Any["∀α>β:α+1>β", s"∀α>β:α+1>β",
                    SubString("123∀α>β:α+1>β123", 4, 18),
@@ -1168,7 +1170,7 @@ end
     code_units = Base.CodeUnits("abc")
     @test Base.IndexStyle(Base.CodeUnits) == IndexLinear()
     @test Base.elsize(code_units) == sizeof(UInt8)
-    @test Base.unsafe_convert(Ptr{Int8}, code_units) == Base.unsafe_convert(Ptr{Int8}, code_units.s)
+    @test Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{UInt8}, code_units)) == Base.unsafe_convert(Ptr{Int8}, Base.cconvert(Ptr{Int8}, code_units.s))
 end
 
 @testset "LazyString" begin

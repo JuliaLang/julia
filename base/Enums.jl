@@ -21,6 +21,14 @@ Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)::T
 Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
 Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, basetype(T)))
 
+"""
+    _enum_hash(x::Enum, h::UInt)
+
+Compute hash for an enum value `x`. This internal method will be specialized
+for every enum type created through [`@enum`](@ref).
+"""
+_enum_hash(x::Enum, h::UInt) = invoke(hash, Tuple{Any, UInt}, x, h)
+Base.hash(x::Enum, h::UInt) = _enum_hash(x, h)
 Base.isless(x::T, y::T) where {T<:Enum} = isless(basetype(T)(x), basetype(T)(y))
 
 Base.Symbol(x::Enum) = namemap(typeof(x))[Integer(x)]::Symbol
@@ -206,8 +214,12 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         Enums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
-        let enum_hash = hash($(esc(typename)))
-            Base.hash(x::$(esc(typename)), h::UInt) = hash(enum_hash, hash(Integer(x), h))
+        let type_hash = hash($(esc(typename)))
+            # Use internal `_enum_hash` to allow users to specialize
+            # `Base.hash` for their own enum types without overwriting the
+            # method we would define here. This avoids a warning for
+            # precompilation.
+            Enums._enum_hash(x::$(esc(typename)), h::UInt) = hash(type_hash, hash(Integer(x), h))
         end
         let insts = (Any[ $(esc(typename))(v) for v in $values ]...,)
             Base.instances(::Type{$(esc(typename))}) = insts

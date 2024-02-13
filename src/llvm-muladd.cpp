@@ -9,7 +9,6 @@
 #include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/OptimizationRemarkEmitter.h>
 #include <llvm/IR/Value.h>
-#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -40,10 +39,10 @@ STATISTIC(TotalContracted, "Total number of multiplies marked for FMA");
  * Combine
  * ```
  * %v0 = fmul ... %a, %b
- * %v = fadd fast ... %v0, %c
+ * %v = fadd contract ... %v0, %c
  * ```
  * to
- * `%v = call fast @llvm.fmuladd.<...>(... %a, ... %b, ... %c)`
+ * `%v = call contract @llvm.fmuladd.<...>(... %a, ... %b, ... %c)`
  * when `%v0` has no other use
  */
 
@@ -87,13 +86,13 @@ static bool combineMulAdd(Function &F) JL_NOTSAFEPOINT
             it++;
             switch (I.getOpcode()) {
             case Instruction::FAdd: {
-                if (!I.isFast())
+                if (!I.hasAllowContract())
                     continue;
                 modified |= checkCombine(I.getOperand(0), ORE) || checkCombine(I.getOperand(1), ORE);
                 break;
             }
             case Instruction::FSub: {
-                if (!I.isFast())
+                if (!I.hasAllowContract())
                     continue;
                 modified |= checkCombine(I.getOperand(0), ORE) || checkCombine(I.getOperand(1), ORE);
                 break;
@@ -104,43 +103,15 @@ static bool combineMulAdd(Function &F) JL_NOTSAFEPOINT
         }
     }
 #ifdef JL_VERIFY_PASSES
-    assert(!verifyFunction(F, &errs()));
+    assert(!verifyLLVMIR(F));
 #endif
     return modified;
 }
 
-PreservedAnalyses CombineMulAdd::run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT
+PreservedAnalyses CombineMulAddPass::run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT
 {
     if (combineMulAdd(F)) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
-}
-
-
-struct CombineMulAddLegacy : public FunctionPass {
-    static char ID;
-    CombineMulAddLegacy() : FunctionPass(ID)
-    {}
-
-private:
-    bool runOnFunction(Function &F) override {
-        return combineMulAdd(F);
-    }
-};
-
-char CombineMulAddLegacy::ID = 0;
-static RegisterPass<CombineMulAddLegacy> X("CombineMulAdd", "Combine mul and add to muladd",
-                                     false /* Only looks at CFG */,
-                                     false /* Analysis Pass */);
-
-Pass *createCombineMulAddPass()
-{
-    return new CombineMulAddLegacy();
-}
-
-extern "C" JL_DLLEXPORT_CODEGEN
-void LLVMExtraAddCombineMulAddPass_impl(LLVMPassManagerRef PM)
-{
-    unwrap(PM)->add(createCombineMulAddPass());
 }

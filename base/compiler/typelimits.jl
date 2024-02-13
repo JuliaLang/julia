@@ -116,15 +116,31 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             return Union{a, b}
         end
     elseif isa(t, DataType)
-        if isType(t) # see equivalent case in type_more_complex
-            tt = unwrap_unionall(t.parameters[1])
-            if isa(tt, Union) || isa(tt, TypeVar) || isType(tt)
-                is_derived_type_from_any(tt, sources, depth + 1) && return t
-            else
-                isType(c) && (c = unwrap_unionall(c.parameters[1]))
-                type_more_complex(tt, c, sources, depth, 0, 0) || return t
+        if isType(t)
+            # Type is fairly important, so do not widen it as fast as other types if avoidable
+            tt = t.parameters[1]
+            ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+            # must forbid nesting through this if we detect that potentially occurring
+            # we already know !is_derived_type_from_any so refuse to recurse here
+            if !isa(ttu, DataType)
+                return Type
+            elseif isType(ttu)
+                return Type{<:Type}
             end
-            return Type
+            # try to peek into c to get a comparison object, but if we can't perhaps t is already simple enough on its own
+            if isType(c)
+                ct = c.parameters[1]
+            else
+                ct = Union{}
+            end
+            Qt = __limit_type_size(tt, ct, sources, depth + 1, 0)
+            Qt === tt && return t
+            Qt === Any && return Type
+            # Can't form Type{<:Qt} just yet, without first make sure we limited the depth
+            # enough, since this moves Qt outside of Type for is_derived_type_from_any
+            Qt = __limit_type_size(tt, ct, sources, depth + 2, 0)
+            Qt === Any && return Type
+            return Type{<:Qt}
         elseif isa(c, DataType)
             tP = t.parameters
             cP = c.parameters
@@ -157,10 +173,11 @@ function _limit_type_size(@nospecialize(t), @nospecialize(c), sources::SimpleVec
             end
         end
         if allowed_tuplelen < 1 && t.name === Tuple.name
+            # forbid nesting Tuple{Tuple{Tuple...}} through this
             return Any
         end
         widert = t.name.wrapper
-        if !(t <: widert)
+        if !(t <: widert) # XXX: we should call has_free_typevars(t) here, but usually t does not have those wrappers by the time it got here
             # This can happen when a typevar has bounds too wide for its context, e.g.
             # `Complex{T} where T` is not a subtype of `Complex`. In that case widen even
             # faster to something safe to ensure the result is a supertype of the input.
@@ -211,19 +228,21 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
         return false # Bottom is as simple as they come
     elseif isa(t, DataType) && isempty(t.parameters)
         return false # fastpath: unparameterized types are always finite
-    elseif tupledepth > 0 && is_derived_type_from_any(unwrap_unionall(t), sources, depth)
+    elseif is_derived_type_from_any(unwrap_unionall(t), sources, depth)
         return false # t isn't something new
     end
     # peel off wrappers
     isvarargtype(t) && (t = unwrapva(t))
     isvarargtype(c) && (c = unwrapva(c))
     if isa(c, UnionAll)
-        # allow wrapping type with fewer UnionAlls than comparison if in a covariant context
+        # allow wrapping type with fewer UnionAlls than comparison only if in a covariant context
         if !isa(t, UnionAll) && tupledepth == 0
             return true
         end
-        t = unwrap_unionall(t)
         c = unwrap_unionall(c)
+    end
+    if isa(t, UnionAll)
+        t = unwrap_unionall(t)
     end
     # rules for various comparison types
     if isa(c, TypeVar)
@@ -248,16 +267,22 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
     if isa(t, DataType)
         tP = t.parameters
         if isType(t)
-            # Treat Type{T} and T as equivalent to allow taking typeof any
-            # source type (DataType) anywhere as Type{...}, as long as it isn't
-            # nesting as Type{Type{...}}
-            tt = unwrap_unionall(t.parameters[1])
-            if isa(tt, Union) || isa(tt, TypeVar) || isType(tt)
-                return !is_derived_type_from_any(tt, sources, depth + 1)
+            # Type is fairly important, so do not widen it as fast as other types if avoidable
+            tt = tP[1]
+            ttu = unwrap_unionall(tt) # TODO: use argument_datatype(tt) after #50692 fixed
+            if isType(c)
+                ct = c.parameters[1]
             else
-                isType(c) && (c = unwrap_unionall(c.parameters[1]))
-                return type_more_complex(tt, c, sources, depth, 0, 0)
+                ct = Union{}
+                tupledepth == 0 && return true # cannot allow nesting
             end
+            # allow creating variation within a nested Type, but not very deep
+            if tupledepth > 1
+                tupledepth = 1
+            else
+                tupledepth = 0
+            end
+            return type_more_complex(tt, ct, sources, depth + 1, tupledepth, 0)
         elseif isa(c, DataType) && t.name === c.name
             cP = c.parameters
             length(cP) < length(tP) && return true
@@ -270,22 +295,9 @@ function type_more_complex(@nospecialize(t), @nospecialize(c), sources::SimpleVe
             else
                 tupledepth = 0
             end
-            isgenerator = (t.name.name === :Generator && t.name.module === _topmod(t.name.module))
             for i = 1:length(tP)
                 tPi = tP[i]
                 cPi = cP[i + ntail]
-                if isgenerator
-                    let tPi = unwrap_unionall(tPi),
-                        cPi = unwrap_unionall(cPi)
-                        if isa(tPi, DataType) && isa(cPi, DataType) &&
-                            !isabstracttype(tPi) && !isabstracttype(cPi) &&
-                                sym_isless(cPi.name.name, tPi.name.name)
-                            # allow collect on (anonymous) Generators to nest, provided that their functions are appropriately ordered
-                            # TODO: is there a better way?
-                            continue
-                        end
-                    end
-                end
                 type_more_complex(tPi, cPi, sources, depth + 1, tupledepth, 0) && return true
             end
             return false
@@ -298,15 +310,20 @@ union_count_abstract(x::Union) = union_count_abstract(x.a) + union_count_abstrac
 union_count_abstract(@nospecialize(x)) = !isdispatchelem(x)
 
 function issimpleenoughtype(@nospecialize t)
-    return unionlen(t) + union_count_abstract(t) <= MAX_TYPEUNION_LENGTH &&
+    ut = unwrap_unionall(t)
+    ut isa DataType && ut.name.wrapper == t && return true
+    return max(unionlen(t), union_count_abstract(t) + 1) <= MAX_TYPEUNION_LENGTH &&
            unioncomplexity(t) <= MAX_TYPEUNION_COMPLEXITY
 end
 
+# We may want to apply a stricter limit than issimpleenoughtype to
+# tupleelements individually, to try to keep the whole tuple under the limit,
+# even after complicated recursion and other operations on it elsewhere
+const issimpleenoughtupleelem = issimpleenoughtype
+
 # A simplified type_more_complex query over the extended lattice
 # (assumes typeb ⊑ typea)
-function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
-    typea isa MaybeUndef && (typea = typea.typ) # n.b. does not appear in inference
-    typeb isa MaybeUndef && (typeb = typeb.typ) # n.b. does not appear in inference
+@nospecializeinfer function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
     @assert !isa(typea, LimitedAccuracy) && !isa(typeb, LimitedAccuracy) "LimitedAccuracy not supported by simplertype lattice" # n.b. the caller was supposed to handle these
     typea === typeb && return true
     if typea isa PartialStruct
@@ -379,19 +396,6 @@ end
     return nothing
 end
 
-function tmerge(lattice::OptimizerLattice, @nospecialize(typea), @nospecialize(typeb))
-    r = tmerge_fast_path(lattice, typea, typeb)
-    r !== nothing && return r
-
-    # type-lattice for MaybeUndef wrapper
-    if isa(typea, MaybeUndef) || isa(typeb, MaybeUndef)
-        return MaybeUndef(tmerge(
-            isa(typea, MaybeUndef) ? typea.typ : typea,
-            isa(typeb, MaybeUndef) ? typeb.typ : typeb))
-    end
-    return tmerge(widenlattice(lattice), typea, typeb)
-end
-
 function union_causes(causesa::IdSet{InferenceState}, causesb::IdSet{InferenceState})
     if causesa ⊆ causesb
         return causesb
@@ -415,7 +419,7 @@ function merge_causes(causesa::IdSet{InferenceState}, causesb::IdSet{InferenceSt
     end
 end
 
-@noinline function tmerge_limited(lattice::InferenceLattice, @nospecialize(typea), @nospecialize(typeb))
+@nospecializeinfer @noinline function tmerge_limited(lattice::InferenceLattice, @nospecialize(typea), @nospecialize(typeb))
     typea === Union{} && return typeb
     typeb === Union{} && return typea
 
@@ -466,17 +470,15 @@ end
     return LimitedAccuracy(tmerge(widenlattice(lattice), typea, typeb), causes)
 end
 
-function tmerge(lattice::InferenceLattice, @nospecialize(typea), @nospecialize(typeb))
+@nospecializeinfer function tmerge(lattice::InferenceLattice, @nospecialize(typea), @nospecialize(typeb))
     if isa(typea, LimitedAccuracy) || isa(typeb, LimitedAccuracy)
         return tmerge_limited(lattice, typea, typeb)
     end
 
-    r = tmerge_fast_path(widenlattice(lattice), typea, typeb)
-    r !== nothing && return r
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
-function tmerge(lattice::ConditionalsLattice, @nospecialize(typea), @nospecialize(typeb))
+@nospecializeinfer function tmerge(lattice::ConditionalsLattice, @nospecialize(typea), @nospecialize(typeb))
     # type-lattice for Conditional wrapper (NOTE never be merged with InterConditional)
     if isa(typea, Conditional) && isa(typeb, Const)
         if typeb.val === true
@@ -506,12 +508,17 @@ function tmerge(lattice::ConditionalsLattice, @nospecialize(typea), @nospecializ
         end
         return Bool
     end
-    typea = widenconditional(typea)
-    typeb = widenconditional(typeb)
+    if isa(typea, Conditional)
+        typeb === Union{} && return typea
+        typea = widenconditional(typea)
+    elseif isa(typeb, Conditional)
+        typea === Union{} && return typeb
+        typeb = widenconditional(typeb)
+    end
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
-function tmerge(lattice::InterConditionalsLattice, @nospecialize(typea), @nospecialize(typeb))
+@nospecializeinfer function tmerge(lattice::InterConditionalsLattice, @nospecialize(typea), @nospecialize(typeb))
     # type-lattice for InterConditional wrapper (NOTE never be merged with Conditional)
     if isa(typea, InterConditional) && isa(typeb, Const)
         if typeb.val === true
@@ -541,20 +548,31 @@ function tmerge(lattice::InterConditionalsLattice, @nospecialize(typea), @nospec
         end
         return Bool
     end
-    typea = widenconditional(typea)
-    typeb = widenconditional(typeb)
+    if isa(typea, InterConditional)
+        typeb === Union{} && return typea
+        typea = widenconditional(typea)
+    elseif isa(typeb, InterConditional)
+        typea === Union{} && return typeb
+        typeb = widenconditional(typeb)
+    end
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
-function tmerge(𝕃::AnyMustAliasesLattice, @nospecialize(typea), @nospecialize(typeb))
-    typea = widenmustalias(typea)
-    typeb = widenmustalias(typeb)
+@nospecializeinfer function tmerge(𝕃::AnyMustAliasesLattice, @nospecialize(typea), @nospecialize(typeb))
+    if is_valid_lattice_norec(𝕃, typea)
+        typeb === Union{} && return typea
+        typea = widenmustalias(typea)
+    end
+    if is_valid_lattice_norec(𝕃, typeb)
+        typea === Union{} && return typeb
+        typeb = widenmustalias(typeb)
+    end
     return tmerge(widenlattice(𝕃), typea, typeb)
 end
 
 # N.B. This can also be called with both typea::Const and typeb::Const to
 # to recover PartialStruct from `Const`s with overlapping fields.
-function tmerge_partial_struct(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
+@nospecializeinfer function tmerge_partial_struct(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
     aty = widenconst(typea)
     bty = widenconst(typeb)
     if aty === bty
@@ -612,7 +630,10 @@ function tmerge_partial_struct(lattice::PartialsLattice, @nospecialize(typea), @
     return nothing
 end
 
-function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
+@nospecializeinfer function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
+    r = tmerge_fast_path(lattice, typea, typeb)
+    r !== nothing && return r
+
     # type-lattice for Const and PartialStruct wrappers
     aps = isa(typea, PartialStruct)
     bps = isa(typeb, PartialStruct)
@@ -655,8 +676,7 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
     return tmerge(wl, typea, typeb)
 end
 
-
-function tmerge(lattice::ConstsLattice, @nospecialize(typea), @nospecialize(typeb))
+@nospecializeinfer function tmerge(lattice::ConstsLattice, @nospecialize(typea), @nospecialize(typeb))
     acp = isa(typea, Const) || isa(typea, PartialTypeVar)
     bcp = isa(typeb, Const) || isa(typeb, PartialTypeVar)
     if acp && bcp
@@ -668,7 +688,7 @@ function tmerge(lattice::ConstsLattice, @nospecialize(typea), @nospecialize(type
     return tmerge(wl, typea, typeb)
 end
 
-function tmerge(::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb::Type))
+@nospecializeinfer function tmerge(lattice::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb::Type))
     # it's always ok to form a Union of two concrete types
     act = isconcretetype(typea)
     bct = isconcretetype(typeb)
@@ -679,12 +699,39 @@ function tmerge(::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb
     if (act || isType(typea)) && (bct || isType(typeb))
         return Union{typea, typeb}
     end
-    typea <: typeb && return typeb
-    typeb <: typea && return typea
+    u = tmerge_fast_path(lattice, typea, typeb)
+    u === nothing || return u
     return tmerge_types_slow(typea, typeb)
 end
 
-@noinline function tmerge_types_slow(@nospecialize(typea::Type), @nospecialize(typeb::Type))
+@nospecializeinfer @noinline function tname_intersect(aname::Core.TypeName, bname::Core.TypeName)
+    aname === bname && return aname
+    if !isabstracttype(aname.wrapper) && !isabstracttype(bname.wrapper)
+        return nothing # fast path
+    end
+    Any.name === aname && return aname
+    a = unwrap_unionall(aname.wrapper)
+    heighta = 0
+    while a !== Any
+        heighta += 1
+        a = a.super
+    end
+    b = unwrap_unionall(bname.wrapper)
+    heightb = 0
+    while b !== Any
+        b.name === aname && return aname
+        heightb += 1
+        b = b.super
+    end
+    a = unwrap_unionall(aname.wrapper)
+    while heighta > heightb
+        a = a.super
+        heighta -= 1
+    end
+    return a.name === bname ? bname : nothing
+end
+
+@nospecializeinfer @noinline function tmerge_types_slow(@nospecialize(typea::Type), @nospecialize(typeb::Type))
     # collect the list of types from past tmerge calls returning Union
     # and then reduce over that list
     types = Any[]
@@ -707,73 +754,96 @@ end
     # see if any of the union elements have the same TypeName
     # in which case, simplify this tmerge by replacing it with
     # the widest possible version of itself (the wrapper)
+    simplify = falses(length(types))
     for i in 1:length(types)
+        typenames[i] === Any.name && continue
         ti = types[i]
         for j in (i + 1):length(types)
-            if typenames[i] === typenames[j]
+            typenames[j] === Any.name && continue
+            ijname = tname_intersect(typenames[i], typenames[j])
+            if !(ijname === nothing)
                 tj = types[j]
                 if ti <: tj
                     types[i] = Union{}
                     typenames[i] = Any.name
+                    simplify[i] = false
+                    simplify[j] = true
                     break
                 elseif tj <: ti
                     types[j] = Union{}
                     typenames[j] = Any.name
+                    simplify[j] = false
+                    simplify[i] = true
                 else
-                    if typenames[i] === Tuple.name
+                    if ijname === Tuple.name
                         # try to widen Tuple slower: make a single non-concrete Tuple containing both
                         # converge the Tuple element-wise if they are the same length
                         # see 4ee2b41552a6bc95465c12ca66146d69b354317b, be59686f7613a2ccfd63491c7b354d0b16a95c05,
                         widen = tuplemerge(unwrap_unionall(ti)::DataType, unwrap_unionall(tj)::DataType)
                         widen = rewrap_unionall(rewrap_unionall(widen, ti), tj)
+                        simplify[j] = false
                     else
-                        wr = typenames[i].wrapper
+                        wr = ijname.wrapper
                         uw = unwrap_unionall(wr)::DataType
                         ui = unwrap_unionall(ti)::DataType
+                        while ui.name !== ijname
+                            ui = ui.super
+                        end
                         uj = unwrap_unionall(tj)::DataType
-                        merged = wr
+                        while uj.name !== ijname
+                            uj = uj.super
+                        end
+                        p = Vector{Any}(undef, length(uw.parameters))
+                        usep = true
+                        widen = wr
                         for k = 1:length(uw.parameters)
                             ui_k = ui.parameters[k]
                             if ui_k === uj.parameters[k] && !has_free_typevars(ui_k)
-                                merged = merged{ui_k}
+                                p[k] = ui_k
+                                usep = true
                             else
-                                merged = merged{uw.parameters[k]}
+                                p[k] = uw.parameters[k]
                             end
                         end
-                        widen = rewrap_unionall(merged, wr)
+                        if usep
+                            widen = rewrap_unionall(wr{p...}, wr)
+                            widen <: wr || (widen = wr) # sometimes there are cross-constraints on wr that we may lose in this process, but that would cause future calls to this to need to return Any, which is undesirable
+                        end
+                        simplify[j] = !usep
                     end
                     types[i] = Union{}
                     typenames[i] = Any.name
+                    simplify[i] = false
                     types[j] = widen
                     break
                 end
             end
         end
     end
-    u = Union{types...}
-    # don't let type unions get too big, if the above didn't reduce it enough
-    if issimpleenoughtype(u)
-        return u
-    end
-    # don't let the slow widening of Tuple cause the whole type to grow too fast
+    # don't let elements of the union get too big, if the above didn't reduce something enough
+    # Specifically widen Tuple{..., Union{lots of stuff}...} to Tuple{..., Any, ...}
+    # Don't let Val{<:Val{<:Val}} keep nesting abstract levels either
     for i in 1:length(types)
+        simplify[i] || continue
+        ti = types[i]
+        issimpleenoughtype(ti) && continue
         if typenames[i] === Tuple.name
-            widen = unwrap_unionall(types[i])
-            if isa(widen, DataType) && !isvatuple(widen)
-                widen = NTuple{length(widen.parameters), Any}
-            else
-                widen = Tuple
+            # otherwise we need to do a simple version of tuplemerge for one element now
+            tip = (unwrap_unionall(ti)::DataType).parameters
+            lt = length(tip)
+            p = Vector{Any}(undef, lt)
+            for j = 1:lt
+                ui = tip[j]
+                p[j] = issimpleenoughtupleelem(unwrapva(ui)) ? ui : isvarargtype(ui) ? Vararg : Any
             end
-            types[i] = widen
-            u = Union{types...}
-            if issimpleenoughtype(u)
-                return u
-            end
-            break
+            types[i] = rewrap_unionall(Tuple{p...}, ti)
+        else
+            # this element is not simple enough yet, make it so now
+            types[i] = typenames[i].wrapper
         end
     end
-    # finally, just return the widest possible type
-    return Any
+    u = Union{types...}
+    return u
 end
 
 # the inverse of switchtupleunion, with limits on max element union size
@@ -795,7 +865,7 @@ function tuplemerge(a::DataType, b::DataType)
     p = Vector{Any}(undef, lt + vt)
     for i = 1:lt
         ui = Union{ap[i], bp[i]}
-        p[i] = issimpleenoughtype(ui) ? ui : Any
+        p[i] = issimpleenoughtupleelem(ui) ? ui : Any
     end
     # merge the remaining tail into a single, simple Tuple{Vararg{T}} (#22120)
     if vt
@@ -813,8 +883,10 @@ function tuplemerge(a::DataType, b::DataType)
                 #   or (equivalently?) iteratively took super-types until reaching a common wrapper
                 #   e.g. consider the results of `tuplemerge(Tuple{Complex}, Tuple{Number, Int})` and of
                 #   `tuplemerge(Tuple{Int}, Tuple{String}, Tuple{Int, String})`
-                if !(ti <: tail)
-                    if tail <: ti
+                #   c.f. tname_intersect in the algorithm above
+                hasfree = has_free_typevars(ti)
+                if hasfree || !(ti <: tail)
+                    if !hasfree && tail <: ti
                         tail = ti # widen to ti
                     else
                         uw = unwrap_unionall(tail)
@@ -842,11 +914,16 @@ function tuplemerge(a::DataType, b::DataType)
                         end
                     end
                 end
-                tail === Any && return Tuple # short-circuit loop
+                tail === Any && return Tuple # short-circuit loops
             end
         end
         @assert !(tail === Union{})
-        p[lt + 1] = Vararg{tail}
+        if !issimpleenoughtupleelem(tail) || tail === Any
+            p[lt + 1] = Vararg
+            lt == 0 && return Tuple
+        else
+            p[lt + 1] = Vararg{tail}
+        end
     end
     return Tuple{p...}
 end

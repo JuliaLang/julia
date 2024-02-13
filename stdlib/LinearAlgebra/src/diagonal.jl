@@ -10,7 +10,6 @@ struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         new{T,V}(diag)
     end
 end
-Diagonal{T,V}(d::Diagonal) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(d.diag)
 Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
 
@@ -53,8 +52,9 @@ julia> I(2)
  ⋅  1
 ```
 
-Note that a one-column matrix is not treated like a vector, but instead calls the
-method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
+!!! note
+    A one-column matrix is not treated like a vector, but instead calls the
+    method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
 
 ```jldoctest
 julia> A = transpose([7.0 13.0])
@@ -72,31 +72,36 @@ Diagonal(V::AbstractVector)
 """
     Diagonal(A::AbstractMatrix)
 
-Construct a matrix from the diagonal of `A`.
+Construct a matrix from the principal diagonal of `A`.
+The input matrix `A` may be rectangular, but the output will
+be square.
 
 # Examples
 ```jldoctest
-julia> A = permutedims(reshape(1:15, 5, 3))
-3×5 Matrix{Int64}:
-  1   2   3   4   5
-  6   7   8   9  10
- 11  12  13  14  15
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> D = Diagonal(A)
+2×2 Diagonal{Int64, Vector{Int64}}:
+ 1  ⋅
+ ⋅  4
+
+julia> A = [1 2 3; 4 5 6]
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
 
 julia> Diagonal(A)
-3×3 Diagonal{$Int, Vector{$Int}}:
- 1  ⋅   ⋅
- ⋅  7   ⋅
- ⋅  ⋅  13
-
-julia> diag(A, 2)
-3-element Vector{$Int}:
-  3
-  9
- 15
+2×2 Diagonal{Int64, Vector{Int64}}:
+ 1  ⋅
+ ⋅  5
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
 Diagonal{T}(A::AbstractMatrix) where T = Diagonal{T}(diag(A))
+Diagonal{T,V}(A::AbstractMatrix) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(diag(A))
 function convert(::Type{T}, A::AbstractMatrix) where T<:Diagonal
     checksquare(A)
     isdiag(A) ? T(A) : throw(InexactError(:convert, T, A))
@@ -107,11 +112,13 @@ Diagonal{T}(D::Diagonal{T}) where {T} = D
 Diagonal{T}(D::Diagonal) where {T} = Diagonal{T}(D.diag)
 
 AbstractMatrix{T}(D::Diagonal) where {T} = Diagonal{T}(D)
+AbstractMatrix{T}(D::Diagonal{T}) where {T} = copy(D)
 Matrix(D::Diagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(D)
 Array(D::Diagonal{T}) where {T} = Matrix(D)
 function Matrix{T}(D::Diagonal) where {T}
     n = size(D, 1)
-    B = zeros(T, n, n)
+    B = Matrix{T}(undef, n, n)
+    n > 1 && fill!(B, zero(T))
     @inbounds for i in 1:n
         B[i,i] = D.diag[i]
     end
@@ -132,11 +139,38 @@ copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (n = length(D.diag); (n,n))
 
-function size(D::Diagonal,d::Integer)
-    if d<1
-        throw(ArgumentError("dimension must be ≥ 1, got $d"))
+axes(D::Diagonal) = (ax = axes(D.diag, 1); (ax, ax))
+
+@inline function Base.isassigned(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(Bool, D, i, j) || return false
+    if i == j
+        @inbounds r = isassigned(D.diag, i)
+    else
+        r = true
     end
-    return d<=2 ? length(D.diag) : 1
+    r
+end
+
+@inline function Base.isstored(D::Diagonal, i::Int, j::Int)
+    @boundscheck checkbounds(D, i, j)
+    if i == j
+        @inbounds r = Base.isstored(D.diag, i)
+    else
+        r = false
+    end
+    r
+end
+
+function Base.minimum(D::Diagonal{T}) where T <: Number
+    mindiag = minimum(D.diag)
+    size(D, 1) > 1 && return (min(zero(T), mindiag))
+    return mindiag
+end
+
+function Base.maximum(D::Diagonal{T}) where T <: Number
+    maxdiag = Base.maximum(D.diag)
+    size(D, 1) > 1 && return (max(zero(T), maxdiag))
+    return maxdiag
 end
 
 @inline function getindex(D::Diagonal, i::Int, j::Int)
@@ -168,6 +202,8 @@ function Base.replace_in_print_matrix(A::Diagonal,i::Integer,j::Integer,s::Abstr
 end
 
 parent(D::Diagonal) = D.diag
+
+copy(D::Diagonal) = Diagonal(copy(D.diag))
 
 ishermitian(D::Diagonal{<:Real}) = true
 ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
@@ -274,26 +310,8 @@ function (*)(D::Diagonal, V::AbstractVector)
     return D.diag .* V
 end
 
-(*)(A::AbstractMatrix, D::Diagonal) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D)
-(*)(A::HermOrSym, D::Diagonal) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
-(*)(D::Diagonal, A::AbstractMatrix) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D, A)
-(*)(D::Diagonal, A::HermOrSym) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
-
 rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
 lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
-
-function (*)(A::AdjOrTransAbsMat, D::Diagonal)
-    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
-    rmul!(Ac, D)
-end
-function (*)(D::Diagonal, A::AdjOrTransAbsMat)
-    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
-    lmul!(D, Ac)
-end
 
 function __muldiag!(out, D::Diagonal, B, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
     require_one_based_indexing(out, B)
@@ -404,8 +422,8 @@ function (*)(Da::Diagonal, Db::Diagonal, Dc::Diagonal)
     return Diagonal(Da.diag .* Db.diag .* Dc.diag)
 end
 
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D))), A, D)
-/(A::HermOrSym, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D)), size(A)), A, D)
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(matprod_dest(A, D, promote_op(/, eltype(A), eltype(D))), A, D)
+/(A::HermOrSym, D::Diagonal) = _rdiv!(matprod_dest(A, D, promote_op(/, eltype(A), eltype(D))), A, D)
 
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
@@ -431,8 +449,8 @@ function \(D::Diagonal, B::AbstractVector)
     isnothing(j) || throw(SingularException(j))
     return D.diag .\ B
 end
-\(D::Diagonal, B::AbstractMatrix) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B))), D, B)
-\(D::Diagonal, B::HermOrSym) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B)), size(B)), D, B)
+\(D::Diagonal, B::AbstractMatrix) = ldiv!(matprod_dest(D, B, promote_op(\, eltype(D), eltype(B))), D, B)
+\(D::Diagonal, B::HermOrSym) = ldiv!(matprod_dest(D, B, promote_op(\, eltype(D), eltype(B))), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -452,8 +470,8 @@ function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
 end
 
 # Optimizations for \, / between Diagonals
-\(D::Diagonal, B::Diagonal) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B))), D, B)
-/(A::Diagonal, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D))), A, D)
+\(D::Diagonal, B::Diagonal) = ldiv!(matprod_dest(D, B, promote_op(\, eltype(D), eltype(B))), D, B)
+/(A::Diagonal, D::Diagonal) = _rdiv!(matprod_dest(A, D, promote_op(/, eltype(A), eltype(D))), A, D)
 function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
     n, k = length(Db.diag), length(Da.diag)
     n == k || throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
@@ -516,7 +534,7 @@ function (/)(S::SymTridiagonal, D::Diagonal)
     dl = similar(S.ev, T, max(length(S.dv)-1, 0))
     _rdiv!(Tridiagonal(dl, d, du), S, D)
 end
-(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(similar(T, promote_op(/, eltype(T), eltype(D))), T, D)
+(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(matprod_dest(T, D, promote_op(/, eltype(T), eltype(D))), T, D)
 function _rdiv!(T::Tridiagonal, S::Union{SymTridiagonal,Tridiagonal}, D::Diagonal)
     n = size(S, 2)
     dd = D.diag
@@ -702,6 +720,9 @@ for f in (:exp, :cis, :log, :sqrt,
     @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
 end
 
+# Cube root of a real-valued diagonal matrix
+cbrt(A::Diagonal{<:Real}) = Diagonal(cbrt.(A.diag))
+
 function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(oneunit(T))))
     for i = 1:length(D.diag)
@@ -747,11 +768,32 @@ function pinv(D::Diagonal{T}, tol::Real) where T
     Diagonal(Di)
 end
 
+# TODO Docstrings for eigvals, eigvecs, eigen all mention permute, scale, sortby as keyword args
+# but not all of them below provide them. Do we need to fix that?
 #Eigensystem
 eigvals(D::Diagonal{<:Number}; permute::Bool=true, scale::Bool=true) = copy(D.diag)
 eigvals(D::Diagonal; permute::Bool=true, scale::Bool=true) =
-    [eigvals(x) for x in D.diag] #For block matrices, etc.
-eigvecs(D::Diagonal) = Matrix{eltype(D)}(I, size(D))
+    reduce(vcat, eigvals(x) for x in D.diag) #For block matrices, etc.
+function eigvecs(D::Diagonal{T}) where T<:AbstractMatrix
+    diag_vecs = [ eigvecs(x) for x in D.diag ]
+    matT = reduce((a,b) -> promote_type(typeof(a),typeof(b)), diag_vecs)
+    ncols_diag = [ size(x, 2) for x in D.diag ]
+    nrows = size(D, 1)
+    vecs = Matrix{Vector{eltype(matT)}}(undef, nrows, sum(ncols_diag))
+    for j in axes(D, 2), i in axes(D, 1)
+        jj = sum(view(ncols_diag,1:j-1))
+        if i == j
+            for k in 1:ncols_diag[j]
+                vecs[i,jj+k] = diag_vecs[i][:,k]
+            end
+        else
+            for k in 1:ncols_diag[j]
+                vecs[i,jj+k] = zeros(eltype(T), ncols_diag[i])
+            end
+        end
+    end
+    return vecs
+end
 function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
     if any(!isfinite, D.diag)
         throw(ArgumentError("matrix contains Infs or NaNs"))
@@ -770,6 +812,19 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     end
     Eigen(λ, evecs)
 end
+function eigen(D::Diagonal{<:AbstractMatrix}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=nothing)
+    if any(any(!isfinite, x) for x in D.diag)
+        throw(ArgumentError("matrix contains Infs or NaNs"))
+    end
+    λ = eigvals(D)
+    evecs = eigvecs(D)
+    if !isnothing(sortby)
+        p = sortperm(λ; alg=QuickSort, by=sortby)
+        λ = λ[p]
+        evecs = evecs[:,p]
+    end
+    Eigen(λ, evecs)
+end
 function eigen(Da::Diagonal, Db::Diagonal; sortby::Union{Function,Nothing}=nothing)
     if any(!isfinite, Da.diag) || any(!isfinite, Db.diag)
         throw(ArgumentError("matrices contain Infs or NaNs"))
@@ -785,12 +840,11 @@ function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=n
     end
     if size(A, 1) == size(A, 2) && isdiag(A)
         return eigen(Diagonal(A), D; sortby)
-    elseif ishermitian(A)
+    elseif all(isposdef, D.diag)
         S = promote_type(eigtype(eltype(A)), eltype(D))
-        return eigen!(eigencopy_oftype(Hermitian(A), S), Diagonal{S}(D); sortby)
+        return eigen(A, cholesky(Diagonal{S}(D)); sortby)
     else
-        S = promote_type(eigtype(eltype(A)), eltype(D))
-        return eigen!(eigencopy_oftype(A, S), Diagonal{S}(D); sortby)
+        return eigen!(D \ A; sortby)
     end
 end
 
@@ -813,9 +867,6 @@ function svd(D::Diagonal{T}) where {T<:Number}
     return SVD(U, S, Vt)
 end
 
-# disambiguation methods: * and / of Diagonal and Adj/Trans AbsVec
-*(u::AdjointAbsVec, D::Diagonal) = (D'u')'
-*(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) * transpose(u))
 *(x::AdjointAbsVec,   D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 *(x::TransposeAbsVec, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 /(u::AdjointAbsVec, D::Diagonal) = (D' \ u')'
@@ -829,7 +880,7 @@ dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x,
 dot(A::Diagonal, B::Diagonal) = dot(A.diag, B.diag)
 function dot(D::Diagonal, B::AbstractMatrix)
     size(D) == size(B) || throw(DimensionMismatch("Matrix sizes $(size(D)) and $(size(B)) differ"))
-    return dot(D.diag, view(B, diagind(B)))
+    return dot(D.diag, view(B, diagind(B, IndexStyle(B))))
 end
 
 dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
