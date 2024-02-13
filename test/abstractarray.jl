@@ -548,12 +548,18 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
-    # isassigned(a::AbstractArray, i::Int...)
+    # isassigned(a::AbstractArray, i::Integer...)
     j = rand(1:length(B))
     @test isassigned(B, j)
     if T == T24Linear
         @test !isassigned(B, length(B) + 1)
     end
+    # isassigned(a::AbstractArray, i::CartesianIndex)
+    @test isassigned(B, first(CartesianIndices(B)))
+    ind = last(CartesianIndices(B))
+    @test !isassigned(B, ind + oneunit(ind))
+    # isassigned(a::AbstractArray, i::Union{Integer,CartesianIndex}...)
+    @test isassigned(B, Int16.(first.(axes(B)))..., CartesianIndex(1,1))
 
     # reshape(a::AbstractArray, dims::Dims)
     @test_throws DimensionMismatch reshape(B, (0, 1))
