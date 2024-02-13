@@ -9,7 +9,7 @@ include("testenv.jl")
 Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
-Base.Experimental.register_error_hint(Base.nonsetable_number_hint_handler, MethodError)
+Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
 
 
 @testset "SystemError" begin

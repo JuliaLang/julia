@@ -1022,18 +1022,29 @@ end
 
 Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 
-# handler for displaying a hint in case the user tries to setindex
-# the instance of a number (probably attempting to use wrong indexing)
-# eg: a = [1 2; 3 4]; a[1][2] = 5
-function nonsetable_number_hint_handler(io, ex, arg_types, kwargs)
-    if ex.f == setindex! && arg_types[1] <: Number
-        print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
-        printstyled(io, "a[1, 2]", color=:cyan)
-        print(io, " rather than a[1][2]")
+# handler for displaying a hint in case the user tries to call setindex! on
+# something that doesn't support it:
+#  - a number (probably attempting to use wrong indexing)
+#    eg: a = [1 2; 3 4]; a[1][2] = 5
+#  - a type (probably tried to initialize without parentheses)
+#    eg: d = Dict; d["key"] = 2
+function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
+    if ex.f == setindex!
+        T = arg_types[1]
+        if T <: Number
+            print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
+            printstyled(io, "a[1, 2]", color=:cyan)
+            print(io, " rather than a[1][2]")
+        else arg_types[1] isa Type
+            print(io, "\nYou attempted to index the Type $T, rather than an instance of the type. Make sure you create the type using its constructor: ")
+            printstyled(io, "d = $T()", color=:cyan)
+            print(io, " rather than d = $T")
+        end
     end
 end
 
-Experimental.register_error_hint(nonsetable_number_hint_handler, MethodError)
+Experimental.register_error_hint(nonsetable_type_hint_handler, MethodError)
 
 # Display a hint in case the user tries to use the + operator on strings
 # (probably attempting concatenation)
