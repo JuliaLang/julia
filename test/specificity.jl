@@ -16,8 +16,8 @@ let
     @test !args_morespecific(b2, a)
     a  = Tuple{Type{T1}, Ptr{T1}} where T1<:Integer
     b2 = Tuple{Type{T2}, Ptr{Integer}} where T2<:Integer
-    @test args_morespecific(a, b2)
-    @test !args_morespecific(b2, a)
+    @test !args_morespecific(a, b2)
+    @test  args_morespecific(b2, a)
 end
 
 # issue #11534
@@ -62,7 +62,7 @@ _z_z_z_(::Int, c...) = 3
 @test args_morespecific(Tuple{Union{Int,String},Type{Pair{A,B} where B}} where A, Tuple{Integer,UnionAll})
 
 # PR #21750
-let A = Tuple{Any, Tuple{Vararg{Integer,N} where N}},
+let A = Tuple{Any, Tuple{Vararg{Integer}}},
     B = Tuple{Any, Tuple{Any}},
     C = Tuple{Any, Tuple{}}
     @test args_morespecific(A, B)
@@ -90,7 +90,12 @@ begin
     @test f((1,2,3), A) == 3
     @test f((1,2), A) == 2
     @test f((), reshape([1])) == 1
+
+    oldstderr = stderr
+    newstderr = redirect_stderr() # redirect stderr to avoid method definition overwrite warning
     f(dims::NTuple{N,Int}, A::AbstractArray{T,N}) where {T,N} = 4
+    redirect_stderr(oldstderr)
+
     @test f((1,2), A) == 4
     @test f((1,2,3), A) == 3
 end
@@ -111,16 +116,16 @@ f17016(f, t1::Tuple) = 1
 @test !args_morespecific(Tuple{Type{Any}, Any}, Tuple{Type{T}, Any} where T<:VecElement)
 @test !args_morespecific((Tuple{Type{T}, Any} where T<:VecElement), Tuple{Type{Any}, Any})
 
-@test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any, N} where N}} where T<:Tuple{Any, Vararg{Any, N} where N},
+@test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any}}} where T<:Tuple{Any, Vararg{Any}},
                          Tuple{Type{Any}, Any})
-@test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any, N} where N}} where T<:Tuple{Any, Vararg{Any, N} where N},
+@test !args_morespecific(Tuple{Type{T}, Tuple{Any, Vararg{Any}}} where T<:Tuple{Any, Vararg{Any}},
                          Tuple{Type{Tuple}, Tuple})
-@test !args_morespecific(Tuple{Type{T}, T} where T<:Tuple{Any, Vararg{Any, N} where N},
+@test !args_morespecific(Tuple{Type{T}, T} where T<:Tuple{Any, Vararg{Any}},
                          Tuple{Type{T}, Any} where T<:VecElement)
 
 @test args_morespecific(Tuple{Any, Tuple{}, Tuple{}}, Tuple{Any, Tuple{Any}})
 @test args_morespecific(Tuple{Any, Tuple{Any}, Tuple{Any}}, Tuple{Any, Tuple{Any, Any}})
-@test args_morespecific(Tuple{Any, Vararg{Tuple{}, N} where N}, Tuple{Any, Tuple{Any}})
+@test args_morespecific(Tuple{Any, Vararg{Tuple{}}}, Tuple{Any, Tuple{Any}})
 
 @test  args_morespecific(Tuple{T, T} where T<:AbstractFloat, Tuple{T, T, T} where T<:AbstractFloat)
 @test  args_morespecific(Tuple{T, Real, T} where T<:AbstractFloat, Tuple{T, T} where T<:Real)
@@ -137,10 +142,10 @@ f17016(f, t1::Tuple) = 1
                          Tuple{T, T} where T<:Union{Base.StepRangeLen, Base.LinRange})
 
 @test args_morespecific(Tuple{Type{Tuple}, Any, Any},
-                        Tuple{Type{Tuple{Vararg{E, N} where N}}, Any, Any} where E)
+                        Tuple{Type{Tuple{Vararg{E}}}, Any, Any} where E)
 
 @test args_morespecific(Tuple{Type{Tuple{}}, Tuple{}},
-                        Tuple{Type{T}, T} where T<:Tuple{Any, Vararg{Any, N} where N})
+                        Tuple{Type{T}, T} where T<:Tuple{Any, Vararg{Any}})
 
 @test args_morespecific(Tuple{Type{CartesianIndex{N}}} where N,
                         Tuple{Type{CartesianIndex{N}},Vararg{Int,N}} where N)
@@ -202,3 +207,112 @@ let A = Tuple{Vector, AbstractVector},
     @test args_morespecific(B, C)
     @test args_morespecific(A, C)
 end
+
+# issue #27361
+f27361(::M) where M <: Tuple{2} = nothing
+f27361(::M) where M <: Tuple{3} = nothing
+@test length(methods(f27361)) == 2
+
+# specificity of TypeofBottom
+@test !args_morespecific(Tuple{DataType}, Tuple{Core.TypeofBottom})
+@test args_morespecific(Tuple{Core.TypeofBottom}, Tuple{Type{<:Tuple}})
+
+@test  args_morespecific(Tuple{Type{Any}, Type}, Tuple{Type{T}, Type{T}} where T)
+@test !args_morespecific(Tuple{Type{Any}, Type}, Tuple{Type{T}, Type{T}} where T<:Union{})
+
+# issue #22592
+abstract type Colorant22592{T,N} end
+abstract type Color22592{T, N} <: Colorant22592{T,N} end
+abstract type AbstractRGB22592{T} <: Color22592{T,3} end
+AbstractGray22592{T} = Color22592{T,1}
+MathTypes22592{T,C} = Union{AbstractRGB22592{T},AbstractGray22592{T}}
+@test !args_morespecific(Tuple{MathTypes22592}, Tuple{AbstractGray22592})
+@test !args_morespecific(Tuple{MathTypes22592, MathTypes22592}, Tuple{AbstractGray22592})
+
+@test args_morespecific(Union{Set,Dict,Vector}, Union{Vector,AbstractSet})
+
+let N = Tuple{Type{Union{Nothing, T}}, Union{Nothing, T}} where T,
+    LI = Tuple{Type{LinearIndices{N,R}}, LinearIndices{N}} where {N,R},
+    A = Tuple{Type{T},T} where T<:AbstractArray
+    @test  args_morespecific(LI, A)
+    @test  args_morespecific(A, N)
+    @test  args_morespecific(LI, N)
+end
+
+# issue #29528
+@test !args_morespecific(Tuple{Array,Vararg{Int64}}, Tuple{AbstractArray, Array})
+@test !args_morespecific(Tuple{Array,Vararg{Int64,N}} where N, Tuple{AbstractArray, Array})
+@test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64,N}} where N)
+@test  args_morespecific(Tuple{Array,Int64}, Tuple{Array,Vararg{Int64}})
+@test !args_morespecific(Tuple{Array,Int64}, Tuple{AbstractArray, Array})
+
+# issue #30114
+let T1 = Tuple{Type{Tuple{Vararg{AbstractUnitRange{Int64}}}},CartesianIndices{N,R} where R<:Tuple{Vararg{AbstractUnitRange{Int64},N}}} where N
+    T2 = Tuple{Type{T},T} where T<:AbstractArray
+    T3 = Tuple{Type{AbstractArray{T,N} where N},AbstractArray} where T
+    T4 = Tuple{Type{AbstractArray{T,N}},AbstractArray{s57,N} where s57} where N where T
+    @test !args_morespecific(T1, T2)
+    @test !args_morespecific(T1, T3)
+    @test !args_morespecific(T1, T4)
+    @test  args_morespecific(T2, T3)
+    @test  args_morespecific(T2, T4)
+end
+
+@test !args_morespecific(Tuple{Type{Tuple{Vararg{AbstractUnitRange{Int64},N}}},} where N,
+                         Tuple{Type{Tuple{Vararg{AbstractUnitRange}}},})
+
+@test  args_morespecific(Tuple{Type{SubArray{T,2,P} where T}, Array{T}} where T where P,
+                         Tuple{Type{AbstractArray{T,N} where N},AbstractArray} where T)
+
+# these are ambiguous
+@test !args_morespecific(Tuple{Type{T},T} where T<:BitArray,
+                         Tuple{Type{BitArray},Any})
+@test !args_morespecific(Tuple{Type{BitArray},Any},
+                         Tuple{Type{T},T} where T<:BitArray)
+
+abstract type Domain{T} end
+
+abstract type AbstractInterval{T} <: Domain{T} end
+
+struct Interval{L,R,T} <: AbstractInterval{T}
+end
+
+let A = Tuple{Type{Interval{:closed,:closed,T} where T}, Interval{:closed,:closed,T} where T},
+    B = Tuple{Type{II},                                  AbstractInterval} where II<:(Interval{:closed,:closed,T} where T),
+    C = Tuple{Type{AbstractInterval},                    AbstractInterval}
+    @test  args_morespecific(A, B)
+    @test !args_morespecific(B, C)
+    @test !args_morespecific(A, C)
+end
+
+let A = Tuple{Type{Domain},              Interval{L,R,T} where T} where R where L,
+    B = Tuple{Type{II},                  AbstractInterval} where II<:(Interval{:closed,:closed,T} where T),
+    C = Tuple{Type{AbstractInterval{T}}, AbstractInterval{T}} where T
+    @test !args_morespecific(A, B)
+    @test  args_morespecific(B, C)
+    @test !args_morespecific(A, C)
+end
+
+let A = Tuple{Type{AbstractInterval},    Interval{L,R,T} where T} where R where L,
+    B = Tuple{Type{II},                  AbstractInterval} where II<:(Interval{:closed,:closed,T} where T),
+    C = Tuple{Type{AbstractInterval{T}}, AbstractInterval{T}} where T
+    @test !args_morespecific(A, B)
+    @test  args_morespecific(B, C)
+    @test  args_morespecific(A, C)
+end
+
+@test args_morespecific(Tuple{Type{Missing},Any},
+                        Tuple{Type{Union{Nothing, T}},Any} where T)
+
+let A = Tuple{Type{SubString{S}},AbstractString} where S<:AbstractString,
+    B = Tuple{Type{T},AbstractString} where T<:AbstractString,
+    C = Tuple{Type{Union{Missing, Nothing, T}},Union{Missing, Nothing, T}} where T
+    @test  args_morespecific(A, B)
+    @test  args_morespecific(B, C)
+    @test  args_morespecific(A, C)
+end
+
+@test args_morespecific(Tuple{Type{Union{}}, Any}, Tuple{Any, Type{Union{}}})
+@test args_morespecific(Tuple{typeof(Union{}), Any}, Tuple{Any, Type{Union{}}})
+@test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any}, Tuple{Type{Union{}}, Any, Type{Union{}}})
+@test args_morespecific(Tuple{Type{Union{}}, Type{Union{}}, Any, Type{Union{}}}, Tuple{Type{Union{}}, Any, Type{Union{}}, Type{Union{}}})

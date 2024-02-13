@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <math.h>
 
-JULIA_DEFINE_FAST_TLS() // only define this once, in an executable
+JULIA_DEFINE_FAST_TLS // only define this once, in an executable
 
 #ifdef _OS_WINDOWS_
 __declspec(dllexport) __cdecl
@@ -32,12 +32,21 @@ jl_value_t *checked_eval_string(const char* code)
 
 int main()
 {
+    // check that setting options works
+    jl_options.opt_level = 1;
+
     jl_init();
 
     {
         // Simple running of Julia code
 
         checked_eval_string("println(sqrt(2.0))");
+    }
+
+    if (jl_options.opt_level != 1) {
+        jl_printf(jl_stderr_stream(), "setting jl_options didn't work\n");
+        jl_atexit_hook(1);
+        exit(1);
     }
 
     {
@@ -61,6 +70,14 @@ int main()
     }
 
     {
+        // Same as above but using `@cfunction`
+        double (*sqrt_jl)(double) = jl_unbox_voidpointer(jl_eval_string("@cfunction(sqrt, Float64, (Float64,))"));
+        double retDouble = sqrt_jl(2.0);
+        printf("sqrt(2.0) in C: %e\n", retDouble);
+        fflush(stdout);
+    }
+
+    {
         // 1D arrays
 
         jl_value_t* array_type = jl_apply_array_type((jl_value_t*)jl_float64_type, 1);
@@ -69,17 +86,17 @@ int main()
         // (aka, is gc-rooted until) the program reaches the corresponding JL_GC_POP()
         JL_GC_PUSH1(&x);
 
-        double* xData = jl_array_data(x);
+        double* xData = jl_array_data(x, double);
 
         size_t i;
-        for (i = 0; i < jl_array_len(x); i++)
+        for (i = 0; i < jl_array_nrows(x); i++)
             xData[i] = i;
 
         jl_function_t *func  = jl_get_function(jl_base_module, "reverse!");
         jl_call1(func, (jl_value_t*) x);
 
         printf("x = [");
-        for (i = 0; i < jl_array_len(x); i++)
+        for (i = 0; i < jl_array_nrows(x); i++)
             printf("%e ", xData[i]);
         printf("]\n");
         fflush(stdout);
@@ -92,7 +109,7 @@ int main()
 
         checked_eval_string("my_func(x) = 2 * x");
 
-        jl_function_t *func = jl_get_function(jl_current_module, "my_func");
+        jl_function_t *func = jl_get_function(jl_main_module, "my_func");
         jl_value_t* arg = jl_box_float64(5.0);
         double ret = jl_unbox_float64(jl_call1(func, arg));
 
@@ -161,12 +178,31 @@ int main()
         // disable the package manager
         "    ENV[\"JULIA_PKGDIR\"] = joinpath(dir, \"disabled\")\n"
         // locate files relative to the "embedding" executable
-        "    stdlib = filter(env -> startswith(Base.find_package(Base, \"Distributed\"), env), Base.load_path())[end]\n"
+        "    stdlib = filter(env -> startswith(Base.find_package(\"Distributed\"), env), Base.load_path())[end]\n"
         "    push!(empty!(LOAD_PATH), dir, stdlib)\n"
         "end"
         );
         checked_eval_string("import LocalModule");
         checked_eval_string("LocalModule.myapp()");
+    }
+
+    {
+        // Main.include and Main.eval exist (#28825)
+        checked_eval_string("include(\"include_and_eval.jl\")");
+        checked_eval_string("f28825()");
+    }
+
+    {
+        // jl_typeof works (#50714)
+        jl_value_t *v = checked_eval_string("sqrt(2.0)");
+        jl_value_t *t = jl_typeof(v);
+    }
+
+    JL_TRY {
+        jl_error("exception thrown");
+    }
+    JL_CATCH {
+        jl_printf(jl_stderr_stream(), "exception caught from C\n");
     }
 
     int ret = 0;

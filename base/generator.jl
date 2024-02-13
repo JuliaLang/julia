@@ -5,25 +5,26 @@
 
 Given a function `f` and an iterator `iter`, construct an iterator that yields
 the values of `f` applied to the elements of `iter`.
-The syntax `f(x) for x in iter [if cond(x)::Bool]` is syntax for constructing an instance of this
-type. The `[if cond(x)::Bool]` expression is optional and acts as a "guard", effectively
-filtering out values where the condition is false.
+The syntax `f(x) for x in iter` is syntax for constructing an instance of this
+type.
 
 ```jldoctest
-julia> g = (abs2(x) for x in 1:5 if x != 3);
+julia> g = (abs2(x) for x in 1:5);
 
 julia> for x in g
            println(x)
        end
 1
 4
+9
 16
 25
 
 julia> collect(g)
-4-element Array{Int64,1}:
+5-element Vector{Int64}:
   1
   4
+  9
  16
  25
 ```
@@ -40,17 +41,21 @@ Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
 Generator(::Type{T}, I1, I2, Is...) where {T} = Generator(a->T(a...), zip(I1, I2, Is...))
 
 function iterate(g::Generator, s...)
-    @_inline_meta
-    y = iterate(g.iter, s...)::Union{Tuple{Any, Any}, Nothing}
+    @inline
+    y = iterate(g.iter, s...)
     y === nothing && return nothing
-    g.f(y[1]), y[2]
+    y = y::Tuple{Any, Any} # try to give inference some idea of what to expect about the behavior of the next line
+    return (g.f(y[1]), y[2])
 end
 
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
 axes(g::Generator) = axes(g.iter)
 ndims(g::Generator) = ndims(g.iter)
-
+keys(g::Generator) = keys(g.iter)
+last(g::Generator) = g.f(last(g.iter))
+isempty(g::Generator) = isempty(g.iter)
+isdone(g::Generator, state...) = isdone(g.iter, state...)
 
 ## iterator traits
 
@@ -88,11 +93,12 @@ Base.HasLength()
 """
 IteratorSize(x) = IteratorSize(typeof(x))
 IteratorSize(::Type) = HasLength()  # HasLength is the default
+IteratorSize(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
+IteratorSize(::Type{Any}) = SizeUnknown()
 
+IteratorSize(::Type{<:Tuple}) = HasLength()
 IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
 IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
-
-IteratorSize(::Type{Any}) = SizeUnknown()
 
 haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}
 
@@ -121,7 +127,7 @@ Base.HasEltype()
 """
 IteratorEltype(x) = IteratorEltype(typeof(x))
 IteratorEltype(::Type) = HasEltype()  # HasEltype is the default
+IteratorEltype(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
+IteratorEltype(::Type{Any}) = EltypeUnknown()
 
 IteratorEltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
-
-IteratorEltype(::Type{Any}) = EltypeUnknown()

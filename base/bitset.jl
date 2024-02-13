@@ -8,14 +8,18 @@ const NO_OFFSET = Int === Int64 ? -one(Int) << 60 : -one(Int) << 29
 #   or -2^26:2^26 (32-bits architectures)
 # + when the offset is NO_OFFSET, the bits field *must* be empty
 # + NO_OFFSET could be made to be > 0, but a negative one allows
-#   a small optimization in the in(x, ::BitSet)
+#   a small optimization in the in(x, ::BitSet) method
 
 mutable struct BitSet <: AbstractSet{Int}
-    bits::Vector{UInt64}
+    const bits::Vector{UInt64}
     # 1st stored Int equals 64*offset
     offset::Int
 
-    BitSet() = new(sizehint!(zeros(UInt64, 0), 4), NO_OFFSET)
+    function BitSet()
+        a = Vector{UInt64}(undef, 4) # start with some initial space for holding 0:255 without additional allocations later
+        setfield!(a, :size, (0,)) # aka `empty!(a)` inlined
+        return new(a, NO_OFFSET)
+   end
 end
 
 """
@@ -29,11 +33,14 @@ very large integers), use [`Set`](@ref) instead.
 BitSet(itr) = union!(BitSet(), itr)
 
 # Special implementation for BitSet, which lacks a fast `length` method.
-union!(s::BitSet, itr) = foldl(push!, s, itr)
+function union!(s::BitSet, itr)
+    for x in itr
+        push!(s, x)
+    end
+    return s
+end
 
 @inline intoffset(s::BitSet) = s.offset << 6
-
-eltype(::Type{BitSet}) = Int
 
 empty(s::BitSet, ::Type{Int}=Int) = BitSet()
 emptymutable(s::BitSet, ::Type{Int}=Int) = BitSet()
@@ -41,14 +48,6 @@ emptymutable(s::BitSet, ::Type{Int}=Int) = BitSet()
 copy(s1::BitSet) = copy!(BitSet(), s1)
 copymutable(s::BitSet) = copy(s)
 
-"""
-    copy!(dst, src)
-
-In-place [`copy`](@ref) of `src` into `dst`. After the call to `copy!`,
-`dst` must be left equal to `src`, otherwise an error is thrown; this
-function appropriately resizes `dst` if necessary.
-See also [`copyto!`](@ref).
-"""
 function copy!(dest::BitSet, src::BitSet)
     resize!(dest.bits, length(src.bits))
     copyto!(dest.bits, src.bits)
@@ -56,7 +55,10 @@ function copy!(dest::BitSet, src::BitSet)
     dest
 end
 
-sizehint!(s::BitSet, n::Integer) = (sizehint!(s.bits, (n+63) >> 6); s)
+function sizehint!(s::BitSet, n::Integer; first::Bool=false, shrink::Bool=true)
+    sizehint!(s.bits, (n+63) >> 6; first, shrink)
+    s
+end
 
 function _bits_getindex(b::Bits, n::Int, offset::Int)
     ci = _div64(n) - offset + 1
@@ -124,6 +126,44 @@ end
     for i in 1:nchunks
         @inbounds b[i] = CHK0
     end
+end
+
+function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
+    isempty(r) && return s
+    a, b = Int(first(r)), Int(last(r))
+    cidxa = _div64(a)
+    cidxb = _div64(b)
+    if s.offset == NO_OFFSET
+        s.offset = cidxa
+    end
+    len = length(s.bits)
+    diffa = cidxa - s.offset
+    diffb = cidxb - s.offset
+
+    # grow s.bits as necessary
+    if diffb >= len
+        _growend0!(s.bits, diffb - len + 1)
+    end
+    if diffa < 0
+        _growbeg0!(s.bits, -diffa)
+        s.offset = cidxa # s.offset += diffa
+        diffb -= diffa
+        diffa = 0
+    end
+
+    # update s.bits
+    i = _mod64(a)
+    j = _mod64(b)
+    @inbounds if diffa == diffb
+        s.bits[diffa + 1] |= (((~CHK0) >> i) << (i+63-j)) >> (63-j)
+    else
+        s.bits[diffa + 1] |= ((~CHK0) >> i) << i
+        s.bits[diffb + 1] |= (~CHK0  << (63-j)) >> (63-j)
+        for n = diffa+1:diffb-1
+            s.bits[n+1] = ~CHK0
+        end
+    end
+    s
 end
 
 function _matched_map!(f, s1::BitSet, s2::BitSet)
@@ -212,20 +252,7 @@ function _matched_map!(f, a1::Bits, b1::Int, a2::Bits, b2::Int,
     b1 # the new offset
 end
 
-
-@noinline _throw_bitset_bounds_err() =
-    throw(ArgumentError("elements of BitSet must be between typemin(Int) and typemax(Int)"))
-
-@inline _is_convertible_Int(n) = typemin(Int) <= n <= typemax(Int)
-
-@inline _check_bitset_bounds(n) =
-    _is_convertible_Int(n) ? Int(n) : _throw_bitset_bounds_err()
-
-@inline _check_bitset_bounds(n::Int) = n
-
-@noinline _throw_keyerror(n) = throw(KeyError(n))
-
-@inline push!(s::BitSet, n::Integer) = _setint!(s, _check_bitset_bounds(n), true)
+@inline push!(s::BitSet, n::Integer) = _setint!(s, Int(n), true)
 
 push!(s::BitSet, ns::Integer...) = (for n in ns; push!(s, n); end; s)
 
@@ -236,7 +263,7 @@ push!(s::BitSet, ns::Integer...) = (for n in ns; push!(s, n); end; s)
         delete!(s, n)
         n
     else
-        _throw_keyerror(n)
+        throw(KeyError(n))
     end
 end
 
@@ -249,6 +276,7 @@ end
     end
 end
 
+@inline _is_convertible_Int(n) = typemin(Int) <= n <= typemax(Int)
 @inline delete!(s::BitSet, n::Int) = _setint!(s, n, false)
 @inline delete!(s::BitSet, n::Integer) = _is_convertible_Int(n) ? delete!(s, Int(n)) : s
 
@@ -274,10 +302,22 @@ intersect!(s1::BitSet, s2::BitSet) = _matched_map!(&, s1, s2)
 
 setdiff!(s1::BitSet, s2::BitSet) = _matched_map!((p, q) -> p & ~q, s1, s2)
 
-symdiff!(s::BitSet, ns) = foldl(int_symdiff!, s, ns)
+function symdiff!(s::BitSet, ns)
+    for x in ns
+        int_symdiff!(s, x)
+    end
+    return s
+end
+
+function symdiff!(s::BitSet, ns::AbstractSet)
+    for x in ns
+        int_symdiff!(s, x)
+    end
+    return s
+end
 
 function int_symdiff!(s::BitSet, n::Integer)
-    n0 = _check_bitset_bounds(n)
+    n0 = Int(n)
     val = !(n0 in s)
     _setint!(s, n0, val)
     s
@@ -290,10 +330,13 @@ filter!(f, s::BitSet) = unsafe_filter!(f, s)
 @inline in(n::Int, s::BitSet) = _bits_getindex(s.bits, n, s.offset)
 @inline in(n::Integer, s::BitSet) = _is_convertible_Int(n) ? in(Int(n), s) : false
 
-function iterate(s::BitSet, idx=0)
-   idx = _bits_findnext(s.bits, idx)
-   idx == -1 && return nothing
-   (idx + intoffset(s), idx+1)
+function iterate(s::BitSet, (word, idx) = (CHK0, 0))
+    while word == 0
+        idx == length(s.bits) && return nothing
+        idx += 1
+        word = @inbounds s.bits[idx]
+    end
+    trailing_zeros(word) + (idx - 1 + s.offset) << 6, (_blsr(word), idx)
 end
 
 @noinline _throw_bitset_notempty_error() =
@@ -309,7 +352,7 @@ function last(s::BitSet)
     idx == -1 ? _throw_bitset_notempty_error() : idx + intoffset(s)
 end
 
-length(s::BitSet) = bitcount(s.bits) # = mapreduce(count_ones, +, 0, s.bits)
+length(s::BitSet) = bitcount(s.bits) # = mapreduce(count_ones, +, s.bits; init=0)
 
 function show(io::IO, s::BitSet)
     print(io, "BitSet([")
@@ -353,13 +396,27 @@ function ==(s1::BitSet, s2::BitSet)
 
     # compare overlap values
     if overlap > 0
-        _memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 || return false
+        t1 = @_gc_preserve_begin a1
+        t2 = @_gc_preserve_begin a2
+        memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 || return false
+        @_gc_preserve_end t2
+        @_gc_preserve_end t1
     end
 
     return true
 end
 
-issubset(a::BitSet, b::BitSet) = a == intersect(a,b)
+function issubset(a::BitSet, b::BitSet)
+    n = length(a.bits)
+    shift = b.offset - a.offset
+    i, j = shift, shift + length(b.bits)
+
+    f(a, b) = a == a & b
+    return (
+        all(@inbounds iszero(a.bits[i]) for i in 1:min(n, i)) &&
+        all(@inbounds f(a.bits[i], b.bits[i - shift]) for i in max(1, i+1):min(n, j)) &&
+        all(@inbounds iszero(a.bits[i]) for i in max(1, j+1):n))
+end
 ⊊(a::BitSet, b::BitSet) = a <= b && a != b
 
 

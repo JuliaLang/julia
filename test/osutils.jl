@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+using Libdl
 
-@testset "isunix/islinux/iswindows" begin
+@testset "Operating system predicates" begin
     @test !Sys.isunix(:Windows)
     @test !Sys.islinux(:Windows)
     @test Sys.islinux(:Linux)
@@ -12,6 +13,16 @@
     @test !Sys.isapple(:Windows)
     @test Sys.isunix(:Darwin)
     @test Sys.isunix(:FreeBSD)
+    for bsd in (:FreeBSD, :OpenBSD, :NetBSD, :DragonFly)
+        f = Symbol("is", lowercase(String(bsd)))
+        q = QuoteNode(bsd)
+        @eval begin
+            @test Sys.$f($q)
+            @test Sys.isbsd($q)
+            @test Sys.isunix($q)
+            @test !Sys.isapple($q)
+        end
+    end
     @test_throws ArgumentError Sys.isunix(:BeOS)
     if !Sys.iswindows()
         @test Sys.windows_version() == v"0.0.0"
@@ -34,14 +45,27 @@ end
     @test (@static if false 1 elseif false 2 else 3 end) === 3
     @test (@static if false 1 elseif false 2 elseif true && false 3 else 4 end) === 4
     @test (@static if false 1 elseif false 2 elseif true && false 3 end) === nothing
+    @test_throws ArgumentError("invalid @static macro") @macroexpand @static 1
 end
 
 if Sys.iswindows()
     @testset "path variables use correct path delimiters on windows" begin
         for path in (Base.SYSCONFDIR, Base.DATAROOTDIR, Base.DOCDIR,
-                     Base.LIBDIR, Base.PRIVATE_LIBDIR, Base.INCLUDEDIR)
+                     Base.LIBDIR, Base.PRIVATE_LIBDIR, Base.INCLUDEDIR, Base.LIBEXECDIR, Base.PRIVATE_LIBEXECDIR)
             @test !occursin("/", path)
             @test !occursin("\\\\", path)
+        end
+    end
+end
+
+if Sys.islinux() && Sys.which("readelf") !== nothing
+    @testset "stack is not marked as executable" begin
+        for f in intersect(dllist(),
+                           [readdir(joinpath(Sys.BINDIR, Base.LIBDIR), join=true);
+                            readdir(joinpath(Sys.BINDIR, Base.LIBDIR, "julia"), join=true)])
+            for l in eachline(open(`readelf -l $f`))
+                @test !(contains(l, "GNU_STACK") && contains(l, 'E'))
+            end
         end
     end
 end

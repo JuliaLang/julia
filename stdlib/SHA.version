@@ -1,0 +1,4 @@
+SHA_BRANCH = master
+SHA_SHA1 = aaf2df61ff8c3898196587a375d3cf213bd40b41
+SHA_GIT_URL := https://github.com/JuliaCrypto/SHA.jl.git
+SHA_TAR_URL = https://api.github.com/repos/JuliaCrypto/SHA.jl/tarball/$1

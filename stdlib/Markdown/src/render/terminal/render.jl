@@ -2,7 +2,6 @@
 
 include("formatting.jl")
 
-const margin = 2
 cols(io) = displaysize(io)[2]
 
 function term(io::IO, content::Vector, cols)
@@ -35,13 +34,13 @@ end
 function term(io::IO, md::Admonition, columns)
     col = :default
     # If the types below are modified, the page manual/documentation.md must be updated accordingly.
-    if lowercase(md.title) == "danger"
+    if md.category == "danger"
         col = Base.error_color()
-    elseif lowercase(md.title) == "warning"
+    elseif md.category == "warning"
         col = Base.warn_color()
-    elseif lowercase(md.title) in ("info", "note")
+    elseif md.category in ("info", "note")
         col = Base.info_color()
-    elseif lowercase(md.title) == "tip"
+    elseif md.category == "tip"
         col = :green
     end
     printstyled(io, ' '^margin, "│ "; color=col, bold=true)
@@ -71,7 +70,7 @@ end
 function term(io::IO, md::List, columns)
     for (i, point) in enumerate(md.items)
         print(io, ' '^2margin, isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
-        print_wrapped(io, width = columns-(4margin+2), pre = ' '^(2margin+2),
+        print_wrapped(io, width = columns-(4margin+2), pre = ' '^(2margin+3),
                           i = 2margin+2) do io
             term(io, point, columns - 10)
         end
@@ -82,14 +81,16 @@ end
 function _term_header(io::IO, md, char, columns)
     text = terminline_string(io, md.text)
     with_output_color(:bold, io) do io
-        print(io, ' '^margin)
+        pre = ' '^margin
+        print(io, pre)
         line_no, lastline_width = print_wrapped(io, text,
-                                                width=columns - 4margin; pre=" ")
-        line_width = min(1 + lastline_width, columns)
+                                                width=columns - 4margin; pre)
+        line_width = min(lastline_width, columns)
         if line_no > 1
-            line_width = max(line_width, div(columns, 3))
+            line_width = max(line_width, div(columns, 3)+length(pre))
         end
-        char != ' ' && print(io, '\n', ' '^(margin), char^line_width)
+        header_width = max(0, line_width-length(pre))
+        char != ' ' && header_width > 0 && print(io, '\n', ' '^(margin), char^header_width)
     end
 end
 
@@ -109,6 +110,10 @@ function term(io::IO, md::Code, columns)
             i < lastindex(L) && println(io)
         end
     end
+end
+
+function term(io::IO, tex::LaTeX, columns)
+    printstyled(io, ' '^margin, tex.formula, color=:magenta)
 end
 
 term(io::IO, br::LineBreak, columns) = nothing # line breaks already printed between subsequent elements
@@ -161,6 +166,10 @@ end
 
 function terminline(io::IO, code::Code)
     printstyled(io, code.code, color=:cyan)
+end
+
+function terminline(io::IO, tex::LaTeX)
+    printstyled(io, tex.formula, color=:magenta)
 end
 
 terminline(io::IO, x) = show(io, MIME"text/plain"(), x)

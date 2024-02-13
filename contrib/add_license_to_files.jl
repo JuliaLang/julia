@@ -15,21 +15,24 @@ const print_result = true  # prints files which where not processed.
 
 const rootdirs = [
     "../base",
+    "../cli",
     "../contrib",
     "../src",
     "../stdlib",
-    "../test",
 ]
 
-# to exculde whole sub directories
+# to exclude whole sub directories
 const excludedirs = [
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98090053
-    "../base/grisu",
+    "../base/ryu",
     "../src/flisp",
+    "../stdlib/TOML/test/testfiles",
+    "../test/testhelpers/allocation_file.jl",
 ]
 
 const skipfiles = [
     "../contrib/add_license_to_files.jl",
+    "../contrib/asan/check.jl",
     # files to check - already copyright
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98099389
     "../base/special/trig.jl",
@@ -43,11 +46,10 @@ const skipfiles = [
     "../src/abi_x86.cpp",
     "../src/abi_x86_64.cpp",
     "../src/disasm.cpp",
-    "../src/getopt.c",
-    "../src/getopt.h",
     "../src/support/END.h",
     "../src/support/ENTRY.amd64.h",
     "../src/support/ENTRY.i387.h",
+    "../src/support/_setjmp.win32.S",
     "../src/support/MurmurHash3.c",
     "../src/support/MurmurHash3.h",
     "../src/support/asprintf.c",
@@ -57,6 +59,7 @@ const skipfiles = [
     "../src/support/tzfile.h",
     "../src/support/utf8.c",
     "../src/crc32c.c",
+    "../src/mach_excUser.c",
 ]
 
 const ext_prefix = Dict([
@@ -65,6 +68,7 @@ const ext_prefix = Dict([
     (".h", "// "),
     (".c", "// "),
     (".cpp", "// "),
+    (".S", "// "),
 ])
 
 const new_license = "This file is a part of Julia. License is MIT: https://julialang.org/license"
@@ -103,6 +107,7 @@ function getfilespaths!(filepaths::Vector, rootdir::AbstractString)
     abs_rootdir = abspath(rootdir)
     for name in readdir(abs_rootdir)
         path = joinpath(abs_rootdir, name)
+        islink(path) && continue
         if isdir(path)
             getfilespaths!(filepaths, path)
         else
@@ -117,6 +122,7 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
 
     for name in readdir(src)
         path = normpath(joinpath(src, name))
+        islink(path) && continue
         if isdir(path)
             if path in abs_excludedirs
                 getfilespaths!(unprocessed, path)
@@ -138,6 +144,7 @@ function add_license_line!(unprocessed::Vector, src::AbstractString, new_license
                 isempty(lines) && (push!(unprocessed, path); continue)
                 isempty(old_license) || check_lines!(path, lines, old_license, prefix, true)
                 check_lines!(path, lines, new_license, prefix, false)
+                isempty(lines) && continue  # file consisting of just license header
                 # check shebang file
                 linenum = license_linenum(lines[1])
                 if !isempty(strip(lines[linenum]))
@@ -162,7 +169,7 @@ end
 function abspaths(A::Vector)
     abs_A = []
     for p in A
-        abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(dirname(@__FILE__), p))
+        abs_p = isabspath(p) ? normpath(p) : normpath(joinpath(@__DIR__, p))
         ispath(abs_p) || error(string("`abs_p` seems not to be an existing path. ",
                                       "Adjust your configuration: <", p, "> : ", abs_p, "\n"))
         push!(abs_A, abs_p)

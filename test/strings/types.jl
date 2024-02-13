@@ -26,7 +26,7 @@ for i1 = 1:length(u8str2)
 end
 
 # tests that SubString of a single multibyte `Char` string, like "∀" which takes 3 bytes
-# gives the same result as `getindex` (except that it is a veiw not a copy)
+# gives the same result as `getindex` (except that it is a view not a copy)
 for idx in 0:1
     @test SubString("∀", 1, idx) == "∀"[1:idx]
 end
@@ -322,4 +322,12 @@ let
     @test C_NULL == nullstr
     @test cstring != C_NULL
     @test C_NULL != cstring
+end
+
+# issue #31381: eltype(Cstring) != Cchar
+let
+    s = Cstring(C_NULL)
+    @test eltype(Cstring) == Cchar
+    @test eltype(s) == Cchar
+    @test pointer(s) isa Ptr{Cchar}
 end

@@ -108,7 +108,7 @@ static value_t cprim(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
     return tagptr(pcp, TAG_CPRIM);
 }
 
-value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
+static value_t _cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz, int may_finalize)
 {
     cvalue_t *pcv;
     int str=0;
@@ -127,7 +127,7 @@ value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
         pcv = (cvalue_t*)alloc_words(fl_ctx, nw);
         pcv->type = type;
         pcv->data = &pcv->_space[0];
-        if (type->vtable != NULL && type->vtable->finalize != NULL)
+        if (may_finalize && type->vtable != NULL && type->vtable->finalize != NULL)
             add_finalizer(fl_ctx, pcv);
     }
     else {
@@ -136,6 +136,7 @@ value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
         pcv = (cvalue_t*)alloc_words(fl_ctx, CVALUE_NWORDS);
         pcv->type = type;
         pcv->data = malloc(sz);
+        // TODO: if pcv->data == NULL
         autorelease(fl_ctx, pcv);
         fl_ctx->malloc_pressure += sz;
     }
@@ -145,6 +146,16 @@ value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
     }
     pcv->len = sz;
     return tagptr(pcv, TAG_CVALUE);
+}
+
+value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
+{
+    return _cvalue(fl_ctx, type, sz, 1);
+}
+
+value_t cvalue_no_finalizer(fl_context_t *fl_ctx, fltype_t *type, size_t sz)
+{
+    return _cvalue(fl_ctx, type, sz, 0);
 }
 
 value_t cvalue_from_data(fl_context_t *fl_ctx, fltype_t *type, void *data, size_t sz)
@@ -220,6 +231,7 @@ void cv_pin(fl_context_t *fl_ctx, cvalue_t *cv)
     size_t sz = cv_len(cv);
     if (cv_isstr(fl_ctx, cv)) sz++;
     void *data = malloc(sz);
+    // TODO: if data == NULL
     memcpy(data, cv_data(cv), sz);
     cv->data = data;
     autorelease(fl_ctx, cv);
@@ -242,7 +254,8 @@ static int cvalue_##ctype##_init(fl_context_t *fl_ctx, fltype_t *type, \
     else {                                                             \
         return 1;                                                      \
     }                                                                  \
-    *((fl_##ctype##_t*)dest) = n;                                      \
+    memcpy(jl_assume_aligned(dest, sizeof(void*)), &n,                 \
+            sizeof(fl_##ctype##_t));                                   \
     return 0;                                                          \
 }
 num_init(int8, int32, T_INT8)
@@ -569,6 +582,7 @@ value_t cvalue_copy(fl_context_t *fl_ctx, value_t v)
         size_t len = cv_len(cv);
         if (cv_isstr(fl_ctx, cv)) len++;
         ncv->data = malloc(len);
+        // TODO: if ncv->data == NULL
         memcpy(ncv->data, cv_data(cv), len);
         autorelease(fl_ctx, ncv);
         if (hasparent(cv)) {
@@ -777,6 +791,7 @@ value_t fl_builtin(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 value_t cbuiltin(fl_context_t *fl_ctx, const char *name, builtin_t f)
 {
     cvalue_t *cv = (cvalue_t*)malloc(CVALUE_NWORDS * sizeof(value_t));
+    // TODO: if cv->data == NULL
     cv->type = fl_ctx->builtintype;
     cv->data = &cv->_space[0];
     cv->len = sizeof(value_t);

@@ -18,6 +18,7 @@
         0x0000001c      '\x1c'      "\\x1c"
         0x0000001f      '\x1f'      "\\x1f"
         0x00000020      ' '         " "
+        0x00000022      '"'         "\\\""
         0x0000002f      '/'         "/"
         0x00000030      '0'         "0"
         0x00000039      '9'         "9"
@@ -26,6 +27,7 @@
         0x00000041      'A'         "A"
         0x0000005a      'Z'         "Z"
         0x0000005b      '['         "["
+        0x0000005c      '\\'         "\\\\"
         0x00000060      '`'         "`"
         0x00000061      'a'         "a"
         0x0000007a      'z'         "z"
@@ -62,6 +64,13 @@
     @test typeof(escape_string("test", "t")) == String
     @test escape_string("test", "t") == "\\tes\\t"
 
+    @test escape_string("\\cdot") == "\\\\cdot"
+    @test escape_string("\\cdot"; keep = '\\') == "\\cdot"
+    @test escape_string("\\cdot", '\\'; keep = '\\') == "\\\\cdot"
+    @test escape_string("\\cdot\n"; keep = "\\\n") == "\\cdot\n"
+    @test escape_string("\\cdot\n", '\n'; keep = "\\\n") == "\\cdot\\\n"
+    @test escape_string("\\cdot\n", "\\\n"; keep = "\\\n") == "\\\\cdot\\\n"
+
     for i = 1:size(cx,1)
         cp, ch, st = cx[i,:]
         @test cp == convert(UInt32, ch)
@@ -73,7 +82,7 @@
             local str = string(ch, cx[j,2])
             @test str == unescape_string(escape_string(str))
         end
-        @test repr(ch) == "'$(isprint(ch) ? ch : st)'"
+        @test repr(ch) == "'$(isprint(ch) && ch != '\\' ? ch : st)'"
     end
 
     for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
@@ -141,7 +150,21 @@
         @test "\x01" == unescape_string("\\x01")
         @test "\x0f" == unescape_string("\\x0f")
         @test "\x0F" == unescape_string("\\x0F")
+
+        str= "aaa \\g \\n"
+        @test "aaa \\g \n" == unescape_string(str, ['g'])
+        @test "aaa \\g \\n" == unescape_string(str, ['g', 'n'])
     end
+    @test Base.escape_raw_string(raw"\"\\\"\\-\\") == "\\\"\\\\\\\"\\\\-\\\\"
+    @test Base.escape_raw_string(raw"`\`\\-\\") == "\`\\\`\\\\-\\\\"
+    @test Base.escape_raw_string(raw"\"\\\"\\-\\", '`') == "\"\\\"\\\\-\\\\"
+    @test Base.escape_raw_string(raw"`\`\\-\\", '`') == "\\\`\\\\\\\`\\\\-\\\\"
+    @test Base.escape_raw_string(raw"some`string") == "some`string"
+    @test Base.escape_raw_string(raw"some\"string", '`') == "some\"string"
+    @test Base.escape_raw_string(raw"some`string\\") == "some`string\\\\"
+    @test Base.escape_raw_string(raw"some\"string\\", '`') == "some\"string\\\\"
+    @test Base.escape_raw_string(raw"some\"string") == "some\\\"string"
+    @test Base.escape_raw_string(raw"some`string", '`') == "some\\`string"
 end
 @testset "join()" begin
     @test join([]) == join([],",") == ""
@@ -169,7 +192,46 @@ join(myio, "", "", 1)
 @testset "unescape_string ArgumentErrors" begin
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"xZ"))
     @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"777"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"U110000"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"N"))
+    @test_throws ArgumentError unescape_string(IOBuffer(), string('\\',"m"))
 end
+
+@testset "sprint with context" begin
+    function f(io::IO)
+        println(io, "compact => ", get(io, :compact, false)::Bool)
+        println(io, "limit   => ", get(io, :limit,   false)::Bool)
+    end
+
+    str = sprint(f)
+    @test str == """
+        compact => false
+        limit   => false
+        """
+
+    str = sprint(f, context = :compact => true)
+    @test str == """
+        compact => true
+        limit   => false
+        """
+
+    str = sprint(f, context = (:compact => true, :limit => true))
+    @test str == """
+        compact => true
+        limit   => true
+        """
+
+    str = sprint(f, context = IOContext(stdout, :compact => true, :limit => true))
+    @test str == """
+        compact => true
+        limit   => true
+        """
+end
+
+@testset "sprint honoring IOContext" begin
+    @test startswith(sprint(show, Base.Dict[], context=(:compact=>false, :module=>nothing)), "Base.Dict")
+end
+
 @testset "#11659" begin
     # The indentation code was not correctly counting tab stops
     @test Base.indentation("      \t") == (8, true)
@@ -259,4 +321,21 @@ for i = 1:10
     buf = IOBuffer()
     print(buf, join(s22021, "\n"))
     @test isvalid(String, take!(buf))
+end
+
+@testset "string()" begin
+    # test the Float sizehints
+    @test string(2.f0) == "2.0"
+    @test string(2.f0, 2.0) == "2.02.0"
+    # test empty args
+    @test string() == ""
+end
+
+module StringsIOStringReturnTypesTestModule
+    struct S end
+    Base.joinpath(::S) = S()
+end
+
+@testset "`string` return types" begin
+    @test all(T -> T <: AbstractString, Base.return_types(string))
 end

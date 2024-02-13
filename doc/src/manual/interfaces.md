@@ -7,28 +7,24 @@ to generically build upon those behaviors.
 
 ## [Iteration](@id man-interface-iteration)
 
-| Required methods               |                        | Brief description                                                                     |
-|:------------------------------ |:---------------------- |:------------------------------------------------------------------------------------- |
-| `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or `nothing` if empty        |
-| `iterate(iter, state)`         |                        | Returns either a tuple of the next item and next state or `nothing` if no items remain  |
-| **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
-| `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
-| `eltype(IterType)`             | `Any`                  | The type of the items returned by `next()`                                            |
-| `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
-| `size(iter, [dim...])`         | (*undefined*)          | The number of items in each dimension, if known                                       |
+There are two methods that are always required:
 
-| Value returned by `IteratorSize(IterType)` | Required Methods                           |
-|:------------------------------------------ |:------------------------------------------ |
-| `HasLength()`                              | `length(iter)`                             |
-| `HasShape{N}()`                            | `length(iter)`  and `size(iter, [dim...])` |
-| `IsInfinite()`                             | (*none*)                                   |
-| `SizeUnknown()`                            | (*none*)                                   |
+| Required method         | Brief description                                                                        |
+|:----------------------- |:---------------------------------------------------------------------------------------- |
+| [`iterate(iter)`](@ref) | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty |
+| `iterate(iter, state)`  | Returns either a tuple of the next item and next state or `nothing` if no items remain   |
 
-| Value returned by `IteratorEltype(IterType)` | Required Methods   |
-|:-------------------------------------------- |:------------------ |
-| `HasEltype()`                                | `eltype(IterType)` |
-| `EltypeUnknown()`                            | (*none*)           |
+There are several more methods that should be defined in some circumstances.
+Please note that you should always define at least one of `Base.IteratorSize(IterType)` and `length(iter)` because the default definition of `Base.IteratorSize(IterType)` is `Base.HasLength()`.
+
+| Method                                  | When should this method be defined?                                         | Default definition | Brief description |
+|:--- |:--- |:--- |:--- |
+| [`Base.IteratorSize(IterType)`](@ref)   | If default is not appropriate                                               | `Base.HasLength()` | One of `Base.HasLength()`, `Base.HasShape{N}()`, `Base.IsInfinite()`, or `Base.SizeUnknown()` as appropriate |
+| [`length(iter)`](@ref)                  | If `Base.IteratorSize()` returns `Base.HasLength()` or `Base.HasShape{N}()` | (*undefined*)      | The number of items, if known |
+| [`size(iter, [dim])`](@ref)             | If `Base.IteratorSize()` returns `Base.HasShape{N}()`                       | (*undefined*)      | The number of items in each dimension, if known |
+| [`Base.IteratorEltype(IterType)`](@ref) | If default is not appropriate                                               | `Base.HasEltype()` | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate |
+| [`eltype(IterType)`](@ref)              | If default is not appropriate                                               | `Any`              | The type of the first entry of the tuple returned by `iterate()` |
+| [`Base.isdone(iter, [state])`](@ref)    | **Must** be defined if iterator is stateful                                 | `missing`          | Fast-path hint for iterator completion. If not defined for a stateful iterator then functions that check for done-ness, like `isempty()` and `zip()`, may mutate the iterator and cause buggy behaviour! |
 
 Sequential iteration is implemented by the [`iterate`](@ref) function. Instead
 of mutating objects as they are iterated over, Julia iterators may keep track
@@ -38,10 +34,10 @@ The state object will be passed back to the iterate function on the next iterati
 and is generally considered an implementation detail private to the iterable object.
 
 Any object that defines this function is iterable and can be used in the [many functions that rely upon iteration](@ref lib-collections-iteration).
-It can also be used directly in a `for` loop since the syntax:
+It can also be used directly in a [`for`](@ref) loop since the syntax:
 
 ```julia
-for i in iter   # or  "for i = iter"
+for item in iter   # or  "for item = iter"
     # body
 end
 ```
@@ -51,7 +47,7 @@ is translated into:
 ```julia
 next = iterate(iter)
 while next !== nothing
-    (i, state) = next
+    (item, state) = next
     # body
     next = iterate(iter, state)
 end
@@ -65,15 +61,14 @@ julia> struct Squares
        end
 
 julia> Base.iterate(S::Squares, state=1) = state > S.count ? nothing : (state*state, state+1)
-
 ```
 
 With only [`iterate`](@ref) definition, the `Squares` type is already pretty powerful.
 We can iterate over all the elements:
 
 ```jldoctest squaretype
-julia> for i in Squares(7)
-           println(i)
+julia> for item in Squares(7)
+           println(item)
        end
 1
 4
@@ -84,17 +79,15 @@ julia> for i in Squares(7)
 49
 ```
 
-We can use many of the builtin methods that work with iterables, like [`in`](@ref), [`mean`](@ref) and [`std`](@ref):
+We can use many of the builtin methods that work with iterables,
+like [`in`](@ref) or [`sum`](@ref):
 
 ```jldoctest squaretype
 julia> 25 in Squares(10)
 true
 
-julia> mean(Squares(100))
-3383.5
-
-julia> std(Squares(100))
-3024.355854282583
+julia> sum(Squares(100))
+338350
 ```
 
 There are a few more methods we can extend to give Julia more information about this iterable
@@ -110,11 +103,11 @@ julia> Base.length(S::Squares) = S.count
 ```
 
 Now, when we ask Julia to [`collect`](@ref) all the elements into an array it can preallocate a `Vector{Int}`
-of the right size instead of blindly [`push!`](@ref)ing each element into a `Vector{Any}`:
+of the right size instead of naively [`push!`](@ref)ing each element into a `Vector{Any}`:
 
 ```jldoctest squaretype
 julia> collect(Squares(4))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   1
   4
   9
@@ -148,7 +141,7 @@ In our `Squares` example, we would implement `Iterators.Reverse{Squares}` method
 julia> Base.iterate(rS::Iterators.Reverse{Squares}, state=rS.itr.count) = state < 1 ? nothing : (state*state, state-1)
 
 julia> collect(Iterators.reverse(Squares(4)))
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  16
   9
   4
@@ -159,10 +152,10 @@ julia> collect(Iterators.reverse(Squares(4)))
 
 | Methods to implement | Brief description                |
 |:-------------------- |:-------------------------------- |
-| `getindex(X, i)`     | `X[i]`, indexed element access   |
-| `setindex!(X, v, i)` | `X[i] = v`, indexed assignment   |
-| `firstindex(X)`      | The first index                  |
-| `lastindex(X)`        | The last index, used in `X[end]` |
+| `getindex(X, i)`     | `X[i]`, indexed access, non-scalar `i` should allocate a copy  |
+| `setindex!(X, v, i)` | `X[i] = v`, indexed assignment         |
+| `firstindex(X)`         | The first index, used in `X[begin]` |
+| `lastindex(X)`           | The last index, used in `X[end]`   |
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
 it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
@@ -178,8 +171,8 @@ julia> Squares(100)[23]
 529
 ```
 
-Additionally, to support the syntax `S[end]`, we must define [`lastindex`](@ref) to specify the last
-valid index. It is recommended to also define [`firstindex`](@ref) to specify the first valid index:
+Additionally, to support the syntax `S[begin]` and `S[end]`, we must define [`firstindex`](@ref) and
+[`lastindex`](@ref) to specify the first and last valid indices, respectively:
 
 ```jldoctest squaretype
 julia> Base.firstindex(S::Squares) = 1
@@ -189,6 +182,10 @@ julia> Base.lastindex(S::Squares) = length(S)
 julia> Squares(23)[end]
 529
 ```
+
+For multi-dimensional `begin`/`end` indexing as in `a[3, begin, 7]`, for example,
+you should define `firstindex(a, dim)` and `lastindex(a, dim)`
+(which default to calling `first` and `last` on `axes(a, dim)`, respectively).
 
 Note, though, that the above *only* defines [`getindex`](@ref) with one integer index. Indexing with
 anything other than an `Int` will throw a [`MethodError`](@ref) saying that there was no matching method.
@@ -200,7 +197,7 @@ julia> Base.getindex(S::Squares, i::Number) = S[convert(Int, i)]
 julia> Base.getindex(S::Squares, I) = [S[i] for i in I]
 
 julia> Squares(10)[[3,4.,5]]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   9
  16
  25
@@ -213,27 +210,27 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 
 ## [Abstract Arrays](@id man-interface-array)
 
-| Methods to implement                            |                                        | Brief description                                                                     |
+| Methods to implement                            |                                        | Brief description                                                                     |
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
-| `size(A)`                                       |                                        | Returns a tuple containing the dimensions of `A`                                      |
-| `getindex(A, i::Int)`                           |                                        | (if `IndexLinear`) Linear scalar indexing                                             |
-| `getindex(A, I::Vararg{Int, N})`                |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexing             |
-| `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
-| `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
+| `size(A)`                                       |                                        | Returns a tuple containing the dimensions of `A`                                      |
+| `getindex(A, i::Int)`                           |                                        | (if `IndexLinear`) Linear scalar indexing                                             |
+| `getindex(A, I::Vararg{Int, N})`                |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexing             |
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
 | `IndexStyle(::Type)`                            | `IndexCartesian()`                     | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
+| `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
+| `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
-| `setindex!(A, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
+| `setindex!(A, X, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
 | `iterate`                                       | defined in terms of scalar `getindex`  | Iteration                                                                             |
 | `length(A)`                                     | `prod(size(A))`                        | Number of elements                                                                    |
 | `similar(A)`                                    | `similar(A, eltype(A), size(A))`       | Return a mutable array with the same shape and element type                           |
 | `similar(A, ::Type{S})`                         | `similar(A, S, size(A))`               | Return a mutable array with the same shape and the specified element type             |
-| `similar(A, dims::NTuple{Int})`                 | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
-| `similar(A, ::Type{S}, dims::NTuple{Int})`      | `Array{S}(undef, dims)`               | Return a mutable array with the specified element type and size                       |
+| `similar(A, dims::Dims)`                        | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
+| `similar(A, ::Type{S}, dims::Dims)`             | `Array{S}(undef, dims)`                | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
-| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return the `AbstractUnitRange` of valid indices                                       |
-| `Base.similar(A, ::Type{S}, inds::NTuple{Ind})` | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
-| `Base.similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
+| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return a tuple of `AbstractUnitRange{<:Integer}` of valid indices. The axes should be their own axes, that is `axes.(axes(A),1) == axes(A)` should be satisfied. |
+| `similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
+| `similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 
 If a type is defined as a subtype of `AbstractArray`, it inherits a very large set of rich behaviors
 including iteration and multidimensional indexing built on top of single-element access.  See
@@ -250,12 +247,12 @@ provides a traits-based mechanism to enable efficient generic code for all array
 
 This distinction determines which scalar indexing methods the type must define. `IndexLinear()`
 arrays are simple: just define `getindex(A::ArrayType, i::Int)`.  When the array is subsequently
-indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)()`
+indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)`
 efficiently converts the indices into one linear index and then calls the above method. `IndexCartesian()`
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
 `ndims(A)` `Int` indices. For example, [`SparseMatrixCSC`](@ref) from the `SparseArrays` standard
 library module, only supports two dimensions, so it just defines
-`getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for `setindex!`.
+`getindex(A::SparseMatrixCSC, i::Int, j::Int)`. The same holds for [`setindex!`](@ref).
 
 Returning to the sequence of squares from above, we could instead define it as a subtype of an
 `AbstractArray{Int, 1}`:
@@ -286,19 +283,19 @@ julia> s = SquaresVector(4)
  16
 
 julia> s[s .> 8]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
   9
  16
 
 julia> s + s
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   2
   8
  18
  32
 
 julia> sin.(s)
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
   0.8414709848078965
  -0.7568024953079282
   0.4121184852417566
@@ -333,19 +330,19 @@ and so we can mutate the array:
 
 ```jldoctest squarevectype
 julia> A = SparseArray(Float64, 3, 3)
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  0.0  0.0  0.0
  0.0  0.0  0.0
  0.0  0.0  0.0
 
 julia> fill!(A, 2)
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  2.0  2.0  2.0
  2.0  2.0  2.0
  2.0  2.0  2.0
 
 julia> A[:] = 1:length(A); A
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  1.0  4.0  7.0
  2.0  5.0  8.0
  3.0  6.0  9.0
@@ -359,12 +356,12 @@ well:
 
 ```jldoctest squarevectype
 julia> A[1:2,:]
-2×3 SparseArray{Float64,2}:
+2×3 SparseArray{Float64, 2}:
  1.0  4.0  7.0
  2.0  5.0  8.0
 ```
 
-In this example it is accomplished by defining `Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims)`
+In this example it is accomplished by defining `Base.similar(A::SparseArray, ::Type{T}, dims::Dims) where T`
 to create the appropriate wrapped array. (Note that while `similar` supports 1- and 2-argument
 forms, in most case you only need to specialize the 3-argument form.) For this to work it's important
 that `SparseArray` is mutable (supports `setindex!`). Defining `similar`, `getindex` and
@@ -372,7 +369,7 @@ that `SparseArray` is mutable (supports `setindex!`). Defining `similar`, `getin
 
 ```jldoctest squarevectype
 julia> copy(A)
-3×3 SparseArray{Float64,2}:
+3×3 SparseArray{Float64, 2}:
  1.0  4.0  7.0
  2.0  5.0  8.0
  3.0  6.0  9.0
@@ -383,29 +380,30 @@ with each other and use most of the methods defined in Julia Base for `AbstractA
 
 ```jldoctest squarevectype
 julia> A[SquaresVector(3)]
-3-element SparseArray{Float64,1}:
+3-element SparseArray{Float64, 1}:
  1.0
  4.0
  9.0
 
-julia> mean(A)
-5.0
+julia> sum(A)
+45.0
 ```
 
 If you are defining an array type that allows non-traditional indexing (indices that start at
-something other than 1), you should specialize `axes`. You should also specialize [`similar`](@ref)
+something other than 1), you should specialize [`axes`](@ref). You should also specialize [`similar`](@ref)
 so that the `dims` argument (ordinarily a `Dims` size-tuple) can accept `AbstractUnitRange` objects,
 perhaps range-types `Ind` of your own design. For more information, see
 [Arrays with custom indices](@ref man-custom-indices).
 
 ## [Strided Arrays](@id man-interface-strided-arrays)
 
-| Methods to implement                            |                                        | Brief description                                                                     |
+| Methods to implement                            |                                        | Brief description                                                                     |
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
-| `strides(A)`                             |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
-| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                            |
-| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
-| `stride(A, i::Int)`                             |     `strides(A)[i]`                                   | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
+| `strides(A)`                                    |                                        | Return the distance in memory (in number of elements) between adjacent elements in each dimension as a tuple. If `A` is an `AbstractArray{T,0}`, this should return an empty tuple.    |
+| `Base.unsafe_convert(::Type{Ptr{T}}, A)`        |                                        | Return the native address of an array.                                                             |
+| `Base.elsize(::Type{<:A})`                      |                                        | Return the stride between consecutive elements in the array.                                       |
+| **Optional methods**                            | **Default definition**                 | **Brief description**                                                                              |
+| `stride(A, i::Int)`                             |     `strides(A)[i]`                    | Return the distance in memory (in number of elements) between adjacent elements in dimension k.    |
 
 A strided array is a subtype of `AbstractArray` whose entries are stored in memory with fixed strides.
 Provided the element type of the array is compatible with BLAS, a strided array can utilize BLAS and LAPACK routines
@@ -437,7 +435,7 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 | `Base.similar(bc::Broadcasted{DestStyle}, ::Type{ElType})` | Allocation of output container |
 | **Optional methods** | | |
 | `Base.BroadcastStyle(::Style1, ::Style2) = Style12()` | Precedence rules for mixing styles |
-| `Base.broadcast_axes(::StyleA, A)` | Declaration of the indices of `A` for broadcasting purposes (defaults to [`axes(A)`](@ref)) |
+| `Base.axes(x)` | Declaration of the indices of `x`, as per [`axes(x)`](@ref). |
 | `Base.broadcastable(x)` | Convert `x` to an object that has `axes` and supports indexing |
 | **Bypassing default machinery** | |
 | `Base.copy(bc::Broadcasted{DestStyle})` | Custom implementation of `broadcast` |
@@ -459,19 +457,26 @@ Not all types support `axes` and indexing, but many are convenient to allow in b
 The [`Base.broadcastable`](@ref) function is called on each argument to broadcast, allowing
 it to return something different that supports `axes` and indexing. By
 default, this is the identity function for all `AbstractArray`s and `Number`s — they already
-support `axes` and indexing. For a handful of other types (including but not limited to
-types themselves, functions, special singletons like `missing` and `nothing`, and dates),
-`Base.broadcastable` returns the argument wrapped in a `Ref` to act as a 0-dimensional
-"scalar" for the purposes of broadcasting. Custom types can similarly specialize
+support `axes` and indexing.
+
+If a type is intended to act like a "0-dimensional scalar" (a single object) rather than as a
+container for broadcasting, then the following method should be defined:
+```julia
+Base.broadcastable(o::MyType) = Ref(o)
+```
+that returns the argument wrapped in a 0-dimensional [`Ref`](@ref) container.   For example, such a wrapper
+method is defined for types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates.
+
+Custom array-like types can specialize
 `Base.broadcastable` to define their shape, but they should follow the convention that
 `collect(Base.broadcastable(x)) == collect(x)`. A notable exception is `AbstractString`;
 strings are special-cased to behave as scalars for the purposes of broadcast even though
-they are iterable collections of their characters.
+they are iterable collections of their characters (see [Strings](@ref) for more).
 
 The next two steps (selecting the output array and implementation) are dependent upon
 determining a single answer for a given set of arguments. Broadcast must take all the varied
 types of its arguments and collapse them down to just one output array and one
-implementation. Broadcast calls this single answer a "style." Every broadcastable object
+implementation. Broadcast calls this single answer a "style". Every broadcastable object
 each has its own preferred style, and a promotion-like system is used to combine these
 styles into a single answer — the "destination style".
 
@@ -541,7 +546,7 @@ Base.showarg(io::IO, A::ArrayAndChar, toplevel) = print(io, typeof(A), " with ch
 
 ```
 
-You might want broadcasting to preserve the `char` "metadata." First we define
+You might want broadcasting to preserve the `char` "metadata". First we define
 
 ```jldoctest ArrayAndChar; output = false
 Base.BroadcastStyle(::Type{<:ArrayAndChar}) = Broadcast.ArrayStyle{ArrayAndChar}()
@@ -562,26 +567,27 @@ end
 find_aac(bc::Base.Broadcast.Broadcasted) = find_aac(bc.args)
 find_aac(args::Tuple) = find_aac(find_aac(args[1]), Base.tail(args))
 find_aac(x) = x
+find_aac(::Tuple{}) = nothing
 find_aac(a::ArrayAndChar, rest) = a
 find_aac(::Any, rest) = find_aac(rest)
 # output
-find_aac (generic function with 5 methods)
+find_aac (generic function with 6 methods)
 ```
 
 From these definitions, one obtains the following behavior:
 ```jldoctest ArrayAndChar
 julia> a = ArrayAndChar([1 2; 3 4], 'x')
-2×2 ArrayAndChar{Int64,2} with char 'x':
+2×2 ArrayAndChar{Int64, 2} with char 'x':
  1  2
  3  4
 
 julia> a .+ 1
-2×2 ArrayAndChar{Int64,2} with char 'x':
+2×2 ArrayAndChar{Int64, 2} with char 'x':
  2  3
  4  5
 
 julia> a .+ [5,10]
-2×2 ArrayAndChar{Int64,2} with char 'x':
+2×2 ArrayAndChar{Int64, 2} with char 'x':
   6   7
  13  14
 ```
@@ -697,7 +703,7 @@ array types that have fixed dimensionality requirements.
 BroadcastStyle(a::AbstractArrayStyle{Any}, ::DefaultArrayStyle) = a
 BroadcastStyle(a::AbstractArrayStyle{N}, ::DefaultArrayStyle{N}) where N = a
 BroadcastStyle(a::AbstractArrayStyle{M}, ::DefaultArrayStyle{N}) where {M,N} =
-    typeof(a)(_max(Val(M),Val(N)))
+    typeof(a)(Val(max(M, N)))
 ```
 
 You do not need to write binary `BroadcastStyle`
@@ -730,3 +736,151 @@ yields another `SparseVecStyle`, that its combination with a 2-dimensional array
 yields a `SparseMatStyle`, and anything of higher dimensionality falls back to the dense arbitrary-dimensional framework.
 These rules allow broadcasting to keep the sparse representation for operations that result
 in one or two dimensional outputs, but produce an `Array` for any other dimensionality.
+
+## [Instance Properties](@id man-instance-properties)
+
+| Methods to implement              | Default definition           | Brief description                                                                     |
+|:--------------------------------- |:---------------------------- |:------------------------------------------------------------------------------------- |
+| `propertynames(x::ObjType, private::Bool=false)` | `fieldnames(typeof(x))`     | Return a tuple of the properties (`x.property`) of an object `x`. If `private=true`, also return property names intended to be kept as private |
+| `getproperty(x::ObjType, s::Symbol)`       | `getfield(x, s)`     | Return property `s` of `x`. `x.s` calls `getproperty(x, :s)`.  |
+| `setproperty!(x::ObjType, s::Symbol, v)`   | `setfield!(x, s, v)` | Set property `s` of `x` to `v`. `x.s = v` calls `setproperty!(x, :s, v)`. Should return `v`.|
+
+Sometimes, it is desirable to change how the end-user interacts with the fields of an object.
+Instead of granting direct access to type fields, an extra layer of abstraction between
+the user and the code can be provided by overloading `object.field`. Properties are what the
+user *sees of* the object, fields what the object *actually is*.
+
+By default, properties and fields are the same. However, this behavior can be changed.
+For example, take this representation of a point in a plane in [polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system):
+
+```jldoctest polartype
+julia> mutable struct Point
+           r::Float64
+           ϕ::Float64
+       end
+
+julia> p = Point(7.0, pi/4)
+Point(7.0, 0.7853981633974483)
+```
+
+As described in the table above dot access `p.r` is the same as `getproperty(p, :r)` which is by default the same as `getfield(p, :r)`:
+
+```jldoctest polartype
+julia> propertynames(p)
+(:r, :ϕ)
+
+julia> getproperty(p, :r), getproperty(p, :ϕ)
+(7.0, 0.7853981633974483)
+
+julia> p.r, p.ϕ
+(7.0, 0.7853981633974483)
+
+julia> getfield(p, :r), getproperty(p, :ϕ)
+(7.0, 0.7853981633974483)
+```
+
+However, we may want users to be unaware that `Point` stores the coordinates as `r` and `ϕ` (fields),
+and instead interact with `x` and `y` (properties). The methods in the first column can be
+defined to add new functionality:
+
+```jldoctest polartype
+julia> Base.propertynames(::Point, private::Bool=false) = private ? (:x, :y, :r, :ϕ) : (:x, :y)
+
+julia> function Base.getproperty(p::Point, s::Symbol)
+           if s === :x
+               return getfield(p, :r) * cos(getfield(p, :ϕ))
+           elseif s === :y
+               return getfield(p, :r) * sin(getfield(p, :ϕ))
+           else
+               # This allows accessing fields with p.r and p.ϕ
+               return getfield(p, s)
+           end
+       end
+
+julia> function Base.setproperty!(p::Point, s::Symbol, f)
+           if s === :x
+               y = p.y
+               setfield!(p, :r, sqrt(f^2 + y^2))
+               setfield!(p, :ϕ, atan(y, f))
+               return f
+           elseif s === :y
+               x = p.x
+               setfield!(p, :r, sqrt(x^2 + f^2))
+               setfield!(p, :ϕ, atan(f, x))
+               return f
+           else
+               # This allow modifying fields with p.r and p.ϕ
+               return setfield!(p, s, f)
+           end
+       end
+```
+
+It is important that `getfield` and `setfield` are used inside `getproperty` and `setproperty!` instead of the dot syntax,
+since the dot syntax would make the functions recursive which can lead to type inference issues. We can now
+try out the new functionality:
+
+```jldoctest polartype
+julia> propertynames(p)
+(:x, :y)
+
+julia> p.x
+4.949747468305833
+
+julia> p.y = 4.0
+4.0
+
+julia> p.r
+6.363961030678928
+```
+
+Finally, it is worth noting that adding instance properties like this is quite
+rarely done in Julia and should in general only be done if there is a good
+reason for doing so.
+
+## [Rounding](@id man-rounding-interface)
+
+| Methods to implement                          | Default definition        | Brief description                                                                                   |
+|:--------------------------------------------- |:------------------------- |:--------------------------------------------------------------------------------------------------- |
+| `round(x::ObjType, r::RoundingMode)`          | none                      | Round `x` and return the result. If possible, round should return an object of the same type as `x` |
+| `round(T::Type, x::ObjType, r::RoundingMode)` | `convert(T, round(x, r))` | Round `x`, returning the result as a `T`                                                            |
+
+To support rounding on a new type it is typically sufficient to define the single method
+`round(x::ObjType, r::RoundingMode)`. The passed rounding mode determines in which direction
+the value should be rounded. The most commonly used rounding modes are `RoundNearest`,
+`RoundToZero`, `RoundDown`, and `RoundUp`, as these rounding modes are used in the
+definitions of the one argument `round`, method, and `trunc`, `floor`, and `ceil`,
+respectively.
+
+In some cases, it is possible to define a three-argument `round` method that is more
+accurate or performant than the two-argument method followed by conversion. In this case it
+is acceptable to define the three argument method in addition to the two argument method.
+If it is impossible to represent the rounded result as an object of the type `T`,
+then the three argument method should throw an `InexactError`.
+
+For example, if we have an `Interval` type which represents a range of possible values
+similar to https://github.com/JuliaPhysics/Measurements.jl, we may define rounding on that
+type with the following
+
+```jldoctest
+julia> struct Interval{T}
+           min::T
+           max::T
+       end
+
+julia> Base.round(x::Interval, r::RoundingMode) = Interval(round(x.min, r), round(x.max, r))
+
+julia> x = Interval(1.7, 2.2)
+Interval{Float64}(1.7, 2.2)
+
+julia> round(x)
+Interval{Float64}(2.0, 2.0)
+
+julia> floor(x)
+Interval{Float64}(1.0, 2.0)
+
+julia> ceil(x)
+Interval{Float64}(2.0, 3.0)
+
+julia> trunc(x)
+Interval{Float64}(1.0, 2.0)
+```

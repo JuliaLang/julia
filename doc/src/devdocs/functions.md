@@ -13,16 +13,16 @@ share the same `Complex` type name object.
 All objects in Julia are potentially callable, because every object has a type, which in turn
 has a `TypeName`.
 
-## Function calls
+## [Function calls](@id Function-calls)
 
-Given the call `f(x,y)`, the following steps are performed: first, the method table to use is
+Given the call `f(x, y)`, the following steps are performed: first, the method table to use is
 accessed as `typeof(f).name.mt`. Second, an argument tuple type is formed, `Tuple{typeof(f), typeof(x), typeof(y)}`.
 Note that the type of the function itself is the first element. This is because the type might
 have parameters, and so needs to take part in dispatch. This tuple type is looked up in the method
 table.
 
 This dispatch process is performed by `jl_apply_generic`, which takes two arguments: a pointer
-to an array of the values f, x, and y, and the number of values (in this case 3).
+to an array of the values `f`, `x`, and `y`, and the number of values (in this case 3).
 
 Throughout the system, there are two kinds of APIs that handle functions and argument lists: those
 that accept the function and arguments separately, and those that accept a single argument structure.
@@ -48,7 +48,7 @@ jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
 
 Given the above dispatch process, conceptually all that is needed to add a new method is (1) a
 tuple type, and (2) code for the body of the method. `jl_method_def` implements this operation.
-`jl_first_argument_datatype` is called to extract the relevant method table from what would be
+`jl_method_table_for` is called to extract the relevant method table from what would be
 the type of the first argument. This is much more complicated than the corresponding procedure
 during dispatch, since the argument tuple type might be abstract. For example, we can define:
 
@@ -93,26 +93,38 @@ end
 
 ## Constructors
 
-A constructor call is just a call to a type. The type of most types is `DataType`, so the method
-table for `DataType` contains most constructor definitions. One wrinkle is the fallback definition
-that makes all types callable via `convert`:
-
-```julia
-(::Type{T})(args...) where {T} = convert(T, args...)::T
-```
-
-In this definition the function type is abstract, which is not normally supported. To make this
-work, all subtypes of `Type` (`Type`, `UnionAll`, `Union`, and `DataType`) currently share
-a method table via special arrangement.
+A constructor call is just a call to a type. The method table for `Type` contains all
+constructor definitions. All subtypes of `Type` (`Type`, `UnionAll`, `Union`, and `DataType`)
+currently share a method table via special arrangement.
 
 ## Builtins
 
 The "builtin" functions, defined in the `Core` module, are:
 
-```
-=== typeof sizeof <: isa typeassert throw tuple getfield setfield! fieldtype
-nfields isdefined arrayref arrayset arraysize applicable invoke apply_type _apply
-_expr svec
+```@eval
+function lines(words)
+    io = IOBuffer()
+    n = 0
+    for w in words
+        if n+length(w) > 80
+            print(io, '\n', w)
+            n = length(w)
+        elseif n == 0
+            print(io, w);
+            n += length(w)
+        else
+            print(io, ' ', w);
+            n += length(w)+1
+        end
+    end
+    String(take!(io))
+end
+import Markdown
+[string(n) for n in names(Core;all=true)
+    if getfield(Core,n) isa Core.Builtin && nameof(getfield(Core,n)) === n] |>
+    lines |>
+    s ->  "```\n$s\n```" |>
+    Markdown.parse
 ```
 
 These are all singleton objects whose types are subtypes of `Builtin`, which is a subtype of
@@ -129,15 +141,15 @@ but works reasonably well.
 
 ## Keyword arguments
 
-Keyword arguments work by associating a special, hidden function object with each method table
-that has definitions with keyword arguments. This function is called the "keyword argument sorter"
-or "keyword sorter", or "kwsorter", and is stored in the `kwsorter` field of `MethodTable` objects.
+Keyword arguments work by adding methods to the kwcall function. This function
+is usually the "keyword argument sorter" or "keyword sorter", which then calls
+the inner body of the function (defined anonymously).
 Every definition in the kwsorter function has the same arguments as some definition in the normal
-method table, except with a single `Array` argument prepended. This array contains alternating
-symbols and values that represent the passed keyword arguments. The kwsorter's job is to move
-keyword arguments into their canonical positions based on name, plus evaluate and substite any
-needed default value expressions. The result is a normal positional argument list, which is then
-passed to yet another function.
+method table, except with a single `NamedTuple` argument prepended, which gives
+the names and values of passed keyword arguments. The kwsorter's job is to move keyword arguments
+into their canonical positions based on name, plus evaluate and substitute any needed default value
+expressions. The result is a normal positional argument list, which is then passed to yet another
+compiler-generated function.
 
 The easiest way to understand the process is to look at how a keyword argument method definition
 is lowered. The code:
@@ -149,8 +161,8 @@ end
 ```
 
 actually produces *three* method definitions. The first is a function that accepts all arguments
-(including keywords) as positional arguments, and includes the code for the method body. It has
-an auto-generated name:
+(including keyword arguments) as positional arguments, and includes the code for the method body.
+It has an auto-generated name:
 
 ```julia
 function #circle#1(color, fill::Bool, options, circle, center, radius)
@@ -163,27 +175,38 @@ the case where no keyword arguments are passed:
 
 ```julia
 function circle(center, radius)
-    #circle#1(black, true, Any[], circle, center, radius)
+    #circle#1(black, true, pairs(NamedTuple()), circle, center, radius)
 end
 ```
 
-This simply dispatches to the first method, passing along default values. Finally there is the
-kwsorter definition:
+This simply dispatches to the first method, passing along default values.
+`pairs` is applied to the named tuple of rest arguments to provide key-value pair iteration.
+Note that if the method doesn't accept rest keyword arguments then this argument
+is absent.
+
+Finally there is the kwsorter definition:
 
 ```
-function (::Core.kwftype(typeof(circle)))(kw::Array, circle, center, radius)
-    options = Any[]
-    color = arg associated with :color, or black if not found
-    fill = arg associated with :fill, or true if not found
-    # push remaining elements of kw into options array
-    #circle#1(color, fill, options, circle, center, radius)
+function (::Core.kwftype(typeof(circle)))(kws, circle, center, radius)
+    if haskey(kws, :color)
+        color = kws.color
+    else
+        color = black
+    end
+    # etc.
+
+    # put remaining kwargs in `options`
+    options = structdiff(kws, NamedTuple{(:color, :fill)})
+
+    # if the method doesn't accept rest keywords, throw an error
+    # unless `options` is empty
+
+    #circle#1(color, fill, pairs(options), circle, center, radius)
 end
 ```
 
-The front end generates code to loop over the `kw` array and pick out arguments in the right order,
-evaluating default expressions when an argument is not found.
-
-The function `Core.kwftype(t)` fetches (and creates, if necessary) the field `t.name.mt.kwsorter`.
+The function `Core.kwftype(t)` creates the field `t.name.mt.kwsorter` (if it hasn't been created
+yet), and returns the type of that function.
 
 This design has the feature that call sites that don't use keyword arguments require no special
 handling; everything works as if they were not part of the language at all. Call sites that do
@@ -191,21 +214,23 @@ use keyword arguments are dispatched directly to the called function's kwsorter.
 call:
 
 ```julia
-circle((0,0), 1.0, color = red; other...)
+circle((0, 0), 1.0, color = red; other...)
 ```
 
 is lowered to:
 
 ```julia
-kwfunc(circle)(Any[:color,red,other...], circle, (0,0), 1.0)
+kwcall(merge((color = red,), other), circle, (0, 0), 1.0)
 ```
 
-The unpacking procedure represented here as `other...` actually further unpacks each *element*
-of `other`, expecting each one to contain two values (a symbol and a value). `kwfunc` (also in
-`Core`) fetches the kwsorter for the called function. Notice that the original `circle` function
-is passed through, to handle closures.
+`kwcall` (also in`Core`) denotes a kwcall signature and dispatch.
+The keyword splatting operation (written as `other...`) calls the named tuple `merge` function.
+This function further unpacks each *element* of `other`, expecting each one to contain two values
+(a symbol and a value).
+Naturally, a more efficient implementation is available if all splatted arguments are named tuples.
+Notice that the original `circle` function is passed through, to handle closures.
 
-## Compiler efficiency issues
+## [Compiler efficiency issues](@id compiler-efficiency-issues)
 
 Generating a new type for every function has potentially serious consequences for compiler resource
 use when combined with Julia's "specialize on all arguments by default" design. Indeed, the initial
@@ -242,12 +267,12 @@ element instead of the second.
 The front end generates type declarations for all closures. Initially, this was implemented by
 generating normal type declarations. However, this produced an extremely large number of constructors,
 all of which were trivial (simply passing all arguments through to [`new`](@ref)). Since methods are partially
-ordered, inserting all of these methods is O(n^2), plus there are just too many of them to keep
+ordered, inserting all of these methods is O(n²), plus there are just too many of them to keep
 around. This was optimized by generating `struct_type` expressions directly (bypassing default
 constructor generation), and using `new` directly to create closure instances. Not the prettiest
 thing ever, but you do what you gotta do.
 
 The next problem was the `@test` macro, which generated a 0-argument closure for each test case.
-This is not really necessary, since each test case is simply run once in place. Therefore I modified
-`@test` to expand to a try-catch block that records the test result (true, false, or exception
+This is not really necessary, since each test case is simply run once in place. Therefore, `@test`
+was modified to expand to a try-catch block that records the test result (true, false, or exception
 raised) and calls the test suite handler on it.

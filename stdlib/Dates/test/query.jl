@@ -194,22 +194,25 @@ end
     @test Dates.quarterofyear(Dates.DateTime(2000, 12, 31)) == 4
 end
 @testset "dayofquarter" begin
-    @test Dates.dayofquarter(Dates.Date(2014, 1, 1)) == 1
-    @test Dates.dayofquarter(Dates.Date(2014, 4, 1)) == 1
-    @test Dates.dayofquarter(Dates.Date(2014, 7, 1)) == 1
-    @test Dates.dayofquarter(Dates.Date(2014, 10, 1)) == 1
-    @test Dates.dayofquarter(Dates.Date(2014, 3, 31)) == 90
-    @test Dates.dayofquarter(Dates.Date(2014, 6, 30)) == 91
-    @test Dates.dayofquarter(Dates.Date(2014, 9, 30)) == 92
-    @test Dates.dayofquarter(Dates.Date(2014, 12, 31)) == 92
-    @test Dates.dayofquarter(Dates.DateTime(2014, 1, 1)) == 1
-    @test Dates.dayofquarter(Dates.DateTime(2014, 4, 1)) == 1
-    @test Dates.dayofquarter(Dates.DateTime(2014, 7, 1)) == 1
-    @test Dates.dayofquarter(Dates.DateTime(2014, 10, 1)) == 1
-    @test Dates.dayofquarter(Dates.DateTime(2014, 3, 31)) == 90
-    @test Dates.dayofquarter(Dates.DateTime(2014, 6, 30)) == 91
-    @test Dates.dayofquarter(Dates.DateTime(2014, 9, 30)) == 92
-    @test Dates.dayofquarter(Dates.DateTime(2014, 12, 31)) == 92
+    # Non-leap and leap year
+    for y in (2014, 2020)
+        @test Dates.dayofquarter(Dates.Date(y, 1, 1)) == 1
+        @test Dates.dayofquarter(Dates.Date(y, 4, 1)) == 1
+        @test Dates.dayofquarter(Dates.Date(y, 7, 1)) == 1
+        @test Dates.dayofquarter(Dates.Date(y, 10, 1)) == 1
+        @test Dates.dayofquarter(Dates.Date(y, 3, 31)) == 90 + isleapyear(y)
+        @test Dates.dayofquarter(Dates.Date(y, 6, 30)) == 91
+        @test Dates.dayofquarter(Dates.Date(y, 9, 30)) == 92
+        @test Dates.dayofquarter(Dates.Date(y, 12, 31)) == 92
+        @test Dates.dayofquarter(Dates.DateTime(y, 1, 1)) == 1
+        @test Dates.dayofquarter(Dates.DateTime(y, 4, 1)) == 1
+        @test Dates.dayofquarter(Dates.DateTime(y, 7, 1)) == 1
+        @test Dates.dayofquarter(Dates.DateTime(y, 10, 1)) == 1
+        @test Dates.dayofquarter(Dates.DateTime(y, 3, 31)) == 90 + isleapyear(y)
+        @test Dates.dayofquarter(Dates.DateTime(y, 6, 30)) == 91
+        @test Dates.dayofquarter(Dates.DateTime(y, 9, 30)) == 92
+        @test Dates.dayofquarter(Dates.DateTime(y, 12, 31)) == 92
+    end
 end
 
 end
