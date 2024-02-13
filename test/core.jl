@@ -2,13 +2,145 @@
 
 # test core language features
 
-using Random, SparseArrays, InteractiveUtils
+using Random, InteractiveUtils
 
 const Bottom = Union{}
 
-
 # For curmod_*
 include("testenv.jl")
+
+## tests that `const` field declarations
+
+# sanity tests that our built-in types are marked correctly for const fields
+for (T, c) in (
+        (Core.CodeInfo, []),
+        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :ipo_purity_bits, :analysis_results]),
+        (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
+        (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
+        (Core.MethodTable, [:module]),
+        (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
+        (Core.TypeMapLevel, []),
+        (Core.TypeName, [:name, :module, :names, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
+        (DataType, [:name, :super, :parameters, :instance, :hash]),
+        (TypeVar, [:name, :ub, :lb]),
+        (Core.Memory, [:length, :ptr]),
+        (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
+    )
+    @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
+end
+#
+# sanity tests that our built-in types are marked correctly for atomic fields
+for (T, c) in (
+        (Core.CodeInfo, []),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
+        (Core.Method, [:primary_world, :deleted_world]),
+        (Core.MethodInstance, [:uninferred, :cache, :precompiled]),
+        (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
+        (Core.TypeMapEntry, [:next, :min_world, :max_world]),
+        (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
+        (Core.TypeName, [:cache, :linearcache]),
+        (DataType, [:types, :layout]),
+        (Core.Memory, []),
+        (Core.GenericMemoryRef, []),
+    )
+    @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
+end
+
+@test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
+    setfield!(Int, :name, Int.name))
+@test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
+    (Base.Experimental.@force_compile; setfield!(Int, :name, Int.name)))
+
+@test_throws(ErrorException("invalid field attribute const for immutable struct"),
+    @eval struct ABCDconst
+        const abcd
+    end)
+mutable struct ABCDconst
+    const a
+    const b::Int
+    c
+    const d::Union{Int,Nothing}
+end
+@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
+    mutable struct ABCDconst
+        const a
+        const b::Int
+        c
+        d::Union{Int,Nothing}
+    end)
+@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
+    mutable struct ABCDconst
+        a
+        b::Int
+        c
+        d::Union{Int,Nothing}
+    end)
+let abcd = ABCDconst(1, 2, 3, 4)
+    @test (1, 2, 3, 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+    @test_throws(ErrorException("setfield!: const field .a of type ABCDconst cannot be changed"),
+        abcd.a = 0)
+    @test_throws(ErrorException("replacefield!: const field .a of type ABCDconst cannot be changed"),
+        replacefield!(abcd, :a, 1, 0))
+    @test_throws(ErrorException("modifyfield!: const field .a of type ABCDconst cannot be changed"),
+        modifyfield!(abcd, :a, +, 1))
+    @test_throws(ErrorException("swapfield!: const field .a of type ABCDconst cannot be changed"),
+        swapfield!(abcd, :a, 0))
+    @test_throws(ErrorException("setfield!: const field .b of type ABCDconst cannot be changed"),
+        abcd.b = 0)
+    abcd.c = "not constant"
+    @test_throws(ErrorException("setfield!: const field .d of type ABCDconst cannot be changed"),
+        abcd.d = nothing)
+    @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+end
+# repeat with the compiler
+let abcd = ABCDconst(1, 2, 3, 4)
+    Base.Experimental.@force_compile
+    @test (1, 2, 3, 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+    @test_throws(ErrorException("setfield!: const field .a of type ABCDconst cannot be changed"),
+        abcd.a = 0)
+    @test_throws(ErrorException("replacefield!: const field .a of type ABCDconst cannot be changed"),
+        replacefield!(abcd, :a, 1, 0))
+    @test_throws(ErrorException("modifyfield!: const field .a of type ABCDconst cannot be changed"),
+        modifyfield!(abcd, :a, +, 1))
+    @test_throws(ErrorException("swapfield!: const field .a of type ABCDconst cannot be changed"),
+        swapfield!(abcd, :a, 0))
+    @test_throws(ErrorException("setfield!: const field .b of type ABCDconst cannot be changed"),
+        abcd.b = 0)
+    abcd.c = "not constant"
+    @test_throws(ErrorException("setfield!: const field .d of type ABCDconst cannot be changed"),
+        abcd.d = nothing)
+    @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+end
+# Issue #52686
+struct A52686{T} end
+struct B52686{T, S}
+    a::A52686{<:T}
+end
+function func52686()
+    @eval begin
+        struct A52686{T} end
+        struct B52686{T, S}
+            a::A52686{<:T}
+        end
+    end
+    return true
+end
+@test func52686()
+
+# test `===` handling null pointer in struct #44712
+struct N44712
+    a::Some{Any}
+    b::Int
+    N44712() = new()
+end
+let a  = Int[0, 1], b = Int[0, 2]
+    GC.@preserve a b begin
+        @test unsafe_load(Ptr{N44712}(pointer(a))) !== unsafe_load(Ptr{N44712}(pointer(b)))
+    end
+end
+
+# another possible issue in #44712
+@test (("", 0),) !== (("", 1),)
 
 f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws MethodError f47(Vector{Vector}())
@@ -23,6 +155,12 @@ f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws TypeError (Array{T} where T>:Vararg)
 @test_throws TypeError (Array{T} where T<:Vararg{Int})
 @test_throws TypeError (Array{T} where T<:Vararg{Int,2})
+
+@test_throws TypeError TypeVar(:T) <: Any
+@test_throws TypeError TypeVar(:T) >: Any
+
+# issue #28673
+@test_throws TypeError Array{2}(undef, 1, 2)
 
 # issue #12939
 module Issue12939
@@ -64,9 +202,6 @@ g11840(sig::Type{T}) where {T<:Tuple} = 3
 
 g11840b(::DataType) = 1
 g11840b(::Type) = 2
-# FIXME (needs a test): how to compute that the guard entry is still required,
-# even though Type{Vector} ∩ DataType = Bottom and this method would set
-# cache_with_orig = true
 g11840b(sig::Type{T}) where {T<:Tuple} = 3
 @test g11840b(Vector) == 2
 @test g11840b(Vector.body) == 1
@@ -87,11 +222,25 @@ h11840(::Type{T}) where {T<:Tuple} = '4'
 @test h11840(Tuple) == '4'
 @test h11840(TT11840) == '4'
 
+# show that we don't make the cache confused by using alternative representations
+# when specificity is reversed
+j11840(::DataType) = '1'
+j11840(::Union{Type{T}, T}) where {T} = '2' # force cache to contain leaftypes
+@test j11840(Union{Tuple{Int32}, Tuple{Int64}}) == '2'
+@test j11840(Tuple{Union{Int32, Int64}}) == '1' # DataType more specific than Type
+
+# but show we can correctly match types with alternate equivalent representations
+k11840(::Type{Union{Tuple{Int32}, Tuple{Int64}}}) = '2'
+@test k11840(Tuple{Union{Int32, Int64}}) == '2'
+@test k11840(Tuple{Union{Int32, Int64}}) == '2'
+@test k11840(Union{Tuple{Int32}, Tuple{Int64}}) == '2'
+
+
 # issue #20511
 f20511(x::DataType) = 0
 f20511(x) = 1
-Type{Integer}  # cache this
-@test f20511(Union{Integer,T} where T <: Unsigned) == 1
+Type{AbstractSet}  # cache this
+@test f20511(Union{AbstractSet,Set{T}} where T) == 1
 
 # join
 @test typejoin(Int8,Int16) === Signed
@@ -99,17 +248,17 @@ Type{Integer}  # cache this
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
 @test typejoin(Tuple{Int,Int8},Tuple{Int8,Float64}) === Tuple{Signed,Real}
-@test Base.typeseq(typejoin(Tuple{String,String},Tuple{GenericString,String},
-                            Tuple{String,GenericString},Tuple{Int,String,Int}),
-                   Tuple{Any,AbstractString,Vararg{Int}})
-@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Int8}),
-                   Tuple{Int8,Vararg{Signed}})
-@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
-                   Tuple{Int8,Vararg{Signed}})
-@test Base.typeseq(typejoin(Tuple{Int8,UInt8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
-                   Tuple{Int8,Vararg{Integer}})
-@test Base.typeseq(typejoin(Union{Int,AbstractString},Int), Union{Int,AbstractString})
-@test Base.typeseq(typejoin(Union{Int,AbstractString},Int8), Any)
+@test typejoin(Tuple{String,String}, Tuple{GenericString,String},
+               Tuple{String,GenericString}, Tuple{Int,String,Int}) ==
+    Tuple{Any,AbstractString,Vararg{Int}}
+@test typejoin(Tuple{Int8,Vararg{Int}}, Tuple{Int8,Int8}) ==
+    Tuple{Int8,Vararg{Signed}}
+@test typejoin(Tuple{Int8,Vararg{Int}}, Tuple{Int8,Vararg{Int8}}) ==
+    Tuple{Int8,Vararg{Signed}}
+@test typejoin(Tuple{Int8,UInt8,Vararg{Int}}, Tuple{Int8,Vararg{Int8}}) ==
+    Tuple{Int8,Vararg{Integer}}
+@test typejoin(Union{Int,AbstractString}, Int) == Union{Int,AbstractString}
+@test typejoin(Union{Int,AbstractString}, Int8) == Any
 @test typejoin(Tuple{}, Tuple{Int}) == Tuple{Vararg{Int}}
 
 # typejoin associativity
@@ -127,17 +276,71 @@ end
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Int,Int,Int}) === Tuple{Int,Int,Vararg{Int}}
 @test typejoin(Tuple{Vararg{Int,2}}, Tuple{Vararg{Int}}) === Tuple{Vararg{Int}}
 
+@test typejoin(NTuple{3,Tuple}, NTuple{2,T} where T) == Tuple{Any,Any,Vararg{Tuple}}
+@test typejoin(Tuple{Tuple{T, T, Any}} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Vararg{Any}}
+@test typejoin(Tuple{T, T, T} where T, Tuple{T, T, Vector{T}} where T) == Tuple{Any,Any,Any}
+
+# issue #26321
+struct T26321{N,S<:NTuple{N}}
+    t::S
+end
+let mi = T26321{3,NTuple{3,Int}}((1,2,3)), mf = T26321{3,NTuple{3,Float64}}((1.0,2.0,3.0))
+    J = T26321{3,S} where S<:(Tuple{T,T,T} where T)
+    @test typejoin(typeof(mi),typeof(mf)) == J
+    a = [mi, mf]
+    @test a[1] === mi
+    @test a[2] === mf
+    @test eltype(a) == J
+    @test a isa Vector{<:T26321{3}}
+end
+
+@test Base.return_types() do
+    typejoin(Int, UInt)
+end  |> only == Type{typejoin(Int, UInt)}
+@test Base.return_types() do
+    typejoin(Int, UInt, Float64)
+end  |> only == Type{typejoin(Int, UInt, Float64)}
+
+let res = @test_throws TypeError let
+        Base.Experimental.@force_compile
+        typejoin(1, 2)
+        nothing
+    end
+    err = res.value
+    @test err.func === :<:
+end
+let res = @test_throws TypeError let
+        Base.Experimental.@force_compile
+        typejoin(1, 2, 3)
+        nothing
+    end
+    err = res.value
+    @test err.func === :<:
+end
+
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, Float64) === Real
     @test Base.promote_typejoin(Int, T) === Union{Int, T}
     @test Base.promote_typejoin(T, String) === Union{T, String}
     @test Base.promote_typejoin(Vector{Int}, T) === Union{Vector{Int}, T}
-    @test Base.promote_typejoin(Vector, T) === Any
-    @test Base.promote_typejoin(Real, T) === Any
-    @test Base.promote_typejoin(Int, String) === Any
-    @test Base.promote_typejoin(Int, Union{Float64, T}) === Any
-    @test Base.promote_typejoin(Int, Union{String, T}) === Any
+    @test Base.promote_typejoin(Vector, T) === Union{Vector, T}
+    @test Base.promote_typejoin(Real, T) === Union{Real, T}
+    for U in (String, Float64)
+        @test Base.promote_typejoin(Int, U) === typejoin(Int, U)
+        @test Base.promote_typejoin(Int, Union{U, T}) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{Int, U}, T) === Union{Union{Int, U}, T}
+        @test Base.promote_typejoin(Union{T, U}, Int) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{T, U}, Union{T, Int}) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{T, U}, Union{Missing, Int}) ===
+            Union{typejoin(Int, U), T, Missing}
+        @test Base.promote_typejoin(Union{T, U}, Union{Nothing, Int}) ===
+            Union{typejoin(Int, U), T, Nothing}
+        @test Base.promote_typejoin(Union{T, Nothing, U}, Union{Nothing, Missing, Int}) ===
+            Union{typejoin(Int, U), T, Nothing, Missing}
+    end
+    @test Base.promote_typejoin(T, Union{}) === T
+    @test Base.promote_typejoin(Union{}, T) === T
 end
 
 @test promote_type(Bool,Bottom) === Bool
@@ -182,24 +385,36 @@ struct D21923{T,N}; v::D21923{T}; end
 
 # issue #22624, more circular definitions
 struct T22624{A,B,C}; v::Vector{T22624{Int64,A}}; end
-let elT = T22624.body.body.body.types[1].parameters[1]
+let ft = Base.datatype_fieldtypes
+    elT = T22624.body.body.body.types[1].parameters[1]
     @test elT == T22624{Int64, T22624.var, C} where C
-    elT2 = elT.body.types[1].parameters[1]
+    elT2 = ft(elT.body)[1].parameters[1]
     @test elT2 == T22624{Int64, Int64, C} where C
-    @test elT2.body.types[1].parameters[1] === elT2
-    @test Base.isconcretetype(elT2.body.types[1])
+    @test ft(elT2.body)[1].parameters[1] === elT2
+    @test Base.isconcretetype(ft(elT2.body)[1])
 end
+struct S22624{A,B,C} <: Ref{S22624{Int,A}}; end
+@test sizeof(S22624) == sizeof(S22624{Int,Int,Int}) == 0
+
+# issue #42297
+mutable struct Node42297{T, V}
+    value::V
+    next::Union{Node42297{T, T}, Node42297{T, Val{T}}, Nothing}
+    Node42297{T}(value) where {T} = new{T, typeof(value)}(value, nothing)
+end
+@test fieldtype(Node42297{Int,Val{Int}}, 1) === Val{Int}
+@test fieldtype(Node42297{Int,Int}, 1) === Int
 
 # issue #3890
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
 end
-@test A3890{Float64}.types[1] === Array{Complex{Float64},2}
+@test A3890{Float64}.types[1] === Array{ComplexF64,2}
 # make sure the field type Matrix{Complex{T1}} isn't cached
 mutable struct B3890{T2}
     x::Matrix{Complex{T2}}
 end
-@test B3890{Float64}.types[1] === Array{Complex{Float64},2}
+@test B3890{Float64}.types[1] === Array{ComplexF64,2}
 
 # issue #786
 mutable struct Node{T}
@@ -218,6 +433,18 @@ mutable struct FooFoo{A,B} y::FooFoo{A} end
 
 @test FooFoo{Int} <: FooFoo{Int,AbstractString}.types[1]
 
+# make sure this self-referential struct doesn't crash type layout
+struct SelfTyA{V}
+    a::Base.RefValue{V}
+end
+struct SelfTyB{T}
+    a::T
+    b::SelfTyA{SelfTyB{T}}
+end
+let T = Base.RefValue{SelfTyB{Int}}
+    @test sizeof(T) === sizeof(Int)
+    @test sizeof(T.types[1]) === 2 * sizeof(Int)
+end
 
 let x = (2,3)
     @test +(x...) == 5
@@ -261,7 +488,7 @@ function bar(x::T) where T
 end
 @test bar(3.0) == Complex(3.0,0.0)
 
-z = convert(Complex{Float64},2)
+z = convert(ComplexF64,2)
 @test z == Complex(2.0,0.0)
 
 function typeassert_instead_of_decl()
@@ -271,9 +498,6 @@ function typeassert_instead_of_decl()
     return 0
 end
 @test_throws TypeError typeassert_instead_of_decl()
-
-# type declarations on globals not implemented yet
-@test_throws ErrorException eval(Meta.parse("global x20327::Int"))
 
 y20327 = 1
 @test_throws TypeError y20327::Float64
@@ -343,7 +567,7 @@ function i18408()
     return (x -> i)
 end
 let f = i18408()
-    @test_throws UndefVarError(:i) f(0)
+    @test_throws UndefVarError(:i, :local) f(0)
 end
 
 # issue #23558
@@ -361,7 +585,7 @@ function foo23996(xs...)
     bar(::AbstractFloat) = push!(rets, 2)
     bar(::Bool) = foobar()
     for x in xs
-	bar(x)
+        bar(x)
     end
     rets
 end
@@ -403,7 +627,7 @@ begin
         global f7234_cnt += -10000
     end
 end
-@test_throws UndefVarError(:glob_x2) f7234_a()
+@test_throws UndefVarError(:glob_x2, :local) f7234_a()
 @test f7234_cnt == 1
 begin
     global glob_x2 = 24
@@ -413,7 +637,7 @@ begin
         global f7234_cnt += -10000
     end
 end
-@test_throws UndefVarError(:glob_x2) f7234_b()
+@test_throws UndefVarError(:glob_x2, :local) f7234_b()
 @test f7234_cnt == 2
 # globals can accessed if declared
 for i = 1:2
@@ -486,7 +710,7 @@ function const_implies_local()
 end
 @test const_implies_local() === (1, 0)
 
-a_global_closure_vector = Vector{Any}(uninitialized, 3)
+a_global_closure_vector = Vector{Any}(undef, 3)
 for i = 1:3
     let ii = i
         a_global_closure_vector[i] = x -> x + ii
@@ -521,18 +745,18 @@ end
 f21900_cnt = 0
 function f21900()
     for i = 1:1
-        x = 0
+        x_global_undefined_error = 0
     end
     global f21900_cnt += 1
-    x
+    x_global_undefined_error # should be global
     global f21900_cnt += -1000
     nothing
 end
-@test_throws UndefVarError f21900()
+@test_throws UndefVarError(:x_global_undefined_error, @__MODULE__) f21900()
 @test f21900_cnt == 1
 
 # use @eval so this runs as a toplevel scope block
-@test_throws UndefVarError(:foo21900) @eval begin
+@test_throws UndefVarError(:foo21900, @__MODULE__) @eval begin
     for i21900 = 1:10
         local bar21900
         for j21900 = 1:10
@@ -545,7 +769,7 @@ end
 @test !@isdefined(foo21900)
 @test !@isdefined(bar21900)
 bar21900 = 0
-@test_throws UndefVarError(:foo21900) @eval begin
+@test_throws UndefVarError(:foo21900, @__MODULE__) @eval begin
     for i21900 = 1:10
         global bar21900
         for j21900 = 1:10
@@ -599,32 +823,57 @@ let
     @test !isdefined(a, :foo)
     @test !isdefined(2, :a)
 
-    @test_throws TypeError isdefined(2)
+    @test_throws TypeError isdefined(Base, 2)
+    @test_throws ArgumentError isdefined(2)
 end
 
 let
     local a
-    a = Vector{Any}(uninitialized, 2)
+    a = Vector{Any}(undef, 2)
     @test !isassigned(a,1) && !isassigned(a,2)
     a[1] = 1
     @test isassigned(a,1) && !isassigned(a,2)
-    a = Vector{Float64}(uninitialized,1)
+    a = Vector{Float64}(undef,1)
+    @test isassigned(a,1)
+    @test isassigned(a,1,1)
+    @test isassigned(a)
+    @test !isassigned(a,2)
+    a = Array{Float64}(undef, 2, 2, 2)
+    @test isassigned(a,1)
+    @test isassigned(a,8)
+    @test isassigned(a,2,2,2)
+    @test isassigned(a,2,2,2,1)
+    @test !isassigned(a)
+    @test !isassigned(a,9)
+    a = Array{Float64}(undef, 1)
     @test isassigned(a,1)
     @test isassigned(a)
     @test !isassigned(a,2)
+    a = Array{Float64}(undef, 2, 2, 2, 2)
+    @test isassigned(a,1)
+    @test isassigned(a,2,2,2,2)
+    @test isassigned(a,2,2,2,2,1)
+    @test isassigned(a,16)
+    @test !isassigned(a)
+    @test !isassigned(a,17)
+    @test !isassigned(a,3,1,1,1)
+    @test !isassigned(a,1,3,1,1)
+    @test !isassigned(a,1,1,3,1)
+    @test !isassigned(a,1,1,1,3)
 end
 
 # isassigned, issue #11167
 mutable struct Type11167{T,N} end
-Type11167{Int,2}
-let tname = Type11167.body.body.name
-    @test !isassigned(tname.cache, 0)
-    @test isassigned(tname.cache, 1)
-    @test !isassigned(tname.cache, 2)
-    Type11167{Float32,5}
-    @test isassigned(tname.cache, 2)
-    @test !isassigned(tname.cache, 3)
+function count11167()
+    let cache = Type11167.body.body.name.cache
+        return count(!isnothing, cache)
+    end
 end
+@test count11167() == 0
+Type11167{Int,2}
+@test count11167() == 1
+Type11167{Float32,5}
+@test count11167() == 2
 
 # dispatch
 let
@@ -740,6 +989,7 @@ begin
             global try_finally_glo_after = 1
         end
         global gothere = 1
+    catch
     end
     @test try_finally_loc_after == 0
     @test try_finally_glo_after == 1
@@ -769,7 +1019,7 @@ begin
     @test retfinally() == 5
     @test glo == 18
 
-    @test try error() end === nothing
+    @test try error(); catch; end === nothing
 end
 
 # issue #12806
@@ -910,6 +1160,15 @@ function f24331()
 end
 @test f24331() == [2]
 
+# issue #26743
+function f26743()
+    try
+        return 5
+    finally
+    end
+end
+@test @inferred(f26743()) == 5
+
 # finalizers
 let A = [1]
     local x = 0
@@ -921,9 +1180,15 @@ let A = [1]
     @test x == 1
 end
 
+# Make sure that `Module` is not resolved to `Core.Module` during sysimg generation
+# so that users can define their own binding named `Module` in Main.
+@test !Base.isbindingresolved(Main, :Module)
+
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
+@test Module(:anonymous, false, true).Core == Core
+@test_throws UndefVarError Module(:anonymous, false, false).Core
 
 # exception from __init__()
 let didthrow =
@@ -1022,32 +1287,40 @@ let
     @test_throws BoundsError(z, -1) getfield(z, -1)
     @test_throws BoundsError(z, 0) getfield(z, 0)
     @test_throws BoundsError(z, 3) getfield(z, 3)
-
-    strct = LoadError("yofile", 0, "bad")
+end
+let strct = LoadError("yofile", 0, "bad")
     @test nfields(strct) == 3 # sanity test
     @test_throws BoundsError(strct, 10) getfield(strct, 10)
-    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 0, "")
-    @test_throws ErrorException("type LoadError is immutable") setfield!(strct, 4, "")
-    @test_throws ErrorException("type is immutable") setfield!(strct, :line, 0)
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
     @test strct.file == "yofile"
     @test strct.line === 0
     @test strct.error == "bad"
     @test getfield(strct, 1) == "yofile"
     @test getfield(strct, 2) === 0
     @test getfield(strct, 3) == "bad"
-
-    mstrct = TestMutable("melm", 1, nothing)
-    Base.setproperty!(mstrct, :line, 8.0)
+end
+let mstrct = TestMutable("melm", 1, nothing)
+    @test Base.setproperty!(mstrct, :line, 8.0) === 8
     @test mstrct.line === 8
     @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, :line, 8.0)
     @test_throws TypeError(:setfield!, "", Int, 8.0) setfield!(mstrct, 2, 8.0)
-    setfield!(mstrct, 3, "hi")
+    @test setfield!(mstrct, 3, "hi") == "hi"
     @test mstrct.error == "hi"
-    setfield!(mstrct, 1, "yo")
+    @test setfield!(mstrct, 1, "yo") == "yo"
     @test mstrct.file == "yo"
     @test_throws BoundsError(mstrct, 10) getfield(mstrct, 10)
     @test_throws BoundsError(mstrct, 0) setfield!(mstrct, 0, "")
     @test_throws BoundsError(mstrct, 4) setfield!(mstrct, 4, "")
+end
+let strct = LoadError("yofile", 0, "bad")
+    @test_throws(ErrorException("setfield!: immutable struct of type LoadError cannot be changed"),
+                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), strct, 0, ""))
+end
+let mstrct = TestMutable("melm", 1, nothing)
+    @test_throws(BoundsError(mstrct, 4),
+                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), mstrct, 3, ""))
 end
 
 # test getfield-overloading
@@ -1055,7 +1328,7 @@ function Base.getproperty(mstrct::TestMutable, p::Symbol)
     return (p, getfield(mstrct, :error))
 end
 function Base.setproperty!(mstrct::TestMutable, p::Symbol, v)
-    setfield!(mstrct, :error, (p, v))
+    return setfield!(mstrct, :error, (p, v))
 end
 
 let
@@ -1073,6 +1346,20 @@ let
     @test mstrct.bar === (:bar, (:line, 8.0))
     @test mstrct.error === (:error, (:line, 8.0))
 end
+
+struct S29761
+    x
+end
+function S29761_world(i)
+    x = S29761(i)
+    @eval function Base.getproperty(x::S29761, sym::Symbol)
+        return sym => getfield(x, sym)
+    end
+    # ensure world updates are handled correctly for simple x.y expressions:
+    return x.x, @eval($x.x), x.x
+end
+@test S29761_world(1) == (1, :x => 1, 1)
+
 
 # allow typevar in Union to match as long as the arguments contain
 # sufficient information
@@ -1123,7 +1410,7 @@ end
 # issue #22842
 f22842(x::UnionAll) = UnionAll
 f22842(x::DataType) = length(x.parameters)
-@test f22842(Tuple{Vararg{Int64,N} where N}) == 1
+@test f22842(Tuple{Vararg{Int64}}) == 1
 @test f22842(Tuple{Vararg{Int64,N}} where N) === UnionAll
 
 # issue #1153
@@ -1177,6 +1464,9 @@ let
     @test unsafe_load(p2) == 101
     unsafe_store!(p2, 909, 3)
     @test a2 == [101,102,909]
+    # test for issue 51954
+    @test pointer(a.ref.mem)===pointer(a)
+    @test pointer(a.ref.mem,2)===pointer(a,2)
 end
 
 @test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any),
@@ -1203,9 +1493,10 @@ let
     @test_throws InexactError unsafe_wrap(Array, pointer(a), -3)
     # Misaligned pointer
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, length(a))
-    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, (1, 1))
-    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
+    res = @test_throws MethodError unsafe_wrap(Vector{UInt8}, pointer(Int32[1]), (sizeof(Int32),))
 end
 
 struct FooBar2515
@@ -1231,6 +1522,7 @@ let
     function f()
         try
             return 1
+        catch
         end
     end
     @test f() == 1
@@ -1304,7 +1596,7 @@ let
 
     # issue #1886
     X = [1:4;]
-    r = Vector{UnitRange{Int}}(uninitialized, 1)
+    r = Vector{UnitRange{Int}}(undef, 1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
@@ -1345,6 +1637,12 @@ let
     @test invoke(i2169, Tuple{Array}, Int8[1]) === Int8(-128)
 end
 
+# issue #44227
+struct F{T} end
+F{Int32}(; y=1) = 1
+F{Int64}(; y=1) = invoke(F{Int32}, Tuple{}; y)
+@test F{Int64}() === 1
+
 # issue #2365
 mutable struct B2365{T}
      v::Union{T, Nothing}
@@ -1369,7 +1667,7 @@ struct Foo2509; foo::Int; end
 # issue #2517
 struct Foo2517; end
 @test repr(Foo2517()) == "$(curmod_prefix)Foo2517()"
-@test repr(Vector{Foo2517}(uninitialized, 1)) == "$(curmod_prefix)Foo2517[$(curmod_prefix)Foo2517()]"
+@test repr(Vector{Foo2517}(undef, 1)) == "[$(curmod_prefix)Foo2517()]"
 @test Foo2517() === Foo2517()
 
 # issue #1474
@@ -1434,7 +1732,9 @@ end
 
 # issue #3221
 let x = fill(nothing, 1)
-    @test_throws MethodError x[1] = 1
+    @test_throws ErrorException("cannot convert a value to nothing for assignment") x[1] = 1
+    x = Vector{Union{}}(undef, 1)
+    @test_throws ArgumentError("cannot convert a value to Union{} for assignment") x[1] = 1
 end
 
 # issue #3220
@@ -1498,13 +1798,13 @@ end
 # issue #3167
 let
     function foo(x)
-        ret=Vector{typeof(x[1])}(uninitialized, length(x))
+        ret=Vector{typeof(x[1])}(undef, length(x))
         for j = 1:length(x)
             ret[j] = x[j]
         end
         return ret
     end
-    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Nothing}}(uninitialized, 3)
+    x = Vector{Union{Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Nothing}}(undef, 3)
     x[1] = 1.0
     x[2] = 2.0
     x[3] = 3.0
@@ -1619,6 +1919,7 @@ try
     (function() end)(1)
     # should throw an argument count error
     @test false
+catch
 end
 
 # issue #4526
@@ -1692,7 +1993,7 @@ mutable struct SIQ{A,B} <: Number
 end
 import Base: promote_rule
 promote_rule(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) where {T,T2,S,S2} = SIQ{promote_type(T,S)}
-@test_throws ErrorException promote_type(SIQ{Int},SIQ{Float64})
+@test promote_type(SIQ{Int},SIQ{Float64}) == SIQ
 f4731(x::T...) where {T} = ""
 f4731(x...) = 0
 g4731() = f4731()
@@ -1752,7 +2053,7 @@ end
 @test invalid_tupleref()==true
 
 # issue #5150
-f5150(T) = Vector{Rational{T}}(uninitialized, 1)
+f5150(T) = Vector{Rational{T}}(undef, 1)
 @test typeof(f5150(Int)) === Vector{Rational{Int}}
 
 
@@ -1765,15 +2066,21 @@ for x in xs5165
     println(b5165, x)   # segfaulted
 end
 
+# issue #31486
+f31486(x::Bool, y::Bool, z::Bool) = Core.Intrinsics.bitcast(UInt8, Core.Intrinsics.add_int(x, Core.Intrinsics.add_int(y, z)))
+@test f31486(false, false, true) == 0x01
+@test f31486(false, true, true) == 0x00
+@test f31486(true, true, true) == 0x01
+
+
 # support tuples as type parameters
 
 mutable struct TupleParam{P}
     x::Bool
 end
 
-function tupledispatch(a::TupleParam{(1,:a)})
-    a.x
-end
+tupledispatch(a::TupleParam{(1,:a)}) = a.x
+tupledispatch(a::TupleParam{(1,(:a,))}) = 42
 
 # tuples can be used as type params
 let t1 = TupleParam{(1,:a)}(true),
@@ -1785,6 +2092,10 @@ let t1 = TupleParam{(1,:a)}(true),
     # dispatch works properly
     @test tupledispatch(t1) == true
     @test_throws MethodError tupledispatch(t2)
+
+    @test tupledispatch(TupleParam{(1,(:a,))}(true)) === 42
+    @test_throws TypeError TupleParam{NamedTuple{(:a,), Tuple{Any}}((1,))}
+    @test_throws TypeError Val{NamedTuple{(:a,), Tuple{NamedTuple{<:Any,Tuple{Int}}}}(((x=2,),))}
 end
 
 # issue #5254
@@ -1842,6 +2153,7 @@ try
     # try running this code in a different context that triggers the codegen
     # assertion `assert(isboxed || v.typ == typ)`.
     f5142()
+catch
 end
 
 primitive type Int5142b 8 end
@@ -1902,7 +2214,7 @@ mutable struct Polygon5884{T<:Real}
 end
 
 function test5884()
-    star = Vector{Polygon5884}(uninitialized, (3,))
+    star = Vector{Polygon5884}(undef, (3,))
     star[1] = Polygon5884([Complex(1.0,1.0)])
     p1 = star[1].points[1]
     @test p1 == Complex(1.0,1.0)
@@ -1913,11 +2225,11 @@ test5884()
 
 # issue #5924
 let
-    function Test()
+    function test5924()
         func = function () end
         func
     end
-    @test Test()() === nothing
+    @test test5924()() === nothing
 end
 
 # issue #6031
@@ -1975,7 +2287,7 @@ mutable struct A6142 <: AbstractMatrix{Float64}; end
 +(x::A6142, y::AbstractRange) = "AbstractRange method called" #16324 ambiguity
 
 # issue #6175
-function g6175(); print(""); (); end
+function g6175(); GC.safepoint(); (); end
 g6175(i::Real, I...) = g6175(I...)
 g6175(i, I...) = tuple(length(i), g6175(I...)...)
 @test g6175(1:5) === (5,)
@@ -2024,7 +2336,7 @@ f5577(::Type) = true
 # issue #6426
 f6426(x,args...) = f6426(x,map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 f6426(x,t::Tuple{Vararg{Type}}) = string(t)
-@test f6426(1, (1.,2.)) == "(Tuple{Float64,Float64},)"
+@test f6426(1, (1.,2.)) == "(Tuple{Float64, Float64},)"
 
 # issue #6502
 f6502() = convert(Tuple{Vararg{Int}}, (10,))
@@ -2095,7 +2407,7 @@ end
 obj6387 = ObjMember(DateRange6387{Int64}())
 
 function v6387(r::AbstractRange{T}) where T
-    a = Vector{T}(uninitialized, 1)
+    a = Vector{T}(undef, 1)
     a[1] = Core.Intrinsics.bitcast(Date6387{Int64}, Int64(1))
     return a
 end
@@ -2108,14 +2420,14 @@ end
 day_in(obj6387)
 
 # issue #6784
-@test ndims(Array{Array{Float64}}(uninitialized, 3,5)) == 2
-@test ndims(Array{Array}(uninitialized, 3,5)) == 2
+@test ndims(Array{Array{Float64}}(undef, 3,5)) == 2
+@test ndims(Array{Array}(undef, 3,5)) == 2
 
 # issue #6793
 function segfault6793(;gamma=1)
     A = 1
     B = 1
-    print()
+    GC.safepoint()
     return
     -gamma
     nothing
@@ -2167,7 +2479,7 @@ end
 @test ttt7049(init="a") == "init=a"
 
 # issue #7074
-let z(A::StridedMatrix{T}) where {T<:Union{Float64,Complex{Float64},Float32,Complex{Float32}}} = T,
+let z(A::StridedMatrix{T}) where {T<:Union{Float64,ComplexF64,Float32,ComplexF32}} = T,
     S = zeros(Complex,2,2)
     @test_throws MethodError z(S)
 end
@@ -2218,15 +2530,18 @@ a7652 = A7652(0)
 t_a7652 = A7652
 f7652() = fieldtype(t_a7652, :a) <: Int
 @test f7652() == (fieldtype(A7652, :a) <: Int) == true
+
 g7652() = fieldtype(DataType, :types)
-@test g7652() == fieldtype(DataType, :types) == SimpleVector
+@test g7652() == fieldtype(DataType, :types) == Core.SimpleVector
 @test fieldtype(t_a7652, 1) == Int
+
 h7652() = setfield!(a7652, 1, 2)
-h7652()
-@test a7652.a == 2
+@test h7652() === 2
+@test a7652.a === 2
+
 i7652() = Base.setproperty!(a7652, :a, 3.0)
-i7652()
-@test a7652.a == 3
+@test i7652() === 3
+@test a7652.a === 3
 
 # issue #7679
 @test map(f->f(), Any[ ()->i for i=1:3 ]) == Any[1,2,3]
@@ -2243,6 +2558,7 @@ let
     # This can throw an error, but shouldn't segfault
     try
         issue7897!(sa, zeros(10))
+    catch
     end
 end
 
@@ -2280,20 +2596,46 @@ let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
 end
 
 # call overloading (#2403)
-(x::Int)(y::Int) = x + 3y
 issue2403func(f) = f(7)
-let x = 10
-    @test x(3) == 19
-    @test x((3,)...) == 19
-    @test issue2403func(x) == 31
-end
 mutable struct Issue2403
     x
 end
 (i::Issue2403)(y) = i.x + 2y
 let x = Issue2403(20)
     @test x(3) == 26
+    @test x((3,)...) == 26
     @test issue2403func(x) == 34
+end
+
+# issue #14919
+abstract type A14919; end
+struct B14919 <: A14919; end
+struct C14919 <: A14919; end
+struct D14919 <: Function; end
+(::A14919)() = "It's a brand new world"
+(::Union{C14919,D14919})() = "Boo."
+@test B14919()() == "It's a brand new world"
+@test C14919()() == D14919()() == "Boo."
+
+for f in (:Any, :Function, :(Core.Builtin), :(Union{Nothing, Type}), :(Union{typeof(+), Type}), :(Union{typeof(+), typeof(-)}), :(Base.Callable))
+    @test_throws ErrorException("Method dispatch is unimplemented currently for this method signature") @eval (::$f)() = 1
+end
+for f in (:(Core.getfield), :((::typeof(Core.getfield))), :((::Core.IntrinsicFunction)))
+    @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
+end
+
+# issue #33370
+abstract type B33370 end
+
+let n = gensym(), c(x) = B33370[x][1]()
+    @eval begin
+        struct $n <: B33370
+        end
+
+        function (::$n)()
+        end
+    end
+    @test c(eval(n)()) === nothing
 end
 
 # issue #8798
@@ -2343,7 +2685,7 @@ end
 
 # issue #9475
 module I9475
-    arr = Vector{Any}(uninitialized, 1)
+    arr = Vector{Any}(undef, 1)
     @eval @eval $arr[1] = 1
 end
 
@@ -2367,6 +2709,20 @@ f24460(x::Int, y::Int) = "3"
 const T24460 = Tuple{T,T} where T
 g24460() = invoke(f24460, T24460, 1, 2)
 @test @inferred(g24460()) === 2.0
+
+# issue #30679
+@noinline function f30679(::DataType)
+    b = IOBuffer()
+    write(b, 0x00)
+    2
+end
+@noinline function f30679(t::Type{Int})
+    x = invoke(f30679, Tuple{DataType}, t)
+    b = IOBuffer()
+    write(b, 0x00)
+    return x + 40
+end
+@test f30679(Int) == 42
 
 call_lambda1() = (()->x)(1)
 call_lambda2() = ((x)->x)()
@@ -2392,18 +2748,6 @@ let x = [1,2,3]
     @test (ccall(:jl_new_bits, Any, (Any,Ptr{Cvoid},), Tuple{Int16,Tuple{Cvoid},Int8,Tuple{},Int,Cvoid,Int}, x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
 end
 
-# sig 2 is SIGINT per the POSIX.1-1990 standard
-if !Sys.iswindows()
-    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 0)
-    @test_throws InterruptException begin
-        ccall(:kill, Cvoid, (Cint, Cint,), getpid(), 2)
-        for i in 1:10
-            Libc.systemsleep(0.1)
-            ccall(:jl_gc_safepoint, Cvoid, ()) # wait for SIGINT to arrive
-        end
-    end
-    ccall(:jl_exit_on_sigint, Cvoid, (Cint,), 1)
-end
 let
     # Exception frame automatically restores sigatomic counter.
     Base.sigatomic_begin()
@@ -2418,7 +2762,7 @@ end
 # pull request #9534
 @test_throws BoundsError((1, 2), 3) begin; a, b, c = 1, 2; end
 let a = []
-    @test_broken try; a[]; catch ex; (ex::BoundsError).a === a && ex.i == (1,); end # TODO: Re-enable after PLI
+    @test try; a[]; catch ex; (ex::BoundsError).a === a && ex.i == (); end
     @test_throws BoundsError(a, (1, 2)) a[1, 2]
     @test_throws BoundsError(a, (10,)) a[10]
 end
@@ -2478,16 +2822,20 @@ mutable struct Obj; x; end
         x = Obj(1)
         push!(r, x)
         push!(wr, WeakRef(x))
+        nothing
     end
-    test_wr(r,wr) = @test r[1] == wr[1].value
+    @noinline test_wr(r, wr) = @test r[1] == wr[1].value
     function test_wr()
+        # we need to be very careful here that we never
+        # use the value directly in this function, so we aren't dependent
+        # on optimizations deleting the root for it before reaching the test
         ref = []
         wref = []
         mk_wr(ref, wref)
         test_wr(ref, wref)
         GC.gc()
         test_wr(ref, wref)
-        pop!(ref)
+        empty!(ref)
         GC.gc()
         @test wref[1].value === nothing
     end
@@ -2557,7 +2905,7 @@ end === nothing
 # issue #10221
 module GCbrokentype
 using InteractiveUtils
-OLD_STDOUT = STDOUT
+OLD_STDOUT = stdout
 fname = tempname()
 file = open(fname, "w")
 redirect_stdout(file)
@@ -2566,6 +2914,7 @@ try
     mutable struct Foo{T}
         val::Bar{T}
     end
+catch
 end
 GC.gc()
 redirect_stdout(OLD_STDOUT)
@@ -2584,10 +2933,10 @@ let f
     end
 end
 for m in methods(f10373)
-    @test m.name == :f10373
+    @test m.name === :f10373
 end
 for m in methods(g10373)
-    @test m.name == :g10373
+    @test m.name === :g10373
 end
 
 # issue #7221
@@ -3179,11 +3528,28 @@ function f11065()
         if i == 1
             z = "z is defined"
         elseif i == 2
-            print(z)
+            print(z) # z is undefined
         end
     end
 end
 @test_throws UndefVarError f11065()
+
+# issue #25724
+a25724 = Any[]
+for i = 1:3
+    needX = false
+    try
+        X = X
+        X[1] = X[1] + 1
+    catch err
+        needX = true
+    end
+    if needX
+        X = [0]
+    end
+    push!(a25724, copy(X))
+end
+@test a25724 == [[0], [0], [0]]
 
 # for loop iterator expression should be evaluated in outer scope
 let
@@ -3203,7 +3569,7 @@ let
     @test forouter() == 3
 end
 
-@test_throws ErrorException("syntax: no outer variable declaration exists for \"for outer\"") @eval function f()
+@test_throws ErrorException("syntax: no outer local variable declaration exists for \"for outer\"") @eval function f()
     for outer i = 1:2
     end
 end
@@ -3248,7 +3614,7 @@ mutable struct D11597{T} <: C11597{T} d::T end
 @test_throws TypeError repr(D11597(1.0))
 
 # issue #11772
-@test_throws UndefRefError (Vector{Any}(uninitialized, 5)...,)
+@test_throws UndefRefError (Vector{Any}(undef, 5)...,)
 
 # issue #11813
 let a = UInt8[1, 107, 66, 88, 2, 99, 254, 13, 0, 0, 0, 0]
@@ -3305,7 +3671,7 @@ end
 @noinline throw_error() = error()
 foo11904(x::Int) = x
 @inline function foo11904(x::Nullable11904{S}) where S
-    if isbits(S)
+    if isbitstype(S)
         Nullable11904(foo11904(x.value), x.hasvalue)
     else
         throw_error()
@@ -3336,7 +3702,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :apply_type
+        @test err.func === :Vararg
         @test err.expected == Int
         @test err.got == Int
     end
@@ -3346,7 +3712,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :apply_type
+        @test err.func === :Vararg
         @test err.expected == Int
         @test err.got == 0x1
     end
@@ -3356,18 +3722,31 @@ end
 @test_throws ErrorException NTuple{-1, Int}
 @test_throws TypeError Union{Int, 1}
 
+@test_throws ErrorException Vararg{Any,-2}
+# Disabled due to #39698, see src/jltypes.c
+#@test_throws ErrorException Vararg{Int, N} where N<:T where T
+#@test_throws ErrorException Vararg{Int, N} where N<:Integer
+#@test_throws ErrorException Vararg{Int, N} where N>:Integer
+
 mutable struct FooNTuple{N}
     z::Tuple{Integer, Vararg{Int, N}}
 end
-@test_throws ErrorException FooNTuple{-1}
-@test_throws ErrorException FooNTuple{typemin(Int)}
-@test_throws TypeError FooNTuple{0x01}
+for i in (-1, typemin(Int), 0x01)
+    T = FooNTuple{i}
+    @test T.parameters[1] == i
+    @test fieldtypes(T) == (Union{},)
+end
 @test fieldtype(FooNTuple{0}, 1) == Tuple{Integer}
 
 mutable struct FooTupleT{T}
     z::Tuple{Int, T, Int}
 end
-@test_throws TypeError FooTupleT{Vararg{Int, 2}}
+let R = Vararg{Int, 2}
+    @test_throws TypeError Val{R}
+    @test_throws TypeError Ref{R}
+    @test_throws TypeError FooTupleT{R}
+    @test_throws TypeError Union{R}
+end
 @test fieldtype(FooTupleT{Int}, 1) == NTuple{3, Int}
 
 @test Tuple{} === NTuple{0, Any}
@@ -3401,7 +3780,7 @@ f12092(x::Int, y::Int...) = 2
 # NOTE: should have > MAX_TUPLETYPE_LEN arguments
 f12063(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) where {T} = 1
 f12063(args...) = 2
-g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, spzeros(0,0), Int[])
+g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, zeros(0,0), Int[])
 @test g12063() == 1
 
 # issue #11587
@@ -3456,14 +3835,23 @@ end
         return nothing
     end
 end
-@test_throws TypeError f1()
-@test_throws TypeError f2()
-@test_throws TypeError f3()
-@test_throws TypeError eval(Expr(:new, B, 1))
+@test_throws TypeError("new", A, 1) f1()
+@test_throws TypeError("new", A, 1) f2()
+@test_throws TypeError("new", A, 1) f3()
+@test_throws TypeError("new", A, 1) eval(Expr(:new, B, 1))
+
+# some tests for handling of malformed syntax--these cases should not be possible in normal code
+@test eval(Expr(:new, B, A())) == B(A())
+@test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B))
+@test_throws ErrorException("invalid struct allocation") eval(Expr(:new, B, A(), A()))
+@test_throws TypeError("new", DataType, Complex) eval(Expr(:new, Complex))
+@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:new, Complex.body))
+@test_throws TypeError("new", DataType, Complex) eval(Expr(:splatnew, Complex, ()))
+@test_throws TypeError("new", DataType, Complex.body) eval(Expr(:splatnew, Complex.body, ()))
 
 end
 
-# don't allow redefining types if ninitialized changes
+# don't allow redefining types if n_uninitialized changes
 struct NInitializedTestType
     a
 end
@@ -3475,7 +3863,7 @@ end
 
 # issue #12394
 mutable struct Empty12394 end
-let x = Vector{Empty12394}(uninitialized, 1), y = [Empty12394()]
+let x = Vector{Empty12394}(undef, 1), y = [Empty12394()]
     @test_throws UndefRefError x==y
     @test_throws UndefRefError y==x
 end
@@ -3535,7 +3923,8 @@ PossiblyInvalidUnion{T} = Union{T,Int}
 # issue #13007
 call13007(::Type{Array{T,N}}) where {T,N} = 0
 call13007(::Type{Array}) = 1
-@test length(Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, typemax(UInt))) == 2
+@test Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, typemax(UInt)) === nothing
+@test length(Base._methods(call13007, Tuple{Type{x} where x<:Array}, 4, Base.get_world_counter())) == 2
 
 # detecting cycles during type intersection, e.g. #1631
 cycle_in_solve_tvar_constraints(::Type{Some{S}}, x::S) where {S} = 0
@@ -3614,7 +4003,7 @@ end
 #13433, read!(::IO, a::Vector{UInt8}) should return a
 mutable struct IO13433 <: IO end
 Base.read(::IO13433, ::Type{UInt8}) = 0x01
-@test read!(IO13433(), Array{UInt8}(uninitialized, 4)) == [0x01, 0x01, 0x01, 0x01]
+@test read!(IO13433(), Array{UInt8}(undef, 4)) == [0x01, 0x01, 0x01, 0x01]
 
 # issue #13647, comparing boxed isbits immutables
 struct X13647
@@ -3651,7 +4040,7 @@ f11327(::Type{T},x::T) where {T} = x
 
 # issue #8487
 @test [x for x in 1:3] == [x for x ∈ 1:3] == [x for x = 1:3]
-let A = Matrix{Int}(uninitialized, 4,3)
+let A = Matrix{Int}(undef, 4,3)
     for i ∈ 1:size(A,1), j ∈ 1:size(A,2)
         A[i,j] = 17*i + 51*j
     end
@@ -3702,7 +4091,7 @@ let
 end
 
 # issue #14323
-@test_throws ErrorException eval(Expr(:body, :(1)))
+@test eval(Expr(:block, :(1))) === 1
 
 # issue #14339
 f14339(x::T, y::T) where {T<:Union{}} = 0
@@ -3759,7 +4148,29 @@ end
 let z1 = Z14477()
     @test isa(z1, Z14477)
     @test isa(z1.fld, Z14477)
+    @test isdefined(z1, :fld)
+    @test !isdefined(z1.fld, :fld)
 end
+struct Z14477B
+    fld::Union{Nothing,Z14477B}
+    Z14477B() = new(new(nothing))
+end
+let z1 = Z14477B()
+    @test isa(z1, Z14477B)
+    @test isa(z1.fld, Z14477B)
+    @test isa(z1.fld.fld, Nothing)
+end
+struct Z14477C{T}
+    fld::Z14477C{Int8}
+    Z14477C() = new{Int16}(new{Int8}())
+end
+let z1 = Z14477C()
+    @test isa(z1, Z14477C)
+    @test isa(z1.fld, Z14477C)
+    @test isdefined(z1, :fld)
+    @test !isdefined(z1.fld, :fld)
+end
+
 
 # issue #8846, generic macros
 macro m8846(a, b=0)
@@ -3784,7 +4195,7 @@ let foo(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = 1
 end
 let foo(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = T
     @test foo(1, nothing) === Int
-    @test_throws UndefVarError(:T) foo(nothing, nothing)
+    @test_throws UndefVarError(:T, :static_parameter) foo(nothing, nothing)
 end
 
 module TestMacroGlobalFunction
@@ -3838,14 +4249,14 @@ foo9677(x::Array) = invoke(foo9677, Tuple{AbstractArray}, x)
 
 # issue #6846
 f6846() = (please6846; 2)
-@test_throws UndefVarError f6846()
+@test_throws UndefVarError(:please6846, @__MODULE__) f6846()
 
 module M6846
     macro f()
-        return :(please6846; 2)
+        return esc(:(please6846; 2))
     end
 end
-@test_throws UndefVarError @M6846.f()
+@test_throws UndefVarError(:please6846, @__MODULE__) @M6846.f()
 
 # issue #14758
 @test isa(@eval(f14758(; $([]...)) = ()), Function)
@@ -3936,12 +4347,12 @@ end
 let ex = quote
              $(if true; :(test); end)
          end
-    @test ex.args[2] == :test
+    @test ex.args[2] === :test
 end
 
 # issue #15180
 function f15180(x::T) where T
-    X = Vector{T}(uninitialized, 1)
+    X = Vector{T}(undef, 1)
     X[1] = x
     @noinline ef(::J) where {J} = (J,X[1]) # Use T
     ef(::J, ::Int) where {J} = (T,J)
@@ -3949,82 +4360,110 @@ function f15180(x::T) where T
 end
 @test map(f15180(1), [1,2]) == [(Int,1),(Int,1)]
 
-let ary = Vector{Any}(uninitialized, 10)
-    check_undef_and_fill(ary, rng) = for i in rng
-        @test !isassigned(ary, i)
-        ary[i] = (Float64(i), i) # some non-cached content
-        @test isassigned(ary, i)
-    end
-    # Check if the memory is initially zerod and fill it with value
-    # to check if these values are not reused later.
-    check_undef_and_fill(ary, 1:10)
-    # Check if the memory grown at the end are zerod
-    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
-    check_undef_and_fill(ary, 11:20)
-    # Make sure the content of the memory deleted at the end are not reused
-    ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 5)
-    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 5)
-    check_undef_and_fill(ary, 16:20)
+using Base: _growbeg!, _deletebeg!, _growend!, _deleteend!
+struct ValueWrapper
+    vpadding::NTuple{2,VecElement{UInt}}
+    value
+    ValueWrapper(value) = new((typemax(UInt), typemax(UInt)), value)
+end
+Base.convert(::Type{ValueWrapper}, x) = ValueWrapper(x)
+for T in (Any, ValueWrapper)
+    let ary = Vector{T}(undef, 10)
+        check_undef_and_fill(ary, rng) = all(i -> begin
+            isassigned(ary, i) && return false
+            ary[i] = (Float64(i), i) # some non-cached content
+            isassigned(ary, i) || return false
+            return true
+        end, rng)
+        # Check if the memory is initially zerod and fill it with value
+        # to check if these values are not reused later.
+        @test check_undef_and_fill(ary, 1:10)
+        # Check if the memory grown at the end are zerod
+        _growend!(ary, 10)
+        @test check_undef_and_fill(ary, 11:20)
+        # Make sure the content of the memory deleted at the end are not reused
+        _deleteend!(ary, 5)
+        _growend!(ary, 5)
+        @test check_undef_and_fill(ary, 16:20)
 
-    # Now check grow/del_end
-    ary = Vector{Any}(uninitialized, 1010)
-    check_undef_and_fill(ary, 1:1010)
-    # This del_beg should move the buffer
-    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 1000)
-    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 1000)
-    check_undef_and_fill(ary, 1:1000)
-    ary = Vector{Any}(uninitialized, 1010)
-    check_undef_and_fill(ary, 1:1010)
-    # This del_beg should not move the buffer
-    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10)
-    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
-    check_undef_and_fill(ary, 1:10)
+        # Now check grow/del_end
+        ary = Vector{T}(undef, 1010)
+        @test check_undef_and_fill(ary, 1:1010)
+        # This del_beg should move the buffer
+        _deletebeg!(ary, 1000)
+        _growbeg!(ary, 1000)
+        @test check_undef_and_fill(ary, 1:1000)
+        ary = Vector{T}(undef, 1010)
+        @test check_undef_and_fill(ary, 1:1010)
+        # This del_beg should not move the buffer
+        _deletebeg!(ary, 10)
+        _growbeg!(ary, 10)
+        @test check_undef_and_fill(ary, 1:10)
 
-    ary = Vector{Any}(uninitialized, 1010)
-    check_undef_and_fill(ary, 1:1010)
-    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
-    check_undef_and_fill(ary, 1011:1020)
-    ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), ary, 10)
-    ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 10)
-    check_undef_and_fill(ary, 1:10)
+        ary = Vector{T}(undef, 1010)
+        @test check_undef_and_fill(ary, 1:1010)
+        _growend!(ary, 10)
+        @test check_undef_and_fill(ary, 1011:1020)
+        _deleteend!(ary, 10)
+        _growbeg!(ary, 10)
+        @test check_undef_and_fill(ary, 1:10)
 
-    # Make sure newly malloc'd buffers are filled with 0
-    # test this for a few different sizes since we need to make sure
-    # we are malloc'ing the buffer after the grow_end and malloc is not using
-    # mmap directly (which may return a zero'd new page).
-    for n in [50, 51, 100, 101, 200, 201, 300, 301]
-        ary = Vector{Any}(uninitialized, n)
-        # Try to free the previous buffer that was filled with random content
-        # and to increase the chance of getting a non-zero'd buffer next time
-        GC.gc()
-        GC.gc()
-        GC.gc()
-        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
-        ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 4)
-        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, n)
-        ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), ary, 4)
-        check_undef_and_fill(ary, 1:(2n + 4))
-    end
-
-    ary = Vector{Any}(uninitialized, 100)
-    ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10000)
-    ary[:] = 1:length(ary)
-    ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), ary, 10000)
-    # grow on the back until a buffer reallocation happens
-    cur_ptr = pointer(ary)
-    while cur_ptr == pointer(ary)
-        len = length(ary)
-        ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), ary, 10)
-        for i in (len + 1):(len + 10)
-            @test !isassigned(ary, i)
+        # Make sure newly malloc'd buffers are filled with 0
+        # test this for a few different sizes since we need to make sure
+        # we are malloc'ing the buffer after the grow_end and malloc is not using
+        # mmap directly (which may return a zero'd new page).
+        for n in [50, 51, 100, 101, 200, 201, 300, 301]
+            ary = Vector{T}(undef, n)
+            # Try to free the previous buffer that was filled with random content
+            # and to increase the chance of getting a non-zero'd buffer next time
+            GC.gc()
+            GC.gc()
+            GC.gc()
+            _growbeg!(ary, 4)
+            _deletebeg!(ary, 4)
+            _growend!(ary, n)
+            _growbeg!(ary, 4)
+            @test check_undef_and_fill(ary, 1:(2n + 4))
         end
-    end
 
-    ary = Vector{Any}(uninitialized, 100)
-    ary[:] = 1:length(ary)
-    ccall(:jl_array_grow_at, Cvoid, (Any, Csize_t, Csize_t), ary, 50, 10)
-    for i in 51:60
-        @test !isassigned(ary, i)
+        ary = Vector{T}(undef, 100)
+        _growend!(ary, 10000)
+        ary[:] = 1:length(ary)
+        _deletebeg!(ary, 10000)
+        # grow on the back until a buffer reallocation happens
+        cur_ptr = pointer(ary)
+        while cur_ptr == pointer(ary)
+            len = length(ary)
+            _growend!(ary, 10)
+            result = @test all(i -> !isassigned(ary, i), (len + 1):(len + 10))
+            result isa Test.Pass || break
+        end
+
+        # growat when copy into start of same buffer
+        ary = Vector{T}(undef, 10)
+        ary[:] = 1:10
+        pushfirst!(ary, 0)
+        Base._growat!(ary, 3, 5)
+        @test all(i -> !isassigned(ary, i), 3:7)
+        @test all(i -> isassigned(ary, i), 8:length(ary))
+        @test all(i -> isassigned(ary, i), 1:2)
+
+        # growat when copy into end of same buffer
+        ary = Vector{T}(undef, 10)
+        ary[:] = 1:10
+        push!(ary, 11)
+        Base._growat!(ary, 6, 10)
+        @test all(i -> !isassigned(ary, i), 6:15)
+        @test all(i -> isassigned(ary, i), 16:length(ary))
+        @test all(i -> isassigned(ary, i), 1:5)
+
+        # growat when copy to new buffer
+        ary = Vector{T}(undef, 10)
+        ary[:] = 1:10
+        Base._growat!(ary, 6, 10)
+        @test all(i -> !isassigned(ary, i), 6:15)
+        @test all(i -> isassigned(ary, i), 16:length(ary))
+        @test all(i -> isassigned(ary, i), 1:5)
     end
 end
 
@@ -4041,7 +4480,10 @@ end
 end
 # disable GC to make sure no collection/promotion happens
 # when we are constructing the objects
+get_finalizers_inhibited() = ccall(:jl_gc_get_finalizers_inhibited, Int32, (Ptr{Cvoid},), C_NULL)
 let gc_enabled13995 = GC.enable(false)
+    @assert gc_enabled13995
+    @assert get_finalizers_inhibited() == 0
     finalized13995 = [false, false, false, false]
     create_dead_object13995(finalized13995)
     GC.enable(true)
@@ -4051,6 +4493,30 @@ let gc_enabled13995 = GC.enable(false)
     GC.enable(false)
     @test finalized13995 == [true, true, true, true]
     GC.enable(gc_enabled13995)
+end
+
+# Ensure an independent GC frame
+@noinline outlined(f) = f()
+
+@testset "finalizers must not change the sticky flag" begin
+    GC.enable(false)
+    try
+        outlined() do
+            local obj = Ref(0)
+            finalizer(obj) do _
+                @async nothing
+            end
+            Base.donotdelete(obj)
+        end
+        task = Threads.@spawn begin
+            GC.enable(true)
+            GC.gc()
+        end
+        wait(task)
+        @test !task.sticky
+    finally
+        GC.enable(true)
+    end
 end
 
 # issue #15283
@@ -4077,14 +4543,19 @@ end
 @test M15455.partialsort(1,2)==0
 
 # check that medium-sized array is 64-byte aligned (#15139)
-@test Int(pointer(Vector{Float64}(uninitialized, 1024))) % 64 == 0
+@test Int(pointer(Vector{Float64}(undef, 1024))) % 64 == 0
 
 # PR #15413
 # Make sure arrayset can handle `Array{T}` (where `T` is a type and not a
 # `TypeVar`) without crashing
 let
-    function arrayset_unknown_dim(::Type{T}, n) where T
-        Base.arrayset(true, reshape(Vector{T}(uninitialized, 1), fill(1, n)...), 2, 1)
+    @noinline function arrayset_unknown_dim(::Type{T}, n) where T
+        a = Vector{T}(undef, 1)
+        fill!(a, 0)
+        a = reshape(a, fill(1, n)...)::Array{T}
+        @test a[1] === 0
+        Core.memoryrefset!(a.ref, 2, :not_atomic, true)
+        @test a[1] === 2
     end
     arrayset_unknown_dim(Any, 1)
     arrayset_unknown_dim(Any, 2)
@@ -4094,90 +4565,8 @@ let
     arrayset_unknown_dim(Int, 3)
 end
 
-module TestSharedArrayResize
-using Test
-# Attempting to change the shape of a shared array should unshare it and
-# not modify the original data
-function test_shared_array_resize(::Type{T}) where T
-    len = 100
-    a = Vector{T}(uninitialized, len)
-    function test_unshare(f)
-        a′ = reshape(reshape(a, (len ÷ 2, 2)), len)
-        a[:] = 1:length(a)
-        # The operation should fail on the owner shared array
-        # and has no side effect.
-        @test_throws ErrorException f(a)
-        @test a == [1:len;]
-        @test a′ == [1:len;]
-        @test pointer(a) == pointer(a′)
-        # The operation should pass on the non-owner shared array
-        # and should unshare the arrays with no effect on the original one.
-        f(a′)
-        @test a == [1:len;]
-        @test pointer(a) != pointer(a′)
-    end
-
-    test_unshare(a->ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_del_end, Cvoid, (Any, Csize_t), a, 1))
-    test_unshare(a->ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_del_beg, Cvoid, (Any, Csize_t), a, 1))
-    test_unshare(a->deleteat!(a, 10))
-    test_unshare(a->deleteat!(a, 90))
-    test_unshare(a->ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_grow_end, Cvoid, (Any, Csize_t), a, 1))
-    test_unshare(a->ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), a, 0))
-    test_unshare(a->ccall(:jl_array_grow_beg, Cvoid, (Any, Csize_t), a, 1))
-    test_unshare(a->insert!(a, 10, 10))
-    test_unshare(a->insert!(a, 90, 90))
-end
-test_shared_array_resize(Int)
-test_shared_array_resize(Any)
-end
-
-module TestArrayNUL
-using Test
-function check_nul(a::Vector{UInt8})
-    b = ccall(:jl_array_cconvert_cstring,
-              Ref{Vector{UInt8}}, (Vector{UInt8},), a)
-    @test unsafe_load(pointer(b), length(b) + 1) == 0x0
-    return b === a
-end
-
-a = UInt8[]
-b = "aaa"
-c = [0x2, 0x1, 0x3]
-
-@test check_nul(a)
-@test check_nul(unsafe_wrap(Vector{UInt8},b))
-@test check_nul(c)
-d = [0x2, 0x1, 0x3]
-@test check_nul(d)
-push!(d, 0x3)
-@test check_nul(d)
-push!(d, 0x3)
-@test check_nul(d)
-ccall(:jl_array_del_end, Cvoid, (Any, UInt), d, 2)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 1)
-@test check_nul(d)
-ccall(:jl_array_grow_end, Cvoid, (Any, UInt), d, 10)
-@test check_nul(d)
-ccall(:jl_array_del_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-ccall(:jl_array_grow_beg, Cvoid, (Any, UInt), d, 8)
-@test check_nul(d)
-f = unsafe_wrap(Array, pointer(d), length(d))
-@test !check_nul(f)
-f = unsafe_wrap(Array, ccall(:malloc, Ptr{UInt8}, (Csize_t,), 10), 10, own = true)
-@test !check_nul(f)
-end
-
 # Copy of `#undef`
-copyto!(Vector{Any}(uninitialized, 10), Vector{Any}(uninitialized, 10))
+copyto!(Vector{Any}(undef, 10), Vector{Any}(undef, 10))
 function test_copy_alias(::Type{T}) where T
     ary = T[1:100;]
     unsafe_copyto!(ary, 1, ary, 11, 90)
@@ -4188,6 +4577,7 @@ function test_copy_alias(::Type{T}) where T
 end
 test_copy_alias(Int)
 test_copy_alias(Any)
+test_copy_alias(Union{Int,Nothing})
 
 # issue #15370
 @test isdefined(Core, :Box)
@@ -4271,7 +4661,7 @@ function count_expr_push(ex::Expr, head::Symbol, counter)
     return false
 end
 
-function metadata_matches(ast::CodeInfo)
+function metadata_matches(ast::Core.CodeInfo)
     inbounds_cnt = Ref(0)
     for ex in ast.code::Array{Any,1}
         if isa(ex, Expr)
@@ -4346,7 +4736,7 @@ end
 @test f16158("abc") == "abcaba"
 
 # LLVM verifier error for noreturn function
-# the `code_llvm(DevNull, ...)` tests are only meaningful on debug build
+# the `code_llvm(devnull, ...)` tests are only meaningful on debug build
 # with verifier on (but should still pass on release build).
 module TestSSA16244
 
@@ -4362,7 +4752,7 @@ function f1(a)
     end
     b[1]
 end
-code_llvm(DevNull, f1, Tuple{Bool})
+code_llvm(devnull, f1, Tuple{Bool})
 @test f1(true) == 2
 @test_throws DivideError f1(false)
 
@@ -4377,7 +4767,7 @@ function f2(a)
     end
     b[1]
 end
-code_llvm(DevNull, f2, Tuple{Bool})
+code_llvm(devnull, f2, Tuple{Bool})
 @test f2(true) == 2
 @test_throws ErrorException f2(false)
 
@@ -4388,7 +4778,7 @@ function f3(a)
     end
     b[1]
 end
-code_llvm(DevNull, f3, Tuple{Bool})
+code_llvm(devnull, f3, Tuple{Bool})
 @test f3(true) == 2
 ex = try
     f3(false)
@@ -4407,7 +4797,7 @@ function f4(a, p)
     end
     b[1]
 end
-code_llvm(DevNull, f4, Tuple{Bool,Ptr{Cvoid}})
+code_llvm(devnull, f4, Tuple{Bool,Ptr{Cvoid}})
 @test f4(true, C_NULL) == 2
 @test_throws UndefRefError f4(false, C_NULL)
 
@@ -4419,7 +4809,7 @@ function f5(a)
     end
     b[1]
 end
-code_llvm(DevNull, f5, Tuple{Bool})
+code_llvm(devnull, f5, Tuple{Bool})
 @test f5(true) == 2
 @test f5(false) == 1
 
@@ -4430,7 +4820,7 @@ function f6(a)
     end
     b[1]
 end
-code_llvm(DevNull, f6, Tuple{Bool})
+code_llvm(devnull, f6, Tuple{Bool})
 @test f6(true) == 2
 @test f6(false) == 1
 
@@ -4443,7 +4833,7 @@ function f7(a)
     end
     b[1]
 end
-code_llvm(DevNull, f7, Tuple{Bool})
+code_llvm(devnull, f7, Tuple{Bool})
 @test f7(true) == 2
 @test_throws TypeError f7(false)
 
@@ -4456,7 +4846,7 @@ function f8(a, c)
     end
     b[1]
 end
-code_llvm(DevNull, f8, Tuple{Bool,Int})
+code_llvm(devnull, f8, Tuple{Bool,Int})
 @test f8(true, 1) == 2
 @test_throws TypeError f8(false, 1)
 
@@ -4470,7 +4860,7 @@ function f9(a)
     end
     b[1]
 end
-code_llvm(DevNull, f9, Tuple{Bool})
+code_llvm(devnull, f9, Tuple{Bool})
 @test f9(true) == 2
 ex = try
     f9(false)
@@ -4504,13 +4894,20 @@ undefined_x16090 = (Int,)
 @test_throws TypeError f16090()
 
 # issue #12238
-mutable struct A12238{T} end
+struct A12238{T} end
 mutable struct B12238{T,S}
     a::A12238{B12238{Int,S}}
 end
 @test B12238.body.body.types[1] === A12238{B12238{Int}.body}
 @test isa(A12238{B12238{Int}}.instance, A12238{B12238{Int}})
-@test !isdefined(B12238.body.body.types[1], :instance)  # has free type vars
+let ft = Base.datatype_fieldtypes
+    @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
+end
+
+# `where` syntax in constructor definitions
+(A12238{T} where T<:Real)(x) = 0
+@test A12238{<:Real}(0) == 0
+@test_throws MethodError A12238{<:Integer}(0)
 
 # issue #16315
 let a = Any[]
@@ -4519,12 +4916,19 @@ let a = Any[]
     @test a == [10, 2]
 end
 
+# issue 47209
+struct f47209
+    x::Int
+    f47209()::Nothing = new(1)
+end
+@test_throws ErrorException("cannot convert a value to nothing for assignment") f47209()
+
 # issue #12096
 let a = Val{Val{TypeVar(:_, Int)}},
     b = Val{Val{x} where x<:Int}
 
-    @test !isdefined(a, :instance)
-    @test  isdefined(b, :instance)
+    @test !Base.issingletontype(a)
+    @test  Base.issingletontype(b)
     @test Base.isconcretetype(b)
 end
 
@@ -4552,10 +4956,10 @@ end
 B14878(ng) = B14878()
 function trigger14878()
     w = A14878()
-    w.ext[:14878] = B14878(junk)  # junk not defined!
+    w.ext[:14878] = B14878(junk)  # global junk not defined!
     return w
 end
-@test_throws UndefVarError trigger14878()
+@test_throws UndefVarError(:junk, @__MODULE__) trigger14878()
 
 # issue #1090
 function f1090(x)::Int
@@ -4623,8 +5027,10 @@ end
 mutable struct C16767{T}
     b::A16767{C16767{:a}}
 end
-@test B16767.body.types[1].types[1].parameters[1].types[1] === A16767{B16767.body}
-@test C16767.body.types[1].types[1].parameters[1].types[1] === A16767{C16767{:a}}
+let ft = Base.datatype_fieldtypes
+    @test ft(ft(B16767.body.types[1])[1].parameters[1])[1] === A16767{B16767.body}
+    @test ft(C16767.body.types[1].types[1].parameters[1])[1] === A16767{C16767{:a}}
+end
 
 # issue #16340
 function f16340(x::T) where T
@@ -4702,21 +5108,6 @@ let
     @test k(1) == 1
 end
 
-# PR #18054: compilation of cfunction leaves IRBuilder in bad state,
-#            causing heap-use-after-free when compiling f18054
-function f18054()
-    return Cint(0)
-end
-cfunction(f18054, Cint, Tuple{})
-
-# issue #18986: the ccall optimization of cfunction leaves JL_TRY stack in bad state
-dummy18996() = return nothing
-function main18986()
-    cfunction(dummy18986, Cvoid, ())
-    ccall((:dummy2, "this_is_a_nonexisting_library"), Cvoid, ())
-end
-@test_throws ErrorException main18986()
-
 # issue #18085
 f18085(a, x...) = (0, )
 for (f, g) in ((:asin, :sin), (:acos, :cos))
@@ -4728,11 +5119,11 @@ end
 # issue #18236 constant VecElement in ast triggers codegen assertion/undef
 # VecElement of scalar
 v18236 = VecElement(1.0)
-ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
+ptr18236 = @cfunction(identity, VecElement{Float64}, (VecElement{Float64},))
 @eval @noinline f18236(ptr) = ccall(ptr, VecElement{Float64},
                                     (VecElement{Float64},), $v18236)
 @test f18236(ptr18236) === v18236
-@test !contains(sprint(code_llvm, f18236, Tuple{Ptr{Cvoid}}), "double undef")
+@test !occursin("double undef", sprint(code_llvm, f18236, Tuple{Ptr{Cvoid}}))
 # VecElement of struct, not necessarily useful but does have special
 # ABI so should be handled correctly
 # This struct should be small enough to be passed by value in C ABI
@@ -4740,8 +5131,8 @@ ptr18236 = cfunction(identity, VecElement{Float64}, Tuple{VecElement{Float64}})
 # We should be at least testing this on some platforms.
 # Not sure if there's a better way to trigger unboxing in codegen.
 v18236_2 = VecElement((Int8(1), Int8(2)))
-ptr18236_2 = cfunction(identity, VecElement{NTuple{2,Int8}},
-                       Tuple{VecElement{NTuple{2,Int8}}})
+ptr18236_2 = @cfunction(identity, VecElement{NTuple{2,Int8}},
+                        (VecElement{NTuple{2,Int8}},))
 @eval @noinline f18236_2(ptr) = ccall(ptr, VecElement{NTuple{2,Int8}},
                                       (VecElement{NTuple{2,Int8}},),
                                       $v18236_2)
@@ -4800,16 +5191,17 @@ gVararg(a::fVararg(Int)) = length(a)
     false
 catch e
     (e::ErrorException).msg
-end == "generated function body is not pure. this likely means it contains a closure or comprehension."
+end == "The function body AST defined by this @generated function is not pure. " *
+       "This likely means it contains a closure, a comprehension or a generator."
 
 let x = 1
     global g18444
     @noinline g18444(a) = (x += 1; a[])
     f18444_1(a) = invoke(sin, Tuple{Int}, g18444(a))
     f18444_2(a) = invoke(sin, Tuple{Integer}, g18444(a))
-    @test_throws ErrorException("invoke: argument type error") f18444_1(Ref{Any}(1.0))
+    @test_throws "TypeError: in invoke: argument type error, expected" f18444_1(Ref{Any}(1.0))
     @test x == 2
-    @test_throws ErrorException("invoke: argument type error") f18444_2(Ref{Any}(1.0))
+    @test_throws "TypeError: in invoke: argument type error, expected" f18444_2(Ref{Any}(1.0))
     @test x == 3
     @test f18444_1(Ref{Any}(1)) === sin(1)
     @test x == 4
@@ -4824,6 +5216,23 @@ f18095(::Number, ::Int) = 0x12
 @test_throws MethodError invoke(f18095, Tuple{Int, Any}, 1, 2)
 @test invoke(f18095, Tuple{Int, Real}, 1, 2) === 0x21
 
+# `invoke` with non-constant function
+struct CassetteLikeWrapper{F}
+    x
+    f::F
+end
+(foo::CassetteLikeWrapper)(args...) = foo.f(args...)
+(foo::CassetteLikeWrapper)(x) = invoke(foo, Tuple{Vararg{Any}}, x)
+@test CassetteLikeWrapper(1,-)(2) == -2
+
+f26301(x) = 1
+f26301(x::Int) = 2
+function g26301()
+    f = Any[f26301][1]
+    invoke(f, Tuple{Any}, 0)
+end
+@test g26301() == 1
+
 # issue #10981, long argument lists
 let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
     # we introduce a new function `temp_vcat` to make sure there is no existing
@@ -4834,17 +5243,27 @@ let a = fill(["sdf"], 2*10^6), temp_vcat(x...) = vcat(x...)
     @test b[1] == b[end] == "sdf"
 end
 
+# test for splatting of something fairly large and unusual (not builtin or pre-countable)
+@noinline splat10981(a...) = a
+for trail in ((), ntuple(_ -> (), 4 * 10^7)) # 150 / 300 MB of pointers
+    got = splat10981((1, 2, "3")..., (trail...)..., Core.svec("4",)..., (5 => 6)..., (trail...)..., ([i => j for i in 1:100, j=2.0:2:20]...)..., ntuple(identity, 1000)..., (trail...)...)
+    expected = (1,2,"3","4",5,6,1,2.0,2,2.0,3,2.0,4,2.0,5,2.0,6,2.0,7,2.0,8,2.0,9,2.0,10,2.0,11,2.0,12,2.0,13,2.0,14,2.0,15,2.0,16,2.0,17,2.0,18,2.0,19,2.0,20,2.0,21,2.0,22,2.0,23,2.0,24,2.0,25,2.0,26,2.0,27,2.0,28,2.0,29,2.0,30,2.0,31,2.0,32,2.0,33,2.0,34,2.0,35,2.0,36,2.0,37,2.0,38,2.0,39,2.0,40,2.0,41,2.0,42,2.0,43,2.0,44,2.0,45,2.0,46,2.0,47,2.0,48,2.0,49,2.0,50,2.0,51,2.0,52,2.0,53,2.0,54,2.0,55,2.0,56,2.0,57,2.0,58,2.0,59,2.0,60,2.0,61,2.0,62,2.0,63,2.0,64,2.0,65,2.0,66,2.0,67,2.0,68,2.0,69,2.0,70,2.0,71,2.0,72,2.0,73,2.0,74,2.0,75,2.0,76,2.0,77,2.0,78,2.0,79,2.0,80,2.0,81,2.0,82,2.0,83,2.0,84,2.0,85,2.0,86,2.0,87,2.0,88,2.0,89,2.0,90,2.0,91,2.0,92,2.0,93,2.0,94,2.0,95,2.0,96,2.0,97,2.0,98,2.0,99,2.0,100,2.0,1,4.0,2,4.0,3,4.0,4,4.0,5,4.0,6,4.0,7,4.0,8,4.0,9,4.0,10,4.0,11,4.0,12,4.0,13,4.0,14,4.0,15,4.0,16,4.0,17,4.0,18,4.0,19,4.0,20,4.0,21,4.0,22,4.0,23,4.0,24,4.0,25,4.0,26,4.0,27,4.0,28,4.0,29,4.0,30,4.0,31,4.0,32,4.0,33,4.0,34,4.0,35,4.0,36,4.0,37,4.0,38,4.0,39,4.0,40,4.0,41,4.0,42,4.0,43,4.0,44,4.0,45,4.0,46,4.0,47,4.0,48,4.0,49,4.0,50,4.0,51,4.0,52,4.0,53,4.0,54,4.0,55,4.0,56,4.0,57,4.0,58,4.0,59,4.0,60,4.0,61,4.0,62,4.0,63,4.0,64,4.0,65,4.0,66,4.0,67,4.0,68,4.0,69,4.0,70,4.0,71,4.0,72,4.0,73,4.0,74,4.0,75,4.0,76,4.0,77,4.0,78,4.0,79,4.0,80,4.0,81,4.0,82,4.0,83,4.0,84,4.0,85,4.0,86,4.0,87,4.0,88,4.0,89,4.0,90,4.0,91,4.0,92,4.0,93,4.0,94,4.0,95,4.0,96,4.0,97,4.0,98,4.0,99,4.0,100,4.0,1,6.0,2,6.0,3,6.0,4,6.0,5,6.0,6,6.0,7,6.0,8,6.0,9,6.0,10,6.0,11,6.0,12,6.0,13,6.0,14,6.0,15,6.0,16,6.0,17,6.0,18,6.0,19,6.0,20,6.0,21,6.0,22,6.0,23,6.0,24,6.0,25,6.0,26,6.0,27,6.0,28,6.0,29,6.0,30,6.0,31,6.0,32,6.0,33,6.0,34,6.0,35,6.0,36,6.0,37,6.0,38,6.0,39,6.0,40,6.0,41,6.0,42,6.0,43,6.0,44,6.0,45,6.0,46,6.0,47,6.0,48,6.0,49,6.0,50,6.0,51,6.0,52,6.0,53,6.0,54,6.0,55,6.0,56,6.0,57,6.0,58,6.0,59,6.0,60,6.0,61,6.0,62,6.0,63,6.0,64,6.0,65,6.0,66,6.0,67,6.0,68,6.0,69,6.0,70,6.0,71,6.0,72,6.0,73,6.0,74,6.0,75,6.0,76,6.0,77,6.0,78,6.0,79,6.0,80,6.0,81,6.0,82,6.0,83,6.0,84,6.0,85,6.0,86,6.0,87,6.0,88,6.0,89,6.0,90,6.0,91,6.0,92,6.0,93,6.0,94,6.0,95,6.0,96,6.0,97,6.0,98,6.0,99,6.0,100,6.0,1,8.0,2,8.0,3,8.0,4,8.0,5,8.0,6,8.0,7,8.0,8,8.0,9,8.0,10,8.0,11,8.0,12,8.0,13,8.0,14,8.0,15,8.0,16,8.0,17,8.0,18,8.0,19,8.0,20,8.0,21,8.0,22,8.0,23,8.0,24,8.0,25,8.0,26,8.0,27,8.0,28,8.0,29,8.0,30,8.0,31,8.0,32,8.0,33,8.0,34,8.0,35,8.0,36,8.0,37,8.0,38,8.0,39,8.0,40,8.0,41,8.0,42,8.0,43,8.0,44,8.0,45,8.0,46,8.0,47,8.0,48,8.0,49,8.0,50,8.0,51,8.0,52,8.0,53,8.0,54,8.0,55,8.0,56,8.0,57,8.0,58,8.0,59,8.0,60,8.0,61,8.0,62,8.0,63,8.0,64,8.0,65,8.0,66,8.0,67,8.0,68,8.0,69,8.0,70,8.0,71,8.0,72,8.0,73,8.0,74,8.0,75,8.0,76,8.0,77,8.0,78,8.0,79,8.0,80,8.0,81,8.0,82,8.0,83,8.0,84,8.0,85,8.0,86,8.0,87,8.0,88,8.0,89,8.0,90,8.0,91,8.0,92,8.0,93,8.0,94,8.0,95,8.0,96,8.0,97,8.0,98,8.0,99,8.0,100,8.0,1,10.0,2,10.0,3,10.0,4,10.0,5,10.0,6,10.0,7,10.0,8,10.0,9,10.0,10,10.0,11,10.0,12,10.0,13,10.0,14,10.0,15,10.0,16,10.0,17,10.0,18,10.0,19,10.0,20,10.0,21,10.0,22,10.0,23,10.0,24,10.0,25,10.0,26,10.0,27,10.0,28,10.0,29,10.0,30,10.0,31,10.0,32,10.0,33,10.0,34,10.0,35,10.0,36,10.0,37,10.0,38,10.0,39,10.0,40,10.0,41,10.0,42,10.0,43,10.0,44,10.0,45,10.0,46,10.0,47,10.0,48,10.0,49,10.0,50,10.0,51,10.0,52,10.0,53,10.0,54,10.0,55,10.0,56,10.0,57,10.0,58,10.0,59,10.0,60,10.0,61,10.0,62,10.0,63,10.0,64,10.0,65,10.0,66,10.0,67,10.0,68,10.0,69,10.0,70,10.0,71,10.0,72,10.0,73,10.0,74,10.0,75,10.0,76,10.0,77,10.0,78,10.0,79,10.0,80,10.0,81,10.0,82,10.0,83,10.0,84,10.0,85,10.0,86,10.0,87,10.0,88,10.0,89,10.0,90,10.0,91,10.0,92,10.0,93,10.0,94,10.0,95,10.0,96,10.0,97,10.0,98,10.0,99,10.0,100,10.0,1,12.0,2,12.0,3,12.0,4,12.0,5,12.0,6,12.0,7,12.0,8,12.0,9,12.0,10,12.0,11,12.0,12,12.0,13,12.0,14,12.0,15,12.0,16,12.0,17,12.0,18,12.0,19,12.0,20,12.0,21,12.0,22,12.0,23,12.0,24,12.0,25,12.0,26,12.0,27,12.0,28,12.0,29,12.0,30,12.0,31,12.0,32,12.0,33,12.0,34,12.0,35,12.0,36,12.0,37,12.0,38,12.0,39,12.0,40,12.0,41,12.0,42,12.0,43,12.0,44,12.0,45,12.0,46,12.0,47,12.0,48,12.0,49,12.0,50,12.0,51,12.0,52,12.0,53,12.0,54,12.0,55,12.0,56,12.0,57,12.0,58,12.0,59,12.0,60,12.0,61,12.0,62,12.0,63,12.0,64,12.0,65,12.0,66,12.0,67,12.0,68,12.0,69,12.0,70,12.0,71,12.0,72,12.0,73,12.0,74,12.0,75,12.0,76,12.0,77,12.0,78,12.0,79,12.0,80,12.0,81,12.0,82,12.0,83,12.0,84,12.0,85,12.0,86,12.0,87,12.0,88,12.0,89,12.0,90,12.0,91,12.0,92,12.0,93,12.0,94,12.0,95,12.0,96,12.0,97,12.0,98,12.0,99,12.0,100,12.0,1,14.0,2,14.0,3,14.0,4,14.0,5,14.0,6,14.0,7,14.0,8,14.0,9,14.0,10,14.0,11,14.0,12,14.0,13,14.0,14,14.0,15,14.0,16,14.0,17,14.0,18,14.0,19,14.0,20,14.0,21,14.0,22,14.0,23,14.0,24,14.0,25,14.0,26,14.0,27,14.0,28,14.0,29,14.0,30,14.0,31,14.0,32,14.0,33,14.0,34,14.0,35,14.0,36,14.0,37,14.0,38,14.0,39,14.0,40,14.0,41,14.0,42,14.0,43,14.0,44,14.0,45,14.0,46,14.0,47,14.0,48,14.0,49,14.0,50,14.0,51,14.0,52,14.0,53,14.0,54,14.0,55,14.0,56,14.0,57,14.0,58,14.0,59,14.0,60,14.0,61,14.0,62,14.0,63,14.0,64,14.0,65,14.0,66,14.0,67,14.0,68,14.0,69,14.0,70,14.0,71,14.0,72,14.0,73,14.0,74,14.0,75,14.0,76,14.0,77,14.0,78,14.0,79,14.0,80,14.0,81,14.0,82,14.0,83,14.0,84,14.0,85,14.0,86,14.0,87,14.0,88,14.0,89,14.0,90,14.0,91,14.0,92,14.0,93,14.0,94,14.0,95,14.0,96,14.0,97,14.0,98,14.0,99,14.0,100,14.0,1,16.0,2,16.0,3,16.0,4,16.0,5,16.0,6,16.0,7,16.0,8,16.0,9,16.0,10,16.0,11,16.0,12,16.0,13,16.0,14,16.0,15,16.0,16,16.0,17,16.0,18,16.0,19,16.0,20,16.0,21,16.0,22,16.0,23,16.0,24,16.0,25,16.0,26,16.0,27,16.0,28,16.0,29,16.0,30,16.0,31,16.0,32,16.0,33,16.0,34,16.0,35,16.0,36,16.0,37,16.0,38,16.0,39,16.0,40,16.0,41,16.0,42,16.0,43,16.0,44,16.0,45,16.0,46,16.0,47,16.0,48,16.0,49,16.0,50,16.0,51,16.0,52,16.0,53,16.0,54,16.0,55,16.0,56,16.0,57,16.0,58,16.0,59,16.0,60,16.0,61,16.0,62,16.0,63,16.0,64,16.0,65,16.0,66,16.0,67,16.0,68,16.0,69,16.0,70,16.0,71,16.0,72,16.0,73,16.0,74,16.0,75,16.0,76,16.0,77,16.0,78,16.0,79,16.0,80,16.0,81,16.0,82,16.0,83,16.0,84,16.0,85,16.0,86,16.0,87,16.0,88,16.0,89,16.0,90,16.0,91,16.0,92,16.0,93,16.0,94,16.0,95,16.0,96,16.0,97,16.0,98,16.0,99,16.0,100,16.0,1,18.0,2,18.0,3,18.0,4,18.0,5,18.0,6,18.0,7,18.0,8,18.0,9,18.0,10,18.0,11,18.0,12,18.0,13,18.0,14,18.0,15,18.0,16,18.0,17,18.0,18,18.0,19,18.0,20,18.0,21,18.0,22,18.0,23,18.0,24,18.0,25,18.0,26,18.0,27,18.0,28,18.0,29,18.0,30,18.0,31,18.0,32,18.0,33,18.0,34,18.0,35,18.0,36,18.0,37,18.0,38,18.0,39,18.0,40,18.0,41,18.0,42,18.0,43,18.0,44,18.0,45,18.0,46,18.0,47,18.0,48,18.0,49,18.0,50,18.0,51,18.0,52,18.0,53,18.0,54,18.0,55,18.0,56,18.0,57,18.0,58,18.0,59,18.0,60,18.0,61,18.0,62,18.0,63,18.0,64,18.0,65,18.0,66,18.0,67,18.0,68,18.0,69,18.0,70,18.0,71,18.0,72,18.0,73,18.0,74,18.0,75,18.0,76,18.0,77,18.0,78,18.0,79,18.0,80,18.0,81,18.0,82,18.0,83,18.0,84,18.0,85,18.0,86,18.0,87,18.0,88,18.0,89,18.0,90,18.0,91,18.0,92,18.0,93,18.0,94,18.0,95,18.0,96,18.0,97,18.0,98,18.0,99,18.0,100,18.0,1,20.0,2,20.0,3,20.0,4,20.0,5,20.0,6,20.0,7,20.0,8,20.0,9,20.0,10,20.0,11,20.0,12,20.0,13,20.0,14,20.0,15,20.0,16,20.0,17,20.0,18,20.0,19,20.0,20,20.0,21,20.0,22,20.0,23,20.0,24,20.0,25,20.0,26,20.0,27,20.0,28,20.0,29,20.0,30,20.0,31,20.0,32,20.0,33,20.0,34,20.0,35,20.0,36,20.0,37,20.0,38,20.0,39,20.0,40,20.0,41,20.0,42,20.0,43,20.0,44,20.0,45,20.0,46,20.0,47,20.0,48,20.0,49,20.0,50,20.0,51,20.0,52,20.0,53,20.0,54,20.0,55,20.0,56,20.0,57,20.0,58,20.0,59,20.0,60,20.0,61,20.0,62,20.0,63,20.0,64,20.0,65,20.0,66,20.0,67,20.0,68,20.0,69,20.0,70,20.0,71,20.0,72,20.0,73,20.0,74,20.0,75,20.0,76,20.0,77,20.0,78,20.0,79,20.0,80,20.0,81,20.0,82,20.0,83,20.0,84,20.0,85,20.0,86,20.0,87,20.0,88,20.0,89,20.0,90,20.0,91,20.0,92,20.0,93,20.0,94,20.0,95,20.0,96,20.0,97,20.0,98,20.0,99,20.0,100,20.0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,215,216,217,218,219,220,221,222,223,224,225,226,227,228,229,230,231,232,233,234,235,236,237,238,239,240,241,242,243,244,245,246,247,248,249,250,251,252,253,254,255,256,257,258,259,260,261,262,263,264,265,266,267,268,269,270,271,272,273,274,275,276,277,278,279,280,281,282,283,284,285,286,287,288,289,290,291,292,293,294,295,296,297,298,299,300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,318,319,320,321,322,323,324,325,326,327,328,329,330,331,332,333,334,335,336,337,338,339,340,341,342,343,344,345,346,347,348,349,350,351,352,353,354,355,356,357,358,359,360,361,362,363,364,365,366,367,368,369,370,371,372,373,374,375,376,377,378,379,380,381,382,383,384,385,386,387,388,389,390,391,392,393,394,395,396,397,398,399,400,401,402,403,404,405,406,407,408,409,410,411,412,413,414,415,416,417,418,419,420,421,422,423,424,425,426,427,428,429,430,431,432,433,434,435,436,437,438,439,440,441,442,443,444,445,446,447,448,449,450,451,452,453,454,455,456,457,458,459,460,461,462,463,464,465,466,467,468,469,470,471,472,473,474,475,476,477,478,479,480,481,482,483,484,485,486,487,488,489,490,491,492,493,494,495,496,497,498,499,500,501,502,503,504,505,506,507,508,509,510,511,512,513,514,515,516,517,518,519,520,521,522,523,524,525,526,527,528,529,530,531,532,533,534,535,536,537,538,539,540,541,542,543,544,545,546,547,548,549,550,551,552,553,554,555,556,557,558,559,560,561,562,563,564,565,566,567,568,569,570,571,572,573,574,575,576,577,578,579,580,581,582,583,584,585,586,587,588,589,590,591,592,593,594,595,596,597,598,599,600,601,602,603,604,605,606,607,608,609,610,611,612,613,614,615,616,617,618,619,620,621,622,623,624,625,626,627,628,629,630,631,632,633,634,635,636,637,638,639,640,641,642,643,644,645,646,647,648,649,650,651,652,653,654,655,656,657,658,659,660,661,662,663,664,665,666,667,668,669,670,671,672,673,674,675,676,677,678,679,680,681,682,683,684,685,686,687,688,689,690,691,692,693,694,695,696,697,698,699,700,701,702,703,704,705,706,707,708,709,710,711,712,713,714,715,716,717,718,719,720,721,722,723,724,725,726,727,728,729,730,731,732,733,734,735,736,737,738,739,740,741,742,743,744,745,746,747,748,749,750,751,752,753,754,755,756,757,758,759,760,761,762,763,764,765,766,767,768,769,770,771,772,773,774,775,776,777,778,779,780,781,782,783,784,785,786,787,788,789,790,791,792,793,794,795,796,797,798,799,800,801,802,803,804,805,806,807,808,809,810,811,812,813,814,815,816,817,818,819,820,821,822,823,824,825,826,827,828,829,830,831,832,833,834,835,836,837,838,839,840,841,842,843,844,845,846,847,848,849,850,851,852,853,854,855,856,857,858,859,860,861,862,863,864,865,866,867,868,869,870,871,872,873,874,875,876,877,878,879,880,881,882,883,884,885,886,887,888,889,890,891,892,893,894,895,896,897,898,899,900,901,902,903,904,905,906,907,908,909,910,911,912,913,914,915,916,917,918,919,920,921,922,923,924,925,926,927,928,929,930,931,932,933,934,935,936,937,938,939,940,941,942,943,944,945,946,947,948,949,950,951,952,953,954,955,956,957,958,959,960,961,962,963,964,965,966,967,968,969,970,971,972,973,974,975,976,977,978,979,980,981,982,983,984,985,986,987,988,989,990,991,992,993,994,995,996,997,998,999,1000)
+    @test got == expected
+end
+
 # issue #17255, take `deferred_alloc` into account
 # when calculating total allocation size.
 @noinline function f17255(n)
     GC.enable(false)
-    b0 = Base.gc_bytes()
+    b0 = Ref{Int64}(0)
+    b1 = Ref{Int64}(0)
+    Base.gc_bytes(b0)
     local a
     for i in 1:n
         a, t, allocd = @timed [Ref(1) for i in 1:1000]
         @test allocd > 0
-        b1 = Base.gc_bytes()
-        if b1 < b0
+        Base.gc_bytes(b1)
+        if b1[] < b0[]
             return false, a
         end
     end
@@ -4854,13 +5273,13 @@ end
 GC.enable(true)
 
 # issue #18710
-bad_tvars() where {T} = 1
+@test_warn "declares type variable T but does not use it" @eval bad_tvars() where {T} = 1
 @test isa(which(bad_tvars, ()), Method)
 @test bad_tvars() === 1
-bad_tvars2() where {T} = T
-@test_throws UndefVarError(:T) bad_tvars2()
+@test_warn "declares type variable T but does not use it" @eval bad_tvars2() where {T} = T
+@test_throws UndefVarError(:T, :static_parameter) bad_tvars2()
 missing_tvar(::T...) where {T} = T
-@test_throws UndefVarError(:T) missing_tvar()
+@test_throws UndefVarError(:T, :static_parameter) missing_tvar()
 @test missing_tvar(1) === Int
 @test missing_tvar(1, 2, 3) === Int
 @test_throws MethodError missing_tvar(1, 2, "3")
@@ -4963,6 +5382,51 @@ end
 @test let_Box5()() == 46
 @test let_noBox()() == 21
 
+# issue #37690
+function foo37690()
+    local f
+    local x
+    for k = 1:2
+        x = k
+        if k == 1
+            f = () -> x
+        end
+    end
+    f
+end
+@test foo37690()() == 2
+
+function g37690()
+    local x
+    local f
+    for k = 1:2
+    end
+    x = 0
+    ()->x
+end
+@test g37690().x === 0
+
+# issue #48889
+function f48889()
+    let j=0, f, i
+        while j < 3
+            i = j + 1
+            if j == 0
+                f = ()->i
+            end
+            j += 1
+        end
+        f
+    end
+end
+@test f48889()() == 3
+
+function _assigns_and_captures_arg(a)
+    a = a
+    return ()->a
+end
+@test !any(contains_Box, code_lowered(_assigns_and_captures_arg,(Any,))[1].code)
+
 module TestModuleAssignment
 using Test
 @eval $(GlobalRef(TestModuleAssignment, :x)) = 1
@@ -5050,6 +5514,16 @@ if Sys.WORD_SIZE == 64
     @test_nowarn tester20360()
 end
 
+# issue #39717
+let a = Base.StringVector(2^17)
+    b = String(a)
+    c = String(a)
+    GC.gc()
+    @test sizeof(a) == 0
+    @test sizeof(b) == 2^17
+    @test sizeof(c) == 0
+end
+
 @test_throws ArgumentError eltype(Bottom)
 
 # issue #16424, re-evaluating type definitions
@@ -5128,7 +5602,7 @@ end
     x::Array{T} where T<:Integer
 end
 
-let a = Vector{Core.TypeofBottom}(uninitialized, 2)
+let a = Vector{Core.TypeofBottom}(undef, 2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]
 end
@@ -5169,7 +5643,7 @@ end
 let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     ns128 = sizeof(FP128align) ÷ sizeof(Int),
     nbit = sizeof(Int) * 8,
-    arr = Vector{FP128align}(uninitialized, 2),
+    arr = Vector{FP128align}(undef, 2),
     offset = Base.datatype_alignment(FP128test) ÷ sizeof(Int),
     little,
     expected,
@@ -5392,11 +5866,9 @@ f_isdefined_unionvar(y, t) = (t > 0 && (x = (t == 1 ? 1 : y)); @isdefined x)
 @test !f_isdefined_unionvar(1, 0)
 f_isdefined_splat(x...) = @isdefined x
 @test f_isdefined_splat(1, 2, 3)
-let err = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
+let e = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
     __source__ = LineNumberNode(@__LINE__() - 1, Symbol(@__FILE__))
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    e = err.error::MethodError
+    e::MethodError
     @test e.f === getfield(@__MODULE__, Symbol("@isdefined"))
     @test e.args === (__source__, @__MODULE__, :(:x))
 end
@@ -5419,6 +5891,11 @@ f_isdefined_tv(::T) where {T} = @isdefined T
 f_isdefined_va(::T...) where {T} = @isdefined T
 @test !f_isdefined_va()
 @test f_isdefined_va(1, 2, 3)
+function f_unused_undefined_sp(::T...) where T
+    T
+    return 0
+end
+@test_throws UndefVarError(:T, :static_parameter) f_unused_undefined_sp()
 
 # note: the constant `5` here should be > DataType.ninitialized.
 # This tests that there's no crash due to accessing Type.body.layout.
@@ -5531,7 +6008,7 @@ module GlobalDef18933
         global sincos
         nothing
     end
-    @test which(Main, :sincos) === Base.Math
+    @test which(@__MODULE__, :sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
 end
@@ -5560,10 +6037,10 @@ const unboxedunions = [Union{Int8, Nothing},
 @test Base.isbitsunion(unboxedunions[2])
 @test Base.isbitsunion(unboxedunions[3])
 
-@test Base.bitsunionsize(unboxedunions[1]) == 1
-@test Base.bitsunionsize(unboxedunions[2]) == 2
-@test Base.bitsunionsize(unboxedunions[3]) == 16
-@test Base.bitsunionsize(unboxedunions[4]) == 8
+@test Base.aligned_sizeof(unboxedunions[1]) == 1
+@test Base.aligned_sizeof(unboxedunions[2]) == 2
+@test Base.aligned_sizeof(unboxedunions[3]) == 16
+@test Base.aligned_sizeof(unboxedunions[4]) == 8
 
 @test sizeof(unboxedunions[1]) == 1
 @test sizeof(unboxedunions[2]) == 2
@@ -5654,6 +6131,13 @@ let x5 = UnionField5(nothing, Int8(3))
     @test hash(x5) === hash(x5copy)
 end
 
+struct UnionField6
+    alignment::Int32
+    padding::NTuple{3, UInt8}
+    #= implicit-padding::UInt8 =#
+    maybe_val::Union{UInt16, Nothing} # offset = 8, align = 8, size = 2
+end
+@test UnionField6(1,(1,1,1),2018).maybe_val == 2018
 
 # PR #23367
 struct A23367
@@ -5673,9 +6157,9 @@ let
     b3 = B23367[b][1] # copy b via array assignment
     addr(@nospecialize x) = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
     @test addr(b)  == addr(b)
-    @test addr(b)  == addr(b2)
-    @test addr(b)  == addr(b3)
-    @test addr(b2) == addr(b3)
+    # @test addr(b)  == addr(b2)
+    # @test addr(b)  == addr(b3)
+    # @test addr(b2) == addr(b3)
 
     @test b === b2 === b3 === b
     @test egal(b, b2) && egal(b2, b3) && egal(b3, b)
@@ -5684,7 +6168,7 @@ let
     @test b.x === Int8(91)
     @test b.z === Int8(23)
     @test b.y === A23367((Int8(1), Int8(2), Int8(3), Int8(4), Int8(5), Int8(6), Int8(7)))
-    @test sizeof(b) == sizeof(Int) * 3
+    @test sizeof(b) == 12
     @test A23367(Int8(1)).x === Int8(1)
     @test A23367(Int8(0)).x === Int8(0)
     @test A23367(Int16(1)).x === Int16(1)
@@ -5701,16 +6185,60 @@ end
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(uninitialized, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(Returns(0), N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        A = Array{U}(uninitialized, ntuple(x->10, N)...)
+        A = Array{U}(undef, ntuple(Returns(10), N)...)
         @test length(A) == 10^N
         @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
     end
 end
+
+struct UnionFieldInlineStruct
+    x::Int64
+    y::Union{Float64, Missing}
+end
+
+@test sizeof(Vector{UnionFieldInlineStruct}(undef, 2)) == sizeof(UnionFieldInlineStruct) * 2
+
+let x = UnionFieldInlineStruct(1, 3.14)
+    AInlineUnion = [x for i = 1:10]
+    @test sizeof(AInlineUnion) == sizeof(UnionFieldInlineStruct) * 10
+    BInlineUnion = Vector{UnionFieldInlineStruct}(undef, 10)
+    copyto!(BInlineUnion, AInlineUnion)
+    @test AInlineUnion == BInlineUnion
+    @test BInlineUnion[end] == x
+    CInlineUnion = vcat(AInlineUnion, BInlineUnion)
+    @test sizeof(CInlineUnion) == sizeof(UnionFieldInlineStruct) * 20
+    @test CInlineUnion[end] == x
+end
+
+# issue 33709
+struct A33709
+    a::Union{Nothing,A33709}
+end
+let a33709 = A33709(A33709(nothing))
+    @test isnothing(a33709.a.a)
+end
+
+# issue #35793
+struct A35793
+    x::Union{Nothing, Missing}
+end
+let x = A35793(nothing), y = A35793(missing)
+    @test x isa A35793
+    @test x.x === nothing
+    @test y.x === missing
+end
+
+# issue 31583
+a31583 = "a"
+f31583() = a31583 === "a"
+@test f31583()
+a31583 = "b"
+@test !f31583()
 
 # unsafe_wrap
 let
@@ -5721,7 +6249,7 @@ let
 end
 
 # copyto!
-A23567 = Vector{Union{Float64, Nothing}}(uninitialized, 5)
+A23567 = Vector{Union{Float64, Nothing}}(undef, 5)
 B23567 = collect(Union{Float64, Nothing}, 1.0:3.0)
 copyto!(A23567, 2, B23567)
 @test A23567[1] === nothing
@@ -5742,13 +6270,13 @@ using Serialization
 for U in unboxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(uninitialized, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(Returns(0), N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        len = ntuple(x->10, N)
+        len = ntuple(Returns(10), N)
         mxsz = maximum(sizeof, Base.uniontypes(U))
-        A = Array{U}(uninitialized, len)
+        A = Array{U}(undef, len)
         @test length(A) == prod(len)
         @test sizeof(A) == prod(len) * mxsz
         @test isassigned(A, 1)
@@ -5820,7 +6348,7 @@ for U in unboxedunions
             resize!(A, len)
             @test length(A) === len
             @test A[1] === initvalue2(F2)
-            @test typeof(A[end]) === F
+            @test typeof(A[end]) === F2
 
             # deleteat!
             F = Base.uniontypes(U)[2]
@@ -5908,6 +6436,386 @@ for U in unboxedunions
     end
 end
 
+@testset "array _growatend!" begin
+
+# start w/ array, set & check elements, grow it, check that elements stayed correct, set & check elements
+A = Vector{Union{Missing, UInt8}}(undef, 2)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+
+resize!(A, 5)
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+# The rest of the values are unspecified
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
+@test isequal(A, [0x01, missing, 0x03, missing, 0x05])
+
+# grow_at_end 1
+Base._growat!(A, 4, 1)
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x03
+#A[4] is unspecified
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x05
+
+setindex!(A, missing, 1)
+setindex!(A, 0x02, 2)
+setindex!(A, missing, 3)
+setindex!(A, 0x04, 4)
+setindex!(A, missing, 5)
+setindex!(A, 0x06, 6)
+@test isequal(A, [missing, 0x2, missing, 0x4, missing, 0x6])
+
+# grow_at_end 5
+Base._growat!(A, 4, 1)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x02
+@test getindex(A, 3) === missing
+#A[4] is unspecified
+@test getindex(A, 5) === 0x04
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x06
+
+# grow_at_end 6
+resize!(A, 8)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x02
+@test getindex(A, 3) === missing
+# A[4] still unspecified
+@test getindex(A, 5) === 0x04
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x06
+# A[8] is unspecified but test that it exists
+@test getindex(A, 8) isa Any
+
+# grow_at_end 4
+resize!(A, 1048576)
+resize!(A, 1048577)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x02
+@test getindex(A, 3) === missing
+# A[4] is stil still unspecified
+@test getindex(A, 5) === 0x04
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x06
+@test getindex(A, 8) === missing
+# 9:1048577 are unspecified
+foreach(9:1048577) do i
+    setindex!(A, i % UInt8, i)
+    @test getindex(A, i) === i % UInt8
+end
+
+# grow_at_end 3
+A = Vector{Union{Missing, UInt8}}(undef, 1048577)
+foreach(1:1048577) do i
+    @test getindex(A, i) === missing
+    setindex!(A, i % UInt8, i)
+    @test getindex(A, i) === i % UInt8
+end
+Base._growat!(A, 1048576, 1)
+@test length(A) == 1048578
+foreach(1:1048575) do i
+    @test getindex(A, i) === i % UInt8
+    @test A[i] === i % UInt8
+end
+@test getindex(A, 1048576) === missing
+@test getindex(A, 1048577) === 1048576 % UInt8
+@test getindex(A, 1048578) === 1048577 % UInt8
+
+end # @testset
+
+@testset "array _growatbeg!" begin
+
+# grow_at_beg 4
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
+Base._growat!(A, 1, 1)
+
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x01
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === 0x03
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x05
+
+# grow_at_beg 2
+Base._growat!(A, 1, 1)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x01
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === 0x03
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x05
+
+# grow_at_beg 1
+Base._growat!(A, 2, 1)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === 0x01
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x03
+@test getindex(A, 7) === missing
+@test getindex(A, 8) === 0x05
+
+# grow_at_beg 9
+Base._growat!(A, 1, 1)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === 0x01
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x03
+@test getindex(A, 8) === missing
+@test getindex(A, 9) === 0x05
+
+# grow_at_beg 8
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
+Base._growat!(A, 2, 1)
+Base._growat!(A, 2, 1)
+
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === 0x03
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x05
+
+# grow_at_beg 5
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
+Base._growat!(A, 4, 1)
+Base._growat!(A, 4, 1)
+
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x03
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === missing
+@test getindex(A, 7) === 0x05
+
+# grow_at_beg 6
+Base._growat!(A, 2, 3)
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x03
+@test getindex(A, 7) === missing
+@test getindex(A, 8) === missing
+@test getindex(A, 9) === missing
+@test getindex(A, 10) === 0x05
+
+# grow_at_beg 3
+A = Vector{Union{Missing, UInt8}}(undef, 1048577)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
+Base._growat!(A, 2, 1)
+
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === 0x03
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x05
+
+foreach(7:length(A)) do i
+    @test getindex(A, i) === missing
+    setindex!(A, i % UInt8, i)
+    @test getindex(A, i) === i % UInt8
+end
+
+end # @testset
+
+@testset "array _deleteatbeg!" begin
+
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
+Base._deleteat!(A, 2, 1)
+
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === 0x03
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === 0x05
+
+Base._deleteat!(A, 1, 1)
+@test getindex(A, 1) === 0x03
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x05
+
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
+Base._growat!(A, 1, 1)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x01
+@test getindex(A, 3) === missing
+@test getindex(A, 4) === 0x03
+@test getindex(A, 5) === missing
+@test getindex(A, 6) === 0x05
+Base._deleteat!(A, 2, 1)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x03
+@test getindex(A, 4) === missing
+@test getindex(A, 5) === 0x05
+Base._deleteat!(A, 1, 2)
+@test getindex(A, 1) === 0x03
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x05
+Base._deleteat!(A, 1, 1)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x05
+
+end # @testset
+
+@testset "array _deleteatend!" begin
+
+A = Vector{Union{Missing, UInt8}}(undef, 5)
+setindex!(A, 0x01, 1)
+setindex!(A, missing, 2)
+setindex!(A, 0x03, 3)
+setindex!(A, missing, 4)
+setindex!(A, 0x05, 5)
+Base._deleteat!(A, 5, 1)
+
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === 0x03
+@test getindex(A, 4) === missing
+
+Base._deleteat!(A, 3, 1)
+@test getindex(A, 1) === 0x01
+@test getindex(A, 2) === missing
+@test getindex(A, 3) === missing
+
+end # @testset
+
+# issue #27767
+let A=Vector{Union{Int, Missing}}(undef, 1)
+    resize!(A, 2)
+    @test length(A) == 2
+    @test A[2] === missing
+end
+
+# issue #27809
+let A=Vector{Union{Int, Missing}}(undef, 0)
+    while length(A) < 2^17
+        push!(A, 0.0)
+    end
+    push!(A, 0.0)
+    @test !any(ismissing, A)
+end
+
+# jl_array_shrink
+let A=Vector{Union{UInt8, Missing}}(undef, 1048577)
+    setindex!(A, 0x01, 1)
+    setindex!(A, missing, 2)
+    setindex!(A, 0x03, 3)
+    setindex!(A, missing, 4)
+    setindex!(A, 0x05, 5)
+    deleteat!(A, 6:1048577)
+    @test getindex(A, 1) === 0x01
+    @test getindex(A, 2) === missing
+    @test getindex(A, 3) === 0x03
+    @test getindex(A, 4) === missing
+    @test getindex(A, 5) === 0x05
+    sizehint!(A, 5)
+    @test getindex(A, 1) === 0x01
+    @test getindex(A, 2) === missing
+    @test getindex(A, 3) === 0x03
+    @test getindex(A, 4) === missing
+    @test getindex(A, 5) === 0x05
+end
+
+# copyto!/vcat w/ internal padding
+let A=[0, missing], B=[missing, 0], C=Vector{Union{Int, Missing}}(undef, 6)
+    push!(A, missing)
+    push!(B, missing)
+    @test isequal(vcat(A, B), [0, missing, missing, missing, 0, missing])
+    copyto!(C, 1, A)
+    copyto!(C, 4, B)
+    @test isequal(C, [0, missing, missing, missing, 0, missing])
+end
+
+# non-power-of-2 element sizes, issue #26026
+primitive type TypeWith24Bits 24 end
+TypeWith24Bits(x::UInt32) = Core.Intrinsics.trunc_int(TypeWith24Bits, x)
+let x = TypeWith24Bits(0x112233), y = TypeWith24Bits(0x445566), z = TypeWith24Bits(0x778899)
+    a = [x, x]
+    Core.memoryrefset!(Core.memoryref(a.ref, 2, true), y, :not_atomic, true)
+    @test a == [x, y]
+    a[2] = z
+    @test a == [x, z]
+    @test pointer(a, 2) - pointer(a, 1) == 4
+
+    b = [(x, x), (x, x)]
+    Core.memoryrefset!(Core.memoryref(b.ref, 2, true), (x, y), :not_atomic, true)
+    @test b == [(x, x), (x, y)]
+    b[2] = (y, z)
+    @test b == [(x, x), (y, z)]
+
+    V = Vector{TypeWith24Bits}(undef, 1000)
+    p = Ptr{UInt8}(pointer(V))
+    for i = 1:sizeof(V)
+        unsafe_store!(p, i % UInt8, i)
+    end
+    @test V[1:4] == [TypeWith24Bits(0x030201), TypeWith24Bits(0x070605), TypeWith24Bits(0x0b0a09), TypeWith24Bits(0x0f0e0d)]
+end
+
+# issue #29718
+function f29718()
+    nt = NamedTuple{(:a, :b, :c, :d, :e, :f,),
+                    Tuple{Union{Missing, Float64},
+                          Tuple{UInt8},
+                          Union{Missing, Int8},
+                          Int8,
+                          Tuple{UInt8,UInt8},
+                          Union{Missing, Int16}}
+                    }((missing,
+                       (1,),
+                       1,
+                       41,
+                       (1,2),
+                       1915,
+                       ))
+    return Ref{Any}(nt)[].f
+end
+@test f29718() == 1915
+
 end # module UnionOptimizations
 
 # issue #6614, argument destructuring
@@ -5935,6 +6843,20 @@ function hh6614()
     x, y
 end
 @test hh6614() == (1, 2)
+# issue #26518
+function f26518((a,b)) end
+@test f26518((1,2)) === nothing
+# issue #36572 - destructuring called object
+struct Foo36572
+    a
+    b
+end
+function Base.iterate(f::Foo36572, i=1)
+    i == 1 ? (f.a, 2) :
+    i == 2 ? (f.b, 3) : nothing
+end
+((a,b)::Foo36572)(x) = a*x + b
+@test Foo36572(10,2)(3) == 32
 
 # issue 22098
 macro m22098 end
@@ -5951,3 +6873,1257 @@ void24363 = A24363(nothing)
 f24363(a) = a.x
 @test f24363(int24363) === 65535
 @test f24363(void24363) === nothing
+
+# issue 17149
+mutable struct Foo17149
+end
+@test Foo17149() !== Foo17149()
+let a = Foo17149()
+    @test a === a
+end
+
+# issue #21004
+const PTuple_21004{N,T} = NTuple{N,VecElement{T}}
+@test_throws ArgumentError("too few elements for tuple type $PTuple_21004") PTuple_21004(1)
+@test_throws UndefVarError(:T, :static_parameter) PTuple_21004_2{N,T} = NTuple{N, VecElement{T}}(1)
+
+#issue #22792
+foo_22792(::Type{<:Union{Int8,Int,UInt}}) = 1;
+@test foo_22792(Union{Int,UInt}) == 1
+foo_22792(::Union) = 2;
+@test foo_22792(Union{Int,UInt}) == 1
+@test foo_22792(Union{Int8,UInt}) == 1
+@test foo_22792(Union{Int,UInt}) == 1
+
+# issue #25907
+g25907a(x) = x[1]::Integer
+@test g25907a(Union{Int, UInt, Nothing}[1]) === 1
+g25907b(x) = x[1]::Complex
+@test g25907b(Union{Complex{Int}, Complex{UInt}, Nothing}[1im]) === 1im
+
+#issue #26363
+@test eltype(Ref(Float64(1))) === Float64
+@test ndims(Ref(1)) === 0
+@test collect(Ref(1)) == [v for v in Ref(1)] == fill(1)
+@test axes(Ref(1)) === size(Ref(1)) === ()
+
+# issue #23206
+g1_23206(::Tuple{Type{Int}, T}) where T = 0
+g2_23206(::Tuple{Type{Int}}) = 1
+@test_throws MethodError g1_23206(tuple(Int, 2))
+@test_throws MethodError g2_23206(tuple(Int, 2))
+
+# issue #26739
+let x26739 = Int[1]
+    @test eval(:(identity.($x26739))) == x26739
+end
+
+# issue #27018
+@test Base.isvatuple(Tuple{Float64,Vararg{Int}})
+@test Base.isvatuple(Tuple{T,Vararg{Int}} where T)
+@test Base.isvatuple(Tuple{Int,Int,Vararg{Int,N}} where N)
+@test Base.isvatuple(Tuple{T,S,Vararg{T}} where T<:S where S)
+@test Base.isvatuple(Tuple{T,S,Vararg{T,3}} where T<:S where S)
+@test !Base.isvatuple(Tuple{Float64,Vararg{Int,1}})
+@test !Base.isvatuple(Tuple{T,Vararg{Int,2}} where T)
+@test !Base.isvatuple(Tuple{Int,Int,Vararg{Int,2}})
+
+# Issue 27103
+function f27103()
+    a = @isdefined x
+    x = 3
+    b = @isdefined x
+    (a, b)
+end
+@test f27103() == (false, true)
+
+g27103() = @isdefined z27103
+@test g27103() == false
+z27103 = 1
+@test g27103() == true
+
+# Issue 27181
+struct A27181
+    typ::Type
+end
+
+struct C27181
+    val
+end
+
+function f27181()
+    invoke(A27181(C27181).typ, Tuple{Any}, nothing)
+end
+@test f27181() == C27181(nothing)
+
+# Issue #27204
+struct Foo27204{T}
+end
+(::Foo27204{Int})() = 1
+(::Foo27204{Float64})() = 2
+@noinline f27204(x) = x ? Foo27204{Int}() : Foo27204{Float64}()
+foo27204(x) = f27204(x)()
+@test foo27204(true) == 1
+@test foo27204(false) == 2
+
+# Issue 27209
+@noinline function f27209(x::Union{Float64, Nothing})
+    if x === nothing
+        y = x; return @isdefined(y)
+    else
+        return @isdefined(y)
+    end
+end
+g27209(x) = f27209(x ? nothing : 1.0)
+@test g27209(true) == true
+
+# Issue 27240
+@inline function foo27240()
+    if rand(Bool)
+        return foo_nonexistent_27240
+    else
+        return bar_nonexistent_27240
+    end
+end
+bar27240() = foo27240()
+@test_throws UndefVarError bar27240()
+
+# issue #27269
+struct T27269{X, Y <: Vector{X}}
+    v::Vector{Y}
+end
+@test T27269([[1]]) isa T27269{Int, Vector{Int}}
+
+# issue #27368
+struct Combinator27368
+    op
+    args::Vector{Any}
+    Combinator27368(op, args...) =
+        new(op, collect(Any, args))
+end
+field27368(name) =
+    Combinator27368(field27368, name)
+translate27368(name::Symbol) =
+    translate27368(Val{name})
+translate27368(::Type{Val{name}}) where {name} =
+    field27368(name)
+@test isa(translate27368(:name), Combinator27368)
+
+# issue #27456
+@inline foo27456() = try baz_nonexistent27456(); catch; nothing; end
+bar27456() = foo27456()
+@test bar27456() == nothing
+
+# issue #27365
+mutable struct foo27365
+    x::Float64
+    foo27365() = new()
+end
+
+function baz27365()
+    data = foo27365()
+    return data.x
+end
+
+@test isa(baz27365(), Float64)
+
+# Issue #27566
+function test27566(a,b)
+    c = (b,(0,1)...)
+    test27566(a, c...)
+end
+test27566(a, b, c, d) = a.*(b, c, d)
+@test test27566(1,1) == (1,0,1)
+
+# Issue #27594
+struct Iter27594 end
+Base.iterate(::Iter27594) = (1, nothing)
+Base.iterate(::Iter27594, ::Any) = nothing
+
+function foo27594()
+    ind = 0
+    for x in (1,)
+        for y in Iter27594()
+            ind += 1
+        end
+    end
+    ind
+end
+
+@test foo27594() == 1
+
+# Issue 27597
+function f27597(y)
+    x = Int[]
+
+    if isempty(y)
+        y = 1:length(x)
+    elseif false
+        ;
+    end
+
+    length(y)
+    return y
+end
+@test f27597([1]) == [1]
+@test f27597([]) === 1:0
+
+# issue #22291
+wrap22291(ind) = (ind...,)
+@test @inferred(wrap22291(1)) == (1,)
+@test @inferred(wrap22291((1, 2))) == (1, 2)
+
+# Issue 27770
+mutable struct Handle27770
+    ptr::Ptr{Cvoid}
+end
+Handle27770() = Handle27770(Ptr{Cvoid}(UInt(0xfeedface)))
+
+struct Nullable27770
+    hasvalue::Bool
+    value::Handle27770
+    Nullable27770() = new(false)
+    Nullable27770(v::Handle27770) = new(true, Handle27770)
+end
+get27770(n::Nullable27770, v::Handle27770) = n.hasvalue ? n.value : v
+
+foo27770() = get27770(Nullable27770(), Handle27770())
+@test foo27770().ptr == Ptr{Cvoid}(UInt(0xfeedface))
+
+bar27770() = Nullable27770().value
+@test_throws UndefRefError bar27770()
+
+# Issue 27910
+f27910() = ((),)[2]
+@test_throws BoundsError f27910()
+
+# Issue 9765
+f9765(::Bool) = 1
+g9765() = f9765(isa(1, 1))
+@test_throws TypeError g9765()
+
+# Issue 28102
+struct HasPlain28102
+    plain::Int
+    HasPlain28102() = new()
+end
+@noinline function bam28102()
+    x = HasPlain28102()
+    if isdefined(x,:plain)
+        x.plain
+    end
+end
+@test isa(bam28102(), Int)
+
+# Check that the tfunc for fieldtype is correct
+struct FooFieldType; x::Int; end
+f_fieldtype(b) = fieldtype(b ? Int : FooFieldType, 1)
+
+@test @inferred(f_fieldtype(false)) == Int
+@test_throws BoundsError f_fieldtype(true)
+
+# Issue #28224
+@noinline make_error28224(n) = n == 5 ? error() : true
+function foo28224()
+    z = 0
+    try
+        while make_error28224(z)
+            z+=1
+        end
+    catch end
+    return z
+end
+@test foo28224() == 5
+
+# Issue #28208
+@noinline function foo28208(a::Bool, b::Bool)
+    x = (1, 2)
+    if a
+        if b
+            y = nothing
+        else
+            y = missing
+        end
+        x = y
+    end
+    x
+end
+@test isa(foo28208(false, true), Tuple)
+@test foo28208(true, false) === missing
+@test foo28208(true, true) === nothing
+
+# Issue #28326
+function foo28326(a)
+    try
+        @inbounds a[1]
+        return false
+    catch
+        return true
+    end
+end
+@test foo28326(Vector(undef, 1))
+
+# Issue #28392
+struct Foo28392; end
+@test_throws MethodError iterate(Foo28392())
+
+# issue #28399
+function g28399(n)
+    for a = 1:n
+        c28399 = 1
+    end
+    ()->c28399
+end
+function f28399()
+    for a = __undef_28399__
+        c28399 = 1
+    end
+    ()->c28399
+end
+c28399 = 42
+@test g28399(0)() == 42
+@test g28399(1)() == 42
+@test_throws UndefVarError(:__undef_28399__, @__MODULE__) f28399()
+
+# issue #28445
+mutable struct foo28445
+    x::Int
+end
+
+@noinline make_foo28445() = (foo28445(1), foo28445(rand(1:10)), foo28445(rand(1:10)))
+@noinline function use_tuple28445(c)
+    @test isa(c[2], foo28445)
+    @test isa(c[3], foo28445)
+end
+
+function repackage28445()
+    (_, a, b) = make_foo28445()
+    GC.gc()
+    c = (foo28445(1), foo28445(2), a, b)
+    use_tuple28445(c)
+    true
+end
+@test repackage28445()
+
+# issue #28597
+@test_throws ArgumentError Array{Int, 2}(undef, 0, -10)
+@test_throws ArgumentError Array{Int, 2}(undef, -10, 0)
+@test_throws ArgumentError Array{Int, 2}(undef, -1, -1)
+
+# issue #28812
+@test Tuple{Vararg{Array{T} where T,3}} === Tuple{Array,Array,Array}
+
+# issue #29145
+struct T29145{A,B}
+    function T29145()
+        new{S,Ref{S}}() where S
+    end
+end
+@test_throws TypeError T29145()
+
+# issue #29175
+function f29175(tuple::T) where {T<:Tuple}
+    prefix::Tuple{T.parameters[1:end-1]...} = tuple[1:length(T.parameters)-1]
+    x = prefix
+    prefix = x  # force another conversion to declared type
+    return prefix
+end
+@test f29175((1,2,3)) === (1,2)
+
+# issue #29306
+let a = [1,2,3,4,missing,6,7]
+    @test_throws TypeError [ (x>6 ? missing : x)  for x in a]
+    foo(x) = x > 0 ? x : missing
+    @test_throws TypeError foo(missing)
+end
+
+# issue #29152
+function f29152()
+    try
+        g29152()
+    finally
+    end
+end
+g29152() = (_true29152 ? error() : _true29152 ? 0 : false)
+_true29152 = true;
+@test_throws ErrorException f29152()
+
+# issue #29828
+f29828() = 2::String
+g29828() = 2::Any[String][1]
+@test_throws TypeError(:typeassert, String, 2) f29828()
+@test_throws TypeError(:typeassert, String, 2) g29828()
+
+# splatting in `new`
+struct SplatNew{T}
+    x::Int8
+    y::T
+    SplatNew{T}(args...) where {T} = new(0, args..., 1)
+    SplatNew(args...) = new{Float32}(args...)
+    SplatNew{Any}(args...) = new(args...)
+    SplatNew{Tuple{Int16}}(args...) = new([2]..., args...)
+    SplatNew{Int8}() = new(1, 2, 3)
+end
+let x = SplatNew{Int16}()
+    @test x.x === Int8(0)
+    @test x.y === Int16(1)
+end
+@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew{Int16}(1)
+let x = SplatNew(3, 2)
+    @test x.x === Int8(3)
+    @test x.y === 2.0f0
+end
+@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew(1, 2, 3)
+@test_throws ArgumentError("new: too few arguments (expected 2)") SplatNew{Any}(1)
+let x = SplatNew{Tuple{Int16}}((1,))
+    @test x.x === Int8(2)
+    @test x.y === (Int16(1),)
+end
+@test_throws ArgumentError("new: too many arguments (expected 2)")  SplatNew{Int8}()
+
+# Issue #31357 - Missed assignment in nested try/catch
+function foo31357(b::Bool)
+    x = nothing
+    try
+        try
+            x = 12345
+            if !b
+               throw("hi")
+            end
+        finally
+        end
+    catch
+    end
+    return x
+end
+@test foo31357(true) == 12345
+@test foo31357(false) == 12345
+
+# Issue #31406
+abstract type Shape31406 end
+struct ValueOf31406 <: Shape31406
+    ty::Type
+end
+struct TupleOf31406 <: Shape31406
+    cols::Vector{Shape31406}
+end
+TupleOf31406(cols::Union{Shape31406,Type}...) = TupleOf31406(collect(Shape31406, cols))
+@test (TupleOf31406(ValueOf31406(Int64), ValueOf31406(Float64))::TupleOf31406).cols ==
+    Shape31406[ValueOf31406(Int64), ValueOf31406(Float64)]
+@test try
+        TupleOf31406(ValueOf31406(Int64), Float64)
+        false
+    catch ex
+        if !(ex isa MethodError && ex.f === convert && ex.args == (Shape31406, Float64))
+            rethrow(ex)
+        end
+        true
+    end
+
+# Issue #31783
+struct LL31783{T}
+    x::T
+end
+foo31783(tv::TypeVar) = tv.ub == Any ? Union{tv,LL31783{tv}} : tv
+@test isa(foo31783(TypeVar(:T)),Union)
+
+# Issue #31649
+struct sparse_t31649
+    val::Vector{Float64}
+    sub::Vector{Int64}
+end
+Base.convert(::Any, v::sparse_t31649) = copy(v.val)
+let spvec = sparse_t31649(zeros(Float64,5), Vector{Int64}())
+    @test_throws MethodError convert(Any, spvec)
+    # Try manually putting the problematic method into the cache (in
+    # the original issue compiling the showerror method caused this to happen)
+    @test convert(Any, nothing) === nothing
+    @test_throws MethodError convert(Any, spvec)
+end
+
+# Issue #31062 - Accidental recursion in jl_has_concrete_subtype
+struct Bar31062
+    x::NTuple{N, Bar31062} where N
+end
+struct Foo31062
+    x::Foo31062
+end
+# Use eval to make sure that this actually gets executed and not
+# just constant folded by (future) over-eager compiler optimizations
+@test isa(Core.eval(@__MODULE__, :(Bar31062(()))), Bar31062)
+@test precompile(identity, (Foo31062,))
+
+ftype_eval = Ref(0)
+FieldTypeA = String
+FieldTypeE = UInt32
+struct FieldConvert{FieldTypeA, S}
+    a::FieldTypeA
+    b::(ftype_eval[] += 1; Vector{FieldTypeA})
+    c
+    d::Any
+    e::FieldTypeE
+    FieldConvert(a::S, b, c, d, e) where {S} = new{FieldTypeA, S}(a, b, c, d, e)
+end
+@test ftype_eval[] == 1
+FieldTypeA = UInt64
+FieldTypeE = String
+let fc = FieldConvert(1.0, [2.0], 0x3, 0x4, 0x5)
+    @test fc.a === UInt64(1)
+    @test fc.b isa Vector{UInt64}
+    @test fc.c === 0x3
+    @test fc.d === 0x4
+    @test fc.e === UInt32(0x5)
+end
+@test ftype_eval[] == 1
+let code = code_lowered(FieldConvert)[1].code
+    local fc_global_ssa, sp1_ssa, apply_type_ssa, field_type_ssa,
+        field_type2_ssa, field_type4_ssa, field_type5_ssa,
+        slot_read_1, slot_read_2, slot_read_3, slot_read_4,
+        new_ssa
+    @test code[(fc_global_ssa = 1;)] == GlobalRef(@__MODULE__, :FieldConvert)
+    @test code[(sp1_ssa = 2;)] == Expr(:static_parameter, 1)
+    @test code[(apply_type_ssa = 3;)] == Expr(:call, GlobalRef(Core, :apply_type), Core.SSAValue(fc_global_ssa), GlobalRef(@__MODULE__, :FieldTypeA), Core.SSAValue(sp1_ssa))
+    @test code[(field_type_ssa = 4;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 1)
+    @test code[10] == Expr(:(=), Core.SlotNumber(10), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type_ssa), Core.SlotNumber(10)))
+    @test code[(slot_read_1 = 11;)] == Core.SlotNumber(10)
+    @test code[(field_type2_ssa = 12;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 2)
+    @test code[18] == Expr(:(=), Core.SlotNumber(9), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type2_ssa), Core.SlotNumber(9)))
+    @test code[(slot_read_2 = 19;)] == Core.SlotNumber(9)
+    @test code[(field_type4_ssa = 20;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 4)
+    @test code[26] == Expr(:(=), Core.SlotNumber(8), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type4_ssa), Core.SlotNumber(8)))
+    @test code[(slot_read_3 = 27;)] == Core.SlotNumber(8)
+    @test code[(field_type5_ssa = 28;)] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(apply_type_ssa), 5)
+    @test code[34] == Expr(:(=), Core.SlotNumber(7), Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(field_type5_ssa), Core.SlotNumber(7)))
+    @test code[(slot_read_4 = 35;)] == Core.SlotNumber(7)
+    @test code[(new_ssa = 36;)] == Expr(:new, Core.SSAValue(apply_type_ssa), Core.SSAValue(slot_read_1), Core.SSAValue(slot_read_2), Core.SlotNumber(4), Core.SSAValue(slot_read_3), Core.SSAValue(slot_read_4))
+    @test code[37] == Core.ReturnNode(Core.SSAValue(new_ssa))
+end
+
+# Issue #32820
+function f32820(refs)
+    local x
+    for r in refs
+        try
+            error()
+        catch e
+            if !@isdefined(x)
+                x = []
+            end
+            push!(x, 1)
+        end
+    end
+    x
+end
+@test f32820(Any[1,2]) == Any[1, 1]
+
+# Splatting with bad iterate
+struct SplatBadIterate; end
+Base.iterate(s::SplatBadIterate, args...) = ()
+@test_throws BoundsError (SplatBadIterate()...,)
+
+# issue #33954, layout with circular type parameters but not fields
+struct P33954{T}
+end
+struct A33954
+    x::P33954{A33954}
+end
+@test isbitstype(Tuple{A33954})
+struct Q33954{T}
+    x::Int
+end
+struct B33954
+    x::Q33954{B33954}
+end
+@test isbitstype(Tuple{B33954})
+@test isbitstype(B33954)
+
+struct A41503{d}
+    e::d
+end
+struct B41503{j,k} <: AbstractArray{A41503{B41503{Any,k}},Any}
+    l::k
+end
+@test !isbitstype(B41503{Any,Any})
+@test_broken isbitstype(B41503{Any,Int})
+
+struct B40050 <: Ref{Tuple{B40050}}
+end
+@test string((B40050(),)) == "($B40050(),)"
+@test_broken isbitstype(Tuple{B40050})
+
+# issue #41654
+struct X41654 <: Ref{X41654}
+end
+@test isbitstype(X41654)
+@test ('a'=>X41654(),)[1][2] isa X41654
+
+# issue #43411
+struct A43411{S, T}
+    x::NamedTuple{S, T}
+end
+@test isbitstype(A43411{(:a,), Tuple{Int}})
+
+# issue #44614
+struct T44614_1{T}
+    m::T
+end
+struct T44614_2{L}
+    tuple::NTuple{3, Int64}
+    T44614_2{L}(t::NTuple{3, Int64}) where {L} = new{sum(t)}(t)
+end
+struct T44614_3{L, N}
+    a::Tuple{T44614_2{L}}
+    param::NTuple{N, T44614_1}
+    T44614_3(a::Tuple{T44614_2{L}}, pars::NTuple{N, T44614_1}) where {L, N} = new{L, N}(a, pars)
+end
+@test sizeof((T44614_2{L} where L).body) == 24
+let T = T44614_3{L,2} where L
+    # these values are computable, but we currently don't know how to compute them properly
+    ex = ErrorException("Argument is an incomplete T44614_3 type and does not have a definite size.")
+    @test_throws ex sizeof(T.body)
+    @test_throws ex sizeof(T)
+    @test_throws BoundsError fieldoffset(T.body, 2)
+    @test fieldoffset(T{1}, 2) == 24
+end
+
+# Issue #34206/34207
+function mre34206(a, n)
+    va = view(a, :)
+    b = ntuple(_ -> va, n)::Tuple{Vararg{typeof(va)}}
+    return b[1].offset1
+end
+@test mre34206([44], 1) == 0
+
+# Issue #34247
+function f34247(a)
+    GC.@preserve a try
+    catch
+    end
+    true
+end
+@test f34247("")
+
+# Issue #34482
+function f34482()
+    Base.not_int("ABC")
+    1
+end
+function h34482()
+    Core.Intrinsics.bitcast(1, 1)
+    1
+end
+@test_throws ErrorException f34482()
+@test_throws TypeError h34482()
+
+struct NFANode34126
+    edges::Vector{Tuple{Nothing,NFANode34126}}
+    NFANode34126() = new(Tuple{Nothing,NFANode34126}[])
+end
+
+@test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing, $NFANode34126}[])"
+
+# issue #35416
+struct Node35416{T,K,X}
+end
+struct AVL35416{K,V}
+    avl:: Union{Nothing,Node35416{AVL35416{K,V},<:K,<:V}}
+end
+@test AVL35416(Node35416{AVL35416{Integer,AbstractString},Int,String}()) isa AVL35416{Integer,AbstractString}
+
+# issue #31696
+foo31696(x::Int8, y::Int8) = 1
+foo31696(x::T, y::T) where {T <: Int8} = 2
+@test length(methods(foo31696)) == 1
+let T1 = Tuple{Int8}, T2 = Tuple{T} where T<:Int8, a = T1[(1,)], b = T2[(1,)]
+    b .= a
+    @test b[1] == (1,)
+    a .= b
+    @test a[1] == (1,)
+end
+
+# issue #36104
+module M36104
+using Test
+struct T36104
+    v::Vector{M36104.T36104}
+end
+struct T36104   # check that redefining it works, issue #21816
+    v::Vector{T36104}
+end
+struct S36104{K,V}
+    v::S36104{K,V}
+    S36104{K,V}() where {K,V} = new()
+    S36104{K,V}(x::S36104) where {K,V} = new(x)
+end
+@test !isdefined(Base.unwrap_unionall(Base.ImmutableDict).name, :partial)
+@test !isdefined(S36104.body.body.name, :partial)
+@test hasfield(typeof(S36104.body.body.name), :partial)
+struct S36104{K,V}   # check that redefining it works
+    v::S36104{K,V}
+    S36104{K,V}() where {K,V} = new()
+    S36104{K,V}(x::S36104) where {K,V} = new(x)
+end
+# with a gensymmed unionall
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+@test_throws ErrorException begin
+    struct Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+        data::S
+        uplo::Char
+    end
+end
+end
+@test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)
+@test_throws ErrorException("expected") @eval(struct X36104; x::error("expected"); end)
+@test @isdefined(X36104)
+struct X36104; x::Int; end
+@test fieldtypes(X36104) == (Int,)
+primitive type P36104 8 end
+@test_throws ErrorException("invalid redefinition of constant $(nameof(curmod)).P36104") @eval(primitive type P36104 16 end)
+
+# Malformed invoke
+f_bad_invoke(x::Int) = invoke(x, (Any,), x)
+@test_throws TypeError f_bad_invoke(1)
+
+# Fixup for #37044, make sure mutation of `types` field of `DataType` is respected.
+struct A37044{T1,T2}
+    x::T1
+    y::T2
+end
+struct Ref37044
+    x::DataType
+end
+function f37044(r)
+    t = r.x
+    if !isdefined(t, :types)
+        Base.datatype_fieldtypes(t)
+    end
+    return t.types
+end
+r37044 = Ref37044(A37044{Int}.body)
+@test f37044(r37044)[1] === Int
+
+a37265() = 0
+b37265() = 0
+function c37265(d)
+    if d == 1
+        e = a37265
+    elseif d == 2
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws UndefVarError c37265(0)
+@test c37265(1) === a37265
+@test c37265(2) === b37265
+
+function c37265_2(d)
+    if 0
+        e = a37265
+    elseif 0
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws TypeError c37265_2(0)
+
+struct PointerImmutable
+    a::Any
+    b::Int
+end
+struct NullableHomogeneousPointerImmutable
+    x1::PointerImmutable
+    x2::PointerImmutable
+    x3::PointerImmutable
+    NullableHomogeneousPointerImmutable() = new()
+    NullableHomogeneousPointerImmutable(x1) = new(x1)
+    NullableHomogeneousPointerImmutable(x1, x2) = new(x1, x2)
+    NullableHomogeneousPointerImmutable(x1, x2, x3) = new(x1, x2, x3)
+end
+
+function getfield_knownindex_unused(v)
+    v.x1
+    return
+end
+
+function getfield_unknownindex_unused(v, n)
+    getfield(v, n)
+    return
+end
+
+function getfield_knownindex_used1(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld
+end
+
+function getfield_knownindex_used2(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld.a
+end
+
+function getfield_knownindex_used3(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld.b
+end
+
+let v = NullableHomogeneousPointerImmutable(),
+    v2 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2)),
+    r = Ref(0)
+    @test_throws UndefRefError getfield_knownindex_unused(v)
+    @test_throws UndefRefError getfield_unknownindex_unused(v, 1)
+    @test_throws UndefRefError getfield_unknownindex_unused(v, :x1)
+    @test_throws UndefRefError getfield_knownindex_used1(r, v)
+    @test r[] == 0
+    @test_throws UndefRefError getfield_knownindex_used2(r, v)
+    @test r[] == 0
+    @test_throws UndefRefError getfield_knownindex_used3(r, v)
+    @test r[] == 0
+
+    @test getfield_knownindex_unused(v2) === nothing
+    @test getfield_unknownindex_unused(v2, 1) === nothing
+    @test getfield_unknownindex_unused(v2, :x1) === nothing
+    @test getfield_knownindex_used1(r, v2) === PointerImmutable(1, 2)
+    @test r[] == 1
+    @test getfield_knownindex_used2(r, v2) === 1
+    @test r[] == 2
+    @test getfield_knownindex_used3(r, v2) === 2
+    @test r[] == 3
+end
+
+struct RedefinedSingleton
+end
+redefined_singleton_ref = Ref{Any}(RedefinedSingleton())
+struct RedefinedSingleton
+end
+cmp_refs(a::Ref{Any}) = a[] === RedefinedSingleton()
+@test cmp_refs(redefined_singleton_ref)
+
+struct PointerNopadding{T}
+    a::Symbol
+    b::T
+end
+struct ContainsPointerNopadding{T}
+    a::PointerNopadding{T}
+    ContainsPointerNopadding{T}() where T = new{T}()
+    ContainsPointerNopadding{T}(a) where T = new{T}(a)
+end
+
+@test !Base.datatype_haspadding(PointerNopadding{Symbol})
+@test !Base.datatype_haspadding(PointerNopadding{Int})
+# Sanity check to make sure the meaning of haspadding didn't change.
+@test Base.datatype_haspadding(PointerNopadding{Any})
+@test !Base.datatype_haspadding(Tuple{PointerNopadding{Symbol}})
+@test !Base.datatype_haspadding(Tuple{PointerNopadding{Int}})
+@test !Base.datatype_haspadding(ContainsPointerNopadding{Symbol})
+@test Base.datatype_haspadding(ContainsPointerNopadding{Int})
+
+# Test the codegen optimized version as well as the unoptimized version of `jl_egal`
+@noinline unopt_jl_egal(@nospecialize(a), @nospecialize(b)) =
+    ccall(:jl_egal, Cint, (Any, Any), a, b) != 0
+@noinline opt_jl_egal(a, b) = a === b
+
+let aint = ContainsPointerNopadding{Int}(), asym = ContainsPointerNopadding{Symbol}(),
+    hint = objectid(aint), hsym = objectid(asym)
+    # Test that the uninitialized bits field doesn't affect the objectid or ===
+    for i in 1:100
+        local i
+        # Increase the chance one of the objects contains garbage int
+        local bint = ContainsPointerNopadding{Int}()
+        local bsym = ContainsPointerNopadding{Symbol}()
+        @test objectid(bint) === hint
+        @test objectid(bsym) === hsym
+        @test aint === bint
+        @test asym === bsym
+        @test unopt_jl_egal(aint, bint)
+        @test unopt_jl_egal(asym, bsym)
+        @test opt_jl_egal(aint, bint)
+        @test opt_jl_egal(asym, bsym)
+        aint = bint
+        asym = bsym
+    end
+end
+
+# Check === for potentially NULL field
+let vnull1 = NullableHomogeneousPointerImmutable(),
+    vnull2 = NullableHomogeneousPointerImmutable(),
+    v1 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2)),
+    v2 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2))
+
+    @test vnull1 === vnull2
+    @test unopt_jl_egal(vnull1, vnull2)
+    @test opt_jl_egal(vnull1, vnull2)
+    @test v1 === v2
+    @test unopt_jl_egal(v1, v2)
+    @test opt_jl_egal(v1, v2)
+
+    @test vnull1 !== v1
+    @test !unopt_jl_egal(vnull1, v1)
+    @test !opt_jl_egal(vnull1, v1)
+    @test vnull2 !== v2
+    @test !unopt_jl_egal(vnull2, v2)
+    @test !opt_jl_egal(vnull2, v2)
+end
+
+# Make sure non-allbits union is handled correctly
+@noinline returns_union37557(r) = r[]
+@noinline compare_union37557(r1, r2) = returns_union37557(r1) === returns_union37557(r2)
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(Int[]), Ref{Union{Int,Vector{Int}}}(Int[]))
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(1), Ref{Union{Int,Vector{Int}}}(Int[]))
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(1),
+                          Ref{Union{Int,Vector{Int}}}(3))
+let array = Int[]
+    @test compare_union37557(Ref{Union{Int,Vector{Int}}}(array),
+                             Ref{Union{Int,Vector{Int}}}(array))
+end
+@test compare_union37557(Ref{Union{Int,Vector{Int}}}(1),
+                         Ref{Union{Int,Vector{Int}}}(1))
+
+# issue #38224
+struct S38224
+    i::Union{Int,Missing}
+end
+@test S38224.flags & 0x10 == 0x10 # .zeroinit
+for _ in 1:5
+    let a = Vector{S38224}(undef, 1000000)
+        @test all(x->ismissing(x.i), a)
+    end
+end
+
+# Redefining types with Vararg
+abstract type RedefineVararg; end
+const RedefineVarargN{N} = Tuple{Vararg{RedefineVararg, N}}
+const RedefineVarargN{N} = Tuple{Vararg{RedefineVararg, N}}
+
+# NTuples with non-types
+@test NTuple{3, 2} == Tuple{2, 2, 2}
+
+# issue #18621
+function f18621()
+   g = (k(i) for i in 1:5)
+   k = identity
+   return collect(g)
+end
+@test f18621() == 1:5
+@test [_ for _ in 1:5] == 1:5
+
+# issue #35130
+const T35130 = Tuple{Vector{Int}, <:Any}
+@eval struct A35130
+    x::Vector{Tuple{Vector{Int}, Any}}
+    A35130(x) = $(Expr(:new, :A35130, :x))
+end
+h35130(x) = A35130(Any[x][1]::Vector{T35130})
+@test h35130(T35130[([1],1)]) isa A35130
+
+# issue #41503
+let S = Tuple{Tuple{Tuple{K, UInt128} where K<:Tuple{Int64}, Int64}},
+    T = Tuple{Tuple{Tuple{Tuple{Int64}, UInt128}, Int64}}
+    @test pointer_from_objref(T) === pointer_from_objref(S)
+    @test isbitstype(T)
+end
+
+# avoid impossible normalization (don't try to form Tuple{Complex{String}} here)
+@test Tuple{Complex{T} where String<:T<:String} == Tuple{Complex{T} where String<:T<:String}
+
+# control over compilation/interpreter
+@testset "Experimental.@force_compile" begin
+    function trim_after_eval(str::AbstractString)
+        rng = findfirst("eval(", str)
+        @test !isempty(rng)
+        return str[1:first(rng)-1]
+    end
+    btc = eval(quote
+        Base.Experimental.@force_compile
+        backtrace()
+    end)
+    bti = eval(quote
+        backtrace()
+    end)
+    @test !occursin(r"(interpreter|do_call)", trim_after_eval(string(stacktrace(btc, true))))
+    @test  occursin(r"(interpreter|do_call)", trim_after_eval(string(stacktrace(bti, true))))
+end
+
+@testset "rest(svec, ...)" begin
+    x = Core.svec(1, 2, 3)
+    a..., = x
+    @test a == Core.svec(1, 2, 3)
+    a, b... = x
+    @test a == 1
+    @test b == Core.svec(2, 3)
+end
+
+@testset "setproperty! on modules" begin
+    m = Module()
+    @eval m global x::Int
+
+    setglobal!(m, :x, 1)
+    @test m.x === 1
+    setglobal!(m, :x, 2, :release)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setglobal!(m, :x, 3, :not_atomic)
+    @test_throws ErrorException setglobal!(m, :x, 4., :release)
+
+    m.x = 1
+    @test m.x === 1
+    setproperty!(m, :x, 2, :release)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setproperty!(m, :x, 3, :not_atomic)
+    m.x = 4.
+    @test m.x === 4
+end
+
+# #45350 - Codegen for assignment to binding imported from module
+module Foo45350
+    global x45350::Int = 1
+end
+import .Foo45350: x45350
+f45350() = (global x45350 = 2)
+@test_throws ErrorException f45350()
+
+@testset "Error behavior of unsafe_convert for RefValue" begin
+    b = Base.RefValue{Int}()
+    @test Base.unsafe_convert(Ptr{Int}, b) !== C_NULL
+    b = Base.RefValue{Base.RefValue{Int}}()
+    # throws because we hit `b.x`
+    @test_throws Core.UndefRefError Base.unsafe_convert(Ptr{Base.RefValue{Int}}, b)
+    # throws because we hit `b.x`
+    b = Base.RefValue{Integer}()
+    @test_throws Core.UndefRefError Base.unsafe_convert(Ptr{Integer}, b)
+end
+
+# #46503 - redefine `invoke`d methods
+foo46503(@nospecialize(a), b::Union{Vector{Any}, Float64, Nothing}) = rand()
+foo46503(a::Int, b::Nothing) = @invoke foo46503(a::Any, b)
+@test 0 <= foo46503(1, nothing) <= 1
+foo46503(@nospecialize(a), b::Union{Nothing, Float64}) = rand() + 10
+@test 10 <= foo46503(1, nothing) <= 11
+
+@testset "effect override on Symbol(::String)" begin
+    @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
+end
+
+@testset "error message for getfield with bad integer type" begin
+    @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
+end
+
+# Correct isdefined error for isdefined of Module of Int fld
+f_isdefined_one(@nospecialize(x)) = isdefined(x, 1)
+@test (try; f_isdefined_one(@__MODULE__); catch err; err; end).got === 1
+
+# Unspecialized retrieval of vararg length
+fvarargN(x::Tuple{Vararg{Int, N}}) where {N} = N
+fvarargN(args...) = fvarargN(args)
+finvokevarargN() = Base.inferencebarrier(fvarargN)(1, 2, 3)
+@test finvokevarargN() == 3
+
+# Make sure that @specialize actually overrides a module annotation
+module SpecializeModuleTest
+    @nospecialize
+    f(@specialize(x), y) = 2
+    @specialize
+end
+@test methods(SpecializeModuleTest.f)[1].nospecialize & 0b11 == 0b10
+
+let # https://github.com/JuliaLang/julia/issues/46918
+    # jl_get_binding_type shouldn't be unstable
+    code = quote
+        res1 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
+
+        stderr
+
+        res2 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
+
+        res3 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
+
+        print(stdout, res1, " ", res2, " ", res3)
+    end |> x->join(x.args, ';')
+    cmd = `$(Base.julia_cmd()) -e $code` # N.B make sure not to pass this code as `:block`
+    stdout = IOBuffer()
+    stderr = IOBuffer()
+    @test success(pipeline(Cmd(cmd); stdout, stderr))
+    @test isempty(String(take!(stderr))) # make sure no error has happened
+    @test String(take!(stdout)) == "nothing IO IO"
+end
+
+# Modules allowed as type parameters and usable in generated functions
+module ModTparamTest
+    foo_test_mod_tparam() = 1
+end
+foo_test_mod_tparam() = 2
+
+struct ModTparamTestStruct{M}; end
+@generated function ModTparamTestStruct{M}() where {M}
+    return :($(GlobalRef(M, :foo_test_mod_tparam))())
+end
+@test ModTparamTestStruct{@__MODULE__}() == 2
+@test ModTparamTestStruct{ModTparamTest}() == 1
+
+# issue #47476
+f47476(::Union{Int, NTuple{N,Int}}...) where {N} = N
+# force it to populate the MethodInstance specializations cache
+# with the correct sparams
+code_typed(f47476, (Vararg{Union{Int, NTuple{2,Int}}},));
+code_typed(f47476, (Int, Vararg{Union{Int, NTuple{2,Int}}},));
+code_typed(f47476, (Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+code_typed(f47476, (Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+code_typed(f47476, (Int, Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+@test f47476(1, 2, 3, 4, 5, 6, (7, 8)) === 2
+@test_throws UndefVarError(:N, :static_parameter) f47476(1, 2, 3, 4, 5, 6, 7)
+
+vect47476(::Type{T}) where {T} = T
+@test vect47476(Type{Type{Type{Int32}}}) === Type{Type{Type{Int32}}}
+@test vect47476(Type{Type{Type{Int64}}}) === Type{Type{Type{Int64}}}
+
+g47476(::Union{Nothing,Int,Val{T}}...) where {T} = T
+@test_throws UndefVarError(:T, :static_parameter) g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5)
+@test g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5, Val(6)) === 6
+let spec = only(methods(g47476)).specializations::Core.SimpleVector
+    @test !isempty(spec)
+    @test any(mi -> mi !== nothing && Base.isvatuple(mi.specTypes), spec)
+    @test all(mi -> mi === nothing || !Base.has_free_typevars(mi.specTypes), spec)
+end
+
+f48950(::Union{Int,d}, ::Union{c,Nothing}...) where {c,d} = 1
+@test f48950(1, 1, 1) == 1
+
+# Module as tparam in unionall
+struct ModTParamUnionAll{A, B}; end
+@test isa(objectid(ModTParamUnionAll{Base}), UInt)
+
+# effects for objectid
+for T in (Int, String, Symbol, Module)
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (T,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (T,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Some{Some{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Some{Some{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{T,T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(hash, (Tuple{T,T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Ref{T},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Ref{T}},)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(objectid, (Tuple{Vector{T}},)))
+end
+@test Core.Compiler.is_foldable(Base.infer_effects(objectid, (DataType,)))
+
+# donotdelete should not taint consistency of the containing function
+f_donotdete(x) = (Core.Compiler.donotdelete(x); 1)
+@test Core.Compiler.is_consistent(Base.infer_effects(f_donotdete, (Tuple{Float64},)))
+
+# Test conditional UndefRefError (#50250)
+struct Foo50250
+    a::Int
+    x
+    Foo50250(a) = new()
+    Foo50250(a, x) = new(x)
+end
+
+struct Bar50250
+    a::Int
+    x
+    Bar50250(a) = new(a)
+    Bar50250(a, x) = new(a, x)
+end
+
+foo50250(b, y) = (b ? Foo50250(y, y) : Foo50250(y)).x
+bar50250(b, y) = (b ? Bar50250(y, y) : Bar50250(y)).x
+
+@test_throws UndefRefError foo50250(true, 1)
+@test_throws UndefRefError foo50250(false, 1)
+@test bar50250(true, 1) === 1
+@test_throws UndefRefError bar50250(false, 1)
+
+# Test that Type{typeof(Union{})} doesn't get codegen'ed as a constant (#50293)
+baz50293(x::Union{Type, Core.Const}) = Base.issingletontype(x)
+bar50293(@nospecialize(u)) = (Base.issingletontype(u.a), baz50293(u.a))
+let u = Union{Type{Union{}}, Type{Any}}, ab = bar50293(u)
+    @test ab[1] == ab[2] == false
+end
+
+# `SimpleVector`-operations should be concrete-eval eligible
+@test Core.Compiler.is_foldable(Base.infer_effects(length, (Core.SimpleVector,)))
+@test Core.Compiler.is_foldable(Base.infer_effects(getindex, (Core.SimpleVector,Int)))
+
+let lin = Core.LineInfoNode(Base, first(methods(convert)), :foo, Int32(5), Int32(0))
+    @test convert(LineNumberNode, lin) == LineNumberNode(5, :foo)
+end
+
+# Test that a nothrow-globalref doesn't get outlined during lowering
+module WellKnownGlobal
+    global well_known = 1
+end
+macro insert_global()
+    Expr(:call, GlobalRef(Base, :println), GlobalRef(WellKnownGlobal, :well_known))
+end
+check_globalref_lowering() = @insert_global
+let src = code_lowered(check_globalref_lowering)[1]
+    @test length(src.code) == 2
+end
+
+# Test correctness of widen_diagonal
+let widen_diagonal(x::UnionAll) = Base.rewrap_unionall(Base.widen_diagonal(Base.unwrap_unionall(x), x), x)
+    @test Tuple{Int,Float64} <: widen_diagonal(NTuple)
+    @test Tuple{Int,Float64} <: widen_diagonal(Tuple{T,T} where {T})
+    @test Tuple{Real,Int,Float64} <: widen_diagonal(Tuple{S,Vararg{T}} where {S, T<:S})
+    @test Tuple{Int,Int,Float64,Float64} <: widen_diagonal(Tuple{S,S,Vararg{T}} where {S, T<:S})
+    @test Union{Tuple{T}, Tuple{T,Int}} where {T} === widen_diagonal(Union{Tuple{T}, Tuple{T,Int}} where {T})
+    @test Tuple === widen_diagonal(Union{Tuple{Vararg{S}}, Tuple{Vararg{T}}} where {S, T})
+    @test Tuple{Vararg{Val{<:Set}}} == widen_diagonal(Tuple{Vararg{T}} where T<:Val{<:Set})
+end
+
+# Test try/catch/else ordering
+function test_try_catch_else()
+    local x
+    try
+        x = 1
+    catch
+        rethrow()
+    else
+        return x
+    end
+end
+@test test_try_catch_else() == 1
+
+# #52433
+@test_throws ErrorException Core.Intrinsics.pointerref(Ptr{Vector{Int64}}(C_NULL), 1, 0)
+
+# #53034 (Union normalization for typevar elimination)
+@test Tuple{Int,Any} <: Tuple{Union{Int,T},T} where {T>:Int}
+@test Tuple{Int,Any} <: Tuple{Union{Int,T},T} where {T>:Integer}
+# #53034 (Union normalization for Type elimination)
+@test Int isa Type{Union{Int,T2} where {T2<:T1}} where {T1}
+@test Int isa Type{Union{Int,T1}} where {T1}
+@test Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}}} where {T1}
+@test Int isa Union{Union, Type{Union{Int,T1}}} where {T1}
+@test_broken Int isa Union{UnionAll, Type{Union{Int,T2} where {T2<:T1}} where {T1}}
+@test_broken Int isa Union{Union, Type{Union{Int,T1}} where {T1}}
+
+let M = @__MODULE__
+    @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
+    @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
+    @test Core.set_binding_type!(M, :a_typed_global, Tuple{Union{Integer,Nothing}}) === nothing
+    @test Core.set_binding_type!(M, :a_typed_global, Union{Tuple{Integer},Tuple{Nothing}}) === nothing
+    @test_throws(ErrorException("cannot set type for global $(nameof(M)).a_typed_global. It already has a value or is already set to a different type."),
+                 Core.set_binding_type!(M, :a_typed_global, Union{Nothing,Tuple{Union{Integer,Nothing}}}))
+    @test Core.set_binding_type!(M, :a_typed_global) === nothing
+    @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
+end

@@ -1065,7 +1065,7 @@ typedef
 
 /* Use these to write the name of your wrapper.  NOTE: duplicates
    VG_WRAP_FUNCTION_Z{U,Z} in pub_tool_redir.h.  NOTE also: inserts
-   the default behaviour equivalance class tag "0000" into the name.
+   the default behaviour equivalence class tag "0000" into the name.
    See pub_tool_redir.h for details -- normally you don't need to
    think about this, though. */
 
@@ -1661,7 +1661,7 @@ typedef
 /* NB 9 Sept 07.  There is a nasty kludge here in all these CALL_FN_
    macros.  In order not to trash the stack redzone, we need to drop
    %rsp by 128 before the hidden call, and restore afterwards.  The
-   nastyness is that it is only by luck that the stack still appears
+   nastiness is that it is only by luck that the stack still appears
    to be unwindable during the hidden call - since then the behaviour
    of any routine using this macro does not match what the CFI data
    says.  Sigh.
@@ -6290,7 +6290,7 @@ VALGRIND_PRINTF_BACKTRACE(const char *format, ...)
 
 
 /* These requests allow control to move from the simulated CPU to the
-   real CPU, calling an arbitary function.
+   real CPU, calling an arbitrary function.
 
    Note that the current ThreadId is inserted as the first argument.
    So this call:

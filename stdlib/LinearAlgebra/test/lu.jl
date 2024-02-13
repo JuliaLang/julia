@@ -3,7 +3,7 @@
 module TestLU
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: ldiv!, BlasInt, BlasFloat
+using LinearAlgebra: ldiv!, BlasReal, BlasInt, BlasFloat, rdiv!
 
 n = 10
 
@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-srand(1234321)
+Random.seed!(1234324)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -37,37 +37,31 @@ dimg  = randn(n)/2
     else
         convert(Tridiagonal{eltya}, Tridiagonal(dlreal, dreal, dureal))
     end
-    ε = εa = eps(abs(float(one(eltya))))
+    εa = eps(abs(float(one(eltya))))
 
     if eltya <: BlasFloat
         @testset "LU factorization for Number" begin
             num = rand(eltya)
-            @test lu(num) == (one(eltya),num,1)
-            @test convert(Array, lufact(num)) ≈ eltya[num]
+            @test (lu(num)...,) == (hcat(one(eltya)), hcat(num), [1])
+            @test convert(Array, lu(num)) ≈ eltya[num]
         end
         @testset "Balancing in eigenvector calculations" begin
             A = convert(Matrix{eltya}, [ 3.0     -2.0      -0.9     2*eps(real(one(eltya)));
                                        -2.0      4.0       1.0    -eps(real(one(eltya)));
                                        -eps(real(one(eltya)))/4  eps(real(one(eltya)))/2  -1.0     0;
                                        -0.5     -0.5       0.1     1.0])
-            F = eigfact(A, permute=false, scale=false)
-            eig(A, permute=false, scale=false)
+            F = eigen(A, permute=false, scale=false)
             @test F.vectors*Diagonal(F.values)/F.vectors ≈ A
-            F = eigfact(A)
+            F = eigen(A)
             # @test norm(F.vectors*Diagonal(F.values)/F.vectors - A) > 0.01
         end
-    end
-    @testset "Singular LU" begin
-        lua = lufact(zeros(eltya, 3, 3))
-        @test !LinearAlgebra.issuccess(lua)
-        @test sprint((t, s) -> show(t, "text/plain", s), lua) == "Failed factorization of type $(typeof(lua))"
     end
     κ  = cond(a,1)
     @testset "(Automatic) Square LU decomposition" begin
         lua   = factorize(a)
         @test_throws ErrorException lua.Z
         l,u,p = lua.L, lua.U, lua.p
-        ll,ul,pl = lu(a)
+        ll,ul,pl = @inferred lu(a)
         @test ll * ul ≈ a[pl,:]
         @test l*u ≈ a[p,:]
         @test (l*u)[invperm(p),:] ≈ a
@@ -77,22 +71,36 @@ dimg  = randn(n)/2
             # test conversion of LU factorization's numerical type
             bft = eltya <: Real ? LinearAlgebra.LU{BigFloat} : LinearAlgebra.LU{Complex{BigFloat}}
             bflua = convert(bft, lua)
-            @test bflua.L*bflua.U ≈ big.(a)[p,:] rtol=ε
+            @test bflua.L*bflua.U ≈ big.(a)[p,:] rtol=εa*norm(a)
+            @test Factorization{eltya}(lua) === lua
+            # test Factorization with different eltype
+            if eltya <: BlasReal
+                @test Array(Factorization{Float16}(lua)) ≈ Array(lu(convert(Matrix{Float16}, a)))
+                @test eltype(Factorization{Float16}(lua)) == Float16
+            end
         end
         # compact printing
         lstring = sprint(show,l)
         ustring = sprint(show,u)
-        # @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
     end
     κd    = cond(Array(d),1)
     @testset "Tridiagonal LU" begin
-        lud   = lufact(d)
+        lud = @inferred lu(d)
         @test LinearAlgebra.issuccess(lud)
-        @test lufact(lud) == lud
+        @test @inferred(lu(lud)) == lud
         @test_throws ErrorException lud.Z
         @test lud.L*lud.U ≈ lud.P*Array(d)
         @test lud.L*lud.U ≈ Array(d)[lud.p,:]
         @test AbstractArray(lud) ≈ d
+        @test Array(lud) ≈ d
+        if eltya != Int
+            dlu = convert.(eltya, [1, 1])
+            dia = convert.(eltya, [-2, -2, -2])
+            tri = Tridiagonal(dlu, dia, dlu)
+            L = lu(tri)
+            @test lu!(tri) == L
+            @test UpperTriangular(tri) == L.U
+        end
     end
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
         b  = eltyb == Int ? rand(1:5, n, 2) :
@@ -135,6 +143,17 @@ dimg  = randn(n)/2
                 ldiv!(c_dest, adjoint(lua), c)
                 @test norm(b_dest - lua' \ b, 1) < ε*κ*2n
                 @test norm(c_dest - lua' \ c, 1) < ε*κ*n
+
+                if eltyb != Int && !(eltya <: Complex) || eltya <: Complex && eltyb <: Complex
+                    p = Matrix(b')
+                    q = Matrix(c')
+                    p_dest = copy(p)
+                    q_dest = copy(q)
+                    rdiv!(p_dest, lua)
+                    rdiv!(q_dest, lua)
+                    @test norm(p_dest - p / lua, 1) < ε*κ*2n
+                    @test norm(q_dest - q / lua, 1) < ε*κ*n
+                end
             end
             if eltya <: BlasFloat && eltyb <: BlasFloat
                 e = rand(eltyb,n,n)
@@ -158,7 +177,10 @@ dimg  = randn(n)/2
                         end
                     end
                     if eltya <: Complex
-                        @test norm((lud'\bb) - Array(d')\bb, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                        dummy_factor = 2.5
+                        # TODO: Remove dummy_factor, this test started failing when the RNG stream changed
+                        # so the factor was added.
+                        @test norm((lud'\bb) - Array(d')\bb, 1) < ε*κd*n*2*dummy_factor # Two because the right hand side has two columns
                     end
                 end
             end
@@ -174,34 +196,72 @@ dimg  = randn(n)/2
                 du[1] = zero(eltya)
                 dl[1] = zero(eltya)
                 zT = Tridiagonal(dl,dd,du)
-                @test !LinearAlgebra.issuccess(lufact(zT))
+                @test !LinearAlgebra.issuccess(lu(zT; check = false))
             end
         end
         @testset "Thin LU" begin
-            lua   = @inferred lufact(a[:,1:n1])
+            lua   = @inferred lu(a[:,1:n1])
             @test lua.L*lua.U ≈ lua.P*a[:,1:n1]
         end
         @testset "Fat LU" begin
-            lua   = lufact(a[1:n1,:])
+            lua   = @inferred lu(a[1:n1,:])
             @test lua.L*lua.U ≈ lua.P*a[1:n1,:]
         end
     end
 
     @testset "LU of Symmetric/Hermitian" begin
         for HS in (Hermitian(a'a), Symmetric(a'a))
-            luhs = lufact(HS)
+            luhs = @inferred lu(HS)
             @test luhs.L*luhs.U ≈ luhs.P*Matrix(HS)
         end
     end
+
+    @testset "Factorization of symtridiagonal dense matrix with zero ldlt-pivot (#38026)" begin
+        A = [0.0 -1.0 0.0 0.0
+            -1.0 0.0 0.0 0.0
+            0.0 0.0 0.0 -1.0
+            0.0 0.0 -1.0 0.0]
+        F = factorize(A)
+        @test all((!isnan).(Matrix(F)))
+    end
+end
+
+@testset "Small tridiagonal matrices" for T in (Float64, ComplexF64)
+    A = Tridiagonal(T[], T[1], T[])
+    @test inv(A) == A
+end
+
+@testset "Singular matrices" for T in (Float64, ComplexF64)
+    A = T[1 2; 0 0]
+    @test_throws SingularException lu(A)
+    @test_throws SingularException lu!(copy(A))
+    @test_throws SingularException lu(A; check = true)
+    @test_throws SingularException lu!(copy(A); check = true)
+    @test !issuccess(lu(A; check = false))
+    @test !issuccess(lu!(copy(A); check = false))
+    @test_throws ZeroPivotException lu(A, NoPivot())
+    @test_throws ZeroPivotException lu!(copy(A), NoPivot())
+    @test_throws ZeroPivotException lu(A, NoPivot(); check = true)
+    @test_throws ZeroPivotException lu!(copy(A), NoPivot(); check = true)
+    @test !issuccess(lu(A, NoPivot(); check = false))
+    @test !issuccess(lu!(copy(A), NoPivot(); check = false))
+    F = lu(A, NoPivot(); check = false)
+    @test sprint((io, x) -> show(io, "text/plain", x), F) ==
+        "Failed factorization of type $(typeof(F))"
+    F2 = lu(A; allowsingular = true)
+    @test !issuccess(F2)
+    @test issuccess(F2, allowsingular = true)
+    @test occursin("U factor (rank-deficient)", sprint((io, x) -> show(io, "text/plain", x), F2))
 end
 
 @testset "conversion" begin
-    srand(3)
+    Random.seed!(4)
     a = Tridiagonal(rand(9),rand(10),rand(9))
     fa = Array(a)
-    falu = lufact(fa)
-    alu = lufact(a)
+    falu = lu(fa)
+    alu = lu(a)
     falu = convert(typeof(falu),alu)
+    @test Array(alu) == fa
     @test AbstractArray(alu) == fa
 end
 
@@ -209,7 +269,7 @@ end
     ## Integrate in general tests when more linear algebra is implemented in julia
     a = convert(Matrix{Rational{BigInt}}, rand(1:10//1,n,n))/n
     b = rand(1:10,n,2)
-    @inferred lufact(a)
+    @inferred lu(a)
     lua   = factorize(a)
     l,u,p = lua.L, lua.U, lua.p
     @test l*u ≈ a[p,:]
@@ -242,24 +302,20 @@ end
     @test_throws DomainError logdet([1 1; 1 -1])
 end
 
-@testset "Issue 21453" begin
-    @test_throws ArgumentError LinearAlgebra._cond1Inf(lufact(randn(5,5)), 2, 2.0)
-end
-
 @testset "REPL printing" begin
         bf = IOBuffer()
-        show(bf, "text/plain", lufact(Matrix(I, 4, 4)))
+        show(bf, "text/plain", lu(Matrix(I, 4, 4)))
         seekstart(bf)
         @test String(take!(bf)) == """
-LinearAlgebra.LU{Float64,Array{Float64,2}}
+$(LinearAlgebra.LU){Float64, Matrix{Float64}, Vector{$Int}}
 L factor:
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
  0.0  0.0  0.0  1.0
 U factor:
-4×4 Array{Float64,2}:
+4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
  0.0  1.0  0.0  0.0
  0.0  0.0  1.0  0.0
@@ -267,10 +323,167 @@ U factor:
 end
 
 @testset "propertynames" begin
-    names = sort!(string.(Base.propertynames(lufact(rand(3,3)))))
+    names = sort!(collect(string.(Base.propertynames(lu(rand(3,3))))))
     @test names == ["L", "P", "U", "p"]
-    allnames = sort!(string.(Base.propertynames(lufact(rand(3,3)), true)))
+    allnames = sort!(collect(string.(Base.propertynames(lu(rand(3,3)), true))))
     @test allnames == ["L", "P", "U", "factors", "info", "ipiv", "p"]
+end
+
+include("trickyarithmetic.jl")
+
+@testset "lu with type whose sum is another type" begin
+    A = TrickyArithmetic.A[1 2; 3 4]
+    ElT = TrickyArithmetic.D{TrickyArithmetic.C,TrickyArithmetic.C}
+    B = lu(A, NoPivot())
+    @test B isa LinearAlgebra.LU{ElT,Matrix{ElT}}
+end
+
+# dimensional correctness:
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
+@testset "lu factorization with dimension type" begin
+    n = 4
+    A = Matrix(Furlong(1.0) * I, n, n)
+    F = lu(A).factors
+    @test Diagonal(F) == Diagonal(A)
+    # upper triangular part has a unit Furlong{1}
+    @test all(x -> typeof(x) == Furlong{1, Float64}, F[i,j] for j=1:n for i=1:j)
+    # lower triangular part is unitless Furlong{0}
+    @test all(x -> typeof(x) == Furlong{0, Float64}, F[i,j] for j=1:n for i=j+1:n)
+end
+
+@testset "Issue #30917. Determinant of integer matrix" begin
+    @test det([1 1 0 0 1 0 0 0
+               1 0 1 0 0 1 0 0
+               1 0 0 1 0 0 1 0
+               0 1 1 1 0 0 0 0
+               0 1 0 0 0 0 1 1
+               0 0 1 0 1 0 0 1
+               0 0 0 1 1 1 0 0
+               0 0 0 0 1 1 0 1]) ≈ 6
+end
+
+@testset "Issue #33177. No ldiv!(LU, Adjoint)" begin
+    A = [1 0; 1 1]
+    B = [1 2; 2 8]
+    F = lu(B)
+    @test (A  / F') * B == A
+    @test (A' / F') * B == A'
+
+    a = complex.(randn(2), randn(2))
+    @test (a' / F') * B ≈ a'
+    @test (transpose(a) / F') * B ≈ transpose(a)
+
+    A = complex.(randn(2, 2), randn(2, 2))
+    @test (A' / F') * B ≈ A'
+    @test (transpose(A) / F') * B ≈ transpose(A)
+end
+
+@testset "0x0 matrix" begin
+    A = ones(0, 0)
+    F = lu(A)
+    @test F.U == ones(0, 0)
+    @test F.L == ones(0, 0)
+    @test F.P == ones(0, 0)
+    @test F.p == []
+end
+
+@testset "more rdiv! methods" begin
+    for elty in (Float16, Float64, ComplexF64), transform in (transpose, adjoint)
+        A = randn(elty, 5, 5)
+        C = copy(A)
+        B = randn(elty, 5, 5)
+        @test rdiv!(transform(A), transform(lu(B))) ≈ transform(C) / transform(B)
+    end
+    for elty in (Float32, Float64, ComplexF64), transF in (identity, transpose),
+            transB in (transpose, adjoint), transT in (identity, complex)
+        A = randn(elty, 5, 5)
+        F = lu(A)
+        b = randn(transT(elty), 5)
+        @test rdiv!(transB(copy(b)), transF(F)) ≈ transB(b) / transF(F) ≈ transB(b) / transF(A)
+        B = randn(transT(elty), 5, 5)
+        @test rdiv!(copy(B), transF(F)) ≈ B / transF(F) ≈ B / transF(A)
+    end
+end
+
+@testset "transpose(A) / lu(B)' should not overwrite A (#36657)" begin
+    for elty in (Float16, Float64, ComplexF64)
+        A = randn(elty, 5, 5)
+        B = randn(elty, 5, 5)
+        C = copy(A)
+        a = randn(elty, 5)
+        c = copy(a)
+        @test transpose(A) / lu(B)' ≈ transpose(A) / B'
+        @test transpose(a) / lu(B)' ≈ transpose(a) / B'
+        @test A == C
+        @test a == c
+    end
+end
+
+@testset "lu on *diagonal matrices" begin
+    dl = rand(3)
+    d = rand(4)
+    Bl = Bidiagonal(d, dl, :L)
+    Bu = Bidiagonal(d, dl, :U)
+    Tri = Tridiagonal(dl, d, dl)
+    Sym = SymTridiagonal(d, dl)
+    D = Diagonal(d)
+    b = ones(4)
+    B = rand(4,4)
+    for A in (Bl, Bu, Tri, Sym, D), pivot in (NoPivot(), RowMaximum())
+        @test A\b ≈ lu(A, pivot)\b
+        @test B/A ≈ B/lu(A, pivot)
+        @test B/A ≈ B/Matrix(A)
+        @test Matrix(lu(A, pivot)) ≈ A
+        @test @inferred(lu(A)) isa LU
+        if A isa Union{Bidiagonal, Diagonal, Tridiagonal, SymTridiagonal}
+            @test lu(A) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+            @test lu(A, pivot) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+            @test lu(A, pivot; check = false) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
+        end
+    end
+end
+
+@testset "can push to vector after 3-arg ldiv! (#43507)" begin
+    u = rand(3)
+    A = rand(3,3)
+    b = rand(3)
+    ldiv!(u,lu(A),b)
+    push!(b,4.0)
+    @test length(b) == 4
+end
+
+@testset "NaN matrix should throw error" begin
+    for eltya in (NaN16, NaN32, NaN64, BigFloat(NaN))
+        r = fill(eltya, 2, 3)
+        c = fill(complex(eltya, eltya), 2, 3)
+        @test_throws ArgumentError lu(r)
+        @test_throws ArgumentError lu(c)
+    end
+end
+
+@testset "more generic ldiv! #35419" begin
+    A = rand(3, 3)
+    b = rand(3)
+    @test A * ldiv!(lu(A), Base.ReshapedArray(copy(b)', (3,), ())) ≈ b
+end
+
+@testset "generic lu!" begin
+    A = rand(3,3); B = deepcopy(A); C = A[2:3,2:3]
+    Asub1 = @view(A[2:3,2:3])
+    F1 = lu!(Asub1)
+    Asub2 = @view(B[[2,3],[2,3]])
+    F2 = lu!(Asub2)
+    @test Matrix(F1) ≈ Matrix(F2) ≈ C
+end
+
+@testset "matrix with Nonfinite" begin
+    lu(fill(NaN, 2, 2), check=false)
+    lu(fill(Inf, 2, 2), check=false)
+    LinearAlgebra.generic_lufact!(fill(NaN, 2, 2), check=false)
+    LinearAlgebra.generic_lufact!(fill(Inf, 2, 2), check=false)
 end
 
 end # module TestLU

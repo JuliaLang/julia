@@ -2,6 +2,37 @@
 
 ## Standard Numeric Types
 
+A type tree for all subtypes of `Number` in `Base` is shown below.
+Abstract types have been marked, the rest are concrete types.
+```
+Number  (Abstract Type)
+├─ Complex
+└─ Real  (Abstract Type)
+   ├─ AbstractFloat  (Abstract Type)
+   │  ├─ Float16
+   │  ├─ Float32
+   │  ├─ Float64
+   │  └─ BigFloat
+   ├─ Integer  (Abstract Type)
+   │  ├─ Bool
+   │  ├─ Signed  (Abstract Type)
+   │  │  ├─ Int8
+   │  │  ├─ Int16
+   │  │  ├─ Int32
+   │  │  ├─ Int64
+   │  │  ├─ Int128
+   │  │  └─ BigInt
+   │  └─ Unsigned  (Abstract Type)
+   │     ├─ UInt8
+   │     ├─ UInt16
+   │     ├─ UInt32
+   │     ├─ UInt64
+   │     └─ UInt128
+   ├─ Rational
+   └─ AbstractIrrational  (Abstract Type)
+      └─ Irrational
+```
+
 ### Abstract number types
 
 ```@docs
@@ -32,6 +63,8 @@ Core.Int64
 Core.UInt64
 Core.Int128
 Core.UInt128
+Base.Int
+Base.UInt
 Base.BigInt
 Base.Complex
 Base.Rational
@@ -41,11 +74,6 @@ Base.Irrational
 ## Data Formats
 
 ```@docs
-Base.bin
-Base.hex
-Base.dec
-Base.oct
-Base.base
 Base.digits
 Base.digits!
 Base.bitstring
@@ -77,9 +105,11 @@ Base.MathConstants.catalan
 Base.MathConstants.eulergamma
 Base.MathConstants.golden
 Base.Inf
+Base.Inf64
 Base.Inf32
 Base.Inf16
 Base.NaN
+Base.NaN64
 Base.NaN32
 Base.NaN16
 Base.issubnormal
@@ -94,8 +124,6 @@ Base.isinteger
 Base.isreal
 Core.Float32(::Any)
 Core.Float64(::Any)
-Base.GMP.BigInt(::Any)
-Base.MPFR.BigFloat(::Any)
 Base.Rounding.rounding
 Base.Rounding.setrounding(::Type, ::Any)
 Base.Rounding.setrounding(::Function, ::Type, ::RoundingMode)
@@ -114,19 +142,22 @@ Base.trailing_zeros
 Base.trailing_ones
 Base.isodd
 Base.iseven
+Base.@int128_str
+Base.@uint128_str
 ```
 
-## BigFloats
+## [BigFloats and BigInts](@id BigFloats-and-BigInts)
 
-The [`BigFloat`](@ref) type implements arbitrary-precision floating-point arithmetic using
-the [GNU MPFR library](http://www.mpfr.org/).
+The [`BigFloat`](@ref) and [`BigInt`](@ref) types implements
+arbitrary-precision floating point and integer arithmetic, respectively. For
+[`BigFloat`](@ref) the [GNU MPFR library](https://www.mpfr.org/) is used,
+and for [`BigInt`](@ref) the [GNU Multiple Precision Arithmetic Library (GMP)]
+(https://gmplib.org) is used.
 
 ```@docs
+Base.MPFR.BigFloat(::Any, rounding::RoundingMode)
 Base.precision
-Base.MPFR.precision(::Type{BigFloat})
 Base.MPFR.setprecision
-Base.MPFR.BigFloat(x, prec::Int)
-BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
-Base.MPFR.BigFloat(x, prec::Int, rounding::RoundingMode)
-Base.MPFR.BigFloat(x::String)
+Base.GMP.BigInt(::Any)
+Base.@big_str
 ```

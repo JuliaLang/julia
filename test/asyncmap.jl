@@ -15,7 +15,7 @@ using Random
 let nt=0
     global nt_func
     nt_func() = (v=div(nt, 25); nt+=1; v)  # increment number of tasks by 1 for every 25th call.
-                                           # nt_func() will be called initally once and then for every
+                                           # nt_func() will be called initially once and then for every
                                            # iteration
 end
 @test length(unique(asyncmap(x->(yield();objectid(current_task())), 1:200; ntasks=nt_func))) == 7
@@ -53,6 +53,19 @@ len_only_iterable = (1,2,3,4,5)
 @test_throws ArgumentError asyncmap(identity, 1:10; batch_size=0)
 @test_throws ArgumentError asyncmap(identity, 1:10; batch_size="10")
 @test_throws ArgumentError asyncmap(identity, 1:10; ntasks="10")
+
+# Check that we throw a `CapturedException` holding the stacktrace if `f` throws
+f42105(i) = i == 5 ? error("captured") :  i
+let
+    e = try
+        asyncmap(f42105, 1:5)
+    catch e
+        e
+    end
+    @test e isa CapturedException
+    @test e.ex == ErrorException("captured")
+    @test e.processed_bt[2][1].func === :f42105
+end
 
 include("generic_map_tests.jl")
 generic_map_tests(asyncmap, asyncmap!)

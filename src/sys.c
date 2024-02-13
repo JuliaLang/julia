@@ -26,6 +26,10 @@
 #include <sys/ptrace.h>
 #include <sys/mman.h>
 #include <dlfcn.h>
+#include <grp.h>
+
+// For `struct termios`
+#include <termios.h>
 #endif
 
 #ifndef _OS_WINDOWS_
@@ -47,12 +51,7 @@
 #include <xmmintrin.h>
 #endif
 
-#if defined _MSC_VER
-#include <io.h>
-#include <intrin.h>
-#endif
-
-#ifdef JL_MSAN_ENABLED
+#ifdef _COMPILER_MSAN_ENABLED_
 #include <sanitizer/msan_interface.h>
 #endif
 
@@ -62,20 +61,6 @@
 extern "C" {
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-JL_DLLEXPORT char *dirname(char *);
-#else
-#include <libgen.h>
-#endif
-
-JL_DLLEXPORT uint32_t jl_getutf8(ios_t *s)
-{
-    uint32_t wc=0;
-    ios_getutf8(s, &wc);
-    return wc;
-}
-
-JL_DLLEXPORT int jl_sizeof_uv_mutex(void) { return sizeof(uv_mutex_t); }
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
 JL_DLLEXPORT int jl_sizeof_mode_t(void) { return sizeof(mode_t); }
@@ -97,9 +82,13 @@ JL_DLLEXPORT void *jl_mmap(void *addr, size_t length, int prot, int flags,
     return mmap(addr, length, prot, flags, fd, (off_t)offset);
 }
 #else
-JL_DLLEXPORT int64_t jl_lseek(int fd, int64_t offset, int whence)
+JL_DLLEXPORT int64_t jl_lseek(HANDLE fd, int64_t offset, int whence)
 {
-    return _lseeki64(fd, offset, whence);
+    LARGE_INTEGER tell;
+    tell.QuadPart = offset;
+    if (SetFilePointerEx(fd, tell, &tell, whence) == 0)
+        return -1;
+    return tell.QuadPart;
 }
 #endif
 JL_DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
@@ -114,21 +103,20 @@ JL_DLLEXPORT int32_t jl_nb_available(ios_t *s)
 // --- dir/file stuff ---
 
 JL_DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
-JL_DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t *req) { uv_fs_req_cleanup(req); }
 JL_DLLEXPORT char *jl_uv_fs_t_ptr(uv_fs_t *req) { return (char*)req->ptr; }
-JL_DLLEXPORT int jl_uv_fs_result(uv_fs_t *f) { return f->result; }
+JL_DLLEXPORT char *jl_uv_fs_t_path(uv_fs_t *req) { return (char*)req->path; }
 
 // --- stat ---
 JL_DLLEXPORT int jl_sizeof_stat(void) { return sizeof(uv_stat_t); }
 
-JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf)
+JL_DLLEXPORT int32_t jl_stat(const char *path, char *statbuf) JL_NOTSAFEPOINT
 {
     uv_fs_t req;
     int ret;
 
     // Ideally one would use the statbuf for the storage in req, but
     // it's not clear that this is possible using libuv
-    ret = uv_fs_stat(uv_default_loop(), &req, path, NULL);
+    ret = uv_fs_stat(unused_uv_loop_arg, &req, path, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -140,19 +128,19 @@ JL_DLLEXPORT int32_t jl_lstat(const char *path, char *statbuf)
     uv_fs_t req;
     int ret;
 
-    ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
+    ret = uv_fs_lstat(unused_uv_loop_arg, &req, path, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
     return ret;
 }
 
-JL_DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
+JL_DLLEXPORT int32_t jl_fstat(uv_os_fd_t fd, char *statbuf)
 {
     uv_fs_t req;
     int ret;
 
-    ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
+    ret = uv_fs_fstat(unused_uv_loop_arg, &req, fd, NULL);
     if (ret == 0)
         memcpy(statbuf, req.ptr, sizeof(uv_stat_t));
     uv_fs_req_cleanup(&req);
@@ -233,6 +221,24 @@ JL_DLLEXPORT double jl_stat_ctime(char *statbuf)
     return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
 }
 
+JL_DLLEXPORT unsigned long jl_getuid(void)
+{
+#ifdef _OS_WINDOWS_
+    return -1;
+#else
+    return getuid();
+#endif
+}
+
+JL_DLLEXPORT unsigned long jl_geteuid(void)
+{
+#ifdef _OS_WINDOWS_
+    return -1;
+#else
+    return geteuid();
+#endif
+}
+
 // --- buffer manipulation ---
 
 JL_DLLEXPORT jl_array_t *jl_take_buffer(ios_t *s)
@@ -274,15 +280,16 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
             return str;
         }
         a = jl_alloc_array_1d(jl_array_uint8_type, n - nchomp);
-        memcpy(jl_array_data(a), s->buf + s->bpos, n - nchomp);
+        memcpy(jl_array_data(a, uint8_t), s->buf + s->bpos, n - nchomp);
         s->bpos += n;
     }
     else {
         a = jl_alloc_array_1d(jl_array_uint8_type, 80);
         ios_t dest;
         ios_mem(&dest, 0);
-        ios_setbuf(&dest, (char*)a->data, 80, 0);
-        size_t n = ios_copyuntil(&dest, s, delim);
+        char *mem = jl_array_data(a, char);
+        ios_setbuf(&dest, (char*)mem, 80, 0);
+        size_t n = ios_copyuntil(&dest, s, delim, 1);
         if (chomp && n > 0 && dest.buf[n - 1] == delim) {
             n--;
             if (chomp == 2 && n > 0 && dest.buf[n - 1] == '\r') {
@@ -292,15 +299,11 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
             assert(truncret == 0);
             (void)truncret; // ensure the variable is used to avoid warnings
         }
-        if (dest.buf != a->data) {
+        if (dest.buf != mem) {
             a = jl_take_buffer(&dest);
         }
         else {
-#ifdef STORE_ARRAY_LEN
-            a->length = n;
-#endif
-            a->nrows = n;
-            ((char*)a->data)[n] = '\0';
+            a->dimsize[0] = n;
         }
         if (str) {
             JL_GC_PUSH1(&a);
@@ -312,16 +315,65 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
     return (jl_value_t*)a;
 }
 
-JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
+// read up to buflen bytes, including delim, into buf.  returns number of bytes read.
+JL_DLLEXPORT size_t jl_readuntil_buf(ios_t *s, uint8_t delim, uint8_t *buf, size_t buflen)
 {
-    assert(n <= 8);
+    // manually inlined common case
+    size_t avail = (size_t)(s->size - s->bpos);
+    if (avail > buflen) avail = buflen;
+    char *pd = (char*)memchr(s->buf + s->bpos, delim, avail);
+    if (pd) {
+        size_t n = pd - (s->buf + s->bpos) + 1;
+        memcpy(buf, s->buf + s->bpos, n);
+        s->bpos += n;
+        return n;
+    }
+    else {
+        size_t total = avail;
+        memcpy(buf, s->buf + s->bpos, avail);
+        s->bpos += avail;
+        if (avail == buflen) return total;
+
+        // code derived from ios_copyuntil
+        while (!ios_eof(s)) {
+            avail = ios_readprep(s, 160); // read LINE_CHUNK_SIZE
+            if (avail == 0) break;
+            if (total+avail > buflen) avail = buflen-total;
+            char *pd = (char*)memchr(s->buf+s->bpos, delim, avail);
+            if (pd == NULL) {
+                memcpy(buf+total, s->buf+s->bpos, avail);
+                s->bpos += avail;
+                total += avail;
+                if (buflen == total) return total;
+            }
+            else {
+                size_t ntowrite = pd - (s->buf+s->bpos) + 1;
+                memcpy(buf+total, s->buf+s->bpos, ntowrite);
+                s->bpos += ntowrite;
+                total += ntowrite;
+                return total;
+            }
+        }
+        s->_eof = 1;
+        return total;
+    }
+}
+
+JL_DLLEXPORT int jl_ios_buffer_n(ios_t *s, const size_t n)
+{
     size_t space, ret;
     do {
         space = (size_t)(s->size - s->bpos);
         ret = ios_readprep(s, n);
         if (space == ret && ret < n)
-            jl_eof_error();
-    } while(ret < n);
+            return 1;
+    } while (ret < n);
+    return 0;
+}
+
+JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
+{
+    assert(n <= 8);
     uint64_t x = 0;
     uint8_t *buf = (uint8_t*)&s->buf[s->bpos];
     if (n == 8) {
@@ -346,10 +398,10 @@ JL_DLLEXPORT uint64_t jl_ios_get_nbyte_int(ios_t *s, const size_t n)
 
 // -- syscall utilities --
 
-JL_DLLEXPORT int jl_errno(void) { return errno; }
-JL_DLLEXPORT void jl_set_errno(int e) { errno = e; }
+JL_DLLEXPORT int jl_errno(void) JL_NOTSAFEPOINT { return errno; }
+JL_DLLEXPORT void jl_set_errno(int e) JL_NOTSAFEPOINT { errno = e; }
 
-// -- get the number of CPU cores --
+// -- get the number of CPU threads (logical cores) --
 
 #ifdef _OS_WINDOWS_
 typedef DWORD (WINAPI *GAPC)(WORD);
@@ -358,7 +410,16 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-JL_DLLEXPORT int jl_cpu_cores(void)
+// Apple's M1 processor is a big.LITTLE style processor, with 4x "performance"
+// cores, and 4x "efficiency" cores.  Because Julia expects to be able to run
+// things like heavy linear algebra workloads on all cores, it's best for us
+// to only spawn as many threads as there are performance cores.  Once macOS
+// 12 is released, we'll be able to query the multiple "perf levels" of the
+// cores of a CPU (see this PR [0] to pytorch/cpuinfo for an example) but
+// until it's released, we will just recognize the M1 by its CPU family
+// identifier, then subtract how many efficiency cores we know it has.
+
+JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 {
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;
@@ -370,6 +431,28 @@ JL_DLLEXPORT int jl_cpu_cores(void)
         sysctl(nm, 2, &count, &len, NULL, 0);
         if (count < 1) { count = 1; }
     }
+
+#if defined(__APPLE__) && defined(_CPU_AARCH64_)
+//MacOS 12 added a way to query performance cores
+    char buf[7];
+    len = 7;
+    sysctlbyname("kern.osrelease", buf, &len, NULL, 0);
+    if (buf[0] > 1 && buf[1] > 0){
+        len = 4;
+        sysctlbyname("hw.perflevel0.physicalcpu", &count, &len, NULL, 0);
+    }
+    else {
+        int32_t family = 0;
+        len = 4;
+        sysctlbyname("hw.cpufamily", &family, &len, NULL, 0);
+        if (family >= 1 && count > 1) {
+            if (family == CPUFAMILY_ARM_FIRESTORM_ICESTORM) {
+                // We know the Apple M1 has 4 efficiency cores, so subtract them out.
+                count -= 4;
+            }
+        }
+    }
+#endif
     return count;
 #elif defined(_SC_NPROCESSORS_ONLN)
     long count = sysconf(_SC_NPROCESSORS_ONLN);
@@ -378,12 +461,8 @@ JL_DLLEXPORT int jl_cpu_cores(void)
     return count;
 #elif defined(_OS_WINDOWS_)
     //Try to get WIN7 API method
-    GAPC gapc = (GAPC) jl_dlsym_e(
-        jl_kernel32_handle,
-        "GetActiveProcessorCount"
-    );
-
-    if (gapc) {
+    GAPC gapc;
+    if (jl_dlsym(jl_kernel32_handle, "GetActiveProcessorCount", (void **)&gapc, 0)) {
         return gapc(ALL_PROCESSOR_GROUPS);
     }
     else { //fall back on GetSystemInfo
@@ -397,10 +476,33 @@ JL_DLLEXPORT int jl_cpu_cores(void)
 #endif
 }
 
+JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
+{
+    int cpu = jl_cpu_threads();
+    int masksize = uv_cpumask_size();
+    if (masksize < 0 || jl_running_under_rr(0))
+        return cpu;
+    uv_thread_t tid = uv_thread_self();
+    char *cpumask = (char *)calloc(masksize, sizeof(char));
+    int err = uv_thread_getaffinity(&tid, cpumask, masksize);
+    if (err) {
+        free(cpumask);
+        jl_safe_printf("WARNING: failed to get thread affinity (%s %d)\n", uv_err_name(err),
+                       err);
+        return cpu;
+    }
+    int n = 0;
+    for (size_t i = 0; i < masksize; i++) {
+        n += cpumask[i];
+    }
+    free(cpumask);
+    return n < cpu ? n : cpu;
+}
+
 
 // -- high resolution timers --
 // Returns time in nanosec
-JL_DLLEXPORT uint64_t jl_hrtime(void)
+JL_DLLEXPORT uint64_t jl_hrtime(void) JL_NOTSAFEPOINT
 {
     return uv_hrtime();
 }
@@ -410,7 +512,7 @@ JL_DLLEXPORT uint64_t jl_hrtime(void)
 #ifdef __APPLE__
 #include <crt_externs.h>
 #else
-#if !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
+#if !defined(_OS_WINDOWS_) || defined(_COMPILER_GCC_)
 extern char **environ;
 #endif
 #endif
@@ -426,7 +528,7 @@ JL_DLLEXPORT jl_value_t *jl_environ(int i)
 
 // -- child process status --
 
-#if defined _MSC_VER || defined _OS_WINDOWS_
+#if defined _OS_WINDOWS_
 /* Native Woe32 API.  */
 #include <process.h>
 #define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
@@ -457,6 +559,14 @@ JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
 JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
+
+JL_DLLEXPORT int jl_termios_size(void) {
+#if defined(_OS_WINDOWS_)
+    return 0;
+#else
+    return sizeof(struct termios);
+#endif
+}
 
 // -- processor native alignment information --
 
@@ -492,13 +602,15 @@ JL_DLLEXPORT long jl_getpagesize(void)
 #else
 JL_DLLEXPORT long jl_getpagesize(void)
 {
-    return sysconf(_SC_PAGESIZE);
+    long page_size = sysconf(_SC_PAGESIZE);
+    assert(page_size != -1);
+    return page_size;
 }
 #endif
 
 #ifdef _OS_WINDOWS_
 static long cachedAllocationGranularity = 0;
-JL_DLLEXPORT long jl_getallocationgranularity(void)
+JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT
 {
     if (!cachedAllocationGranularity) {
         SYSTEM_INFO systemInfo;
@@ -508,7 +620,7 @@ JL_DLLEXPORT long jl_getallocationgranularity(void)
     return cachedAllocationGranularity;
 }
 #else
-JL_DLLEXPORT long jl_getallocationgranularity(void)
+JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT
 {
     return jl_getpagesize();
 }
@@ -519,7 +631,7 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 #ifndef _OS_WINDOWS_
     return sysconf(_SC_CLK_TCK);
 #else
-    return 0;
+    return 1000; /* uv_cpu_info returns times in ms on Windows */
 #endif
 }
 
@@ -534,7 +646,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
     for (int32_t i = _dyld_image_count() - 1; i >= 0 ; i--) {
         // dlopen() each image, check handle
         const char *image_name = _dyld_get_image_name(i);
-        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT);
+        void *probe_lib = jl_load_dynamic_library(image_name, JL_RTLD_DEFAULT | JL_RTLD_NOLOAD, 0);
         jl_dlclose(probe_lib);
 
         // If the handle is the same as what was passed in (modulo mode bits), return this image name
@@ -544,8 +656,8 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
 #elif defined(_OS_WINDOWS_)
 
-    wchar_t *pth16 = (wchar_t*)malloc(32768); // max long path length
-    DWORD n16 = GetModuleFileNameW((HMODULE)handle,pth16,32768);
+    wchar_t *pth16 = (wchar_t*)malloc_s(32768 * sizeof(*pth16)); // max long path length
+    DWORD n16 = GetModuleFileNameW((HMODULE)handle, pth16, 32768);
     if (n16 <= 0) {
         free(pth16);
         return NULL;
@@ -556,7 +668,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
         free(pth16);
         return NULL;
     }
-    char *filepath = (char*)malloc(++n8);
+    char *filepath = (char*)malloc_s(++n8);
     if (!WideCharToMultiByte(CP_UTF8, 0, pth16, -1, filepath, n8, NULL, NULL)) {
         free(pth16);
         free(filepath);
@@ -569,7 +681,7 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 
     struct link_map *map;
     dlinfo(handle, RTLD_DI_LINKMAP, &map);
-#ifdef JL_MSAN_ENABLED
+#ifdef _COMPILER_MSAN_ENABLED_
     __msan_unpoison(&map,sizeof(struct link_map*));
     if (map) {
         __msan_unpoison(map, sizeof(struct link_map));
@@ -584,23 +696,32 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle)
 }
 
 #ifdef _OS_WINDOWS_
-static BOOL CALLBACK jl_EnumerateLoadedModulesProc64(
-  _In_      PCTSTR ModuleName,
-  _In_      DWORD64 ModuleBase,
-  _In_      ULONG ModuleSize,
-  _In_opt_  PVOID a
-)
-{
-    jl_array_grow_end((jl_array_t*)a, 1);
-    //XXX: change to jl_arrayset if array storage allocation for Array{String,1} changes:
-    jl_value_t *v = jl_cstr_to_string(ModuleName);
-    jl_array_ptr_set(a, jl_array_dim0(a)-1, v);
-    return TRUE;
-}
-// Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
+// Get a list of all the modules in this process.
 JL_DLLEXPORT int jl_dllist(jl_array_t *list)
 {
-    return EnumerateLoadedModules64(GetCurrentProcess(), jl_EnumerateLoadedModulesProc64, list);
+    DWORD cb, cbNeeded;
+    HMODULE *hMods = NULL;
+    unsigned int i;
+    cbNeeded = 1024 * sizeof(*hMods);
+    do {
+        cb = cbNeeded;
+        hMods = (HMODULE*)realloc_s(hMods, cb);
+        if (!EnumProcessModulesEx(GetCurrentProcess(), hMods, cb, &cbNeeded, LIST_MODULES_ALL)) {
+          free(hMods);
+          return FALSE;
+        }
+    } while (cb < cbNeeded);
+    for (i = 0; i < cbNeeded / sizeof(HMODULE); i++) {
+        const char *path = jl_pathname_for_handle(hMods[i]);
+        if (path == NULL)
+            continue;
+        jl_array_grow_end((jl_array_t*)list, 1);
+        jl_value_t *v = jl_cstr_to_string(path);
+        free((char*)path);
+        jl_array_ptr_set(list, jl_array_dim0(list) - 1, v);
+    }
+    free(hMods);
+    return TRUE;
 }
 #endif
 
@@ -614,12 +735,12 @@ JL_DLLEXPORT void jl_raise_debugger(void)
 #endif // _OS_WINDOWS_
 }
 
-JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void)
+JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT
 {
     return jl_symbol(JL_BUILD_UNAME);
 }
 
-JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void)
+JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT
 {
     return jl_symbol(JL_BUILD_ARCH);
 }
@@ -648,13 +769,37 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 #endif
 }
 
-JL_DLLEXPORT int jl_threading_enabled(void)
+// Simple `rand()` like function, with global seed and added thread-safety
+// (but slow and insecure)
+static _Atomic(uint64_t) g_rngseed;
+JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT
 {
-#ifdef JULIA_ENABLE_THREADING
-    return 1;
-#else
-    return 0;
-#endif
+    uint64_t max = UINT64_MAX;
+    uint64_t rngseed0 = jl_atomic_load_relaxed(&g_rngseed);
+    uint64_t rngseed;
+    uint64_t rnd;
+    do {
+        rngseed = rngseed0;
+        rnd = cong(max, &rngseed);
+    } while (!jl_atomic_cmpswap_relaxed(&g_rngseed, &rngseed0, rngseed));
+    return rnd;
+}
+
+JL_DLLEXPORT void jl_srand(uint64_t rngseed) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&g_rngseed, rngseed);
+}
+
+void jl_init_rand(void) JL_NOTSAFEPOINT
+{
+    uint64_t rngseed;
+    if (uv_random(NULL, NULL, &rngseed, sizeof(rngseed), 0, NULL)) {
+        ios_puts("WARNING: Entropy pool not available to seed RNG; using ad-hoc entropy sources.\n", ios_stderr);
+        rngseed = uv_hrtime();
+        rngseed ^= int64hash(uv_os_getpid());
+    }
+    jl_srand(rngseed);
+    srand(rngseed);
 }
 
 #ifdef __cplusplus

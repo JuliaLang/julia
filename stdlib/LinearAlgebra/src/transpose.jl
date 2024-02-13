@@ -16,24 +16,24 @@ regions.
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> B = zeros(Complex{Int64}, 2, 2)
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  0+0im  0+0im
  0+0im  0+0im
 
 julia> transpose!(B, A);
 
 julia> B
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  8+7im
  9+2im  4+6im
 
 julia> A
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 ```
@@ -51,24 +51,24 @@ regions.
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> B = zeros(Complex{Int64}, 2, 2)
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  0+0im  0+0im
  0+0im  0+0im
 
 julia> adjoint!(B, A);
 
 julia> B
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3-2im  8-7im
  9-2im  4-6im
 
 julia> A
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 ```
@@ -146,40 +146,79 @@ function ccopy!(B, A)
 end
 
 """
-    transpose(A::AbstractMatrix)
+    copy(A::Transpose)
+    copy(A::Adjoint)
 
-Eager matrix transpose. Note that the transposition is applied recursively to
-elements.
+Eagerly evaluate the lazy matrix transpose/adjoint.
+Note that the transposition is applied recursively to elements.
 
 This operation is intended for linear algebra usage - for general data manipulation see
-[`permutedims`](@ref), which is non-recursive.
+[`permutedims`](@ref Base.permutedims), which is non-recursive.
 
 # Examples
 ```jldoctest
-julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
- 7  8  9
+julia> A = [1 2im; -3im 4]
+2×2 Matrix{Complex{Int64}}:
+ 1+0im  0+2im
+ 0-3im  4+0im
 
-julia> transpose(A)
-3×3 Array{Int64,2}:
- 1  4  7
- 2  5  8
- 3  6  9
+julia> T = transpose(A)
+2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
+ 1+0im  0-3im
+ 0+2im  4+0im
+
+julia> copy(T)
+2×2 Matrix{Complex{Int64}}:
+ 1+0im  0-3im
+ 0+2im  4+0im
 ```
 """
-Base.copy(A::Transpose{<:Any,<:AbstractMatrix}) = transpose!(similar(A.parent, reverse(axes(A.parent))), A.parent)
-Base.copy(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint!(similar(A.parent, reverse(axes(A.parent))), A.parent)
+copy(::Union{Transpose,Adjoint})
 
-function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
-                         A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
+Base.copy(A::TransposeAbsMat) = transpose!(similar(A.parent, reverse(axes(A.parent))), A.parent)
+Base.copy(A::AdjointAbsMat) = adjoint!(similar(A.parent, reverse(axes(A.parent))), A.parent)
+
+"""
+    copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                    A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) -> B
+
+Efficiently copy elements of matrix `A` to `B` with transposition as follows:
+
+    B[ir_dest, jr_dest] = transpose(A)[jr_src, ir_src]
+
+The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore,
+the index range parameters must satisfy `length(ir_dest) == length(jr_src)` and
+`length(jr_dest) == length(ir_src)`.
+"""
+copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) =
+    _copy_adjtrans!(B, ir_dest, jr_dest, A, ir_src, jr_src, transpose)
+
+"""
+    copy_adjoint!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                    A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) -> B
+
+Efficiently copy elements of matrix `A` to `B` with adjunction as follows:
+
+    B[ir_dest, jr_dest] = adjoint(A)[jr_src, ir_src]
+
+The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore,
+the index range parameters must satisfy `length(ir_dest) == length(jr_src)` and
+`length(jr_dest) == length(ir_src)`.
+"""
+copy_adjoint!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+              A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) =
+    _copy_adjtrans!(B, ir_dest, jr_dest, A, ir_src, jr_src, adjoint)
+
+function _copy_adjtrans!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                         A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int},
+                         tfun::T) where {T}
     if length(ir_dest) != length(jr_src)
-        throw(ArgumentError(string("source and destination must have same size (got ",
+        throw(ArgumentError(LazyString("source and destination must have same size (got ",
                                    length(jr_src)," and ",length(ir_dest),")")))
     end
     if length(jr_dest) != length(ir_src)
-        throw(ArgumentError(string("source and destination must have same size (got ",
+        throw(ArgumentError(LazyString("source and destination must have same size (got ",
                                    length(ir_src)," and ",length(jr_dest),")")))
     end
     @boundscheck checkbounds(B, ir_dest, jr_dest)
@@ -188,10 +227,26 @@ function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_de
     for jsrc in jr_src
         jdest = first(jr_dest)
         for isrc in ir_src
-            B[idest,jdest] = A[isrc,jsrc]
+            B[idest,jdest] = tfun(A[isrc,jsrc])
             jdest += step(jr_dest)
         end
         idest += step(ir_dest)
     end
     return B
+end
+
+function copy_similar(A::AdjOrTransAbsMat, ::Type{T}) where {T}
+    Ap = parent(A)
+    f! = inplace_adj_or_trans(A)
+    return f!(similar(Ap, T, reverse(axes(Ap))), Ap)
+end
+
+function Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractMatrix, srcstyle::IndexCartesian, src::AdjOrTransAbsMat)
+    if axes(dest) == axes(src)
+        f! = inplace_adj_or_trans(src)
+        f!(dest, parent(src))
+    else
+        @invoke Base.copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    end
+    return dest
 end

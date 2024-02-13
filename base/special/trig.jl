@@ -34,7 +34,7 @@ function sin(x::T) where T<:Union{Float32, Float64}
         end
         return sin_kernel(x)
     elseif isnan(x)
-        return T(NaN)
+        return x
     elseif isinf(x)
         sin_domain_error(x)
     end
@@ -50,18 +50,17 @@ function sin(x::T) where T<:Union{Float32, Float64}
         return -cos_kernel(y)
     end
 end
-sin(x::Real) = sin(float(x))
 
 # Coefficients in 13th order polynomial approximation on [0; π/4]
 #     sin(x) ≈ x + S1*x³ + S2*x⁵ + S3*x⁷ + S4*x⁹ + S5*x¹¹ + S6*x¹³
 # D for double, S for sin, number is the order of x-1
-
 const DS1 = -1.66666666666666324348e-01
 const DS2 = 8.33333333332248946124e-03
 const DS3 = -1.98412698298579493134e-04
 const DS4 = 2.75573137070700676789e-06
 const DS5 = -2.50507602534068634195e-08
 const DS6 = 1.58969099521155010221e-10
+
 """
     sin_kernel(yhi, ylo)
 
@@ -104,7 +103,7 @@ function cos(x::T) where T<:Union{Float32, Float64}
         end
         return cos_kernel(x)
     elseif isnan(x)
-        return T(NaN)
+        return x
     elseif isinf(x)
         cos_domain_error(x)
     else
@@ -121,7 +120,6 @@ function cos(x::T) where T<:Union{Float32, Float64}
         end
     end
 end
-cos(x::Real) = cos(float(x))
 
 const DC1 = 4.16666666666666019037e-02
 const DC2 = -1.38888888888741095749e-03
@@ -129,6 +127,7 @@ const DC3 = 2.48015872894767294178e-05
 const DC4 = -2.75573143513906633035e-07
 const DC5 = 2.08757232129817482790e-09
 const DC6 = -1.13596475577881948265e-11
+
 """
     cos_kernel(y)
 
@@ -168,7 +167,10 @@ end
 """
     sincos(x)
 
-Simultaneously compute the sine and cosine of `x`, where the `x` is in radians.
+Simultaneously compute the sine and cosine of `x`, where `x` is in radians, returning
+a tuple `(sine, cosine)`.
+
+See also [`cis`](@ref), [`sincospi`](@ref), [`sincosd`](@ref).
 """
 function sincos(x::T) where T<:Union{Float32, Float64}
     if abs(x) < T(pi)/4
@@ -177,7 +179,7 @@ function sincos(x::T) where T<:Union{Float32, Float64}
         end
         return sincos_kernel(x)
     elseif isnan(x)
-        return T(NaN), T(NaN)
+        return x, x
     elseif isinf(x)
         sincos_domain_error(x)
     end
@@ -219,7 +221,7 @@ function tan(x::T) where T<:Union{Float32, Float64}
         end
         return tan_kernel(x)
     elseif isnan(x)
-        return T(NaN)
+        return x
     elseif isinf(x)
         tan_domain_error(x)
     end
@@ -230,7 +232,6 @@ function tan(x::T) where T<:Union{Float32, Float64}
         return tan_kernel(y,-1)
     end
 end
-tan(x::Real) = tan(float(x))
 
 @inline tan_kernel(y::Float64) = tan_kernel(DoubleFloat64(y, 0.0), 1)
 @inline function tan_kernel(y::DoubleFloat64, k)
@@ -245,7 +246,7 @@ tan(x::Real) = tan(float(x))
     #       Callers may do the optimization tan(y) ~ y for tiny y.
     #    3. tan(y) is approximated by a odd polynomial of degree 27 on
     #       [0,0.67434]
-    #                       3             27
+    #                            3             27
     #           tan(y) ~ y + T1*y + ... + T13*y ≡ P(y)
     #       where
     #
@@ -255,7 +256,7 @@ tan(x::Real) = tan(float(x))
     #
     #       Note: tan(y+z) = tan(y) + tan'(y)*z
     #                  ~ tan(y) + (1+y*y)*z
-    #       Therefore, for better accuracz in computing tan(y+z), let
+    #       Therefore, for better accuracy in computing tan(y+z), let
     #             3      2      2       2       2
     #        r = y *(T2+y *(T3+y *(...+y *(T12+y *T13))))
     #       then
@@ -423,7 +424,7 @@ end
     flipsign(Float32(pi/2 - 2*(s + s*tRt)), x)
 end
 
-@noinline asin_domain_error(x) = throw(DomainError(x, "asin(x) is not defined for |x|>1."))
+@noinline asin_domain_error(x) = throw(DomainError(x, "asin(x) is not defined for |x| > 1."))
 function asin(x::T) where T<:Union{Float32, Float64}
     # Since  asin(x) = x + x^3/6 + x^5*3/40 + x^7*15/336 + ...
     # we approximate asin(x) on [0,0.5] by
@@ -449,7 +450,6 @@ function asin(x::T) where T<:Union{Float32, Float64}
     t = (T(1.0) - absx)/2
     return asin_kernel(t, x)
 end
-asin(x::Real) = asin(float(x))
 
 # atan methods
 ATAN_1_O_2_HI(::Type{Float64}) = 4.63647609000806093515e-01 # atan(0.5).hi
@@ -498,6 +498,7 @@ atan_q(w::Float32) = w*@horner(w, -1.9999158382f-01, -1.0648017377f-01)
     # break sum from i=0 to 10 aT[i]z**(i+1) into odd and even poly
     atan_p(x², x⁴), atan_q(x⁴)
 end
+
 function atan(x::T) where T<:Union{Float32, Float64}
     # Method
     #   1. Reduce x to positive by atan(x) = -atan(-x).
@@ -562,7 +563,7 @@ ATAN2_PI_LO(::Type{Float64}) = 1.2246467991473531772E-16
 ATAN2_RATIO_BIT_SHIFT(::Type{Float64}) = 20
 ATAN2_RATIO_THRESHOLD(::Type{Float64}) = 60
 
-function atan2(y::T, x::T) where T<:Union{Float32, Float64}
+function atan(y::T, x::T) where T<:Union{Float32, Float64}
     # Method :
     #    M1) Reduce y to positive by atan2(y,x)=-atan2(-y,x).
     #    M2) Reduce x to positive by (if x and y are unexceptional):
@@ -581,8 +582,8 @@ function atan2(y::T, x::T) where T<:Union{Float32, Float64}
     #    S8) ATAN2(+-INF,+INF ) is +-pi/4 ;
     #    S9) ATAN2(+-INF,-INF ) is +-3pi/4;
     #    S10) ATAN2(+-INF, (anything but,0,NaN, and INF)) is +-pi/2;
-    if isnan(x) || isnan(y) # S1 or S2
-        return T(NaN)
+    if isnan(x) | isnan(y) # S1 or S2
+        return isnan(x) ? x : y
     end
 
     if x == T(1.0) # then y/x = y and x > 0, see M2
@@ -721,147 +722,213 @@ function acos(x::T) where T <: Union{Float32, Float64}
         return T(2.0)*(df + (zRz*s + c))
     end
 end
-acos(x::Real) = acos(float(x))
 
-# multiply in extended precision
-function mulpi_ext(x::Float64)
-    m = 3.141592653589793
-    m_hi = 3.1415926218032837
-    m_lo = 3.178650954705639e-8
-
-    x_hi = reinterpret(Float64, reinterpret(UInt64,x) & 0xffff_ffff_f800_0000)
-    x_lo = x-x_hi
-
-    y_hi = m*x
-    y_lo = x_hi * m_lo + (x_lo* m_hi + ((x_hi*m_hi-y_hi) + x_lo*m_lo))
-
-    DoubleFloat64(y_hi,y_lo)
+# Uses minimax polynomial of sin(π * x) for π * x in [0, .25]
+@inline function sinpi_kernel(x::Float64)
+    sinpi_kernel_wide(x)
 end
-mulpi_ext(x::Float32) = DoubleFloat32(pi*Float64(x))
-mulpi_ext(x::Rational) = mulpi_ext(float(x))
-mulpi_ext(x::Real) = pi*x # Fallback
+@inline function sinpi_kernel_wide(x::Float64)
+    x² = x*x
+    x⁴ = x²*x²
+    r  = evalpoly(x², (2.5501640398773415, -0.5992645293202981, 0.08214588658006512,
+                       -7.370429884921779e-3, 4.662827319453555e-4, -2.1717412523382308e-5))
+    return muladd(3.141592653589793, x, x*muladd(-5.16771278004997,
+                  x², muladd(x⁴, r,  1.2245907532225998e-16)))
+end
+@inline function sinpi_kernel(x::Float32)
+    Float32(sinpi_kernel_wide(x))
+end
+@inline function sinpi_kernel_wide(x::Float32)
+    x = Float64(x)
+    return x*evalpoly(x*x, (3.1415926535762266, -5.167712769188119,
+                            2.5501626483206374, -0.5992021090314925, 0.08100185277841528))
+end
+
+@inline function sinpi_kernel(x::Float16)
+    Float16(sinpi_kernel_wide(x))
+end
+@inline function sinpi_kernel_wide(x::Float16)
+    x = Float32(x)
+    return x*evalpoly(x*x, (3.1415927f0, -5.1677127f0, 2.5501626f0, -0.5992021f0, 0.081001855f0))
+end
+
+# Uses minimax polynomial of cos(π * x) for π * x in [0, .25]
+@inline function cospi_kernel(x::Float64)
+    cospi_kernel_wide(x)
+end
+@inline function cospi_kernel_wide(x::Float64)
+    x² = x*x
+    r = x²*evalpoly(x², (4.058712126416765, -1.3352627688537357, 0.23533063027900392,
+                         -0.025806887811869204, 1.9294917136379183e-3, -1.0368935675474665e-4))
+    a_x² = 4.934802200544679 * x²
+    a_x²lo = muladd(3.109686485461973e-16, x², muladd(4.934802200544679, x², -a_x²))
+
+    w  = 1.0-a_x²
+    return w + muladd(x², r, ((1.0-w)-a_x²) - a_x²lo)
+end
+@inline function cospi_kernel(x::Float32)
+    Float32(cospi_kernel_wide(x))
+end
+@inline function cospi_kernel_wide(x::Float32)
+    x = Float64(x)
+    return evalpoly(x*x, (1.0, -4.934802200541122, 4.058712123568637,
+                          -1.3352624040152927, 0.23531426791507182, -0.02550710082498761))
+end
+@inline function cospi_kernel(x::Float16)
+    Float16(cospi_kernel_wide(x))
+end
+@inline function cospi_kernel_wide(x::Float16)
+    x = Float32(x)
+    return evalpoly(x*x, (1.0f0, -4.934802f0, 4.058712f0, -1.3352624f0, 0.23531426f0, -0.0255071f0))
+end
 
 """
     sinpi(x)
 
 Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large `x`.
+
+See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function sinpi(x::T) where T<:AbstractFloat
+function sinpi(_x::T) where T<:IEEEFloat
+    x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
+    # For large x, answers are all 1 or zero.
+    x >= maxintfloat(T) && return copysign(zero(T), _x)
 
-    ax = abs(x)
-    s = maxintfloat(T)/2
-    ax >= s && return copysign(zero(T),x) # integer-valued
-
-    # reduce to interval [-1,1]
-    # assumes RoundNearest rounding mode
-    t = 3*s
-    rx = x-((x+t)-t) # zeros may be incorrectly signed
-    arx = abs(rx)
-
-    if (arx == 0) | (arx == 1)
-        copysign(zero(T),x)
-    elseif arx < 0.25
-        sin_kernel(mulpi_ext(rx))
-    elseif arx < 0.75
-        y = mulpi_ext(T(0.5) - arx)
-        copysign(cos_kernel(y),rx)
+    # reduce to interval [0, 0.5]
+    n = round(2*x)
+    rx = float(muladd(T(-.5), n, x))
+    n = Int64(n) & 3
+    if n==0
+        res = sinpi_kernel(rx)
+    elseif n==1
+        res = cospi_kernel(rx)
+    elseif n==2
+        res = zero(T)-sinpi_kernel(rx)
     else
-        y = mulpi_ext(copysign(one(T),rx) - rx)
-        sin_kernel(y)
+        res = zero(T)-cospi_kernel(rx)
     end
+    return ifelse(signbit(_x), -res, res)
 end
-
-# Integers and Rationals
-function sinpi(x::T) where T<:Union{Integer,Rational}
-    Tf = float(T)
-    if !isfinite(x)
-        throw(DomainError(x, "`x` must be finite."))
-    end
-
-    # until we get an IEEE remainder function (#9283)
-    rx = rem(x,2)
-    if rx > 1
-        rx -= 2
-    elseif rx < -1
-        rx += 2
-    end
-    arx = abs(rx)
-
-    if (arx == 0) | (arx == 1)
-        copysign(zero(Tf),x)
-    elseif arx < 0.25
-        sin_kernel(mulpi_ext(rx))
-    elseif arx < 0.75
-        y = mulpi_ext(T(0.5) - arx)
-        copysign(cos_kernel(y),rx)
-    else
-        y = mulpi_ext(copysign(one(T),rx) - rx)
-        sin_kernel(y)
-    end
-end
-
 """
     cospi(x)
 
 Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
 """
-function cospi(x::T) where T<:AbstractFloat
+function cospi(x::T) where T<:IEEEFloat
+    x = abs(x)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
+    # For large x, answers are all 1 or zero.
+    x >= maxintfloat(T) && return one(T)
 
-    ax = abs(x)
-    s = maxintfloat(T)
-    ax >= s && return one(T) # even integer-valued
-
-    # reduce to interval [-1,1], then [0,1]
-    # assumes RoundNearest rounding mode
-    rx = abs(ax-((ax+s)-s))
-
-    if rx <= 0.25
-        cos_kernel(mulpi_ext(rx))
-    elseif rx < 0.75
-        y = mulpi_ext(T(0.5) - rx)
-        sin_kernel(y)
+    # reduce to interval [0, 0.5]
+    n = round(2*x)
+    rx = float(muladd(T(-.5), n, x))
+    n = Int64(n) & 3
+    if n==0
+        return cospi_kernel(rx)
+    elseif n==1
+        return zero(T)-sinpi_kernel(rx)
+    elseif n==2
+        return zero(T)-cospi_kernel(rx)
     else
-        y = mulpi_ext(one(T) - rx)
-        -cos_kernel(y)
+        return sinpi_kernel(rx)
     end
 end
+"""
+    sincospi(x)
 
-# Integers and Rationals
-function cospi(x::T) where T<:Union{Integer,Rational}
+Simultaneously compute [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) (the sine and cosine of `π*x`,
+where `x` is in radians), returning a tuple `(sine, cosine)`.
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
+
+See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
+"""
+function sincospi(_x::T) where T<:IEEEFloat
+    x = abs(_x)
     if !isfinite(x)
-        throw(DomainError(x, "`x` must be finite."))
+        isnan(x) && return x, x
+        throw(DomainError(x, "`x` cannot be infinite."))
     end
+    # For large x, answers are all 1 or zero.
+    x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
 
-    ax = abs(x)
-    # until we get an IEEE remainder function (#9283)
-    rx = rem(ax,2)
-    if rx > 1
-        rx = 2-rx
-    end
-
-    if rx <= 0.25
-        cos_kernel(mulpi_ext(rx))
-    elseif rx < 0.75
-        y = mulpi_ext(T(0.5) - rx)
-        sin_kernel(y)
+    # reduce to interval [0, 0.5]
+    n = round(2*x)
+    rx = float(muladd(T(-.5), n, x))
+    n = Int64(n) & 3
+    si, co = sinpi_kernel(rx),cospi_kernel(rx)
+    if n==0
+        si, co = si, co
+    elseif n==1
+        si, co  = co, zero(T)-si
+    elseif n==2
+        si, co  = zero(T)-si, zero(T)-co
     else
-        y = mulpi_ext(one(T) - rx)
-        -cos_kernel(y)
+        si, co  = zero(T)-co, si
     end
+    si = ifelse(signbit(_x), -si, si)
+    return si, co
+end
+
+"""
+    tanpi(x)
+
+Compute ``\\tan(\\pi x)`` more accurately than `tan(pi*x)`, especially for large `x`.
+
+!!! compat "Julia 1.10"
+    This function requires at least Julia 1.10.
+
+See also [`tand`](@ref), [`sinpi`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
+"""
+function tanpi(_x::T) where T<:IEEEFloat
+    # This is modified from sincospi.
+    # Would it be faster or more accurate to make a tanpi_kernel?
+    x = abs(_x)
+    if !isfinite(x)
+        isnan(x) && return x
+        throw(DomainError(x, "`x` cannot be infinite."))
+    end
+    # For large x, answers are all zero.
+    # All integer values for floats larger than maxintfloat are even.
+    x >= maxintfloat(T) && return copysign(zero(T), _x)
+
+    # reduce to interval [0, 0.5]
+    n = round(2*x)
+    rx = float(muladd(T(-.5), n, x))
+    n = Int64(n) & 3
+    si, co = sinpi_kernel_wide(rx), cospi_kernel_wide(rx)
+    if n==0
+        si, co = si, co
+    elseif n==1
+        si, co  = co, zero(T)-si
+    elseif n==2
+        si, co  = zero(T)-si, zero(T)-co
+    else
+        si, co  = zero(T)-co, si
+    end
+    si = ifelse(signbit(_x), -si, si)
+    return float(T)(si / co)
 end
 
 sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
 cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
-sinpi(x::Real) = sinpi(float(x))
-cospi(x::Real) = cospi(float(x))
+tanpi(x::Integer) = x >= 0 ? (isodd(x) ? -zero(float(x)) : zero(float(x))) :
+                             (isodd(x) ? zero(float(x)) : -zero(float(x)))
+sincospi(x::Integer) = (sinpi(x), cospi(x))
+sinpi(x::AbstractFloat) = sin(pi*x)
+cospi(x::AbstractFloat) = cos(pi*x)
+sincospi(x::AbstractFloat) = sincos(pi*x)
+tanpi(x::AbstractFloat) = tan(pi*x)
+tanpi(x::Complex) = sinpi(x) / cospi(x) # Is there a better way to do this?
 
 function sinpi(z::Complex{T}) where T
     F = float(T)
@@ -891,7 +958,8 @@ function sinpi(z::Complex{T}) where T
         end
     else
         pizi = pi*zi
-        Complex(sinpi(zr)*cosh(pizi), cospi(zr)*sinh(pizi))
+        sipi, copi = sincospi(zr)
+        Complex(sipi*cosh(pizi), copi*sinh(pizi))
     end
 end
 
@@ -926,32 +994,132 @@ function cospi(z::Complex{T}) where T
         end
     else
         pizi = pi*zi
-        Complex(cospi(zr)*cosh(pizi), -sinpi(zr)*sinh(pizi))
+        sipi, copi = sincospi(zr)
+        Complex(copi*cosh(pizi), -sipi*sinh(pizi))
+    end
+end
+
+function sincospi(z::Complex{T}) where T
+    F = float(T)
+    zr, zi = reim(z)
+    if isinteger(zr)
+        # zr = ...,-2,-1,0,1,2,...
+        # sin(pi*zr) == ±0
+        # cos(pi*zr) == ±1
+        # cosh(pi*zi) > 0
+        s = copysign(zero(F),zr)
+        c_pos = isa(zr,Integer) ? iseven(zr) : isinteger(zr/2)
+        pizi = pi*zi
+        sh, ch = sinh(pizi), cosh(pizi)
+        (
+            Complex(s, c_pos ? sh : -sh),
+            Complex(c_pos ? ch : -ch, isnan(zi) ? s : -flipsign(s,zi)),
+        )
+    elseif isinteger(2*zr)
+        # zr = ...,-1.5,-0.5,0.5,1.5,2.5,...
+        # sin(pi*zr) == ±1
+        # cos(pi*zr) == +0
+        # sign(sinh(pi*zi)) == sign(zi)
+        s_pos = isinteger((2*zr-1)/4)
+        pizi = pi*zi
+        sh, ch = sinh(pizi), cosh(pizi)
+        (
+            Complex(s_pos ? ch : -ch, isnan(zi) ? zero(F) : copysign(zero(F),zi)),
+            Complex(zero(F), s_pos ? -sh : sh),
+        )
+    elseif !isfinite(zr)
+        if zi == 0
+            Complex(F(NaN), F(zi)), Complex(F(NaN), isnan(zr) ? zero(F) : -flipsign(F(zi),zr))
+        elseif isinf(zi)
+            Complex(F(NaN), F(zi)), Complex(F(Inf), F(NaN))
+        else
+            Complex(F(NaN), F(NaN)), Complex(F(NaN), F(NaN))
+        end
+    else
+        pizi = pi*zi
+        sipi, copi = sincospi(zr)
+        sihpi, cohpi = sinh(pizi), cosh(pizi)
+        (
+            Complex(sipi*cohpi, copi*sihpi),
+            Complex(copi*cohpi, -sipi*sihpi),
+        )
     end
 end
 
 """
+    fastabs(x::Number)
+
+Faster `abs`-like function for rough magnitude comparisons.
+`fastabs` is equivalent to `abs(x)` for most `x`,
+but for complex `x` it computes `abs(real(x))+abs(imag(x))` rather
+than requiring `hypot`.
+"""
+fastabs(x::Number) = abs(x)
+fastabs(z::Complex) = abs(real(z)) + abs(imag(z))
+
+# sinc and cosc are zero if the real part is Inf and imag is finite
+isinf_real(x::Real) = isinf(x)
+isinf_real(x::Complex) = isinf(real(x)) && isfinite(imag(x))
+isinf_real(x::Number) = false
+
+"""
     sinc(x)
 
-Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
+Compute normalized sinc function ``\\operatorname{sinc}(x) = \\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
+
+See also [`cosc`](@ref), its derivative.
 """
-sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
-sinc(x::Integer) = x==0 ? one(x) : zero(x)
-sinc(x::Complex{<:AbstractFloat}) = x==0 ? one(x) : oftype(x, sinpi(x)/(pi*x))
-sinc(x::Complex) = sinc(float(x))
-sinc(x::Real) = x==0 ? one(x) : isinf(x) ? zero(x) : sinpi(x)/(pi*x)
+sinc(x::Number) = _sinc(float(x))
+sinc(x::Integer) = iszero(x) ? one(x) : zero(x)
+_sinc(x::Number) = iszero(x) ? one(x) : isinf_real(x) ? zero(x) : sinpi(x)/(pi*x)
+_sinc_threshold(::Type{Float64}) = 0.001
+_sinc_threshold(::Type{Float32}) = 0.05f0
+@inline _sinc(x::Union{T,Complex{T}}) where {T<:Union{Float32,Float64}} =
+    fastabs(x) < _sinc_threshold(T) ? evalpoly(x^2, (T(1), -T(pi)^2/6, T(pi)^4/120)) : isinf_real(x) ? zero(x) : sinpi(x)/(pi*x)
+_sinc(x::Float16) = Float16(_sinc(Float32(x)))
+_sinc(x::ComplexF16) = ComplexF16(_sinc(ComplexF32(x)))
 
 """
     cosc(x)
 
 Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and ``0`` if
 ``x = 0``. This is the derivative of `sinc(x)`.
+
+See also [`sinc`](@ref).
 """
-cosc(x::Number) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
-cosc(x::Integer) = cosc(float(x))
-cosc(x::Complex{<:AbstractFloat}) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
-cosc(x::Complex) = cosc(float(x))
-cosc(x::Real) = x==0 || isinf(x) ? zero(x) : (cospi(x)-sinpi(x)/(pi*x))/x
+cosc(x::Number) = _cosc(float(x))
+function _cosc(x::Number)
+    # naive cosc formula is susceptible to catastrophic
+    # cancellation error near x=0, so we use the Taylor series
+    # for small enough |x|.
+    if fastabs(x) < 0.5
+        # generic Taylor series: π ∑ (-1)^n (πx)^{2n-1}/a(n) where
+        # a(n) = (1+2n)*(2n-1)! (= OEIS A174549)
+        s = (term = -(π*x))/3
+        π²x² = term^2
+        ε = eps(fastabs(term)) # error threshold to stop sum
+        n = 1
+        while true
+            n += 1
+            term *= π²x²/((1-2n)*(2n-2))
+            s += (δs = term/(1+2n))
+            fastabs(δs) ≤ ε && break
+        end
+        return π*s
+    else
+        return isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+    end
+end
+# hard-code Float64/Float32 Taylor series, with coefficients
+#  Float64.([(-1)^n*big(pi)^(2n)/((2n+1)*factorial(2n-1)) for n = 1:6])
+_cosc(x::Union{Float64,ComplexF64}) =
+    fastabs(x) < 0.14 ? x*evalpoly(x^2, (-3.289868133696453, 3.2469697011334144, -1.1445109447325053, 0.2091827825412384, -0.023460810354558236, 0.001781145516372852)) :
+    isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+_cosc(x::Union{Float32,ComplexF32}) =
+    fastabs(x) < 0.26f0 ? x*evalpoly(x^2, (-3.289868f0, 3.2469697f0, -1.144511f0, 0.20918278f0)) :
+    isinf_real(x) ? zero(x) : ((pi*x)*cospi(x)-sinpi(x))/((pi*x)*x)
+_cosc(x::Float16) = Float16(_cosc(Float32(x)))
+_cosc(x::ComplexF16) = ComplexF16(_cosc(ComplexF32(x)))
 
 for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :cosd, "secant"),
                                             (:csc, :sin, :csch, :sinh, :cscd, :sind, "cosecant"),
@@ -964,17 +1132,17 @@ for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :c
             $($name)(x)
 
         Compute the $($fn) of `x`, where `x` is in radians.
-        """ ($finv)(z::T) where {T<:Number} = one(T) / (($f)(z))
+        """ ($finv)(z::Number) = inv(($f)(z))
         @doc """
             $($hname)(x)
 
         Compute the hyperbolic $($fn) of `x`.
-        """ ($finvh)(z::T) where {T<:Number} = one(T) / (($fh)(z))
+        """ ($finvh)(z::Number) = inv(($fh)(z))
         @doc """
             $($dname)(x)
 
         Compute the $($fn) of `x`, where `x` is in degrees.
-        """ ($finvd)(z::T) where {T<:Number} = one(T) / (($fd)(z))
+        """ ($finvd)(z::Number) = inv(($fd)(z))
     end
 end
 
@@ -986,10 +1154,10 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
     @eval begin
         @doc """
             $($tname)(x)
-        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa)(y::T) where {T<:Number} = ($tfainv)(one(T) / y)
+        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa)(y::Number) = ($tfainv)(inv(y))
         @doc """
             $($hname)(x)
-        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa)(y::T) where {T<:Number} = ($hfainv)(one(T) / y)
+        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa)(y::Number) = ($hfainv)(inv(y))
     end
 end
 
@@ -1016,7 +1184,7 @@ function sind(x::Real)
     if isinf(x)
         return throw(DomainError(x, "`x` cannot be infinite."))
     elseif isnan(x)
-        return oftype(x,NaN)
+        return x
     end
 
     rx = copysign(float(rem(x,360)),x)
@@ -1047,7 +1215,7 @@ function cosd(x::Real)
     if isinf(x)
         return throw(DomainError(x, "`x` cannot be infinite."))
     elseif isnan(x)
-        return oftype(x,NaN)
+        return x
     end
 
     rx = abs(float(rem(x,360)))
@@ -1071,22 +1239,64 @@ end
 
 tand(x::Real) = sind(x) / cosd(x)
 
+"""
+    sincosd(x)
+
+Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
+
+!!! compat "Julia 1.3"
+    This function requires at least Julia 1.3.
+"""
+sincosd(x) = (sind(x), cosd(x))
+# It turns out that calling these functions separately yields better
+# performance than considering each case and calling `sincos_kernel`.
+
+sincosd(::Missing) = (missing, missing)
+
 for (fd, f, fn) in ((:sind, :sin, "sine"), (:cosd, :cos, "cosine"), (:tand, :tan, "tangent"))
-    name = string(fd)
-    @eval begin
-        @doc """
-            $($name)(x)
-        Compute $($fn) of `x`, where `x` is in degrees. """ ($fd)(z) = ($f)(deg2rad(z))
+    for (fu, un) in ((:deg2rad, "degrees"),)
+        name = string(fd)
+        @eval begin
+            @doc """
+                $($name)(x)
+
+            Compute $($fn) of `x`, where `x` is in $($un).
+            If `x` is a matrix, `x` needs to be a square matrix.
+
+            !!! compat "Julia 1.7"
+                Matrix arguments require Julia 1.7 or later.
+            """ ($fd)(x) = ($f)(($fu).(x))
+        end
     end
 end
 
-for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"), (:atand, :atan, "tangent"),
+for (fd, f, fn) in ((:asind, :asin, "sine"), (:acosd, :acos, "cosine"),
                     (:asecd, :asec, "secant"), (:acscd, :acsc, "cosecant"), (:acotd, :acot, "cotangent"))
-    name = string(fd)
-    @eval begin
-        @doc """
-            $($name)(x)
 
-        Compute the inverse $($fn) of `x`, where the output is in degrees. """ ($fd)(y) = rad2deg(($f)(y))
+    for (fu, un) in ((:rad2deg, "degrees"),)
+        name = string(fd)
+        @eval begin
+            @doc """
+                $($name)(x)
+
+            Compute the inverse $($fn) of `x`, where the output is in $($un).
+            If `x` is a matrix, `x` needs to be a square matrix.
+
+            !!! compat "Julia 1.7"
+                Matrix arguments require Julia 1.7 or later.
+            """ ($fd)(x) = ($fu).(($f)(x))
+        end
     end
 end
+
+"""
+    atand(y)
+    atand(y,x)
+
+Compute the inverse tangent of `y` or `y/x`, respectively, where the output is in degrees.
+
+!!! compat "Julia 1.7"
+    The one-argument method supports square matrix arguments as of Julia 1.7.
+"""
+atand(y)    = rad2deg.(atan(y))
+atand(y, x) = rad2deg.(atan(y,x))

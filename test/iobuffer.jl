@@ -9,7 +9,7 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 @testset "Read/write empty IOBuffer" begin
     io = IOBuffer()
     @test eof(io)
-    @test_throws EOFError read(io,UInt8)
+    @test_throws EOFError read(io, UInt8)
     @test write(io,"abc") === 3
     @test isreadable(io)
     @test iswritable(io)
@@ -18,8 +18,8 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
     @test position(io) == 3
     @test eof(io)
     seek(io, 0)
-    @test read(io,UInt8) == convert(UInt8, 'a')
-    a = Vector{UInt8}(uninitialized, 2)
+    @test read(io, UInt8) == convert(UInt8, 'a')
+    a = Vector{UInt8}(undef, 2)
     @test read!(io, a) == a
     @test a == UInt8['b','c']
     @test bufcontents(io) == "abc"
@@ -34,22 +34,24 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
     truncate(io, 10)
     @test position(io) == 0
     @test all(io.data .== 0)
-    @test write(io,Int16[1,2,3,4,5,6]) === 12
+    @test write(io, Int16[1, 2, 3, 4, 5, 6]) === 12
     seek(io, 2)
     truncate(io, 10)
     @test ioslength(io) == 10
     io.readable = false
-    @test_throws ArgumentError read!(io,UInt8[0])
+    @test_throws ArgumentError read!(io, UInt8[0])
     truncate(io, 0)
     @test write(io,"boston\ncambridge\n") > 0
     @test String(take!(io)) == "boston\ncambridge\n"
     @test String(take!(io)) == ""
-    @test write(io, Complex{Float64}(0)) === 16
+    @test write(io, ComplexF64(0)) === 16
     @test write(io, Rational{Int64}(1//2)) === 16
-    close(io)
-    @test_throws ArgumentError write(io,UInt8[0])
-    @test_throws ArgumentError seek(io,0)
+    @test closewrite(io) === nothing
+    @test_throws ArgumentError write(io, UInt8[0])
     @test eof(io)
+    @test close(io) === nothing
+    @test_throws ArgumentError write(io, UInt8[0])
+    @test_throws ArgumentError seek(io, 0)
 end
 
 @testset "Read/write readonly IOBuffer" begin
@@ -118,6 +120,7 @@ end
     Base.compact(io)
     @test position(io) == 0
     @test ioslength(io) == 0
+    Base._resize!(io,0)
     Base.ensureroom(io,50)
     @test position(io) == 0
     @test ioslength(io) == 0
@@ -169,7 +172,7 @@ end
 
 @testset "issue 5453" begin
     io = IOBuffer("abcdef")
-    a = Vector{UInt8}(uninitialized, 1024)
+    a = Vector{UInt8}(undef, 1024)
     @test_throws EOFError read!(io,a)
     @test eof(io)
 end
@@ -195,12 +198,12 @@ end
 
 @testset "pr #11554" begin
     io  = IOBuffer(SubString("***αhelloworldω***", 4, 16))
-    io2 = IOBuffer(Vector{UInt8}(b"goodnightmoon"), true, true)
+    io2 = IOBuffer(Vector{UInt8}(b"goodnightmoon"), read=true, write=true)
 
     @test read(io, Char) == 'α'
     @test_throws ArgumentError write(io,"!")
     @test_throws ArgumentError write(io,'β')
-    a = Vector{UInt8}(uninitialized, 10)
+    a = Vector{UInt8}(undef, 10)
     @test read!(io, a) === a
     @test String(a) == "helloworld"
     @test read(io, Char) == 'ω'
@@ -227,17 +230,17 @@ end
 
 # issue #11917
 # (previous tests triggered this sometimes, but this should trigger nearly all the time)
-let io = IOBuffer(0)
+let io = IOBuffer(maxsize=0)
    write(io, fill(0x01, 1048577))
 end
 
 @testset "BufferStream" begin
-    bstream = BufferStream()
+    bstream = Base.BufferStream()
     @test isopen(bstream)
     @test isreadable(bstream)
     @test iswritable(bstream)
     @test bytesavailable(bstream) == 0
-    @test sprint(show, bstream) == "BufferStream() bytes waiting:$(bytesavailable(bstream.buffer)), isopen:true"
+    @test sprint(show, bstream) == "BufferStream(bytes waiting=$(bytesavailable(bstream.buffer)), isopen=true)"
     a = rand(UInt8,10)
     write(bstream,a)
     @test !eof(bstream)
@@ -251,9 +254,22 @@ end
     @test !eof(bstream)
     read!(bstream,c)
     @test c == a[3:10]
-    @test close(bstream) === nothing
+    @test closewrite(bstream) === nothing
     @test eof(bstream)
     @test bytesavailable(bstream) == 0
+    @test close(bstream) === nothing
+    flag = Ref{Bool}(false)
+    event = Base.Event()
+    bstream = Base.BufferStream()
+    task = @async begin
+        notify(event)
+        read(bstream, 16)
+        flag[] = true
+    end
+    wait(event)
+    write(bstream, rand(UInt8, 16))
+    wait(task)
+    @test flag[] == true
 end
 
 @test flush(IOBuffer()) === nothing # should be a no-op
@@ -283,17 +299,17 @@ end
 
     for char in ['@','߷','࿊','𐋺']
         io = IOBuffer("alphabeticalstuff$char")
-        @test !eof(skipchars(isalpha, io))
+        @test !eof(skipchars(isletter, io))
         @test read(io, Char) == char
     end
 end
 
 @testset "Test constructor with a generic type argument." begin
-    io = IOBuffer(Int16(10))
+    io = IOBuffer(maxsize=Int16(10))
     @test io isa IOBuffer
-    io = IOBuffer(Int32(10))
+    io = IOBuffer(maxsize=Int32(10))
     @test io isa IOBuffer
-    io = IOBuffer(Int64(10))
+    io = IOBuffer(maxsize=Int64(10))
     @test io isa IOBuffer
 end
 
@@ -319,4 +335,26 @@ end
     Base.compact(b)
     @test readline(b) == "Goodbye!"
     close(b)
+end
+
+@testset "peek(::GenericIOBuffer)" begin
+    io = Base.GenericIOBuffer(UInt8[], true, true, false, true, typemax(Int))
+    write(io, "こんにちは")
+    @test peek(io) == 0xe3
+    @test peek(io, Char) == 'こ'
+    @test peek(io, Int32) == -476872221
+    close(io)
+end
+
+@testset "bytesavailable devnull" begin
+    @test bytesavailable(devnull) == 0
+end
+
+@testset "#48188 read_sub for non Array AbstractArray" begin
+    a = [0,0,0]
+    v = @view a[1:2]
+    io = IOBuffer()
+    write(io,1)
+    seek(io,0)
+    @test Base.read_sub(io,v,1,1) == [1,0]
 end

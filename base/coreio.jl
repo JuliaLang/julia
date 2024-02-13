@@ -1,31 +1,35 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-print(xs...)   = print(STDOUT::IO, xs...)
-println(xs...) = println(STDOUT::IO, xs...)
+print(xs...)   = print(stdout, xs...)
+println(xs...) = println(stdout, xs...)
 println(io::IO) = print(io, '\n')
 
-struct DevNullStream <: IO end
-const DevNull = DevNullStream()
-isreadable(::DevNullStream) = false
-iswritable(::DevNullStream) = true
-isopen(::DevNullStream) = true
-read(::DevNullStream, ::Type{UInt8}) = throw(EOFError())
-write(::DevNullStream, ::UInt8) = 1
-unsafe_write(::DevNullStream, ::Ptr{UInt8}, n::UInt)::Int = n
-close(::DevNullStream) = nothing
-flush(::DevNullStream) = nothing
-wait_connected(::DevNullStream) = nothing
-wait_readnb(::DevNullStream) = wait()
-wait_readbyte(::DevNullStream) = wait()
-wait_close(::DevNullStream) = wait()
-eof(::DevNullStream) = true
+function show end
+function repr end
+
+struct DevNull <: IO end
+const devnull = DevNull()
+write(::DevNull, ::UInt8) = 1
+unsafe_write(::DevNull, ::Ptr{UInt8}, n::UInt)::Int = n
+closewrite(::DevNull) = nothing
+close(::DevNull) = nothing
+wait_close(::DevNull) = wait()
+bytesavailable(io::DevNull) = 0
 
 let CoreIO = Union{Core.CoreSTDOUT, Core.CoreSTDERR}
-    global write, unsafe_write
-    write(io::CoreIO, x::UInt8) = Core.write(io, x)
-    unsafe_write(io::CoreIO, x::Ptr{UInt8}, nb::UInt) = Core.unsafe_write(io, x, nb)
+    global write(io::CoreIO, x::UInt8) = Core.write(io, x)
+    global unsafe_write(io::CoreIO, x::Ptr{UInt8}, nb::UInt) = Core.unsafe_write(io, x, nb)
+
+    CoreIO = Union{CoreIO, DevNull}
+    global read(::CoreIO, ::Type{UInt8}) = throw(EOFError())
+    global isopen(::CoreIO) = true
+    global isreadable(::CoreIO) = false
+    global iswritable(::CoreIO) = true
+    global flush(::CoreIO) = nothing
+    global eof(::CoreIO) = true
+    global wait_readnb(::CoreIO, nb::Int) = nothing
 end
 
-STDIN = DevNull
-STDOUT = Core.STDOUT
-STDERR = Core.STDERR
+stdin::IO = devnull
+stdout::IO = Core.stdout
+stderr::IO = Core.stderr

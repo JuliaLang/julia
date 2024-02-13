@@ -1,0 +1,4 @@
+SUITESPARSE_BRANCH = master
+SUITESPARSE_SHA1 = e8285dd13a6d5b5cf52d8124793fc4d622d07554
+SUITESPARSE_GIT_URL := https://github.com/JuliaSparse/SuiteSparse.jl.git
+SUITESPARSE_TAR_URL = https://api.github.com/repos/JuliaSparse/SuiteSparse.jl/tarball/$1

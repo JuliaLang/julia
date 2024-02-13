@@ -28,14 +28,14 @@ let
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
-                @test findall(occursin(dr), dr) == Int64[]
+                @test findall(in(dr), dr) == Int64[]
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
                 @test first(reverse(dr)) < f1
                 @test last(reverse(dr)) >= f1
                 @test issorted(dr)
-                @test sortperm(dr) == 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(f1 in dr)
                 @test !(l1 in dr)
                 @test !(f1 - pos_step in dr)
@@ -55,12 +55,12 @@ let
                     @test maximum(dr) == last(dr)
                     @test dr[1] == f
                     @test dr[end] <= l
-                    @test next(dr, start(dr)) == (first(dr), 1)
+                    @test iterate(dr) == (first(dr), (length(dr), 1))
 
                     if len < 10000
                         dr1 = [i for i in dr]
                         @test length(dr1) == len
-                        @test findall(occursin(dr), dr) == [1:len;]
+                        @test findall(in(dr), dr) == [1:len;]
                         @test length([dr;]) == len
                         @test dr == dr1
                         @test hash(dr) == hash(dr1)
@@ -86,14 +86,14 @@ let
                 @test_throws ArgumentError minimum(dr)
                 @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
-                @test findall(occursin(dr), dr) == Int64[]
+                @test findall(in(dr), dr) == Int64[]
                 @test [dr;] == T[]
                 @test isempty(reverse(dr))
                 @test length(reverse(dr)) == 0
                 @test first(reverse(dr)) > l1
                 @test last(reverse(dr)) <= l1
                 @test issorted(dr)
-                @test sortperm(dr) == 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(l1 in dr)
                 @test !(l1 in dr)
                 @test !(l1 - neg_step in dr)
@@ -113,12 +113,12 @@ let
                     @test maximum(dr) == first(dr)
                     @test dr[1] == l
                     @test dr[end] >= f
-                    @test next(dr, start(dr)) == (first(dr), 1)
+                    @test iterate(dr) == (first(dr), (length(dr), 1))
 
                     if len < 10000
                         dr1 = [i for i in dr]
                         @test length(dr1) == len
-                        @test findall(occursin(dr), dr) == [1:len;]
+                        @test findall(in(dr), dr) == [1:len;]
                         @test length([dr;]) == len
                         @test dr == dr1
                         @test hash(dr) == hash(dr1)
@@ -146,14 +146,14 @@ let
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
-                    @test findall(occursin(dr), dr) == Int64[]
+                    @test findall(in(dr), dr) == Int64[]
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
                     @test first(reverse(dr)) < f1
                     @test last(reverse(dr)) >= f1
                     @test issorted(dr)
-                    @test sortperm(dr) == 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(f1 in dr)
                     @test !(l1 in dr)
                     @test !(f1 - pos_step in dr)
@@ -173,12 +173,12 @@ let
                         @test maximum(dr) == last(dr)
                         @test dr[1] == f
                         @test dr[end] <= l
-                        @test next(dr, start(dr)) == (first(dr), 1)
+                        @test iterate(dr) == (first(dr), (length(dr), 1))
 
                         if len < 10000
                             dr1 = [i for i in dr]
                             @test length(dr1) == len
-                            @test findall(occursin(dr), dr) == [1:len;]
+                            @test findall(in(dr), dr) == [1:len;]
                             @test length([dr;]) == len
                             @test dr == dr1
                             @test hash(dr) == hash(dr1)
@@ -204,14 +204,14 @@ let
                     @test_throws ArgumentError minimum(dr)
                     @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
-                    @test findall(occursin(dr), dr) == Int64[]
+                    @test findall(in(dr), dr) == Int64[]
                     @test [dr;] == T[]
                     @test isempty(reverse(dr))
                     @test length(reverse(dr)) == 0
                     @test first(reverse(dr)) > l1
                     @test last(reverse(dr)) <= l1
                     @test issorted(dr)
-                    @test sortperm(dr) == 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(l1 in dr)
                     @test !(l1 in dr)
                     @test !(l1 - neg_step in dr)
@@ -231,12 +231,12 @@ let
                         @test maximum(dr) == first(dr)
                         @test dr[1] == l
                         @test dr[end] >= f
-                        @test next(dr, start(dr)) == (first(dr), 1)
+                        @test iterate(dr) == (first(dr), (length(dr), 1))
 
                         if len < 10000
                             dr1 = [i for i in dr]
                             @test length(dr1) == len
-                            @test findall(occursin(dr), dr) == [1:len;]
+                            @test findall(in(dr), dr) == [1:len;]
                             @test length([dr;]) == len
                             @test dr == dr1
                             @test hash(dr) == hash(dr1)
@@ -295,9 +295,9 @@ drs2 = map(x->Dates.Date(first(x)):step(x):Dates.Date(last(x)), drs)
 @test map(length, drs) == map(x->size(x)[1], drs)
 @test map(length, drs) == map(x->length(Dates.Date(first(x)):step(x):Dates.Date(last(x))), drs)
 @test map(length, drs) == map(x->length(reverse(x)), drs)
-@test all(x->findall(occursin(x), x)==[1:length(x);], drs[1:4])
+@test all(x->findall(in(x), x)==[1:length(x);], drs[1:4])
 @test isempty(dr2)
-@test all(x->reverse(x) == range(last(x), -step(x), length(x)), drs)
+@test all(x->reverse(x) == range(last(x), step=-step(x), length=length(x)), drs)
 @test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
 @test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)), drs[4:end])
 @test all(drs[1:3]) do dd
@@ -309,7 +309,7 @@ end
 @test_throws MethodError dr .+ 1
 a = Dates.DateTime(2013, 1, 1)
 b = Dates.DateTime(2013, 2, 1)
-@test map!(x->x + Dates.Day(1), Vector{Dates.DateTime}(uninitialized, 32), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
+@test map!(x->x + Dates.Day(1), Vector{Dates.DateTime}(undef, 32), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
 @test map(x->x + Dates.Day(1), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
 
 @test map(x->a in x, drs[1:4]) == [true, true, false, true]
@@ -373,7 +373,7 @@ drs = Any[dr, dr1, dr2, dr3, dr4, dr5, dr6, dr7, dr8, dr9, dr10,
           dr11, dr12, dr13, dr14, dr15, dr16, dr17, dr18, dr19, dr20]
 
 @test map(length, drs) == map(x->size(x)[1], drs)
-@test all(x->findall(occursin(x), x) == [1:length(x);], drs[1:4])
+@test all(x->findall(in(x), x) == [1:length(x);], drs[1:4])
 @test isempty(dr2)
 @test all(x->reverse(x) == last(x): - step(x):first(x), drs)
 @test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
@@ -387,7 +387,7 @@ end
 @test_throws MethodError dr .+ 1
 a = Dates.Date(2013, 1, 1)
 b = Dates.Date(2013, 2, 1)
-@test map!(x->x + Dates.Day(1), Vector{Dates.Date}(uninitialized, 32), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
+@test map!(x->x + Dates.Day(1), Vector{Dates.Date}(undef, 32), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
 @test map(x->x + Dates.Day(1), dr) == [(a + Dates.Day(1)):Dates.Day(1):(b + Dates.Day(1));]
 
 @test map(x->a in x, drs[1:4]) == [true, true, false, true]
@@ -441,11 +441,11 @@ c = Dates.Date(2013, 6, 1)
 @test [a:Dates.Month(2):Dates.Date(2013, 1, 2);] == [a]
 @test [c:Dates.Month(-1):a;] == reverse([a:Dates.Month(1):c;])
 
-@test length(range(Date(2000), Dates.Day(1), 366)) == 366
+@test length(range(Date(2000), step=Dates.Day(1), length=366)) == 366
 let n = 100000
     local a = Dates.Date(2000)
     for i = 1:n
-        @test length(range(a, Dates.Day(1), i)) == i
+        @test length(range(a, step=Dates.Day(1), length=i)) == i
     end
     return a + Dates.Day(n)
 end
@@ -515,14 +515,14 @@ end
 @test length(Dates.Year(1):Dates.Year(1):Dates.Year(10)) == 10
 @test length(Dates.Year(10):Dates.Year(-1):Dates.Year(1)) == 10
 @test length(Dates.Year(10):Dates.Year(-2):Dates.Year(1)) == 5
-@test_throws OverflowError length(typemin(Dates.Year):Dates.Year(1):typemax(Dates.Year))
+@test length(typemin(Dates.Year):Dates.Year(1):typemax(Dates.Year)) == 0 # overflow
 @test_throws MethodError Dates.Date(0):Dates.DateTime(2000)
 @test_throws MethodError Dates.Date(0):Dates.Year(10)
-@test length(range(Dates.Date(2000), Dates.Day(1), 366)) == 366
-@test last(range(Dates.Date(2000), Dates.Day(1), 366)) == Dates.Date(2000, 12, 31)
-@test last(range(Dates.Date(2001), Dates.Day(1), 365)) == Dates.Date(2001, 12, 31)
-@test last(range(Dates.Date(2000), Dates.Day(1), 367)) == last(range(Dates.Date(2000), Dates.Month(12), 2)) == last(range(Dates.Date(2000), Dates.Year(1), 2))
-@test last(range(Dates.DateTime(2000), Dates.Day(366), 2)) == last(range(Dates.DateTime(2000), Dates.Hour(8784), 2))
+@test length(range(Dates.Date(2000), step=Dates.Day(1), length=366)) == 366
+@test last(range(Dates.Date(2000), step=Dates.Day(1), length=366)) == Dates.Date(2000, 12, 31)
+@test last(range(Dates.Date(2001), step=Dates.Day(1), length=365)) == Dates.Date(2001, 12, 31)
+@test last(range(Dates.Date(2000), step=Dates.Day(1), length=367)) == last(range(Dates.Date(2000), step=Dates.Month(12), length=2)) == last(range(Dates.Date(2000), step=Dates.Year(1), length=2))
+@test last(range(Dates.DateTime(2000), step=Dates.Day(366), length=2)) == last(range(Dates.DateTime(2000), step=Dates.Hour(8784), length=2))
 
 # Issue 5
 lastdaysofmonth = [Dates.Date(2014, i, Dates.daysinmonth(2014, i)) for i=1:12]
@@ -559,7 +559,7 @@ drs = Any[dr, dr1, dr2, dr3, dr8, dr9, dr10,
           dr11, dr12, dr13, dr14, dr15, dr16, dr17, dr18, dr19, dr20]
 
 @test map(length, drs) == map(x->size(x)[1], drs)
-@test all(x->findall(occursin(x), x) == [1:length(x);], drs[1:4])
+@test all(x->findall(in(x), x) == [1:length(x);], drs[1:4])
 @test isempty(dr2)
 @test all(x->reverse(x) == last(x): - step(x):first(x), drs)
 @test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
@@ -578,4 +578,37 @@ a = Dates.Time(23, 1, 1)
 @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 
+@test hash(Any[Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
+      hash([Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
+      hash(Date("2018-1-03"):Day(1):Date("2018-1-05"))
+
+@testset "range overflow" begin
+    # DateTime ranges interactions with overflow. If not handled correctly `Dates.len` could
+    # infinite loop
+    @test length(DateTime(0):typemax(Millisecond):DateTime(0)) == 1
+    @test length(typemax(DateTime):typemax(Millisecond):typemax(DateTime)) == 1
+
+    # Overflow interaction is easier to comprehend with using UTM extremes
+    utm_typemin = DateTime(Dates.UTM(typemin(Int64)))
+    utm_typemax = DateTime(Dates.UTM(typemax(Int64)))
+
+    @test length(utm_typemax:Millisecond(1):utm_typemax) == 1
+    @test length(utm_typemin:-Millisecond(1):utm_typemin) == 1
 end
+
+# Issue #45816
+@testset "default step for date ranges" begin
+    r = Date(2000, 1, 1):Date(2000, 12, 31)
+    @test step(r) === Day(1)
+    @test length(r) == 366
+end
+
+# Issue #48209
+@testset "steprange_last overflow" begin
+    epoch = Date(Date(1) - Day(1))
+    dmax = epoch + Day(typemax(fieldtype(Day, :value)))
+    dmin = epoch + Day(typemin(fieldtype(Day, :value)))
+    @test_throws OverflowError StepRange(dmin, Day(1), dmax)
+end
+
+end  # RangesTest module

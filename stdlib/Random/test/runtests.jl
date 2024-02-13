@@ -1,100 +1,74 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, SparseArrays
+using Test: guardseed
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath($(BASE_TEST_PATH), "TestHelpers.jl"))
-using .Main.TestHelpers.OAs
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
 
 using Random
 using Random.DSFMT
 
-using Random: Sampler, SamplerRangeFast, SamplerRangeInt, MT_CACHE_F, MT_CACHE_I
+using Random: default_rng, Sampler, SamplerRangeFast, SamplerRangeInt, SamplerRangeNDL, MT_CACHE_F, MT_CACHE_I
+using Random: jump_128, jump_192, jump_128!, jump_192!
 
-@testset "Issue #6573" begin
-    srand(0)
-    rand()
-    x = rand(384)
-    @test findall(x .== rand()) == []
+import Future # randjump
+
+function test_uniform(xs::AbstractArray{T}) where {T<:AbstractFloat}
+    if precision(T) >= precision(Float32) # TODO: refine
+        @test allunique(xs)
+    end
+    @test all(x -> zero(x) <= x < one(x), xs)
 end
 
-@test rand() != rand()
-@test 0.0 <= rand() < 1.0
-@test rand(UInt32) >= 0
-@test -10 <= rand(-10:-5) <= -5
-@test -10 <= rand(-10:5) <= 5
-@test minimum([rand(Int32(1):Int32(7^7)) for i = 1:100000]) > 0
-@test typeof(rand(false:true)) === Bool
-@test typeof(rand(Char)) === Char
-@test length(randn(4, 5)) == 20
-@test length(randn(ComplexF64, 4, 5)) == 20
-@test length(bitrand(4, 5)) == 20
-
-@test rand(MersenneTwister(0)) == 0.8236475079774124
-@test rand(MersenneTwister(42)) == 0.5331830160438613
-# Try a seed larger than 2^32
-@test rand(MersenneTwister(5294967296)) == 0.3498809918210497
-
-# Test array filling, Issues #7643, #8360
-@test rand(MersenneTwister(0), 1) == [0.8236475079774124]
-let A = zeros(2, 2)
-    rand!(MersenneTwister(0), A)
-    @test A == [0.8236475079774124  0.16456579813368521;
-                0.9103565379264364  0.17732884646626457]
-end
-let A = zeros(2, 2)
-    @test_throws ArgumentError rand!(MersenneTwister(0), A, 5)
-    @test rand(MersenneTwister(0), Int64, 1) == [2118291759721269919]
-end
-let A = zeros(Int64, 2, 2)
-    rand!(MersenneTwister(0), A)
-    @test A == [858542123778948672  5715075217119798169;
-                8690327730555225005 8435109092665372532]
+function test_uniform(xs::AbstractArray{T}) where {T<:Integer}
+    if !Base.hastypemax(T) || widen(typemax(T)) - widen(typemin(T)) >= 2^30 # TODO: refine
+        @test allunique(xs)
+    end
 end
 
-# rand from AbstractArray
-let mt = MersenneTwister()
-    @test rand(mt, 0:3:1000) in 0:3:1000
-    @test issubset(rand!(mt, Vector{Int}(uninitialized, 100), 0:3:1000), 0:3:1000)
-    coll = Any[2, UInt128(128), big(619), "string"]
-    @test rand(mt, coll) in coll
-    @test issubset(rand(mt, coll, 2, 3), coll)
 
-    # check API with default RNG:
-    rand(0:3:1000)
-    rand!(Vector{Int}(uninitialized, 100), 0:3:1000)
-    rand(coll)
-    rand(coll, 2, 3)
+@testset "MersenneTwister: do not do update the same global state in incompatible ways" begin
+    # Issue #6573
+    mm = MersenneTwister(rand(UInt128))
+    rand(mm)
+    xs = rand(mm, 384)
+    @test rand(mm) ∉ xs
+    test_uniform(xs)
 end
 
-# randn
-@test randn(MersenneTwister(42)) == -0.5560268761463861
-let A = zeros(2, 2)
-    randn!(MersenneTwister(42), A)
-    @test A == [-0.5560268761463861  0.027155338009193845;
-                -0.444383357109696  -0.29948409035891055]
-end
+@testset "rand from AbstractArray" begin
+    seed = rand(UInt128)
+    for rng ∈ ([MersenneTwister(seed)], [Xoshiro(seed)], [])
+        # issue 8257
+        i8257 = 1:1/3:100
+        for _ = 1:100
+            @test rand(rng... ,i8257) in i8257
+        end
 
-let B = zeros(ComplexF64, 2)
-    randn!(MersenneTwister(42), B)
-    @test B == [ComplexF64(-0.5560268761463861,-0.444383357109696),
-                ComplexF64(0.027155338009193845,-0.29948409035891055)] * 0.7071067811865475244008
-end
+        @test rand(rng..., 0:3:1000) in 0:3:1000
+        @test issubset(rand!(rng..., Vector{Int}(undef, 100), 0:3:1000), 0:3:1000)
+        coll = Any[2, UInt128(128), big(619), "string"]
+        @test rand(rng..., coll) in coll
+        @test issubset(rand(rng..., coll, 2, 3), coll)
 
-for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt,
-          Float16, Float32, Float64, Rational{Int})
-    r = rand(convert(T, 97):convert(T, 122))
-    @test typeof(r) == T
-    @test 97 <= r <= 122
-    r = rand(convert(T, 97):convert(T,2):convert(T, 122),2)[1]
-    @test typeof(r) == T
-    @test 97 <= r <= 122
-    @test mod(r,2)==1
+        for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt,
+                  Float16, Float32, Float64, Rational{Int})
+            r = rand(rng..., convert(T, 97):convert(T, 122))
+            @test typeof(r) == T
+            @test 97 <= r <= 122
+            r = rand(rng..., convert(T, 97):convert(T,2):convert(T, 122),2)[1]
+            @test typeof(r) == T
+            @test 97 <= r <= 122
+            @test mod(r,2)==1
 
-    if T<:Integer && !(T===BigInt)
-        x = rand(typemin(T):typemax(T))
-        @test isa(x,T)
-        @test typemin(T) <= x <= typemax(T)
+            if T<:Integer && !(T===BigInt)
+                x = rand(rng..., typemin(T):typemax(T))
+                @test isa(x,T)
+                @test typemin(T) <= x <= typemax(T)
+            end
+        end
     end
 end
 
@@ -120,15 +94,17 @@ end
 for T in [UInt32, UInt64, UInt128, Int128]
     local r, s
     s = big(typemax(T)-1000) : big(typemax(T)) + 10000
-    @test rand(s) != rand(s)
+    # s is a 11001-length array
+    @test rand(s) isa BigInt
+    @test sum(rand(s, 1000) .== rand(s, 1000)) <= 20
     @test big(typemax(T)-1000) <= rand(s) <= big(typemax(T)) + 10000
     r = rand(s, 1, 2)
     @test size(r) == (1, 2)
     @test typeof(r) == Matrix{BigInt}
-    guardsrand() do
-        srand(0)
+    guardseed() do
+        Random.seed!(0)
         r = rand(s)
-        srand(0)
+        Random.seed!(0)
         @test rand(s) == r
     end
 end
@@ -143,13 +119,13 @@ emantissa           = Int64(2)^52
 ziggurat_exp_r      = parse(BigFloat,"7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
 exp_section_area    = (ziggurat_exp_r + 1)*exp(-ziggurat_exp_r)
 
-ki = Vector{UInt64}(uninitialized, ziggurat_table_size)
-wi = Vector{Float64}(uninitialized, ziggurat_table_size)
-fi = Vector{Float64}(uninitialized, ziggurat_table_size)
+ki = Vector{UInt64}(undef, ziggurat_table_size)
+wi = Vector{Float64}(undef, ziggurat_table_size)
+fi = Vector{Float64}(undef, ziggurat_table_size)
 # Tables for exponential variates
-ke = Vector{UInt64}(uninitialized, ziggurat_table_size)
-we = Vector{Float64}(uninitialized, ziggurat_table_size)
-fe = Vector{Float64}(uninitialized, ziggurat_table_size)
+ke = Vector{UInt64}(undef, ziggurat_table_size)
+we = Vector{Float64}(undef, ziggurat_table_size)
+fe = Vector{Float64}(undef, ziggurat_table_size)
 function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     wib = big.(wi)
     fib = big.(fi)
@@ -217,93 +193,48 @@ randmtzig_fill_ziggurat_tables()
 @test all(we == Random.we)
 @test all(fe == Random.fe)
 
-#same random numbers on for small ranges on all systems
-guardsrand() do
-    seed = rand(UInt)
-    srand(seed)
-    r = map(Int64, rand(map(Int32, 97:122)))
-    srand(seed)
-    @test r == rand(map(Int64, 97:122))
-    srand(seed)
-    r = map(UInt64, rand(map(UInt32, 97:122)))
-    srand(seed)
-    @test r == rand(map(UInt64, 97:122))
-end
-
 for U in (Int64, UInt64)
     @test all(div(one(UInt64) << 52, k)*k - 1 == SamplerRangeInt(map(U, 1:k)).u
               for k in 13 .+ Int64(2).^(1:30))
 end
 
-
-import Random: uuid1, uuid4, UUID, uuid_version
-
-# UUID
-u1 = uuid1()
-u4 = uuid4()
-@test uuid_version(u1) == 1
-@test uuid_version(u4) == 4
-@test u1 == UUID(string(u1)) == UUID(GenericString(string(u1)))
-@test u4 == UUID(string(u4)) == UUID(GenericString(string(u4)))
-@test u1 == UUID(UInt128(u1))
-@test u4 == UUID(UInt128(u4))
-@test uuid4(MersenneTwister(0)) == uuid4(MersenneTwister(0))
-@test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
-@test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
-@test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")
-
-#issue 8257
-let i8257 = 1:1/3:100
-    for i = 1:100
-        @test rand(i8257) in i8257
-    end
-end
-
-# test code paths of rand!
-
-let mt = MersenneTwister(0)
-    A128 = Vector{UInt128}()
+@testset "test code paths of rand!(::MersenneTwister)" begin
+    mt = MersenneTwister(rand(UInt128))
+    A128 = UInt128[]
     @test length(rand!(mt, A128)) == 0
-    for (i,n) in enumerate([1, 3, 5, 6, 10, 11, 30])
+    for (i, n) in enumerate([1, 3, 5, 6, 10, 11, 30])
         resize!(A128, n)
         rand!(mt, A128)
         @test length(A128) == n
-        @test A128[end] == UInt128[0x15de6b23025813ad129841f537a04e40,
-                                   0xcfa4db38a2c65bc4f18c07dc91125edf,
-                                   0x33bec08136f19b54290982449b3900d5,
-                                   0xde41af3463e74cb830dad4add353ca20,
-                                   0x066d8695ebf85f833427c93416193e1f,
-                                   0x48fab49cc9fcee1c920d6dae629af446,
-                                   0x4b54632b4619f4eca22675166784d229][i]
+        test_uniform(A128)
     end
 
-    srand(mt, 0)
-    for (i,T) in enumerate([Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, Float16, Float32])
-        A = Vector{T}(uninitialized, 16)
-        B = Vector{T}(uninitialized, 31)
+    for (i, T) in enumerate([Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, Float16, Float32])
+        A = Vector{T}(undef, 16)
+        B = Vector{T}(undef, 31)
         rand!(mt, A)
         rand!(mt, B)
-        @test A[end] == Any[21, 0x7b, 17385, 0x3086, -1574090021, 0xadcb4460, 6797283068698303107, 0xc8e6453e139271f3,
-                            69855512850528774484795047199183096941, Float16(0.16895), 0.21086597f0][i]
-        @test B[end] == Any[49, 0x65, -3725, 0x719d, 814246081, 0xdf61843a, 2120308604158549401, 0xcb28c236e9c0f608,
-                            61881313582466480231846019869039259750, Float16(0.38672), 0.20027375f0][i]
+        @test length(A) == 16
+        @test length(B) == 31
+        test_uniform(A)
+        test_uniform(B)
     end
 
-    srand(mt, 0)
-    AF64 = Vector{Float64}(uninitialized, Random.dsfmt_get_min_array_size()-1)
-    @test rand!(mt, AF64)[end] == 0.957735065345398
-    @test rand!(mt, AF64)[end] == 0.6492481059865669
+    AF64 = Vector{Float64}(undef, Random.dsfmt_get_min_array_size()-1)
+    rand!(mt, AF64)
+    test_uniform(AF64)
     resize!(AF64, 2*length(mt.vals))
-    @test invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Random.SamplerTrivial{Random.CloseOpen01_64}},
-                 mt, AF64, Random.SamplerTrivial(Random.CloseOpen01()))[end]  == 0.1142787906708973
+    invoke(rand!, Tuple{MersenneTwister,AbstractArray{Float64},Random.SamplerTrivial{Random.CloseOpen01_64}},
+           mt, AF64, Random.SamplerTrivial(Random.CloseOpen01()))
+    test_uniform(AF64)
 end
 
 # Issue #9037
 let mt = MersenneTwister(0)
     a = Vector{Float64}()
     resize!(a, 1000) # could be 8-byte aligned
-    b = Vector{Float64}(uninitialized, 1000) # should be 16-byte aligned
-    c8 = Vector{UInt64}(uninitialized, 1001)
+    b = Vector{Float64}(undef, 1000) # should be 16-byte aligned
+    c8 = Vector{UInt64}(undef, 1001)
     pc8 = pointer(c8)
     if Int(pc8) % 16 == 0
         # Make sure pc8 is not 16-byte aligned since that's what we want to test.
@@ -315,10 +246,10 @@ let mt = MersenneTwister(0)
 
     for A in (a, b, c)
         local A
-        srand(mt, 0)
+        Random.seed!(mt, 0)
         rand(mt) # this is to fill mt.vals, cf. #9040
         rand!(mt, A) # must not segfault even if Int(pointer(A)) % 16 != 0
-        @test A[end-4:end] == [0.3371041633752143, 0.41147647589610803, 0.6063082992397912, 0.9103565379264364, 0.16456579813368521]
+        test_uniform(A)
     end
 end
 
@@ -327,17 +258,48 @@ let a = [rand(RandomDevice(), UInt128) for i=1:10]
     @test reduce(|, a)>>>64 != 0
 end
 
+# wrapper around Float64 to check fallback random generators
+struct FakeFloat64 <: AbstractFloat
+    x::Float64
+end
+Base.rand(rng::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{FakeFloat64}}) = FakeFloat64(rand(rng))
+for f in (:sqrt, :log, :log1p, :one, :zero, :abs, :+, :-)
+    @eval Base.$f(x::FakeFloat64) = FakeFloat64($f(x.x))
+end
+for f in (:+, :-, :*, :/)
+    @eval begin
+        Base.$f(x::FakeFloat64, y::FakeFloat64) = FakeFloat64($f(x.x,y.x))
+        Base.$f(x::FakeFloat64, y::Real) = FakeFloat64($f(x.x,y))
+        Base.$f(x::Real, y::FakeFloat64) = FakeFloat64($f(x,y.x))
+    end
+end
+for f in (:<, :<=, :>, :>=, :(==), :(!=))
+    @eval begin
+        Base.$f(x::FakeFloat64, y::FakeFloat64) = $f(x.x,y.x)
+        Base.$f(x::FakeFloat64, y::Real) = $f(x.x,y)
+        Base.$f(x::Real, y::FakeFloat64) = $f(x,y.x)
+    end
+end
+
 # test all rand APIs
-for rng in ([], [MersenneTwister(0)], [RandomDevice()])
-    ftypes = [Float16, Float32, Float64]
+for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
+    realrng = rng == [] ? default_rng() : only(rng)
+    ftypes = [Float16, Float32, Float64, FakeFloat64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
-    types = [Bool, Char, BigFloat, Base.BitInteger_types..., ftypes...]
+    types = [Bool, Char, BigFloat, Tuple{Bool, Tuple{Int, Char}}, Pair{Int8, UInt32},
+             Base.BitInteger_types..., cftypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
+
+    randwidetup = Tuple{Bool, Char, Vararg{Tuple{Int, Float64}, 14}}
+    @inferred rand(rng..., randwidetup)
+
     collections = [BitSet(rand(1:100, 20))          => Int,
                    randset                          => Int,
                    GenericSet(randset)              => Int,
                    randdict                         => Pair{Int,Int},
+                   keys(randdict)                   => Int,
+                   values(randdict)                 => Int,
                    GenericDict(randdict)            => Pair{Int,Int},
                    1:100                            => Int,
                    rand(Int, 100)                   => Int,
@@ -352,42 +314,55 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     b2 = big(2)
     u3 = UInt(3)
     for f in [rand, randn, randexp]
-        f(rng...)                     ::Float64
-        f(rng..., 5)                  ::Vector{Float64}
-        f(rng..., 2, 3)               ::Array{Float64, 2}
-        f(rng..., b2, u3)             ::Array{Float64, 2}
+        f1 = f(rng...)                     ::Float64
+        f2 = f(rng..., 5)                  ::Vector{Float64}
+        f3 = f(rng..., 2, 3)               ::Array{Float64, 2}
+        f4 = f(rng..., b2, u3)             ::Array{Float64, 2}
+        @test size(f1) == ()
+        @test size(f2) == (5,)
+        @test size(f3) == size(f4) == (2, 3)
         for T in functypes[f]
-            a0 = f(rng..., T)         ::T
-            a1 = f(rng..., T, 5)      ::Vector{T}
-            a2 = f(rng..., T, 2, 3)   ::Array{T, 2}
-            a3 = f(rng..., T, b2, u3) ::Array{T, 2}
-            a4 = f(rng..., T, (2, 3)) ::Array{T, 2}
-            if T <: AbstractFloat && f === rand
-                for a in [a0, a1..., a2..., a3..., a4...]
-                    @test 0.0 <= a < 1.0
+            tts = f == rand ? (T, Sampler(realrng, T, Val(1)), Sampler(realrng, T, Val(Inf))) : (T,)
+            for tt in tts
+                a0 = f(rng..., tt)         ::T
+                a1 = f(rng..., tt, 5)      ::Vector{T}
+                a2 = f(rng..., tt, 2, 3)   ::Array{T, 2}
+                a3 = f(rng..., tt, b2, u3) ::Array{T, 2}
+                a4 = f(rng..., tt, (2, 3)) ::Array{T, 2}
+                if T <: Number
+                    @test size(a0) == ()
+                end
+                @test size(a1) == (5,)
+                @test size(a2) == size(a3) == size(a4) == (2, 3)
+                if T <: AbstractFloat && f === rand
+                    for a in T[a0, a1..., a2..., a3..., a4...]
+                        @test 0.0 <= a < 1.0
+                    end
                 end
             end
         end
     end
     for (C, T) in collections
-        a0  = rand(rng..., C)                                                       ::T
-        a1  = rand(rng..., C, 5)                                                    ::Vector{T}
-        a2  = rand(rng..., C, 2, 3)                                                 ::Array{T, 2}
-        a3  = rand(rng..., C, (2, 3))                                               ::Array{T, 2}
-        a4  = rand(rng..., C, b2, u3)                                               ::Array{T, 2}
-        a5  = rand!(rng..., Array{T}(uninitialized, 5), C)                          ::Vector{T}
-        a6  = rand!(rng..., Array{T}(uninitialized, 2, 3), C)                       ::Array{T, 2}
-        a7  = rand!(rng..., GenericArray{T}(uninitialized, 5), C)                   ::GenericArray{T, 1}
-        a8  = rand!(rng..., GenericArray{T}(uninitialized, 2, 3), C)                ::GenericArray{T, 2}
-        a9  = rand!(rng..., OffsetArray(Array{T}(uninitialized, 5), 9), C)          ::OffsetArray{T, 1}
-        a10 = rand!(rng..., OffsetArray(Array{T}(uninitialized, 2, 3), (-2, 4)), C) ::OffsetArray{T, 2}
-        @test size(a1) == (5,)
-        @test size(a2) == size(a3) == (2, 3)
-        for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8..., a9..., a10...]
-            if C isa Type
-                @test a isa C
-            else
-                @test a in C
+        for cc = (C, Sampler(realrng, C, Val(1)), Sampler(realrng, C, Val(Inf)))
+            a0  = rand(rng..., cc)                                               ::T
+            a1  = rand(rng..., cc, 5)                                            ::Vector{T}
+            a2  = rand(rng..., cc, 2, 3)                                         ::Array{T, 2}
+            a3  = rand(rng..., cc, (2, 3))                                       ::Array{T, 2}
+            a4  = rand(rng..., cc, b2, u3)                                       ::Array{T, 2}
+            a5  = rand!(rng..., Array{T}(undef, 5), cc)                          ::Vector{T}
+            a6  = rand!(rng..., Array{T}(undef, 2, 3), cc)                       ::Array{T, 2}
+            a7  = rand!(rng..., GenericArray{T}(undef, 5), cc)                   ::GenericArray{T, 1}
+            a8  = rand!(rng..., GenericArray{T}(undef, 2, 3), cc)                ::GenericArray{T, 2}
+            a9  = rand!(rng..., OffsetArray(Array{T}(undef, 5), 9), cc)          ::OffsetArray{T, 1}
+            a10 = rand!(rng..., OffsetArray(Array{T}(undef, 2, 3), (-2, 4)), cc) ::OffsetArray{T, 2}
+            @test size(a1) == (5,)
+            @test size(a2) == size(a3) == (2, 3)
+            for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8..., a9..., a10...]
+                if C isa Type
+                    @test a isa C
+                else
+                    @test a in C
+                end
             end
         end
     end
@@ -399,15 +374,17 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     end
     for f! in [rand!, randn!, randexp!]
         for T in functypes[f!]
+            (T <: Tuple || T <: Pair) && continue
             X = T == Bool ? T[0,1] : T[0,1,2]
-            for A in (Vector{T}(uninitialized, 5),
-                      Matrix{T}(uninitialized, 2, 3),
-                      GenericArray{T}(uninitialized, 5),
-                      GenericArray{T}(uninitialized, 2, 3),
-                      OffsetArray(Array{T}(uninitialized, 5), -3),
-                      OffsetArray(Array{T}(uninitialized, 2, 3), (4, 5)))
+            for A in (Vector{T}(undef, 5),
+                      Matrix{T}(undef, 2, 3),
+                      GenericArray{T}(undef, 5),
+                      GenericArray{T}(undef, 2, 3),
+                      OffsetArray(Array{T}(undef, 5), -3),
+                      OffsetArray(Array{T}(undef, 2, 3), (4, 5)))
                 local A
-                f!(rng..., A)                    ::typeof(A)
+                A2 = f!(rng..., A)               ::typeof(A)
+                @test A2 === A
                 if f! === rand!
                     f!(rng..., A, X)             ::typeof(A)
                     if A isa Array && T !== Char # Char/Integer comparison
@@ -419,22 +396,24 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         end
     end
 
-    bitrand(rng..., 5)             ::BitArray{1}
-    bitrand(rng..., 2, 3)          ::BitArray{2}
-    bitrand(rng..., b2, u3)        ::BitArray{2}
-    rand!(rng..., BitVector(uninitialized, 5))     ::BitArray{1}
-    rand!(rng..., BitMatrix(uninitialized, 2, 3))  ::BitArray{2}
+    z1 = bitrand(rng..., 5)             ::BitArray{1}
+    @test size(z1) == (5,)
+    z2 = bitrand(rng..., 2, 3)          ::BitArray{2}
+    @test size(z2) == (2, 3)
+    z3 = bitrand(rng..., b2, u3)        ::BitArray{2}
+    @test size(z3) == (b2, u3)
+    z4 = rand!(rng..., BitVector(undef, 5))     ::BitArray{1}
+    @test size(z4) == (5,)
+    z5 = rand!(rng..., BitMatrix(undef, 2, 3))  ::BitArray{2}
+    @test size(z5) == (2, 3)
 
     # Test that you cannot call randn or randexp with non-Float types.
-    for r in [randn, randexp, randn!, randexp!]
-        local r
+    for r in [randn, randexp]
         @test_throws MethodError r(Int)
         @test_throws MethodError r(Int32)
         @test_throws MethodError r(Bool)
         @test_throws MethodError r(String)
         @test_throws MethodError r(AbstractFloat)
-        # TODO(#17627): Consider adding support for randn(BigFloat) and removing this test.
-        @test_throws MethodError r(BigFloat)
 
         @test_throws MethodError r(Int64, (2,3))
         @test_throws MethodError r(String, 1)
@@ -442,6 +421,10 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         @test_throws MethodError r(rng..., Number, (2,3))
         @test_throws MethodError r(rng..., Any, 1)
     end
+
+    # Test that you cannot call rand with a tuple type of unknown size or with isbits parameters
+    @test_throws ArgumentError rand(rng..., Tuple{Vararg{Int}})
+    @test_throws TypeError rand(rng..., Tuple{1:2})
 end
 
 function hist(X, n)
@@ -452,22 +435,61 @@ function hist(X, n)
     v
 end
 
-# test uniform distribution of floats
-for rng in [MersenneTwister(), RandomDevice()],
-    T in [Float16, Float32, Float64, BigFloat],
+@testset "uniform distribution of floats" begin
+    for rng in [MersenneTwister(), RandomDevice(), Xoshiro()],
+        T in [Float16, Float32, Float64, BigFloat],
         prec in (T == BigFloat ? [3, 53, 64, 100, 256, 1000] : [256])
-    setprecision(BigFloat, prec) do
-        # array version
-        counts = hist(rand(rng, T, 2000), 4)
-        @test minimum(counts) > 300 # should fail with proba < 1e-26
-        # scalar version
-        counts = hist([rand(rng, T) for i in 1:2000], 4)
-        @test minimum(counts) > 300
+
+        setprecision(BigFloat, prec) do
+            if precision(T) >= precision(Float32)
+                @test rand(rng, T) != rand(rng, T)
+            end
+            # array version
+            counts = hist(rand(rng, T, 2000), 4)
+            @test minimum(counts) > 300 # should fail with proba < 1e-26
+            # scalar version
+            counts = hist([rand(rng, T) for i in 1:2000], 4)
+            @test minimum(counts) > 300
+        end
     end
 end
 
-# test reproducility of methods
-let mta = MersenneTwister(42), mtb = MersenneTwister(42)
+@testset "rand(Bool) uniform distribution" begin
+    for n in [rand(1:8), rand(9:16), rand(17:64)]
+        a = zeros(Bool, n)
+        a8 = unsafe_wrap(Array, Ptr{UInt8}(pointer(a)), length(a); own=false) # unsafely observe the actual bit patterns in `a`
+        as = zeros(Int, n)
+        # we will test statistical properties for each position of a,
+        # but also for 3 linear combinations of positions (for the array version)
+        lcs = unique!.([rand(1:n, 2), rand(1:n, 3), rand(1:n, 5)])
+        aslcs = zeros(Int, 3)
+        for rng = (MersenneTwister(), RandomDevice(), Xoshiro())
+            for scalar = [false, true]
+                fill!(a, 0)
+                fill!(as, 0)
+                fill!(aslcs, 0)
+                for _ = 1:49
+                    if scalar
+                        for i in eachindex(as)
+                            as[i] += rand(rng, Bool)
+                        end
+                    else
+                        as .+= rand!(rng, a)
+                        @test all(x -> x === 0x00 || x === 0x01, a8)
+                        aslcs .+= [xor(getindex.(Ref(a), lcs[i])...) for i in 1:3]
+                    end
+                end
+                @test all(x -> 7 <= x <= 42, as) # for each x, fails with proba ≈ 2/35_000_000
+                if !scalar
+                    @test all(x -> 7 <= x <= 42, aslcs)
+                end
+            end
+        end
+    end
+end
+
+@testset "reproducility of methods for $RNG" for RNG=(MersenneTwister,Xoshiro)
+    mta, mtb = RNG(42), RNG(42)
 
     @test rand(mta) == rand(mtb)
     @test rand(mta,10) == rand(mtb,10)
@@ -490,30 +512,39 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test shuffle!(mta,Vector(1:10)) == shuffle!(mtb,Vector(1:10))
     @test shuffle(mta,Vector(2:11)) == shuffle(mtb,2:11)
     @test shuffle!(mta, rand(mta, 2, 3)) == shuffle!(mtb, rand(mtb, 2, 3))
+    @test shuffle!(mta, rand(mta, Bool, 2, 3)) == shuffle!(mtb, rand(mtb, Bool, 2, 3))
     @test shuffle(mta, rand(mta, 2, 3)) == shuffle(mtb, rand(mtb, 2, 3))
 
     @test randperm(mta,10) == randperm(mtb,10)
     @test sort!(randperm(10)) == sort!(shuffle(1:10)) == 1:10
     @test randperm(mta,big(10)) == randperm(mtb,big(10)) # cf. #16376
     @test randperm(0) == []
-    @test eltype(randperm(UInt(1))) === Int
-    @test_throws ErrorException randperm(-1)
+    @test_throws ArgumentError randperm(-1)
 
-    A, B = Vector{Int}(uninitialized, 10), Vector{Int}(uninitialized, 10)
+    let p = randperm(UInt16(12))
+        @test typeof(p) ≡ Vector{UInt16}
+        @test sort!(p) == 1:12
+    end
+
+    A, B = Vector{Int}(undef, 10), Vector{Int}(undef, 10)
     @test randperm!(mta, A) == randperm!(mtb, B)
     @test randperm!(A) === A
 
     @test randcycle(mta,10) == randcycle(mtb,10)
-    @test eltype(randcycle(UInt(1))) === Int
     @test randcycle!(mta, A) == randcycle!(mtb, B)
     @test randcycle!(A) === A
+
+    let p = randcycle(UInt16(10))
+        @test typeof(p) ≡ Vector{UInt16}
+        @test sort!(p) == 1:10
+    end
 
     @test sprand(mta,1,1,0.9) == sprand(mtb,1,1,0.9)
     @test sprand(mta,10,10,0.3) == sprand(mtb,10,10,0.3)
 end
 
-# test MersenneTwister polynomial generation and jump
-let seed = rand(UInt)
+@testset "MersenneTwister polynomial generation and jump" begin
+    seed = rand(UInt)
     mta = MersenneTwister(seed)
     mtb = MersenneTwister(seed)
     step = 25000*2
@@ -528,80 +559,106 @@ let seed = rand(UInt)
 
     # test PRNG jump
 
-    mts = randjump(mta, 25000, size)
+    function randjumpvec(m, steps, len) # old version of randjump
+        mts = accumulate(Future.randjump, fill(steps, len-1); init=m)
+        pushfirst!(mts, m)
+        mts
+    end
+
+    mts = randjumpvec(mta, 25000, size)
     @test length(mts) == 4
 
     for x in (rand(mts[k], Float64) for j=1:step, k=1:size)
         @test rand(mtb, Float64) == x
     end
-end
 
-# test that the following is not an error (#16925)
-guardsrand() do
-    srand(typemax(UInt))
-    srand(typemax(UInt128))
-end
-
-# copy, == and hash
-let seed = rand(UInt32, 10)
-    r = MersenneTwister(seed)
-    @test r == MersenneTwister(seed) # r.vals should be all zeros
-    @test hash(r) == hash(MersenneTwister(seed))
-    s = copy(r)
-    @test s == r && s !== r
-    @test hash(s) == hash(r)
-    skip, len = rand(0:2000, 2)
-    for j=1:skip
-        rand(r)
-        rand(s)
+    @testset "generated RNGs are in a deterministic state (relatively to ==)" begin
+        m = MersenneTwister()
+        @test Future.randjump(m, 25000) == Future.randjump(m, 25000)
     end
-    @test rand(r, len) == rand(s, len)
-    @test s == r
-    @test hash(s) == hash(r)
-    h = rand(UInt)
-    @test hash(s, h) == hash(r, h)
+end
+
+@testset "copy, == and hash" begin
+    for RNG = (MersenneTwister, Xoshiro)
+        seed = rand(UInt32, 10)
+        r = RNG(seed)
+        t = RNG(seed)
+        @test r == t
+        @test hash(r) == hash(t)
+        s = copy(r)
+        @test s == r == t && s !== r
+        @test hash(s) == hash(r)
+        skip, len = rand(0:2000, 2)
+        for j=1:skip
+            rand(r)
+            @test r != s
+            @test hash(r) != hash(s)
+            rand(s)
+        end
+        @test rand(r, len) == rand(s, len)
+        @test s == r
+        @test hash(s) == hash(r)
+        h = rand(UInt)
+        @test hash(s, h) == hash(r, h)
+        if RNG == Xoshiro
+            t = copy(TaskLocalRNG())
+            @test hash(t) == hash(TaskLocalRNG())
+            @test hash(t, h) == hash(TaskLocalRNG(), h)
+            x = rand()
+            @test hash(t) != hash(TaskLocalRNG())
+            @test rand(t) == x
+            @test hash(t) == hash(TaskLocalRNG())
+            copy!(TaskLocalRNG(), r)
+            @test hash(TaskLocalRNG()) == hash(r)
+            @test TaskLocalRNG() == r
+        end
+    end
 end
 
 # MersenneTwister initialization with invalid values
 @test_throws DomainError DSFMT.DSFMT_state(zeros(Int32, rand(0:DSFMT.JN32-1)))
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0)
+                                         zeros(Float64, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0, 0, 0, -1, -1)
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0)
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0, 0, 0, -1, -1)
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0)
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0, 0, 0, -1, -1)
 
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), DSFMT.DSFMT_state(),
-                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1)
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1, 0, 0, -1, -1)
 
 # seed is private to MersenneTwister
 let seed = rand(UInt32, 10)
     r = MersenneTwister(seed)
     @test r.seed == seed && r.seed !== seed
-    # RNGs do not share their seed in randjump
-    let rs = randjump(r, big(10)^20, 2)
-        @test  rs[1].seed !== rs[2].seed
-        srand(rs[2])
-        @test seed == rs[1].seed != rs[2].seed
+    let r2 = Future.randjump(r, big(10)^20)
+        Random.seed!(r2)
+        @test seed == r.seed != r2.seed
     end
     resize!(seed, 4)
     @test r.seed != seed
 end
 
-# srand(rng, ...) returns rng (#21248)
-guardsrand() do
-    g = Random.GLOBAL_RNG
-    m = MersenneTwister(0)
-    @test srand() === g
-    @test srand(rand(UInt)) === g
-    @test srand(rand(UInt32, rand(1:10))) === g
-    @test srand(m) === m
-    @test srand(m, rand(UInt)) === m
-    @test srand(m, rand(UInt32, rand(1:10))) === m
-    @test srand(m, rand(1:10)) === m
+@testset "Random.seed!(rng, ...) returns rng" begin
+    # issue #21248
+    seed = rand(UInt)
+    for m = ([MersenneTwister(seed)], [Xoshiro(seed)], [])
+        m2 = m == [] ? default_rng() : m[1]
+        @test Random.seed!(m...) === m2
+        @test Random.seed!(m..., rand(UInt)) === m2
+        @test Random.seed!(m..., rand(UInt32, rand(1:10))) === m2
+        @test Random.seed!(m..., rand(1:10)) === m2
+        # Try a seed larger than 2^32
+        @test Random.seed!(m..., 5294967296) === m2
+
+        # test that the following is not an error (#16925)
+        @test Random.seed!(m..., typemax(UInt)) === m2
+        @test Random.seed!(m..., typemax(UInt128)) === m2
+        @test Random.seed!(m..., "a random seed") === m2
+    end
 end
 
 # Issue 20062 - ensure internal functions reserve_1, reserve are type-stable
@@ -623,7 +680,7 @@ let b = ['0':'9';'A':'Z';'a':'z']
             if eltype(c) == Char
                 @test issubset(s, c)
             else # UInt8
-                @test issubset(s, map(Char, c))
+                @test issubset(s, Set(Char(v) for v in c))
             end
         end
     end
@@ -631,9 +688,9 @@ let b = ['0':'9';'A':'Z';'a':'z']
 end
 
 # this shouldn't crash (#22403)
-@test_throws ArgumentError rand!(Union{UInt,Int}[1, 2, 3])
+@test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
 
-@testset "$RNG() & srand(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice)
+@testset "$RNG() & Random.seed!(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice, Xoshiro)
     m = RNG()
     a = rand(m, Int)
     m = RNG()
@@ -642,34 +699,540 @@ end
     m = RNG(nothing)
     b = rand(m, Int)
     @test b != a
-    srand(m)
+    Random.seed!(m)
     c = rand(m, Int)
     @test c ∉ (a, b)
-    srand(m)
+    Random.seed!(m)
     @test rand(m, Int) ∉ (a, b, c)
-    srand(m, nothing)
+    Random.seed!(m, nothing)
     d = rand(m, Int)
     @test d ∉ (a, b, c)
-    srand(m, nothing)
+    Random.seed!(m, nothing)
     @test rand(m, Int) ∉ (a, b, c, d)
 end
 
-@testset "MersenneTwister($seed) & srand(m::MersenneTwister, $seed) produce the same stream" for seed in [0:5; 10000:10005]
-    m = MersenneTwister(seed)
-    a = [rand(m) for _=1:100]
-    srand(m, seed)
-    @test a == [rand(m) for _=1:100]
+@testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister,Xoshiro)
+    seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), randstring(), randstring(), rand(UInt128, 3)...]
+    if RNG == Xoshiro
+        push!(seeds, rand(UInt64, rand(1:4)))
+    end
+    for seed=seeds
+        m = RNG(seed)
+        a = [rand(m) for _=1:100]
+        Random.seed!(m, seed)
+        @test a == [rand(m) for _=1:100]
+    end
+end
+
+@testset "Random.seed!(seed) sets Random.GLOBAL_SEED" begin
+    seeds = Any[0, rand(UInt128), rand(UInt64, 4), randstring(20)]
+
+    for seed=seeds
+        Random.seed!(seed)
+        @test Random.get_tls_seed() == default_rng()
+    end
+
+    for ii = 1:8
+        iseven(ii) ? Random.seed!(nothing) : Random.seed!()
+        push!(seeds, copy(Random.get_tls_seed()))
+        @test Random.get_tls_seed() isa Xoshiro # could change, but must not be nothing
+    end
+    @test allunique(seeds)
 end
 
 struct RandomStruct23964 end
 @testset "error message when rand not defined for a type" begin
-    @test_throws ArgumentError rand(nothing)
-    @test_throws ArgumentError rand(RandomStruct23964())
+    @test_throws MethodError rand(nothing)
+    @test_throws MethodError rand(RandomStruct23964())
 end
 
-@testset "rand(::$RNG, ::UnitRange{$T}" for RNG ∈ (MersenneTwister(), RandomDevice()),
-                                                 T ∈ (Int32, UInt32, Int64, Int128, UInt128)
-    RNG isa MersenneTwister && srand(RNG, rand(UInt128)) # for reproducibility
-    r = T(1):T(108)
-    @test rand(RNG, SamplerRangeFast(r)) ∈ r
+@testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(rand(UInt128)), RandomDevice(), Xoshiro()),
+                                                        T ∈ (Bool, Int8, Int16, Int32, UInt32, Int64, Int128, UInt128)
+    if T === Bool
+        @test rand(RNG, false:true) ∈ (false, true)
+        @test rand(RNG, false:false) === false
+        @test rand(RNG, true:true) === true
+        @test_throws ArgumentError rand(RNG, true:false)
+        continue
+    end
+    for S in (identity, SamplerRangeInt, SamplerRangeFast, SamplerRangeNDL)
+        if T === Int32 && RNG isa MersenneTwister
+            @test minimum([rand(RNG, T(1):T(7^7)) for i = 1:100000]) > 0
+        end
+
+        (S == SamplerRangeNDL || S == identity) && sizeof(T) > 8 && continue
+        r = T(1):T(108)
+        @test rand(RNG, S(r)) ∈ r
+        @test rand(RNG, S(typemin(T):typemax(T))) isa T
+        a, b = sort!(rand(-1000:1000, 2) .% T)
+        @test rand(RNG, S(a:b)) ∈ a:b
+    end
+end
+
+@testset "rand! is allocation-free" begin
+    for A in (Array{Int}(undef, 20), Array{Float64}(undef, 5, 4), BitArray(undef, 20), BitArray(undef, 50, 40))
+        rand!(A)
+        @test @allocated(rand!(A)) == 0
+    end
+end
+
+@testset "gentype for UniformBits" begin
+    @test Random.gentype(Random.UInt52()) == UInt64
+    @test Random.gentype(Random.UInt52(UInt128)) == UInt128
+    @test Random.gentype(Random.UInt104()) == UInt128
+end
+
+@testset "shuffle[!]" begin
+    a = []
+    @test shuffle(a) == a # issue #28727
+    @test shuffle!(a) === a
+    a = rand(Int, 1)
+    @test shuffle(a) == a
+end
+
+@testset "rand(::Tuple)" begin
+    for x in (0x1, 1)
+        @test rand((x,)) == 0x1
+        @test rand((x, 2)) ∈ 1:2
+        @test rand((x, 2, 3)) ∈ 1:3
+        @test rand((x, 2, 3, 4)) ∈ 1:4
+        @test rand((x, 2, 3, 4, 5)) ∈ 1:5
+        @test rand((x, 2, 3, 4, 6)) ∈ 1:6
+    end
+end
+
+@testset "rand(::Type{<:Tuple})" begin
+    @test_throws ArgumentError rand(Tuple)
+    @test rand(Tuple{}) == ()
+    @inferred rand(Tuple{Int32,Int64,Float64})
+    @inferred rand(NTuple{20,Int})
+    @test_throws TypeError rand(Tuple{1:2,3:4})
+end
+
+@testset "GLOBAL_RNG" begin
+    @test VERSION < v"2" # deprecate this in v2 (GLOBAL_RNG must go)
+    local GLOBAL_RNG = Random.GLOBAL_RNG
+    local LOCAL_RNG = Random.default_rng()
+
+    @test Random.seed!(GLOBAL_RNG, nothing) === LOCAL_RNG
+    @test Random.seed!(GLOBAL_RNG, UInt32[0]) === LOCAL_RNG
+    @test Random.seed!(GLOBAL_RNG, 0) === LOCAL_RNG
+    @test Random.seed!(GLOBAL_RNG) === LOCAL_RNG
+
+    xo = Xoshiro()
+    @test copy!(xo, GLOBAL_RNG) === xo
+    @test xo == LOCAL_RNG
+    Random.seed!(xo, 2)
+    @test xo != LOCAL_RNG
+    @test copy!(GLOBAL_RNG, xo) === LOCAL_RNG
+    @test xo == LOCAL_RNG
+    xo2 = copy(GLOBAL_RNG)
+    @test xo2 !== LOCAL_RNG
+    @test xo2 == LOCAL_RNG
+
+    for T in (Random.UInt52Raw{UInt64},
+              Random.UInt104Raw{UInt128},
+              Random.CloseOpen12_64)
+        x = Random.SamplerTrivial(T())
+        @test rand(GLOBAL_RNG, x) === rand(xo, x)
+    end
+    for T in (Int64, UInt64, Int128, UInt128, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)
+        x = Random.SamplerType{T}()
+        @test rand(GLOBAL_RNG, x) === rand(xo, x)
+    end
+
+    A = fill(0.0, 100, 100)
+    B = fill(1.0, 100, 100)
+    vA = view(A, :, :)
+    vB = view(B, :, :)
+    I1 = Random.SamplerTrivial(Random.CloseOpen01{Float64}())
+    I2 = Random.SamplerTrivial(Random.CloseOpen12{Float64}())
+    @test rand!(GLOBAL_RNG, A, I1) === A == rand!(xo, B, I1) === B
+    B = fill!(B, 1.0)
+    @test rand!(GLOBAL_RNG, vA, I1) === vA
+    rand!(xo, vB, I1)
+    @test A == B
+    for T in (Float16, Float32)
+        B = fill!(B, 1.0)
+        @test rand!(GLOBAL_RNG, A, I2) === A == rand!(xo, B, I2) === B
+        B = fill!(B, 1.0)
+        @test rand!(GLOBAL_RNG, A, I1) === A == rand!(xo, B, I1) === B
+    end
+    for T in Base.BitInteger_types
+        x = Random.SamplerType{T}()
+        B = fill!(B, 1.0)
+        @test rand!(GLOBAL_RNG, A, x) === A == rand!(xo, B, x) === B
+    end
+    # issue #33170
+    @test Sampler(GLOBAL_RNG, 2:4, Val(1)) isa SamplerRangeNDL
+    @test Sampler(GLOBAL_RNG, 2:4, Val(Inf)) isa SamplerRangeNDL
+
+    rng = copy(GLOBAL_RNG)
+    # make sure _GLOBAL_RNG and the underlying implementation use the same code path
+    @test rand(rng) == rand(GLOBAL_RNG)
+    @test rand(rng) == rand(GLOBAL_RNG)
+    @test rand(rng) == rand(GLOBAL_RNG)
+    @test rand(rng) == rand(GLOBAL_RNG)
+end
+
+@testset "RNGs broadcast as scalars: T" for T in (MersenneTwister, RandomDevice)
+    @test length.(rand.(T(), 1:3)) == 1:3
+end
+
+@testset "generated scalar integers do not overlap" begin
+    m = MersenneTwister()
+    xs = reinterpret(UInt64, m.ints)
+    x = rand(m, UInt128)  # m.idxI % 16 == 0
+    @test x % UInt64 == xs[end-1]
+    x = rand(m, UInt64)
+    @test x == xs[end-2]
+    x = rand(m, UInt64)
+    @test x == xs[end-3]
+    x = rand(m, UInt64)
+    @test x == xs[end-4]
+    x = rand(m, UInt128) # m.idxI % 16 == 8
+    @test (x >> 64) % UInt64 == xs[end-6]
+    @test x % UInt64 == xs[end-7]
+    x = rand(m, UInt64)
+    @test x == xs[end-8]
+    @test x != xs[end-7]
+
+    s = Set{UInt64}()
+    n = 0
+    for _=1:2000
+        x = rand(m, rand((UInt64, UInt128, Int64, Int128)))
+        if sizeof(x) == 8
+            push!(s, x % UInt64)
+            n += 1
+        else
+            push!(s, x % UInt64, (x >> 64) % UInt64)
+            n += 2
+        end
+    end
+    @test length(s) == n
+end
+
+@testset "show" begin
+    @testset "MersenneTwister" begin
+        m = MersenneTwister(123)
+        @test string(m) == "MersenneTwister(123)"
+        Random.jump!(m, 2*big(10)^20)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 0))"
+        @test m == MersenneTwister(123, (200000000000000000000, 0))
+        rand(m)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 1002, 0, 1))"
+
+        @test m == MersenneTwister(123, (200000000000000000000, 1002, 0, 1))
+        rand(m, Int64)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))"
+        @test m == MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))
+
+        m = MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)
+        @test string(m) == "MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)"
+        rand(m, Int64)
+        @test string(m) == "MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))"
+        @test m == MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))
+
+        m = MersenneTwister(0); rand(m, Int64); rand(m)
+        @test string(m) == "MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))"
+        @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
+
+        # negative seeds
+        Random.seed!(m, -3)
+        @test string(m) == "MersenneTwister(-3)"
+        Random.seed!(m, typemin(Int8))
+        @test string(m) == "MersenneTwister(-128)"
+
+        # string seeds
+        Random.seed!(m, "seed 1")
+        @test string(m) == "MersenneTwister(\"seed 1\")"
+        x = rand(m)
+        @test x == rand(MersenneTwister("seed 1"))
+        @test string(m) == """MersenneTwister("seed 1", (0, 1002, 0, 1))"""
+        # test that MersenneTwister's fancy constructors accept string seeds
+        @test MersenneTwister("seed 1", (0, 1002, 0, 1)) == m
+    end
+
+    @testset "RandomDevice" begin
+        @test string(RandomDevice()) == "$RandomDevice()"
+    end
+end
+
+@testset "rand[!] for BigInt/BigFloat" begin
+    rng = MersenneTwister()
+    s = Random.SamplerBigInt(MersenneTwister, 1:big(9))
+    x = rand(s)
+    @test x isa BigInt
+    y = rand!(rng, x, s)
+    @test y === x
+    @test x in 1:9
+
+    for t = BigInt[0, 10, big(2)^100]
+        s = Random.Sampler(rng, t:t) # s.nlimbs == 0
+        @test rand(rng, s) == t
+        @test x === rand!(rng, x, s) == t
+
+        s = Random.Sampler(rng, big(-1):t) # s.nlimbs != 0
+        @test rand(rng, s) ∈ -1:t
+        @test x === rand!(rng, x, s) ∈ -1:t
+
+    end
+
+    s = Random.Sampler(MersenneTwister, Random.CloseOpen01(BigFloat))
+    x = rand(s)
+    @test x isa BigFloat
+    y = rand!(rng, x, s)
+    @test y === x
+    @test 0 <= x < 1
+    s = Random.Sampler(MersenneTwister, Random.CloseOpen12(BigFloat))
+    y = rand!(rng, x, s)
+    @test y === x
+    @test 1 <= x < 2
+
+    old_prec = precision(BigFloat)
+    setprecision(100) do
+        x = rand(s) # should use precision of s
+        @test precision(x) == old_prec
+        x = BigFloat()
+        @test_throws ArgumentError rand!(rng, x, s) # incompatible precision
+    end
+    s = setprecision(100) do
+        Random.Sampler(MersenneTwister, Random.CloseOpen01(BigFloat))
+    end
+    x = rand(s) # should use precision of s
+    @test precision(x) == 100
+    x = BigFloat()
+    @test_throws ArgumentError rand!(rng, x, s) # incompatible precision
+end
+
+@testset "shuffle! for BitArray" begin
+    # Test that shuffle! is uniformly random on BitArrays
+    rng = MersenneTwister(123)
+    a = (reshape(1:(4*5), 4, 5) .<= 2) # 4x5 BitMatrix whose first two elements are true, rest are false
+    m = sum(1:50_000) do _
+        shuffle!(rng, a)
+    end/50_000 # mean result of shuffle!-ing a 50_000 times. If the shuffle! is uniform, then each index has a
+    # 10% chance of having a true in it, so each value should converge to 0.1.
+    @test minimum(m) >= 0.094
+    @test maximum(m) <= 0.106
+end
+
+# issue #42752
+# test that running finalizers that launch tasks doesn't change RNG stream
+function f42752(do_gc::Bool, cell = (()->Any[[]])())
+    a = rand()
+    if do_gc
+        finalizer(cell[1]) do _
+            @async nothing
+        end
+        cell[1] = nothing
+        GC.gc()
+    end
+    b = rand()
+    (a, b)
+end
+guardseed() do
+    for _ in 1:4
+        Random.seed!(1)
+        val = f42752(false)
+        Random.seed!(1)
+        @test f42752(true) === val
+    end
+end
+
+@testset "TaskLocalRNG: stream collision smoke test" begin
+    # spawn a trinary tree of tasks:
+    # - spawn three recursive child tasks in each
+    # - generate a random UInt64 in each before, after and between
+    # - collect and count all the generated random values
+    # these should all be distinct across all tasks
+    function gen(d)
+        r = rand(UInt64)
+        vals = [r]
+        if d ≥ 0
+            append!(vals, gent(d - 1))
+            isodd(r) && append!(vals, gent(d - 1))
+            push!(vals, rand(UInt64))
+            iseven(r) && append!(vals, gent(d - 1))
+        end
+        push!(vals, rand(UInt64))
+    end
+    gent(d) = fetch(@async gen(d))
+    seeds = rand(RandomDevice(), UInt64, 5)
+    for seed in seeds
+        Random.seed!(seed)
+        vals = gen(6)
+        @test allunique(vals)
+    end
+end
+
+@testset "TaskLocalRNG: child doesn't affect parent" begin
+    seeds = rand(RandomDevice(), UInt64, 5)
+    for seed in seeds
+        Random.seed!(seed)
+        x = rand(UInt64)
+        y = rand(UInt64)
+        n = 3
+        for i = 1:n
+            Random.seed!(seed)
+            @sync for j = 0:i
+                @async rand(UInt64)
+            end
+            @test x == rand(UInt64)
+            @sync for j = 0:(n-i)
+                @async rand(UInt64)
+            end
+            @test y == rand(UInt64)
+        end
+    end
+end
+
+@testset "TaskLocalRNG: copy and copy! handle the splitmix state" begin
+    seeds = rand(RandomDevice(), UInt64, 5)
+    for seed in seeds
+        Random.seed!(seed)
+        rng1 = copy(TaskLocalRNG())
+        x = fetch(@async rand(UInt64))
+        rng2 = copy(TaskLocalRNG())
+        y = fetch(@async rand(UInt64))
+        rng3 = copy(TaskLocalRNG())
+        @test x != y
+        @test rng1 != rng2
+        Random.seed!(seed)
+        @test TaskLocalRNG() == rng1
+        @test x == fetch(@async rand(UInt64))
+        @test TaskLocalRNG() == rng2
+        # this should be a no-op:
+        copy!(TaskLocalRNG(), copy(TaskLocalRNG()))
+        @test TaskLocalRNG() == rng2
+        @test y == fetch(@async rand(UInt64))
+        @test TaskLocalRNG() == rng3
+    end
+end
+
+# Xoshiro jumps
+@testset "Xoshiro jump, basic" begin
+    x1 = Xoshiro(1)
+    x2 = Xoshiro(1)
+
+    @test x1 === jump_128!(jump_128!(x1))
+    @test x2 === jump_128!(x2, 2)
+    @test x1 == x2
+
+    xo1 = Xoshiro(0xfff0241072ddab67, 0xc53bc12f4c3f0b4e, 0x56d451780b2dd4ba, 0x50a4aa153d208dd8)
+    @test rand(jump_128(xo1), UInt64) == 0x87c158da8c35824d
+    @test rand(jump_192(xo1), UInt64) == 0xcaecd5afdd0847d5
+
+    @test rand(jump_128(xo1, 98765), UInt64) == 0xcbec1d5053142608
+    @test rand(jump_192(xo1, 98765), UInt64) == 0x3b97a94c44d66216
+
+    # Throws where appropriate
+    @test_throws DomainError jump_128(Xoshiro(1), -1)
+    @test_throws DomainError jump_128!(Xoshiro(1), -1)
+    @test_throws DomainError jump_192(Xoshiro(1), -1)
+    @test_throws DomainError jump_192!(Xoshiro(1), -1)
+
+    # clean copy when non-mut and no state advance
+    x = Xoshiro(1)
+    @test jump_128(x, 0) == x
+    @test jump_128(x, 0) !== x
+    @test jump_192(x, 0) == x
+    @test jump_192(x, 0) !== x
+
+    y = Xoshiro(1)
+    @test jump_128!(x, 0) == y
+    @test jump_192!(x, 0) == y
+end
+
+@testset "Xoshiro jump_128, various seeds" begin
+    for seed in (0, 1, 0xa0a3f09d0cecd878, 0x7ff8)
+        x = Xoshiro(seed)
+        @test jump_128(jump_128(jump_128(x))) == jump_128(x, 3)
+        x1 = Xoshiro(seed)
+        @test jump_128!(jump_128!(jump_128!(x1))) == jump_128(x, 3)
+        jump_128!(x1, 997)
+        x2 = jump_128!(Xoshiro(seed), 1000)
+        for T ∈ (Float64, UInt64, Int, Char, Bool)
+            @test rand(x1, T, 5) == rand(x2, T, 5)
+            @test rand(jump_128!(x1), T, 5) == rand(jump_128!(x2), T, 5)
+        end
+    end
+end
+
+@testset "Xoshiro jump_192, various seeds" begin
+    for seed in (0, 1, 0xa0a3f09d0cecd878, 0x7ff8)
+        x = Xoshiro(seed)
+        @test jump_192(jump_192(jump_192(x))) == jump_192(x, 3)
+        x1 = Xoshiro(seed)
+        @test jump_192!(jump_192!(jump_192!(x1))) == jump_192(x, 3)
+        jump_192!(x1, 997)
+        x2 = jump_192!(Xoshiro(seed), 1000)
+        for T ∈ (Float64, UInt64, Int, Char, Bool)
+            @test rand(x1, T, 5) == rand(x2, T, 5)
+            @test rand(jump_192!(x1), T, 5) == rand(jump_192!(x2), T, 5)
+        end
+    end
+end
+
+@testset "seed! and hash_seed" begin
+    # Test that:
+    # 1) if n == m, then hash_seed(n) == hash_seed(m)
+    # 2) if n != m, then hash_seed(n) != hash_seed(m)
+    rngs = (Xoshiro(0), TaskLocalRNG(), MersenneTwister(0))
+    seeds = Any[]
+    for T = Base.BitInteger_types
+        append!(seeds, rand(T, 8))
+        push!(seeds, typemin(T), typemin(T) + T(1), typemin(T) + T(2),
+              typemax(T), typemax(T) - T(1), typemax(T) - T(2))
+        T <: Signed && push!(seeds, T(0), T(1), T(2), T(-1), T(-2))
+    end
+
+    vseeds = Dict{Vector{UInt8}, BigInt}()
+    for seed = seeds
+        bigseed = big(seed)
+        vseed = Random.hash_seed(bigseed)
+        # test property 1) above
+        @test Random.hash_seed(seed) == vseed
+        # test property 2) above
+        @test bigseed == get!(vseeds, vseed, bigseed)
+        # test that the property 1) is actually inherited by `seed!`
+        for rng = rngs
+            rng2 = copy(Random.seed!(rng, seed))
+            Random.seed!(rng, bigseed)
+            @test rng == rng2
+        end
+    end
+
+    seed32 = rand(UInt32, rand(1:9))
+    hash32 = Random.hash_seed(seed32)
+    @test Random.hash_seed(map(UInt64, seed32)) == hash32
+    @test hash32 ∉ keys(vseeds)
+
+    seed_str = randstring()
+    seed_gstr = GenericString(seed_str)
+    @test Random.hash_seed(seed_str) == Random.hash_seed(seed_gstr)
+    string_seeds = Set{Vector{UInt8}}()
+    for ch = 'A':'z'
+        vseed = Random.hash_seed(string(ch))
+        @test vseed ∉ keys(vseeds)
+        @test vseed ∉ string_seeds
+        push!(string_seeds, vseed)
+    end
+end
+
+@testset "rand(::Type{<:Pair})" begin
+    @test rand(Pair{Int, Int}) isa Pair{Int, Int}
+    @test rand(Pair{Int, Float64}) isa Pair{Int, Float64}
+    @test rand(Pair{Int, Float64}, 3) isa Array{Pair{Int, Float64}}
+
+    # test that making an array out of a sampler works
+    # (i.e. that gentype(sp) is correct)
+    sp = Random.Sampler(AbstractRNG, Pair{Bool, Char})
+    xs = rand(sp, 3)
+    @test xs isa Vector{Pair{Bool, Char}}
+    @test length(xs) == 3
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Random))
 end
