@@ -153,7 +153,7 @@ lastindex(s::AnnotatedString) = lastindex(s.string)
 function getindex(s::AnnotatedString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
-        AnnotatedChar(s.string[i], map(last, annotations(s, i)))
+        AnnotatedChar(s.string[i], annotations(s, i))
     else
         string_index_err(s, i)
     end
@@ -354,15 +354,11 @@ annotate!(c::AnnotatedChar, @nospecialize(labelval::Pair{Symbol, <:Any})) =
     (push!(c.annotations, labelval); c)
 
 """
-    annotations(str::Union{AnnotatedString, SubString{AnnotatedString}},
-                [position::Union{Integer, UnitRange}]) ->
-        Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}
+    annotations(str::AnnotatedString, [position::Union{Integer, UnitRange}])
+    annotations(str::SubString{AnnotatedString}, [position::Union{Integer, UnitRange}])
 
 Get all annotations that apply to `str`. Should `position` be provided, only
 annotations that overlap with `position` will be returned.
-
-Annotations are provided together with the regions they apply to, in the form of
-a vector of region–annotation tuples.
 
 See also: `annotate!`.
 """
@@ -373,22 +369,22 @@ annotations(s::SubString{<:AnnotatedString}) =
 
 function annotations(s::AnnotatedString, pos::UnitRange{<:Integer})
     # TODO optimise
-    filter(label -> !isempty(intersect(pos, first(label))),
-           s.annotations)
+    annots = filter(label -> !isempty(intersect(pos, first(label))),
+                    s.annotations)
+    last.(annots)
 end
 
 annotations(s::AnnotatedString, pos::Integer) = annotations(s, pos:pos)
 
 annotations(s::SubString{<:AnnotatedString}, pos::Integer) =
     annotations(s.string, s.offset + pos)
-
 annotations(s::SubString{<:AnnotatedString}, pos::UnitRange{<:Integer}) =
     annotations(s.string, first(pos)+s.offset:last(pos)+s.offset)
 
 """
-    annotations(chr::AnnotatedChar) -> Vector{Pair{Symbol, Any}}
+    annotations(chr::AnnotatedChar)
 
-Get all annotations of `chr`, in the form of a vector of annotation pairs.
+Get all annotations of `chr`.
 """
 annotations(c::AnnotatedChar) = c.annotations
 
