@@ -1,6 +1,10 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#include "gc.h"
+#ifdef THIRD_PARY_GC
+#error "This file should not be compiled with MMTK GC"
+#endif
+
+#include "gc-stock.h"
 #include "julia.h"
 #include <inttypes.h>
 #include <stddef.h>

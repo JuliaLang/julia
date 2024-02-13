@@ -1,13 +1,17 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifdef MMTK_GC
+#error "This file should not be compiled when using MMTK GC."
+#endif
+
 /*
   allocation and garbage collection
   . non-moving, precise mark and sweep collector
   . pool-allocates small objects, keeps big objects on a simple list
 */
 
-#ifndef JL_GC_H
-#define JL_GC_H
+#ifndef JL_GC_STOCK_H
+#define JL_GC_STOCK_H
 
 #include <stddef.h>
 #include <stdint.h>
@@ -26,6 +30,7 @@
 #endif
 #endif
 #include "julia_assert.h"
+#include "gc-common.h"
 #include "gc-heap-snapshot.h"
 #include "gc-alloc-profiler.h"
 
@@ -40,6 +45,44 @@ extern "C" {
 #endif
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2)
 #define GC_PAGE_OFFSET (JL_HEAP_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_HEAP_ALIGNMENT))
+
+// =======
+// allocation
+// =======
+
+struct _jl_gc_pagemeta_t;
+
+jl_taggedvalue_t *gc_reset_page(jl_ptls_t ptls2, const jl_gc_pool_t *p, struct _jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT;
+NOINLINE jl_taggedvalue_t *gc_add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz);
+
+// =======
+//  helpers for conservative GC support
+// =======
+
+extern _Atomic(int) support_conservative_marking;
+
+// =======
+//  mark phase
+// =======
+
+int gc_try_setmark_tag(jl_taggedvalue_t *o, uint8_t mark_mode) JL_NOTSAFEPOINT;
+void gc_ptr_queue_push(jl_gc_markqueue_t *q, jl_value_t *p) JL_NOTSAFEPOINT;
+void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t **obj_begin,
+                      jl_value_t **obj_end, uint32_t step, uintptr_t nptr) JL_NOTSAFEPOINT;
+
+// =======
+//  Permanent allocation
+// =======
+
+// Perm gen allocator
+// 2M pool
+#define GC_PERM_POOL_SIZE (2 * 1024 * 1024)
+// 20k limit for pool allocation. At most 1% fragmentation
+#define GC_PERM_POOL_LIMIT (20 * 1024)
+
+void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned offset) JL_NOTSAFEPOINT;
+void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset);
 
 #define jl_malloc_tag ((void*)0xdeadaa01)
 #define jl_singleton_tag ((void*)0xdeadaa02)
@@ -61,34 +104,6 @@ typedef struct {
     jl_alloc_num_t other;
     jl_alloc_num_t print;
 } jl_gc_debug_env_t;
-
-// This struct must be kept in sync with the Julia type of the same name in base/timing.jl
-typedef struct {
-    int64_t     allocd;
-    int64_t     deferred_alloc;
-    int64_t     freed;
-    uint64_t    malloc;
-    uint64_t    realloc;
-    uint64_t    poolalloc;
-    uint64_t    bigalloc;
-    uint64_t    freecall;
-    uint64_t    total_time;
-    uint64_t    total_allocd;
-    size_t      interval;
-    int         pause;
-    int         full_sweep;
-    uint64_t    max_pause;
-    uint64_t    max_memory;
-    uint64_t    time_to_safepoint;
-    uint64_t    max_time_to_safepoint;
-    uint64_t    total_time_to_safepoint;
-    uint64_t    sweep_time;
-    uint64_t    mark_time;
-    uint64_t    total_sweep_time;
-    uint64_t    total_mark_time;
-    uint64_t    last_full_sweep;
-    uint64_t    last_incremental_sweep;
-} jl_gc_num_t;
 
 // Array chunks (work items representing suffixes of
 // large arrays of pointers left to be marked)
@@ -321,13 +336,6 @@ typedef struct {
     pagetable1_t *meta1[REGION2_PG_COUNT];
 } pagetable_t;
 
-typedef struct {
-    _Atomic(size_t) bytes_mapped;
-    _Atomic(size_t) bytes_resident;
-    _Atomic(size_t) heap_size;
-    _Atomic(size_t) heap_target;
-} gc_heapstatus_t;
-
 #define GC_PAGE_UNMAPPED        0
 #define GC_PAGE_ALLOCATED       1
 #define GC_PAGE_LAZILY_FREED    2
@@ -437,16 +445,6 @@ STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 }
 #endif
 
-extern jl_gc_num_t gc_num;
-extern bigval_t *big_objects_marked;
-extern arraylist_t finalizer_list_marked;
-extern arraylist_t to_finalize;
-extern int64_t buffered_pages;
-extern int gc_first_tid;
-extern int gc_n_threads;
-extern jl_ptls_t* gc_all_tls_states;
-extern gc_heapstatus_t gc_heap_stats;
-
 STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {
     return container_of(o, bigval_t, header);
@@ -477,16 +475,6 @@ STATIC_INLINE uintptr_t gc_set_bits(uintptr_t tag, int bits) JL_NOTSAFEPOINT
     return (tag & ~(uintptr_t)3) | bits;
 }
 
-STATIC_INLINE uintptr_t gc_ptr_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT
-{
-    return ((uintptr_t)v) & mask;
-}
-
-STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask) JL_NOTSAFEPOINT
-{
-    return (void*)(((uintptr_t)v) & ~mask);
-}
-
 NOINLINE uintptr_t gc_get_stack_ptr(void);
 
 STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr) JL_NOTSAFEPOINT
@@ -506,9 +494,32 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
     *list = hdr;
 }
 
+extern bigval_t *big_objects_marked;
+extern arraylist_t finalizer_list_marked;
+extern arraylist_t to_finalize;
+extern int64_t buffered_pages;
+extern int gc_first_tid;
+extern int gc_n_threads;
+extern jl_ptls_t* gc_all_tls_states;
+
+extern int under_pressure;
+
+extern jl_mutex_t finalizers_lock;
+extern uv_mutex_t gc_cache_lock;
+extern jl_mutex_t heapsnapshot_lock;
+
+extern size_t last_long_collect_interval;
+extern const size_t default_collect_interval;
+#ifdef _P64
+extern size_t total_mem;
+#endif
+
+extern int64_t t_start;
+
 extern uv_mutex_t gc_threads_lock;
 extern uv_cond_t gc_threads_cond;
 extern uv_sem_t gc_sweep_assists_needed;
+extern uv_mutex_t gc_queue_observer_lock;
 extern _Atomic(int) gc_n_threads_marking;
 extern _Atomic(int) gc_n_threads_sweeping;
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
