@@ -35,7 +35,6 @@ export BINDIR,
        isexecutable,
        isreadable,
        iswriteable,
-       exists,
        username,
        which
 
@@ -598,19 +597,6 @@ function iswriteable(path::String)
     return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, W_OK) == 0
 end
 iswriteable(path::AbstractString) = iswriteable(String(path))
-
-"""
-    Sys.exists(path::String)
-
-Return `true` if the given `path` exists.
-"""
-function exists(path::String)
-    # We use `access()` and `F_OK` to determine if a given path is
-    # executable by the current user.  `F_OK` comes from `unistd.h`.
-    F_OK = 0x00
-    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, F_OK) == 0
-end
-exists(path::AbstractString) = exists(String(path))
 
 """
     Sys.which(program_name::String)
