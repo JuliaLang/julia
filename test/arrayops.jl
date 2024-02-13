@@ -2612,7 +2612,7 @@ end
 end
 
 @testset "sign, conj[!], ~" begin
-    local A, B, C
+    local A, B, C, D, E
     A = [-10,0,3]
     B = [-10.0,0.0,3.0]
     C = [1,im,0]
@@ -2629,6 +2629,11 @@ end
     @test typeof(conj(A)) == Vector{Int}
     @test typeof(conj(B)) == Vector{Float64}
     @test typeof(conj(C)) == Vector{Complex{Int}}
+    D = [C copy(C); copy(C) copy(C)]
+    @test conj(D) == conj!(copy(D))
+    E = [D, copy(D)]
+    @test conj(E) == conj!(copy(E))
+    @test (@allocations conj!(E)) == 0
 
     @test .~A == [9,-1,-4]
     @test typeof(.~A) == Vector{Int}

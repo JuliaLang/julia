@@ -73,7 +73,10 @@ check-unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-checked
 
 ## LLVM libunwind ##
 
-LLVMUNWIND_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=MinSizeRel -DLIBUNWIND_ENABLE_PEDANTIC=OFF -DLLVM_CONFIG_PATH=$(build_depsbindir)/llvm-config
+LLVMUNWIND_OPTS := $(CMAKE_COMMON) \
+	-DCMAKE_BUILD_TYPE=MinSizeRel \
+	-DLIBUNWIND_ENABLE_PEDANTIC=OFF \
+	-DLLVM_PATH=$(SRCCACHE)/$(LLVM_SRC_DIR)/llvm
 
 $(SRCCACHE)/llvmunwind-$(LLVMUNWIND_VER).tar.xz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVMUNWIND_VER)/libunwind-$(LLVMUNWIND_VER).src.tar.xz

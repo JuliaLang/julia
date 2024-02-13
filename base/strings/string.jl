@@ -63,8 +63,27 @@ by [`take!`](@ref) on a writable [`IOBuffer`](@ref) and by calls to
 In other cases, `Vector{UInt8}` data may be copied, but `v` is truncated anyway
 to guarantee consistent behavior.
 """
-String(v::AbstractVector{UInt8}) = String(copyto!(StringVector(length(v)), v))
-String(v::Vector{UInt8}) = ccall(:jl_array_to_string, Ref{String}, (Any,), v)
+String(v::AbstractVector{UInt8}) = String(copyto!(StringMemory(length(v)), v))
+function String(v::Memory{UInt8})
+    len = length(v)
+    len == 0 && return ""
+    return ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), v, len)
+end
+function String(v::Vector{UInt8})
+    #return ccall(:jl_array_to_string, Ref{String}, (Any,), v)
+    len = length(v)
+    len == 0 && return ""
+    ref = v.ref
+    if ref.ptr_or_offset == ref.mem.ptr
+        str = ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), ref.mem, len)
+    else
+        str = ccall(:jl_pchar_to_string, Ref{String}, (Ptr{UInt8}, Int), ref, len)
+    end
+    # optimized empty!(v); sizehint!(v, 0) calls
+    setfield!(v, :size, (0,))
+    setfield!(v, :ref, MemoryRef(Memory{UInt8}()))
+    return str
+end
 
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
@@ -97,8 +116,8 @@ Create a new `String` from an existing `AbstractString`.
 String(s::AbstractString) = print_to_string(s)
 @assume_effects :total String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
-unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
-unsafe_wrap(::Type{Vector{UInt8}}, s::FastContiguousSubArray{UInt8,1,Vector{UInt8}}) = unsafe_wrap(Vector{UInt8}, pointer(s), size(s))
+unsafe_wrap(::Type{Memory{UInt8}}, s::String) = ccall(:jl_string_to_genericmemory, Ref{Memory{UInt8}}, (Any,), s)
+unsafe_wrap(::Type{Vector{UInt8}}, s::String) = wrap(Array, unsafe_wrap(Memory{UInt8}, s))
 
 Vector{UInt8}(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
 Vector{UInt8}(s::String) = Vector{UInt8}(codeunits(s))
