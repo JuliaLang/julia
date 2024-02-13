@@ -205,7 +205,7 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             if bytes != 0 || allocs != 0 || gctime > 0
                 print(io, ", ")
             end
-            print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
+            print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation cputime")
         end
         if recompile_time > 0
             perc = Float64(100 * recompile_time / compile_time)
@@ -254,7 +254,7 @@ end
 
 A macro to execute an expression, printing the time it took to execute, the number of
 allocations, and the total number of bytes its execution caused to be allocated, before
-returning the value of the expression. Any time spent garbage collecting (gc), compiling
+returning the value of the expression. Any cputime spent garbage collecting (gc), compiling
 new code, or recompiling invalidated code is shown as a percentage. Any lock conflicts
 where a [`ReentrantLock`](@ref) had to wait are shown as a count.
 
@@ -275,7 +275,7 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
 !!! compat "Julia 1.8"
     The option to add a description was introduced in Julia 1.8.
 
-    Recompilation time being shown separately from compilation time was introduced in Julia 1.8
+    Recompilation cputime being shown separately from compilation cputime was introduced in Julia 1.8
 
 !!! compat "Julia 1.11"
     The reporting of any lock conflicts was added in Julia 1.11.
@@ -284,7 +284,7 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
 julia> x = rand(10,10);
 
 julia> @time x * x;
-  0.606588 seconds (2.19 M allocations: 116.555 MiB, 3.75% gc time, 99.94% compilation time)
+  0.606588 seconds (2.19 M allocations: 116.555 MiB, 3.75% gc time, 99.94% compilation cputime)
 
 julia> @time x * x;
   0.000009 seconds (1 allocation: 896 bytes)
@@ -362,7 +362,7 @@ See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
 julia> x = rand(10,10);
 
 julia> @timev x * x;
-  0.546770 seconds (2.20 M allocations: 116.632 MiB, 4.23% gc time, 99.94% compilation time)
+  0.546770 seconds (2.20 M allocations: 116.632 MiB, 4.23% gc time, 99.94% compilation cputime)
 elapsed time (ns): 546769547
 gc time (ns):      23115606
 bytes allocated:   122297811
@@ -524,7 +524,7 @@ end
 
 A macro to execute an expression, and return the value of the expression, elapsed time in seconds,
 total bytes allocated, garbage collection time, an object with various memory allocation
-counters, compilation time in seconds, and recompilation time in seconds. Any lock conflicts
+counters, compilation cputime in seconds, and recompilation cputime in seconds. Any lock conflicts
 where a [`ReentrantLock`](@ref) had to wait are shown as a count.
 
 In some cases the system will look inside the `@timed` expression and compile some of the
