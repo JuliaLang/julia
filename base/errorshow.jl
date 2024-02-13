@@ -1036,10 +1036,11 @@ function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
             print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
             printstyled(io, "a[1, 2]", color=:cyan)
             print(io, " rather than a[1][2]")
-        else arg_types[1] isa Type
-            print(io, "\nYou attempted to index the Type $T, rather than an instance of the type. Make sure you create the type using its constructor: ")
-            printstyled(io, "d = $T()", color=:cyan)
-            print(io, " rather than d = $T")
+        else T isa Type
+            Tx = T.parameters[1]
+            print(io, "\nYou attempted to index the type $Tx, rather than an instance of the type. Make sure you create the type using its constructor: ")
+            printstyled(io, "d = $Tx([...])", color=:cyan)
+            print(io, " rather than d = $Tx")
         end
     end
 end
