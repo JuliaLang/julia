@@ -18,14 +18,17 @@ function, and primitive function, before turning into the desired result (hopefu
         Abstract Syntax Tree The AST is the digital representation of the code structure. In this form
         the code has been tokenized for meaning so that it is more suitable for manipulation and execution.
 
+
+![Diagram of the compiler flow](./img/compiler_diagram.png)
+
 ## Julia Execution
 
 The 10,000 foot view of the whole process is as follows:
 
 1. The user starts `julia`.
-2. The C function `main()` from `ui/repl.c` gets called. This function processes the command line
+2. The C function `main()` from `cli/loader_exe.c` gets called. This function processes the command line
    arguments, filling in the `jl_options` struct and setting the variable `ARGS`. It then initializes
-   Julia (by calling [`julia_init` in `task.c`](https://github.com/JuliaLang/julia/blob/master/src/task.c),
+   Julia (by calling [`julia_init` in `init.c`](https://github.com/JuliaLang/julia/blob/master/src/init.c),
    which may load a previously compiled [sysimg](@ref dev-sysimg)). Finally, it passes off control to Julia
    by calling [`Base._start()`](https://github.com/JuliaLang/julia/blob/master/base/client.jl).
 3. When `_start()` takes over control, the subsequent sequence of commands depends on the command
@@ -43,7 +46,7 @@ The 10,000 foot view of the whole process is as follows:
    interpreter.
 9. `jl_toplevel_eval_flex()` then [expands](@ref dev-macro-expansion) the code to eliminate any macros and to "lower"
    the AST to make it simpler to execute.
-10. `jl_toplevel_eval_flex()` then uses some simple heuristics to decide whether to JIT compiler the
+10. `jl_toplevel_eval_flex()` then uses some simple heuristics to decide whether to JIT compile the
     AST or to interpret it directly.
 11. The bulk of the work to interpret code is handled by [`eval` in `interpreter.c`](https://github.com/JuliaLang/julia/blob/master/src/interpreter.c).
 12. If instead, the code is compiled, the bulk of the work is handled by `codegen.cpp`. Whenever a
@@ -71,6 +74,14 @@ which handles tokenizing Julia code and turning it into an AST, and [`julia-synt
 which handles transforming complex AST representations into simpler, "lowered" AST representations
 which are more suitable for analysis and execution.
 
+If you want to test the parser without re-building Julia in its entirety, you can run the frontend
+on its own as follows:
+
+    $ cd src
+    $ flisp/flisp
+    > (load "jlfrontend.scm")
+    > (jl-parse-file "<filename>")
+
 ## [Macro Expansion](@id dev-macro-expansion)
 
 When [`eval()`](@ref) encounters a macro, it expands that AST node before attempting to evaluate
@@ -83,7 +94,7 @@ although it can also be invoked directly by a call to [`macroexpand()`](@ref)/`j
 
 ## [Type Inference](@id dev-type-inference)
 
-Type inference is implemented in Julia by [`typeinf()` in `compiler/typeinf.jl`](https://github.com/JuliaLang/julia/blob/master/base/compiler/typeinf.jl).
+Type inference is implemented in Julia by [`typeinf()` in `compiler/typeinfer.jl`](https://github.com/JuliaLang/julia/blob/master/base/compiler/typeinfer.jl).
 Type inference is the process of examining a Julia function and determining bounds for the types
 of each of its variables, as well as bounds on the type of the return value from the function.
 This enables many future optimizations, such as unboxing of known immutable values, and compile-time

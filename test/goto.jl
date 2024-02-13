@@ -87,7 +87,7 @@ end
 @test goto_test5_3()
 
 
-@test Expr(:error, "goto from a try/finally block is not permitted") ==
+@test Expr(:error, "goto from a try/finally block is not permitted around $(@__FILE__):$(3 + @__LINE__)") ==
     Meta.lower(@__MODULE__, quote
         function goto_test6()
             try
@@ -154,3 +154,17 @@ function f15561()
     @label crater
 end
 @test f15561() === nothing
+
+# issue #28077
+function foo28077()
+    s = 0
+    i = 0
+    @label L
+    i += 1
+    s += i
+    if i < 10
+        @goto L
+    end
+    return s
+end
+@test foo28077() == 55

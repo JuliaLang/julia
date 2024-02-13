@@ -1,0 +1,4 @@
+NETWORKOPTIONS_BRANCH = master
+NETWORKOPTIONS_SHA1 = aab83e5dd900c874826d430e25158dff43559d78
+NETWORKOPTIONS_GIT_URL := https://github.com/JuliaLang/NetworkOptions.jl.git
+NETWORKOPTIONS_TAR_URL = https://api.github.com/repos/JuliaLang/NetworkOptions.jl/tarball/$1

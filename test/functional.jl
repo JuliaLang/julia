@@ -52,9 +52,6 @@ end
 
 # foreach
 let a = []
-    foreach(()->push!(a,0))
-    @test a == [0]
-    a = []
     foreach(x->push!(a,x), [1,5,10])
     @test a == [1,5,10]
     a = []
@@ -107,7 +104,7 @@ end
 # generators and guards
 let gen = (x for x in 1:10)
     @test gen.iter == 1:10
-    @test gen.f(first(1:10)) == next(gen, start(gen))[1]
+    @test gen.f(first(1:10)) == iterate(gen)[1]
     for (a,b) in zip(1:10,gen)
         @test a == b
     end
@@ -132,6 +129,25 @@ end
 let gen = ((x,y) for x in 1:10, y in 1:10 if x % 2 == 0 && y % 2 == 0),
     gen2 = Iterators.filter(x->x[1] % 2 == 0 && x[2] % 2 == 0, (x,y) for x in 1:10, y in 1:10)
     @test collect(gen) == collect(gen2)
+end
+
+# keys of a generator for find* and arg* (see #34678)
+@test keys(x^2 for x in -1:0.5:1) == 1:5
+@test findall(!iszero, x^2 for x in -1:0.5:1) == [1, 2, 4, 5]
+@test argmin(x^2 for x in -1:0.5:1) == 3
+
+# findall return type, see #45495
+let gen = (i for i in 1:3);
+    @test @inferred(findall(x -> true, gen))::Vector{Int} == [1, 2, 3]
+    @test @inferred(findall(x -> false, gen))::Vector{Int} == Int[]
+    @test @inferred(findall(x -> x < 0, gen))::Vector{Int} == Int[]
+end
+let d = Dict()
+    d[7]=2
+    d[3]=6
+    @test @inferred(sort(findall(x -> true, d)))::Vector{Int} == [3, 7]
+    @test @inferred(sort(findall(x -> false, d)))::Vector{Any} == []
+    @test @inferred(sort(findall(x -> x < 0, d)))::Vector{Any} == []
 end
 
 # inference on vararg generator of a type (see #22907 comments)
@@ -200,4 +216,22 @@ end
     @test res isa Vector{Union{Bool, T}}
     res = map(f, y)
     @test res isa Vector{Union{Bool, T}}
+end
+
+@testset "inference of collect with unstable eltype" begin
+    @test Core.Compiler.return_type(collect, Tuple{typeof(2x for x in Real[])}) <: Vector
+    @test Core.Compiler.return_type(collect, Tuple{typeof(x+y for x in Real[] for y in Real[])}) <: Vector
+    @test Core.Compiler.return_type(collect, Tuple{typeof(x+y for x in Real[], y in Real[])}) <: Matrix
+    @test Core.Compiler.return_type(collect, Tuple{typeof(x for x in Union{Bool,String}[])}) <: Array
+end
+
+let x = rand(2,2)
+    (:)(a,b) = x
+    @test Float64[ i for i = 1:2 ] == x
+    @test Float64[ i+j for i = 1:2, j = 1:2 ] == cat(cat(x[1].+x, x[2].+x; dims=3),
+                                                     cat(x[3].+x, x[4].+x; dims=3); dims=4)
+end
+
+let (:)(a,b) = (i for i in Base.:(:)(1,10) if i%2==0)
+    @test Int8[ i for i = 1:2 ] == [2,4,6,8,10]
 end

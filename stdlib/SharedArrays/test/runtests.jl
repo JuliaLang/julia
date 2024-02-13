@@ -3,7 +3,9 @@
 using Test, Distributed, SharedArrays, Random
 include(joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testenv.jl"))
 
-addprocs_with_testenv(4)
+# These processes explicitly want to share memory, we can't have
+# them in separate rr sessions
+addprocs_with_testenv(4; rr_allowed=false)
 @test nprocs() == 5
 
 @everywhere using Test, SharedArrays
@@ -34,7 +36,7 @@ function check_pids_all(S::SharedArray)
             parentindices(D.loc_subarr_1d)[1]
         end
         @test all(sdata(S)[idxes_in_p] .== p)
-        pidtested[idxes_in_p] = true
+        pidtested[idxes_in_p] .= true
     end
     @test all(pidtested)
 end
@@ -124,7 +126,7 @@ finalize(S)
 
 # Creating a new file
 fn2 = tempname()
-S = SharedArray{Int,2}(fn2, sz, init=D->D[localindices(D)] = myid())
+S = SharedArray{Int,2}(fn2, sz, init=D->(for i in localindices(D); D[i] = myid(); end))
 @test S == filedata
 filedata2 = similar(Atrue)
 read!(fn2, filedata2)
@@ -134,7 +136,7 @@ finalize(S)
 # Appending to a file
 fn3 = tempname()
 write(fn3, fill(0x1, 4))
-S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->D[localindices(D)]=0x02)
+S = SharedArray{UInt8}(fn3, sz, 4, mode="a+", init=D->(for i in localindices(D); D[i] = 0x02; end))
 len = prod(sz)+4
 @test filesize(fn3) == len
 filedata = Vector{UInt8}(undef, len)
@@ -142,12 +144,13 @@ read!(fn3, filedata)
 @test all(filedata[1:4] .== 0x01)
 @test all(filedata[5:end] .== 0x02)
 finalize(S)
+@test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{UInt8})
 
 # call gc 3 times to avoid unlink: operation not permitted (EPERM) on Windows
 S = nothing
-@everywhere GC.gc()
-@everywhere GC.gc()
-@everywhere GC.gc()
+@everywhere GC.gc(true)
+@everywhere GC.gc(true)
+@everywhere GC.gc(true)
 rm(fn); rm(fn2); rm(fn3)
 
 ### Utility functions
@@ -165,6 +168,7 @@ S = @inferred(SharedArray{Int}(1,2))
 S = @inferred(SharedArray{Int}(1,2,3))
 @test size(S) == (1,2,3)
 @test typeof(S) <: SharedArray{Int}
+@test Base.elsize(S) == Base.elsize(typeof(S)) == Base.elsize(Vector{Int})
 
 # reshape
 
@@ -172,6 +176,12 @@ d = SharedArrays.shmem_fill(1.0, (10,10,10))
 @test fill(1., 100, 10) == reshape(d,(100,10))
 d = SharedArrays.shmem_fill(1.0, (10,10,10))
 @test_throws DimensionMismatch reshape(d,(50,))
+# issue #40249, reshaping on another process
+let m = SharedArray{ComplexF64}(10, 20, 30)
+    m2 = remotecall_fetch(() -> reshape(m, (100, :)), id_other)
+    @test size(m2) == (100, 60)
+    @test m2 isa SharedArray
+end
 
 # rand, randn
 d = SharedArrays.shmem_rand(dims)
@@ -190,30 +200,30 @@ s = copy(sdata(d))
 ds = deepcopy(d)
 @test ds == d
 pids_d = procs(d)
-remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)::Int], d, 1.0, 1:10)
+@everywhere bcast_setindex!(S, v, I) = (for i in I; S[i] = v; end; S)
+remotecall_fetch(bcast_setindex!, pids_d[findfirst(id->(id != myid()), pids_d)::Int], d, 1.0, 1:10)
 @test ds != d
 @test s != d
 copyto!(d, s)
-@everywhere setid!(A) = A[localindices(A)] = myid()
+@everywhere setid!(A) = (for i in localindices(A); A[i] = myid(); end; A)
 @everywhere procs(ds) setid!($ds)
 @test d == s
 @test ds != s
 @test first(ds) == first(procs(ds))
 @test last(ds)  ==  last(procs(ds))
 
-
 # SharedArray as an array
 # Since the data in d will depend on the nprocs, just test that these operations work
 a = d[1:5]
 @test_throws BoundsError d[-1:5]
 a = d[1,1,1:3:end]
-d[2:4] = 7
-d[5,1:2:4,8] = 19
+d[2:4] .= 7
+d[5,1:2:4,8] .= 19
 
 AA = rand(4,2)
 A = @inferred(convert(SharedArray, AA))
 B = @inferred(convert(SharedArray, copy(AA')))
-@test B*A == AA'*AA
+@test B*A ≈ AA'*AA
 
 d=SharedArray{Int64,2}((10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
 d2 = map(x->1, d)
@@ -288,7 +298,7 @@ let
     id = a1.id
     aorig = nothing
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
-    GC.gc(); GC.gc()
+    GC.gc(true); GC.gc(true)
     a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
     @test haskey(SharedArrays.sa_refs, id)
     finalize(a1)
@@ -298,4 +308,23 @@ end
 #14399
 let s = convert(SharedArray, [1,2,3,4])
     @test pmap(i->length(s), 1:2) == [4,4]
+end
+
+let S = SharedArray([1,2,3])
+    @test sprint(show, S) == "[1, 2, 3]"
+end
+
+let S = SharedArray(Int64[]) # Issue #26582
+    @test sprint(show, S) == "Int64[]"
+    @test sprint(show, "text/plain", S, context = :module=>@__MODULE__) == "0-element SharedVector{Int64}:\n"
+end
+
+#28133
+@test SharedVector([1; 2; 3]) == [1; 2; 3]
+@test SharedMatrix([0.1 0.2; 0.3 0.4]) == [0.1 0.2; 0.3 0.4]
+@test_throws MethodError SharedVector(rand(4,4))
+@test_throws MethodError SharedMatrix(rand(4))
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(SharedArrays))
 end

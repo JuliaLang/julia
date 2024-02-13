@@ -25,6 +25,7 @@ function splitexpr(x::Expr)
     error("Invalid @var syntax `$x`.")
 end
 splitexpr(s::Symbol) = Expr(:macrocall, getfield(Base, Symbol("@__MODULE__")), nothing), quot(s)
+splitexpr(r::GlobalRef) = r.mod, quot(r.name)
 splitexpr(other)     = error("Invalid @var syntax `$other`.")
 
 macro var(x)
@@ -32,7 +33,7 @@ macro var(x)
 end
 
 function Base.show(io::IO, b::Binding)
-    if b.mod === Main
+    if b.mod === Base.active_module()
         print(io, b.var)
     else
         print(io, b.mod, '.', Base.isoperator(b.var) ? ":" : "", b.var)

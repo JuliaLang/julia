@@ -2,20 +2,25 @@
 
 module TestAdjointTranspose
 
-using Test, LinearAlgebra, SparseArrays
+using Test, LinearAlgebra
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
 
 @testset "Adjoint and Transpose inner constructor basics" begin
     intvec, intmat = [1, 2], [1 2; 3 4]
     # Adjoint/Transpose eltype must match the type of the Adjoint/Transpose of the input eltype
-    @test_throws ErrorException Adjoint{Float64,Vector{Int}}(intvec)
-    @test_throws ErrorException Adjoint{Float64,Matrix{Int}}(intmat)
-    @test_throws ErrorException Transpose{Float64,Vector{Int}}(intvec)
-    @test_throws ErrorException Transpose{Float64,Matrix{Int}}(intmat)
+    @test_throws TypeError Adjoint{Float64,Vector{Int}}(intvec)[1,1]
+    @test_throws TypeError Adjoint{Float64,Matrix{Int}}(intmat)[1,1]
+    @test_throws TypeError Transpose{Float64,Vector{Int}}(intvec)[1,1]
+    @test_throws TypeError Transpose{Float64,Matrix{Int}}(intmat)[1,1]
     # Adjoint/Transpose wrapped array type must match the input array type
-    @test_throws MethodError Adjoint{Int,Vector{Float64}}(intvec)
-    @test_throws MethodError Adjoint{Int,Matrix{Float64}}(intmat)
-    @test_throws MethodError Transpose{Int,Vector{Float64}}(intvec)
-    @test_throws MethodError Transpose{Int,Matrix{Float64}}(intmat)
+    @test_throws TypeError Adjoint{Int,Vector{Float64}}(intvec)[1,1]
+    @test_throws TypeError Adjoint{Int,Matrix{Float64}}(intmat)[1,1]
+    @test_throws TypeError Transpose{Int,Vector{Float64}}(intvec)[1,1]
+    @test_throws TypeError Transpose{Int,Matrix{Float64}}(intmat)[1,1]
     # Adjoint/Transpose inner constructor basic functionality, concrete scalar eltype
     @test (Adjoint{Int,Vector{Int}}(intvec)::Adjoint{Int,Vector{Int}}).parent === intvec
     @test (Adjoint{Int,Matrix{Int}}(intmat)::Adjoint{Int,Matrix{Int}}).parent === intmat
@@ -85,11 +90,15 @@ end
         @test size(Transpose(intvec)) == (1, length(intvec))
         @test size(Transpose(intmat)) == reverse(size(intmat))
     end
-    @testset "indices methods" begin
+    @testset "axes methods" begin
         @test axes(Adjoint(intvec)) == (Base.OneTo(1), Base.OneTo(length(intvec)))
         @test axes(Adjoint(intmat)) == reverse(axes(intmat))
         @test axes(Transpose(intvec)) == (Base.OneTo(1), Base.OneTo(length(intvec)))
         @test axes(Transpose(intmat)) == reverse(axes(intmat))
+
+        A = OffsetArray([1,2], 2)
+        @test (@inferred axes(A')[2]) === axes(A,1)
+        @test (@inferred axes(A')[1]) === axes(A,2)
     end
     @testset "IndexStyle methods" begin
         @test IndexStyle(Adjoint(intvec)) == IndexLinear()
@@ -239,6 +248,25 @@ end
     @test convert(Transpose{Float64,Matrix{Float64}}, Transpose(intmat))::Transpose{Float64,Matrix{Float64}} == Transpose(intmat)
 end
 
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Adjoint and Transpose convert methods to AbstractArray" begin
+    # tests corresponding to #34995
+    intvec, intmat = [1, 2], [1 2 3; 4 5 6]
+    statvec = ImmutableArray(intvec)
+    statmat = ImmutableArray(intmat)
+
+    @test convert(AbstractArray{Float64}, Adjoint(statvec))::Adjoint{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Adjoint(statvec)
+    @test convert(AbstractArray{Float64}, Adjoint(statmat))::Array{Float64,2} == Adjoint(statmat)
+    @test convert(AbstractArray{Float64}, Transpose(statvec))::Transpose{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Transpose(statvec)
+    @test convert(AbstractArray{Float64}, Transpose(statmat))::Array{Float64,2} == Transpose(statmat)
+    @test convert(AbstractMatrix{Float64}, Adjoint(statvec))::Adjoint{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Adjoint(statvec)
+    @test convert(AbstractMatrix{Float64}, Adjoint(statmat))::Array{Float64,2} == Adjoint(statmat)
+    @test convert(AbstractMatrix{Float64}, Transpose(statvec))::Transpose{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Transpose(statvec)
+    @test convert(AbstractMatrix{Float64}, Transpose(statmat))::Array{Float64,2} == Transpose(statmat)
+end
+
 @testset "Adjoint and Transpose similar methods" begin
     intvec, intmat = [1, 2], [1 2 3; 4 5 6]
     # similar with no additional specifications, vector (rewrapping) semantics
@@ -273,6 +301,11 @@ end
     intvec = [1, 2]
     @test vec(Adjoint(intvec)) === intvec
     @test vec(Transpose(intvec)) === intvec
+    cvec = [1 + 1im]
+    @test vec(cvec')[1] == cvec[1]'
+    mvec = [[1 2; 3 4+5im]];
+    @test vec(transpose(mvec))[1] == transpose(mvec[1])
+    @test vec(adjoint(mvec))[1] == adjoint(mvec[1])
 end
 
 @testset "horizontal concatenation of Adjoint/Transpose-wrapped vectors and Numbers" begin
@@ -328,14 +361,6 @@ end
     @test broadcast(+, Transpose(vec), 1, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec .+ 1
     @test broadcast(+, Adjoint(vec), 1im, Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == avec + avec .+ 1im
     @test broadcast(+, Transpose(vec), 1im, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec .+ 1im
-    # ascertain inference friendliness, ref. https://github.com/JuliaLang/julia/pull/25083#issuecomment-353031641
-    sparsevec = SparseVector([1.0, 2.0, 3.0])
-    @test map(-, Adjoint(sparsevec), Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test map(-, Transpose(sparsevec), Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
-    @test broadcast(-, Adjoint(sparsevec), Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test broadcast(-, Transpose(sparsevec), Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
-    @test broadcast(+, Adjoint(sparsevec), 1.0, Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test broadcast(+, Transpose(sparsevec), 1.0, Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
 end
 
 @testset "Adjoint/Transpose-wrapped vector multiplication" begin
@@ -378,8 +403,8 @@ end
     # TODO tighten type asserts once pinv yields Transpose/Adjoint
     @test pinv(Adjoint(realvec))::Vector{Float64} ≈ pinv(rowrealvec)
     @test pinv(Transpose(realvec))::Vector{Float64} ≈ pinv(rowrealvec)
-    @test pinv(Adjoint(complexvec))::Vector{Complex{Float64}} ≈ pinv(conj(rowcomplexvec))
-    @test pinv(Transpose(complexvec))::Vector{Complex{Float64}} ≈ pinv(rowcomplexvec)
+    @test pinv(Adjoint(complexvec))::Vector{ComplexF64} ≈ pinv(conj(rowcomplexvec))
+    @test pinv(Transpose(complexvec))::Vector{ComplexF64} ≈ pinv(rowcomplexvec)
 end
 
 @testset "Adjoint/Transpose-wrapped vector left-division" begin
@@ -413,19 +438,30 @@ end
     @test (Transpose(complexvec) / Transpose(complexmat))::Transpose ≈ rowcomplexvec / copy(Transpose(complexmat))
 end
 
-@testset "norm of Adjoint/Transpose-wrapped vectors" begin
+@testset "norm and opnorm of Adjoint/Transpose-wrapped vectors" begin
     # definitions are in base/linalg/generic.jl
     realvec, complexvec = [3, -4], [3im, -4im]
-    # one norm result should be maximum(abs.(realvec)) == 4
+    # one norm result should be sum(abs.(realvec)) == 7
     # two norm result should be sqrt(sum(abs.(realvec))) == 5
-    # inf norm result should be sum(abs.(realvec)) == 7
+    # inf norm result should be maximum(abs.(realvec)) == 4
     for v in (realvec, complexvec)
         @test norm(Adjoint(v)) ≈ 5
-        @test norm(Adjoint(v), 1) ≈ 4
-        @test norm(Adjoint(v), Inf) ≈ 7
+        @test norm(Adjoint(v), 1) ≈ 7
+        @test norm(Adjoint(v), Inf) ≈ 4
         @test norm(Transpose(v)) ≈ 5
-        @test norm(Transpose(v), 1) ≈ 4
-        @test norm(Transpose(v), Inf) ≈ 7
+        @test norm(Transpose(v), 1) ≈ 7
+        @test norm(Transpose(v), Inf) ≈ 4
+    end
+    # one opnorm result should be maximum(abs.(realvec)) == 4
+    # two opnorm result should be sqrt(sum(abs.(realvec))) == 5
+    # inf opnorm result should be sum(abs.(realvec)) == 7
+    for v in (realvec, complexvec)
+        @test opnorm(Adjoint(v)) ≈ 5
+        @test opnorm(Adjoint(v), 1) ≈ 4
+        @test opnorm(Adjoint(v), Inf) ≈ 7
+        @test opnorm(Transpose(v)) ≈ 5
+        @test opnorm(Transpose(v), 1) ≈ 4
+        @test opnorm(Transpose(v), Inf) ≈ 7
     end
 end
 
@@ -447,6 +483,16 @@ end
     @test adjoint!(b, a) === b
 end
 
+@testset "copyto! uses adjoint!/transpose!" begin
+    for T in (Float64, ComplexF64), f in (transpose, adjoint), sz in ((5,4), (5,))
+        S = rand(T, sz)
+        adjS = f(S)
+        A = similar(S')
+        copyto!(A, adjS)
+        @test A == adjS
+    end
+end
+
 @testset "aliasing with adjoint and transpose" begin
     A = collect(reshape(1:25, 5, 5)) .+ rand.().*im
     B = copy(A)
@@ -458,6 +504,203 @@ end
     B = copy(A)
     B .= B .* B'
     @test B == A .* A'
+end
+
+@testset "test show methods for $t of Factorizations" for t in (adjoint, transpose)
+    A = randn(ComplexF64, 4, 4)
+    F = lu(A)
+    Fop = t(F)
+    @test sprint(show, Fop) ==
+                  "$t of "*sprint(show, parent(Fop))
+    @test sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
+                  "$t of "*sprint((io, t) -> show(io, MIME"text/plain"(), t), parent(Fop))
+end
+
+@testset "showarg" begin
+    io = IOBuffer()
+
+    A = ones(Float64, 3,3)
+
+    B = Adjoint(A)
+    @test summary(B) == "3×3 adjoint(::Matrix{Float64}) with eltype Float64"
+    @test Base.showarg(io, B, false) === nothing
+    @test String(take!(io)) == "adjoint(::Matrix{Float64})"
+
+    B = Transpose(A)
+    @test summary(B) == "3×3 transpose(::Matrix{Float64}) with eltype Float64"
+    @test Base.showarg(io, B, false) === nothing
+    @test String(take!(io)) == "transpose(::Matrix{Float64})"
+end
+
+@testset "strided transposes" begin
+    for t in (Adjoint, Transpose)
+        @test strides(t(rand(3))) == (3, 1)
+        @test strides(t(rand(3,2))) == (3, 1)
+        @test strides(t(view(rand(3, 2), :))) == (6, 1)
+        @test strides(t(view(rand(3, 2), :, 1:2))) == (3, 1)
+
+        A = rand(3)
+        @test pointer(t(A)) === pointer(A)
+        B = rand(3,1)
+        @test pointer(t(B)) === pointer(B)
+    end
+    @test_throws MethodError strides(Adjoint(rand(3) .+ rand(3).*im))
+    @test_throws MethodError strides(Adjoint(rand(3, 2) .+ rand(3, 2).*im))
+    @test strides(Transpose(rand(3) .+ rand(3).*im)) == (3, 1)
+    @test strides(Transpose(rand(3, 2) .+ rand(3, 2).*im)) == (3, 1)
+
+    C = rand(3) .+ rand(3).*im
+    @test_throws ErrorException pointer(Adjoint(C))
+    @test pointer(Transpose(C)) === pointer(C)
+    D = rand(3,2) .+ rand(3,2).*im
+    @test_throws ErrorException pointer(Adjoint(D))
+    @test pointer(Transpose(D)) === pointer(D)
+end
+
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+@testset "offset axes" begin
+    s = Base.Slice(-3:3)'
+    @test axes(s) === (Base.OneTo(1), Base.IdentityUnitRange(-3:3))
+    @test collect(LinearIndices(s)) == reshape(1:7, 1, 7)
+    @test collect(CartesianIndices(s)) == reshape([CartesianIndex(1,i) for i = -3:3], 1, 7)
+    @test s[1] == -3
+    @test s[7] ==  3
+    @test s[4] ==  0
+    @test_throws BoundsError s[0]
+    @test_throws BoundsError s[8]
+    @test s[1,-3] == -3
+    @test s[1, 3] ==  3
+    @test s[1, 0] ==  0
+    @test_throws BoundsError s[1,-4]
+    @test_throws BoundsError s[1, 4]
+end
+
+@testset "specialized conj of Adjoint/Transpose" begin
+    realmat = [1 2; 3 4]
+    complexmat = ComplexF64[1+im 2; 3 4-im]
+    nested = [[complexmat] [-complexmat]; [0complexmat] [3complexmat]]
+    @testset "AdjOrTrans{...,$(typeof(i))}" for i in (
+                                                      realmat, vec(realmat),
+                                                      complexmat, vec(complexmat),
+                                                      nested, vec(nested),
+                                                     )
+        for (t,type) in ((transpose, Adjoint), (adjoint, Transpose))
+            M = t(i)
+            @test conj(M) isa type
+            @test conj(M) == conj(collect(M))
+            @test conj(conj(M)) === M
+        end
+    end
+    # test if `conj(transpose(::Hermitian))` is a no-op
+    hermitian = Hermitian([1 2+im; 2-im 3])
+    @test conj(transpose(hermitian)) === hermitian
+end
+
+@testset "empty and mismatched lengths" begin
+    # issue 36678
+    @test_throws DimensionMismatch [1, 2]' * [1,2,3]
+    @test Int[]' * Int[] == 0
+    @test transpose(Int[]) * Int[] == 0
+end
+
+@testset "reductions: $adjtrans" for adjtrans in (transpose, adjoint)
+    for (reduction, reduction!, op) in ((sum, sum!, +), (prod, prod!, *), (minimum, minimum!, min), (maximum, maximum!, max))
+        T = op in (max, min) ? Float64 : ComplexF64
+        mat = rand(T, 3,5)
+        rd1 = zeros(T, 1, 3)
+        rd2 = zeros(T, 5, 1)
+        rd3 = zeros(T, 1, 1)
+        @test reduction(adjtrans(mat)) ≈ reduction(copy(adjtrans(mat)))
+        @test reduction(adjtrans(mat), dims=1) ≈ reduction(copy(adjtrans(mat)), dims=1)
+        @test reduction(adjtrans(mat), dims=2) ≈ reduction(copy(adjtrans(mat)), dims=2)
+        @test reduction(adjtrans(mat), dims=(1,2)) ≈ reduction(copy(adjtrans(mat)), dims=(1,2))
+
+        @test reduction!(rd1, adjtrans(mat)) ≈ reduction!(rd1, copy(adjtrans(mat)))
+        @test reduction!(rd2, adjtrans(mat)) ≈ reduction!(rd2, copy(adjtrans(mat)))
+        @test reduction!(rd3, adjtrans(mat)) ≈ reduction!(rd3, copy(adjtrans(mat)))
+
+        @test reduction(imag, adjtrans(mat)) ≈ reduction(imag, copy(adjtrans(mat)))
+        @test reduction(imag, adjtrans(mat), dims=1) ≈ reduction(imag, copy(adjtrans(mat)), dims=1)
+        @test reduction(imag, adjtrans(mat), dims=2) ≈ reduction(imag, copy(adjtrans(mat)), dims=2)
+        @test reduction(imag, adjtrans(mat), dims=(1,2)) ≈ reduction(imag, copy(adjtrans(mat)), dims=(1,2))
+
+        @test Base.mapreducedim!(imag, op, rd1, adjtrans(mat)) ≈ Base.mapreducedim!(imag, op, rd1, copy(adjtrans(mat)))
+        @test Base.mapreducedim!(imag, op, rd2, adjtrans(mat)) ≈ Base.mapreducedim!(imag, op, rd2, copy(adjtrans(mat)))
+        @test Base.mapreducedim!(imag, op, rd3, adjtrans(mat)) ≈ Base.mapreducedim!(imag, op, rd3, copy(adjtrans(mat)))
+
+        op in (max, min) && continue
+        mat = [rand(T,2,2) for _ in 1:3, _ in 1:5]
+        rd1 = fill(zeros(T, 2, 2), 1, 3)
+        rd2 = fill(zeros(T, 2, 2), 5, 1)
+        rd3 = fill(zeros(T, 2, 2), 1, 1)
+        @test reduction(adjtrans(mat)) ≈ reduction(copy(adjtrans(mat)))
+        @test reduction(adjtrans(mat), dims=1) ≈ reduction(copy(adjtrans(mat)), dims=1)
+        @test reduction(adjtrans(mat), dims=2) ≈ reduction(copy(adjtrans(mat)), dims=2)
+        @test reduction(adjtrans(mat), dims=(1,2)) ≈ reduction(copy(adjtrans(mat)), dims=(1,2))
+
+        @test reduction(imag, adjtrans(mat)) ≈ reduction(imag, copy(adjtrans(mat)))
+        @test reduction(x -> x[1,2], adjtrans(mat)) ≈ reduction(x -> x[1,2], copy(adjtrans(mat)))
+        @test reduction(imag, adjtrans(mat), dims=1) ≈ reduction(imag, copy(adjtrans(mat)), dims=1)
+        @test reduction(x -> x[1,2], adjtrans(mat), dims=1) ≈ reduction(x -> x[1,2], copy(adjtrans(mat)), dims=1)
+    end
+    # see #46605
+    Ac = [1 2; 3 4]'
+    @test mapreduce(identity, (x, y) -> 10x+y, copy(Ac)) == mapreduce(identity, (x, y) -> 10x+y, Ac) == 1234
+    @test extrema([3,7,4]') == (3, 7)
+    @test mapreduce(x -> [x;;;], +, [1, 2, 3]') == sum(x -> [x;;;], [1, 2, 3]') == [6;;;]
+    @test mapreduce(string, *, [1 2; 3 4]') == mapreduce(string, *, copy([1 2; 3 4]')) == "1234"
+end
+
+@testset "trace" begin
+    for T in (Float64, ComplexF64), t in (adjoint, transpose)
+        A = randn(T, 10, 10)
+        @test tr(t(A)) == tr(copy(t(A))) == t(tr(A))
+    end
+end
+
+@testset "structured printing" begin
+    D = Diagonal(1:3)
+    @test sprint(Base.print_matrix, Adjoint(D)) == sprint(Base.print_matrix, D)
+    @test sprint(Base.print_matrix, Transpose(D)) == sprint(Base.print_matrix, D)
+    D = Diagonal((1:3)*im)
+    D2 = Diagonal((1:3)*(-im))
+    @test sprint(Base.print_matrix, Transpose(D)) == sprint(Base.print_matrix, D)
+    @test sprint(Base.print_matrix, Adjoint(D)) == sprint(Base.print_matrix, D2)
+
+    struct OneHotVecOrMat{N} <: AbstractArray{Bool,N}
+        inds::NTuple{N,Int}
+        sz::NTuple{N,Int}
+    end
+    Base.size(x::OneHotVecOrMat) = x.sz
+    function Base.getindex(x::OneHotVecOrMat{N}, inds::Vararg{Int,N}) where {N}
+        checkbounds(x, inds...)
+        inds == x.inds
+    end
+    Base.replace_in_print_matrix(o::OneHotVecOrMat{1}, i::Integer, j::Integer, s::AbstractString) =
+        o.inds == (i,) ? s : Base.replace_with_centered_mark(s)
+    Base.replace_in_print_matrix(o::OneHotVecOrMat{2}, i::Integer, j::Integer, s::AbstractString) =
+        o.inds == (i,j) ? s : Base.replace_with_centered_mark(s)
+
+    o = OneHotVecOrMat((2,), (4,))
+    @test sprint(Base.print_matrix, Transpose(o)) == sprint(Base.print_matrix, OneHotVecOrMat((1,2), (1,4)))
+    @test sprint(Base.print_matrix, Adjoint(o)) == sprint(Base.print_matrix, OneHotVecOrMat((1,2), (1,4)))
+end
+
+@testset "copy_transpose!" begin
+    # scalar case
+    A = [randn() for _ in 1:2, _ in 1:3]
+    At = copy(transpose(A))
+    B = zero.(At)
+    LinearAlgebra.copy_transpose!(B, axes(B, 1), axes(B, 2), A, axes(A, 1), axes(A, 2))
+    @test B == At
+    # matrix of matrices
+    A = [randn(2,3) for _ in 1:2, _ in 1:3]
+    At = copy(transpose(A))
+    B = zero.(At)
+    LinearAlgebra.copy_transpose!(B, axes(B, 1), axes(B, 2), A, axes(A, 1), axes(A, 2))
+    @test B == At
 end
 
 end # module TestAdjointTranspose

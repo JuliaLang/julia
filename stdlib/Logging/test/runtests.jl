@@ -6,7 +6,18 @@ import Logging: min_enabled_level, shouldlog, handle_message
 
 @noinline func1() = backtrace()
 
+# see "custom log macro" testset
+@create_log_macro CustomLog1 -500 :magenta
+@create_log_macro CustomLog2 1500 1
+
 @testset "Logging" begin
+
+@testset "Core" begin
+    # Symbols imported from CoreLogging should appear in tab completions
+    @test :AbstractLogger in names(Logging, all=true)  # exported public type
+    @test :Info in names(Logging, all=true)            # non-exported public constant
+    @test :handle_message in names(Logging, all=true)  # non-exported public function
+end
 
 @testset "ConsoleLogger" begin
     # First pass log limiting
@@ -21,15 +32,46 @@ import Logging: min_enabled_level, shouldlog, handle_message
     handle_message(logger, Logging.Info, "msg", Base, :group, :asdf, "somefile", 1, maxlog=2)
     @test shouldlog(logger, Logging.Info, Base, :group, :asdf) === false
 
+    # Check that maxlog works without an explicit ID (#28786)
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize=>(30,80), :color=>false)
+    logger = ConsoleLogger(io)
+    with_logger(logger) do
+        for i in 1:2
+            @info "test" maxlog=1
+        end
+    end
+    @test String(take!(buf)) ==
+    """
+    [ Info: test
+    """
+    with_logger(logger) do
+        for i in 1:2
+            @info "test" maxlog=0
+        end
+    end
+    @test String(take!(buf)) == ""
+
     @testset "Default metadata formatting" begin
-        @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, "path/to/somefile.jl", 42) ==
-            (:blue,      "Debug:",   "@ Base somefile.jl:42")
+        @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
+            (:log_debug, "Debug:",   "@ Base ~/somefile.jl:42")
         @test Logging.default_metafmt(Logging.Info,  Main, :g, :i, "a.jl", 1) ==
-            (:cyan,      "Info:",    "")
+            (:log_info,  "Info:",    "")
         @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2) ==
-            (:yellow,    "Warning:", "@ Main b.jl:2")
+            (:log_warn,  "Warning:", "@ Main b.jl:2")
         @test Logging.default_metafmt(Logging.Error, Main, :g, :i, "", 0) ==
-            (:light_red, "Error:",   "@ Main :0")
+            (:log_error, "Error:",   "@ Main :0")
+        # formatting of nothing
+        @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, "b.jl", 2) ==
+            (:log_warn,  "Warning:", "@ b.jl:2")
+        @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, nothing, 2) ==
+            (:log_warn,  "Warning:", "@ Main")
+        @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", nothing) ==
+            (:log_warn,  "Warning:", "@ Main b.jl")
+        @test Logging.default_metafmt(Logging.Warn,  nothing, :g, :i, nothing, 2) ==
+            (:log_warn,  "Warning:", "")
+        @test Logging.default_metafmt(Logging.Warn,  Main, :g, :i, "b.jl", 2:5) ==
+            (:log_warn,  "Warning:", "@ Main b.jl:2-5")
     end
 
     function dummy_metafmt(level, _module, group, id, file, line)
@@ -155,6 +197,9 @@ import Logging: min_enabled_level, shouldlog, handle_message
     └ SUFFIX
     """
 
+    # Execute backtrace once before checking formatting, see #3885
+    backtrace()
+
     # Attaching backtraces
     bt = func1()
     @test startswith(genmsg("msg", exception=(DivideError(),bt)),
@@ -163,7 +208,7 @@ import Logging: min_enabled_level, shouldlog, handle_message
     │   exception =
     │    DivideError: integer division error
     │    Stacktrace:
-    │     [1] func1() at""")
+    │      [1] func1()""")
 
 
     @testset "Limiting large data structures" begin
@@ -171,19 +216,19 @@ import Logging: min_enabled_level, shouldlog, handle_message
         replace("""
         ┌ PREFIX msg
         │   a =
-        │    100×100 Array{Float64,2}:
+        │    100×100 Matrix{Float64}:
         │     1.00001  1.00001  1.00001  1.00001  …  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
-        │     ⋮                                   ⋱                           EOL
+        │     ⋮                                   ⋱                    EOL
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001     1.00001  1.00001  1.00001
         │   b =
-        │    10×10 Array{Float64,2}:
+        │    10×10 Matrix{Float64}:
         │     2.00002  2.00002  2.00002  2.00002  …  2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
-        │     ⋮                                   ⋱                           EOL
+        │     ⋮                                   ⋱                    EOL
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         │     2.00002  2.00002  2.00002  2.00002     2.00002  2.00002  2.00002
         └ SUFFIX
@@ -193,7 +238,7 @@ import Logging: min_enabled_level, shouldlog, handle_message
         """
         ┌ PREFIX msg
         │   a =
-        │    10×10 Array{Float64,2}:
+        │    10×10 Matrix{Float64}:
         │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
         │     1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001  1.00001
@@ -211,11 +256,53 @@ import Logging: min_enabled_level, shouldlog, handle_message
     # Basic colorization test
     @test genmsg("line1\nline2", color=true) ==
     """
-    \e[36m\e[1m┌ \e[22m\e[39m\e[36m\e[1mPREFIX \e[22m\e[39mline1
-    \e[36m\e[1m│ \e[22m\e[39mline2
-    \e[36m\e[1m└ \e[22m\e[39m\e[90mSUFFIX\e[39m
+    \e[36m\e[1m┌\e[39m\e[22m \e[36m\e[1mPREFIX\e[39m\e[22m line1
+    \e[36m\e[1m│\e[39m\e[22m line2
+    \e[36m\e[1m└\e[39m\e[22m \e[90mSUFFIX\e[39m
     """
 
+end
+
+@testset "exported names" begin
+    m = Module(:ExportedLoggingNames)
+    include_string(m, """
+        using Logging
+        function run()
+            BelowMinLevel === Logging.BelowMinLevel &&
+            Debug === Logging.Debug &&
+            Info === Logging.Info &&
+            Warn === Logging.Warn &&
+            Error === Logging.Error &&
+            AboveMaxLevel === Logging.AboveMaxLevel
+        end
+        """)
+    @test m.run()
+end
+
+@testset "custom log macro" begin
+    llevel = LogLevel(-500)
+
+    @test_logs (llevel, "foo") min_level=llevel @customlog1 "foo"
+
+    buf = IOBuffer()
+    io = IOContext(buf, :displaysize=>(30,80), :color=>false)
+    logger = ConsoleLogger(io, llevel)
+
+    with_logger(logger) do
+        @customlog1 "foo"
+    end
+    @test occursin("CustomLog1: foo", String(take!(buf)))
+
+
+    with_logger(logger) do
+        @customlog2 "hello"
+    end
+    @test occursin("CustomLog2: hello", String(take!(buf)))
+end
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Logging)
+    @test isempty(undoc)
 end
 
 end

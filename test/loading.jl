@@ -1,16 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+original_depot_path = copy(Base.DEPOT_PATH)
+
 using Test
 
 # Tests for @__LINE__ inside and outside of macros
-@test (@__LINE__) == 6
+@test (@__LINE__) == 8
 
 macro macro_caller_lineno()
-    @test 9 == (@__LINE__) != __source__.line > 12
+    @test 11 == (@__LINE__) != __source__.line > 14
     return __source__.line
 end
 
-@test @macro_caller_lineno() == (@__LINE__) > 12
+@test @macro_caller_lineno() == (@__LINE__) > 14
 
 # @__LINE__ in a macro expands to the location of the macrocall in the source
 # while __source__.line is the location of the macro caller
@@ -40,19 +42,32 @@ thefname = "the fname!//\\&\1*"
 include_string_test_func = include_string(@__MODULE__, "include_string_test() = @__FILE__", thefname)
 @test include_string_test_func() == thefname
 @test include_string(@__MODULE__, "Base.source_path()", thefname) == Base.source_path()
+@test isdir(Base.source_dir())
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
-let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no`,
-    wd = sprint(show, abspath(pwd(), "")),
-    s_dir = sprint(show, joinpath(realpath(tempdir()), ""))
+@test !endswith(@__DIR__, Base.Filesystem.path_separator)
+let exename = `$(Base.julia_cmd()) --compiled-modules=yes --startup-file=no --color=no`,
+    wd = sprint(show, pwd())
+    s_dir = sprint(show, realpath(tempdir()))
     @test wd != s_dir
     @test readchomp(`$exename -E "@__DIR__" -i`) == wd
     @test readchomp(`$exename -E "cd(()->eval(:(@__DIR__)), $s_dir)" -i`) == s_dir
     @test readchomp(`$exename -E "@__DIR__"`) == wd # non-interactive
+    @test !endswith(wd, Base.Filesystem.path_separator)
+    @test !endswith(s_dir, Base.Filesystem.path_separator)
 end
+
+@test Base.in_sysimage(Base.PkgId(Base.UUID("8f399da3-3557-5675-b5ff-fb832c97cbdb"), "Libdl"))
+@test Base.in_sysimage(Base.PkgId(Base.UUID("3a7fdc7e-7467-41b4-9f64-ea033d046d5b"), "NotAPackage")) == false
+
+## Unit tests for safe file operations ##
+
+@test Base.isaccessiblefile("/root/path/doesn't/exist") == false
+@test Base.isaccessiblepath("/root/path/doesn't/exist") == false
+@test Base.isaccessibledir("/root/path/doesn't/exist") == false
 
 # Issue #5789 and PR #13542:
 mktempdir() do dir
@@ -86,17 +101,46 @@ import UUIDs: UUID, uuid4, uuid_version
 import Random: shuffle, randstring
 using Test
 
-function subset(v::Vector{T}, m::Int) where T
-    T[v[j] for j = 1:length(v) if ((m >>> (j - 1)) & 1) == 1]
+let shastr = "ab"^20
+    hash = SHA1(shastr)
+    @test hash == eval(Meta.parse(repr(hash))) # check show method
+    @test string(hash) == shastr
+    @test "check $hash" == "check $shastr"
 end
 
-function perm(p::Vector, i::Int)
-    for j = length(p):-1:1
-        i, k = divrem(i, j)
-        p[j], p[k+1] = p[k+1], p[j]
-    end
-    return p
+let shastr1 = "ab"^20, shastr2 = "ac"^20
+    hash1 = SHA1(shastr1)
+    hash2 = SHA1(shastr2)
+    @test isless(hash1, hash2)
+    @test !isless(hash2, hash1)
+    @test !isless(hash1, hash1)
 end
+
+# Test bad SHA1 values
+@test_throws ArgumentError SHA1("this is not a valid SHA1")
+@test_throws ArgumentError parse(SHA1, "either is this")
+@test tryparse(SHA1, "nor this") === nothing
+
+let uuidstr = "ab"^4 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^2 * "-" * "ab"^6
+    uuid = UUID(uuidstr)
+    @test uuid == eval(Meta.parse(repr(uuid))) # check show method
+    @test string(uuid) == uuidstr == sprint(print, uuid)
+    @test "check $uuid" == "check $uuidstr"
+    @test UUID(UInt128(uuid)) == uuid
+    @test UUID(uuid) === uuid
+    @test UUID(convert(NTuple{2, UInt64}, uuid)) == uuid
+    @test UUID(convert(NTuple{4, UInt32}, uuid)) == uuid
+
+    uuidstr2 = "ba"^4 * "-" * "ba"^2 * "-" * "ba"^2 * "-" * "ba"^2 * "-" * "ba"^6
+    uuid2 = UUID(uuidstr2)
+    uuids = [uuid, uuid2]
+    @test (uuids .== uuid) == [true, false]
+
+    @test parse(UUID, uuidstr2) == uuid2
+end
+@test_throws ArgumentError UUID("@"^4 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^2 * "-" * "@"^6)
+@test_throws ArgumentError parse(UUID, "not a UUID")
+@test tryparse(UUID, "either is this") === nothing
 
 @testset "explicit_project_deps_get" begin
     mktempdir() do dir
@@ -106,70 +150,133 @@ end
         proj_uuid = dummy_uuid(project_file)
         root_uuid = uuid4()
         this_uuid = uuid4()
-        # project file to subset/permute
-        lines = split("""
-        name = "Root"
-        uuid = "$root_uuid"
-        [deps]
-        This = "$this_uuid"
-        """, '\n')
-        N = length(lines)
-        # test every permutation of every subset of lines
-        for m = 0:2^N-1
-            s = subset(lines, m) # each subset of lines
-            for i = 1:factorial(count_ones(m))
-                p = perm(s, i) # each permutation of the subset
-                open(project_file, write=true) do io
-                    for line in p
-                        println(io, line)
-                    end
-                end
-                # look at lines and their order
-                n = findfirst(line -> startswith(line, "name"), p)
-                u = findfirst(line -> startswith(line, "uuid"), p)
-                d = findfirst(line -> line == "[deps]", p)
-                t = findfirst(line -> startswith(line, "This"), p)
-                # look up various packages by name
-                root = Base.explicit_project_deps_get(project_file, "Root")
-                this = Base.explicit_project_deps_get(project_file, "This")
-                that = Base.explicit_project_deps_get(project_file, "That")
-                # test that the correct answers are given
-                @test root == (coalesce(n, N+1) ≥ coalesce(d, N+1) ? false :
-                               coalesce(u, N+1) < coalesce(d, N+1) ? root_uuid : proj_uuid)
-                @test this == (coalesce(d, N+1) < coalesce(t, N+1) ≤ N ? this_uuid : false)
-                @test that == false
-            end
+
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [project_file])
+            write(project_file, """
+            name = "Root"
+            uuid = "$root_uuid"
+            [deps]
+            This = "$this_uuid"
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == root_uuid
+            @test this.uuid == this_uuid
+            @test that == nothing
+
+            write(project_file, """
+            name = "Root"
+            This = "$this_uuid"
+            [deps]
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == proj_uuid
+            @test this == nothing
+            @test that == nothing
+        finally
+            copy!(LOAD_PATH, old_load_path)
         end
     end
 end
+
+# extras
+@testset "extras" begin
+    mktempdir() do dir
+        project_file = joinpath(dir, "Project.toml")
+        touch(project_file) # dummy_uuid calls realpath
+        # various UUIDs to work with
+        proj_uuid = dummy_uuid(project_file)
+        root_uuid = uuid4()
+        this_uuid = uuid4()
+
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [project_file])
+            write(project_file, """
+            name = "Root"
+            uuid = "$root_uuid"
+            [extras]
+            This = "$this_uuid"
+            """)
+            # look up various packages by name
+            root = Base.identify_package("Root")
+            this = Base.identify_package("This")
+            that = Base.identify_package("That")
+
+            @test root.uuid == root_uuid
+            @test this == nothing
+            @test that == nothing
+
+            @test Base.get_uuid_name(project_file, this_uuid) == "This"
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
+    end
+end
+
 
 ## functional testing of package identification, location & loading ##
 
 saved_load_path = copy(LOAD_PATH)
 saved_depot_path = copy(DEPOT_PATH)
-push!(empty!(LOAD_PATH), "project")
-push!(empty!(DEPOT_PATH), "depot")
+saved_active_project = Base.ACTIVE_PROJECT[]
+watcher_counter = Ref(0)
+push!(Base.active_project_callbacks, () -> watcher_counter[] += 1)
+push!(Base.active_project_callbacks, () -> error("broken"))
 
-@test load_path() == [abspath("project","Project.toml")]
+push!(empty!(LOAD_PATH), joinpath(@__DIR__, "project"))
+append!(empty!(DEPOT_PATH), [mktempdir(), joinpath(@__DIR__, "depot")])
+@test watcher_counter[] == 0
+@test_logs (:error, r"active project callback .* failed") Base.set_active_project(nothing)
+@test watcher_counter[] == 1
+pop!(Base.active_project_callbacks)
+
+@test load_path() == [joinpath(@__DIR__, "project", "Project.toml")]
+
+# locate `tail(names)` package by following the search path graph through `names` starting from `where`
+function recurse_package(where::PkgId, name::String, names::String...)
+    pkg = identify_package(where, name)
+    pkg === nothing && return nothing
+    return recurse_package(pkg, names...)
+end
+
+recurse_package(pkg::String) = identify_package(pkg)
+recurse_package(where::PkgId, pkg::String) = identify_package(where, pkg)
+
+function recurse_package(name::String, names::String...)
+    pkg = identify_package(name)
+    pkg === nothing && return nothing
+    return recurse_package(pkg, names...)
+end
 
 @testset "project & manifest identify_package & locate_package" begin
     local path
     for (names, uuid, path) in [
-        ("Foo",     "767738be-2f1f-45a9-b806-0234f3164144", "project/deps/Foo1/src/Foo.jl"      ),
-        ("Bar.Foo", "6f418443-bd2e-4783-b551-cdbac608adf2", "project/deps/Foo2.jl/src/Foo.jl"   ),
-        ("Bar",     "2a550a13-6bab-4a91-a4ee-dff34d6b99d0", "project/deps/Bar/src/Bar.jl"       ),
-        ("Foo.Baz", "6801f525-dc68-44e8-a4e8-cabd286279e7", "depot/packages/Baz/81oL/src/Baz.jl"),
-        ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"               ),
+        ("Foo",     "767738be-2f1f-45a9-b806-0234f3164144", "project/deps/Foo1/src/Foo.jl"       ),
+        ("Bar.Foo", "6f418443-bd2e-4783-b551-cdbac608adf2", "project/deps/Foo2.jl/src/Foo.jl"    ),
+        ("Bar",     "2a550a13-6bab-4a91-a4ee-dff34d6b99d0", "project/deps/Bar/src/Bar.jl"        ),
+        ("Foo.Baz", "6801f525-dc68-44e8-a4e8-cabd286279e7", "depot/packages/Baz/81oLe/src/Baz.jl"),
+        ("Foo.Qux", "b5ec9b9c-e354-47fd-b367-a348bdc8f909", "project/deps/Qux.jl"                ),
     ]
         n = map(String, split(names, '.'))
-        pkg = identify_package(n...)
+        pkg = recurse_package(n...)
         @test pkg == PkgId(UUID(uuid), n[end])
         @test joinpath(@__DIR__, normpath(path)) == locate_package(pkg)
+        @test Base.compilecache_path(pkg, UInt64(0)) == Base.compilecache_path(pkg, UInt64(0))
     end
     @test identify_package("Baz") == nothing
     @test identify_package("Qux") == nothing
     @testset "equivalent package names" begin
-        local classes = [
+         classes = [
             ["Foo"],
             ["Bar", "Foo.Bar"],
             ["Foo.Baz", "Bar.Baz", "Foo.Bar.Baz"],
@@ -182,15 +289,15 @@ push!(empty!(DEPOT_PATH), "depot")
         for i = 1:length(classes)
             A = classes[i]
             for x in A
-                X = identify_package(map(String, split(x, '.'))...)
+                X = recurse_package(map(String, split(x, '.'))...)
                 for y in A
-                    Y = identify_package(map(String, split(y, '.'))...)
+                    Y = recurse_package(map(String, split(y, '.'))...)
                     @test X == Y
                 end
                 for j = i+1:length(classes)
                     B = classes[j]
                     for z in B
-                        Z = identify_package(map(String, split(z, '.'))...)
+                        Z = recurse_package(map(String, split(z, '.'))...)
                         @test X != Z
                     end
                 end
@@ -198,6 +305,8 @@ push!(empty!(DEPOT_PATH), "depot")
         end
     end
 end
+
+module NotPkgModule; end
 
 @testset "project & manifest import" begin
     @test !@isdefined Foo
@@ -235,6 +344,31 @@ end
         end
     end
     @test Foo.which == "path"
+
+    @testset "pathof" begin
+        @test pathof(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1/src/Foo.jl"))
+        @test pathof(NotPkgModule) === nothing
+    end
+
+    @testset "pkgdir" begin
+        @test pkgdir(Foo) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo1) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(Foo.SubFoo2) == normpath(abspath(@__DIR__, "project/deps/Foo1"))
+        @test pkgdir(NotPkgModule) === nothing
+
+        @test pkgdir(Foo, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(Foo.SubFoo1, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(Foo.SubFoo2, "src") == normpath(abspath(@__DIR__, "project/deps/Foo1/src"))
+        @test pkgdir(NotPkgModule, "src") === nothing
+    end
+
+    @testset "pkgversion" begin
+        @test pkgversion(Foo) == v"1.2.3"
+        @test pkgversion(Foo.SubFoo1) == v"1.2.3"
+        @test pkgversion(Foo.SubFoo2) == v"1.2.3"
+        @test pkgversion(NotPkgModule) === nothing
+    end
+
 end
 
 ## systematic generation of test environments ##
@@ -328,6 +462,12 @@ const depots = [mktempdir() for _ = 1:3]
 const envs = Dict{String,Any}()
 
 append!(empty!(DEPOT_PATH), depots)
+
+@testset "load code uniqueness" begin
+    @test allunique(UUIDS)
+    @test allunique(depots)
+    @test allunique(DEPOT_PATH)
+end
 
 for (flat, root, roots, graph) in graphs
     if flat
@@ -460,7 +600,7 @@ function test_find(
     for name in NAMES
         id = identify_package(name)
         @test id == get(roots, name, nothing)
-        path = locate_package(id)
+        path = id === nothing ? nothing : locate_package(id)
         @test path == get(paths, id, nothing)
     end
     # check indirect dependencies
@@ -470,7 +610,7 @@ function test_find(
         for name in NAMES
             id = identify_package(where, name)
             @test id == get(deps, name, nothing)
-            path = locate_package(id)
+            path = id === nothing ? nothing : locate_package(id)
             @test path == get(paths, id, nothing)
         end
     end
@@ -508,7 +648,104 @@ end
 end
 
 # normalization of paths by include (#26424)
-@test_throws ErrorException("could not open file $(joinpath(@__DIR__, "notarealfile.jl"))") include("./notarealfile.jl")
+@test begin
+    exc = try; include("./notarealfile.jl"); "unexpectedly reached!"; catch exc; exc; end
+    @test exc isa SystemError
+    exc.prefix
+end == "opening file $(repr(joinpath(@__DIR__, "notarealfile.jl")))"
+
+old_act_proj = Base.ACTIVE_PROJECT[]
+pushfirst!(LOAD_PATH, "@")
+try
+    Base.set_active_project(joinpath(@__DIR__, "TestPkg"))
+    @eval using TestPkg
+finally
+    Base.set_active_project(old_act_proj)
+    popfirst!(LOAD_PATH)
+end
+@test pkgversion(TestPkg) == v"1.2.3"
+
+@testset "--project and JULIA_PROJECT paths should be absolutified" begin
+    mktempdir() do dir; cd(dir) do
+        mkdir("foo")
+        script = """
+        using Test
+        old = Base.active_project()
+        cd("foo")
+        @test Base.active_project() == old
+        """
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $(script)`
+        cmd = addenv(cmd, "JULIA_PROJECT" => "foo")
+        cmd = pipeline(cmd; stdout, stderr)
+        @test success(cmd)
+    end; end
+end
+
+# Base.active_project when version directory exist in depot, but contains no project file
+mktempdir() do dir
+    vdir = Base.DEFAULT_LOAD_PATH[2]
+    vdir = replace(vdir, "#" => VERSION.major, count = 1)
+    vdir = replace(vdir, "#" => VERSION.minor, count = 1)
+    vdir = replace(vdir, "#" => VERSION.patch, count = 1)
+    vdir = vdir[2:end] # remove @
+    vpath = joinpath(dir, "environments", vdir)
+    mkpath(vpath)
+    script = "@assert startswith(Base.active_project(), $(repr(vpath)))"
+    cmd = `$(Base.julia_cmd()) --startup-file=no -e $(script)`
+    cmd = addenv(cmd,
+        "JULIA_DEPOT_PATH" => dir,
+        "JULIA_LOAD_PATH" => Sys.iswindows() ? ";" : ":")
+    cmd = pipeline(cmd; stdout, stderr)
+    @test success(cmd)
+end
+
+@testset "expansion of JULIA_LOAD_PATH" begin
+    s = Sys.iswindows() ? ';' : ':'
+    tmp = "/this/does/not/exist"
+    cases = Dict{Any,Vector{String}}(
+        nothing => Base.DEFAULT_LOAD_PATH,
+        "" => [],
+        "$s" => Base.DEFAULT_LOAD_PATH,
+        "$tmp$s" => [tmp; Base.DEFAULT_LOAD_PATH],
+        "$s$tmp" => [Base.DEFAULT_LOAD_PATH; tmp],
+        )
+    for (env, result) in pairs(cases)
+        script = "LOAD_PATH == $(repr(result)) || error()"
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => env)
+        cmd = pipeline(cmd; stdout, stderr)
+        @test success(cmd)
+    end
+end
+
+@testset "expansion of JULIA_DEPOT_PATH" begin
+    s = Sys.iswindows() ? ';' : ':'
+    tmp = "/this/does/not/exist"
+    default = joinpath(homedir(), ".julia")
+    bundled = Base.append_bundled_depot_path!(String[])
+    cases = Dict{Any,Vector{String}}(
+        nothing => [default; bundled],
+        "" => [],
+        "$s" => [default; bundled],
+        "$tmp$s" => [tmp; bundled],
+        "$s$tmp" => [bundled; tmp],
+        )
+    for (env, result) in pairs(cases)
+        script = "DEPOT_PATH == $(repr(result)) || error(\"actual depot \" * join(DEPOT_PATH,':') * \" does not match expected depot \" * join($(repr(result)), ':'))"
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+        cmd = addenv(cmd, "JULIA_DEPOT_PATH" => env)
+        cmd = pipeline(cmd; stdout, stderr)
+        @test success(cmd)
+    end
+end
+
+@testset "Issue #25719" begin
+    empty!(LOAD_PATH)
+    @test Base.root_module(Core, :Core) == Core
+    push!(LOAD_PATH, "@stdlib")
+    @test Base.root_module(Base, :Test) == Test
+    @test_throws KeyError(:SomeNonExistentPackage) Base.root_module(Base, :SomeNonExistentPackage)
+end
 
 ## cleanup after tests ##
 
@@ -516,8 +753,782 @@ for env in keys(envs)
     rm(env, force=true, recursive=true)
 end
 for depot in depots
-    rm(depot, force=true, recursive=true)
+    try
+        rm(depot, force=true, recursive=true)
+    catch err
+        @show err
+    end
 end
 
-append!(empty!(DEPOT_PATH), saved_depot_path)
 append!(empty!(LOAD_PATH), saved_load_path)
+append!(empty!(DEPOT_PATH), saved_depot_path)
+pop!(Base.active_project_callbacks)
+Base.set_active_project(saved_active_project)
+@test watcher_counter[] == 3
+
+# issue #28190
+module Foo28190; import Libdl; end
+import .Foo28190.Libdl; import Libdl
+@test Foo28190.Libdl === Libdl
+
+@testset "include with mapexpr" begin
+    let exprs = Any[]
+        @test 13 === include_string(@__MODULE__, "1+1\n3*4") do ex
+            ex isa LineNumberNode || push!(exprs, ex)
+            Meta.isexpr(ex, :call) ? :(1 + $ex) : ex
+        end
+        @test exprs == [:(1 + 1), :(3 * 4)]
+    end
+    # test using test_exec.jl, just because that is the shortest handy file
+    for incl in (include, (mapexpr,path) -> Base.include(mapexpr, @__MODULE__, path))
+        let exprs = Any[]
+            incl("test_exec.jl") do ex
+                ex isa LineNumberNode || push!(exprs, ex)
+                Meta.isexpr(ex, :macrocall) ? :nothing : ex
+            end
+            @test length(exprs) == 2 && exprs[1] == :(using Test)
+            @test Meta.isexpr(exprs[2], :macrocall) &&
+                  exprs[2].args[[1,3]] == [Symbol("@test"), :(1 == 2)]
+        end
+    end
+end
+
+@testset "`Base.project_names` and friends" begin
+    # Some functions in Pkg assumes that these tuples have the same length
+    n = length(Base.project_names)
+    @test length(Base.preferences_names) == n
+
+    # there are two manifest names per project name
+    @test length(Base.manifest_names) == 2n
+end
+
+@testset "Manifest formats" begin
+    deps = Dict{String,Any}(
+        "Serialization" => Any[Dict{String, Any}("uuid"=>"9e88b42a-f829-5b0c-bbe9-9e923198166b")],
+        "Random"        => Any[Dict{String, Any}("deps"=>["Serialization"], "uuid"=>"9a3f8284-a2c9-5f02-9a11-845980a1fd5c")],
+        "Logging"       => Any[Dict{String, Any}("uuid"=>"56ddb016-857b-54e1-b83d-db4d58db5568")]
+    )
+
+    @testset "v1.0" begin
+        env_dir = joinpath(@__DIR__, "manifest", "v1.0")
+        manifest_file = joinpath(env_dir, "Manifest.toml")
+        isfile(manifest_file) || error("Reference manifest is missing")
+        raw_manifest = Base.parsed_toml(manifest_file)
+        @test Base.is_v1_format_manifest(raw_manifest)
+        @test Base.get_deps(raw_manifest) == deps
+    end
+
+    @testset "v2.0" begin
+        env_dir = joinpath(@__DIR__, "manifest", "v2.0")
+        manifest_file = joinpath(env_dir, "Manifest.toml")
+        isfile(manifest_file) || error("Reference manifest is missing")
+        raw_manifest = Base.parsed_toml(manifest_file)
+        @test Base.is_v1_format_manifest(raw_manifest) == false
+        @test Base.get_deps(raw_manifest) == deps
+    end
+end
+
+@testset "Manifest name preferential loading" begin
+    mktempdir() do tmp
+        proj = joinpath(tmp, "Project.toml")
+        touch(proj)
+        for man_name in (
+            "Manifest.toml",
+            "JuliaManifest.toml",
+            "Manifest-v$(VERSION.major).$(VERSION.minor).toml",
+            "JuliaManifest-v$(VERSION.major).$(VERSION.minor).toml"
+            )
+            touch(joinpath(tmp, man_name))
+            man = basename(Base.project_file_manifest_path(proj))
+            @test man == man_name
+        end
+    end
+    mktempdir() do tmp
+        # check that another version isn't preferred
+        proj = joinpath(tmp, "Project.toml")
+        touch(proj)
+        touch(joinpath(tmp, "Manifest-v1.5.toml"))
+        @test Base.project_file_manifest_path(proj) == nothing
+        touch(joinpath(tmp, "Manifest.toml"))
+        man = basename(Base.project_file_manifest_path(proj))
+        @test man == "Manifest.toml"
+    end
+end
+
+@testset "error message loading pkg bad module name" begin
+    mktempdir() do tmp
+        old_loadpath = copy(LOAD_PATH)
+        try
+            push!(LOAD_PATH, tmp)
+            write(joinpath(tmp, "BadCase.jl"), "module badcase end")
+            @test_logs (:warn, r"The call to compilecache failed.*") match_mode=:any begin
+                @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
+                    check for typos in package module name") (@eval using BadCase)
+            end
+        finally
+            copy!(LOAD_PATH, old_loadpath)
+        end
+    end
+end
+
+@testset "Preferences loading" begin
+    mktempdir() do dir
+        this_uuid = uuid4()
+        that_uuid = uuid4()
+
+        # First, create outer environment with exported preferences
+        mkpath(joinpath(dir, "outer_env"))
+        open(joinpath(dir, "outer_env", "Project.toml"), write=true) do io
+            write(io, """
+            [deps]
+            This = "$(this_uuid)"
+            That = "$(that_uuid)"
+
+            [preferences.This]
+            pref1 = "outer-project"
+            pref2 = "outer-project"
+            pref3 = "outer-project"
+            pref4 = "outer-project"
+            pref5 = "outer-project"
+            pref6 = "outer-project"
+
+            [preferences.That]
+            pref1 = "outer-project"
+            """)
+        end
+
+        # Override some of those preferences above here:
+        open(joinpath(dir, "outer_env", "JuliaLocalPreferences.toml"), write=true) do io
+            write(io, """
+            [This]
+            pref2 = "outer-jlp"
+            """)
+        end
+
+        # Ensure that a `JuliaLocalPreferences.toml` disables `LocalPreferences.toml`
+        # We test that both overriding `pref2` and trying to clear `pref5` are ignored
+        open(joinpath(dir, "outer_env", "LocalPreferences.toml"), write=true) do io
+            write(io, """
+            [This]
+            pref2 = "outer-lp"
+            __clear__ = ["pref5"]
+            """)
+        end
+
+        # Next, set up an inner environment that will override some of the preferences
+        # set by the outer environment, even clearing `pref6`.
+        mkpath(joinpath(dir, "inner_env"))
+        open(joinpath(dir, "inner_env", "Project.toml"), write=true) do io
+            write(io, """
+            name = "Root"
+            uuid = "$(uuid4())"
+
+            [extras]
+            This = "$(this_uuid)"
+
+            [preferences.This]
+            pref3 = "inner-project"
+            pref4 = "inner-project"
+            __clear__ = ["pref6"]
+            """)
+        end
+
+        # And have an override here as well, this time only LocalPreferences.toml
+        open(joinpath(dir, "inner_env", "LocalPreferences.toml"), write=true) do io
+            write(io, """
+            [This]
+            pref4 = "inner-lp"
+            """)
+        end
+
+        # Finally, we load preferences with a stacked environment, and ensure that
+        # we get the appropriate outputs:
+        old_load_path = copy(LOAD_PATH)
+        try
+            copy!(LOAD_PATH, [joinpath(dir, "inner_env", "Project.toml"), joinpath(dir, "outer_env", "Project.toml")])
+
+            function test_this_prefs(this_prefs)
+                @test this_prefs["pref1"] == "outer-project"
+                @test this_prefs["pref2"] == "outer-jlp"
+                @test this_prefs["pref3"] == "inner-project"
+                @test this_prefs["pref4"] == "inner-lp"
+                @test this_prefs["pref5"] == "outer-project"
+                @test !haskey(this_prefs, "pref6")
+            end
+
+            # Test directly loading the UUID we're interested in
+            test_this_prefs(Base.get_preferences(this_uuid))
+
+            # Also test loading _all_ preferences
+            all_prefs = Base.get_preferences()
+            @test haskey(all_prefs, "This")
+            @test haskey(all_prefs, "That")
+            @test all_prefs["That"]["pref1"] == "outer-project"
+
+            # Ensure that the sub-tree of `This` still satisfies our tests
+            test_this_prefs(all_prefs["This"])
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
+    end
+end
+
+
+@testset "Loading with incomplete manifest/depot #45977" begin
+    mktempdir() do tmp
+        # Set up a stacked env.
+        cp(joinpath(@__DIR__, "depot"), joinpath(tmp, "depot"))
+
+        mkdir(joinpath(tmp, "Env1"))
+        mkdir(joinpath(tmp, "Global"))
+
+        for env in ["Env1", "Global"]
+            write(joinpath(tmp, env, "Project.toml"), """
+            [deps]
+            Baz = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            """)
+        end
+
+        write(joinpath(tmp, "Global", "Manifest.toml"), """
+            [[Baz]]
+            uuid = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            git-tree-sha1 = "efc7e24c53d6a328011975294a2c75fed2f9800a"
+            """)
+
+        # This SHA does not exist in the depot.
+        write(joinpath(tmp, "Env1", "Manifest.toml"), """
+            [[Baz]]
+            uuid = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            git-tree-sha1 = "5f2f6e72d001b014b48b26ec462f3714c342e167"
+            """)
+
+
+        old_load_path = copy(LOAD_PATH)
+        old_depot_path = copy(DEPOT_PATH)
+        try
+            empty!(LOAD_PATH)
+            push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
+
+            push!(LOAD_PATH, joinpath(tmp, "Global"))
+
+            pkg = Base.identify_package("Baz")
+            # Package in manifest in current env not present in depot
+            @test Base.locate_package(pkg) !== nothing
+
+            @test Base.find_package("Baz") !== nothing  # coverage
+
+            pushfirst!(LOAD_PATH, joinpath(tmp, "Env1"))
+
+            @test Base.locate_package(pkg) === nothing
+
+            write(joinpath(tmp, "Env1", "Manifest.toml"), """
+            """)
+            # Package in current env not present in manifest
+            pkg, env = Base.identify_package_env("Baz")
+            @test Base.locate_package(pkg, env) === nothing
+        finally
+            copy!(LOAD_PATH, old_load_path)
+            copy!(DEPOT_PATH, old_depot_path)
+        end
+    end
+end
+
+@testset "Extensions" begin
+    depot_path = mktempdir()
+    try
+        proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+
+        function gen_extension_cmd(compile, distr=false)
+            load_distr = distr ? "using Distributed; addprocs(1)" : ""
+            ew = distr ? "@everywhere" : ""
+            cmd = """
+            $load_distr
+            begin
+                $ew push!(empty!(DEPOT_PATH), $(repr(depot_path)))
+                using HasExtensions
+                $ew using HasExtensions
+                $ew Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                $ew HasExtensions.ext_loaded && error("ext_loaded set")
+                using HasDepWithExtensions
+                $ew using HasDepWithExtensions
+                $ew Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                $ew HasExtensions.ext_loaded || error("ext_loaded not set")
+                $ew HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
+                $ew HasDepWithExtensions.do_something() || error("do_something errored")
+                using ExtDep2
+                $ew using ExtDep2
+                $ew HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
+            end
+            """
+            return `$(Base.julia_cmd()) $compile --startup-file=no -e $cmd`
+        end
+
+        for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precompilation, once where it is already precompiled
+            cmd = gen_extension_cmd(compile)
+            cmd = addenv(cmd, "JULIA_LOAD_PATH" => proj)
+            cmd = pipeline(cmd; stdout, stderr)
+            @test success(cmd)
+        end
+
+        sep = Sys.iswindows() ? ';' : ':'
+
+        cmd = gen_extension_cmd(``, true)
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
+        str = read(cmd, String)
+        @test !occursin("Error during loading of extension", str)
+        @test !occursin("ConcurrencyViolationError", str)
+
+        # 48351
+        cmd = gen_extension_cmd(``)
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([mktempdir(), proj], sep))
+        cmd = pipeline(cmd; stdout, stderr)
+        @test success(cmd)
+
+        # Only load env from where package is loaded
+        envs = [joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensionsv2"), joinpath(@__DIR__, "project", "Extensions", "EnvWithHasExtensions")]
+        cmd = addenv(```$(Base.julia_cmd()) --startup-file=no -e '
+        begin
+            push!(empty!(DEPOT_PATH), '$(repr(depot_path))')
+            using HasExtensions
+            using ExtDep
+            Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly loaded ext from other env")
+            Base.get_extension(HasExtensions, :Extension2) === nothing && error("did not load ext from active env")
+        end
+        '
+        ```, "JULIA_LOAD_PATH" => join(envs, sep))
+        @test success(cmd)
+
+        test_ext_proj = """
+        begin
+            using HasExtensions
+            using ExtDep
+            Base.get_extension(HasExtensions, :Extension) isa Module || error("expected extension to load")
+            using ExtDep2
+            Base.get_extension(HasExtensions, :ExtensionFolder) isa Module || error("expected extension to load")
+        end
+        """
+        for compile in (`--compiled-modules=no`, ``)
+            cmd_proj_ext = `$(Base.julia_cmd()) $compile --startup-file=no -e $test_ext_proj`
+            proj = joinpath(@__DIR__, "project", "Extensions")
+            cmd_proj_ext = addenv(cmd_proj_ext, "JULIA_LOAD_PATH" => join([joinpath(proj, "HasExtensions.jl"), joinpath(proj, "EnvWithDeps")], sep))
+            run(cmd_proj_ext)
+        end
+
+        # Sysimage extensions
+        # The test below requires that LinearAlgebra is in the sysimage and that it has not been loaded yet.
+        # if it gets moved out, this test will need to be updated.
+        # We run this test in a new process so we are not vulnerable to a previous test having loaded LinearAlgebra
+        sysimg_ext_test_code = """
+            uuid_key = Base.PkgId(Base.UUID("37e2e46d-f89d-539d-b4ee-838fcccc9c8e"), "LinearAlgebra")
+            Base.in_sysimage(uuid_key) || error("LinearAlgebra not in sysimage")
+            haskey(Base.explicit_loaded_modules, uuid_key) && error("LinearAlgebra already loaded")
+            using HasExtensions
+            Base.get_extension(HasExtensions, :LinearAlgebraExt) === nothing || error("unexpectedly got an extension")
+            using LinearAlgebra
+            haskey(Base.explicit_loaded_modules, uuid_key) || error("LinearAlgebra not loaded")
+            Base.get_extension(HasExtensions, :LinearAlgebraExt) isa Module || error("expected extension to load")
+        """
+        cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
+        run(cmd)
+    finally
+        try
+            rm(depot_path, force=true, recursive=true)
+        catch err
+            @show err
+        end
+    end
+end
+
+pkgimage(val) = val == 1 ? `--pkgimages=yes` : `--pkgimages=no`
+opt_level(val) = `-O$val`
+debug_level(val) = `-g$val`
+inline(val) = val == 1 ? `--inline=yes` : `--inline=no`
+check_bounds(val) = if val == 0
+    `--check-bounds=auto`
+elseif val == 1
+    `--check-bounds=yes`
+elseif val == 2
+    `--check-bounds=no`
+end
+
+@testset "CacheFlags" begin
+    cf = Base.CacheFlags()
+    opts = Base.JLOptions()
+    @test cf.use_pkgimages == opts.use_pkgimages
+    @test cf.debug_level == opts.debug_level
+    @test cf.check_bounds == opts.check_bounds
+    @test cf.inline == opts.can_inline
+    @test cf.opt_level == opts.opt_level
+
+    # OOICCDDP
+    for (P, D, C, I, O) in Iterators.product(0:1, 0:2, 0:2, 0:1, 0:3)
+        julia = joinpath(Sys.BINDIR, Base.julia_exename())
+        script = """
+        let
+            cf = Base.CacheFlags()
+            opts = Base.JLOptions()
+            cf.use_pkgimages == opts.use_pkgimages == $P || error("use_pkgimages")
+            cf.debug_level == opts.debug_level == $D || error("debug_level")
+            cf.check_bounds == opts.check_bounds == $C || error("check_bounds")
+            cf.inline == opts.can_inline == $I || error("inline")
+            cf.opt_level == opts.opt_level == $O || error("opt_level")
+        end
+        """
+        cmd = `$julia $(pkgimage(P)) $(opt_level(O)) $(debug_level(D)) $(check_bounds(C)) $(inline(I)) -e $script`
+        @test success(pipeline(cmd; stdout, stderr))
+    end
+
+    cf = Base.CacheFlags(255)
+    @test cf.use_pkgimages
+    @test cf.debug_level == 3
+    @test cf.check_bounds == 3
+    @test cf.inline
+    @test cf.opt_level == 3
+
+    io = PipeBuffer()
+    show(io, cf)
+    @test read(io, String) == "use_pkgimages = true, debug_level = 3, check_bounds = 3, inline = true, opt_level = 3"
+end
+
+empty!(Base.DEPOT_PATH)
+append!(Base.DEPOT_PATH, original_depot_path)
+
+@testset "loading deadlock detector" begin
+    pkid1 = Base.PkgId("pkgid1")
+    pkid2 = Base.PkgId("pkgid2")
+    pkid3 = Base.PkgId("pkgid3")
+    pkid4 = Base.PkgId("pkgid4")
+    e = Base.Event()
+    @test nothing === @lock Base.require_lock Base.start_loading(pkid4)     # module pkgid4
+    @test nothing === @lock Base.require_lock Base.start_loading(pkid1)     # module pkgid1
+    t1 = @async begin
+        @test nothing === @lock Base.require_lock Base.start_loading(pkid2) # @async module pkgid2; using pkgid1; end
+        notify(e)
+        @test "loaded_pkgid1" == @lock Base.require_lock Base.start_loading(pkid1)
+        @lock Base.require_lock Base.end_loading(pkid2, "loaded_pkgid2")
+    end
+    wait(e)
+    reset(e)
+    t2 = @async begin
+        @test nothing === @lock Base.require_lock Base.start_loading(pkid3) # @async module pkgid3; using pkgid2; end
+        notify(e)
+        @test "loaded_pkgid2" == @lock Base.require_lock Base.start_loading(pkid2)
+        @lock Base.require_lock Base.end_loading(pkid3, "loaded_pkgid3")
+    end
+    wait(e)
+    reset(e)
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid3 -> pkgid2 -> pkgid1 -> pkgid3 && pkgid4"),
+        @lock Base.require_lock Base.start_loading(pkid3)).value            # try using pkgid3
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 -> pkgid4 && pkgid1"),
+        @lock Base.require_lock Base.start_loading(pkid4)).value            # try using pkgid4
+    @lock Base.require_lock Base.end_loading(pkid1, "loaded_pkgid1")        # end
+    @lock Base.require_lock Base.end_loading(pkid4, "loaded_pkgid4")        # end
+    wait(t2)
+    wait(t1)
+end
+
+@testset "Upgradable stdlibs" begin
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using DelimitedFiles'`)
+    @test success(`$(Base.julia_cmd()) --startup-file=no -e 'using Statistics'`)
+end
+
+@testset "checking srcpath modules" begin
+    p = Base.PkgId("Dummy")
+    fpath, _ = mktemp()
+    @testset "valid" begin
+        write(fpath, """
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        baremodule Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        \"\"\"
+        Foo
+        using Foo
+        \"\"\"
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        \"\"\" Foo \"\"\"
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        \"\"\"
+        Foo
+        \"\"\" module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        @doc let x = 1
+            x
+        end module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        # using foo
+        module Foo
+        using Bar
+        end
+        """)
+        @test Base.check_src_module_wrap(p, fpath)
+    end
+    @testset "invalid" begin
+        write(fpath, """
+        # module Foo
+        using Bar
+        # end
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        using Bar
+        module Foo
+        end
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        using Bar
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+
+        write(fpath, """
+        x = 1
+        """)
+        @test_throws ErrorException Base.check_src_module_wrap(p, fpath)
+    end
+end
+
+@testset "relocatable upgrades #51989" begin
+    mktempdir() do depot
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+
+        # Create fake `Foo.jl` package with two files:
+        foo_path = joinpath(depot, "dev", "Foo51989")
+        mkpath(joinpath(foo_path, "src"))
+        open(joinpath(foo_path, "src", "Foo51989.jl"); write=true) do io
+            println(io, """
+            module Foo51989
+            include("internal.jl")
+            end
+            """)
+        end
+        open(joinpath(foo_path, "src", "internal.jl"); write=true) do io
+            println(io, "const a = \"asd\"")
+        end
+        open(joinpath(foo_path, "Project.toml"); write=true) do io
+            println(io, """
+            name = "Foo51989"
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+        end
+
+        # In our depot, `dev` and then `precompile` this `Foo` package.
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo51989"); Pkg.precompile(); exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot))
+
+        # Get the size of the generated `.ji` file so that we can ensure that it gets altered
+        foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo51989")
+        cache_path = joinpath(foo_compiled_path, only(filter(endswith(".ji"), readdir(foo_compiled_path))))
+        cache_size = filesize(cache_path)
+
+        # Next, remove the dependence on `internal.jl` and delete it:
+        rm(joinpath(foo_path, "src", "internal.jl"))
+        open(joinpath(foo_path, "src", "Foo51989.jl"); write=true) do io
+            truncate(io, 0)
+            println(io, """
+            module Foo51989
+            end
+            """)
+        end
+
+        # Try to load `Foo`; this should trigger recompilation, not an error!
+        @test success(addenv(
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo51989; exit(0)'`,
+            "JULIA_DEPOT_PATH" => depot,
+        ))
+
+        # Ensure that there is still only one `.ji` file (it got replaced
+        # and the file size changed).
+        @test length(filter(endswith(".ji"), readdir(foo_compiled_path))) == 1
+        @test filesize(cache_path) != cache_size
+    end
+end
+
+@testset "code coverage disabled during precompilation" begin
+    mktempdir() do depot
+        cov_test_dir = joinpath(@__DIR__, "project", "deps", "CovTest.jl")
+        cov_cache_dir = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "CovTest")
+        function rm_cov_files()
+            for cov_file in filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"), join=true))
+                rm(cov_file)
+            end
+            @test !cov_exists()
+        end
+        cov_exists() = !isempty(filter(endswith(".cov"), readdir(joinpath(cov_test_dir, "src"))))
+
+        rm_cov_files() # clear out any coverage files first
+        @test !cov_exists()
+
+        cd(cov_test_dir) do
+            # In our depot, precompile CovTest.jl with coverage on
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test !isempty(filter(!endswith(".ji"), readdir(cov_cache_dir))) # check that object cache file(s) exists
+            @test !cov_exists()
+            rm_cov_files()
+
+            # same again but call foo(), which is in the pkgimage, and should generate coverage
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; foo(); exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test cov_exists()
+            rm_cov_files()
+
+            # same again but call bar(), which is NOT in the pkgimage, and should generate coverage
+            @test success(addenv(
+                `$(Base.julia_cmd()) --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; bar(); exit(0)'`,
+                "JULIA_DEPOT_PATH" => depot,
+            ))
+            @test cov_exists()
+            rm_cov_files()
+        end
+    end
+end
+
+@testset "command-line flags" begin
+    mktempdir() do dir
+        # generate a Parent.jl and Child.jl package, with Parent depending on Child
+        open(joinpath(dir, "Child.jl"), "w") do io
+            println(io, """
+                module Child
+                end""")
+        end
+        open(joinpath(dir, "Parent.jl"), "w") do io
+            println(io, """
+                module Parent
+                using Child
+                end""")
+        end
+
+        # helper function to load a package and return the output
+        function load_package(name, args=``)
+            code = "using $name"
+            cmd = addenv(`$(Base.julia_cmd()) -e $code $args`,
+                        "JULIA_LOAD_PATH" => dir,
+                        "JULIA_DEBUG" => "loading")
+
+            out = Pipe()
+            proc = run(pipeline(cmd, stdout=out, stderr=out))
+            close(out.in)
+
+            log = @async String(read(out))
+            @test success(proc)
+            fetch(log)
+        end
+
+        log = load_package("Parent", `--compiled-modules=no --pkgimages=no`)
+        @test !occursin(r"Generating (cache|object cache) file", log)
+        @test !occursin(r"Loading (cache|object cache) file", log)
+
+
+        ## tests for `--compiled-modules`, which generates cache files
+
+        log = load_package("Child", `--compiled-modules=yes --pkgimages=no`)
+        @test occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+
+        # with `--compiled-modules=existing` we should only precompile Child
+        log = load_package("Parent", `--compiled-modules=existing --pkgimages=no`)
+        @test !occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+        @test !occursin(r"Generating cache file for Parent", log)
+        @test !occursin(r"Loading cache file .+ for Parent", log)
+
+        # the default is `--compiled-modules=yes`, which should now precompile Parent
+        log = load_package("Parent", `--pkgimages=no`)
+        @test !occursin(r"Generating cache file for Child", log)
+        @test occursin(r"Loading cache file .+ for Child", log)
+        @test occursin(r"Generating cache file for Parent", log)
+        @test occursin(r"Loading cache file .+ for Parent", log)
+
+
+        ## tests for `--pkgimages`, which generates object cache files
+
+        log = load_package("Child", `--compiled-modules=yes --pkgimages=yes`)
+        @test occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+
+        # with `--pkgimages=existing` we should only generate code for Child
+        log = load_package("Parent", `--compiled-modules=yes --pkgimages=existing`)
+        @test !occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+        @test !occursin(r"Generating object cache file for Parent", log)
+        @test !occursin(r"Loading object cache file .+ for Parent", log)
+
+        # the default is `--pkgimages=yes`, which should now generate code for Parent
+        log = load_package("Parent")
+        @test !occursin(r"Generating object cache file for Child", log)
+        @test occursin(r"Loading object cache file .+ for Child", log)
+        @test occursin(r"Generating object cache file for Parent", log)
+        @test occursin(r"Loading object cache file .+ for Parent", log)
+    end
+end
+
+@testset "including non-existent file throws proper error #52462" begin
+    mktempdir() do depot
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+
+        # Create a `Foo.jl` package
+        foo_path = joinpath(depot, "dev", "Foo52462")
+        mkpath(joinpath(foo_path, "src"))
+        open(joinpath(foo_path, "src", "Foo52462.jl"); write=true) do io
+            println(io, """
+            module Foo52462
+            include("non-existent.jl")
+            end
+            """)
+        end
+        open(joinpath(foo_path, "Project.toml"); write=true) do io
+            println(io, """
+            name = "Foo52462"
+            uuid = "00000000-0000-0000-0000-000000000001"
+            version = "1.0.0"
+            """)
+        end
+
+        file = joinpath(depot, "dev", "non-existent.jl")
+        @test_throws SystemError("opening file $(repr(file))") include(file)
+    end
+end

@@ -92,22 +92,29 @@ qr(A::BitMatrix) = qr(float(A))
 
 ## kron
 
-function kron(a::BitVector, b::BitVector)
+@inline function kron!(R::BitVector, a::BitVector, b::BitVector)
     m = length(a)
     n = length(b)
-    R = falses(n * m)
+    @boundscheck length(R) == n*m || throw(DimensionMismatch())
     Rc = R.chunks
     bc = b.chunks
     for j = 1:m
         a[j] && Base.copy_chunks!(Rc, (j-1)*n+1, bc, 1, n)
     end
-    R
+    return R
 end
 
-function kron(a::BitMatrix, b::BitMatrix)
+function kron(a::BitVector, b::BitVector)
+    m = length(a)
+    n = length(b)
+    R = falses(n * m)
+    return @inbounds kron!(R, a, b)
+end
+
+function kron!(R::BitMatrix, a::BitMatrix, b::BitMatrix)
     mA,nA = size(a)
     mB,nB = size(b)
-    R = falses(mA*mB, nA*nB)
+    @boundscheck size(R) == (mA*mB, nA*nB) || throw(DimensionMismatch())
 
     for i = 1:mA
         ri = (1:mB) .+ ((i-1)*mB)
@@ -118,7 +125,14 @@ function kron(a::BitMatrix, b::BitMatrix)
             end
         end
     end
-    R
+    return R
+end
+
+function kron(a::BitMatrix, b::BitMatrix)
+    mA,nA = size(a)
+    mB,nB = size(b)
+    R = falses(mA*mB, nA*nB)
+    return @inbounds kron!(R, a, b)
 end
 
 ## Structure query functions
@@ -171,38 +185,8 @@ function istril(A::BitMatrix)
     return true
 end
 
-function findmax(a::BitArray)
-    isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
-    m, mi = false, 1
-    ti = 1
-    ac = a.chunks
-    for i = 1:length(ac)
-        @inbounds k = trailing_zeros(ac[i])
-        ti += k
-        k == 64 || return (true, ti)
-    end
-    return m, mi
-end
-
-function findmin(a::BitArray)
-    isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
-    m, mi = true, 1
-    ti = 1
-    ac = a.chunks
-    for i = 1:length(ac)-1
-        @inbounds k = trailing_ones(ac[i])
-        ti += k
-        k == 64 || return (false, ti)
-    end
-    l = Base._mod64(length(a)-1) + 1
-    @inbounds k = trailing_ones(ac[end] & Base._msk_end(l))
-    ti += k
-    k == l || return (false, ti)
-    return m, mi
-end
-
 # fast 8x8 bit transpose from Henry S. Warrens's "Hacker's Delight"
-# http://www.hackersdelight.org/hdcodetxt/transpose8.c.txt
+# https://www.hackersdelight.org/hdcodetxt/transpose8.c.txt
 function transpose8x8(x::UInt64)
     y = x
     t = xor(y, y >>> 7) & 0x00aa00aa00aa00aa

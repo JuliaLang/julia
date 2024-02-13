@@ -162,7 +162,7 @@ end
     max_pos = max_width <= 0 ? len : min(i + max_width - 1, len)
     d::Int64 = 0
     @inbounds while i <= max_pos
-        c, ii = next(str, i)
+        c, ii = iterate(str, i)::Tuple{Char, Int}
         if '0' <= c <= '9'
             d = d * 10 + (c - '0')
         else
@@ -181,8 +181,8 @@ end
     word_start, word_end = i, 0
     max_pos = maxchars <= 0 ? len : min(len, nextind(str, i, maxchars-1))
     @inbounds while i <= max_pos
-        c, ii = next(str, i)
-        if isalpha(c)
+        c, ii = iterate(str, i)::Tuple{Char, Int}
+        if isletter(c)
             word_end = i
         else
             break
@@ -198,6 +198,7 @@ end
 
 function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeFormat))
     i, end_pos = firstindex(s), lastindex(s)
+    i > end_pos && throw(ArgumentError("Cannot parse an empty string as a DateTime"))
 
     local dy
     dm = dd = Int64(1)
@@ -209,7 +210,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto error
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != '-' && @goto error
     i > end_pos && @goto done
 
@@ -219,7 +220,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto done
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != '-' && @goto error
     i > end_pos && @goto done
 
@@ -229,7 +230,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto done
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != 'T' && @goto error
     i > end_pos && @goto done
 
@@ -239,7 +240,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto done
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != ':' && @goto error
     i > end_pos && @goto done
 
@@ -249,7 +250,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto done
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != ':' && @goto error
     i > end_pos && @goto done
 
@@ -259,7 +260,7 @@ function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeF
         i > end_pos && @goto done
     end
 
-    c, i = next(s, i)
+    c, i = iterate(s, i)::Tuple{Char, Int}
     c != '.' && @goto error
     i > end_pos && @goto done
 
@@ -279,20 +280,22 @@ end
 
 function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = firstindex(str), lastindex(str)
+    pos > len && throw(ArgumentError("Cannot parse an empty string as a Date or Time"))
     val = tryparsenext_internal(T, str, pos, len, df, true)
     @assert val !== nothing
     values, endpos = val
-    return T(values...)
+    return T(values...)::T
 end
 
 function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     pos, len = firstindex(str), lastindex(str)
+    pos > len && return nothing
     res = tryparsenext_internal(T, str, pos, len, df, false)
     res === nothing && return nothing
     values, endpos = res
     if validargs(T, values...) === nothing
         # TODO: validargs gets called twice, since it's called again in the T constructor
-        return T(values...)
+        return T(values...)::T
     end
     return nothing
 end

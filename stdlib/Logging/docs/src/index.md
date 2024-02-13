@@ -1,6 +1,10 @@
-# Logging
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Logging/docs/src/index.md"
+```
 
-The `Logging` module provides a way to record the history and progress of a
+# [Logging](@id man-logging)
+
+The [`Logging`](@ref Logging.Logging) module provides a way to record the history and progress of a
 computation as a log of events.  Events are created by inserting a logging
 statement into the source code, for example:
 
@@ -35,10 +39,10 @@ A = ones(Int, 4, 4)
 v = ones(100)
 @info "Some variables"  A  s=sum(v)
 
-# Output
+# output
 ┌ Info: Some variables
 │   A =
-│    4×4 Array{Int64,2}:
+│    4×4 Matrix{Int64}:
 │     1  1  1  1
 │     1  1  1  1
 │     1  1  1  1
@@ -58,17 +62,34 @@ automatically extracted. Let's examine the user-defined data first:
 * The *log level* is a broad category for the message that is used for early
   filtering. There are several standard levels of type [`LogLevel`](@ref);
   user-defined levels are also possible.
-  - Use `Debug` for verbose information that could be useful when debugging an
-    application or module. These events are disabled by default.
-  - Use `Info` to inform the user about the normal operation of the program.
-  - Use `Warn` when a potential problem is detected.
-  - Use `Error` to report errors where the code has enough context to recover
-    and continue.  (When the code doesn't have enough context, an exception or
-    early return is more appropriate.)
+  Each built-in log level is distinct in purpose:
+  - [`Logging.Debug`](@ref) (log level -1000) is information intended for the developer of
+    the program. These events are disabled by default.
+  - [`Logging.Info`](@ref) (log level 0) is for general information to the user.
+    Think of it as an alternative to using `println` directly.
+  - [`Logging.Warn`](@ref) (log level 1000) means something is wrong and action is likely
+    required but that for now the program is still working.
+  - [`Logging.Error`](@ref) (log level 2000) means something is wrong and it is unlikely to
+    be recovered, at least by this part of the code.
+    Often this log-level is unneeded as throwing an exception can convey
+    all the required information.
+
+    You can create logging macros for custom log levels. For instance:
+    ```julia-repl
+    julia> using Logging
+
+    julia> @create_log_macro MyLog 200 :magenta
+    @mylog (macro with 1 method)
+
+    julia> @mylog "hello"
+    [ MyLog: hello
+    ```
+
 * The *message*  is an object describing the event. By convention
   `AbstractString`s passed as messages are assumed to be in markdown format.
-  Other types will be displayed using `show(io,mime,obj)` according to the
-  display capabilities of the installed logger.
+  Other types will be displayed using `print(io, obj)` or `string(obj)` for
+  text-based output and possibly `show(io,mime,obj)` for other multimedia
+  displays used in the installed logger.
 * Optional *key--value pairs* allow arbitrary data to be attached to each event.
   Some keys have conventional meaning that can affect the way an event is
   interpreted (see [`@logmsg`](@ref)).
@@ -77,10 +98,10 @@ The system also generates some standard information for each event:
 
 * The `module` in which the logging macro was expanded.
 * The `file` and `line` where the logging macro occurs in the source code.
-* A message `id` that is unique for each logging macro invocation. This is
-  very useful as a key for caching information or actions associated with an
-  event. For instance, it can be used to limit the number of times a message
-  is presented to the user.
+* A message `id` that is a unique, fixed identifier for the *source code
+  statement* where the logging macro appears. This identifier is designed to be
+  fairly stable even if the source code of the file changes, as long as the
+  logging statement itself remains the same.
 * A `group` for the event, which is set to the base name of the file by default,
   without extension.  This can be used to group messages into categories more
   finely than the log level (for example, all deprecation warnings have group
@@ -131,7 +152,7 @@ There are three logger types provided by the library.  [`ConsoleLogger`](@ref)
 is the default logger you see when starting the REPL.  It displays events in a
 readable text format and tries to give simple but user friendly control over
 formatting and filtering.  [`NullLogger`](@ref) is a convenient way to drop all
-messages where necessary; it is the logging equivalent of the [`DevNull`](@ref)
+messages where necessary; it is the logging equivalent of the [`devnull`](@ref)
 stream.  [`SimpleLogger`](@ref) is a very simplistic text formatting logger,
 mainly useful for debugging the logging system itself.
 
@@ -147,15 +168,15 @@ messages that will be discarded:
    [`disable_logging`](@ref)).  This is a crude but extremely cheap global
    setting.
 2. The current logger state is looked up and the message level checked against the
-   logger's cached minimum level, as found by calling [`min_enabled_level`](@ref).
+   logger's cached minimum level, as found by calling [`Logging.min_enabled_level`](@ref).
    This behavior can be overridden via environment variables (more on this later).
-3. The [`shouldlog`](@ref) function is called with the current logger, taking
+3. The [`Logging.shouldlog`](@ref) function is called with the current logger, taking
    some minimal information (level, module, group, id) which can be computed
    statically.  Most usefully, `shouldlog` is passed an event `id` which can be
    used to discard events early based on a cached predicate.
 
 If all these checks pass, the message and key--value pairs are evaluated in full
-and passed to the current logger via the [`handle_message`](@ref) function.
+and passed to the current logger via the [`Logging.handle_message`](@ref) function.
 `handle_message()` may perform additional filtering as required and display the
 event to the screen, save it to a file, etc.
 
@@ -163,7 +184,7 @@ Exceptions that occur while generating the log event are captured and logged
 by default.  This prevents individual broken events from crashing the
 application, which is helpful when enabling little-used debug events in a
 production system.  This behavior can be customized per logger type by
-extending [`catch_exceptions`](@ref).
+extending [`Logging.catch_exceptions`](@ref).
 
 ## Testing log events
 
@@ -174,10 +195,10 @@ pattern match against the log event stream.
 
 ## Environment variables
 
-Message filtering can be influenced through the `JULIA_DEBUG` environment
+Message filtering can be influenced through the [`JULIA_DEBUG`](@ref JULIA_DEBUG) environment
 variable, and serves as an easy way to enable debug logging for a file or
-module. For example, loading julia with `JULIA_DEBUG=loading` will activate
-`@debug` log messages in `loading.jl`:
+module. Loading julia with `JULIA_DEBUG=loading` will activate
+`@debug` log messages in `loading.jl`. For example, in Linux shells:
 
 ```
 $ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
@@ -189,18 +210,112 @@ $ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
 ...
 ```
 
+On windows, the same can be achieved in `CMD` via first running `set JULIA_DEBUG="loading"` and in `Powershell` via
+`$env:JULIA_DEBUG="loading"`.
+
 Similarly, the environment variable can be used to enable debug logging of
 modules, such as `Pkg`, or module roots (see [`Base.moduleroot`](@ref)). To
 enable all debug logging, use the special value `all`.
 
+To turn debug logging on from the REPL, set `ENV["JULIA_DEBUG"]` to the
+name of the module of interest. Functions defined in the REPL belong to
+module `Main`; logging for them can be enabled like this:
+```julia-repl
+julia> foo() = @debug "foo"
+foo (generic function with 1 method)
+
+julia> foo()
+
+julia> ENV["JULIA_DEBUG"] = Main
+Main
+
+julia> foo()
+┌ Debug: foo
+└ @ Main REPL[1]:1
+
+```
+
+Use a comma separator to enable debug for multiple
+modules: `JULIA_DEBUG=loading,Main`.
+
+## Examples
+
+### Example: Writing log events to a file
+
+Sometimes it can be useful to write log events to a file. Here is an example
+of how to use a task-local and global logger to write information to a text
+file:
+
+```julia-repl
+# Load the logging module
+julia> using Logging
+
+# Open a textfile for writing
+julia> io = open("log.txt", "w+")
+IOStream(<file log.txt>)
+
+# Create a simple logger
+julia> logger = SimpleLogger(io)
+SimpleLogger(IOStream(<file log.txt>), Info, Dict{Any,Int64}())
+
+# Log a task-specific message
+julia> with_logger(logger) do
+           @info("a context specific log message")
+       end
+
+# Write all buffered messages to the file
+julia> flush(io)
+
+# Set the global logger to logger
+julia> global_logger(logger)
+SimpleLogger(IOStream(<file log.txt>), Info, Dict{Any,Int64}())
+
+# This message will now also be written to the file
+julia> @info("a global log message")
+
+# Close the file
+julia> close(io)
+```
+
+### Example: Enable debug-level messages
+
+Here is an example of creating a [`ConsoleLogger`](@ref) that lets through any messages
+with log level higher than, or equal, to [`Logging.Debug`](@ref).
+
+```julia-repl
+julia> using Logging
+
+# Create a ConsoleLogger that prints any log messages with level >= Debug to stderr
+julia> debuglogger = ConsoleLogger(stderr, Logging.Debug)
+
+# Enable debuglogger for a task
+julia> with_logger(debuglogger) do
+           @debug "a context specific log message"
+       end
+
+# Set the global logger
+julia> global_logger(debuglogger)
+```
 
 ## Reference
+
+### Logging module
+```@docs
+Logging.Logging
+```
 
 ### Creating events
 
 ```@docs
 Logging.@logmsg
 Logging.LogLevel
+Logging.Debug
+Logging.Info
+Logging.Warn
+Logging.Error
+Logging.BelowMinLevel
+Logging.AboveMaxLevel
+Logging.@create_log_macro
 ```
 
 ### [Processing events with AbstractLogger](@id AbstractLogger-interface)
@@ -208,13 +323,13 @@ Logging.LogLevel
 Event processing is controlled by overriding functions associated with
 `AbstractLogger`:
 
-| Methods to implement          |                        | Brief description                        |
-|:----------------------------- |:---------------------- |:---------------------------------------- |
-| [`handle_message`](@ref)      |                        | Handle a log event                       |
-| [`shouldlog`](@ref)           |                        | Early filtering of events                |
-| [`min_enabled_level`](@ref)   |                        | Lower bound for log level of accepted events |
-| **Optional methods**          | **Default definition** | **Brief description**                    |
-| [`catch_exceptions`](@ref)    | `true`                 | Catch exceptions during event evaluation |
+| Methods to implement                |                        | Brief description                        |
+|:----------------------------------- |:---------------------- |:---------------------------------------- |
+| [`Logging.handle_message`](@ref)    |                        | Handle a log event                       |
+| [`Logging.shouldlog`](@ref)         |                        | Early filtering of events                |
+| [`Logging.min_enabled_level`](@ref) |                        | Lower bound for log level of accepted events |
+| **Optional methods**                | **Default definition** | **Brief description**                    |
+| [`Logging.catch_exceptions`](@ref)  | `true`                 | Catch exceptions during event evaluation |
 
 
 ```@docs
@@ -243,4 +358,3 @@ Logging.NullLogger
 Logging.ConsoleLogger
 Logging.SimpleLogger
 ```
-

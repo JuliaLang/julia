@@ -6,6 +6,7 @@
 Core.AbstractArray
 Base.AbstractVector
 Base.AbstractMatrix
+Base.AbstractVecOrMat
 Core.Array
 Core.Array(::UndefInitializer, ::Any)
 Core.Array(::Nothing, ::Any)
@@ -20,6 +21,20 @@ Base.Matrix
 Base.Matrix(::UndefInitializer, ::Any, ::Any)
 Base.Matrix(::Nothing, ::Any, ::Any)
 Base.Matrix(::Missing, ::Any, ::Any)
+Base.VecOrMat
+Core.DenseArray
+Base.DenseVector
+Base.DenseMatrix
+Base.DenseVecOrMat
+Base.StridedArray
+Base.StridedVector
+Base.StridedMatrix
+Base.StridedVecOrMat
+Base.Memory
+Base.MemoryRef
+Base.Slices
+Base.RowSlices
+Base.ColumnSlices
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
@@ -30,8 +45,8 @@ Base.trues
 Base.falses
 Base.fill
 Base.fill!
-Base.similar(::AbstractArray)
-Base.similar(::Any, ::Tuple)
+Base.empty
+Base.similar
 ```
 
 ## Basic functions
@@ -42,9 +57,11 @@ Base.size
 Base.axes(::Any)
 Base.axes(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
+Base.keys(::AbstractArray)
 Base.eachindex
-Base.linearindices
 Base.IndexStyle
+Base.IndexLinear
+Base.IndexCartesian
 Base.conj!
 Base.stride
 Base.strides
@@ -61,19 +78,18 @@ to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 Base.broadcast
 Base.Broadcast.broadcast!
 Base.@__dot__
-Base.Broadcast.broadcast_getindex
-Base.Broadcast.broadcast_setindex!
 ```
 
 For specializing broadcast on custom types, see
 ```@docs
 Base.BroadcastStyle
-Base.broadcast_similar
-Base.broadcast_axes
 Base.Broadcast.AbstractArrayStyle
 Base.Broadcast.ArrayStyle
 Base.Broadcast.DefaultArrayStyle
 Base.Broadcast.broadcastable
+Base.Broadcast.combine_axes
+Base.Broadcast.combine_styles
+Base.Broadcast.result_style
 ```
 
 ## Indexing and assignment
@@ -81,18 +97,35 @@ Base.Broadcast.broadcastable
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
+Base.nextind
+Base.prevind
 Base.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
+Base.copy!
 Base.isassigned
 Base.Colon
 Base.CartesianIndex
 Base.CartesianIndices
+Base.Dims
 Base.LinearIndices
 Base.to_indices
 Base.checkbounds
 Base.checkindex
+Base.elsize
 ```
 
 ## Views (SubArrays and other view types)
+
+A “view” is a data structure that acts like an array (it is a subtype of `AbstractArray`), but the underlying data is actually
+part of another array.
+
+For example, if `x` is an array and `v = @view x[1:10]`, then `v` acts like a 10-element array, but its data is actually
+accessing the first 10 elements of `x`. Writing to a view, e.g. `v[3] = 2`, writes directly to the underlying array `x`
+(in this case modifying `x[3]`).
+
+Slicing operations like `x[1:10]` create a copy by default in Julia. `@view x[1:10]` changes it to make a view. The
+`@views` macro can be used on a whole block of code (e.g. `@views function foo() .... end` or `@views begin ... end`)
+to change all the slicing operations in that block to use views.  Sometimes making a copy of the data is faster and
+sometimes using a view is faster, as described in the [performance tips](@ref man-performance-views).
 
 ```@docs
 Base.view
@@ -103,8 +136,9 @@ Base.parentindices
 Base.selectdim
 Base.reinterpret
 Base.reshape
-Base.squeeze
+Base.dropdims
 Base.vec
+Base.SubArray
 ```
 
 ## Concatenation and permutation
@@ -114,6 +148,8 @@ Base.cat
 Base.vcat
 Base.hcat
 Base.hvcat
+Base.hvncat
+Base.stack
 Base.vect
 Base.circshift
 Base.circshift!
@@ -149,6 +185,9 @@ Base.rot180
 Base.rotl90
 Base.rotr90
 Base.mapslices
+Base.eachrow
+Base.eachcol
+Base.eachslice
 ```
 
 ## Combinatorics
@@ -158,17 +197,7 @@ Base.invperm
 Base.isperm
 Base.permute!(::Any, ::AbstractVector)
 Base.invpermute!
-Base.reverse
+Base.reverse(::AbstractVector; kwargs...)
 Base.reverseind
 Base.reverse!
-```
-
-## BitArrays
-
-[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
-They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
-and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
-
-```@docs
-Base.flipbits!
 ```

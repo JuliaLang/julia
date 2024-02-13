@@ -4,18 +4,101 @@
 
 module Filesystem
 
-const S_IRUSR = 0o400
-const S_IWUSR = 0o200
-const S_IXUSR = 0o100
-const S_IRWXU = 0o700
-const S_IRGRP = 0o040
-const S_IWGRP = 0o020
-const S_IXGRP = 0o010
-const S_IRWXG = 0o070
-const S_IROTH = 0o004
-const S_IWOTH = 0o002
-const S_IXOTH = 0o001
-const S_IRWXO = 0o007
+"""
+    JL_O_APPEND
+    JL_O_ASYNC
+    JL_O_CLOEXEC
+    JL_O_CREAT
+    JL_O_DIRECT
+    JL_O_DIRECTORY
+    JL_O_DSYNC
+    JL_O_EXCL
+    JL_O_FSYNC
+    JL_O_LARGEFILE
+    JL_O_NDELAY
+    JL_O_NOATIME
+    JL_O_NOCTTY
+    JL_O_NOFOLLOW
+    JL_O_NONBLOCK
+    JL_O_PATH
+    JL_O_RANDOM
+    JL_O_RDONLY
+    JL_O_RDWR
+    JL_O_RSYNC
+    JL_O_SEQUENTIAL
+    JL_O_SHORT_LIVED
+    JL_O_SYNC
+    JL_O_TEMPORARY
+    JL_O_TMPFILE
+    JL_O_TRUNC
+    JL_O_WRONLY
+
+Enum constant for the `open` syscall, where `JL_O_*` corresponds to the `O_*` constant.
+See [the libuv docs](https://docs.libuv.org/en/v1.x/fs.html#file-open-constants) for more details.
+"""
+(:JL_O_APPEND, :JL_O_ASYNC, :JL_O_CLOEXEC, :JL_O_CREAT, :JL_O_DIRECT,
+ :JL_O_DIRECTORY, :JL_O_DSYNC, :JL_O_EXCL, :JL_O_FSYNC, :JL_O_LARGEFILE,
+ :JL_O_NOATIME, :JL_O_NOCTTY, :JL_O_NDELAY, :JL_O_NOFOLLOW, :JL_O_NONBLOCK,
+ :JL_O_PATH, :JL_O_RANDOM, :JL_O_RDONLY, :JL_O_RDWR, :JL_O_RSYNC,
+ :JL_O_SEQUENTIAL, :JL_O_SHORT_LIVED, :JL_O_SYNC, :JL_O_TEMPORARY,
+ :JL_O_TMPFILE, :JL_O_TRUNC, :JL_O_WRONLY)
+
+const S_IFDIR  = 0o040000  # directory
+const S_IFCHR  = 0o020000  # character device
+const S_IFBLK  = 0o060000  # block device
+const S_IFREG  = 0o100000  # regular file
+const S_IFIFO  = 0o010000  # fifo (named pipe)
+const S_IFLNK  = 0o120000  # symbolic link
+const S_IFSOCK = 0o140000  # socket file
+const S_IFMT   = 0o170000
+
+const S_ISUID = 0o4000  # set UID bit
+const S_ISGID = 0o2000  # set GID bit
+const S_ENFMT = S_ISGID # file locking enforcement
+const S_ISVTX = 0o1000  # sticky bit
+
+const S_IRUSR = 0o0400  # read by owner
+const S_IWUSR = 0o0200  # write by owner
+const S_IXUSR = 0o0100  # execute by owner
+const S_IRWXU = 0o0700  # mask for owner permissions
+const S_IRGRP = 0o0040  # read by group
+const S_IWGRP = 0o0020  # write by group
+const S_IXGRP = 0o0010  # execute by group
+const S_IRWXG = 0o0070  # mask for group permissions
+const S_IROTH = 0o0004  # read by other
+const S_IWOTH = 0o0002  # write by other
+const S_IXOTH = 0o0001  # execute by other
+const S_IRWXO = 0o0007  # mask for other permissions
+
+"""
+    S_IRUSR
+    S_IWUSR
+    S_IXUSR
+    S_IRGRP
+    S_IWGRP
+    S_IXGRP
+    S_IROTH
+    S_IWOTH
+    S_IXOTH
+
+Constants for file access permission bits.
+The general structure is `S_I[permission][class]`
+where `permission` is `R` for read, `W` for write, and `X` for execute,
+and `class` is `USR` for user/owner, `GRP` for group, and `OTH` for other.
+"""
+(:S_IRUSR, :S_IWUSR, :S_IXUSR, :S_IRGRP, :S_IWGRP, :S_IXGRP, :S_IROTH, :S_IWOTH, :S_IXOTH)
+
+"""
+    S_IRWXU
+    S_IRWXG
+    S_IRWXO
+
+Constants for file access permission masks, i.e. the combination of read, write,
+and execute permissions for a class.
+The general structure is `S_IRWX[class]`
+where `class` is `U` for user/owner, `G` for group, and `O` for other.
+"""
+(:S_IRWXU, :S_IRWXG, :S_IRWXO)
 
 export File,
        StatStruct,
@@ -34,19 +117,43 @@ export File,
        JL_O_SEQUENTIAL,
        JL_O_RANDOM,
        JL_O_NOCTTY,
+       JL_O_NONBLOCK,
+       JL_O_NDELAY,
+       JL_O_SYNC,
+       JL_O_FSYNC,
+       JL_O_ASYNC,
+       JL_O_LARGEFILE,
+       JL_O_DIRECTORY,
+       JL_O_NOFOLLOW,
+       JL_O_CLOEXEC,
+       JL_O_DIRECT,
+       JL_O_NOATIME,
+       JL_O_PATH,
+       JL_O_TMPFILE,
+       JL_O_DSYNC,
+       JL_O_RSYNC,
        S_IRUSR, S_IWUSR, S_IXUSR, S_IRWXU,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 import .Base:
-    UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
+    IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE
+    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
+
+import .Base.RefValue
 
 if Sys.iswindows()
     import .Base: cwstring
 end
+
+# Average buffer size including null terminator for several filesystem operations.
+# On Windows we use the MAX_PATH = 260 value on Win32.
+const AVG_PATH = Sys.iswindows() ? 260 : 512
+
+# helper function to clean up libuv request
+uv_fs_req_cleanup(req) = ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
 
 include("path.jl")
 include("stat.jl")
@@ -63,10 +170,11 @@ mutable struct File <: AbstractFile
     File(fd::OS_HANDLE) = new(true, fd)
 end
 if OS_HANDLE !== RawFD
-    File(fd::RawFD) = File(Libc._get_osfhandle(fd))
+    File(fd::RawFD) = File(Libc._get_osfhandle(fd)) # TODO: calling close would now destroy the wrong handle
 end
 
 rawhandle(file::File) = file.handle
+setup_stdio(file::File, ::Bool) = (file, false)
 
 # Filesystem.open, not Base.open
 function open(path::AbstractString, flags::Integer, mode::Integer=0)
@@ -75,10 +183,10 @@ function open(path::AbstractString, flags::Integer, mode::Integer=0)
     try
         ret = ccall(:uv_fs_open, Int32,
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Int32, Int32, Ptr{Cvoid}),
-                    eventloop(), req, path, flags, mode, C_NULL)
-        handle = ccall(:jl_uv_fs_result, Cssize_t, (Ptr{Cvoid},), req)
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-        uv_error("open", ret)
+                    C_NULL, req, path, flags, mode, C_NULL)
+        handle = ccall(:uv_fs_get_result, Cssize_t, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
+        ret < 0 && uv_error("open($(repr(path)), $flags, $mode)", ret)
     finally # conversion to Cstring could cause an exception
         Libc.free(req)
     end
@@ -94,21 +202,30 @@ function check_open(f::File)
 end
 
 function close(f::File)
-    check_open(f)
-    err = ccall(:jl_fs_close, Int32, (OS_HANDLE,), f.handle)
-    uv_error("close", err)
-    f.handle = INVALID_OS_HANDLE
-    f.open = false
-    return nothing
+    if isopen(f)
+        f.open = false
+        err = ccall(:jl_fs_close, Int32, (OS_HANDLE,), f.handle)
+        f.handle = INVALID_OS_HANDLE
+        uv_error("close", err)
+    end
+    nothing
 end
 
-# sendfile is the most efficient way to copy a file (or any file descriptor)
+closewrite(f::File) = nothing
+
+# sendfile is the most efficient way to copy from a file descriptor
 function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
-    err = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
-                src.handle, dst.handle, src_offset, bytes)
-    uv_error("sendfile", err)
+    while true
+        result = ccall(:jl_fs_sendfile, Int32, (OS_HANDLE, OS_HANDLE, Int64, Csize_t),
+                       src.handle, dst.handle, src_offset, bytes)
+        uv_error("sendfile", result)
+        nsent = result
+        bytes -= nsent
+        src_offset += nsent
+        bytes <= 0 && break
+    end
     nothing
 end
 
@@ -127,7 +244,7 @@ function truncate(f::File, n::Integer)
     req = Libc.malloc(_sizeof_uv_fs)
     err = ccall(:uv_fs_ftruncate, Int32,
                 (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Int64, Ptr{Cvoid}),
-                eventloop(), req, f.handle, n, C_NULL)
+                C_NULL, req, f.handle, n, C_NULL)
     Libc.free(req)
     uv_error("ftruncate", err)
     return f
@@ -138,7 +255,7 @@ function futime(f::File, atime::Float64, mtime::Float64)
     req = Libc.malloc(_sizeof_uv_fs)
     err = ccall(:uv_fs_futime, Int32,
                 (Ptr{Cvoid}, Ptr{Cvoid}, OS_HANDLE, Float64, Float64, Ptr{Cvoid}),
-                eventloop(), req, f.handle, atime, mtime, C_NULL)
+                C_NULL, req, f.handle, atime, mtime, C_NULL)
     Libc.free(req)
     uv_error("futime", err)
     return f
@@ -146,18 +263,23 @@ end
 
 function read(f::File, ::Type{UInt8})
     check_open(f)
-    ret = ccall(:jl_fs_read_byte, Int32, (OS_HANDLE,), f.handle)
+    p = Ref{UInt8}()
+    ret = ccall(:jl_fs_read, Int32, (OS_HANDLE, Ptr{Cvoid}, Csize_t),
+                f.handle, p, 1)
     uv_error("read", ret)
-    return ret % UInt8
+    @assert ret <= sizeof(p) == 1
+    ret < 1 && throw(EOFError())
+    return p[] % UInt8
 end
 
 function read(f::File, ::Type{Char})
     b0 = read(f, UInt8)
-    l = 8(4-leading_ones(b0))
+    l = 0x08 * (0x04 - UInt8(leading_ones(b0)))
     c = UInt32(b0) << 24
-    if l < 24
+    if l ≤ 0x10
         s = 16
         while s ≥ l && !eof(f)
+            # this works around lack of peek(::File)
             p = position(f)
             b = read(f, UInt8)
             if b & 0xc0 != 0x80
@@ -170,6 +292,7 @@ function read(f::File, ::Type{Char})
     end
     return reinterpret(Char, c)
 end
+
 read(f::File, ::Type{T}) where {T<:AbstractChar} = T(read(f, Char)) # fallback
 
 function unsafe_read(f::File, p::Ptr{UInt8}, nel::UInt)
@@ -205,30 +328,42 @@ const SEEK_END = Int32(2)
 
 function seek(f::File, n::Integer)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, n, SEEK_SET)
-    systemerror("seek", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("seek")
     return f
 end
 
 function seekend(f::File)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, 0, SEEK_END)
-    systemerror("seekend", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("seekend")
     return f
 end
 
 function skip(f::File, n::Integer)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, n, SEEK_CUR)
-    systemerror("skip", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("skip")
     return f
 end
 
 function position(f::File)
     check_open(f)
     ret = ccall(:jl_lseek, Int64, (OS_HANDLE, Int64, Int32), f.handle, 0, SEEK_CUR)
-    systemerror("lseek", ret == -1)
+    ret == -1 && (@static Sys.iswindows() ? windowserror : systemerror)("lseek")
     return ret
 end
 
 fd(f::File) = f.handle
 stat(f::File) = stat(f.handle)
+
+function touch(f::File)
+    @static if Sys.isunix()
+        ret = ccall(:futimes, Cint, (Cint, Ptr{Cvoid}), fd(f), C_NULL)
+        systemerror(:futimes, ret != 0)
+    else
+        t = time()
+        futime(f, t, t)
+    end
+    f
+end
+
 
 end

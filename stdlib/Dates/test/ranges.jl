@@ -35,7 +35,7 @@ let
                 @test first(reverse(dr)) < f1
                 @test last(reverse(dr)) >= f1
                 @test issorted(dr)
-                @test sortperm(dr) == 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(f1 in dr)
                 @test !(l1 in dr)
                 @test !(f1 - pos_step in dr)
@@ -55,7 +55,7 @@ let
                     @test maximum(dr) == last(dr)
                     @test dr[1] == f
                     @test dr[end] <= l
-                    @test next(dr, start(dr)) == (first(dr), 1)
+                    @test iterate(dr) == (first(dr), (length(dr), 1))
 
                     if len < 10000
                         dr1 = [i for i in dr]
@@ -93,7 +93,7 @@ let
                 @test first(reverse(dr)) > l1
                 @test last(reverse(dr)) <= l1
                 @test issorted(dr)
-                @test sortperm(dr) == 1:1:0
+                @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                 @test !(l1 in dr)
                 @test !(l1 in dr)
                 @test !(l1 - neg_step in dr)
@@ -113,7 +113,7 @@ let
                     @test maximum(dr) == first(dr)
                     @test dr[1] == l
                     @test dr[end] >= f
-                    @test next(dr, start(dr)) == (first(dr), 1)
+                    @test iterate(dr) == (first(dr), (length(dr), 1))
 
                     if len < 10000
                         dr1 = [i for i in dr]
@@ -153,7 +153,7 @@ let
                     @test first(reverse(dr)) < f1
                     @test last(reverse(dr)) >= f1
                     @test issorted(dr)
-                    @test sortperm(dr) == 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(f1 in dr)
                     @test !(l1 in dr)
                     @test !(f1 - pos_step in dr)
@@ -173,7 +173,7 @@ let
                         @test maximum(dr) == last(dr)
                         @test dr[1] == f
                         @test dr[end] <= l
-                        @test next(dr, start(dr)) == (first(dr), 1)
+                        @test iterate(dr) == (first(dr), (length(dr), 1))
 
                         if len < 10000
                             dr1 = [i for i in dr]
@@ -211,7 +211,7 @@ let
                     @test first(reverse(dr)) > l1
                     @test last(reverse(dr)) <= l1
                     @test issorted(dr)
-                    @test sortperm(dr) == 1:1:0
+                    @test sortperm(dr) === StepRange{Int64,Int}(1:1:0)
                     @test !(l1 in dr)
                     @test !(l1 in dr)
                     @test !(l1 - neg_step in dr)
@@ -231,7 +231,7 @@ let
                         @test maximum(dr) == first(dr)
                         @test dr[1] == l
                         @test dr[end] >= f
-                        @test next(dr, start(dr)) == (first(dr), 1)
+                        @test iterate(dr) == (first(dr), (length(dr), 1))
 
                         if len < 10000
                             dr1 = [i for i in dr]
@@ -515,7 +515,7 @@ end
 @test length(Dates.Year(1):Dates.Year(1):Dates.Year(10)) == 10
 @test length(Dates.Year(10):Dates.Year(-1):Dates.Year(1)) == 10
 @test length(Dates.Year(10):Dates.Year(-2):Dates.Year(1)) == 5
-@test_throws OverflowError length(typemin(Dates.Year):Dates.Year(1):typemax(Dates.Year))
+@test length(typemin(Dates.Year):Dates.Year(1):typemax(Dates.Year)) == 0 # overflow
 @test_throws MethodError Dates.Date(0):Dates.DateTime(2000)
 @test_throws MethodError Dates.Date(0):Dates.Year(10)
 @test length(range(Dates.Date(2000), step=Dates.Day(1), length=366)) == 366
@@ -578,4 +578,37 @@ a = Dates.Time(23, 1, 1)
 @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
 
+@test hash(Any[Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
+      hash([Date("2018-1-03"), Date("2018-1-04"), Date("2018-1-05")]) ==
+      hash(Date("2018-1-03"):Day(1):Date("2018-1-05"))
+
+@testset "range overflow" begin
+    # DateTime ranges interactions with overflow. If not handled correctly `Dates.len` could
+    # infinite loop
+    @test length(DateTime(0):typemax(Millisecond):DateTime(0)) == 1
+    @test length(typemax(DateTime):typemax(Millisecond):typemax(DateTime)) == 1
+
+    # Overflow interaction is easier to comprehend with using UTM extremes
+    utm_typemin = DateTime(Dates.UTM(typemin(Int64)))
+    utm_typemax = DateTime(Dates.UTM(typemax(Int64)))
+
+    @test length(utm_typemax:Millisecond(1):utm_typemax) == 1
+    @test length(utm_typemin:-Millisecond(1):utm_typemin) == 1
 end
+
+# Issue #45816
+@testset "default step for date ranges" begin
+    r = Date(2000, 1, 1):Date(2000, 12, 31)
+    @test step(r) === Day(1)
+    @test length(r) == 366
+end
+
+# Issue #48209
+@testset "steprange_last overflow" begin
+    epoch = Date(Date(1) - Day(1))
+    dmax = epoch + Day(typemax(fieldtype(Day, :value)))
+    dmin = epoch + Day(typemin(fieldtype(Day, :value)))
+    @test_throws OverflowError StepRange(dmin, Day(1), dmax)
+end
+
+end  # RangesTest module

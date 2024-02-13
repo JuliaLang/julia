@@ -5,11 +5,14 @@ module Libc
 Interface to libc, the C standard library.
 """ Libc
 
-import Base: transcode
+import Base: transcode, windowserror, show
+# these need to be defined separately for bootstrapping but belong to Libc
+import Base: memcpy, memmove, memset, memcmp
 import Core.Intrinsics: bitcast
 
-export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
-    errno, strerror, flush_cstdio, systemsleep, time, transcode
+export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, memcpy,
+    memmove, memset, calloc, realloc, errno, strerror, flush_cstdio, systemsleep, time,
+    transcode, mkfifo
 if Sys.iswindows()
     export GetLastError, FormatMessage
 end
@@ -19,6 +22,15 @@ include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "errno_h.jl"))  # inc
 ## RawFD ##
 
 # Wrapper for an OS file descriptor (on both Unix and Windows)
+"""
+    RawFD
+
+Primitive type which wraps the native OS file descriptor.
+`RawFD`s can be passed to methods like [`stat`](@ref) to
+discover information about the underlying file, and can
+also be used to open streams, with the `RawFD` describing
+the OS file backing the stream.
+"""
 primitive type RawFD 32 end
 RawFD(fd::Integer) = bitcast(RawFD, Cint(fd))
 RawFD(fd::RawFD) = fd
@@ -29,8 +41,15 @@ dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
                 (RawFD, RawFD), src, target))
 
+show(io::IO, fd::RawFD) = print(io, "RawFD(", bitcast(Int32, fd), ')')  # avoids invalidation via show_default
+
 # Wrapper for an OS file descriptor (for Windows)
 if Sys.iswindows()
+    @doc """
+        WindowsRawSocket
+
+    Primitive type which wraps the native Windows file `HANDLE`.
+    """
     primitive type WindowsRawSocket sizeof(Ptr) * 8 end # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
     WindowsRawSocket(handle::Ptr{Cvoid}) = bitcast(WindowsRawSocket, handle)
     WindowsRawSocket(handle::WindowsRawSocket) = handle
@@ -45,7 +64,7 @@ if Sys.iswindows()
         status = ccall(:DuplicateHandle, stdcall, Int32,
             (Ptr{Cvoid}, WindowsRawSocket, Ptr{Cvoid}, Ptr{WindowsRawSocket}, UInt32, Int32, UInt32),
             my_process, src, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
-        status == 0 && error("dup failed: $(FormatMessage())")
+        windowserror("dup failed", status == 0)
         return new_handle[]
     end
     function dup(src::WindowsRawSocket, target::RawFD)
@@ -61,6 +80,34 @@ end
 
 ## FILE (not auto-finalized) ##
 
+"""
+    FILE(::Ptr)
+    FILE(::IO)
+
+A libc `FILE*`, representing an opened file.
+
+It can be passed as a `Ptr{FILE}` argument to [`ccall`](@ref) and also supports
+[`seek`](@ref), [`position`](@ref) and [`close`](@ref).
+
+A `FILE` can be constructed from an ordinary `IO` object, provided it is an open file. It
+must be closed afterward.
+
+# Examples
+```jldoctest
+julia> using Base.Libc
+
+julia> mktemp() do _, io
+           # write to the temporary file using `puts(char*, FILE*)` from libc
+           file = FILE(io)
+           ccall(:fputs, Cint, (Cstring, Ptr{FILE}), "hello world", file)
+           close(file)
+           # read the file again
+           seek(io, 0)
+           read(io, String)
+       end
+"hello world"
+```
+"""
 struct FILE
     ptr::Ptr{Cvoid}
 end
@@ -113,6 +160,16 @@ elseif Sys.iswindows()
 else
     error("systemsleep undefined for this OS")
 end
+"""
+    systemsleep(s::Real)
+
+Suspends execution for `s` seconds.
+This function does not yield to Julia's scheduler and therefore blocks
+the Julia thread that it is running on for the duration of the sleep time.
+
+See also [`sleep`](@ref).
+"""
+systemsleep
 
 struct TimeVal
    sec::Int64
@@ -170,12 +227,13 @@ library.
 """
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
+# Use wcsftime instead of strftime to support different locales
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Base.StringVector(128)
-    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ref{TmStruct}),
-              timestr, length(timestr), fmt, tm)
+    wctimestr = Vector{Cwchar_t}(undef, 128)
+    n = ccall(:wcsftime, Csize_t, (Ptr{Cwchar_t}, Csize_t, Cwstring, Ref{TmStruct}),
+              wctimestr, length(wctimestr), fmt, tm)
     n == 0 && return ""
-    return String(resize!(timestr,n))
+    return transcode(String, resize!(wctimestr, n))
 end
 
 """
@@ -203,7 +261,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     @static if Sys.isapple()
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
-        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
+        if !occursin(r"([^%]|^)%(a|A|j|w|Ow)"a, fmt)
             ccall(:mktime, Int, (Ref{TmStruct},), tm)
         end
     end
@@ -213,14 +271,14 @@ end
 # system date in seconds
 
 """
-    time(t::TmStruct)
+    time(t::TmStruct) -> Float64
 
 Converts a `TmStruct` struct to a number of seconds since the epoch.
 """
 time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ref{TmStruct},), tm))
 
 """
-    time()
+    time() -> Float64
 
 Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 """
@@ -233,12 +291,12 @@ time() = ccall(:jl_clock_now, Float64, ())
 
 Get Julia's process ID.
 """
-getpid() = ccall(:jl_getpid, Int32, ())
+getpid() = ccall(:uv_os_getpid, Int32, ())
 
 ## network functions ##
 
 """
-    gethostname() -> AbstractString
+    gethostname() -> String
 
 Get the local machine's host name.
 """
@@ -293,14 +351,15 @@ function FormatMessage end
 if Sys.iswindows()
     GetLastError() = ccall(:GetLastError, stdcall, UInt32, ())
 
-    function FormatMessage(e=GetLastError())
+    FormatMessage(e) = FormatMessage(UInt32(e))
+    function FormatMessage(e::UInt32=GetLastError())
         FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
         FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
         FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
         FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
         lpMsgBuf = Ref{Ptr{UInt16}}()
         lpMsgBuf[] = 0
-        len = ccall(:FormatMessageW, stdcall, UInt32, (Cint, Ptr{Cvoid}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Cvoid}),
+        len = ccall(:FormatMessageW, stdcall, UInt32, (UInt32, Ptr{Cvoid}, UInt32, UInt32, Ptr{Ptr{UInt16}}, UInt32, Ptr{Cvoid}),
                     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
@@ -313,16 +372,17 @@ if Sys.iswindows()
 end
 
 ## Memory related ##
-
 """
     free(addr::Ptr)
 
-Call `free` from the C standard library. Only use this on memory obtained from `malloc`, not
-on pointers retrieved from other C libraries. `Ptr` objects obtained from C libraries should
+Call `free` from the C standard library. Only use this on memory obtained from [`malloc`](@ref), not
+on pointers retrieved from other C libraries. [`Ptr`](@ref) objects obtained from C libraries should
 be freed by the free functions defined in that library, to avoid assertion failures if
 multiple `libc` libraries exist on the system.
 """
 free(p::Ptr) = ccall(:free, Cvoid, (Ptr{Cvoid},), p)
+free(p::Cstring) = free(convert(Ptr{UInt8}, p))
+free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
 
 """
     malloc(size::Integer) -> Ptr{Cvoid}
@@ -336,8 +396,8 @@ malloc(size::Integer) = ccall(:malloc, Ptr{Cvoid}, (Csize_t,), size)
 
 Call `realloc` from the C standard library.
 
-See warning in the documentation for `free` regarding only using this on memory originally
-obtained from `malloc`.
+See warning in the documentation for [`free`](@ref) regarding only using this on memory originally
+obtained from [`malloc`](@ref).
 """
 realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, size)
 
@@ -348,29 +408,165 @@ Call `calloc` from the C standard library.
 """
 calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Cvoid}, (Csize_t, Csize_t), num, size)
 
-free(p::Cstring) = free(convert(Ptr{UInt8}, p))
-free(p::Cwstring) = free(convert(Ptr{Cwchar_t}, p))
+
 
 ## Random numbers ##
 
-# To limit dependency on rand functionality implemented in the Random module,
-# Libc.rand is used in file.jl, and could be used in error.jl (but it breaks a test)
-"""
-    rand([T::Type])
+# Access to very high quality (kernel) randomness
+function getrandom!(A::Union{Array,Base.RefValue})
+    ret = ccall(:uv_random, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}, Csize_t,   Cuint, Ptr{Cvoid}),
+                                   C_NULL,     C_NULL,     A,          sizeof(A), 0,     C_NULL)
+    Base.uv_error("getrandom", ret)
+    return A
+end
+_make_uint64_seed() = getrandom!(Base.RefValue{UInt64}())[]
 
-Interface to the C `rand()` function. If `T` is provided, generate a value of type `T`
-by composing two calls to `rand()`. `T` can be `UInt32` or `Float64`.
+# To limit dependency on rand functionality implemented in the Random module,
+# Libc.rand is used in Base (it also is independent from Random.seed, so is
+# only affected by `Libc.srand(seed)` calls)
 """
-rand() = ccall(:rand, Cint, ())
-# RAND_MAX at least 2^15-1 in theory, but we assume 2^16-1 (in practice, it's 2^31-1)
-rand(::Type{UInt32}) = ((rand() % UInt32) << 16) ⊻ (rand() % UInt32)
-rand(::Type{Float64}) = rand(UInt32) / 2^32
+    rand([T::Type]=UInt32)
+
+Generate a random number of type `T`. `T` can be `UInt32` or `Float64`.
+"""
+rand() = ccall(:jl_rand, UInt64, ()) % UInt32
+rand(::Type{UInt32}) = rand()
+rand(::Type{Float64}) = rand() * 2.0^-32
 
 """
     srand([seed])
 
-Interface to the C `srand(seed)` function.
+Set a value for the current global `seed`.
 """
-srand(seed=floor(time())) = ccall(:srand, Cvoid, (Cuint,), seed)
+function srand(seed::Integer=_make_uint64_seed())
+    ccall(:jl_srand, Cvoid, (UInt64,), seed % UInt64)
+end
+
+"""
+    mkfifo(path::AbstractString, [mode::Integer]) -> path
+
+Make a FIFO special file (a named pipe) at `path`.  Return `path` as-is on success.
+
+`mkfifo` is supported only in Unix platforms.
+
+!!! compat "Julia 1.11"
+    `mkfifo` requires at least Julia 1.11.
+"""
+function mkfifo(
+    path::AbstractString,
+    mode::Integer = Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IWGRP |
+                    Base.S_IROTH | Base.S_IWOTH,
+)
+    @static if Sys.isunix()
+        # Default `mode` is compatible with `mkfifo` CLI in coreutils.
+        ret = ccall(:mkfifo, Cint, (Cstring, Base.Cmode_t), path, mode)
+        systemerror("mkfifo", ret == -1)
+        return path
+    else
+        # Using normal `error` because `systemerror("mkfifo", ENOTSUP)` does not
+        # seem to work on Windows.
+        error("mkfifo: Operation not supported")
+    end
+end
+
+struct Cpasswd
+   username::Cstring
+   uid::Culong
+   gid::Culong
+   shell::Cstring
+   homedir::Cstring
+   gecos::Cstring
+   Cpasswd() = new(C_NULL, typemax(Culong), typemax(Culong), C_NULL, C_NULL, C_NULL)
+end
+mutable struct Cgroup
+    groupname::Cstring # group name
+    gid::Culong        # group ID
+    mem::Ptr{Cstring}  # group members
+    Cgroup() = new(C_NULL, typemax(Culong), C_NULL)
+end
+struct Passwd
+    username::String
+    uid::UInt
+    gid::UInt
+    shell::String
+    homedir::String
+    gecos::String
+end
+struct Group
+    groupname::String
+    gid::UInt
+    mem::Vector{String}
+end
+
+# Gets password-file entry for default user, or a subset thereof
+# (e.g., uid and guid are set to -1 on Windows)
+function getpw()
+    ref_pd = Ref(Cpasswd())
+    ret = ccall(:uv_os_get_passwd, Cint, (Ref{Cpasswd},), ref_pd)
+    Base.uv_error("getpw", ret)
+
+    pd = ref_pd[]
+    pd = Passwd(
+        pd.username == C_NULL ? "" : unsafe_string(pd.username),
+        pd.uid,
+        pd.gid,
+        pd.shell == C_NULL ? "" : unsafe_string(pd.shell),
+        pd.homedir == C_NULL ? "" : unsafe_string(pd.homedir),
+        pd.gecos == C_NULL ? "" : unsafe_string(pd.gecos),
+    )
+    ccall(:uv_os_free_passwd, Cvoid, (Ref{Cpasswd},), ref_pd)
+    return pd
+end
+
+function getpwuid(uid::Unsigned, throw_error::Bool=true)
+    ref_pd = Ref(Cpasswd())
+    ret = ccall(:uv_os_get_passwd2, Cint, (Ref{Cpasswd}, Culong), ref_pd, uid)
+    if ret != 0
+        throw_error && Base.uv_error("getpwuid", ret)
+        return
+    end
+    pd = ref_pd[]
+    pd = Passwd(
+        pd.username == C_NULL ? "" : unsafe_string(pd.username),
+        pd.uid,
+        pd.gid,
+        pd.shell == C_NULL ? "" : unsafe_string(pd.shell),
+        pd.homedir == C_NULL ? "" : unsafe_string(pd.homedir),
+        pd.gecos == C_NULL ? "" : unsafe_string(pd.gecos),
+    )
+    ccall(:uv_os_free_passwd, Cvoid, (Ref{Cpasswd},), ref_pd)
+    return pd
+end
+
+function getgrgid(gid::Unsigned, throw_error::Bool=true)
+    ref_gp = Ref(Cgroup())
+    ret = ccall(:uv_os_get_group, Cint, (Ref{Cgroup}, Culong), ref_gp, gid)
+    if ret != 0
+        throw_error && Base.uv_error("getgrgid", ret)
+        return
+    end
+    gp = ref_gp[]
+    members = String[]
+    if gp.mem != C_NULL
+        while true
+            mem = unsafe_load(gp.mem, length(members) + 1)
+            mem == C_NULL && break
+            push!(members, unsafe_string(mem))
+        end
+    end
+    gp = Group(
+         gp.groupname == C_NULL ? "" : unsafe_string(gp.groupname),
+         gp.gid,
+         members,
+    )
+    ccall(:uv_os_free_group, Cvoid, (Ref{Cgroup},), ref_gp)
+    return gp
+end
+
+getuid() = ccall(:jl_getuid, Culong, ())
+geteuid() = ccall(:jl_geteuid, Culong, ())
+
+# Include dlopen()/dlpath() code
+include("libdl.jl")
 
 end # module
