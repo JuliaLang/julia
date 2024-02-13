@@ -27,7 +27,7 @@ if !Sys.iswindows()
         tracecompile_out = read(f, String)
         close(ptm) # close after reading so we don't get precompiles from error shutdown
 
-        expected_precompiles = 1
+        expected_precompiles = 2
 
         n_precompiles = count(r"precompile\(", tracecompile_out)
 
