@@ -175,6 +175,7 @@ periods(x::CompoundPeriod) = x.periods
 
 """
     CompoundPeriod(periods) -> CompoundPeriod
+    CompoundPeriod(::Real, ::Type{Period}) -> CompoundPeriod
 
 Construct a `CompoundPeriod` from a `Vector` of `Period`s. All `Period`s of the same type
 will be added together.
@@ -192,6 +193,9 @@ julia> Dates.CompoundPeriod(Dates.Month(1), Dates.Week(-2))
 
 julia> Dates.CompoundPeriod(Dates.Minute(50000))
 50000 minutes
+
+julia> Dates.canonicalize(Dates.CompoundPeriod(1.5, Dates.Day))
+1 day, 12 hours
 ```
 """
 CompoundPeriod(p::Vector{<:Period}) = CompoundPeriod(Vector{Period}(p))
@@ -201,6 +205,10 @@ CompoundPeriod(t::Time) = CompoundPeriod(Period[Hour(t), Minute(t), Second(t), M
 
 CompoundPeriod(p::Period...) = CompoundPeriod(Period[p...])
 
+function CompoundPeriod(x::Real, ::Type{T}) where {T <: Period}
+    nf = value(convert(Nanosecond, T(1)))
+    return CompoundPeriod(Nanosecond(ceil(x * nf)))
+end
 
 """
     canonicalize(::CompoundPeriod) -> CompoundPeriod
