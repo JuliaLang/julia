@@ -65,6 +65,10 @@ installed. The default is `~/.juliaup`.
 Note that we recommend the following methods _only_ if none of the installation
 methods described above work for your system.
 
+Some of the installation methods described below recommend installing a package
+called `juliaup`. Note that this nevertheless installs a fully functional
+Julia system, not just Juliaup.
+
 ### App Installer (Windows)
 
 If the Windows Store is blocked on a system, we have an alternative
