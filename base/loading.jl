@@ -776,12 +776,21 @@ end
 function entry_point_and_project_file(dir::String, name::String)::Union{Tuple{Nothing,Nothing},Tuple{String,Nothing},Tuple{String,String}}
     path = normpath(joinpath(dir, "$name.jl"))
     isfile_casesensitive(path) && return path, nothing
-    dir = joinpath(dir, name)
-    path, project_file = entry_point_and_project_file_inside(dir, name)
+    dir_name = joinpath(dir, name)
+    path, project_file = entry_point_and_project_file_inside(dir_name, name)
     path === nothing || return path, project_file
-    dir = dir * ".jl"
-    path, project_file = entry_point_and_project_file_inside(dir, name)
+    dir_jl = dir_name * ".jl"
+    path, project_file = entry_point_and_project_file_inside(dir_jl, name)
     path === nothing || return path, project_file
+    # `name` could be an extension so we have to check for that:
+    for pkg in readdir(dir; join=true)
+        project_file = env_project_file(pkg)
+        project_file isa String || continue
+        path = project_file_ext_path(project_file, name)
+        if path !== nothing
+            return path, project_file
+        end
+    end
     return nothing, nothing
 end
 
@@ -796,11 +805,12 @@ end
 ## explicit project & manifest API ##
 
 # find project file root or deps `name => uuid` mapping
+# `ext` is the name of the extension if `name` is loaded from one
 # return `nothing` if `name` is not found
-function explicit_project_deps_get(project_file::String, name::String)::Union{Nothing,UUID}
+function explicit_project_deps_get(project_file::String, name::String, ext::Union{String,Nothing}=nothing)::Union{Nothing,UUID}
     d = parsed_toml(project_file)
-    root_uuid = dummy_uuid(project_file)
     if get(d, "name", nothing)::Union{String, Nothing} === name
+        root_uuid = dummy_uuid(project_file)
         uuid = get(d, "uuid", nothing)::Union{String, Nothing}
         return uuid === nothing ? root_uuid : UUID(uuid)
     end
@@ -808,6 +818,19 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     if deps !== nothing
         uuid = get(deps, name, nothing)::Union{String, Nothing}
         uuid === nothing || return UUID(uuid)
+    end
+    if ext !== nothing
+        extensions = get(d, "extensions", nothing)
+        extensions === nothing && return nothing
+        ext_data = get(extensions, ext, nothing)
+        ext_data === nothing && return nothing
+        if (ext_data isa String && name == ext_data) || (ext_data isa Vector{String} && name in ext_data)
+            weakdeps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
+            weakdeps === nothing && return nothing
+            wuuid = get(weakdeps, name, nothing)::Union{String, Nothing}
+            wuuid === nothing && return nothing
+            return UUID(wuuid)
+        end
     end
     return nothing
 end
@@ -998,9 +1021,22 @@ function implicit_manifest_deps_get(dir::String, where::PkgId, name::String)::Un
     project_file = entry_point_and_project_file(dir, where.name)[2]
     project_file === nothing && return nothing # a project file is mandatory for a package with a uuid
     proj = project_file_name_uuid(project_file, where.name)
-    proj == where || return nothing # verify that this is the correct project file
+    ext = nothing
+    if proj !== where
+        # `where` could be an extension in `proj`
+        d = parsed_toml(project_file)
+        exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
+        if exts !== nothing && where.name in keys(exts)
+            if where.uuid !== uuid5(proj.uuid, where.name)
+                return nothing
+            end
+            ext = where.name
+        else
+            return nothing
+        end
+    end
     # this is the correct project, so stop searching here
-    pkg_uuid = explicit_project_deps_get(project_file, name)
+    pkg_uuid = explicit_project_deps_get(project_file, name, ext)
     return PkgId(pkg_uuid, name)
 end
 
