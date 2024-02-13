@@ -152,6 +152,7 @@ end
     @test α.\UniformScaling(α) == UniformScaling(1.0)
     @test α * UniformScaling(1.0) == UniformScaling(1.0) * α
     @test UniformScaling(α)/α == UniformScaling(1.0)
+    @test 2I//3 == (2//3)*I
     @test (2I)^α == (2I).^α == (2^α)I
 
     β = rand()

@@ -106,6 +106,11 @@ norm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
 norm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     length(x) < NRM2_CUTOFF ? generic_norm2(x) : BLAS.nrm2(x)
 
+# Conservative assessment of types that have zero(T) defined for themselves
+haszero(::Type) = false
+haszero(::Type{T}) where {T<:Number} = isconcretetype(T)
+@propagate_inbounds _zero(M::AbstractArray{T}, i, j) where {T} = haszero(T) ? zero(T) : zero(M[i,j])
+
 """
     triu!(M, k::Integer)
 
@@ -136,7 +141,7 @@ function triu!(M::AbstractMatrix, k::Integer)
     m, n = size(M)
     for j in 1:min(n, m + k)
         for i in max(1, j - k + 1):m
-            @inbounds M[i,j] = zero(M[i,j])
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     M
@@ -173,12 +178,13 @@ function tril!(M::AbstractMatrix, k::Integer)
     require_one_based_indexing(M)
     m, n = size(M)
     for j in max(1, k + 1):n
-        @inbounds for i in 1:min(j - k - 1, m)
-            M[i,j] = zero(M[i,j])
+        for i in 1:min(j - k - 1, m)
+            @inbounds M[i,j] = _zero(M, i,j)
         end
     end
     M
 end
+
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 """

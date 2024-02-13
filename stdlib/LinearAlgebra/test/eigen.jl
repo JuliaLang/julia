@@ -45,12 +45,13 @@ aimg  = randn(n,n)/2
             @test eigvecs(f) === f.vectors
             @test Array(f) ≈ a
 
-            for T in (Tridiagonal(a), Hermitian(Tridiagonal(a)))
+            for T in (Tridiagonal(a), Hermitian(Tridiagonal(a), :U), Hermitian(Tridiagonal(a), :L))
                 f = eigen(T)
                 d, v = f
                 for i in 1:size(a,2)
                     @test T*v[:,i] ≈ d[i]*v[:,i]
                 end
+                @test eigvals(T) ≈ d
                 @test det(T) ≈ det(f)
                 @test inv(T) ≈ inv(f)
             end

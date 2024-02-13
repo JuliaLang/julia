@@ -177,7 +177,7 @@ a Goertzel-like [^DK62] algorithm if `x` is complex.
 !!! compat "Julia 1.4"
     This function requires Julia 1.4 or later.
 
-# Example
+# Examples
 ```jldoctest
 julia> evalpoly(2, (1, 2, 3))
 17
@@ -453,7 +453,7 @@ tanh(x::Number)
 
 Compute the inverse tangent of `y` or `y/x`, respectively.
 
-For one argument, this is the angle in radians between the positive *x*-axis and the point
+For one real argument, this is the angle in radians between the positive *x*-axis and the point
 (1, *y*), returning a value in the interval ``[-\\pi/2, \\pi/2]``.
 
 For two arguments, this is the angle in radians between the positive *x*-axis and the
@@ -581,8 +581,11 @@ atanh(x::Number)
 """
     log(x)
 
-Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
-[`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
+Compute the natural logarithm of `x`.
+
+Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use complex arguments to obtain complex results.
+Has a branch cut along the negative real axis, for which `-0.0im` is taken to be below the axis.
 
 See also [`ℯ`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
@@ -597,6 +600,12 @@ log was called with a negative real argument but will only return a complex resu
 Stacktrace:
  [1] throw_complex_domainerror(::Symbol, ::Float64) at ./math.jl:31
 [...]
+
+julia> log(-3 + 0im)
+1.0986122886681098 + 3.141592653589793im
+
+julia> log(-3 - 0.0im)
+1.0986122886681098 - 3.141592653589793im
 
 julia> log.(exp.(-1:1))
 3-element Vector{Float64}:
@@ -695,8 +704,13 @@ end
 """
     sqrt(x)
 
-Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
-Use complex negative arguments instead. The prefix operator `√` is equivalent to `sqrt`.
+Return ``\\sqrt{x}``.
+
+Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use complex negative arguments instead. Note that `sqrt` has a branch cut
+along the negative real axis.
+
+The prefix operator `√` is equivalent to `sqrt`.
 
 See also: [`hypot`](@ref).
 
@@ -714,6 +728,9 @@ Stacktrace:
 
 julia> sqrt(big(complex(-81)))
 0.0 + 9.0im
+
+julia> sqrt(-81 - 0.0im)  # -0.0im is below the branch cut
+0.0 - 9.0im
 
 julia> .√(1:4)
 4-element Vector{Float64}:
@@ -932,9 +949,11 @@ end
 
 Compute ``x \\times 2^n``.
 
+See also [`frexp`](@ref), [`exponent`](@ref).
+
 # Examples
 ```jldoctest
-julia> ldexp(5., 2)
+julia> ldexp(5.0, 2)
 20.0
 ```
 """
@@ -991,8 +1010,7 @@ Returns the largest integer `y` such that `2^y ≤ abs(x)`.
 Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
 For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
 
-See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref).
-
+See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref), [`ldexp`](@ref).
 # Examples
 ```jldoctest
 julia> exponent(8)
@@ -1004,8 +1022,16 @@ julia> exponent(6.5)
 julia> exponent(-1//4)
 -2
 
+julia> exponent(3.142e-4)
+-12
+
 julia> exponent(floatmin(Float32)), exponent(nextfloat(0.0f0))
 (-126, -149)
+
+julia> exponent(0.0)
+ERROR: DomainError with 0.0:
+Cannot be ±0.0.
+[...]
 ```
 """
 function exponent(x::T) where T<:IEEEFloat
@@ -1045,6 +1071,8 @@ a non-zero finite number, then the result will be a number of the same type and
 sign as `x`, and whose absolute value is on the interval ``[1,2)``. Otherwise
 `x` is returned.
 
+See also [`frexp`](@ref), [`exponent`](@ref).
+
 # Examples
 ```jldoctest
 julia> significand(15.2)
@@ -1079,10 +1107,19 @@ end
 
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and `val` is equal to ``x \\times 2^{exp}``.
+
+See also [`significand`](@ref), [`exponent`](@ref), [`ldexp`](@ref).
+
 # Examples
 ```jldoctest
-julia> frexp(12.8)
-(0.8, 4)
+julia> frexp(6.0)
+(0.75, 3)
+
+julia> significand(6.0), exponent(6.0)  # interval [1, 2) instead
+(1.5, 2)
+
+julia> frexp(0.0), frexp(NaN), frexp(-Inf)  # exponent would give an error
+((0.0, 0), (NaN, 0), (-Inf, 0))
 ```
 """
 function frexp(x::T) where T<:IEEEFloat
@@ -1294,7 +1331,7 @@ end
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
     # double-double numbers and returns the high double. References:
-    # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
+    # [1] https://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
@@ -1469,9 +1506,11 @@ end
 rem2pi(x::Float32, r::RoundingMode) = Float32(rem2pi(Float64(x), r))
 rem2pi(x::Float16, r::RoundingMode) = Float16(rem2pi(Float64(x), r))
 rem2pi(x::Int32, r::RoundingMode) = rem2pi(Float64(x), r)
-function rem2pi(x::Int64, r::RoundingMode)
-    fx = Float64(x)
-    fx == x || throw(ArgumentError("Int64 argument to rem2pi is too large: $x"))
+
+# general fallback
+function rem2pi(x::Integer, r::RoundingMode)
+    fx = float(x)
+    fx == x || throw(ArgumentError(LazyString(typeof(x), " argument to rem2pi is too large: ", x)))
     rem2pi(fx, r)
 end
 

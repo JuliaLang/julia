@@ -103,17 +103,20 @@ end
     has_offset_axes(A, B, ...)
 
 Return `true` if the indices of `A` start with something other than 1 along any axis.
-If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset_axes(B) | ...`.
+If multiple arguments are passed, equivalent to `has_offset_axes(A) || has_offset_axes(B) || ...`.
 
 See also [`require_one_based_indexing`](@ref).
 """
+has_offset_axes() = false
 has_offset_axes(A) = _any_tuple(x->Int(first(x))::Int != 1, false, axes(A)...)
 has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve performance of a common case (ranges)
-# Use `_any_tuple` to avoid unneeded invoke.
-# note: this could call `any` directly if the compiler can infer it
-has_offset_axes(As...) = _any_tuple(has_offset_axes, false, As...)
 has_offset_axes(::Colon) = false
 has_offset_axes(::Array) = false
+# note: this could call `any` directly if the compiler can infer it. We don't use _any_tuple
+# here because it stops full elision in some cases (#49332) and we don't need handling of
+# `missing` (has_offset_axes(A) always returns a Bool)
+has_offset_axes(A, As...) = has_offset_axes(A) || has_offset_axes(As...)
+
 
 """
     require_one_based_indexing(A::AbstractArray)
@@ -881,7 +884,7 @@ julia> empty([1.0, 2.0, 3.0], String)
 String[]
 ```
 """
-empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
+empty(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = similar(a, U, 0)
 
 # like empty, but should return a mutable collection, a Vector by default
 emptymutable(a::AbstractVector{T}, ::Type{U}=T) where {T,U} = Vector{U}()
@@ -1214,7 +1217,8 @@ function copymutable(a::AbstractArray)
 end
 copymutable(itr) = collect(itr)
 
-zero(x::AbstractArray{T}) where {T} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray) = map(zero, x)
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
@@ -1986,23 +1990,90 @@ The keyword also accepts `Val(dims)`.
     For multiple dimensions `dims = Val(::Tuple)` was added in Julia 1.8.
 
 # Examples
+
+Concatenate two arrays in different dimensions:
+```jldoctest
+julia> a = [1 2 3]
+1×3 Matrix{Int64}:
+ 1  2  3
+
+julia> b = [4 5 6]
+1×3 Matrix{Int64}:
+ 4  5  6
+
+julia> cat(a, b; dims=1)
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+
+julia> cat(a, b; dims=2)
+1×6 Matrix{Int64}:
+ 1  2  3  4  5  6
+
+julia> cat(a, b; dims=(1, 2))
+2×6 Matrix{Int64}:
+ 1  2  3  0  0  0
+ 0  0  0  4  5  6
+```
+
+# Extended Help
+
+Concatenate 3D arrays:
+```jldoctest
+julia> a = ones(2, 2, 3);
+
+julia> b = ones(2, 2, 4);
+
+julia> c = cat(a, b; dims=3);
+
+julia> size(c) == (2, 2, 7)
+true
+```
+
+Concatenate arrays of different sizes:
 ```jldoctest
 julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)  # same as hcat
 2×6×1 Array{Float64, 3}:
 [:, :, 1] =
  1.0  2.0  3.14159  10.0  10.0  10.0
  3.0  4.0  3.14159  10.0  10.0  10.0
+```
 
+Construct a block diagonal matrix:
+```
 julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
 4×7 Matrix{Bool}:
  1  0  0  0  0  0  0
  0  1  1  0  0  0  0
  0  1  1  0  0  0  0
  0  0  0  1  1  1  1
+```
 
+```
 julia> cat(1, [2], [3;;]; dims=Val(2))
 1×3 Matrix{Int64}:
  1  2  3
+```
+
+!!! note
+    `cat` does not join two strings, you may want to use `*`.
+
+```jldoctest
+julia> a = "aaa";
+
+julia> b = "bbb";
+
+julia> cat(a, b; dims=1)
+2-element Vector{String}:
+ "aaa"
+ "bbb"
+
+julia> cat(a, b; dims=2)
+1×2 Matrix{String}:
+ "aaa"  "bbb"
+
+julia> a * b
+"aaabbb"
 ```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
@@ -3108,9 +3179,8 @@ julia> foreach((x, y) -> println(x, " with ", y), tri, 'a':'z')
 7 with c
 ```
 """
-foreach(f) = (f(); nothing)
 foreach(f, itr) = (for x in itr; f(x); end; nothing)
-foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
+foreach(f, itr, itrs...) = (for z in zip(itr, itrs...); f(z...); end; nothing)
 
 ## map over arrays ##
 
@@ -3282,10 +3352,6 @@ end
 concatenate_setindex!(R, v, I...) = (R[I...] .= (v,); R)
 concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 
-## 0 arguments
-
-map(f) = f()
-
 ## 1 argument
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
@@ -3421,7 +3487,7 @@ julia> map(+, [1 2; 3 4], [1,10,100,1000], zeros(3,1))  # iterates until 3rd is 
  102.0
 ```
 """
-map(f, iters...) = collect(Generator(f, iters...))
+map(f, it, iters...) = collect(Generator(f, it, iters...))
 
 # multi-item push!, pushfirst! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)

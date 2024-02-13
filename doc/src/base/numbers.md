@@ -63,6 +63,8 @@ Core.Int64
 Core.UInt64
 Core.Int128
 Core.UInt128
+Base.Int
+Base.UInt
 Base.BigInt
 Base.Complex
 Base.Rational

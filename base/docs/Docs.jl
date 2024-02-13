@@ -60,12 +60,12 @@ function.
 
 include("bindings.jl")
 
-import .Base.Meta: quot, isexpr
+import .Base.Meta: quot, isexpr, unblock, unescape, uncurly
 import .Base: Callable, with_output_color
 using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 
-export doc
+export doc, hasdoc, undocumented_names
 
 # Basic API / Storage
 
@@ -284,29 +284,6 @@ catdoc() = nothing
 catdoc(xs...) = vcat(xs...)
 
 const keywords = Dict{Symbol, DocStr}()
-
-function unblock(@nospecialize ex)
-    while isexpr(ex, :var"hygienic-scope")
-        isexpr(ex.args[1], :escape) || break
-        ex = ex.args[1].args[1]
-    end
-    isexpr(ex, :block) || return ex
-    exs = filter(ex -> !(isa(ex, LineNumberNode) || isexpr(ex, :line)), ex.args)
-    length(exs) == 1 || return ex
-    return unblock(exs[1])
-end
-
-# peek through ex to figure out what kind of expression it may eventually act like
-# but ignoring scopes and line numbers
-function unescape(@nospecialize ex)
-    ex = unblock(ex)
-    while isexpr(ex, :escape) || isexpr(ex, :var"hygienic-scope")
-       ex = unblock(ex.args[1])
-    end
-    return ex
-end
-
-uncurly(@nospecialize ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
 namify(@nospecialize x) = astname(x, isexpr(x, :macro))::Union{Symbol,Expr,GlobalRef}
 
@@ -650,11 +627,37 @@ function loaddocs(docs::Vector{Core.SimpleVector})
     nothing
 end
 
+# FIXME: formatdoc, parsedoc, apropos, and doc are defined here (but only doc is exported)
+# for historical reasons (#25738), but are *implemented* in REPL/src/docview.jl, while
+# apropos is *exported* by InteractiveUtils and doc is exported by Docs.  Seems
+# like a more sensible refactoring should be possible.
+
 function formatdoc end
 function parsedoc end
-function apropos end
-function doc end
 
+"""
+    apropos([io::IO=stdout], pattern::Union{AbstractString,Regex})
+
+Search available docstrings for entries containing `pattern`.
+
+When `pattern` is a string, case is ignored. Results are printed to `io`.
+
+`apropos` can be called from the help mode in the REPL by wrapping the query in double quotes:
+```
+help?> "pattern"
+```
+"""
+function apropos end
+
+"""
+    Docs.doc(binding, sig)
+
+Return all documentation that matches both `binding` and `sig`.
+
+If `getdoc` returns a non-`nothing` result on the value of the binding, then a
+dynamic docstring is returned instead of one based on the binding itself.
+"""
+function doc end
 
 """
     Docs.hasdoc(mod::Module, sym::Symbol)::Bool
@@ -676,18 +679,19 @@ end
 
 
 """
-    undocumented_names(mod::Module; all=false)
+    undocumented_names(mod::Module; private=false)
 
-Return an array of undocumented symbols in `module` (that is, lacking docstrings).
-`all=false` returns only exported symbols; whereas `all=true` also includes
-non-exported symbols, following the behavior of [`names`](@ref). Only valid identifiers
-are included. Names are returned in sorted order.
+Return a sorted vector of undocumented symbols in `module` (that is, lacking docstrings).
+`private=false` (the default) returns only identifiers declared with `public` and/or
+`export`, whereas `private=true` returns all symbols in the module (excluding
+compiler-generated hidden symbols starting with `#`).
 
-See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.isidentifier`](@ref).
+See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.ispublic`](@ref).
 """
-function undocumented_names(mod::Module; all::Bool=false)
-    filter!(names(mod; all)) do sym
-        !hasdoc(mod, sym) && Base.isidentifier(sym)
+function undocumented_names(mod::Module; private::Bool=false)
+    filter!(names(mod; all=true)) do sym
+        !hasdoc(mod, sym) && !startswith(string(sym), '#') &&
+            (private || Base.ispublic(mod, sym))
     end
 end
 

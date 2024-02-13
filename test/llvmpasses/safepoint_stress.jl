@@ -14,7 +14,7 @@ define void @stress(i64 %a, i64 %b) {
     %ptls = call {}*** @julia.ptls_states()
 """)
 
-# CHECK: %gcframe = alloca {} addrspace(10)*, i32 10002
+# CHECK: %gcframe = alloca ptr addrspace(10), i32 10002
 for i = 1:10000
     println("\t%arg$i = call {} addrspace(10)* @alloc()")
 end

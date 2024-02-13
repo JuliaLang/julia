@@ -3,7 +3,7 @@
 original_depot_path = copy(Base.DEPOT_PATH)
 original_load_path = copy(Base.LOAD_PATH)
 
-using Test, Distributed, Random
+using Test, Distributed, Random, Logging
 using REPL # doc lookup function
 
 Foo_module = :Foo4b3a94a1a081a8cb
@@ -115,6 +115,8 @@ precompile_test_harness(false) do dir
                   d = den(a)
                   return h
               end
+              abstract type AbstractAlgebraMap{A} end
+              struct GAPGroupHomomorphism{A, B} <: AbstractAlgebraMap{GAPGroupHomomorphism{B, A}} end
           end
           """)
     write(Foo2_file,
@@ -130,7 +132,7 @@ precompile_test_harness(false) do dir
     write(Foo_file,
           """
           module $Foo_module
-              import $FooBase_module, $FooBase_module.typeA
+              import $FooBase_module, $FooBase_module.typeA, $FooBase_module.GAPGroupHomomorphism
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
@@ -213,6 +215,8 @@ precompile_test_harness(false) do dir
               Base.convert(::Type{Some{Value18343}}, ::Value18343{Some}) = 2
               Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
+              const GAPType1 = GAPGroupHomomorphism{Nothing, Nothing}
+              const GAPType2 = GAPGroupHomomorphism{1, 2}
 
               # issue #28297
               mutable struct Result
@@ -432,7 +436,8 @@ precompile_test_harness(false) do dir
         modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> mod_fl_mt.filename
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
-        @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
+        # foo.jl and bar.jl are never written to disk, so they are not relocatable
+        @test map(x -> x.filename, deps) == [ Foo_file, joinpath("@depot", "foo.jl"), joinpath("@depot", "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
                             Base.PkgId(Foo) => Base.PkgId(Test),
@@ -464,6 +469,7 @@ precompile_test_harness(false) do dir
             # and their dependencies
             Dict(Base.PkgId(Base.root_module(Base, :SHA)) => Base.module_build_id(Base.root_module(Base, :SHA))),
             Dict(Base.PkgId(Base.root_module(Base, :Markdown)) => Base.module_build_id(Base.root_module(Base, :Markdown))),
+            Dict(Base.PkgId(Base.root_module(Base, :StyledStrings)) => Base.module_build_id(Base.root_module(Base, :StyledStrings))),
             # and their dependencies
             Dict(Base.PkgId(Base.root_module(Base, :Base64)) => Base.module_build_id(Base.root_module(Base, :Base64))),
         )
@@ -579,7 +585,7 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    @test Base.compilecache(Base.PkgId("OverwriteMethodError")) == Base.PrecompilableError() # due to piracy
+    @test (@test_warn "overwritten in module OverwriteMethodError" Base.compilecache(Base.PkgId("OverwriteMethodError"))) == Base.PrecompilableError() # due to piracy
 
     UseBaz_file = joinpath(dir, "UseBaz.jl")
     write(UseBaz_file,
@@ -624,7 +630,7 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    cachefile, _ = Base.compilecache(Base.PkgId("FooBar"))
+    cachefile, _ = @test_logs (:debug, r"Precompiling FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
@@ -1688,13 +1694,14 @@ precompile_test_harness("Issue #46558") do load_path
     @test (@eval $Foo.foo(1)) == 2
 end
 
+# TODO: Decide if we need to keep supporting this.
 precompile_test_harness("issue #46296") do load_path
     write(joinpath(load_path, "CodeInstancePrecompile.jl"),
         """
         module CodeInstancePrecompile
 
         mi = first(Base.specializations(first(methods(identity))))
-        ci = Core.CodeInstance(mi, Any, Any, nothing, nothing, zero(Int32), typemin(UInt),
+        ci = Core.CodeInstance(mi, nothing, Any, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
         __init__() = @assert ci isa Core.CodeInstance
@@ -1703,6 +1710,69 @@ precompile_test_harness("issue #46296") do load_path
         """)
     Base.compilecache(Base.PkgId("CodeInstancePrecompile"))
     (@eval (using CodeInstancePrecompile))
+end
+
+precompile_test_harness("AbstractInterpreter caching") do load_path
+    write(joinpath(load_path, "SimpleModule.jl"),
+        """
+        module SimpleModule
+            basic_callee(x) = x
+            basic_caller(x) = basic_callee(x)
+        end
+        """)
+    write(joinpath(load_path, "CustomAbstractInterpreterCaching.jl"),
+        """
+        module CustomAbstractInterpreterCaching
+            import SimpleModule: basic_caller, basic_callee
+            module Custom
+                const CC = Core.Compiler
+
+                struct InvalidationTesterToken end
+
+                struct InvalidationTester <: CC.AbstractInterpreter
+                    world::UInt
+                    inf_params::CC.InferenceParams
+                    opt_params::CC.OptimizationParams
+                    inf_cache::Vector{CC.InferenceResult}
+                    function InvalidationTester(;
+                                                world::UInt = Base.get_world_counter(),
+                                                inf_params::CC.InferenceParams = CC.InferenceParams(),
+                                                opt_params::CC.OptimizationParams = CC.OptimizationParams(),
+                                                inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
+                        return new(world, inf_params, opt_params, inf_cache)
+                    end
+                end
+
+                CC.InferenceParams(interp::InvalidationTester) = interp.inf_params
+                CC.OptimizationParams(interp::InvalidationTester) = interp.opt_params
+                CC.get_inference_world(interp::InvalidationTester) = interp.world
+                CC.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
+                CC.cache_owner(::InvalidationTester) = InvalidationTesterToken()
+            end
+
+            Base.return_types((Float64,)) do x
+                basic_caller(x)
+            end
+            Base.return_types((Float64,); interp=Custom.InvalidationTester()) do x
+                basic_caller(x)
+            end
+        end
+        """)
+    Base.compilecache(Base.PkgId("CustomAbstractInterpreterCaching"))
+    (@eval begin
+        using CustomAbstractInterpreterCaching
+        let m = only(methods(CustomAbstractInterpreterCaching.basic_callee))
+            mi = only(Base.specializations(m))
+            ci = mi.cache
+            @test isdefined(ci, :next)
+            @test ci.owner === nothing
+            @test ci.max_world == typemax(UInt)
+            ci = ci.next
+            @test !isdefined(ci, :next)
+            @test ci.owner === CustomAbstractInterpreterCaching.Custom.InvalidationTesterToken()
+            @test ci.max_world == typemax(UInt)
+        end
+    end)
 end
 
 precompile_test_harness("Recursive types") do load_path
@@ -1793,10 +1863,10 @@ precompile_test_harness("PkgCacheInspector") do load_path
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
     end
 
-    modules, init_order, external_methods, new_specializations, new_method_roots, external_targets, edges = sv
-    m = only(external_methods)
+    modules, init_order, external_methods, new_ext_cis, new_method_roots, external_targets, edges = sv
+    m = only(external_methods).func::Method
     @test m.name == :repl_cmd && m.nargs < 2
-    @test any(new_specializations) do ci
+    @test new_ext_cis === nothing || any(new_ext_cis) do ci
         mi = ci.def
         mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end

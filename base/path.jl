@@ -77,6 +77,8 @@ Return the current user's home directory.
     `homedir` determines the home directory via `libuv`'s `uv_os_homedir`. For details
     (for example on how to specify the home directory via environment variables), see the
     [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
+
+See also [`Sys.username`](@ref).
 """
 function homedir()
     buf = Base.StringVector(AVG_PATH - 1) # space for null-terminator implied by StringVector
@@ -433,11 +435,11 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
 
-# Example
+# Examples
 
 If you are in a directory called `JuliaExample` and the data you are using is two levels up relative to the `JuliaExample` directory, you could write:
 
-abspath("../../data")
+    abspath("../../data")
 
 Which gives a path like `"/home/JuliaUser/data/"`.
 
