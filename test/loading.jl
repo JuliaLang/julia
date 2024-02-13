@@ -1114,6 +1114,46 @@ end
             run(cmd_proj_ext)
         end
 
+        test_repl_ext = """
+        begin
+            using Pkg
+
+            # Retrieve REPLExt header information
+            REPLExt_compiled_dir = joinpath(DEPOT_PATH[end], "compiled", "v$(VERSION.major).$(VERSION.minor)", "REPLExt")
+            REPLExt_ji_file = first(filter(endswith(".ji"), readdir(REPLExt_compiled_dir)))
+            REPLExt_ji_file = joinpath(REPLExt_compiled_dir, REPLExt_ji_file)
+            REPLExt_header_info = open(REPLExt_ji_file, "r") do io
+                checksum = Base.isvalid_cache_header(io)
+                iszero(checksum) && error("Checksum of \$REPLExt_ji_file is zero")
+                Base.parse_cache_header(io, REPLExt_ji_file)
+            end
+
+            #REPLExt_id = Base.PkgId(Base.UUID("e5eb5ef1-03cf-53a7-ae1d-5a66b08e832b"), "REPLExt")
+            REPLExt_id = REPLExt_header_info[1][1][1]
+
+            # deps = ["Markdown", "UUIDs", "Dates", "REPL", "Pkg"]
+            deps = map(REPLExt_header_info[2][3]) do pair
+               last(pair).name
+            end
+
+            results = map(deps) do dep
+                pkg_id = Base.identify_package(REPLExt_id, dep)
+                return isnothing(pkg_id)
+            end
+            if any(results)
+                error("Could not resolve one or more dependencies of REPLExt \$(deps[results])")
+            end
+
+            using REPL
+            Base.get_extension(Pkg, :REPLExt) isa Module || error("Expected REPLExt to load")
+        end
+        """
+        mktempdir() do path
+            cmd_repl_ext = `$(Base.julia_cmd()) --startup-file=no -e $test_repl_ext`
+            cmd_repl_ext = addenv(cmd_repl_ext, "JULIA_LOAD_PATH" => "$path:")
+            run(cmd_repl_ext)
+        end
+
         # Sysimage extensions
         # The test below requires that LinearAlgebra is in the sysimage and that it has not been loaded yet.
         # if it gets moved out, this test will need to be updated.
