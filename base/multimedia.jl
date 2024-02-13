@@ -206,13 +206,21 @@ for mime in ["application/atom+xml", "application/ecmascript",
 end
 
 """
-    MIMEData{mime<:MIME}(data)
+    struct MIMEData{mime<:MIME}
+        data
+    end
+
+    MIMEData(mime::Union{MIME,AbstractString}, data)
 
 A wrapper around `data` that causes [`show`](@ref)` to [`write`](@ref) it as
 raw data of the given [`MIME`](@ref) type.
 
 That is, when `show(io, mime, d)` is called on `d::MIMEData{mime}`, it simply
-calls `write(io, d)`.
+calls `write(io, d.data)`.
+
+Can be constructed with `MIMEData(mime, data)` where `mime` is either a MIME
+type (an instance of `MIME`) or a string such as `"text/plain"` (which gets
+converted to a `MIME` instance).
 """
 struct MIMEData{mime<:MIME}
     data
