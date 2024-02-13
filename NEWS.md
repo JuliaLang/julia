@@ -111,6 +111,7 @@ New library features
   automatically.
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
 * `filter` can now act on a `NamedTuple` ([#50795]).
+* `Iterators.cycle(iter, n)` runs over `iter` a fixed number of times, instead of forever ([#47354])
 * `zero(::AbstractArray)` now applies recursively, so `zero([[1,2],[3,4,5]])` now produces the additive identity `[[0,0],[0,0,0]]` rather than erroring ([#38064]).
 
 Standard library changes

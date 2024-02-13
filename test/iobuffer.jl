@@ -120,6 +120,7 @@ end
     Base.compact(io)
     @test position(io) == 0
     @test ioslength(io) == 0
+    Base._resize!(io,0)
     Base.ensureroom(io,50)
     @test position(io) == 0
     @test ioslength(io) == 0

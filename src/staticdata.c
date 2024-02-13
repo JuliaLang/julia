@@ -2305,6 +2305,7 @@ static void jl_reinit_ccallable(arraylist_t *ccallable_list, char *base, void *s
 static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
 {
     size_t l = jl_svec_len(cache), i;
+    size_t sz = 0;
     if (l == 0)
         return cache;
     for (i = 0; i < l; i++) {
@@ -2313,11 +2314,16 @@ static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
             continue;
         if (ptrhash_get(&serialization_order, ti) == HT_NOTFOUND)
             jl_svecset(cache, i, jl_nothing);
+        else
+            sz += 1;
     }
+    if (sz < HT_N_INLINE)
+        sz = HT_N_INLINE;
+
     void *idx = ptrhash_get(&serialization_order, cache);
     assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
     assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == cache);
-    cache = cache_rehash_set(cache, l);
+    cache = cache_rehash_set(cache, sz);
     // redirect all references to the old cache to relocate to the new cache object
     ptrhash_put(&serialization_order, cache, idx);
     serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = cache;

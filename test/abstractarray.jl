@@ -1961,3 +1961,21 @@ end
     @test zero([[2,2], [3,3,3]]) isa Vector{Vector{Int}}
     @test zero([[2,2], [3,3,3]]) == [[0,0], [0, 0, 0]]
 end
+
+@testset "`_prechecked_iterate` optimization" begin
+    function test_prechecked_iterate(iter)
+        Js = Base._prechecked_iterate(iter)
+        for I in iter
+            J, s = Js::NTuple{2,Any}
+            @test J === I
+            Js = Base._prechecked_iterate(iter, s)
+        end
+    end
+    test_prechecked_iterate(1:10)
+    test_prechecked_iterate(Base.OneTo(10))
+    test_prechecked_iterate(CartesianIndices((3, 3)))
+    test_prechecked_iterate(CartesianIndices(()))
+    test_prechecked_iterate(LinearIndices((3, 3)))
+    test_prechecked_iterate(LinearIndices(()))
+    test_prechecked_iterate(Base.SCartesianIndices2{3}(1:3))
+end

@@ -1154,6 +1154,7 @@ static void cache_insert_type_set(jl_datatype_t *val, uint_t hv)
 
 jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz)
 {
+    newsz = newsz ? next_power_of_two(newsz) : 0;
     jl_value_t **ol = jl_svec_data(a);
     size_t sz = jl_svec_len(a);
     while (1) {

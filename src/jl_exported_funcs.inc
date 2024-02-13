@@ -436,7 +436,6 @@
     XX(jl_stdout_stream) \
     XX(jl_stored_inline) \
     XX(jl_string_ptr) \
-    XX(jl_string_to_array) \
     XX(jl_subtype) \
     XX(jl_subtype_env) \
     XX(jl_subtype_env_size) \
