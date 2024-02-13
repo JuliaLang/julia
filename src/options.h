@@ -144,6 +144,9 @@
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0
 
+// heap-size-hint in MB
+#define HEAP_SIZE_HINT_MB_NAME          "JULIA_HEAP_SIZE_HINT_MB"
+
 // sanitizer defaults ---------------------------------------------------------
 
 // Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
