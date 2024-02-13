@@ -112,7 +112,7 @@ static const char opts[]  =
     " --handle-signals={yes*|no} Enable or disable Julia's default signal handlers\n"
     " --sysimage-native-code={yes*|no}\n"
     "                            Use native code from system image if available\n"
-    " --compiled-modules={yes*|no|existing}\n"
+    " --compiled-modules={yes*|no|existing|strict}\n"
     "                            Enable or disable incremental precompilation of modules\n"
     " --pkgimages={yes*|no|existing}\n"
     "                            Enable or disable usage of native code caching in the form of pkgimages ($)\n\n"
@@ -466,8 +466,10 @@ restart_switch:
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_NO;
             else if (!strcmp(optarg,"existing"))
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_EXISTING;
+            else if (!strcmp(optarg,"strict"))
+                jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_STRICT;
             else
-                jl_errorf("julia: invalid argument to --compiled-modules={yes|no|existing} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --compiled-modules={yes|no|existing|strict} (%s)", optarg);
             break;
         case opt_pkgimages:
             if (!strcmp(optarg,"yes"))

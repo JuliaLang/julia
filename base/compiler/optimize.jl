@@ -1086,7 +1086,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             idx += 1
             prevloc = codeloc
         end
-        if ssavaluetypes[idx] === Union{} && !(oldidx in sv.unreachable)
+        if ssavaluetypes[idx] === Union{} && !(oldidx in sv.unreachable) && !isa(code[idx], PhiNode)
             # We should have converted any must-throw terminators to an equivalent w/o control-flow edges
             @assert !isterminator(code[idx])
 

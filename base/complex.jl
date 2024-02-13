@@ -1097,7 +1097,7 @@ second is used for rounding the imaginary components.
 which rounds to the nearest integer, with ties (fractional values of 0.5)
 being rounded to the nearest even integer.
 
-# Example
+# Examples
 ```jldoctest
 julia> round(3.14 + 4.5im)
 3.0 + 4.0im

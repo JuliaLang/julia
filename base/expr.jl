@@ -831,7 +831,7 @@ end
 Tells the compiler to infer `f` using the declared types of `@nospecialize`d arguments.
 This can be used to limit the number of compiler-generated specializations during inference.
 
-# Example
+# Examples
 
 ```julia
 julia> f(A::AbstractArray) = g(A)

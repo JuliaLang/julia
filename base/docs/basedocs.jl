@@ -2028,7 +2028,21 @@ AbstractFloat
 """
     Integer <: Real
 
-Abstract supertype for all integers.
+Abstract supertype for all integers (e.g. [`Signed`](@ref), [`Unsigned`](@ref), and [`Bool`](@ref)).
+
+See also [`isinteger`](@ref), [`trunc`](@ref), [`div`](@ref).
+
+# Examples
+```
+julia> 42 isa Integer
+true
+
+julia> 1.0 isa Integer
+false
+
+julia> isinteger(1.0)
+true
+```
 """
 Integer
 
@@ -2043,6 +2057,21 @@ Signed
     Unsigned <: Integer
 
 Abstract supertype for all unsigned integers.
+
+Built-in unsigned integers are printed in hexadecimal, with prefix `0x`,
+and can be entered in the same way.
+
+# Examples
+```
+julia> typemax(UInt8)
+0xff
+
+julia> Int(0x00d)
+13
+
+julia> unsigned(true)
+0x0000000000000001
+```
 """
 Unsigned
 
@@ -2053,56 +2082,146 @@ Boolean type, containing the values `true` and `false`.
 
 `Bool` is a kind of number: `false` is numerically
 equal to `0` and `true` is numerically equal to `1`.
-Moreover, `false` acts as a multiplicative "strong zero":
+Moreover, `false` acts as a multiplicative "strong zero"
+against [`NaN`](@ref) and [`Inf`](@ref):
 
 ```jldoctest
-julia> false == 0
+julia> [true, false] == [1, 0]
 true
 
-julia> true == 1
-true
+julia> 42.0 + true
+43.0
 
-julia> 0 * NaN
-NaN
+julia> 0 .* (NaN, Inf, -Inf)
+(NaN, NaN, NaN)
 
-julia> false * NaN
-0.0
+julia> false .* (NaN, Inf, -Inf)
+(0.0, 0.0, -0.0)
 ```
 
-See also: [`digits`](@ref), [`iszero`](@ref), [`NaN`](@ref).
+Branches via [`if`](@ref) and other conditionals only accept `Bool`.
+There are no "truthy" values in Julia.
+
+Comparisons typically return `Bool`, and broadcasted comparisons may
+return [`BitArray`](@ref) instead of an `Array{Bool}`.
+
+```jldoctest
+julia> [1 2 3 4 5] .< pi
+1×5 BitMatrix:
+ 1  1  1  0  0
+
+julia> map(>(pi), [1 2 3 4 5])
+1×5 Matrix{Bool}:
+ 0  0  0  1  1
+```
+
+See also [`trues`](@ref), [`falses`](@ref), [`ifelse`](@ref).
 """
 Bool
 
-for (bit, sign, exp, frac) in ((16, 1, 5, 10), (32, 1, 8, 23), (64, 1, 11, 52))
-    @eval begin
-        """
-            Float$($bit) <: AbstractFloat
+"""
+    Float64 <: AbstractFloat <: Real
 
-        $($bit)-bit floating point number type (IEEE 754 standard).
+64-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 11 exponent, 52 fraction bits.
+See [`bitstring`](@ref), [`signbit`](@ref), [`exponent`](@ref), [`frexp`](@ref),
+and [`significand`](@ref) to access various bits.
 
-        Binary format: $($sign) sign, $($exp) exponent, $($frac) fraction bits.
-        """
-        $(Symbol("Float", bit))
-    end
-end
+This is the default for floating point literals, `1.0 isa Float64`,
+and for many operations such as `1/2, 2pi, log(2), range(0,90,length=4)`.
+Unlike integers, this default does not change with `Sys.WORD_SIZE`.
+
+The exponent for scientific notation can be entered as `e` or `E`,
+thus `2e3 === 2.0E3 === 2.0 * 10^3`. Doing so is strongly preferred over
+`10^n` because integers overflow, thus `2.0 * 10^19 < 0` but `2e19 > 0`.
+
+See also [`Inf`](@ref), [`NaN`](@ref), [`floatmax`](@ref), [`Float32`](@ref), [`Complex`](@ref).
+"""
+Float64
+
+"""
+    Float32 <: AbstractFloat <: Real
+
+32-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 8 exponent, 23 fraction bits.
+
+The exponent for scientific notation should be entered as lower-case `f`,
+thus `2f3 === 2.0f0 * 10^3 === Float32(2_000)`.
+For array literals and comprehensions, the element type can be specified before
+the square brackets: `Float32[1,4,9] == Float32[i^2 for i in 1:3]`.
+
+See also [`Inf32`](@ref), [`NaN32`](@ref), [`Float16`](@ref), [`exponent`](@ref), [`frexp`](@ref).
+"""
+Float32
+
+"""
+    Float16 <: AbstractFloat <: Real
+
+16-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 5 exponent, 10 fraction bits.
+"""
+Float16
 
 for bit in (8, 16, 32, 64, 128)
+    type = Symbol(:Int, bit)
+    srange = bit > 31 ? "" : "Represents numbers `n ∈ " * repr(eval(:(typemin($type):typemax($type)))) * "`.\n"
+    unshow = repr(eval(Symbol(:UInt, bit))(bit-1))
+
     @eval begin
         """
-            Int$($bit) <: Signed
+            Int$($bit) <: Signed <: Integer
 
         $($bit)-bit signed integer type.
+
+        $($(srange))Note that such integers overflow without warning,
+        thus `typemax($($type)) + $($type)(1) < 0`.
+
+        See also [`Int`](@ref $Int), [`widen`](@ref), [`BigInt`](@ref).
         """
         $(Symbol("Int", bit))
 
         """
-            UInt$($bit) <: Unsigned
+            UInt$($bit) <: Unsigned <: Integer
 
         $($bit)-bit unsigned integer type.
+
+        Printed in hexadecimal, thus $($(unshow)) == $($(bit-1)).
         """
         $(Symbol("UInt", bit))
     end
 end
+
+"""
+    Int
+
+Sys.WORD_SIZE-bit signed integer type, `Int <: Signed <: Integer <: Real`.
+
+This is the default type of most integer literals and is an alias for either `Int32`
+or `Int64`, depending on `Sys.WORD_SIZE`. It is the type returned by functions such as
+[`length`](@ref), and the standard type for indexing arrays.
+
+Note that integers overflow without warning, thus `typemax(Int) + 1 < 0` and `10^19 < 0`.
+Overflow can be avoided by using [`BigInt`](@ref).
+Very large integer literals will use a wider type, for instance `10_000_000_000_000_000_000 isa Int128`.
+
+Integer division is [`div`](@ref) alias `÷`,
+whereas [`/`](@ref) acting on integers returns [`Float64`](@ref).
+
+See also [`$(Symbol("Int", Sys.WORD_SIZE))`](@ref), [`widen`](@ref), [`typemax`](@ref), [`bitstring`](@ref).
+"""
+Int
+
+"""
+    UInt
+
+Sys.WORD_SIZE-bit unsigned integer type, `UInt <: Unsigned <: Integer`.
+
+Like [`Int`](@ref Int), the alias `UInt` may point to either `UInt32` or `UInt64`,
+according to the value of `Sys.WORD_SIZE` on a given computer.
+
+Printed and parsed in hexadecimal: `UInt(15) === $(repr(UInt(15)))`.
+"""
+UInt
 
 """
     Symbol
@@ -2796,7 +2915,13 @@ Ptr{T}()
 """
     +(x, y...)
 
-Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
+Addition operator.
+
+Infix `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`,
+which by default then calls `(x+y) + z + ...` starting from the left.
+
+Note that overflow is possible for most integer types, including the
+default `Int`, when adding large numbers.
 
 # Examples
 ```jldoctest
@@ -2805,6 +2930,14 @@ julia> 1 + 20 + 4
 
 julia> +(1, 20, 4)
 25
+
+julia> [1,2] + [3,4]
+2-element Vector{Int64}:
+ 4
+ 6
+
+julia> typemax(Int) + 1 < 0
+true
 ```
 """
 (+)(x, y...)
@@ -2828,6 +2961,12 @@ julia> -[1 2; 3 4]
 2×2 Matrix{Int64}:
  -1  -2
  -3  -4
+
+julia> -(true)  # promotes to Int
+-1
+
+julia> -(0x003)
+0xfffd
 ```
 """
 -(x)
@@ -2851,7 +2990,18 @@ julia> -(2, 4.5)
 """
     *(x, y...)
 
-Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`.
+Multiplication operator.
+
+Infix `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`,
+which by default then calls `(x*y) * z * ...` starting from the left.
+
+Juxtaposition such as `2pi` also calls `*(2, pi)`. Note that this operation
+has higher precedence than a literal `*`. Note also that juxtaposition "0x..."
+(integer zero times a variable whose name starts with `x`) is forbidden as
+it clashes with unsigned integer literals: `0x01 isa UInt8`.
+
+Note that overflow is possible for most integer types, including the default `Int`,
+when multiplying large numbers.
 
 # Examples
 ```jldoctest
@@ -2860,6 +3010,17 @@ julia> 2 * 7 * 8
 
 julia> *(2, 7, 8)
 112
+
+julia> [2 0; 0 3] * [1, 10]  # matrix * vector
+2-element Vector{Int64}:
+  2
+ 30
+
+julia> 1/2pi, 1/2*pi  # juxtaposition has higher precedence
+(0.15915494309189535, 1.5707963267948966)
+
+julia> x = [1, 2]; x'x  # adjoint vector * vector
+5
 ```
 """
 (*)(x, y...)
@@ -2867,8 +3028,10 @@ julia> *(2, 7, 8)
 """
     /(x, y)
 
-Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
-floating-point results for integer arguments.
+Right division operator: multiplication of `x` by the inverse of `y` on the right.
+
+Gives floating-point results for integer arguments.
+See [`÷`](@ref div) for integer division, or [`//`](@ref) for [`Rational`](@ref) results.
 
 # Examples
 ```jldoctest

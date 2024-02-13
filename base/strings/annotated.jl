@@ -45,7 +45,7 @@ AnnotatedString(s::S<:AbstractString, annotations::Vector{Tuple{UnitRange{Int}, 
 A AnnotatedString can also be created with [`annotatedstring`](@ref), which acts much
 like [`string`](@ref) but preserves any annotations present in the arguments.
 
-# Example
+# Examples
 
 ```julia-repl
 julia> AnnotatedString("this is an example annotated string",
@@ -153,7 +153,7 @@ lastindex(s::AnnotatedString) = lastindex(s.string)
 function getindex(s::AnnotatedString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
-        AnnotatedChar(s.string[i], annotations(s, i))
+        AnnotatedChar(s.string[i], map(last, annotations(s, i)))
     else
         string_index_err(s, i)
     end
@@ -354,11 +354,15 @@ annotate!(c::AnnotatedChar, @nospecialize(labelval::Pair{Symbol, <:Any})) =
     (push!(c.annotations, labelval); c)
 
 """
-    annotations(str::AnnotatedString, [position::Union{Integer, UnitRange}])
-    annotations(str::SubString{AnnotatedString}, [position::Union{Integer, UnitRange}])
+    annotations(str::Union{AnnotatedString, SubString{AnnotatedString}},
+                [position::Union{Integer, UnitRange}]) ->
+        Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}
 
 Get all annotations that apply to `str`. Should `position` be provided, only
 annotations that overlap with `position` will be returned.
+
+Annotations are provided together with the regions they apply to, in the form of
+a vector of region–annotation tuples.
 
 See also: `annotate!`.
 """
@@ -369,22 +373,22 @@ annotations(s::SubString{<:AnnotatedString}) =
 
 function annotations(s::AnnotatedString, pos::UnitRange{<:Integer})
     # TODO optimise
-    annots = filter(label -> !isempty(intersect(pos, first(label))),
-                    s.annotations)
-    last.(annots)
+    filter(label -> !isempty(intersect(pos, first(label))),
+           s.annotations)
 end
 
 annotations(s::AnnotatedString, pos::Integer) = annotations(s, pos:pos)
 
 annotations(s::SubString{<:AnnotatedString}, pos::Integer) =
     annotations(s.string, s.offset + pos)
+
 annotations(s::SubString{<:AnnotatedString}, pos::UnitRange{<:Integer}) =
     annotations(s.string, first(pos)+s.offset:last(pos)+s.offset)
 
 """
-    annotations(chr::AnnotatedChar)
+    annotations(chr::AnnotatedChar) -> Vector{Pair{Symbol, Any}}
 
-Get all annotations of `chr`.
+Get all annotations of `chr`, in the form of a vector of annotation pairs.
 """
 annotations(c::AnnotatedChar) = c.annotations
 
@@ -410,7 +414,7 @@ pipe_writer(io::AnnotatedIOBuffer) = io.io
 # Useful `IOBuffer` methods that we don't get from `AbstractPipe`
 position(io::AnnotatedIOBuffer) = position(io.io)
 seek(io::AnnotatedIOBuffer, n::Integer) = (seek(io.io, n); io)
-seekend(io::AnnotatedIOBuffer) = seekend(io.io)
+seekend(io::AnnotatedIOBuffer) = (seekend(io.io); io)
 skip(io::AnnotatedIOBuffer, n::Integer) = (skip(io.io, n); io)
 copy(io::AnnotatedIOBuffer) = AnnotatedIOBuffer(copy(io.io), copy(io.annotations))
 

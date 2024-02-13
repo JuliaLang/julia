@@ -129,6 +129,36 @@ let l = ReentrantLock()
     @test_throws ErrorException unlock(l)
 end
 
+# Lockable{T, L<:AbstractLock}
+using Base: Lockable
+let
+    @test_broken Base.isexported(Base, :Lockable)
+    lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
+    # note field access is non-public
+    @test lockable.value["foo"] == "hello"
+    @test @lock(lockable, lockable[]["foo"]) == "hello"
+    lock(lockable) do d
+        @test d["foo"] == "hello"
+    end
+    lock(lockable) do d
+        d["foo"] = "goodbye"
+    end
+    @test lockable.value["foo"] == "goodbye"
+    @lock lockable begin
+        @test lockable[]["foo"] == "goodbye"
+    end
+    l = trylock(lockable)
+    try
+        @test l
+    finally
+        unlock(lockable)
+    end
+    # Test 1-arg constructor
+    lockable2 = Lockable(Dict("foo" => "hello"))
+    @test lockable2.lock isa ReentrantLock
+    @test @lock(lockable2, lockable2[]["foo"]) == "hello"
+end
+
 for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 0
     @test lock(get_finalizers_inhibited, l) == 1
@@ -1286,6 +1316,51 @@ end
         @test ((@__LINE__)-6) ≤ method.line ≤ ((@__LINE__)-5)
     end
 end
+
+module KwdefWithEsc
+    const Int1 = Int
+    const val1 = 42
+    macro define_struct()
+        quote
+            @kwdef struct $(esc(:Struct))
+                a
+                b = val1
+                c::Int1
+                d::Int1 = val1
+
+                $(esc(quote
+                    e
+                    f = val2
+                    g::Int2
+                    h::Int2 = val2
+                end))
+
+                $(esc(:(i = val2)))
+                $(esc(:(j::Int2)))
+                $(esc(:(k::Int2 = val2)))
+
+                l::$(esc(:Int2))
+                m::$(esc(:Int2)) = val1
+
+                n = $(esc(:val2))
+                o::Int1 = $(esc(:val2))
+
+                $(esc(:p))
+                $(esc(:q)) = val1
+                $(esc(:s))::Int1
+                $(esc(:t))::Int1 = val1
+            end
+        end
+    end
+end
+
+module KwdefWithEsc_TestModule
+    using ..KwdefWithEsc
+    const Int2 = Int
+    const val2 = 42
+    KwdefWithEsc.@define_struct()
+end
+@test isdefined(KwdefWithEsc_TestModule, :Struct)
 
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules

@@ -353,28 +353,19 @@ function join(io::IO, iterator, delim="")
     end
 end
 
-# TODO: If/when we have `AnnotatedIO`, we can revisit this and
-# implement it more nicely.
-function join_annotated(iterator, delim="", last=delim)
-    xs = zip(iterator, Iterators.repeated(delim)) |> Iterators.flatten |> collect
-    xs = xs[1:end-1]
-    if length(xs) > 1
-        xs[end-1] = last
-    end
-    annotatedstring(xs...)::AnnotatedString{String}
-end
-
-function _join_maybe_annotated(args...)
-    if any(_isannotated ∘ eltype, args)
-        join_annotated(args...)
+function _join_preserve_annotations(iterator, args...)
+    if _isannotated(eltype(iterator)) || any(_isannotated, args)
+        io = AnnotatedIOBuffer()
+        join(io, iterator, args...)
+        read(seekstart(io), AnnotatedString{String})
     else
-        sprint(join, args...)
+        sprint(join, iterator, args...)
     end
 end
 
-join(iterator) = _join_maybe_annotated(iterator)
-join(iterator, delim) = _join_maybe_annotated(iterator, delim)
-join(iterator, delim, last) = _join_maybe_annotated(iterator, delim, last)
+join(iterator) = _join_preserve_annotations(iterator)
+join(iterator, delim) = _join_preserve_annotations(iterator, delim)
+join(iterator, delim, last) = _join_preserve_annotations(iterator, delim, last)
 
 ## string escaping & unescaping ##
 

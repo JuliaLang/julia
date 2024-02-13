@@ -1329,11 +1329,11 @@ end
         mkpath(project_path)
 
         # Create fake `Foo.jl` package with two files:
-        foo_path = joinpath(depot, "dev", "Foo")
+        foo_path = joinpath(depot, "dev", "Foo51989")
         mkpath(joinpath(foo_path, "src"))
-        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+        open(joinpath(foo_path, "src", "Foo51989.jl"); write=true) do io
             println(io, """
-            module Foo
+            module Foo51989
             include("internal.jl")
             end
             """)
@@ -1343,7 +1343,7 @@ end
         end
         open(joinpath(foo_path, "Project.toml"); write=true) do io
             println(io, """
-            name = "Foo"
+            name = "Foo51989"
             uuid = "00000000-0000-0000-0000-000000000001"
             version = "1.0.0"
             """)
@@ -1351,27 +1351,27 @@ end
 
         # In our depot, `dev` and then `precompile` this `Foo` package.
         @test success(addenv(
-            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo"); Pkg.precompile(); exit(0)'`,
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo51989"); Pkg.precompile(); exit(0)'`,
             "JULIA_DEPOT_PATH" => depot))
 
         # Get the size of the generated `.ji` file so that we can ensure that it gets altered
-        foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo")
+        foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo51989")
         cache_path = joinpath(foo_compiled_path, only(filter(endswith(".ji"), readdir(foo_compiled_path))))
         cache_size = filesize(cache_path)
 
         # Next, remove the dependence on `internal.jl` and delete it:
         rm(joinpath(foo_path, "src", "internal.jl"))
-        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+        open(joinpath(foo_path, "src", "Foo51989.jl"); write=true) do io
             truncate(io, 0)
             println(io, """
-            module Foo
+            module Foo51989
             end
             """)
         end
 
         # Try to load `Foo`; this should trigger recompilation, not an error!
         @test success(addenv(
-            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo; exit(0)'`,
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo51989; exit(0)'`,
             "JULIA_DEPOT_PATH" => depot,
         ))
 

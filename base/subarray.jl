@@ -338,7 +338,9 @@ function getindex(V::FastContiguousSubArray, i::Int)
 end
 # parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
 # so we may just forward the indexing to the parent
-function getindex(V::FastContiguousSubArray, i::AbstractUnitRange{Int})
+# This may only be done for non-offset ranges, as the result would otherwise have offset axes
+const OneBasedRanges = Union{OneTo{Int}, UnitRange{Int}, Slice{OneTo{Int}}, IdentityUnitRange{OneTo{Int}}}
+function getindex(V::FastContiguousSubArray, i::OneBasedRanges)
     @inline
     @boundscheck checkbounds(V, i)
     @inbounds r = V.parent[V.offset1 .+ i]

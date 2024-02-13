@@ -3174,7 +3174,7 @@ representing argument `x` in terms of its type. (The double-colon is
 omitted if `toplevel=true`.) However, you can
 specialize this function for specific types to customize printing.
 
-# Example
+# Examples
 
 A SubArray created as `view(a, :, 3, 2:5)`, where `a` is a
 3-dimensional Float64 array, has type

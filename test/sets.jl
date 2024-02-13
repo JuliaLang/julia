@@ -642,21 +642,38 @@ end
     @test !allunique((1,2,3,4,3))
     @test allunique((0.0, -0.0))
     @test !allunique((NaN, NaN))
+    # Known length 1, need not evaluate:
+    @test allunique(error(x) for x in [1])
+end
+
+@testset "allunique(f, xs)" begin
+    @test allunique(sin, 1:3)
+    @test !allunique(sin, [1,2,3,1])
+    @test allunique(sin, (1, 2, pi, im))  # eltype Any
+    @test allunique(abs2, 1:100)
+    @test !allunique(abs, -10:10)
+    @test allunique(abs2, Vector{Any}(1:100))
+    # These cases don't call the function at all:
+    @test allunique(error, [])
+    @test allunique(error, [1])
 end
 
 @testset "allequal" begin
+    # sets & dictionaries
     @test allequal(Set())
     @test allequal(Set(1))
     @test !allequal(Set([1, 2]))
     @test allequal(Dict())
     @test allequal(Dict(:a => 1))
     @test !allequal(Dict(:a => 1, :b => 2))
+    # vectors
     @test allequal([])
     @test allequal([1])
     @test allequal([1, 1])
     @test !allequal([1, 1, 2])
     @test allequal([:a, :a])
     @test !allequal([:a, :b])
+    # ranges
     @test !allequal(1:2)
     @test allequal(1:1)
     @test !allequal(4.0:0.3:7.0)
@@ -670,6 +687,26 @@ end
     @test allequal(LinRange(1, 1, 1))
     @test allequal(LinRange(1, 1, 2))
     @test !allequal(LinRange(1, 2, 2))
+    # Known length 1, need not evaluate:
+    @test allequal(error(x) for x in [1])
+    # Empty, but !haslength:
+    @test allequal(error(x) for x in 1:3 if false)
+end
+
+@testset "allequal(f, xs)" begin
+    @test allequal(abs2, [3, -3])
+    @test allequal(x -> 1, rand(3))
+    @test !allequal(x -> rand(), [1,1,1])
+    # tuples
+    @test allequal(abs2, (3, -3))
+    @test allequal(x -> 1, Tuple(rand(3)))
+    @test !allequal(x -> rand(), (1,1,1))
+    # These cases don't call the function at all:
+    @test allequal(error, [])
+    @test allequal(error, ())
+    @test allequal(error, (x for x in 1:3 if false))
+    @test allequal(error, [1])
+    @test allequal(error, (1,))
 end
 
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
@@ -899,8 +936,8 @@ end
     b = [2, 3, 1, 3]
     ua = unique(a)
     ub = unique(b)
-    for TA in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
-        TB in (Tuple, identity, Set, BitSet, Base.IdSet{Int}),
+    for TA in (Tuple, identity, Set, BitSet, IdSet{Int}),
+        TB in (Tuple, identity, Set, BitSet, IdSet{Int}),
         uA = false:true,
         uB = false:true
         A = TA(uA ? ua : a)
@@ -921,7 +958,7 @@ end
         @test !issetequal(B, A)
         @test !issetequal(B)(A)
         @test !issetequal(A)(B)
-        for T = (Tuple, identity, Set, BitSet, Base.IdSet{Int})
+        for T = (Tuple, identity, Set, BitSet, IdSet{Int})
             @test issetequal(A, T(A))
             @test issetequal(B, T(B))
         end
@@ -982,7 +1019,7 @@ end
     c = [3]
     d = [4]
     e = [5]
-    A = Base.IdSet{Vector{Int}}([a, b, c, d])
+    A = IdSet{Vector{Int}}([a, b, c, d])
     @test !isempty(A)
     B = copy(A)
     @test A ⊆ B

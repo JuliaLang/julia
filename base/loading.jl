@@ -2121,6 +2121,10 @@ function _require(pkg::PkgId, env=nothing)
             end
         end
 
+        if JLOptions().use_compiled_modules == 3
+            error("Precompiled image $pkg not available with flags $(CacheFlags())")
+        end
+
         # if the module being required was supposed to have a particular version
         # but it was not handled by the precompile loader, complain
         for (concrete_pkg, concrete_build_id) in _concrete_dependencies
@@ -2331,7 +2335,7 @@ and return the value of the last expression.
 The optional `args` argument can be used to set the input arguments of the script (i.e. the global `ARGS` variable).
 Note that definitions (e.g. methods, globals) are evaluated in the anonymous module and do not affect the current module.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> write("testfile.jl", \"\"\"
@@ -2508,12 +2512,25 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
+        Base.track_nested_precomp($(vcat(Base.precompilation_stack, pkg)))
         Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
     close(io.in)
     return io
+end
+
+const precompilation_stack = Vector{PkgId}()
+# Helpful for debugging when precompilation is unexpectedly nested.
+# Enable with `JULIA_DEBUG=nested_precomp`. Note that it expected to be nested in classical code-load precompilation
+# TODO: Add detection if extension precompilation is nested and error / return early?
+function track_nested_precomp(pkgs::Vector{PkgId})
+    append!(precompilation_stack, pkgs)
+    if length(precompilation_stack) > 1
+        list() = join(map(p->p.name, precompilation_stack), " > ")
+        @debug "Nested precompilation: $(list())" _group=:nested_precomp
+    end
 end
 
 function compilecache_dir(pkg::PkgId)
@@ -3541,7 +3558,7 @@ Macro to obtain the absolute path of the current directory as a string.
 If in a script, returns the directory of the script containing the `@__DIR__` macrocall. If run from a
 REPL or if evaluated by `julia -e <expr>`, returns the current working directory.
 
-# Example
+# Examples
 
 The example illustrates the difference in the behaviors of `@__DIR__` and `pwd()`, by creating
 a simple script in a different directory than the current working one and executing both commands:

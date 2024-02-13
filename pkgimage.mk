@@ -69,6 +69,9 @@ cache-debug-$1: $$(BUILDDIR)/stdlib/$1.debug.image
 .SECONDARY: $$(BUILDDIR)/stdlib/$1.release.image $$(BUILDDIR)/stdlib/$1.debug.image
 endef
 
+# Note: you can check for the correctness of this tree by running `JULIA_DEBUG=nested_precomp make` and looking
+# out for `Debug: Nested precompilation` logs.
+
 # no dependencies
 $(eval $(call stdlib_builder,MozillaCACerts_jll,))
 $(eval $(call stdlib_builder,ArgTools,))
@@ -77,7 +80,6 @@ $(eval $(call stdlib_builder,Base64,))
 $(eval $(call stdlib_builder,CRC32c,))
 $(eval $(call stdlib_builder,FileWatching,))
 $(eval $(call stdlib_builder,Libdl,))
-$(eval $(call stdlib_builder,Logging,))
 $(eval $(call stdlib_builder,Mmap,))
 $(eval $(call stdlib_builder,NetworkOptions,))
 $(eval $(call stdlib_builder,SHA,))
@@ -106,6 +108,7 @@ $(eval $(call stdlib_builder,OpenBLAS_jll,Artifacts Libdl))
 $(eval $(call stdlib_builder,Markdown,Base64))
 $(eval $(call stdlib_builder,Printf,Unicode))
 $(eval $(call stdlib_builder,Random,SHA))
+$(eval $(call stdlib_builder,Logging,StyledStrings))
 $(eval $(call stdlib_builder,Tar,ArgTools,SHA))
 $(eval $(call stdlib_builder,DelimitedFiles,Mmap))
 $(eval $(call stdlib_builder,JuliaSyntaxHighlighting,StyledStrings))
