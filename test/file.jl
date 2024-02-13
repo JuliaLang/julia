@@ -1658,18 +1658,18 @@ else
     )
 end
 
-@testset "chmod/isexecutable/isreadable/iswriteable/exists" begin
+@testset "chmod/isexecutable/isreadable/iswriteable" begin
     mktempdir() do dir
         subdir = joinpath(dir, "subdir")
         fpath = joinpath(dir, "subdir", "foo")
 
-        @test !Sys.exists(subdir)
+        @test !ispath(subdir)
         mkdir(joinpath(dir, "subdir"))
-        @test Sys.exists(subdir)
+        @test ispath(subdir)
 
-        @test !Sys.exists(fpath)
+        @test !ispath(fpath)
         touch(fpath)
-        @test Sys.exists(fpath)
+        @test ispath(fpath)
 
         # Test that we can actually set the executable/readable/writeable bit on all platforms.
         chmod(fpath, 0o644)
