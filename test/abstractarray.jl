@@ -548,6 +548,7 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
+    @test !isassigned(B)
     # isassigned(a::AbstractArray, i::Integer...)
     j = rand(1:length(B))
     @test isassigned(B, j)
