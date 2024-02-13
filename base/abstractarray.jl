@@ -1100,9 +1100,9 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         iterdest, itersrc = eachindex(dest), eachindex(src)
         if iterdest == itersrc
             # Shared-iterator implementation
-            for I in iterdest
+            @inbounds for I in iterdest
                 if isassigned(src, I)
-                    @inbounds dest[I] = src[I]
+                    dest[I] = src[I]
                 else
                     _unsetindex!(dest, I)
                 end
