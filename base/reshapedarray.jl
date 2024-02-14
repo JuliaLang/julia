@@ -154,6 +154,7 @@ end
 
 """
     reshape(size...) -> Function
+    reshape(dims::Tuple) -> Function
 
 Create a function that reshapes its argument using the given size,
 equivalent to `x -> reshape(x, size...)`. At most one argument may
@@ -172,11 +173,33 @@ julia> stack(reshape(2,3), eachrow(rand(7,6))) |> size
 (2, 3, 7)
 ```
 
-!!! compat "Julia 1.10"
-    This functionality requires at least Julia 1.10.
+Also accepts a tuple: `reshape((2,3)) == reshape(2,3)`.
+This method allows the use of `axes` instead of `size`,
+especially for OffsetArrays.
+
+```
+julia> reshape(7:9, Base.OneTo(1), Base.OneTo(3))  # reshapes the first argument
+1×3 reshape(::UnitRange{Int64}, 1, 3) with eltype Int64:
+ 7  8  9
+
+julia> reshape((7:9, Base.OneTo(1), Base.OneTo(3)))  # 3 axes of an OffsetArray
+(::Base.Fix2{typeof(reshape), Tuple{UnitRange{Int64}, Base.OneTo{Int64}, Base.OneTo{Int64}}}) (generic function with 1 method)
+```
+
+!!! compat "Julia 1.11"
+    This functionality requires at least Julia 1.11.
 """
 reshape(size::Integer...) = Base.Fix2(reshape, size)
+reshape(size::Tuple{Vararg{Integer}}) = Base.Fix2(reshape, size)
+reshape(size::Tuple{Vararg{AbstractUnitRange{<:Integer}}}) = Base.Fix2(reshape, size)
+
 function reshape(dims::Union{Integer,Colon}...)
+    count(s -> s isa Colon, dims) > 1 && throw(DimensionMismatch(string("new dimensions ",
+        dims, " may have at most one omitted dimension specified by `Colon()`")))
+    Base.Fix2(reshape, dims)
+end
+reshape(dims::Tuple{Vararg{Union{Integer,Colon}}}) = reshape(dims...)
+function reshape(dims::Tuple{Vararg{Union{AbstractUnitRange{<:Integer},Colon}}})
     count(s -> s isa Colon, dims) > 1 && throw(DimensionMismatch(string("new dimensions ",
         dims, " may have at most one omitted dimension specified by `Colon()`")))
     Base.Fix2(reshape, dims)
