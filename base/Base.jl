@@ -34,6 +34,8 @@ ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Base, is_primary_base_module)
 macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
+macro _boundscheck() Expr(:boundscheck) end
+
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
@@ -89,6 +91,36 @@ function replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol
     val = desired isa ty ? desired : convert(ty, desired)
     return Core.replacefield!(x, f, expected, val, success_order, fail_order)
 end
+function setpropertyonce!(x, f::Symbol, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = fieldtype(typeof(x), f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.setfieldonce!(x, f, val, success_order, fail_order)
+end
+
+function swapproperty!(x::Module, f::Symbol, v, order::Symbol=:not_atomic)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = v isa ty ? v : convert(ty, v)
+    return Core.swapglobal!(x, f, val, order)
+end
+function modifyproperty!(x::Module, f::Symbol, op, v, order::Symbol=:not_atomic)
+    @inline
+    return Core.modifyglobal!(x, f, op, v, order)
+end
+function replaceproperty!(x::Module, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.replaceglobal!(x, f, expected, val, success_order, fail_order)
+end
+function setpropertyonce!(x::Module, f::Symbol, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+    @inline
+    ty = Core.get_binding_type(x, f)
+    val = desired isa ty ? desired : convert(ty, desired)
+    return Core.setglobalonce!(x, f, val, success_order, fail_order)
+end
+
 
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
@@ -479,6 +511,7 @@ include("summarysize.jl")
 include("errorshow.jl")
 
 include("initdefs.jl")
+Filesystem.__postinit__()
 
 # worker threads
 include("threadcall.jl")
@@ -592,14 +625,12 @@ if is_primary_base_module
 # Profiling helper
 # triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
 # Needs to be in Base because Profile is no longer loaded on boot
-const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
-function profile_printing_listener()
+function profile_printing_listener(cond::Base.AsyncCondition)
     profile = nothing
     try
-        while true
-            wait(PROFILE_PRINT_COND[])
-            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))
-
+        while _trywait(cond)
+            # this call to require is mostly legal, only because Profile has no dependencies and is usually in LOAD_PATH
+            profile = @something(profile, require(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))::Module
             invokelatest(profile.peek_report[])
             if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
@@ -612,10 +643,13 @@ function profile_printing_listener()
             @error "Profile printing listener crashed" exception=ex,catch_backtrace()
         end
     end
+    nothing
 end
 
 function __init__()
     # Base library init
+    global _atexit_hooks_finished = false
+    Filesystem.__postinit__()
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
@@ -623,6 +657,7 @@ function __init__()
     init_load_path()
     init_active_project()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
+    empty!(explicit_loaded_modules)
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
     end
@@ -631,9 +666,20 @@ function __init__()
         # triggering a profile via signals is not implemented on windows
         cond = Base.AsyncCondition()
         Base.uv_unref(cond.handle)
-        PROFILE_PRINT_COND[] = cond
-        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), PROFILE_PRINT_COND[].handle)
-        errormonitor(Threads.@spawn(profile_printing_listener()))
+        t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
+        atexit() do
+            # destroy this callback when exiting
+            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+            # this will prompt any ongoing or pending event to flush also
+            close(cond)
+            # error-propagation is not needed, since the errormonitor will handle printing that better
+            _wait(t)
+        end
+        finalizer(cond) do c
+            # if something goes south, still make sure we aren't keeping a reference in C to this
+            ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), C_NULL)
+        end
+        ccall(:jl_set_peek_cond, Cvoid, (Ptr{Cvoid},), cond.handle)
     end
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.

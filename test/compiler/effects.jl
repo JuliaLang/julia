@@ -446,7 +446,7 @@ let effects = Base.infer_effects() do
     end
     @test !Core.Compiler.is_nothrow(effects)
 end
-@test_throws ErrorException setglobal!_nothrow_undefinedyet()
+@test_throws Union{ErrorException,TypeError} setglobal!_nothrow_undefinedyet() # TODO: what kind of error should this be?
 
 # Nothrow for setfield!
 mutable struct SetfieldNothrow
@@ -477,9 +477,10 @@ end |> Core.Compiler.is_effect_free
 
 # `getfield_effects` handles access to union object nicely
 let 𝕃 = Core.Compiler.fallback_lattice
-    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{String}, Core.Const(:value)]), String))
-    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Some{Symbol}, Core.Const(:value)]), Symbol))
-    @test Core.Compiler.is_consistent(Core.Compiler.getfield_effects(𝕃, Core.Compiler.ArgInfo(nothing, Any[Core.Const(getfield), Union{Some{Symbol},Some{String}}, Core.Const(:value)]), Union{Symbol,String}))
+    getfield_effects = Core.Compiler.getfield_effects
+    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Some{String}, Core.Const(:value)], String))
+    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Some{Symbol}, Core.Const(:value)], Symbol))
+    @test Core.Compiler.is_consistent(getfield_effects(𝕃, Any[Union{Some{Symbol},Some{String}}, Core.Const(:value)], Union{Symbol,String}))
 end
 @test Base.infer_effects((Bool,)) do c
     obj = c ? Some{String}("foo") : Some{Symbol}(:bar)
@@ -495,6 +496,25 @@ end |> Core.Compiler.is_nothrow
 end |> Core.Compiler.is_nothrow
 @test Base.infer_effects((Tuple{Int,Int},String)) do t, i
     getfield(t, i, false) # invalid name type
+end |> !Core.Compiler.is_nothrow
+
+@test Base.infer_effects((Some{Any},)) do some
+    getfield(some, 1, :not_atomic)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},)) do some
+    getfield(some, 1, :invalid_atomic_spec)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
+    getfield(some, 1, boundscheck)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
+    getfield(some, 1, :not_atomic, boundscheck)
+end |> Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Bool)) do some, boundscheck
+    getfield(some, 1, :invalid_atomic_spec, boundscheck)
+end |> !Core.Compiler.is_nothrow
+@test Base.infer_effects((Some{Any},Any)) do some, boundscheck
+    getfield(some, 1, :not_atomic, boundscheck)
 end |> !Core.Compiler.is_nothrow
 
 @test Core.Compiler.is_consistent(Base.infer_effects(setindex!, (Base.RefValue{Int}, Int)))
@@ -861,7 +881,7 @@ end
 
 # Test that builtin_effects handles vararg correctly
 @test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined,
-    Core.Compiler.ArgInfo(nothing, Any[Core.Compiler.Const(Core.isdefined), String, Vararg{Any}]), Bool))
+    Any[String, Vararg{Any}], Bool))
 
 # Test that :new can be eliminated even if an sparam is unknown
 struct SparamUnused{T}
@@ -1113,20 +1133,60 @@ end
     post_opt_refine_effect_free(y, true)
 end |> Core.Compiler.is_effect_free
 
-# effects for Cmd construction
-for f in (() -> `a b c`, () -> `a a$("bb")a $("c")`)
-    effects = Base.infer_effects(f)
+# Check EA-based refinement of :effect_free
+Base.@assume_effects :nothrow @noinline _noinline_set!(x) = (x[] = 1; nothing)
+
+function set_ref_with_unused_arg_1(_)
+    x = Ref(0)
+    _noinline_set!(x)
+    return nothing
+end
+function set_ref_with_unused_arg_2(_)
+    x = @noinline Ref(0)
+    _noinline_set!(x)
+    return nothing
+end
+function set_arg_ref!(x)
+    _noinline_set!(x)
+    y = Ref(false)
+    y[] && (Main.x = x)
+    return nothing
+end
+
+function set_arr_with_unused_arg_1(_)
+    x = Int[0]
+    _noinline_set!(x)
+    return nothing
+end
+function set_arr_with_unused_arg_2(_)
+    x = @noinline Int[0]
+    _noinline_set!(x)
+    return nothing
+end
+function set_arg_arr!(x)
+    _noinline_set!(x)
+    y = Bool[false]
+    y[] && (Main.x = x)
+    return nothing
+end
+
+# This is inferable by type analysis only since the arguments have no mutable memory
+@test Core.Compiler.is_effect_free_if_inaccessiblememonly(Base.infer_effects(_noinline_set!, (Base.RefValue{Int},)))
+@test Core.Compiler.is_effect_free_if_inaccessiblememonly(Base.infer_effects(_noinline_set!, (Vector{Int},)))
+for func in (set_ref_with_unused_arg_1, set_ref_with_unused_arg_2,
+             set_arr_with_unused_arg_1, set_arr_with_unused_arg_2)
+    effects = Base.infer_effects(func, (Nothing,))
+    @test Core.Compiler.is_inaccessiblememonly(effects)
     @test Core.Compiler.is_effect_free(effects)
-    @test Core.Compiler.is_terminates(effects)
-    @test Core.Compiler.is_noub(effects)
-    @test !Core.Compiler.is_consistent(effects)
 end
-let effects = Base.infer_effects(x -> `a $x`, (Any,))
-    @test !Core.Compiler.is_effect_free(effects)
-    @test !Core.Compiler.is_terminates(effects)
-    @test !Core.Compiler.is_noub(effects)
-    @test !Core.Compiler.is_consistent(effects)
-end
+
+# These need EA
+@test Core.Compiler.is_effect_free(Base.infer_effects(set_ref_with_unused_arg_1, (Base.RefValue{Int},)))
+@test Core.Compiler.is_effect_free(Base.infer_effects(set_ref_with_unused_arg_2, (Base.RefValue{Int},)))
+@test Core.Compiler.is_effect_free_if_inaccessiblememonly(Base.infer_effects(set_arg_ref!, (Base.RefValue{Int},)))
+@test_broken Core.Compiler.is_effect_free(Base.infer_effects(set_arr_with_unused_arg_1, (Vector{Int},)))
+@test_broken Core.Compiler.is_effect_free(Base.infer_effects(set_arr_with_unused_arg_2, (Vector{Int},)))
+@test_broken Core.Compiler.is_effect_free_if_inaccessiblememonly(Base.infer_effects(set_arg_arr!, (Vector{Int},)))
 
 function issue51837(; openquotechar::Char, newlinechar::Char)
     ncodeunits(openquotechar) == 1 || throw(ArgumentError("`openquotechar` must be a single-byte character"))
@@ -1139,3 +1199,186 @@ end
     issue51837(; openquotechar, newlinechar)
 end |> !Core.Compiler.is_nothrow
 @test_throws ArgumentError issue51837(; openquotechar='α', newlinechar='\n')
+
+# idempotency of effects derived by post-opt analysis
+callgetfield(x, f) = getfield(x, f, Base.@_boundscheck)
+@test Base.infer_effects(callgetfield, (Some{Any},Symbol)).noub === Core.Compiler.NOUB_IF_NOINBOUNDS
+callgetfield1(x, f) = getfield(x, f, Base.@_boundscheck)
+callgetfield_simple(x, f) = callgetfield1(x, f)
+@test Base.infer_effects(callgetfield_simple, (Some{Any},Symbol)).noub ===
+      Base.infer_effects(callgetfield_simple, (Some{Any},Symbol)).noub ===
+      Core.Compiler.ALWAYS_TRUE
+callgetfield2(x, f) = getfield(x, f, Base.@_boundscheck)
+callgetfield_inbounds(x, f) = @inbounds callgetfield2(x, f)
+@test Base.infer_effects(callgetfield_inbounds, (Some{Any},Symbol)).noub ===
+      Base.infer_effects(callgetfield_inbounds, (Some{Any},Symbol)).noub ===
+      Core.Compiler.ALWAYS_FALSE
+
+# noub modeling for memory ops
+let (memoryref, memoryrefget, memoryref_isassigned, memoryrefset!) =
+        (Core.memoryref, Core.memoryrefget, Core.memoryref_isassigned, Core.memoryrefset!)
+    function builtin_effects(@nospecialize xs...)
+        interp = Core.Compiler.NativeInterpreter()
+        𝕃 = Core.Compiler.typeinf_lattice(interp)
+        rt = Core.Compiler.builtin_tfunction(interp, xs..., nothing)
+        return Core.Compiler.builtin_effects(𝕃, xs..., rt)
+    end
+    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[Memory,]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Core.Const(true)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Core.Const(false)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Bool]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Int]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Int,Vararg{Bool}]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref, Any[MemoryRef,Vararg{Any}]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Core.Const(true)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Core.Const(false)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Bool]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Int]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Symbol,Vararg{Bool}]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefget, Any[MemoryRef,Vararg{Any}]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Core.Const(true)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Core.Const(false)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Bool]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Int]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Symbol,Vararg{Bool}]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryref_isassigned, Any[MemoryRef,Vararg{Any}]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Core.Const(true)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Core.Const(false)]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Bool]))
+    @test Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Int]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Any,Symbol,Vararg{Bool}]))
+    @test !Core.Compiler.is_noub(builtin_effects(memoryrefset!, Any[MemoryRef,Vararg{Any}]))
+    # `:boundscheck` taint should be refined by post-opt analysis
+    @test Base.infer_effects() do xs::Vector{Any}, i::Int
+        memoryrefget(memoryref(getfield(xs, :ref), i, Base.@_boundscheck), :not_atomic, Base.@_boundscheck)
+    end |> Core.Compiler.is_noub_if_noinbounds
+end
+
+# high level tests
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex, (Vector{Int},Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex, (Vector{Any},Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(setindex!, (Vector{Int},Int,Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(setindex!, (Vector{Any},Any,Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(isassigned, (Vector{Int},Int)))
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(isassigned, (Vector{Any},Int)))
+@test Base.infer_effects((Vector{Int},Int)) do xs, i
+    xs[i]
+end |> Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Any},Int)) do xs, i
+    xs[i]
+end |> Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Int},Int,Int)) do xs, x, i
+    xs[i] = x
+end |> Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Any},Any,Int)) do xs, x, i
+    xs[i] = x
+end |> Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Int},Int)) do xs, i
+    @inbounds xs[i]
+end |> !Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Any},Int)) do xs, i
+    @inbounds xs[i]
+end |> !Core.Compiler.is_noub
+Base.@propagate_inbounds getindex_propagate(xs, i) = xs[i]
+getindex_dont_propagate(xs, i) = xs[i]
+@test Core.Compiler.is_noub_if_noinbounds(Base.infer_effects(getindex_propagate, (Vector{Any},Int)))
+@test Core.Compiler.is_noub(Base.infer_effects(getindex_dont_propagate, (Vector{Any},Int)))
+@test Base.infer_effects((Vector{Any},Int)) do xs, i
+    @inbounds getindex_propagate(xs, i)
+end |> !Core.Compiler.is_noub
+@test Base.infer_effects((Vector{Any},Int)) do xs, i
+    @inbounds getindex_dont_propagate(xs, i)
+end |> Core.Compiler.is_noub
+
+# refine `:nothrow` when `exct` is known to be `Bottom`
+@test Base.infer_exception_type(getindex, (Vector{Int},Int)) == BoundsError
+function getindex_nothrow(xs::Vector{Int}, i::Int)
+    try
+        return xs[i]
+    catch err
+        err isa BoundsError && return nothing
+        rethrow(err)
+    end
+end
+@test Core.Compiler.is_nothrow(Base.infer_effects(getindex_nothrow, (Vector{Int}, Int)))
+
+# callsite `@assume_effects` annotation
+let ast = code_lowered((Int,)) do x
+        Base.@assume_effects :total identity(x)
+    end |> only
+    ssaflag = ast.ssaflags[findfirst(!iszero, ast.ssaflags)::Int]
+    override = Core.Compiler.decode_statement_effects_override(ssaflag)
+    # if this gets broken, check if this is synced with expr.jl
+    @test override.consistent && override.effect_free && override.nothrow &&
+          override.terminates_globally && !override.terminates_locally &&
+          override.notaskstate && override.inaccessiblememonly &&
+          override.noub && !override.noub_if_noinbounds
+end
+@test Base.infer_effects((Float64,)) do x
+    isinf(x) && return 0.0
+    return Base.@assume_effects :nothrow sin(x)
+end |> Core.Compiler.is_nothrow
+let effects = Base.infer_effects((Vector{Float64},)) do xs
+        isempty(xs) && return 0.0
+        Base.@assume_effects :nothrow begin
+            x = Base.@assume_effects :noub @inbounds xs[1]
+            isinf(x) && return 0.0
+            return sin(x)
+        end
+    end
+    # all nested overrides should be applied
+    @test Core.Compiler.is_nothrow(effects)
+    @test Core.Compiler.is_noub(effects)
+end
+@test Base.infer_effects((Int,)) do x
+    res = 1
+    0 ≤ x < 20 || error("bad fact")
+    Base.@assume_effects :terminates_locally while x > 1
+        res *= x
+        x -= 1
+    end
+    return res
+end |> Core.Compiler.is_terminates
+
+# https://github.com/JuliaLang/julia/issues/52531
+const a52531 = Core.Ref(1)
+@eval getref52531() = $(QuoteNode(a52531)).x
+@test !Core.Compiler.is_consistent(Base.infer_effects(getref52531))
+let
+    global set_a52531!, get_a52531
+    _a::Int             = -1
+    set_a52531!(a::Int) = (_a = a; return get_a52531())
+    get_a52531()        = _a
+end
+@test !Core.Compiler.is_consistent(Base.infer_effects(set_a52531!, (Int,)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(get_a52531, ()))
+@test get_a52531() == -1
+@test set_a52531!(1) == 1
+@test get_a52531() == 1
+
+let
+    global is_initialized52531, set_initialized52531!
+    _is_initialized                   = false
+    set_initialized52531!(flag::Bool) = (_is_initialized = flag)
+    is_initialized52531()             = _is_initialized
+end
+top_52531(_) = (set_initialized52531!(true); nothing)
+@test !Core.Compiler.is_consistent(Base.infer_effects(is_initialized52531))
+@test !Core.Compiler.is_removable_if_unused(Base.infer_effects(set_initialized52531!, (Bool,)))
+@test !is_initialized52531()
+top_52531(0)
+@test is_initialized52531()
+
+const ref52843 = Ref{Int}()
+@eval func52843() = ($ref52843[] = 1; nothing)
+@test !Core.Compiler.is_foldable(Base.infer_effects(func52843))
+let; Base.Experimental.@force_compile; func52843(); end
+@test ref52843[] == 1
+
+@test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(identity∘identity, Tuple{Any}))
+@test Core.Compiler.is_inaccessiblememonly(Base.infer_effects(()->Vararg, Tuple{}))
+
+# pointerref nothrow for invalid pointer
+@test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{Vector{Int64}}}, Int, Int])
+@test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{T}} where T, Int, Int])

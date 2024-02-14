@@ -19,6 +19,10 @@ environments provide a way to access documentation directly:
 - In [Juno](https://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
   under the cursor.
 
+
+`Docs.hasdoc(module, name)::Bool` tells whether a name has a docstring. `Docs.undocumented_names(module; all)`
+returns the undocumented names in a module.
+
 ## Writing Documentation
 
 Julia enables package developers and users to document functions, types and other objects easily
@@ -303,15 +307,16 @@ Or for use with Julia's metaprogramming functionality:
 ```julia
 for (f, op) in ((:add, :+), (:subtract, :-), (:multiply, :*), (:divide, :/))
     @eval begin
-        $f(a,b) = $op(a,b)
+        $f(a, b) = $op(a, b)
     end
 end
-@doc "`add(a,b)` adds `a` and `b` together" add
-@doc "`subtract(a,b)` subtracts `b` from `a`" subtract
+@doc "`add(a, b)` adds `a` and `b` together" add
+@doc "`subtract(a, b)` subtracts `b` from `a`" subtract
 ```
 
-Documentation in non-toplevel blocks, such as `begin`, `if`, `for`, and `let`, should be
-added to the documentation system via `@doc` as well. For example:
+Documentation in non-toplevel blocks, such as `begin`, `if`, `for`, `let`, and
+inner constructors, should be added to the documentation system via `@doc` as
+well. For example:
 
 ```julia
 if condition()
@@ -402,7 +407,7 @@ f(x) = x
 
 "..."
 function f(x)
-    x
+    return x
 end
 
 "..."
@@ -429,10 +434,13 @@ Adds docstring `"..."` to the `@m(::Any)` macro definition.
 
 ```julia
 "..."
-:(@m)
+:(@m1)
+
+"..."
+macro m2 end
 ```
 
-Adds docstring `"..."` to the macro named `@m`.
+Adds docstring `"..."` to the macros named `@m1` and `@m2`.
 
 ### Types
 
@@ -453,6 +461,20 @@ end
 
 Adds the docstring `"..."` to types `T1`, `T2`, and `T3`.
 
+```
+"..."
+T1
+
+"..."
+T2
+
+"..."
+T3
+```
+
+Adds the docstring `"..."` to types `T1`, `T2`, and `T3`.
+The previous version is the preferred syntax, however both are equivalent.
+
 ```julia
 "..."
 struct T
@@ -460,11 +482,17 @@ struct T
     x
     "y"
     y
+
+    @doc "Inner constructor"
+    function T()
+        new(...)
+    end
 end
 ```
 
-Adds docstring `"..."` to type `T`, `"x"` to field `T.x` and `"y"` to field `T.y`. Also applicable
-to `mutable struct` types.
+Adds docstring `"..."` to type `T`, `"x"` to field `T.x`, `"y"` to field `T.y`,
+and `"Inner constructor"` to the inner constructor `T()`. Also applicable to
+`mutable struct` types.
 
 ### Modules
 

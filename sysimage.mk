@@ -26,6 +26,9 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/docs/core.jl \
 		base/abstractarray.jl \
 		base/abstractdict.jl \
+		base/abstractset.jl \
+		base/iddict.jl \
+		base/idset.jl \
 		base/array.jl \
 		base/bitarray.jl \
 		base/bitset.jl \

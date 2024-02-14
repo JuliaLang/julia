@@ -31,15 +31,17 @@ function chkargsok(ret::BlasInt)
 end
 
 "Handle all nonzero info codes"
-function chklapackerror(ret::BlasInt)
+function chklapackerror(ret::BlasInt, f...)
     if ret == 0
         return
     elseif ret < 0
         throw(ArgumentError("invalid argument #$(-ret) to LAPACK call"))
     else # ret > 0
-        throw(LAPACKException(ret))
+        chklapackerror_positive(ret, f...)
     end
 end
+
+chklapackerror_positive(ret, f...) = throw(LAPACKException(ret))
 
 function chknonsingular(ret::BlasInt)
     if ret > 0
@@ -613,7 +615,9 @@ Compute the pivoted `QR` factorization of `A`, `AP = QR` using BLAS level 3.
 reflectors. The arguments `jpvt` and `tau` are optional and allow
 for passing preallocated arrays. When passed, `jpvt` must have length greater
 than or equal to `n` if `A` is an `(m x n)` matrix and `tau` must have length
-greater than or equal to the smallest dimension of `A`.
+greater than or equal to the smallest dimension of `A`. On entry, if `jpvt[j]`
+does not equal zero then the `j`th column of `A` is permuted to the front of
+`AP`.
 
 `A`, `jpvt`, and `tau` are modified in-place.
 """
@@ -2524,17 +2528,17 @@ for (laic1, elty) in
             if j != length(w)
                 throw(DimensionMismatch("vectors must have same length, but length of x is $j and length of w is $(length(w))"))
             end
-            sestpr = Vector{$elty}(undef, 1)
-            s = Vector{$elty}(undef, 1)
-            c = Vector{$elty}(undef, 1)
+            sestpr = Ref{$elty}()
+            s = Ref{$elty}()
+            c = Ref{$elty}()
             ccall((@blasfunc($laic1), libblastrampoline), Cvoid,
                 (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{$elty},
-                 Ptr{$elty}, Ref{$elty}, Ptr{$elty}, Ptr{$elty},
-                 Ptr{$elty}),
+                 Ptr{$elty}, Ref{$elty}, Ref{$elty}, Ref{$elty},
+                 Ref{$elty}),
                 job, j, x, sest,
                 w, gamma, sestpr, s,
                 c)
-            sestpr[1], s[1], c[1]
+            sestpr[], s[], c[]
         end
     end
 end
@@ -2558,17 +2562,17 @@ for (laic1, elty, relty) in
             if j != length(w)
                 throw(DimensionMismatch("vectors must have same length, but length of x is $j and length of w is $(length(w))"))
             end
-            sestpr = Vector{$relty}(undef, 1)
-            s = Vector{$elty}(undef, 1)
-            c = Vector{$elty}(undef, 1)
+            sestpr = Ref{$relty}()
+            s = Ref{$elty}()
+            c = Ref{$elty}()
             ccall((@blasfunc($laic1), libblastrampoline), Cvoid,
                 (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{$relty},
-                 Ptr{$elty}, Ref{$elty}, Ptr{$relty}, Ptr{$elty},
-                 Ptr{$elty}),
+                 Ptr{$elty}, Ref{$elty}, Ref{$relty}, Ref{$elty},
+                 Ref{$elty}),
                 job, j, x, sest,
                 w, gamma, sestpr, s,
                 c)
-            sestpr[1], s[1], c[1]
+            sestpr[], s[], c[]
         end
     end
 end
@@ -3569,11 +3573,12 @@ for (trtri, trtrs, elty) in
                   uplo, trans, diag, n, size(B,2), A, max(1,stride(A,2)),
                   B, max(1,stride(B,2)), info,
                   1, 1, 1)
-            chklapackerror(info[])
+            chklapackerror(info[], trtrs!)
             B
         end
     end
 end
+chklapackerror_positive(ret, ::typeof(trtrs!)) = chknonsingular(ret)
 
 """
     trtri!(uplo, diag, A)
@@ -6991,5 +6996,58 @@ transposed. Similarly for `transb` and `B`. If `isgn = 1`, the equation
 Returns `X` (overwriting `C`) and `scale`.
 """
 trsyl!(transa::AbstractChar, transb::AbstractChar, A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix, isgn::Int=1)
+
+for (fn, elty) in ((:dlacpy_, :Float64),
+                   (:slacpy_, :Float32),
+                   (:zlacpy_, :ComplexF64),
+                   (:clacpy_, :ComplexF32))
+    @eval begin
+        # SUBROUTINE DLACPY( UPLO, M, N, A, LDA, B, LDB )
+        #     .. Scalar Arguments ..
+        #      CHARACTER          UPLO
+        #      INTEGER            LDA, LDB, M, N
+        #     ..
+        #     .. Array Arguments ..
+        #     DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
+        #     ..
+        function lacpy!(B::AbstractMatrix{$elty}, A::AbstractMatrix{$elty}, uplo::AbstractChar)
+            require_one_based_indexing(A, B)
+            chkstride1(A, B)
+            m,n = size(A)
+            m1,n1 = size(B)
+            (m1 < m || n1 < n) && throw(DimensionMismatch("B of size ($m1,$n1) should have at least the same number of rows and columns than A of size ($m,$n)"))
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
+            ccall((@blasfunc($fn), libblastrampoline), Cvoid,
+                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
+                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Clong),
+                  uplo, m, n, A, lda, B, ldb, 1)
+            B
+        end
+    end
+end
+
+"""
+    lacpy!(B, A, uplo) -> B
+
+Copies all or part of a matrix `A` to another matrix `B`.
+uplo specifies the part of the matrix `A` to be copied to `B`.
+Set `uplo = 'L'` for the lower triangular part, `uplo = 'U'`
+for the upper triangular part, any other character for all
+the matrix `A`.
+
+# Examples
+```jldoctest
+julia> A = [1. 2. ; 3. 4.];
+
+julia> B = [0. 0. ; 0. 0.];
+
+julia> LAPACK.lacpy!(B, A, 'U')
+2×2 Matrix{Float64}:
+ 1.0  2.0
+ 0.0  4.0
+```
+"""
+lacpy!(B::AbstractMatrix, A::AbstractMatrix, uplo::AbstractChar)
 
 end # module

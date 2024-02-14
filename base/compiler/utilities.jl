@@ -321,25 +321,6 @@ function iterate(iter::BackedgeIterator, i::Int=1)
     return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
 end
 
-"""
-    add_invalidation_callback!(callback, mi::MethodInstance)
-
-Register `callback` to be triggered upon the invalidation of `mi`.
-`callback` should a function taking two arguments, `callback(replaced::MethodInstance, max_world::UInt32)`,
-and it will be recursively invoked on `MethodInstance`s within the invalidation graph.
-"""
-function add_invalidation_callback!(@nospecialize(callback), mi::MethodInstance)
-    if !isdefined(mi, :callbacks)
-        callbacks = mi.callbacks = Any[callback]
-    else
-        callbacks = mi.callbacks::Vector{Any}
-        if !any(@nospecialize(cb)->cb===callback, callbacks)
-            push!(callbacks, callback)
-        end
-    end
-    return callbacks
-end
-
 #########
 # types #
 #########
@@ -415,15 +396,15 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
         if isa(e, SSAValue)
             push!(uses[e.id], line)
         elseif isa(e, Expr)
-            find_ssavalue_uses(e, uses, line)
+            find_ssavalue_uses!(uses, e, line)
         elseif isa(e, PhiNode)
-            find_ssavalue_uses(e, uses, line)
+            find_ssavalue_uses!(uses, e, line)
         end
     end
     return uses
 end
 
-function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
+function find_ssavalue_uses!(uses::Vector{BitSet}, e::Expr, line::Int)
     head = e.head
     is_meta_expr_head(head) && return
     skiparg = (head === :(=))
@@ -433,24 +414,30 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
         elseif isa(a, SSAValue)
             push!(uses[a.id], line)
         elseif isa(a, Expr)
-            find_ssavalue_uses(a, uses, line)
+            find_ssavalue_uses!(uses, a, line)
         end
     end
 end
 
-function find_ssavalue_uses(e::PhiNode, uses::Vector{BitSet}, line::Int)
-    for val in e.values
+function find_ssavalue_uses!(uses::Vector{BitSet}, e::PhiNode, line::Int)
+    values = e.values
+    for i = 1:length(values)
+        isassigned(values, i) || continue
+        val = values[i]
         if isa(val, SSAValue)
             push!(uses[val.id], line)
         end
     end
 end
 
-function is_throw_call(e::Expr)
+function is_throw_call(e::Expr, code::Vector{Any})
     if e.head === :call
         f = e.args[1]
+        if isa(f, SSAValue)
+            f = code[f.id]
+        end
         if isa(f, GlobalRef)
-            ff = abstract_eval_globalref(f)
+            ff = abstract_eval_globalref_type(f)
             if isa(ff, Const) && ff.val === Core.throw
                 return true
             end
@@ -459,14 +446,14 @@ function is_throw_call(e::Expr)
     return false
 end
 
-function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Int})
+function mark_throw_blocks!(src::CodeInfo, handler_at::Vector{Tuple{Int, Int}})
     for stmt in find_throw_blocks(src.code, handler_at)
         src.ssaflags[stmt] |= IR_FLAG_THROW_BLOCK
     end
     return nothing
 end
 
-function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
+function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Tuple{Int, Int}})
     stmts = BitSet()
     n = length(code)
     for i in n:-1:1
@@ -478,8 +465,8 @@ function find_throw_blocks(code::Vector{Any}, handler_at::Vector{Int})
                 end
             elseif s.head === :return
                 # see `ReturnNode` handling
-            elseif is_throw_call(s)
-                if handler_at[i] == 0
+            elseif is_throw_call(s, code)
+                if handler_at[i][1] == 0
                     push!(stmts, i)
                 end
             elseif i+1 in stmts
@@ -517,6 +504,7 @@ end
 is_root_module(m::Module) = false
 
 inlining_enabled() = (JLOptions().can_inline == 1)
+
 function coverage_enabled(m::Module)
     generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
@@ -530,9 +518,12 @@ function coverage_enabled(m::Module)
     end
     return false
 end
+
 function inbounds_option()
     opt_check_bounds = JLOptions().check_bounds
     opt_check_bounds == 0 && return :default
     opt_check_bounds == 1 && return :on
     return :off
 end
+
+is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1

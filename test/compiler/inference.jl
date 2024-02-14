@@ -138,7 +138,7 @@ end
       Core.Compiler.limit_type_size(Type{Any}, Type, Union{}, 0, 0) ==
       Type{Any}
 
-# issue #43296 #43296
+# issue #43296
 struct C43296{t,I} end
 r43296(b) = r43296(typeof(b))
 r43296(::Type) = nothing
@@ -149,7 +149,8 @@ f43296(g, :) = h
 k43296(b, j, :) = l
 k43296(b, j, ::Nothing) = b
 i43296(b, j) = k43296(b, j, r43296(j))
-@test only(Base.return_types(i43296, (Int, C43296{C43296{C43296{Val, Tuple}, Tuple}}))) == Int
+@test only(Base.return_types(i43296, (Int, C43296{C43296{C43296{Val, Tuple}}}))) <: Int
+@test only(Base.return_types(i43296, (Int, C43296{C43296{C43296{Val, <:Tuple}}}))) <: Int
 
 abstract type e43296{a, j} <: AbstractArray{a, j} end
 abstract type b43296{a, j, c, d} <: e43296{a, j} end
@@ -237,13 +238,18 @@ tuplemerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{Char, Int}}, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}}
 @test Core.Compiler.tmerge(Nothing, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
 @test Core.Compiler.tmerge(Union{Nothing, Tuple{Int, Int}}, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Vector) == Union{Nothing, AbstractVector}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Matrix{Int}) == Union{Nothing, AbstractArray{Int}}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector{Int}}, Array) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractArray{Int}}, Vector) == Union{Nothing, AbstractArray}
-@test Core.Compiler.tmerge(Union{Nothing, AbstractVector}, Matrix{Int}) == Union{Nothing, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Vector) == Union{Nothing, Int, AbstractVector}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Matrix) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Matrix{Int}) == Union{Nothing, Int, AbstractArray{Int}}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector{Int}}, Array) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractArray{Int}}, Vector) == Union{Nothing, Int, AbstractArray}
+@test Core.Compiler.tmerge(Union{Nothing, Int, AbstractVector}, Matrix{Int}) == Union{Nothing, Int, AbstractArray}
 @test Core.Compiler.tmerge(Union{Nothing, AbstractFloat}, Integer) == Union{Nothing, AbstractFloat, Integer}
+@test Core.Compiler.tmerge(AbstractVector, AbstractMatrix) == Union{AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Nothing}, AbstractMatrix) == Union{Nothing, AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Int}, AbstractMatrix) == Union{Int, AbstractVector, AbstractMatrix}
+@test Core.Compiler.tmerge(Union{AbstractVector, Integer}, AbstractMatrix) == Union{Integer, AbstractArray}
+@test Core.Compiler.tmerge(Union{AbstractVector, Nothing, Int}, AbstractMatrix) == Union{Nothing, Int, AbstractArray}
 
 # test that recursively more complicated types don't widen all the way to Any when there is a useful valid type upper bound
 # Specifically test with base types of a trivial type, a simple union, a complicated union, and a tuple.
@@ -426,8 +432,7 @@ code_llvm(devnull, f14009, (Int,))
 mutable struct B14009{T}; end
 g14009(a) = g14009(B14009{a})
 code_typed(g14009, (Type{Int},))
-code_llvm(devnull, f14009, (Int,))
-
+code_llvm(devnull, g14009, (Type{Int},))
 
 # issue #9232
 arithtype9232(::Type{T},::Type{T}) where {T<:Real} = arithtype9232(T)
@@ -731,7 +736,7 @@ for (codetype, all_ssa) in Any[
     test_inferred_static(codetype, all_ssa)
 end
 @test f18679() === ()
-@test_throws UndefVarError(:any_undef_global) g18679()
+@test_throws UndefVarError(:any_undef_global, @__MODULE__) g18679()
 @test h18679() === nothing
 
 
@@ -1579,15 +1584,21 @@ end
 f_typeof_tfunc(x) = typeof(x)
 @test Base.return_types(f_typeof_tfunc, (Union{<:T, Int} where T<:Complex,)) == Any[Union{Type{Int}, Type{Complex{T}} where T<:Real}]
 
-# memoryref_tfunc, memoryrefget_tfunc, memoryrefset!_tfunc
+# memoryref_tfunc, memoryrefget_tfunc, memoryrefset!_tfunc, memoryref_isassigned, memoryrefoffset_tfunc
 let memoryref_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_tfunc(Core.Compiler.fallback_lattice, xs...)
     memoryrefget_tfunc(@nospecialize xs...) = Core.Compiler.memoryrefget_tfunc(Core.Compiler.fallback_lattice, xs...)
+    memoryref_isassigned_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_isassigned_tfunc(Core.Compiler.fallback_lattice, xs...)
     memoryrefset!_tfunc(@nospecialize xs...) = Core.Compiler.memoryrefset!_tfunc(Core.Compiler.fallback_lattice, xs...)
+    memoryrefoffset_tfunc(@nospecialize xs...) = Core.Compiler.memoryrefoffset_tfunc(Core.Compiler.fallback_lattice, xs...)
+    interp = Core.Compiler.NativeInterpreter()
+    builtin_tfunction(@nospecialize xs...) = Core.Compiler.builtin_tfunction(interp, xs..., nothing)
     @test memoryref_tfunc(Memory{Int}) == MemoryRef{Int}
     @test memoryref_tfunc(Memory{Integer}) == MemoryRef{Integer}
     @test memoryref_tfunc(MemoryRef{Int}, Int) == MemoryRef{Int}
+    @test memoryref_tfunc(MemoryRef{Int}, Vararg{Int}) == MemoryRef{Int}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Symbol) == Union{}
     @test memoryref_tfunc(MemoryRef{Int}, Int, Bool) == MemoryRef{Int}
+    @test memoryref_tfunc(MemoryRef{Int}, Int, Vararg{Bool}) == MemoryRef{Int}
     @test memoryref_tfunc(Memory{Int}, Int) == Union{}
     @test memoryref_tfunc(Any, Any, Any) == Any # also probably could be GenericMemoryRef
     @test memoryref_tfunc(Any, Any) == Any # also probably could be GenericMemoryRef
@@ -1602,20 +1613,43 @@ let memoryref_tfunc(@nospecialize xs...) = Core.Compiler.memoryref_tfunc(Core.Co
     @test memoryrefget_tfunc(MemoryRef{Int}, String, Bool) === Union{}
     @test memoryrefget_tfunc(MemoryRef{Int}, Symbol, String) === Union{}
     @test memoryrefget_tfunc(Any, Any, Any) === Any
-    @test memoryrefset!_tfunc(MemoryRef{Int}, Int, Symbol, Bool) === MemoryRef{Int}
+    @test builtin_tfunction(Core.memoryrefget, Any[MemoryRef{Int}, Vararg{Any}]) == Int
+    @test builtin_tfunction(Core.memoryrefget, Any[MemoryRef{Int}, Symbol, Bool, Vararg{Bool}]) == Int
+    @test memoryref_isassigned_tfunc(MemoryRef{Any}, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(MemoryRef{Any}, Any, Any) === Bool
+    @test memoryref_isassigned_tfunc(MemoryRef{<:Integer}, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(GenericMemoryRef, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(GenericMemoryRef{:not_atomic}, Symbol, Bool) === Bool
+    @test memoryref_isassigned_tfunc(Vector{Int}, Symbol, Bool) === Union{}
+    @test memoryref_isassigned_tfunc(String, Symbol, Bool) === Union{}
+    @test memoryref_isassigned_tfunc(MemoryRef{Int}, String, Bool) === Union{}
+    @test memoryref_isassigned_tfunc(MemoryRef{Int}, Symbol, String) === Union{}
+    @test memoryref_isassigned_tfunc(Any, Any, Any) === Bool
+    @test builtin_tfunction(Core.memoryref_isassigned, Any[MemoryRef{Int}, Vararg{Any}]) == Bool
+    @test builtin_tfunction(Core.memoryref_isassigned, Any[MemoryRef{Int}, Symbol, Bool, Vararg{Bool}]) == Bool
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Int, Symbol, Bool) === Int
     let ua = MemoryRef{<:Integer}
-        @test memoryrefset!_tfunc(ua, Int, Symbol, Bool) === ua
+        @test memoryrefset!_tfunc(ua, Int, Symbol, Bool) === Int
     end
-    @test memoryrefset!_tfunc(GenericMemoryRef, Int, Symbol, Bool) === GenericMemoryRef
-    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Int, Symbol, Bool) === GenericMemoryRef{:not_atomic}
-    @test memoryrefset!_tfunc(Any, Int, Symbol, Bool) === Any
+    @test memoryrefset!_tfunc(GenericMemoryRef, Int, Symbol, Bool) === Int
+    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Int, Symbol, Bool) === Int
+    @test memoryrefset!_tfunc(Any, Int, Symbol, Bool) === Int
     @test memoryrefset!_tfunc(MemoryRef{String}, Int, Symbol, Bool) === Union{}
     @test memoryrefset!_tfunc(String, Char, Symbol, Bool) === Union{}
-    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Symbol, Bool) === MemoryRef{Int}
-    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Any, Any) === MemoryRef{Int}
-    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Any, Any, Any) === GenericMemoryRef{:not_atomic}
-    @test memoryrefset!_tfunc(GenericMemoryRef, Any, Any, Any) === GenericMemoryRef
-    @test memoryrefset!_tfunc(Any, Any, Any, Any) === Any # also probably could be GenericMemoryRef
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Symbol, Bool) === Any # could improve this to Int
+    @test memoryrefset!_tfunc(MemoryRef{Int}, Any, Any, Any) === Any # could improve this to Int
+    @test memoryrefset!_tfunc(GenericMemoryRef{:not_atomic}, Any, Any, Any) === Any
+    @test memoryrefset!_tfunc(GenericMemoryRef, Any, Any, Any) === Any
+    @test memoryrefset!_tfunc(Any, Any, Any, Any) === Any
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Any}]) == Any
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Vararg{Symbol}]) == Union{}
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Vararg{Bool}]) === Any # could improve this to Int
+    @test builtin_tfunction(Core.memoryrefset!, Any[MemoryRef{Int}, Any, Symbol, Bool, Vararg{Any}]) === Any # could improve this to Int
+    @test memoryrefoffset_tfunc(MemoryRef) == memoryrefoffset_tfunc(GenericMemoryRef) == Int
+    @test memoryrefoffset_tfunc(Memory) == memoryrefoffset_tfunc(GenericMemory) == Union{}
+    @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{MemoryRef}]) == Int
+    @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{Any}]) == Int
+    @test builtin_tfunction(Core.memoryrefoffset, Any[Vararg{Memory}]) == Union{}
 end
 
 let tuple_tfunc(@nospecialize xs...) =
@@ -2561,7 +2595,7 @@ function h25579(g)
     return t ? typeof(h) : typeof(h)
 end
 @test Base.return_types(h25579, (Base.RefValue{Union{Nothing, Int}},)) ==
-        Any[Union{Type{Float64}, Type{Int}, Type{Nothing}}]
+        Any[Type{Float64}]
 
 f26172(v) = Val{length(Base.tail(ntuple(identity, v)))}() # Val(M-1)
 g26172(::Val{0}) = ()
@@ -2998,13 +3032,16 @@ end
 @test ig27907(Int, Int, 1, 0) == 0
 
 # issue #28279
+# ensure that lowering doesn't move these into statement position, which would require renumbering
+using Base: +, -
 function f28279(b::Bool)
-    i = 1
-    while i > b
-        i -= 1
+    let i = 1
+        while i > b
+            i -= 1
+        end
+        if b end
+        return i + 1
     end
-    if b end
-    return i + 1
 end
 code28279 = code_lowered(f28279, (Bool,))[1].code
 oldcode28279 = deepcopy(code28279)
@@ -4384,30 +4421,28 @@ g41908() = f41908(Any[1][1])
 # issue #42022
 let x = Tuple{Int,Any}[
         #= 1=# (0, Expr(:(=), Core.SlotNumber(3), 1))
-        #= 2=# (0, Expr(:enter, 18))
+        #= 2=# (0, EnterNode(17))
         #= 3=# (2, Expr(:(=), Core.SlotNumber(3), 2.0))
-        #= 4=# (2, Expr(:enter, 12))
+        #= 4=# (2, EnterNode(12))
         #= 5=# (4, Expr(:(=), Core.SlotNumber(3), '3'))
         #= 6=# (4, Core.GotoIfNot(Core.SlotNumber(2), 9))
         #= 7=# (4, Expr(:leave, Core.SSAValue(4), Core.SSAValue(2)))
         #= 8=# (0, Core.ReturnNode(1))
         #= 9=# (4, Expr(:call, GlobalRef(Main, :throw)))
         #=10=# (4, Expr(:leave, Core.SSAValue(4)))
-        #=11=# (2, Core.GotoNode(16))
-        #=12=# (4, Expr(:leave, Core.SSAValue(4)))
-        #=13=# (2, Expr(:(=), Core.SlotNumber(4), Expr(:the_exception)))
-        #=14=# (2, Expr(:call, GlobalRef(Main, :rethrow)))
-        #=15=# (2, Expr(:pop_exception, Core.SSAValue(4)))
-        #=16=# (2, Expr(:leave, Core.SSAValue(2)))
-        #=17=# (0, Core.GotoNode(22))
-        #=18=# (2, Expr(:leave, Core.SSAValue(2)))
-        #=19=# (0, Expr(:(=), Core.SlotNumber(5), Expr(:the_exception)))
-        #=20=# (0, nothing)
-        #=21=# (0, Expr(:pop_exception, Core.SSAValue(2)))
-        #=22=# (0, Core.ReturnNode(Core.SlotNumber(3)))
+        #=11=# (2, Core.GotoNode(15))
+        #=12=# (2, Expr(:(=), Core.SlotNumber(4), Expr(:the_exception)))
+        #=13=# (2, Expr(:call, GlobalRef(Main, :rethrow)))
+        #=14=# (2, Expr(:pop_exception, Core.SSAValue(4)))
+        #=15=# (2, Expr(:leave, Core.SSAValue(2)))
+        #=16=# (0, Core.GotoNode(20))
+        #=17=# (0, Expr(:(=), Core.SlotNumber(5), Expr(:the_exception)))
+        #=18=# (0, nothing)
+        #=19=# (0, Expr(:pop_exception, Core.SSAValue(2)))
+        #=20=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
-    handler_at = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
-    @test handler_at == first.(x)
+    handler_at, handlers = Core.Compiler.compute_trycatch(last.(x), Core.Compiler.BitSet())
+    @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
 end
 
 @test only(Base.return_types((Bool,)) do y
@@ -4424,7 +4459,7 @@ end
             nothing
         end
         return x
-    end) === Union{Int, Float64, Char}
+    end) === Union{Int, Char}
 
 # issue #42097
 struct Foo42097{F} end
@@ -4650,11 +4685,11 @@ end
 
     a = Tuple{Vararg{Tuple{}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}
+    @test a == Union{Tuple{Tuple{Vararg{Tuple{}}}}, Tuple{Vararg{Tuple{}}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}}}
+    @test a == Tuple{Vararg{Union{Tuple{Tuple{Vararg{Tuple{}}}}, Tuple{Vararg{Tuple{}}}}}}
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
-    @test a == Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{Vararg{Tuple{}}}}}}}}}
+    @test a == Tuple
     a = Core.Compiler.tmerge(Core.Compiler.JLTypeLattice(), Tuple{a}, a)
     @test a == Tuple
 end
@@ -4907,10 +4942,21 @@ g() = empty_nt_values(Base.inferencebarrier(Tuple{}))
 # This is somewhat sensitive to the exact recursion level that inference is willing to do, but the intention
 # is to test the case where inference limited a recursion, but then a forced constprop nevertheless managed
 # to terminate the call.
+@newinterp RecurseInterpreter
+let CC = Core.Compiler
+    function CC.const_prop_entry_heuristic(interp::RecurseInterpreter, result::CC.MethodCallResult,
+                                           si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+        if result.rt isa CC.LimitedAccuracy
+            return force # allow forced constprop to recurse into unresolved cycles
+        end
+        return @invoke CC.const_prop_entry_heuristic(interp::CC.AbstractInterpreter, result::CC.MethodCallResult,
+                                                     si::CC.StmtInfo, sv::CC.AbsIntState, force::Bool)
+    end
+end
 Base.@constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(x) > 100 ? x : type_level_recurse2(x[1] + 1, x..., x...))
 Base.@constprop :aggressive type_level_recurse2(x...) = type_level_recurse1(x...)
 type_level_recurse_entry() = Val{type_level_recurse1(1)}()
-@test Base.return_types(type_level_recurse_entry, ()) |> only == Val{1}
+@test Base.infer_return_type(type_level_recurse_entry, (); interp=RecurseInterpreter()) == Val{1}
 
 # Test that inference doesn't give up if it can potentially refine effects,
 # even if the return type is Any.
@@ -5372,6 +5418,127 @@ end
 @test Base.return_types(phic_type3) |> only === Union{Int, Float64}
 @test phic_type3() === 2
 
+# Issue #51852
+function phic_type4()
+    a = (;progress = "a")
+    try
+        may_error(false)
+        let b = Base.inferencebarrier(true) ? (;progress = 1.0) : a
+            a = b
+        end
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type4) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::String}}
+@test phic_type4() === (;progress = 1.0)
+
+function phic_type5()
+    a = (;progress = "a")
+    try
+        vals = (a, (progress=1.0,))
+        may_error(false)
+        a = vals[Base.inferencebarrier(false) ? 1 : 2]
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type5) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::String}}
+@test phic_type5() === (;progress = 1.0)
+
+function phic_type6()
+    a = Base.inferencebarrier(true) ? (;progress = "a") : (;progress = Ref{Any}(0))
+    try
+        may_error(false)
+        let b = Base.inferencebarrier(true) ? (;progress = 1.0) : a
+            a = b
+        end
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type6) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::Base.RefValue{Any}}, @NamedTuple{progress::String}}
+@test phic_type6() === (;progress = 1.0)
+
+function phic_type7()
+    a = Base.inferencebarrier(true) ? (;progress = "a") : (;progress = Ref{Any}(0))
+    try
+        vals = (a, (progress=1.0,))
+        may_error(false)
+        a = vals[Base.inferencebarrier(false) ? 1 : 2]
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type7) |> only === Union{@NamedTuple{progress::Float64}, @NamedTuple{progress::Base.RefValue{Any}}, @NamedTuple{progress::String}}
+@test phic_type7() === (;progress = 1.0)
+
+function phic_type8()
+    local a
+    try
+        may_error(true)
+        a = Base.inferencebarrier(1)
+    catch
+    end
+
+    try
+        a = 2
+        may_error(true)
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type8) |> only === Int
+@test phic_type8() === 2
+
+function phic_type9()
+    local a
+    try
+        may_error(false)
+        a = Base.inferencebarrier(false) ? 1 : nothing
+    catch
+    end
+
+    try
+        a = 2
+        may_error(true)
+    catch
+    end
+    GC.gc()
+    return a
+end
+@test Base.return_types(phic_type9) |> only === Int
+@test phic_type9() === 2
+
+function phic_type10()
+    local a
+    try
+        may_error(false)
+        a = Base.inferencebarrier(true) ? missing : nothing
+    catch
+    end
+
+    try
+        Base.inferencebarrier(true) && (a = 2)
+        may_error(true)
+    catch
+    end
+    GC.gc()
+    return a::Int
+end
+@test Base.return_types(phic_type10) |> only === Int
+@test phic_type10() === 2
+
+undef_trycatch() = try (a_undef_trycatch = a_undef_trycatch, b = 2); return 1 catch end
+# `global a_undef_trycatch` could be defined dynamically, so both paths must be allowed
+@test Base.return_types(undef_trycatch) |> only === Union{Nothing, Int}
+@test undef_trycatch() === nothing
+
 # Test that `exit` returns `Union{}` (issue #51856)
 function test_exit_bottom(s)
     n = tryparse(Int, s)
@@ -5379,3 +5546,90 @@ function test_exit_bottom(s)
     n
 end
 @test only(Base.return_types(test_exit_bottom, Tuple{String})) == Int
+
+function foo_typed_throw_error()
+    try
+        error()
+    catch e
+        if isa(e, ErrorException)
+            return 1.0
+        end
+    end
+    return 1
+end
+@test Base.return_types(foo_typed_throw_error) |> only === Float64
+
+will_throw_no_method(x::Int) = 1
+function foo_typed_throw_metherr()
+    try
+        will_throw_no_method(1.0)
+    catch e
+        if isa(e, MethodError)
+            return 1.0
+        end
+    end
+    return 1
+end
+@test Base.return_types(foo_typed_throw_metherr) |> only === Float64
+
+# refine `exct` when `:nothrow` is proven
+Base.@assume_effects :nothrow function sin_nothrow(x::Float64)
+    x == Inf && return zero(x)
+    return sin(x)
+end
+@test Base.infer_exception_type(sin_nothrow, (Float64,)) == Union{}
+@test Base.return_types((Float64,)) do x
+    try
+        return sin_nothrow(x)
+    catch err
+        return err
+    end
+end |> only === Float64
+# for semi-concrete interpretation result too
+Base.@constprop :aggressive function sin_maythrow(x::Float64, maythrow::Bool)
+    if maythrow
+        return sin(x)
+    else
+        return @noinline sin_nothrow(x)
+    end
+end
+@test Base.return_types((Float64,)) do x
+    try
+        return sin_maythrow(x, false)
+    catch err
+        return err
+    end
+end |> only === Float64
+
+# exception type from GotoIfNot
+@test Base.infer_exception_type(c::Bool -> c ? 1 : 2) == Union{}
+@test Base.infer_exception_type(c::Missing -> c ? 1 : 2) == TypeError
+@test Base.infer_exception_type(c::Any -> c ? 1 : 2) == TypeError
+
+# semi-concrete interpretation accuracy
+# https://github.com/JuliaLang/julia/issues/50037
+@inline countvars50037(bitflags::Int, var::Int) = bitflags >> 0
+@test Base.infer_return_type() do var::Int
+    Val(countvars50037(1, var))
+end == Val{1}
+
+# Issue #52168
+f52168(x, t::Type) = x::NTuple{2, Base.inferencebarrier(t)::Type}
+@test f52168((1, 2.), Any) === (1, 2.)
+
+# Issue #27031
+let x = 1, _Any = Any
+    @noinline bar27031(tt::Tuple{T,T}, ::Type{Val{T}}) where {T} = notsame27031(tt)
+    @noinline notsame27031(tt::Tuple{T, T}) where {T} = error()
+    @noinline notsame27031(tt::Tuple{T, S}) where {T, S} = "OK"
+    foo27031() = bar27031((x, 1.0), Val{_Any})
+    @test foo27031() == "OK"
+end
+
+# Issue #51927
+let 𝕃 = Core.Compiler.fallback_lattice
+    @test apply_type_tfunc(𝕃, Const(Tuple{Vararg{Any,N}} where N), Int) == Type{NTuple{_A, Any}} where _A
+end
+
+# Issue #52613
+@test (code_typed((Any,)) do x; TypeVar(x...); end)[1][2] === TypeVar

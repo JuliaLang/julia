@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Prevent this from putting anything into the Main namespace
-@eval Module() begin
+@eval Core.Module() begin
 
 if Threads.maxthreadid() != 1
     @warn "Running this file with multiple Julia threads may lead to a build error" Threads.maxthreadid()
@@ -46,10 +46,16 @@ precompile(Base.check_open, (Base.TTY,))
 precompile(Base.getproperty, (Base.TTY, Symbol))
 precompile(write, (Base.TTY, String))
 precompile(Tuple{typeof(Base.get), Base.TTY, Symbol, Bool})
-precompile(Tuple{typeof(Base.hashindex), String, Int64})
+precompile(Tuple{typeof(Base.hashindex), String, Int})
 precompile(Tuple{typeof(Base.write), Base.GenericIOBuffer{Array{UInt8, 1}}, String})
-precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Nothing, Int64}, Int64})
-precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Nothing, Int64}, Int64, Int64})
+precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Nothing, Int}, Int})
+precompile(Tuple{typeof(Base.indexed_iterate), Tuple{Nothing, Int}, Int, Int})
+precompile(Tuple{typeof(Base._typeddict), Base.Dict{String, Any}, Base.Dict{String, Any}, Vararg{Base.Dict{String, Any}}})
+precompile(Tuple{typeof(Base.promoteK), Type, Base.Dict{String, Any}, Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.promoteK), Type, Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.promoteV), Type, Base.Dict{String, Any}, Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.eval_user_input), Base.PipeEndpoint, Any, Bool})
+precompile(Tuple{typeof(Base.get), Base.PipeEndpoint, Symbol, Bool})
 
 # used by Revise.jl
 precompile(Tuple{typeof(Base.parse_cache_header), String})
@@ -66,8 +72,8 @@ precompile(Tuple{typeof(Base.exit)})
 precompile(Tuple{typeof(Base.require), Base.PkgId})
 precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
 precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}, Base.Dict{String, Any}, Vararg{Base.Dict{String, Any}}})
-precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, Nothing}, Int64})
-precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, String}, Int64})
+precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, Nothing}, Int})
+precompile(Tuple{typeof(Base.hashindex), Tuple{Base.PkgId, String}, Int})
 precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
 precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
 precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
@@ -333,10 +339,6 @@ finally
 end
 
 generate_precompile_statements()
-
-# As a last step in system image generation,
-# remove some references to build time environment for a more reproducible build.
-Base.Filesystem.temp_cleanup_purge(force=true)
 
 let stdout = Ref{IO}(stdout)
     Base.PROGRAM_FILE = ""

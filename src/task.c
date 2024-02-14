@@ -42,6 +42,13 @@ extern "C" {
 #endif
 
 #if defined(_COMPILER_ASAN_ENABLED_)
+#if __GLIBC__
+#include <dlfcn.h>
+// Bypass the ASAN longjmp wrapper - we are unpoisoning the stack ourselves,
+// since ASAN normally unpoisons far too much.
+// c.f. interceptor in jl_dlopen as well
+void (*real_siglongjmp)(jmp_buf _Buf, int _Value) = NULL;
+#endif
 static inline void sanitizer_start_switch_fiber(jl_ptls_t ptls, jl_task_t *from, jl_task_t *to) {
     if (to->copy_stack)
         __sanitizer_start_switch_fiber(&from->ctx.asan_fake_stack, (char*)ptls->stackbase-ptls->stacksize, ptls->stacksize);
@@ -127,18 +134,11 @@ static inline void sanitizer_finish_switch_fiber(jl_task_t *last, jl_task_t *cur
 #define ROOT_TASK_STACK_ADJUSTMENT 3000000
 #endif
 
-#ifdef JL_HAVE_ASYNCIFY
-// Switching logic is implemented in JavaScript
-#define STATIC_OR_JS JL_DLLEXPORT
-#else
-#define STATIC_OR_JS static
-#endif
-
 static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner) JL_NOTSAFEPOINT;
-STATIC_OR_JS void jl_set_fiber(jl_ucontext_t *t);
-STATIC_OR_JS void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
-STATIC_OR_JS void jl_start_fiber_swap(jl_ucontext_t *savet, jl_ucontext_t *t);
-STATIC_OR_JS void jl_start_fiber_set(jl_ucontext_t *t);
+static void jl_set_fiber(jl_ucontext_t *t);
+static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
+static void jl_start_fiber_swap(jl_ucontext_t *savet, jl_ucontext_t *t);
+static void jl_start_fiber_set(jl_ucontext_t *t);
 
 #ifdef ALWAYS_COPY_STACKS
 # ifndef COPY_STACKS
@@ -1165,47 +1165,6 @@ JL_DLLEXPORT jl_task_t *jl_get_current_task(void)
     return pgcstack == NULL ? NULL : container_of(pgcstack, jl_task_t, gcstack);
 }
 
-
-#ifdef JL_HAVE_ASYNCIFY
-JL_DLLEXPORT jl_ucontext_t *task_ctx_ptr(jl_task_t *t)
-{
-    return &t->ctx.ctx;
-}
-
-JL_DLLEXPORT jl_value_t *jl_get_root_task(void)
-{
-    jl_task_t *ct = jl_current_task;
-    return (jl_value_t*)ct->ptls->root_task;
-}
-
-JL_DLLEXPORT void jl_task_wait()
-{
-    static jl_function_t *wait_func = NULL;
-    if (!wait_func) {
-        wait_func = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("wait"));
-    }
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_get_world_counter();
-    jl_apply(&wait_func, 1);
-    ct->world_age = last_age;
-}
-
-JL_DLLEXPORT void jl_schedule_task(jl_task_t *task)
-{
-    static jl_function_t *sched_func = NULL;
-    if (!sched_func) {
-        sched_func = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("schedule"));
-    }
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_get_world_counter();
-    jl_value_t *args[] = {(jl_value_t*)sched_func, (jl_value_t*)task};
-    jl_apply(args, 2);
-    ct->world_age = last_age;
-}
-#endif
-
 // Do one-time initializations for task system
 void jl_init_tasks(void) JL_GC_DISABLED
 {
@@ -1226,13 +1185,24 @@ void jl_init_tasks(void) JL_GC_DISABLED
         exit(1);
     }
 #endif
+#if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
+    void *libc_handle = dlopen("libc.so.6", RTLD_NOW | RTLD_NOLOAD);
+    if (libc_handle) {
+        *(void**)&real_siglongjmp = dlsym(libc_handle, "siglongjmp");
+        dlclose(libc_handle);
+    }
+    if (real_siglongjmp == NULL) {
+        jl_safe_printf("failed to get real siglongjmp\n");
+        exit(1);
+    }
+#endif
 }
 
 #if defined(_COMPILER_ASAN_ENABLED_)
-STATIC_OR_JS void NOINLINE JL_NORETURN _start_task(void);
+static void NOINLINE JL_NORETURN _start_task(void);
 #endif
 
-STATIC_OR_JS void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void)
+static void NOINLINE JL_NORETURN JL_NO_ASAN start_task(void)
 {
 CFI_NORETURN
 #if defined(_COMPILER_ASAN_ENABLED_)
@@ -1248,7 +1218,7 @@ CFI_NORETURN
     _start_task();
 }
 
-STATIC_OR_JS void NOINLINE JL_NORETURN _start_task(void)
+static void NOINLINE JL_NORETURN _start_task(void)
 {
 CFI_NORETURN
 #endif

@@ -512,6 +512,7 @@ end
     @test shuffle!(mta,Vector(1:10)) == shuffle!(mtb,Vector(1:10))
     @test shuffle(mta,Vector(2:11)) == shuffle(mtb,2:11)
     @test shuffle!(mta, rand(mta, 2, 3)) == shuffle!(mtb, rand(mtb, 2, 3))
+    @test shuffle!(mta, rand(mta, Bool, 2, 3)) == shuffle!(mtb, rand(mtb, Bool, 2, 3))
     @test shuffle(mta, rand(mta, 2, 3)) == shuffle(mtb, rand(mtb, 2, 3))
 
     @test randperm(mta,10) == randperm(mtb,10)
@@ -1230,4 +1231,8 @@ end
     xs = rand(sp, 3)
     @test xs isa Vector{Pair{Bool, Char}}
     @test length(xs) == 3
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Random))
 end

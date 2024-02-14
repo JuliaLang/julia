@@ -501,7 +501,7 @@ JCPPFLAGS_COMMON  := -fasynchronous-unwind-tables
 JCPPFLAGS_CLANG   := $(JCPPFLAGS_COMMON) -mllvm -enable-tail-merge=0
 JCPPFLAGS_GCC     := $(JCPPFLAGS_COMMON) -fno-tree-tail-merge
 
-JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++14
+JCXXFLAGS_COMMON  := -pipe $(fPIC) -fno-rtti -std=c++17
 JCXXFLAGS_CLANG   := $(JCXXFLAGS_COMMON) -pedantic
 JCXXFLAGS_GCC     := $(JCXXFLAGS_COMMON) -fno-gnu-unique
 
@@ -571,10 +571,10 @@ CXX_BASE := ccache
 FC_BASE  := ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
-# http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
+# https://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
 CC += -Qunused-arguments
 CXX += -Qunused-arguments
-# http://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
+# https://petereisentraut.blogspot.be/2011/09/ccache-and-clang-part-2.html
 export CCACHE_CPP2 := yes
 endif
 else #USECCACHE
@@ -599,10 +599,13 @@ CPP_STDOUT := $(CPP) -P
 # file extensions
 ifeq ($(OS), WINNT)
   SHLIB_EXT := dll
+  PATHSEP := ;
 else ifeq ($(OS), Darwin)
   SHLIB_EXT := dylib
+  PATHSEP := :
 else
   SHLIB_EXT := so
+  PATHSEP := :
 endif
 
 ifeq ($(OS),WINNT)
@@ -755,6 +758,12 @@ ifeq ($(WITH_GC_VERIFY), 1)
 JCXXFLAGS += -DGC_VERIFY
 JCFLAGS += -DGC_VERIFY
 endif
+
+ifneq ($(JL_STACK_SIZE),)
+JCXXFLAGS += -DJL_STACK_SIZE=$(JL_STACK_SIZE)
+JCFLAGS += -DJL_STACK_SIZE=$(JL_STACK_SIZE)
+endif
+
 
 ifeq ($(WITH_GC_DEBUG_ENV), 1)
 JCXXFLAGS += -DGC_DEBUG_ENV
@@ -1383,7 +1392,7 @@ endif
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(BUILDROOT)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lole32
 JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware

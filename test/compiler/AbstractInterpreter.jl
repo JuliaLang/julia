@@ -21,7 +21,7 @@ end
 
 @newinterp MTOverlayInterp
 @MethodTable OverlayedMT
-CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlayedMT)
+CC.method_table(interp::MTOverlayInterp) = CC.OverlayMethodTable(CC.get_inference_world(interp), OverlayedMT)
 
 function CC.add_remark!(interp::MTOverlayInterp, ::CC.InferenceState, remark)
     if interp.meta !== nothing
@@ -120,7 +120,7 @@ end |> only === Nothing
 # https://github.com/JuliaLang/julia/issues/48097
 @newinterp Issue48097Interp
 @MethodTable Issue48097MT
-CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_world_counter(interp), Issue48097MT)
+CC.method_table(interp::Issue48097Interp) = CC.OverlayMethodTable(CC.get_inference_world(interp), Issue48097MT)
 CC.InferenceParams(::Issue48097Interp) = CC.InferenceParams(; unoptimize_throw_blocks=false)
 function CC.concrete_eval_eligible(interp::Issue48097Interp,
     @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
@@ -141,7 +141,7 @@ end
 # Should not concrete-eval overlayed methods in semi-concrete interpretation
 @newinterp OverlaySinInterp
 @MethodTable OverlaySinMT
-CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_world_counter(interp), OverlaySinMT)
+CC.method_table(interp::OverlaySinInterp) = CC.OverlayMethodTable(CC.get_inference_world(interp), OverlaySinMT)
 overlay_sin1(x) = error("Not supposed to be called.")
 @overlay OverlaySinMT overlay_sin1(x) = cos(x)
 @overlay OverlaySinMT Base.sin(x::Union{Float32,Float64}) = overlay_sin1(x)
@@ -330,19 +330,17 @@ function CC.abstract_call(interp::NoinlineInterpreter,
     ret = @invoke CC.abstract_call(interp::CC.AbstractInterpreter,
         arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Int)
     if sv.mod in noinline_modules(interp)
-        return CC.CallMeta(ret.rt, ret.effects, NoinlineCallInfo(ret.info))
+        return CC.CallMeta(ret.rt, ret.exct, ret.effects, NoinlineCallInfo(ret.info))
     end
     return ret
 end
 function CC.inlining_policy(interp::NoinlineInterpreter,
-    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32, mi::MethodInstance,
-    argtypes::Vector{Any})
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(info, NoinlineCallInfo)
         return nothing
     end
     return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter,
-        src::Any, info::CallInfo, stmt_flag::UInt32, mi::MethodInstance,
-        argtypes::Vector{Any})
+        src::Any, info::CallInfo, stmt_flag::UInt32)
 end
 
 @inline function inlined_usually(x, y, z)
@@ -370,7 +368,7 @@ let NoinlineModule = Module()
     # it should work for cached results
     method = only(methods(inlined_usually, (Float64,Float64,Float64,)))
     mi = CC.specialize_method(method, Tuple{typeof(inlined_usually),Float64,Float64,Float64}, Core.svec())
-    @test haskey(interp.code_cache.dict, mi)
+    @test CC.haskey(CC.code_cache(interp), mi)
     let src = code_typed1((Float64,Float64,Float64); interp) do x, y, z
             inlined_usually(x, y, z)
         end
@@ -444,7 +442,8 @@ function custom_lookup(mi::MethodInstance, min_world::UInt, max_world::UInt)
             end
         end
     end
-    return CONST_INVOKE_INTERP.code_cache.dict[mi]
+    # XXX: This seems buggy, custom_lookup should probably construct the absint on demand.
+    return CC.getindex(CC.code_cache(CONST_INVOKE_INTERP), mi)
 end
 
 let # generate cache
@@ -466,6 +465,7 @@ let # generate cache
         lookup)
     io = IOBuffer()
     code_llvm(io, custom_lookup_target, (Bool,Int,); params)
-    @test  occursin("j_sin_", String(take!(io)))
-    @test !occursin("j_cos_", String(take!(io)))
+    s = String(take!(io))
+    @test  occursin("j_sin_", s)
+    @test !occursin("j_cos_", s)
 end

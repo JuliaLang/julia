@@ -48,6 +48,7 @@ and installing Julia, below.
 - **Documentation:** <https://docs.julialang.org>
 - **Packages:** <https://julialang.org/packages/>
 - **Discussion forum:** <https://discourse.julialang.org>
+- **Zulip:** <https://julialang.zulipchat.com/>
 - **Slack:** <https://julialang.slack.com> (get an invite from <https://julialang.org/slack/>)
 - **YouTube:** <https://www.youtube.com/user/JuliaLanguage>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
@@ -76,7 +77,7 @@ interactive prompt into which you can enter expressions for
 evaluation.  You can read about [getting
 started](https://docs.julialang.org/en/v1/manual/getting-started/) in the manual.
 
-**Note**: Although some system package managers provide Julia, such
+**Note**: Although some OS package managers provide Julia, such
 installations are neither maintained nor endorsed by the Julia
 project. They may be outdated, broken and/or unmaintained. We
 recommend you use the official Julia binaries instead.
@@ -89,11 +90,11 @@ Then, acquire the source code by cloning the git repository:
 
     git clone https://github.com/JuliaLang/julia.git
 
-and then use the command prompt to change into the resulting julia directory. By default you will be building the latest unstable version of
+and then use the command prompt to change into the resulting julia directory. By default, you will be building the latest unstable version of
 Julia. However, most users should use the [most recent stable version](https://github.com/JuliaLang/julia/releases)
 of Julia. You can get this version by running:
 
-    git checkout v1.9.3
+    git checkout v1.10.0
 
 To build the `julia` executable, run `make` from within the julia directory.
 
@@ -116,7 +117,7 @@ started](https://docs.julialang.org/en/v1/manual/getting-started/)
 in the manual.
 
 Detailed build instructions, should they be necessary,
-are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/).
+are included in the [build documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/build.md).
 
 ### Uninstalling Julia
 
@@ -131,14 +132,14 @@ The Julia source code is organized as follows:
 | Directory         | Contents                                                           |
 | -                 | -                                                                  |
 | `base/`           | source code for the Base module (part of Julia's standard library) |
-| `stdlib/`         | source code for other standard library packages                    |
 | `cli/`            | source for the command line interface/REPL                         |
 | `contrib/`        | miscellaneous scripts                                              |
 | `deps/`           | external dependencies                                              |
 | `doc/src/`        | source for the user manual                                         |
+| `etc/`            | contains `startup.jl`                                              |
 | `src/`            | source for Julia language core                                     |
+| `stdlib/`         | source code for other standard library packages                    |
 | `test/`           | test suites                                                        |
-| `usr/`            | binaries and shared libraries loaded by Julia's standard libraries |
 
 ## Terminal, Editors and IDEs
 
@@ -146,7 +147,7 @@ The Julia REPL is quite powerful. See the section in the manual on
 [the Julia REPL](https://docs.julialang.org/en/v1/stdlib/REPL/)
 for more details.
 
-On Windows we highly recommend running Julia in a modern terminal,
+On Windows, we highly recommend running Julia in a modern terminal,
 such as [Windows Terminal from the Microsoft Store](https://aka.ms/terminal).
 
 Support for editing Julia is available for many
@@ -157,7 +158,7 @@ Support for editing Julia is available for many
 others.
 
 For users who prefer IDEs, we recommend using VS Code with the
-[julia-vscode](https://www.julia-vscode.org/) plugin.
+[julia-vscode](https://www.julia-vscode.org/) plugin.\
 For notebook users, [Jupyter](https://jupyter.org/) notebook support is available through the
 [IJulia](https://github.com/JuliaLang/IJulia.jl) package, and
 the [Pluto.jl](https://github.com/fonsp/Pluto.jl) package provides Pluto notebooks.

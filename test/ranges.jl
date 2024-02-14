@@ -3,6 +3,9 @@
 using Base.Checked: checked_length
 using InteractiveUtils: code_llvm
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @testset "range construction" begin
     @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
     @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
@@ -232,9 +235,23 @@ end
             @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
         end
     end
+    @testset "high precision of varying types" begin
+        x = Float32(π)
+        y = Float64(Base.MathConstants.γ)
+        @test Base.mul12(x, y)[1] ≈ Base.mul12(Float64(π), y)[1] rtol=1e-6
+        @test Base.mul12(x, y)[2] ≈ Base.mul12(Float64(π), y)[2] atol=1e-15
+        @test Base.div12(x, y)[1] ≈ Base.div12(Float64(π), y)[1] rtol=1e-6
+        @test Base.div12(x, y)[2] ≈ Base.div12(Float64(π), y)[2] atol=1e-15
+        xtp = Base.TwicePrecision{Float32}(π)
+        ytp = Base.TwicePrecision{Float64}(Base.MathConstants.γ)
+        @test Float32(xtp + ytp) ≈ Float32(Base.TwicePrecision{Float64}(π) + ytp)
+    end
 
     x1 = Base.TwicePrecision{Float64}(1)
     x0 = Base.TwicePrecision{Float64}(0)
+    @test eltype(x1) == Float64
+    @test eltype(typeof(x1)) == Float64
+    @test zero(typeof(x1)) === x0
     xinf = Base.TwicePrecision{Float64}(Inf)
     @test Float64(x1+x0)  == 1
     @test Float64(x1+0)   == 1
@@ -545,6 +562,13 @@ end
         @test sort(1:10, rev=true) == 10:-1:1
         @test sort(-3:3, by=abs) == [0,-1,1,-2,2,-3,3]
         @test partialsort(1:10, 4) == 4
+
+        @testset "offset ranges" begin
+            x = OffsetArrays.IdOffsetRange(values=4:13, indices=4:13)
+            @test sort(x) === x === sort!(x)
+            @test sortperm(x) == eachindex(x)
+            @test issorted(x[sortperm(x)])
+        end
     end
     @testset "in" begin
         @test 0 in UInt(0):100:typemax(UInt)
@@ -631,11 +655,30 @@ end
     end
 end
 @testset "indexing range with empty range (#4309)" begin
-    @test (3:6)[5:4] === 7:6
+    @test (@inferred (3:6)[5:4]) === 7:6
     @test_throws BoundsError (3:6)[5:5]
     @test_throws BoundsError (3:6)[5]
-    @test (0:2:10)[7:6] === 12:2:10
+    @test (@inferred (0:2:10)[7:6]) === 12:2:11
     @test_throws BoundsError (0:2:10)[7:7]
+
+    for start in [true], stop in [true, false]
+        @test (@inferred (start:stop)[1:0]) === true:false
+    end
+    @test (@inferred (true:false)[true:false]) == true:false
+
+    @testset "issue #40760" begin
+        empty_range = 1:0
+        r = range(false, length = 0)
+        @test r isa UnitRange && first(r) == 0 && last(r) == -1
+        r = (true:true)[empty_range]
+        @test r isa UnitRange && first(r) == true && last(r) == false
+        @testset for r in Any[true:true, true:true:true, 1:2, 1:1:2]
+            @test (@inferred r[1:0]) isa AbstractRange
+            @test r[1:0] == empty_range
+            @test (@inferred r[1:1:0]) isa AbstractRange
+            @test r[1:1:0] == empty_range
+        end
+    end
 end
 # indexing with negative ranges (#8351)
 for a=AbstractRange[3:6, 0:2:10], b=AbstractRange[0:1, 2:-1:0]
@@ -1007,6 +1050,7 @@ end
         end
         a = prevfloat(a)
     end
+    @test (1:2:3)[StepRangeLen{Bool}(true,-1,2)] == [1]
 end
 
 # issue #20380
@@ -2305,6 +2349,7 @@ end
     @test_throws BoundsError r[true:true:false]
     @test_throws BoundsError r[true:true:true]
 end
+
 @testset "Non-Int64 endpoints that are identical (#39798)" begin
     for T in DataType[Float16,Float32,Float64,Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128],
         r in [ LinRange(1, 1, 10), StepRangeLen(7, 0, 5) ]
@@ -2536,4 +2581,25 @@ end
     @test x[UInt(1)] == -1.0
     a = StepRangeLen(1,2,3,2)
     @test a[UInt(1)] == -1
+end
+
+@testset "StepRangeLen of CartesianIndex-es" begin
+    CIstart = CartesianIndex(2,3)
+    CIstep = CartesianIndex(1,1)
+    r = StepRangeLen(CIstart, CIstep, 4)
+    @test length(r) == 4
+    @test first(r) == CIstart
+    @test step(r) == CIstep
+    @test last(r) == CartesianIndex(5,6)
+    @test r[2] == CartesianIndex(3,4)
+
+    @test repr(r) == "StepRangeLen($CIstart, $CIstep, 4)"
+
+    r = StepRangeLen(CartesianIndex(), CartesianIndex(), 3)
+    @test all(==(CartesianIndex()), r)
+    @test length(r) == 3
+    @test repr(r) == "StepRangeLen(CartesianIndex(), CartesianIndex(), 3)"
+
+    errmsg = ("deliberately unsupported for CartesianIndex", "StepRangeLen")
+    @test_throws errmsg range(CartesianIndex(1), step=CartesianIndex(1), length=3)
 end

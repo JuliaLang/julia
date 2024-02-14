@@ -344,6 +344,9 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
             i++;
             pe = pe->prev;
         }
+        uintptr_t bits = jl_astaggedvalue(v)->header;
+        if (bits & GC_IN_IMAGE)
+            return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
     }
     if (tv == jl_uniontype_type) {
@@ -432,55 +435,62 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
     return h;
 }
 
-static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) JL_NOTSAFEPOINT
+static uintptr_t NOINLINE jl_object_id__cold(uintptr_t tv, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    if (dt == jl_simplevector_type)
-        return hash_svec((jl_svec_t*)v);
-    if (dt == jl_datatype_type) {
-        jl_datatype_t *dtv = (jl_datatype_t*)v;
-        uintptr_t h = ~dtv->name->hash;
-        return bitmix(h, hash_svec(dtv->parameters));
-    }
-    if (dt == jl_string_type) {
+    jl_datatype_t *dt = (jl_datatype_t*)jl_to_typeof(tv);
+    if (dt->name->mutabl) {
+        if (dt == jl_string_type) {
 #ifdef _P64
-        return memhash_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
+            return memhash_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
 #else
-        return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
+            return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
 #endif
-    }
-    if (dt == jl_module_type) {
-        jl_module_t *m = (jl_module_t*)v;
-        return m->hash;
-    }
-    if (dt->name->mutabl)
+        }
+        if (dt == jl_simplevector_type)
+            return hash_svec((jl_svec_t*)v);
+        if (dt == jl_datatype_type) {
+            jl_datatype_t *dtv = (jl_datatype_t*)v;
+            uintptr_t h = ~dtv->name->hash;
+            return bitmix(h, hash_svec(dtv->parameters));
+        }
+        if (dt == jl_module_type) {
+            jl_module_t *m = (jl_module_t*)v;
+            return m->hash;
+        }
+        uintptr_t bits = jl_astaggedvalue(v)->header;
+        if (bits & GC_IN_IMAGE)
+            return ((uintptr_t*)v)[-2];
         return inthash((uintptr_t)v);
+    }
     return immut_id_(dt, v, dt->hash);
 }
 
-JL_DLLEXPORT inline uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v) JL_NOTSAFEPOINT
+JL_DLLEXPORT inline uintptr_t jl_object_id_(uintptr_t tv, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    jl_datatype_t *dt = (jl_datatype_t*)tv;
-    if (dt == jl_symbol_type)
+    if (tv == jl_symbol_tag << 4) {
         return ((jl_sym_t*)v)->hash;
-    if (dt == jl_typename_type)
-        return ((jl_typename_t*)v)->hash;
-    if (dt == jl_datatype_type) {
+    }
+    else if (tv == jl_datatype_tag << 4) {
         jl_datatype_t *dtv = (jl_datatype_t*)v;
         if (dtv->isconcretetype)
             return dtv->hash;
     }
-    return jl_object_id__cold(dt, v);
+    else if (tv == (uintptr_t)jl_typename_type) {
+        return ((jl_typename_t*)v)->hash;
+    }
+    return jl_object_id__cold(tv, v);
 }
 
 
 JL_DLLEXPORT uintptr_t jl_object_id(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    return jl_object_id_(jl_typeof(v), v);
+    return jl_object_id_(jl_typetagof(v), v);
 }
 
 // eq hash table --------------------------------------------------------------
 
 #include "iddict.c"
+#include "idset.c"
 
 // object model and type primitives -------------------------------------------
 
@@ -577,6 +587,12 @@ JL_CALLABLE(jl_f_ifelse)
     return (args[0] == jl_false ? args[2] : args[1]);
 }
 
+JL_CALLABLE(jl_f_current_scope)
+{
+    JL_NARGS(current_scope, 0, 0);
+    return jl_current_task->scope;
+}
+
 // apply ----------------------------------------------------------------------
 
 static NOINLINE jl_svec_t *_copy_to(size_t newalloc, jl_value_t **oldargs, size_t oldalloc)
@@ -610,7 +626,7 @@ STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t 
 
 static jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
-    return jl_memoryrefget(jl_memoryrefindex(a->ref, i));
+    return jl_memoryrefget(jl_memoryrefindex(a->ref, i), 0);
 }
 
 static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
@@ -669,7 +685,7 @@ static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *itera
         }
     }
     if (extra && iterate == NULL) {
-        jl_undefined_var_error(jl_symbol("iterate"));
+        jl_undefined_var_error(jl_symbol("iterate"), NULL);
     }
     // allocate space for the argument array and gc roots for it
     // based on our previous estimates
@@ -988,7 +1004,7 @@ static inline size_t get_checked_fieldindex(const char *name, jl_datatype_t *st,
     }
     if (mutabl && jl_field_isconst(st, idx)) {
         jl_errorf("%s: const field .%s of type %s cannot be changed", name,
-                jl_symbol_name((jl_sym_t*)jl_svec_ref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
+                jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
     }
     return idx;
 }
@@ -1019,9 +1035,11 @@ JL_CALLABLE(jl_f_getfield)
         jl_atomic_error("getfield: non-atomic field cannot be accessed atomically");
     if (isatomic && order == jl_memory_order_notatomic)
         jl_atomic_error("getfield: atomic field cannot be accessed non-atomically");
-    v = jl_get_nth_field_checked(v, idx);
-    if (order >= jl_memory_order_acq_rel || order == jl_memory_order_acquire)
-        jl_fence(); // `v` already had at least consume ordering
+    if (order >= jl_memory_order_seq_cst)
+        jl_fence();
+    v = jl_get_nth_field_checked(v, idx); // `v` already had at least consume ordering
+    if (order >= jl_memory_order_acquire)
+        jl_fence();
     return v;
 }
 
@@ -1043,7 +1061,7 @@ JL_CALLABLE(jl_f_setfield)
     jl_value_t *ft = jl_field_type_concrete(st, idx);
     if (!jl_isa(args[2], ft))
         jl_type_error("setfield!", ft, args[2]);
-    if (order >= jl_memory_order_acq_rel || order == jl_memory_order_release)
+    if (order >= jl_memory_order_release)
         jl_fence(); // `st->[idx]` will have at least relaxed ordering
     set_nth_field(st, v, idx, args[2], isatomic);
     return args[2];
@@ -1117,6 +1135,35 @@ JL_CALLABLE(jl_f_replacefield)
     return v;
 }
 
+JL_CALLABLE(jl_f_setfieldonce)
+{
+    enum jl_memory_order success_order = jl_memory_order_notatomic;
+    JL_NARGS(setfieldonce!, 3, 5);
+    if (nargs >= 4) {
+        JL_TYPECHK(setfieldonce!, symbol, args[3]);
+        success_order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 1);
+    }
+    enum jl_memory_order failure_order = success_order;
+    if (nargs == 5) {
+        JL_TYPECHK(setfieldonce!, symbol, args[4]);
+        failure_order = jl_get_atomic_order_checked((jl_sym_t*)args[4], 1, 0);
+    }
+    if (failure_order > success_order)
+        jl_atomic_error("invalid atomic ordering");
+    // TODO: filter more invalid ordering combinations?
+    jl_value_t *v = args[0];
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    size_t idx = get_checked_fieldindex("setfieldonce!", st, v, args[1], 1);
+    int isatomic = !!jl_field_isatomic(st, idx);
+    if (isatomic == (success_order == jl_memory_order_notatomic))
+        jl_atomic_error(isatomic ? "setfieldonce!: atomic field cannot be written non-atomically"
+                                 : "setfieldonce!: non-atomic field cannot be written atomically");
+    if (isatomic == (failure_order == jl_memory_order_notatomic))
+        jl_atomic_error(isatomic ? "setfieldonce!: atomic field cannot be accessed non-atomically"
+                                 : "setfieldonce!: non-atomic field cannot be accessed atomically");
+    int success = set_nth_fieldonce(st, v, idx, args[2], isatomic); // always seq_cst, if isatomic needed at all
+    return success ? jl_true : jl_false;
+}
 
 static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
 {
@@ -1225,7 +1272,12 @@ JL_CALLABLE(jl_f_isdefined)
         JL_TYPECHK(isdefined, symbol, args[1]);
         m = (jl_module_t*)args[0];
         s = (jl_sym_t*)args[1];
-        return jl_boundp(m, s) ? jl_true : jl_false; // is seq_cst already
+        if (order == jl_memory_order_unspecified)
+            order = jl_memory_order_unordered;
+        if (order < jl_memory_order_unordered)
+            jl_atomic_error("isdefined: module binding cannot be accessed non-atomically");
+        int bound = jl_boundp(m, s); // seq_cst always
+        return bound ? jl_true : jl_false;
     }
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);
     assert(jl_is_datatype(vt));
@@ -1252,15 +1304,11 @@ JL_CALLABLE(jl_f_isdefined)
         jl_atomic_error("isdefined: non-atomic field cannot be accessed atomically");
     if (isatomic && order == jl_memory_order_notatomic)
         jl_atomic_error("isdefined: atomic field cannot be accessed non-atomically");
-    int v = jl_field_isdefined(args[0], idx);
-    if (v == 2) {
-        if (order > jl_memory_order_notatomic)
-            jl_fence(); // isbits case has no ordering already
-    }
-    else {
-        if (order >= jl_memory_order_acq_rel || order == jl_memory_order_acquire)
-            jl_fence(); // `v` already gave at least consume ordering
-    }
+    if (order >= jl_memory_order_seq_cst)
+        jl_fence();
+    int v = jl_field_isdefined(args[0], idx); // relaxed ordering
+    if (order >= jl_memory_order_acquire)
+        jl_fence();
     return v ? jl_true : jl_false;
 }
 
@@ -1281,8 +1329,11 @@ JL_CALLABLE(jl_f_getglobal)
     JL_TYPECHK(getglobal, symbol, (jl_value_t*)sym);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("getglobal: module binding cannot be read non-atomically");
-    jl_value_t *v = jl_eval_global_var(mod, sym);
-    // is seq_cst already, no fence needed
+    else if (order >= jl_memory_order_seq_cst)
+        jl_fence();
+    jl_value_t *v = jl_eval_global_var(mod, sym); // relaxed load
+    if (order >= jl_memory_order_acquire)
+        jl_fence();
     return v;
 }
 
@@ -1300,9 +1351,12 @@ JL_CALLABLE(jl_f_setglobal)
     JL_TYPECHK(setglobal!, symbol, (jl_value_t*)var);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("setglobal!: module binding cannot be written non-atomically");
-    // is seq_cst already, no fence needed
+    else if (order >= jl_memory_order_seq_cst)
+        jl_fence();
     jl_binding_t *b = jl_get_binding_wr(mod, var);
-    jl_checked_assignment(b, mod, var, args[2]);
+    jl_checked_assignment(b, mod, var, args[2]); // release store
+    if (order >= jl_memory_order_seq_cst)
+        jl_fence();
     return args[2];
 }
 
@@ -1339,15 +1393,113 @@ JL_CALLABLE(jl_f_set_binding_type)
     JL_TYPECHK(set_binding_type!, type, ty);
     jl_binding_t *b = jl_get_binding_wr(m, s);
     jl_value_t *old_ty = NULL;
-    if (!jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty) && ty != old_ty) {
-        if (nargs == 2)
-            return jl_nothing;
+    if (jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, ty)) {
+        jl_gc_wb(b, ty);
+    }
+    else if (nargs != 2 && !jl_types_equal(ty, old_ty)) {
         jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
                   jl_symbol_name(m->name), jl_symbol_name(s));
     }
-    jl_gc_wb(b, ty);
     return jl_nothing;
 }
+
+JL_CALLABLE(jl_f_swapglobal)
+{
+    enum jl_memory_order order = jl_memory_order_release;
+    JL_NARGS(swapglobal!, 3, 4);
+    if (nargs == 4) {
+        JL_TYPECHK(swapglobal!, symbol, args[3]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 1);
+    }
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *var = (jl_sym_t*)args[1];
+    JL_TYPECHK(swapglobal!, module, (jl_value_t*)mod);
+    JL_TYPECHK(swapglobal!, symbol, (jl_value_t*)var);
+    if (order == jl_memory_order_notatomic)
+        jl_atomic_error("swapglobal!: module binding cannot be written non-atomically");
+    // is seq_cst already, no fence needed
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    return jl_checked_swap(b, mod, var, args[2]);
+}
+
+JL_CALLABLE(jl_f_modifyglobal)
+{
+    enum jl_memory_order order = jl_memory_order_release;
+    JL_NARGS(modifyglobal!, 4, 5);
+    if (nargs == 5) {
+        JL_TYPECHK(modifyglobal!, symbol, args[4]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[4], 1, 1);
+    }
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *var = (jl_sym_t*)args[1];
+    JL_TYPECHK(modifyglobal!, module, (jl_value_t*)mod);
+    JL_TYPECHK(modifyglobal!, symbol, (jl_value_t*)var);
+    if (order == jl_memory_order_notatomic)
+        jl_atomic_error("modifyglobal!: module binding cannot be written non-atomically");
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    // is seq_cst already, no fence needed
+    return jl_checked_modify(b, mod, var, args[2], args[3]);
+}
+
+JL_CALLABLE(jl_f_replaceglobal)
+{
+    enum jl_memory_order success_order = jl_memory_order_release;
+    JL_NARGS(replaceglobal!, 4, 6);
+    if (nargs >= 5) {
+        JL_TYPECHK(replaceglobal!, symbol, args[4]);
+        success_order = jl_get_atomic_order_checked((jl_sym_t*)args[4], 1, 1);
+    }
+    enum jl_memory_order failure_order = success_order;
+    if (nargs == 6) {
+        JL_TYPECHK(replaceglobal!, symbol, args[5]);
+        failure_order = jl_get_atomic_order_checked((jl_sym_t*)args[5], 1, 0);
+    }
+    if (failure_order > success_order)
+        jl_atomic_error("invalid atomic ordering");
+    // TODO: filter more invalid ordering combinations?
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *var = (jl_sym_t*)args[1];
+    JL_TYPECHK(replaceglobal!, module, (jl_value_t*)mod);
+    JL_TYPECHK(replaceglobal!, symbol, (jl_value_t*)var);
+    if (success_order == jl_memory_order_notatomic)
+        jl_atomic_error("replaceglobal!: module binding cannot be written non-atomically");
+    if (failure_order == jl_memory_order_notatomic)
+        jl_atomic_error("replaceglobal!: module binding cannot be accessed non-atomically");
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    // is seq_cst already, no fence needed
+    return jl_checked_replace(b, mod, var, args[2], args[3]);
+}
+
+JL_CALLABLE(jl_f_setglobalonce)
+{
+    enum jl_memory_order success_order = jl_memory_order_release;
+    JL_NARGS(setglobalonce!, 3, 5);
+    if (nargs >= 4) {
+        JL_TYPECHK(setglobalonce!, symbol, args[3]);
+        success_order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 1);
+    }
+    enum jl_memory_order failure_order = success_order;
+    if (nargs == 5) {
+        JL_TYPECHK(setglobalonce!, symbol, args[4]);
+        failure_order = jl_get_atomic_order_checked((jl_sym_t*)args[4], 1, 0);
+    }
+    if (failure_order > success_order)
+        jl_atomic_error("invalid atomic ordering");
+    // TODO: filter more invalid ordering combinations?
+    jl_module_t *mod = (jl_module_t*)args[0];
+    jl_sym_t *var = (jl_sym_t*)args[1];
+    JL_TYPECHK(setglobalonce!, module, (jl_value_t*)mod);
+    JL_TYPECHK(setglobalonce!, symbol, (jl_value_t*)var);
+    if (success_order == jl_memory_order_notatomic)
+        jl_atomic_error("setglobalonce!: module binding cannot be written non-atomically");
+    if (failure_order == jl_memory_order_notatomic)
+        jl_atomic_error("setglobalonce!: module binding cannot be accessed non-atomically");
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
+    // is seq_cst already, no fence needed
+    jl_value_t *old = jl_checked_assignonce(b, mod, var, args[2]);
+    return old == NULL ? jl_true : jl_false;
+}
+
 
 
 // apply_type -----------------------------------------------------------------
@@ -1574,51 +1726,197 @@ JL_CALLABLE(jl_f_memoryrefoffset)
 
 JL_CALLABLE(jl_f_memoryrefget)
 {
+    enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(memoryrefget, 3, 3);
     JL_TYPECHK(memoryrefget, genericmemoryref, args[0]);
     JL_TYPECHK(memoryrefget, symbol, args[1]);
     JL_TYPECHK(memoryrefget, bool, args[2]);
     jl_genericmemoryref_t m = *(jl_genericmemoryref_t*)args[0];
-    jl_value_t *isatomic = jl_tparam0(jl_typetagof(m.mem));
-    if (isatomic == jl_false)
-        if (args[1] != (jl_value_t*)jl_not_atomic_sym)
-            jl_atomic_error("memoryrefget!: non-atomic memory cannot be accessed atomically");
+    jl_value_t *kind = jl_tparam0(jl_typetagof(m.mem));
+    if (kind == (jl_value_t*)jl_not_atomic_sym) {
+        if (args[1] != kind) {
+            order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 1, 0);
+            jl_atomic_error("memoryrefget: non-atomic memory cannot be accessed atomically");
+        }
+    }
+    else if (kind == (jl_value_t*)jl_atomic_sym) {
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 1, 0);
+        if (order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryrefget: atomic memory cannot be accessed non-atomically");
+    }
     if (m.mem->length == 0)
         jl_bounds_error_int((jl_value_t*)m.mem, 1);
-    return jl_memoryrefget(m);
+    return jl_memoryrefget(m, kind == (jl_value_t*)jl_atomic_sym);
 }
 
 JL_CALLABLE(jl_f_memoryrefset)
 {
+    enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(memoryrefset!, 4, 4);
     JL_TYPECHK(memoryrefset!, genericmemoryref, args[0]);
     JL_TYPECHK(memoryrefset!, symbol, args[2]);
     JL_TYPECHK(memoryrefset!, bool, args[3]);
     jl_genericmemoryref_t m = *(jl_genericmemoryref_t*)args[0];
-    jl_value_t *isatomic = jl_tparam0(jl_typetagof(m.mem));
-    if (isatomic == jl_false)
-        if (args[2] != (jl_value_t*)jl_not_atomic_sym)
+    jl_value_t *kind = jl_tparam0(jl_typetagof(m.mem));
+    if (kind == (jl_value_t*)jl_not_atomic_sym) {
+        if (args[2] != kind) {
+            order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 0, 1);
             jl_atomic_error("memoryrefset!: non-atomic memory cannot be written atomically");
+        }
+    }
+    else if (kind == (jl_value_t*)jl_atomic_sym) {
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 0, 1);
+        if (order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryrefset!: atomic memory cannot be written non-atomically");
+    }
     if (m.mem->length == 0)
         jl_bounds_error_int((jl_value_t*)m.mem, 1);
-    jl_memoryrefset(m, args[1]);
-    return args[0];
+    jl_memoryrefset(m, args[1], kind == (jl_value_t*)jl_atomic_sym);
+    return args[1];
 }
 
 JL_CALLABLE(jl_f_memoryref_isassigned)
 {
+    enum jl_memory_order order = jl_memory_order_notatomic;
     JL_NARGS(memoryref_isassigned, 3, 3);
     JL_TYPECHK(memoryref_isassigned, genericmemoryref, args[0]);
     JL_TYPECHK(memoryref_isassigned, symbol, args[1]);
     JL_TYPECHK(memoryref_isassigned, bool, args[2]);
     jl_genericmemoryref_t m = *(jl_genericmemoryref_t*)args[0];
-    jl_value_t *isatomic = jl_tparam0(jl_typetagof(m.mem));
-    if (isatomic == jl_false)
-        if (args[1] != (jl_value_t*)jl_not_atomic_sym)
-            jl_atomic_error("memoryref_isassigned!: non-atomic memory cannot be accessed atomically");
+    jl_value_t *kind = jl_tparam0(jl_typetagof(m.mem));
+    if (kind == (jl_value_t*)jl_not_atomic_sym) {
+        if (args[1] != kind) {
+            order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 1, 0);
+            jl_atomic_error("memoryref_isassigned: non-atomic memory cannot be accessed atomically");
+        }
+    }
+    else if (kind == (jl_value_t*)jl_atomic_sym) {
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[1], 1, 0);
+        if (order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryref_isassigned: atomic memory cannot be accessed non-atomically");
+    }
     if (m.mem->length == 0)
+        // TODO(jwn): decide on the fences required for ordering here
         return jl_false;
-    return jl_memoryref_isassigned(m);
+    return jl_memoryref_isassigned(m, kind == (jl_value_t*)jl_atomic_sym);
+}
+
+JL_CALLABLE(jl_f_memoryrefswap)
+{
+    enum jl_memory_order order = jl_memory_order_notatomic;
+    JL_NARGS(memoryrefswap!, 4, 4);
+    JL_TYPECHK(memoryrefswap!, genericmemoryref, args[0]);
+    JL_TYPECHK(memoryrefswap!, symbol, args[2]);
+    JL_TYPECHK(memoryrefswap!, bool, args[3]);
+    jl_genericmemoryref_t m = *(jl_genericmemoryref_t*)args[0];
+    jl_value_t *kind = jl_tparam0(jl_typetagof(m.mem));
+    if (kind == (jl_value_t*)jl_not_atomic_sym) {
+        if (args[2] != kind) {
+            order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 1);
+            jl_atomic_error("memoryrefswap!: non-atomic memory cannot be written atomically");
+        }
+    }
+    else if (kind == (jl_value_t*)jl_atomic_sym) {
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 1);
+        if (order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryrefswap!: atomic memory cannot be written non-atomically");
+    }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
+    return jl_memoryrefswap(m, args[1], kind == (jl_value_t*)jl_atomic_sym);
+}
+
+JL_CALLABLE(jl_f_memoryrefmodify)
+{
+    enum jl_memory_order order = jl_memory_order_notatomic;
+    JL_NARGS(memoryrefmodify!, 5, 5);
+    JL_TYPECHK(memoryrefmodify!, genericmemoryref, args[0]);
+    JL_TYPECHK(memoryrefmodify!, symbol, args[3]);
+    JL_TYPECHK(memoryrefmodify!, bool, args[4]);
+    jl_genericmemoryref_t m = *(jl_genericmemoryref_t*)args[0];
+    jl_value_t *kind = jl_tparam0(jl_typetagof(m.mem));
+    if (kind == (jl_value_t*)jl_not_atomic_sym) {
+        if (args[3] != kind) {
+            order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 1);
+            jl_atomic_error("memoryrefmodify!: non-atomic memory cannot be written atomically");
+        }
+    }
+    else if (kind == (jl_value_t*)jl_atomic_sym) {
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 1);
+        if (order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryrefmodify!: atomic memory cannot be written non-atomically");
+    }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
+    return jl_memoryrefmodify(m, args[1], args[2], kind == (jl_value_t*)jl_atomic_sym);
+}
+
+JL_CALLABLE(jl_f_memoryrefreplace)
+{
+    enum jl_memory_order success_order = jl_memory_order_notatomic;
+    enum jl_memory_order failure_order = jl_memory_order_notatomic;
+    JL_NARGS(memoryrefreplace!, 6, 6);
+    JL_TYPECHK(memoryrefreplace!, genericmemoryref, args[0]);
+    JL_TYPECHK(memoryrefreplace!, symbol, args[3]);
+    JL_TYPECHK(memoryrefreplace!, symbol, args[4]);
+    JL_TYPECHK(memoryrefreplace!, bool, args[5]);
+    jl_genericmemoryref_t m = *(jl_genericmemoryref_t*)args[0];
+    jl_value_t *kind = jl_tparam0(jl_typetagof(m.mem));
+    if (kind == (jl_value_t*)jl_not_atomic_sym) {
+        if (args[4] != kind)
+            jl_atomic_error("invalid atomic ordering"); // because either it is invalid, or failure_order > success_order
+        if (args[3] != kind) {
+            success_order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 1);
+            jl_atomic_error("memoryrefreplace!: non-atomic memory cannot be written atomically");
+        }
+    }
+    else if (kind == (jl_value_t*)jl_atomic_sym) {
+        success_order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 1);
+        failure_order = jl_get_atomic_order_checked((jl_sym_t*)args[4], 1, 0);
+        if (failure_order > success_order)
+            jl_atomic_error("invalid atomic ordering"); // because either it is invalid, or failure_order > success_order
+        if (success_order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryrefreplace!: atomic memory cannot be written non-atomically");
+        if (failure_order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryrefreplace!: atomic memory cannot be accessed non-atomically");
+    }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
+    return jl_memoryrefreplace(m, args[1], args[2], kind == (jl_value_t*)jl_atomic_sym);
+}
+
+JL_CALLABLE(jl_f_memoryrefsetonce)
+{
+    enum jl_memory_order success_order = jl_memory_order_notatomic;
+    enum jl_memory_order failure_order = jl_memory_order_notatomic;
+    JL_NARGS(memoryrefsetonce!, 5, 5);
+    JL_TYPECHK(memoryrefsetonce!, genericmemoryref, args[0]);
+    JL_TYPECHK(memoryrefsetonce!, symbol, args[2]);
+    JL_TYPECHK(memoryrefsetonce!, symbol, args[3]);
+    JL_TYPECHK(memoryrefsetonce!, bool, args[4]);
+    jl_genericmemoryref_t m = *(jl_genericmemoryref_t*)args[0];
+    jl_value_t *kind = jl_tparam0(jl_typetagof(m.mem));
+    if (kind == (jl_value_t*)jl_not_atomic_sym) {
+        if (args[3] != kind)
+            jl_atomic_error("invalid atomic ordering"); // because either it is invalid, or failure_order > success_order
+        if (args[2] != kind) {
+            success_order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 1);
+            jl_atomic_error("memoryrefsetonce!: non-atomic memory cannot be written atomically");
+        }
+    }
+    else if (kind == (jl_value_t*)jl_atomic_sym) {
+        success_order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 1);
+        failure_order = jl_get_atomic_order_checked((jl_sym_t*)args[3], 1, 0);
+        if (failure_order > success_order)
+            jl_atomic_error("invalid atomic ordering"); // because either it is invalid, or failure_order > success_order
+        if (success_order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryrefsetonce!: atomic memory cannot be written non-atomically");
+        if (failure_order == jl_memory_order_notatomic)
+            jl_atomic_error("memoryrefsetonce!: atomic memory cannot be accessed non-atomically");
+    }
+    if (m.mem->length == 0)
+        jl_bounds_error_int((jl_value_t*)m.mem, 1);
+    return jl_memoryrefsetonce(m, args[1], kind == (jl_value_t*)jl_atomic_sym);
 }
 
 // type definition ------------------------------------------------------------
@@ -1757,7 +2055,7 @@ JL_CALLABLE(jl_f__svec_ref)
     if (idx < 1 || idx > len) {
         jl_bounds_error_int((jl_value_t*)s, idx);
     }
-    return jl_svec_ref(s, idx-1);
+    return jl_svecref(s, idx-1);
 }
 
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
@@ -1770,7 +2068,7 @@ static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
         jl_value_t *ta = jl_svecref(old, i);
         jl_value_t *tb = jl_svecref(ft, i);
         if (jl_has_free_typevars(ta)) {
-            if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
+            if (!jl_has_free_typevars(tb) || !jl_types_egal(ta, tb))
                 return 0;
         }
         else if (jl_has_free_typevars(tb) || jl_typetagof(ta) != jl_typetagof(tb) ||
@@ -1968,7 +2266,7 @@ JL_CALLABLE(jl_f_intrinsic_call)
         f = cglobal_auto;
     unsigned fargs = intrinsic_nargs[f];
     if (!fargs)
-        jl_errorf("`%s` must be compiled to be called", jl_intrinsic_name(f));
+        jl_errorf("`%s` requires the compiler", jl_intrinsic_name(f));
     JL_NARGS(intrinsic_call, fargs, fargs);
 
     union {
@@ -2080,6 +2378,7 @@ jl_fptr_args_t jl_get_builtin_fptr(jl_datatype_t *dt)
     jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_atomic_load_relaxed(&dt->name->mt->defs);
     jl_method_instance_t *mi = jl_atomic_load_relaxed(&entry->func.method->unspecialized);
     jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
+    assert(ci->owner == jl_nothing);
     return jl_atomic_load_relaxed(&ci->specptr.fptr1);
 }
 
@@ -2103,6 +2402,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // field access
     jl_builtin_getfield = add_builtin_func("getfield",  jl_f_getfield);
     jl_builtin_setfield = add_builtin_func("setfield!",  jl_f_setfield);
+    jl_builtin_setfieldonce = add_builtin_func("setfieldonce!",  jl_f_setfieldonce);
     jl_builtin_swapfield = add_builtin_func("swapfield!",  jl_f_swapfield);
     jl_builtin_modifyfield = add_builtin_func("modifyfield!",  jl_f_modifyfield);
     jl_builtin_replacefield = add_builtin_func("replacefield!",  jl_f_replacefield);
@@ -2115,6 +2415,10 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_setglobal = add_builtin_func("setglobal!", jl_f_setglobal);
     add_builtin_func("get_binding_type", jl_f_get_binding_type);
     add_builtin_func("set_binding_type!", jl_f_set_binding_type);
+    jl_builtin_swapglobal = add_builtin_func("swapglobal!", jl_f_swapglobal);
+    jl_builtin_replaceglobal = add_builtin_func("replaceglobal!", jl_f_replaceglobal);
+    jl_builtin_modifyglobal = add_builtin_func("modifyglobal!", jl_f_modifyglobal);
+    jl_builtin_setglobalonce = add_builtin_func("setglobalonce!", jl_f_setglobalonce);
 
     // memory primitives
     jl_builtin_memoryref = add_builtin_func("memoryref", jl_f_memoryref);
@@ -2122,6 +2426,10 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_memoryrefget = add_builtin_func("memoryrefget", jl_f_memoryrefget);
     jl_builtin_memoryrefset = add_builtin_func("memoryrefset!", jl_f_memoryrefset);
     jl_builtin_memoryref_isassigned = add_builtin_func("memoryref_isassigned", jl_f_memoryref_isassigned);
+    jl_builtin_memoryrefswap = add_builtin_func("memoryrefswap!", jl_f_memoryrefswap);
+    jl_builtin_memoryrefreplace = add_builtin_func("memoryrefreplace!", jl_f_memoryrefreplace);
+    jl_builtin_memoryrefmodify = add_builtin_func("memoryrefmodify!", jl_f_memoryrefmodify);
+    jl_builtin_memoryrefsetonce = add_builtin_func("memoryrefsetonce!", jl_f_memoryrefsetonce);
 
     // method table utils
     jl_builtin_applicable = add_builtin_func("applicable", jl_f_applicable);
@@ -2148,6 +2456,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("finalizer", jl_f_finalizer);
     add_builtin_func("_compute_sparams", jl_f__compute_sparams);
     add_builtin_func("_svec_ref", jl_f__svec_ref);
+    add_builtin_func("current_scope", jl_f_current_scope);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
@@ -2204,6 +2513,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("LineInfoNode", (jl_value_t*)jl_lineinfonode_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
     add_builtin("GotoIfNot", (jl_value_t*)jl_gotoifnot_type);
+    add_builtin("EnterNode", (jl_value_t*)jl_enternode_type);
     add_builtin("ReturnNode", (jl_value_t*)jl_returnnode_type);
     add_builtin("PiNode", (jl_value_t*)jl_pinode_type);
     add_builtin("PhiNode", (jl_value_t*)jl_phinode_type);
