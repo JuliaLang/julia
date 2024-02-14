@@ -150,10 +150,8 @@ The [`BigFloat`](@ref) and [`BigInt`](@ref) types implements
 arbitrary-precision floating-point and integer arithmetic, respectively. For
 [`BigInt`](@ref) the [GNU Multiple Precision Arithmetic Library (GMP)]
 (https://gmplib.org) is used, and for [`BigFloat`](@ref) the
-[GNU MPFR library](https://www.mpfr.org/) is used. Consider also rather using
-the [ArbNumerics.jl](https://github.com/JeffreySarnoff/ArbNumerics.jl) package,
-i.e. `ArbFloat` from it instead of `BigFloat`), since it's very fast, much
-faster than BigFloat, and also has additional features and types.
+[GNU MPFR library](https://www.mpfr.org/) is used. See also
+the [ArbNumerics.jl](https://github.com/JeffreySarnoff/ArbNumerics.jl) package.
 
 ```@docs
 Base.MPFR.BigFloat(::Any, rounding::RoundingMode)
