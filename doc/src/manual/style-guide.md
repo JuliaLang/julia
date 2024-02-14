@@ -272,12 +272,12 @@ julia> struct Foo{T}
            x::T
        end
 
-julia> Base.Float64(foo::Foo) = Foo(Float64(foo.x))
+julia> Base.Float64(foo::Foo) = Foo(Float64(foo.x))  # Do not define methods like this
 
 julia> Float64(Foo(3))  # Should return `Float64`
 Foo{Float64}(3.0)
 
-julia> Foo{Int}(x) = Foo{Float64}(x)
+julia> Foo{Int}(x) = Foo{Float64}(x)  # Do not define methods like this
 
 julia> Foo{Int}(3)  # Should return `Foo{Int}`
 Foo{Float64}(3.0)
