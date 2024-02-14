@@ -275,12 +275,12 @@ julia> struct Foo{T}
 julia> Float64(x::Foo) = Foo(Float64(3))
 Float64
 
-julia> Float64(Foo(3))  # Shuold return `Float64`
+julia> Float64(Foo(3))  # Should return `Float64`
 Foo{Float64}(3.0)
 
 julia> Foo{Int}(x) = Foo{Float64}(x)
 
-julia> Foo{Int}(3)  # Shuold return `Foo{Int}`
+julia> Foo{Int}(3)  # Should return `Foo{Int}`
 Foo{Float64}(3.0)
 ```
 
