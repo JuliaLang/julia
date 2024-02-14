@@ -259,7 +259,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
             if x isa GotoIfNot || x isa GotoNode || x isa ReturnNode ||
                (x isa Expr && (x.head == :leave || x.head == :gc_preserve_end))
                 @verify_error "Non value statement $(ssa.id) (defined as $(ir.stmts[ssa.id])) used as a value in statement $idx: $stmt"
-                error()
+                error("")
             end
         end
         if isa(stmt, PhiNode)
