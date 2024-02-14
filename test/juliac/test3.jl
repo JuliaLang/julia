@@ -1,6 +1,10 @@
 #!/usr/bin/env -S julia --project=@scriptdir
 
 module Main2
+using OrdinaryDiffEq
+using OpenBLAS_jll
+using LinearAlgebra
+using PrecompileTools
 
 function take_heap_snapshot()
     flags = Base.open_flags(
@@ -20,7 +24,16 @@ function take_heap_snapshot()
     return nothing
 end
 
+f(u,p,t) = 1.01*u
+const u0=1/2
+const tspan = (0.0,1.0)
+const prob = ODEProblem(f,u0,tspan)
+
 Base.@ccallable function main() :: Cvoid
+    Sys.__init__()
+    OpenBLAS_jll.__init__()
+    LinearAlgebra.libblastrampoline_jll.__init__()
+    LinearAlgebra.__init__()
     # println("Hello, world!")
     task = current_task()
     task.rngState0 = 0x5156087469e170ab
@@ -28,11 +41,30 @@ Base.@ccallable function main() :: Cvoid
     task.rngState2 = 0x503e1d32781c2608
     task.rngState3 = 0x3a77f7189200c20b
     task.rngState4 = 0x5502376d099035ae
-    a = rand(10)
-    b = sum(a)
-    ccall(:printf, Int32, (Ptr{UInt8},Float64...), "hello_world %lf", b)
+    sol = solve(prob,Tsit5(),reltol=1e-8,abstol=1e-8)
+    for i in eachindex(sol)
+        ccall(:printf, Int32, (Ptr{UInt8},Float64...), "value %lf \n", sol[i])
+    end
     # take_heap_snapshot()
     return nothing
+end
+
+@setup_workload begin
+    # Putting some things in `@setup_workload` instead of `@compile_workload` can reduce the size of the
+    # precompile file and potentially make loading faster.
+    N=10
+    A = rand(N, N); b = rand(N)
+
+    @compile_workload begin
+        Sys.__init__()
+        OpenBLAS_jll.__init__()
+        LinearAlgebra.libblastrampoline_jll.__init__()
+        LinearAlgebra.__init__()
+        sol = solve(prob,Tsit5(),reltol=1e-8,abstol=1e-8)
+        for i in eachindex(sol)
+            ccall(:printf, Int32, (Ptr{UInt8},Float64...), "value %lf \n", sol[i])
+        end
+    end
 end
 
 precompile(main, ())

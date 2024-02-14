@@ -1410,7 +1410,7 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
     if ((jl_nparams(ftype) == 0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) &&
             ((jl_datatype_t*)ftype)->name->mt != jl_type_type_mt &&
             ((jl_datatype_t*)ftype)->name->mt != jl_nonfunction_mt) {
-        n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->mt->name);
+            n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->name);
     }
     else {
         n += jl_printf(s, "(::");

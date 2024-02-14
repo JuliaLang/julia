@@ -361,10 +361,13 @@ static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
         if (!ptrhash_has(mtables, old_mt))
             ptrhash_put(mtables, old_mt, jl_new_method_table(name, m->module));
         jl_methtable_t *mt = (jl_methtable_t*)ptrhash_get(mtables, old_mt);
-        size_t min_world = 0;
+        size_t min_world = 1;
         size_t max_world = ~(size_t)0;
-        if (jl_gf_invoke_lookup_worlds(m->sig, (jl_value_t *)mt, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world) == jl_nothing)
+        if (jl_gf_invoke_lookup_worlds(m->sig, (jl_value_t *)mt, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world) == jl_nothing){
+            jl_atomic_store_relaxed(&m->primary_world, max_world);
+            jl_atomic_store_relaxed(&m->deleted_world, min_world);
             jl_method_table_insert(mt, m, NULL);
+        }
     }
 
 }

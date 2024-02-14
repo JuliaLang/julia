@@ -33,7 +33,7 @@ Base.@ccallable function linsolve10(A::Ptr{Float64}, b::Ptr{Float64})::Ptr{Float
             PtrArray(Base.unsafe_convert(Ptr{Int}, piv), (D,)))
         ldiv!(F, PtrArray(b, (D,)))
     end
-    take_heap_snapshot()
+    # take_heap_snapshot()
     return b
 end
 
