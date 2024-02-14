@@ -603,31 +603,35 @@ JL_DLLEXPORT uint8_t jl_cache_flags(void)
     return flags;
 }
 
-JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
+
+JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t requested_flags, uint8_t actual_flags)
 {
-    // 1. Check which flags are relevant
-    uint8_t current_flags = jl_cache_flags();
-    uint8_t supports_pkgimage = (current_flags & 1);
-    uint8_t is_pkgimage = (flags & 1);
+    uint8_t supports_pkgimage = (requested_flags & 1);
+    uint8_t is_pkgimage = (actual_flags & 1);
 
     // For .ji packages ignore other flags
     if (!supports_pkgimage && !is_pkgimage) {
         return 1;
     }
 
-    // If package images are optional, ignore that bit (it will be unset in current_flags)
+    // If package images are optional, ignore that bit (it will be unset in requested_flags)
     if (jl_options.use_pkgimages == JL_OPTIONS_USE_PKGIMAGES_EXISTING) {
-        flags &= ~1;
+        actual_flags &= ~1;
     }
 
     // 2. Check all flags, execept opt level must be exact
     uint8_t mask = (1 << OPT_LEVEL)-1;
-    if ((flags & mask) != (current_flags & mask))
+    if ((actual_flags & mask) != (requested_flags & mask))
         return 0;
     // 3. allow for higher optimization flags in cache
-    flags >>= OPT_LEVEL;
-    current_flags >>= OPT_LEVEL;
-    return flags >= current_flags;
+    actual_flags >>= OPT_LEVEL;
+    requested_flags >>= OPT_LEVEL;
+    return actual_flags >= requested_flags;
+}
+
+JL_DLLEXPORT uint8_t jl_match_cache_flags_current(uint8_t flags)
+{
+    return jl_match_cache_flags(jl_cache_flags(), flags);
 }
 
 // return char* from String field in Base.GIT_VERSION_INFO

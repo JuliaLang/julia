@@ -1449,6 +1449,135 @@ end
 
 # End extensions
 
+
+struct CacheFlags
+    # OOICCDDP - see jl_cache_flags
+    use_pkgimages::Bool
+    debug_level::Int
+    check_bounds::Int
+    inline::Bool
+    opt_level::Int
+end
+function CacheFlags(f::UInt8)
+    use_pkgimages = Bool(f & 1)
+    debug_level = Int((f >> 1) & 3)
+    check_bounds = Int((f >> 3) & 3)
+    inline = Bool((f >> 5) & 1)
+    opt_level = Int((f >> 6) & 3) # define OPT_LEVEL in statiddata_utils
+    CacheFlags(use_pkgimages, debug_level, check_bounds, inline, opt_level)
+end
+CacheFlags(f::Int) = CacheFlags(UInt8(f))
+CacheFlags() = CacheFlags(ccall(:jl_cache_flags, UInt8, ()))
+
+function _to_uint8(cf::CacheFlags)::UInt8
+    f = UInt8(0)
+    f |= cf.use_pkgimages << 0
+    f |= cf.debug_level << 1
+    f |= cf.check_bounds << 3
+    f |= cf.inline << 5
+    f |= cf.opt_level << 6
+    return f
+end
+
+function _to_cmd(flags::Base.CacheFlags)
+    inline_flag = flags.inline ? "--inline=yes" : "--inline=no"
+    optimize_flag = "-O$(flags.opt_level)"
+    debug_flag = "-g$(flags.debug_level)"
+    check_bounds_flag = "--check-bounds=" * ("auto", "yes", "no")[flags.check_bounds + 1]
+    pkg_images_flag = flags.use_pkgimages ? "--pkgimages=yes" : "--pkgimages=no"
+    return Cmd([inline_flag, optimize_flag, debug_flag, check_bounds_flag, pkg_images_flag])
+end
+
+function show(io::IO, cf::CacheFlags)
+    print(io, "use_pkgimages = ", cf.use_pkgimages)
+    print(io, ", debug_level = ", cf.debug_level)
+    print(io, ", check_bounds = ", cf.check_bounds)
+    print(io, ", inline = ", cf.inline)
+    print(io, ", opt_level = ", cf.opt_level)
+end
+
+struct ImageTarget
+    name::String
+    flags::Int32
+    ext_features::String
+    features_en::Vector{UInt8}
+    features_dis::Vector{UInt8}
+end
+
+function parse_image_target(io::IO)
+    flags = read(io, Int32)
+    nfeature = read(io, Int32)
+    feature_en = read(io, 4*nfeature)
+    feature_dis = read(io, 4*nfeature)
+    name_len = read(io, Int32)
+    name = String(read(io, name_len))
+    ext_features_len = read(io, Int32)
+    ext_features = String(read(io, ext_features_len))
+    ImageTarget(name, flags, ext_features, feature_en, feature_dis)
+end
+
+function parse_image_targets(targets::Vector{UInt8})
+    io = IOBuffer(targets)
+    ntargets = read(io, Int32)
+    targets = Vector{ImageTarget}(undef, ntargets)
+    for i in 1:ntargets
+        targets[i] = parse_image_target(io)
+    end
+    return targets
+end
+
+function current_image_targets()
+    targets = @ccall jl_reflect_clone_targets()::Vector{UInt8}
+    return parse_image_targets(targets)
+end
+
+struct FeatureName
+    name::Cstring
+    bit::UInt32 # bit index into a `uint32_t` array;
+    llvmver::UInt32 # 0 if it is available on the oldest LLVM version we support
+end
+
+function feature_names()
+    fnames = Ref{Ptr{FeatureName}}()
+    nf = Ref{Csize_t}()
+    @ccall jl_reflect_feature_names(fnames::Ptr{Ptr{FeatureName}}, nf::Ptr{Csize_t})::Cvoid
+    if fnames[] == C_NULL
+        @assert nf[] == 0
+        return Vector{FeatureName}(undef, 0)
+    end
+    Base.unsafe_wrap(Array, fnames[], nf[], own=false)
+end
+
+function test_feature(features::Vector{UInt8}, feat::FeatureName)
+    bitidx = feat.bit
+    u8idx = div(bitidx, 8) + 1
+    bit = bitidx % 8
+    return (features[u8idx] & (1 << bit)) != 0
+end
+
+function show(io::IO, it::ImageTarget)
+    print(io, it.name)
+    if !isempty(it.ext_features)
+        print(io, ",", it.ext_features)
+    end
+    print(io, "; flags=", it.flags)
+    print(io, "; features_en=(")
+    first = true
+    for feat in feature_names()
+        if test_feature(it.features_en, feat)
+            name = Base.unsafe_string(feat.name)
+            if first
+                first = false
+                print(io, name)
+            else
+                print(io, ", ", name)
+            end
+        end
+    end
+    print(io, ")")
+    # Is feature_dis useful?
+end
+
 # should sync with the types of arguments of `stale_cachefile`
 const StaleCacheKey = Tuple{Base.PkgId, UInt128, String, String}
 
@@ -1469,11 +1598,11 @@ function isprecompiled(pkg::PkgId;
         ignore_loaded::Bool=false,
         stale_cache::Dict{StaleCacheKey,Bool}=Dict{StaleCacheKey, Bool}(),
         cachepaths::Vector{String}=Base.find_all_in_cache_path(pkg),
-        sourcepath::Union{String,Nothing}=Base.locate_package(pkg)
-    )
+        sourcepath::Union{String,Nothing}=Base.locate_package(pkg),
+        flags::CacheFlags=CacheFlags())
     isnothing(sourcepath) && error("Cannot locate source for $(repr(pkg))")
     for path_to_try in cachepaths
-        staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true)
+        staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true, requested_flags=flags)
         if staledeps === true
             continue
         end
@@ -1486,7 +1615,7 @@ function isprecompiled(pkg::PkgId;
             modpaths = find_all_in_cache_path(modkey)
             for modpath_to_try in modpaths::Vector{String}
                 stale_cache_key = (modkey, modbuild_id, modpath, modpath_to_try)::StaleCacheKey
-                if get!(() -> stale_cachefile(stale_cache_key...; ignore_loaded) === true,
+                if get!(() -> stale_cachefile(stale_cache_key...; ignore_loaded, flags) === true,
                         stale_cache, stale_cache_key)
                     continue
                 end
@@ -2447,7 +2576,7 @@ end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::Union{Nothing, String},
-                           concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+                           concrete_deps::typeof(_concrete_dependencies), requested_flags::CacheFlags=CacheFlags(), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
@@ -2503,7 +2632,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd) $(opts)
                               --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
-                              $flags
+                              $(_to_cmd(requested_flags))
                               $trace
                               -`,
                               "OPENBLAS_NUM_THREADS" => 1,
@@ -2571,7 +2700,7 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::CacheFlags=CacheFlags(), reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
     @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
@@ -2581,7 +2710,7 @@ end
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
-                      keep_loaded_modules::Bool = true; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
+                      keep_loaded_modules::Bool = true; flags::CacheFlags=CacheFlags(), reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -3166,116 +3295,6 @@ function check_clone_targets(clone_targets)
     end
 end
 
-struct CacheFlags
-    # OOICCDDP - see jl_cache_flags
-    use_pkgimages::Bool
-    debug_level::Int
-    check_bounds::Int
-    inline::Bool
-    opt_level::Int
-
-    function CacheFlags(f::UInt8)
-        use_pkgimages = Bool(f & 1)
-        debug_level = Int((f >> 1) & 3)
-        check_bounds = Int((f >> 3) & 3)
-        inline = Bool((f >> 5) & 1)
-        opt_level = Int((f >> 6) & 3) # define OPT_LEVEL in statiddata_utils
-        new(use_pkgimages, debug_level, check_bounds, inline, opt_level)
-    end
-end
-CacheFlags(f::Int) = CacheFlags(UInt8(f))
-CacheFlags() = CacheFlags(ccall(:jl_cache_flags, UInt8, ()))
-
-function show(io::IO, cf::CacheFlags)
-    print(io, "use_pkgimages = ", cf.use_pkgimages)
-    print(io, ", debug_level = ", cf.debug_level)
-    print(io, ", check_bounds = ", cf.check_bounds)
-    print(io, ", inline = ", cf.inline)
-    print(io, ", opt_level = ", cf.opt_level)
-end
-
-struct ImageTarget
-    name::String
-    flags::Int32
-    ext_features::String
-    features_en::Vector{UInt8}
-    features_dis::Vector{UInt8}
-end
-
-function parse_image_target(io::IO)
-    flags = read(io, Int32)
-    nfeature = read(io, Int32)
-    feature_en = read(io, 4*nfeature)
-    feature_dis = read(io, 4*nfeature)
-    name_len = read(io, Int32)
-    name = String(read(io, name_len))
-    ext_features_len = read(io, Int32)
-    ext_features = String(read(io, ext_features_len))
-    ImageTarget(name, flags, ext_features, feature_en, feature_dis)
-end
-
-function parse_image_targets(targets::Vector{UInt8})
-    io = IOBuffer(targets)
-    ntargets = read(io, Int32)
-    targets = Vector{ImageTarget}(undef, ntargets)
-    for i in 1:ntargets
-        targets[i] = parse_image_target(io)
-    end
-    return targets
-end
-
-function current_image_targets()
-    targets = @ccall jl_reflect_clone_targets()::Vector{UInt8}
-    return parse_image_targets(targets)
-end
-
-struct FeatureName
-    name::Cstring
-    bit::UInt32 # bit index into a `uint32_t` array;
-    llvmver::UInt32 # 0 if it is available on the oldest LLVM version we support
-end
-
-function feature_names()
-    fnames = Ref{Ptr{FeatureName}}()
-    nf = Ref{Csize_t}()
-    @ccall jl_reflect_feature_names(fnames::Ptr{Ptr{FeatureName}}, nf::Ptr{Csize_t})::Cvoid
-    if fnames[] == C_NULL
-        @assert nf[] == 0
-        return Vector{FeatureName}(undef, 0)
-    end
-    Base.unsafe_wrap(Array, fnames[], nf[], own=false)
-end
-
-function test_feature(features::Vector{UInt8}, feat::FeatureName)
-    bitidx = feat.bit
-    u8idx = div(bitidx, 8) + 1
-    bit = bitidx % 8
-    return (features[u8idx] & (1 << bit)) != 0
-end
-
-function show(io::IO, it::ImageTarget)
-    print(io, it.name)
-    if !isempty(it.ext_features)
-        print(io, ",", it.ext_features)
-    end
-    print(io, "; flags=", it.flags)
-    print(io, "; features_en=(")
-    first = true
-    for feat in feature_names()
-        if test_feature(it.features_en, feat)
-            name = Base.unsafe_string(feat.name)
-            if first
-                first = false
-                print(io, name)
-            else
-                print(io, ", ", name)
-            end
-        end
-    end
-    print(io, ")")
-    # Is feature_dis useful?
-end
-
 # Set by FileWatching.__init__()
 global mkpidlock_hook
 global trymkpidlock_hook
@@ -3331,11 +3350,11 @@ list_reasons(::Nothing) = ""
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
-@constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false, reasons=nothing)
-    return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded, reasons)
+@constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons=nothing)
+    return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded, requested_flags, reasons)
 end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String;
-                                            ignore_loaded::Bool = false, reasons::Union{Dict{String,Int},Nothing}=nothing)
+                                            ignore_loaded::Bool = false, requested_flags::CacheFlags=CacheFlags(), reasons::Union{Dict{String,Int},Nothing}=nothing)
     io = open(cachefile, "r")
     try
         checksum = isvalid_cache_header(io)
@@ -3344,15 +3363,15 @@ end
             record_reason(reasons, "invalid header")
             return true # invalid cache file
         end
-        modules, (includes, _, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, flags = parse_cache_header(io, cachefile)
+        modules, (includes, _, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets, actual_flags = parse_cache_header(io, cachefile)
         if isempty(modules)
             return true # ignore empty file
         end
-        if ccall(:jl_match_cache_flags, UInt8, (UInt8,), flags) == 0
+        if @ccall(jl_match_cache_flags(_to_uint8(requested_flags)::UInt8, actual_flags::UInt8)::UInt8) == 0
             @debug """
             Rejecting cache file $cachefile for $modkey since the flags are mismatched
-              current session: $(CacheFlags())
-              cache file:      $(CacheFlags(flags))
+              requested flags: $(requested_flags)
+              cache file:      $(CacheFlags(actual_flags))
             """
             record_reason(reasons, "mismatched flags")
             return true
@@ -3626,7 +3645,7 @@ function precompile(@nospecialize(argt::Type), m::Method)
     return precompile(mi)
 end
 
-precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))
-precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String))
-precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), IO, IO, Cmd))
-precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), IO, IO, Cmd))
+@assert precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))
+@assert precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String))
+@assert precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), CacheFlags, IO, IO))
+@assert precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), CacheFlags, IO, IO))

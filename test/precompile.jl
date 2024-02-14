@@ -1992,8 +1992,17 @@ precompile_test_harness("Test flags") do load_path
           module TestFlags
           end
           """)
-    ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
-    @show ji, ofile
+
+    current_flags = Base.CacheFlags()
+    modified_flags = Base.CacheFlags(
+        current_flags.use_pkgimages,
+        current_flags.debug_level,
+        2,
+        current_flags.inline,
+        3
+    )
+
+    ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=modified_flags)
     open(ji, "r") do io
         Base.isvalid_cache_header(io)
         _, _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
@@ -2001,6 +2010,9 @@ precompile_test_harness("Test flags") do load_path
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
     end
+    id = Base.identify_package("TestFlags")
+    @test Base.isprecompiled(id, ;flags=modified_flags)
+    @test !Base.isprecompiled(id, ;flags=current_flags)
 end
 
 empty!(Base.DEPOT_PATH)
