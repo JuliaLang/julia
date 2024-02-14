@@ -4037,14 +4037,22 @@ void jl_gc_init(void)
     gc_num.max_pause = 0;
     gc_num.max_memory = 0;
 
+    uint64_t mem_reserve = 250*1024*1024; // LLVM + other libraries need some amount of memory
+    uint64_t min_heap_size_hint = mem_reserve + 1*1024*1024;
+    uint64_t hint = jl_options.heap_size_hint;
 #ifdef _P64
     total_mem = uv_get_total_memory();
-    uint64_t constrained_mem = uv_get_constrained_memory();
-    if (constrained_mem > 0 && constrained_mem < total_mem)
-        jl_gc_set_max_memory(constrained_mem - 250*1024*1024); // LLVM + other libraries need some amount of memory
+    if (hint == 0) {
+        uint64_t constrained_mem = uv_get_constrained_memory();
+        if (constrained_mem > 0 && constrained_mem < total_mem)
+            hint = constrained_mem;
+    }
 #endif
-    if (jl_options.heap_size_hint)
-        jl_gc_set_max_memory(jl_options.heap_size_hint - 250*1024*1024);
+    if (hint) {
+        if (hint < min_heap_size_hint)
+            hint = min_heap_size_hint;
+        jl_gc_set_max_memory(hint - mem_reserve);
+    }
 
     t_start = jl_hrtime();
 }
