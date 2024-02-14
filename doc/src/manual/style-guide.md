@@ -272,7 +272,7 @@ julia> struct Foo{T}
            x::T
        end
 
-julia> Float64(x::Foo) = Foo(Float64(3))
+julia> Float64(x::Foo) = Foo(Float64(x))
 Float64
 
 julia> Float64(Foo(3))  # Should return `Float64`
