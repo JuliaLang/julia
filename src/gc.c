@@ -4043,6 +4043,18 @@ void jl_gc_init(void)
     if (constrained_mem > 0 && constrained_mem < total_mem)
         jl_gc_set_max_memory(constrained_mem - 250*1024*1024); // LLVM + other libraries need some amount of memory
 #endif
+
+    char *heap_size_hint_str = NULL;
+    if ((heap_size_hint_str = getenv(HEAP_SIZE_HINT_MB_NAME))) {
+        errno = 0;
+        int64_t heap_size_hint = strtoll(heap_size_hint_str, NULL, 10);
+        // error checking
+        if (errno != 0 || heap_size_hint < 0) {
+            jl_safe_printf("Warning: invalid JULIA_HEAP_SIZE_HINT_MB setting: \"%s\". It should be a non-negative integer.\n", heap_size_hint_str);
+            abort();
+        }
+        jl_options.heap_size_hint = heap_size_hint * 1024 * 1024;
+    }
     if (jl_options.heap_size_hint)
         jl_gc_set_max_memory(jl_options.heap_size_hint - 250*1024*1024);
 
