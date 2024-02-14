@@ -29,7 +29,7 @@ function json_repr(io::IO, val::String; indent::Int=0)
 end
 json_repr(io::IO, val::Integer; indent::Int=0) = print(io, val)
 json_repr(io::IO, val::Float64; indent::Int=0) = print(io, val)
-function json_repr(io::IO, val::Vector; indent::Int=0)
+function json_repr(io::IO, val::AbstractVector; indent::Int=0)
     print(io, '[')
     for elt in val
         print(io, '\n', ' '^(indent + 2))
