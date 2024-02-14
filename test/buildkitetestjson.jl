@@ -8,7 +8,7 @@ module BuildKiteTestJSON
 using Test
 using Dates
 
-export write_testset_json
+export write_testset_json_files
 
 # Bootleg JSON writer
 
@@ -133,10 +133,17 @@ function collect_results!(results::Vector{Dict{String, Any}}, testset::Test.Defa
     results
 end
 
-function write_testset_json(io::IO, testset::Test.DefaultTestSet)
+function write_testset_json_files(dir::String, testset::Test.DefaultTestSet)
     data = Dict{String, Any}[]
     collect_results!(data, testset)
-    json_repr(io, data)
+    files = String[]
+    # Buildkite is limited to 5000 results per file https://buildkite.com/docs/test-analytics/importing-json
+    for (i, chunk) in enumerate(Iterators.partition(data, 5000))
+        res_file = joinpath(dir, "results_$i.json")
+        open(io -> json_repr(io, chunk), res_file, "w")
+        push!(files, res_file)
+    end
+    return files
 end
 
 end

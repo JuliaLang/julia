@@ -1986,6 +1986,23 @@ precompile_test_harness("Issue #50538") do load_path
     @test !isdefined(I50538, :undefglobal)
 end
 
+precompile_test_harness("Test flags") do load_path
+    write(joinpath(load_path, "TestFlags.jl"),
+          """
+          module TestFlags
+          end
+          """)
+    ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
+    @show ji, ofile
+    open(ji, "r") do io
+        Base.isvalid_cache_header(io)
+        _, _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
+        cacheflags = Base.CacheFlags(flags)
+        @test cacheflags.check_bounds == 2
+        @test cacheflags.opt_level == 3
+    end
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 empty!(Base.LOAD_PATH)

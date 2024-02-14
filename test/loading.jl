@@ -1131,6 +1131,18 @@ end
         cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
         run(cmd)
+
+
+        # Extensions in implicit environments
+        old_load_path = copy(LOAD_PATH)
+        try
+            empty!(LOAD_PATH)
+            push!(LOAD_PATH, joinpath(@__DIR__, "project", "Extensions", "ImplicitEnv"))
+            pkgid_B = Base.PkgId(Base.uuid5(Base.identify_package("A").uuid, "BExt"), "BExt")
+            @test Base.identify_package(pkgid_B, "B") isa Base.PkgId
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
     finally
         try
             rm(depot_path, force=true, recursive=true)
