@@ -550,10 +550,14 @@ Determines if a [`Channel`](@ref) is full, in the sense
 that calling `put!(c, some_value)` would have blocked.
 Returns immediately, does not block.
 
-Note that if another task is currently waiting to `take!`
-a value from `c`, a call to `put!(c, some_value)` might
-immediately be unblocked, even if `isfull(c)==true`.
-This is particularly relevant for unbuffered channels.
+Note that it may frequently be the case that `put!` will
+not block after this returns `true`. Users must take
+precautions not to accidentally create live-lock bugs
+in their code by calling this method, as these are
+generally harder to debug than deadlocks. It is also
+possible that `put!` will block after this call 
+returns `false`, if there are multiple producer
+tasks calling `put!` in parallel.
 
 # Examples
 
