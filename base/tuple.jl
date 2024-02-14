@@ -692,29 +692,6 @@ empty(@nospecialize x::Tuple) = ()
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itr::Tuple, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itr, itrs...), init=nothing)
 
-"""
-    circshift(x::Tuple, shift)
-
-Circularly shift, i.e. rotate, the data in a tuple. The second argument specifies
-the shift amount.
-
-The generated code is most efficient when the shift amount is a compile-time constant.
-
-# Examples
-```jldoctest
-julia> x = (1, 2, 3, 4, 5)
-(1, 2, 3, 4, 5)
-
-julia> circshift(x, 4)
-(2, 3, 4, 5, 1)
-
-julia> z = (1, 'a', -7.0, 3)
-(1, 'a', -7.0, 3)
-
-julia> circshift(z, -1)
-('a', -7.0, 3, 1)
-```
-"""
 function circshift(x::Tuple, shift::Integer)
     @inline
     j = mod1(shift, length(x))
