@@ -64,11 +64,10 @@ transpose(F::AdjointFactorization{<:Real}) = F.parent
 conj(A::TransposeFactorization) = adjoint(A.parent)
 conj(A::AdjointFactorization) = transpose(A.parent)
 
+# These functions expect a non-zero info to be positive, indicating the position where a problem was detected
 checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
-checknonsingular(info, ::RowMaximum) = info == 0 || throw(SingularException(info))
-checknonsingular(info, ::RowNonZero) = info == 0 || throw(SingularException(info))
-checknonsingular(info, ::NoPivot) = info == 0 || throw(ZeroPivotException(info))
-checknonsingular(info) = checknonsingular(info, RowMaximum())
+checknonsingular(info) = info == 0 || throw(SingularException(info))
+checknozeropivot(info) = info == 0 || throw(ZeroPivotException(info))
 
 """
     issuccess(F::Factorization)
@@ -78,16 +77,13 @@ Test that a factorization of a matrix succeeded.
 !!! compat "Julia 1.6"
     `issuccess(::CholeskyPivoted)` requires Julia 1.6 or later.
 
+# Examples
+
 ```jldoctest
 julia> F = cholesky([1 0; 0 1]);
 
 julia> issuccess(F)
 true
-
-julia> F = lu([1 0; 0 0]; check = false);
-
-julia> issuccess(F)
-false
 ```
 """
 issuccess(F::Factorization)

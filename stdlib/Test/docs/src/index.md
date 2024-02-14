@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Test/docs/src/index.md"
+```
+
 # Unit Testing
 
 ```@meta
@@ -20,7 +24,7 @@ The `Test` module provides simple *unit testing* functionality. Unit testing is 
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
 of specifying the behaviors your code should have when complete. You may also want to look at the
-documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
+documentation for [adding tests to your Julia Package](@ref adding-tests-to-packages).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
@@ -69,6 +73,8 @@ Error During Test
   Test threw an exception of type MethodError
   Expression: foo(:cat) == 1
   MethodError: no method matching length(::Symbol)
+  The function `length` exists, but no method is defined for this combination of argument types.
+
   Closest candidates are:
     length(::SimpleVector) at essentials.jl:256
     length(::Base.MethodList) at reflection.jl:521
@@ -316,8 +322,12 @@ function finish(ts::CustomTestSet)
     # just record if we're not the top-level parent
     if get_testset_depth() > 0
         record(get_testset(), ts)
+        return ts
     end
-    ts
+
+    # so the results are printed if we are at the top level
+    Test.print_test_results(ts)
+    return ts
 end
 ```
 
@@ -330,6 +340,45 @@ And using that testset looks like:
         @test true
     end
 end
+```
+
+In order to use a custom testset and have the recorded results printed as part of any outer default testset,
+also define `Test.get_test_counts`. This might look like so:
+
+```julia
+using Test: AbstractTestSet, Pass, Fail, Error, Broken, get_test_counts, TestCounts, format_duration
+
+function Test.get_test_counts(ts::CustomTestSet)
+    passes, fails, errors, broken = 0, 0, 0, 0
+    # cumulative results
+    c_passes, c_fails, c_errors, c_broken = 0, 0, 0, 0
+
+    for t in ts.results
+        # count up results
+        isa(t, Pass)   && (passes += 1)
+        isa(t, Fail)   && (fails  += 1)
+        isa(t, Error)  && (errors += 1)
+        isa(t, Broken) && (broken += 1)
+        # handle children
+        if isa(t, AbstractTestSet)
+            tc = get_test_counts(t)::TestCounts
+            c_passes += tc.passes + tc.cumulative_passes
+            c_fails  += tc.fails + tc.cumulative_fails
+            c_errors += tc.errors + tc.cumulative_errors
+            c_broken += tc.broken + tc.cumulative_broken
+        end
+    end
+    # get a duration, if we have one
+    duration = format_duration(ts)
+    return TestCounts(true, passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration)
+end
+```
+
+```@docs
+Test.TestCounts
+Test.get_test_counts
+Test.format_duration
+Test.print_test_results
 ```
 
 ## Test utilities
@@ -420,7 +469,7 @@ end
 We will need to create those two included files, `math_tests.jl` and `greeting_tests.jl`, and add some tests to them.
 
 > **Note:** Notice how we did not have to specify add `Example` into the `test` environment's `Project.toml`.
-> This is a benefit of Julia's testing system that you could [read about more here](https://pkgdocs.julialang.org/dev/creating-packages/).
+> This is a benefit of Julia's testing system that you could [read about more here](@ref adding-tests-to-packages).
 
 #### Writing Tests for `math_tests.jl`
 
@@ -491,3 +540,15 @@ Using `Test.jl`, more complicated tests can be added for packages but this shoul
 ```@meta
 DocTestSetup = nothing
 ```
+
+### Code Coverage
+
+Code coverage tracking during tests can be enabled using the `pkg> test --coverage` flag (or at a lower level using the
+[`--code-coverage`](@ref command-line-interface) julia arg). This is on by default in the
+[julia-runtest](https://github.com/julia-actions/julia-runtest) GitHub action.
+
+To evaluate coverage either manually inspect the `.cov` files that are generated beside the source files locally,
+or in CI use the [julia-processcoverage](https://github.com/julia-actions/julia-processcoverage) GitHub action.
+
+!!! compat "Julia 1.11"
+    Since Julia 1.11, coverage is not collected during the package precompilation phase.

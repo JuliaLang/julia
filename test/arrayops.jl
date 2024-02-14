@@ -741,6 +741,9 @@ end
     v = [1,2,3]
     @test permutedims(v) == [1 2 3]
 
+    zd = fill(0)
+    @test permutedims(zd, ()) == zd
+
     x = PermutedDimsArray([1 2; 3 4], (2, 1))
     @test size(x) == (2, 2)
     @test copy(x) == [1 3; 2 4]
@@ -2609,7 +2612,7 @@ end
 end
 
 @testset "sign, conj[!], ~" begin
-    local A, B, C
+    local A, B, C, D, E
     A = [-10,0,3]
     B = [-10.0,0.0,3.0]
     C = [1,im,0]
@@ -2626,6 +2629,11 @@ end
     @test typeof(conj(A)) == Vector{Int}
     @test typeof(conj(B)) == Vector{Float64}
     @test typeof(conj(C)) == Vector{Complex{Int}}
+    D = [C copy(C); copy(C) copy(C)]
+    @test conj(D) == conj!(copy(D))
+    E = [D, copy(D)]
+    @test conj(E) == conj!(copy(E))
+    @test (@allocations conj!(E)) == 0
 
     @test .~A == [9,-1,-4]
     @test typeof(.~A) == Vector{Int}
@@ -3169,4 +3177,32 @@ end
         c = view(b, 1:1, 1:1)
         @test c + zero(c) == c
     end
+end
+
+@testset "Wrapping Memory into Arrays" begin
+    mem = Memory{Int}(undef, 10) .= 1
+    memref = MemoryRef(mem)
+    @test_throws DimensionMismatch wrap(Array, mem, (10, 10))
+    @test wrap(Array, mem, (5,)) == ones(Int, 5)
+    @test wrap(Array, mem, 2) == ones(Int, 2)
+    @test wrap(Array, memref, 10) == ones(Int, 10)
+    @test wrap(Array, memref, (2,2,2)) == ones(Int,2,2,2)
+    @test wrap(Array, mem, (5, 2)) == ones(Int, 5, 2)
+
+    memref2 = MemoryRef(mem, 3)
+    @test wrap(Array, memref2, (5,)) == ones(Int, 5)
+    @test wrap(Array, memref2, 2) == ones(Int, 2)
+    @test wrap(Array, memref2, (2,2,2)) == ones(Int,2,2,2)
+    @test wrap(Array, memref2, (3, 2)) == ones(Int, 3, 2)
+    @test_throws DimensionMismatch wrap(Array, memref2, 9)
+    @test_throws DimensionMismatch wrap(Array, memref2, 10)
+end
+
+@testset "Memory size" begin
+    len = 5
+    mem = Memory{Int}(undef, len)
+    @test size(mem, 1) == len
+    @test size(mem, 0x1) == len
+    @test size(mem, 2) == 1
+    @test size(mem, 0x2) == 1
 end

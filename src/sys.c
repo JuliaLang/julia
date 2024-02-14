@@ -631,7 +631,7 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 #ifndef _OS_WINDOWS_
     return sysconf(_SC_CLK_TCK);
 #else
-    return 0;
+    return 1000; /* uv_cpu_info returns times in ms on Windows */
 #endif
 }
 

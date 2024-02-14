@@ -384,7 +384,6 @@ private:
     SmallVector<Group, 0> groups{};
     SmallVector<Target *, 0> linearized;
     SmallVector<Function*, 0> fvars;
-    SmallVector<Constant*, 0> gvars;
     Module &M;
     Type *T_size;
     Triple TT;
@@ -441,7 +440,6 @@ CloneCtx::CloneCtx(Module &M, bool allow_bad_fvars)
     : tbaa_const(tbaa_make_child_with_context(M.getContext(), "jtbaa_const", nullptr, true).first),
       specs(*get_target_specs(M)),
       fvars(consume_gv<Function>(M, "jl_fvars", allow_bad_fvars)),
-      gvars(consume_gv<Constant>(M, "jl_gvars", false)),
       M(M),
       T_size(M.getDataLayout().getIntPtrType(M.getContext())),
       TT(M.getTargetTriple()),
@@ -532,7 +530,7 @@ void CloneCtx::clone_decls()
             new_F->setVisibility(F->getVisibility());
             new_F->setDSOLocal(true);
             auto base_func = F;
-            if (specs[i].flags & JL_TARGET_CLONE_ALL)
+            if (!(specs[i].flags & JL_TARGET_CLONE_ALL))
                 base_func = static_cast<Group*>(linearized[specs[i].base])->base_func(F);
             (*linearized[i]->vmap)[base_func] = new_F;
         }
@@ -587,7 +585,7 @@ void CloneCtx::clone_bodies()
             }
             for (auto &target : groups[i].clones) {
                 prepare_vmap(*target.vmap);
-                auto target_F = cast_or_null<Function>(map_get(*target.vmap, F));
+                auto target_F = cast_or_null<Function>(map_get(*target.vmap, group_F));
                 if (target_F) {
                     if (!F->isDeclaration()) {
                         clone_function(group_F, target_F, *target.vmap);
@@ -876,46 +874,27 @@ static Constant *get_ptrdiff32(Type *T_size, Constant *ptr, Constant *base)
     if (ptr->getType()->isPointerTy())
         ptr = ConstantExpr::getPtrToInt(ptr, T_size);
     auto ptrdiff = ConstantExpr::getSub(ptr, base);
-    return sizeof(void*) == 8 ? ConstantExpr::getTrunc(ptrdiff, Type::getInt32Ty(ptr->getContext())) : ptrdiff;
+    return T_size->getPrimitiveSizeInBits() > 32 ? ConstantExpr::getTrunc(ptrdiff, Type::getInt32Ty(ptr->getContext())) : ptrdiff;
 }
 
-template<typename T>
-static Constant *emit_offset_table(Module &M, Type *T_size, const SmallVectorImpl<T*> &vars,
-                                   StringRef name, StringRef suffix)
+static void emit_table(Module &M, Type *T_size, ArrayRef<Constant*> vars, StringRef name, StringRef suffix)
 {
-    auto T_int32 = Type::getInt32Ty(M.getContext());
     uint32_t nvars = vars.size();
-    Constant *base = nullptr;
-    if (nvars > 0) {
-        base = ConstantExpr::getBitCast(vars[0], T_size->getPointerTo());
-        auto ga = GlobalAlias::create(T_size, 0, GlobalVariable::ExternalLinkage,
-                                       name + "_base" + suffix,
-                                       base, &M);
-        ga->setVisibility(GlobalValue::HiddenVisibility);
-        ga->setDSOLocal(true);
-    } else {
-        auto gv = new GlobalVariable(M, T_size, true, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), name + "_base" + suffix);
-        gv->setVisibility(GlobalValue::HiddenVisibility);
-        gv->setDSOLocal(true);
-        base = gv;
-    }
-    auto vbase = ConstantExpr::getPtrToInt(base, T_size);
-    SmallVector<Constant*, 0> offsets(nvars + 1);
-    offsets[0] = ConstantInt::get(T_int32, nvars);
-    if (nvars > 0) {
-        offsets[1] = ConstantInt::get(T_int32, 0);
-        for (uint32_t i = 1; i < nvars; i++)
-            offsets[i + 1] = get_ptrdiff32(T_size, vars[i], vbase);
-    }
-    ArrayType *vars_type = ArrayType::get(T_int32, nvars + 1);
-    auto gv = new GlobalVariable(M, vars_type, true,
-                                  GlobalVariable::ExternalLinkage,
-                                  ConstantArray::get(vars_type, offsets),
-                                  name + "_offsets" + suffix);
+    SmallVector<Constant*,0> castvars(nvars);
+    for (size_t i = 0; i < nvars; i++)
+        castvars[i] = ConstantExpr::getBitCast(vars[i], T_size->getPointerTo());
+    auto gv = new GlobalVariable(M, T_size, true, GlobalValue::ExternalLinkage, ConstantInt::get(T_size, nvars), name + "_count" + suffix);
     gv->setVisibility(GlobalValue::HiddenVisibility);
     gv->setDSOLocal(true);
-    return vbase;
+    ArrayType *vars_type = ArrayType::get(T_size->getPointerTo(), nvars);
+    gv = new GlobalVariable(M, vars_type, false,
+                            GlobalVariable::ExternalLinkage,
+                            ConstantArray::get(vars_type, castvars),
+                            name + "_ptrs" + suffix);
+    gv->setVisibility(GlobalValue::HiddenVisibility);
+    gv->setDSOLocal(true);
 }
+
 
 void CloneCtx::emit_metadata()
 {
@@ -931,11 +910,8 @@ void CloneCtx::emit_metadata()
     }
 
     // Store back the information about exported functions.
-    auto fbase = emit_offset_table(M, T_size, fvars, "jl_fvar", suffix);
-    auto gbase = emit_offset_table(M, T_size, gvars, "jl_gvar", suffix);
-
+    emit_table(M, T_size, ArrayRef<Constant*>((Constant* const*)fvars.data(), fvars.size()), "jl_fvar", suffix);
     M.getGlobalVariable("jl_fvar_idxs")->setName("jl_fvar_idxs" + suffix);
-    M.getGlobalVariable("jl_gvar_idxs")->setName("jl_gvar_idxs" + suffix);
 
     uint32_t ntargets = specs.size();
 
@@ -944,8 +920,8 @@ void CloneCtx::emit_metadata()
     {
         auto T_int32 = Type::getInt32Ty(M.getContext());
         std::sort(gv_relocs.begin(), gv_relocs.end(),
-                         [] (const std::pair<Constant*,uint32_t> &lhs,
-                             const std::pair<Constant*,uint32_t> &rhs) {
+                         [] (const std::pair<Constant*, uint32_t> &lhs,
+                             const std::pair<Constant*, uint32_t> &rhs) {
                              return lhs.second < rhs.second;
                          });
         SmallVector<Constant*, 0> values{nullptr};
@@ -960,28 +936,31 @@ void CloneCtx::emit_metadata()
                  gv_reloc_idx++) {
                 shared_relocs.insert(id);
                 values.push_back(id_v);
-                values.push_back(get_ptrdiff32(T_size, gv_relocs[gv_reloc_idx].first, gbase));
+                values.push_back(gv_relocs[gv_reloc_idx].first);
             }
             auto it = const_relocs.find(id);
             if (it != const_relocs.end()) {
                 shared_relocs.insert(id);
                 values.push_back(id_v);
-                values.push_back(get_ptrdiff32(T_size, it->second, gbase));
+                values.push_back(it->second);
             }
         }
         values[0] = ConstantInt::get(T_int32, values.size() / 2);
         ArrayType *vars_type = ArrayType::get(T_int32, values.size());
-        auto gv = new GlobalVariable(M, vars_type, true, GlobalVariable::ExternalLinkage,
-                                      ConstantArray::get(vars_type, values),
-                                      "jl_clone_slots" + suffix);
+        auto gv = new GlobalVariable(M, vars_type, true, GlobalVariable::ExternalLinkage, nullptr, "jl_clone_slots" + suffix);
+        auto gbase = ConstantExpr::getPtrToInt(gv, T_size);
+        for (size_t i = 2; i < values.size(); i += 2)
+            values[i] = get_ptrdiff32(T_size, values[i], gbase);
+        gv->setInitializer(ConstantArray::get(vars_type, values));
         gv->setVisibility(GlobalValue::HiddenVisibility);
         gv->setDSOLocal(true);
     }
 
-    // Generate `jl_dispatch_fvars_idxs` and `jl_dispatch_fvars_offsets`
+    // Generate `jl_dispatch_fvars_idxs` and `jl_dispatch_fvars`
     {
         SmallVector<uint32_t, 0> idxs;
-        SmallVector<Constant*, 0> offsets;
+        SmallVector<Constant*, 0> fptrs;
+        Type *Tfptr = T_size->getPointerTo();
         for (uint32_t i = 0; i < ntargets; i++) {
             auto tgt = linearized[i];
             auto &spec = specs[i];
@@ -997,7 +976,7 @@ void CloneCtx::emit_metadata()
                         idxs.push_back(j);
                     }
                     if (i != 0) {
-                        offsets.push_back(get_ptrdiff32(T_size, grp->base_func(fvars[j]), fbase));
+                        fptrs.push_back(grp->base_func(fvars[j]));
                     }
                 }
             }
@@ -1011,12 +990,12 @@ void CloneCtx::emit_metadata()
                         count++;
                         idxs.push_back(jl_sysimg_tag_mask | j);
                         auto f = map_get(*tgt->vmap, base_f, base_f);
-                        offsets.push_back(get_ptrdiff32(T_size, cast<Function>(f), fbase));
+                        fptrs.push_back(cast<Function>(f));
                     }
                     else if (auto f = map_get(*tgt->vmap, base_f)) {
                         count++;
                         idxs.push_back(j);
-                        offsets.push_back(get_ptrdiff32(T_size, cast<Function>(f), fbase));
+                        fptrs.push_back(cast<Function>(f));
                     }
                 }
             }
@@ -1028,11 +1007,13 @@ void CloneCtx::emit_metadata()
                                       idxval, "jl_clone_idxs" + suffix);
         gv1->setVisibility(GlobalValue::HiddenVisibility);
         gv1->setDSOLocal(true);
-        ArrayType *offsets_type = ArrayType::get(Type::getInt32Ty(M.getContext()), offsets.size());
+        for (size_t i = 0; i < fptrs.size(); i++)
+            fptrs[i] = ConstantExpr::getBitCast(fptrs[i], Tfptr);
+        ArrayType *offsets_type = ArrayType::get(Tfptr, fptrs.size());
         auto gv2 = new GlobalVariable(M, offsets_type, true,
                                       GlobalVariable::ExternalLinkage,
-                                      ConstantArray::get(offsets_type, offsets),
-                                      "jl_clone_offsets" + suffix);
+                                      ConstantArray::get(offsets_type, fptrs),
+                                      "jl_clone_ptrs" + suffix);
         gv2->setVisibility(GlobalValue::HiddenVisibility);
         gv2->setDSOLocal(true);
     }
@@ -1065,9 +1046,7 @@ static bool runMultiVersioning(Module &M, bool allow_bad_fvars)
     }
 
     GlobalVariable *fvars = M.getGlobalVariable("jl_fvars");
-    GlobalVariable *gvars = M.getGlobalVariable("jl_gvars");
-    if (allow_bad_fvars && (!fvars || !fvars->hasInitializer() || !isa<ConstantArray>(fvars->getInitializer()) ||
-                            !gvars || !gvars->hasInitializer() || !isa<ConstantArray>(gvars->getInitializer())))
+    if (allow_bad_fvars && (!fvars || !fvars->hasInitializer() || !isa<ConstantArray>(fvars->getInitializer())))
         return false;
 
     CloneCtx clone(M, allow_bad_fvars);

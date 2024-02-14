@@ -25,9 +25,9 @@ using ._TOP_MOD:     # Base definitions
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using Core.Compiler: # Core.Compiler specific definitions
     Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
-    argextype, check_effect_free!, fieldcount_noerror, hasintersect, intrinsic_nothrow,
+    argextype, fieldcount_noerror, hasintersect, has_flag, intrinsic_nothrow,
     is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow, singleton_type,
-    try_compute_field, try_compute_fieldidx, widenconst, ⊑
+    try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -37,13 +37,12 @@ else
 end
 
 const AInfo = IdSet{Any}
-const 𝕃ₒ = SimpleInferenceLattice.instance
 
 """
     x::EscapeInfo
 
 A lattice for escape information, which holds the following properties:
-- `x.Analyzed::Bool`: not formally part of the lattice, only indicates `x` has not been analyzed or not
+- `x.Analyzed::Bool`: not formally part of the lattice, only indicates whether `x` has been analyzed
 - `x.ReturnEscape::Bool`: indicates `x` can escape to the caller via return
 - `x.ThrownEscape::BitSet`: records SSA statement numbers where `x` can be thrown as exception:
   * `isempty(x.ThrownEscape)`: `x` will never be thrown in this call frame (the bottom)
@@ -598,11 +597,12 @@ struct LivenessChange <: Change
 end
 const Changes = Vector{Change}
 
-struct AnalysisState{T}
+struct AnalysisState{GetEscapeCache, Lattice<:AbstractLattice}
     ir::IRCode
     estate::EscapeState
     changes::Changes
-    get_escape_cache::T
+    𝕃ₒ::Lattice
+    get_escape_cache::GetEscapeCache
 end
 
 """
@@ -610,17 +610,17 @@ end
 
 Analyzes escape information in `ir`:
 - `nargs`: the number of actual arguments of the analyzed call
-- `get_escape_cache(::MethodInstance) -> Union{Nothing,ArgEscapeCache}`:
+- `get_escape_cache(::MethodInstance) -> Union{Bool,ArgEscapeCache}`:
   retrieves cached argument escape information
 """
-function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
+function analyze_escapes(ir::IRCode, nargs::Int, 𝕃ₒ::AbstractLattice, get_escape_cache)
     stmts = ir.stmts
     nstmts = length(stmts) + length(ir.new_nodes.stmts)
 
     tryregions, arrayinfo = compute_frameinfo(ir)
     estate = EscapeState(nargs, nstmts, arrayinfo)
     changes = Changes() # keeps changes that happen at current statement
-    astate = AnalysisState(ir, estate, changes, get_escape_cache)
+    astate = AnalysisState(ir, estate, changes, 𝕃ₒ, get_escape_cache)
 
     local debug_itr_counter = 0
     while true
@@ -652,7 +652,7 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                 elseif is_meta_expr_head(head)
                     # meta expressions doesn't account for any usages
                     continue
-                elseif head === :enter || head === :leave || head === :the_exception || head === :pop_exception
+                elseif head === :leave || head === :the_exception || head === :pop_exception
                     # ignore these expressions since escapes via exceptions are handled by `escape_exception!`
                     # `escape_exception!` conservatively propagates `AllEscape` anyway,
                     # and so escape information imposed on `:the_exception` isn't computed
@@ -666,6 +666,9 @@ function analyze_escapes(ir::IRCode, nargs::Int, get_escape_cache)
                 else
                     add_conservative_changes!(astate, pc, stmt.args)
                 end
+            elseif isa(stmt, EnterNode)
+                # Handled via escape_exception!
+                continue
             elseif isa(stmt, ReturnNode)
                 if isdefined(stmt, :val)
                     add_escape_change!(astate, stmt.val, ReturnEscape(pc))
@@ -728,10 +731,10 @@ function compute_frameinfo(ir::IRCode)
     for idx in 1:nstmts+nnewnodes
         inst = ir[SSAValue(idx)]
         stmt = inst[:stmt]
-        if isexpr(stmt, :enter)
+        if isa(stmt, EnterNode)
             @assert idx ≤ nstmts "try/catch inside new_nodes unsupported"
             tryregions === nothing && (tryregions = UnitRange{Int}[])
-            leave_block = stmt.args[1]::Int
+            leave_block = stmt.catch_dest
             leave_pc = first(ir.cfg.blocks[leave_block].stmts)
             push!(tryregions, idx:leave_pc)
         elseif arrayinfo !== nothing
@@ -975,7 +978,7 @@ end
     error("unexpected assignment found: inspect `Main.pc` and `Main.pc`")
 end
 
-is_nothrow(ir::IRCode, pc::Int) = ir[SSAValue(pc)][:flag] & IR_FLAG_NOTHROW ≠ 0
+is_nothrow(ir::IRCode, pc::Int) = has_flag(ir[SSAValue(pc)], IR_FLAG_NOTHROW)
 
 # NOTE if we don't maintain the alias set that is separated from the lattice state, we can do
 # something like below: it essentially incorporates forward escape propagation in our default
@@ -1061,11 +1064,14 @@ function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
     first_idx, last_idx = 2, length(args)
     # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available
     cache = astate.get_escape_cache(mi)
-    if cache === nothing
-        return add_conservative_changes!(astate, pc, args, 2)
-    else
-        cache = cache::ArgEscapeCache
+    if cache isa Bool
+        if cache
+            return nothing # guaranteed to have no escape
+        else
+            return add_conservative_changes!(astate, pc, args, 2)
+        end
     end
+    cache = cache::ArgEscapeCache
     ret = SSAValue(pc)
     retinfo = astate.estate[ret] # escape information imposed on the call statement
     method = mi.def::Method
@@ -1449,10 +1455,10 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     add_escape_change!(astate, val, ssainfo)
     # compute the throwness of this setfield! call here since builtin_nothrow doesn't account for that
     @label add_thrown_escapes
-    if length(args) == 4 && setfield!_nothrow(𝕃ₒ,
+    if length(args) == 4 && setfield!_nothrow(astate.𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir))
         return true
-    elseif length(args) == 3 && setfield!_nothrow(𝕃ₒ,
+    elseif length(args) == 3 && setfield!_nothrow(astate.𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir))
         return true
     else

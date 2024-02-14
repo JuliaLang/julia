@@ -398,7 +398,7 @@ the result in single precision by writing:
 Float32[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 ```
 
-## Generator Expressions
+## [Generator Expressions](@id man-generators)
 
 Comprehensions can also be written without the enclosing square brackets, producing an object
 known as a generator. This object can be iterated to produce values on demand, instead of allocating
@@ -603,7 +603,7 @@ overwritten with the value of `X`, [`convert`](@ref)ing to the
 If any index `I_k` is itself an array, then the right hand side `X` must also be an
 array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
 the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
-`A` is overwritten with the value `X[I_1, I_2, ..., I_n]`, converting if necessary. The
+`A` is overwritten with the value `X[i_1, i_2, ..., i_n]`, converting if necessary. The
 element-wise assignment operator `.=` may be used to [broadcast](@ref Broadcasting) `X`
 across the selected locations:
 
@@ -793,38 +793,46 @@ Indexing by a boolean vector `B` is effectively the same as indexing by the
 vector of integers that is returned by [`findall(B)`](@ref). Similarly, indexing
 by a `N`-dimensional boolean array is effectively the same as indexing by the
 vector of `CartesianIndex{N}`s where its values are `true`. A logical index
-must be a vector of the same length as the dimension it indexes into, or it
-must be the only index provided and match the size and dimensionality of the
-array it indexes into. It is generally more efficient to use boolean arrays as
-indices directly instead of first calling [`findall`](@ref).
+must be a array of the same shape as the dimension(s) it indexes into, or it
+must be the only index provided and match the shape of the one-dimensional
+reshaped view of the array it indexes into. It is generally more efficient
+to use boolean arrays as indices directly instead of first calling [`findall`](@ref).
 
 ```jldoctest
-julia> x = reshape(1:16, 4, 4)
-4×4 reshape(::UnitRange{Int64}, 4, 4) with eltype Int64:
- 1  5   9  13
- 2  6  10  14
- 3  7  11  15
- 4  8  12  16
+julia> x = reshape(1:12, 2, 3, 2)
+2×3×2 reshape(::UnitRange{Int64}, 2, 3, 2) with eltype Int64:
+[:, :, 1] =
+ 1  3  5
+ 2  4  6
 
-julia> x[[false, true, true, false], :]
-2×4 Matrix{Int64}:
- 2  6  10  14
- 3  7  11  15
+[:, :, 2] =
+ 7   9  11
+ 8  10  12
+
+julia> x[:, [true false; false true; true false]]
+2×3 Matrix{Int64}:
+ 1  5   9
+ 2  6  10
 
 julia> mask = map(ispow2, x)
-4×4 Matrix{Bool}:
- 1  0  0  0
- 1  0  0  0
- 0  0  0  0
- 1  1  0  1
+2×3×2 Array{Bool, 3}:
+[:, :, 1] =
+ 1  0  0
+ 1  1  0
+
+[:, :, 2] =
+ 0  0  0
+ 1  0  0
 
 julia> x[mask]
-5-element Vector{Int64}:
-  1
-  2
-  4
-  8
- 16
+4-element Vector{Int64}:
+ 1
+ 2
+ 4
+ 8
+
+julia> x[vec(mask)] == x[mask] # we can also index with a single Boolean vector
+true
 ```
 
 ### Number of indices
@@ -881,7 +889,7 @@ in their implementations, other arrays — like [`Diagonal`](@ref) — need the
 full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
 introspect which is which).
 
-!!! warnings
+!!! warning
 
     When iterating over all the indices for an array, it is
     better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.

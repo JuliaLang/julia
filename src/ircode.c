@@ -104,6 +104,8 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
 {
     rle_reference rr;
 
+    if (jl_is_string(v))
+        v = jl_as_global_root(v, 1);
     literal_val_id(&rr, s, v);
     int id = rr.index;
     assert(id >= 0);
@@ -155,7 +157,7 @@ static void jl_encode_memory_slice(jl_ircode_state *s, jl_genericmemory_t *mem, 
     }
     else {
         ios_write(s->s, (char*)mem->ptr + offset * layout->size, len * layout->size);
-        if (jl_genericmemory_isbitsunion(mem))
+        if (layout->flags.arrayelem_isunion)
             ios_write(s->s, jl_genericmemory_typetagdata(mem) + offset, len);
     }
 }
@@ -392,7 +394,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         if (layout->flags.arrayelem_isunion || layout->size == 0)
             offset = (uintptr_t)ar->ref.ptr_or_offset;
         else
-            offset = (char*)ar->ref.ptr_or_offset - (char*)ar->ref.mem->ptr;
+            offset = ((char*)ar->ref.ptr_or_offset - (char*)ar->ref.mem->ptr) / layout->size;
         jl_encode_memory_slice(s, ar->ref.mem, offset, l);
     }
     else if (as_literal && jl_is_genericmemory(v)) {
@@ -788,6 +790,18 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
 
 typedef jl_value_t jl_string_t; // for local expressibility
 
+#define IR_DATASIZE_FLAGS         sizeof(uint8_t)
+#define IR_DATASIZE_PURITY        sizeof(uint16_t)
+#define IR_DATASIZE_INLINING_COST sizeof(uint16_t)
+#define IR_DATASIZE_NSLOTS        sizeof(int32_t)
+typedef enum {
+    ir_offset_flags         = 0,
+    ir_offset_purity        = 0 + IR_DATASIZE_FLAGS,
+    ir_offset_inlining_cost = 0 + IR_DATASIZE_FLAGS + IR_DATASIZE_PURITY,
+    ir_offset_nslots        = 0 + IR_DATASIZE_FLAGS + IR_DATASIZE_PURITY + IR_DATASIZE_INLINING_COST,
+    ir_offset_slotflags     = 0 + IR_DATASIZE_FLAGS + IR_DATASIZE_PURITY + IR_DATASIZE_INLINING_COST + IR_DATASIZE_NSLOTS
+} ir_offset;
+
 JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
 {
     JL_TIMING(AST_COMPRESS, AST_COMPRESS);
@@ -813,12 +827,16 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     jl_code_info_flags_t flags = code_info_flags(code->inferred, code->propagate_inbounds, code->has_fcall,
                                                  code->nospecializeinfer, code->inlining, code->constprop);
     write_uint8(s.s, flags.packed);
-    write_uint8(s.s, code->purity.bits);
+    static_assert(sizeof(flags.packed) == IR_DATASIZE_FLAGS, "ir_datasize_flags is mismatched with the actual size");
+    write_uint16(s.s, code->purity.bits);
+    static_assert(sizeof(code->purity.bits) == IR_DATASIZE_PURITY, "ir_datasize_purity is mismatched with the actual size");
     write_uint16(s.s, code->inlining_cost);
+    static_assert(sizeof(code->inlining_cost) == IR_DATASIZE_INLINING_COST, "ir_datasize_inlining_cost is mismatched with the actual size");
 
-    size_t nslots = jl_array_nrows(code->slotflags);
+    int32_t nslots = jl_array_nrows(code->slotflags);
     assert(nslots >= m->nargs && nslots < INT32_MAX); // required by generated functions
     write_int32(s.s, nslots);
+    static_assert(sizeof(nslots) == IR_DATASIZE_NSLOTS, "ir_datasize_nslots is mismatched with the actual size");
     ios_write(s.s, jl_array_data(code->slotflags, const char), nslots);
 
     // N.B.: The layout of everything before this point is explicitly referenced
@@ -911,7 +929,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->propagate_inbounds = flags.bits.propagate_inbounds;
     code->has_fcall = flags.bits.has_fcall;
     code->nospecializeinfer = flags.bits.nospecializeinfer;
-    code->purity.bits = read_uint8(s.s);
+    code->purity.bits = read_uint16(s.s);
     code->inlining_cost = read_uint16(s.s);
 
     size_t nslots = read_int32(&src);
@@ -958,8 +976,9 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
     if (metadata) {
-        code->min_world = metadata->min_world;
-        code->max_world = metadata->max_world;
+        code->min_world = jl_atomic_load_relaxed(&metadata->min_world);
+        // n.b. this should perhaps be capped to jl_world_counter max here, since we don't have backedges on it after return
+        code->max_world = jl_atomic_load_relaxed(&metadata->max_world);
         code->rettype = metadata->rettype;
         code->parent = metadata->def;
     }
@@ -973,7 +992,7 @@ JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_string_t *data)
         return ((jl_code_info_t*)data)->inferred;
     assert(jl_is_string(data));
     jl_code_info_flags_t flags;
-    flags.packed = jl_string_data(data)[0];
+    flags.packed = jl_string_data(data)[ir_offset_flags];
     return flags.bits.inferred;
 }
 
@@ -983,7 +1002,7 @@ JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_string_t *data)
         return ((jl_code_info_t*)data)->inlining;
     assert(jl_is_string(data));
     jl_code_info_flags_t flags;
-    flags.packed = jl_string_data(data)[0];
+    flags.packed = jl_string_data(data)[ir_offset_flags];
     return flags.bits.inlining;
 }
 
@@ -993,7 +1012,7 @@ JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_string_t *data)
         return ((jl_code_info_t*)data)->has_fcall;
     assert(jl_is_string(data));
     jl_code_info_flags_t flags;
-    flags.packed = jl_string_data(data)[0];
+    flags.packed = jl_string_data(data)[ir_offset_flags];
     return flags.bits.has_fcall;
 }
 
@@ -1002,7 +1021,7 @@ JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_string_t *data)
     if (jl_is_code_info(data))
         return ((jl_code_info_t*)data)->inlining_cost;
     assert(jl_is_string(data));
-    uint16_t res = jl_load_unaligned_i16(jl_string_data(data) + 2);
+    uint16_t res = jl_load_unaligned_i16(jl_string_data(data) + ir_offset_inlining_cost);
     return res;
 }
 
@@ -1040,7 +1059,7 @@ JL_DLLEXPORT ssize_t jl_ir_nslots(jl_value_t *data)
     }
     else {
         assert(jl_is_string(data));
-        int nslots = jl_load_unaligned_i32(jl_string_data(data) + 2 + sizeof(uint16_t));
+        int nslots = jl_load_unaligned_i32(jl_string_data(data) + ir_offset_nslots);
         return nslots;
     }
 }
@@ -1053,7 +1072,7 @@ JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_string_t *data, size_t i)
         return jl_array_data(slotflags, uint8_t)[i];
     }
     assert(jl_is_string(data));
-    return jl_string_data(data)[2 + sizeof(uint16_t) + sizeof(int32_t) + i];
+    return jl_string_data(data)[ir_offset_slotflags + i];
 }
 
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms)

@@ -27,6 +27,8 @@
 /Distributed
 /StyledStrings-*
 /StyledStrings
+/JuliaSyntaxHighlighting-*
+/JuliaSyntaxHighlighting
 /*_jll/StdlibArtifacts.toml
 /*/Manifest.toml
 /*.image

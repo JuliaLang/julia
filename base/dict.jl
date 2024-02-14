@@ -74,10 +74,10 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
     maxprobe::Int
 
     function Dict{K,V}() where V where K
-        n = 16
+        n = 0
         slots = Memory{UInt8}(undef,n)
         fill!(slots, 0x0)
-        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, n, 0)
+        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, max(1, n), 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
@@ -114,45 +114,7 @@ const AnyDict = Dict{Any,Any}
 Dict(ps::Pair{K,V}...) where {K,V} = Dict{K,V}(ps)
 Dict(ps::Pair...)                  = Dict(ps)
 
-function Dict(kv)
-    try
-        dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
-    catch
-        if !isiterable(typeof(kv)) || !all(x->isa(x,Union{Tuple,Pair}),kv)
-            throw(ArgumentError("Dict(kv): kv needs to be an iterator of tuples or pairs"))
-        else
-            rethrow()
-        end
-    end
-end
-
-function grow_to!(dest::AbstractDict{K, V}, itr) where V where K
-    y = iterate(itr)
-    y === nothing && return dest
-    ((k,v), st) = y
-    dest2 = empty(dest, typeof(k), typeof(v))
-    dest2[k] = v
-    grow_to!(dest2, itr, st)
-end
-
-# this is a special case due to (1) allowing both Pairs and Tuples as elements,
-# and (2) Pair being invariant. a bit annoying.
-function grow_to!(dest::AbstractDict{K,V}, itr, st) where V where K
-    y = iterate(itr, st)
-    while y !== nothing
-        (k,v), st = y
-        if isa(k,K) && isa(v,V)
-            dest[k] = v
-        else
-            new = empty(dest, promote_typejoin(K,typeof(k)), promote_typejoin(V,typeof(v)))
-            merge!(new, dest)
-            new[k] = v
-            return grow_to!(new, itr, st)
-        end
-        y = iterate(itr, st)
-    end
-    return dest
-end
+Dict(kv) = dict_with_eltype((K, V) -> Dict{K, V}, kv, eltype(kv))
 
 empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 
@@ -266,12 +228,12 @@ function empty!(h::Dict{K,V}) where V where K
     h.count = 0
     h.maxprobe = 0
     h.age += 1
-    h.idxfloor = sz
+    h.idxfloor = max(1, sz)
     return h
 end
 
 # get the index where a key is stored, or -1 if not present
-@assume_effects :terminates_locally function ht_keyindex(h::Dict{K,V}, key) where V where K
+function ht_keyindex(h::Dict{K,V}, key) where V where K
     isempty(h) && return -1
     sz = length(h.keys)
     iter = 0
@@ -280,9 +242,9 @@ end
     index, sh = hashindex(key, sz)
     keys = h.keys
 
-    @inbounds while true
+    @assume_effects :terminates_locally :noub @inbounds while true
         isslotempty(h,index) && return -1
-        if h.slots[index] == sh
+        if sh == h.slots[index]
             k = keys[index]
             if (key ===  k || isequal(key, k))
                 return index
@@ -302,6 +264,11 @@ end
 # This version is for use by setindex! and get!
 function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
+    if sz == 0 # if Dict was empty resize and then return location to insert
+        rehash!(h, 4)
+        index, sh = hashindex(key, length(h.keys))
+        return -index, sh
+    end
     iter = 0
     maxprobe = h.maxprobe
     index, sh = hashindex(key, sz)
@@ -367,7 +334,7 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
     # Rehash now if necessary
     if (h.count + h.ndel)*3 > sz*2
         # > 2/3 full (including tombstones)
-        rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
+        rehash!(h, h.count > 64000 ? h.count*2 : max(h.count*4, 4))
     end
     nothing
 end
@@ -507,7 +474,7 @@ end
 
 function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
-    @inbounds return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V
+    return index < 0 ? throw(KeyError(key)) : @assume_effects :noub @inbounds h.vals[index]::V
 end
 
 """
@@ -738,6 +705,8 @@ end
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
+@propagate_inbounds Iterators.only(t::Dict) = Iterators._only(t, first)
+
 @propagate_inbounds function Base.iterate(v::T, i::Int = v.dict.idxfloor) where T <: Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}}
     i == 0 && return nothing
     i = skip_deleted(v.dict, i)
@@ -887,10 +856,52 @@ _similar_for(c::AbstractDict, ::Type{T}, itr, isz, len) where {T} =
 
 include("hamt.jl")
 using .HashArrayMappedTries
+using Core.OptimizedGenerics: KeyValue
 const HAMT = HashArrayMappedTries
 
 struct PersistentDict{K,V} <: AbstractDict{K,V}
     trie::HAMT.HAMT{K,V}
+    # Serves as a marker for an empty initialization
+    @noinline function KeyValue.set(::Type{PersistentDict{K, V}}) where {K, V}
+        new{K, V}(HAMT.HAMT{K,V}())
+    end
+    @noinline function KeyValue.set(::Type{PersistentDict{K, V}}, ::Nothing, key, val) where {K, V}
+        new{K, V}(HAMT.HAMT{K, V}(key => val))
+    end
+    @noinline @Base.assume_effects :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key, val) where {K, V}
+        trie = dict.trie
+        h = HAMT.HashState(key)
+        found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
+        HAMT.insert!(found, present, trie, i, bi, hs, val)
+        return new{K, V}(top)
+    end
+    @noinline @Base.assume_effects :nothrow :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key::K, val::V) where {K, V}
+        trie = dict.trie
+        h = HAMT.HashState(key)
+        found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
+        HAMT.insert!(found, present, trie, i, bi, hs, val)
+        return new{K, V}(top)
+    end
+    @noinline @Base.assume_effects :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key) where {K, V}
+        trie = dict.trie
+        h = HAMT.HashState(key)
+        found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
+        if found && present
+            deleteat!(trie.data, i)
+            HAMT.unset!(trie, bi)
+        end
+        return new{K, V}(top)
+    end
+    @noinline @Base.assume_effects :nothrow :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key::K) where {K, V}
+        trie = dict.trie
+        h = HAMT.HashState(key)
+        found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
+        if found && present
+            deleteat!(trie.data, i)
+            HAMT.unset!(trie, bi)
+        end
+        return new{K, V}(top)
+    end
 end
 
 """
@@ -902,7 +913,12 @@ returns a new dictionary separate from the previous one, but the underlying
 implementation is space-efficient and may share storage across multiple
 separate dictionaries.
 
-    PersistentDict(KV::Pair)
+!!! note
+    It behaves like an IdDict.
+
+```julia
+PersistentDict(KV::Pair)
+```
 
 # Examples
 
@@ -921,25 +937,40 @@ Base.PersistentDict{Symbol, Int64} with 1 entry:
 """
 PersistentDict
 
-PersistentDict{K,V}() where {K,V} = PersistentDict(HAMT.HAMT{K,V}())
-PersistentDict{K,V}(KV::Pair) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV...))
-PersistentDict(KV::Pair{K,V}) where {K,V} = PersistentDict(HAMT.HAMT{K,V}(KV...))
+PersistentDict{K,V}() where {K, V} = KeyValue.set(PersistentDict{K,V})
+function PersistentDict{K,V}(KV::Pair) where {K,V}
+    KeyValue.set(
+        PersistentDict{K, V},
+        nothing,
+        KV...)
+end
+function PersistentDict(KV::Pair{K,V}) where {K,V}
+    KeyValue.set(
+        PersistentDict{K, V},
+        nothing,
+        KV...)
+end
 PersistentDict(dict::PersistentDict, pair::Pair) = PersistentDict(dict, pair...)
 PersistentDict{K,V}(dict::PersistentDict{K,V}, pair::Pair) where {K,V} = PersistentDict(dict, pair...)
+
+
 function PersistentDict(dict::PersistentDict{K,V}, key, val) where {K,V}
     key = convert(K, key)
     val = convert(V, val)
-    trie = dict.trie
-    h = hash(key)
-    found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
-    HAMT.insert!(found, present, trie, i, bi, hs, val)
-    return PersistentDict(top)
+    return KeyValue.set(dict, key, val)
+end
+
+function PersistentDict{K,V}(KV::Pair, rest::Pair...) where {K,V}
+    dict = PersistentDict{K,V}(KV)
+    for (key, value) in rest
+        dict = PersistentDict(dict, key, value)
+    end
+    return dict
 end
 
 function PersistentDict(kv::Pair, rest::Pair...)
     dict = PersistentDict(kv)
-    for kv in rest
-        key, value = kv
+    for (key, value) in rest
         dict = PersistentDict(dict, key, value)
     end
     return dict
@@ -948,84 +979,62 @@ end
 eltype(::PersistentDict{K,V}) where {K,V} = Pair{K,V}
 
 function in(key_val::Pair{K,V}, dict::PersistentDict{K,V}, valcmp=(==)) where {K,V}
-    trie = dict.trie
-    if HAMT.islevel_empty(trie)
-        return false
-    end
-
     key, val = key_val
-
-    h = hash(key)
-    found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
-    if found && present
-        leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
-        return valcmp(val, leaf.val) && return true
-    end
-    return false
+    found = KeyValue.get(dict, key)
+    found === nothing && return false
+    return valcmp(val, only(found))
 end
 
 function haskey(dict::PersistentDict{K}, key::K) where K
-    trie = dict.trie
-    h = hash(key)
-    found, present, _, _, _, _, _ = HAMT.path(trie, key, h)
-    return found && present
+    return KeyValue.get(dict, key) !== nothing
 end
 
 function getindex(dict::PersistentDict{K,V}, key::K) where {K,V}
-    trie = dict.trie
-    if HAMT.islevel_empty(trie)
-        throw(KeyError(key))
-    end
-    h = hash(key)
-    found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
-    if found && present
-        leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
-        return leaf.val
-    end
-    throw(KeyError(key))
+    found = KeyValue.get(dict, key)
+    found === nothing && throw(KeyError(key))
+    return only(found)
 end
 
 function get(dict::PersistentDict{K,V}, key::K, default) where {K,V}
+    found = KeyValue.get(dict, key)
+    found === nothing && return default
+    return only(found)
+end
+
+@noinline function KeyValue.get(dict::PersistentDict{K, V}, key) where {K, V}
     trie = dict.trie
     if HAMT.islevel_empty(trie)
-        return default
+        return nothing
     end
-    h = hash(key)
+    h = HAMT.HashState(key)
     found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
     if found && present
         leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
-        return leaf.val
+        return (leaf.val,)
     end
-    return default
+    return nothing
+end
+
+@noinline function KeyValue.get(default, dict::PersistentDict, key)
+    found = KeyValue.get(dict, key)
+    found === nothing && return default()
+    return only(found)
 end
 
 function get(default::Callable, dict::PersistentDict{K,V}, key::K) where {K,V}
-    trie = dict.trie
-    if HAMT.islevel_empty(trie)
-        return default
-    end
-    h = hash(key)
-    found, present, trie, i, _, _, _ = HAMT.path(trie, key, h)
-    if found && present
-        leaf = @inbounds trie.data[i]::HAMT.Leaf{K,V}
-        return leaf.val
-    end
-    return default()
+    found = KeyValue.get(dict, key)
+    found === nothing && return default()
+    return only(found)
+end
+
+function delete(dict::PersistentDict{K}, key::K) where K
+    return KeyValue.set(dict, key)
 end
 
 iterate(dict::PersistentDict, state=nothing) = HAMT.iterate(dict.trie, state)
 
-function delete(dict::PersistentDict{K}, key::K) where K
-    trie = dict.trie
-    h = hash(key)
-    found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
-    if found && present
-        deleteat!(trie.data, i)
-        HAMT.unset!(trie, bi)
-    end
-    return PersistentDict(top)
-end
-
 length(dict::PersistentDict) = HAMT.length(dict.trie)
 isempty(dict::PersistentDict) = HAMT.isempty(dict.trie)
 empty(::PersistentDict, ::Type{K}, ::Type{V}) where {K, V} = PersistentDict{K, V}()
+
+@propagate_inbounds Iterators.only(dict::PersistentDict) = Iterators._only(dict, first)

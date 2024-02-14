@@ -863,7 +863,7 @@ end
                foo
            end
     ERROR: UndefVarError: `foo` not defined in `Main`
-    Suggestion: check for spelling errors or missing imports. No global of this name exists in this module.
+    Suggestion: check for spelling errors or missing imports.
     ```
     Use the [`local` keyword](@ref local-scope) outside the `try` block to make the variable
     accessible from anywhere within the outer scope.

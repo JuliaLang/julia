@@ -218,7 +218,7 @@ gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
 # multiplicative inverse of n mod m, error if none
 
 """
-    invmod(n, m)
+    invmod(n::Integer, m::Integer)
 
 Take the inverse of `n` modulo `m`: `y` such that ``n y = 1 \\pmod m``,
 and ``div(y,m) = 0``. This will throw an error if ``m = 0``, or if
@@ -257,6 +257,43 @@ function invmod(n::Integer, m::Integer)
     return mod(x, m)
 end
 
+"""
+    invmod(n::Integer, T) where {T <: Base.BitInteger}
+    invmod(n::T) where {T <: Base.BitInteger}
+
+Compute the modular inverse of `n` in the integer ring of type `T`, i.e. modulo
+`2^N` where `N = 8*sizeof(T)` (e.g. `N = 32` for `Int32`). In other words these
+methods satisfy the following identities:
+```
+n * invmod(n) == 1
+(n * invmod(n, T)) % T == 1
+(n % T) * invmod(n, T) == 1
+```
+Note that `*` here is modular multiplication in the integer ring, `T`.
+
+Specifying the modulus implied by an integer type as an explicit value is often
+inconvenient since the modulus is by definition too big to be represented by the
+type.
+
+The modular inverse is computed much more efficiently than the general case
+using the algorithm described in https://arxiv.org/pdf/2204.04342.pdf.
+
+!!! compat "Julia 1.11"
+    The `invmod(n)` and `invmod(n, T)` methods require Julia 1.11 or later.
+"""
+invmod(n::Integer, ::Type{T}) where {T<:BitInteger} = invmod(n % T)
+
+function invmod(n::T) where {T<:BitInteger}
+    isodd(n) || throw(DomainError(n, "Argument must be odd."))
+    x = (3*n ⊻ 2) % T
+    y = (1 - n*x) % T
+    for _ = 1:trailing_zeros(2*sizeof(T))
+        x *= y + true
+        y *= y
+    end
+    return x
+end
+
 # ^ for any x supporting *
 to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p, LazyString(
@@ -272,14 +309,15 @@ to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
     "\nMake x a float matrix by adding a zero decimal ",
     "(e.g., [2.0 1.0;1.0 0.0]^", p, " instead of [2 1;1 0]^", p, ")",
     "or write float(x)^", p, " or Rational.(x)^", p, ".")))
-@assume_effects :terminates_locally function power_by_squaring(x_, p::Integer)
+# The * keyword supports `*=checked_mul` for `checked_pow`
+@assume_effects :terminates_locally function power_by_squaring(x_, p::Integer; mul=*)
     x = to_power_type(x_)
     if p == 1
         return copy(x)
     elseif p == 0
         return one(x)
     elseif p == 2
-        return x*x
+        return mul(x, x)
     elseif p < 0
         isone(x) && return copy(x)
         isone(-x) && return iseven(p) ? one(x) : copy(x)
@@ -288,16 +326,16 @@ to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
     t = trailing_zeros(p) + 1
     p >>= t
     while (t -= 1) > 0
-        x *= x
+        x = mul(x, x)
     end
     y = x
     while p > 0
         t = trailing_zeros(p) + 1
         p >>= t
         while (t -= 1) >= 0
-            x *= x
+            x = mul(x, x)
         end
-        y *= x
+        y = mul(y, x)
     end
     return y
 end

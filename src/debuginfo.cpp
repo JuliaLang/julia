@@ -374,12 +374,13 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         }
         jl_method_instance_t *mi = NULL;
         if (codeinst) {
+            JL_GC_PROMISE_ROOTED(codeinst);
             mi = codeinst->def;
             // Non-opaque-closure MethodInstances are considered globally rooted
             // through their methods, but for OC, we need to create a global root
             // here.
             if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
-                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi);
+                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi, 1);
         }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (mi)
@@ -1136,7 +1137,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     if (entry.obj)
         *Section = getModuleSectionForAddress(entry.obj, pointer + entry.slide);
     // Assume we only need base address for sysimg for now
-    if (!inimage || !image_info.fptrs.base)
+    if (!inimage || 0 == image_info.fptrs.nptrs)
         saddr = nullptr;
     get_function_name_and_base(*Section, pointer, entry.slide, inimage, saddr, name, untrusted_dladdr);
     return true;
@@ -1179,9 +1180,8 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
         JITDebugInfoRegistry::image_info_t image;
         bool inimage = getJITDebugRegistry().get_image_info(fbase, &image);
         if (isImage && saddr && inimage) {
-            intptr_t diff = (uintptr_t)saddr - (uintptr_t)image.fptrs.base;
             for (size_t i = 0; i < image.fptrs.nclones; i++) {
-                if (diff == image.fptrs.clone_offsets[i]) {
+                if (saddr == image.fptrs.clone_ptrs[i]) {
                     uint32_t idx = image.fptrs.clone_idxs[i] & jl_sysimg_val_mask;
                     if (idx < image.fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
                         frame0->linfo = image.fvars_linfo[idx];
@@ -1189,7 +1189,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
                 }
             }
             for (size_t i = 0; i < image.fvars_n; i++) {
-                if (diff == image.fptrs.offsets[i]) {
+                if (saddr == image.fptrs.ptrs[i]) {
                     frame0->linfo = image.fvars_linfo[i];
                     break;
                 }
@@ -1363,7 +1363,7 @@ enum DW_EH_PE : uint8_t {
 // Parse the CIE and return the type of encoding used by FDE
 static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
 {
-    // http://www.airs.com/blog/archives/460
+    // https://www.airs.com/blog/archives/460
     // Length (4 bytes)
     uint32_t cie_size = *(const uint32_t*)Addr;
     const uint8_t *cie_addr = Addr + 4;

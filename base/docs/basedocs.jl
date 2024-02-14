@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+#
 
 module BaseDocs
 
@@ -2027,7 +2028,21 @@ AbstractFloat
 """
     Integer <: Real
 
-Abstract supertype for all integers.
+Abstract supertype for all integers (e.g. [`Signed`](@ref), [`Unsigned`](@ref), and [`Bool`](@ref)).
+
+See also [`isinteger`](@ref), [`trunc`](@ref), [`div`](@ref).
+
+# Examples
+```
+julia> 42 isa Integer
+true
+
+julia> 1.0 isa Integer
+false
+
+julia> isinteger(1.0)
+true
+```
 """
 Integer
 
@@ -2042,6 +2057,21 @@ Signed
     Unsigned <: Integer
 
 Abstract supertype for all unsigned integers.
+
+Built-in unsigned integers are printed in hexadecimal, with prefix `0x`,
+and can be entered in the same way.
+
+# Examples
+```
+julia> typemax(UInt8)
+0xff
+
+julia> Int(0x00d)
+13
+
+julia> unsigned(true)
+0x0000000000000001
+```
 """
 Unsigned
 
@@ -2052,56 +2082,146 @@ Boolean type, containing the values `true` and `false`.
 
 `Bool` is a kind of number: `false` is numerically
 equal to `0` and `true` is numerically equal to `1`.
-Moreover, `false` acts as a multiplicative "strong zero":
+Moreover, `false` acts as a multiplicative "strong zero"
+against [`NaN`](@ref) and [`Inf`](@ref):
 
 ```jldoctest
-julia> false == 0
+julia> [true, false] == [1, 0]
 true
 
-julia> true == 1
-true
+julia> 42.0 + true
+43.0
 
-julia> 0 * NaN
-NaN
+julia> 0 .* (NaN, Inf, -Inf)
+(NaN, NaN, NaN)
 
-julia> false * NaN
-0.0
+julia> false .* (NaN, Inf, -Inf)
+(0.0, 0.0, -0.0)
 ```
 
-See also: [`digits`](@ref), [`iszero`](@ref), [`NaN`](@ref).
+Branches via [`if`](@ref) and other conditionals only accept `Bool`.
+There are no "truthy" values in Julia.
+
+Comparisons typically return `Bool`, and broadcasted comparisons may
+return [`BitArray`](@ref) instead of an `Array{Bool}`.
+
+```jldoctest
+julia> [1 2 3 4 5] .< pi
+1×5 BitMatrix:
+ 1  1  1  0  0
+
+julia> map(>(pi), [1 2 3 4 5])
+1×5 Matrix{Bool}:
+ 0  0  0  1  1
+```
+
+See also [`trues`](@ref), [`falses`](@ref), [`ifelse`](@ref).
 """
 Bool
 
-for (bit, sign, exp, frac) in ((16, 1, 5, 10), (32, 1, 8, 23), (64, 1, 11, 52))
-    @eval begin
-        """
-            Float$($bit) <: AbstractFloat
+"""
+    Float64 <: AbstractFloat <: Real
 
-        $($bit)-bit floating point number type (IEEE 754 standard).
+64-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 11 exponent, 52 fraction bits.
+See [`bitstring`](@ref), [`signbit`](@ref), [`exponent`](@ref), [`frexp`](@ref),
+and [`significand`](@ref) to access various bits.
 
-        Binary format: $($sign) sign, $($exp) exponent, $($frac) fraction bits.
-        """
-        $(Symbol("Float", bit))
-    end
-end
+This is the default for floating point literals, `1.0 isa Float64`,
+and for many operations such as `1/2, 2pi, log(2), range(0,90,length=4)`.
+Unlike integers, this default does not change with `Sys.WORD_SIZE`.
+
+The exponent for scientific notation can be entered as `e` or `E`,
+thus `2e3 === 2.0E3 === 2.0 * 10^3`. Doing so is strongly preferred over
+`10^n` because integers overflow, thus `2.0 * 10^19 < 0` but `2e19 > 0`.
+
+See also [`Inf`](@ref), [`NaN`](@ref), [`floatmax`](@ref), [`Float32`](@ref), [`Complex`](@ref).
+"""
+Float64
+
+"""
+    Float32 <: AbstractFloat <: Real
+
+32-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 8 exponent, 23 fraction bits.
+
+The exponent for scientific notation should be entered as lower-case `f`,
+thus `2f3 === 2.0f0 * 10^3 === Float32(2_000)`.
+For array literals and comprehensions, the element type can be specified before
+the square brackets: `Float32[1,4,9] == Float32[i^2 for i in 1:3]`.
+
+See also [`Inf32`](@ref), [`NaN32`](@ref), [`Float16`](@ref), [`exponent`](@ref), [`frexp`](@ref).
+"""
+Float32
+
+"""
+    Float16 <: AbstractFloat <: Real
+
+16-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 5 exponent, 10 fraction bits.
+"""
+Float16
 
 for bit in (8, 16, 32, 64, 128)
+    type = Symbol(:Int, bit)
+    srange = bit > 31 ? "" : "Represents numbers `n ∈ " * repr(eval(:(typemin($type):typemax($type)))) * "`.\n"
+    unshow = repr(eval(Symbol(:UInt, bit))(bit-1))
+
     @eval begin
         """
-            Int$($bit) <: Signed
+            Int$($bit) <: Signed <: Integer
 
         $($bit)-bit signed integer type.
+
+        $($(srange))Note that such integers overflow without warning,
+        thus `typemax($($type)) + $($type)(1) < 0`.
+
+        See also [`Int`](@ref $Int), [`widen`](@ref), [`BigInt`](@ref).
         """
         $(Symbol("Int", bit))
 
         """
-            UInt$($bit) <: Unsigned
+            UInt$($bit) <: Unsigned <: Integer
 
         $($bit)-bit unsigned integer type.
+
+        Printed in hexadecimal, thus $($(unshow)) == $($(bit-1)).
         """
         $(Symbol("UInt", bit))
     end
 end
+
+"""
+    Int
+
+Sys.WORD_SIZE-bit signed integer type, `Int <: Signed <: Integer <: Real`.
+
+This is the default type of most integer literals and is an alias for either `Int32`
+or `Int64`, depending on `Sys.WORD_SIZE`. It is the type returned by functions such as
+[`length`](@ref), and the standard type for indexing arrays.
+
+Note that integers overflow without warning, thus `typemax(Int) + 1 < 0` and `10^19 < 0`.
+Overflow can be avoided by using [`BigInt`](@ref).
+Very large integer literals will use a wider type, for instance `10_000_000_000_000_000_000 isa Int128`.
+
+Integer division is [`div`](@ref) alias `÷`,
+whereas [`/`](@ref) acting on integers returns [`Float64`](@ref).
+
+See also [`$(Symbol("Int", Sys.WORD_SIZE))`](@ref), [`widen`](@ref), [`typemax`](@ref), [`bitstring`](@ref).
+"""
+Int
+
+"""
+    UInt
+
+Sys.WORD_SIZE-bit unsigned integer type, `UInt <: Unsigned <: Integer`.
+
+Like [`Int`](@ref Int), the alias `UInt` may point to either `UInt32` or `UInt64`,
+according to the value of `Sys.WORD_SIZE` on a given computer.
+
+Printed and parsed in hexadecimal: `UInt(15) === $(repr(UInt(15)))`.
+"""
+UInt
 
 """
     Symbol
@@ -2235,11 +2355,14 @@ setfield!
     swapfield!(value, name::Symbol, x, [order::Symbol])
     swapfield!(value, i::Int, x, [order::Symbol])
 
-These atomically perform the operations to simultaneously get and set a field:
+Atomically perform the operations to simultaneously get and set a field:
 
     y = getfield(value, name)
     setfield!(value, name, x)
     return y
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 swapfield!
 
@@ -2247,7 +2370,7 @@ swapfield!
     modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
     modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
 
-These atomically perform the operations to get and set a field after applying
+Atomically perform the operations to get and set a field after applying
 the function `op`.
 
     y = getfield(value, name)
@@ -2257,6 +2380,9 @@ the function `op`.
 
 If supported by the hardware (for example, atomic increment), this may be
 optimized to the appropriate hardware instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 modifyfield!
 
@@ -2266,7 +2392,7 @@ modifyfield!
     replacefield!(value, i::Int, expected, desired,
                   [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
 
-These atomically perform the operations to get and conditionally set a field to
+Atomically perform the operations to get and conditionally set a field to
 a given value.
 
     y = getfield(value, name, fail_order)
@@ -2278,8 +2404,29 @@ a given value.
 
 If supported by the hardware, this may be optimized to the appropriate hardware
 instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 replacefield!
+
+"""
+    setfieldonce!(value, name::Union{Int,Symbol}, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> success::Bool
+
+Atomically perform the operations to set a field to
+a given value, only if it was previously not set.
+
+    ok = !isdefined(value, name, fail_order)
+    if ok
+        setfield!(value, name, desired, success_order)
+    end
+    return ok
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+setfieldonce!
 
 """
     getglobal(module::Module, name::Symbol, [order::Symbol=:monotonic])
@@ -2321,6 +2468,7 @@ julia> getglobal(M, :a)
 """
 getglobal
 
+
 """
     setglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
 
@@ -2347,7 +2495,7 @@ julia> module M end;
 
 julia> M.a  # same as `getglobal(M, :a)`
 ERROR: UndefVarError: `a` not defined in `M`
-Suggestion: check for spelling errors or missing imports. No global of this name exists in this module.
+Suggestion: check for spelling errors or missing imports.
 
 julia> setglobal!(M, :a, 1)
 1
@@ -2357,6 +2505,81 @@ julia> M.a
 ```
 """
 setglobal!
+
+"""
+    Core.get_binding_type(module::Module, name::Symbol)
+
+Retrieve the declared type of the binding `name` from the module `module`.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+"""
+Core.get_binding_type
+
+"""
+    Core.set_binding_type!(module::Module, name::Symbol, [type::Type])
+
+Set the declared type of the binding `name` in the module `module` to `type`. Error if the
+binding already has a type that is not equivalent to `type`. If the `type` argument is
+absent, set the binding type to `Any` if unset, but do not error.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+"""
+Core.set_binding_type!
+
+"""
+    swapglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
+
+Atomically perform the operations to simultaneously get and set a global.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`swapproperty!`](@ref Base.swapproperty!) and [`setglobal!`](@ref).
+"""
+swapglobal!
+
+"""
+    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic]) -> Pair
+
+Atomically perform the operations to get and set a global after applying
+the function `op`.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`modifyproperty!`](@ref Base.modifyproperty!) and [`setglobal!`](@ref).
+"""
+modifyglobal!
+
+"""
+    replaceglobal!(module::Module, name::Symbol, expected, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+
+Atomically perform the operations to get and conditionally set a global to
+a given value.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`replaceproperty!`](@ref Base.replaceproperty!) and [`setglobal!`](@ref).
+"""
+replaceglobal!
+
+"""
+    setglobalonce!(module::Module, name::Symbol, value,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> success::Bool
+
+Atomically perform the operations to set a global to
+a given value, only if it was previously not set.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@ref).
+"""
+setglobalonce!
 
 """
     typeof(x)
@@ -2692,7 +2915,13 @@ Ptr{T}()
 """
     +(x, y...)
 
-Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
+Addition operator.
+
+Infix `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`,
+which by default then calls `(x+y) + z + ...` starting from the left.
+
+Note that overflow is possible for most integer types, including the
+default `Int`, when adding large numbers.
 
 # Examples
 ```jldoctest
@@ -2701,6 +2930,14 @@ julia> 1 + 20 + 4
 
 julia> +(1, 20, 4)
 25
+
+julia> [1,2] + [3,4]
+2-element Vector{Int64}:
+ 4
+ 6
+
+julia> typemax(Int) + 1 < 0
+true
 ```
 """
 (+)(x, y...)
@@ -2724,6 +2961,12 @@ julia> -[1 2; 3 4]
 2×2 Matrix{Int64}:
  -1  -2
  -3  -4
+
+julia> -(true)  # promotes to Int
+-1
+
+julia> -(0x003)
+0xfffd
 ```
 """
 -(x)
@@ -2747,7 +2990,18 @@ julia> -(2, 4.5)
 """
     *(x, y...)
 
-Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`.
+Multiplication operator.
+
+Infix `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`,
+which by default then calls `(x*y) * z * ...` starting from the left.
+
+Juxtaposition such as `2pi` also calls `*(2, pi)`. Note that this operation
+has higher precedence than a literal `*`. Note also that juxtaposition "0x..."
+(integer zero times a variable whose name starts with `x`) is forbidden as
+it clashes with unsigned integer literals: `0x01 isa UInt8`.
+
+Note that overflow is possible for most integer types, including the default `Int`,
+when multiplying large numbers.
 
 # Examples
 ```jldoctest
@@ -2756,6 +3010,17 @@ julia> 2 * 7 * 8
 
 julia> *(2, 7, 8)
 112
+
+julia> [2 0; 0 3] * [1, 10]  # matrix * vector
+2-element Vector{Int64}:
+  2
+ 30
+
+julia> 1/2pi, 1/2*pi  # juxtaposition has higher precedence
+(0.15915494309189535, 1.5707963267948966)
+
+julia> x = [1, 2]; x'x  # adjoint vector * vector
+5
 ```
 """
 (*)(x, y...)
@@ -2763,8 +3028,10 @@ julia> *(2, 7, 8)
 """
     /(x, y)
 
-Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
-floating-point results for integer arguments.
+Right division operator: multiplication of `x` by the inverse of `y` on the right.
+
+Gives floating-point results for integer arguments.
+See [`÷`](@ref div) for integer division, or [`//`](@ref) for [`Rational`](@ref) results.
 
 # Examples
 ```jldoctest
@@ -2893,7 +3160,7 @@ Union
     UnionAll
 
 A union of types over all values of a type parameter. `UnionAll` is used to describe parametric types
-where the values of some parameters are not known.
+where the values of some parameters are not known. See the manual section on [UnionAll Types](@ref).
 
 # Examples
 ```jldoctest
@@ -3161,13 +3428,29 @@ Base.modifyproperty!
     replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
 
 Perform a compare-and-swap operation on `x.f` from `expected` to `desired`, per
-egal. The syntax `@atomic_replace! x.f expected => desired` can be used instead
+egal. The syntax `@atomicreplace x.f expected => desired` can be used instead
 of the function call form.
 
 See also [`replacefield!`](@ref Core.replacefield!)
-and [`setproperty!`](@ref Base.setproperty!).
+[`setproperty!`](@ref Base.setproperty!),
+[`setpropertyonce!`](@ref Base.setpropertyonce!).
 """
 Base.replaceproperty!
+
+"""
+    setpropertyonce!(x, f::Symbol, value, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+
+Perform a compare-and-swap operation on `x.f` to set it to `value` if previously unset.
+The syntax `@atomiconce x.f = value` can be used instead of the function call form.
+
+See also [`setfieldonce!`](@ref Core.replacefield!),
+[`setproperty!`](@ref Base.setproperty!),
+[`replaceproperty!`](@ref Base.replaceproperty!).
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+Base.setpropertyonce!
 
 
 """
@@ -3312,7 +3595,7 @@ kw"atomic"
 
 This function prevents dead-code elimination (DCE) of itself and any arguments
 passed to it, but is otherwise the lightest barrier possible. In particular,
-it is not a GC safepoint, does model an observable heap effect, does not expand
+it is not a GC safepoint, does not model an observable heap effect, does not expand
 to any code itself and may be re-ordered with respect to other side effects
 (though the total number of executions may not change).
 
@@ -3329,6 +3612,14 @@ unused and delete the entire benchmark code).
     `donotdelete` does not affect constant folding. For example, in
     `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
     the code is semantically equivalent to `donotdelete(2).`
+
+!!! note
+    This intrinsic does not affect the semantics of code that is dead because it is
+    *unreachable*. For example, the body of the function `f(x) = false && donotdelete(x)`
+    may be deleted in its entirety. The semantics of this intrinsic only guarantee that
+    *if* the intrinsic is semantically executed, then there is some program state at
+    which the value of the arguments of this intrinsic were available (in a register,
+    in memory, etc.).
 
 # Examples
 

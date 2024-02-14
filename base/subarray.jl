@@ -52,8 +52,10 @@ viewindexing(I::Tuple{Slice, Slice, Vararg{Any}}) = (@inline; viewindexing(tail(
 # A UnitRange can follow Slices, but only if all other indices are scalar
 viewindexing(I::Tuple{Slice, AbstractUnitRange, Vararg{ScalarIndex}}) = IndexLinear()
 viewindexing(I::Tuple{Slice, Slice, Vararg{ScalarIndex}}) = IndexLinear() # disambiguate
-# In general, ranges are only fast if all other indices are scalar
-viewindexing(I::Tuple{AbstractRange, Vararg{ScalarIndex}}) = IndexLinear()
+# In general, scalar ranges are only fast if all other indices are scalar
+# Other ranges, such as those of `CartesianIndex`es, are not fast even if these
+# are followed by `ScalarIndex`es
+viewindexing(I::Tuple{AbstractRange{<:ScalarIndex}, Vararg{ScalarIndex}}) = IndexLinear()
 # All other index combinations are slow
 viewindexing(I::Tuple{Vararg{Any}}) = IndexCartesian()
 # Of course, all other array types are slow
@@ -108,16 +110,41 @@ unaliascopy(A::SubArray) = typeof(A)(unaliascopy(A.parent), map(unaliascopy, A.i
 
 # When the parent is an Array we can trim the size down a bit. In the future this
 # could possibly be extended to any mutable array.
-function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Vararg{Union{Real,AbstractRange,Array}}},LD}
-    dest = Array{T}(undef, index_lengths(V.indices...))
-    copyto!(dest, V)
+function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Vararg{Union{ScalarIndex,AbstractRange{<:ScalarIndex},Array{<:Union{ScalarIndex,AbstractCartesianIndex}}}}},LD}
+    dest = Array{T}(undef, _trimmedshape(V.indices...))
+    trimmedpind = _trimmedpind(V.indices...)
+    vdest = trimmedpind isa Tuple{Vararg{Union{Slice,Colon}}} ? dest : view(dest, trimmedpind...)
+    copyto!(vdest, view(V, _trimmedvind(V.indices...)...))
     SubArray{T,N,A,I,LD}(dest, map(_trimmedindex, V.indices), 0, Int(LD))
 end
+# Get the proper trimmed shape
+_trimmedshape(::ScalarIndex, rest...) = (1, _trimmedshape(rest...)...)
+_trimmedshape(i::AbstractRange, rest...) = (maximum(i), _trimmedshape(rest...)...)
+_trimmedshape(i::Union{UnitRange,StepRange,OneTo}, rest...) = (length(i), _trimmedshape(rest...)...)
+_trimmedshape(i::AbstractArray{<:ScalarIndex}, rest...) = (length(i), _trimmedshape(rest...)...)
+_trimmedshape(i::AbstractArray{<:AbstractCartesianIndex{0}}, rest...) = _trimmedshape(rest...)
+_trimmedshape(i::AbstractArray{<:AbstractCartesianIndex{N}}, rest...) where {N} = (length(i), ntuple(Returns(1), Val(N - 1))..., _trimmedshape(rest...)...)
+_trimmedshape() = ()
+# We can avoid the repeation from `AbstractArray{CartesianIndex{0}}`
+_trimmedpind(i, rest...) = (map(Returns(:), axes(i))..., _trimmedpind(rest...)...)
+_trimmedpind(i::AbstractRange, rest...) = (i, _trimmedpind(rest...)...)
+_trimmedpind(i::Union{UnitRange,StepRange,OneTo}, rest...) = ((:), _trimmedpind(rest...)...)
+_trimmedpind(i::AbstractArray{<:AbstractCartesianIndex{0}}, rest...) = _trimmedpind(rest...)
+_trimmedpind() = ()
+_trimmedvind(i, rest...) = (map(Returns(:), axes(i))..., _trimmedvind(rest...)...)
+_trimmedvind(i::AbstractArray{<:AbstractCartesianIndex{0}}, rest...) = (map(first, axes(i))..., _trimmedvind(rest...)...)
+_trimmedvind() = ()
 # Transform indices to be "dense"
-_trimmedindex(i::Real) = oftype(i, 1)
-_trimmedindex(i::AbstractUnitRange) = oftype(i, oneto(length(i)))
-_trimmedindex(i::AbstractArray) = oftype(i, reshape(eachindex(IndexLinear(), i), axes(i)))
-
+_trimmedindex(i::ScalarIndex) = oftype(i, 1)
+_trimmedindex(i::AbstractRange) = i
+_trimmedindex(i::Union{UnitRange,StepRange,OneTo}) = oftype(i, oneto(length(i)))
+_trimmedindex(i::AbstractArray{<:ScalarIndex}) = oftype(i, reshape(eachindex(IndexLinear(), i), axes(i)))
+_trimmedindex(i::AbstractArray{<:AbstractCartesianIndex{0}}) = oftype(i, copy(i))
+function _trimmedindex(i::AbstractArray{<:AbstractCartesianIndex{N}}) where {N}
+    padding = ntuple(Returns(1), Val(N - 1))
+    ax1 = eachindex(IndexLinear(), i)
+    return oftype(i, reshape(CartesianIndices((ax1, padding...)), axes(i)))
+end
 ## SubArray creation
 # We always assume that the dimensionality of the parent matches the number of
 # indices that end up getting passed to it, so we store the parent as a
@@ -127,6 +154,11 @@ _maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val(1))
 _maybe_reshape_parent(A::AbstractArray{<:Any,1}, ::NTuple{1, Bool}) = reshape(A, Val(1))
 _maybe_reshape_parent(A::AbstractArray{<:Any,N}, ::NTuple{N, Bool}) where {N} = A
 _maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A, Val(N))
+# The trailing singleton indices could be eliminated after bounds checking.
+rm_singleton_indices(ndims::Tuple, J1, Js...) = (J1, rm_singleton_indices(IteratorsMD._splitrest(ndims, index_ndims(J1)), Js...)...)
+rm_singleton_indices(::Tuple{}, ::ScalarIndex, Js...) = rm_singleton_indices((), Js...)
+rm_singleton_indices(::Tuple) = ()
+
 """
     view(A, inds...)
 
@@ -173,15 +205,12 @@ julia> view(2:5, 2:3) # returns a range as type is immutable
 3:4
 ```
 """
-function view(A::AbstractArray{<:Any,N}, I::Vararg{Any,M}) where {N,M}
+function view(A::AbstractArray, I::Vararg{Any,M}) where {M}
     @inline
     J = map(i->unalias(A,i), to_indices(A, I))
     @boundscheck checkbounds(A, J...)
-    if length(J) > ndims(A) && J[N+1:end] isa Tuple{Vararg{Int}}
-        # view([1,2,3], :, 1) does not need to reshape
-        return unsafe_view(A, J[1:N]...)
-    end
-    unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
+    J′ = rm_singleton_indices(ntuple(Returns(true), Val(ndims(A))), J...)
+    unsafe_view(_maybe_reshape_parent(A, index_ndims(J′...)), J′...)
 end
 
 # Ranges implement getindex to return recomputed ranges; use that for views, too (when possible)
@@ -263,18 +292,18 @@ reindex(idxs::Tuple{Slice, Vararg{Any}}, subidxs::Tuple{Any, Vararg{Any}}) =
 
 # Re-index into parent vectors with one subindex
 reindex(idxs::Tuple{AbstractVector, Vararg{Any}}, subidxs::Tuple{Any, Vararg{Any}}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]], reindex(tail(idxs), tail(subidxs))...))
+    (@_propagate_inbounds_meta; (maybeview(idxs[1], subidxs[1]), reindex(tail(idxs), tail(subidxs))...))
 
 # Parent matrices are re-indexed with two sub-indices
 reindex(idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any, Any, Vararg{Any}}) =
-    (@_propagate_inbounds_meta; (idxs[1][subidxs[1], subidxs[2]], reindex(tail(idxs), tail(tail(subidxs)))...))
+    (@_propagate_inbounds_meta; (maybeview(idxs[1], subidxs[1], subidxs[2]), reindex(tail(idxs), tail(tail(subidxs)))...))
 
 # In general, we index N-dimensional parent arrays with N indices
 @generated function reindex(idxs::Tuple{AbstractArray{T,N}, Vararg{Any}}, subidxs::Tuple{Vararg{Any}}) where {T,N}
     if length(subidxs.parameters) >= N
         subs = [:(subidxs[$d]) for d in 1:N]
         tail = [:(subidxs[$d]) for d in N+1:length(subidxs.parameters)]
-        :(@_propagate_inbounds_meta; (idxs[1][$(subs...)], reindex(tail(idxs), ($(tail...),))...))
+        :(@_propagate_inbounds_meta; (maybeview(idxs[1], $(subs...)), reindex(tail(idxs), ($(tail...),))...))
     else
         :(throw(ArgumentError("cannot re-index SubArray with fewer indices than dimensions\nThis should not occur; please submit a bug report.")))
     end
@@ -307,6 +336,17 @@ function getindex(V::FastContiguousSubArray, i::Int)
     @inbounds r = V.parent[V.offset1 + i]
     r
 end
+# parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
+# so we may just forward the indexing to the parent
+# This may only be done for non-offset ranges, as the result would otherwise have offset axes
+const OneBasedRanges = Union{OneTo{Int}, UnitRange{Int}, Slice{OneTo{Int}}, IdentityUnitRange{OneTo{Int}}}
+function getindex(V::FastContiguousSubArray, i::OneBasedRanges)
+    @inline
+    @boundscheck checkbounds(V, i)
+    @inbounds r = V.parent[V.offset1 .+ i]
+    r
+end
+
 # For vector views with linear indexing, we disambiguate to favor the stride/offset
 # computation as that'll generally be faster than (or just as fast as) re-indexing into a range.
 function getindex(V::FastSubArray{<:Any, 1}, i::Int)
@@ -321,6 +361,7 @@ function getindex(V::FastContiguousSubArray{<:Any, 1}, i::Int)
     @inbounds r = V.parent[V.offset1 + i]
     r
 end
+@inline getindex(V::FastContiguousSubArray, i::Colon) = getindex(V, to_indices(V, (:,))...)
 
 # Indexed assignment follows the same pattern as `getindex` above
 function setindex!(V::SubArray{T,N}, x, I::Vararg{Int,N}) where {T,N}
@@ -341,6 +382,19 @@ function setindex!(V::FastContiguousSubArray, x, i::Int)
     @inbounds V.parent[V.offset1 + i] = x
     V
 end
+function setindex!(V::FastSubArray, x, i::AbstractUnitRange{Int})
+    @inline
+    @boundscheck checkbounds(V, i)
+    @inbounds V.parent[V.offset1 .+ V.stride1 .* i] = x
+    V
+end
+function setindex!(V::FastContiguousSubArray, x, i::AbstractUnitRange{Int})
+    @inline
+    @boundscheck checkbounds(V, i)
+    @inbounds V.parent[V.offset1 .+ i] = x
+    V
+end
+
 function setindex!(V::FastSubArray{<:Any, 1}, x, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
@@ -353,6 +407,7 @@ function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::Int)
     @inbounds V.parent[V.offset1 + i] = x
     V
 end
+@inline setindex!(V::FastSubArray, x, i::Colon) = setindex!(V, x, to_indices(V, (i,))...)
 
 function isassigned(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
     @inline
@@ -483,8 +538,11 @@ end
 has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)
 
 function replace_in_print_matrix(S::SubArray{<:Any,2,<:AbstractMatrix}, i::Integer, j::Integer, s::AbstractString)
-    replace_in_print_matrix(S.parent, reindex(S.indices, (i,j))..., s)
+    replace_in_print_matrix(S.parent, to_indices(S.parent, reindex(S.indices, (i,j)))..., s)
 end
 function replace_in_print_matrix(S::SubArray{<:Any,1,<:AbstractVector}, i::Integer, j::Integer, s::AbstractString)
-    replace_in_print_matrix(S.parent, reindex(S.indices, (i,))..., j, s)
+    replace_in_print_matrix(S.parent, to_indices(S.parent, reindex(S.indices, (i,)))..., j, s)
 end
+
+# XXX: this is considerably more unsafe than the other similarly named methods
+unsafe_wrap(::Type{Vector{UInt8}}, s::FastContiguousSubArray{UInt8,1,Vector{UInt8}}) = unsafe_wrap(Vector{UInt8}, pointer(s), size(s))

@@ -44,7 +44,7 @@ SRCS := \
 	jltypes gf typemap smallintset ast builtins module interpreter symbol \
 	dlload sys init task array genericmemory staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
-	threading partr stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler method \
+	threading scheduler stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler gc-page-profiler method \
 	jlapi signal-handling safepoint timing subtype rtutils gc-heap-snapshot \
 	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall
 
@@ -77,10 +77,9 @@ else
 # JULIACODEGEN != LLVM
 endif
 
-RT_LLVM_LIBS := support
-
-ifeq ($(LLVM_VER_MAJ),16)
-RT_LLVM_LIBS += targetparser
+RT_LLVM_LIBS := support # for APMath and some other useful ADT
+ifneq ($(LLVM_VER_MAJ),15)
+RT_LLVM_LIBS += targetparser # for getHostCPUName on LLVM 16+
 endif
 
 ifeq ($(OS),WINNT)
@@ -113,6 +112,10 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 
 LLVM_LDFLAGS := $(shell $(LLVM_CONFIG_HOST) --ldflags)
 LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG_HOST) --cxxflags)
+
+ifeq ($(OS)_$(BINARY),WINNT_32)
+LLVM_CXXFLAGS += -I$(SRCDIR)/support/win32-clang-ABI-bug
+endif
 
 # llvm-config --cxxflags does not return -DNDEBUG
 ifeq ($(shell $(LLVM_CONFIG_HOST) --assertion-mode),OFF)
@@ -306,7 +309,7 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliase
 $(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj: $(SRCDIR)/intrinsics.h
 $(BUILDDIR)/aotcompile.o $(BUILDDIR)/aotcompile.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/processor.h
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
-$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/iddict.c $(SRCDIR)/builtin_proto.h
+$(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/iddict.c $(SRCDIR)/idset.c $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
 	intrinsics.cpp jitlayers.h intrinsics.h llvm-codegen-shared.h cgutils.cpp ccall.cpp abi_*.cpp processor.h builtin_proto.h)
 $(BUILDDIR)/datatype.o $(BUILDDIR)/datatype.dbg.obj: $(SRCDIR)/support/htable.h $(SRCDIR)/support/htable.inc

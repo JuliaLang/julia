@@ -330,3 +330,12 @@ end
     # test empty args
     @test string() == ""
 end
+
+module StringsIOStringReturnTypesTestModule
+    struct S end
+    Base.joinpath(::S) = S()
+end
+
+@testset "`string` return types" begin
+    @test all(T -> T <: AbstractString, Base.return_types(string))
+end

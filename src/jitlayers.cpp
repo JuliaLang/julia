@@ -41,9 +41,7 @@ using namespace llvm;
 # include <llvm/ExecutionEngine/Orc/DebuggerSupportPlugin.h>
 # include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
 # include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
-# if JL_LLVM_VERSION >= 150000
 # include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
-# endif
 # include <llvm/ExecutionEngine/SectionMemoryManager.h>
 
 #define DEBUG_TYPE "julia_jitlayers"
@@ -198,8 +196,11 @@ static jl_callptr_t _jl_compile_codeinst(
         start_time = jl_hrtime();
 
     assert(jl_is_code_instance(codeinst));
-    assert(codeinst->min_world <= world && (codeinst->max_world >= world || codeinst->max_world == 0) &&
+#ifndef NDEBUG
+    size_t max_world = jl_atomic_load_relaxed(&codeinst->max_world);
+    assert(jl_atomic_load_relaxed(&codeinst->min_world) <= world && (max_world >= world || max_world == 0) &&
         "invalid world for method-instance");
+#endif
 
     JL_TIMING(CODEINST_COMPILE, CODEINST_COMPILE);
 #ifdef USE_TRACY
@@ -588,7 +589,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         if (src) {
             assert(jl_is_code_info(src));
             ++UnspecFPtrCount;
-            _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext(), 0);
+            _jl_compile_codeinst(unspec, src, jl_atomic_load_relaxed(&unspec->min_world), *jl_ExecutionEngine->getContext(), 0);
         }
         jl_callptr_t null = nullptr;
         // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
@@ -1003,9 +1004,7 @@ public:
 // TODO: Port our memory management optimisations to JITLink instead of using the
 // default InProcessMemoryManager.
 std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() {
-#if JL_LLVM_VERSION < 150000
-    return cantFail(jitlink::InProcessMemoryManager::Create());
-#elif JL_LLVM_VERSION < 160000
+#if JL_LLVM_VERSION < 160000
     return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>());
 #else
     return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>(/*Reservation Granularity*/ 16 * 1024 * 1024));
@@ -1249,26 +1248,30 @@ namespace {
         orc::JITTargetMachineBuilder JTMB;
         OptimizationLevel O;
         SmallVector<std::function<void()>, 0> &printers;
-        PMCreator(TargetMachine &TM, int optlevel, SmallVector<std::function<void()>, 0> &printers) JL_NOTSAFEPOINT
-            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers) {}
+        std::mutex &llvm_printing_mutex;
+        PMCreator(TargetMachine &TM, int optlevel, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex) JL_NOTSAFEPOINT
+            : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)), printers(printers), llvm_printing_mutex(llvm_printing_mutex) {}
 
         auto operator()() JL_NOTSAFEPOINT {
             auto TM = cantFail(JTMB.createTargetMachine());
             fixupTM(*TM);
             auto NPM = std::make_unique<NewPM>(std::move(TM), O);
             // TODO this needs to be locked, as different resource pools may add to the printer vector at the same time
-            printers.push_back([NPM = NPM.get()]() JL_NOTSAFEPOINT {
-                NPM->printTimers();
-            });
+            {
+                std::lock_guard<std::mutex> lock(llvm_printing_mutex);
+                printers.push_back([NPM = NPM.get()]() JL_NOTSAFEPOINT {
+                    NPM->printTimers();
+                });
+            }
             return NPM;
         }
     };
 
     template<size_t N>
     struct OptimizerT {
-        OptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers) JL_NOTSAFEPOINT {
+        OptimizerT(TargetMachine &TM, SmallVector<std::function<void()>, 0> &printers, std::mutex &llvm_printing_mutex) JL_NOTSAFEPOINT {
             for (size_t i = 0; i < N; i++) {
-                PMs[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>>>(PMCreator(TM, i, printers));
+                PMs[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>>>(PMCreator(TM, i, printers, llvm_printing_mutex));
             }
         }
 
@@ -1410,10 +1413,12 @@ namespace {
 
     struct JITPointersT {
 
-        JITPointersT(orc::ExecutionSession &ES) JL_NOTSAFEPOINT : ES(ES) {}
+        JITPointersT(SharedBytesT &SharedBytes, std::mutex &Lock) JL_NOTSAFEPOINT
+            : SharedBytes(SharedBytes), Lock(Lock) {}
 
         Expected<orc::ThreadSafeModule> operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) JL_NOTSAFEPOINT {
             TSM.withModuleDo([&](Module &M) JL_NOTSAFEPOINT {
+                std::lock_guard<std::mutex> locked(Lock);
                 for (auto &GV : make_early_inc_range(M.globals())) {
                     if (auto *Shared = getSharedBytes(GV)) {
                         ++InternedGlobals;
@@ -1429,10 +1434,11 @@ namespace {
             return std::move(TSM);
         }
 
+    private:
         // optimize memory by turning long strings into memoized copies, instead of
         // making a copy per object file of output.
-        // we memoize them using the ExecutionSession's string pool;
-        // this makes it unsafe to call clearDeadEntries() on the pool.
+        // we memoize them using a StringSet with a custom-alignment allocator
+        // to ensure they are properly aligned
         Constant *getSharedBytes(GlobalVariable &GV) JL_NOTSAFEPOINT {
             // We could probably technically get away with
             // interning even external linkage globals,
@@ -1458,11 +1464,17 @@ namespace {
                 // Cutoff, since we don't want to intern small strings
                 return nullptr;
             }
-            auto Interned = *ES.intern(Data);
+            Align Required = GV.getAlign().valueOrOne();
+            Align Preferred = MaxAlignedAlloc::alignment(Data.size());
+            if (Required > Preferred)
+                return nullptr;
+            StringRef Interned = SharedBytes.insert(Data).first->getKey();
+            assert(llvm::isAddrAligned(Preferred, Interned.data()));
             return literal_static_pointer_val(Interned.data(), GV.getType());
         }
 
-        orc::ExecutionSession &ES;
+        SharedBytesT &SharedBytes;
+        std::mutex &Lock;
     };
 }
 
@@ -1642,7 +1654,7 @@ void optimizeDLSyms(Module &M) {
     JuliaOJIT::DLSymOptimizer(true)(M);
 }
 
-void fixupTM(TargetMachine &TM){
+void fixupTM(TargetMachine &TM) {
     auto TheTriple = TM.getTargetTriple();
     if (jl_options.opt_level < 2) {
         if (!TheTriple.isARM() && !TheTriple.isPPC64() && !TheTriple.isAArch64())
@@ -1650,6 +1662,17 @@ void fixupTM(TargetMachine &TM){
         else    // FastISel seems to be buggy Ref #13321
             TM.setFastISel(false);
     }
+}
+
+extern int jl_opaque_ptrs_set;
+void SetOpaquePointer(LLVMContext &ctx) {
+    if (jl_opaque_ptrs_set)
+        return;
+#ifndef JL_LLVM_OPAQUE_POINTERS
+    ctx.setOpaquePointers(false);
+#else
+    ctx.setOpaquePointers(true);
+#endif
 }
 
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
@@ -1673,12 +1696,7 @@ JuliaOJIT::JuliaOJIT()
     DLSymOpt(std::make_unique<DLSymOptimizer>(false)),
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
-        if (!ctx->hasSetOpaquePointersValue())
-#ifndef JL_LLVM_OPAQUE_POINTERS
-            ctx->setOpaquePointers(false);
-#else
-            ctx->setOpaquePointers(true);
-#endif
+        SetOpaquePointer(*ctx);
         return orc::ThreadSafeContext(std::move(ctx));
     }),
 #ifdef JL_USE_JITLINK
@@ -1696,8 +1714,8 @@ JuliaOJIT::JuliaOJIT()
 #endif
     LockLayer(ObjectLayer),
     CompileLayer(ES, LockLayer, std::make_unique<CompilerT<N_optlevels>>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM)),
-    JITPointersLayer(ES, CompileLayer, orc::IRTransformLayer::TransformFunction(JITPointersT(ES))),
-    OptimizeLayer(ES, JITPointersLayer, orc::IRTransformLayer::TransformFunction(OptimizerT<N_optlevels>(*TM, PrintLLVMTimers))),
+    JITPointersLayer(ES, CompileLayer, orc::IRTransformLayer::TransformFunction(JITPointersT(SharedBytes, RLST_mutex))),
+    OptimizeLayer(ES, JITPointersLayer, orc::IRTransformLayer::TransformFunction(OptimizerT<N_optlevels>(*TM, PrintLLVMTimers, llvm_printing_mutex))),
     OptSelLayer(ES, OptimizeLayer, orc::IRTransformLayer::TransformFunction(selectOptLevel)),
     DepsVerifyLayer(ES, OptSelLayer, orc::IRTransformLayer::TransformFunction(validateExternRelocations)),
     ExternalCompileLayer(ES, LockLayer,
@@ -1780,15 +1798,24 @@ JuliaOJIT::JuliaOJIT()
 
     orc::SymbolAliasMap jl_crt = {
         // Float16 conversion routines
-        { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
-        { mangle("__extendhfsf2"),  { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
-        { mangle("__gnu_f2h_ieee"), { mangle("julia__gnu_f2h_ieee"), JITSymbolFlags::Exported } },
-        { mangle("__truncsfhf2"),   { mangle("julia__gnu_f2h_ieee"), JITSymbolFlags::Exported } },
-        { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),   JITSymbolFlags::Exported } },
-
+#if defined(_CPU_X86_64_) && defined(_OS_DARWIN_) && JL_LLVM_VERSION >= 160000
+        // LLVM 16 reverted to soft-float ABI for passing half on x86_64 Darwin
+        // https://github.com/llvm/llvm-project/commit/2bcf51c7f82ca7752d1bba390a2e0cb5fdd05ca9
+        { mangle("__gnu_h2f_ieee"), { mangle("julia_half_to_float"),  JITSymbolFlags::Exported } },
+        { mangle("__extendhfsf2"),  { mangle("julia_half_to_float"),  JITSymbolFlags::Exported } },
+        { mangle("__gnu_f2h_ieee"), { mangle("julia_float_to_half"),  JITSymbolFlags::Exported } },
+        { mangle("__truncsfhf2"),   { mangle("julia_float_to_half"),  JITSymbolFlags::Exported } },
+        { mangle("__truncdfhf2"),   { mangle("julia_double_to_half"), JITSymbolFlags::Exported } },
+#else
+        { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"),  JITSymbolFlags::Exported } },
+        { mangle("__extendhfsf2"),  { mangle("julia__gnu_h2f_ieee"),  JITSymbolFlags::Exported } },
+        { mangle("__gnu_f2h_ieee"), { mangle("julia__gnu_f2h_ieee"),  JITSymbolFlags::Exported } },
+        { mangle("__truncsfhf2"),   { mangle("julia__gnu_f2h_ieee"),  JITSymbolFlags::Exported } },
+        { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),    JITSymbolFlags::Exported } },
+#endif
         // BFloat16 conversion routines
-        { mangle("__truncsfbf2"),   { mangle("julia__truncsfbf2"),   JITSymbolFlags::Exported } },
-        { mangle("__truncdfbf2"),   { mangle("julia__truncdfbf2"),   JITSymbolFlags::Exported } },
+        { mangle("__truncsfbf2"),   { mangle("julia__truncsfbf2"),    JITSymbolFlags::Exported } },
+        { mangle("__truncdfbf2"),   { mangle("julia__truncdfbf2"),    JITSymbolFlags::Exported } },
     };
     cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
 

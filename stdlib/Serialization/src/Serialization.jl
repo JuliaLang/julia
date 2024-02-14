@@ -80,7 +80,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 25 # do not make changes without bumping the version #!
+const ser_version = 26 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -1058,7 +1058,8 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
     nospecializeinfer = false
-    constprop = purity = 0x00
+    constprop = 0x00
+    purity = 0x0000
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
@@ -1068,8 +1069,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         if format_version(s) >= 14
             constprop = deserialize(s)::UInt8
         end
-        if format_version(s) >= 17
-            purity = deserialize(s)::UInt8
+        if format_version(s) >= 26
+            purity = deserialize(s)::UInt16
+        elseif format_version(s) >= 17
+            purity = UInt16(deserialize(s)::UInt8)
         end
         template = deserialize(s)
     else
@@ -1242,7 +1245,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     if format_version(s) >= 14
         ci.constprop = deserialize(s)::UInt8
     end
-    if format_version(s) >= 17
+    if format_version(s) >= 26
+        ci.purity = deserialize(s)::UInt16
+    elseif format_version(s) >= 17
         ci.purity = deserialize(s)::UInt8
     end
     if format_version(s) >= 22
@@ -1443,16 +1448,9 @@ function deserialize_typename(s::AbstractSerializer, number)
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
             kws = handle_deserialize(s, tag)
-            if makenew
-                if kws isa Vector{Method}
-                    for def in kws
-                        kwmt = typeof(Core.kwcall).name.mt
-                        ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, def, C_NULL)
-                    end
-                else
-                    # old object format -- try to forward from old to new
-                    @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
-                end
+            if makenew && !(kws isa Vector{Method})
+                # old object format -- try to forward from old to new
+                @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
             end
         end
     elseif makenew

@@ -366,7 +366,7 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
     if !validate_sparams(mi.sparam_vals)
         # N.B. This works on the caller-side argexprs, (i.e. before the va fixup below)
         spvals_ssa = insert_node!(
-            effect_free_and_nothrow(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
+            removable_if_unused(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
     end
     if def.isva
         nargs_def = Int(def.nargs::Int32)
@@ -383,12 +383,13 @@ function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCod
     return SSASubstitute(mi, argexprs, spvals_ssa, linetable_offset)
 end
 
-function adjust_boundscheck!(inline_compact, idx′, stmt, boundscheck)
+function adjust_boundscheck!(inline_compact::IncrementalCompact, idx′::Int, stmt::Expr, boundscheck::Symbol)
     if boundscheck === :off
-        length(stmt.args) == 0 && push!(stmt.args, false)
+        isempty(stmt.args) && push!(stmt.args, false)
     elseif boundscheck !== :propagate
-        length(stmt.args) == 0 && push!(stmt.args, true)
+        isempty(stmt.args) && push!(stmt.args, true)
     end
+    return nothing
 end
 
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
@@ -398,11 +399,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
 
     ssa_substitute = ir_prepare_inlining!(InsertHere(compact), compact, item.ir, item.mi, inlined_at, argexprs)
 
-    if boundscheck === :default || boundscheck === :propagate
-        if (compact.result[idx][:flag] & IR_FLAG_INBOUNDS) != 0
-            boundscheck = :off
-        end
-    end
+    boundscheck = has_flag(compact.result[idx], IR_FLAG_INBOUNDS) ? :off : boundscheck
+
     # If the iterator already moved on to the next basic block,
     # temporarily re-open in again.
     local return_value
@@ -419,7 +417,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             inline_compact[idx′] = nothing
             insert_node! = InsertBefore(inline_compact, SSAValue(idx′))
             stmt′ = ssa_substitute!(insert_node!, inline_compact[SSAValue(idx′)], stmt′,
-                                    ssa_substitute, boundscheck)
+                                    ssa_substitute)
             if isa(stmt′, ReturnNode)
                 val = stmt′.val
                 return_value = SSAValue(idx′)
@@ -427,7 +425,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 inline_compact.result[idx′][:type] =
                     argextype(val, isa(val, Argument) || isa(val, Expr) ? compact : inline_compact)
                 # Everything legal in value position is guaranteed to be effect free in stmt position
-                inline_compact.result[idx′][:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+                inline_compact.result[idx′][:flag] = IR_FLAGS_REMOVABLE
                 break
             elseif isexpr(stmt′, :boundscheck)
                 adjust_boundscheck!(inline_compact, idx′, stmt′, boundscheck)
@@ -450,7 +448,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             inline_compact[idx′] = nothing
             insert_node! = InsertBefore(inline_compact, SSAValue(idx′))
             stmt′ = ssa_substitute!(insert_node!, inline_compact[SSAValue(idx′)], stmt′,
-                                    ssa_substitute, boundscheck)
+                                    ssa_substitute)
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
                     val = stmt′.val
@@ -461,8 +459,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 end
             elseif isa(stmt′, GotoNode)
                 stmt′ = GotoNode(stmt′.label + bb_offset)
-            elseif isa(stmt′, Expr) && stmt′.head === :enter
-                stmt′ = Expr(:enter, stmt′.args[1]::Int + bb_offset)
+            elseif isa(stmt′, EnterNode)
+                stmt′ = EnterNode(stmt′, stmt′.catch_dest == 0 ? 0 : stmt′.catch_dest + bb_offset)
             elseif isa(stmt′, GotoIfNot)
                 stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
             elseif isa(stmt′, PhiNode)
@@ -659,10 +657,7 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
     end
     finish_cfg_inline!(state)
 
-    boundscheck = :default
-    if boundscheck === :default && propagate_inbounds
-        boundscheck = :propagate
-    end
+    boundscheck = propagate_inbounds ? :propagate : :default
 
     let compact = IncrementalCompact(ir, CFGTransformState!(state.new_cfg_blocks, false))
         # This needs to be a minimum and is more of a size hint
@@ -697,7 +692,7 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                 for aidx in 1:length(argexprs)
                     aexpr = argexprs[aidx]
                     if isa(aexpr, Expr) || isa(aexpr, GlobalRef)
-                        ninst = effect_free_and_nothrow(NewInstruction(aexpr, argextype(aexpr, compact), compact.result[idx][:line]))
+                        ninst = removable_if_unused(NewInstruction(aexpr, argextype(aexpr, compact), compact.result[idx][:line]))
                         argexprs[aidx] = insert_node_here!(compact, ninst)
                     end
                 end
@@ -715,8 +710,8 @@ function batch_inline!(ir::IRCode, todo::Vector{Pair{Int,Any}}, propagate_inboun
                 end
             elseif isa(stmt, GotoNode)
                 compact[idx] = GotoNode(state.bb_rename[stmt.label])
-            elseif isa(stmt, Expr) && stmt.head === :enter
-                compact[idx] = Expr(:enter, state.bb_rename[stmt.args[1]::Int])
+            elseif isa(stmt, EnterNode)
+                compact[idx] = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : state.bb_rename[stmt.catch_dest])
             elseif isa(stmt, GotoIfNot)
                 compact[idx] = GotoIfNot(stmt.cond, state.bb_rename[stmt.dest])
             elseif isa(stmt, PhiNode)
@@ -832,7 +827,7 @@ function compileable_specialization(mi::MethodInstance, effects::Effects,
         end
     end
     add_inlining_backedge!(et, mi) # to the dispatch lookup
-    push!(et.edges, method.sig, mi_invoke) # add_inlining_backedge to the invoke call
+    mi_invoke !== mi && push!(et.edges, method.sig, mi_invoke) # add_inlining_backedge to the invoke call, if that is different
     return InvokeCase(mi_invoke, effects, info)
 end
 
@@ -1001,23 +996,6 @@ function retrieve_ir_for_inlining(::MethodInstance, ir::IRCode, preserve_local_s
     return ir
 end
 
-function flags_for_effects(effects::Effects)
-    flags::UInt32 = 0
-    if is_consistent(effects)
-        flags |= IR_FLAG_CONSISTENT
-    end
-    if is_effect_free(effects)
-        flags |= IR_FLAG_EFFECT_FREE
-    end
-    if is_nothrow(effects)
-        flags |= IR_FLAG_NOTHROW
-    end
-    if is_noub(effects, false)
-        flags |= IR_FLAG_NOUB
-    end
-    return flags
-end
-
 function handle_single_case!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(case),
     isinvoke::Bool = false)
@@ -1032,7 +1010,7 @@ function handle_single_case!(todo::Vector{Pair{Int,Any}},
             stmt.head = :invoke
             pushfirst!(stmt.args, case.invoke)
         end
-        ir[SSAValue(idx)][:flag] |= flags_for_effects(case.effects)
+        add_flag!(ir[SSAValue(idx)], flags_for_effects(case.effects))
     elseif case === nothing
         # Do, well, nothing
     else
@@ -1252,28 +1230,12 @@ end
 # As a matter of convenience, this pass also computes effect-freenes.
 # For primitives, we do that right here. For proper calls, we will
 # discover this when we consult the caches.
-function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecialize(rt), state::InliningState)
-    return check_effect_free!(ir, idx, stmt, rt, optimizer_lattice(state.interp))
-end
-function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecialize(rt), 𝕃ₒ::AbstractLattice)
-    (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(𝕃ₒ, stmt, rt, ir)
-    if consistent
-        ir.stmts[idx][:flag] |= IR_FLAG_CONSISTENT
-    end
-    if effect_free_and_nothrow
-        ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-    elseif nothrow
-        ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
-    end
-    if !isexpr(stmt, :call) && !isexpr(stmt, :invoke)
-        # There is a bit of a subtle point here, which is that some non-call
-        # statements (e.g. PiNode) can be UB:, however, we consider it
-        # illegal to introduce such statements that actually cause UB (for any
-        # input). Ideally that'd be handled at insertion time (TODO), but for
-        # the time being just do that here.
-        ir.stmts[idx][:flag] |= IR_FLAG_NOUB
-    end
-    return effect_free_and_nothrow
+add_inst_flag!(inst::Instruction, ir::IRCode, state::InliningState) =
+    add_inst_flag!(inst, ir, optimizer_lattice(state.interp))
+function add_inst_flag!(inst::Instruction, ir::IRCode, 𝕃ₒ::AbstractLattice)
+    flags = recompute_effects_flags(𝕃ₒ, inst[:stmt], inst[:type], ir)
+    add_flag!(inst, flags)
+    return !iszero(flags & IR_FLAGS_REMOVABLE)
 end
 
 # Handles all analysis and inlining of intrinsics and builtins. In particular,
@@ -1282,11 +1244,11 @@ end
 function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, state::InliningState)
     inst = ir[SSAValue(idx)]
     stmt = inst[:stmt]
-    rt = inst[:type]
     if !(stmt isa Expr)
-        check_effect_free!(ir, idx, stmt, rt, state)
+        add_inst_flag!(inst, ir, state)
         return nothing
     end
+    rt = inst[:type]
     head = stmt.head
     if head !== :call
         if head === :splatnew
@@ -1298,7 +1260,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
             sig === nothing && return nothing
             return stmt, sig
         end
-        check_effect_free!(ir, idx, stmt, rt, state)
+        add_inst_flag!(inst, ir, state)
         return nothing
     end
 
@@ -1316,7 +1278,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
         return nothing
     end
 
-    if check_effect_free!(ir, idx, stmt, rt, state)
+    if add_inst_flag!(inst, ir, state)
         if sig.f === typeassert || ⊑(optimizer_lattice(state.interp), sig.ft, typeof(typeassert))
             # typeassert is a no-op if effect free
             inst[:stmt] = stmt.args[2]
@@ -1324,17 +1286,25 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
         end
     end
 
-    if (sig.f !== Core.invoke && sig.f !== Core.finalizer && sig.f !== modifyfield!) &&
-        is_builtin(optimizer_lattice(state.interp), sig)
-        # No inlining for builtins (other invoke/apply/typeassert/finalizer)
-        return nothing
+    if is_builtin(optimizer_lattice(state.interp), sig)
+        let f = sig.f
+            if (f !== Core.invoke &&
+                f !== Core.finalizer &&
+                f !== modifyfield! &&
+                f !== Core.modifyglobal! &&
+                f !== Core.memoryrefmodify! &&
+                f !== atomic_pointermodify)
+                # No inlining defined for most builtins (just invoke/apply/typeassert/finalizer), so attempt an early exit for them
+                return nothing
+            end
+        end
     end
 
     # Special case inliners for regular functions
     lateres = late_inline_special_case!(ir, idx, stmt, rt, sig, state)
     if isa(lateres, SomeCase)
         inst[:stmt] = lateres.val
-        check_effect_free!(ir, idx, lateres.val, rt, state)
+        add_inst_flag!(inst, ir, state)
         return nothing
     end
 
@@ -1434,7 +1404,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
         fully_covered &= split_fully_covered
     end
 
-    (handled_all_cases && fully_covered) || (joint_effects = Effects(joint_effects; nothrow=false))
+    (handled_all_cases & fully_covered) || (joint_effects = Effects(joint_effects; nothrow=false))
 
     if handled_all_cases && revisit_idx !== nothing
         # we handled everything except one match with unmatched sparams,
@@ -1583,7 +1553,7 @@ function handle_cases!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stmt::
         end
         push!(todo, idx=>UnionSplit(fully_covered, atype, cases))
     else
-        ir[SSAValue(idx)][:flag] |= flags_for_effects(joint_effects)
+        add_flag!(ir[SSAValue(idx)], flags_for_effects(joint_effects))
     end
     return nothing
 end
@@ -1609,7 +1579,7 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
     return nothing
 end
 
-function handle_modifyfield!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyFieldInfo, state::InliningState)
+function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyOpInfo, state::InliningState)
     info = info.info
     info isa MethodResultPure && (info = info.info)
     info isa ConstCallInfo && (info = info.call)
@@ -1682,7 +1652,7 @@ function inline_const_if_inlineable!(inst::Instruction)
         inst[:stmt] = quoted(rt.val)
         return true
     end
-    inst[:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    add_flag!(inst, IR_FLAGS_REMOVABLE)
     return false
 end
 
@@ -1717,8 +1687,8 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         # handle special cased builtins
         if isa(info, OpaqueClosureCallInfo)
             handle_opaque_closure_call!(todo, ir, idx, stmt, info, flag, sig, state)
-        elseif isa(info, ModifyFieldInfo)
-            handle_modifyfield!_call!(ir, idx, stmt, info, state)
+        elseif isa(info, ModifyOpInfo)
+            handle_modifyop!_call!(ir, idx, stmt, info, state)
         elseif isa(info, InvokeCallInfo)
             handle_invoke_call!(todo, ir, idx, stmt, info, flag, sig, state)
         elseif isa(info, FinalizerInfo)
@@ -1787,6 +1757,8 @@ function early_inline_special_case(
             elseif cond.val === false
                 return SomeCase(stmt.args[4])
             end
+        elseif ⊑(optimizer_lattice(state.interp), cond, Bool) && stmt.args[3] === stmt.args[4]
+            return SomeCase(stmt.args[3])
         end
     end
     return nothing
@@ -1807,7 +1779,7 @@ function late_inline_special_case!(
             return SomeCase(quoted(type.val))
         end
         cmp_call = Expr(:call, GlobalRef(Core, :(===)), stmt.args[2], stmt.args[3])
-        cmp_call_ssa = insert_node!(ir, idx, effect_free_and_nothrow(NewInstruction(cmp_call, Bool)))
+        cmp_call_ssa = insert_node!(ir, idx, removable_if_unused(NewInstruction(cmp_call, Bool)))
         not_call = Expr(:call, GlobalRef(Core.Intrinsics, :not_int), cmp_call_ssa)
         return SomeCase(not_call)
     elseif length(argtypes) == 3 && istopfunction(f, :(>:))
@@ -1845,26 +1817,26 @@ struct SSASubstitute
 end
 
 function ssa_substitute!(insert_node!::Inserter, subst_inst::Instruction, @nospecialize(val),
-                         ssa_substitute::SSASubstitute, boundscheck::Symbol)
+                         ssa_substitute::SSASubstitute)
     subst_inst[:line] += ssa_substitute.linetable_offset
-    return ssa_substitute_op!(insert_node!, subst_inst, val, ssa_substitute, boundscheck)
+    return ssa_substitute_op!(insert_node!, subst_inst, val, ssa_substitute)
 end
 
 function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
     ret = insert_node!(
-        effect_free_and_nothrow(NewInstruction(Expr(:call, Core._svec_ref, spvals_ssa, spidx), Any)))
+        removable_if_unused(NewInstruction(Expr(:call, Core._svec_ref, spvals_ssa, spidx), Any)))
     tcheck_not = nothing
     if do_isdefined
         tcheck = insert_node!(
-            effect_free_and_nothrow(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
+            removable_if_unused(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
         tcheck_not = insert_node!(
-            effect_free_and_nothrow(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
+            removable_if_unused(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
     end
     return (ret, tcheck_not)
 end
 
 function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @nospecialize(val),
-                            ssa_substitute::SSASubstitute, boundscheck::Symbol)
+                            ssa_substitute::SSASubstitute)
     if isa(val, Argument)
         return ssa_substitute.arg_replacements[val.n]
     end
@@ -1879,7 +1851,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
                 return quoted(val)
             else
                 flag = subst_inst[:flag]
-                maybe_undef = (flag & IR_FLAG_NOTHROW) == 0 && isa(val, TypeVar)
+                maybe_undef = !has_flag(flag, IR_FLAG_NOTHROW) && isa(val, TypeVar)
                 (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef)
                 if maybe_undef
                     insert_node!(
@@ -1917,10 +1889,10 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
             end
         end
     end
-    isa(val, Union{SSAValue, NewSSAValue}) && return val # avoid infinite loop
+    isa(val, AnySSAValue) && return val # avoid infinite loop
     urs = userefs(val)
     for op in urs
-        op[] = ssa_substitute_op!(insert_node!, subst_inst, op[], ssa_substitute, boundscheck)
+        op[] = ssa_substitute_op!(insert_node!, subst_inst, op[], ssa_substitute)
     end
     return urs[]
 end

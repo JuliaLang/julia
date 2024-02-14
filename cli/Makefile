@@ -20,7 +20,8 @@ ifeq ($(OS),WINNT)
 LOADER_LDFLAGS += -municode -mconsole -nostdlib --disable-auto-import \
                   --disable-runtime-pseudo-reloc -lntdll -lkernel32 -lpsapi
 else ifeq ($(OS),Linux)
-LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed
+# textoff and notext are aliases to the same option which suppress the TEXTREL warning for i686
+LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed -Wl,-z,notext
 else ifeq ($(OS),FreeBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed
 else ifeq ($(OS),Darwin)
