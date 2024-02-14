@@ -9,7 +9,7 @@ Defines new `NewInterpreter <: AbstractInterpreter` whose cache is separated
 from the native code cache, satisfying the minimum interface requirements.
 """
 macro newinterp(InterpName)
-    InterpCacheName = QuoteNode(Symbol(string(InterpName, "Cache")))
+    cache_token = QuoteNode(gensym(string(InterpName, "Cache")))
     InterpName = esc(InterpName)
     C = Core
     CC = Core.Compiler
@@ -32,6 +32,6 @@ macro newinterp(InterpName)
         $CC.OptimizationParams(interp::$InterpName) = interp.opt_params
         $CC.get_inference_world(interp::$InterpName) = interp.world
         $CC.get_inference_cache(interp::$InterpName) = interp.inf_cache
-        $CC.cache_owner(::$InterpName) = $InterpCacheName
+        $CC.cache_owner(::$InterpName) = $cache_token
     end
 end
