@@ -370,13 +370,16 @@ See also: `annotate!`.
 """
 annotations(s::AnnotatedString) = s.annotations
 
-annotations(s::SubString{<:AnnotatedString}) =
-    annotations(s, s.offset+1:s.offset+s.ncodeunits)
+function annotations(s::SubString{<:AnnotatedString})
+    map(((region, annot),) -> (first(region)-s.offset:last(region)-s.offset, annot),
+        annotations(s.string, s.offset+1:s.offset+s.ncodeunits))
+end
 
 function annotations(s::AnnotatedString, pos::UnitRange{<:Integer})
     # TODO optimise
-    filter(label -> !isempty(intersect(pos, first(label))),
-           s.annotations)
+    Tuple{UnitRange{Int64}, Pair{Symbol, Any}}[
+        (max(first(pos), first(region)):min(last(pos), last(region)), annot)
+        for (region, annot) in s.annotations if !isempty(intersect(pos, region))]
 end
 
 annotations(s::AnnotatedString, pos::Integer) = annotations(s, pos:pos)
