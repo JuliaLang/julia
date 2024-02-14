@@ -262,6 +262,30 @@ Splicing function arguments can be addictive. Instead of `[a..., b...]`, use sim
 which already concatenates arrays. [`collect(a)`](@ref) is better than `[a...]`, but since `a`
 is already iterable it is often even better to leave it alone, and not convert it to an array.
 
+## Ensure constructors return an instance of their own type
+
+When a method `T(x)` is called on a type `T`, it is generally expected to return a value of type T.
+Defining a [constructor](@ref man-constructors) that returns an unexpected type can lead to confusing and unpredictable behavior:
+
+```jldoctest
+julia> struct Foo{T}
+           x::T
+       end
+
+julia> Float64(x::Foo) = Foo(Float64(3))
+Float64
+
+julia> Float64(Foo(3))  # Shuold return `Float64`
+Foo{Float64}(3.0)
+
+julia> Foo{Int}(x) = Foo{Float64}(x)
+
+julia> Foo{Int}(3)  # Shuold return `Foo{Int}`
+Foo{Float64}(3.0)
+```
+
+To maintain code clarity and ensure type consistency, always design constructors to return an instance of the type they are supposed to construct.
+
 ## Don't use unnecessary static parameters
 
 A function signature:
