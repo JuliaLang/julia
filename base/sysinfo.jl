@@ -559,6 +559,11 @@ const WINDOWS_VISTA_VER = v"6.0"
 Return `true` if the given `path` has executable permissions.
 
 !!! note
+    This permission may change before the user executes `path`,
+    so it is recommended to execute the file and handle the error if that fails,
+    rather than calling `isexecutable` first.
+
+!!! note
     Prior to Julia 1.6, this did not correctly interrogate filesystem
     ACLs on Windows, therefore it would return `true` for any
     file.  From Julia 1.6 on, it correctly determines whether the
@@ -575,7 +580,17 @@ isexecutable(path::AbstractString) = isexecutable(String(path))
 """
     Sys.isreadable(path::String)
 
-Return `true` if the given `path` has readable permissions.
+Return `true` if the access permissions for the given `path` permitted reading by the current user.
+
+!!! note
+    This permission may change before the user calls `open`,
+    so it is recommended to just call `open` alone and handle the error if that fails,
+    rather than calling `isreadable` first.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+
+See also [`ispath`](@ref).
 """
 function isreadable(path::String)
     # We use `access()` and `R_OK` to determine if a given path is
@@ -588,7 +603,17 @@ isreadable(path::AbstractString) = isreadable(String(path))
 """
     Sys.iswriteable(path::String)
 
-Return `true` if the given `path` has writeable permissions.
+Return `true` if the access permissions for the given `path` permitted writing by the current user.
+
+!!! note
+    This permission may change before the user calls `open`,
+    so it is recommended to just call `open` alone and handle the error if that fails,
+    rather than calling `iswriteable` first.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+
+See also [`ispath`](@ref).
 """
 function iswriteable(path::String)
     # We use `access()` and `W_OK` to determine if a given path is
