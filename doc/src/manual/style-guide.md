@@ -272,8 +272,7 @@ julia> struct Foo{T}
            x::T
        end
 
-julia> Float64(foo::Foo) = Foo(Float64(foo.x))
-Float64
+julia> Base.Float64(foo::Foo) = Foo(Float64(foo.x))
 
 julia> Float64(Foo(3))  # Should return `Float64`
 Foo{Float64}(3.0)
