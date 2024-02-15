@@ -561,6 +561,10 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test !isassigned(B, ind + oneunit(ind))
     # isassigned(a::AbstractArray, i::Union{Integer,CartesianIndex}...)
     @test isassigned(B, Int16.(first.(axes(B)))..., CartesianIndex(1,1))
+    @test !isassigned(B, Bool.(first.(axes(B)))..., CartesianIndex(1,1))
+    @test !isassigned(B, Bool.(first.(axes(B)))...)
+    @test !isassigned(B, true)
+    @test !isassigned(B, false)
 
     # reshape(a::AbstractArray, dims::Dims)
     @test_throws DimensionMismatch reshape(B, (0, 1))
