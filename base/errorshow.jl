@@ -79,20 +79,19 @@ function showerror(io::IO, ex::BoundsError)
 
             # compute which indices are out of bounds
             oobis = map(enumerate(ex.i)) do (j, idx)
+                ax = cartesianindexes ? axes(ex.a, j) : eachindex(ex.a)
                 if idx isa LogicalIndex
                     # true => too many, false => too few, nothing => inbounds
-                    if length(idx) != length(ex.a)
-                        length(idx) > length(ex.a)
+                    if length(idx.mask) != length(ax)
+                        length(idx.mask) > length(ax)
                     end
                 elseif idx isa Number
                     # nothing => inbounds
-                    ax = cartesianindexes ? axes(ex.a, j) : eachindex(ex.a)
                     if clamp(idx, ax) != idx
                         idx
                     end
                 else
                     # tuple with 1 or 2 ranges or vector => out of bounds, nothing => inbounds
-                    ax = cartesianindexes ? axes(ex.a, j) : eachindex(ex.a)
                     _bounds_setdiff(idx, ax)
                 end
             end
@@ -120,7 +119,7 @@ function showerror(io::IO, ex::BoundsError)
                     print(io, "a $(typeof(ex.i[j])) including ")
                     if idx isa Tuple
                         print(io, "$(idx[1])")
-                        length(idx) > 1 && print(io, "and $(idx[2])")
+                        length(idx) > 1 && print(io, " and $(idx[2])")
                         println(io)
                     else
                         println(io, "$(idx)")
