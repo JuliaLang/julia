@@ -327,10 +327,16 @@ This is the generalization of [`isfile`](@ref), [`isdir`](@ref) etc.
 """
 ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
 function ispath(path::String)
-    # We use `access()` and `F_OK` to determine if a given path exists.
-    # `F_OK` comes from `unistd.h`.
+    if contains(path, '\0')
+        throw(ArgumentError(string("embedded NULs are not allowed in C strings: ", repr(path), ")")))
+    end
+    # We use `access()` and `F_OK` to determine if a given path exists. `F_OK` comes from `unistd.h`.
     F_OK = 0x00
-    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, F_OK) == 0
+    r = ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, F_OK)
+    if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
+        uv_error(string("ispath(", repr(path), ")"), r)
+    end
+    return r == 0
 end
 ispath(path::AbstractString) = ispath(String(path))
 
