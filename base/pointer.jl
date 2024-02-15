@@ -54,17 +54,39 @@ See also [`cconvert`](@ref)
 """
 function unsafe_convert end
 
+# convert strings to String etc. to pass as pointers
+cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
+cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
 unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
 unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
 unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
 unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
-# convert strings to String etc. to pass as pointers
-cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = String(s)
-cconvert(::Type{Ptr{Int8}}, s::AbstractString) = String(s)
 
-unsafe_convert(::Type{Ptr{T}}, a::Array{T}) where {T} = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
+cconvert(::Type{<:Ptr}, a::Array) = getfield(a, :ref)
 unsafe_convert(::Type{Ptr{S}}, a::AbstractArray{T}) where {S,T} = convert(Ptr{S}, unsafe_convert(Ptr{T}, a))
 unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("conversion to pointer not defined for $(typeof(a))")
+# TODO: add this deprecation to give a better error:
+# cconvert(::Type{<:Ptr}, a::AbstractArray) = error("conversion to pointer not defined for $(typeof(a))")
+# unsafe_convert(::Type{Ptr{T}}, a::AbstractArray{T}) where {T} = error("missing call to cconvert for call to unsafe_convert for AbstractArray")
+
+cconvert(::Type{<:Ptr}, a::GenericMemory) = a
+unsafe_convert(::Type{Ptr{Cvoid}}, a::GenericMemory{T}) where {T} = getfield(a, :ptr)
+unsafe_convert(::Type{Ptr{T}}, a::GenericMemory) where {T} = convert(Ptr{T}, getfield(a, :ptr))
+
+function unsafe_convert(::Type{Ptr{Cvoid}}, a::GenericMemoryRef{<:Any,T,Core.CPU}) where {T}
+    mem = getfield(a, :mem)
+    offset = getfield(a, :ptr_or_offset)
+    MemT = typeof(mem)
+    arrayelem = datatype_arrayelem(MemT)
+    elsz = datatype_layoutsize(MemT)
+    isboxed = 1; isunion = 2
+    if arrayelem == isunion || elsz == 0
+        offset = UInt(offset) * elsz
+        offset += unsafe_convert(Ptr{Cvoid}, mem)
+    end
+    return offset
+end
+unsafe_convert(::Type{Ptr{T}}, a::GenericMemoryRef) where {T} = convert(Ptr{T}, unsafe_convert(Ptr{Cvoid}, a))
 
 # unsafe pointer to array conversions
 """
@@ -92,9 +114,20 @@ function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
     ccall(:jl_ptr_to_array_1d, Array{T,1},
           (Any, Ptr{Cvoid}, Csize_t, Cint), Array{T,1}, p, d, own)
 end
-unsafe_wrap(Atype::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
+function unsafe_wrap(::Union{Type{GenericMemory{kind,<:Any,Core.CPU}},Type{GenericMemory{kind,T,Core.CPU}}},
+                     p::Ptr{T}, dims::Tuple{Int}; own::Bool = false) where {kind,T}
+    ccall(:jl_ptr_to_genericmemory, Ref{GenericMemory{kind,T,Core.CPU}},
+          (Any, Ptr{Cvoid}, Csize_t, Cint), GenericMemory{kind,T,Core.CPU}, p, dim[1], own)
+end
+function unsafe_wrap(::Union{Type{GenericMemory{kind,<:Any,Core.CPU}},Type{GenericMemory{kind,T,Core.CPU}}},
+                     p::Ptr{T}, d::Integer; own::Bool = false) where {kind,T}
+    ccall(:jl_ptr_to_genericmemory, Ref{GenericMemory{kind,T,Core.CPU}},
+          (Any, Ptr{Cvoid}, Csize_t, Cint), GenericMemory{kind,T,Core.CPU}, p, d, own)
+end
+unsafe_wrap(Atype::Union{Type{Array},Type{Array{T}},Type{Array{T,N}},Type{GenericMemory{kind,<:Any,Core.CPU}},Type{GenericMemory{kind,T,Core.CPU}}} where {kind},
             p::Ptr{T}, dims::NTuple{N,<:Integer}; own::Bool = false) where {T,N} =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own = own)
+
 
 """
     unsafe_load(p::Ptr{T}, i::Integer=1)

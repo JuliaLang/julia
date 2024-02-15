@@ -119,6 +119,7 @@ julia> A
 """
 conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 conj!(x::AbstractArray{<:Real}) = x
+conj!(A::AbstractArray) = (foreach(conj!, A); A)
 
 """
     conj(A::AbstractArray)
@@ -353,7 +354,7 @@ julia> repeat([1, 2, 3], 2, 3)
 ```
 """
 function repeat(A::AbstractArray, counts...)
-    return _RepeatInnerOuter.repeat(A, outer=counts)
+    return repeat(A, outer=counts)
 end
 
 """

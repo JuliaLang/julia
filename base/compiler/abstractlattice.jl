@@ -260,7 +260,7 @@ end
 Appropriately converts inferred type of a return value `rt` to such a type
 that we know we can store in the cache and is valid and good inter-procedurally,
 E.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
-or the other cachable lattice element.
+or the other cacheable lattice element.
 
 External lattice `𝕃ᵢ::ExternalLattice` may overload:
 - `widenreturn(𝕃ᵢ::ExternalLattice, @nospecialize(rt), info::BestguessInfo)`
@@ -285,9 +285,12 @@ has_extended_unionsplit(::AnyMustAliasesLattice) = true
 has_extended_unionsplit(::JLTypeLattice) = false
 
 # Curried versions
-⊑(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊑(lattice, a, b)
-⊏(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊏(lattice, a, b)
-⋤(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⋤(lattice, a, b)
+⊑(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊑(𝕃, a, b)
+⊏(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊏(𝕃, a, b)
+⋤(𝕃::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⋤(𝕃, a, b)
+partialorder(𝕃::AbstractLattice) = ⊑(𝕃)
+strictpartialorder(𝕃::AbstractLattice) = ⊏(𝕃)
+strictneqpartialorder(𝕃::AbstractLattice) = ⋤(𝕃)
 
 # Fallbacks for external packages using these methods
 const fallback_lattice = InferenceLattice(BaseInferenceLattice.instance)

@@ -283,9 +283,11 @@ end
 
 # test all rand APIs
 for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
+    realrng = rng == [] ? default_rng() : only(rng)
     ftypes = [Float16, Float32, Float64, FakeFloat64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
-    types = [Bool, Char, BigFloat, Tuple{Bool, Tuple{Int, Char}}, Base.BitInteger_types..., cftypes...]
+    types = [Bool, Char, BigFloat, Tuple{Bool, Tuple{Int, Char}}, Pair{Int8, UInt32},
+             Base.BitInteger_types..., cftypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
 
@@ -296,6 +298,8 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
                    randset                          => Int,
                    GenericSet(randset)              => Int,
                    randdict                         => Pair{Int,Int},
+                   keys(randdict)                   => Int,
+                   values(randdict)                 => Int,
                    GenericDict(randdict)            => Pair{Int,Int},
                    1:100                            => Int,
                    rand(Int, 100)                   => Int,
@@ -318,42 +322,47 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
         @test size(f2) == (5,)
         @test size(f3) == size(f4) == (2, 3)
         for T in functypes[f]
-            a0 = f(rng..., T)         ::T
-            a1 = f(rng..., T, 5)      ::Vector{T}
-            a2 = f(rng..., T, 2, 3)   ::Array{T, 2}
-            a3 = f(rng..., T, b2, u3) ::Array{T, 2}
-            a4 = f(rng..., T, (2, 3)) ::Array{T, 2}
-            if T <: Number
-                @test size(a0) == ()
-            end
-            @test size(a1) == (5,)
-            @test size(a2) == size(a3) == size(a4) == (2, 3)
-            if T <: AbstractFloat && f === rand
-                for a in T[a0, a1..., a2..., a3..., a4...]
-                    @test 0.0 <= a < 1.0
+            tts = f == rand ? (T, Sampler(realrng, T, Val(1)), Sampler(realrng, T, Val(Inf))) : (T,)
+            for tt in tts
+                a0 = f(rng..., tt)         ::T
+                a1 = f(rng..., tt, 5)      ::Vector{T}
+                a2 = f(rng..., tt, 2, 3)   ::Array{T, 2}
+                a3 = f(rng..., tt, b2, u3) ::Array{T, 2}
+                a4 = f(rng..., tt, (2, 3)) ::Array{T, 2}
+                if T <: Number
+                    @test size(a0) == ()
+                end
+                @test size(a1) == (5,)
+                @test size(a2) == size(a3) == size(a4) == (2, 3)
+                if T <: AbstractFloat && f === rand
+                    for a in T[a0, a1..., a2..., a3..., a4...]
+                        @test 0.0 <= a < 1.0
+                    end
                 end
             end
         end
     end
     for (C, T) in collections
-        a0  = rand(rng..., C)                                                       ::T
-        a1  = rand(rng..., C, 5)                                                    ::Vector{T}
-        a2  = rand(rng..., C, 2, 3)                                                 ::Array{T, 2}
-        a3  = rand(rng..., C, (2, 3))                                               ::Array{T, 2}
-        a4  = rand(rng..., C, b2, u3)                                               ::Array{T, 2}
-        a5  = rand!(rng..., Array{T}(undef, 5), C)                          ::Vector{T}
-        a6  = rand!(rng..., Array{T}(undef, 2, 3), C)                       ::Array{T, 2}
-        a7  = rand!(rng..., GenericArray{T}(undef, 5), C)                   ::GenericArray{T, 1}
-        a8  = rand!(rng..., GenericArray{T}(undef, 2, 3), C)                ::GenericArray{T, 2}
-        a9  = rand!(rng..., OffsetArray(Array{T}(undef, 5), 9), C)          ::OffsetArray{T, 1}
-        a10 = rand!(rng..., OffsetArray(Array{T}(undef, 2, 3), (-2, 4)), C) ::OffsetArray{T, 2}
-        @test size(a1) == (5,)
-        @test size(a2) == size(a3) == (2, 3)
-        for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8..., a9..., a10...]
-            if C isa Type
-                @test a isa C
-            else
-                @test a in C
+        for cc = (C, Sampler(realrng, C, Val(1)), Sampler(realrng, C, Val(Inf)))
+            a0  = rand(rng..., cc)                                               ::T
+            a1  = rand(rng..., cc, 5)                                            ::Vector{T}
+            a2  = rand(rng..., cc, 2, 3)                                         ::Array{T, 2}
+            a3  = rand(rng..., cc, (2, 3))                                       ::Array{T, 2}
+            a4  = rand(rng..., cc, b2, u3)                                       ::Array{T, 2}
+            a5  = rand!(rng..., Array{T}(undef, 5), cc)                          ::Vector{T}
+            a6  = rand!(rng..., Array{T}(undef, 2, 3), cc)                       ::Array{T, 2}
+            a7  = rand!(rng..., GenericArray{T}(undef, 5), cc)                   ::GenericArray{T, 1}
+            a8  = rand!(rng..., GenericArray{T}(undef, 2, 3), cc)                ::GenericArray{T, 2}
+            a9  = rand!(rng..., OffsetArray(Array{T}(undef, 5), 9), cc)          ::OffsetArray{T, 1}
+            a10 = rand!(rng..., OffsetArray(Array{T}(undef, 2, 3), (-2, 4)), cc) ::OffsetArray{T, 2}
+            @test size(a1) == (5,)
+            @test size(a2) == size(a3) == (2, 3)
+            for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8..., a9..., a10...]
+                if C isa Type
+                    @test a isa C
+                else
+                    @test a in C
+                end
             end
         end
     end
@@ -365,7 +374,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
     end
     for f! in [rand!, randn!, randexp!]
         for T in functypes[f!]
-            (T <: Tuple) && continue
+            (T <: Tuple || T <: Pair) && continue
             X = T == Bool ? T[0,1] : T[0,1,2]
             for A in (Vector{T}(undef, 5),
                       Matrix{T}(undef, 2, 3),
@@ -503,6 +512,7 @@ end
     @test shuffle!(mta,Vector(1:10)) == shuffle!(mtb,Vector(1:10))
     @test shuffle(mta,Vector(2:11)) == shuffle(mtb,2:11)
     @test shuffle!(mta, rand(mta, 2, 3)) == shuffle!(mtb, rand(mtb, 2, 3))
+    @test shuffle!(mta, rand(mta, Bool, 2, 3)) == shuffle!(mtb, rand(mtb, Bool, 2, 3))
     @test shuffle(mta, rand(mta, 2, 3)) == shuffle(mtb, rand(mtb, 2, 3))
 
     @test randperm(mta,10) == randperm(mtb,10)
@@ -647,6 +657,7 @@ end
         # test that the following is not an error (#16925)
         @test Random.seed!(m..., typemax(UInt)) === m2
         @test Random.seed!(m..., typemax(UInt128)) === m2
+        @test Random.seed!(m..., "a random seed") === m2
     end
 end
 
@@ -701,7 +712,7 @@ end
 end
 
 @testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister,Xoshiro)
-    seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), rand(UInt128, 3)...]
+    seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), randstring(), randstring(), rand(UInt128, 3)...]
     if RNG == Xoshiro
         push!(seeds, rand(UInt64, rand(1:4)))
     end
@@ -714,17 +725,17 @@ end
 end
 
 @testset "Random.seed!(seed) sets Random.GLOBAL_SEED" begin
-    seeds = Any[0, rand(UInt128), rand(UInt64, 4)]
+    seeds = Any[0, rand(UInt128), rand(UInt64, 4), randstring(20)]
 
     for seed=seeds
         Random.seed!(seed)
-        @test Random.GLOBAL_SEED === seed
+        @test Random.get_tls_seed() == default_rng()
     end
 
     for ii = 1:8
         iseven(ii) ? Random.seed!(nothing) : Random.seed!()
-        push!(seeds, Random.GLOBAL_SEED)
-        @test Random.GLOBAL_SEED isa UInt128 # could change, but must not be nothing
+        push!(seeds, copy(Random.get_tls_seed()))
+        @test Random.get_tls_seed() isa Xoshiro # could change, but must not be nothing
     end
     @test allunique(seeds)
 end
@@ -788,6 +799,14 @@ end
         @test rand((x, 2, 3, 4, 5)) ∈ 1:5
         @test rand((x, 2, 3, 4, 6)) ∈ 1:6
     end
+end
+
+@testset "rand(::Type{<:Tuple})" begin
+    @test_throws ArgumentError rand(Tuple)
+    @test rand(Tuple{}) == ()
+    @inferred rand(Tuple{Int32,Int64,Float64})
+    @inferred rand(NTuple{20,Int})
+    @test_throws TypeError rand(Tuple{1:2,3:4})
 end
 
 @testset "GLOBAL_RNG" begin
@@ -923,6 +942,15 @@ end
         @test string(m) == "MersenneTwister(-3)"
         Random.seed!(m, typemin(Int8))
         @test string(m) == "MersenneTwister(-128)"
+
+        # string seeds
+        Random.seed!(m, "seed 1")
+        @test string(m) == "MersenneTwister(\"seed 1\")"
+        x = rand(m)
+        @test x == rand(MersenneTwister("seed 1"))
+        @test string(m) == """MersenneTwister("seed 1", (0, 1002, 0, 1))"""
+        # test that MersenneTwister's fancy constructors accept string seeds
+        @test MersenneTwister("seed 1", (0, 1002, 0, 1)) == m
     end
 
     @testset "RandomDevice" begin
@@ -1179,4 +1207,32 @@ end
     hash32 = Random.hash_seed(seed32)
     @test Random.hash_seed(map(UInt64, seed32)) == hash32
     @test hash32 ∉ keys(vseeds)
+
+    seed_str = randstring()
+    seed_gstr = GenericString(seed_str)
+    @test Random.hash_seed(seed_str) == Random.hash_seed(seed_gstr)
+    string_seeds = Set{Vector{UInt8}}()
+    for ch = 'A':'z'
+        vseed = Random.hash_seed(string(ch))
+        @test vseed ∉ keys(vseeds)
+        @test vseed ∉ string_seeds
+        push!(string_seeds, vseed)
+    end
+end
+
+@testset "rand(::Type{<:Pair})" begin
+    @test rand(Pair{Int, Int}) isa Pair{Int, Int}
+    @test rand(Pair{Int, Float64}) isa Pair{Int, Float64}
+    @test rand(Pair{Int, Float64}, 3) isa Array{Pair{Int, Float64}}
+
+    # test that making an array out of a sampler works
+    # (i.e. that gentype(sp) is correct)
+    sp = Random.Sampler(AbstractRNG, Pair{Bool, Char})
+    xs = rand(sp, 3)
+    @test xs isa Vector{Pair{Bool, Char}}
+    @test length(xs) == 3
+end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Random))
 end

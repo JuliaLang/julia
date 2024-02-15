@@ -103,12 +103,12 @@ end
         logmsg = (function() @info msg x=y end,
                   function() @info msg x=y z=1+1 end)[i]
         @test_logs (Error, Test.Ignored(), Test.Ignored(), :logevent_error) catch_exceptions=true logmsg()
-        @test_throws UndefVarError(:msg) collect_test_logs(logmsg)
-        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:msg)
+        @test_throws UndefVarError(:msg, :local) collect_test_logs(logmsg)
+        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:msg, :local)
         msg = "the msg"
         @test_logs (Error, Test.Ignored(), Test.Ignored(), :logevent_error) catch_exceptions=true logmsg()
-        @test_throws UndefVarError(:y) collect_test_logs(logmsg)
-        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:y)
+        @test_throws UndefVarError(:y, :local) collect_test_logs(logmsg)
+        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:y, :local)
         y = "the y"
         @test_logs (Info,"the msg") logmsg()
         @test only(collect_test_logs(logmsg)[1]).kwargs[:x] === "the y"

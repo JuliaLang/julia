@@ -171,16 +171,34 @@ end
 
 function Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {T<:Tuple, RNG<:AbstractRNG}
     tail_sp_ = Sampler(RNG, Tuple{Base.tail(fieldtypes(T))...}, n)
-    SamplerTag{T}((Sampler(RNG, fieldtype(T, 1), n), tail_sp_.data...))
+    SamplerTag{Ref{T}}((Sampler(RNG, fieldtype(T, 1), n), tail_sp_.data...))
+    # Ref so that the gentype is `T` in SamplerTag's constructor
 end
 
 function Sampler(::Type{RNG}, ::Type{Tuple{Vararg{T, N}}}, n::Repetition) where {T, N, RNG<:AbstractRNG}
-    SamplerTag{Tuple{Vararg{T, N}}}((Sampler(RNG, T, n),))
+    if N > 0
+        SamplerTag{Ref{Tuple{Vararg{T, N}}}}((Sampler(RNG, T, n),))
+    else
+        SamplerTag{Ref{Tuple{}}}(())
+    end
 end
 
-function rand(rng::AbstractRNG, sp::SamplerTag{T}) where T<:Tuple
+function rand(rng::AbstractRNG, sp::SamplerTag{Ref{T}}) where T<:Tuple
     ntuple(i -> rand(rng, sp.data[min(i, length(sp.data))]), Val{fieldcount(T)}())::T
 end
+
+### random pairs
+
+function Sampler(::Type{RNG}, ::Type{Pair{A, B}}, n::Repetition) where {RNG<:AbstractRNG, A, B}
+    sp1 = Sampler(RNG, A, n)
+    sp2 = A === B ? sp1 : Sampler(RNG, B, n)
+    SamplerTag{Ref{Pair{A,B}}}(sp1 => sp2) # Ref so that the gentype is Pair{A, B}
+                                           # in SamplerTag's constructor
+end
+
+rand(rng::AbstractRNG, sp::SamplerTag{<:Ref{<:Pair}}) =
+    rand(rng, sp.data.first) => rand(rng, sp.data.second)
+
 
 ## Generate random integer within a range
 
@@ -276,7 +294,7 @@ rem_knuth(a::T, b::T) where {T<:Unsigned} = b != 0 ? a % b : a
 # maximum multiple of k <= sup decremented by one,
 # that is 0xFFFF...FFFF if k = (typemax(T) - typemin(T)) + 1 and sup == typemax(T) - 1
 # with intentional underflow
-# see http://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
+# see https://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
 
 # sup == 0 means typemax(T) + 1
 maxmultiple(k::T, sup::T=zero(T)) where {T<:Unsigned} =
@@ -451,6 +469,12 @@ function rand(rng::AbstractRNG, sp::SamplerSimple{<:Dict,<:Sampler})
         Base.isslotfilled(sp[], i) && @inbounds return (sp[].keys[i] => sp[].vals[i])
     end
 end
+
+rand(rng::AbstractRNG, sp::SamplerTrivial{<:Base.KeySet{<:Any,<:Dict}}) =
+    rand(rng, sp[].dict).first
+
+rand(rng::AbstractRNG, sp::SamplerTrivial{<:Base.ValueIterator{<:Dict}}) =
+    rand(rng, sp[].dict).second
 
 ## random values from Set
 

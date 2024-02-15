@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Random/docs/src/index.md"
+```
+
 # Random Numbers
 
 ```@meta
@@ -215,7 +219,7 @@ and that we *always* want to build an alias table, regardless of the number of v
 Random.eltype(::Type{<:DiscreteDistribution}) = Int
 
 function Random.Sampler(::Type{<:AbstractRNG}, distribution::DiscreteDistribution, ::Repetition)
-    SamplerSimple(disribution, make_alias_table(distribution.probabilities))
+    SamplerSimple(distribution, make_alias_table(distribution.probabilities))
 end
 ```
 should be defined to return a sampler with pre-computed data, then

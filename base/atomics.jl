@@ -80,6 +80,13 @@ end
 
 Atomic() = Atomic{Int}()
 
+const LOCK_PROFILING = Atomic{Int}(0)
+lock_profiling(state::Bool) = state ? atomic_add!(LOCK_PROFILING, 1) : atomic_sub!(LOCK_PROFILING, 1)
+lock_profiling() = LOCK_PROFILING[] > 0
+
+const LOCK_CONFLICT_COUNT = Atomic{Int}(0);
+inc_lock_conflict_count() = atomic_add!(LOCK_CONFLICT_COUNT, 1)
+
 """
     Threads.atomic_cas!(x::Atomic{T}, cmp::T, newval::T) where T
 

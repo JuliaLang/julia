@@ -11,6 +11,10 @@ using Dates: Date, Day
 # issue #4718
 @test collect(Iterators.filter(x->x[1], zip([true, false, true, false],"abcd"))) == [(true,'a'),(true,'c')]
 
+# issue #45085
+@test_throws ArgumentError Iterators.reverse(zip("abc", "abcd"))
+@test_throws ArgumentError Iterators.reverse(zip("abc", Iterators.cycle("ab")))
+
 let z = zip(1:2)
     @test size(z) == (2,)
     @test collect(z) == [(1,), (2,)]
@@ -248,6 +252,22 @@ let i = 0
     end
     @test Base.isdone(cycle(0:3)) === Base.isdone(0:3) === missing
     @test !Base.isdone(cycle(0:3), 1)
+end
+
+@testset "cycle(iter, n)"  begin
+    @test collect(cycle(0:3, 2)) == [0, 1, 2, 3, 0, 1, 2, 3]
+    @test collect(cycle(Iterators.filter(iseven, 1:4), 2)) == [2, 4, 2, 4]
+    @test collect(take(cycle(countfrom(11), 3), 4)) == 11:14
+
+    @test isempty(cycle(1:0)) == isempty(cycle(1:0, 3)) == true
+    @test isempty(cycle(1:5, 0))
+    @test isempty(cycle(Iterators.filter(iseven, 1:4), 0))
+
+    @test eltype(cycle(0:3, 2)) === Int
+    @test Base.IteratorEltype(cycle(0:3, 2)) == Base.HasEltype()
+
+    Base.haslength(cycle(0:3, 2)) == false  # but not sure we should test these
+    Base.IteratorSize(cycle(0:3, 2)) == Base.SizeUnknown()
 end
 
 # repeated
@@ -849,8 +869,10 @@ end
         v, s = iterate(z)
         @test Base.isdone(z, s)
     end
-    # Stateful wrapping mutable iterators of known length (#43245)
-    @test length(Iterators.Stateful(Iterators.Stateful(1:5))) == 5
+    # Stateful does not define length
+    let s = Iterators.Stateful(Iterators.Stateful(1:5))
+        @test_throws MethodError length(s)
+    end
 end
 
 @testset "pair for Svec" begin
@@ -862,6 +884,10 @@ end
 @testset "inference for large zip #26765" begin
     x = zip(1:2, ["a", "b"], (1.0, 2.0), Base.OneTo(2), Iterators.repeated("a"), 1.0:0.2:2.0,
             (1 for i in 1:2), Iterators.Stateful(["a", "b", "c"]), (1.0 for i in 1:2, j in 1:3))
+    @test Base.IteratorSize(x) isa Base.SizeUnknown
+    x = zip(1:2, ["a", "b"], (1.0, 2.0), Base.OneTo(2), Iterators.repeated("a"), 1.0:0.2:2.0,
+            (1 for i in 1:2), Iterators.cycle(Iterators.Stateful(["a", "b", "c"])), (1.0 for i in 1:2, j in 1:3))
+    @test Base.IteratorSize(x) isa Base.HasLength
     @test @inferred(length(x)) == 2
     z = Iterators.filter(x -> x[1] >= 1, x)
     @test @inferred(eltype(z)) <: Tuple{Int,String,Float64,Int,String,Float64,Any,String,Any}
@@ -870,20 +896,20 @@ end
 end
 
 @testset "Stateful fix #30643" begin
-    @test Base.IteratorSize(1:10) isa Base.HasShape
+    @test Base.IteratorSize(1:10) isa Base.HasShape{1}
     a = Iterators.Stateful(1:10)
-    @test Base.IteratorSize(a) isa Base.HasLength
-    @test length(a) == 10
+    @test Base.IteratorSize(a) isa Base.SizeUnknown
+    @test !Base.isdone(a)
     @test length(collect(a)) == 10
-    @test length(a) == 0
+    @test Base.isdone(a)
     b = Iterators.Stateful(Iterators.take(1:10,3))
-    @test Base.IteratorSize(b) isa Base.HasLength
-    @test length(b) == 3
+    @test Base.IteratorSize(b) isa Base.SizeUnknown
+    @test !Base.isdone(b)
     @test length(collect(b)) == 3
-    @test length(b) == 0
+    @test Base.isdone(b)
     c = Iterators.Stateful(Iterators.countfrom(1))
     @test Base.IteratorSize(c) isa Base.IsInfinite
-    @test length(Iterators.take(c,3)) == 3
+    @test !Base.isdone(Iterators.take(c,3))
     @test length(collect(Iterators.take(c,3))) == 3
     d = Iterators.Stateful(Iterators.filter(isodd,1:10))
     @test Base.IteratorSize(d) isa Base.SizeUnknown
@@ -1000,4 +1026,26 @@ end
         v = z
     end
     @test v == ()
+end
+
+@testset "collect partition substring" begin
+    @test collect(Iterators.partition(lstrip("01111", '0'), 2)) == ["11", "11"]
+end
+
+let itr = (i for i in 1:9) # Base.eltype == Any
+    @test first(Iterators.partition(itr, 3)) isa Vector{Any}
+    @test collect(zip(repeat([Iterators.Stateful(itr)], 3)...)) == [(1, 2, 3), (4, 5, 6), (7, 8, 9)]
+end
+
+@testset "no single-argument map methods" begin
+    maps = (tuple, Returns(nothing), (() -> nothing))
+    mappers = (Iterators.map, map, foreach)
+    for f ∈ maps, m ∈ mappers
+        @test !applicable(m, f)
+        @test !hasmethod(m, Tuple{typeof(f)})
+    end
+end
+
+@testset "Iterators docstrings" begin
+    @test isempty(Docs.undocumented_names(Iterators))
 end

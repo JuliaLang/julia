@@ -6,10 +6,14 @@
 Base.stdout
 Base.stderr
 Base.stdin
+Base.read(::AbstractString)
+Base.write(::AbstractString, ::Any)
 Base.open
 Base.IOStream
 Base.IOBuffer
 Base.take!(::Base.GenericIOBuffer)
+Base.Pipe
+Base.link_pipe!
 Base.fdio
 Base.flush
 Base.close
