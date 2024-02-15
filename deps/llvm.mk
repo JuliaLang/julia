@@ -56,12 +56,15 @@ endif
 ifeq ($(BUILD_LIBCXX), 1)
 LLVM_ENABLE_RUNTIMES := $(LLVM_ENABLE_RUNTIMES);libcxx;libcxxabi
 endif
+ifeq ($(BUILD_LLD), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lld
+endif
 
 
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
 # Figure out which targets to build
-LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly;BPF
+LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly;BPF;AVR
 LLVM_EXPERIMENTAL_TARGETS :=
 
 LLVM_CFLAGS :=
@@ -98,7 +101,7 @@ endif
 LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_INCLUDE_UTILS=ON -DLLVM_INSTALL_UTILS=ON
-LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
+LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
 endif # LLVM_ASSERTIONS
@@ -117,7 +120,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_LINK_LLVM_DYLIB:BOOL=ON
 endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
-LLVM_CMAKE += -DLLVM_USE_INTEL_JITEVENTS:BOOL=ON
+LLVM_CMAKE += -DLLVM_USE_INTEL_JITEVENTS:BOOL=ON -DITTAPI_SOURCE_DIR=$(SRCCACHE)/$(ITTAPI_SRC_DIR)
 endif # USE_INTEL_JITEVENTS
 
 ifeq ($(USE_OPROFILE_JITEVENTS), 1)
@@ -130,7 +133,7 @@ endif # USE_PERF_JITEVENTS
 
 ifeq ($(BUILD_LLDB),1)
 ifeq ($(USECLANG),0)
-LLVM_CXXFLAGS += -std=c++0x
+LLVM_CXXFLAGS += -std=c++17
 endif # USECLANG
 ifeq ($(LLDB_DISABLE_PYTHON),1)
 LLVM_CXXFLAGS += -DLLDB_DISABLE_PYTHON
@@ -147,7 +150,7 @@ endif
 ifeq ($(LLVM_SANITIZE),1)
 ifeq ($(SANITIZE_MEMORY),1)
 LLVM_CFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
-LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
+LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins -rpath $(build_shlibdir)
 LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
 endif
@@ -207,11 +210,14 @@ LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
 LLVM_CMAKE += -DLLVM_VERSION_SUFFIX:STRING="jl"
 LLVM_CMAKE += -DLLVM_SHLIB_SYMBOL_VERSION:STRING="JL_LLVM_$(LLVM_VER_SHORT)"
 
+# Change the default bug report URL to Julia's issue tracker
+LLVM_CMAKE += -DBUG_REPORT_URL="https://github.com/julialang/julia"
+
 # Apply version-specific LLVM patches sequentially
 LLVM_PATCH_PREV :=
 define LLVM_PATCH
 $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
-	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm && patch -p1 < $$(SRCDIR)/patches/$1.patch
+	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm && patch -p1 -f < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 # declare that applying any patch must re-run the compile step
 $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
@@ -220,12 +226,14 @@ endef
 
 define LLVM_PROJ_PATCH
 $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
-	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
+	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR) && patch -p1 -f < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 # declare that applying any patch must re-run the compile step
 $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
+
+$(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
 
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
@@ -235,6 +243,21 @@ endif
 
 # declare that all patches must be applied before running ./configure
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
+
+# Apply Julia's specific patches if requested, e.g. if not using Julia's fork of LLVM.
+ifeq ($(LLVM_APPLY_JULIA_PATCHES), 1)
+# Download Julia's patchset.
+$(BUILDDIR)/julia-patches.patch:
+	$(JLDOWNLOAD) $@ $(LLVM_JULIA_DIFF_GITHUB_REPO)/compare/$(LLVM_BASE_REF)...$(LLVM_JULIA_REF).diff
+
+# Apply the patch.
+$(SRCCACHE)/$(LLVM_SRC_DIR)/julia-patches.patch-applied: $(BUILDDIR)/julia-patches.patch $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
+	cd $(SRCCACHE)/$(LLVM_SRC_DIR) && patch -p1 -f < $(realpath $<)
+	echo 1 > $@
+
+# Require application of Julia's patchset before configuring LLVM.
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(SRCCACHE)/$(LLVM_SRC_DIR)/julia-patches.patch-applied
+endif
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
@@ -283,6 +306,11 @@ configure-llvm: $(LLVM_BUILDDIR_withtype)/build-configured
 compile-llvm: $(LLVM_BUILDDIR_withtype)/build-compiled
 fastcheck-llvm: #none
 check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
+
+ifeq ($(USE_INTEL_JITEVENTS),1)
+$(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/source-extracted
+endif
+
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
 
 else # USE_BINARYBUILDER_LLVM
@@ -305,10 +333,11 @@ LLVM_TOOLS_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ)
 endif
 
 $(eval $(call bb-install,llvm,LLVM,false,true))
-$(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,lld,LLD,false,true))
+$(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
 
-install-lld install-clang install-llvm-tools: install-llvm
-
 endif # USE_BINARYBUILDER_LLVM
+
+get-lld: get-llvm
+install-lld install-clang install-llvm-tools: install-llvm

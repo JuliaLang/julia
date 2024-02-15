@@ -2,7 +2,7 @@
 
 # Core definitions for interacting with the libuv library from Julia
 
-include("../uv_constants.jl")
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "uv_constants.jl"))  # include($BUILDROOT/base/uv_constants.jl)
 
 # convert UV handle data to julia object, checking for null
 function uv_sizeof_handle(handle)
@@ -82,7 +82,13 @@ struct IOError <: Exception
     IOError(msg::AbstractString, code::Integer) = new(msg, code)
 end
 
-showerror(io::IO, e::IOError) = print(io, "IOError: ", e.msg)
+function showerror(io::IO, e::IOError)
+    print(io, "IOError: ", e.msg)
+    if e.code == UV_ENOENT && '~' in e.msg
+        print(io, "\nMany shells expand '~' to the home directory in unquoted strings. To replicate this behavior, call",
+                  " `expanduser` to expand the '~' character to the user’s home directory.")
+    end
+end
 
 function _UVError(pfx::AbstractString, code::Integer)
     code = Int32(code)
@@ -102,6 +108,18 @@ uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix, c)
 ## event loop ##
 
 eventloop() = ccall(:jl_global_event_loop, Ptr{Cvoid}, ())
+
+function uv_unref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_unref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
+end
+
+function uv_ref(h::Ptr{Cvoid})
+    iolock_begin()
+    ccall(:uv_ref, Cvoid, (Ptr{Cvoid},), h)
+    iolock_end()
+end
 
 function process_events()
     return ccall(:jl_process_events, Int32, ())

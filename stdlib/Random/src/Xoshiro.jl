@@ -4,13 +4,13 @@
 # Lots of implementation is shared with TaskLocalRNG
 
 """
-    Xoshiro(seed)
+    Xoshiro(seed::Union{Integer, AbstractString})
     Xoshiro()
 
 Xoshiro256++ is a fast pseudorandom number generator described by David Blackman and
 Sebastiano Vigna in "Scrambled Linear Pseudorandom Number Generators",
 ACM Trans. Math. Softw., 2021. Reference implementation is available
-at http://prng.di.unimi.it
+at https://prng.di.unimi.it
 
 Apart from the high speed, Xoshiro has a small memory footprint, making it suitable for
 applications where many different random states need to be held for long time.
@@ -20,6 +20,12 @@ from the parent, and uses SIMD to generate in parallel (i.e. the bulk stream con
 multiple interleaved xoshiro instances).
 The virtual PRNGs are discarded once the bulk request has been serviced (and should cause
 no heap allocations).
+
+If no seed is provided, a randomly generated one is created (using entropy from the system).
+See the [`seed!`](@ref) function for reseeding an already existing `Xoshiro` object.
+
+!!! compat "Julia 1.11"
+    Passing a negative integer seed requires at least Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -48,47 +54,130 @@ mutable struct Xoshiro <: AbstractRNG
     s1::UInt64
     s2::UInt64
     s3::UInt64
+    s4::UInt64 # internal splitmix state
 
-    Xoshiro(s0::Integer, s1::Integer, s2::Integer, s3::Integer) = new(s0, s1, s2, s3)
+    Xoshiro(s0::Integer, s1::Integer, s2::Integer, s3::Integer, s4::Integer) = new(s0, s1, s2, s3, s4)
+    Xoshiro(s0::Integer, s1::Integer, s2::Integer, s3::Integer) = initstate!(new(), map(UInt64, (s0, s1, s2, s3)))
     Xoshiro(seed=nothing) = seed!(new(), seed)
 end
 
-function setstate!(x::Xoshiro, s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64)
+@inline function setstate!(x::Xoshiro, (s0, s1, s2, s3, s4))
     x.s0 = s0
     x.s1 = s1
     x.s2 = s2
     x.s3 = s3
+    if s4 !== nothing
+        x.s4 = s4
+    end
     x
 end
 
-copy(rng::Xoshiro) = Xoshiro(rng.s0, rng.s1, rng.s2, rng.s3)
-
-function copy!(dst::Xoshiro, src::Xoshiro)
-    dst.s0, dst.s1, dst.s2, dst.s3 = src.s0, src.s1, src.s2, src.s3
-    dst
-end
-
-function ==(a::Xoshiro, b::Xoshiro)
-    a.s0 == b.s0 && a.s1 == b.s1 && a.s2 == b.s2 && a.s3 == b.s3
-end
+@inline getstate(x::Xoshiro) = (x.s0, x.s1, x.s2, x.s3, x.s4)
 
 rng_native_52(::Xoshiro) = UInt64
 
-@inline function rand(rng::Xoshiro, ::SamplerType{UInt64})
-    s0, s1, s2, s3 = rng.s0, rng.s1, rng.s2, rng.s3
-    tmp = s0 + s3
-    res = ((tmp << 23) | (tmp >> 41)) + s0
-    t = s1 << 17
-    s2 = xor(s2, s0)
-    s3 = xor(s3, s1)
-    s1 = xor(s1, s2)
-    s0 = xor(s0, s3)
-    s2 = xor(s2, t)
-    s3 = s3 << 45 | s3 >> 19
-    rng.s0, rng.s1, rng.s2, rng.s3 = s0, s1, s2, s3
-    res
+# Jump functions from: https://xoshiro.di.unimi.it/xoshiro256plusplus.c
+
+for (fname, JUMP) in ((:jump_128, (0x180ec6d33cfd0aba, 0xd5a61266f0c9392c, 0xa9582618e03fc9aa, 0x39abdc4529b1661c)),
+                      (:jump_192, (0x76e15d3efefdcbbf, 0xc5004e441c522fb3, 0x77710069854ee241, 0x39109bb02acbe635)))
+    local fname! = Symbol(fname, :!)
+    @eval function $fname!(rng::Xoshiro)
+        _s0 = 0x0000000000000000
+        _s1 = 0x0000000000000000
+        _s2 = 0x0000000000000000
+        _s3 = 0x0000000000000000
+        s0, s1, s2, s3 = rng.s0, rng.s1, rng.s2, rng.s3
+        for j in $JUMP
+            for b in 0x0000000000000000:0x000000000000003f
+                if (j & 0x0000000000000001 << b) != 0
+                    _s0 ⊻= s0
+                    _s1 ⊻= s1
+                    _s2 ⊻= s2
+                    _s3 ⊻= s3
+                end
+                t = s1 << 17
+                s2 = xor(s2, s0)
+                s3 = xor(s3, s1)
+                s1 = xor(s1, s2)
+                s0 = xor(s0, s3)
+                s2 = xor(s2, t)
+                s3 = s3 << 45 | s3 >> 19
+            end
+        end
+        setstate!(rng, (_s0, _s1, _s2, _s3, nothing))
+    end
+    @eval $fname(rng::Xoshiro) = $fname!(copy(rng))
+
+    @eval function $fname!(rng::Xoshiro, n::Integer)
+        n < 0 && throw(DomainError(n, "the number of jumps must be ≥ 0"))
+        i = zero(n)
+        while i < n
+            $fname!(rng)
+            i += one(n)
+        end
+        rng
+    end
+
+    @eval $fname(rng::Xoshiro, n::Integer) = $fname!(copy(rng), n)
 end
 
+for (fname, sz) in ((:jump_128, 128), (:jump_192, 192))
+    local fname! = Symbol(fname, :!)
+    local see_other = Symbol(fname === :jump_128 ? :jump_192 : :jump_128)
+    local see_other! = Symbol(see_other, :!)
+    local seq_pow = 256 - sz
+    @eval begin
+        """
+            $($fname!)(rng::Xoshiro, [n::Integer=1])
+
+        Jump forward, advancing the state equivalent to `2^$($sz)` calls which consume
+        8 bytes (i.e. a full `UInt64`) each.
+
+        If `n > 0` is provided, the state is advanced equivalent to `n * 2^$($sz)` calls; if `n = 0`,
+        the state remains unchanged.
+
+        This can be used to generate `2^$($seq_pow)` non-overlapping subsequences for parallel computations.
+
+        See also: [`$($fname)`](@ref), [`$($see_other!)`](@ref)
+
+        # Examples
+        ```julia-repl
+        julia> $($fname!)($($fname!)(Xoshiro(1))) == $($fname!)(Xoshiro(1), 2)
+        true
+        ```
+        """
+        function $fname! end
+    end
+
+    @eval begin
+        """
+            $($fname)(rng::Xoshiro, [n::Integer=1])
+
+        Return a copy of `rng` with the state advanced equivalent to `n * 2^$($sz)` calls which consume
+        8 bytes (i.e. a full `UInt64`) each; if `n = 0`, the state of the returned copy will be
+        identical to `rng`.
+
+        This can be used to generate `2^$($seq_pow)` non-overlapping subsequences for parallel computations.
+
+        See also: [`$($fname!)`](@ref), [`$($see_other)`](@ref)
+
+        # Examples
+        ```julia-repl
+        julia> x = Xoshiro(1);
+
+        julia> $($fname)($($fname)(x)) == $($fname)(x, 2)
+        true
+
+        julia> $($fname)(x, 0) == x
+        true
+
+        julia> $($fname)(x, 0) === x
+        false
+        ```
+        """
+        function $fname end
+    end
+end
 
 ## Task local RNG
 
@@ -108,58 +197,85 @@ endianness and possibly word size.
 
 Using or seeding the RNG of any other task than the one returned by `current_task()`
 is undefined behavior: it will work most of the time, and may sometimes fail silently.
+
+When seeding `TaskLocalRNG()` with [`seed!`](@ref), the passed seed, if any,
+may be any integer.
+
+!!! compat "Julia 1.11"
+    Seeding `TaskLocalRNG()` with a negative integer seed requires at least Julia 1.11.
 """
 struct TaskLocalRNG <: AbstractRNG end
 TaskLocalRNG(::Nothing) = TaskLocalRNG()
-rng_native_52(::TaskLocalRNG) = UInt64
 
-function setstate!(x::TaskLocalRNG, s0::UInt64, s1::UInt64, s2::UInt64, s3::UInt64)
+@inline function setstate!(x::TaskLocalRNG, (s0, s1, s2, s3, s4))
     t = current_task()
     t.rngState0 = s0
     t.rngState1 = s1
     t.rngState2 = s2
     t.rngState3 = s3
+    if s4 !== nothing
+        t.rngState4 = s4
+    end
     x
 end
 
-@inline function rand(::TaskLocalRNG, ::SamplerType{UInt64})
-    task = current_task()
-    s0, s1, s2, s3 = task.rngState0, task.rngState1, task.rngState2, task.rngState3
+@inline function getstate(::TaskLocalRNG)
+    t = current_task()
+    (t.rngState0, t.rngState1, t.rngState2, t.rngState3, t.rngState4)
+end
+
+rng_native_52(::TaskLocalRNG) = UInt64
+
+
+## Shared implementation between Xoshiro and TaskLocalRNG
+
+# this variant of setstate! initializes the internal splitmix state, a.k.a. `s4`
+@inline function initstate!(x::Union{TaskLocalRNG, Xoshiro}, state)
+    length(state) == 4 && eltype(state) == UInt64 ||
+        throw(ArgumentError("initstate! expects a list of 4 `UInt64` values"))
+    s0, s1, s2, s3 = state
+    setstate!(x, (s0, s1, s2, s3, 1s0 + 3s1 + 5s2 + 7s3))
+end
+
+copy(rng::Union{TaskLocalRNG, Xoshiro}) = Xoshiro(getstate(rng)...)
+copy!(dst::Union{TaskLocalRNG, Xoshiro}, src::Union{TaskLocalRNG, Xoshiro}) = setstate!(dst, getstate(src))
+==(x::Union{TaskLocalRNG, Xoshiro}, y::Union{TaskLocalRNG, Xoshiro}) = getstate(x) == getstate(y)
+# use a magic (random) number to scramble `h` so that `hash(x)` is distinct from `hash(getstate(x))`
+hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2dda6fa9be % UInt)
+
+function seed!(rng::Union{TaskLocalRNG, Xoshiro}, ::Nothing)
+    # as we get good randomness from RandomDevice, we can skip hashing
+    rd = RandomDevice()
+    s0 = rand(rd, UInt64)
+    s1 = rand(rd, UInt64)
+    s2 = rand(rd, UInt64)
+    s3 = rand(rd, UInt64)
+    initstate!(rng, (s0, s1, s2, s3))
+end
+
+seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed) =
+    initstate!(rng, reinterpret(UInt64, hash_seed(seed)))
+
+
+@inline function rand(x::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt64})
+    s0, s1, s2, s3 = getstate(x)
     tmp = s0 + s3
     res = ((tmp << 23) | (tmp >> 41)) + s0
     t = s1 << 17
-    s2 = xor(s2, s0)
-    s3 = xor(s3, s1)
-    s1 = xor(s1, s2)
-    s0 = xor(s0, s3)
-    s2 = xor(s2, t)
+    s2 ⊻= s0
+    s3 ⊻= s1
+    s1 ⊻= s2
+    s0 ⊻= s3
+    s2 ⊻= t
     s3 = s3 << 45 | s3 >> 19
-    task.rngState0, task.rngState1, task.rngState2, task.rngState3 = s0, s1, s2, s3
+    setstate!(x, (s0, s1, s2, s3, nothing))
     res
 end
-
-# Shared implementation between Xoshiro and TaskLocalRNG -- seeding
-
-function seed!(rng::Union{TaskLocalRNG,Xoshiro})
-    # as we get good randomness from RandomDevice, we can skip hashing
-    rd = RandomDevice()
-    setstate!(rng, rand(rd, UInt64), rand(rd, UInt64), rand(rd, UInt64), rand(rd, UInt64))
-end
-
-function seed!(rng::Union{TaskLocalRNG,Xoshiro}, seed::Union{Vector{UInt32}, Vector{UInt64}})
-    c = SHA.SHA2_256_CTX()
-    SHA.update!(c, reinterpret(UInt8, seed))
-    s0, s1, s2, s3 = reinterpret(UInt64, SHA.digest!(c))
-    setstate!(rng, s0, s1, s2, s3)
-end
-
-seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed::Integer) = seed!(rng, make_seed(seed))
-
 
 @inline function rand(rng::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt128})
     first = rand(rng, UInt64)
     second = rand(rng,UInt64)
-    second + UInt128(first)<<64
+    second + UInt128(first) << 64
 end
 
 @inline rand(rng::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{Int128}) = rand(rng, UInt128) % Int128
@@ -170,30 +286,6 @@ end
     # use upper bits
     (rand(rng, UInt64) >>> (64 - 8*sizeof(S))) % S
 end
-
-function copy(rng::TaskLocalRNG)
-    t = current_task()
-    Xoshiro(t.rngState0, t.rngState1, t.rngState2, t.rngState3)
-end
-
-function copy!(dst::TaskLocalRNG, src::Xoshiro)
-    t = current_task()
-    t.rngState0, t.rngState1, t.rngState2, t.rngState3 = src.s0, src.s1, src.s2, src.s3
-    dst
-end
-
-function copy!(dst::Xoshiro, src::TaskLocalRNG)
-    t = current_task()
-    dst.s0, dst.s1, dst.s2, dst.s3 = t.rngState0, t.rngState1, t.rngState2, t.rngState3
-    dst
-end
-
-function ==(a::Xoshiro, b::TaskLocalRNG)
-    t = current_task()
-    a.s0 == t.rngState0 && a.s1 == t.rngState1 && a.s2 == t.rngState2 && a.s3 == t.rngState3
-end
-
-==(a::TaskLocalRNG, b::Xoshiro) = b == a
 
 # for partial words, use upper bits from Xoshiro
 

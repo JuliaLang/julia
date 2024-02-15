@@ -2,7 +2,7 @@
 
 # macro wrappers for various reflection functions
 
-import Base: typesof, insert!, replace_ref_begin_end!
+import Base: typesof, insert!, replace_ref_begin_end!, infer_effects
 
 separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
@@ -24,7 +24,8 @@ function recursive_dotcalls!(ex, args, i=1)
         end
     end
     (start, branches) = ex.head === :. ? (1, ex.args[2].args) : (2, ex.args)
-    for j in start:length(branches)
+    length_branches = length(branches)::Int
+    for j in start:length_branches
         branch, i = recursive_dotcalls!(branches[j], args, i)
         branches[j] = branch
     end
@@ -35,6 +36,10 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     if Meta.isexpr(ex0, :ref)
         ex0 = replace_ref_begin_end!(ex0)
     end
+    # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
+    if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
+        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
+    end
     if isa(ex0, Expr)
         if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
@@ -42,7 +47,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             end
             i = findlast(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args[1].args)
             args = copy(ex0.args[1].args)
-            insert!(args, (isnothing(i) ? 2 : i+1), ex0.args[2])
+            insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
         if ex0.head === :. || (ex0.head === :call && ex0.args[1] !== :.. && string(ex0.args[1])[1] == '.')
@@ -56,7 +61,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 dotfuncdef = Expr(:local, Expr(:(=), Expr(:call, dotfuncname, xargs...), ex))
                 return quote
                     $(esc(dotfuncdef))
-                    local args = typesof($(map(esc, args)...))
+                    local args = $typesof($(map(esc, args)...))
                     $(fcn)($(esc(dotfuncname)), args; $(kws...))
                 end
             elseif !codemacro
@@ -80,7 +85,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                                   :(error("expression is not a function call"))
                               end)
                         else
-                            local args = typesof($(map(esc, ex0.args)...))
+                            local args = $typesof($(map(esc, ex0.args)...))
                             $(fcn)(Base.getproperty, args)
                         end
                     end
@@ -96,7 +101,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             return quote
                 local arg1 = $(esc(ex0.args[1]))
                 local args, kwargs = $separate_kwargs($(map(esc, ex0.args[2:end])...))
-                $(fcn)(Core.kwfunc(arg1),
+                $(fcn)(Core.kwcall,
                        Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...};
                        $(kws...))
             end
@@ -211,7 +216,7 @@ macro which(ex0::Symbol)
     return :(which($__module__, $ex0))
 end
 
-for fname in [:code_warntype, :code_llvm, :code_native]
+for fname in [:code_warntype, :code_llvm, :code_native, :infer_effects]
     @eval begin
         macro ($fname)(ex0...)
             gen_call_with_extracted_types_and_kwargs(__module__, $(Expr(:quote, fname)), ex0)
@@ -296,6 +301,8 @@ Evaluates the arguments to the function or macro call, determines their types, a
     @code_typed optimize=true foo(x)
 
 to control whether additional optimizations, such as inlining, are also applied.
+
+See also: [`code_typed`](@ref), [`@code_warntype`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_typed
 
@@ -304,6 +311,8 @@ to control whether additional optimizations, such as inlining, are also applied.
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_lowered`](@ref) on the resulting expression.
+
+See also: [`code_lowered`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_lowered
 
@@ -312,6 +321,8 @@ Evaluates the arguments to the function or macro call, determines their types, a
 
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_warntype`](@ref) on the resulting expression.
+
+See also: [`code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref), [`@code_native`](@ref).
 """
 :@code_warntype
 
@@ -330,6 +341,8 @@ by putting them and their value before the function call, like this:
 `raw` makes all metadata and dbg.* calls visible.
 `debuginfo` may be one of `:source` (default) or `:none`,  to specify the verbosity of code comments.
 `dump_module` prints the entire module that encapsulates the function.
+
+See also: [`code_llvm`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_native`](@ref).
 """
 :@code_llvm
 
@@ -344,12 +357,12 @@ by putting it before the function call, like this:
 
     @code_native syntax=:intel debuginfo=:default binary=true dump_module=false f(x)
 
-* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Set assembly syntax by setting `syntax` to `:intel` (default) for Intel syntax or `:att` for AT&T syntax.
 * Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
 * If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 
-See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and [`@code_lowered`](@ref)
+See also: [`code_native`](@ref), [`@code_warntype`](@ref), [`@code_typed`](@ref), [`@code_lowered`](@ref), [`@code_llvm`](@ref).
 """
 :@code_native
 
@@ -358,6 +371,10 @@ See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and
 
 A macro to execute an expression and produce a report of any time spent importing packages and their
 dependencies. Any compilation time will be reported as a percentage, and how much of which was recompilation, if any.
+
+One line is printed per package or package extension. The duration shown is the time to import that package itself, not including the time to load any of its dependencies.
+
+On Julia 1.9+ [package extensions](@ref man-extensions) will show as Parent → Extension.
 
 !!! note
     During the load process a package sequentially imports all of its dependencies, not just its direct dependencies.

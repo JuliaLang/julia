@@ -6,7 +6,8 @@ module PCRE
 
 import ..RefValue
 
-include("../pcre_h.jl")
+# include($BUILDROOT/base/pcre_h.jl)
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "pcre_h.jl"))
 
 const PCRE_LIB = "libpcre2-8"
 
@@ -28,7 +29,7 @@ THREAD_MATCH_CONTEXTS::Vector{Ptr{Cvoid}} = [C_NULL]
 PCRE_COMPILE_LOCK = nothing
 
 _tid() = Int(ccall(:jl_threadid, Int16, ())) + 1
-_nth() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
+_mth() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
 
 function get_local_match_context()
     tid = _tid()
@@ -40,7 +41,7 @@ function get_local_match_context()
         try
             ctxs = THREAD_MATCH_CONTEXTS
             if length(ctxs) < tid
-                global THREAD_MATCH_CONTEXTS = ctxs = copyto!(fill(C_NULL, _nth()), ctxs)
+                global THREAD_MATCH_CONTEXTS = ctxs = copyto!(fill(C_NULL, length(ctxs) + _mth()), ctxs)
             end
         finally
             unlock(l)
@@ -195,10 +196,12 @@ function err_message(errno::Integer)
     return GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
-function exec(re, subject, offset, options, match_data)
-    if !(subject isa Union{String,SubString{String}})
-        subject = String(subject)
-    end
+exec(re, subject::Union{String,SubString{String}}, offset, options, match_data) =
+    _exec(re, subject, offset, options, match_data)
+exec(re, subject, offset, options, match_data) =
+    _exec(re, String(subject), offset, options, match_data)
+
+function _exec(re, subject, offset, options, match_data)
     rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
                (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, UInt32, Ptr{Cvoid}, Ptr{Cvoid}),
                re, subject, ncodeunits(subject), offset, options, match_data, get_local_match_context())

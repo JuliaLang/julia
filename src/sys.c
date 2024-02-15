@@ -280,15 +280,16 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
             return str;
         }
         a = jl_alloc_array_1d(jl_array_uint8_type, n - nchomp);
-        memcpy(jl_array_data(a), s->buf + s->bpos, n - nchomp);
+        memcpy(jl_array_data(a, uint8_t), s->buf + s->bpos, n - nchomp);
         s->bpos += n;
     }
     else {
         a = jl_alloc_array_1d(jl_array_uint8_type, 80);
         ios_t dest;
         ios_mem(&dest, 0);
-        ios_setbuf(&dest, (char*)a->data, 80, 0);
-        size_t n = ios_copyuntil(&dest, s, delim);
+        char *mem = jl_array_data(a, char);
+        ios_setbuf(&dest, (char*)mem, 80, 0);
+        size_t n = ios_copyuntil(&dest, s, delim, 1);
         if (chomp && n > 0 && dest.buf[n - 1] == delim) {
             n--;
             if (chomp == 2 && n > 0 && dest.buf[n - 1] == '\r') {
@@ -298,13 +299,11 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
             assert(truncret == 0);
             (void)truncret; // ensure the variable is used to avoid warnings
         }
-        if (dest.buf != a->data) {
+        if (dest.buf != mem) {
             a = jl_take_buffer(&dest);
         }
         else {
-            a->length = n;
-            a->nrows = n;
-            ((char*)a->data)[n] = '\0';
+            a->dimsize[0] = n;
         }
         if (str) {
             JL_GC_PUSH1(&a);
@@ -314,6 +313,50 @@ JL_DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim, uint8_t str, uint
         }
     }
     return (jl_value_t*)a;
+}
+
+// read up to buflen bytes, including delim, into buf.  returns number of bytes read.
+JL_DLLEXPORT size_t jl_readuntil_buf(ios_t *s, uint8_t delim, uint8_t *buf, size_t buflen)
+{
+    // manually inlined common case
+    size_t avail = (size_t)(s->size - s->bpos);
+    if (avail > buflen) avail = buflen;
+    char *pd = (char*)memchr(s->buf + s->bpos, delim, avail);
+    if (pd) {
+        size_t n = pd - (s->buf + s->bpos) + 1;
+        memcpy(buf, s->buf + s->bpos, n);
+        s->bpos += n;
+        return n;
+    }
+    else {
+        size_t total = avail;
+        memcpy(buf, s->buf + s->bpos, avail);
+        s->bpos += avail;
+        if (avail == buflen) return total;
+
+        // code derived from ios_copyuntil
+        while (!ios_eof(s)) {
+            avail = ios_readprep(s, 160); // read LINE_CHUNK_SIZE
+            if (avail == 0) break;
+            if (total+avail > buflen) avail = buflen-total;
+            char *pd = (char*)memchr(s->buf+s->bpos, delim, avail);
+            if (pd == NULL) {
+                memcpy(buf+total, s->buf+s->bpos, avail);
+                s->bpos += avail;
+                total += avail;
+                if (buflen == total) return total;
+            }
+            else {
+                size_t ntowrite = pd - (s->buf+s->bpos) + 1;
+                memcpy(buf+total, s->buf+s->bpos, ntowrite);
+                s->bpos += ntowrite;
+                total += ntowrite;
+                return total;
+            }
+        }
+        s->_eof = 1;
+        return total;
+    }
 }
 
 JL_DLLEXPORT int jl_ios_buffer_n(ios_t *s, const size_t n)
@@ -588,7 +631,7 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 #ifndef _OS_WINDOWS_
     return sysconf(_SC_CLK_TCK);
 #else
-    return 0;
+    return 1000; /* uv_cpu_info returns times in ms on Windows */
 #endif
 }
 
@@ -732,13 +775,12 @@ static _Atomic(uint64_t) g_rngseed;
 JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT
 {
     uint64_t max = UINT64_MAX;
-    uint64_t unbias = UINT64_MAX;
     uint64_t rngseed0 = jl_atomic_load_relaxed(&g_rngseed);
     uint64_t rngseed;
     uint64_t rnd;
     do {
         rngseed = rngseed0;
-        rnd = cong(max, unbias, &rngseed);
+        rnd = cong(max, &rngseed);
     } while (!jl_atomic_cmpswap_relaxed(&g_rngseed, &rngseed0, rngseed));
     return rnd;
 }

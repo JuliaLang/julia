@@ -18,12 +18,12 @@ GPL licensed. We do hope to have a non-GPL distribution of Julia in the future.
 Versioning and Git
 ------------------
 The Makefile uses both the `VERSION` file and commit hashes and tags from the
-git repository to generate the `version_git.jl` with information we use to
+git repository to generate the `base/version_git.jl` with information we use to
 fill the splash screen and the `versioninfo()` output. If you for some reason
 don't want to have the git repository available when building you should
-pre-generate the `version_git.jl` file with:
+pregenerate the `base/version_git.jl` file with:
 
-    make -C base version_git.jl
+    make -C base version_git.jl.phony
 
 Julia has lots of build dependencies where we use patched versions that has not
 yet been included by the popular package managers. These dependencies will usually
@@ -53,7 +53,7 @@ as it will make Julia fail at startup on any machine with incompatible CPUs
 We therefore recommend that you pass the `MARCH` variable when calling `make`,
 setting it to the baseline target you intend to support. This will determine
 the target CPU for both the Julia executable and libraries, and the system
-image (the latter can also be set using `JULIA_CPU_TARGET`). Typically useful
+image (the latter can also be set using [`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET)). Typically useful
 values for x86 CPUs are `x86-64` and `core2` (for 64-bit builds) and
 `pentium4` (for 32-bit builds). Unfortunately, CPUs older than Pentium 4
 are currently not supported (see

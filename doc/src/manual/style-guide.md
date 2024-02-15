@@ -96,7 +96,7 @@ Instead of:
 
 ```julia
 function double(a::AbstractArray{<:Number})
-    for i = firstindex(a):lastindex(a)
+    for i in eachindex(a)
         a[i] *= 2
     end
     return a
@@ -107,7 +107,7 @@ use:
 
 ```julia
 function double!(a::AbstractArray{<:Number})
-    for i = firstindex(a):lastindex(a)
+    for i in eachindex(a)
         a[i] *= 2
     end
     return a
@@ -118,6 +118,10 @@ Julia Base uses this convention throughout and contains examples of functions
 with both copying and modifying forms (e.g., [`sort`](@ref) and [`sort!`](@ref)), and others
 which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)).  It
 is typical for such functions to also return the modified array for convenience.
+
+Functions related to IO or making use of random number generators (RNG) are notable exceptions:
+Since these functions almost invariably must mutate the IO or RNG, functions ending with `!` are used to signify a mutation _other_ than mutating the IO or advancing the RNG state.
+For example, `rand(x)` mutates the RNG, whereas `rand!(x)` mutates both the RNG and `x`; similarly, `read(io)` mutates `io`, whereas `read!(io, x)` mutates both arguments.
 
 ## Avoid strange type `Union`s
 
@@ -258,6 +262,29 @@ Splicing function arguments can be addictive. Instead of `[a..., b...]`, use sim
 which already concatenates arrays. [`collect(a)`](@ref) is better than `[a...]`, but since `a`
 is already iterable it is often even better to leave it alone, and not convert it to an array.
 
+## Ensure constructors return an instance of their own type
+
+When a method `T(x)` is called on a type `T`, it is generally expected to return a value of type T.
+Defining a [constructor](@ref man-constructors) that returns an unexpected type can lead to confusing and unpredictable behavior:
+
+```jldoctest
+julia> struct Foo{T}
+           x::T
+       end
+
+julia> Base.Float64(foo::Foo) = Foo(Float64(foo.x))  # Do not define methods like this
+
+julia> Float64(Foo(3))  # Should return `Float64`
+Foo{Float64}(3.0)
+
+julia> Foo{Int}(x) = Foo{Float64}(x)  # Do not define methods like this
+
+julia> Foo{Int}(3)  # Should return `Foo{Int}`
+Foo{Float64}(3.0)
+```
+
+To maintain code clarity and ensure type consistency, always design constructors to return an instance of the type they are supposed to construct.
+
 ## Don't use unnecessary static parameters
 
 A function signature:
@@ -342,7 +369,7 @@ This would provide custom showing of vectors with a specific new element type. W
 this should be avoided. The trouble is that users will expect a well-known type like `Vector()`
 to behave in a certain way, and overly customizing its behavior can make it harder to work with.
 
-## Avoid type piracy
+## [Avoid type piracy](@id avoid-type-piracy)
 
 "Type piracy" refers to the practice of extending or redefining methods in Base
 or other packages on types that you have not defined. In extreme cases, you can crash Julia
@@ -378,7 +405,7 @@ You generally want to use [`isa`](@ref) and [`<:`](@ref) for testing types,
 not `==`. Checking types for exact equality typically only makes sense when comparing to a known
 concrete type (e.g. `T == Float64`), or if you *really, really* know what you're doing.
 
-## Do not write `x->f(x)`
+## Don't write a trivial anonymous function `x->f(x)` for a named function `f`
 
 Since higher-order functions are often called with anonymous functions, it is easy to conclude
 that this is desirable or even necessary. But any function can be passed directly, without being

@@ -84,7 +84,6 @@ end # module ReflectionTest
 @test isconcretetype(DataType)
 @test isconcretetype(Union)
 @test !isconcretetype(Union{})
-@test isconcretetype(Tuple{Union{}})
 @test !isconcretetype(Complex)
 @test !isconcretetype(Complex.body)
 @test !isconcretetype(AbstractArray{Int,1})
@@ -193,6 +192,8 @@ let
     @test parentmodule(foo9475, (Any,)) == TestMod7648.TestModSub9475
     @test parentmodule(foo9475) == TestMod7648.TestModSub9475
     @test parentmodule(Foo7648) == TestMod7648
+    @test parentmodule(first(methods(foo9475))) == TestMod7648.TestModSub9475
+    @test parentmodule(first(methods(foo7648))) == TestMod7648
     @test nameof(Foo7648) === :Foo7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
     @test first(methods(TestMod7648.TestModSub9475.foo7648)) == which(foo7648, (Int,))
@@ -202,7 +203,7 @@ end
 
 @test which(===, Tuple{Int, Int}) isa Method
 @test length(code_typed(===, Tuple{Int, Int})) === 1
-@test only(Base.return_types(===, Tuple{Int, Int})) === Any
+@test only(Base.return_types(===, Tuple{Int, Int})) === Bool
 
 module TestingExported
 using Test
@@ -210,15 +211,21 @@ include("testenv.jl") # for curmod_str
 import Base.isexported
 global this_is_not_defined
 export this_is_not_defined
+public this_is_public
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module Main") which(Main, :this_is_not_defined)
 @test_throws ErrorException("\"this_is_not_exported\" is not defined in module Main") which(Main, :this_is_not_exported)
 @test isexported(@__MODULE__, :this_is_not_defined)
 @test !isexported(@__MODULE__, :this_is_not_exported)
+@test !isexported(@__MODULE__, :this_is_public)
 const a_value = 1
 @test which(@__MODULE__, :a_value) === @__MODULE__
 @test_throws ErrorException("\"a_value\" is not defined in module Main") which(Main, :a_value)
 @test which(Main, :Core) === Main
 @test !isexported(@__MODULE__, :a_value)
+@test !Base.ispublic(@__MODULE__, :a_value)
+@test Base.ispublic(@__MODULE__, :this_is_not_defined)
+@test Base.ispublic(@__MODULE__, :this_is_public)
+@test !Base.ispublic(@__MODULE__, :this_is_not_exported)
 end
 
 # PR 13825
@@ -530,7 +537,7 @@ let
     ft = typeof(f18888)
 
     code_typed(f18888, Tuple{}; optimize=false)
-    @test !isempty(m.specializations) # uncached, but creates the specializations entry
+    @test m.specializations !== Core.svec() # uncached, but creates the specializations entry
     mi = Core.Compiler.specialize_method(m, Tuple{ft}, Core.svec())
     interp = Core.Compiler.NativeInterpreter(world)
     @test !Core.Compiler.haskey(Core.Compiler.code_cache(interp), mi)
@@ -546,7 +553,7 @@ let
 end
 
 # code_typed_by_type
-@test Base.code_typed_by_type(Tuple{Type{<:Val}})[1][2] == Val
+@test Base.code_typed_by_type(Tuple{Type{<:Val}})[2][2] == Val
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
 
 # New reflection methods in 0.6
@@ -607,11 +614,16 @@ end
              sizeof(Real))
 @test sizeof(Union{ComplexF32,ComplexF64}) == 16
 @test sizeof(Union{Int8,UInt8}) == 1
-@test_throws ErrorException sizeof(AbstractArray)
+@test sizeof(MemoryRef{Int}) == 2 * sizeof(Int)
+@test sizeof(GenericMemoryRef{:atomic,Int,Core.CPU}) == 2 * sizeof(Int)
+@test sizeof(Array{Int,0}) == 2 * sizeof(Int)
+@test sizeof(Array{Int,1}) == 3 * sizeof(Int)
+@test sizeof(Array{Int,2}) == 4 * sizeof(Int)
+@test sizeof(Array{Int,20}) == 22 * sizeof(Int)
 @test_throws ErrorException sizeof(Tuple)
 @test_throws ErrorException sizeof(Tuple{Any,Any})
 @test_throws ErrorException sizeof(String)
-@test_throws ErrorException sizeof(Vector{Int})
+@test_throws ErrorException sizeof(Memory{false,Int})
 @test_throws ErrorException sizeof(Symbol)
 @test_throws ErrorException sizeof(Core.SimpleVector)
 @test_throws ErrorException sizeof(Union{})
@@ -646,7 +658,7 @@ let
     world = Core.Compiler.get_world_counter()
     match = Base._methods_by_ftype(T22979, -1, world)[1]
     instance = Core.Compiler.specialize_method(match)
-    cinfo_generated = Core.Compiler.get_staged(instance)
+    cinfo_generated = Core.Compiler.get_staged(instance, world)
     @test_throws ErrorException Base.uncompressed_ir(match.method)
 
     test_similar_codeinfo(code_lowered(f22979, typeof(x22979))[1], cinfo_generated)
@@ -723,6 +735,31 @@ Base.delete_method(m)
 @test foo4(1.0) == 1
 @test faz4(1) == 1
 @test faz4(1.0) == 1
+
+# Deletion & invoke (issue #48802)
+function f48802!(log, x::Integer)
+    log[] = "default"
+    return x + 1
+end
+function addmethod_48802()
+    @eval function f48802!(log, x::Int)
+        ret = invoke(f48802!, Tuple{Any, Integer}, log, x)
+        log[] = "specialized"
+        return ret
+    end
+end
+log = Ref{String}()
+@test f48802!(log, 1) == 2
+@test log[] == "default"
+addmethod_48802()
+@test f48802!(log, 1) == 2
+@test log[] == "specialized"
+Base.delete_method(which(f48802!, Tuple{Any, Int}))
+@test f48802!(log, 1) == 2
+@test log[] == "default"
+addmethod_48802()
+@test f48802!(log, 1) == 2
+@test log[] == "specialized"
 
 # Methods with keyword arguments
 fookw(x; direction=:up) = direction
@@ -883,16 +920,15 @@ _test_at_locals2(1,1,0.5f0)
     f31687_parent() = f31687_child(0)
     params = Base.CodegenParams()
     _dump_function(f31687_parent, Tuple{},
-                   #=native=#false, #=wrapper=#false, #=strip=#false,
+                   #=native=#false, #=wrapper=#false, #=raw=#true,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
-                   #=binary=#false,
-                   params)
+                   #=binary=#false)
 end
 
 @test nameof(Any) === :Any
 @test nameof(:) === :Colon
 @test nameof(Core.Intrinsics.mul_int) === :mul_int
-@test nameof(Core.Intrinsics.arraylen) === :arraylen
+@test nameof(Core.Intrinsics.cglobal) === :cglobal
 
 module TestMod33403
 f(x) = 1
@@ -968,9 +1004,18 @@ end
     @test Base.default_tt(m.f4) == Tuple
 end
 
+@testset "lookup mi" begin
+    @test 1+1 == 2
+    mi1 = Base.method_instance(+, (Int, Int))
+    @test mi1.def.name == :+
+    # Note `jl_method_lookup` doesn't returns CNull if not found
+    mi2 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
+    @test mi1 == mi2
+end
+
 Base.@assume_effects :terminates_locally function issue41694(x::Int)
     res = 1
-    1 < x < 20 || throw("bad")
+    0 ≤ x < 20 || error("bad fact")
     while x > 1
         res *= x
         x -= 1
@@ -980,8 +1025,27 @@ end
 maybe_effectful(x::Int) = 42
 maybe_effectful(x::Any) = unknown_operation()
 function f_no_methods end
+ambig_effects_test(a::Int, b) = 1
+ambig_effects_test(a, b::Int) = 1
+ambig_effects_test(a, b) = 1
 
-@testset "infer_effects" begin
+@testset "Base.infer_return_type[s]" begin
+    # generic function case
+    @test only(Base.return_types(issue41694, (Int,))) == Base.infer_return_type(issue41694, (Int,)) == Int
+    # case when it's not fully covered
+    @test only(Base.return_types(issue41694, (Integer,))) == Base.infer_return_type(issue41694, (Integer,)) == Int
+    # MethodError case
+    @test isempty(Base.return_types(issue41694, (Float64,)))
+    @test Base.infer_return_type(issue41694, (Float64,)) == Union{}
+    # builtin case
+    @test only(Base.return_types(typeof, (Any,))) == Base.infer_return_type(typeof, (Any,)) == DataType
+    @test only(Base.return_types(===, (Any,Any))) == Base.infer_return_type(===, (Any,Any)) == Bool
+    @test only(Base.return_types(setfield!, ())) == Base.infer_return_type(setfield!, ()) == Union{}
+    @test only(Base.return_types(Core.Intrinsics.mul_int, ())) == Base.infer_return_type(Core.Intrinsics.mul_int, ()) == Union{}
+end
+
+@testset "Base.infer_effects" begin
+    # generic functions
     @test Base.infer_effects(issue41694, (Int,)) |> Core.Compiler.is_terminates
     @test Base.infer_effects((Int,)) do x
         issue41694(x)
@@ -994,10 +1058,138 @@ function f_no_methods end
         @test !Core.Compiler.is_terminates(effects)
         @test !Core.Compiler.is_nonoverlayed(effects)
     end
-    @test Base.infer_effects(f_no_methods) |> !Core.Compiler.is_nothrow
+    # should account for MethodError
+    @test Base.infer_effects(issue41694, (Float64,)) |> !Core.Compiler.is_nothrow # definitive dispatch error
+    @test Base.infer_effects(issue41694, (Integer,)) |> !Core.Compiler.is_nothrow # possible dispatch error
+    @test Base.infer_effects(f_no_methods) |> !Core.Compiler.is_nothrow # no possible matching methods
+    @test Base.infer_effects(ambig_effects_test, (Int,Int)) |> !Core.Compiler.is_nothrow # ambiguity error
+    @test Base.infer_effects(ambig_effects_test, (Int,Any)) |> !Core.Compiler.is_nothrow # ambiguity error
     # builtins
-    @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_total
-    @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_total
+    @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_foldable_nothrow
+    @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_foldable_nothrow
     @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
-    @test (Base.infer_effects(Core.Intrinsics.arraylen, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
+    @test (Base.infer_effects(Core.Intrinsics.mul_int, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
 end
+
+@testset "Base.infer_exception_type[s]" begin
+    # generic functions
+    @test Base.infer_exception_type(issue41694, (Int,)) == only(Base.infer_exception_types(issue41694, (Int,))) == ErrorException
+    @test Base.infer_exception_type((Int,)) do x
+        issue41694(x)
+    end == Base.infer_exception_types((Int,)) do x
+        issue41694(x)
+    end |> only == ErrorException
+    @test Base.infer_exception_type(issue41694) == only(Base.infer_exception_types(issue41694)) == ErrorException # use `default_tt`
+    let excts = Base.infer_exception_types(maybe_effectful, (Any,))
+        @test any(==(Any), excts)
+        @test any(==(Union{}), excts)
+    end
+    @test Base.infer_exception_type(maybe_effectful, (Any,)) == Any
+    # `infer_exception_type` should account for MethodError
+    @test Base.infer_exception_type(issue41694, (Float64,)) == MethodError # definitive dispatch error
+    @test Base.infer_exception_type(issue41694, (Integer,)) == Union{MethodError,ErrorException} # possible dispatch error
+    @test Base.infer_exception_type(f_no_methods) == MethodError # no possible matching methods
+    @test Base.infer_exception_type(ambig_effects_test, (Int,Int)) == MethodError # ambiguity error
+    @test Base.infer_exception_type(ambig_effects_test, (Int,Any)) == MethodError # ambiguity error
+    # builtins
+    @test Base.infer_exception_type(typeof, (Any,)) === only(Base.infer_exception_types(typeof, (Any,))) === Union{}
+    @test Base.infer_exception_type(===, (Any,Any)) === only(Base.infer_exception_types(===, (Any,Any))) === Union{}
+    @test (Base.infer_exception_type(setfield!, ()); Base.infer_exception_types(setfield!, ()); true) # `infer_exception_type[s]` shouldn't throw on empty `argtypes`
+    @test (Base.infer_exception_type(Core.Intrinsics.mul_int, ()); Base.infer_exception_types(Core.Intrinsics.mul_int, ()); true) # `infer_exception_type[s]` shouldn't throw on empty `argtypes`
+end
+
+@test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]
+@test length(methods(Base.Broadcast.broadcasted, Tuple{Any, Any, Vararg})) >
+      length(methods(Base.Broadcast.broadcasted, Tuple{Base.Broadcast.BroadcastStyle, Any, Vararg})) >=
+      length(methods(Base.Broadcast.broadcasted, Tuple{Base.Broadcast.DefaultArrayStyle{1}, Any, Vararg})) >=
+      10
+
+@testset "specializations" begin
+    f(x) = 1
+    f(1)
+    f("hello")
+    @test length(Base.specializations(only(methods(f)))) == 2
+end
+
+# https://github.com/JuliaLang/julia/issues/48856
+@test !Base.ismutationfree(Vector{Any})
+@test !Base.ismutationfree(Vector{Symbol})
+@test !Base.ismutationfree(Vector{UInt8})
+@test !Base.ismutationfree(Vector{Int32})
+@test !Base.ismutationfree(Vector{UInt64})
+
+@test Base.ismutationfree(Type{Union{}})
+
+module TestNames
+
+public publicized
+export exported
+
+publicized() = 1
+exported() = 1
+private() = 1
+
+end
+
+@test names(TestNames) == [:TestNames, :exported, :publicized]
+
+# reflections for generated function with abstract input types
+
+# :generated_only function should return failed results if given abstract input types
+@generated function generated_only_simple(x)
+    if x <: Integer
+        return :(x ^ 2)
+    else
+        return :(x)
+    end
+end
+@test only(Base.return_types(generated_only_simple, (Real,))) ==
+      Base.infer_return_type(generated_only_simple, (Real,)) ==
+      Core.Compiler.return_type(generated_only_simple, Tuple{Real}) == Any
+let (src, rt) = only(code_typed(generated_only_simple, (Real,)))
+    @test src isa Method
+    @test rt == Any
+end
+
+# optionally generated function should return fallback results if given abstract input types
+function sub2ind_gen_impl(dims::Type{NTuple{N,Int}}, I...) where N
+    ex = :(I[$N] - 1)
+    for i = (N - 1):-1:1
+        ex = :(I[$i] - 1 + dims[$i] * $ex)
+    end
+    return :($ex + 1)
+end;
+function sub2ind_gen_fallback(dims::NTuple{N,Int}, I) where N
+    ind = I[N] - 1
+    for i = (N - 1):-1:1
+        ind = I[i] - 1 + dims[i]*ind
+    end
+    return ind + 1
+end;
+function sub2ind_gen(dims::NTuple{N,Int}, I::Integer...) where N
+    length(I) == N || error("partial indexing is unsupported")
+    if @generated
+        return sub2ind_gen_impl(dims, I...)
+    else
+        return sub2ind_gen_fallback(dims, I)
+    end
+end;
+@test only(Base.return_types(sub2ind_gen, (NTuple,Int,Int,))) == Int
+let (src, rt) = only(code_typed(sub2ind_gen, (NTuple,Int,Int,); optimize=false))
+    @test src isa CodeInfo
+    @test rt == Int
+    @test any(iscall((src,sub2ind_gen_fallback)), src.code)
+    @test any(iscall((src,error)), src.code)
+end
+
+# marking a symbol as public should not "unexport" it
+# https://github.com/JuliaLang/julia/issues/52812
+module Mod52812
+export a, b
+public a
+end
+
+@test Base.isexported(Mod52812, :a)
+@test Base.isexported(Mod52812, :b)
+@test Base.ispublic(Mod52812, :a)
+@test Base.ispublic(Mod52812, :b)
