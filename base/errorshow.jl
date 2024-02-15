@@ -35,8 +35,22 @@ show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
-_bounds_setdiff(r, s) = setdiff(r, s)
-_bounds_setdiff(r::AbstractUnitRange, s::OneTo) = last(r) ≤ last(s) ? Int[] : (max(last(s) + 1, first(r)) : last(r))
+function _bounds_setdiff(r, s)
+    sd = setdiff(r, s)
+    return isempty(sd) ? nothing : sd
+end
+function _bounds_setdiff(r::AbstractUnitRange, s::AbstractUnitRange)
+    if last(r) > last(s) && first(r) < first(s)
+        # s splits r
+        return (first(r) : (first(s) - 1), (last(s) + 1) : last(r))
+    elseif last(r) ≤ last(s) && first(r) < first(s)
+        return (first(r) : min(first(s) - 1, last(r)),)
+    elseif last(r) > last(s) && first(r) ≥ first(s)
+        return (max(last(s) + 1, first(r)) : last(r),)
+    else
+        return nothing
+    end
+end
 
 function showerror(io::IO, ex::Meta.ParseError)
     if isnothing(ex.detail)
@@ -46,59 +60,73 @@ function showerror(io::IO, ex::Meta.ParseError)
     end
 end
 
-function showerror(io::IO, ex::BoundsError)
+#=
+
+BoundsError: attempt to access 3x4x5x6 Array{Int64, 3} outside of valid bounds:
+  - Axis 1 bounds are 1:3, got UnitRange including 4:10
+  - Axis 2 bounds are 1:4, got Vector including [-2, 5, 11, ...]
+  - Axis 4 bounds are 1:6, got 12
+=#
+
+function Base.showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
         summary(io, ex.a)
         if isdefined(ex, :i)
-            print(io, " at index ")
-            if !(ex.i isa AbstractString) && any(.!isa.(ex.i, Number)) && all(.!isa.(ex.i, LogicalIndex))
-                oobis = [] # out of bounds indexes
-                carteseanindexes = length(ex.i) > 1
-                for (i, x) in enumerate(ex.i)
-                    if x isa AbstractString
-                        oobi = x
-                    elseif x isa Colon
-                        oobi = []
+            println(io, " outside of valid bounds:")
+            cartesianindexes = length(ex.i) > 1
+
+            # compute which indices are out of bounds
+            oobis = map(enumerate(ex.i)) do (j, idx)
+                if idx isa Base.LogicalIndex
+                    # true => too many, false => too few, nothing => inbounds
+                    if length(idx) != length(ex.a)
+                        length(idx) > length(ex.a)
+                    end
+                elseif idx isa Number
+                    # nothing => inbounds
+                    ax = cartesianindexes ? axes(ex.a, j) : eachindex(ex.a)
+                    if clamp(idx, ax) != idx
+                        idx
+                    end
+                else
+                    # tuple with 1 or 2 ranges or vector => out of bounds, nothing => inbounds
+                    ax = cartesianindexes ? axes(ex.a, j) : eachindex(ex.a)
+                    _bounds_setdiff(idx, ax)
+                end
+            end
+
+            foreach(enumerate(oobis)) do (j, idx)
+                idx === nothing && return
+                if cartesianindexes
+                    print(io, "  - Axis $j bounds are $(axes(ex.a, j)), got ")
+                else
+                    print(io, "  Bounds are $(eachindex(ex.a)), got ")
+                end
+                if idx isa Bool
+                    print(io, "a LogicalIndex with ")
+                    if idx
+                        println(io, "too many elements")
                     else
-                        if carteseanindexes
-                            oobi = _bounds_setdiff(x, Base.OneTo(size(ex.a, i)))
-                        else
-                            oobi = _bounds_setdiff(x, eachindex(ex.a))
-                        end
-                        length(oobi) == 1 && (oobi = oobi[1])
+                        println(io, "too few elements")
                     end
-                    push!(oobis, oobi)
-                end
-                if any(.!isempty.(oobis) .&& oobis .!= ex.i)
-                    print(io, "[")
-                    for (i, x) in enumerate(oobis)
-                        i > 1 && print(io, ", ")
-                        if isempty(x)
-                            print(io, "…")
-                        else
-                            length(x) > 1 ? show_index(io, x) : show_index(io, x[1])
-                        end
+                elseif idx isa Number
+                    println(io, idx)
+                else
+                    print(io, "a $(typeof(ex.i[j])) including ")
+                    if idx isa Tuple
+                        print(io, "$(idx[1])")
+                        length(idx) > 1 && print(io, "and $(idx[2])")
+                        println(io)
+                    else
+                        println(io, "$(idx)")
                     end
-                    print(io, "] in ")
                 end
             end
-            print(io, "[")
-            if ex.i isa AbstractRange
-                print(io, ex.i)
-            elseif ex.i isa AbstractString
-                show(io, ex.i)
-            else
-                for (i, x) in enumerate(ex.i)
-                    i > 1 && print(io, ", ")
-                    show_index(io, x)
-                end
-            end
-            print(io, ']')
         end
     end
-    Experimental.show_error_hints(io, ex)
+    Base.Experimental.show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::TypeError)
