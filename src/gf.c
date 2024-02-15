@@ -3319,7 +3319,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         closure->lim--;
     }
     // don't need to consider other similar methods if this ml will always fully intersect with them and dominates all of them
-    if (!closure->include_ambiguous || closure->lim != -1)
+    if (!closure->include_ambiguous)
         typemap_slurp_search(ml, &closure->match);
     closure->matc = make_method_match((jl_tupletype_t*)closure->match.ti,
         closure->match.env, meth,
@@ -3385,7 +3385,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
         if (*found_minmax == 2)
             visited->items[idx] = (void*)1;
     }
-    else if (lim != -1) {
+    else if (1) {
         for (; result_len < result->len; result_len++) {
             size_t idx2 = (size_t)result->items[result_len];
             jl_method_match_t *matc2 = (jl_method_match_t*)jl_array_ptr_ref(t, idx2);
@@ -3429,7 +3429,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
         int msp = jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig);
         int msp2 = !msp && jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig);
         if (!msp) {
-            if (subt || !include_ambiguous || (lim != -1 && msp2)) {
+            if (subt || !include_ambiguous || msp2) {
                 if (subt2 || jl_subtype((jl_value_t*)ti, m2->sig)) {
                     // this may be filtered out as fully intersected, if applicable later
                     mayexclude = 1;
@@ -3439,7 +3439,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 addambig = 1; // record there is a least one previously-undetected ambiguity that may need to be investigated later (between m and m2)
             }
         }
-        if (lim == -1 ? msp : !msp2) // include only strong or also weak edges, depending on whether the result size is limited
+        if (include_ambiguous ? msp : !msp2) // include only strong or also weak edges, depending on whether the result size is limited
             continue;
         // m2 is (lim!=-1 ? better : not-worse), so attempt to visit it first
         // if limited, then we want to visit only better edges, because that results in finding k best matches quickest
@@ -3501,10 +3501,8 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
     }
     else {
         // We have a set of ambiguous methods. Record that.
-        // This is greatly over-approximated for lim==-1
         *has_ambiguity = 1;
-        // If we followed weak edges above, then this also fully closed the ambiguity cycle
-        if (lim == -1)
+        if (include_ambiguous)
             addambig = 0;
         // If we're only returning possible matches, now filter out this method
         // if its intersection is fully ambiguous in this SCC group.
@@ -3521,7 +3519,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
             assert(visited->items[childidx] == (void*)(2 + i));
             // if we only followed strong edges before above
             // check also if this set has an unresolved ambiguity missing from it
-            if (lim != -1 && !addambig) {
+            if (!addambig) {
                 for (size_t j = 0; j < allambig->len; j++) {
                     if ((size_t)allambig->items[j] == childidx) {
                         addambig = 1;
@@ -3535,7 +3533,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                     visited->items[childidx] = (void*)1;
                 continue;
             }
-            else if (lim != -1) {
+            else if (1) {
                 // when limited, don't include this match if it was covered by an earlier one
                 for (size_t result_len = 0; result_len < result->len; result_len++) {
                     size_t idx2 = (size_t)result->items[result_len];
@@ -3552,7 +3550,7 @@ static int sort_mlmatches(jl_array_t *t, size_t idx, arraylist_t *visited, array
                 }
             }
         }
-        if (!include_ambiguous && lim == -1) {
+        if (0) {
             for (size_t i = depth - 1; i < stack->len; i++) {
                 size_t childidx = (size_t)stack->items[i];
                 if ((size_t)visited->items[childidx] == 1)
@@ -3862,7 +3860,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
         }
         // now compute whether there were ambiguities left in this cycle
         if (has_ambiguity == 0 && allambig.len > 0) {
-            if (lim == -1) {
+            if (0) {
                 // lim is over-approximated, so has_ambiguities is too
                 has_ambiguity = 1;
             }

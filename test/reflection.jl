@@ -1193,3 +1193,19 @@ end
 @test Base.isexported(Mod52812, :b)
 @test Base.ispublic(Mod52812, :a)
 @test Base.ispublic(Mod52812, :b)
+
+# test that limited and unlimited results from `methods` give the same matches
+using LinearAlgebra
+
+_pseudo_convert_(::Type{T}, ::AbstractArray) where T<:Array = 0
+_pseudo_convert_(::Type{T}, ::LinearAlgebra.AbstractQ) where T<:AbstractArray = 0
+_pseudo_convert_(::Type{T}, ::LinearAlgebra.Factorization) where T<:AbstractArray = 0
+_pseudo_convert_(::Type{T}, ::T) where T<:AbstractArray = 0
+_pseudo_convert_(::Type{T}, ::T) where T = 0
+_pseudo_convert_(::Type{AbstractArray{T, N}}, a::AbstractArray{<:Any, N}) where {T, N} = 0
+_pseudo_convert_(::Type{AbstractArray{T}}, a::AbstractArray) where T = 0
+_pseudo_convert_(::Type{AbstractMatrix{T}}, Q::LinearAlgebra.AbstractQ) where T = 0
+_pseudo_convert_(::Type{T}, a::AbstractArray) where T<:BitArray = 0
+_pseudo_convert_(::Type{T}, A::AbstractMatrix) where T<:Diagonal = 0
+
+@test length(methods(_pseudo_convert_, (Type{Vector{UInt16}}, Any))) == length(Base._methods_by_ftype(Tuple{typeof(_pseudo_convert_),Type{Vector{UInt16}}, Any}, 4, Base.get_world_counter())) == 3
