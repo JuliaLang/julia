@@ -14,10 +14,12 @@ Only by explicitly checking types, or when objects fail to support operations at
 are the types of any values ever restricted.
 
 Julia's type system is dynamic, but gains some of the advantages of static type systems
-by allowing optional type annotations. This can be of great assistance
-in generating efficient code, but even more significantly, it allows method dispatch on the types
-of function arguments to be deeply integrated with the language. Method dispatch is explored in
-detail in the [Methods](@ref) section, but is rooted in the type system presented here.
+by allowing optional type annotations. Type annotations are important for defining efficient new data structures,
+can help enforce correctness and clarity, and can sometimes improve efficiency
+(although in many contexts the Julia compiler infers types automatically.
+Type annotations also play a central role in Julia because they control method dispatch:
+functions can be extended to new behaviours for different argument types.
+Method dispatch is explored in detail in the [Methods](@ref) section, but is rooted in the type system presented here.
 
 All values in a Julia program belong to exactly one concrete type.
 All types belong to a single type tree, i.e. they are all at least related to the [`Any`](@ref) type.
@@ -46,18 +48,12 @@ kinds of programming, however, become clearer, simpler, faster and more robust w
 The default behavior in Julia when type annotations are omitted is to allow values to be of any type.
 When additional expressiveness is needed, however,
 it is easy to gradually introduce explicit annotations into previously "untyped" code.
-Adding annotations serves three primary purposes: to take advantage
+Adding annotations serves four primary purposes: to take advantage
 of Julia's powerful multiple-dispatch mechanism, to improve human readability,
-and to catch programmer errors.
+to catch programmer errors, and to assist the compiler (especially when defining new types).
 
 The `::` operator can be used to attach type annotations to expressions and variables in programs.
 It is also used for type assertions in method signatures (see [Defining Methods](#Defining-Methods)).
-There are two primary reasons to use type annotations:
-
-1. As an assertion to help confirm that your program works the way you expect, and
-2. To provide extra type information to the compiler, which can then improve performance in some
-   cases.
-
 When appended to an expression computing a value, the `::` operator is read as "is an instance
 of". It can be used anywhere to assert that the value of the expression on the left is an instance
 of the type on the right. When the type on the right is concrete, the value on the left must have
@@ -78,7 +74,7 @@ This allows a type assertion to be attached to any expression in-place.
 When the type on the right is concrete,
 the value on the left must have that type as its implementation.
 When the type is abstract,
-it suffices for the value to be implemented by a concrete type that is a subtype of the abstract type.
+it suffices for the value to have a concrete type that is a subtype of the abstract type.
 When appended to a variable on the left-hand side of an assignment, or as part of a `local` declaration,
 the `::` operator means something a bit different: it declares the variable to always have the
 specified type, like a type declaration in a statically-typed language such as C. Every value
@@ -605,7 +601,7 @@ julia> struct Point{T}
 
 This declaration defines a new parametric type, `Point{T}`,
 holding two "coordinates" of the same type `T`.
-The parameter `T` is a placeholder, which will be replaced by a particular concrete type
+The parameter `T` is a placeholder, which will be replaced by a particular type
 when an instance of this type is created.
 Thus, this single declaration actually declares an unlimited number of types:
 `Point{Float64}`, `Point{AbstractString}`, `Point{Int64}`, etc.
