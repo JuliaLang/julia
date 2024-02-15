@@ -1188,8 +1188,12 @@ end
 end
 
 @testset "Wait multiple tasks" begin
+    convert_tasks(t, x) = x
+    convert_tasks(::Set{Task}, x::Vector{Task}) = Set{Task}(x)
+    convert_tasks(::Tuple{Task}, x::Vector{Task}) = tuple(x...)
+
     function create_tasks()
-        tasks = Vector{Task}()
+        tasks = Task[]
         event = Threads.Event()
         push!(tasks,
               Threads.@spawn begin
@@ -1206,55 +1210,57 @@ end
         return tasks, event
     end
 
-    @testset "waitany" begin
-        tasks, event = create_tasks()
-        sleep(0.1)
-        done,  pending = waitany(tasks)
-        @test length(done) == 2
-        @test tasks[1] ∈ done
-        @test tasks[2] ∈ done
-        @test length(pending) == 1
-        @test tasks[3] ∈ pending
-        notify(event)
-        yield()
-        wait(tasks[3])
-    end
-
-    @testset "waitall" begin
-        @testset "All tasks succeed" begin
+    for tasks_type in (Vector{Task}, Set{Task}, Tuple{Task})
+        @testset "waitany" begin
             tasks, event = create_tasks()
-
             sleep(0.1)
-            waiter = Threads.@spawn waitall(tasks)
-            @test !istaskdone(waiter)
-
-            notify(event)
-            done, pending = fetch(waiter)
-            @test length(done) == 3
+            done,  pending = waitany(convert_tasks(tasks_type, tasks))
+            @test length(done) == 2
             @test tasks[1] ∈ done
             @test tasks[2] ∈ done
-            @test tasks[3] ∈ done
-            @test length(pending) == 0
-        end
-
-        @testset "failfast=true" begin
-            tasks, event = create_tasks()
-            push!(tasks, Threads.@spawn error("Error"))
-
-            sleep(0.1)
-            waiter = Threads.@spawn waitall(tasks; failfast=true)
-
-            done, pending = fetch(waiter)
-            @test length(done) == 3
-            @test tasks[1] ∈ done
-            @test tasks[2] ∈ done
-            @test tasks[4] ∈ done
             @test length(pending) == 1
             @test tasks[3] ∈ pending
-
             notify(event)
             yield()
             wait(tasks[3])
+        end
+
+        @testset "waitall" begin
+            @testset "All tasks succeed" begin
+                tasks, event = create_tasks()
+
+                sleep(0.1)
+                waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks))
+                @test !istaskdone(waiter)
+
+                notify(event)
+                done, pending = fetch(waiter)
+                @test length(done) == 3
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test tasks[3] ∈ done
+                @test length(pending) == 0
+            end
+
+            @testset "failfast=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                sleep(0.1)
+                waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks); failfast=true)
+
+                done, pending = fetch(waiter)
+                @test length(done) == 3
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test tasks[4] ∈ done
+                @test length(pending) == 1
+                @test tasks[3] ∈ pending
+
+                notify(event)
+                yield()
+                wait(tasks[3])
+            end
         end
     end
 end
