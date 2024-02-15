@@ -31,6 +31,7 @@
 
 ;; this is overwritten when we run in actual julia
 (define (defined-julia-global v) #f)
+(define (nothrow-julia-global v) #f)
 (define (julia-current-file) 'none)
 (define (julia-current-line) 0)
 
@@ -140,7 +141,7 @@
 
 (define (toplevel-only-expr? e)
   (and (pair? e)
-       (or (memq (car e) '(toplevel line module import using export
+       (or (memq (car e) '(toplevel line module import using export public
                                     error incomplete))
            (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
 
@@ -149,7 +150,7 @@
 (define (expand-toplevel-expr e file line)
   (cond ((or (atom? e) (toplevel-only-expr? e))
          (if (underscore-symbol? e)
-             (error "all-underscore identifier used as rvalue"))
+             (error "all-underscore identifiers are write-only and their values cannot be used in expressions"))
          e)
         (else
          (let ((last *in-expand*))

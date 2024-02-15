@@ -50,6 +50,8 @@ Base.unlock
 Base.trylock
 Base.islocked
 Base.ReentrantLock
+Base.@lock
+Base.Lockable
 ```
 
 ## Channels

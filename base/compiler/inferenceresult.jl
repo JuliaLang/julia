@@ -61,6 +61,12 @@ function pick_const_args!(𝕃::AbstractLattice, cache_argtypes::Vector{Any}, ov
         cache_argtype = cache_argtypes[i]
         if !is_argtype_match(𝕃, given_argtype, cache_argtype, false)
             # prefer the argtype we were given over the one computed from `linfo`
+            if (isa(given_argtype, PartialStruct) && isa(cache_argtype, Type) &&
+                !⊏(𝕃, given_argtype, cache_argtype))
+                # if the type information of this `PartialStruct` is less strict than
+                # declared method signature, narrow it down using `tmeet`
+                given_argtype = tmeet(𝕃, given_argtype, cache_argtype)
+            end
             cache_argtypes[i] = given_argtype
             overridden_by_const[i] = true
         end
@@ -80,7 +86,7 @@ end
 
 va_process_argtypes(𝕃::AbstractLattice, given_argtypes::Vector{Any}, mi::MethodInstance) =
     va_process_argtypes(Returns(nothing), 𝕃, given_argtypes, mi)
-function va_process_argtypes(@nospecialize(va_handler!), 𝕃::AbstractLattice, given_argtypes::Vector{Any}, mi::MethodInstance)
+function va_process_argtypes(@specialize(va_handler!), 𝕃::AbstractLattice, given_argtypes::Vector{Any}, mi::MethodInstance)
     def = mi.def
     isva = isa(def, Method) ? def.isva : false
     nargs = isa(def, Method) ? Int(def.nargs) : length(mi.specTypes.parameters)
@@ -203,31 +209,29 @@ function elim_free_typevars(@nospecialize t)
     end
 end
 
-function cache_lookup(lattice::AbstractLattice, linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
+function cache_lookup(𝕃::AbstractLattice, linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
     method = linfo.def::Method
-    nargs::Int = method.nargs
+    nargs = Int(method.nargs)
     method.isva && (nargs -= 1)
-    length(given_argtypes) >= nargs || return nothing
+    length(given_argtypes) ≥ nargs || return nothing
     for cached_result in cache
         cached_result.linfo === linfo || continue
-        cache_match = true
         cache_argtypes = cached_result.argtypes
         cache_overridden_by_const = cached_result.overridden_by_const
         for i in 1:nargs
-            if !is_argtype_match(lattice, widenmustalias(given_argtypes[i]),
-                                 cache_argtypes[i],
-                                 cache_overridden_by_const[i])
-                cache_match = false
-                break
+            if !is_argtype_match(𝕃, widenmustalias(given_argtypes[i]),
+                                 cache_argtypes[i], cache_overridden_by_const[i])
+                @goto next_cache
             end
         end
-        if method.isva && cache_match
-            cache_match = is_argtype_match(lattice, tuple_tfunc(lattice, given_argtypes[(nargs + 1):end]),
-                                           cache_argtypes[end],
-                                           cache_overridden_by_const[end])
+        if method.isva
+            if !is_argtype_match(𝕃, tuple_tfunc(𝕃, given_argtypes[(nargs + 1):end]),
+                                 cache_argtypes[end], cache_overridden_by_const[end])
+                @goto next_cache
+            end
         end
-        cache_match || continue
         return cached_result
+        @label next_cache
     end
     return nothing
 end

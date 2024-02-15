@@ -15,7 +15,8 @@ typedef struct {
     const char *cpu_target;
     int8_t nthreadpools;
     int16_t nthreads;
-    int16_t ngcthreads;
+    int16_t nmarkthreads;
+    int8_t nsweepthreads;
     const int16_t *nthreads_per_pool;
     int32_t nprocs;
     const char *machine_file;

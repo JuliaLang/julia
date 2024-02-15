@@ -296,6 +296,8 @@ end
         @test_throws ArgumentError parse(Complex{T}, bad)
     end
     @test_throws ArgumentError parse(Complex{Int}, "3 + 4.2im")
+    @test_throws ArgumentError parse(ComplexF64, "3 β+ 4im")
+    @test_throws ArgumentError parse(ComplexF64, "3 + 4αm")
 end
 
 @testset "parse and tryparse type inference" begin

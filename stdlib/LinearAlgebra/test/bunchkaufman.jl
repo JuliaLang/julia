@@ -21,9 +21,24 @@ a2img  = randn(n,n)/2
 breal = randn(n,2)/2
 bimg  = randn(n,2)/2
 
-@testset "$eltya argument A" for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int)
-    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-    a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
+areint = rand(1:7, n, n)
+aimint = rand(1:7, n, n)
+a2reint = rand(1:7, n, n)
+a2imint = rand(1:7, n, n)
+breint = rand(1:5, n, 2)
+bimint = rand(1:5, n, 2)
+
+@testset "$eltya argument A" for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int, ###
+    Float16, Complex{Float16}, BigFloat, Complex{BigFloat}, Complex{Int}, BigInt,
+    Complex{BigInt}, Rational{BigInt}, Complex{Rational{BigInt}})
+    # a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    # a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
+    a = convert(Matrix{eltya}, eltya <: Complex ? (real(eltya) <: AbstractFloat ?
+        complex.(areal, aimg) : complex.(areint, aimint)) : (eltya <: AbstractFloat ?
+        areal : areint))
+    a2 = convert(Matrix{eltya}, eltya <: Complex ? (real(eltya) <: AbstractFloat ?
+        complex.(a2real, a2img) : complex.(a2reint, a2imint)) : (eltya <: AbstractFloat ?
+        a2real : a2reint))
     asym = transpose(a) + a                  # symmetric indefinite
     aher = a' + a                  # Hermitian indefinite
     apd  = a' * a                  # Positive-definite
@@ -34,9 +49,39 @@ bimg  = randn(n,2)/2
                                 view(apd , 1:n, 1:n)))
         ε = εa = eps(abs(float(one(eltya))))
 
+        # Inertia tests
+        @testset "$uplo Bunch-Kaufman factor inertia" for uplo in (:L, :U)
+            @testset "rook pivoting: $rook" for rook in (false, true)
+                test_list = eltya <: Complex ? (Hermitian(aher, uplo), Hermitian(apd, uplo)) :
+                    (Symmetric(transpose(a) + a, uplo), Hermitian(aher, uplo),
+                Hermitian(apd, uplo))
+                ελ = n*max(eps(Float64), εa) # zero-eigenvalue threshold
+                ελ = typeof(Integer(one(real(eltya)))) <: Signed ? Rational{BigInt}(ελ) :
+                    real(eltya(ελ))
+                for M in test_list
+                    bc = bunchkaufman(M, rook)
+                    D = bc.D
+                    λ = real(eltya <: Complex ? eigen(ComplexF64.(D)).values :
+                        eigen(Float64.(D)).values)
+                    σ₁ = norm(λ, Inf)
+                    np = sum(λ .> ελ*σ₁)
+                    nn = sum(λ .< -ελ*σ₁)
+                    nz = n - np - nn
+                    if real(eltya) <: AbstractFloat
+                        @test inertia(bc) == (np, nn, nz)
+                    else
+                        @test inertia(bc; rtol=ελ) == (np, nn, nz)
+                    end
+                end
+            end
+        end
+
         # check that factorize gives a Bunch-Kaufman
-        @test isa(factorize(asym), LinearAlgebra.BunchKaufman)
-        @test isa(factorize(aher), LinearAlgebra.BunchKaufman)
+        if eltya <: Union{Float32, Float64, ComplexF32, ComplexF64, Int}
+            # Default behaviour only uses Bunch-Kaufman for these types, for now.
+            @test isa(factorize(asym), LinearAlgebra.BunchKaufman)
+            @test isa(factorize(aher), LinearAlgebra.BunchKaufman)
+        end
         @testset "$uplo Bunch-Kaufman factor of indefinite matrix" for uplo in (:L, :U)
             bc1 = bunchkaufman(Hermitian(aher, uplo))
             @test LinearAlgebra.issuccess(bc1)
@@ -89,15 +134,25 @@ bimg  = randn(n,2)/2
             @test Base.propertynames(bc1) == (:p, :P, :L, :U, :D)
         end
 
-        @testset "$eltyb argument B" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
-            b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
+        @testset "$eltyb argument B" for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int, ###
+            Float16, Complex{Float16}, BigFloat, Complex{BigFloat}, Complex{Int}, BigInt,
+            Complex{BigInt}, Rational{BigInt}, Complex{Rational{BigInt}})
+            # b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
+            b = convert(Matrix{eltyb}, eltyb <: Complex ? (real(eltyb) <: AbstractFloat ?
+                complex.(breal, bimg) : complex.(breint, bimint)) : (eltyb <: AbstractFloat ?
+                breal : breint))
             for b in (b, view(b, 1:n, 1:2))
                 εb = eps(abs(float(one(eltyb))))
                 ε = max(εa,εb)
+                epsc = eltya <: Complex ? sqrt(2)*n : n # tolerance scale
 
                 @testset "$uplo Bunch-Kaufman factor of indefinite matrix" for uplo in (:L, :U)
                     bc1 = bunchkaufman(Hermitian(aher, uplo))
-                    @test aher*(bc1\b) ≈ b atol=1000ε
+                    # @test aher*(bc1\b) ≈ b atol=1000ε
+                    cda = eltya <: Complex ? cond(ComplexF64.(aher)) : cond(Float64.(aher))
+                    cda = real(eltya) <: AbstractFloat ? real(eltya(cda)) : cda
+                    @test norm(aher*(bc1\b) - b) <= epsc*sqrt(eps(cda))*max(
+                            norm(aher*(bc1\b)), norm(b))
                 end
 
                 @testset "$uplo Bunch-Kaufman factors of a pos-def matrix" for uplo in (:U, :L)
@@ -112,8 +167,14 @@ bimg  = randn(n,2)/2
                         @test logdet(bc2) ≈ log(det(bc2))
                         @test logabsdet(bc2)[1] ≈ log(abs(det(bc2)))
                         @test logabsdet(bc2)[2] == sign(det(bc2))
-                        @test inv(bc2)*apd ≈ Matrix(I, n, n)
-                        @test apd*(bc2\b) ≈ b rtol=eps(cond(apd))
+                        # @test inv(bc2)*apd ≈ Matrix(I, n, n) rtol=Base.rtoldefault(real(eltya))
+                        # @test apd*(bc2\b) ≈ b rtol=eps(cond(apd))
+                        @test norm(inv(bc2)*apd - Matrix(I, n, n)) <= epsc*Base.rtoldefault(
+                            real(eltya))*max(norm(inv(bc2)*apd), norm(Matrix(I, n, n)))
+                        cda = eltya <: Complex ? cond(ComplexF64.(apd)) : cond(Float64.(apd))
+                        cda = real(eltya) <: AbstractFloat ? real(eltya(cda)) : cda
+                        @test norm(apd*(bc2\b) - b) <= epsc*sqrt(eps(cda))*max(
+                            norm(apd*(bc2\b)), norm(b))
                         @test ishermitian(bc2)
                         @test !issymmetric(bc2) || eltya <: Real
                     end

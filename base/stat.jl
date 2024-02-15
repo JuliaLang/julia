@@ -25,6 +25,30 @@ export
     stat,
     uperm
 
+"""
+    StatStruct
+
+A struct which stores the information from `stat`.
+The following fields of this struct is considered public API:
+
+| Name    | Type                            | Description                                                        |
+|:--------|:--------------------------------|:-------------------------------------------------------------------|
+| desc    | `Union{String, Base.OS_HANDLE}` | The path or OS file descriptor                                     |
+| size    | `Int64`                         | The size (in bytes) of the file                                    |
+| device  | `UInt`                          | ID of the device that contains the file                            |
+| inode   | `UInt`                          | The inode number of the file                                       |
+| mode    | `UInt`                          | The protection mode of the file                                    |
+| nlink   | `Int`                           | The number of hard links to the file                               |
+| uid     | `UInt`                          | The user id of the owner of the file                               |
+| gid     | `UInt`                          | The group id of the file owner                                     |
+| rdev    | `UInt`                          | If this file refers to a device, the ID of the device it refers to |
+| blksize | `Int64`                         | The file-system preferred block size for the file                  |
+| blocks  | `Int64`                         | The number of 512-byte blocks allocated                            |
+| mtime   | `Float64`                       | Unix timestamp of when the file was last modified                  |
+| ctime   | `Float64`                       | Unix timestamp of when the file's metadata was changed             |
+
+See also: [`stat`](@ref)
+"""
 struct StatStruct
     desc    :: Union{String, OS_HANDLE} # for show method, not included in equality or hash
     device  :: UInt
@@ -144,13 +168,14 @@ show(io::IO, ::MIME"text/plain", st::StatStruct) = show_statstruct(io, st, false
 
 # stat & lstat functions
 
-macro stat_call!(stat_buf, sym, arg1type, arg)
+macro stat_call(sym, arg1type, arg)
     return quote
-        r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), $(esc(stat_buf)))
+        stat_buf = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
+        r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
         if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
             uv_error(string("stat(", repr($(esc(arg))), ")"), r)
         end
-        st = StatStruct($(esc(arg)), $(esc(stat_buf)))
+        st = StatStruct($(esc(arg)), stat_buf)
         if ispath(st) != (r == 0)
             error("stat returned zero type for a valid path")
         end
@@ -158,30 +183,13 @@ macro stat_call!(stat_buf, sym, arg1type, arg)
     end
 end
 
-"""
-    stat!(stat_buf::Vector{UInt8}, file)
-
-Like [`stat`](@ref), but avoids internal allocations by using a pre-allocated buffer,
-`stat_buf`.  For a small performance gain over `stat`, consecutive calls to `stat!` can use
-the same `stat_buf`.  See also [`Base.Filesystem.get_stat_buf`](@ref).
-"""
-stat!(stat_buf::Vector{UInt8}, fd::OS_HANDLE)         = @stat_call! stat_buf jl_fstat OS_HANDLE fd
-stat!(stat_buf::Vector{UInt8}, path::AbstractString)  = @stat_call! stat_buf jl_stat  Cstring path
-lstat!(stat_buf::Vector{UInt8}, path::AbstractString) = @stat_call! stat_buf jl_lstat Cstring path
+stat(fd::OS_HANDLE)         = @stat_call jl_fstat OS_HANDLE fd
+stat(path::AbstractString)  = @stat_call jl_stat  Cstring path
+lstat(path::AbstractString) = @stat_call jl_lstat Cstring path
 if RawFD !== OS_HANDLE
-    global stat!(stat_buf::Vector{UInt8}, fd::RawFD)  = stat!(stat_buf, Libc._get_osfhandle(fd))
+    global stat(fd::RawFD)  = stat(Libc._get_osfhandle(fd))
 end
-stat!(stat_buf::Vector{UInt8}, fd::Integer)           = stat!(stat_buf, RawFD(fd))
-
-stat(x) = stat!(get_stat_buf(), x)
-lstat(x) = lstat!(get_stat_buf(), x)
-
-"""
-    get_stat_buf()
-
-Return a buffer of bytes of the right size for [`stat!`](@ref).
-"""
-get_stat_buf() = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
+stat(fd::Integer)           = stat(RawFD(fd))
 
 """
     stat(file)
@@ -189,22 +197,21 @@ get_stat_buf() = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
 Return a structure whose fields contain information about the file.
 The fields of the structure are:
 
-| Name    | Description                                                        |
-|:--------|:-------------------------------------------------------------------|
-| desc    | The path or OS file descriptor                                     |
-| size    | The size (in bytes) of the file                                    |
-| device  | ID of the device that contains the file                            |
-| inode   | The inode number of the file                                       |
-| mode    | The protection mode of the file                                    |
-| nlink   | The number of hard links to the file                               |
-| uid     | The user id of the owner of the file                               |
-| gid     | The group id of the file owner                                     |
-| rdev    | If this file refers to a device, the ID of the device it refers to |
-| blksize | The file-system preferred block size for the file                  |
-| blocks  | The number of such blocks allocated                                |
-| mtime   | Unix timestamp of when the file was last modified                  |
-| ctime   | Unix timestamp of when the file's metadata was changed             |
-
+| Name    | Type                            | Description                                                        |
+|:--------|:--------------------------------|:-------------------------------------------------------------------|
+| desc    | `Union{String, Base.OS_HANDLE}` | The path or OS file descriptor                                     |
+| size    | `Int64`                         | The size (in bytes) of the file                                    |
+| device  | `UInt`                          | ID of the device that contains the file                            |
+| inode   | `UInt`                          | The inode number of the file                                       |
+| mode    | `UInt`                          | The protection mode of the file                                    |
+| nlink   | `Int`                           | The number of hard links to the file                               |
+| uid     | `UInt`                          | The user id of the owner of the file                               |
+| gid     | `UInt`                          | The group id of the file owner                                     |
+| rdev    | `UInt`                          | If this file refers to a device, the ID of the device it refers to |
+| blksize | `Int64`                         | The file-system preferred block size for the file                  |
+| blocks  | `Int64`                         | The number of 512-byte blocks allocated                            |
+| mtime   | `Float64`                       | Unix timestamp of when the file was last modified                  |
+| ctime   | `Float64`                       | Unix timestamp of when the file's metadata was changed             |
 """
 stat(path...) = stat(joinpath(path...))
 

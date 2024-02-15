@@ -196,10 +196,12 @@ function err_message(errno::Integer)
     return GC.@preserve buffer unsafe_string(pointer(buffer))
 end
 
-function exec(re, subject, offset, options, match_data)
-    if !(subject isa Union{String,SubString{String}})
-        subject = String(subject)
-    end
+exec(re, subject::Union{String,SubString{String}}, offset, options, match_data) =
+    _exec(re, subject, offset, options, match_data)
+exec(re, subject, offset, options, match_data) =
+    _exec(re, String(subject), offset, options, match_data)
+
+function _exec(re, subject, offset, options, match_data)
     rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
                (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, UInt32, Ptr{Cvoid}, Ptr{Cvoid}),
                re, subject, ncodeunits(subject), offset, options, match_data, get_local_match_context())

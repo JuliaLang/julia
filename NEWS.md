@@ -1,132 +1,201 @@
-Julia v1.10 Release Notes
+Julia v1.11 Release Notes
 ========================
 
 New language features
 ---------------------
-
-* JuliaSyntax.jl is now used as the default parser, providing better diagnostics and faster
-  parsing. Set environment variable `JULIA_USE_NEW_PARSER` to `0` to switch back to the old
-  parser if necessary (and if you find this necessary, please file an issue) ([#46372]).
-* `⥺` (U+297A, `\leftarrowsubset`) and `⥷` (U+2977, `\leftarrowless`)
-  may now be used as binary operators with arrow precedence. ([#45962])
+* `public` is a new keyword. Symbols marked with `public` are considered public
+  API. Symbols marked with `export` are now also treated as public API. The
+  difference between `public` and `export` is that `public` names do not become
+  available when `using` a package/module ([#50105]).
+* `ScopedValue` implements dynamic scope with inheritance across tasks ([#50958]).
+* The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
+  but allows to add keyword arguments to the function call ([#51501]).
+* Support for Unicode 15.1 ([#51799]).
+* Three new types around the idea of text with "annotations" (`Pair{Symbol, Any}`
+  entries, e.g. `:lang => "en"` or `:face => :magenta`). These annotations
+  are preserved across operations (e.g. string concatenation with `*`) when
+  possible.
+  * `AnnotatedString` is a new `AbstractString` type. It wraps an underlying
+    string and allows for annotations to be attached to regions of the string.
+    This type is used extensively in the new `StyledStrings` standard library to
+    hold styling information.
+  * `AnnotatedChar` is a new `AbstractChar` type. It wraps another char and
+    holds a list of annotations that apply to it.
+  * `AnnotatedIOBuffer` is a new `IO` type that mimics an `IOBuffer`, but has
+    specialised `read`/`write` methods for annotated content. This can be
+    thought of both as a "string builder" of sorts and also as glue between
+    annotated and unannotated content.
+* `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
+  to be preferentially picked up by the given julia version. i.e. in the same folder,
+  a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
+  version. This makes managing environments for multiple julia versions at the same time
+  easier ([#43845]).
+* `@time` now reports a count of any lock conflicts where a `ReentrantLock` had to wait, plus a new macro
+  `@lock_conflicts` which returns that count ([#52883]).
 
 Language changes
 ----------------
+* During precompilation, the `atexit` hooks now run before saving the output file. This
+  allows users to safely tear down background state (such as closing Timers and sending
+  disconnect notifications to heartbeat tasks) and cleanup other resources when the program
+  wants to begin exiting.
+* Code coverage and malloc tracking is no longer generated during the package precompilation stage.
+  Further, during these modes pkgimage caches are now used for packages that are not being tracked.
+  This means that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
+  pkgimage caches for all other packages than the package being tested, likely meaning faster test
+  execution. ([#52123])
 
-* When a task forks a child, the parent task's task-local RNG (random number generator) is no longer affected. The seeding of child based on the parent task also takes a more disciplined approach to collision resistance, using a design based on the SplitMix and DotMix splittable RNG schemes ([#49110]).
-* A new more-specific rule for methods resolves ambiguities containing Union{} in favor of
-  the method defined explicitly to handle the Union{} argument. This makes it possible to
-  define methods to explicitly handle Union{} without the ambiguities that commonly would
-  result previously. This also lets the runtime optimize certain method lookups in a way
-  that significantly improves load and inference times for heavily overloaded methods that
-  dispatch on Types (such as traits and constructors).
-* The "h bar" `ℏ` (`\hslash` U+210F) character is now treated as equivalent to `ħ` (`\hbar` U+0127).
-* When a method with keyword arguments is displayed in the stack trace view, the textual
-  representation of the keyword arguments' types is simplified using the new
-  `@Kwargs{key1::Type1, ...}` macro syntax ([#49959]).
+* Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
+  omit the default user depot ([#51448]).
 
 Compiler/Runtime improvements
 -----------------------------
-
-* The `@pure` macro is now deprecated. Use `Base.@assume_effects :foldable` instead ([#48682]).
-* The mark phase of the Garbage Collector is now multi-threaded ([#48600]).
-* [JITLink](https://llvm.org/docs/JITLink.html) is enabled by default on Linux aarch64 when Julia is linked to LLVM 15 or later versions ([#49745]).
-  This should resolve many segmentation faults previously observed on this platform.
+* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
+* A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
+  loads, primarily to be used within JLLs ([#50074]).
+* Added support for annotating `Base.@assume_effects` on code blocks ([#52400]).
+* The libuv library has been updated from a base of v1.44.2 to v1.48.0 ([#49937]).
 
 Command-line option changes
 ---------------------------
 
-* New option `--gcthreads` to set how many threads will be used by the Garbage Collector ([#48600]).
-  The default is set to `N/2` where `N` is the amount of worker threads (`--threads`) used by Julia.
+* The entry point for Julia has been standardized to `Main.main(ARGS)`. This must be explicitly opted into using the `@main` macro
+(see the docstring for further details). When opted-in, and julia is invoked to run a script or expression
+(i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically.
+This is intended to unify script and compilation workflows, where code loading may happen
+in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
+difference between defining a `main` function and executing the code directly at the end of the script ([50974]).
+* The `--compiled-modules` and `--pkgimages` flags can now be set to `existing`, which will
+  cause Julia to consider loading existing cache files, but not to create new ones ([#50586]
+  and [#52573]).
 
 Multi-threading changes
 -----------------------
 
+* `Threads.@threads` now supports the `:greedy` scheduler, intended for non-uniform workloads ([#52096]).
+* A new exported struct `Lockable{T, L<:AbstractLock}` makes it easy to bundle a resource and its lock together ([#52898]).
 
 Build system changes
 --------------------
 
-
 New library functions
 ---------------------
-* `tanpi` is now defined. It computes tan(πx) more accurately than `tan(pi*x)` ([#48575]).
-* `fourthroot(x)` is now defined in `Base.Math` and can be used to compute the fourth root of `x`.
-   It can also be accessed using the unicode character `∜`, which can be typed by `\fourthroot<tab>` ([#48899]).
-* `Libc.memmove`, `Libc.memset`, and `Libc.memcpy` are now defined, whose functionality matches that of their respective C calls.
+
+* `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not.
+* The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
+* `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
+* `eachrsplit(string, pattern)` iterates split substrings right to left.
+* `Sys.username()` can be used to return the current user's username ([#51897]).
+* `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` is the safe counterpart to `unsafe_wrap` ([#52049]).
+* `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
+* `IdSet` is now exported from Base and considered public ([#53262]).
 
 New library features
 --------------------
-* The `initialized=true` keyword assignment for `sortperm!` and `partialsortperm!`
-  is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
-* `binomial(x, k)` now supports non-integer `x` ([#48124]).
-* A `CartesianIndex` is now treated as a "scalar" for broadcasting ([#47044]).
-* `printstyled` now supports italic output ([#45164]).
-* `parent` and `parentindices` support `SubString`s
+
+* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
+* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
+* `replace(string, pattern...)` now supports an optional `IO` argument to
+  write the output to a stream rather than returning a string ([#48625]).
+* New methods `allequal(f, itr)` and `allunique(f, itr)` taking a predicate function ([#47679]).
+* `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
+* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
+* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
+* Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
+  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
+  no longer required there for correctness to avoid data races ([#52461]).
+* After a process exits, `closewrite` will no longer be automatically called on
+  the stream passed to it. Call `wait` on the process instead to ensure the
+  content is fully written, then call `closewrite` manually to avoid
+  data-races. Or use the callback form of `open` to have all that handled
+  automatically.
+* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+* `filter` can now act on a `NamedTuple` ([#50795]).
+* `Iterators.cycle(iter, n)` runs over `iter` a fixed number of times, instead of forever ([#47354])
+* `zero(::AbstractArray)` now applies recursively, so `zero([[1,2],[3,4,5]])` now produces the additive identity `[[0,0],[0,0,0]]` rather than erroring ([#38064]).
 
 Standard library changes
 ------------------------
 
-* `startswith` now supports seekable `IO` streams ([#43055])
-* printing integral `Rational`s will skip the denominator in `Rational`-typed IO context (e.g. in `Arrays`) ([#45396])
+#### StyledStrings
+
+* A new standard library for handling styling in a more comprehensive and structured way ([#49586]).
+* The new `Faces` struct serves as a container for text styling information
+  (think typeface, as well as color and decoration), and comes with a framework
+  to provide a convenient, extensible (via `addface!`), and customisable (with a
+  user's `Faces.toml` and `loadfaces!`) approach to
+  styled content ([#49586]).
+* The new `@styled_str` string macro provides a convenient way of creating a
+  `AnnotatedString` with various faces or other attributes applied ([#49586]).
+
+#### JuliaSyntaxHighlighting
+
+* A new standard library for applying syntax highlighting to Julia code, this
+  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
+  that creates an `AnnotatedString` with syntax highlighting applied.
 
 #### Package Manager
 
-* `Pkg.precompile` now accepts `timing` as a keyword argument which displays per package timing information for precompilation (e.g. `Pkg.precompile(timing=true)`)
-
 #### LinearAlgebra
+* `cbrt(::AbstractMatrix{<:Real})` is now defined and returns real-valued matrix cube roots of real-valued matrices ([#50661]).
+* `eigvals/eigen(A, bunchkaufman(B))` and `eigvals/eigen(A, lu(B))`, which utilize the Bunchkaufman (LDL) and LU decomposition of `B`,
+   respectively, now efficiently compute the generalized eigenvalues (`eigen`: and eigenvectors) of `A` and `B`. Note: The second
+   argument is the output of `bunchkaufman` or `lu` ([#50471]).
+* There is now a specialized dispatch for `eigvals/eigen(::Hermitian{<:Tridiagonal})` which performs a similarity transformation to create a real symmetrix triagonal matrix, and solve that using the LAPACK routines ([#49546]).
+* Structured matrices now retain either the axes of the parent (for `Symmetric`/`Hermitian`/`AbstractTriangular`/`UpperHessenberg`), or that of the principal diagonal (for banded matrices) ([#52480]).
+* `bunchkaufman` and `bunchkaufman!` now work for any `AbstractFloat`, `Rational` and their complex variants. `bunchkaufman` now supports `Integer` types, by making an internal conversion to `Rational{BigInt}`. Added new function `inertia` that computes the inertia of the diagonal factor given by the `BunchKaufman` factorization object of a real symmetric or Hermitian matrix. For complex symmetric matrices, `inertia` only computes the number of zero eigenvalues of the diagonal factor ([#51487]).
+* Packages that specialize matrix-matrix `mul!` with a method signature of the form `mul!(::AbstractMatrix, ::MyMatrix, ::AbstractMatrix, ::Number, ::Number)` no longer encounter method ambiguities when interacting with `LinearAlgebra`. Previously, ambiguities used to arise when multiplying a `MyMatrix` with a structured matrix type provided by LinearAlgebra, such as `AbstractTriangular`, which used to necessitate additional methods to resolve such ambiguities. Similar sources of ambiguities have also been removed for matrix-vector `mul!` operations ([#52837]).
+* `lu` and `issuccess(::LU)` now accept an `allowsingular` keyword argument. When set to `true`, a valid factorization with rank-deficient U factor will be treated as success instead of throwing an error. Such factorizations are now shown by printing the factors together with a "rank-deficient" note rather than printing a "Failed Factorization" message ([#52957]).
 
-* `AbstractQ` no longer subtypes to `AbstractMatrix`. Moreover, `adjoint(Q::AbstractQ)`
-  no longer wraps `Q` in an `Adjoint` type, but instead in an `AdjointQ`, that itself
-  subtypes `AbstractQ`. This change accounts for the fact that typically `AbstractQ`
-  instances behave like function-based, matrix-backed linear operators, and hence don't
-  allow for efficient indexing. Also, many `AbstractQ` types can act on vectors/matrices
-  of different size, acting like a matrix with context-dependent size. With this change,
-  `AbstractQ` has a well-defined API that is described in detail in the
-  [Julia documentation](https://docs.julialang.org/en/v1/stdlib/LinearAlgebra/#man-linalg-abstractq)
-  ([#46196]).
-* Adjoints and transposes of `Factorization` objects are no longer wrapped in `Adjoint`
-  and `Transpose` wrappers, respectively. Instead, they are wrapped in
-  `AdjointFactorization` and `TranposeFactorization` types, which themselves subtype
-  `Factorization` ([#46874]).
-* New functions `hermitianpart` and `hermitianpart!` for extracting the Hermitian
-  (real symmetric) part of a matrix ([#31836]).
-* The `norm` of the adjoint or transpose of an `AbstractMatrix` now returns the norm of the
-  parent matrix by default, matching the current behaviour for `AbstractVector`s ([#49020]).
+#### Logging
+* New `@create_log_macro` macro for creating new log macros like `@info`, `@warn` etc. For instance
+  `@create_log_macro MyLog 1500 :magenta` will create `@mylog` to be used like `@mylog "hello"` which
+  will show as `┌ MyLog: hello` etc. ([#52196])
 
 #### Printf
-* Format specifiers now support dynamic width and precision, e.g. `%*s` and `%*.*g` ([#40105]).
 
 #### Profile
 
-
 #### Random
-
+* `rand` now supports sampling over `Tuple` types ([#35856], [#50251]).
+* `rand` now supports sampling over `Pair` types ([#28705]).
+* When seeding RNGs provided by `Random`, negative integer seeds can now be used ([#51416]).
+* Seedable random number generators from `Random` can now be seeded by a string, e.g.
+  `seed!(rng, "a random seed")` ([#51527]).
 
 #### REPL
 
-* When stack traces are printed, the printed depth of types in function signatures will be limited
-  to avoid overly verbose output ([#49795]).
+* Tab complete hints now show in lighter text while typing in the repl. To disable
+  set `Base.active_repl.options.hint_tab_completes = false` interactively, or in startup.jl:
+  ```
+  if VERSION >= v"1.11.0-0"
+    atreplinit() do repl
+        repl.options.hint_tab_completes = false
+    end
+  end
+  ``` ([#51229]).
+* Meta-M with an empty prompt now toggles the contextual module between the previous non-Main
+  contextual module and Main so that switching back and forth is simple. ([#51616], [#52670])
 
 #### SuiteSparse
 
 
 #### SparseArrays
 
-
 #### Test
-
-
-* The `@test_broken` macro (or `@test` with `broken=true`) now complains if the test expression returns a
-  non-boolean value in the same way as a non-broken test. ([#47804])
-* When a call to `@test` fails or errors inside a function, a larger stacktrace is now printed such that the location of the test within a `@testset` can be retrieved ([#49451])
 
 #### Dates
 
+* The undocumented function `adjust` is no longer exported but is now documented
 * `unix2datetime`, `datetime2unix`, `julian2datetime`, and `datetime2julian` now accept a keyword argument `localtime=true` to use the local time zone instead of UTC ([#50296]).
 
+#### Statistics
+
+* Statistics is now an upgradeable standard library ([#46501]).
 
 #### Distributed
 
+* `pmap` now defaults to using a `CachingPool` ([#33892]).
 
 #### Unicode
 
@@ -136,19 +205,21 @@ Standard library changes
 
 #### InteractiveUtils
 
- * `code_native` and `@code_native` now default to intel syntax instead of AT&T.
- * `@time_imports` now shows the timing of any module `__init__()`s that are run ([#49529])
-
 Deprecated or removed
 ---------------------
+
+* `Base.map`, `Iterators.map`, and `foreach` lost their single-argument methods ([#52631]).
 
 
 External dependencies
 ---------------------
-
+* `tput` is no longer called to check terminal capabilities, it has been replaced with a pure-Julia terminfo parser ([#50797]).
 
 Tooling Improvements
 --------------------
 
+* CI now performs limited automatic typo detection on all PRs. If you merge a PR with a
+  failing typo CI check, then the reported typos will be automatically ignored in future CI
+  runs on PRs that edit those same files ([#51704]).
 
 <!--- generated by NEWS-update.jl: -->

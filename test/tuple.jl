@@ -212,7 +212,7 @@ end
 end
 
 
-@testset "element type" begin
+@testset "elelement/value/key types" begin
     @test eltype((1,2,3)) === Int
     @test eltype((1.0,2.0,3.0)) <: AbstractFloat
     @test eltype((true, false)) === Bool
@@ -227,6 +227,11 @@ end
         typejoin(Int, Float64, Bool)
     @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
     @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+
+    @test valtype((1,2,3)) === eltype((1,2,3))
+    @test valtype(Tuple{Int, Missing}) === eltype(Tuple{Int, Missing})
+    @test keytype((1,2,3)) === Int
+    @test keytype(Tuple{Int, Missing}) === Int
 end
 
 @testset "map with Nothing and Missing" begin
@@ -763,6 +768,12 @@ g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
 # issue #46049: setindex(::Tuple) regression
 @inferred Base.setindex((1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16), 42, 1)
 
+# issue #50562
+f50562(r) = in(:i_backward, r[])
+r50562 = Ref((:b_back, :foofakgka, :i_backw))
+f50562(r50562)
+@test @allocated(f50562(r50562)) == 0
+
 # issue #47326
 function fun1_47326(args...)
     head..., tail = args
@@ -796,3 +807,14 @@ namedtup = (;a=1, b=2, c=3)
 @test_throws ErrorException("Tuple field type cannot be Union{}") Tuple{Vararg{Union{},1}}
 @test Tuple{} <: Tuple{Vararg{Union{},N}} where N
 @test !(Tuple{} >: Tuple{Vararg{Union{},N}} where N)
+
+@test Val{Tuple{T,T,T} where T} === Val{Tuple{Vararg{T,3}} where T}
+@test Val{Tuple{Vararg{T,4}} where T} === Val{Tuple{T,T,T,T} where T}
+@test Val{Tuple{Int64, Vararg{Int32,N}} where N} === Val{Tuple{Int64, Vararg{Int32}}}
+@test Val{Tuple{Int32, Vararg{Int64}}} === Val{Tuple{Int32, Vararg{Int64,N}} where N}
+
+@testset "from Pair, issue #52636" begin
+    pair = (1 => "2")
+    @test (1, "2") == @inferred Tuple(pair)
+    @test (1, "2") == @inferred Tuple{Int,String}(pair)
+end

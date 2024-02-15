@@ -13,7 +13,7 @@ abstract type AbstractPattern end
 nothing_sentinel(i) = i == 0 ? nothing : i
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
-                  s::String, i::Integer)
+                  s::Union{String, SubString{String}}, i::Integer)
     if i < 1 || i > sizeof(s)
         i == sizeof(s) + 1 && return nothing
         throw(BoundsError(s, i))
@@ -38,7 +38,7 @@ findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a:
 findfirst(::typeof(iszero), a::ByteArray) = nothing_sentinel(_search(a, zero(UInt8)))
 findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
 
-function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
+function _search(a::Union{String,SubString{String},ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
     if i < 1
         throw(BoundsError(a, i))
     end
@@ -201,10 +201,10 @@ function _search_bloom_mask(c)
     UInt64(1) << (c & 63)
 end
 
-_nthbyte(s::String, i) = codeunit(s, i)
+_nthbyte(s::Union{String, SubString{String}}, i) = codeunit(s, i)
 _nthbyte(t::AbstractVector, index) = t[index + (firstindex(t)-1)]
 
-function _searchindex(s::String, t::String, i::Integer)
+function _searchindex(s::Union{String, SubString{String}}, t::Union{String, SubString{String}}, i::Integer)
     # Check for fast case of a single byte
     lastindex(t) == 1 && return something(findnext(isequal(t[1]), s, i), 0)
     _searchindex(codeunits(s), codeunits(t), i)
