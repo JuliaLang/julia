@@ -513,6 +513,8 @@ include("errorshow.jl")
 include("initdefs.jl")
 Filesystem.__postinit__()
 
+include("compilerwrappers.jl")
+
 # worker threads
 include("threadcall.jl")
 
