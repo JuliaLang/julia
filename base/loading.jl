@@ -1438,7 +1438,7 @@ function run_extension_callbacks(pkgid::PkgId)
     extids = pop!(EXT_DORMITORY, pkgid, nothing)
     extids === nothing && return
     for extid in extids
-        if in(extid.id, precompilation_stack) && !isprecompiled(extid.id)
+        if in(extid.id, precompilation_stack)
             @debug """
             Dependency cycle detected in extension precompilation: $(precompilation_stack_list()) > $(extid.id.name)
             $(extid.id.name) will not be loaded here.
