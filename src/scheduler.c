@@ -143,9 +143,7 @@ void jl_parallel_gc_threadfun(void *arg)
             uv_cond_wait(&gc_threads_cond, &gc_threads_lock);
         }
         uv_mutex_unlock(&gc_threads_lock);
-        if (may_mark()) {
-            gc_mark_loop_parallel(ptls, 0);
-        }
+        gc_mark_loop_parallel(ptls, 0);
         if (may_sweep(ptls)) { // not an else!
             gc_sweep_pool_parallel(ptls);
             jl_atomic_fetch_add(&ptls->gc_sweeps_requested, -1);
