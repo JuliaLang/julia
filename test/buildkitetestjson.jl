@@ -123,11 +123,29 @@ end
 
 function collect_results!(results::Vector{Dict{String, Any}}, testset::Test.DefaultTestSet, prefix::String="")
     common_data = result_dict(testset, prefix)
+    result_offset = length(results) + 1
+    result_counts = Dict{Tuple{String, String}, Int}()
     for (i, result) in enumerate(testset.results)
         if result isa Test.Result
-            push!(results, merge(common_data, result_dict(result)))
+            rdata = result_dict(result)
+            rid = (rdata["location"], rdata["result"])
+            if haskey(result_counts, rid)
+                result_counts[rid] += 1
+            else
+                result_counts[rid] = 1
+                push!(results, merge(common_data, rdata))
+            end
         elseif result isa Test.DefaultTestSet
             collect_results!(results, result, common_data["scope"])
+        end
+    end
+    # Modify names to hold `result_counts`
+    for i in result_offset:length(results)
+        result = results[i]
+        rid = (result["location"], result["result"])
+        if get(result_counts, rid, 0) > 1
+            result["name"] = replace(result["name"], r"^([^:]):" =>
+                SubstitutionString("\\1 (x$(result_counts[rid])):"))
         end
     end
     results
