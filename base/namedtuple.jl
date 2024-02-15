@@ -576,5 +576,5 @@ end
     return NamedTuple{names_front}(t), NamedTuple{names_last_n}(t)
 end
 
-mapreduce(f::F, op::OP, x::NamedTuple) where {F,OP} = reduce(op, map(f, Tuple(x)))
+mapreduce(f, op, x::NamedTuple) = reduce(op, map(f, Tuple(x)))
 
