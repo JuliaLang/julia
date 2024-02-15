@@ -1570,9 +1570,9 @@ end
     return isassigned(A, CartesianIndex(to_indices(A, i)))
 end
 @inline function isassigned(A::AbstractArray, i::Integer...)
-    @boundscheck checkbounds(Bool, A, i...) || return false
     # convert to valid indices, checking for Bool
     inds = to_indices(A, i)
+    @boundscheck checkbounds(Bool, A, inds...) || return false
     S = IndexStyle(A)
     ninds = length(inds)
     if (isa(S, IndexLinear) && ninds != 1)
