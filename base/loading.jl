@@ -1469,7 +1469,7 @@ end
 CacheFlags(f::Int) = CacheFlags(UInt8(f))
 CacheFlags() = CacheFlags(ccall(:jl_cache_flags, UInt8, ()))
 
-function _to_uint8(cf::CacheFlags)::UInt8
+function _cacheflag_to_uint8(cf::CacheFlags)::UInt8
     f = UInt8(0)
     f |= cf.use_pkgimages << 0
     f |= cf.debug_level << 1
@@ -1477,15 +1477,6 @@ function _to_uint8(cf::CacheFlags)::UInt8
     f |= cf.inline << 5
     f |= cf.opt_level << 6
     return f
-end
-
-function _to_cmd(flags::Base.CacheFlags)
-    inline_flag = flags.inline ? "--inline=yes" : "--inline=no"
-    optimize_flag = "-O$(flags.opt_level)"
-    debug_flag = "-g$(flags.debug_level)"
-    check_bounds_flag = "--check-bounds=" * ("auto", "yes", "no")[flags.check_bounds + 1]
-    pkg_images_flag = flags.use_pkgimages ? "--pkgimages=yes" : "--pkgimages=no"
-    return Cmd([inline_flag, optimize_flag, debug_flag, check_bounds_flag, pkg_images_flag])
 end
 
 function show(io::IO, cf::CacheFlags)
@@ -2576,7 +2567,7 @@ end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::Union{Nothing, String},
-                           concrete_deps::typeof(_concrete_dependencies), requested_flags::CacheFlags=CacheFlags(), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+                           concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, internal_stderr::IO = stderr, internal_stdout::IO = stdout)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
     output_o === nothing || rm(output_o, force=true)
@@ -2618,21 +2609,21 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     if output_o !== nothing
         @debug "Generating object cache file for $(repr("text/plain", pkg))"
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
-        opt_level = Base.JLOptions().opt_level
-        opts = `-O$(opt_level) --output-o $(output_o) --output-ji $(output) --output-incremental=yes`
+        opts = `--output-o $(output_o) --output-ji $(output) --output-incremental=yes`
     else
         @debug "Generating cache file for $(repr("text/plain", pkg))"
         cpu_target = nothing
-        opts = `-O0 --output-ji $(output) --output-incremental=yes`
+        opts = `--output-ji $(output) --output-incremental=yes -O0`
     end
 
     deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
     deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
-    io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd) $(opts)
+    io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd)
+                             $(flags)
+                             $(opts)
                               --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
-                              $(_to_cmd(requested_flags))
                               $trace
                               -`,
                               "OPENBLAS_NUM_THREADS" => 1,
@@ -2700,7 +2691,7 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::CacheFlags=CacheFlags(), reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
     @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
@@ -2710,7 +2701,7 @@ end
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
-                      keep_loaded_modules::Bool = true; flags::CacheFlags=CacheFlags(), reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
+                      keep_loaded_modules::Bool = true; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -3367,11 +3358,11 @@ end
         if isempty(modules)
             return true # ignore empty file
         end
-        if @ccall(jl_match_cache_flags(_to_uint8(requested_flags)::UInt8, actual_flags::UInt8)::UInt8) == 0
+        if @ccall(jl_match_cache_flags(_cacheflag_to_uint8(requested_flags)::UInt8, actual_flags::UInt8)::UInt8) == 0
             @debug """
             Rejecting cache file $cachefile for $modkey since the flags are mismatched
-              requested flags: $(requested_flags)
-              cache file:      $(CacheFlags(actual_flags))
+              requested flags: $(requested_flags) [$(_cacheflag_to_uint8(requested_flags))]
+              cache file:      $(CacheFlags(actual_flags)) [$actual_flags]
             """
             record_reason(reasons, "mismatched flags")
             return true
@@ -3647,5 +3638,5 @@ end
 
 @assert precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))
 @assert precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String))
-@assert precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), CacheFlags, IO, IO))
-@assert precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), CacheFlags, IO, IO))
+@assert precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), Cmd, IO, IO))
+@assert precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), Cmd, IO, IO))

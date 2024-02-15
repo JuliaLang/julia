@@ -2001,8 +2001,7 @@ precompile_test_harness("Test flags") do load_path
         current_flags.inline,
         3
     )
-
-    ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=modified_flags)
+    ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
     open(ji, "r") do io
         Base.isvalid_cache_header(io)
         _, _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
