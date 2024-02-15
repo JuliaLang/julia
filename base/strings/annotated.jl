@@ -153,7 +153,7 @@ lastindex(s::AnnotatedString) = lastindex(s.string)
 function getindex(s::AnnotatedString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
-        AnnotatedChar(s.string[i], map(last, annotations(s, i)))
+        AnnotatedChar(s.string[i], annotations(s, i))
     else
         string_index_err(s, i)
     end
@@ -200,34 +200,36 @@ julia> annotatedstring(AnnotatedString("annotated", [(1:9, :label => 1)]), ", an
 function annotatedstring(xs...)
     isempty(xs) && return AnnotatedString("")
     size = mapreduce(_str_sizehint, +, xs)
-    s = IOContext(IOBuffer(sizehint=size), :color => true)
+    buf = IOBuffer(sizehint=size)
+    s = IOContext(buf, :color => true)
     annotations = Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}()
     for x in xs
+        size = filesize(s.io)
         if x isa AnnotatedString
             for (region, annot) in x.annotations
-                push!(annotations, (s.io.size .+ (region), annot))
+                push!(annotations, (size .+ (region), annot))
             end
             print(s, x.string)
         elseif x isa SubString{<:AnnotatedString}
             for (region, annot) in x.string.annotations
                 start, stop = first(region), last(region)
                 if start <= x.offset + x.ncodeunits && stop > x.offset
-                    rstart = s.io.size + max(0, start - x.offset - 1) + 1
-                    rstop = s.io.size + min(stop, x.offset + x.ncodeunits) - x.offset
+                    rstart = size + max(0, start - x.offset - 1) + 1
+                    rstop = size + min(stop, x.offset + x.ncodeunits) - x.offset
                     push!(annotations, (rstart:rstop, annot))
                 end
             end
             print(s, SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)))
         elseif x isa AnnotatedChar
             for annot in x.annotations
-                push!(annotations, (1+s.io.size:1+s.io.size, annot))
+                push!(annotations, (1+size:1+size, annot))
             end
             print(s, x.char)
         else
             print(s, x)
         end
     end
-    str = String(resize!(s.io.data, s.io.size))
+    str = String(take!(buf))
     AnnotatedString(str, annotations)
 end
 
@@ -354,15 +356,11 @@ annotate!(c::AnnotatedChar, @nospecialize(labelval::Pair{Symbol, <:Any})) =
     (push!(c.annotations, labelval); c)
 
 """
-    annotations(str::Union{AnnotatedString, SubString{AnnotatedString}},
-                [position::Union{Integer, UnitRange}]) ->
-        Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}
+    annotations(str::AnnotatedString, [position::Union{Integer, UnitRange}])
+    annotations(str::SubString{AnnotatedString}, [position::Union{Integer, UnitRange}])
 
 Get all annotations that apply to `str`. Should `position` be provided, only
 annotations that overlap with `position` will be returned.
-
-Annotations are provided together with the regions they apply to, in the form of
-a vector of region–annotation tuples.
 
 See also: `annotate!`.
 """
@@ -373,22 +371,22 @@ annotations(s::SubString{<:AnnotatedString}) =
 
 function annotations(s::AnnotatedString, pos::UnitRange{<:Integer})
     # TODO optimise
-    filter(label -> !isempty(intersect(pos, first(label))),
-           s.annotations)
+    annots = filter(label -> !isempty(intersect(pos, first(label))),
+                    s.annotations)
+    last.(annots)
 end
 
 annotations(s::AnnotatedString, pos::Integer) = annotations(s, pos:pos)
 
 annotations(s::SubString{<:AnnotatedString}, pos::Integer) =
     annotations(s.string, s.offset + pos)
-
 annotations(s::SubString{<:AnnotatedString}, pos::UnitRange{<:Integer}) =
     annotations(s.string, first(pos)+s.offset:last(pos)+s.offset)
 
 """
-    annotations(chr::AnnotatedChar) -> Vector{Pair{Symbol, Any}}
+    annotations(chr::AnnotatedChar)
 
-Get all annotations of `chr`, in the form of a vector of annotation pairs.
+Get all annotations of `chr`.
 """
 annotations(c::AnnotatedChar) = c.annotations
 
@@ -404,7 +402,8 @@ AnnotatedIOBuffer() = AnnotatedIOBuffer(IOBuffer())
 
 function show(io::IO, aio::AnnotatedIOBuffer)
     show(io, AnnotatedIOBuffer)
-    print(io, '(', aio.io.size, " byte", ifelse(aio.io.size == 1, "", "s"), ", ",
+    size = filesize(aio.io)
+    print(io, '(', size, " byte", ifelse(size == 1, "", "s"), ", ",
           length(aio.annotations), " annotation", ifelse(length(aio.annotations) == 1, "", "s"), ")")
 end
 

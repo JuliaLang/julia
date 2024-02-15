@@ -1961,3 +1961,49 @@ end
     @test zero([[2,2], [3,3,3]]) isa Vector{Vector{Int}}
     @test zero([[2,2], [3,3,3]]) == [[0,0], [0, 0, 0]]
 end
+
+@testset "`_prechecked_iterate` optimization" begin
+    function test_prechecked_iterate(iter)
+        Js = Base._prechecked_iterate(iter)
+        for I in iter
+            J, s = Js::NTuple{2,Any}
+            @test J === I
+            Js = Base._prechecked_iterate(iter, s)
+        end
+    end
+    test_prechecked_iterate(1:10)
+    test_prechecked_iterate(Base.OneTo(10))
+    test_prechecked_iterate(CartesianIndices((3, 3)))
+    test_prechecked_iterate(CartesianIndices(()))
+    test_prechecked_iterate(LinearIndices((3, 3)))
+    test_prechecked_iterate(LinearIndices(()))
+    test_prechecked_iterate(Base.SCartesianIndices2{3}(1:3))
+end
+
+@testset "IndexStyles in copyto!" begin
+    A = rand(3,2)
+    B = zeros(size(A))
+    colons = ntuple(_->:, ndims(B))
+    # Ensure that the AbstractArray methods are hit
+    # by using views instead of Arrays
+    @testset "IndexLinear - IndexLinear" begin
+        B .= 0
+        copyto!(view(B, colons...), A)
+        @test B == A
+    end
+    @testset "IndexLinear - IndexCartesian" begin
+        B .= 0
+        copyto!(view(B, colons...), view(A, axes(A)...))
+        @test B == A
+    end
+    @testset "IndexCartesian - IndexLinear" begin
+        B .= 0
+        copyto!(view(B, axes(B)...), A)
+        @test B == A
+    end
+    @testset "IndexCartesian - IndexCartesian" begin
+        B .= 0
+        copyto!(view(B, axes(B)...), view(A, axes(A)...))
+        @test B == A
+    end
+end

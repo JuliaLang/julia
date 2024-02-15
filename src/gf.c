@@ -2368,12 +2368,13 @@ jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT)
 jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
 {
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
-    while (codeinst) {
+    for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
+        if (codeinst->owner != jl_nothing)
+            continue;
         if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
             if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL)
                 return codeinst;
         }
-        codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     return NULL;
 }
