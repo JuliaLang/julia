@@ -555,7 +555,7 @@ julia> collect(LinRange(-0.1, 0.3, 5))
   0.3
 ```
 
-See also [`logrange`](@ref) for logarithmically spaced points.
+See also [`Logrange`](@ref Base.LogRange) for logarithmically spaced points.
 """
 struct LinRange{T,L<:Integer} <: AbstractRange{T}
     start::T
@@ -1572,14 +1572,6 @@ julia> logrange(1e-310, 1e-300, 11)[1:2:end]
 
 julia> prevfloat(1e-308, 5) == ans[2]
 true
-
-julia> logrange(2, Inf, 5)
-5-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
- 2.0, Inf, Inf, Inf, Inf
-
-julia> logrange(0, 4, 5)
-5-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
- NaN, NaN, NaN, NaN, 4.0
 ```
 
 Note that integer eltype `T` is not allowed.
@@ -1607,23 +1599,25 @@ struct LogRange{T<:Real,X} <: AbstractArray{T,1}
             # LogRange{Int}(1, 512, 4) produces InexactError: Int64(7.999999999999998)
             throw(ArgumentError("LogRange{T} does not support integer types"))
         end
-        # LogRange(0, 1, 100) could be == [0,0,0,0,...,1], that's the limit start -> 0,
-        # but seems more likely to give silent surprises than returning NaN.
-        a = iszero(start) ? T(NaN) : T(start)
-        b = iszero(stop) ? T(NaN) : T(stop)
-        if len < 0
+        if iszero(start) || iszero(stop)
+            throw(DomainError((start, stop),
+                "LogRange cannot start or stop at zero"))
+        elseif start < 0 || stop < 0
+            # log would throw, but _log_twice64_unchecked does not
+            throw(DomainError((start, stop),
+                "LogRange does not accept negative numbers"))
+        elseif !isfinite(start) || !isfinite(stop)
+            throw(DomainError((start, stop),
+                "LogRange is only defined for finite start & stop"))
+        elseif len < 0
             throw(ArgumentError(LazyString(
                 "LogRange(", start, ", ", stop, ", ", len, "): can't have negative length")))
         elseif len == 1 && start != stop
             throw(ArgumentError(LazyString(
                 "LogRange(", start, ", ", stop, ", ", len, "): endpoints differ, while length is 1")))
-        elseif start < 0 || stop < 0
-            # log would throw, but _log_twice64_unchecked does not
-            throw(DomainError((start, stop),
-                "LogRange(start, stop, length) does not accept negative numbers"))
         end
-        ex = _logrange_extra(a, b, len)
-        new{T,typeof(ex[1])}(a, b, len, ex)
+        ex = _logrange_extra(start, stop, len)
+        new{T,typeof(ex[1])}(start, stop, len, ex)
     end
 end
 
@@ -1659,10 +1653,8 @@ function getindex(r::LogRange{T}, i::Int) where {T}
     @boundscheck checkbounds(r, i)
     i == 1 && return r.start
     i == r.len && return r.stop
-    tot = r.start + r.stop
-    isfinite(tot) || return tot
     # Main path uses Math.exp_impl for TwicePrecision, but is not perfectly
-    # accurate, nor does it handle NaN/Inf as desired, hence the cases above.
+    # accurate, hence the special cases for endpoints above.
     logx = (r.len-i) * r.extra[1] + (i-1) * r.extra[2]
     x = _exp_allowing_twice64(logx)
     return T(x)

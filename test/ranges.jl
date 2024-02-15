@@ -2621,25 +2621,12 @@ end
         @test logrange(0.1, 1000, 2^54)[end] === 1000.0
     end
 
-    # empty, only, NaN, Inf
+    # empty, only, constant
     @test first(logrange(1, 2, 0)) === 1.0
     @test last(logrange(1, 2, 0)) === 2.0
     @test collect(logrange(1, 2, 0)) == Float64[]
-    @test isnan(first(logrange(0, 2, 0)))
     @test only(logrange(2pi, 2pi, 1)) === logrange(2pi, 2pi, 1)[1] === 2pi
-    @test isnan(logrange(1, NaN, 3)[2])
-    @test isnan(logrange(NaN, 2, 3)[2])
-    @test isnan(logrange(1f0, NaN32, 3)[2])
-    @test isnan(logrange(NaN32, 2f0, 3)[2])
-    @test isnan(logrange(0, 2, 3)[1])
-    @test isnan(logrange(-0.0, +2.0, 3)[1])
-    @test isnan(logrange(0f0, 2f0, 3)[1])
-    @test isinf(logrange(1, Inf, 3)[2])
-    @test isinf(logrange(1f0, Inf32, 3)[2])
-    # constant
     @test logrange(1, 1, 3) == fill(1.0, 3)
-    @test all(isnan, logrange(0.0, -0.0, 3))
-    @test all(isnan, logrange(-0f0, 0f0, 3))
 
     # subnormal Float64
     x = logrange(1e-320, 1e-300, 21) .* 1e300
@@ -2669,10 +2656,16 @@ end
     @test_throws BoundsError logrange(1, 10, 2)[3]
     @test_throws ArgumentError Base.LogRange{Int}(1,4,5)  # no integer ranges
     @test_throws MethodError Base.LogRange(1,4, length=5)  # type does not take keyword
+    # (not sure if these should ideally be DomainError or ArgumentError)
+    @test_throws DomainError logrange(1, Inf, 3)
+    @test_throws DomainError logrange(0, 2, 3)
+    @test_throws DomainError logrange(1, NaN, 3)
+    @test_throws DomainError logrange(NaN, 2, 3)
 
     # printing
-    @test repr(Base.LogRange(1,2,3)) == "LogRange{Float64}(1.0, 2.0, 3)"
+    @test repr(Base.LogRange(1,2,3)) == "LogRange{Float64}(1.0, 2.0, 3)"  # like 2-arg show
     @test repr("text/plain", Base.LogRange(1,2,3)) == "3-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:\n 1.0, 1.41421, 2.0"
+    @test repr("text/plain", Base.LogRange(1,2,0)) == "LogRange{Float64}(1.0, 2.0, 0)"  # empty case
 end
 
 @testset "_log_twice64_unchecked" begin
