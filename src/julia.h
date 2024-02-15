@@ -126,6 +126,7 @@ static inline void jl_set_typeof(void *v, void *t) JL_NOTSAFEPOINT
     jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)&tag->type, (jl_value_t*)t);
 }
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
+size_t jl_bigalloc_size(jl_value_t*);
 
 // Symbols are interned strings (hash-consed) stored as an invasive binary tree.
 // The string data is nul-terminated and hangs off the end of the struct.

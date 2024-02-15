@@ -1179,6 +1179,10 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv) JL_NOTSAFEPOINT
 #ifdef MEMDEBUG
             memset(v, 0xbb, v->sz&~3);
 #endif
+            if (jl_typeis(jl_valueof(&v->header), jl_string_type)){
+            	gc_num.strings_freed_malloc_count ++;
+            	gc_num.strings_freed_malloc_size += v->sz&~3;
+            }
             gc_invoke_callbacks(jl_gc_cb_notify_external_free_t,
                 gc_cblist_notify_external_free, (v));
             jl_free_aligned(v);
@@ -1253,6 +1257,15 @@ static void combine_thread_gc_counts(jl_gc_num_t *dest) JL_NOTSAFEPOINT
             dest->poolalloc += jl_atomic_load_relaxed(&ptls->gc_num.poolalloc);
             dest->bigalloc += jl_atomic_load_relaxed(&ptls->gc_num.bigalloc);
             dest->freecall += jl_atomic_load_relaxed(&ptls->gc_num.freecall);
+            dest->strings_allocd_poolmem_count += jl_atomic_load_relaxed(&ptls->gc_num.strings_allocd_poolmem_count);
+            dest->strings_allocd_poolmem_size += jl_atomic_load_relaxed(&ptls->gc_num.strings_allocd_poolmem_size);
+            dest->strings_freed_poolmem_count += jl_atomic_load_relaxed(&ptls->gc_num.strings_freed_poolmem_count);
+            dest->strings_freed_poolmem_size += jl_atomic_load_relaxed(&ptls->gc_num.strings_freed_poolmem_size);
+            dest->strings_allocd_malloc_count += jl_atomic_load_relaxed(&ptls->gc_num.strings_allocd_malloc_count);
+            dest->strings_allocd_malloc_size += jl_atomic_load_relaxed(&ptls->gc_num.strings_allocd_malloc_size);
+            dest->strings_freed_malloc_count += jl_atomic_load_relaxed(&ptls->gc_num.strings_freed_malloc_count);
+            dest->strings_freed_malloc_size += jl_atomic_load_relaxed(&ptls->gc_num.strings_freed_malloc_size);
+            dest->strings_realloc_count += jl_atomic_load_relaxed(&ptls->gc_num.strings_realloc_count);
         }
     }
 }
@@ -1274,6 +1287,15 @@ static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
             jl_atomic_store_relaxed(&ptls->gc_num.poolalloc, 0);
             jl_atomic_store_relaxed(&ptls->gc_num.bigalloc, 0);
             jl_atomic_store_relaxed(&ptls->gc_num.freecall, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.strings_allocd_poolmem_count, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.strings_allocd_poolmem_size, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.strings_freed_poolmem_count, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.strings_freed_poolmem_size, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.strings_allocd_malloc_count, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.strings_allocd_malloc_size, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.strings_freed_malloc_count, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.strings_freed_malloc_size, 0);
+            jl_atomic_store_relaxed(&ptls->gc_num.strings_realloc_count, 0);
         }
     }
 }
@@ -4164,6 +4186,19 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
     gc_big_object_link(newbig, &ptls->heap.big_objects);
     jl_value_t *snew = jl_valueof(&newbig->header);
     *(size_t*)snew = sz;
+
+    // update stats
+	jl_atomic_store_relaxed(&ptls->gc_num.strings_freed_malloc_size,
+		jl_atomic_load_relaxed(&ptls->gc_num.strings_freed_malloc_size) + oldsz);
+	jl_atomic_store_relaxed(&ptls->gc_num.strings_freed_malloc_count,
+		jl_atomic_load_relaxed(&ptls->gc_num.strings_freed_malloc_count) + 1);
+    jl_atomic_store_relaxed(&ptls->gc_num.strings_allocd_malloc_size,
+        jl_atomic_load_relaxed(&ptls->gc_num.strings_allocd_malloc_size) + allocsz);
+    jl_atomic_store_relaxed(&ptls->gc_num.strings_allocd_malloc_count,
+        jl_atomic_load_relaxed(&ptls->gc_num.strings_allocd_malloc_count) + 1);
+    jl_atomic_store_relaxed(&ptls->gc_num.strings_realloc_count,
+        jl_atomic_load_relaxed(&ptls->gc_num.strings_realloc_count) + 1);
+
     return snew;
 }
 
@@ -4441,6 +4476,9 @@ JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *o
     arraylist_push(&ptls->sweep_objs, obj);
 }
 
+size_t jl_bigalloc_size(jl_value_t* val){
+	return bigval_header(jl_astaggedvalue(val))->sz;
+}
 #ifdef __cplusplus
 }
 #endif

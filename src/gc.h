@@ -87,6 +87,15 @@ typedef struct {
     uint64_t    total_mark_time;
     uint64_t    last_full_sweep;
     uint64_t    last_incremental_sweep;
+    uint64_t 	strings_allocd_poolmem_count;
+    uint64_t 	strings_allocd_poolmem_size;
+    uint64_t 	strings_freed_poolmem_count; // FIXME: not accounted, yet
+    uint64_t 	strings_freed_poolmem_size; // FIXME: not accounted, yet
+    uint64_t 	strings_allocd_malloc_count;
+    uint64_t	strings_allocd_malloc_size;
+    uint64_t 	strings_freed_malloc_count;
+    uint64_t	strings_freed_malloc_size;
+    uint64_t	strings_realloc_count;
 } jl_gc_num_t;
 
 // Array chunks (work items representing suffixes of

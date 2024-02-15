@@ -503,11 +503,21 @@ JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
         // We call `jl_gc_pool_alloc_noinline` instead of `jl_gc_pool_alloc` to avoid double-counting in
         // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
         s = jl_gc_pool_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
+
+        jl_atomic_store_relaxed(&ptls->gc_num.strings_allocd_poolmem_count,
+            jl_atomic_load_relaxed(&ptls->gc_num.strings_allocd_poolmem_count) + 1);
+        jl_atomic_store_relaxed(&ptls->gc_num.strings_allocd_poolmem_size,
+            jl_atomic_load_relaxed(&ptls->gc_num.strings_allocd_poolmem_size) + osize);
     }
     else {
         if (allocsz < sz) // overflow in adding offs, size was "negative"
             jl_throw(jl_memory_exception);
         s = jl_gc_big_alloc_noinline(ptls, allocsz);
+
+        jl_atomic_store_relaxed(&ptls->gc_num.strings_allocd_malloc_count,
+            jl_atomic_load_relaxed(&ptls->gc_num.strings_allocd_malloc_count) + 1);
+        jl_atomic_store_relaxed(&ptls->gc_num.strings_allocd_malloc_size,
+            jl_atomic_load_relaxed(&ptls->gc_num.strings_allocd_malloc_size) + jl_bigalloc_size(s));
     }
     jl_set_typeof(s, jl_string_type);
     maybe_record_alloc_to_profile(s, len, jl_string_type);

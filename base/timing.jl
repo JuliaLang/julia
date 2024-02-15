@@ -27,6 +27,15 @@ struct GC_Num
     total_mark_time   ::Int64
     last_full_sweep ::Int64
     last_incremental_sweep ::Int64
+    strings_allocd_poolmem_count 	::Int64
+    strings_allocd_poolmem_size 	::Int64
+    strings_freed_poolmem_count 	::Int64
+    strings_freed_poolmem_size	 	::Int64
+    strings_allocd_malloc_count 	::Int64
+    strings_allocd_malloc_size	 	::Int64
+    strings_freed_malloc_count	 	::Int64
+    strings_freed_malloc_size	 	::Int64
+    strings_realloc_count		 	::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())

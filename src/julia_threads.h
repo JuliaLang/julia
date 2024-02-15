@@ -135,6 +135,15 @@ typedef struct {
     _Atomic(uint64_t) poolalloc;
     _Atomic(uint64_t) bigalloc;
     _Atomic(uint64_t) freecall;
+    _Atomic(uint64_t) strings_allocd_poolmem_count;
+    _Atomic(uint64_t) strings_allocd_poolmem_size;
+    _Atomic(uint64_t) strings_freed_poolmem_count;
+    _Atomic(uint64_t) strings_freed_poolmem_size;
+    _Atomic(uint64_t) strings_allocd_malloc_count;
+    _Atomic(uint64_t) strings_allocd_malloc_size;
+    _Atomic(uint64_t) strings_freed_malloc_count;
+    _Atomic(uint64_t) strings_freed_malloc_size;
+    _Atomic(uint64_t) strings_realloc_count;
 } jl_thread_gc_num_t;
 
 typedef struct {
