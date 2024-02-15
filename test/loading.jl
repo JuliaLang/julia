@@ -1143,6 +1143,13 @@ end
         finally
             copy!(LOAD_PATH, old_load_path)
         end
+
+        # issue 53081
+        @testset "avoid circular precompilation deadlock through extensions" begin
+            testenv = joinpath(@__DIR__, "extensions", "circular")
+            s = read(`$(Base.julia_cmd()) --startup-file=no --project=$testenv -e 'using A'`, String)
+            @test !occursin("Error during loading of extension", s)
+        end
     finally
         try
             rm(depot_path, force=true, recursive=true)
