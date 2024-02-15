@@ -68,7 +68,7 @@ BoundsError: attempt to access 3x4x5x6 Array{Int64, 3} outside of valid bounds:
   - Axis 4 bounds are 1:6, got 12
 =#
 
-function Base.showerror(io::IO, ex::BoundsError)
+function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
