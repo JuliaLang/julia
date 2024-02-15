@@ -123,7 +123,7 @@ localjulianepoch() = JULIANEPOCH + (localepoch() - UNIXEPOCH)
 
 Take the number of Julian calendar days since epoch `-4713-11-24T12:00:00` (UTC) and return the
 corresponding `DateTime`. If `localtime` is `true`, then the output is in the local
-time zone, otherwise it is in UTC/GMT
+time zone, otherwise it is in UTC/GMT.
 """
 function julian2datetime(f::Real; localtime::Bool=false)
     rata = (localtime ? localjulianepoch() : JULIANEPOCH) + round(Int64, Int64(86400000) * f)
