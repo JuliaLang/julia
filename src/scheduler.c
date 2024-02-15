@@ -114,7 +114,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *t);
 
 static inline int may_mark(void) JL_NOTSAFEPOINT
 {
-    return (jl_atomic_load(&gc_n_threads_marking) > 0);
+    return (jl_atomic_load(&gc_master_tid) != -1);
 }
 
 static inline int may_sweep(jl_ptls_t ptls) JL_NOTSAFEPOINT

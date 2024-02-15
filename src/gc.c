@@ -34,6 +34,8 @@ uv_cond_t gc_threads_cond;
 uv_sem_t gc_sweep_assists_needed;
 // Mutex used to coordinate entry of GC threads in the mark loop
 uv_mutex_t gc_queue_observer_lock;
+// Byte-map to indicate whether threads are done with marking
+uint8_t *gc_mark_done;
 
 // Linked list of callback functions
 
@@ -2966,9 +2968,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_gc_markqueue_t *mq_master = NULL;
     int master_tid = jl_atomic_load(&gc_master_tid);
-    if (master_tid == -1) {
-        return;
-    }
+    assert(master_tid != -1);
     mq_master = &gc_all_tls_states[master_tid]->mark_queue;
     void *new_obj;
     jl_gc_chunk_t c;
@@ -3063,13 +3063,6 @@ size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
  * - No work items shall be in any thread's queues when `gc_mark_loop_barrier` observes
  * that `gc_n_threads_marking` is zero.
  *
- * - No work item shall be stolen from the master thread (i.e. mutator thread which started
- * GC and which helped the `jl_n_markthreads` - 1 threads to mark) after
- * `gc_mark_loop_barrier` observes that `gc_n_threads_marking` is zero. This property is
- * necessary because we call `gc_mark_loop_serial` after marking the finalizer list in
- * `_jl_gc_collect`, and want to ensure that we have the serial mark-loop semantics there,
- * and that no work is stolen from us at that point.
- *
  * Proof:
  * - Suppose the master thread observes that `gc_n_threads_marking` is zero in
  * `gc_mark_loop_barrier` and there is a work item left in one thread's queue at that point.
@@ -3077,15 +3070,6 @@ size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
  * have tried to steal from the queue which still has a work item left, but failed to do so,
  * which violates the semantics of Chase-Lev's work-stealing queue.
  *
- * - Let E1 be the event "master thread writes -1 to gc_master_tid" and E2 be the event
- * "master thread observes that `gc_n_threads_marking` is zero". Since we're using
- * sequentially consistent atomics, E1 => E2. Now suppose one thread which is spinning in
- * `gc_should_mark` tries to enter the mark-loop after E2. In order to do so, it must
- * increment `gc_n_threads_marking` to 1 in an event E3, and then read `gc_master_tid` in an
- * event E4. Since we're using sequentially consistent atomics, E3 => E4. Since we observed
- * `gc_n_threads_marking` as zero in E2, then E2 => E3, and we conclude E1 => E4, so that
- * the thread which is spinning in `gc_should_mark` must observe that `gc_master_tid` is -1
- * and therefore won't enter the mark-loop.
  */
 
 int gc_should_mark(void)
@@ -3130,8 +3114,9 @@ int gc_should_mark(void)
 
 void gc_wake_all_for_marking(jl_ptls_t ptls)
 {
-    jl_atomic_store(&gc_master_tid, ptls->tid);
     uv_mutex_lock(&gc_threads_lock);
+    memset(gc_mark_done, 0, (jl_n_markthreads + 1) * sizeof(uint8_t));
+    jl_atomic_store(&gc_master_tid, ptls->tid);
     jl_atomic_fetch_add(&gc_n_threads_marking, 1);
     uv_cond_broadcast(&gc_threads_cond);
     uv_mutex_unlock(&gc_threads_lock);
@@ -3147,6 +3132,8 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
     while (1) {
         int should_mark = gc_should_mark();
         if (!should_mark) {
+            int idx = master ? 0 : (1 + ptls->tid - gc_first_tid);
+            gc_mark_done[idx] = 1;
             break;
         }
         gc_mark_and_steal(ptls);
@@ -3164,12 +3151,20 @@ void gc_mark_loop(jl_ptls_t ptls)
     }
 }
 
-void gc_mark_loop_barrier(void)
+void gc_mark_loop_barrier(int single_threaded_mark)
 {
-    jl_atomic_store(&gc_master_tid, -1);
-    while (jl_atomic_load(&gc_n_threads_marking) != 0) {
-        jl_cpu_pause();
+    // single-threaded does not need a barrier
+    if (single_threaded_mark) {
+        return;
     }
+    // inclusive because the master thread is also counted
+    for (int i = 0; i <= jl_n_markthreads; i++) {
+        while (!gc_mark_done[i]) {
+            jl_cpu_pause();
+        }
+    }
+    // Clean up
+    jl_atomic_store(&gc_master_tid, -1);
 }
 
 void gc_mark_clean_reclaim_sets(void)
@@ -3549,7 +3544,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
                 gc_cblist_root_scanner, (collection));
         }
         gc_mark_loop(ptls);
-        gc_mark_loop_barrier();
+        gc_mark_loop_barrier(single_threaded_mark);
         gc_mark_clean_reclaim_sets();
 
         // 4. check for objects to finalize
@@ -4024,6 +4019,7 @@ void jl_gc_init(void)
     uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
     uv_mutex_init(&gc_queue_observer_lock);
+    gc_mark_done = (uint8_t*)calloc_s((1 + jl_n_markthreads) * sizeof(uint8_t)); // one extra for the master thread
 
     jl_gc_init_page();
     jl_gc_debug_init();
