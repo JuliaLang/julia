@@ -79,7 +79,7 @@ function Base.showerror(io::IO, ex::BoundsError)
 
             # compute which indices are out of bounds
             oobis = map(enumerate(ex.i)) do (j, idx)
-                if idx isa Base.LogicalIndex
+                if idx isa LogicalIndex
                     # true => too many, false => too few, nothing => inbounds
                     if length(idx) != length(ex.a)
                         length(idx) > length(ex.a)
@@ -100,10 +100,13 @@ function Base.showerror(io::IO, ex::BoundsError)
             foreach(enumerate(oobis)) do (j, idx)
                 idx === nothing && return
                 if cartesianindexes
-                    print(io, "  - Axis $j bounds are $(axes(ex.a, j)), got ")
+                    print(io, "  - Axis $j bounds are ")
+                    show_index(io, axes(ex.a, j))
                 else
-                    print(io, "  Bounds are $(eachindex(ex.a)), got ")
+                    print(io, "  Bounds are ")
+                    show_index(io, eachindex(ex.a))
                 end
+                print(io, ", got ")
                 if idx isa Bool
                     print(io, "a LogicalIndex with ")
                     if idx
@@ -126,7 +129,7 @@ function Base.showerror(io::IO, ex::BoundsError)
             end
         end
     end
-    Base.Experimental.show_error_hints(io, ex)
+    Experimental.show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::TypeError)
