@@ -3070,6 +3070,9 @@ size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
  * `_jl_gc_collect`, and want to ensure that we have the serial mark-loop semantics there,
  * and that no work is stolen from us at that point.
  *
+ * - No thread in `gc_should_mark` shall read `gc_all_tls_states == NULL` while it's counting the
+ * available work in the queues.
+ *
  * Proof:
  * - Suppose the master thread observes that `gc_n_threads_marking` is zero in
  * `gc_mark_loop_barrier` and there is a work item left in one thread's queue at that point.
@@ -3086,6 +3089,15 @@ size_t gc_count_work_in_queue(jl_ptls_t ptls) JL_NOTSAFEPOINT
  * `gc_n_threads_marking` as zero in E2, then E2 => E3, and we conclude E1 => E4, so that
  * the thread which is spinning in `gc_should_mark` must observe that `gc_master_tid` is -1
  * and therefore won't enter the mark-loop.
+ *
+ * - Let E1 be the event "master thread writes -1 to gc_master_tid" in `gc_mark_loop_barrier`,
+ * E2 be the event "master thread acquires `gc_queue_observer_lock` in `gc_mark_loop_maybe_wait_for_straggler`",
+ * and E3 be the event "master thread sets gc_all_tls_states to NULL". Note that E1 => E2 => E3.
+ * If a straggler thread is still running `gc_should_mark` before E2, then it will observe a non-NULL
+ * value for `gc_all_tls_states` (since E2 => E3) and we will wait for it to finish. Any straggler that tries to
+ * enter to run `gc_should_mark` after E2 will observe `gc_master_tid` as -1 (since E1 => E2)
+ * and will leave `gc_should_mark` in the fast path `tid == -1` before even getting to the point
+ * of reading `gc_all_tls_states`.
  */
 
 int gc_should_mark(void)
@@ -3170,6 +3182,12 @@ void gc_mark_loop_barrier(void)
     while (jl_atomic_load(&gc_n_threads_marking) != 0) {
         jl_cpu_pause();
     }
+}
+
+void gc_mark_loop_maybe_wait_for_straggler(void)
+{
+    uv_mutex_lock(&gc_queue_observer_lock);
+    uv_mutex_unlock(&gc_queue_observer_lock);
 }
 
 void gc_mark_clean_reclaim_sets(void)
@@ -3919,6 +3937,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
 
+    gc_mark_loop_maybe_wait_for_straggler();
     gc_n_threads = 0;
     gc_all_tls_states = NULL;
     jl_safepoint_end_gc();
