@@ -60,78 +60,12 @@ function showerror(io::IO, ex::Meta.ParseError)
     end
 end
 
-#=
-
-BoundsError: attempt to access 3x4x5x6 Array{Int64, 3} outside of valid bounds:
-  - Axis 1 bounds are 1:3, got UnitRange including 4:10
-  - Axis 2 bounds are 1:4, got Vector including [-2, 5, 11, ...]
-  - Axis 4 bounds are 1:6, got 12
-=#
-
 function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
         summary(io, ex.a)
-        if isdefined(ex, :i)
-            println(io, " outside of valid bounds:")
-            cartesianindexes = length(ex.i) > 1
-
-            # compute which indices are out of bounds
-            oobis = map(enumerate(ex.i)) do (j, idx)
-                ax = cartesianindexes ? axes(ex.a, j) : eachindex(ex.a)
-                if idx isa LogicalIndex
-                    # true => too many, false => too few, nothing => inbounds
-                    if length(idx.mask) != length(ax)
-                        length(idx.mask) > length(ax)
-                    end
-                elseif idx isa Number
-                    # nothing => inbounds
-                    if clamp(idx, ax) != idx
-                        idx
-                    end
-                else
-                    # tuple with 1 or 2 ranges or vector => out of bounds, nothing => inbounds
-                    _bounds_setdiff(idx, ax)
-                end
-            end
-
-            foreach(enumerate(oobis)) do (j, idx)
-                idx === nothing && return
-                if cartesianindexes
-                    print(io, "  - Axis $j bounds are ")
-                    show_index(io, axes(ex.a, j))
-                else
-                    if ndims(ex.a) > 1
-                        print(io, "  Linear bounds are ")
-                    else
-                        print(io, "  Bounds are ")
-                    end
-                    show_index(io, eachindex(ex.a))
-                end
-                print(io, ", got ")
-                if idx isa Bool
-                    print(io, "a LogicalIndex with ")
-                    if idx
-                        println(io, "too many elements")
-                    else
-                        println(io, "too few elements")
-                    end
-                elseif idx isa Number
-                    println(io, idx)
-                else
-                    print(io, "a $(typeof(ex.i[j])) including ")
-                    if idx isa Tuple
-                        print(io, "$(idx[1])")
-                        length(idx) > 1 && print(io, " and $(idx[2])")
-                        println(io)
-                    else
-                        show(io, sort!(unique!(idx)))
-                        println(io)
-                    end
-                end
-            end
-        end
+        println(io, " outside of valid bounds")
     end
     Experimental.show_error_hints(io, ex)
 end
@@ -1105,6 +1039,76 @@ end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
 
+#=
+Display the exact indices that were out of bounds
+
+  - Axis 1 bounds are 1:3, got UnitRange including 4:10
+  - Axis 2 bounds are 1:4, got Vector including [-2, 5, 11, ...]
+  - Axis 4 bounds are 1:6, got 12
+=#
+function out_of_bounds_hint_handler(io, ex)
+    @nospecialize
+    if isdefined(ex, :i)
+        cartesianindexes = length(ex.i) > 1
+
+        # compute which indices are out of bounds
+        oobis = map(enumerate(ex.i)) do (j, idx)
+            ax = cartesianindexes ? axes(ex.a, j) : eachindex(ex.a)
+            if idx isa LogicalIndex
+                # true => too many, false => too few, nothing => inbounds
+                if length(idx.mask) != length(ax)
+                    length(idx.mask) > length(ax)
+                end
+            elseif idx isa Number
+                # nothing => inbounds
+                if clamp(idx, ax) != idx
+                    idx
+                end
+            else
+                # tuple with 1 or 2 ranges or vector => out of bounds, nothing => inbounds
+                _bounds_setdiff(idx, ax)
+            end
+        end
+
+        foreach(enumerate(oobis)) do (j, idx)
+            idx === nothing && return
+            if cartesianindexes
+                print(io, "  - Axis $j bounds are ")
+                show_index(io, axes(ex.a, j))
+            else
+                if ndims(ex.a) > 1
+                    print(io, "  Linear bounds are ")
+                else
+                    print(io, "  Bounds are ")
+                end
+                show_index(io, eachindex(ex.a))
+            end
+            print(io, ", got ")
+            if idx isa Bool
+                print(io, "a LogicalIndex with ")
+                if idx
+                    println(io, "too many elements")
+                else
+                    println(io, "too few elements")
+                end
+            elseif idx isa Number
+                println(io, idx)
+            else
+                print(io, "a $(typeof(ex.i[j])) including ")
+                if idx isa Tuple
+                    print(io, "$(idx[1])")
+                    length(idx) > 1 && print(io, " and $(idx[2])")
+                    println(io)
+                else
+                    show(io, sort!(unique!(idx)))
+                    println(io)
+                end
+            end
+        end
+    end
+end
+
+Experimental.register_error_hint(out_of_bounds_hint_handler, BoundsError)
 
 # Display a hint in case the user tries to use the min or max function on an iterable
 # or tries to use something like `collect` on an iterator without defining either IteratorSize or length
