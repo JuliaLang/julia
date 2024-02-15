@@ -102,7 +102,11 @@ function showerror(io::IO, ex::BoundsError)
                     print(io, "  - Axis $j bounds are ")
                     show_index(io, axes(ex.a, j))
                 else
-                    print(io, "  Bounds are ")
+                    if ndims(ex.a) > 1
+                        print(io, "  Linear bounds are ")
+                    else
+                        print(io, "  Bounds are ")
+                    end
                     show_index(io, eachindex(ex.a))
                 end
                 print(io, ", got ")
@@ -122,7 +126,8 @@ function showerror(io::IO, ex::BoundsError)
                         length(idx) > 1 && print(io, " and $(idx[2])")
                         println(io)
                     else
-                        println(io, "$(idx)")
+                        show(io, sort!(unique!(idx)))
+                        println(io)
                     end
                 end
             end
