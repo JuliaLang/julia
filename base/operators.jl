@@ -21,8 +21,7 @@ The subtyping relation is a *partial order*. I.e., `<:` is:
 * *transitive*: for any type `A`, any type `B` and any type `C`;
   `(A <: B) && (B <: C)` implies `A <: C`
 
-See also: [the Manual page on types](@ref man-types), [`Union{}`](@ref),
-[`Any`](@ref), [`isa`](@ref), [`where`](@ref).
+See also info on [Types](@ref man-types), [`Union{}`](@ref), [`Any`](@ref), [`isa`](@ref).
 
 # Examples
 ```jldoctest
@@ -41,20 +40,21 @@ true
 julia> Union{} <: Int  # The bottom type, `Union{}`, subtypes each type.
 true
 
-julia> Union{} <: Float32 <: AbstractFloat <: Real <: Number <: Any  # Chaining
+julia> Union{} <: Float32 <: AbstractFloat <: Real <: Number <: Any  # Operator chaining
 true
 ```
 
-The `<:` operator is also used in other senses:
+The `<:` keyword also has several syntactic uses which represent the same subtyping relation,
+but which do not execute the operator or return a Bool:
 
-* to specify the lower bound and the upper bound on a parameter of a
-  [`UnionAll`](@ref) type
+* To specify the lower bound and the upper bound on a parameter of a
+  [`UnionAll`](@ref) type in a [`where`](@ref) statement.
 
-* to specify the lower bound and the upper bound on a (static) parameter of a
-  method, see [Parametric Methods](@ref)
+* To specify the lower bound and the upper bound on a (static) parameter of a
+  method, see [Parametric Methods](@ref).
 
-* to define a subtyping relation while declaring a new type, see [`struct`](@ref)
-  and [`abstract type`](@ref)
+* To define a subtyping relation while declaring a new type, see [`struct`](@ref)
+  and [`abstract type`](@ref).
 """
 (<:)
 
