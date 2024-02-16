@@ -410,10 +410,10 @@ end
 `_show_nonempty(io, X::AbstractMatrix, prefix)` prints matrix X with opening and closing square brackets,
 preceded by `prefix`, supposed to encode the type of the elements.
 """
-_show_nonempty(io::IO, X::AbstractMatrix, prefix::String) =
-    _show_nonempty(io, inferencebarrier(X), prefix, false, axes(X))
+_show_nonempty(io::IO, X::AbstractMatrix, prefix::String, need_parens::Bool) =
+    _show_nonempty(io, inferencebarrier(X), prefix, need_parens, false, axes(X))
 
-function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, drop_brackets::Bool, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
+function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, need_parens::Bool, drop_brackets::Bool, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
     @assert !isempty(X)
     limit = get(io, :limit, false)::Bool
     indr, indc = axs
@@ -458,20 +458,21 @@ function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String
         nc > 1 || print(io, ";;")
         print(io, "]")
     end
+    need_parens && print(io, ")")
     return nothing
 end
 
 
-function _show_nonempty(io::IO, X::AbstractArray, prefix::String)
+function _show_nonempty(io::IO, X::AbstractArray, prefix::String, need_parens::Bool)
     print(io, prefix)
-    show_nd(io, X, (io, slice) -> _show_nonempty(io, inferencebarrier(slice), prefix, true, axes(slice)), false)
+    show_nd(io, X, (io, slice) -> _show_nonempty(io, inferencebarrier(slice), prefix, false, true, axes(slice)), false)
 end
 
 # a specific call path is used to show vectors (show_vector)
 _show_nonempty(::IO, ::AbstractVector, ::String) =
     error("_show_nonempty(::IO, ::AbstractVector, ::String) is not implemented")
 
-_show_nonempty(io::IO, X::AbstractArray{T,0} where T, prefix::String) = print_array(io, X)
+_show_nonempty(io::IO, X::AbstractArray{T,0} where T, prefix::String, need_parens::Bool) = print_array(io, X)
 
 # NOTE: it's not clear how this method could use the :typeinfo attribute
 function _show_empty(io::IO, X::Array)
@@ -484,13 +485,13 @@ _show_empty(io, X::AbstractArray) = summary(io, X)
 function show(io::IO, X::AbstractArray)
     ndims(X) == 0 && return show_zero_dim(io, X)
     ndims(X) == 1 && return show_vector(io, X)
-    prefix, implicit = typeinfo_prefix(io, X)
+    prefix, implicit, need_parens = typeinfo_prefix(io, X)
     if !implicit
         io = IOContext(io, :typeinfo => eltype(X))
     end
     isempty(X) ?
         _show_empty(io, X) :
-        _show_nonempty(io, X, prefix)
+        _show_nonempty(io, X, prefix, need_parens)
 end
 
 ### 0-dimensional arrays (#31481)
@@ -512,7 +513,7 @@ end
 # NOTE: v is not constrained to be a vector, as this function can work with iterables
 # in general (it's used e.g. by show(::IO, ::Set))
 function show_vector(io::IO, v, opn='[', cls=']')
-    prefix, implicit = typeinfo_prefix(io, v)
+    prefix, implicit, need_parens = typeinfo_prefix(io, v)
     print(io, prefix)
     # directly or indirectly, the context now knows about eltype(v)
     if !implicit
@@ -529,6 +530,8 @@ function show_vector(io::IO, v, opn='[', cls=']')
     else
         show_delim_array(io, v, opn, ",", cls, false)
     end
+    need_parens && print(io, ')')
+    return nothing
 end
 
 
@@ -572,22 +575,35 @@ function typeinfo_prefix(io::IO, X)
 
     if X isa AbstractDict
         if eltype_X == eltype_ctx
-            sprint(show_type_name, typeof(X).name; context=io), false
+            sprint(show_type_name, typeof(X).name; context=io), false, false
         elseif !isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X))
-            sprint(show_type_name, typeof(X).name; context=io), true
+            sprint(show_type_name, typeof(X).name; context=io), true, false
         else
-            sprint(print, typeof(X); context=io), false
+            sprint(print, typeof(X); context=io), false, false
         end
     else
         # Types hard-coded here are those which are created by default for a given syntax
-        if eltype_X == eltype_ctx
-            "", false
+        if X isa AbstractArray && !(X isa Array)
+            prefix = IOContext(IOBuffer(), io)
+            alias = make_typealias(typeof(X))
+            if alias !== nothing
+                show_typealias(prefix, alias[1], typeof(X), alias[2], TypeVar[])
+            else
+                print(prefix, typeof(X).name.name)
+            end
+            print(prefix, "(")
+            if alias === nothing && eltype(typeof(X).name.wrapper) !== eltype_X && !typeinfo_implicit(eltype_X)
+                print(prefix, eltype(X))
+            end
+            String(take!(prefix.io)), false, true
+        elseif eltype_X == eltype_ctx
+            "", false, false
         elseif !isempty(X) && typeinfo_implicit(eltype_X)
-            "", true
+            "", true, false
         elseif print_without_params(eltype_X)
-            sprint(show_type_name, unwrap_unionall(eltype_X).name; context=io), false # Print "Array" rather than "Array{T,N}"
+            sprint(show_type_name, unwrap_unionall(eltype_X).name; context=io), false, false # Print "Array" rather than "Array{T,N}"
         else
-            sprint(print, eltype_X; context=io), false
+            sprint(print, eltype_X; context=io), false, false
         end
     end
 end
