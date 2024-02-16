@@ -9681,7 +9681,7 @@ void jl_compile_workqueue(
                 // method body. See #34993
                 if (policy != CompilationPolicy::Default &&
                     jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
-                    codeinst = jl_type_infer(codeinst->def, jl_atomic_load_acquire(&jl_world_counter), 0, SOURCE_MODE_FORCE_SOURCE);
+                    codeinst = jl_type_infer(codeinst->def, jl_atomic_load_relaxed(&codeinst->max_world), 0, SOURCE_MODE_FORCE_SOURCE);
                 }
                 if (codeinst) {
                     orc::ThreadSafeModule result_m =

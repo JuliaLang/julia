@@ -379,9 +379,9 @@ end
 A33163(x; y) = x + y
 B33163(x) = x
 let
-    @code_typed A33163(1, y=2)[1]
-    @code_typed optimize=false A33163(1, y=2)[1]
-    @code_typed optimize=false B33163(1)[1]
+    (@code_typed A33163(1, y=2))[1]
+    (@code_typed optimize=false A33163(1, y=2))[1]
+    (@code_typed optimize=false B33163(1))[1]
 end
 
 @test_throws MethodError (@code_lowered wrongkeyword=true 3 + 4)

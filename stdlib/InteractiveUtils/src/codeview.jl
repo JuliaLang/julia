@@ -54,7 +54,7 @@ function is_expected_union(u::Union)
     return true
 end
 
-function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Integer; lineprinter)
+function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Int; lineprinter)
     if src.slotnames !== nothing
         slotnames = Base.sourceinfo_slotnames(src)
         io = IOContext(io, :SOURCE_SLOTNAMES => slotnames)
@@ -151,18 +151,18 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt
         error("code reflection cannot be used from generated functions")
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
-    nargs = 0
+    nargs::Int = 0
     if isa(f, Core.OpaqueClosure)
         isa(f.source, Method) && (nargs = f.nargs)
         print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f)[1]..., nargs; lineprinter)
         return nothing
     end
-    matches = Base._methods_by_ftype(Base.to_tuple_type(Base.signature_type(f, t)), #=lim=#-1, world)::Vector
+    matches = Base._methods_by_ftype(Base.signature_type(f, t), #=lim=#-1, world)::Vector
     for match in matches
         match = match::Core.MethodMatch
         (src, rettype) = Core.Compiler.typeinf_code(interp, match, optimize)
         mi = Core.Compiler.specialize_method(match)
-        mi.def isa Method && (nargs = mi.def.nargs)
+        mi.def isa Method && (nargs = (mi.def::Method).nargs)
         print_warntype_mi(io, mi)
         print_warntype_codeinfo(io, src, rettype, nargs; lineprinter)
     end

@@ -549,9 +549,11 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             if (specfptr == 0) {
                 jl_code_instance_t *forced_ci = jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE);
                 JL_GC_PUSH1(&forced_ci);
-                // Force compile of this codeinst even though it already has an ->invoke
-                _jl_compile_codeinst(forced_ci, NULL, *jl_ExecutionEngine->getContext());
-                specfptr = (uintptr_t)jl_atomic_load_relaxed(&forced_ci->specptr.fptr);
+                if (forced_ci) {
+                    // Force compile of this codeinst even though it already has an ->invoke
+                    _jl_compile_codeinst(forced_ci, NULL, *jl_ExecutionEngine->getContext());
+                    specfptr = (uintptr_t)jl_atomic_load_relaxed(&forced_ci->specptr.fptr);
+                }
                 JL_GC_POP();
             }
             JL_UNLOCK(&jl_codegen_lock);

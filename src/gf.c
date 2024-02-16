@@ -2369,7 +2369,9 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
     return NULL;
 }
 
-jl_code_instance_t *jl_method_inferred_with_source(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
+// Opportunistic SOURCE_MODE_ABI cache lookup. Note that it's possible for us to miss a CodeInstance for which the
+// compiler has already deleted the source, but not yet set ->invoke.
+jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
@@ -2378,7 +2380,7 @@ jl_code_instance_t *jl_method_inferred_with_source(jl_method_instance_t *mi JL_P
 
         if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
             jl_value_t *code = jl_atomic_load_relaxed(&codeinst->inferred);
-            if (code && code != jl_nothing)
+            if (code && (code != jl_nothing || (jl_atomic_load_relaxed(&codeinst->invoke) != NULL)))
                 return codeinst;
         }
     }
@@ -2536,9 +2538,9 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     // Ok, compilation is enabled. We'll need to try to compile something (probably).
     // Try to find a codeinst we have already inferred (e.g. while we were compiling
     // something else).
-    codeinst = jl_method_inferred_with_source(mi, world);
+    codeinst = jl_method_inferred_with_abi(mi, world);
 
-    // Everything from here on our is considered (user facing) compile time
+    // Everything from here on is considered (user facing) compile time
     uint64_t start = jl_typeinf_timing_begin();
     int is_recompile = jl_atomic_load_relaxed(&mi->cache) != NULL;
 

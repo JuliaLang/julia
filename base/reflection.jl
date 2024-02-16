@@ -1318,7 +1318,7 @@ uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m, m.sourc
                              error("Code for this Method is not available.")
 _uncompressed_ir(m::Method, s::CodeInfo) = copy(s)
 _uncompressed_ir(m::Method, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Any), m, s)::CodeInfo
-_uncompressed_ir(ci::Core.CodeInstance, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
+_uncompressed_ir(ci::Core.CodeInstance, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Any), ci.def.def::Method, s)::CodeInfo
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
@@ -1633,7 +1633,7 @@ function get_oc_code_rt(@nospecialize(oc::Core.OpaqueClosure))
     m = oc.source
     if isa(m, Method)
         code = _uncompressed_ir(m, m.source)
-        return code => typeof(oc).parameters[2]
+        return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
     else
         error("encountered invalid Core.OpaqueClosure object")
     end

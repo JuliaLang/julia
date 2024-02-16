@@ -277,7 +277,7 @@ function is_result_constabi_eligible(result::InferenceResult)
     return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
 end
 function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
-        can_discard_trees=may_discard_trees(interp))
+        can_discard_trees::Bool=may_discard_trees(interp))
     local const_flags::Int32
     result_type = result.result
     @assert !(result_type === nothing || result_type isa LimitedAccuracy)
@@ -1020,13 +1020,41 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
     return frame
 end
 
-# We only care about types/effects, no source required
+# N.B.: These need to be aligned with the C side headers
+"""
+    SOURCE_MODE_NOT_REQUIRED
+
+Indicates to inference that the source is not required and the only fields
+of the resulting `CodeInstance` that the caller is interested in are types
+and effects. Inference is still free to create a CodeInstance with source,
+but is not required to do so.
+"""
 const SOURCE_MODE_NOT_REQUIRED = 0x0
 
-# We need something that can be invoked or compiled (i.e. constabi or inferred)
+"""
+    SOURCE_MODE_ABI
+
+Indicates to inference that it should return a CodeInstance that can
+either be `->invoke`'d (because it has already been compiled or because
+it has constabi) or one that can be made so by compiling its `->inferred`
+field.
+
+N.B.: The `->inferred` field is volatile and the compiler may delete it
+before setting the `->invoke` field. To ensure that the resulting CodeInstance
+maintains the required invariants, the codegen lock needs to be held.
+"""
 const SOURCE_MODE_ABI = 0x1
 
-# We need source, even for constabi
+"""
+    SOURCE_MODE_FORCE_SOURCE
+
+Indicates that inference must always produce source in the `->inferred` field.
+This may mean that inference will need to re-do inference (if the `->inferred`
+field was previously deleted by the JIT) or may need to synthesize source for
+other kinds of CodeInstances. The same caching considerations as SOURCE_MODE_ABI
+apply and the codegen lock needs to be held to ensure that the JIT does not
+delete the `->inferred` field.
+"""
 const SOURCE_MODE_FORCE_SOURCE = 0x2
 
 function ci_has_source(code::CodeInstance)
