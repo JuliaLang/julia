@@ -619,6 +619,7 @@ function notify_filled(buffer::IOBuffer, nread::Int)
         buffer.size += nread
     else
         buffer.ptr += nread
+        buffer.size = max(buffer.size, buffer.ptr - 1)
     end
     nothing
 end

@@ -800,7 +800,8 @@ void jl_start_threads(void)
     uv_barrier_wait(&thread_init_done);
 }
 
-_Atomic(unsigned) _threadedregion; // HACK: keep track of whether to prioritize IO or threading
+_Atomic(unsigned) _threadedregion; // keep track of whether to prioritize IO or threading
+_Atomic(uint16_t) io_loop_tid; // mark which thread is assigned to run the uv_loop
 
 JL_DLLEXPORT int jl_in_threaded_region(void)
 {
@@ -821,7 +822,27 @@ JL_DLLEXPORT void jl_exit_threaded_region(void)
         JL_UV_UNLOCK();
         // make sure thread 0 is not using the sleep_lock
         // so that it may enter the libuv event loop instead
-        jl_wakeup_thread(0);
+        jl_fence();
+        jl_wakeup_thread(jl_atomic_load_relaxed(&io_loop_tid));
+    }
+}
+
+JL_DLLEXPORT void jl_set_io_loop_tid(int16_t tid)
+{
+    if (tid < 0 || tid >= jl_atomic_load_relaxed(&jl_n_threads)) {
+        // TODO: do we care if this thread has exited or not started yet,
+        // since ptls2 might not be defined yet and visible on all threads yet
+        return;
+    }
+    jl_atomic_store_relaxed(&io_loop_tid, tid);
+    jl_fence();
+    if (jl_atomic_load_relaxed(&_threadedregion) == 0) {
+        // make sure the previous io_loop_tid leaves the libuv event loop
+        JL_UV_LOCK();
+        JL_UV_UNLOCK();
+        // make sure thread io_loop_tid is not using the sleep_lock
+        // so that it may enter the libuv event loop instead
+        jl_wakeup_thread(tid);
     }
 }
 
