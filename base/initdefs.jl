@@ -283,7 +283,12 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
                 end
                 dir = dirname(ARGS[1])
             end
-            return abspath(replace(env, "@script" => dir))
+            if env == "@script"  # complete match, not startswith, so search upwards
+                return current_project(dir)
+            else
+                # starts with, so assume rleative path is after
+                return abspath(replace(env, "@script" => dir))
+            end
         end
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
