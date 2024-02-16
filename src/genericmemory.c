@@ -101,6 +101,8 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory(jl_value_t *mtype, size_
 
 JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str)
 {
+    if (jl_string_len(str) == 0)
+        return (jl_genericmemory_t*)((jl_datatype_t*)jl_memory_uint8_type)->instance;
     jl_task_t *ct = jl_current_task;
     int tsz = sizeof(jl_genericmemory_t) + sizeof(void*);
     jl_genericmemory_t *m = (jl_genericmemory_t*)jl_gc_alloc(ct->ptls, tsz, jl_memory_uint8_type);

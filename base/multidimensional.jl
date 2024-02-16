@@ -879,6 +879,28 @@ _maybe_linear_logical_index(::IndexLinear, A, i) = LogicalIndex{Int}(i)
 uncolon(::Tuple{}) = Slice(OneTo(1))
 uncolon(inds::Tuple) = Slice(inds[1])
 
+"""
+    _prechecked_iterate(iter[, state])
+
+Internal function used to eliminate the dead branch in `iterate`.
+Fallback to `iterate` by default, but optimized for indices type in `Base`.
+"""
+@propagate_inbounds _prechecked_iterate(iter) = iterate(iter)
+@propagate_inbounds _prechecked_iterate(iter, state) = iterate(iter, state)
+
+_prechecked_iterate(iter::AbstractUnitRange, i = first(iter)) = i, convert(eltype(iter), i + step(iter))
+_prechecked_iterate(iter::LinearIndices, i = first(iter)) = i, i + 1
+_prechecked_iterate(iter::CartesianIndices) = first(iter), first(iter)
+function _prechecked_iterate(iter::CartesianIndices, i)
+    i′ = IteratorsMD.inc(i.I, iter.indices)
+    return i′, i′
+end
+_prechecked_iterate(iter::SCartesianIndices2) = first(iter), first(iter)
+function _prechecked_iterate(iter::SCartesianIndices2{K}, (;i, j)) where {K}
+    I = i < K ? SCartesianIndex2{K}(i + 1, j) : SCartesianIndex2{K}(1, j + 1)
+    return I, I
+end
+
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
 getindex(x::Union{Number,AbstractChar}, ::CartesianIndex{0}) = x
 getindex(t::Tuple,  i::CartesianIndex{1}) = getindex(t, i.I[1])
@@ -910,14 +932,11 @@ function _generate_unsafe_getindex!_body(N::Int)
     quote
         @inline
         D = eachindex(dest)
-        Dy = iterate(D)
+        Dy = _prechecked_iterate(D)
         @inbounds @nloops $N j d->I[d] begin
-            # This condition is never hit, but at the moment
-            # the optimizer is not clever enough to split the union without it
-            Dy === nothing && return dest
-            (idx, state) = Dy
+            (idx, state) = Dy::NTuple{2,Any}
             dest[idx] = @ncall $N getindex src j
-            Dy = iterate(D, state)
+            Dy = _prechecked_iterate(D, state)
         end
         return dest
     end
@@ -953,14 +972,12 @@ function _generate_unsafe_setindex!_body(N::Int)
         @nexprs $N d->(I_d = unalias(A, I[d]))
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check x′ (d->idxlens[d])
-        Xy = iterate(x′)
+        X = eachindex(x′)
+        Xy = _prechecked_iterate(X)
         @inbounds @nloops $N i d->I_d begin
-            # This is never reached, but serves as an assumption for
-            # the optimizer that it does not need to emit error paths
-            Xy === nothing && break
-            (val, state) = Xy
-            @ncall $N setindex! A val i
-            Xy = iterate(x′, state)
+            (idx, state) = Xy::NTuple{2,Any}
+            @ncall $N setindex! A x′[idx] i
+            Xy = _prechecked_iterate(X, state)
         end
         A
     end
@@ -1565,19 +1582,23 @@ end
     end
 end
 
-isassigned(a::AbstractArray, i::CartesianIndex) = isassigned(a, Tuple(i)...)
-function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
-    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(to_indices(A, i)))
-    @boundscheck checkbounds(Bool, A, i...) || return false
+@propagate_inbounds isassigned(A::AbstractArray, i::CartesianIndex) = isassigned(A, Tuple(i)...)
+@propagate_inbounds function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
+    return isassigned(A, CartesianIndex(to_indices(A, i)))
+end
+@inline function isassigned(A::AbstractArray, i::Integer...)
+    # convert to valid indices, checking for Bool
+    inds = to_indices(A, i)
+    @boundscheck checkbounds(Bool, A, inds...) || return false
     S = IndexStyle(A)
-    ninds = length(i)
+    ninds = length(inds)
     if (isa(S, IndexLinear) && ninds != 1)
-        return @inbounds isassigned(A, _to_linear_index(A, i...))
+        return @inbounds isassigned(A, _to_linear_index(A, inds...))
     elseif (!isa(S, IndexLinear) && ninds != ndims(A))
-        return @inbounds isassigned(A, _to_subscript_indices(A, i...)...)
+        return @inbounds isassigned(A, _to_subscript_indices(A, inds...)...)
     else
        try
-            A[i...]
+            A[inds...]
             true
         catch e
             if isa(e, BoundsError) || isa(e, UndefRefError)

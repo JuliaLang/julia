@@ -1712,67 +1712,71 @@ precompile_test_harness("issue #46296") do load_path
     (@eval (using CodeInstancePrecompile))
 end
 
-precompile_test_harness("AbstractInterpreter caching") do load_path
-    write(joinpath(load_path, "SimpleModule.jl"),
-        """
-        module SimpleModule
+let newinterp_path = abspath("compiler/newinterp.jl")
+    precompile_test_harness("AbstractInterpreter caching") do load_path
+        write(joinpath(load_path, "SimpleModule.jl"), :(module SimpleModule
             basic_callee(x) = x
             basic_caller(x) = basic_callee(x)
-        end
-        """)
-    write(joinpath(load_path, "CustomAbstractInterpreterCaching.jl"),
-        """
-        module CustomAbstractInterpreterCaching
+        end) |> string)
+
+        write(joinpath(load_path, "CustomAbstractInterpreterCaching.jl"), :(module CustomAbstractInterpreterCaching
             import SimpleModule: basic_caller, basic_callee
+
             module Custom
                 const CC = Core.Compiler
-
-                struct InvalidationTesterToken end
-
-                struct InvalidationTester <: CC.AbstractInterpreter
-                    world::UInt
-                    inf_params::CC.InferenceParams
-                    opt_params::CC.OptimizationParams
-                    inf_cache::Vector{CC.InferenceResult}
-                    function InvalidationTester(;
-                                                world::UInt = Base.get_world_counter(),
-                                                inf_params::CC.InferenceParams = CC.InferenceParams(),
-                                                opt_params::CC.OptimizationParams = CC.OptimizationParams(),
-                                                inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
-                        return new(world, inf_params, opt_params, inf_cache)
-                    end
-                end
-
-                CC.InferenceParams(interp::InvalidationTester) = interp.inf_params
-                CC.OptimizationParams(interp::InvalidationTester) = interp.opt_params
-                CC.get_inference_world(interp::InvalidationTester) = interp.world
-                CC.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
-                CC.cache_owner(::InvalidationTester) = InvalidationTesterToken()
+                include("$($newinterp_path)")
+                @newinterp PrecompileInterpreter
             end
 
             Base.return_types((Float64,)) do x
                 basic_caller(x)
             end
-            Base.return_types((Float64,); interp=Custom.InvalidationTester()) do x
+            Base.return_types((Float64,); interp=Custom.PrecompileInterpreter()) do x
                 basic_caller(x)
             end
+            Base.return_types((Vector{Float64},)) do x
+                sum(x)
+            end
+            Base.return_types((Vector{Float64},); interp=Custom.PrecompileInterpreter()) do x
+                sum(x)
+            end
+        end) |> string)
+        Base.compilecache(Base.PkgId("CustomAbstractInterpreterCaching"))
+        @eval let
+            using CustomAbstractInterpreterCaching
+            cache_owner = Core.Compiler.cache_owner(
+                CustomAbstractInterpreterCaching.Custom.PrecompileInterpreter())
+            let m = only(methods(CustomAbstractInterpreterCaching.basic_callee))
+                mi = only(Base.specializations(m))
+                ci = mi.cache
+                @test isdefined(ci, :next)
+                @test ci.owner === nothing
+                @test ci.max_world == typemax(UInt)
+                ci = ci.next
+                @test !isdefined(ci, :next)
+                @test ci.owner === cache_owner
+                @test ci.max_world == typemax(UInt)
+            end
+            let m = only(methods(sum, (Vector{Float64},)))
+                found = false
+                for mi in Base.specializations(m)
+                    if mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(sum),Vector{Float64}}
+                        ci = mi.cache
+                        @test isdefined(ci, :next)
+                        @test ci.owner === cache_owner
+                        @test ci.max_world == typemax(UInt)
+                        ci = ci.next
+                        @test !isdefined(ci, :next)
+                        @test ci.owner === nothing
+                        @test ci.max_world == typemax(UInt)
+                        found = true
+                        break
+                    end
+                end
+                @test found
+            end
         end
-        """)
-    Base.compilecache(Base.PkgId("CustomAbstractInterpreterCaching"))
-    (@eval begin
-        using CustomAbstractInterpreterCaching
-        let m = only(methods(CustomAbstractInterpreterCaching.basic_callee))
-            mi = only(Base.specializations(m))
-            ci = mi.cache
-            @test isdefined(ci, :next)
-            @test ci.owner === nothing
-            @test ci.max_world == typemax(UInt)
-            ci = ci.next
-            @test !isdefined(ci, :next)
-            @test ci.owner === CustomAbstractInterpreterCaching.Custom.InvalidationTesterToken()
-            @test ci.max_world == typemax(UInt)
-        end
-    end)
+    end
 end
 
 precompile_test_harness("Recursive types") do load_path
@@ -1984,6 +1988,23 @@ precompile_test_harness("Issue #50538") do load_path
     Core.set_binding_type!(I50538, :undefglobal, Any)
     @test Core.get_binding_type(I50538, :undefglobal) === Any
     @test !isdefined(I50538, :undefglobal)
+end
+
+precompile_test_harness("Test flags") do load_path
+    write(joinpath(load_path, "TestFlags.jl"),
+          """
+          module TestFlags
+          end
+          """)
+    ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
+    @show ji, ofile
+    open(ji, "r") do io
+        Base.isvalid_cache_header(io)
+        _, _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
+        cacheflags = Base.CacheFlags(flags)
+        @test cacheflags.check_bounds == 2
+        @test cacheflags.opt_level == 3
+    end
 end
 
 empty!(Base.DEPOT_PATH)
