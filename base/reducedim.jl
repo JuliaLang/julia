@@ -324,6 +324,8 @@ julia> mapreduce(isodd, |, a, dims=1)
  1  1  1  1
 ```
 """
+mapreduce(f, op; kw...) = reduce(op, f(); kw...) # for disambiguity
+
 mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
     _mapreduce_dim(f, op, init, A, dims)
 mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
