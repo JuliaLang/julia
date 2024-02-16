@@ -136,25 +136,41 @@ function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
     a
 end
 
-function permute!!(a, p::AbstractVector{<:Integer})
+# Row and column permutations for AbstractMatrix
+permutecols!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _permute!(a, p, Base.swapcols!)
+permuterows!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _permute!(a, p, Base.swaprows!)
+@inline function _permute!(a::AbstractMatrix, p::AbstractVector{<:Integer}, swapfun!::F) where {F}
     require_one_based_indexing(a, p)
-    count = 0
-    start = 0
-    while count < length(a)
-        ptr = start = findnext(!iszero, p, start+1)::Int
-        temp = a[start]
-        next = p[start]
-        count += 1
-        while next != start
-            a[ptr] = a[next]
-            p[ptr] = 0
-            ptr = next
-            next = p[next]
-            count += 1
+    p .= .-p
+    for i in 1:length(p)
+        p[i] > 0 && continue
+        j = i
+        in = p[j] = -p[j]
+        while p[in] < 0
+            swapfun!(a, in, j)
+            j = in
+            in = p[in] = -p[in]
         end
-        a[ptr] = temp
-        p[ptr] = 0
     end
+    a
+end
+invpermutecols!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _invpermute!(a, p, Base.swapcols!)
+invpermuterows!(a::AbstractMatrix, p::AbstractVector{<:Integer}) =
+    _invpermute!(a, p, Base.swaprows!)
+@inline function _invpermute!(a::AbstractMatrix, p::AbstractVector{<:Integer}, swapfun!::F) where {F}
+    require_one_based_indexing(a, p)
+    p .= .-p
+    for i in 1:length(p)
+        p[i] > 0 && continue
+        j = p[i] = -p[i]
+        while j != i
+           swapfun!(a, j, i)
+           j = p[j] = -p[j]
+        end
+     end
     a
 end
 
@@ -168,6 +184,8 @@ To return a new permutation, use `v[p]`. This is generally faster than `permute!
 it is even faster to write into a pre-allocated output array with `u .= @view v[p]`.
 (Even though `permute!` overwrites `v` in-place, it internally requires some allocation
 to keep track of which elements have been moved.)
+
+$(_DOCS_ALIASING_WARNING)
 
 See also [`invpermute!`](@ref).
 
@@ -189,30 +207,6 @@ julia> A
 """
 permute!(v, p::AbstractVector) = (v .= v[p])
 
-function invpermute!!(a, p::AbstractVector{<:Integer})
-    require_one_based_indexing(a, p)
-    count = 0
-    start = 0
-    while count < length(a)
-        start = findnext(!iszero, p, start+1)::Int
-        temp = a[start]
-        next = p[start]
-        count += 1
-        while next != start
-            temp_next = a[next]
-            a[next] = temp
-            temp = temp_next
-            ptr = p[next]
-            p[next] = 0
-            next = ptr
-            count += 1
-        end
-        a[next] = temp
-        p[next] = 0
-    end
-    a
-end
-
 """
     invpermute!(v, p)
 
@@ -221,6 +215,8 @@ Like [`permute!`](@ref), but the inverse of the given permutation is applied.
 Note that if you have a pre-allocated output array (e.g. `u = similar(v)`),
 it is quicker to instead employ `u[p] = v`.  (`invpermute!` internally
 allocates a copy of the data.)
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -283,7 +279,7 @@ julia> B[invperm(v)]
 """
 function invperm(a::AbstractVector)
     require_one_based_indexing(a)
-    b = zero(a) # similar vector of zeros
+    b = fill!(similar(a), zero(eltype(a))) # mutable vector of zeros
     n = length(a)
     @inbounds for (i, j) in enumerate(a)
         ((1 <= j <= n) && b[j] == 0) ||

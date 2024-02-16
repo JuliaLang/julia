@@ -480,13 +480,26 @@ function tempdir()
         rc = ccall(:uv_os_tmpdir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0
             resize!(buf, sz[])
-            return String(buf)
+            break
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1)  # space for null-terminator implied by StringVector
         else
             uv_error("tempdir()", rc)
         end
     end
+    tempdir = String(buf)
+    try
+        s = stat(tempdir)
+        if !ispath(s)
+            @warn "tempdir path does not exist" tempdir
+        elseif !isdir(s)
+            @warn "tempdir path is not a directory" tempdir
+        end
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        @warn "accessing tempdir path failed" _exception=ex
+    end
+    return tempdir
 end
 
 """
@@ -504,13 +517,19 @@ function prepare_for_deletion(path::AbstractString)
         return
     end
 
-    try chmod(path, filemode(path) | 0o333)
-    catch; end
+    try
+        chmod(path, filemode(path) | 0o333)
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+    end
     for (root, dirs, files) in walkdir(path; onerror=x->())
         for dir in dirs
             dpath = joinpath(root, dir)
-            try chmod(dpath, filemode(dpath) | 0o333)
-            catch; end
+            try
+                chmod(dpath, filemode(dpath) | 0o333)
+            catch ex
+                ex isa IOError || ex isa SystemError || rethrow()
+            end
         end
     end
 end
@@ -521,37 +540,70 @@ const TEMP_CLEANUP = Dict{String,Bool}()
 const TEMP_CLEANUP_LOCK = ReentrantLock()
 
 function temp_cleanup_later(path::AbstractString; asap::Bool=false)
-    lock(TEMP_CLEANUP_LOCK)
+    @lock TEMP_CLEANUP_LOCK begin
     # each path should only be inserted here once, but if there
     # is a collision, let !asap win over asap: if any user might
     # still be using the path, don't delete it until process exit
     TEMP_CLEANUP[path] = get(TEMP_CLEANUP, path, true) & asap
     if length(TEMP_CLEANUP) > TEMP_CLEANUP_MAX[]
-        temp_cleanup_purge()
+        temp_cleanup_purge_prelocked(false)
         TEMP_CLEANUP_MAX[] = max(TEMP_CLEANUP_MIN[], 2*length(TEMP_CLEANUP))
     end
-    unlock(TEMP_CLEANUP_LOCK)
-    return nothing
+    end
+    nothing
 end
 
-function temp_cleanup_purge(; force::Bool=false)
-    need_gc = Sys.iswindows()
-    for (path, asap) in TEMP_CLEANUP
+function temp_cleanup_forget(path::AbstractString)
+    @lock TEMP_CLEANUP_LOCK delete!(TEMP_CLEANUP, path)
+    nothing
+end
+
+function temp_cleanup_purge_prelocked(force::Bool)
+    filter!(TEMP_CLEANUP) do (path, asap)
         try
-            if (force || asap) && ispath(path)
-                need_gc && GC.gc(true)
-                need_gc = false
+            ispath(path) || return false
+            if force || asap
                 prepare_for_deletion(path)
                 rm(path, recursive=true, force=true)
             end
-            !ispath(path) && delete!(TEMP_CLEANUP, path)
+            return ispath(path)
         catch ex
             @warn """
                 Failed to clean up temporary path $(repr(path))
                 $ex
                 """ _group=:file
+            ex isa InterruptException && rethrow()
+            return true
         end
     end
+    nothing
+end
+
+function temp_cleanup_purge_all()
+    may_need_gc = false
+    @lock TEMP_CLEANUP_LOCK filter!(TEMP_CLEANUP) do (path, asap)
+        try
+            ispath(path) || return false
+            may_need_gc = true
+            return true
+        catch ex
+            ex isa InterruptException && rethrow()
+            return true
+        end
+    end
+    if may_need_gc
+        # this is only usually required on Sys.iswindows(), but may as well do it everywhere
+        GC.gc(true)
+    end
+    @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(true)
+    nothing
+end
+
+# deprecated internal function used by some packages
+temp_cleanup_purge(; force=false) = force ? temp_cleanup_purge_all() : @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(false)
+
+function __postinit__()
+    Base.atexit(temp_cleanup_purge_all)
 end
 
 const temp_prefix = "jl_"
@@ -733,10 +785,11 @@ temporary file upon completion.
 See also: [`mktempdir`](@ref).
 """
 function mktemp(fn::Function, parent::AbstractString=tempdir())
-    (tmp_path, tmp_io) = mktemp(parent, cleanup=false)
+    (tmp_path, tmp_io) = mktemp(parent)
     try
         fn(tmp_path, tmp_io)
     finally
+        temp_cleanup_forget(tmp_path)
         try
             close(tmp_io)
             ispath(tmp_path) && rm(tmp_path)
@@ -761,10 +814,11 @@ See also: [`mktemp`](@ref), [`mkdir`](@ref).
 """
 function mktempdir(fn::Function, parent::AbstractString=tempdir();
     prefix::AbstractString=temp_prefix)
-    tmpdir = mktempdir(parent; prefix=prefix, cleanup=false)
+    tmpdir = mktempdir(parent; prefix=prefix)
     try
         fn(tmpdir)
     finally
+        temp_cleanup_forget(tmpdir)
         try
             if ispath(tmpdir)
                 prepare_for_deletion(tmpdir)

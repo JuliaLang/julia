@@ -96,7 +96,11 @@ end
         f44319(1)
     catch e
         s = sprint(showerror, e)
-        @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\n\nClosest candidates are:\n  f44319()\n   @ $curmod_str none:0\n"
+        @test s == """MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))
+                      The function `f44319` exists, but no method is defined for this combination of argument types.
+
+                      Closest candidates are:\n  f44319()\n   @ $curmod_str none:0
+                      """
     end
 end
 

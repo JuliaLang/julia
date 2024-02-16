@@ -374,12 +374,13 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         }
         jl_method_instance_t *mi = NULL;
         if (codeinst) {
+            JL_GC_PROMISE_ROOTED(codeinst);
             mi = codeinst->def;
             // Non-opaque-closure MethodInstances are considered globally rooted
             // through their methods, but for OC, we need to create a global root
             // here.
             if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
-                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi);
+                mi = (jl_method_instance_t*)jl_as_global_root((jl_value_t*)mi, 1);
         }
         jl_profile_atomic([&]() JL_NOTSAFEPOINT {
             if (mi)
@@ -549,7 +550,7 @@ static int lookup_pointer(
 #if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
 
 void JITDebugInfoRegistry::libc_frames_t::libc_register_frame(const char *Entry) {
-    auto libc_register_frame_ = jl_atomic_load_relaxed(&this->libc_register_frame_);
+    frame_register_func libc_register_frame_ = jl_atomic_load_relaxed(&this->libc_register_frame_);
     if (!libc_register_frame_) {
         libc_register_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__register_frame");
         jl_atomic_store_release(&this->libc_register_frame_, libc_register_frame_);
@@ -562,7 +563,7 @@ void JITDebugInfoRegistry::libc_frames_t::libc_register_frame(const char *Entry)
 }
 
 void JITDebugInfoRegistry::libc_frames_t::libc_deregister_frame(const char *Entry) {
-    auto libc_deregister_frame_ = jl_atomic_load_relaxed(&this->libc_deregister_frame_);
+    frame_register_func libc_deregister_frame_  = jl_atomic_load_relaxed(&this->libc_deregister_frame_);
     if (!libc_deregister_frame_) {
         libc_deregister_frame_ = (void(*)(void*))dlsym(RTLD_NEXT, "__deregister_frame");
         jl_atomic_store_release(&this->libc_deregister_frame_, libc_deregister_frame_);
@@ -1136,7 +1137,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     if (entry.obj)
         *Section = getModuleSectionForAddress(entry.obj, pointer + entry.slide);
     // Assume we only need base address for sysimg for now
-    if (!inimage || !image_info.fptrs.base)
+    if (!inimage || 0 == image_info.fptrs.nptrs)
         saddr = nullptr;
     get_function_name_and_base(*Section, pointer, entry.slide, inimage, saddr, name, untrusted_dladdr);
     return true;
@@ -1179,9 +1180,8 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
         JITDebugInfoRegistry::image_info_t image;
         bool inimage = getJITDebugRegistry().get_image_info(fbase, &image);
         if (isImage && saddr && inimage) {
-            intptr_t diff = (uintptr_t)saddr - (uintptr_t)image.fptrs.base;
             for (size_t i = 0; i < image.fptrs.nclones; i++) {
-                if (diff == image.fptrs.clone_offsets[i]) {
+                if (saddr == image.fptrs.clone_ptrs[i]) {
                     uint32_t idx = image.fptrs.clone_idxs[i] & jl_sysimg_val_mask;
                     if (idx < image.fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
                         frame0->linfo = image.fvars_linfo[idx];
@@ -1189,7 +1189,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
                 }
             }
             for (size_t i = 0; i < image.fvars_n; i++) {
-                if (diff == image.fptrs.offsets[i]) {
+                if (saddr == image.fptrs.ptrs[i]) {
                     frame0->linfo = image.fvars_linfo[i];
                     break;
                 }
@@ -1363,7 +1363,7 @@ enum DW_EH_PE : uint8_t {
 // Parse the CIE and return the type of encoding used by FDE
 static DW_EH_PE parseCIE(const uint8_t *Addr, const uint8_t *End)
 {
-    // http://www.airs.com/blog/archives/460
+    // https://www.airs.com/blog/archives/460
     // Length (4 bytes)
     uint32_t cie_size = *(const uint32_t*)Addr;
     const uint8_t *cie_addr = Addr + 4;
@@ -1490,7 +1490,7 @@ void register_eh_frames(uint8_t *Addr, size_t Size)
     // While we're at it, also record the start_ip and size,
     // which we fill in the table
     unw_table_entry *table = new unw_table_entry[nentries];
-    std::vector<uintptr_t> start_ips(nentries);
+    SmallVector<uintptr_t, 0> start_ips(nentries);
     size_t cur_entry = 0;
     // Cache the previously parsed CIE entry so that we can support multiple
     // CIE's (may not happen) without parsing it every time.

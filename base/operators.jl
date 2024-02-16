@@ -52,8 +52,9 @@ Generic equality operator. Falls back to [`===`](@ref).
 Should be implemented for all types with a notion of equality, based on the abstract value
 that an instance represents. For example, all numeric types are compared by numeric value,
 ignoring type. Strings are compared as sequences of characters, ignoring encoding.
-For collections, `==` is generally called recursively on all contents,
-though other properties (like the shape for arrays) may also be taken into account.
+Collections of the same type generally compare their key sets, and if those are `==`, then compare the values
+for each of those keys, returning true if all such pairs are `==`.
+Other properties are typically not taken into account (such as the exact type).
 
 This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` and
 `NaN != NaN`.
@@ -61,8 +62,8 @@ This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` a
 The result is of type `Bool`, except when one of the operands is [`missing`](@ref),
 in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic)).
-For collections, `missing` is returned if at least one of the operands contains
-a `missing` value and all non-missing values are equal.
+Collections generally implement three-valued logic akin to [`all`](@ref), returning
+missing if any operands contain missing values and all other pairs are equal.
 Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 
 # Implementation
@@ -464,13 +465,17 @@ cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0
 """
     max(x, y, ...)
 
-Return the maximum of the arguments (with respect to [`isless`](@ref)). See also the [`maximum`](@ref) function
-to take the maximum element from a collection.
+Return the maximum of the arguments, with respect to [`isless`](@ref).
+If any of the arguments is [`missing`](@ref), return `missing`.
+See also the [`maximum`](@ref) function to take the maximum element from a collection.
 
 # Examples
 ```jldoctest
 julia> max(2, 5, 1)
 5
+
+julia> max(5, missing, 6)
+missing
 ```
 """
 max(x, y) = ifelse(isless(y, x), x, y)
@@ -478,13 +483,17 @@ max(x, y) = ifelse(isless(y, x), x, y)
 """
     min(x, y, ...)
 
-Return the minimum of the arguments (with respect to [`isless`](@ref)). See also the [`minimum`](@ref) function
-to take the minimum element from a collection.
+Return the minimum of the arguments, with respect to [`isless`](@ref).
+If any of the arguments is [`missing`](@ref), return `missing`.
+See also the [`minimum`](@ref) function to take the minimum element from a collection.
 
 # Examples
 ```jldoctest
 julia> min(2, 5, 1)
 1
+
+julia> min(4, missing, 6)
+missing
 ```
 """
 min(x,y) = ifelse(isless(y, x), y, x)
@@ -1233,7 +1242,7 @@ it into the original function. This is useful as an adaptor to pass a
 multi-argument function in a context that expects a single argument, but passes
 a tuple as that single argument.
 
-# Example usage:
+# Examples
 ```jldoctest
 julia> map(splat(+), zip(1:3,4:6))
 3-element Vector{Int64}:
@@ -1287,17 +1296,22 @@ used to implement specialized methods.
 """
 in(x) = Fix2(in, x)
 
-function in(x, itr)
-    anymissing = false
-    for y in itr
-        v = (y == x)
-        if ismissing(v)
-            anymissing = true
-        elseif v
-            return true
+for ItrT = (Tuple,Any)
+    # define a generic method and a specialized version for `Tuple`,
+    # whose method bodies are identical, while giving better effects to the later
+    @eval function in(x, itr::$ItrT)
+        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
+        anymissing = false
+        for y in itr
+            v = (y == x)
+            if ismissing(v)
+                anymissing = true
+            elseif v
+                return true
+            end
         end
+        return anymissing ? missing : false
     end
-    return anymissing ? missing : false
 end
 
 const ∈ = in

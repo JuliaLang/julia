@@ -16,7 +16,7 @@
 //
 //    University of Illinois at Urbana-Champaign
 //
-//    http://llvm.org
+//    https://llvm.org
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
 // this software and associated documentation files (the "Software"), to deal with
@@ -117,7 +117,7 @@ using namespace llvm;
 // helper class for tracking inlining context while printing debug info
 class DILineInfoPrinter {
     // internal state:
-    std::vector<DILineInfo> context;
+    SmallVector<DILineInfo, 0> context;
     uint32_t inline_depth = 0;
     // configuration options:
     const char* LineStart = "; ";
@@ -147,7 +147,7 @@ public:
     }
 
     void emit_finish(raw_ostream &Out) JL_NOTSAFEPOINT;
-    void emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI) JL_NOTSAFEPOINT;
+    void emit_lineinfo(raw_ostream &Out, SmallVectorImpl<DILineInfo> &DI) JL_NOTSAFEPOINT;
 
     struct repeat {
         size_t times;
@@ -169,7 +169,7 @@ public:
 
     void emit_lineinfo(raw_ostream &Out, DILineInfo &DI) JL_NOTSAFEPOINT
     {
-        std::vector<DILineInfo> DIvec(1);
+        SmallVector<DILineInfo, 0> DIvec(1);
         DIvec[0] = DI;
         emit_lineinfo(Out, DIvec);
     }
@@ -177,7 +177,7 @@ public:
     void emit_lineinfo(raw_ostream &Out, DIInliningInfo &DI) JL_NOTSAFEPOINT
     {
         uint32_t nframes = DI.getNumberOfFrames();
-        std::vector<DILineInfo> DIvec(nframes);
+        SmallVector<DILineInfo, 0> DIvec(nframes);
         for (uint32_t i = 0; i < DI.getNumberOfFrames(); i++) {
             DIvec[i] = DI.getFrame(i);
         }
@@ -207,7 +207,7 @@ void DILineInfoPrinter::emit_finish(raw_ostream &Out)
     this->inline_depth = 0;
 }
 
-void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI)
+void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, SmallVectorImpl<DILineInfo> &DI)
 {
     if (verbosity == output_none)
         return;
@@ -217,8 +217,8 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
     // compute the size of the matching prefix in the inlining information stack
     uint32_t nctx;
     for (nctx = 0; nctx < context.size() && nctx < nframes; nctx++) {
-        const DILineInfo &CtxLine = context.at(nctx);
-        const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
+        const DILineInfo &CtxLine = context[nctx];
+        const DILineInfo &FrameLine = DI[nframes - 1 - nctx];
         if (CtxLine != FrameLine) {
             break;
         }
@@ -230,27 +230,27 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
             // if so, drop all existing calls to it from the top of the context
             // AND check if instead the context was previously printed that way
             // but now has removed the recursive frames
-            StringRef method = StringRef(context.at(nctx - 1).FunctionName).rtrim(';'); // last matching frame
-            if ((nctx < nframes && StringRef(DI.at(nframes - nctx - 1).FunctionName).rtrim(';') == method) ||
-                (nctx < context.size() && StringRef(context.at(nctx).FunctionName).rtrim(';') == method)) {
+            StringRef method = StringRef(context[nctx - 1].FunctionName).rtrim(';'); // last matching frame
+            if ((nctx < nframes && StringRef(DI[nframes - nctx - 1].FunctionName).rtrim(';') == method) ||
+                (nctx < context.size() && StringRef(context[nctx].FunctionName).rtrim(';') == method)) {
                 update_line_only = true;
                 // transform nctx to exclude the combined frames
-                while (nctx > 0 && StringRef(context.at(nctx - 1).FunctionName).rtrim(';') == method)
+                while (nctx > 0 && StringRef(context[nctx - 1].FunctionName).rtrim(';') == method)
                     nctx -= 1;
             }
         }
         if (!update_line_only && nctx < context.size() && nctx < nframes) {
             // look at the first non-matching element to see if we are only changing the line number
-            const DILineInfo &CtxLine = context.at(nctx);
-            const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
+            const DILineInfo &CtxLine = context[nctx];
+            const DILineInfo &FrameLine = DI[nframes - 1 - nctx];
             if (StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';'))
                 update_line_only = true;
         }
     }
     else if (nctx < context.size() && nctx < nframes) {
         // look at the first non-matching element to see if we are only changing the line number
-        const DILineInfo &CtxLine = context.at(nctx);
-        const DILineInfo &FrameLine = DI.at(nframes - 1 - nctx);
+        const DILineInfo &CtxLine = context[nctx];
+        const DILineInfo &FrameLine = DI[nframes - 1 - nctx];
         if (CtxLine.FileName == FrameLine.FileName &&
                 StringRef(CtxLine.FunctionName).rtrim(';') == StringRef(FrameLine.FunctionName).rtrim(';')) {
             update_line_only = true;
@@ -262,9 +262,9 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
         uint32_t npops;
         if (collapse_recursive) {
             npops = 1;
-            StringRef Prev = StringRef(context.at(nctx).FunctionName).rtrim(';');
+            StringRef Prev = StringRef(context[nctx].FunctionName).rtrim(';');
             for (uint32_t i = nctx + 1; i < context.size(); i++) {
-                StringRef Next = StringRef(context.at(i).FunctionName).rtrim(';');
+                StringRef Next = StringRef(context[i].FunctionName).rtrim(';');
                 if (Prev != Next)
                     npops += 1;
                 Prev = Next;
@@ -282,7 +282,7 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
     }
     // print the new frames
     while (nctx < nframes) {
-        const DILineInfo &frame = DI.at(nframes - 1 - nctx);
+        const DILineInfo &frame = DI[nframes - 1 - nctx];
         Out << LineStart << inlining_indent("│");
         nctx += 1;
         context.push_back(frame);
@@ -301,7 +301,7 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
         Out << " within `" << method << "`";
         if (collapse_recursive) {
             while (nctx < nframes) {
-                const DILineInfo &frame = DI.at(nframes - 1 - nctx);
+                const DILineInfo &frame = DI[nframes - 1 - nctx];
                 if (StringRef(frame.FunctionName).rtrim(';') != method)
                     break;
                 nctx += 1;
@@ -313,10 +313,10 @@ void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> 
         Out << "\n";
     }
 #ifndef JL_NDEBUG
-    StringRef Prev = StringRef(context.at(0).FunctionName).rtrim(';');
+    StringRef Prev = StringRef(context[0].FunctionName).rtrim(';');
     uint32_t depth2 = 1;
     for (uint32_t i = 1; i < nctx; i++) {
-        StringRef Next = StringRef(context.at(i).FunctionName).rtrim(';');
+        StringRef Next = StringRef(context[i].FunctionName).rtrim(';');
         if (!collapse_recursive || Prev != Next)
             depth2 += 1;
         Prev = Next;
@@ -375,7 +375,7 @@ void LineNumberAnnotatedWriter::emitFunctionAnnot(
             FuncLoc = SP->second;
     }
     if (FuncLoc) {
-        std::vector<DILineInfo> DIvec(1);
+        SmallVector<DILineInfo, 0> DIvec(1);
         DILineInfo &DI = DIvec.back();
         DI.FunctionName = FuncLoc->getName().str();
         DI.FileName = FuncLoc->getFilename().str();
@@ -402,7 +402,7 @@ void LineNumberAnnotatedWriter::emitInstructionAnnot(
 {
     if (NewInstrLoc && NewInstrLoc != InstrLoc) {
         InstrLoc = NewInstrLoc;
-        std::vector<DILineInfo> DIvec;
+        SmallVector<DILineInfo, 0> DIvec;
         do {
             DIvec.emplace_back();
             DILineInfo &DI = DIvec.back();
@@ -797,19 +797,15 @@ static const char *SymbolLookup(void *DisInfo, uint64_t ReferenceValue, uint64_t
 
 static int OpInfoLookup(void *DisInfo, uint64_t PC,
                         uint64_t Offset,
-#if JL_LLVM_VERSION < 150000
-                        uint64_t Size,
-#else
                         uint64_t OpSize, uint64_t InstSize,
-#endif
                         int TagType, void *TagBuf)
 {
-    SymbolTable *SymTab = (SymbolTable*)DisInfo;
+    // SymbolTable *SymTab = (SymbolTable*)DisInfo;
     LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
     memset(info, 0, sizeof(*info));
     if (TagType != 1)
         return 0;               // Unknown data format
-    PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
+    // PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
     // TODO: see if we knew of a relocation applied at PC
     // info->AddSymbol.Present = 1;
     // info->AddSymbol.Name = name;
@@ -910,11 +906,7 @@ static void jl_dump_asm_internal(
     std::unique_ptr<MCCodeEmitter> CE;
     std::unique_ptr<MCAsmBackend> MAB;
     if (ShowEncoding) {
-#if JL_LLVM_VERSION >= 150000
         CE.reset(TheTarget->createMCCodeEmitter(*MCII, Ctx));
-#else
-        CE.reset(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
-#endif
         MAB.reset(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
     }
 
@@ -929,11 +921,7 @@ static void jl_dump_asm_internal(
                                          IP.release(),
                                          std::move(CE), std::move(MAB),
                                          /*ShowInst*/ false));
-#if JL_LLVM_VERSION >= 140000
     Streamer->initSections(true, *STI);
-#else
-    Streamer->InitSections(true);
-#endif
 
     // Make the MemoryObject wrapper
     ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);
@@ -1049,9 +1037,6 @@ static void jl_dump_asm_internal(
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
             FuncMCView view = memoryObject.slice(Index);
-#if JL_LLVM_VERSION < 150000
-#define getCommentOS() GetCommentOS()
-#endif
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
                                       /*CStream*/ pass != 0 ? Streamer->getCommentOS () : nulls());
             if (pass != 0 && Streamer->getCommentOS ().tell() > 0)
@@ -1256,11 +1241,7 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;
             if (binary) { // enable MCAsmStreamer::AddEncodingComment printing
-#if JL_LLVM_VERSION >= 150000
                 MCE.reset(TM->getTarget().createMCCodeEmitter(MII, *Context));
-#else
-                MCE.reset(TM->getTarget().createMCCodeEmitter(MII, MRI, *Context));
-#endif
             }
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(

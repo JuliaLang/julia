@@ -320,11 +320,6 @@ function BigInt(x::Float64)
     unsafe_trunc(BigInt,x)
 end
 
-function trunc(::Type{BigInt}, x::Union{Float16,Float32,Float64})
-    isfinite(x) || throw(InexactError(:trunc, BigInt, x))
-    unsafe_trunc(BigInt,x)
-end
-
 BigInt(x::Float16) = BigInt(Float64(x))
 BigInt(x::Float32) = BigInt(Float64(x))
 
@@ -611,8 +606,8 @@ function top_set_bit(x::BigInt)
     x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
 end
 
-divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
-divrem(x::BigInt, y::Integer) = MPZ.tdiv_qr(x, big(y))
+divrem(x::BigInt, y::BigInt,  ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, y)
+divrem(x::BigInt, y::Integer, ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, BigInt(y))
 
 cmp(x::BigInt, y::BigInt) = sign(MPZ.cmp(x, y))
 cmp(x::BigInt, y::ClongMax) = sign(MPZ.cmp_si(x, y))
@@ -628,11 +623,11 @@ isqrt(x::BigInt) = MPZ.sqrt(x)
 ^(x::BigInt, y::Culong) = MPZ.pow_ui(x, y)
 
 function bigint_pow(x::BigInt, y::Integer)
+    x == 1 && return x
+    x == -1 && return isodd(y) ? x : -x
     if y<0; throw(DomainError(y, "`y` cannot be negative.")); end
     @noinline throw1(y) =
         throw(OverflowError("exponent $y is too large and computation will overflow"))
-    if x== 1; return x; end
-    if x==-1; return isodd(y) ? x : -x; end
     if y>typemax(Culong)
        x==0 && return x
 
@@ -705,7 +700,7 @@ function prod(arr::AbstractArray{BigInt})
     foldl(MPZ.mul!, arr; init)
 end
 
-factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
+factorial(n::BigInt) = !isneg(n) ? MPZ.fac_ui(n) : throw(DomainError(n, "`n` must not be negative."))
 
 function binomial(n::BigInt, k::Integer)
     k < 0 && return BigInt(0)

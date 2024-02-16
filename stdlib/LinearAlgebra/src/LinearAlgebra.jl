@@ -7,15 +7,15 @@ functionality.
 """
 module LinearAlgebra
 
-import Base: \, /, *, ^, +, -, ==
+import Base: \, /, //, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, collect, conj, convert, copy,
-    copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
-    getindex, hcat, getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle,
-    kron, kron!, length, log, map, ndims, one, oneunit, parent, permutedims,
-    power_by_squaring, promote_rule, real, sec, sech, setindex!, show, similar, sin,
-    sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc, typed_hcat,
-    vec, view, zero
+    asin, asinh, atan, atanh, axes, big, broadcast, cbrt, ceil, cis, collect, conj, convert,
+    copy, copyto!, copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor,
+    getindex, hcat, getproperty, imag, inv, invpermuterows!, isapprox, isequal, isone, iszero,
+    IndexStyle, kron, kron!, length, log, map, ndims, one, oneunit, parent, permutecols!,
+    permutedims, permuterows!, power_by_squaring, promote_rule, real, sec, sech, setindex!,
+    show, similar, sin, sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc,
+    typed_hcat, vec, view, zero
 using Base: IndexLinear, promote_eltype, promote_op, promote_typeof, print_matrix,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
@@ -27,132 +27,136 @@ import Libdl
 
 export
 # Modules
-    LAPACK,
     BLAS,
+    LAPACK,
 
 # Types
     Adjoint,
-    Transpose,
-    SymTridiagonal,
-    Tridiagonal,
     Bidiagonal,
-    Factorization,
     BunchKaufman,
     Cholesky,
     CholeskyPivoted,
     ColumnNorm,
+    Diagonal,
     Eigen,
+    Factorization,
     GeneralizedEigen,
     GeneralizedSVD,
     GeneralizedSchur,
+    Hermitian,
     Hessenberg,
-    LU,
     LDLt,
+    LQ,
+    LU,
+    LowerTriangular,
     NoPivot,
-    RowNonZero,
     QR,
     QRPivoted,
-    LQ,
-    Schur,
-    SVD,
-    Hermitian,
     RowMaximum,
+    RowNonZero,
+    SVD,
+    Schur,
+    SymTridiagonal,
     Symmetric,
-    LowerTriangular,
-    UpperTriangular,
+    Transpose,
+    Tridiagonal,
+    UniformScaling,
     UnitLowerTriangular,
     UnitUpperTriangular,
     UpperHessenberg,
-    Diagonal,
-    UniformScaling,
+    UpperTriangular,
+
 
 # Functions
-    axpy!,
+    adjoint!,
+    adjoint,
     axpby!,
-    bunchkaufman,
+    axpy!,
     bunchkaufman!,
-    cholesky,
+    bunchkaufman,
     cholesky!,
+    cholesky,
     cond,
     condskeel,
-    copyto!,
+    copy_adjoint!,
     copy_transpose!,
+    copyto!,
+    copytrito!,
     cross,
-    adjoint,
-    adjoint!,
     det,
     diag,
     diagind,
     diagm,
     dot,
-    eigen,
     eigen!,
+    eigen,
     eigmax,
     eigmin,
-    eigvals,
     eigvals!,
+    eigvals,
     eigvecs,
     factorize,
     givens,
-    hermitianpart,
     hermitianpart!,
-    hessenberg,
+    hermitianpart,
     hessenberg!,
+    hessenberg,
     isdiag,
     ishermitian,
-    isposdef,
     isposdef!,
+    isposdef,
     issuccess,
     issymmetric,
     istril,
     istriu,
-    kron,
     kron!,
+    kron,
     ldiv!,
     ldlt!,
     ldlt,
+    lmul!,
     logabsdet,
     logdet,
-    lowrankdowndate,
     lowrankdowndate!,
-    lowrankupdate,
+    lowrankdowndate,
     lowrankupdate!,
-    lu,
+    lowrankupdate,
+    lq!,
+    lq,
     lu!,
+    lu,
     lyap,
     mul!,
-    lmul!,
-    rmul!,
     norm,
-    normalize,
     normalize!,
+    normalize,
     nullspace,
+    opnorm,
     ordschur!,
     ordschur,
     pinv,
-    qr,
     qr!,
-    lq,
-    lq!,
-    opnorm,
+    qr,
     rank,
     rdiv!,
     reflect!,
+    rmul!,
     rotate!,
-    schur,
     schur!,
-    svd,
+    schur,
     svd!,
+    svd,
     svdvals!,
     svdvals,
     sylvester,
     tr,
-    transpose,
     transpose!,
-    tril,
-    triu,
+    transpose,
     tril!,
+    tril,
     triu!,
+    triu,
+
 
 # Operators
     \,
@@ -160,6 +164,17 @@ export
 
 # Constants
     I
+
+# not exported, but public names
+public AbstractTriangular,
+        Givens,
+        checksquare,
+        hermitian,
+        hermitian_type,
+        isbanded,
+        peakflops,
+        symmetric,
+        symmetric_type
 
 const BlasFloat = Union{Float64,Float32,ComplexF64,ComplexF32}
 const BlasReal = Union{Float64,Float32}
@@ -176,10 +191,54 @@ abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
 
+# Pivoting strategies for matrix factorization algorithms.
 abstract type PivotingStrategy end
+
+"""
+    NoPivot
+
+Pivoting is not performed. Matrix factorizations such as the LU factorization
+may fail without pivoting, and may also be numerically unstable for floating-point matrices in the face of roundoff error.
+This pivot strategy is mainly useful for pedagogical purposes.
+"""
 struct NoPivot <: PivotingStrategy end
+
+"""
+    RowNonZero
+
+First non-zero element in the remaining rows is chosen as the pivot element.
+
+Beware that for floating-point matrices, the resulting LU algorithm is numerically unstable — this strategy
+is mainly useful for comparison to hand calculations (which typically use this strategy) or for other
+algebraic types (e.g. rational numbers) not susceptible to roundoff errors.   Otherwise, the default
+`RowMaximum` pivoting strategy should be generally preferred in Gaussian elimination.
+
+Note that the [element type](@ref eltype) of the matrix must admit an [`iszero`](@ref)
+method.
+"""
 struct RowNonZero <: PivotingStrategy end
+
+"""
+    RowMaximum
+
+The maximum-magnitude element in the remaining rows is chosen as the pivot element.
+This is the default strategy for LU factorization of floating-point matrices, and is sometimes
+referred to as the "partial pivoting" algorithm.
+
+Note that the [element type](@ref eltype) of the matrix must admit an [`abs`](@ref) method,
+whose result type must admit a [`<`](@ref) method.
+"""
 struct RowMaximum <: PivotingStrategy end
+
+"""
+    ColumnNorm
+
+The column with the maximum norm is used for subsequent computation.  This
+is used for pivoted QR factorization.
+
+Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref) and
+[`abs`](@ref) methods, whose respective result types must admit a [`<`](@ref) method.
+"""
 struct ColumnNorm <: PivotingStrategy end
 
 # Check that stride of matrix/vector is 1
@@ -465,22 +524,26 @@ wrapper_char(A::Hermitian) = A.uplo == 'U' ? 'H' : 'h'
 wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
 wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
 
-function wrap(A::AbstractVecOrMat, tA::AbstractChar)
-    if tA == 'N'
-        return A
+Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
+    # merge the result of this before return, so that we can type-assert the return such
+    # that even if the tmerge is inaccurate, inference can still identify that the
+    # `_generic_matmatmul` signature still matches and doesn't require missing backedges
+    B = if tA == 'N'
+        A
     elseif tA == 'T'
-        return transpose(A)
+        transpose(A)
     elseif tA == 'C'
-        return adjoint(A)
+        adjoint(A)
     elseif tA == 'H'
-        return Hermitian(A, :U)
+        Hermitian(A, :U)
     elseif tA == 'h'
-        return Hermitian(A, :L)
+        Hermitian(A, :L)
     elseif tA == 'S'
-        return Symmetric(A, :U)
+        Symmetric(A, :U)
     else # tA == 's'
-        return Symmetric(A, :L)
+        Symmetric(A, :L)
     end
+    return B::AbstractVecOrMat
 end
 
 _unwrap(A::AbstractVecOrMat) = A
@@ -509,6 +572,17 @@ _makevector(x::AbstractVector) = Vector(x)
 _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
 
+# destination type for matmul
+matprod_dest(A::StructuredMatrix, B::StructuredMatrix, TS) = similar(B, TS, size(B))
+matprod_dest(A, B::StructuredMatrix, TS) = similar(A, TS, size(A))
+matprod_dest(A::StructuredMatrix, B, TS) = similar(B, TS, size(B))
+matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
+matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
+matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
+matprod_dest(A::HermOrSym, B::Diagonal, TS) = similar(A, TS, size(A))
+matprod_dest(A::Diagonal, B::HermOrSym, TS) = similar(B, TS, size(B))
+
+# TODO: remove once not used anymore in SparseArrays.jl
 # some trait like this would be cool
 # onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
 # but we are actually asking for oneunit(T), that is, however, defined for generic T as
@@ -619,7 +693,9 @@ function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3
     if parallel
         let Distributed = Base.require(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            return sum(Distributed.pmap(peakflops, fill(n, Distributed.nworkers())))
+            nworkers = @invokelatest Distributed.nworkers()
+            results = @invokelatest Distributed.pmap(peakflops, fill(n, nworkers))
+            return sum(results)
         end
     else
         return 2*Float64(n)^3 / minimum(t)
@@ -678,7 +754,8 @@ end
 
 function __init__()
     try
-        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
+        verbose = parse(Bool, get(ENV, "LBT_VERBOSE", "false"))
+        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true, verbose)
         BLAS.check()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")
