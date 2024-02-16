@@ -1582,19 +1582,23 @@ end
     end
 end
 
-isassigned(a::AbstractArray, i::CartesianIndex) = isassigned(a, Tuple(i)...)
-function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
-    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(to_indices(A, i)))
-    @boundscheck checkbounds(Bool, A, i...) || return false
+@propagate_inbounds isassigned(A::AbstractArray, i::CartesianIndex) = isassigned(A, Tuple(i)...)
+@propagate_inbounds function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
+    return isassigned(A, CartesianIndex(to_indices(A, i)))
+end
+@inline function isassigned(A::AbstractArray, i::Integer...)
+    # convert to valid indices, checking for Bool
+    inds = to_indices(A, i)
+    @boundscheck checkbounds(Bool, A, inds...) || return false
     S = IndexStyle(A)
-    ninds = length(i)
+    ninds = length(inds)
     if (isa(S, IndexLinear) && ninds != 1)
-        return @inbounds isassigned(A, _to_linear_index(A, i...))
+        return @inbounds isassigned(A, _to_linear_index(A, inds...))
     elseif (!isa(S, IndexLinear) && ninds != ndims(A))
-        return @inbounds isassigned(A, _to_subscript_indices(A, i...)...)
+        return @inbounds isassigned(A, _to_subscript_indices(A, inds...)...)
     else
        try
-            A[i...]
+            A[inds...]
             true
         catch e
             if isa(e, BoundsError) || isa(e, UndefRefError)

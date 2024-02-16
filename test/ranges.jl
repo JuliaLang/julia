@@ -2603,3 +2603,86 @@ end
     errmsg = ("deliberately unsupported for CartesianIndex", "StepRangeLen")
     @test_throws errmsg range(CartesianIndex(1), step=CartesianIndex(1), length=3)
 end
+
+@testset "logrange" begin
+    # basic idea
+    @test logrange(2, 16, 4) ≈ [2, 4, 8, 16]
+    @test logrange(1/8, 8.0, 7) ≈ [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+    @test logrange(1000, 1, 4) ≈ [1000, 100, 10, 1]
+    @test logrange(1, 10^9, 19)[1:2:end] ≈ 10 .^ (0:9)
+
+    # endpoints
+    @test logrange(0.1f0, 100, 33)[1] === 0.1f0
+    @test logrange(0.789, 123_456, 135_790)[[begin, end]] == [0.789, 123_456]
+    @test logrange(nextfloat(0f0), floatmax(Float32), typemax(Int))[end] === floatmax(Float32)
+    @test logrange(nextfloat(Float16(0)), floatmax(Float16), 66_000)[end] === floatmax(Float16)
+    @test first(logrange(pi, 2pi, 3000)) === logrange(pi, 2pi, 3000)[1] === Float64(pi)
+    if Int == Int64
+        @test logrange(0.1, 1000, 2^54)[end] === 1000.0
+    end
+
+    # empty, only, constant
+    @test first(logrange(1, 2, 0)) === 1.0
+    @test last(logrange(1, 2, 0)) === 2.0
+    @test collect(logrange(1, 2, 0)) == Float64[]
+    @test only(logrange(2pi, 2pi, 1)) === logrange(2pi, 2pi, 1)[1] === 2pi
+    @test logrange(1, 1, 3) == fill(1.0, 3)
+
+    # subnormal Float64
+    x = logrange(1e-320, 1e-300, 21) .* 1e300
+    @test x ≈ logrange(1e-20, 1, 21) rtol=1e-6
+
+    # types
+    @test eltype(logrange(1, 10, 3)) == Float64
+    @test eltype(logrange(1, 10, Int32(3))) == Float64
+    @test eltype(logrange(1, 10f0, 3)) == Float32
+    @test eltype(logrange(1f0, 10, 3)) == Float32
+    @test eltype(logrange(1, big(10), 3)) == BigFloat
+    @test logrange(big"0.3", big(pi), 50)[1] == big"0.3"
+    @test logrange(big"0.3", big(pi), 50)[end] == big(pi)
+
+    # more constructors
+    @test logrange(1,2,length=3) === Base.LogRange(1,2,3) == Base.LogRange{Float64}(1,2,3)
+    @test logrange(1f0, 2f0, length=3) == Base.LogRange{Float32}(1,2,3)
+
+    # errors
+    @test_throws UndefKeywordError logrange(1, 10)  # no default length
+    @test_throws ArgumentError logrange(1, 10, -1)  # negative length
+    @test_throws ArgumentError logrange(1, 10, 1) # endpoints must not differ
+    @test_throws DomainError logrange(1, -1, 3)   # needs complex numbers
+    @test_throws DomainError logrange(-1, -2, 3)  # not supported, for now
+    @test_throws MethodError logrange(1, 2+3im, length=4)  # not supported, for now
+    @test_throws ArgumentError logrange(1, 10, 2)[true]  # bad index
+    @test_throws BoundsError logrange(1, 10, 2)[3]
+    @test_throws ArgumentError Base.LogRange{Int}(1,4,5)  # no integer ranges
+    @test_throws MethodError Base.LogRange(1,4, length=5)  # type does not take keyword
+    # (not sure if these should ideally be DomainError or ArgumentError)
+    @test_throws DomainError logrange(1, Inf, 3)
+    @test_throws DomainError logrange(0, 2, 3)
+    @test_throws DomainError logrange(1, NaN, 3)
+    @test_throws DomainError logrange(NaN, 2, 3)
+
+    # printing
+    @test repr(Base.LogRange(1,2,3)) == "LogRange{Float64}(1.0, 2.0, 3)"  # like 2-arg show
+    @test repr("text/plain", Base.LogRange(1,2,3)) == "3-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:\n 1.0, 1.41421, 2.0"
+    @test repr("text/plain", Base.LogRange(1,2,0)) == "LogRange{Float64}(1.0, 2.0, 0)"  # empty case
+end
+
+@testset "_log_twice64_unchecked" begin
+    # it roughly works
+    @test big(Base._log_twice64_unchecked(exp(1))) ≈ 1.0
+    @test big(Base._log_twice64_unchecked(exp(123))) ≈ 123.0
+
+    # it gets high accuracy
+    @test abs(big(log(4.0)) - log(big(4.0))) < 1e-16
+    @test abs(big(Base._log_twice64_unchecked(4.0)) - log(big(4.0))) < 1e-30
+
+    # it handles subnormals
+    @test abs(big(Base._log_twice64_unchecked(1e-310)) - log(big(1e-310))) < 1e-20
+
+    # it accepts negative, NaN, etc without complaint:
+    @test Base._log_twice64_unchecked(-0.0).lo isa Float64
+    @test Base._log_twice64_unchecked(-1.23).lo isa Float64
+    @test Base._log_twice64_unchecked(NaN).lo isa Float64
+    @test Base._log_twice64_unchecked(Inf).lo isa Float64
+end
