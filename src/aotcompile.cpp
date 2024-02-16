@@ -1939,7 +1939,12 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
 
     jl_code_info_t *src = NULL;
     jl_value_t *ci = jl_default_cgparams.lookup(mi, world, world);
-    if (ci != jl_nothing) {
+    if (ci == jl_nothing) {
+        ci = (jl_value_t*)jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE);
+    } else {
+        ci = NULL;
+    }
+    if (ci) {
         jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method)) {
