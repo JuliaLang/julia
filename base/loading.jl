@@ -2613,7 +2613,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     else
         @debug "Generating cache file for $(repr("text/plain", pkg))"
         cpu_target = nothing
-        opts = `--output-ji $(output) --output-incremental=yes -O0`
+        opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
 
     deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
