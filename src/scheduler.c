@@ -131,7 +131,7 @@ void jl_parallel_gc_threadfun(void *arg)
     jl_ptls_t ptls = jl_init_threadtls(targ->tid);
 
     // wait for all threads
-    jl_gc_state_set(ptls, JL_GC_STATE_WAITING, 0);
+    jl_gc_state_set(ptls, JL_GC_STATE_WAITING, JL_GC_STATE_UNSAFE);
     uv_barrier_wait(targ->barrier);
 
     // free the thread argument here
@@ -160,7 +160,7 @@ void jl_concurrent_gc_threadfun(void *arg)
     jl_ptls_t ptls = jl_init_threadtls(targ->tid);
 
     // wait for all threads
-    jl_gc_state_set(ptls, JL_GC_STATE_WAITING, 0);
+    jl_gc_state_set(ptls, JL_GC_STATE_WAITING, JL_GC_STATE_UNSAFE);
     uv_barrier_wait(targ->barrier);
 
     // free the thread argument here
@@ -188,7 +188,7 @@ void jl_threadfun(void *arg)
     JL_GC_PROMISE_ROOTED(ct);
 
     // wait for all threads
-    jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
+    jl_gc_state_set(ptls, JL_GC_STATE_SAFE, JL_GC_STATE_UNSAFE);
     uv_barrier_wait(targ->barrier);
 
     // free the thread argument here
