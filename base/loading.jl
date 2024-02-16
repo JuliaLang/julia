@@ -1606,7 +1606,7 @@ function isprecompiled(pkg::PkgId;
             modpaths = find_all_in_cache_path(modkey)
             for modpath_to_try in modpaths::Vector{String}
                 stale_cache_key = (modkey, modbuild_id, modpath, modpath_to_try)::StaleCacheKey
-                if get!(() -> stale_cachefile(stale_cache_key...; ignore_loaded, flags) === true,
+                if get!(() -> stale_cachefile(stale_cache_key...; ignore_loaded, requested_flags=flags) === true,
                         stale_cache, stale_cache_key)
                     continue
                 end
