@@ -146,11 +146,13 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
     jl_atomic_store_release(&meth->primary_world, world);
     jl_atomic_store_release(&meth->deleted_world, world);
 
-    sigtype = jl_argtype_with_function(env, (jl_value_t*)argt);
-    jl_method_instance_t *mi = jl_specializations_get_linfo((jl_method_t*)root, sigtype, jl_emptysvec);
-    inst = jl_new_codeinst(mi, jl_nothing, rt_ub, (jl_value_t*)jl_any_type, NULL, (jl_value_t*)ci,
-        0, world, world, 0, 0, jl_nothing, 0);
-    jl_mi_cache_insert(mi, inst);
+    if (isinferred) {
+        sigtype = jl_argtype_with_function(env, (jl_value_t*)argt);
+        jl_method_instance_t *mi = jl_specializations_get_linfo((jl_method_t*)root, sigtype, jl_emptysvec);
+        inst = jl_new_codeinst(mi, jl_nothing, rt_ub, (jl_value_t*)jl_any_type, NULL, (jl_value_t*)ci,
+            0, world, world, 0, 0, jl_nothing, 0);
+        jl_mi_cache_insert(mi, inst);
+    }
 
     jl_opaque_closure_t *oc = new_opaque_closure(argt, rt_lb, rt_ub, root, env, do_compile);
     JL_GC_POP();
