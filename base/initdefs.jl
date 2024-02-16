@@ -272,7 +272,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         env == "@" && return active_project(false)
         env == "@." && return current_project()
         env == "@stdlib" && return Sys.STDLIB
-        if startswith(env, "@scriptdir")
+        if startswith(env, "@script")
             if @isdefined(PROGRAM_FILE)
                 dir = dirname(PROGRAM_FILE)
             else
@@ -283,7 +283,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
                 end
                 dir = dirname(ARGS[1])
             end
-            return abspath(replace(env, "@scriptdir" => dir))
+            return abspath(replace(env, "@script" => dir))
         end
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
