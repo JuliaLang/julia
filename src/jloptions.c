@@ -56,6 +56,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         NULL, // tracked_path
                         2,    // opt_level
                         0,    // opt_level_min
+                        JL_OPTIONS_JULIA_DEBUG_SCRIPT, // julia_debug
 #ifdef JL_DEBUG_BUILD
                         2,    // debug_level [debug build]
 #else
@@ -113,12 +114,14 @@ static const char opts[]  =
     " --compiled-modules={yes*|no|existing|strict}\n"
     "                            Enable or disable incremental precompilation of modules\n"
     " --pkgimages={yes*|no|existing}\n"
-    "                            Enable or disable usage of native code caching in the form of pkgimages ($)\n\n"
+    "                            Enable or disable usage of native code caching in the form of pkgimages ($)\n"
+    "\n"
 
     // actions
     " -e, --eval <expr>          Evaluate <expr>\n"
     " -E, --print <expr>         Evaluate <expr> and display the result\n"
-    " -L, --load <file>          Load <file> immediately on all processors\n\n"
+    " -L, --load <file>          Load <file> immediately on all processors\n"
+    "\n"
 
     // parallel options
     " -t, --threads {auto|N[,auto|M]}\n"
@@ -135,7 +138,8 @@ static const char opts[]  =
     "                           N is set to half of the number of compute threads and M is set to 0 if unspecified.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
-    " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
+    " --machine-file <file>     Run processes on hosts listed in <file>\n"
+    "\n"
 
     // interactive options
     " -i, --interactive          Interactive mode; REPL runs and `isinteractive()` is true\n"
@@ -143,17 +147,21 @@ static const char opts[]  =
     " --banner={yes|no|short|auto*}\n"
     "                            Enable or disable startup banner\n"
     " --color={yes|no|auto*}     Enable or disable color text\n"
-    " --history-file={yes*|no}   Load or save history\n\n"
+    " --history-file={yes*|no}   Load or save history\n"
+    "\n"
 
     // error and warning options
     " --depwarn={yes|no*|error}  Enable or disable syntax and method deprecation warnings (`error` turns warnings into errors)\n"
     " --warn-overwrite={yes|no*} Enable or disable method overwrite warnings\n"
-    " --warn-scope={yes*|no}     Enable or disable warning for ambiguous top-level scope\n\n"
+    " --warn-scope={yes*|no}     Enable or disable warning for ambiguous top-level scope\n"
+    "\n"
 
     // code generation options
     " -C, --cpu-target <target>  Limit usage of CPU features up to <target>; set to `help` to see the available options\n"
     " -O, --optimize={0,1,2*,3}  Set the optimization level (level 3 if `-O` is used without a level) ($)\n"
     " --min-optlevel={0*,1,2,3}  Set a lower bound on the optimization level\n"
+    " --debug={no|script*|yes}   Control if the `@assert` macro and `isdebug` is `true` nowhere, only in scripts (not packages)\n"
+    "                            or everywhere, respectively\n"
 #ifdef JL_DEBUG_BUILD
         " -g, --debug-info=[{0,1,2*}] Set the level of debug info generation in the julia-debug build ($)\n"
 #else
@@ -165,6 +173,7 @@ static const char opts[]  =
 #ifdef USE_POLLY
     " --polly={yes*|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
+    "\n"
 
     // instrumentation options
     " --code-coverage[={none*|user|all}]\n"
@@ -183,6 +192,8 @@ static const char opts[]  =
     "                            Count bytes but only in files that fall under the given file path/directory.\n"
     "                            The `@` prefix is required to select this option. A `@` with no path will track the\n"
     "                            current directory.\n"
+    "\n"
+
     " --bug-report=KIND          Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
     "                            expressions. It first tries to use BugReporting.jl installed in current environment and\n"
     "                            fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
@@ -259,9 +270,9 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_ir,
            opt_heap_size_hint,
            opt_gc_threads,
-           opt_permalloc_pkgimg
+           opt_permalloc_pkgimg,
     };
-    static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
+    static const char* const shortopts = "+vhqHd:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
@@ -295,6 +306,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
         { "min-optlevel",    optional_argument, 0, opt_optlevel_min },
+        { "debug",           required_argument, 0, 'd' },
         { "debug-info",      optional_argument, 0, 'g' },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
@@ -468,6 +480,18 @@ restart_switch:
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_STRICT;
             else
                 jl_errorf("julia: invalid argument to --compiled-modules={yes|no|existing|strict} (%s)", optarg);
+            break;
+        case 'd':
+            if (!strcmp(optarg,"yes"))
+                jl_options.julia_debug = JL_OPTIONS_JULIA_DEBUG_YES;
+            else if (!strcmp(optarg,"no"))
+                jl_options.julia_debug = JL_OPTIONS_JULIA_DEBUG_NO;
+            else if (!strcmp(optarg,"script")) {
+                jl_options.julia_debug = JL_OPTIONS_JULIA_DEBUG_SCRIPT;
+                printf("opt: %d", jl_options.julia_debug);
+            }
+            else
+                jl_errorf("julia: invalid argument to --debug={yes|script|no} (%s)", optarg);
             break;
         case opt_pkgimages:
             if (!strcmp(optarg,"yes"))

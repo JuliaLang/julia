@@ -2094,6 +2094,67 @@ precompile_test_harness("Test flags") do load_path
     @test !Base.isprecompiled(id, ;flags=current_flags)
 end
 
+
+# Debug mode
+precompile_test_harness("Test flags") do load_path
+    write(joinpath(load_path, "Project.toml"), """
+            [deps]
+            A = "065497a9-3da1-45c2-901d-78aba5544f04"
+            B = "d52a13bc-ce4c-4a58-a416-e1c8b2d677de"
+            """)
+
+    write(joinpath(load_path, "Manifest.toml"), """
+            [[A]]
+            deps = ["B"]
+            path = "A"
+            uuid = "065497a9-3da1-45c2-901d-78aba5544f04"
+            [[B]]
+            path = "B"
+            uuid = "d52a13bc-ce4c-4a58-a416-e1c8b2d677de"
+            """)
+
+    mkpath(joinpath(load_path, "A/src/"))
+    write(joinpath(load_path, "A/src/A.jl"), """
+        module A
+            using B
+            const is_debug = Base.julia_debug
+            maybe_assert() = @assert false
+        end
+        """)
+
+    mkpath(joinpath(load_path, "B/src/"))
+    write(joinpath(load_path, "B/src/B.jl"), """
+        module B
+            const is_debug = Base.julia_debug
+            maybe_assert() = @assert false
+        end
+        """)
+
+    s = """
+        using Test
+        using A
+        @test A.is_debug == true
+        @test A.B.is_debug == true
+        @test_throws AssertionError A.maybe_assert()
+        @test_throws AssertionError A.B.maybe_assert()
+    """
+    # Assert in packages should not be removed with `--debug=yes`
+    @test success(Cmd(`$(Base.julia_cmd()) --project=$load_path --debug=yes -e $s`))
+
+    s = """
+        using Test
+        using A
+        @test A.is_debug == false
+        @test A.B.is_debug == false
+        @test A.maybe_assert() === nothing
+        @test A.B.maybe_assert() === nothing
+    """
+    # Assert in packages should be removed with `--debug=no` or default
+    @test success(Cmd(`$(Base.julia_cmd()) --project=$load_path -e $s`))
+    @test success(Cmd(`$(Base.julia_cmd()) --project=$load_path --debug=no -e $s`))
+end
+
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 empty!(Base.LOAD_PATH)

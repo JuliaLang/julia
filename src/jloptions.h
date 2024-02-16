@@ -31,6 +31,7 @@ typedef struct {
     const char *tracked_path;
     int8_t opt_level;
     int8_t opt_level_min;
+    int8_t julia_debug;
     int8_t debug_level;
     int8_t check_bounds;
     int8_t depwarn;

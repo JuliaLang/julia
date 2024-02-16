@@ -27,6 +27,7 @@ struct JLOptions
     tracked_path::Ptr{UInt8}
     opt_level::Int8
     opt_level_min::Int8
+    julia_debug::Int8
     debug_level::Int8
     check_bounds::Int8
     depwarn::Int8

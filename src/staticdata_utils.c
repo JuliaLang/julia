@@ -589,25 +589,26 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
 }
 
 // OPT_LEVEL should always be the upper bits
-#define OPT_LEVEL 6
+#define OPT_LEVEL 7
 
-JL_DLLEXPORT uint8_t jl_cache_flags(void)
+JL_DLLEXPORT uint16_t jl_cache_flags(void)
 {
-    // OOICCDDP
-    uint8_t flags = 0;
-    flags |= (jl_options.use_pkgimages & 1); // 0-bit
-    flags |= (jl_options.debug_level & 3) << 1; // 1-2 bit
-    flags |= (jl_options.check_bounds & 3) << 3; // 3-4 bit
-    flags |= (jl_options.can_inline & 1) << 5; // 5-bit
-    flags |= (jl_options.opt_level & 3) << OPT_LEVEL; // 6-7 bit
+    // OOJICCDDP
+    uint16_t flags = 0;
+    flags |= (jl_options.use_pkgimages & 1) << 0; // 0-bit
+    flags |= (jl_options.debug_level   & 3) << 1; // 1-2 bits
+    flags |= (jl_options.check_bounds  & 3) << 3; // 3-4 bits
+    flags |= (jl_options.can_inline    & 1) << 5; // 5-bit
+    flags |= ((jl_options.julia_debug == JL_OPTIONS_JULIA_DEBUG_YES) ? 1 : 0) << 6; // 6-bit
+    flags |= (jl_options.opt_level     & 3) << OPT_LEVEL; // 7-8 bits
     return flags;
 }
 
 
-JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t requested_flags, uint8_t actual_flags)
+JL_DLLEXPORT uint16_t jl_match_cache_flags(uint16_t requested_flags, uint16_t actual_flags)
 {
-    uint8_t supports_pkgimage = (requested_flags & 1);
-    uint8_t is_pkgimage = (actual_flags & 1);
+    uint16_t supports_pkgimage = (requested_flags & 1);
+    uint16_t is_pkgimage = (actual_flags & 1);
 
     // For .ji packages ignore other flags
     if (!supports_pkgimage && !is_pkgimage) {
@@ -620,7 +621,7 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t requested_flags, uint8_t actua
     }
 
     // 2. Check all flags, execept opt level must be exact
-    uint8_t mask = (1 << OPT_LEVEL)-1;
+    uint16_t mask = (1 << OPT_LEVEL)-1;
     if ((actual_flags & mask) != (requested_flags & mask))
         return 0;
     // 3. allow for higher optimization flags in cache
@@ -629,7 +630,7 @@ JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t requested_flags, uint8_t actua
     return actual_flags >= requested_flags;
 }
 
-JL_DLLEXPORT uint8_t jl_match_cache_flags_current(uint8_t flags)
+JL_DLLEXPORT uint16_t jl_match_cache_flags_current(uint16_t flags)
 {
     return jl_match_cache_flags(jl_cache_flags(), flags);
 }
