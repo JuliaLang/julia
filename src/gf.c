@@ -2369,8 +2369,7 @@ jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
     return NULL;
 }
 
-// Opportunistic SOURCE_MODE_ABI cache lookup. Note that it's possible for us to miss a CodeInstance for which the
-// compiler has already deleted the source, but not yet set ->invoke.
+// Opportunistic SOURCE_MODE_ABI cache lookup.
 jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
@@ -2556,7 +2555,6 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     }
 
     if (codeinst) {
-        // Something went very wrong. Bail out.
         if (jl_atomic_load_acquire(&codeinst->invoke) != NULL) {
             jl_typeinf_timing_end(start, is_recompile);
             // Already compiled - e.g. constabi, or compiled by a different thread while we were waiting.

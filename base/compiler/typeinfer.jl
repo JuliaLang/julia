@@ -1039,8 +1039,9 @@ either be `->invoke`'d (because it has already been compiled or because
 it has constabi) or one that can be made so by compiling its `->inferred`
 field.
 
-N.B.: The `->inferred` field is volatile and the compiler may delete it
-before setting the `->invoke` field.
+N.B.: The `->inferred` field is volatile and the compiler may delete it.
+In such a case, it will first set the `invoke` field to a method that
+will block the thread until compilation is completed.
 """
 const SOURCE_MODE_ABI = 0x1
 

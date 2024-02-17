@@ -6538,7 +6538,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
     bool cache_valid = params.cache;
 
-    if (cache_valid && invoke != NULL) {
+    if (cache_valid && invoke != NULL && invoke != &jl_fptr_wait_for_compiled) {
         StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)invoke, codeinst);
         theFunc = cast<Function>(
             M->getOrInsertFunction(theFptrName, jlinvoke_func->_type(ctx.builder.getContext())).getCallee());
@@ -9629,6 +9629,9 @@ jl_llvm_functions_t jl_emit_codeinst(
                         ((jl_ir_inlining_cost(inferred) == UINT16_MAX) || // don't delete inlineable code
                         jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) && // unless it is constant
                         !(params.imaging_mode || jl_options.incremental)) { // don't delete code when generating a precompile file
+                // Never end up in a situation where the codeinst has no invoke, but also no source, so we never fall
+                // through the cracks of SOURCE_MODE_ABI.
+                jl_atomic_store_release(&codeinst->invoke, &jl_fptr_wait_for_compiled);
                 jl_atomic_store_release(&codeinst->inferred, jl_nothing);
             }
         }
@@ -9657,7 +9660,7 @@ void jl_compile_workqueue(
         auto invoke = jl_atomic_load_acquire(&codeinst->invoke);
         bool cache_valid = params.cache;
         // WARNING: isspecsig is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with this.
-        if (cache_valid && invoke != NULL) {
+        if (cache_valid && invoke != NULL && invoke != &jl_fptr_wait_for_compiled) {
             auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
             if (fptr) {
                 while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {
