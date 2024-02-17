@@ -66,77 +66,49 @@ Base.copy(aR::AdjointRotation{T,Rotation{T}}) where {T} =
 
 floatmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 floatmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
-floatmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(floatmin(T)/eps(T))/log(twopar)/twopar))
+floatmin2(::Type{T}) where {T} = (twopar = 2
 
-# derived from LAPACK's dlartg
-# Copyright:
-# Univ. of Tennessee
-# Univ. of California Berkeley
-# Univ. of Colorado Denver
-# NAG Ltd.
-function givensAlgorithm(f::T, g::T) where T<:AbstractFloat
-    onepar = one(T)
-    T0 = typeof(onepar) # dimensionless
-    zeropar = T0(zero(T)) # must be dimensionless
+# a hypot function that scales correctly but doesn't deal with hypot(Inf, NaN) or round correctly
+function fasthypot(x::T,y::T) where T<:AbstractFloat
+    ax = abs(x) / oneunit(x)
+    ay = abs(y) / oneunit(y)
 
-    # need both dimensionful and dimensionless versions of these:
-    safmn2 = floatmin2(T0)
-    safmn2u = floatmin2(T)
-    safmx2 = one(T)/safmn2
-    safmx2u = oneunit(T)/safmn2
+    # Ensure ax >= ay
+    if ay > ax
+        ax, ay = ay, ax
+    end
 
-    if g == 0
-        cs = onepar
-        sn = zeropar
-        r = f
-    elseif f == 0
-        cs = zeropar
-        sn = onepar
-        r = g
+    # Widely varying operands
+    if ay <= ax*sqrt(eps(typeof(ax))/2)  #Note: This also gets ay == 0
+        return ax*oneunit(x)
+    end
+
+    # Operands do not vary widely
+    scale = eps(typeof(ax))*sqrt(floatmin(ax))  #Rescaling constant
+    invscale = inv(scale)
+    if ax > sqrt(floatmax(ax)/2)
+        ax = ax*scale
+        ay = ay*scale
+        scale = invscale
+    elseif ay < sqrt(floatmin(ax))
+        ax = ax*invscale
+        ay = ay*invscale
     else
-        f1 = f
-        g1 = g
-        scalepar = max(abs(f1), abs(g1))
-        if scalepar >= safmx2u
-            count = 0
-            while true
-                count += 1
-                f1 *= safmn2
-                g1 *= safmn2
-                scalepar = max(abs(f1), abs(g1))
-                if scalepar < safmx2u || count >= 20 break end
-            end
-            r = sqrt(f1*f1 + g1*g1)
-            cs = f1/r
-            sn = g1/r
-            for i = 1:count
-                r *= safmx2
-            end
-        elseif scalepar <= safmn2u
-            count = 0
-            while true
-                count += 1
-                f1 *= safmx2
-                g1 *= safmx2
-                scalepar = max(abs(f1), abs(g1))
-                if scalepar > safmn2u break end
-            end
-            r = sqrt(f1*f1 + g1*g1)
-            cs = f1/r
-            sn = g1/r
-            for i = 1:count
-                r *= safmn2
-            end
-        else
-            r = sqrt(f1*f1 + g1*g1)
-            cs = f1/r
-            sn = g1/r
-        end
-        if abs(f) > abs(g) && cs < 0
-            cs = -cs
-            sn = -sn
-            r = -r
-        end
+        scale = oneunit(scale)
+    end
+    h = sqrt(fma(ax, ax, ay*ay))
+    return h*scale*oneunit(x)
+end
+fasthypot(x::Union{Float16, Float32}, y::Union{Float16,Float32}) = hypot(x,y)
+    
+function givensAlgorithm(f::T, g::T) where T<:AbstractFloat
+    r = fasthypot(f, g)
+    cs = f / r
+    sn = g / r
+    if abs(f) > abs(g) && cs < 0
+        cs = -cs
+        sn = -sn
+        r = -r
     end
     return cs, sn, r
 end
