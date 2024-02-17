@@ -573,7 +573,7 @@ function isexecutable(path::String)
     # We use `access()` and `X_OK` to determine if a given path is
     # executable by the current user.  `X_OK` comes from `unistd.h`.
     X_OK = 0x01
-    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, X_OK) == 0
 end
 isexecutable(path::AbstractString) = isexecutable(String(path))
 
@@ -596,7 +596,7 @@ function isreadable(path::String)
     # We use `access()` and `R_OK` to determine if a given path is
     # readable by the current user.  `R_OK` comes from `unistd.h`.
     R_OK = 0x04
-    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, R_OK) == 0
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, R_OK) == 0
 end
 isreadable(path::AbstractString) = isreadable(String(path))
 
@@ -619,7 +619,7 @@ function iswriteable(path::String)
     # We use `access()` and `W_OK` to determine if a given path is
     # writeable by the current user.  `W_OK` comes from `unistd.h`.
     W_OK = 0x02
-    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, W_OK) == 0
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
 end
 iswriteable(path::AbstractString) = iswriteable(String(path))
 
