@@ -854,7 +854,6 @@ STATIC_INLINE void gc_setmark_big(jl_ptls_t ptls, jl_taggedvalue_t *o,
 STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
                                     uint8_t mark_mode, jl_gc_pagemeta_t *page) JL_NOTSAFEPOINT
 {
-    assert(page);
 #ifdef MEMDEBUG
     gc_setmark_big(ptls, o, mark_mode);
 #else
@@ -3126,7 +3125,7 @@ void gc_mark_loop_parallel(jl_ptls_t ptls, int master)
         jl_atomic_fetch_add(&gc_n_threads_marking, 1);
         gc_wake_all_for_marking(ptls);
         gc_mark_and_steal(ptls);
-        jl_atomic_fetch_add(&gc_n_threads_marking, -1); // This releases
+        jl_atomic_fetch_add(&gc_n_threads_marking, -1);
     }
     while (1) {
         int should_mark = gc_should_mark();

@@ -333,9 +333,7 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
                                      int8_t old_state)
 {
     jl_atomic_store_release(&ptls->gc_state, state);
-    if ((state == JL_GC_STATE_SAFE) && old_state == JL_GC_STATE_UNSAFE)
-        jl_gc_safepoint_(ptls);
-    if (state == JL_GC_STATE_UNSAFE && (old_state == JL_GC_STATE_SAFE || old_state == JL_GC_STATE_WAITING))
+    if (state == JL_GC_STATE_UNSAFE || old_state == JL_GC_STATE_UNSAFE)
         jl_gc_safepoint_(ptls);
     return old_state;
 }
