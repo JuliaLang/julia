@@ -444,8 +444,11 @@ STATIC_INLINE jl_value_t *_jl_rettype_inferred(jl_value_t *owner, jl_method_inst
         if (jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
             max_world <= jl_atomic_load_relaxed(&codeinst->max_world) &&
             jl_egal(codeinst->owner, owner)) {
-            jl_value_t *code = jl_atomic_load_relaxed(&codeinst->inferred);
-            if (code && (code == jl_nothing || jl_ir_flag_inferred(code)))
+            jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
+            if (inferred && ((inferred == jl_nothing) || (
+                // allow whatever code instance external abstract interpreter produced
+                // since `jl_ir_flag_inferred` is specific to the native interpreter
+                codeinst->owner != jl_nothing || jl_ir_flag_inferred(inferred))))
                 return (jl_value_t*)codeinst;
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
