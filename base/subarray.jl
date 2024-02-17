@@ -322,7 +322,7 @@ end
 FastSubArray{T,N,P,I} = SubArray{T,N,P,I,true}
 # We define a convenience functions to compute the shifted parent index
 # This differs from reindex as this accepts the view directly, instead of its indices
-@inline _reindexlinear(V::FastSubArray, i::Integer) = V.offset1 + V.stride1*i
+@inline _reindexlinear(V::FastSubArray, i::Int) = V.offset1 + V.stride1*i
 @inline _reindexlinear(V::FastSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ V.stride1 .* i
 
 function getindex(V::FastSubArray, i::Int)
@@ -346,7 +346,7 @@ end
 FastContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}},
                                       Tuple{Vararg{ScalarIndex}}}} = SubArray{T,N,P,I,true}
 
-@inline _reindexlinear(V::FastContiguousSubArray, i::Integer) = V.offset1 + i
+@inline _reindexlinear(V::FastContiguousSubArray, i::Int) = V.offset1 + i
 @inline _reindexlinear(V::FastContiguousSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ i
 
 # parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
