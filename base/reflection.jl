@@ -1643,7 +1643,7 @@ function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
                                    debuginfo::Symbol=:default, _...)
     (code, rt) = get_oc_code_rt(oc)
     debuginfo === :none && remove_linenums!(code)
-    return Any[code=>rt]
+    return Any[Pair{CodeInfo,Any}(code, rt)]
 end
 
 """

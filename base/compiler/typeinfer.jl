@@ -1040,8 +1040,7 @@ it has constabi) or one that can be made so by compiling its `->inferred`
 field.
 
 N.B.: The `->inferred` field is volatile and the compiler may delete it
-before setting the `->invoke` field. To ensure that the resulting CodeInstance
-maintains the required invariants, the codegen lock needs to be held.
+before setting the `->invoke` field.
 """
 const SOURCE_MODE_ABI = 0x1
 
@@ -1051,9 +1050,9 @@ const SOURCE_MODE_ABI = 0x1
 Indicates that inference must always produce source in the `->inferred` field.
 This may mean that inference will need to re-do inference (if the `->inferred`
 field was previously deleted by the JIT) or may need to synthesize source for
-other kinds of CodeInstances. The same caching considerations as SOURCE_MODE_ABI
-apply and the codegen lock needs to be held to ensure that the JIT does not
-delete the `->inferred` field.
+other kinds of CodeInstances.
+
+N.B.: The same caching considerations as SOURCE_MODE_ABI apply.
 """
 const SOURCE_MODE_FORCE_SOURCE = 0x2
 

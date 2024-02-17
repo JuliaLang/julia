@@ -646,7 +646,8 @@ end
 # macro options should accept both literals and variables
 let
     opt = false
-    first(@code_typed optimize=opt sum(1:10))
+    @test length(first(@code_typed optimize=opt sum(1:10)).code) ==
+        length((@code_lowered sum(1:10)).code)
 end
 
 @testset "@time_imports" begin
