@@ -68,17 +68,16 @@ function settings(s::RawFD, shared::Bool, exec::Bool=false)
     if s == INVALID_OS_HANDLE
         flags |= MAP_ANONYMOUS
         prot = PROT_READ | PROT_WRITE
-        exec && (prot |= PROT_EXEC)
     else
         mode = ccall(:fcntl, Cint, (RawFD, Cint, Cint...), s, F_GETFL)
         systemerror("fcntl F_GETFL", mode == -1)
         mode = mode & 3
         prot = (mode == 0) ? PROT_READ : ((mode == 1) ? PROT_WRITE : (PROT_READ | PROT_WRITE))
-        exec && (prot |= PROT_EXEC)
         if prot & PROT_READ == 0
             throw(ArgumentError("mmap requires read permissions on the file (open with \"r+\" mode to override)"))
         end
     end
+    exec && (prot |= PROT_EXEC)
     return prot, flags, (prot & PROT_WRITE) > 0
 end
 
@@ -240,7 +239,6 @@ function mmap(io::IO,
             C_NULL, mmaplen, prot, flags, file_desc, offset_page)
         systemerror("memory mapping failed", reinterpret(Int, ptr) == -1)
     else
-        # TODO settings() here only takes one arg, what to do with PROT_EXEC?
         name, readonly, create = settings(io)
         if requestedSizeLarger
             if readonly
@@ -249,13 +247,16 @@ function mmap(io::IO,
                 throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
             end
         end
+        page_flag = exec ? (readonly ? PAGE_EXECUTE_READ : PAGE_EXECUTE_READWRITE) : (readonly ? PAGE_READONLY : PAGE_READWRITE)
+        file_flag = readonly ? FILE_MAP_READ : FILE_MAP_WRITE
+        exec && (file_flag |= FILE_MAP_EXECUTE)
         handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
-                                file_desc, C_NULL, readonly ? PAGE_READONLY : PAGE_READWRITE, szfile >> 32, szfile & typemax(UInt32), name) :
+                                file_desc, C_NULL, page_flag, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
-                                readonly ? FILE_MAP_READ : FILE_MAP_WRITE, true, name)
+                                page_flag, true, name)
         Base.windowserror(:mmap, handle == C_NULL)
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
-                    handle, readonly ? FILE_MAP_READ : FILE_MAP_WRITE, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
+                    handle, file_flag, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
         Base.windowserror(:mmap, ptr == C_NULL)
     end # os-test
     # convert mmapped region to Julia Array at `ptr + (offset - offset_page)` since file was mapped at offset_page
