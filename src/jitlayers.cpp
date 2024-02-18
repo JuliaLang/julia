@@ -552,6 +552,8 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
             specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
             if (specfptr == 0) {
+                // Doesn't need SOURCE_MODE_FORCE_SOURCE_UNCACHED, because the codegen lock is held,
+                // so there's no concern that the ->inferred field will be deleted.
                 jl_code_instance_t *forced_ci = jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE);
                 JL_GC_PUSH1(&forced_ci);
                 if (forced_ci) {

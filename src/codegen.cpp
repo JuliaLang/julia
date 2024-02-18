@@ -9684,6 +9684,7 @@ void jl_compile_workqueue(
                 // method body. See #34993
                 if (policy != CompilationPolicy::Default &&
                     jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
+                    // Codegen lock is held, so SOURCE_MODE_FORCE_SOURCE_UNCACHED is not required
                     codeinst = jl_type_infer(codeinst->def, jl_atomic_load_relaxed(&codeinst->max_world), 0, SOURCE_MODE_FORCE_SOURCE);
                 }
                 if (codeinst) {

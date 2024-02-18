@@ -1941,7 +1941,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
     jl_code_info_t *src = NULL;
     jl_value_t *ci = jl_default_cgparams.lookup(mi, world, world);
     if (ci == jl_nothing) {
-        ci = (jl_value_t*)jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE);
+        ci = (jl_value_t*)jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE_UNCACHED);
     } else {
         ci = NULL;
     }
@@ -1982,7 +1982,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
     }
     if (!src || (jl_value_t*)src == jl_nothing) {
-        codeinst = jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE);
+        codeinst = jl_type_infer(mi, world, 0, SOURCE_MODE_FORCE_SOURCE_UNCACHED);
         if (codeinst) {
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         }
