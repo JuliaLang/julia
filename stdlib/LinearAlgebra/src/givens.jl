@@ -90,7 +90,7 @@ function fasthypot(x::T,y::T) where T<:AbstractFloat
     else
         scale = oneunit(scale)
     end
-    h = sqrt(fma(ax, ax, ay*ay))
+    h = sqrt(muladd(ax, ax, ay*ay))
     return h*scale*oneunit(x)
 end
 fasthypot(x::Union{Float16, Float32}, y::Union{Float16,Float32}) = hypot(x,y)
