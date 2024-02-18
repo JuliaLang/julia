@@ -12,9 +12,9 @@ If `interp::NewInterpreter` is an `AbstractInterpreter`, it is expected to provi
 the following methods to satisfy the `AbstractInterpreter` API requirement:
 - `InferenceParams(interp::NewInterpreter)` - return an `InferenceParams` instance
 - `OptimizationParams(interp::NewInterpreter)` - return an `OptimizationParams` instance
-- `get_world_counter(interp::NewInterpreter)` - return the world age for this interpreter
+- `get_inference_world(interp::NewInterpreter)` - return the world age for this interpreter
 - `get_inference_cache(interp::NewInterpreter)` - return the local inference cache
-- `code_cache(interp::NewInterpreter)` - return the global inference cache
+- `cache_owner(interp::NewInterpreter)` - return the owner of any new cache entries
 """
 :(AbstractInterpreter)
 
@@ -373,20 +373,17 @@ end
 function NativeInterpreter(world::UInt = get_world_counter();
                            inf_params::InferenceParams = InferenceParams(),
                            opt_params::OptimizationParams = OptimizationParams())
+    curr_max_world = get_world_counter()
     # Sometimes the caller is lazy and passes typemax(UInt).
     # we cap it to the current world age for correctness
     if world == typemax(UInt)
-        world = get_world_counter()
+        world = curr_max_world
     end
-
     # If they didn't pass typemax(UInt) but passed something more subtly
     # incorrect, fail out loudly.
-    @assert world <= get_world_counter()
-
+    @assert world <= curr_max_world
     method_table = CachedMethodTable(InternalMethodTable(world))
-
     inf_cache = Vector{InferenceResult}() # Initially empty cache
-
     return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
 end
 
@@ -402,9 +399,9 @@ end
 # Quickly and easily satisfy the AbstractInterpreter API contract
 InferenceParams(interp::NativeInterpreter) = interp.inf_params
 OptimizationParams(interp::NativeInterpreter) = interp.opt_params
-get_world_counter(interp::NativeInterpreter) = interp.world
+get_inference_world(interp::NativeInterpreter) = interp.world
 get_inference_cache(interp::NativeInterpreter) = interp.inf_cache
-code_cache(interp::NativeInterpreter) = WorldView(GLOBAL_CI_CACHE, get_world_counter(interp))
+cache_owner(interp::NativeInterpreter) = nothing
 
 """
     already_inferred_quick_test(::AbstractInterpreter, ::MethodInstance)
@@ -458,7 +455,7 @@ Returns a method table this `interp` uses for method lookup.
 External `AbstractInterpreter` can optionally return `OverlayMethodTable` here
 to incorporate customized dispatches for the overridden methods.
 """
-method_table(interp::AbstractInterpreter) = InternalMethodTable(get_world_counter(interp))
+method_table(interp::AbstractInterpreter) = InternalMethodTable(get_inference_world(interp))
 method_table(interp::NativeInterpreter) = interp.method_table
 
 """

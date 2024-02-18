@@ -89,7 +89,7 @@ since it is not idiomatic to explicitly mark names from `Main` as public.
     `names` will return symbols marked with `public` or `export`, even if
     they are not defined in the module.
 
-See also: [`isexported`](@ref), [`ispublic`](@ref), [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
+See also: [`Base.isexported`](@ref), [`Base.ispublic`](@ref), [`Base.@locals`](@ref), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =
     sort!(unsorted_names(m; all, imported))
@@ -880,6 +880,9 @@ issingletontype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && isdefined
 
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
 smallest such type or one close to it.
+
+A special case where exact behavior is guaranteed: when `T <: S`,
+`typeintersect(S, T) == T == typeintersect(T, S)`.
 """
 typeintersect(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type_intersection, Any, (Any, Any), a::Type, b::Type))
 
@@ -1061,7 +1064,7 @@ fieldtypes(T::Type) = (@_foldable_meta; ntupleany(i -> fieldtype(T, i), fieldcou
 Return a collection of all instances of the given type, if applicable. Mostly used for
 enumerated types (see `@enum`).
 
-# Example
+# Examples
 ```jldoctest
 julia> @enum Color red blue green
 
@@ -1123,6 +1126,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
         throw(ArgumentError("'debuginfo' must be either :source or :none"))
     end
     world = get_world_counter()
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     return map(method_instances(f, t, world)) do m
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
@@ -1329,6 +1333,15 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
         push!(results, instance)
     end
     return results
+end
+
+function method_instance(@nospecialize(f), @nospecialize(t);
+                         world=Base.get_world_counter(), method_table=nothing)
+    tt = signature_type(f, t)
+    mi = ccall(:jl_method_lookup_by_tt, Any,
+                (Any, Csize_t, Any),
+                tt, world, method_table)
+    return mi::Union{Nothing, MethodInstance}
 end
 
 default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cint))
@@ -1545,7 +1558,7 @@ internals.
 - `interp::Core.Compiler.AbstractInterpreter = Core.Compiler.NativeInterpreter(world)`:
   optional, controls the abstract interpreter to use, use the native interpreter if not specified.
 
-# Example
+# Examples
 
 One can put the argument types in a tuple to get the corresponding `code_typed`.
 
@@ -1653,7 +1666,7 @@ internals.
   If it is an integer, it specifies the number of passes to run.
   If it is `nothing` (default), all passes are run.
 
-# Example
+# Examples
 
 One can put the argument types in a tuple to get the corresponding `code_ircode`.
 
@@ -1751,7 +1764,7 @@ candidates for `f` and `types` (see also [`methods(f, types)`](@ref methods).
   methods matching with the given `f` and `types`. The list's order matches the order
   returned by `methods(f, types)`.
 
-# Example
+# Examples
 
 ```julia
 julia> Base.return_types(sum, Tuple{Vector{Int}})
@@ -1820,7 +1833,7 @@ Returns an inferred return type of the function call specified by `f` and `types
     It returns a single return type, taking into account all potential outcomes of
     any function call entailed by the given signature type.
 
-# Example
+# Examples
 
 ```julia
 julia> checksym(::Symbol) = :symbol;
@@ -1891,7 +1904,7 @@ It works like [`Base.return_types`](@ref), but it infers the exception types ins
   methods matching with the given `f` and `types`. The list's order matches the order
   returned by `methods(f, types)`.
 
-# Example
+# Examples
 
 ```julia
 julia> throw_if_number(::Number) = error("number is given");
@@ -1974,7 +1987,7 @@ Returns the type of exception potentially thrown by the function call specified 
     It returns a single exception type, taking into account all potential outcomes of
     any function call entailed by the given signature type.
 
-# Example
+# Examples
 
 ```julia
 julia> f1(x) = x * 2;
@@ -2058,7 +2071,7 @@ Returns the possible computation effects of the function call specified by `f` a
     It returns a single effect, taking into account all potential outcomes of any function
     call entailed by the given signature type.
 
-# Example
+# Examples
 
 ```julia
 julia> f1(x) = x * 2;
@@ -2192,7 +2205,17 @@ See also: [`parentmodule`](@ref), [`@which`](@ref Main.InteractiveUtils.@which),
 """
 function which(@nospecialize(f), @nospecialize(t))
     tt = signature_type(f, t)
-    return which(tt)
+    world = get_world_counter()
+    match, _ = Core.Compiler._findsup(tt, nothing, world)
+    if match === nothing
+        me = MethodError(f, t, world)
+        ee = ErrorException(sprint(io -> begin
+            println(io, "Calling invoke(f, t, args...) would throw:");
+            Base.showerror(io, me);
+        end))
+        throw(ee)
+    end
+    return match.method
 end
 
 """
@@ -2319,6 +2342,7 @@ end
 
 function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_counter())
     @nospecialize
+    world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     isempty(kwnames) && return hasmethod(f, t; world)
     t = to_tuple_type(t)
     ft = Core.Typeof(f)
@@ -2540,7 +2564,21 @@ min_world(m::Core.CodeInstance) = m.min_world
 max_world(m::Core.CodeInstance) = m.max_world
 min_world(m::Core.CodeInfo) = m.min_world
 max_world(m::Core.CodeInfo) = m.max_world
+
+"""
+    get_world_counter()
+
+Returns the current maximum world-age counter. This counter is global and monotonically
+increasing.
+"""
 get_world_counter() = ccall(:jl_get_world_counter, UInt, ())
+
+"""
+    tls_world_age()
+
+Returns the world the [current_task()](@ref) is executing within.
+"""
+tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 
 """
     propertynames(x, private=false)

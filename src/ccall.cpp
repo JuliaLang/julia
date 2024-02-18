@@ -671,7 +671,7 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
 
 // --- code generator for cglobal ---
 
-static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, const jl_cgval_t *argv, size_t nargs);
+static jl_cgval_t emit_runtime_call(jl_codectx_t &ctx, JL_I::intrinsic f, ArrayRef<jl_cgval_t> argv, size_t nargs);
 
 static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 {
@@ -686,7 +686,7 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         rt = static_eval(ctx, args[2]);
         if (rt == NULL) {
             JL_GC_POP();
-            jl_cgval_t argv[2] = {jl_cgval_t(), jl_cgval_t()};
+            jl_cgval_t argv[2];
             argv[0] = emit_expr(ctx, args[1]);
             argv[1] = emit_expr(ctx, args[2]);
             return emit_runtime_call(ctx, JL_I::cglobal, argv, nargs);
@@ -2001,7 +2001,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
     else if (symarg.jl_ptr != NULL) {
         ++LiteralCCalls;
-        null_pointer_check(ctx, symarg.jl_ptr);
+        null_pointer_check(ctx, symarg.jl_ptr, nullptr);
         Type *funcptype = PointerType::get(functype, 0);
         llvmf = emit_inttoptr(ctx, symarg.jl_ptr, funcptype);
     }

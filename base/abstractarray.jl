@@ -1100,9 +1100,9 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
         iterdest, itersrc = eachindex(dest), eachindex(src)
         if iterdest == itersrc
             # Shared-iterator implementation
-            for I in iterdest
+            @inbounds for I in iterdest
                 if isassigned(src, I)
-                    @inbounds dest[I] = src[I]
+                    dest[I] = src[I]
                 else
                     _unsetindex!(dest, I)
                 end
@@ -1217,7 +1217,8 @@ function copymutable(a::AbstractArray)
 end
 copymutable(itr) = collect(itr)
 
-zero(x::AbstractArray{T}) where {T} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray) = map(zero, x)
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
 # Allows fast iteration by default for both IndexLinear and IndexCartesian arrays
@@ -1273,8 +1274,11 @@ end
 """
     getindex(A, inds...)
 
-Return a subset of array `A` as specified by `inds`, where each `ind` may be,
-for example, an `Int`, an [`AbstractRange`](@ref), or a [`Vector`](@ref).
+Return a subset of array `A` as selected by the indices `inds`.
+
+Each index may be any [supported index type](@ref man-supported-index-types), such
+as an [`Integer`](@ref), [`CartesianIndex`](@ref), [range](@ref Base.AbstractRange), or [array](@ref man-multi-dim-arrays) of supported indices.
+A [:](@ref Base.Colon) may be used to select all elements along a specific dimension, and a boolean array (e.g. an `Array{Bool}` or a [`BitArray`](@ref)) may be used to filter for elements where the corresponding index is `true`.
 
 When `inds` selects multiple elements, this function returns a newly
 allocated array. To index multiple elements without making a copy,
@@ -1301,6 +1305,27 @@ julia> getindex(A, 2:4)
 3-element Vector{Int64}:
  3
  2
+ 4
+
+julia> getindex(A, 2, 1)
+3
+
+julia> getindex(A, CartesianIndex(2, 1))
+3
+
+julia> getindex(A, :, 2)
+2-element Vector{Int64}:
+ 2
+ 4
+
+julia> getindex(A, 2, :)
+2-element Vector{Int64}:
+ 3
+ 4
+
+julia> getindex(A, A .> 2)
+2-element Vector{Int64}:
+ 3
  4
 ```
 """
@@ -1989,23 +2014,90 @@ The keyword also accepts `Val(dims)`.
     For multiple dimensions `dims = Val(::Tuple)` was added in Julia 1.8.
 
 # Examples
+
+Concatenate two arrays in different dimensions:
+```jldoctest
+julia> a = [1 2 3]
+1×3 Matrix{Int64}:
+ 1  2  3
+
+julia> b = [4 5 6]
+1×3 Matrix{Int64}:
+ 4  5  6
+
+julia> cat(a, b; dims=1)
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+
+julia> cat(a, b; dims=2)
+1×6 Matrix{Int64}:
+ 1  2  3  4  5  6
+
+julia> cat(a, b; dims=(1, 2))
+2×6 Matrix{Int64}:
+ 1  2  3  0  0  0
+ 0  0  0  4  5  6
+```
+
+# Extended Help
+
+Concatenate 3D arrays:
+```jldoctest
+julia> a = ones(2, 2, 3);
+
+julia> b = ones(2, 2, 4);
+
+julia> c = cat(a, b; dims=3);
+
+julia> size(c) == (2, 2, 7)
+true
+```
+
+Concatenate arrays of different sizes:
 ```jldoctest
 julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)  # same as hcat
 2×6×1 Array{Float64, 3}:
 [:, :, 1] =
  1.0  2.0  3.14159  10.0  10.0  10.0
  3.0  4.0  3.14159  10.0  10.0  10.0
+```
 
+Construct a block diagonal matrix:
+```
 julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
 4×7 Matrix{Bool}:
  1  0  0  0  0  0  0
  0  1  1  0  0  0  0
  0  1  1  0  0  0  0
  0  0  0  1  1  1  1
+```
 
+```
 julia> cat(1, [2], [3;;]; dims=Val(2))
 1×3 Matrix{Int64}:
  1  2  3
+```
+
+!!! note
+    `cat` does not join two strings, you may want to use `*`.
+
+```jldoctest
+julia> a = "aaa";
+
+julia> b = "bbb";
+
+julia> cat(a, b; dims=1)
+2-element Vector{String}:
+ "aaa"
+ "bbb"
+
+julia> cat(a, b; dims=2)
+1×2 Matrix{String}:
+ "aaa"  "bbb"
+
+julia> a * b
+"aaabbb"
 ```
 """
 @inline cat(A...; dims) = _cat(dims, A...)

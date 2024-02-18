@@ -827,7 +827,7 @@ function compileable_specialization(mi::MethodInstance, effects::Effects,
         end
     end
     add_inlining_backedge!(et, mi) # to the dispatch lookup
-    push!(et.edges, method.sig, mi_invoke) # add_inlining_backedge to the invoke call
+    mi_invoke !== mi && push!(et.edges, method.sig, mi_invoke) # add_inlining_backedge to the invoke call, if that is different
     return InvokeCase(mi_invoke, effects, info)
 end
 
@@ -1286,10 +1286,18 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
         end
     end
 
-    if (sig.f !== Core.invoke && sig.f !== Core.finalizer && sig.f !== modifyfield!) &&
-        is_builtin(optimizer_lattice(state.interp), sig)
-        # No inlining for builtins (other invoke/apply/typeassert/finalizer)
-        return nothing
+    if is_builtin(optimizer_lattice(state.interp), sig)
+        let f = sig.f
+            if (f !== Core.invoke &&
+                f !== Core.finalizer &&
+                f !== modifyfield! &&
+                f !== Core.modifyglobal! &&
+                f !== Core.memoryrefmodify! &&
+                f !== atomic_pointermodify)
+                # No inlining defined for most builtins (just invoke/apply/typeassert/finalizer), so attempt an early exit for them
+                return nothing
+            end
+        end
     end
 
     # Special case inliners for regular functions
@@ -1571,7 +1579,7 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
     return nothing
 end
 
-function handle_modifyfield!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyFieldInfo, state::InliningState)
+function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyOpInfo, state::InliningState)
     info = info.info
     info isa MethodResultPure && (info = info.info)
     info isa ConstCallInfo && (info = info.call)
@@ -1679,8 +1687,8 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         # handle special cased builtins
         if isa(info, OpaqueClosureCallInfo)
             handle_opaque_closure_call!(todo, ir, idx, stmt, info, flag, sig, state)
-        elseif isa(info, ModifyFieldInfo)
-            handle_modifyfield!_call!(ir, idx, stmt, info, state)
+        elseif isa(info, ModifyOpInfo)
+            handle_modifyop!_call!(ir, idx, stmt, info, state)
         elseif isa(info, InvokeCallInfo)
             handle_invoke_call!(todo, ir, idx, stmt, info, flag, sig, state)
         elseif isa(info, FinalizerInfo)

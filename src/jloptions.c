@@ -110,7 +110,7 @@ static const char opts[]  =
     " --handle-signals={yes*|no} Enable or disable Julia's default signal handlers\n"
     " --sysimage-native-code={yes*|no}\n"
     "                            Use native code from system image if available\n"
-    " --compiled-modules={yes*|no|existing}\n"
+    " --compiled-modules={yes*|no|existing|strict}\n"
     "                            Enable or disable incremental precompilation of modules\n"
     " --pkgimages={yes*|no|existing}\n"
     "                            Enable or disable usage of native code caching in the form of pkgimages ($)\n\n"
@@ -189,7 +189,7 @@ static const char opts[]  =
     "                            --bug-report=help.\n\n"
 
     " --heap-size-hint=<size>    Forces garbage collection if memory usage is higher than that value.\n"
-    "                            The memory hint might be specified in megabytes(500M) or gigabytes(1G)\n\n"
+    "                            The value can be specified in units of K, M, G, T, or % of physical memory.\n\n"
 ;
 
 static const char opts_hidden[]  =
@@ -464,8 +464,10 @@ restart_switch:
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_NO;
             else if (!strcmp(optarg,"existing"))
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_EXISTING;
+            else if (!strcmp(optarg,"strict"))
+                jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_STRICT;
             else
-                jl_errorf("julia: invalid argument to --compiled-modules={yes|no|existing} (%s)", optarg);
+                jl_errorf("julia: invalid argument to --compiled-modules={yes|no|existing|strict} (%s)", optarg);
             break;
         case opt_pkgimages:
             if (!strcmp(optarg,"yes"))
@@ -821,14 +823,24 @@ restart_switch:
                         case 'T':
                             multiplier <<= 40;
                             break;
+                        case '%':
+                            if (value > 100)
+                                jl_errorf("julia: invalid percentage specified in --heap-size-hint");
+                            uint64_t mem = uv_get_total_memory();
+                            uint64_t cmem = uv_get_constrained_memory();
+                            if (cmem > 0 && cmem < mem)
+                                mem = cmem;
+                            multiplier = mem/100;
+                            break;
                         default:
+                            jl_errorf("julia: invalid unit specified in --heap-size-hint");
                             break;
                     }
                     jl_options.heap_size_hint = (uint64_t)(value * multiplier);
                 }
             }
             if (jl_options.heap_size_hint == 0)
-                jl_errorf("julia: invalid argument to --heap-size-hint without memory size specified");
+                jl_errorf("julia: invalid memory size specified in --heap-size-hint");
 
             break;
         case opt_gc_threads:

@@ -78,6 +78,7 @@ export
     cholesky,
     cond,
     condskeel,
+    copy_adjoint!,
     copy_transpose!,
     copyto!,
     copytrito!,
@@ -190,10 +191,54 @@ abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
 
+# Pivoting strategies for matrix factorization algorithms.
 abstract type PivotingStrategy end
+
+"""
+    NoPivot
+
+Pivoting is not performed. Matrix factorizations such as the LU factorization
+may fail without pivoting, and may also be numerically unstable for floating-point matrices in the face of roundoff error.
+This pivot strategy is mainly useful for pedagogical purposes.
+"""
 struct NoPivot <: PivotingStrategy end
+
+"""
+    RowNonZero
+
+First non-zero element in the remaining rows is chosen as the pivot element.
+
+Beware that for floating-point matrices, the resulting LU algorithm is numerically unstable — this strategy
+is mainly useful for comparison to hand calculations (which typically use this strategy) or for other
+algebraic types (e.g. rational numbers) not susceptible to roundoff errors.   Otherwise, the default
+`RowMaximum` pivoting strategy should be generally preferred in Gaussian elimination.
+
+Note that the [element type](@ref eltype) of the matrix must admit an [`iszero`](@ref)
+method.
+"""
 struct RowNonZero <: PivotingStrategy end
+
+"""
+    RowMaximum
+
+The maximum-magnitude element in the remaining rows is chosen as the pivot element.
+This is the default strategy for LU factorization of floating-point matrices, and is sometimes
+referred to as the "partial pivoting" algorithm.
+
+Note that the [element type](@ref eltype) of the matrix must admit an [`abs`](@ref) method,
+whose result type must admit a [`<`](@ref) method.
+"""
 struct RowMaximum <: PivotingStrategy end
+
+"""
+    ColumnNorm
+
+The column with the maximum norm is used for subsequent computation.  This
+is used for pivoted QR factorization.
+
+Note that the [element type](@ref eltype) of the matrix must admit [`norm`](@ref) and
+[`abs`](@ref) methods, whose respective result types must admit a [`<`](@ref) method.
+"""
 struct ColumnNorm <: PivotingStrategy end
 
 # Check that stride of matrix/vector is 1
@@ -480,21 +525,25 @@ wrapper_char(A::Hermitian{<:Real}) = A.uplo == 'U' ? 'S' : 's'
 wrapper_char(A::Symmetric) = A.uplo == 'U' ? 'S' : 's'
 
 Base.@constprop :aggressive function wrap(A::AbstractVecOrMat, tA::AbstractChar)
-    if tA == 'N'
-        return A
+    # merge the result of this before return, so that we can type-assert the return such
+    # that even if the tmerge is inaccurate, inference can still identify that the
+    # `_generic_matmatmul` signature still matches and doesn't require missing backedges
+    B = if tA == 'N'
+        A
     elseif tA == 'T'
-        return transpose(A)
+        transpose(A)
     elseif tA == 'C'
-        return adjoint(A)
+        adjoint(A)
     elseif tA == 'H'
-        return Hermitian(A, :U)
+        Hermitian(A, :U)
     elseif tA == 'h'
-        return Hermitian(A, :L)
+        Hermitian(A, :L)
     elseif tA == 'S'
-        return Symmetric(A, :U)
+        Symmetric(A, :U)
     else # tA == 's'
-        return Symmetric(A, :L)
+        Symmetric(A, :L)
     end
+    return B::AbstractVecOrMat
 end
 
 _unwrap(A::AbstractVecOrMat) = A

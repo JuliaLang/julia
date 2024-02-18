@@ -155,6 +155,7 @@ MethodInstance/CodeInstance updates : Method->writelock, codegen lock
 >       * specTypes
 >       * sparam_vals
 >       * def
+>       * owner
 
 >   * These are set by `jl_type_infer` (while holding codegen lock):
 >       * cache

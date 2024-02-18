@@ -29,8 +29,6 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         $t{T}(A::AbstractMatrix) where {T} = $t(convert(AbstractMatrix{T}, A))
         $t{T}(A::$t) where {T} = $t(convert(AbstractMatrix{T}, A.data))
 
-        Matrix(A::$t{T}) where {T} = Matrix{T}(A)
-
         AbstractMatrix{T}(A::$t) where {T} = $t{T}(A)
         AbstractMatrix{T}(A::$t{T}) where {T} = copy(A)
 
@@ -180,6 +178,9 @@ end
 
 Array(A::AbstractTriangular) = Matrix(A)
 parent(A::UpperOrLowerTriangular) = A.data
+
+# For strided matrices, we may only loop over the filled triangle
+copy(A::UpperOrLowerTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = copyto!(similar(A), A)
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
@@ -465,13 +466,13 @@ transpose(A::UnitLowerTriangular) = UnitUpperTriangular(transpose(A.data))
 transpose(A::UnitUpperTriangular) = UnitLowerTriangular(transpose(A.data))
 
 transpose!(A::LowerTriangular) = UpperTriangular(copytri!(A.data, 'L', false, true))
-transpose!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L', false, true))
+transpose!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L', false, false))
 transpose!(A::UpperTriangular) = LowerTriangular(copytri!(A.data, 'U', false, true))
-transpose!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U', false, true))
+transpose!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U', false, false))
 adjoint!(A::LowerTriangular) = UpperTriangular(copytri!(A.data, 'L' , true, true))
-adjoint!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L' , true, true))
+adjoint!(A::UnitLowerTriangular) = UnitUpperTriangular(copytri!(A.data, 'L' , true, false))
 adjoint!(A::UpperTriangular) = LowerTriangular(copytri!(A.data, 'U' , true, true))
-adjoint!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U' , true, true))
+adjoint!(A::UnitUpperTriangular) = UnitLowerTriangular(copytri!(A.data, 'U' , true, false))
 
 diag(A::LowerTriangular) = diag(A.data)
 diag(A::UnitLowerTriangular) = fill(oneunit(eltype(A)), size(A,1))

@@ -145,6 +145,7 @@ Each `lock` must be matched by an [`unlock`](@ref).
 """
 @inline function lock(rl::ReentrantLock)
     trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
+        Threads.lock_profiling() && Threads.inc_lock_conflict_count()
         c = rl.cond_wait
         lock(c.lock)
         try
@@ -292,6 +293,63 @@ macro lock_nofail(l, expr)
         val
     end
 end
+
+"""
+  Lockable(value, lock = ReentrantLock())
+
+Creates a `Lockable` object that wraps `value` and
+associates it with the provided `lock`. This object
+supports [`@lock`](@ref), [`lock`](@ref), [`trylock`](@ref),
+[`unlock`](@ref). To access the value, index the lockable object while
+holding the lock.
+
+!!! compat "Julia 1.11"
+    Requires at least Julia 1.11.
+
+## Example
+
+```jldoctest
+julia> locked_list = Base.Lockable(Int[]);
+
+julia> @lock(locked_list, push!(locked_list[], 1)) # must hold the lock to access the value
+1-element Vector{Int64}:
+ 1
+
+julia> lock(summary, locked_list)
+"1-element Vector{Int64}"
+```
+"""
+struct Lockable{T, L <: AbstractLock}
+    value::T
+    lock::L
+end
+
+Lockable(value) = Lockable(value, ReentrantLock())
+getindex(l::Lockable) = (assert_havelock(l.lock); l.value)
+
+"""
+  lock(f::Function, l::Lockable)
+
+Acquire the lock associated with `l`, execute `f` with the lock held,
+and release the lock when `f` returns. `f` will receive one positional
+argument: the value wrapped by `l`. If the lock is already locked by a
+different task/thread, wait for it to become available.
+When this function returns, the `lock` has been released, so the caller should
+not attempt to `unlock` it.
+
+!!! compat "Julia 1.11"
+    Requires at least Julia 1.11.
+"""
+function lock(f, l::Lockable)
+    lock(l.lock) do
+        f(l.value)
+    end
+end
+
+# implement the rest of the Lock interface on Lockable
+lock(l::Lockable) = lock(l.lock)
+trylock(l::Lockable) = trylock(l.lock)
+unlock(l::Lockable) = unlock(l.lock)
 
 @eval Threads begin
     """

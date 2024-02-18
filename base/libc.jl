@@ -41,7 +41,7 @@ dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
                 (RawFD, RawFD), src, target))
 
-show(io::IO, fd::RawFD) = print(io, "RawFD(", bitcast(UInt32, fd), ')')  # avoids invalidation via show_default
+show(io::IO, fd::RawFD) = print(io, "RawFD(", bitcast(Int32, fd), ')')  # avoids invalidation via show_default
 
 # Wrapper for an OS file descriptor (for Windows)
 if Sys.iswindows()

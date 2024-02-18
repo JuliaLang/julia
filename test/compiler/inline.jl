@@ -761,7 +761,7 @@ end
 let f(x) = (x...,)
     # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
     # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
-    # the the original apply call is not union-split, but the inserted `iterate` call is.
+    # that the original apply call is not union-split, but the inserted `iterate` call is.
     @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
 end
 
@@ -1004,6 +1004,14 @@ end
             UnionAll(a, b)
         end |> only |> first
         @test count(iscall((src,UnionAll)), src.code) == 0
+    end
+    # test >:
+    let src = code_typed((Any,Any)) do x, y
+            x >: y
+        end |> only |> first
+        idx = findfirst(iscall((src,<:)), src.code)
+        @test idx !== nothing
+        @test src.code[idx].args[2:3] == Any[#=y=#Argument(3), #=x=#Argument(2)]
     end
 end
 
@@ -1793,6 +1801,24 @@ let src = code_typed1((Atomic{Int},Union{Int,Float64})) do a, b
     end
     @test count(isinvokemodify(:mymax), src.code) == 2
 end
+global x_global_inc::Int = 1
+let src = code_typed1(()) do
+        @atomic (@__MODULE__).x_global_inc += 1
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((Ptr{Int},)) do a
+        unsafe_modify!(a, +, 1)
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((AtomicMemoryRef{Int},)) do a
+        Core.memoryrefmodify!(a, +, 1, :sequentially_consistent, true)
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+
+
 
 # apply `ssa_inlining_pass` multiple times
 let interp = Core.Compiler.NativeInterpreter()
