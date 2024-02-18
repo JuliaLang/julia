@@ -31,6 +31,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(subdir, dirlink)
     @test stat(dirlink) == stat(subdir)
     @test readdir(dirlink) == readdir(subdir)
+    @test readdirx(dirlink) == readdirx(subdir)
 
     # relative link
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
@@ -38,6 +39,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(reldir, relsubdirlink)
     @test stat(relsubdirlink) == stat(subdir2)
     @test readdir(relsubdirlink) == readdir(subdir2)
+    @test readdirx(relsubdirlink) == readdirx(subdir2)
 
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
@@ -56,6 +58,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     mkdir(new_dir)
     touch(foo_file)
     @test readdir(new_dir) == readdir(nedlink)
+    @test readdirx(new_dir) == readdirx(nedlink)
 
     rm(foo_file)
     rm(new_dir)
@@ -1441,6 +1444,10 @@ rm(dirwalk, recursive=true)
                 touch(randstring())
             end
             @test issorted(readdir())
+            @test issorted(readdirx())
+            @test map(o->o.name, readdirx()) == readdir()
+            @test map(o->o.path, readdirx()) == readdir(join=true)
+            @test count(isfile, readdir(join=true)) == count(isfile, readdirx())
         end
     end
 end

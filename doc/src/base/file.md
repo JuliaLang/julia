@@ -7,6 +7,8 @@ Base.Filesystem.pwd
 Base.Filesystem.cd(::AbstractString)
 Base.Filesystem.cd(::Function)
 Base.Filesystem.readdir
+Base.Filesystem.readdirx
+Base.Filesystem.DirEntry
 Base.Filesystem.walkdir
 Base.Filesystem.mkdir
 Base.Filesystem.mkpath
