@@ -78,19 +78,13 @@ function fasthypot(x::T,y::T) where T<:AbstractFloat
         ax, ay = ay, ax
     end
 
-    # Widely varying operands
-    if ay <= ax*sqrt(eps(typeof(ax))/2)  #Note: This also gets ay == 0
-        return ax*oneunit(x)
-    end
-
-    # Operands do not vary widely
     scale = eps(typeof(ax))*sqrt(floatmin(ax))  #Rescaling constant
     invscale = inv(scale)
     if ax > sqrt(floatmax(ax)/2)
         ax = ax*scale
         ay = ay*scale
         scale = invscale
-    elseif ay < sqrt(floatmin(ax))
+    elseif ax < sqrt(floatmin(ax))
         ax = ax*invscale
         ay = ay*invscale
     else
