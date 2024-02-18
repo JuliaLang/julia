@@ -159,18 +159,6 @@
             "summary": "Double precision SIMD-oriented Fast Mersenne Twister"
         },
         {
-            "name": "OpenLibm",
-            "SPDXID": "SPDXRef-OpenLibm",
-            "downloadLocation": "git+https://github.com/JuliaMath/openlibm.git",
-            "filesAnalyzed": false,
-            "homepage": "https://julialang.org",
-            "sourceInfo": "The git hash of the version in use can be found in the file deps/openlibm.version",
-            "licenseConcluded": "MIT",
-            "licenseDeclared": "MIT AND BSD-2-Clause-FreeBSD AND ISC",
-            "copyrightText": "Copyright (c) 2011-14 The Julia Project.  Copyright (c) 2008 Stephen L. Moshier steve@moshier.net  Copyright 1992-2011 The FreeBSD Project. All rights reserved.  Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.",
-            "summary": "High quality system independent, portable, open source libm implementation"
-        },
-        {
             "name": "GMP",
             "SPDXID": "SPDXRef-GMP",
             "downloadLocation": "https://gmplib.org/download/gmp/",
@@ -519,11 +507,6 @@
         },
         {
             "spdxElementId": "SPDXRef-dSFMT",
-            "relationshipType": "BUILD_DEPENDENCY_OF",
-            "relatedSpdxElement": "SPDXRef-JuliaMain"
-        },
-        {
-            "spdxElementId": "SPDXRef-OpenLibm",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },

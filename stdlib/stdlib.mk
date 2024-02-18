@@ -9,7 +9,7 @@ INDEPENDENT_STDLIBS := \
 	SparseArrays Statistics StyledStrings SuiteSparse_jll Tar Test TOML Unicode UUIDs \
 	dSFMT_jll GMP_jll libLLVM_jll LLD_jll LLVMLibUnwind_jll LibUnwind_jll LibUV_jll \
 	LibCURL_jll LibSSH2_jll LibGit2_jll nghttp2_jll  MozillaCACerts_jll MbedTLS_jll \
-	MPFR_jll OpenLibm_jll PCRE2_jll p7zip_jll Zlib_jll
+	MPFR_jll PCRE2_jll p7zip_jll Zlib_jll
 
 PKG_EXTS := \
 	REPLExt

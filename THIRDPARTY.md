@@ -32,7 +32,6 @@ and optionally:
 Julia's `stdlib` uses the following external libraries, which have their own licenses:
 
 - [DSFMT](https://github.com/MersenneTwister-Lab/dSFMT/blob/master/LICENSE.txt) [BSD-3]
-- [OPENLIBM](https://github.com/JuliaMath/openlibm/blob/master/LICENSE.md) [MIT, BSD-2, ISC]
 - [GMP](https://gmplib.org/manual/Copying.html#Copying) [LGPL3+ or GPL2+]
 - [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING) [GPL2+ with unlimited linking exception]
 - [CURL](https://curl.haxx.se/docs/copyright.html) [MIT/X derivative]

@@ -71,7 +71,7 @@ function ldlibs(doframework)
             (Sys.isapple() ? string() : "-Wl,-rpath,$(shell_escape(private_libDir())) ") *
             "-l$libname"
     else
-        return "-l$libname -lopenlibm"
+        return "-l$libname -lm"
     end
 end
 

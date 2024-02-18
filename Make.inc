@@ -45,9 +45,6 @@ USE_SYSTEM_LLVM:=0
 USE_SYSTEM_LIBUNWIND:=0
 DISABLE_LIBUNWIND:=0
 USE_SYSTEM_PCRE:=0
-USE_SYSTEM_LIBM:=0
-USE_SYSTEM_OPENLIBM:=0
-UNTRUSTED_SYSTEM_LIBM:=0
 USE_SYSTEM_DSFMT:=0
 USE_SYSTEM_LIBBLASTRAMPOLINE:=0
 USE_SYSTEM_BLAS:=0
@@ -1177,14 +1174,6 @@ LIBLAPACKNAME := liblapack
 endif
 endif
 
-ifeq ($(USE_SYSTEM_LIBM), 1)
-LIBM := -lm
-LIBMNAME := libm
-else
-LIBM := -lopenlibm
-LIBMNAME := libopenlibm
-endif
-
 ifeq ($(USE_SYSTEM_LIBUV), 1)
   LIBUV := $(LOCALBASE)/lib/libuv-julia.a
   LIBUV_INC := $(LOCALBASE)/include
@@ -1268,7 +1257,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.33|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1398,7 +1387,6 @@ ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0502
-UNTRUSTED_SYSTEM_LIBM := 1
 # Use hard links for files on windows, rather than soft links
 #   https://stackoverflow.com/questions/3648819/how-to-make-a-symbolic-link-with-cygwin-in-windows-7
 # Usage: $(WIN_MAKE_HARD_LINK) <source> <target>
@@ -1472,12 +1460,6 @@ USE_BINARYBUILDER_OPENBLAS := 0
 # Disable BB LIBSUITESPARSE if we're using system BLAS
 USE_BINARYBUILDER_LIBSUITESPARSE := 0
 endif
-
-ifeq ($(USE_SYSTEM_LIBM),1)
-# If we're using system libm, disable BB OpenLibm
-USE_BINARYBUILDER_OPENLIBM := 0
-endif
-
 
 # Note: we're passing *FLAGS here computed based on your system compiler to
 # clang. If that causes you problems, you might want to build and/or run
@@ -1634,20 +1616,13 @@ endif
 LIBSTDCXX_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBSTDCXX_NAME))
 endif
 
-
-# USE_SYSTEM_LIBM and USE_SYSTEM_OPENLIBM causes it to get symlinked into build_private_shlibdir
-ifeq ($(USE_SYSTEM_LIBM),1)
-LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
-else ifeq ($(USE_SYSTEM_OPENLIBM),1)
-LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
-else
-LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
-endif
-LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+# Symlink system libm
+LIBMNAME := libm
+#LIBM_BUILD_DEPLIB := $(call dep_lib_path,$(build_libdir),$(build_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
+#LIBM_INSTALL_DEPLIB := $(call dep_lib_path,$(libdir),$(private_shlibdir)/$(LIBMNAME).$(SHLIB_EXT))
 
 # We list:
 #  * libgcc_s, because FreeBSD needs to load ours, not the system one.
-#  * libopenlibm, because Windows has an untrustworthy libm, and we want to use ours more than theirs
 #  * libstdc++, because while performing `libstdc++` probing we need to
 #    know the path to the bundled `libstdc++` library.
 #  * libjulia-internal, which must always come second-to-last.
@@ -1669,7 +1644,6 @@ endef
 
 LOADER_BUILD_DEP_LIBS = $(call build_deplibs, \
     $(LIBGCC_BUILD_DEPLIB) \
-    $(LIBM_BUILD_DEPLIB) \
     @$(LIBSTDCXX_BUILD_DEPLIB) \
     @$(LIBJULIAINTERNAL_BUILD_DEPLIB) \
     @$(LIBJULIACODEGEN_BUILD_DEPLIB) \
@@ -1677,7 +1651,6 @@ LOADER_BUILD_DEP_LIBS = $(call build_deplibs, \
 
 LOADER_DEBUG_BUILD_DEP_LIBS = $(call build_deplibs, \
    $(LIBGCC_BUILD_DEPLIB) \
-   $(LIBM_BUILD_DEPLIB) \
    @$(LIBSTDCXX_BUILD_DEPLIB) \
    @$(LIBJULIAINTERNAL_DEBUG_BUILD_DEPLIB) \
    @$(LIBJULIACODEGEN_DEBUG_BUILD_DEPLIB) \
@@ -1685,14 +1658,12 @@ LOADER_DEBUG_BUILD_DEP_LIBS = $(call build_deplibs, \
 
 LOADER_INSTALL_DEP_LIBS = $(call build_deplibs, \
     $(LIBGCC_INSTALL_DEPLIB) \
-    $(LIBM_INSTALL_DEPLIB) \
     @$(LIBSTDCXX_INSTALL_DEPLIB) \
     @$(LIBJULIAINTERNAL_INSTALL_DEPLIB) \
     @$(LIBJULIACODEGEN_INSTALL_DEPLIB) \
 )
 LOADER_DEBUG_INSTALL_DEP_LIBS = $(call build_deplibs, \
     $(LIBGCC_INSTALL_DEPLIB) \
-    $(LIBM_INSTALL_DEPLIB) \
     @$(LIBSTDCXX_INSTALL_DEPLIB) \
     @$(LIBJULIAINTERNAL_DEBUG_INSTALL_DEPLIB) \
     @$(LIBJULIACODEGEN_DEBUG_INSTALL_DEPLIB) \
