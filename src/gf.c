@@ -444,8 +444,11 @@ STATIC_INLINE jl_value_t *_jl_rettype_inferred(jl_value_t *owner, jl_method_inst
         if (jl_atomic_load_relaxed(&codeinst->min_world) <= min_world &&
             max_world <= jl_atomic_load_relaxed(&codeinst->max_world) &&
             jl_egal(codeinst->owner, owner)) {
-            jl_value_t *code = jl_atomic_load_relaxed(&codeinst->inferred);
-            if (code && (code == jl_nothing || jl_ir_flag_inferred(code)))
+            jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
+            if (inferred && ((inferred == jl_nothing) || (
+                // allow whatever code instance external abstract interpreter produced
+                // since `jl_ir_flag_inferred` is specific to the native interpreter
+                codeinst->owner != jl_nothing || jl_ir_flag_inferred(inferred))))
                 return (jl_value_t*)codeinst;
         }
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
@@ -2368,12 +2371,13 @@ jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT)
 jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
 {
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
-    while (codeinst) {
+    for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
+        if (codeinst->owner != jl_nothing)
+            continue;
         if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
             if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL)
                 return codeinst;
         }
-        codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     return NULL;
 }

@@ -2,7 +2,7 @@
 
 """
 `Base.TOML` is an undocumented internal part of Julia's TOML parser
-implementation.  Users should call the the documented interface in the
+implementation.  Users should call the documented interface in the
 TOML.jl standard library instead (by `import TOML` or `using TOML`).
 """
 module TOML

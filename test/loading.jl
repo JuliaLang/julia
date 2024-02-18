@@ -1131,6 +1131,18 @@ end
         cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
         run(cmd)
+
+
+        # Extensions in implicit environments
+        old_load_path = copy(LOAD_PATH)
+        try
+            empty!(LOAD_PATH)
+            push!(LOAD_PATH, joinpath(@__DIR__, "project", "Extensions", "ImplicitEnv"))
+            pkgid_B = Base.PkgId(Base.uuid5(Base.identify_package("A").uuid, "BExt"), "BExt")
+            @test Base.identify_package(pkgid_B, "B") isa Base.PkgId
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
     finally
         try
             rm(depot_path, force=true, recursive=true)
@@ -1427,7 +1439,7 @@ end
 end
 
 @testset "command-line flags" begin
-    mktempdir() do dir
+    mktempdir() do depot_path mktempdir() do dir
         # generate a Parent.jl and Child.jl package, with Parent depending on Child
         open(joinpath(dir, "Child.jl"), "w") do io
             println(io, """
@@ -1446,6 +1458,7 @@ end
             code = "using $name"
             cmd = addenv(`$(Base.julia_cmd()) -e $code $args`,
                         "JULIA_LOAD_PATH" => dir,
+                        "JULIA_DEPOT_PATH" => depot_path,
                         "JULIA_DEBUG" => "loading")
 
             out = Pipe()
@@ -1502,7 +1515,7 @@ end
         @test occursin(r"Loading object cache file .+ for Child", log)
         @test occursin(r"Generating object cache file for Parent", log)
         @test occursin(r"Loading object cache file .+ for Parent", log)
-    end
+    end end
 end
 
 @testset "including non-existent file throws proper error #52462" begin

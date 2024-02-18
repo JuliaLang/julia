@@ -480,13 +480,26 @@ function tempdir()
         rc = ccall(:uv_os_tmpdir, Cint, (Ptr{UInt8}, Ptr{Csize_t}), buf, sz)
         if rc == 0
             resize!(buf, sz[])
-            return String(buf)
+            break
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1)  # space for null-terminator implied by StringVector
         else
             uv_error("tempdir()", rc)
         end
     end
+    tempdir = String(buf)
+    try
+        s = stat(tempdir)
+        if !ispath(s)
+            @warn "tempdir path does not exist" tempdir
+        elseif !isdir(s)
+            @warn "tempdir path is not a directory" tempdir
+        end
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+        @warn "accessing tempdir path failed" _exception=ex
+    end
+    return tempdir
 end
 
 """
@@ -504,13 +517,19 @@ function prepare_for_deletion(path::AbstractString)
         return
     end
 
-    try chmod(path, filemode(path) | 0o333)
-    catch; end
+    try
+        chmod(path, filemode(path) | 0o333)
+    catch ex
+        ex isa IOError || ex isa SystemError || rethrow()
+    end
     for (root, dirs, files) in walkdir(path; onerror=x->())
         for dir in dirs
             dpath = joinpath(root, dir)
-            try chmod(dpath, filemode(dpath) | 0o333)
-            catch; end
+            try
+                chmod(dpath, filemode(dpath) | 0o333)
+            catch ex
+                ex isa IOError || ex isa SystemError || rethrow()
+            end
         end
     end
 end

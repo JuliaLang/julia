@@ -118,8 +118,17 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     end
 
     # Generate a text representation of the message and all key value pairs,
-    # split into lines.
-    msglines = [(indent=0, msg=l) for l in split(chomp(convert(String, string(message))::String), '\n')]
+    # split into lines.  This is specialised to improve type inference,
+    # and reduce the risk of resulting method invalidations.
+    message = string(message)
+    msglines = if Base._isannotated(message) && !isempty(Base.annotations(message))
+        message = Base.AnnotatedString(String(message), Base.annotations(message))
+        @NamedTuple{indent::Int, msg::Union{SubString{Base.AnnotatedString{String}}, SubString{String}}}[
+            (indent=0, msg=l) for l in split(chomp(message), '\n')]
+    else
+        [(indent=0, msg=l) for l in split(
+             chomp(convert(String, message)::String), '\n')]
+    end
     stream::IO = logger.stream
     if !(isopen(stream)::Bool)
         stream = stderr
@@ -148,7 +157,10 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     # Format lines as text with appropriate indentation and with a box
     # decoration on the left.
     color, prefix, suffix = logger.meta_formatter(level, _module, group, id, filepath, line)::Tuple{Union{Symbol,Int},String,String}
-    color = StyledStrings.Face(foreground=StyledStrings.Legacy.legacy_color(color))
+    lcolor = StyledStrings.Legacy.legacy_color(color)
+    if !isnothing(lcolor)
+        color = StyledStrings.Face(foreground=lcolor)
+    end
     minsuffixpad = 2
     buf = IOBuffer()
     iob = IOContext(buf, stream)

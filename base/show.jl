@@ -23,6 +23,13 @@ function show(io::IO, ::MIME"text/plain", r::LinRange)
     print_range(io, r)
 end
 
+function show(io::IO, ::MIME"text/plain", r::LogRange)  # display LogRange like LinRange
+    isempty(r) && return show(io, r)
+    summary(io, r)
+    println(io, ":")
+    print_range(io, r, " ", ", ", "", " \u2026 ")
+end
+
 function _isself(ft::DataType)
     ftname = ft.name
     isdefined(ftname, :mt) || return false

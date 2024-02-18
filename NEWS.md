@@ -83,6 +83,7 @@ New library functions
 
 * `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not.
 * The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
+* `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 * `eachrsplit(string, pattern)` iterates split substrings right to left.
 * `Sys.username()` can be used to return the current user's username ([#51897]).
@@ -111,6 +112,7 @@ New library features
   automatically.
 * `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
 * `filter` can now act on a `NamedTuple` ([#50795]).
+* `Iterators.cycle(iter, n)` runs over `iter` a fixed number of times, instead of forever ([#47354])
 * `zero(::AbstractArray)` now applies recursively, so `zero([[1,2],[3,4,5]])` now produces the additive identity `[[0,0],[0,0,0]]` rather than erroring ([#38064]).
 
 Standard library changes

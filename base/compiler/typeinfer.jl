@@ -818,23 +818,29 @@ struct EdgeCallResult
     end
 end
 
+# return cached regular inference result
+function return_cached_result(::AbstractInterpreter, codeinst::CodeInstance, caller::AbsIntState)
+    rt = cached_return_type(codeinst)
+    effects = ipo_effects(codeinst)
+    update_valid_age!(caller, WorldRange(min_world(codeinst), max_world(codeinst)))
+    return EdgeCallResult(rt, codeinst.exctype, codeinst.def, effects)
+end
+
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, caller::AbsIntState)
     mi = specialize_method(method, atype, sparams)::MethodInstance
-    code = get(code_cache(interp), mi, nothing)
+    codeinst = get(code_cache(interp), mi, nothing)
     force_inline = is_stmt_inline(get_curr_ssaflag(caller))
-    if code isa CodeInstance # return existing rettype if the code is already inferred
-        inferred = @atomic :monotonic code.inferred
+    if codeinst isa CodeInstance # return existing rettype if the code is already inferred
+        inferred = @atomic :monotonic codeinst.inferred
         if inferred === nothing && force_inline
             # we already inferred this edge before and decided to discard the inferred code,
             # nevertheless we re-infer it here again in order to propagate the re-inferred
             # source to the inliner as a volatile result
             cache_mode = CACHE_MODE_VOLATILE
         else
-            rt = cached_return_type(code)
-            effects = ipo_effects(code)
-            update_valid_age!(caller, WorldRange(min_world(code), max_world(code)))
-            return EdgeCallResult(rt, code.exctype, mi, effects)
+            @assert codeinst.def === mi "MethodInstance for cached edge does not match"
+            return return_cached_result(interp, codeinst, caller)
         end
     else
         cache_mode = CACHE_MODE_GLOBAL # cache edge targets globally by default
