@@ -523,7 +523,6 @@ include("pkgid.jl")
 include("toml_parser.jl")
 include("linking.jl")
 include("loading.jl")
-include("precompile.jl")
 
 # misc useful functions & macros
 include("timing.jl")
@@ -543,6 +542,8 @@ using .Docs
 if isdefined(Core, :Compiler) && is_primary_base_module
     Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 end
+
+include("precompile.jl")
 
 # finally, now make `include` point to the full version
 for m in methods(include)
