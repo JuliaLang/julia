@@ -149,6 +149,7 @@ function retrieve_code_info(linfo::MethodInstance, world::UInt)
         end
     end
     if c isa CodeInfo
+        c.parent = linfo
         return c
     end
     return nothing

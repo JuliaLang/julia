@@ -1212,7 +1212,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.slottypes = deserialize(s)
         if format_version(s) <= 26
             deserialize(s) # rettype
-            deserialize(s) # parent
+            ci.parent = deserialize(s)
             world_or_edges = deserialize(s)
             pre_13 = isa(world_or_edges, Integer)
             if pre_13
@@ -1223,6 +1223,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
                 ci.max_world = reinterpret(UInt, deserialize(s))
             end
         else
+            ci.parent = deserialize(s)
             ci.method_for_inference_limit_heuristics = deserialize(s)
             ci.edges = deserialize(s)
             ci.min_world = reinterpret(UInt, deserialize(s))

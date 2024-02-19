@@ -930,6 +930,7 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
     tree.ssaflags = UInt32[0]
     set_inlineable!(tree, true)
+    tree.parent = mi
     return tree
 end
 
