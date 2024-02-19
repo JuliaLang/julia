@@ -34,6 +34,12 @@ function take_heap_snapshot()
     return nothing
 end
 
+#Open a new julia session and run the following commands to get a chrome snapshot:
+#=
+open("lala.heapsnapshot", "w") do io
+Profile.HeapSnapshot.assemble_snapshot("lala", io)
+end
+=#
 
 Base.@ccallable function main() :: Cint
     # println("Hello, world!")
