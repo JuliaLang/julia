@@ -1,10 +1,18 @@
-#!/usr/bin/env -S julia --project=@scriptdir
-
 module Main2
+
 using OrdinaryDiffEq
 using OpenBLAS_jll
 using LinearAlgebra
 using PrecompileTools
+using OrdinaryDiffEq, ModelingToolkit
+using ModelingToolkitStandardLibrary.Electrical, ModelingToolkit, OrdinaryDiffEq
+using ModelingToolkitStandardLibrary.Blocks: Step,
+    Constant, Sine, Cosine, ExpSine, Ramp,
+    Square, Triangular
+using ModelingToolkitStandardLibrary.Blocks: square, triangular
+using OrdinaryDiffEq: ReturnCode.Success
+using SciMLBase
+using SparseDiffTools
 
 function take_heap_snapshot()
     flags = Base.open_flags(
@@ -38,10 +46,25 @@ function take_heap_snapshot()
     return nothing
 end
 
-f(u,p,t) = 1.01*u
-const u0=1/2
-const tspan = (0.0,1.0)
-const prob = ODEProblem(f,u0,tspan)
+@parameters t
+@named source = Sine(offset = 0, amplitude = 1.0, frequency = 1e3, start_time = 0.5, phase = 0)
+@named voltage = Voltage()
+@named R1 = Resistor(R = 1e3)
+@named R2 = Resistor(R = 1e3)
+@named ground = Ground()
+
+const connections = [connect(source.output, voltage.V)
+    connect(voltage.p, R1.p)
+    connect(R1.n, R2.p)
+    connect(R2.n, voltage.n, ground.g)]
+
+@named model = ODESystem(connections, t,
+        systems = [R1, R2, source, voltage, ground])
+sys = structural_simplify(model)
+const prob = ODEProblem(sys, Pair[R2.i => 0.0], (0, 2.0))
+
+# and then if that works...
+# this will probably fail since it goes through RuntimeGeneratedFunctions
 
 Base.@ccallable function main() :: Cvoid
     Sys.__init__()
@@ -55,11 +78,11 @@ Base.@ccallable function main() :: Cvoid
     task.rngState2 = 0x503e1d32781c2608
     task.rngState3 = 0x3a77f7189200c20b
     task.rngState4 = 0x5502376d099035ae
-    sol = solve(prob,Tsit5(),reltol=1e-8,abstol=1e-8)
+    sol = solve(prob, Rodas5P())
     for i in eachindex(sol)
-        ccall(:printf, Int32, (Ptr{UInt8},Float64...), "value %lf \n", sol[i])
+        ccall(:printf, Int32, (Ptr{UInt8},Float64...), "value %lf \n", sol[i][1])
     end
-    take_heap_snapshot()
+    # take_heap_snapshot()
     return nothing
 end
 
@@ -74,9 +97,9 @@ end
         OpenBLAS_jll.__init__()
         LinearAlgebra.libblastrampoline_jll.__init__()
         LinearAlgebra.__init__()
-        sol = solve(prob,Tsit5(),reltol=1e-8,abstol=1e-8)
+        sol = solve(prob, Rodas5P())
         for i in eachindex(sol)
-            ccall(:printf, Int32, (Ptr{UInt8},Float64...), "value %lf \n", sol[i])
+            ccall(:printf, Int32, (Ptr{UInt8},Float64...), "value %lf \n", sol[i][1])
         end
     end
 end
@@ -90,6 +113,8 @@ precompile(join , (Base.GenericIOBuffer{Array{UInt8, 1}}, Array{Base.SubString{S
 precompile(join , (Base.GenericIOBuffer{Array{UInt8, 1}}, Array{String, 1}, Char))
 precompile(Base.showerror_nostdio, (Core.MissingCodeError, String))
 precompile(Base.VersionNumber, (UInt32, UInt32, UInt32, Tuple{}, Tuple{}))
+# precompile(print, (Base.GenericIOBuffer{Core.Array{UInt8, 1}}, String) )
 precompile(! ,(Bool,))
-# precompile()
+precompile(SparseDiffTools._get_t, (DataType, Core.Array{Float64, 1}, Core.Array{Core.Array{Tuple{Float64}, 1}, 1}))
+# SparseDiffTools.var"#_get_t"()(DataType, Core.Array{Float64, 1}, Core.Array{Core.Array{Tuple{Float64}, 1}, 1})
 end

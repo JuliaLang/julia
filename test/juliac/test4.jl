@@ -5,6 +5,7 @@ using OrdinaryDiffEq
 using OpenBLAS_jll
 using LinearAlgebra
 using PrecompileTools
+using OrdinaryDiffEq, ModelingToolkit
 
 function take_heap_snapshot()
     flags = Base.open_flags(
@@ -38,12 +39,32 @@ function take_heap_snapshot()
     return nothing
 end
 
-f(u,p,t) = 1.01*u
-const u0=1/2
-const tspan = (0.0,1.0)
-const prob = ODEProblem(f,u0,tspan)
 
-Base.@ccallable function main() :: Cvoid
+@parameters σ ρ β
+@variables t x(t) y(t) z(t)
+const D = Differential(t)
+
+const eqs = [D(D(x)) ~ σ * (y - x),
+    D(y) ~ x * (ρ - z) - y,
+    D(z) ~ x * y - β * z]
+
+@named sys = ODESystem(eqs)
+sys = structural_simplify(sys)
+
+const u0 = [D(x) => 2.0,
+    x => 1.0,
+    y => 0.0,
+    z => 0.0]
+
+const p = [σ => 28.0,
+    ρ => 10.0,
+    β => 8 / 3]
+
+const tspan = (0.0, 100.0)
+const prob = ODEProblem(sys, u0, tspan, p, jac = true)
+
+
+Base.@ccallable function main() :: Cint
     Sys.__init__()
     OpenBLAS_jll.__init__()
     LinearAlgebra.libblastrampoline_jll.__init__()
@@ -55,12 +76,12 @@ Base.@ccallable function main() :: Cvoid
     task.rngState2 = 0x503e1d32781c2608
     task.rngState3 = 0x3a77f7189200c20b
     task.rngState4 = 0x5502376d099035ae
-    sol = solve(prob,Tsit5(),reltol=1e-8,abstol=1e-8)
-    for i in eachindex(sol)
-        ccall(:printf, Int32, (Ptr{UInt8},Float64...), "value %lf \n", sol[i])
+    sol = solve(prob,Tsit5())
+    for i in 1:15
+        ccall(:printf, Int32, (Ptr{UInt8},Float64...), "value %lf \n", sol[i][1])
     end
     take_heap_snapshot()
-    return nothing
+    return 0
 end
 
 @setup_workload begin
@@ -74,9 +95,9 @@ end
         OpenBLAS_jll.__init__()
         LinearAlgebra.libblastrampoline_jll.__init__()
         LinearAlgebra.__init__()
-        sol = solve(prob,Tsit5(),reltol=1e-8,abstol=1e-8)
-        for i in eachindex(sol)
-            ccall(:printf, Int32, (Ptr{UInt8},Float64...), "value %lf \n", sol[i])
+        sol = solve(prob,Tsit5())
+        for i in 1:15
+            ccall(:printf, Int32, (Ptr{UInt8},Float64...), "value %lf \n", sol[i][1])
         end
     end
 end

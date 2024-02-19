@@ -10,17 +10,32 @@ function take_heap_snapshot()
         truncate = true,
         append = false,
     )
-    fname = "lala.heapsnapshot"
-    s = IOStream("<file lala.heapsnapshot>")
-    ccall(:ios_file, Ptr{Cvoid},
-                      (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
-                      s.ios, fname, flags.read, flags.write, flags.create, flags.truncate)
-    ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), s.handle, Cchar(false))
-    ccall(:ios_close, Cint, (Ptr{Cvoid},), s.ios)
+    nodes = IOStream("<file lala.nodes>")
+    ccall(:ios_file, Ptr{Cvoid}, (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
+        nodes.ios, "lala.nodes", flags.read, flags.write, flags.create, flags.truncate)
+    edges = IOStream("<file lala.edges>")
+    ccall(:ios_file, Ptr{Cvoid}, (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
+        edges.ios, "lala.edges", flags.read, flags.write, flags.create, flags.truncate)
+    strings = IOStream("<file lala.strings>")
+    ccall(:ios_file, Ptr{Cvoid},(Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
+        strings.ios, "lala.strings", flags.read, flags.write, flags.create, flags.truncate)
+    json = IOStream("<file lala.metadata.json>")
+    ccall(:ios_file, Ptr{Cvoid}, (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
+        json.ios, "lala.metadata.json", flags.read, flags.write, flags.create, flags.truncate)
+    ccall(:jl_gc_take_heap_snapshot,
+        Cvoid,
+        (Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}, Cchar),
+        nodes.handle, edges.handle, strings.handle, json.handle,
+        Cchar(false))
+    ccall(:ios_close, Cint, (Ptr{Cvoid},), nodes.ios)
+    ccall(:ios_close, Cint, (Ptr{Cvoid},), edges.ios)
+    ccall(:ios_close, Cint, (Ptr{Cvoid},), strings.ios)
+    ccall(:ios_close, Cint, (Ptr{Cvoid},), json.ios)
     return nothing
 end
 
-Base.@ccallable function main() :: Cvoid
+
+Base.@ccallable function main() :: Cint
     # println("Hello, world!")
     task = current_task()
     task.rngState0 = 0x5156087469e170ab
@@ -31,8 +46,8 @@ Base.@ccallable function main() :: Cvoid
     a = rand(10)
     b = sum(a)
     ccall(:printf, Int32, (Ptr{UInt8},Float64...), "hello_world %lf", b)
-    # take_heap_snapshot()
-    return nothing
+    take_heap_snapshot()
+    return 0
 end
 
 precompile(main, ())
