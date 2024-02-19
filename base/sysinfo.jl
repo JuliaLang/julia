@@ -568,6 +568,8 @@ Return `true` if the given `path` has executable permissions.
     ACLs on Windows, therefore it would return `true` for any
     file.  From Julia 1.6 on, it correctly determines whether the
     file is marked as executable or not.
+
+See also [`ispath`](@ref), [`isreadable`](@ref), [`iswriteable`](@ref).
 """
 function isexecutable(path::String)
     # We use `access()` and `X_OK` to determine if a given path is
@@ -587,10 +589,14 @@ Return `true` if the access permissions for the given `path` permitted reading b
     so it is recommended to just call `open` alone and handle the error if that fails,
     rather than calling `isreadable` first.
 
+!!! note
+    Currently this function does not correctly interrogate filesystem
+    ACLs on Windows, therefore it can return wrong results.
+
 !!! compat "Julia 1.11"
     This function requires at least Julia 1.11.
 
-See also [`ispath`](@ref).
+See also [`ispath`](@ref), [`isexecutable`](@ref), [`iswriteable`](@ref).
 """
 function isreadable(path::String)
     # We use `access()` and `R_OK` to determine if a given path is
@@ -610,10 +616,14 @@ Return `true` if the access permissions for the given `path` permitted writing b
     so it is recommended to just call `open` alone and handle the error if that fails,
     rather than calling `iswriteable` first.
 
+!!! note
+    Currently this function does not correctly interrogate filesystem
+    ACLs on Windows, therefore it can return wrong results.
+
 !!! compat "Julia 1.11"
     This function requires at least Julia 1.11.
 
-See also [`ispath`](@ref).
+See also [`ispath`](@ref), [`isexecutable`](@ref), [`isreadable`](@ref).
 """
 function iswriteable(path::String)
     # We use `access()` and `W_OK` to determine if a given path is
