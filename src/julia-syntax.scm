@@ -3455,7 +3455,7 @@ f(x) = yt(x)
               (call (core _setsuper!) ,s ,super)
               (= (outerref ,name) ,s)
               (call (core _typebody!) ,s
-                    (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
+                    (call (core svec) ,@(map (lambda (v) '(call (core apply_type) (core Box) (core Any))) fields)))
               (return (null)))))))))
 
 ;; better versions of above, but they get handled wrong in many places
@@ -4137,7 +4137,7 @@ f(x) = yt(x)
                         (typedef  ;; expression to define the type
                          (let* ((fieldtypes (map (lambda (v)
                                                    (if (is-var-boxed? v lam)
-                                                       '(core Box)
+                                                       '(call (core apply_type) (core Box) (core Any))
                                                        (make-ssavalue)))
                                                  capt-vars))
                                 (para (append closure-param-syms
