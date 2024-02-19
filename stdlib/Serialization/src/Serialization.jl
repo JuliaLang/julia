@@ -1214,24 +1214,25 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
             deserialize(s) # rettype
             ci.parent = deserialize(s)
             world_or_edges = deserialize(s)
-            pre_13 = isa(world_or_edges, Integer)
+            pre_13 = isa(world_or_edges, Union{UInt, Int})
             if pre_13
-                ci.min_world = world_or_edges
+                ci.min_world = reinterpret(UInt, world_or_edges)
+                ci.max_world = reinterpret(UInt, deserialize(s))
             else
                 ci.edges = world_or_edges
-                ci.min_world = reinterpret(UInt, deserialize(s))
-                ci.max_world = reinterpret(UInt, deserialize(s))
+                ci.min_world = deserialize(s)::UInt
+                ci.max_world = deserialize(s)::UInt
             end
         else
             ci.parent = deserialize(s)
             ci.method_for_inference_limit_heuristics = deserialize(s)
             ci.edges = deserialize(s)
-            ci.min_world = reinterpret(UInt, deserialize(s))
-            ci.max_world = reinterpret(UInt, deserialize(s))
+            ci.min_world = deserialize(s)::UInt
+            ci.max_world = deserialize(s)::UInt
         end
     end
     if format_version(s) <= 26
-        deserialize(s) # inferred
+        deserialize(s)::Bool # inferred
     end
     if format_version(s) < 22
         inlining_cost = deserialize(s)
