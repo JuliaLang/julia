@@ -630,8 +630,8 @@ g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 # idempotency of callsite inlining
 function getcache(mi::Core.MethodInstance)
     cache = Core.Compiler.code_cache(Core.Compiler.NativeInterpreter())
-    codeinf = Core.Compiler.get(cache, mi, nothing)
-    return isnothing(codeinf) ? nothing : codeinf
+    codeinst = Core.Compiler.get(cache, mi, nothing)
+    return isnothing(codeinst) ? nothing : codeinst
 end
 @noinline f42078(a) = sum(sincos(a))
 let
@@ -649,8 +649,8 @@ let
     end
     let # make sure to discard the inferred source
         mi = only(methods(f42078)).specializations::Core.MethodInstance
-        codeinf = getcache(mi)::Core.CodeInstance
-        @atomic codeinf.inferred = nothing
+        codeinst = getcache(mi)::Core.CodeInstance
+        @atomic codeinst.inferred = nothing
     end
 
     let # inference should re-infer `f42078(::Int)` and we should get the same code

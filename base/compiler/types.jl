@@ -88,6 +88,7 @@ mutable struct InferenceResult
     effects::Effects         # if optimization is finished
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool    # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
+    ci::CodeInstance         # CodeInstance if this result has been added to the cache
     function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
         # def = linfo.def
         # nargs = def isa Method ? Int(def.nargs) : 0
