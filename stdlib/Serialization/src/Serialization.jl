@@ -7,7 +7,7 @@ Provide serialization of Julia objects via the functions
 """
 module Serialization
 
-import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
+import Base: GMP, Bottom, unsafe_convert
 import Core: svec, SimpleVector
 using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
@@ -447,7 +447,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.constprop)
     serialize(s, meth.purity)
     if isdefined(meth, :source)
-        serialize(s, Base._uncompressed_ast(meth, meth.source))
+        serialize(s, Base._uncompressed_ast(meth))
     else
         serialize(s, nothing)
     end

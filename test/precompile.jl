@@ -1794,14 +1794,18 @@ let newinterp_path = abspath("compiler/newinterp.jl")
                         mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
                     return CustomData(inferred_result)
                 end
-                function CC.inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
+                function CC.src_inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
                                             @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)
                     if src isa CustomData
                         src = src.inferred
                     end
-                    return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter, src::Any,
-                                                    info::CC.CallInfo, stmt_flag::UInt32)
+                    return @invoke CC.src_inlining_policy(interp::CC.AbstractInterpreter, src::Any,
+                                                          info::CC.CallInfo, stmt_flag::UInt32)
                 end
+                CC.retrieve_ir_for_inlining(cached_result::Core.CodeInstance, src::CustomData) =
+                    CC.retrieve_ir_for_inlining(cached_result, src.inferred)
+                CC.retrieve_ir_for_inlining(mi::Core.MethodInstance, src::CustomData, preserve_local_sources::Bool) =
+                    CC.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
             end
 
             Base.return_types((Float64,)) do x

@@ -310,11 +310,20 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
         end
     end
     relocatability = 0x0
+    owner = cache_owner(interp)
     if const_flags == 0x3 && can_discard_trees
         inferred_result = nothing
         relocatability = 0x1
     else
         inferred_result = transform_result_for_cache(interp, result.linfo, result.valid_worlds, result, can_discard_trees)
+        if inferred_result isa CodeInfo
+            uncompressed = inferred_result
+            inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result, can_discard_trees)
+            result.is_src_volatile |= uncompressed !== inferred_result
+        elseif owner === nothing
+            # The global cache can only handle objects that codegen understands
+            inferred_result = nothing
+        end
         if isa(inferred_result, String)
             t = @_gc_preserve_begin inferred_result
             relocatability = unsafe_load(unsafe_convert(Ptr{UInt8}, inferred_result), Core.sizeof(inferred_result))
@@ -323,13 +332,19 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
             relocatability = 0x1
         end
     end
-    # relocatability = isa(inferred_result, String) ? inferred_result[end] : UInt8(0)
-    return CodeInstance(result.linfo, cache_owner(interp),
+    # n.b. relocatability = (isa(inferred_result, String) && inferred_result[end]) || inferred_result === nothing
+    return CodeInstance(result.linfo, owner,
         widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
         const_flags, first(result.valid_worlds), last(result.valid_worlds),
         # TODO: Actually do something with non-IPO effects
         encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.analysis_results,
         relocatability)
+end
+
+function transform_result_for_cache(interp::AbstractInterpreter,
+        linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult,
+        can_discard_trees::Bool=may_discard_trees(interp))
+    return result.src
 end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo,
@@ -352,22 +367,6 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
     else
         return nothing
     end
-end
-
-function transform_result_for_cache(interp::AbstractInterpreter,
-        linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult,
-        can_discard_trees::Bool=may_discard_trees(interp))
-    inferred_result = result.src
-    if inferred_result isa CodeInfo
-        uncompressed = inferred_result
-        inferred_result = maybe_compress_codeinfo(interp, linfo, inferred_result, can_discard_trees)
-        result.is_src_volatile |= uncompressed !== inferred_result
-    end
-    # The global cache can only handle objects that codegen understands
-    if !isa(inferred_result, MaybeCompressed)
-        inferred_result = nothing
-    end
-    return inferred_result
 end
 
 function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
@@ -874,7 +873,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, we can use this local result destructively
-        volatile_inf_result = isinferred && (force_inline || inlining_policy(interp, result.src, NoCallInfo(), IR_FLAG_NULL) !== nothing) ?
+        volatile_inf_result = isinferred && (force_inline || src_inlining_policy(interp, result.src, NoCallInfo(), IR_FLAG_NULL) !== nothing) ?
             VolatileInferenceResult(result) : nothing
         return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects, volatile_inf_result)
     elseif frame === true
@@ -1091,6 +1090,8 @@ function ci_meets_requirement(code::CodeInstance, source_mode::UInt8, ci_is_cach
     source_mode == SOURCE_MODE_FORCE_SOURCE_UNCACHED && return (!ci_is_cached && ci_has_source(code))
     return false
 end
+
+_uncompressed_ir(ci::Core.CodeInstance, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
 
 # compute (and cache) an inferred AST and return type
 function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
