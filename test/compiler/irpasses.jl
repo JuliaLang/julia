@@ -1161,6 +1161,35 @@ let src = @eval Module() begin
     @test count(iscall((src, Core.tuple)), src.code) == 0
 end
 
+# Test that when acde_pass!() folds a PhiNode into a value with a
+# more narrow type, it adds `IR_FLAG_REFINED` to its statement. (#53390)
+let
+    code = Any[
+        # Block 1
+        GotoIfNot(false, 3),
+        # Block 2
+        nothing,
+        # Block 3
+        PhiNode(Int32[1, 2], Any[1, Argument(1)]),
+        Expr(:call, Base.inferencebarrier, SSAValue(3)),
+        ReturnNode(SSAValue(4)),
+    ]
+    ir = make_ircode(code;
+        slottypes=Any[Float64],
+        ssavaluetypes=Any[
+            Bool,
+            Nothing,
+            Union{Int64,Float64},
+            Any,
+            Any,
+        ]
+    )
+    Core.Compiler.verify_ir(ir)
+    ir = Core.Compiler.adce_pass!(ir)
+    @test isexpr(ir[1].stmts[3][:inst], :call)
+    @test (ir[1].stmts[3][:flag] & Core.Compiler.IR_FLAG_REFINED) != 0
+end
+
 # Test that cfg_simplify can converging control flow through empty blocks
 function foo_cfg_empty(b)
     if b
