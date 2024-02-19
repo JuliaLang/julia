@@ -386,6 +386,7 @@
     XX(jl_raise_debugger) \
     XX(jl_readuntil) \
     XX(jl_cache_flags) \
+    XX(jl_match_cache_flags_current) \
     XX(jl_match_cache_flags) \
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
