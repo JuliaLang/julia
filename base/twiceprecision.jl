@@ -196,7 +196,20 @@ ranges, you can set `nb = ceil(Int, log2(len-1))`.
 struct TwicePrecision{T}
     hi::T    # most significant bits
     lo::T    # least significant bits
+
+    function TwicePrecision{T}(hi::T, lo::T) where {T}
+        isconcretetype(T) || error("$T isn't a concrete type")
+        (T <: Integer) &&
+            error("TwicePrecision{<:Integer} is nonsensical")
+        (T <: TwicePrecision) &&
+            error("TwicePrecision{<:TwicePrecision} is nonsensical")
+        (T <: Tuple) &&
+            error("TwicePrecision{<:Tuple} is nonsensical")
+        new{T}(hi, lo)
+    end
 end
+
+TwicePrecision(hi::T, lo::T) where {T} = TwicePrecision{T}(hi, lo)
 
 TwicePrecision{T}(x::T) where {T} = TwicePrecision{T}(x, zero(T))
 
