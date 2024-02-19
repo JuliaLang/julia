@@ -517,10 +517,6 @@ const RECURSION_MSG_HARDLIMIT = "Bounded recursion detected under hardlimit. Cal
 function abstract_call_method(interp::AbstractInterpreter,
                               method::Method, @nospecialize(sig), sparams::SimpleVector,
                               hardlimit::Bool, si::StmtInfo, sv::AbsIntState)
-    if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
-        add_remark!(interp, sv, "Refusing to infer into `depwarn`")
-        return MethodCallResult(Any, Any, false, false, nothing, Effects())
-    end
     sigtuple = unwrap_unionall(sig)
     sigtuple isa DataType ||
         return MethodCallResult(Any, Any, false, false, nothing, Effects())
@@ -685,7 +681,7 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
     # necessary in order to retrieve this field from the generated `CodeInfo`, if it exists.
     # The other `CodeInfo`s we inspect will already have this field inflated, so we just
     # access it directly instead (to avoid regeneration).
-    world = get_world_counter(interp)
+    world = get_inference_world(interp)
     callee_method2 = method_for_inference_heuristics(method, sig, sparams, world) # Union{Method, Nothing}
 
     inf_method2 = method_for_inference_limit_heuristics(frame) # limit only if user token match
@@ -814,12 +810,7 @@ end
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     result::MethodCallResult, @nospecialize(f), arginfo::ArgInfo, si::StmtInfo,
     match::MethodMatch, sv::AbsIntState, invokecall::Union{Nothing,InvokeCall}=nothing)
-
-    if !const_prop_enabled(interp, sv, match)
-        return nothing
-    end
-    if bail_out_const_call(interp, result, si)
-        add_remark!(interp, sv, "[constprop] No more information to be gained")
+    if bail_out_const_call(interp, result, si, match, sv)
         return nothing
     end
     eligibility = concrete_eval_eligible(interp, f, result, arginfo, sv)
@@ -852,30 +843,33 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     return const_prop_call(interp, mi, result, arginfo, sv, concrete_eval_result)
 end
 
-function const_prop_enabled(interp::AbstractInterpreter, sv::AbsIntState, match::MethodMatch)
+function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResult,
+                             si::StmtInfo, match::MethodMatch, sv::AbsIntState)
     if !InferenceParams(interp).ipo_constant_propagation
         add_remark!(interp, sv, "[constprop] Disabled by parameter")
-        return false
+        return true
     end
     if is_no_constprop(match.method)
         add_remark!(interp, sv, "[constprop] Disabled by method parameter")
-        return false
+        return true
     end
-    return true
-end
-
-function bail_out_const_call(interp::AbstractInterpreter, result::MethodCallResult, si::StmtInfo)
     if is_removable_if_unused(result.effects)
-        if isa(result.rt, Const) || call_result_unused(si)
+        if isa(result.rt, Const)
+            add_remark!(interp, sv, "[constprop] No more information to be gained (const)")
+            return true
+        elseif call_result_unused(si)
+            add_remark!(interp, sv, "[constprop] No more information to be gained (unused result)")
             return true
         end
-    elseif result.rt === Bottom
+    end
+    if result.rt === Bottom
         if is_terminates(result.effects) && is_effect_free(result.effects)
             # In the future, we may want to add `&& isa(result.exct, Const)` to
             # the list of conditions here, but currently, our effect system isn't
             # precise enough to let us determine :consistency of `exct`, so we
             # would have to force constprop just to determine this, which is too
             # expensive.
+            add_remark!(interp, sv, "[constprop] No more information to be gained (bottom)")
             return true
         end
     end
@@ -941,7 +935,7 @@ function concrete_eval_call(interp::AbstractInterpreter,
         pushfirst!(args, f, invokecall.types)
         f = invoke
     end
-    world = get_world_counter(interp)
+    world = get_inference_world(interp)
     edge = result.edge::MethodInstance
     value = try
         Core._call_in_world_total(world, f, args...)
@@ -974,7 +968,10 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
     match::MethodMatch, sv::AbsIntState)
     method = match.method
     force = force_const_prop(interp, f, method)
-    force || const_prop_entry_heuristic(interp, result, si, sv) || return nothing
+    if !const_prop_entry_heuristic(interp, result, si, sv, force)
+        # N.B. remarks are emitted within `const_prop_entry_heuristic`
+        return nothing
+    end
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
     length(arginfo.argtypes) < nargs && return nothing
@@ -1001,8 +998,17 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
     return mi
 end
 
-function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult, si::StmtInfo, sv::AbsIntState)
-    if call_result_unused(si) && result.edgecycle
+function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult,
+                                    si::StmtInfo, sv::AbsIntState, force::Bool)
+    if result.rt isa LimitedAccuracy
+        # optimizations like inlining are disabled for limited frames,
+        # thus there won't be much benefit in constant-prop' here
+        # N.B. don't allow forced constprop' for safety (xref #52763)
+        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
+        return false
+    elseif force
+        return true
+    elseif call_result_unused(si) && result.edgecycle
         add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (edgecycle with unused result)")
         return false
     end
@@ -1015,27 +1021,21 @@ function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodC
         if rt === Bottom
             add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (erroneous result)")
             return false
-        else
-            return true
         end
+        return true
     elseif isa(rt, PartialStruct) || isa(rt, InterConditional) || isa(rt, InterMustAlias)
         # could be improved to `Const` or a more precise wrapper
         return true
-    elseif isa(rt, LimitedAccuracy)
-        # optimizations like inlining are disabled for limited frames,
-        # thus there won't be much benefit in constant-prop' here
-        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (limited accuracy)")
-        return false
-    else
-        if isa(rt, Const)
-            if !is_nothrow(result.effects)
-                # Could still be improved to Bottom (or at least could see the effects improved)
-                return true
-            end
+    elseif isa(rt, Const)
+        if is_nothrow(result.effects)
+            add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (nothrow const)")
+            return false
         end
-        add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable result)")
-        return false
+        # Could still be improved to Bottom (or at least could see the effects improved)
+        return true
     end
+    add_remark!(interp, sv, "[constprop] Disabled by entry heuristic (unimprovable result)")
+    return false
 end
 
 # determines heuristically whether if constant propagation can be worthwhile
@@ -1113,12 +1113,12 @@ function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecializ
                 if !still_nothrow || ismutabletype(arrty)
                     return false
                 end
-            elseif ⊑(𝕃ᵢ, arrty, Array)
+            elseif ⊑(𝕃ᵢ, arrty, Array) || ⊑(𝕃ᵢ, arrty, GenericMemory)
                 return false
             end
         elseif istopfunction(f, :iterate)
             itrty = argtypes[2]
-            if ⊑(𝕃ᵢ, itrty, Array)
+            if ⊑(𝕃ᵢ, itrty, Array) || ⊑(𝕃ᵢ, itrty, GenericMemory)
                 return false
             end
         end
@@ -1221,45 +1221,53 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
     return nothing
 end
 
+const_prop_result(inf_result::InferenceResult) =
+    ConstCallResults(inf_result.result, inf_result.exc_result, ConstPropResult(inf_result),
+                     inf_result.ipo_effects, inf_result.linfo)
+
+# return cached constant analysis result
+return_cached_result(::AbstractInterpreter, inf_result::InferenceResult, ::AbsIntState) =
+    const_prop_result(inf_result)
+
 function const_prop_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
     concrete_eval_result::Union{Nothing, ConstCallResults}=nothing)
     inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
     inf_result = cache_lookup(𝕃ᵢ, mi, arginfo.argtypes, inf_cache)
-    if inf_result === nothing
-        # fresh constant prop'
-        argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
-        inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
-        if !any(inf_result.overridden_by_const)
-            add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
-            return nothing
-        end
-        frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
-        if frame === nothing
-            add_remark!(interp, sv, "[constprop] Could not retrieve the source")
-            return nothing # this is probably a bad generated function (unsound), but just ignore it
-        end
-        frame.parent = sv
-        if !typeinf(interp, frame)
-            add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
-            return nothing
-        end
-        @assert inf_result.result !== nothing
-        if concrete_eval_result !== nothing
-            # override return type and effects with concrete evaluation result if available
-            inf_result.result = concrete_eval_result.rt
-            inf_result.ipo_effects = concrete_eval_result.effects
-        end
-    else
+    if inf_result !== nothing
         # found the cache for this constant prop'
         if inf_result.result === nothing
             add_remark!(interp, sv, "[constprop] Found cached constant inference in a cycle")
             return nothing
         end
+        @assert inf_result.linfo === mi "MethodInstance for cached inference result does not match"
+        return return_cached_result(interp, inf_result, sv)
     end
-    return ConstCallResults(inf_result.result, inf_result.exc_result,
-        ConstPropResult(inf_result), inf_result.ipo_effects, mi)
+    # perform fresh constant prop'
+    argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
+    inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
+    if !any(inf_result.overridden_by_const)
+        add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
+        return nothing
+    end
+    frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
+    if frame === nothing
+        add_remark!(interp, sv, "[constprop] Could not retrieve the source")
+        return nothing # this is probably a bad generated function (unsound), but just ignore it
+    end
+    frame.parent = sv
+    if !typeinf(interp, frame)
+        add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
+        return nothing
+    end
+    @assert inf_result.result !== nothing
+    if concrete_eval_result !== nothing
+        # override return type and effects with concrete evaluation result if available
+        inf_result.result = concrete_eval_result.rt
+        inf_result.ipo_effects = concrete_eval_result.effects
+    end
+    return const_prop_result(inf_result)
 end
 
 # TODO implement MustAlias forwarding
@@ -1501,7 +1509,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # Return Bottom if this is not an iterator.
     # WARNING: Changes to the iteration protocol must be reflected here,
     # this is not just an optimization.
-    # TODO: this doesn't realize that Array, SimpleVector, Tuple, and NamedTuple do not use the iterate protocol
+    # TODO: this doesn't realize that Array, GenericMemory, SimpleVector, Tuple, and NamedTuple do not use the iterate protocol
     stateordonet === Bottom && return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(CallMeta[CallMeta(Bottom, Any, call.effects, info)], true))
     valtype = statetype = Bottom
     ret = Any[]
@@ -2076,8 +2084,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_apply(interp, argtypes, si, sv, max_methods)
         elseif f === invoke
             return abstract_invoke(interp, arginfo, si, sv)
-        elseif f === modifyfield!
-            return abstract_modifyfield!(interp, argtypes, si, sv)
+        elseif f === modifyfield! || f === Core.modifyglobal! || f === Core.memoryrefmodify! || f === atomic_pointermodify
+            return abstract_modifyop!(interp, f, argtypes, si, sv)
         elseif f === Core.finalizer
             return abstract_finalizer(interp, argtypes, sv)
         elseif f === applicable
@@ -2722,7 +2730,7 @@ end
 function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), vtypes::VarTable, sv::InferenceState)
     if !isa(e, Expr)
         if isa(e, PhiNode)
-            add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
+            add_curr_ssaflag!(sv, IR_FLAGS_REMOVABLE)
             return RTEffects(abstract_eval_phi(interp, e, vtypes, sv), Union{}, EFFECTS_TOTAL)
         end
         (; rt, exct, effects) = abstract_eval_special_value(interp, e, vtypes, sv)
@@ -3304,6 +3312,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             end
             if rt === Bottom
                 ssavaluetypes[currpc] = Bottom
+                # Special case: Bottom-typed PhiNodes do not error (but must also be unused)
+                if isa(stmt, PhiNode)
+                    continue
+                end
                 @goto find_next_bb
             end
             if changes !== nothing

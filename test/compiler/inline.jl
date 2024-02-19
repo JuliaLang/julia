@@ -630,8 +630,8 @@ g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 # idempotency of callsite inlining
 function getcache(mi::Core.MethodInstance)
     cache = Core.Compiler.code_cache(Core.Compiler.NativeInterpreter())
-    codeinf = Core.Compiler.get(cache, mi, nothing)
-    return isnothing(codeinf) ? nothing : codeinf
+    codeinst = Core.Compiler.get(cache, mi, nothing)
+    return isnothing(codeinst) ? nothing : codeinst
 end
 @noinline f42078(a) = sum(sincos(a))
 let
@@ -649,8 +649,8 @@ let
     end
     let # make sure to discard the inferred source
         mi = only(methods(f42078)).specializations::Core.MethodInstance
-        codeinf = getcache(mi)::Core.CodeInstance
-        @atomic codeinf.inferred = nothing
+        codeinst = getcache(mi)::Core.CodeInstance
+        @atomic codeinst.inferred = nothing
     end
 
     let # inference should re-infer `f42078(::Int)` and we should get the same code
@@ -761,7 +761,7 @@ end
 let f(x) = (x...,)
     # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
     # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
-    # the the original apply call is not union-split, but the inserted `iterate` call is.
+    # that the original apply call is not union-split, but the inserted `iterate` call is.
     @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
 end
 
@@ -1004,6 +1004,14 @@ end
             UnionAll(a, b)
         end |> only |> first
         @test count(iscall((src,UnionAll)), src.code) == 0
+    end
+    # test >:
+    let src = code_typed((Any,Any)) do x, y
+            x >: y
+        end |> only |> first
+        idx = findfirst(iscall((src,<:)), src.code)
+        @test idx !== nothing
+        @test src.code[idx].args[2:3] == Any[#=y=#Argument(3), #=x=#Argument(2)]
     end
 end
 
@@ -1793,6 +1801,24 @@ let src = code_typed1((Atomic{Int},Union{Int,Float64})) do a, b
     end
     @test count(isinvokemodify(:mymax), src.code) == 2
 end
+global x_global_inc::Int = 1
+let src = code_typed1(()) do
+        @atomic (@__MODULE__).x_global_inc += 1
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((Ptr{Int},)) do a
+        unsafe_modify!(a, +, 1)
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((AtomicMemoryRef{Int},)) do a
+        Core.memoryrefmodify!(a, +, 1, :sequentially_consistent, true)
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+
+
 
 # apply `ssa_inlining_pass` multiple times
 let interp = Core.Compiler.NativeInterpreter()
@@ -2116,3 +2142,20 @@ let src = code_typed1() do
     end
     @test count(isinvoke(:iterate), src.code) == 0
 end
+
+# JuliaLang/julia#53062: proper `joint_effects` for call with empty method matches
+let ir = first(only(Base.code_ircode(setproperty!, (Base.RefValue{Int},Symbol,Base.RefValue{Int}))))
+    i = findfirst(iscall((ir, convert)), ir.stmts.stmt)::Int
+    @test iszero(ir.stmts.flag[i] & Core.Compiler.IR_FLAG_NOTHROW)
+end
+function issue53062(cond)
+    x = Ref{Int}(0)
+    if cond
+        x[] = x
+    else
+        return -1
+    end
+end
+@test !Core.Compiler.is_nothrow(Base.infer_effects(issue53062, (Bool,)))
+@test issue53062(false) == -1
+@test_throws MethodError issue53062(true)

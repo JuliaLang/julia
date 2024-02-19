@@ -410,8 +410,14 @@ hcat(tvs::Transpose{T,Vector{T}}...) where {T} = _transpose_hcat(tvs...)
 #
 # note that the caller's operation f operates in the domain of the wrapped vectors' entries.
 # hence the adjoint->f->adjoint shenanigans applied to the parent vectors' entries.
-map(f, avs::AdjointAbsVec...) = adjoint(map((xs...) -> adjoint(f(adjoint.(xs)...)), parent.(avs)...))
-map(f, tvs::TransposeAbsVec...) = transpose(map((xs...) -> transpose(f(transpose.(xs)...)), parent.(tvs)...))
+function map(f, av::AdjointAbsVec, avs::AdjointAbsVec...)
+    s = (av, avs...)
+    adjoint(map((xs...) -> adjoint(f(adjoint.(xs)...)), parent.(s)...))
+end
+function map(f, tv::TransposeAbsVec, tvs::TransposeAbsVec...)
+    s = (tv, tvs...)
+    transpose(map((xs...) -> transpose(f(transpose.(xs)...)), parent.(s)...))
+end
 quasiparentt(x) = parent(x); quasiparentt(x::Number) = x # to handle numbers in the defs below
 quasiparenta(x) = parent(x); quasiparenta(x::Number) = conj(x) # to handle numbers in the defs below
 quasiparentc(x) = parent(parent(x)); quasiparentc(x::Number) = conj(x) # to handle numbers in the defs below

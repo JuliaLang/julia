@@ -60,12 +60,12 @@ function.
 
 include("bindings.jl")
 
-import .Base.Meta: quot, isexpr
+import .Base.Meta: quot, isexpr, unblock, unescape, uncurly
 import .Base: Callable, with_output_color
 using .Base: RefValue, mapany
 import ..CoreDocs: lazy_iterpolate
 
-export doc
+export doc, hasdoc, undocumented_names
 
 # Basic API / Storage
 
@@ -194,7 +194,7 @@ docexpr(__source__, __module__, args...) = Expr(:call, docstr, args...)
 Stores a collection of docstrings for related objects, ie. a `Function`/`DataType` and
 associated `Method` objects.
 
-Each documented object in a `MultiDoc` is referred to by it's signature which is represented
+Each documented object in a `MultiDoc` is referred to by its signature which is represented
 by a `Union` of `Tuple` types. For example, the following `Method` definition
 
     f(x, y) = ...
@@ -243,7 +243,7 @@ function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = U
             @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
-        # are initially added. Replacing a specific docstring does not change it's ordering.
+        # are initially added. Replacing a specific docstring does not change its ordering.
         push!(m.order, sig)
     end
     m.docs[sig] = str
@@ -284,29 +284,6 @@ catdoc() = nothing
 catdoc(xs...) = vcat(xs...)
 
 const keywords = Dict{Symbol, DocStr}()
-
-function unblock(@nospecialize ex)
-    while isexpr(ex, :var"hygienic-scope")
-        isexpr(ex.args[1], :escape) || break
-        ex = ex.args[1].args[1]
-    end
-    isexpr(ex, :block) || return ex
-    exs = filter(ex -> !(isa(ex, LineNumberNode) || isexpr(ex, :line)), ex.args)
-    length(exs) == 1 || return ex
-    return unblock(exs[1])
-end
-
-# peek through ex to figure out what kind of expression it may eventually act like
-# but ignoring scopes and line numbers
-function unescape(@nospecialize ex)
-    ex = unblock(ex)
-    while isexpr(ex, :escape) || isexpr(ex, :var"hygienic-scope")
-       ex = unblock(ex.args[1])
-    end
-    return ex
-end
-
-uncurly(@nospecialize ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
 namify(@nospecialize x) = astname(x, isexpr(x, :macro))::Union{Symbol,Expr,GlobalRef}
 

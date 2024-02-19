@@ -8,6 +8,9 @@ using .Main.InfiniteArrays
 isdefined(Main, :StructArrays) || @eval Main include("testhelpers/StructArrays.jl")
 using .Main.StructArrays
 
+isdefined(Main, :FillArrays) || @eval Main include("testhelpers/FillArrays.jl")
+using .Main.FillArrays
+
 A = rand(5,4,3)
 @testset "Bounds checking" begin
     @test checkbounds(Bool, A, 1, 1, 1) == true
@@ -545,12 +548,24 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
-    # isassigned(a::AbstractArray, i::Int...)
+    @test !isassigned(B)
+    # isassigned(a::AbstractArray, i::Integer...)
     j = rand(1:length(B))
     @test isassigned(B, j)
     if T == T24Linear
         @test !isassigned(B, length(B) + 1)
     end
+    # isassigned(a::AbstractArray, i::CartesianIndex)
+    @test isassigned(B, first(CartesianIndices(B)))
+    ind = last(CartesianIndices(B))
+    @test !isassigned(B, ind + oneunit(ind))
+    # isassigned(a::AbstractArray, i::Union{Integer,CartesianIndex}...)
+    @test isassigned(B, Int16.(first.(axes(B)))..., CartesianIndex(1,1))
+    # Bool isn't a valid index
+    @test_throws ArgumentError isassigned(B, Bool.(first.(axes(B)))..., CartesianIndex(1,1))
+    @test_throws ArgumentError isassigned(B, Bool.(first.(axes(B)))...)
+    @test_throws ArgumentError isassigned(B, true)
+    @test_throws ArgumentError isassigned(B, false)
 
     # reshape(a::AbstractArray, dims::Dims)
     @test_throws DimensionMismatch reshape(B, (0, 1))
@@ -822,9 +837,8 @@ Base.getindex(A::TSlowNIndexes{T,2}, i::Int, j::Int) where {T} = A.data[i,j]
     @test isa(map(Set, Array[[1,2],[3,4]]), Vector{Set{Int}})
 end
 
-@testset "mapping over scalars and empty arguments:" begin
+@testset "mapping over scalars" begin
     @test map(sin, 1) === sin(1)
-    @test map(()->1234) === 1234
 end
 
 function test_UInt_indexing(::Type{TestAbstractArray})
@@ -1908,13 +1922,17 @@ end
 
 @testset "type-based offset axes check" begin
     a = randn(ComplexF64, 10)
+    b = randn(ComplexF64, 4, 4, 4, 4)
     ta = reinterpret(Float64, a)
     tb = reinterpret(Float64, view(a, 1:2:10))
     tc = reinterpret(Float64, reshape(view(a, 1:3:10), 2, 2, 1))
+    td = view(b, :, :, 1, 1)
     # Issue #44040
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(tc, tc))
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(ta, tc, tb))
+    # Issue #49332
+    @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(td, td, td))
     # Ranges && CartesianIndices
     @test IRUtils.fully_eliminated(Base.require_one_based_indexing, Base.typesof(1:10, Base.OneTo(10), 1.0:2.0, LinRange(1.0, 2.0, 2), 1:2:10, CartesianIndices((1:2:10, 1:2:10))))
     # Remind us to call `any` in `Base.has_offset_axes` once our compiler is ready.
@@ -1932,4 +1950,72 @@ f45952(x) = [x;;]
     A = zeros(2,2)
     @test_throws "invalid index: true of type Bool" isassigned(A, 1, true)
     @test_throws "invalid index: true of type Bool" isassigned(A, true)
+end
+
+@testset "repeat for FillArrays" begin
+    f = FillArrays.Fill(3, (4,))
+    @test repeat(f, 2) === FillArrays.Fill(3, (8,))
+    @test repeat(f, 2, 3) === FillArrays.Fill(3, (8, 3))
+    @test repeat(f, inner=(1,2), outer=(3,1)) === repeat(f, 3, 2) === FillArrays.Fill(3, (12,2))
+    f = FillArrays.Fill(3, (4, 2))
+    @test repeat(f, 2, 3) === FillArrays.Fill(3, (8, 6))
+    @test repeat(f, 2, 3, 4) === FillArrays.Fill(3, (8, 6, 4))
+    @test repeat(f, inner=(1,2), outer=(3,1)) === FillArrays.Fill(3, (12, 4))
+end
+
+@testset "zero" begin
+    @test zero([1 2; 3 4]) isa Matrix{Int}
+    @test zero([1 2; 3 4]) == [0 0; 0 0]
+
+    @test zero([1.0]) isa Vector{Float64}
+    @test zero([1.0]) == [0.0]
+
+    @test zero([[2,2], [3,3,3]]) isa Vector{Vector{Int}}
+    @test zero([[2,2], [3,3,3]]) == [[0,0], [0, 0, 0]]
+end
+
+@testset "`_prechecked_iterate` optimization" begin
+    function test_prechecked_iterate(iter)
+        Js = Base._prechecked_iterate(iter)
+        for I in iter
+            J, s = Js::NTuple{2,Any}
+            @test J === I
+            Js = Base._prechecked_iterate(iter, s)
+        end
+    end
+    test_prechecked_iterate(1:10)
+    test_prechecked_iterate(Base.OneTo(10))
+    test_prechecked_iterate(CartesianIndices((3, 3)))
+    test_prechecked_iterate(CartesianIndices(()))
+    test_prechecked_iterate(LinearIndices((3, 3)))
+    test_prechecked_iterate(LinearIndices(()))
+    test_prechecked_iterate(Base.SCartesianIndices2{3}(1:3))
+end
+
+@testset "IndexStyles in copyto!" begin
+    A = rand(3,2)
+    B = zeros(size(A))
+    colons = ntuple(_->:, ndims(B))
+    # Ensure that the AbstractArray methods are hit
+    # by using views instead of Arrays
+    @testset "IndexLinear - IndexLinear" begin
+        B .= 0
+        copyto!(view(B, colons...), A)
+        @test B == A
+    end
+    @testset "IndexLinear - IndexCartesian" begin
+        B .= 0
+        copyto!(view(B, colons...), view(A, axes(A)...))
+        @test B == A
+    end
+    @testset "IndexCartesian - IndexLinear" begin
+        B .= 0
+        copyto!(view(B, axes(B)...), A)
+        @test B == A
+    end
+    @testset "IndexCartesian - IndexCartesian" begin
+        B .= 0
+        copyto!(view(B, axes(B)...), view(A, axes(A)...))
+        @test B == A
+    end
 end

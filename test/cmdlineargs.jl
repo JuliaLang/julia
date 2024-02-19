@@ -1043,8 +1043,26 @@ end
         @test lines[3] == "foo"
         @test lines[4] == "bar"
     end
-#heap-size-hint, we reserve 250 MB for non GC memory (llvm, etc.)
-@test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$((500-250)*1024*1024)"
+end
+
+@testset "heap size hint" begin
+    #heap-size-hint, we reserve 250 MB for non GC memory (llvm, etc.)
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$((500-250)*1024*1024)"
+
+    mem = ccall(:uv_get_total_memory, UInt64, ())
+    cmem = ccall(:uv_get_constrained_memory, UInt64, ())
+    if cmem > 0 && cmem < mem
+        mem = cmem
+    end
+    maxmem = parse(UInt64, readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=25% -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`))
+    hint = max(mem÷4, 251*1024*1024) - 250*1024*1024
+    MAX32HEAP = 1536 * 1024 * 1024
+    if Int === Int32 && hint > MAX32HEAP
+        hint = MAX32HEAP
+    end
+    @test abs(Float64(maxmem) - hint)/maxmem < 0.05
+
+    @test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=10M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$(1*1024*1024)"
 end
 
 ## `Main.main` entrypoint
