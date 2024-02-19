@@ -26,18 +26,6 @@ jl_datatype_t *ijl_small_typeof[(jl_max_tags << 4) / sizeof(*ijl_small_typeof)];
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 #define h2index(hv, sz) (size_t)((hv) & ((sz)-1))
 
-// compute smallest power of two >= x
-static size_t bit_ceil(size_t x)
-{
-    if (x <= 1)
-        return 1;
-#ifdef _P64
-    return 2ull << (8 * sizeof(size_t) - 1 - __builtin_clzll(x - 1));
-#else
-    return 2ul  << (8 * sizeof(size_t) - 1 - __builtin_clzl(x - 1));
-#endif
-}
-
 // --- type properties and predicates ---
 
 static int typeenv_has(jl_typeenv_t *env, jl_tvar_t *v) JL_NOTSAFEPOINT
@@ -1166,7 +1154,6 @@ static void cache_insert_type_set(jl_datatype_t *val, uint_t hv)
 
 jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz)
 {
-    newsz = newsz ? bit_ceil(newsz) : 0;
     jl_value_t **ol = jl_svec_data(a);
     size_t sz = jl_svec_len(a);
     while (1) {
