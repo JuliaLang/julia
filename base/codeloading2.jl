@@ -1,3 +1,6 @@
+using Base: PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_names,
+            project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive
+using UUIDs
 
 #########################
 # Implicit environments #
@@ -39,7 +42,7 @@ function _ImplicitEnv(envpath::String)
                 # It did have a project file:
                 if project_file !== nothing
                     project_d = parsed_toml(project_file)
-                    uuid = project_file_uuid(project_d, project_file)
+                    uuid = project_file_name_uuid(envpath, "").uuid
                     deps = PkgId[]
                     # Get the explicit deps, these are the only deps that can be loaded inside the package:
                     for (name, uuid) in get(Dict{String, Any}, project_d, "deps")
@@ -99,40 +102,98 @@ end
 # as well as how the path is looked up for a package
 struct ExplicitEnv
     path::String
-    project_deps::Dict{String, UUID} # [deps] in Project.toml
-    project_extras::Dict{String, UUID} # [extras] in Project.toml
-    deps::Dict{UUID, Dict{String, UUID}} # all dependencies in Manifest.toml
+    project_deps::Vector{UUID} # [deps] in Project.toml
+    project_weakdeps::Vector{UUID} # [weakdeps] in Project.toml
+    project_extras::Vector{UUID} # [extras] in Project.toml
+    project_extensions::Dict{String, Vector{UUID}} # [exts] in Project.toml
+    deps::Dict{UUID, Vector{UUID}} # all dependencies in Manifest.toml
+    weakdeps::Dict{UUID, Vector{UUID}} # all weak dependencies in Manifest.toml
+    extensions::Dict{UUID, Dict{String, Vector{UUID}}}
+    # Lookup name for a UUID
+    names::Dict{UUID, String}
     lookup_strategy::Dict{UUID, Union{
                                       SHA1,     # `git-tree-sha1` entry
                                       String,   # `path` entry
                                       Nothing,  # stdlib (no `path` nor `git-tree-sha1`)
                                       Missing}} # not present in the manifest
-    prefs::Union{Nothing, Dict{String, Any}}
-    local_prefs::Union{Nothing, Dict{String, Any}}
+    #prefs::Union{Nothing, Dict{String, Any}}
+    #local_prefs::Union{Nothing, Dict{String, Any}}
 end
+
+#=
+
+[[deps.PGFPlotsX]]
+deps = ["ArgCheck", "Dates", "DefaultApplication", "DocStringExtensions", "MacroTools", "OrderedCollections", "Parameters", "Requires", "Tables"]
+path = "../../../../../../../Users/kristoffercarlsson/JuliaPkgs/PGFPlotsX.jl"
+uuid = "8314cec4-20b6-5062-9cdb-752b83310925"
+version = "1.6.1"
+
+    [deps.PGFPlotsX.extensions]
+    ColorsExt = "Colors"
+    ContourExt = "Contour"
+    MeasurementsExt = "Measurements"
+    StatsBaseExt = "StatsBase"
+
+    [deps.PGFPlotsX.weakdeps]
+    Colors = "5ae59095-9a9b-59fe-a467-6f913c188581"
+    Contour = "d38c429a-6771-53c6-b99e-75d170b6e991"
+    Measurements = "eff96d63-e80a-5855-80a2-b1b0885c5ab7"
+    StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+=#
+
 
 function ExplicitEnv(envpath::String)
     envpath = abspath(envpath)
     project_d = parsed_toml(envpath)
 
-    project_deps = Dict{String, UUID}()
+    # TODO: Perhaps verify that two packages with the same UUID do not have different names?
+    names = Dict{UUID, String}()
+    project_uuid_to_name = Dict{String, UUID}()
+
+    project_deps = UUID[]
+    project_weakdeps = UUID[]
+    project_extras = UUID[]
+
     # Collect all direct dependencies of the project
-    for (name, uuid) in get(Dict{String, Any}, project_d, "deps")::Dict{String, Any}
-        project_deps[name] = UUID(uuid::String)
+    for key in ["deps", "weakdeps", "extras"]
+        for (name, _uuid) in get(Dict{String, Any}, project_d, key)::Dict{String, Any}
+            v = key == "deps" ? project_deps :
+                key == "weakdeps" ? project_weakdeps :
+                key == "extras" ? project_extras :
+                error()
+            uuid = UUID(_uuid)
+            push!(v, uuid)
+            names[UUID(uuid)] = name
+            project_uuid_to_name[name] = UUID(uuid)
+        end
     end
 
-    project_extras = Dict{String, UUID}()
-    # Collect all "extras" dependencies of the project
-    for (name, uuid) in get(Dict{String, Any}, project_d, "extras")::Dict{String, Any}
-        project_extras[name] = UUID(uuid::String)
+    project_extensions = Dict{String, Vector{UUID}}()
+    # Collect all extensions of the project
+    for (name, triggers::Union{String, Vector{String}}) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
+        if triggers isa String
+            triggers = [triggers]
+        end
+        uuids = UUID[]
+        for trigger in triggers
+            uuid = get(project_uuid_to_name, trigger, nothing)
+            if uuid === nothing
+                error("Trigger $trigger for extension $name not found in project")
+            end
+            push!(uuids, uuid)
+        end
+        project_extensions[name] = uuids
     end
 
     # This project might be a package, in that case, that is also a "dependency"
     # of the project.
-    name = get(project_d, "name", nothing)::Union{String, Nothing}
-    pkg_uuid = UUID(project_file_uuid(project_d, envpath))
-    if name !== nothing
-        project_deps[name] = pkg_uuid
+    proj_name = get(project_d, "name", nothing)::Union{String, Nothing}
+    _proj_uuid = get(project_d, "uuid", nothing)::Union{String, Nothing}
+    proj_uuid = _proj_uuid === nothing ? nothing : UUID(_proj_uuid)
+    if proj_name !== nothing
+        # TODO: Error on missing uuid?
+        push!(project_deps, UUID(proj_uuid))
+        names[UUID(proj_uuid)] = proj_name
     end
 
     manifest = project_file_manifest_path(envpath)
@@ -140,11 +201,16 @@ function ExplicitEnv(envpath::String)
 
     # Dependencies in a manifest can either be stored compressed (when name is unique among all packages)
     # in which case it is a `Vector{String}` or expanded where it is a `name => uuid` mapping.
-    deps = Dict{UUID, Union{Vector{String}, Dict{String, UUID}}}()
-    sizehint!(deps, length(manifest_d))
+    deps = Dict{UUID, Union{Vector{String}, Vector{UUID}}}()
+    weakdeps = Dict{UUID, Union{Vector{String}, Vector{UUID}}}()
+    extensions = Dict{UUID, Dict{String, Vector{String}}}()
     name_to_uuid = Dict{String, UUID}()
-    sizehint!(name_to_uuid, length(manifest_d))
     lookup_strategy = Dict{UUID, Union{SHA1, String, Nothing, Missing}}()
+
+    sizehint!(deps, length(manifest_d))
+    sizehint!(weakdeps, length(manifest_d))
+    sizehint!(extensions, length(manifest_d))
+    sizehint!(name_to_uuid, length(manifest_d))
     sizehint!(lookup_strategy, length(manifest_d))
 
     for (name, pkg_infos) in get_deps(manifest_d)
@@ -155,15 +221,40 @@ function ExplicitEnv(envpath::String)
             # If we have multiple packages with the same name we will overwrite things here
             # but that is fine since we will only use the information in here for packages
             # with unique names
+            names[m_uuid] = name
             name_to_uuid[name] = m_uuid
-            deps_pkg = get(Vector{String}, pkg_info, "deps")::Union{Vector{String}, Dict{String, Any}}
-            # Compressed format with unique names:
-            if deps_pkg isa Vector{String}
-                deps[m_uuid] = deps_pkg
-            # Exapanded format:
-            else
-                deps[m_uuid] = Dict{String, UUID}(name_dep => UUID(dep_uuid::String) for (name_dep, dep_uuid) in deps_pkg)
+
+            for key in ["deps", "weakdeps"]
+                deps_pkg = get(Vector{String}, pkg_info, key)::Union{Vector{String}, Dict{String, Any}}
+                d = key == "deps" ? deps :
+                    key == "weakdeps" ? weakdeps :
+                    error()
+
+                # Compressed format with unique names:
+                if deps_pkg isa Vector{String}
+                    d[m_uuid] = deps_pkg
+                # Expanded format:
+                else
+                    uuids = UUID[]
+                    for (name_dep, _dep_uuid::String) in deps_pkg
+                        dep_uuid = UUID(_dep_uuid)
+                        push!(uuids, dep_uuid)
+                        names[dep_uuid] = name_dep
+                    end
+                    d[m_uuid] = uuids
+                end
             end
+
+            # Extensions
+            deps_pkg = get(Dict{String, Any}, pkg_info, "extensions")::Dict{String, Any}
+            for (ext, triggers) in deps_pkg
+                triggers = triggers::Union{String, Vector{String}}
+                if triggers isa String
+                    triggers = [triggers]
+                end
+                deps_pkg[ext] = triggers
+            end
+            extensions[m_uuid] = deps_pkg
 
             # Determine strategy to find package
             lookup_strat = begin
@@ -181,37 +272,65 @@ function ExplicitEnv(envpath::String)
 
     # No matter if the deps were stored compressed or not in the manifest,
     # we internally store them expanded
-    deps_expanded = Dict{UUID, Dict{String, UUID}}()
+    deps_expanded = Dict{UUID, Vector{UUID}}()
+    weakdeps_expanded = Dict{UUID, Vector{UUID}}()
+    extensions_expanded = Dict{UUID, Dict{String, Vector{UUID}}}()
     sizehint!(deps_expanded, length(deps))
+    sizehint!(weakdeps_expanded, length(deps))
+    sizehint!(extensions_expanded, length(deps))
 
-    if name !== nothing
-        deps_expanded[pkg_uuid] = project_deps
-        # N.b `path` entries in the Project file is currently not understood by Pkg
+    if proj_name !== nothing
+        deps_expanded[proj_uuid] = project_deps
         path = get(project_d, "path", nothing)
         entry_point = path !== nothing ? path : dirname(envpath)
-        lookup_strategy[pkg_uuid] = entry_point
+        lookup_strategy[proj_uuid] = entry_point
     end
 
-    for (pkg, deps) in deps
-        # dependencies was already expanded so use it directly:
-        if deps isa Dict{String,UUID}
-            deps_expanded[pkg] = deps
-        # find the (unique) UUID associated with the name
-        else
-            deps_pkg = Dict{String, UUID}()
-            sizehint!(deps_pkg, length(deps))
-            for dep in deps
-                deps_pkg[dep] = name_to_uuid[dep]
+    for key in ["deps", "weakdeps"]
+        d = key == "deps" ? deps :
+            key == "weakdeps" ? weakdeps :
+            error()
+        d_expanded = key == "deps" ? deps_expanded :
+                     key == "weakdeps" ? weakdeps_expanded :
+                     error()
+        for (pkg, deps) in d
+            # dependencies was already expanded so use it directly:
+            if deps isa Vector{UUID}
+                d_expanded[pkg] = deps
+                for dep in deps
+                    name_to_uuid[names[dep]] = dep
+                end
+            # find the (unique) UUID associated with the name
+            else
+                deps_pkg = UUID[]
+                sizehint!(deps_pkg, length(deps))
+                for dep in deps
+                    push!(deps_pkg, name_to_uuid[dep])
+                end
+                d_expanded[pkg] = deps_pkg
             end
-            deps_expanded[pkg] = deps_pkg
         end
     end
 
+    for (pkg, exts) in extensions
+        exts_expanded = Dict{String, Vector{UUID}}()
+        for (ext, triggers) in exts
+            triggers_expanded = UUID[]
+            sizehint!(triggers_expanded, length(triggers))
+            for trigger in triggers
+                push!(triggers_expanded, name_to_uuid[trigger])
+            end
+            exts_expanded[ext] = triggers_expanded
+        end
+        extensions_expanded[pkg] = exts_expanded
+    end
+
     # Everything that does not yet have a lookup_strategy is missing from the manifest
-    for (name, uuid) in project_deps
+    for uuid in project_deps
         get!(lookup_strategy, uuid, missing)
     end
 
+    #=
     # Preferences:
     prefs = get(project_d, "preferences", nothing)
 
@@ -225,8 +344,11 @@ function ExplicitEnv(envpath::String)
             break
         end
     end
+    =#
 
-    return ExplicitEnv(envpath, project_deps, project_extras, deps_expanded, lookup_strategy, prefs, local_prefs)
+    return ExplicitEnv(envpath, project_deps, project_weakdeps, project_extras,
+                       project_extensions, deps_expanded, weakdeps_expanded, extensions_expanded,
+                       names, lookup_strategy, #=prefs, local_prefs=#)
 end
 
 # Marker to return when we should have been able to load a package but failed.
