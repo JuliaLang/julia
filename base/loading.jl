@@ -2664,6 +2664,9 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
 
     deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
     deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
+    # protect against PkgId and UUID being imported and losing Base prefix
+    precomp_stack_pkgs = map(p->"Base.PkgId(Base.UUID(\"$(p.uuid)\"), \"$(p.name)\")", vcat(Base.precompilation_stack, pkg))
+    precomp_stack = "Base.PkgId[$(join(precomp_stack_pkgs, ", "))]"
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd)
                              $(flags)
@@ -2679,7 +2682,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
-        Base.track_nested_precomp($(vcat(Base.precompilation_stack, pkg)))
+        Base.track_nested_precomp($precomp_stack)
         Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
