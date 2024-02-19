@@ -8,7 +8,6 @@
 
 #include <unistd.h>
 #include <getopt.h>
-#include "utf8proc.h"
 
 #include "julia_assert.h"
 
@@ -19,6 +18,15 @@ char *shlib_ext = ".dylib";
 #else
 char *shlib_ext = ".so";
 #endif
+
+/* This simple hand-crafted tolower exists to avoid locale-dependent effects in
+ * behaviors (and utf8proc_tolower wasn't linking properly on all platforms) */
+static char ascii_tolower(char c)
+{
+    if ('A' <= c && c <= 'Z')
+        return c - 'A' + 'a';
+    return c;
+}
 
 static const char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
@@ -806,11 +814,11 @@ restart_switch:
                 long double value = 0.0;
                 char unit[4] = {0};
                 int nparsed = sscanf(optarg, "%Lf%3s", &value, unit);
-                if (nparsed == 0 || strlen(unit) > 2 || (strlen(unit) == 2 && utf8proc_tolower(unit[1]) != 'b')) {
+                if (nparsed == 0 || strlen(unit) > 2 || (strlen(unit) == 2 && ascii_tolower(unit[1]) != 'b')) {
                     jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                 }
                 uint64_t multiplier = 1ull;
-                switch (utf8proc_tolower(unit[0])) {
+                switch (ascii_tolower(unit[0])) {
                     case '\0':
                     case 'b':
                         break;
