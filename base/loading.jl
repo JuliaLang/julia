@@ -1145,6 +1145,8 @@ cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Libc.Lib
 # use an Int counter so that nested @time_imports calls all remain open
 const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 
+# loads a precompile cache file, ignoring stale_cachefile tests
+# assuming all depmods are already loaded and everything is valid
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
@@ -1170,6 +1172,15 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         t_before = time_ns()
         cumulative_compile_timing(true)
         t_comp_before = cumulative_compile_time_ns()
+    end
+
+    for i in 1:length(depmods)
+        dep = depmods[i]
+        dep isa Module && continue
+        _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt128}
+        @assert root_module_exists(depkey)
+        dep = root_module(depkey)
+        depmods[i] = dep
     end
 
     if ocachepath !== nothing
@@ -1675,62 +1686,18 @@ function isprecompiled(pkg::PkgId;
 end
 
 # search for a precompile cache file to load, after some various checks
-function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
+function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     assert_havelock(require_lock)
-    if root_module_exists(modkey)
-        M = root_module(modkey)
-        if !stalecheck || (PkgId(M) == modkey && module_build_id(M) === build_id)
-            return M
-        end
-    end
-    loaded = nothing
-    while true
-        loaded = start_loading(modkey)
-        if loaded isa Module && (!stalecheck || (PkgId(M) == modkey && module_build_id(M) === build_id))
-            break
-        elseif loaded === nothing
-            try
-                modpath = locate_package(modkey)
-                modpath === nothing && return nothing
-                set_pkgorigin_version_path(modkey, String(modpath))
-                loaded = _require_search_from_serialized(modkey, String(modpath), build_id, stalecheck)
-            finally
-                end_loading(modkey, loaded)
-            end
-            if loaded isa Module
-                insert_extension_triggers(modkey)
-                run_package_callbacks(modkey)
-            end
-            break
-        end
-    end
-    if loaded isa Module && PkgId(loaded) == modkey && module_build_id(loaded) === build_id
-        return loaded
-    end
-    return ErrorException("Required dependency $modkey failed to load from a cache file.")
-end
-
-# loads a precompile cache file, ignoring stale_cachefile tests
-# assuming all depmods are already loaded and everything is valid
-function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Union{Nothing, String}, sourcepath::String, depmods::Vector{Any})
-    assert_havelock(require_lock)
-    loaded = nothing
     if root_module_exists(modkey)
         loaded = root_module(modkey)
     else
         loaded = start_loading(modkey)
         if loaded === nothing
             try
-                for i in 1:length(depmods)
-                    dep = depmods[i]
-                    dep isa Module && continue
-                    _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt128}
-                    @assert root_module_exists(depkey)
-                    dep = root_module(depkey)
-                    depmods[i] = dep
-                end
-                set_pkgorigin_version_path(modkey, sourcepath)
-                loaded = _include_from_serialized(modkey, path, ocachepath, depmods)
+                modpath = locate_package(modkey)
+                modpath === nothing && return nothing
+                set_pkgorigin_version_path(modkey, String(modpath))
+                loaded = _require_search_from_serialized(modkey, String(modpath), build_id, true)
             finally
                 end_loading(modkey, loaded)
             end
@@ -1740,10 +1707,10 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Un
             end
         end
     end
-    if !(loaded isa Module || PkgId(loaded) == modkey)
-        return ErrorException("Required dependency $modkey failed to load from a cache file.")
+    if loaded isa Module && PkgId(loaded) == modkey && module_build_id(loaded) === build_id
+        return loaded
     end
-    return loaded
+    return ErrorException("Required dependency $modkey failed to load from a cache file.")
 end
 
 # returns whether the package is tracked in coverage or malloc tracking based on
@@ -1774,7 +1741,7 @@ end
 
 # loads a precompile cache file, ignoring stale_cachefile tests
 # load all dependent modules first
-function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, stalecheck::Bool)
+function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String})
     assert_havelock(require_lock)
     local depmodnames
     io = open(path, "r")
@@ -1803,7 +1770,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
     depmods = Vector{Any}(undef, ndeps)
     for i in 1:ndeps
         modkey, build_id = depmodnames[i]
-        dep = _tryrequire_from_serialized(modkey, build_id, stalecheck)
+        dep = _tryrequire_from_serialized(modkey, build_id)
         if !isa(dep, Module)
             return dep
         end
@@ -1855,10 +1822,37 @@ end
             dep = staledeps[i]
             dep isa Module && continue
             modpath, modkey, modcachepath, modstaledeps, modocachepath = dep::Tuple{String, PkgId, String, Vector{Any}, Union{Nothing, String}}
-            dep = _tryrequire_from_serialized(modkey, modcachepath, modocachepath, modpath, modstaledeps)
-            if !isa(dep, Module)
-                @debug "Rejecting cache file $path_to_try because required dependency $modkey failed to load from cache file for $modcachepath." exception=dep
-                @goto check_next_path
+            dep = nothing
+            if root_module_exists(modkey)
+                dep = root_module(modkey)
+            end
+            while true
+                if dep isa Module
+                    if PkgId(dep) == modkey && module_build_id(dep) === build_id
+                        break
+                    else
+                        if stalecheck
+                            @debug "Rejecting cache file $path_to_try because module $modkey is already loaded and incompatible."
+                            @goto check_next_path
+                        end
+                    end
+                end
+                dep = start_loading(modkey)
+                if dep === nothing
+                    try
+                        set_pkgorigin_version_path(modkey, modpath)
+                        dep = _include_from_serialized(modkey, modcachepath, modocachepath, modstaledeps)
+                    finally
+                        end_loading(modkey, loaded)
+                    end
+                    if !isa(dep, Module)
+                        @debug "Rejecting cache file $path_to_try because required dependency $modkey failed to load from cache file for $modcachepath." exception=dep
+                        @goto check_next_path
+                    else
+                        insert_extension_triggers(modkey)
+                        run_package_callbacks(modkey)
+                    end
+                end
             end
             staledeps[i] = dep
         end
@@ -2344,7 +2338,7 @@ function _require(pkg::PkgId, env=nothing)
                     # fall-through to loading the file locally if not incremental
                 else
                     cachefile, ocachefile = cachefile::Tuple{String, Union{Nothing, String}}
-                    m = _tryrequire_from_serialized(pkg, cachefile, ocachefile, true)
+                    m = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
                     if !isa(m, Module)
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $(repr("text/plain", pkg))" exception=m
                     else
@@ -2384,10 +2378,10 @@ function _require(pkg::PkgId, env=nothing)
 end
 
 # load a serialized file directly
-function _require_from_serialized(uuidkey::PkgId, path::String, ocachepath::Union{String, Nothing}, sourcepath::String, stalecheck::Bool=true)
+function _require_from_serialized(uuidkey::PkgId, path::String, ocachepath::Union{String, Nothing}, sourcepath::String)
     @lock require_lock begin
     set_pkgorigin_version_path(uuidkey, sourcepath)
-    newm = _tryrequire_from_serialized(uuidkey, path, ocachepath, stalecheck)
+    newm = _tryrequire_from_serialized(uuidkey, path, ocachepath)
     newm isa Module || throw(newm)
     insert_extension_triggers(uuidkey)
     # After successfully loading, notify downstream consumers
@@ -2428,7 +2422,13 @@ function require_stdlib(uuidkey::PkgId, ext::Union{Nothing, String}=nothing)
     #end
     set_pkgorigin_version_path(uuidkey, sourcepath)
     depot_path = append_bundled_depot_path!(empty(DEPOT_PATH))
-    newm = _require_search_from_serialized(uuidkey, sourcepath, UInt128(0), false; DEPOT_PATH=depot_path)
+    newm = start_loading(uuidkey)
+    newm === nothing || return newm
+    try
+        newm = _require_search_from_serialized(uuidkey, sourcepath, UInt128(0), false; DEPOT_PATH=depot_path)
+    finally
+        end_loading(uuidkey, newm)
+    end
     if newm isa Module
         # After successfully loading, notify downstream consumers
         insert_extension_triggers(env, uuidkey)
