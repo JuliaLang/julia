@@ -238,7 +238,14 @@ function request(term::REPL.Terminals.TTYTerminal, m::AbstractMenu; cursor::Unio
     finally # always disable raw mode
         if raw_mode_enabled
             !suppress_output && print(term.out_stream, "\x1b[?25h") # unhide cursor
-            REPL.Terminals.raw!(term, false)
+            try
+                # raw! calls check_open which can throw
+                REPL.Terminals.raw!(term, false)
+            catch err
+                if err !== Base.IOError("stream is closed or unusable", 0)
+                    rethrow()
+                end
+            end
         end
     end
     !suppress_output && println(term.out_stream)
