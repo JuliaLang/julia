@@ -29,8 +29,6 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         $t{T}(A::AbstractMatrix) where {T} = $t(convert(AbstractMatrix{T}, A))
         $t{T}(A::$t) where {T} = $t(convert(AbstractMatrix{T}, A.data))
 
-        Matrix(A::$t{T}) where {T} = Matrix{T}(A)
-
         AbstractMatrix{T}(A::$t) where {T} = $t{T}(A)
         AbstractMatrix{T}(A::$t{T}) where {T} = copy(A)
 
@@ -180,6 +178,9 @@ end
 
 Array(A::AbstractTriangular) = Matrix(A)
 parent(A::UpperOrLowerTriangular) = A.data
+
+# For strided matrices, we may only loop over the filled triangle
+copy(A::UpperOrLowerTriangular{<:Any, <:StridedMaybeAdjOrTransMat}) = copyto!(similar(A), A)
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 

@@ -90,7 +90,7 @@ f(y) = [x for x in y]
     standard ones) on type-inference. Use [`Base.@nospecializeinfer`](@ref) together with
     `@nospecialize` to additionally suppress inference.
 
-# Example
+# Examples
 
 ```julia
 julia> f(A::AbstractArray) = g(A)
@@ -366,9 +366,14 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
-getindex(A::GenericMemory{:not_atomic}, i::Int) = (@_noub_if_noinbounds_meta;
-    memoryrefget(memoryref(memoryref(A), i, @_boundscheck), :not_atomic, false))
-getindex(A::GenericMemoryRef{:not_atomic}) = memoryrefget(A, :not_atomic, @_boundscheck)
+default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
+default_access_order(a::GenericMemory{:atomic}) = :monotonic
+default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
+default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
+
+getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
+    memoryrefget(memoryref(memoryref(A), i, @_boundscheck), default_access_order(A), false))
+getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 function iterate end
 
@@ -668,7 +673,7 @@ Change the type-interpretation of the binary data in the isbits value `x`
 to that of the isbits type `Out`.
 The size (ignoring padding) of `Out` has to be the same as that of the type of `x`.
 For example, `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
-[`Float32`](@ref).
+[`Float32`](@ref). Note that `reinterpret(In, reinterpret(Out, x)) === x`
 
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
@@ -684,11 +689,16 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
 (0x0301, 0x02)
 ```
 
+!!! note
+
+    The treatment of padding differs from reinterpret(::DataType, ::AbstractArray).
+
 !!! warning
 
     Use caution if some combinations of bits in `Out` are not considered valid and would
     otherwise be prevented by the type's constructors and methods. Unexpected behavior
     may result without additional validation.
+
 """
 function reinterpret(::Type{Out}, x) where {Out}
     if isprimitivetype(Out) && isprimitivetype(typeof(x))
@@ -889,8 +899,8 @@ function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     return A
 end
 setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryref(memoryref(A), i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
-setindex!(A::MemoryRef{T}, x) where {T} = memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck)
-setindex!(A::MemoryRef{Any}, @nospecialize(x)) = memoryrefset!(A, x, :not_atomic, @_boundscheck)
+setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
+setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
 
 # SimpleVector
 

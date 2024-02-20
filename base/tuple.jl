@@ -308,6 +308,13 @@ end
 #  @ tuple.jl:209
 typeof(function eltype end).name.max_methods = UInt8(4)
 
+# key/val types
+keytype(@nospecialize t::Tuple) = keytype(typeof(t))
+keytype(@nospecialize T::Type{<:Tuple}) = Int
+
+valtype(@nospecialize t::Tuple) = valtype(typeof(t))
+valtype(@nospecialize T::Type{<:Tuple}) = eltype(T)
+
 # version of tail that doesn't throw on empty tuples (used in array indexing)
 safe_tail(t::Tuple) = tail(t)
 safe_tail(t::Tuple{}) = ()
@@ -684,3 +691,9 @@ empty(@nospecialize x::Tuple) = ()
 
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itr::Tuple, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itr, itrs...), init=nothing)
+
+function circshift(x::Tuple, shift::Integer)
+    @inline
+    j = mod1(shift, length(x))
+    ntuple(k -> getindex(x, k-j+ifelse(k>j,0,length(x))), Val(length(x)))
+end

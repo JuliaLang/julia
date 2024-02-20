@@ -14,6 +14,8 @@ const Inf16 = bitcast(Float16, 0x7c00)
     NaN16
 
 A not-a-number value of type [`Float16`](@ref).
+
+See also: [`NaN`](@ref).
 """
 const NaN16 = bitcast(Float16, 0x7e00)
 """
@@ -26,6 +28,8 @@ const Inf32 = bitcast(Float32, 0x7f800000)
     NaN32
 
 A not-a-number value of type [`Float32`](@ref).
+
+See also: [`NaN`](@ref).
 """
 const NaN32 = bitcast(Float32, 0x7fc00000)
 const Inf64 = bitcast(Float64, 0x7ff0000000000000)
@@ -69,9 +73,23 @@ NaN
 julia> Inf - Inf
 NaN
 
-julia> NaN == NaN, isequal(NaN, NaN), NaN === NaN
+julia> NaN == NaN, isequal(NaN, NaN), isnan(NaN)
 (false, true, true)
 ```
+
+!!! note
+    Always use [`isnan`](@ref) or [`isequal`](@ref) for checking for `NaN`.
+    Using `x === NaN` may give unexpected results:
+    ```julia-repl
+    julia> reinterpret(UInt32, NaN32)
+    0x7fc00000
+
+    julia> NaN32p1 = reinterpret(Float32, 0x7fc00001)
+    NaN32
+
+    julia> NaN32p1 === NaN32, isequal(NaN32p1, NaN32), isnan(NaN32p1)
+    (false, true, true)
+    ```
 """
 NaN, NaN64
 

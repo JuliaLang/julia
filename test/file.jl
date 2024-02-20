@@ -637,9 +637,11 @@ end
     MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
     for i = 0:9
         local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
-        @test withenv(var => tmp) do
-            tempdir()
-        end == tmp
+        no_error_logging() do
+            @test withenv(var => tmp) do
+                tempdir()
+            end == tmp
+        end
     end
 end
 

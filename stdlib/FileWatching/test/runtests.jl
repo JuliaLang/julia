@@ -161,7 +161,7 @@ test2_12992()
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
-F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple()  # platforms where F_GETPATH is available
+F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple() # platforms where F_GETPATH is available
 F_PATH = F_GETPATH ? "afile.txt" : ""
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
@@ -276,7 +276,7 @@ function test_dirmonitor_wait(tval)
             end
         end
         fname, events = wait(fm)::Pair
-        @test fname == F_PATH
+        @test fname == basename(file)
         @test events.changed && !events.timedout && !events.renamed
         close(fm)
     end
@@ -442,6 +442,9 @@ unwatch_folder(dir)
 @test isempty(FileWatching.watched_folders)
 rm(file)
 rm(dir)
+
+# Test that creating a FDWatcher with a (probably) negative FD fails
+@test_throws ArgumentError FDWatcher(RawFD(-1), true, true)
 
 @testset "Pidfile" begin
     include("pidfile.jl")

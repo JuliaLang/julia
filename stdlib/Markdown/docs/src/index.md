@@ -392,6 +392,16 @@ If no title text is specified after the admonition type, then the type name will
 
 Admonitions, like most other toplevel elements, can contain other toplevel elements (e.g. lists, images).
 
+## [Markdown String Literals](@id stdlib-markdown-literals)
+
+The `md""` macro allows you to embed Markdown strings directly into your Julia code.
+This macro is designed to simplify the inclusion of Markdown-formatted text within your Julia source files.
+
+### Usage
+
+```julia
+result = md"This is a **custom** Markdown string with [a link](http://example.com)."
+```
 ## Markdown Syntax Extensions
 
 Julia's markdown supports interpolation in a very similar way to basic string literals, with the
@@ -403,9 +413,6 @@ complex features (such as references) without cluttering the basic syntax.
 In principle, the Markdown parser itself can also be arbitrarily extended by packages, or an entirely
 custom flavour of Markdown can be used, but this should generally be unnecessary.
 
-## [Markdown String Literals](@id stdlib-markdown-literals)
-
-Markdown strings can be constructed using the string literal syntax `md"..."`.
 
 ## [API reference](@id stdlib-markdown-api)
 

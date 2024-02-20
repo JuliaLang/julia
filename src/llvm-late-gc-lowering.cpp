@@ -1620,6 +1620,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee == gc_preserve_end_func || callee == typeof_func ||
                         callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                         callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
+                        callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
                         callee == write_barrier_func || callee == gc_loaded_func ||
                         callee->getName() == "memcmp") {
                         continue;

@@ -4,8 +4,14 @@ module Precompile
 # Can't use this during incremental: `@eval Module() begin``
 
 import ..REPL
+# Prepare this staging area with all the loaded packages available
+for (_pkgid, _mod) in Base.loaded_modules
+    if !(_pkgid.name in ("Main", "Core", "Base", "REPL"))
+        eval(:(const $(Symbol(_mod)) = $_mod))
+    end
+end
 
-# Ugly hack for our cache file to not have a dependency edge on FakePTYs.
+# Ugly hack for our cache file to not have a dependency edge on the FakePTYs file.
 Base._track_dependencies[] = false
 try
     Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
@@ -16,6 +22,7 @@ end
 using Base.Meta
 
 import Markdown
+import StyledStrings
 
 ## Debugging options
 # Disable parallel precompiles generation by setting `false`
@@ -171,10 +178,10 @@ generate_precompile_statements() = try
         end
         close(precompile_copy)
         wait(buffer_reader)
-        close(statements_step)
         return :ok
     end
     !PARALLEL_PRECOMPILATION && wait(step)
+    bind(statements_step, step)
 
     # Make statements unique
     statements = Set{String}()
@@ -204,7 +211,7 @@ generate_precompile_statements() = try
         end
     end
 
-    fetch(step) == :ok || throw("Collecting precompiles failed.")
+    fetch(step) == :ok || throw("Collecting precompiles failed: $(c.excp)")
     return nothing
 finally
     GC.gc(true); GC.gc(false); # reduce memory footprint
