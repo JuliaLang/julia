@@ -1545,3 +1545,14 @@ end
         @test_throws SystemError("opening file $(repr(file))") include(file)
     end
 end
+
+@testset "Revise internals" begin
+    entry = Dict{String, Any}(
+        "SparseArrays" => [Dict("deps" => ["Libdl", "LinearAlgebra", "Random", "Serialization", "SuiteSparse_jll"],
+                                "uuid" => "2f01184e-e22b-5df5-ae63-d93ebab69eaf",
+                                "version" => "1.10.0")])
+    id = Base.PkgId(Base.UUID("2f01184e-e22b-5df5-ae63-d93ebab69eaf"), "SparseArrays")
+    manifest_file = mktemp()[1]
+    dir = Base.explicit_manifest_entry_path(manifest_file, id, entry)
+    @test isdir(dir)
+end
