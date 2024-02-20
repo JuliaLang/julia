@@ -1,4 +1,5 @@
 ## LIBUV ##
+override USE_BINARYBUILDER_LIBUV=0
 ifneq ($(USE_BINARYBUILDER_LIBUV),1)
 LIBUV_GIT_URL:=https://github.com/JuliaLang/libuv.git
 LIBUV_TAR_URL=https://api.github.com/repos/JuliaLang/libuv/tarball/$1

@@ -3,5 +3,5 @@ LIBUV_JLL_NAME := LibUV
 
 ## source build
 LIBUV_VER := 2
-LIBUV_BRANCH=julia-uv2-1.48.0
-LIBUV_SHA1=afa1c67fa496eb49ade1e520f76fd018a1409eaa
+LIBUV_BRANCH=ib/posix_rm_test
+LIBUV_SHA1=7be33d0a9f8a7be9431a379fe625d2b8fbd5222b
