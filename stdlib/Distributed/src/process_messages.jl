@@ -210,8 +210,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             handle_msg(msg, header, r_stream, w_stream, version)
         end
     catch e
-        werr = worker_from_id(wpid)
-        oldstate = werr.state
+        oldstate = W_UNKNOWN_STATE
 
         # Check again as it may have been set in a message handler but not propagated to the calling block above
         if wpid < 1
@@ -222,6 +221,8 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             println(stderr, e, CapturedException(e, catch_backtrace()))
             println(stderr, "Process($(myid())) - Unknown remote, closing connection.")
         elseif !(wpid in map_del_wrkr)
+            werr = worker_from_id(wpid)
+            oldstate = werr.state
             set_worker_state(werr, W_TERMINATED)
 
             # If unhandleable error occurred talking to pid 1, exit
