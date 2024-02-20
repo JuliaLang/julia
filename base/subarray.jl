@@ -320,30 +320,15 @@ end
 
 # But SubArrays with fast linear indexing pre-compute a stride and offset
 FastSubArray{T,N,P,I} = SubArray{T,N,P,I,true}
+# We define a convenience functions to compute the shifted parent index
+# This differs from reindex as this accepts the view directly, instead of its indices
+@inline _reindexlinear(V::FastSubArray, i::Int) = V.offset1 + V.stride1*i
+@inline _reindexlinear(V::FastSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ V.stride1 .* i
+
 function getindex(V::FastSubArray, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.offset1 + V.stride1*i]
-    r
-end
-# We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange,
-# or if all the indices are scalars, i.e. the view is for a single value only
-FastContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}},
-                                      Tuple{Vararg{ScalarIndex}}}} = SubArray{T,N,P,I,true}
-function getindex(V::FastContiguousSubArray, i::Int)
-    @inline
-    @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.offset1 + i]
-    r
-end
-# parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
-# so we may just forward the indexing to the parent
-# This may only be done for non-offset ranges, as the result would otherwise have offset axes
-const OneBasedRanges = Union{OneTo{Int}, UnitRange{Int}, Slice{OneTo{Int}}, IdentityUnitRange{OneTo{Int}}}
-function getindex(V::FastContiguousSubArray, i::OneBasedRanges)
-    @inline
-    @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.offset1 .+ i]
+    @inbounds r = V.parent[_reindexlinear(V, i)]
     r
 end
 
@@ -352,15 +337,29 @@ end
 function getindex(V::FastSubArray{<:Any, 1}, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.offset1 + V.stride1*i]
+    @inbounds r = V.parent[_reindexlinear(V, i)]
     r
 end
-function getindex(V::FastContiguousSubArray{<:Any, 1}, i::Int)
+
+# We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange,
+# or if all the indices are scalars, i.e. the view is for a single value only
+FastContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}},
+                                      Tuple{Vararg{ScalarIndex}}}} = SubArray{T,N,P,I,true}
+
+@inline _reindexlinear(V::FastContiguousSubArray, i::Int) = V.offset1 + i
+@inline _reindexlinear(V::FastContiguousSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ i
+
+# parents of FastContiguousSubArrays may support fast indexing with AbstractUnitRanges,
+# so we may just forward the indexing to the parent
+# This may only be done for non-offset ranges, as the result would otherwise have offset axes
+const OneBasedRanges = Union{OneTo{Int}, UnitRange{Int}, Slice{OneTo{Int}}, IdentityUnitRange{OneTo{Int}}}
+function getindex(V::FastContiguousSubArray, i::OneBasedRanges)
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds r = V.parent[V.offset1 + i]
+    @inbounds r = V.parent[_reindexlinear(V, i)]
     r
 end
+
 @inline getindex(V::FastContiguousSubArray, i::Colon) = getindex(V, to_indices(V, (:,))...)
 
 # Indexed assignment follows the same pattern as `getindex` above
@@ -373,40 +372,23 @@ end
 function setindex!(V::FastSubArray, x, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 + V.stride1*i] = x
+    @inbounds V.parent[_reindexlinear(V, i)] = x
     V
 end
-function setindex!(V::FastContiguousSubArray, x, i::Int)
-    @inline
-    @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 + i] = x
-    V
-end
-function setindex!(V::FastSubArray, x, i::AbstractUnitRange{Int})
-    @inline
-    @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 .+ V.stride1 .* i] = x
-    V
-end
-function setindex!(V::FastContiguousSubArray, x, i::AbstractUnitRange{Int})
-    @inline
-    @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 .+ i] = x
-    V
-end
-
 function setindex!(V::FastSubArray{<:Any, 1}, x, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 + V.stride1*i] = x
+    @inbounds V.parent[_reindexlinear(V, i)] = x
     V
 end
-function setindex!(V::FastContiguousSubArray{<:Any, 1}, x, i::Int)
+
+function setindex!(V::FastSubArray, x, i::AbstractUnitRange{Int})
     @inline
     @boundscheck checkbounds(V, i)
-    @inbounds V.parent[V.offset1 + i] = x
+    @inbounds V.parent[_reindexlinear(V, i)] = x
     V
 end
+
 @inline setindex!(V::FastSubArray, x, i::Colon) = setindex!(V, x, to_indices(V, (i,))...)
 
 function isassigned(V::SubArray{T,N}, I::Vararg{Int,N}) where {T,N}
@@ -418,25 +400,13 @@ end
 function isassigned(V::FastSubArray, i::Int)
     @inline
     @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + V.stride1*i)
-    r
-end
-function isassigned(V::FastContiguousSubArray, i::Int)
-    @inline
-    @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + i)
+    @inbounds r = isassigned(V.parent, _reindexlinear(V, i))
     r
 end
 function isassigned(V::FastSubArray{<:Any, 1}, i::Int)
     @inline
     @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + V.stride1*i)
-    r
-end
-function isassigned(V::FastContiguousSubArray{<:Any, 1}, i::Int)
-    @inline
-    @boundscheck checkbounds(Bool, V, i) || return false
-    @inbounds r = isassigned(V.parent, V.offset1 + i)
+    @inbounds r = isassigned(V.parent, _reindexlinear(V, i))
     r
 end
 
@@ -543,3 +513,6 @@ end
 function replace_in_print_matrix(S::SubArray{<:Any,1,<:AbstractVector}, i::Integer, j::Integer, s::AbstractString)
     replace_in_print_matrix(S.parent, to_indices(S.parent, reindex(S.indices, (i,)))..., j, s)
 end
+
+# XXX: this is considerably more unsafe than the other similarly named methods
+unsafe_wrap(::Type{Vector{UInt8}}, s::FastContiguousSubArray{UInt8,1,Vector{UInt8}}) = unsafe_wrap(Vector{UInt8}, pointer(s), size(s))

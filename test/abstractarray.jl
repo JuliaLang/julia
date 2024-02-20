@@ -548,12 +548,24 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
-    # isassigned(a::AbstractArray, i::Int...)
+    @test !isassigned(B)
+    # isassigned(a::AbstractArray, i::Integer...)
     j = rand(1:length(B))
     @test isassigned(B, j)
     if T == T24Linear
         @test !isassigned(B, length(B) + 1)
     end
+    # isassigned(a::AbstractArray, i::CartesianIndex)
+    @test isassigned(B, first(CartesianIndices(B)))
+    ind = last(CartesianIndices(B))
+    @test !isassigned(B, ind + oneunit(ind))
+    # isassigned(a::AbstractArray, i::Union{Integer,CartesianIndex}...)
+    @test isassigned(B, Int16.(first.(axes(B)))..., CartesianIndex(1,1))
+    # Bool isn't a valid index
+    @test_throws ArgumentError isassigned(B, Bool.(first.(axes(B)))..., CartesianIndex(1,1))
+    @test_throws ArgumentError isassigned(B, Bool.(first.(axes(B)))...)
+    @test_throws ArgumentError isassigned(B, true)
+    @test_throws ArgumentError isassigned(B, false)
 
     # reshape(a::AbstractArray, dims::Dims)
     @test_throws DimensionMismatch reshape(B, (0, 1))
@@ -1960,4 +1972,50 @@ end
 
     @test zero([[2,2], [3,3,3]]) isa Vector{Vector{Int}}
     @test zero([[2,2], [3,3,3]]) == [[0,0], [0, 0, 0]]
+end
+
+@testset "`_prechecked_iterate` optimization" begin
+    function test_prechecked_iterate(iter)
+        Js = Base._prechecked_iterate(iter)
+        for I in iter
+            J, s = Js::NTuple{2,Any}
+            @test J === I
+            Js = Base._prechecked_iterate(iter, s)
+        end
+    end
+    test_prechecked_iterate(1:10)
+    test_prechecked_iterate(Base.OneTo(10))
+    test_prechecked_iterate(CartesianIndices((3, 3)))
+    test_prechecked_iterate(CartesianIndices(()))
+    test_prechecked_iterate(LinearIndices((3, 3)))
+    test_prechecked_iterate(LinearIndices(()))
+    test_prechecked_iterate(Base.SCartesianIndices2{3}(1:3))
+end
+
+@testset "IndexStyles in copyto!" begin
+    A = rand(3,2)
+    B = zeros(size(A))
+    colons = ntuple(_->:, ndims(B))
+    # Ensure that the AbstractArray methods are hit
+    # by using views instead of Arrays
+    @testset "IndexLinear - IndexLinear" begin
+        B .= 0
+        copyto!(view(B, colons...), A)
+        @test B == A
+    end
+    @testset "IndexLinear - IndexCartesian" begin
+        B .= 0
+        copyto!(view(B, colons...), view(A, axes(A)...))
+        @test B == A
+    end
+    @testset "IndexCartesian - IndexLinear" begin
+        B .= 0
+        copyto!(view(B, axes(B)...), A)
+        @test B == A
+    end
+    @testset "IndexCartesian - IndexCartesian" begin
+        B .= 0
+        copyto!(view(B, axes(B)...), view(A, axes(A)...))
+        @test B == A
+    end
 end

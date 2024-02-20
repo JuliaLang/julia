@@ -630,8 +630,8 @@ g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 # idempotency of callsite inlining
 function getcache(mi::Core.MethodInstance)
     cache = Core.Compiler.code_cache(Core.Compiler.NativeInterpreter())
-    codeinf = Core.Compiler.get(cache, mi, nothing)
-    return isnothing(codeinf) ? nothing : codeinf
+    codeinst = Core.Compiler.get(cache, mi, nothing)
+    return isnothing(codeinst) ? nothing : codeinst
 end
 @noinline f42078(a) = sum(sincos(a))
 let
@@ -649,8 +649,8 @@ let
     end
     let # make sure to discard the inferred source
         mi = only(methods(f42078)).specializations::Core.MethodInstance
-        codeinf = getcache(mi)::Core.CodeInstance
-        @atomic codeinf.inferred = nothing
+        codeinst = getcache(mi)::Core.CodeInstance
+        @atomic codeinst.inferred = nothing
     end
 
     let # inference should re-infer `f42078(::Int)` and we should get the same code
@@ -761,7 +761,7 @@ end
 let f(x) = (x...,)
     # Test splatting with a Union of non-{Tuple, SimpleVector} types that require creating new `iterate` calls
     # in inlining. For this particular case, we're relying on `iterate(::CaretesianIndex)` throwing an error, such
-    # the the original apply call is not union-split, but the inserted `iterate` call is.
+    # that the original apply call is not union-split, but the inserted `iterate` call is.
     @test code_typed(f, Tuple{Union{Int64, CartesianIndex{1}, CartesianIndex{3}}})[1][2] == Tuple{Int64}
 end
 

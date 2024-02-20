@@ -197,9 +197,9 @@ static const char opts[]  =
     "                            expressions. It first tries to use BugReporting.jl installed in current environment and\n"
     "                            fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
     "                            --bug-report=help.\n\n"
-
-    " --heap-size-hint=<size>    Forces garbage collection if memory usage is higher than the given number of bytes.\n"
-    "                            The size may be specified with units (e.g., 2500M or 2.5gb both specify 2.5 gigabytes)\n\n"
+    " --heap-size-hint=<size>    Forces garbage collection if memory usage is higher than the given value.\n"
+    "                            The value may be specified as a number of bytes, optionally in units of\n"
+    "                            KB, MB, GB, or TB, or as a percentage of physical memory with %.\n\n"
 ;
 
 static const char opts_hidden[]  =
@@ -834,6 +834,15 @@ restart_switch:
                     case 't':
                         multiplier <<= 40;
                         break;
+                    case '%':
+                        if (value > 100)
+                            jl_errorf("julia: invalid percentage specified in --heap-size-hint");
+                        uint64_t mem = uv_get_total_memory();
+                        uint64_t cmem = uv_get_constrained_memory();
+                        if (cmem > 0 && cmem < mem)
+                            mem = cmem;
+                        multiplier = mem/100;
+                        break;
                     default:
                         jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                         break;
@@ -845,7 +854,7 @@ restart_switch:
                 jl_options.heap_size_hint = sz < UINT64_MAX ? (uint64_t)sz : UINT64_MAX;
             }
             if (jl_options.heap_size_hint == 0)
-                jl_errorf("julia: invalid argument to --heap-size-hint without memory size specified");
+                jl_errorf("julia: invalid memory size specified in --heap-size-hint");
 
             break;
         case opt_gc_threads:
