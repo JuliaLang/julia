@@ -137,7 +137,7 @@ end
         iolock_end()
     end
     if err != 0
-        throw(_UVError("could not spawn " * repr(cmd), err))
+        throw(_UVError("could not spawn `" * cmd[1] * '`', err))
     end
     return pp
 end
