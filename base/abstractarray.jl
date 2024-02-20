@@ -1481,8 +1481,9 @@ function _unsetindex!(A::AbstractArray{T}, i::Int...) where T
     # this provides a fallback method which is a no-op if the element is already unassigned
     # such that copying into an uninitialized object generally always will work,
     # even if the specific custom array type has not implemented `_unsetindex!`
+    @inline
     @boundscheck checkbounds(A, i...)
-    allocatedinline(T) || @inbounds(!isassigned(A, i)) || throw(MethodError(_unsetindex!, (A, i...)))
+    allocatedinline(T) || @inbounds(!isassigned(A, i...)) || throw(MethodError(_unsetindex!, (A, i...)))
     return A
 end
 
