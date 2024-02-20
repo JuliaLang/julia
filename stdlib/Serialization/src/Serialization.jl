@@ -1111,7 +1111,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         end
         if !is_for_opaque_closure
             mt = ccall(:jl_method_table_for, Any, (Any,), sig)
-            if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, typemax(UInt))
+            if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, Base.get_world_counter())
                 ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
             end
         end
