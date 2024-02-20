@@ -264,8 +264,7 @@ function equal(ci1::Core.CodeInfo, ci2::Core.CodeInfo)
            ci1.linetable == ci2.linetable &&
            ci1.slotnames == ci2.slotnames &&
            ci1.slotflags == ci2.slotflags &&
-           ci1.slottypes == ci2.slottypes &&
-           ci1.rettype == ci2.rettype
+           ci1.slottypes == ci2.slottypes
 end
 equal(p1::Pair, p2::Pair) = p1.second == p2.second && equal(p1.first, p2.first)
 

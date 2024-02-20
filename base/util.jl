@@ -207,6 +207,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     opts.can_inline == 0 && push!(addflags, "--inline=no")
     opts.use_compiled_modules == 0 && push!(addflags, "--compiled-modules=no")
     opts.use_compiled_modules == 2 && push!(addflags, "--compiled-modules=existing")
+    opts.use_compiled_modules == 3 && push!(addflags, "--compiled-modules=strict")
     opts.use_pkgimages == 0 && push!(addflags, "--pkgimages=no")
     opts.use_pkgimages == 2 && push!(addflags, "--pkgimages=existing")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
@@ -374,7 +375,7 @@ then the user can enter just a newline character to select the `default`.
 
 See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
 
-# Example
+# Examples
 
 ```julia-repl
 julia> your_name = Base.prompt("Enter your name");

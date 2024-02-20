@@ -185,7 +185,7 @@ If a group was not captured, `nothing` will be yielded instead of a substring.
 
 Methods that accept a `RegexMatch` object are defined for [`iterate`](@ref),
 [`length`](@ref), [`eltype`](@ref), [`keys`](@ref keys(::RegexMatch)), [`haskey`](@ref), and
-[`getindex`](@ref), where keys are the the names or numbers of a capture group.
+[`getindex`](@ref), where keys are the names or numbers of a capture group.
 See [`keys`](@ref keys(::RegexMatch)) for more information.
 
 # Examples

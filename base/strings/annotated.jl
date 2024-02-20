@@ -45,7 +45,7 @@ AnnotatedString(s::S<:AbstractString, annotations::Vector{Tuple{UnitRange{Int}, 
 A AnnotatedString can also be created with [`annotatedstring`](@ref), which acts much
 like [`string`](@ref) but preserves any annotations present in the arguments.
 
-# Example
+# Examples
 
 ```julia-repl
 julia> AnnotatedString("this is an example annotated string",
@@ -200,34 +200,36 @@ julia> annotatedstring(AnnotatedString("annotated", [(1:9, :label => 1)]), ", an
 function annotatedstring(xs...)
     isempty(xs) && return AnnotatedString("")
     size = mapreduce(_str_sizehint, +, xs)
-    s = IOContext(IOBuffer(sizehint=size), :color => true)
+    buf = IOBuffer(sizehint=size)
+    s = IOContext(buf, :color => true)
     annotations = Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}()
     for x in xs
+        size = filesize(s.io)
         if x isa AnnotatedString
             for (region, annot) in x.annotations
-                push!(annotations, (s.io.size .+ (region), annot))
+                push!(annotations, (size .+ (region), annot))
             end
             print(s, x.string)
         elseif x isa SubString{<:AnnotatedString}
             for (region, annot) in x.string.annotations
                 start, stop = first(region), last(region)
                 if start <= x.offset + x.ncodeunits && stop > x.offset
-                    rstart = s.io.size + max(0, start - x.offset - 1) + 1
-                    rstop = s.io.size + min(stop, x.offset + x.ncodeunits) - x.offset
+                    rstart = size + max(0, start - x.offset - 1) + 1
+                    rstop = size + min(stop, x.offset + x.ncodeunits) - x.offset
                     push!(annotations, (rstart:rstop, annot))
                 end
             end
             print(s, SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)))
         elseif x isa AnnotatedChar
             for annot in x.annotations
-                push!(annotations, (1+s.io.size:1+s.io.size, annot))
+                push!(annotations, (1+size:1+size, annot))
             end
             print(s, x.char)
         else
             print(s, x)
         end
     end
-    str = String(resize!(s.io.data, s.io.size))
+    str = String(take!(buf))
     AnnotatedString(str, annotations)
 end
 
@@ -400,7 +402,8 @@ AnnotatedIOBuffer() = AnnotatedIOBuffer(IOBuffer())
 
 function show(io::IO, aio::AnnotatedIOBuffer)
     show(io, AnnotatedIOBuffer)
-    print(io, '(', aio.io.size, " byte", ifelse(aio.io.size == 1, "", "s"), ", ",
+    size = filesize(aio.io)
+    print(io, '(', size, " byte", ifelse(size == 1, "", "s"), ", ",
           length(aio.annotations), " annotation", ifelse(length(aio.annotations) == 1, "", "s"), ")")
 end
 
@@ -410,7 +413,7 @@ pipe_writer(io::AnnotatedIOBuffer) = io.io
 # Useful `IOBuffer` methods that we don't get from `AbstractPipe`
 position(io::AnnotatedIOBuffer) = position(io.io)
 seek(io::AnnotatedIOBuffer, n::Integer) = (seek(io.io, n); io)
-seekend(io::AnnotatedIOBuffer) = seekend(io.io)
+seekend(io::AnnotatedIOBuffer) = (seekend(io.io); io)
 skip(io::AnnotatedIOBuffer, n::Integer) = (skip(io.io, n); io)
 copy(io::AnnotatedIOBuffer) = AnnotatedIOBuffer(copy(io.io), copy(io.annotations))
 

@@ -146,7 +146,7 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
     indent::Int = 0,
     first_block::Bool = true,
     sorted::Bool = false,
-    inline_tables::Base.IdSet,
+    inline_tables::IdSet,
     by::Function = identity,
 )
 
@@ -223,7 +223,7 @@ end
 # API #
 #######
 
-print(f::MbyFunc, io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::Base.IdSet{<:AbstractDict}=Base.IdSet{Dict{String}}()) = print_table(f, io, a; sorted, by, inline_tables)
-print(f::MbyFunc,         a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::Base.IdSet{<:AbstractDict}=Base.IdSet{Dict{String}}()) = print(f, stdout, a; sorted, by, inline_tables)
-print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::Base.IdSet{<:AbstractDict}=Base.IdSet{Dict{String}}()) = print_table(nothing, io, a; sorted, by, inline_tables)
-print(        a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::Base.IdSet{<:AbstractDict}=Base.IdSet{Dict{String}}()) = print(nothing, stdout, a; sorted, by, inline_tables)
+print(f::MbyFunc, io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) = print_table(f, io, a; sorted, by, inline_tables)
+print(f::MbyFunc,         a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) = print(f, stdout, a; sorted, by, inline_tables)
+print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) = print_table(nothing, io, a; sorted, by, inline_tables)
+print(        a::AbstractDict; sorted::Bool=false, by=identity, inline_tables::IdSet{<:AbstractDict}=IdSet{Dict{String}}()) = print(nothing, stdout, a; sorted, by, inline_tables)

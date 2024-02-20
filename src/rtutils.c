@@ -219,14 +219,6 @@ JL_DLLEXPORT void JL_NORETURN jl_bounds_error_ints(jl_value_t *v JL_MAYBE_UNROOT
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
-JL_DLLEXPORT void JL_NORETURN jl_eof_error(void)
-{
-    jl_datatype_t *eof_error =
-        (jl_datatype_t*)jl_get_global(jl_base_module, jl_symbol("EOFError"));
-    assert(eof_error != NULL);
-    jl_throw(jl_new_struct(eof_error));
-}
-
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t)
 {
     if (!jl_isa(x,t))
@@ -544,14 +536,6 @@ JL_DLLEXPORT void jl_flush_cstdio(void) JL_NOTSAFEPOINT
 {
     fflush(stdout);
     fflush(stderr);
-}
-
-JL_DLLEXPORT jl_value_t *jl_stdout_obj(void) JL_NOTSAFEPOINT
-{
-    if (jl_base_module == NULL)
-        return NULL;
-    jl_binding_t *stdout_obj = jl_get_module_binding(jl_base_module, jl_symbol("stdout"), 0);
-    return stdout_obj ? jl_atomic_load_relaxed(&stdout_obj->value) : NULL;
 }
 
 JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT

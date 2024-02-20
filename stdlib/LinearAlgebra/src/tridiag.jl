@@ -946,7 +946,7 @@ function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
                         B[i+1,j] -= fact*B[i,j]
                     end
                 else
-                    checknonsingular(i, RowMaximum())
+                    checknonsingular(i)
                 end
                 i < n-1 && (dl[i] = 0)
             else
@@ -967,7 +967,7 @@ function ldiv!(A::Tridiagonal, B::AbstractVecOrMat)
                 end
             end
         end
-        iszero(d[n]) && checknonsingular(n, RowMaximum())
+        iszero(d[n]) && checknonsingular(n)
         # backward substitution
         for j in 1:nrhs
             B[n,j] /= d[n]

@@ -1250,12 +1250,12 @@ end
 @testset "PR 17117: print_array" begin
     s = IOBuffer(Vector{UInt8}(), read=true, write=true)
     Base.print_array(s, [1, 2, 3])
-    @test String(resize!(s.data, s.size)) == " 1\n 2\n 3"
+    @test String(take!(s)) == " 1\n 2\n 3"
     close(s)
     s2 = IOBuffer(Vector{UInt8}(), read=true, write=true)
     z = zeros(0,0,0,0,0,0,0,0)
     Base.print_array(s2, z)
-    @test String(resize!(s2.data, s2.size)) == ""
+    @test String(take!(s2)) == ""
     close(s2)
 end
 

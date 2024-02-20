@@ -102,6 +102,7 @@ div(x::Period, y::Period, r::RoundingMode) = div(promote(x, y)..., r)
 Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
 Base.abs(a::T) where {T<:Period} = T(abs(value(a)))
 Base.sign(x::Period) = sign(value(x))
+Base.signbit(x::Period) = signbit(value(x))
 
 # return (next coarser period, conversion factor):
 coarserperiod(::Type{P}) where {P<:Period} = (P, 1)

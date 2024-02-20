@@ -129,6 +129,36 @@ let l = ReentrantLock()
     @test_throws ErrorException unlock(l)
 end
 
+# Lockable{T, L<:AbstractLock}
+using Base: Lockable
+let
+    @test_broken Base.isexported(Base, :Lockable)
+    lockable = Lockable(Dict("foo" => "hello"), ReentrantLock())
+    # note field access is non-public
+    @test lockable.value["foo"] == "hello"
+    @test @lock(lockable, lockable[]["foo"]) == "hello"
+    lock(lockable) do d
+        @test d["foo"] == "hello"
+    end
+    lock(lockable) do d
+        d["foo"] = "goodbye"
+    end
+    @test lockable.value["foo"] == "goodbye"
+    @lock lockable begin
+        @test lockable[]["foo"] == "goodbye"
+    end
+    l = trylock(lockable)
+    try
+        @test l
+    finally
+        unlock(lockable)
+    end
+    # Test 1-arg constructor
+    lockable2 = Lockable(Dict("foo" => "hello"))
+    @test lockable2.lock isa ReentrantLock
+    @test @lock(lockable2, lockable2[]["foo"]) == "hello"
+end
+
 for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 0
     @test lock(get_finalizers_inhibited, l) == 1
