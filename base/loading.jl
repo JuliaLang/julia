@@ -2049,16 +2049,25 @@ const include_callbacks = Any[]
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
 const _require_dependencies = Any[] # a list of (mod, abspath, fsize, hash, mtime) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
-function _include_dependency(mod::Module, _path::AbstractString; track_content=true)
+function _include_dependency(mod::Module, _path::AbstractString; track_content=true,
+                             path_maybe_dir=false)
     prev = source_path(nothing)
     if prev === nothing
         path = abspath(_path)
     else
         path = normpath(joinpath(dirname(prev), _path))
     end
-    ispath(path) || throw(ArgumentError("$(repr(path)): No such file or directory"))
-    uperm(path) & 0x04 == 0x04 || throw(ArgumentError("$(repr(path)): Missing read permission"))
-    if _track_dependencies[]
+    if !_track_dependencies[]
+        if !path_maybe_dir && !isfile(path)
+            throw(ArgumentError("including $(repr(path)): No such file"))
+        elseif path_maybe_dir && !ispath(path)
+            throw(ArgumentError("including $(repr(path)): No such file or directory"))
+        end
+        readable = @static Sys.iswindows() ? uperm(path) & 0x04 == 0x04 : Sys.isreadable(path)
+        if !readable
+            throw(ArgumentError("including $(repr(path)): Missing read permission"))
+        end
+    else
         @lock require_lock begin
             if track_content
                 hash = isdir(path) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r")
@@ -2088,7 +2097,7 @@ no effect outside of compilation.
     Keyword argument `track_content` requires at least Julia 1.11.
 """
 function include_dependency(path::AbstractString; track_content::Bool=false)
-    _include_dependency(Main, path, track_content=track_content)
+    _include_dependency(Main, path, track_content=track_content, path_maybe_dir=true)
     return nothing
 end
 
