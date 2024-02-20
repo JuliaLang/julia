@@ -984,6 +984,32 @@ JL_DLLEXPORT int jl_alignment(size_t sz)
     return jl_gc_alignment(sz);
 }
 
+JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize) {
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    if (tid < 0 || tid >= nthreads)
+        jl_error("invalid tid");
+
+    // TODO: relaxed or acquire here?
+    jl_ptls_t *tls = jl_atomic_load_relaxed(&jl_all_tls_states);
+    uv_thread_t uvtid = tls[tid]->system_id;
+
+    // returns 0 in case of success and a value != 0 otherwise
+    return uv_thread_getaffinity(&uvtid, mask, cpumasksize);
+}
+
+JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    if (tid < 0 || tid >= nthreads)
+        jl_error("invalid tid");
+
+    // TODO: relaxed or acquire here?
+    jl_ptls_t *tls = jl_atomic_load_relaxed(&jl_all_tls_states);
+    uv_thread_t uvtid = tls[tid]->system_id;
+
+    // returns 0 in case of success and a value != 0 otherwise
+    return uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+}
+
 #ifdef __cplusplus
 }
 #endif
