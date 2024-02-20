@@ -1811,7 +1811,9 @@ function ssa_substitute!(insert_node!::Inserter,
                          spvals_ssa::Union{Nothing, SSAValue},
                          linetable_offset::Int32, boundscheck::Symbol)
     subst_inst[:flag] &= ~IR_FLAG_INBOUNDS
-    subst_inst[:line] += linetable_offset
+    if subst_inst[:line] != 0
+        subst_inst[:line] += linetable_offset
+    end
     return ssa_substitute_op!(insert_node!, subst_inst,
         val, arg_replacements, spsig, spvals, spvals_ssa, boundscheck)
 end
