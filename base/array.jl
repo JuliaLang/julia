@@ -343,6 +343,9 @@ See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 copy
 
 @eval function copy(a::Array{T}) where {T}
+    # `jl_genericmemory_copy_slice` only throws when the size exceeds the max allocation
+    # size, but since we're copying an existing array, we're guaranteed that this will not happen.
+    @_nothrow_meta
     ref = a.ref
     newmem = ccall(:jl_genericmemory_copy_slice, Ref{Memory{T}}, (Any, Ptr{Cvoid}, Int), ref.mem, ref.ptr_or_offset, length(a))
     return $(Expr(:new, :(typeof(a)), :(Core.memoryref(newmem)), :(a.size)))
@@ -669,30 +672,34 @@ _array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(it
     collect(collection)
 
 Return an `Array` of all items in a collection or iterator. For dictionaries, returns
-`Vector{Pair{KeyType, ValType}}`. If the argument is array-like or is an iterator with the
-[`HasShape`](@ref IteratorSize) trait, the result will have the same shape
+a `Vector` of `key=>value` [Pair](@ref Pair)s. If the argument is array-like or is an iterator
+with the [`HasShape`](@ref IteratorSize) trait, the result will have the same shape
 and number of dimensions as the argument.
 
-Used by comprehensions to turn a generator into an `Array`.
+Used by [comprehensions](@ref man-comprehensions) to turn a [generator expression](@ref man-generators)
+into an `Array`. Thus, *on generators*, the square-brackets notation may be used instead of calling `collect`,
+see second example.
 
 # Examples
-```jldoctest
-julia> collect(1:2:13)
-7-element Vector{Int64}:
-  1
-  3
-  5
-  7
-  9
- 11
- 13
 
-julia> [x^2 for x in 1:8 if isodd(x)]
-4-element Vector{Int64}:
-  1
-  9
- 25
- 49
+Collect items from a `UnitRange{Int64}` collection:
+
+```jldoctest
+julia> collect(1:3)
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
+
+Collect items from a generator (same output as `[x^2 for x in 1:3]`):
+
+```jldoctest
+julia> collect(x^2 for x in 1:3)
+3-element Vector{Int64}:
+ 1
+ 4
+ 9
 ```
 """
 collect(itr) = _collect(1:1 #= Array =#, itr, IteratorEltype(itr), IteratorSize(itr))
@@ -988,13 +995,13 @@ __safe_setindex!(A::Vector{T}, x,    i::Int) where {T} = (@inline;
 function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
     @_propagate_inbounds_meta
     @boundscheck setindex_shape_check(X, length(I))
+    @boundscheck checkbounds(A, I)
     require_one_based_indexing(X)
     X′ = unalias(A, X)
     I′ = unalias(A, I)
     count = 1
     for i in I′
-        @inbounds x = X′[count]
-        A[i] = x
+        @inbounds A[i] = X′[count]
         count += 1
     end
     return A
@@ -1040,6 +1047,7 @@ end
 array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when implemented, this should attempt to first expand mem
 
 function _growbeg!(a::Vector, delta::Integer)
+    @_noub_meta
     delta = Int(delta)
     delta == 0 && return # avoid attempting to index off the end
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
@@ -1077,6 +1085,7 @@ function _growbeg!(a::Vector, delta::Integer)
 end
 
 function _growend!(a::Vector, delta::Integer)
+    @_noub_meta
     delta = Int(delta)
     delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
@@ -1113,6 +1122,7 @@ function _growend!(a::Vector, delta::Integer)
 end
 
 function _growat!(a::Vector, i::Integer, delta::Integer)
+    @_terminates_globally_noub_meta
     delta = Int(delta)
     i = Int(i)
     i == 1 && return _growbeg!(a, delta)
@@ -1715,10 +1725,11 @@ julia> insert!(Any[1:6;], 3, "here")
 ```
 """
 function insert!(a::Array{T,1}, i::Integer, item) where T
+    @_noub_meta
     # Throw convert error before changing the shape of the array
     _item = item isa T ? item : convert(T, item)::T
     _growat!(a, i, 1)
-    # _growat! already did bound check
+    # :noub, because _growat! already did bound check
     @inbounds a[i] = _item
     return a
 end
@@ -2294,7 +2305,9 @@ findfirst(A::AbstractArray) = findnext(A, first(keys(A)))
     findnext(predicate::Function, A, i)
 
 Find the next index after or including `i` of an element of `A`
-for which `predicate` returns `true`, or `nothing` if not found.
+for which `predicate` returns `true`, or `nothing` if not found. This works for
+Arrays, Strings, and most other collections that support [`getindex`](@ref),
+[`keys(A)`](@ref), and [`nextind`](@ref).
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -2312,6 +2325,9 @@ julia> A = [1 4; 2 2];
 
 julia> findnext(isodd, A, CartesianIndex(1, 1))
 CartesianIndex(1, 1)
+
+julia> findnext(isspace, "a b c", 3)
+4
 ```
 """
 function findnext(testf::Function, A, start)
@@ -2468,7 +2484,9 @@ findlast(A::AbstractArray) = findprev(A, last(keys(A)))
     findprev(predicate::Function, A, i)
 
 Find the previous index before or including `i` of an element of `A`
-for which `predicate` returns `true`, or `nothing` if not found.
+for which `predicate` returns `true`, or `nothing` if not found. This works for
+Arrays, Strings, and most other collections that support [`getindex`](@ref),
+[`keys(A)`](@ref), and [`nextind`](@ref).
 
 Indices are of the same type as those returned by [`keys(A)`](@ref)
 and [`pairs(A)`](@ref).
@@ -2494,6 +2512,9 @@ julia> A = [4 6; 1 2]
 
 julia> findprev(isodd, A, CartesianIndex(1, 2))
 CartesianIndex(2, 1)
+
+julia> findprev(isspace, "a b c", 3)
+2
 ```
 """
 function findprev(testf::Function, A, start)
@@ -3050,7 +3071,8 @@ of [`unsafe_wrap`](@ref) utilizing `Memory` or `MemoryRef` instead of raw pointe
 """
 function wrap end
 
-@eval @propagate_inbounds function wrap(::Type{Array}, ref::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
+# validity checking for _wrap calls, separate from allocation of Array so that it can be more likely to inline into the caller
+function _wrap(ref::MemoryRef{T}, dims::NTuple{N, Int}) where {T, N}
     mem = ref.mem
     mem_len = length(mem) + 1 - memoryrefoffset(ref)
     len = Core.checked_dims(dims...)
@@ -3059,18 +3081,35 @@ function wrap end
         mem = ccall(:jl_genericmemory_slice, Memory{T}, (Any, Ptr{Cvoid}, Int), mem, ref.ptr_or_offset, len)
         ref = MemoryRef(mem)
     end
-    $(Expr(:new, :(Array{T, N}), :ref, :dims))
+    return ref
 end
 
 @noinline invalid_wrap_err(len, dims, proddims) = throw(DimensionMismatch(
     "Attempted to wrap a MemoryRef of length $len with an Array of size dims=$dims, which is invalid because prod(dims) = $proddims > $len, so that the array would have more elements than the underlying memory can store."))
 
-function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
-    wrap(Array, MemoryRef(m), dims)
+@eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, dims::NTuple{N, Integer}) where {T, N}
+    dims = convert(Dims, dims)
+    ref = _wrap(m, dims)
+    $(Expr(:new, :(Array{T, N}), :ref, :dims))
 end
-function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
-    wrap(Array, m, (l,))
+
+@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, dims::NTuple{N, Integer}) where {T, N}
+    dims = convert(Dims, dims)
+    ref = _wrap(MemoryRef(m), dims)
+    $(Expr(:new, :(Array{T, N}), :ref, :dims))
 end
-function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
-    wrap(Array, MemoryRef(m), (l,))
+@eval @propagate_inbounds function wrap(::Type{Array}, m::MemoryRef{T}, l::Integer) where {T}
+    dims = (Int(l),)
+    ref = _wrap(m, dims)
+    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
+end
+@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}, l::Integer) where {T}
+    dims = (Int(l),)
+    ref = _wrap(MemoryRef(m), (l,))
+    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
+end
+@eval @propagate_inbounds function wrap(::Type{Array}, m::Memory{T}) where {T}
+    ref = MemoryRef(m)
+    dims = (length(m),)
+    $(Expr(:new, :(Array{T, 1}), :ref, :dims))
 end

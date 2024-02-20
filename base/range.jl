@@ -70,6 +70,7 @@ Valid invocations of range are:
 * Call `range` with one of `stop` or `length`. `start` and `step` will be assumed to be one.
 
 See Extended Help for additional details on the returned type.
+See also [`logrange`](@ref) for logarithmically spaced points.
 
 # Examples
 ```jldoctest
@@ -252,10 +253,13 @@ end
 ## 1-dimensional ranges ##
 
 """
-    AbstractRange{T}
+    AbstractRange{T} <: AbstractVector{T}
 
-Supertype for ranges with elements of type `T`.
-[`UnitRange`](@ref) and other types are subtypes of this.
+Supertype for linear ranges with elements of type `T`.
+[`UnitRange`](@ref), [`LinRange`](@ref) and other types are subtypes of this.
+
+All subtypes must define [`step`](@ref).
+Thus [`LogRange`](@ref Base.LogRange) is not a subtype of `AbstractRange`.
 """
 abstract type AbstractRange{T} <: AbstractArray{T,1} end
 
@@ -550,6 +554,8 @@ julia> collect(LinRange(-0.1, 0.3, 5))
   0.19999999999999998
   0.3
 ```
+
+See also [`Logrange`](@ref Base.LogRange) for logarithmically spaced points.
 """
 struct LinRange{T,L<:Integer} <: AbstractRange{T}
     start::T
@@ -620,7 +626,7 @@ parameters `pre` and `post` characters for each printed row,
 `sep` separator string between printed elements,
 `hdots` string for the horizontal ellipsis.
 """
-function print_range(io::IO, r::AbstractRange,
+function print_range(io::IO, r::AbstractArray,
                      pre::AbstractString = " ",
                      sep::AbstractString = ", ",
                      post::AbstractString = "",
@@ -1393,8 +1399,8 @@ sort!(r::AbstractUnitRange) = r
 
 sort(r::AbstractRange) = issorted(r) ? r : reverse(r)
 
-sortperm(r::AbstractUnitRange) = 1:length(r)
-sortperm(r::AbstractRange) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
+sortperm(r::AbstractUnitRange) = eachindex(r)
+sortperm(r::AbstractRange) = issorted(r) ? (firstindex(r):1:lastindex(r)) : (lastindex(r):-1:firstindex(r))
 
 function sum(r::AbstractRange{<:Real})
     l = length(r)
@@ -1488,3 +1494,179 @@ julia> mod(3, 0:2)  # mod(3, 3)
 """
 mod(i::Integer, r::OneTo) = mod1(i, last(r))
 mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + first(r)
+
+
+"""
+    logrange(start, stop, length)
+    logrange(start, stop; length)
+
+Construct a specialized array whose elements are spaced logarithmically
+between the given endpoints. That is, the ratio of successive elements is
+a constant, calculated from the length.
+
+This is similar to `geomspace` in Python. Unlike `PowerRange` in Mathematica,
+you specify the number of elements not the ratio.
+Unlike `logspace` in Python and Matlab, the `start` and `stop` arguments are
+always the first and last elements of the result, not powers applied to some base.
+
+# Examples
+```jldoctest
+julia> logrange(10, 4000, length=3)
+3-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
+ 10.0, 200.0, 4000.0
+
+julia> ans[2] ≈ sqrt(10 * 4000)  # middle element is the geometric mean
+true
+
+julia> range(10, 40, length=3)[2] ≈ (10 + 40)/2  # arithmetic mean
+true
+
+julia> logrange(1f0, 32f0, 11)
+11-element Base.LogRange{Float32, Float64}:
+ 1.0, 1.41421, 2.0, 2.82843, 4.0, 5.65685, 8.0, 11.3137, 16.0, 22.6274, 32.0
+
+julia> logrange(1, 1000, length=4) ≈ 10 .^ (0:3)
+true
+```
+
+See the [`LogRange`](@ref Base.LogRange) type for further details.
+
+See also [`range`](@ref) for linearly spaced points.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+"""
+logrange(start::Real, stop::Real, length::Integer) = LogRange(start, stop, Int(length))
+logrange(start::Real, stop::Real; length::Integer) = logrange(start, stop, length)
+
+
+"""
+    LogRange{T}(start, stop, len) <: AbstractVector{T}
+
+A range whose elements are spaced logarithmically between `start` and `stop`,
+with spacing controlled by `len`. Returned by [`logrange`](@ref).
+
+Like [`LinRange`](@ref), the first and last elements will be exactly those
+provided, but intermediate values may have small floating-point errors.
+These are calculated using the logs of the endpoints, which are
+stored on construction, often in higher precision than `T`.
+
+# Examples
+```jldoctest
+julia> logrange(1, 4, length=5)
+5-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
+ 1.0, 1.41421, 2.0, 2.82843, 4.0
+
+julia> Base.LogRange{Float16}(1, 4, 5)
+5-element Base.LogRange{Float16, Float64}:
+ 1.0, 1.414, 2.0, 2.828, 4.0
+
+julia> logrange(1e-310, 1e-300, 11)[1:2:end]
+6-element Vector{Float64}:
+ 1.0e-310
+ 9.999999999999974e-309
+ 9.999999999999981e-307
+ 9.999999999999988e-305
+ 9.999999999999994e-303
+ 1.0e-300
+
+julia> prevfloat(1e-308, 5) == ans[2]
+true
+```
+
+Note that integer eltype `T` is not allowed.
+Use for instance `round.(Int, xs)`, or explicit powers of some integer base:
+
+```jldoctest
+julia> xs = logrange(1, 512, 4)
+4-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:
+ 1.0, 8.0, 64.0, 512.0
+
+julia> 2 .^ (0:3:9) |> println
+[1, 8, 64, 512]
+```
+
+!!! compat "Julia 1.11"
+    This type requires at least Julia 1.11.
+"""
+struct LogRange{T<:Real,X} <: AbstractArray{T,1}
+    start::T
+    stop::T
+    len::Int
+    extra::Tuple{X,X}
+    function LogRange{T}(start::T, stop::T, len::Int) where {T<:Real}
+        if T <: Integer
+            # LogRange{Int}(1, 512, 4) produces InexactError: Int64(7.999999999999998)
+            throw(ArgumentError("LogRange{T} does not support integer types"))
+        end
+        if iszero(start) || iszero(stop)
+            throw(DomainError((start, stop),
+                "LogRange cannot start or stop at zero"))
+        elseif start < 0 || stop < 0
+            # log would throw, but _log_twice64_unchecked does not
+            throw(DomainError((start, stop),
+                "LogRange does not accept negative numbers"))
+        elseif !isfinite(start) || !isfinite(stop)
+            throw(DomainError((start, stop),
+                "LogRange is only defined for finite start & stop"))
+        elseif len < 0
+            throw(ArgumentError(LazyString(
+                "LogRange(", start, ", ", stop, ", ", len, "): can't have negative length")))
+        elseif len == 1 && start != stop
+            throw(ArgumentError(LazyString(
+                "LogRange(", start, ", ", stop, ", ", len, "): endpoints differ, while length is 1")))
+        end
+        ex = _logrange_extra(start, stop, len)
+        new{T,typeof(ex[1])}(start, stop, len, ex)
+    end
+end
+
+function LogRange{T}(start::Real, stop::Real, len::Integer) where {T}
+    LogRange{T}(convert(T, start), convert(T, stop), convert(Int, len))
+end
+function LogRange(start::Real, stop::Real, len::Integer)
+    T = float(promote_type(typeof(start), typeof(stop)))
+    LogRange{T}(convert(T, start), convert(T, stop), convert(Int, len))
+end
+
+size(r::LogRange) = (r.len,)
+length(r::LogRange) = r.len
+
+first(r::LogRange) = r.start
+last(r::LogRange) = r.stop
+
+function _logrange_extra(a::Real, b::Real, len::Int)
+    loga = log(1.0 * a)  # widen to at least Float64
+    logb = log(1.0 * b)
+    (loga/(len-1), logb/(len-1))
+end
+function _logrange_extra(a::Float64, b::Float64, len::Int)
+    loga = _log_twice64_unchecked(a)
+    logb = _log_twice64_unchecked(b)
+    # The reason not to do linear interpolation on log(a)..log(b) in `getindex` is
+    # that division of TwicePrecision is quite slow, so do it once on construction:
+    (loga/(len-1), logb/(len-1))
+end
+
+function getindex(r::LogRange{T}, i::Int) where {T}
+    @inline
+    @boundscheck checkbounds(r, i)
+    i == 1 && return r.start
+    i == r.len && return r.stop
+    # Main path uses Math.exp_impl for TwicePrecision, but is not perfectly
+    # accurate, hence the special cases for endpoints above.
+    logx = (r.len-i) * r.extra[1] + (i-1) * r.extra[2]
+    x = _exp_allowing_twice64(logx)
+    return T(x)
+end
+
+function show(io::IO, r::LogRange{T}) where {T}
+    print(io, "LogRange{", T, "}(")
+    ioc = IOContext(io, :typeinfo => T)
+    show(ioc, first(r))
+    print(io, ", ")
+    show(ioc, last(r))
+    print(io, ", ")
+    show(io, length(r))
+    print(io, ')')
+end

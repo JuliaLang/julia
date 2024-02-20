@@ -945,11 +945,6 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         new_ci->ssaflags = jl_array_copy(new_ci->ssaflags);
         jl_gc_wb(new_ci, new_ci->ssaflags);
 
-        if (new_ci->edges != jl_nothing) {
-            new_ci->edges = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->edges);
-            jl_gc_wb(new_ci, new_ci->edges);
-        }
-
         if (jl_is_array(new_ci->ssavaluetypes)) {
             new_ci->ssavaluetypes = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->ssavaluetypes);
             jl_gc_wb(new_ci, new_ci->ssavaluetypes);
@@ -990,7 +985,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
     return expr;
 }
 
-JL_DLLEXPORT int jl_is_operator(char *sym)
+JL_DLLEXPORT int jl_is_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -999,7 +994,7 @@ JL_DLLEXPORT int jl_is_operator(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_unary_operator(char *sym)
+JL_DLLEXPORT int jl_is_unary_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -1008,7 +1003,7 @@ JL_DLLEXPORT int jl_is_unary_operator(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym)
+JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -1017,7 +1012,7 @@ JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_syntactic_operator(char *sym)
+JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -1026,7 +1021,7 @@ JL_DLLEXPORT int jl_is_syntactic_operator(char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_operator_precedence(char *sym)
+JL_DLLEXPORT int jl_operator_precedence(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;

@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+The `InteractiveUtils` module provides utilities for interactive use of Julia,
+such as code introspection and clipboard access.
+It is intended for interactive work and is loaded automatically in interactive mode.
+"""
 module InteractiveUtils
 
 Base.Experimental.@optlevel 1
@@ -160,7 +165,8 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
-    println(io, "  Threads: ", Threads.maxthreadid(), " on ", Sys.CPU_THREADS, " virtual cores")
+    println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
+      $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
 
     function is_nonverbose_env(k::String)
         return occursin(r"^JULIA_|^DYLD_|^LD_", k)

@@ -65,9 +65,14 @@ end
 (*)(a::AbstractVector, adjB::AdjointAbsMat) = reshape(a, length(a), 1) * adjB
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
 
+# Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
 @inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
+                alpha::Number, beta::Number) = _mul!(y, A, x, alpha, beta)
+
+@inline _mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
                 alpha::Number, beta::Number) =
     generic_matvecmul!(y, wrapper_char(A), _unwrap(A), x, MulAddMul(alpha, beta))
+
 # BLAS cases
 # equal eltypes
 @inline generic_matvecmul!(y::StridedVector{T}, tA, A::StridedVecOrMat{T}, x::StridedVector{T},
@@ -106,8 +111,11 @@ julia> [1 1; 0 1] * [1 0; 1 1]
 """
 function (*)(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
-    mul!(similar(B, TS, (size(A, 1), size(B, 2))), A, B)
+    mul!(matprod_dest(A, B, TS), A, B)
 end
+
+matprod_dest(A, B, TS) = similar(B, TS, (size(A, 1), size(B, 2)))
+
 # optimization for dispatching to BLAS, e.g. *(::Matrix{Float32}, ::Matrix{Float64})
 # but avoiding the case *(::Matrix{<:BlasComplex}, ::Matrix{<:BlasReal})
 # which is better handled by reinterpreting rather than promotion
@@ -176,7 +184,7 @@ function Base.muladd(A::AbstractMatrix, y::AbstractVecOrMat, z::Union{Number, Ab
     end
     for d in ndims(Ay)+1:ndims(z)
         # Similar error to what Ay + z would give, to match (Any,Any,Any) method:
-        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+        size(z,d) > 1 && throw(DimensionMismatch(string("z has dims ",
             axes(z), ", must have singleton at dim ", d)))
     end
     Ay .+ z
@@ -189,7 +197,7 @@ function Base.muladd(u::AbstractVector, v::AdjOrTransAbsVec, z::Union{Number, Ab
     end
     for d in 3:ndims(z)
         # Similar error to (u*v) + z:
-        size(z,d) > 1 && throw(DimensionMismatch(string("dimensions must match: z has dims ",
+        size(z,d) > 1 && throw(DimensionMismatch(string("z has dims ",
             axes(z), ", must have singleton at dim ", d)))
     end
     (u .* v) .+ z
@@ -217,18 +225,24 @@ end
 """
     mul!(Y, A, B) -> Y
 
-Calculates the matrix-matrix or matrix-vector product ``AB`` and stores the result in `Y`,
+Calculates the matrix-matrix or matrix-vector product ``A B`` and stores the result in `Y`,
 overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
 `B`.
 
 # Examples
 ```jldoctest
-julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); mul!(Y, A, B);
+julia> A = [1.0 2.0; 3.0 4.0]; B = [1.0 1.0; 1.0 1.0]; Y = similar(B);
+
+julia> mul!(Y, A, B) === Y
+true
 
 julia> Y
 2×2 Matrix{Float64}:
  3.0  3.0
  7.0  7.0
+
+julia> Y == A * B
+true
 ```
 
 # Implementation
@@ -250,18 +264,27 @@ aliased with either `A` or `B`.
 
 # Examples
 ```jldoctest
-julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; C=[1.0 2.0; 3.0 4.0];
+julia> A = [1.0 2.0; 3.0 4.0]; B = [1.0 1.0; 1.0 1.0]; C = [1.0 2.0; 3.0 4.0];
 
-julia> mul!(C, A, B, 100.0, 10.0) === C
+julia> α, β = 100.0, 10.0;
+
+julia> mul!(C, A, B, α, β) === C
 true
 
 julia> C
 2×2 Matrix{Float64}:
  310.0  320.0
  730.0  740.0
+
+julia> C_original = [1.0 2.0; 3.0 4.0]; # A copy of the original value of C
+
+julia> C == A * B * α + C_original * β
+true
 ```
 """
-@inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
+@inline mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) = _mul!(C, A, B, α, β)
+# Add a level of indirection and specialize _mul! to avoid ambiguities in mul!
+@inline _mul!(C::AbstractMatrix, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
     generic_matmatmul!(
         C,
         wrapper_char(A),
@@ -659,19 +682,60 @@ end
 
 lapack_size(t::AbstractChar, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
 
+"""
+    copyto!(B::AbstractMatrix, ir_dest::AbstractUnitRange, jr_dest::AbstractUnitRange,
+            tM::AbstractChar,
+            M::AbstractVecOrMat, ir_src::AbstractUnitRange, jr_src::AbstractUnitRange) -> B
+
+Efficiently copy elements of matrix `M` to `B` conditioned on the character
+parameter `tM` as follows:
+
+| `tM` | Destination | Source |
+| --- | :--- | :--- |
+| `'N'` | `B[ir_dest, jr_dest]` | `M[ir_src, jr_src]` |
+| `'T'` | `B[ir_dest, jr_dest]` | `transpose(M)[ir_src, jr_src]` |
+| `'C'` | `B[ir_dest, jr_dest]` | `adjoint(M)[ir_src, jr_src]` |
+
+The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore, the index range
+parameters must satisfy `length(ir_dest) == length(ir_src)` and
+`length(jr_dest) == length(jr_src)`.
+
+See also [`copy_transpose!`](@ref) and [`copy_adjoint!`](@ref).
+"""
 function copyto!(B::AbstractVecOrMat, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
         copyto!(B, ir_dest, jr_dest, M, ir_src, jr_src)
+    elseif tM == 'T'
+        copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
     else
-        LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, jr_src, ir_src)
-        tM == 'C' && conj!(@view B[ir_dest, jr_dest])
+        copy_adjoint!(B, ir_dest, jr_dest, M, jr_src, ir_src)
     end
     B
 end
 
+"""
+    copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange, jr_dest::AbstractUnitRange,
+                    tM::AbstractChar,
+                    M::AbstractVecOrMat, ir_src::AbstractUnitRange, jr_src::AbstractUnitRange) -> B
+
+Efficiently copy elements of matrix `M` to `B` conditioned on the character
+parameter `tM` as follows:
+
+| `tM` | Destination | Source |
+| --- | :--- | :--- |
+| `'N'` | `B[ir_dest, jr_dest]` | `transpose(M)[jr_src, ir_src]` |
+| `'T'` | `B[ir_dest, jr_dest]` | `M[jr_src, ir_src]` |
+| `'C'` | `B[ir_dest, jr_dest]` | `conj(M)[jr_src, ir_src]` |
+
+The elements `B[ir_dest, jr_dest]` are overwritten. Furthermore, the index
+range parameters must satisfy `length(ir_dest) == length(jr_src)` and
+`length(jr_dest) == length(ir_src)`.
+
+See also [`copyto!`](@ref) and [`copy_adjoint!`](@ref).
+"""
 function copy_transpose!(B::AbstractMatrix, ir_dest::AbstractUnitRange{Int}, jr_dest::AbstractUnitRange{Int}, tM::AbstractChar, M::AbstractVecOrMat, ir_src::AbstractUnitRange{Int}, jr_src::AbstractUnitRange{Int})
     if tM == 'N'
-        LinearAlgebra.copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
+        copy_transpose!(B, ir_dest, jr_dest, M, ir_src, jr_src)
     else
         copyto!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         tM == 'C' && conj!(@view B[ir_dest, jr_dest])

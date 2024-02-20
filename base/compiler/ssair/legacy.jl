@@ -55,8 +55,6 @@ Mainly used for testing or interactive use.
 inflate_ir(ci::CodeInfo, linfo::MethodInstance) = inflate_ir!(copy(ci), linfo)
 inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, argtypes)
 function inflate_ir(ci::CodeInfo)
-    parent = ci.parent
-    isa(parent, MethodInstance) && return inflate_ir(ci, parent)
     # XXX the length of `ci.slotflags` may be different from the actual number of call
     # arguments, but we really don't know that information in this case
     argtypes = Any[ Any for i = 1:length(ci.slotflags) ]

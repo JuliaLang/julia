@@ -2,7 +2,7 @@
 
 Core.PhiNode() = Core.PhiNode(Int32[], Any[])
 
-isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, EnterNode)
+isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isa(stmt, ReturnNode) || isa(stmt, EnterNode) || isexpr(stmt, :leave)
 
 struct CFG
     blocks::Vector{BasicBlock}
@@ -82,7 +82,7 @@ block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
             end
         end
     end
-    # and add add one more basic block start after the last statement
+    # and add one more basic block start after the last statement
     for i = length(stmts):-1:1
         if stmts[i] !== nothing
             push!(jump_dests, i+1)
@@ -342,7 +342,7 @@ function NewInstruction(inst::Instruction;
     return NewInstruction(stmt, type, info, line, flag)
 end
 @specialize
-effect_free_and_nothrow(newinst::NewInstruction) = add_flag(newinst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
+removable_if_unused(newinst::NewInstruction) = add_flag(newinst, IR_FLAGS_REMOVABLE)
 function add_flag(newinst::NewInstruction, newflag::UInt32)
     flag = newinst.flag
     if flag === nothing
@@ -595,7 +595,7 @@ function insert_node!(ir::IRCode, pos::SSAValue, newinst::NewInstruction, attach
     end
     node = add_inst!(ir.new_nodes, posid, attach_after)
     newline = something(newinst.line, ir[pos][:line])
-    newflag = recompute_inst_flag(newinst, ir)
+    newflag = recompute_newinst_flag(newinst, ir)
     node = inst_from_newinst!(node, newinst, newline, newflag)
     return SSAValue(length(ir.stmts) + node.idx)
 end
@@ -873,29 +873,14 @@ function inst_from_newinst!(node::Instruction, newinst::NewInstruction,
     return node
 end
 
-function recompute_inst_flag(newinst::NewInstruction, src::Union{IRCode,IncrementalCompact})
+function recompute_newinst_flag(newinst::NewInstruction, src::Union{IRCode,IncrementalCompact})
     flag = newinst.flag
     flag !== nothing && return flag
-    flag = IR_FLAG_NULL
-    (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(
-        fallback_lattice, newinst.stmt, newinst.type, src)
-    if consistent
-        flag |= IR_FLAG_CONSISTENT
-    end
-    if effect_free_and_nothrow
-        flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-    elseif nothrow
-        flag |= IR_FLAG_NOTHROW
-    end
-    if !isexpr(newinst.stmt, :call) && !isexpr(newinst.stmt, :invoke)
-        # See comment in check_effect_free!
-        flag |= IR_FLAG_NOUB
-    end
-    return flag
+    return recompute_effects_flags(fallback_lattice, newinst.stmt, newinst.type, src)
 end
 
 function insert_node!(compact::IncrementalCompact, @nospecialize(before), newinst::NewInstruction, attach_after::Bool=false)
-    newflag = recompute_inst_flag(newinst, compact)
+    newflag = recompute_newinst_flag(newinst, compact)
     if isa(before, SSAValue)
         if before.id < compact.result_idx
             count_added_node!(compact, newinst.stmt)
@@ -953,11 +938,15 @@ function insert_node!(compact::IncrementalCompact, @nospecialize(before), newins
     end
 end
 
-function maybe_reopen_bb!(compact)
+function did_just_finish_bb(compact)
     result_idx = compact.result_idx
     result_bbs = compact.cfg_transform.result_bbs
-    if (compact.active_result_bb == length(result_bbs) + 1) ||
-        result_idx == first(result_bbs[compact.active_result_bb].stmts)
+    (compact.active_result_bb == length(result_bbs) + 1) ||
+    result_idx == first(result_bbs[compact.active_result_bb].stmts)
+end
+
+function maybe_reopen_bb!(compact)
+    if did_just_finish_bb(compact)
         compact.active_result_bb -= 1
         return true
     end
@@ -974,7 +963,7 @@ function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction,
         @assert result_idx == length(compact.result) + 1
         resize!(compact, result_idx)
     end
-    newflag = recompute_inst_flag(newinst, compact)
+    newflag = recompute_newinst_flag(newinst, compact)
     node = inst_from_newinst!(compact.result[result_idx], newinst, newline, newflag)
     count_added_node!(compact, newinst.stmt) && push!(compact.late_fixup, result_idx)
     compact.result_idx = result_idx + 1
@@ -1113,7 +1102,7 @@ function find_ssavalue_uses1(compact::IncrementalCompact)
 end
 
 function _oracle_check(compact::IncrementalCompact)
-    (observed_used_ssas, observed_used_newssas) = Core.Compiler.find_ssavalue_uses1(compact)
+    (observed_used_ssas, observed_used_newssas) = find_ssavalue_uses1(compact)
     for i = 1:length(observed_used_ssas)
         if observed_used_ssas[i] != compact.used_ssas[i]
             return (observed_used_ssas, observed_used_newssas, SSAValue(i))
@@ -1336,8 +1325,8 @@ function kill_edge!(compact::IncrementalCompact, active_bb::Int, from::Int, to::
         else
             stmts = compact.ir.cfg.blocks[to].stmts
             for stmt in CompactPeekIterator(compact, first(stmts), last(stmts))
-                stmt === nothing && continue
-                isa(stmt, PhiNode) || break
+                is_valid_phiblock_stmt(stmt) || break
+                isa(stmt, PhiNode) || continue
                 i = findfirst(x::Int32->x==from, stmt.edges)
                 if i !== nothing
                     deleteat!(stmt.edges, i)
@@ -1359,7 +1348,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     (; result, ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
     (; cfg_transforms_enabled, fold_constant_branches, bb_rename_succ, bb_rename_pred, result_bbs) = compact.cfg_transform
     mark_refined! = Refiner(result.flag, result_idx)
-    already_inserted = (::Int, ssa::OldSSAValue)->ssa.id <= processed_idx
+    already_inserted_phi_arg = already_inserted_ssa(compact, processed_idx)
     if stmt === nothing
         ssa_rename[idx] = stmt
     elseif isa(stmt, OldSSAValue)
@@ -1422,11 +1411,11 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         if stmt.catch_dest != 0
             label = bb_rename_succ[stmt.catch_dest]
             @assert label > 0
-            ssa_rename[idx] = SSAValue(result_idx)
             result[result_idx][:stmt] = EnterNode(stmt, label)
         else
             result[result_idx][:stmt] = stmt
         end
+        ssa_rename[idx] = SSAValue(result_idx)
         result_idx += 1
     elseif isa(stmt, Expr)
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::Expr
@@ -1535,7 +1524,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             values = stmt.values
         end
 
-        values = process_phinode_values(values, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
+        values = process_phinode_values(values, late_fixup, already_inserted_phi_arg, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
         # Don't remove the phi node if it is before the definition of its value
         # because doing so can create forward references. This should only
         # happen with dead loops, but can cause problems when optimization
@@ -1574,7 +1563,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 push!(values, value)
             end
         end
-        result[result_idx][:stmt] = PhiCNode(process_phinode_values(values, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
+        result[result_idx][:stmt] = PhiCNode(process_phinode_values(values, late_fixup, already_inserted_phi_arg, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!))
         result_idx += 1
     else
         if isa(stmt, SSAValue)
@@ -1680,13 +1669,27 @@ struct CompactPeekIterator
     compact::IncrementalCompact
     start_idx::Int
     end_idx::Int
+    include_stmts_before_start::Bool
 end
+CompactPeekIterator(compact::IncrementalCompact, start_idx::Int, end_idx::Int) =
+    CompactPeekIterator(compact, start_idx, end_idx, false)
+
 
 function CompactPeekIterator(compact::IncrementalCompact, start_idx::Int)
     return CompactPeekIterator(compact, start_idx, 0)
 end
 
-entry_at_idx(entry::NewNodeInfo, idx::Int) = entry.attach_after ? entry.pos == idx - 1 : entry.pos == idx
+function entry_at_idx(entry::NewNodeInfo, idx::Int, start_idx::Int, include_stmts_before_start::Bool)
+    if entry.attach_after
+        if !include_stmts_before_start
+            entry.pos >= start_idx || return false
+        end
+        return entry.pos == idx - 1
+    else
+        return entry.pos == idx
+    end
+end
+
 function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.start_idx, it.compact.new_nodes_idx, 1))
     if it.end_idx > 0 && idx > it.end_idx
         return nothing
@@ -1698,7 +1701,7 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
     if compact.new_nodes_idx <= length(compact.perm)
         new_nodes = compact.ir.new_nodes
         for eidx in aidx:length(compact.perm)
-            if entry_at_idx(new_nodes.info[compact.perm[eidx]], idx)
+            if entry_at_idx(new_nodes.info[compact.perm[eidx]], idx, it.start_idx, it.include_stmts_before_start)
                 entry = new_nodes.stmts[compact.perm[eidx]]
                 return (entry[:stmt], (idx, eidx+1, bidx))
             end
@@ -1706,7 +1709,7 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
     end
     if !isempty(compact.pending_perm)
         for eidx in bidx:length(compact.pending_perm)
-            if entry_at_idx(compact.pending_nodes.info[compact.pending_perm[eidx]], idx)
+            if entry_at_idx(compact.pending_nodes.info[compact.pending_perm[eidx]], idx, it.start_idx, it.include_stmts_before_start)
                 entry = compact.pending_nodes.stmts[compact.pending_perm[eidx]]
                 return (entry[:stmt], (idx, aidx, eidx+1))
             end
@@ -1822,8 +1825,7 @@ function maybe_erase_unused!(callback::Function, compact::IncrementalCompact, id
     stmt = inst[:stmt]
     stmt === nothing && return false
     inst[:type] === Bottom && return false
-    effect_free = has_flag(inst, (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW))
-    effect_free || return false
+    has_flag(inst, IR_FLAGS_REMOVABLE) || return false
     foreachssa(stmt) do val::SSAValue
         if compact.used_ssas[val.id] == 1
             if val.id < idx || in_worklist
@@ -1883,6 +1885,8 @@ function fixup_node(compact::IncrementalCompact, @nospecialize(stmt), reify_new_
             compact.used_ssas[node.id] += 1
         elseif isa(node, NewSSAValue)
             compact.new_new_used_ssas[-node.id] += 1
+        elseif isa(node, OldSSAValue)
+            return fixup_node(compact, node, reify_new_nodes)
         end
         return FixedNode(node, needs_fixup)
     else

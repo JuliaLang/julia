@@ -19,7 +19,7 @@
 Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {RNG<:AbstractRNG,T<:AbstractFloat} =
     Sampler(RNG, CloseOpen01(T), n)
 
-# generic random generation function which can be used by RNG implementors
+# generic random generation function which can be used by RNG implementers
 # it is not defined as a fallback rand method as this could create ambiguities
 
 rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float16}}) =
@@ -130,7 +130,7 @@ rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
 
 #### BitInteger
 
-# rand_generic methods are intended to help RNG implementors with common operations
+# rand_generic methods are intended to help RNG implementers with common operations
 # we don't call them simply `rand` as this can easily contribute to create
 # ambiguities with user-side methods (forcing the user to resort to @eval)
 
@@ -294,7 +294,7 @@ rem_knuth(a::T, b::T) where {T<:Unsigned} = b != 0 ? a % b : a
 # maximum multiple of k <= sup decremented by one,
 # that is 0xFFFF...FFFF if k = (typemax(T) - typemin(T)) + 1 and sup == typemax(T) - 1
 # with intentional underflow
-# see http://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
+# see https://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
 
 # sup == 0 means typemax(T) + 1
 maxmultiple(k::T, sup::T=zero(T)) where {T<:Unsigned} =

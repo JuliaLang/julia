@@ -16,10 +16,10 @@ loop:
   %i = phi i64 [0, %top], [%nexti, %loop]
   %aptr = getelementptr double, double *%a, i64 %i
   %bptr = getelementptr double, double *%b, i64 %i
-; CHECK: MemoryUse([[MPHI]]) MayAlias
+; CHECK: MemoryUse([[MPHI]])
 ; CHECK: llvm.mem.parallel_loop_access
   %aval = load double, double *%aptr
-; CHECK: MemoryUse([[MPHI]]) MayAlias
+; CHECK: MemoryUse([[MPHI]])
   %bval = load double, double *%aptr
   %cval = fadd double %aval, %bval
 ; CHECK: [[MSSA_USE]] = MemoryDef([[MPHI]])
@@ -40,7 +40,7 @@ loop:
   %i = phi i64 [0, %top], [%nexti, %loop]
   %v = phi double [0.000000e+00, %top], [%nextv, %loop]
   %aptr = getelementptr double, double *%a, i64 %i
-; CHECK: MemoryUse(liveOnEntry) MayAlias
+; CHECK: MemoryUse(liveOnEntry) 
   %aval = load double, double *%aptr
   %nextv = fsub double %v, %aval
 ; CHECK: fsub reassoc contract double %v, %aval
