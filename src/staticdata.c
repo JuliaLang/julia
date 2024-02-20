@@ -960,18 +960,16 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 //record_field_change((jl_value_t **)((jl_method_t*)v)->roots, jl_emptysvec);
             } else if (jl_typetagis(v, jl_typename_type)) {
                 jl_typename_t *tn = (jl_typename_t*)v;
-                if (!(tn->mt->frozen)){
+                if (tn->mt != NULL && !(tn->mt->frozen)){
                 // if (strcmp(jl_symbol_name(tn->name), "#main") == 0  || (strcmp(jl_symbol_name(tn->name), "#__init__") == 0 ) ||
                 //     (strcmp(jl_symbol_name(tn->name), "#_str_sizehint") == 0 ) || (strcmp(jl_symbol_name(tn->name), "#print") == 0 )
                 //     || (strcmp(jl_symbol_name(tn->name), "#join") == 0 ) || (strcmp(jl_symbol_name(tn->name), "#showerror_nostdio") == 0 ) || (strcmp(jl_symbol_name(tn->name), "#!") == 0 )
                 //     || (strcmp(jl_symbol_name(tn->name), "#get_binding_type") == 0 ))
-                    if (tn->mt != NULL) {
-                        jl_methtable_t * new_methtable = (jl_methtable_t *)ptrhash_get(&new_methtables, tn->mt);
-                        if (new_methtable != HT_NOTFOUND)
-                            record_field_change((jl_value_t **)&tn->mt, (jl_value_t*)new_methtable);
-                        else
-                            record_field_change((jl_value_t **)&tn->mt, NULL);
-                    }
+                    jl_methtable_t * new_methtable = (jl_methtable_t *)ptrhash_get(&new_methtables, tn->mt);
+                    if (new_methtable != HT_NOTFOUND)
+                        record_field_change((jl_value_t **)&tn->mt, (jl_value_t*)new_methtable);
+                    else
+                        record_field_change((jl_value_t **)&tn->mt, NULL);
                 }
             }
         }
@@ -2430,6 +2428,38 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
         jl_svecset(cache, ins++, jl_nothing);
 }
 
+uint_t bindingkey_hash(size_t idx, jl_value_t *data);
+
+static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
+{
+    jl_svec_t * bindings = jl_atomic_load_relaxed(&m->bindings);
+    size_t l = jl_svec_len(bindings), i;
+    arraylist_t bindings_list;
+    if (l == 0)
+        return;
+    for (i = 0; i < l; i++) {
+        jl_value_t *ti = jl_svecref(bindings, i);
+        if (ti == jl_nothing)
+            continue;
+        jl_binding_t *ref = ((jl_binding_t*)ti);
+        if (!((ptrhash_get(&serialization_order, ref) == HT_NOTFOUND) &&
+            (ptrhash_get(&serialization_order, ref->globalref) == HT_NOTFOUND))) {
+            jl_svecset(bindings, i, jl_nothing);
+            arraylist_push(&bindings_list, ref);
+        }
+    }
+    _Atomic(jl_genericmemory_t*)bindingkeyset;
+    jl_atomic_store_relaxed(&bindingkeyset,(jl_genericmemory_t*)jl_an_empty_memory_any);
+    jl_svec_t *bindings2 = jl_alloc_svec_uninit(bindings_list.len);
+    for (i = 0; i < bindings_list.len; i++) {
+        jl_binding_t *ref = (jl_binding_t*)bindings_list.items[i];
+        jl_svecset(bindings2, i, ref);
+        jl_smallintset_insert(&bindingkeyset, (jl_value_t*)m, bindingkey_hash, i, (jl_value_t*)bindings2);
+    }
+    jl_atomic_store_relaxed(&m->bindings, bindings2);
+    jl_atomic_store_relaxed(&m->bindingkeyset, bindingkeyset);
+}
+
 static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig)
 {
     jl_code_info_t *ci = NULL;
@@ -2853,23 +2883,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                             jl_svecset(specializations, i, jl_nothing);
                     }
                 } else if (jl_is_module(v)) {
-                    jl_module_t *m = (jl_module_t*)v;
-                    jl_svec_t * bindings = m->bindings;
-                    size_t l = jl_svec_len(bindings), i;
-                    if (l == 0)
-                        continue;
-                    for (i = 0; i < l; i++) {
-                        jl_value_t *ti = jl_svecref(bindings, i);
-                        if (ti == jl_nothing)
-                            continue;
-
-                        jl_binding_t *ref = ((jl_binding_t*)ti);
-
-                        if ((ptrhash_get(&serialization_order, ref) == HT_NOTFOUND) &&
-                           ((ptrhash_get(&serialization_order, ref->globalref) == HT_NOTFOUND))){
-                            jl_svecset(bindings, i, jl_nothing);
-                           }
-                    }
+                    jl_prune_module_bindings((jl_module_t*)v);
                 }
             }
             // Not else
