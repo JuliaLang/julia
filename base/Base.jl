@@ -523,6 +523,7 @@ include("pkgid.jl")
 include("toml_parser.jl")
 include("linking.jl")
 include("loading.jl")
+include("precompile.jl")
 
 # misc useful functions & macros
 include("timing.jl")
