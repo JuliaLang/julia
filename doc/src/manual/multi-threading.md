@@ -227,7 +227,7 @@ Here `sum_single` is reused, with its own internal buffer `s`. The input vector 
 chunks for parallel work. We then use `Threads.@spawn` to create tasks that individually sum each chunk. Finally, we sum the results from each task using `sum_single` again:
 ```julia-repl
 julia> function sum_multi_good(a)
-           chunks = Iterators.partition(a, length(a) ÷ Threads.nthreads())
+           chunks = Iterators.partition(a, cld(length(a), Threads.nthreads()))
            tasks = map(chunks) do chunk
                Threads.@spawn sum_single(chunk)
            end
