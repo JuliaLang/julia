@@ -182,11 +182,13 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         int do_compile = 0;
-        if (jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return) {
+        if (codeinst->owner != jl_nothing) {
+            // TODO(vchuravy) native code caching for foreign interpreters
+        }
+        else if (jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return) {
             jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
             if (inferred &&
                 inferred != jl_nothing &&
-                jl_ir_flag_inferred(inferred) &&
                 (jl_ir_inlining_cost(inferred) == UINT16_MAX)) {
                 do_compile = 1;
             }
@@ -279,7 +281,7 @@ static void *jl_precompile(int all)
     return native_code;
 }
 
-static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_methods, jl_array_t *new_specializations)
+static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_methods, jl_array_t *new_ext_cis)
 {
     if (!worklist)
         return NULL;
@@ -310,9 +312,9 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
             }
         }
     }
-    n = jl_array_nrows(new_specializations);
+    n = jl_array_nrows(new_ext_cis);
     for (i = 0; i < n; i++) {
-        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_specializations, i);
+        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_ext_cis, i);
         precompile_enq_specialization_(ci->def, m);
     }
     void *native_code = jl_precompile_(m, 1);

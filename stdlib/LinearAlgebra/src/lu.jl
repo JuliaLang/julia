@@ -21,6 +21,7 @@ The individual components of the factorization `F::LU` can be accessed via [`get
 Iterating the factorization produces the components `F.L`, `F.U`, and `F.p`.
 
 # Examples
+
 ```jldoctest
 julia> A = [4 3; 6 3]
 2×2 Matrix{Int64}:
@@ -50,7 +51,7 @@ true
 struct LU{T,S<:AbstractMatrix{T},P<:AbstractVector{<:Integer}} <: Factorization{T}
     factors::S
     ipiv::P
-    info::BlasInt
+    info::BlasInt # Can be negative to indicate failed unpivoted factorization
 
     function LU{T,S,P}(factors, ipiv, info) where {T, S<:AbstractMatrix{T}, P<:AbstractVector{<:Integer}}
         require_one_based_indexing(factors)
@@ -76,16 +77,25 @@ Base.iterate(S::LU, ::Val{:done}) = nothing
 adjoint(F::LU{<:Real}) = TransposeFactorization(F)
 transpose(F::LU{<:Real}) = TransposeFactorization(F)
 
+function _check_lu_success(info, allowsingular)
+    if info < 0 # zero pivot error from unpivoted LU
+        checknozeropivot(-info)
+    else
+        allowsingular || checknonsingular(info)
+    end
+end
+
 # the following method is meant to catch calls to lu!(A::LAPACKArray) without a pivoting strategy
-lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
-function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true) where {T<:BlasFloat}
+lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true, allowsingular::Bool = false) = lu!(A, RowMaximum(); check, allowsingular)
+function lu!(A::StridedMatrix{T}, ::RowMaximum; check::Bool = true, allowsingular::Bool = false) where {T<:BlasFloat}
     lpt = LAPACK.getrf!(A; check)
-    check && checknonsingular(lpt[3])
+    check && _check_lu_success(lpt[3], allowsingular)
     return LU{T,typeof(lpt[1]),typeof(lpt[2])}(lpt[1], lpt[2], lpt[3])
 end
-function lu!(A::HermOrSym{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T); check::Bool = true) where {T}
+function lu!(A::HermOrSym{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T);
+        check::Bool = true, allowsingular::Bool = false) where {T}
     copytri!(A.data, A.uplo, isa(A, Hermitian))
-    lu!(A.data, pivot; check = check)
+    lu!(A.data, pivot; check, allowsingular)
 end
 # for backward compatibility
 # TODO: remove towards Julia v2
@@ -93,12 +103,15 @@ end
 @deprecate lu!(A::Union{StridedMatrix,HermOrSym,Tridiagonal}, ::Val{false}; check::Bool = true) lu!(A, NoPivot(); check=check)
 
 """
-    lu!(A, pivot = RowMaximum(); check = true) -> LU
+    lu!(A, pivot = RowMaximum(); check = true, allowsingular = false) -> LU
 
 `lu!` is the same as [`lu`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy. An [`InexactError`](@ref)
 exception is thrown if the factorization produces a number not representable by the
 element type of `A`, e.g. for integer types.
+
+!!! compat "Julia 1.11"
+    The `allowsingular` keyword argument was added in Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -129,10 +142,10 @@ Stacktrace:
 [...]
 ```
 """
-lu!(A::AbstractMatrix, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(eltype(A)); check::Bool = true) =
-    generic_lufact!(A, pivot; check = check)
+lu!(A::AbstractMatrix, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(eltype(A));
+    check::Bool = true, allowsingular::Bool = false) = generic_lufact!(A, pivot; check, allowsingular)
 function generic_lufact!(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T);
-                         check::Bool = true) where {T}
+                         check::Bool = true, allowsingular::Bool = false) where {T}
     check && LAPACK.chkfinite(A)
     # Extract values
     m, n = size(A)
@@ -188,7 +201,12 @@ function generic_lufact!(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot,R
             end
         end
     end
-    check && checknonsingular(info, pivot)
+    if pivot === NoPivot()
+        # Use a negative value to distinguish a failed factorization (zero in pivot
+        # position during unpivoted LU) from a valid but rank-deficient factorization
+        info = -info
+    end
+    check && _check_lu_success(info, allowsingular)
     return LU{T,typeof(A),typeof(ipiv)}(A, ipiv, convert(BlasInt, info))
 end
 
@@ -215,13 +233,17 @@ lupivottype(::Type{T}) where {T} = RowMaximum()
 
 # for all other types we must promote to a type which is stable under division
 """
-    lu(A, pivot = RowMaximum(); check = true) -> F::LU
+    lu(A, pivot = RowMaximum(); check = true, allowsingular = false) -> F::LU
 
 Compute the LU factorization of `A`.
 
 When `check = true`, an error is thrown if the decomposition fails.
 When `check = false`, responsibility for checking the decomposition's
 validity (via [`issuccess`](@ref)) lies with the user.
+
+By default, with `check = true`, an error is also thrown when the decomposition
+produces valid factors, but the upper-triangular factor `U` is rank-deficient. This may be changed by
+passing `allowsingular = true`.
 
 In most cases, if `A` is a subtype `S` of `AbstractMatrix{T}` with an element
 type `T` supporting `+`, `-`, `*` and `/`, the return type is `LU{T,S{T}}`.
@@ -240,7 +262,8 @@ One of the following pivoting strategies can be selected via the optional `pivot
   to be factorized rows.  (This corresponds to the typical choice in hand calculations, and
   is also useful for more general algebraic number types that support [`iszero`](@ref) but
   not `abs` or `<`.)
-* `NoPivot()`: pivoting turned off (may fail if a zero entry is encountered).
+* `NoPivot()`: pivoting turned off (will fail if a zero entry is encountered in
+  a pivot position, even when `allowsingular = true`).
 
 The individual components of the factorization `F` can be accessed via [`getproperty`](@ref):
 
@@ -269,6 +292,9 @@ The relationship between `F` and `A` is
 | [`logabsdet`](@ref)              | ✓    | ✓                      |
 | [`size`](@ref)                   | ✓    | ✓                      |
 
+!!! compat "Julia 1.11"
+    The `allowsingular` keyword argument was added in Julia 1.11.
+
 # Examples
 ```jldoctest
 julia> A = [4 3; 6 3]
@@ -294,6 +320,17 @@ julia> l, u, p = lu(A); # destructuring via iteration
 
 julia> l == F.L && u == F.U && p == F.p
 true
+
+julia> lu([1 2; 1 2], allowsingular = true)
+LU{Float64, Matrix{Float64}, Vector{Int64}}
+L factor:
+2×2 Matrix{Float64}:
+ 1.0  0.0
+ 1.0  1.0
+U factor (rank-deficient):
+2×2 Matrix{Float64}:
+ 1.0  2.0
+ 0.0  0.0
 ```
 """
 lu(A::AbstractMatrix{T}, args...; kwargs...) where {T} =
@@ -309,9 +346,9 @@ _lucopy(A::HermOrSym, T)      = copymutable_oftype(A, T)
 _lucopy(A::Tridiagonal, T)    = copymutable_oftype(A, T)
 
 lu(S::LU) = S
-function lu(x::Number; check::Bool=true)
+function lu(x::Number; check::Bool=true, allowsingular::Bool=false)
     info = x == 0 ? one(BlasInt) : zero(BlasInt)
-    check && checknonsingular(info)
+    check && _check_lu_success(info, allowsingular)
     return LU(fill(x, 1, 1), BlasInt[1], info)
 end
 
@@ -357,17 +394,47 @@ end
 Base.propertynames(F::LU, private::Bool=false) =
     (:L, :U, :p, :P, (private ? fieldnames(typeof(F)) : ())...)
 
-issuccess(F::LU) = F.info == 0
+
+"""
+    issuccess(F::LU; allowsingular = false)
+
+Test that the LU factorization of a matrix succeeded. By default a
+factorization that produces a valid but rank-deficient U factor is considered a
+failure. This can be changed by passing `allowsingular = true`.
+
+!!! compat "Julia 1.11"
+    The `allowsingular` keyword argument was added in Julia 1.11.
+
+# Examples
+
+```jldoctest
+julia> F = lu([1 2; 1 2], check = false);
+
+julia> issuccess(F)
+false
+
+julia> issuccess(F, allowsingular = true)
+true
+```
+"""
+function issuccess(F::LU; allowsingular::Bool=false)
+    # A negative info is always a failure, a positive info indicates a valid but rank-deficient U factor
+    F.info == 0 || (allowsingular && F.info > 0)
+end
 
 function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LU)
-    if issuccess(F)
+    if F.info < 0
+        print(io, "Failed factorization of type $(typeof(F))")
+    else
         summary(io, F); println(io)
         println(io, "L factor:")
         show(io, mime, F.L)
-        println(io, "\nU factor:")
+        if F.info > 0
+            println(io, "\nU factor (rank-deficient):")
+        else
+            println(io, "\nU factor:")
+        end
         show(io, mime, F.U)
-    else
-        print(io, "Failed factorization of type $(typeof(F))")
     end
 end
 
@@ -494,7 +561,8 @@ inv!(A::LU{T,<:StridedMatrix}) where {T} =
 inv(A::LU{<:BlasFloat,<:StridedMatrix}) = inv!(copy(A))
 
 # Tridiagonal
-function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true) where {T,V}
+function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum();
+        check::Bool = true, allowsingular::Bool = false) where {T,V}
     n = size(A, 1)
     has_du2_defined = isdefined(A, :du2) && length(A.du2) == max(0, n-2)
     if has_du2_defined
@@ -502,16 +570,17 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(
     else
         du2 = similar(A.d, max(0, n-2))::V
     end
-    _lu_tridiag!(A.dl, A.d, A.du, du2, Vector{BlasInt}(undef, n), pivot, check)
+    _lu_tridiag!(A.dl, A.d, A.du, du2, Vector{BlasInt}(undef, n), pivot, check, allowsingular)
 end
-function lu!(F::LU{<:Any,<:Tridiagonal}, A::Tridiagonal, pivot::Union{RowMaximum,NoPivot} = RowMaximum(); check::Bool = true)
+function lu!(F::LU{<:Any,<:Tridiagonal}, A::Tridiagonal, pivot::Union{RowMaximum,NoPivot} = RowMaximum();
+        check::Bool = true, allowsingular::Bool = false)
     B = F.factors
     size(B) == size(A) || throw(DimensionMismatch())
     copyto!(B, A)
-    _lu_tridiag!(B.dl, B.d, B.du, B.du2, F.ipiv, pivot, check)
+    _lu_tridiag!(B.dl, B.d, B.du, B.du2, F.ipiv, pivot, check, allowsingular)
 end
 # See dgttrf.f
-@inline function _lu_tridiag!(dl, d, du, du2, ipiv, pivot, check)
+@inline function _lu_tridiag!(dl, d, du, du2, ipiv, pivot, check, allowsingular)
     T = eltype(d)
     V = typeof(d)
 
@@ -520,9 +589,6 @@ end
 
     # Initialize variables
     info = 0
-    if dl === du
-        throw(ArgumentError("off-diagonals must not alias"))
-    end
     fill!(du2, 0)
 
     @inbounds begin
@@ -578,7 +644,7 @@ end
             end
         end
     end
-    check && checknonsingular(info, pivot)
+    check && _check_lu_success(info, allowsingular)
     return LU{T,Tridiagonal{T,V},typeof(ipiv)}(Tridiagonal{T,V}(dl, d, du, du2), ipiv, convert(BlasInt, info))
 end
 

@@ -6,6 +6,8 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/StringMap.h>
+#include <llvm/Support/Host.h>
 #include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -649,48 +651,42 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         jl_error("Image file is not compatible with this version of Julia");
     }
 
-    llvm::SmallVector<const char *, 0> fvars(pointers->header->nfvars);
-    llvm::SmallVector<const char *, 0> gvars(pointers->header->ngvars);
+    llvm::SmallVector<void*, 0> fvars(pointers->header->nfvars);
+    llvm::SmallVector<const char*, 0> gvars(pointers->header->ngvars);
 
-    llvm::SmallVector<std::pair<uint32_t, const char *>, 0> clones;
+    llvm::SmallVector<std::pair<uint32_t, void*>, 0> clones;
 
     for (unsigned i = 0; i < pointers->header->nshards; i++) {
         auto shard = pointers->shards[i];
 
-        // .data base
-        char *data_base = (char *)shard.gvar_base;
-
-        // .text base
-        const char *text_base = shard.fvar_base;
-
-        const int32_t *offsets = shard.fvar_offsets;
-        uint32_t nfunc = offsets[0];
+        void **fvar_shard = shard.fvar_ptrs;
+        uintptr_t nfunc = *shard.fvar_count;
         assert(nfunc <= pointers->header->nfvars);
-        offsets++;
         const int32_t *reloc_slots = shard.clone_slots;
         const uint32_t nreloc = reloc_slots[0];
-        reloc_slots += 1;
+        reloc_slots++;
         const uint32_t *clone_idxs = shard.clone_idxs;
-        const int32_t *clone_offsets = shard.clone_offsets;
+        void **clone_ptrs = shard.clone_ptrs;
         uint32_t tag_len = clone_idxs[0];
-        clone_idxs += 1;
+        clone_idxs++;
 
         assert(tag_len & jl_sysimg_tag_mask);
-        llvm::SmallVector<const int32_t*, 0> base_offsets = {offsets};
+        llvm::SmallVector<void**, 0> base_ptrs(0);
+        base_ptrs.push_back(fvar_shard);
         // Find target
-        for (uint32_t i = 0;i < target_idx;i++) {
+        for (uint32_t i = 0; i < target_idx; i++) {
             uint32_t len = jl_sysimg_val_mask & tag_len;
             if (jl_sysimg_tag_mask & tag_len) {
-                if (i != 0)
-                    clone_offsets += nfunc;
                 clone_idxs += len + 1;
+                if (i != 0)
+                    clone_ptrs += nfunc;
             }
             else {
-                clone_offsets += len;
+                clone_ptrs += len;
                 clone_idxs += len + 2;
             }
             tag_len = clone_idxs[-1];
-            base_offsets.push_back(tag_len & jl_sysimg_tag_mask ? clone_offsets : nullptr);
+            base_ptrs.push_back(tag_len & jl_sysimg_tag_mask ? clone_ptrs : nullptr);
         }
 
         bool clone_all = (tag_len & jl_sysimg_tag_mask) != 0;
@@ -698,22 +694,22 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         if (clone_all) {
             // clone_all
             if (target_idx != 0) {
-                offsets = clone_offsets;
+                fvar_shard = clone_ptrs;
             }
         }
         else {
             uint32_t base_idx = clone_idxs[0];
             assert(base_idx < target_idx);
             if (target_idx != 0) {
-                offsets = base_offsets[base_idx];
-                assert(offsets);
+                fvar_shard = base_ptrs[base_idx];
+                assert(fvar_shard);
             }
             clone_idxs++;
             unsigned start = clones.size();
             clones.resize(start + tag_len);
             auto idxs = shard.fvar_idxs;
             for (unsigned i = 0; i < tag_len; i++) {
-                clones[start + i] = {(clone_idxs[i] & ~jl_sysimg_val_mask) | idxs[clone_idxs[i] & jl_sysimg_val_mask], clone_offsets[i] + text_base};
+                clones[start + i] = {(clone_idxs[i] & ~jl_sysimg_val_mask) | idxs[clone_idxs[i] & jl_sysimg_val_mask], clone_ptrs[i]};
             }
         }
         // Do relocation
@@ -721,13 +717,13 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         uint32_t len = jl_sysimg_val_mask & tag_len;
         for (uint32_t i = 0; i < len; i++) {
             uint32_t idx = clone_idxs[i];
-            int32_t offset;
+            void *fptr;
             if (clone_all) {
-                offset = offsets[idx];
+                fptr = fvar_shard[idx];
             }
             else if (idx & jl_sysimg_tag_mask) {
                 idx = idx & jl_sysimg_val_mask;
-                offset = clone_offsets[i];
+                fptr = clone_ptrs[i];
             }
             else {
                 continue;
@@ -737,9 +733,10 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
                 auto reloc_idx = ((const uint32_t*)reloc_slots)[reloc_i * 2];
                 if (reloc_idx == idx) {
                     found = true;
+                    const char *data_base = (const char*)shard.clone_slots;
                     auto slot = (const void**)(data_base + reloc_slots[reloc_i * 2 + 1]);
                     assert(slot);
-                    *slot = offset + text_base;
+                    *slot = fptr;
                 }
                 else if (reloc_idx > idx) {
                     break;
@@ -751,34 +748,35 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 
         auto fidxs = shard.fvar_idxs;
         for (uint32_t i = 0; i < nfunc; i++) {
-            fvars[fidxs[i]] = text_base + offsets[i];
+            fvars[fidxs[i]] = fvar_shard[i];
         }
 
+        // .data base
         auto gidxs = shard.gvar_idxs;
         unsigned ngvars = shard.gvar_offsets[0];
         assert(ngvars <= pointers->header->ngvars);
+        char *data_base = (char*)shard.gvar_offsets;
         for (uint32_t i = 0; i < ngvars; i++) {
             gvars[gidxs[i]] = data_base + shard.gvar_offsets[i+1];
         }
     }
 
     if (!fvars.empty()) {
-        auto offsets = (int32_t *) malloc(sizeof(int32_t) * fvars.size());
-        res.fptrs.base = fvars[0];
+        auto ptrs = (void**) malloc(sizeof(void*) * fvars.size());
         for (size_t i = 0; i < fvars.size(); i++) {
             assert(fvars[i] && "Missing function pointer!");
-            offsets[i] = fvars[i] - res.fptrs.base;
+            ptrs[i] = fvars[i];
         }
-        res.fptrs.offsets = offsets;
-        res.fptrs.noffsets = fvars.size();
+        res.fptrs.ptrs = ptrs;
+        res.fptrs.nptrs = fvars.size();
     }
 
     if (!gvars.empty()) {
-        auto offsets = (int32_t *) malloc(sizeof(int32_t) * gvars.size());
-        res.gvars_base = (uintptr_t *)gvars[0];
+        auto offsets = (int32_t*)malloc(sizeof(int32_t) * gvars.size());
+        res.gvars_base = (const char*)pointers->header;
         for (size_t i = 0; i < gvars.size(); i++) {
             assert(gvars[i] && "Missing global variable pointer!");
-            offsets[i] = gvars[i] - (const char *)res.gvars_base;
+            offsets[i] = gvars[i] - res.gvars_base;
         }
         res.gvars_offsets = offsets;
         res.ngvars = gvars.size();
@@ -786,15 +784,18 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
 
     if (!clones.empty()) {
         assert(!fvars.empty());
-        std::sort(clones.begin(), clones.end());
-        auto clone_offsets = (int32_t *) malloc(sizeof(int32_t) * clones.size());
+        std::sort(clones.begin(), clones.end(),
+            [](const std::pair<uint32_t, const void*> &a, const std::pair<uint32_t, const void*> &b) {
+                return (a.first & jl_sysimg_val_mask) < (b.first & jl_sysimg_val_mask);
+        });
+        auto clone_ptrs = (void**) malloc(sizeof(void*) * clones.size());
         auto clone_idxs = (uint32_t *) malloc(sizeof(uint32_t) * clones.size());
         for (size_t i = 0; i < clones.size(); i++) {
             clone_idxs[i] = clones[i].first;
-            clone_offsets[i] = clones[i].second - res.fptrs.base;
+            clone_ptrs[i] = clones[i].second;
         }
         res.fptrs.clone_idxs = clone_idxs;
-        res.fptrs.clone_offsets = clone_offsets;
+        res.fptrs.clone_ptrs = clone_ptrs;
         res.fptrs.nclones = clones.size();
     }
 
@@ -962,6 +963,43 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 
 }
 
+static std::string jl_get_cpu_name_llvm(void)
+{
+    return llvm::sys::getHostCPUName().str();
+}
+
+static std::string jl_get_cpu_features_llvm(void)
+{
+    llvm::StringMap<bool> HostFeatures;
+    llvm::sys::getHostCPUFeatures(HostFeatures);
+    std::string attr;
+    for (auto &ele: HostFeatures) {
+        if (ele.getValue()) {
+            if (!attr.empty()) {
+                attr.append(",+");
+            }
+            else {
+                attr.append("+");
+            }
+            attr.append(ele.getKey().str());
+        }
+    }
+    // Explicitly disabled features need to be added at the end so that
+    // they are not re-enabled by other features that implies them by default.
+    for (auto &ele: HostFeatures) {
+        if (!ele.getValue()) {
+            if (!attr.empty()) {
+                attr.append(",-");
+            }
+            else {
+                attr.append("-");
+            }
+            attr.append(ele.getKey().str());
+        }
+    }
+    return attr;
+}
+
 #if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 
 #include "processor_x86.cpp"
@@ -975,6 +1013,16 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 #include "processor_fallback.cpp"
 
 #endif
+
+JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
+{
+    return jl_cstr_to_string(host_cpu_name().c_str());
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
+{
+    return jl_cstr_to_string(jl_get_cpu_features_llvm().c_str());
+}
 
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
     auto specs = jl_get_llvm_clone_targets();

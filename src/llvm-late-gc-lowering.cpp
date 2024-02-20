@@ -1620,6 +1620,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee == gc_preserve_end_func || callee == typeof_func ||
                         callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
                         callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
+                        callee->getName() == XSTR(jl_lock_field) || callee->getName() == XSTR(jl_unlock_field) ||
                         callee == write_barrier_func || callee == gc_loaded_func ||
                         callee->getName() == "memcmp") {
                         continue;
@@ -2435,8 +2436,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                             false),
                         builder.CreatePtrToInt(tag, T_size),
                     });
+                newI->setAttributes(allocBytesIntrinsic->getAttributes());
+                newI->addDereferenceableRetAttr(CI->getRetDereferenceableBytes());
                 newI->takeName(CI);
-
                 // Now, finally, set the tag. We do this in IR instead of in the C alloc
                 // function, to provide possible optimization opportunities. (I think? TBH
                 // the most recent editor of this code is not entirely clear on why we

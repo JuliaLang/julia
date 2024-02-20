@@ -25,9 +25,8 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{A
             code[i] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Int32[block_for_inst(cfg, Int(edge)) for edge in stmt.edges], stmt.values)
-        elseif isexpr(stmt, :enter)
-            stmt.args[1] = block_for_inst(cfg, stmt.args[1]::Int)
-            code[i] = stmt
+        elseif isa(stmt, EnterNode)
+            code[i] = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest))
         end
     end
     nstmts = length(code)
@@ -56,8 +55,6 @@ Mainly used for testing or interactive use.
 inflate_ir(ci::CodeInfo, linfo::MethodInstance) = inflate_ir!(copy(ci), linfo)
 inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, argtypes)
 function inflate_ir(ci::CodeInfo)
-    parent = ci.parent
-    isa(parent, MethodInstance) && return inflate_ir(ci, parent)
     # XXX the length of `ci.slotflags` may be different from the actual number of call
     # arguments, but we really don't know that information in this case
     argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
@@ -93,9 +90,8 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode)
             code[i] = GotoIfNot(stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Int32[edge == 0 ? 0 : last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
-        elseif isexpr(stmt, :enter)
-            stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]::Int].stmts)
-            code[i] = stmt
+        elseif isa(stmt, EnterNode)
+            code[i] = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : first(ir.cfg.blocks[stmt.catch_dest].stmts))
         end
     end
 end

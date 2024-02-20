@@ -67,8 +67,18 @@ mutable struct Barrier
     b
 end
 
+# COM: check write barrier names
+function f8(b,y)
+    b.b = y
+    return b
+end
+
 struct Named
     x::Int
+end
+
+function fmemory(nel)
+    return Memory{Int64}(undef,nel)
 end
 # CHECK-LABEL: define {{(swiftcc )?}}double @julia_f1
 # CHECK-SAME: double %"a::Float64"
@@ -86,12 +96,12 @@ end
 # CHECK: ret double
 # CHECK: }
 
-# CHECK-LABEL: define nonnull {} addrspace(10)* @jfptr_f1
+# CHECK-LABEL: define nonnull ptr @jfptr_f1
 # CHECK-SAME: %"function::Core.Function"
 # CHECK-SAME: %"args::Any[]"
 # CHECK-SAME: %"nargs::UInt32"
 # CHECK: %"+Core.Float64
-# CHECK: ret {} addrspace(10)*
+# CHECK: ret ptr
 # CHECK: }
 emit(f1, Float64, Float64, Float64, Float64)
 
@@ -123,22 +133,20 @@ emit(f2, Float64, Float64, Float64, Float64, Float64, Float64)
 # CHECK-SAME: double %"e[3]::Float64"
 emit(f2, Float64, Float64, Float64, Float64, Float64, Float64, Float64)
 
-# CHECK: define {{(swiftcc )?}}nonnull {} addrspace(10)* @julia_f5
+# CHECK: define {{(swiftcc )?}}nonnull ptr @julia_f5
 # CHECK-SAME: %"a::A"
 # CHECK: %"a::A.b_ptr.c_ptr.d
 emit(f5, A)
 
-# CHECK: define {{(swiftcc )?}}nonnull {} addrspace(10)* @julia_f6
+# CHECK: define {{(swiftcc )?}}nonnull ptr @julia_f6
 # CHECK-SAME: %"e::E"
 # CHECK: %jlcallframe
 # CHECK: %gcframe
-# CHECK: %frame.nroots
 # CHECK: %frame.prev
 # CHECK: %task.gcstack
 # CHECK: %ptls_field
 # CHECK: %ptls_load
 # CHECK: %safepoint
-# CHECK: %"e::E.f_ptr"
 # CHECK: %"e::E.f"
 # CHECK: %"e::E.f.tag_addr"
 # CHECK: %"e::E.f.tag"
@@ -152,20 +160,23 @@ emit(f6, E)
 # CHECK: define {{(swiftcc )?}}i64 @julia_f7
 # CHECK-SAME: %"a::Tuple"
 # CHECK: %"a::Tuple[2]_ptr.unbox
-emit(f7,Tuple{Int,Int})
+emit(f7, Tuple{Int,Int})
 
-# CHECK: define {{(swiftcc )?}}nonnull {} addrspace(10)* @julia_Barrier
-# CHECK-SAME: %"b::Int64"
+# CHECK: define {{(swiftcc )?}}nonnull ptr @julia_f8
+# CHECK-SAME: %"y::Int64"
 # CHECK: %parent_bits
 # CHECK: %parent_old_marked
 # CHECK: %child_bit
 # CHECK: %child_not_marked
-emit(Barrier, Int64)
+emit(f8, Barrier, Int)
 
-# CHECK: define {{(swiftcc )?}}nonnull {} addrspace(10)* @julia_Barrier
+# CHECK: define {{(swiftcc )?}}nonnull ptr @julia_Barrier
 # CHECK-SAME: %"b::Named"
 # CHECK: %"new::Barrier"
 # CHECK: %"box::Named"
-# CHECK: %parent_bits
-# CHECK: %parent_old_marked
 emit(Barrier, Named)
+
+# CHECK: define {{(swiftcc )?}}nonnull ptr @julia_fmemory
+# CHECK-SAME: %"nel::Int64"
+# CHECK: %"Memory{Int64}[]"
+emit(fmemory, Int64)

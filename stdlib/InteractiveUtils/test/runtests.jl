@@ -229,7 +229,7 @@ module Tmp14173
 end
 varinfo(Tmp14173) # warm up
 const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 100000)
+@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 125000)
 
 # PR #24997: test that `varinfo` doesn't fail when encountering `missing`
 module A
@@ -284,7 +284,7 @@ try
     @which x = 1
     error("unexpected")
 catch err13464
-    @test startswith(err13464.msg, "expression is not a function call, or is too complex")
+    @test startswith(err13464.msg, "expression is not a function call")
 end
 
 module MacroTest
@@ -330,7 +330,9 @@ let _true = Ref(true), f, g, h
 end
 
 # manually generate a broken function, which will break codegen
-# and make sure Julia doesn't crash
+# and make sure Julia doesn't crash (when using a non-asserts build)
+is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+if !is_asserts()
 @eval @noinline Base.@constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
@@ -345,9 +347,9 @@ _true = true
 # and show that we can still work around it
 @noinline g_broken_code() = _true ? 0 : h_broken_code()
 @noinline h_broken_code() = (g_broken_code(); f_broken_code())
-let err = tempname(),
+let errf = tempname(),
     old_stderr = stderr,
-    new_stderr = open(err, "w")
+    new_stderr = open(errf, "w")
     try
         redirect_stderr(new_stderr)
         println(new_stderr, "start")
@@ -360,24 +362,27 @@ let err = tempname(),
     finally
         redirect_stderr(old_stderr)
         close(new_stderr)
-        let errstr = read(err, String)
+        let errstr = read(errf, String)
             @test startswith(errstr, """start
                 end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
-                ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """) || errstr
             @test !endswith(errstr, "\nend\n") || errstr
         end
-        rm(err)
+        rm(errf)
     end
+end
 end
 
 # Issue #33163
 A33163(x; y) = x + y
 B33163(x) = x
-@test (@code_typed A33163(1, y=2))[1].inferred
-@test !(@code_typed optimize=false A33163(1, y=2))[1].inferred
-@test !(@code_typed optimize=false B33163(1))[1].inferred
+let
+    (@code_typed A33163(1, y=2))[1]
+    (@code_typed optimize=false A33163(1, y=2))[1]
+    (@code_typed optimize=false B33163(1))[1]
+end
 
 @test_throws MethodError (@code_lowered wrongkeyword=true 3 + 4)
 
@@ -411,10 +416,11 @@ a14637 = A14637(0)
 @test (@code_typed max.(1 .+ 3, 5 - 7))[2] == Int
 f36261(x,y) = 3x + 4y
 A36261 = Float64[1.0, 2.0, 3.0]
-@test (@code_typed f36261.(A36261, pi))[1].inferred
-@test (@code_typed f36261.(A36261, 1 .+ pi))[1].inferred
-@test (@code_typed f36261.(A36261, 1 + pi))[1].inferred
-
+let
+    @code_typed f36261.(A36261, pi)[1]
+    @code_typed f36261.(A36261, 1 .+ pi)[1]
+    @code_typed f36261.(A36261, 1 + pi)[1]
+end
 
 module ReflectionTest
 using Test, Random, InteractiveUtils
@@ -640,7 +646,8 @@ end
 # macro options should accept both literals and variables
 let
     opt = false
-    @test !(first(@code_typed optimize=opt sum(1:10)).inferred)
+    @test length(first(@code_typed optimize=opt sum(1:10)).code) ==
+        length((@code_lowered sum(1:10)).code)
 end
 
 @testset "@time_imports" begin
@@ -721,3 +728,7 @@ end
 end
 
 @test Base.infer_effects(sin, (Int,)) == InteractiveUtils.@infer_effects sin(42)
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(InteractiveUtils))
+end

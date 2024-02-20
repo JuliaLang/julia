@@ -158,7 +158,7 @@ julia> rand2(2,2)
  1.15119   0.918912
 
 julia> fetch(@spawnat :any rand2(2,2))
-ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))
+ERROR: RemoteException(2, CapturedException(UndefVarError(Symbol("#rand2"))))
 Stacktrace:
 [...]
 ```
@@ -209,7 +209,7 @@ MyType(7)
 
 julia> fetch(@spawnat 2 MyType(7))
 ERROR: On worker 2:
-UndefVarError: `MyType` not defined
+UndefVarError: `MyType` not defined in `Main`
 ⋮
 
 julia> fetch(@spawnat 2 DummyModule.MyType(7))
@@ -270,10 +270,11 @@ julia> addprocs(2)
 Module [`Distributed`](@ref man-distributed) must be explicitly loaded on the master process before invoking [`addprocs`](@ref).
 It is automatically made available on the worker processes.
 
-Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
-their global state (such as global variables, new method definitions, and loaded modules) with any
-of the other running processes. You may use `addprocs(exeflags="--project")` to initialize a worker with
-a particular environment, and then `@everywhere using <modulename>` or `@everywhere include("file.jl")`.
+!!! note
+    Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
+    their global state (such as command-line switches, global variables, new method definitions, and loaded modules) with any
+    of the other running processes. You may use `addprocs(exeflags="--project")` to initialize a worker with
+    a particular environment, and then `@everywhere using <modulename>` or `@everywhere include("file.jl")`.
 
 Other types of clusters can be supported by writing your own custom `ClusterManager`, as described
 below in the [ClusterManagers](@ref) section.
@@ -539,9 +540,72 @@ Methods [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and 
 on a [`RemoteChannel`](@ref) are proxied onto the backing store on the remote process.
 
 [`RemoteChannel`](@ref) can thus be used to refer to user implemented `AbstractChannel` objects.
-A simple example of this is provided in `dictchannel.jl` in the
-[Examples repository](https://github.com/JuliaAttic/Examples), which uses a dictionary as its
-remote store.
+A simple example of this is the following `DictChannel` which uses a dictionary as its
+remote store:
+
+```jldoctest
+julia> struct DictChannel{T} <: AbstractChannel{T}
+           d::Dict
+           cond_take::Threads.Condition    # waiting for data to become available
+           DictChannel{T}() where {T} = new(Dict(), Threads.Condition())
+           DictChannel() = DictChannel{Any}()
+       end
+
+julia> begin
+       function Base.put!(D::DictChannel, k, v)
+           @lock D.cond_take begin
+               D.d[k] = v
+               notify(D.cond_take)
+           end
+           return D
+       end
+       function Base.take!(D::DictChannel, k)
+           @lock D.cond_take begin
+               v = fetch(D, k)
+               delete!(D.d, k)
+               return v
+           end
+       end
+       Base.isready(D::DictChannel) = @lock D.cond_take !isempty(D.d)
+       Base.isready(D::DictChannel, k) = @lock D.cond_take haskey(D.d, k)
+       function Base.fetch(D::DictChannel, k)
+           @lock D.cond_take begin
+               wait(D, k)
+               return D.d[k]
+           end
+       end
+       function Base.wait(D::DictChannel, k)
+           @lock D.cond_take begin
+               while !isready(D, k)
+                   wait(D.cond_take)
+               end
+           end
+       end
+       end;
+
+julia> d = DictChannel();
+
+julia> isready(d)
+false
+
+julia> put!(d, :k, :v);
+
+julia> isready(d, :k)
+true
+
+julia> fetch(d, :k)
+:v
+
+julia> wait(d, :k)
+
+julia> take!(d, :k)
+:v
+
+julia> isready(d, :k)
+false
+```
+
+
 
 
 ## Channels and RemoteChannels
@@ -750,16 +814,18 @@ will always operate on copies of arguments.
 
 ## [Shared Arrays](@id man-shared-arrays)
 
-Shared Arrays use system shared memory to map the same array across many processes. While there
-are some similarities to a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl), the
-behavior of a [`SharedArray`](@ref) is quite different. In a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl),
-each process has local access to just a chunk of the data, and no two processes share the same
-chunk; in contrast, in a [`SharedArray`](@ref) each "participating" process has access to the
-entire array.  A [`SharedArray`](@ref) is a good choice when you want to have a large amount of
-data jointly accessible to two or more processes on the same machine.
+Shared Arrays use system shared memory to map the same array across many processes. A
+[`SharedArray`](@ref) is a good choice when you want to have a large amount of data jointly
+accessible to two or more processes on the same machine. Shared Array support is available via the
+module `SharedArrays`, which must be explicitly loaded on all participating workers.
 
-Shared Array support is available via module `SharedArrays` which must be explicitly loaded on
-all participating workers.
+A complementary data structure is provided by the external package
+[`DistributedArrays.jl`](https://github.com/JuliaParallel/DistributedArrays.jl) in the form of a
+`DArray`. While there are some similarities to a [`SharedArray`](@ref), the behavior of a
+[`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl) is quite different. In a
+[`SharedArray`](@ref), each "participating" process has access to the entire array; in contrast, in
+a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl), each process has local access
+to just a chunk of the data, and no two processes share the same chunk.
 
 [`SharedArray`](@ref) indexing (assignment and accessing values) works just as with regular arrays,
 and is efficient because the underlying memory is available to the local process. Therefore,
@@ -1263,8 +1329,11 @@ in future releases.
 ## Noteworthy external packages
 
 Outside of Julia parallelism there are plenty of external packages that should be mentioned.
-For example [MPI.jl](https://github.com/JuliaParallel/MPI.jl) is a Julia wrapper for the `MPI` protocol, [Dagger.jl](https://github.com/JuliaParallel/Dagger.jl) provides functionality similar to Python's [Dask](https://dask.org/), and
-[DistributedArrays.jl](https://github.com/JuliaParallel/Distributedarrays.jl) provides array operations distributed across workers, as presented in [Shared Arrays](@ref).
+For example, [`MPI.jl`](https://github.com/JuliaParallel/MPI.jl) is a Julia wrapper for the `MPI`
+protocol, [`Dagger.jl`](https://github.com/JuliaParallel/Dagger.jl) provides functionality similar to
+Python's [Dask](https://dask.org/), and
+[`DistributedArrays.jl`](https://github.com/JuliaParallel/Distributedarrays.jl) provides array
+operations distributed across workers, as [outlined above](@ref man-shared-arrays).
 
 A mention must be made of Julia's GPU programming ecosystem, which includes:
 

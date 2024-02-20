@@ -73,3 +73,7 @@ str = "22b4a8a1-e548-4eeb-9270-60426d66a48e"
 for r in rand(UInt128, 10^3)
     @test UUID(r) == UUID(string(UUID(r)))
 end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(UUIDs))
+end

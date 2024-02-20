@@ -337,3 +337,7 @@ end
     # There must be at least two: one for the root test task and one for the async task:
     @test fetch(@async(@ccall(jl_get_num_stack_mappings()::Cint))) >= 2
 end
+
+@testset "Base.Threads docstrings" begin
+    @test isempty(Docs.undocumented_names(Threads))
+end

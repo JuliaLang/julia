@@ -11,7 +11,7 @@ const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
     SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
-    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator,
+    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
@@ -59,7 +59,7 @@ julia> collect(Iterators.map(x -> x^2, 1:3))
  9
 ```
 """
-map(f, args...) = Base.Generator(f, args...)
+map(f, arg, args...) = Base.Generator(f, arg, args...)
 
 tail_if_any(::Tuple{}) = ()
 tail_if_any(x::Tuple) = tail(x)
@@ -953,12 +953,17 @@ struct Cycle{I}
 end
 
 """
-    cycle(iter)
+    cycle(iter[, n::Int])
 
 An iterator that cycles through `iter` forever.
-If `iter` is empty, so is `cycle(iter)`.
+If `n` is specified, then it cycles through `iter` that many times.
+When `iter` is empty, so are `cycle(iter)` and `cycle(iter, n)`.
 
-See also: [`Iterators.repeated`](@ref), [`Base.repeat`](@ref).
+`Iterators.cycle(iter, n)` is the lazy equivalent of [`Base.repeat`](@ref)`(vector, n)`,
+while [`Iterators.repeated`](@ref)`(iter, n)` is the lazy [`Base.fill`](@ref)`(item, n)`.
+
+!!! compat "Julia 1.11"
+    The method `cycle(iter, n)` was added in Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -967,13 +972,23 @@ julia> for (i, v) in enumerate(Iterators.cycle("hello"))
            i > 10 && break
        end
 hellohelloh
+
+julia> foreach(print, Iterators.cycle(['j', 'u', 'l', 'i', 'a'], 3))
+juliajuliajulia
+
+julia> repeat([1,2,3], 4) == collect(Iterators.cycle([1,2,3], 4))
+true
+
+julia> fill([1,2,3], 4) == collect(Iterators.repeated([1,2,3], 4))
+true
 ```
 """
 cycle(xs) = Cycle(xs)
+cycle(xs, n::Integer) = flatten(repeated(xs, n))
 
 eltype(::Type{Cycle{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{Cycle{I}}) where {I} = IteratorEltype(I)
-IteratorSize(::Type{Cycle{I}}) where {I} = IsInfinite()
+IteratorSize(::Type{Cycle{I}}) where {I} = IsInfinite() # XXX: this is false if iterator ever becomes empty
 
 iterate(it::Cycle) = iterate(it.xs)
 isdone(it::Cycle) = isdone(it.xs)
@@ -1000,7 +1015,7 @@ repeated(x) = Repeated(x)
 An iterator that generates the value `x` forever. If `n` is specified, generates `x` that
 many times (equivalent to `take(repeated(x), n)`).
 
-See also: [`Iterators.cycle`](@ref), [`Base.repeat`](@ref).
+See also [`fill`](@ref Base.fill), and compare [`Iterators.cycle`](@ref).
 
 # Examples
 ```jldoctest
@@ -1012,6 +1027,12 @@ julia> collect(a)
  [1 2]
  [1 2]
  [1 2]
+
+julia> ans == fill([1 2], 4)
+true
+
+julia> Iterators.cycle([1 2], 4) |> collect |> println
+[1, 2, 1, 2, 1, 2, 1, 2]
 ```
 """
 repeated(x, n::Integer) = take(repeated(x), Int(n))
@@ -1422,42 +1443,29 @@ julia> sum(a) # Sum the remaining elements
 7
 ```
 """
-mutable struct Stateful{T, VS, N<:Integer}
+mutable struct Stateful{T, VS}
     itr::T
     # A bit awkward right now, but adapted to the new iteration protocol
     nextvalstate::Union{VS, Nothing}
-
-    # Number of remaining elements, if itr is HasLength or HasShape.
-    # if not, store -1 - number_of_consumed_elements.
-    # This allows us to defer calculating length until asked for.
-    # See PR #45924
-    remaining::N
     @inline function Stateful{<:Any, Any}(itr::T) where {T}
-        itl = iterlength(itr)
-        new{T, Any, typeof(itl)}(itr, iterate(itr), itl)
+        return new{T, Any}(itr, iterate(itr))
     end
     @inline function Stateful(itr::T) where {T}
         VS = approx_iter_type(T)
-        itl = iterlength(itr)
-        return new{T, VS, typeof(itl)}(itr, iterate(itr)::VS, itl)
+        return new{T, VS}(itr, iterate(itr)::VS)
     end
 end
 
-function iterlength(it)::Signed
-    if IteratorSize(it) isa Union{HasShape, HasLength}
-       return length(it)
-    else
-        -1
-    end
+function reset!(s::Stateful)
+    setfield!(s, :nextvalstate, iterate(s.itr)) # bypass convert call of setproperty!
+    return s
 end
-
-function reset!(s::Stateful{T,VS}, itr::T=s.itr) where {T,VS}
+function reset!(s::Stateful{T}, itr::T) where {T}
     s.itr = itr
-    itl = iterlength(itr)
-    setfield!(s, :nextvalstate, iterate(itr))
-    s.remaining = itl
-    s
+    reset!(s)
+    return s
 end
+
 
 # Try to find an appropriate type for the (value, state tuple),
 # by doing a recursive unrolling of the iteration protocol up to
@@ -1480,7 +1488,6 @@ end
 
 Stateful(x::Stateful) = x
 convert(::Type{Stateful}, itr) = Stateful(itr)
-
 @inline isdone(s::Stateful, st=nothing) = s.nextvalstate === nothing
 
 @inline function popfirst!(s::Stateful)
@@ -1490,8 +1497,6 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
     else
         val, state = vs
         Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
-        rem = s.remaining
-        s.remaining = rem - typeof(rem)(1)
         return val
     end
 end
@@ -1501,20 +1506,10 @@ end
     return ns !== nothing ? ns[1] : sentinel
 end
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
-IteratorSize(::Type{<:Stateful{T}}) where {T} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
+IteratorSize(::Type{<:Stateful{T}}) where {T} = IteratorSize(T) isa IsInfinite ? IsInfinite() : SizeUnknown()
 eltype(::Type{<:Stateful{T}}) where {T} = eltype(T)
 IteratorEltype(::Type{<:Stateful{T}}) where {T} = IteratorEltype(T)
 
-function length(s::Stateful)
-    rem = s.remaining
-    # If rem is actually remaining length, return it.
-    # else, rem is number of consumed elements.
-    if rem >= 0
-        rem
-    else
-        length(s.itr) - (typeof(rem)(1) - rem)
-    end
-end
 end # if statement several hundred lines above
 
 """
@@ -1547,7 +1542,9 @@ Stacktrace:
 [...]
 ```
 """
-@propagate_inbounds function only(x)
+@propagate_inbounds only(x) = _only(x, iterate)
+
+@propagate_inbounds function _only(x, ::typeof(iterate))
     i = iterate(x)
     @boundscheck if i === nothing
         throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
@@ -1559,15 +1556,20 @@ Stacktrace:
     return ret
 end
 
-# Collections of known size
-only(x::Ref) = x[]
-only(x::Number) = x
-only(x::Char) = x
+@inline function _only(x, ::typeof(first))
+    @boundscheck if length(x) != 1
+        throw(ArgumentError("Collection must contain exactly 1 element"))
+    end
+    @inbounds first(x)
+end
+
+@propagate_inbounds only(x::IdDict) = _only(x, first)
+
+# Specific error messages for tuples and named tuples
 only(x::Tuple{Any}) = x[1]
 only(x::Tuple) = throw(
     ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
 )
-only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
 only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")

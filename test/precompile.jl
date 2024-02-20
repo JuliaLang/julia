@@ -3,7 +3,7 @@
 original_depot_path = copy(Base.DEPOT_PATH)
 original_load_path = copy(Base.LOAD_PATH)
 
-using Test, Distributed, Random
+using Test, Distributed, Random, Logging
 using REPL # doc lookup function
 
 Foo_module = :Foo4b3a94a1a081a8cb
@@ -115,6 +115,8 @@ precompile_test_harness(false) do dir
                   d = den(a)
                   return h
               end
+              abstract type AbstractAlgebraMap{A} end
+              struct GAPGroupHomomorphism{A, B} <: AbstractAlgebraMap{GAPGroupHomomorphism{B, A}} end
           end
           """)
     write(Foo2_file,
@@ -130,7 +132,7 @@ precompile_test_harness(false) do dir
     write(Foo_file,
           """
           module $Foo_module
-              import $FooBase_module, $FooBase_module.typeA
+              import $FooBase_module, $FooBase_module.typeA, $FooBase_module.GAPGroupHomomorphism
               import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
@@ -213,6 +215,8 @@ precompile_test_harness(false) do dir
               Base.convert(::Type{Some{Value18343}}, ::Value18343{Some}) = 2
               Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
+              const GAPType1 = GAPGroupHomomorphism{Nothing, Nothing}
+              const GAPType2 = GAPGroupHomomorphism{1, 2}
 
               # issue #28297
               mutable struct Result
@@ -288,6 +292,9 @@ precompile_test_harness(false) do dir
               a_vec_inline = Pair{Int,Any}[]
               push!(a_vec_inline, 1=>2, 3=>4)
               a_mat_inline = reshape(a_vec_inline, (1, 2))
+
+              oid_vec_int = objectid(a_vec_int)
+              oid_mat_int = objectid(a_mat_int)
           end
           """)
     # Issue #12623
@@ -371,6 +378,10 @@ precompile_test_harness(false) do dir
         @test Foo.a_mat_inline == Pair{Int,Any}[1=>2 3=>4]
         Foo.a_mat_inline[1, 2] = 5=>6
         @test Foo.a_vec_inline[2] === Pair{Int,Any}(5, 6)
+
+        @test objectid(Foo.a_vec_int) === Foo.oid_vec_int
+        @test objectid(Foo.a_mat_int) === Foo.oid_mat_int
+        @test Foo.oid_vec_int !== Foo.oid_mat_int
     end
 
     @eval begin function ccallable_test()
@@ -425,7 +436,8 @@ precompile_test_harness(false) do dir
         modules, (deps, _, requires), required_modules, _... = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> mod_fl_mt.filename
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
-        @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
+        # foo.jl and bar.jl are never written to disk, so they are not relocatable
+        @test map(x -> x.filename, deps) == [ Foo_file, joinpath("@depot", "foo.jl"), joinpath("@depot", "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
                             Base.PkgId(Foo) => Base.PkgId(Test),
@@ -457,6 +469,7 @@ precompile_test_harness(false) do dir
             # and their dependencies
             Dict(Base.PkgId(Base.root_module(Base, :SHA)) => Base.module_build_id(Base.root_module(Base, :SHA))),
             Dict(Base.PkgId(Base.root_module(Base, :Markdown)) => Base.module_build_id(Base.root_module(Base, :Markdown))),
+            Dict(Base.PkgId(Base.root_module(Base, :StyledStrings)) => Base.module_build_id(Base.root_module(Base, :StyledStrings))),
             # and their dependencies
             Dict(Base.PkgId(Base.root_module(Base, :Base64)) => Base.module_build_id(Base.root_module(Base, :Base64))),
         )
@@ -564,6 +577,16 @@ precompile_test_harness(false) do dir
 
     @test Base.compilecache(Base.PkgId("Baz")) == Base.PrecompilableError() # due to __precompile__(false)
 
+    OverwriteMethodError_file = joinpath(dir, "OverwriteMethodError.jl")
+    write(OverwriteMethodError_file,
+          """
+          module OverwriteMethodError
+              Base.:(+)(x::Bool, y::Bool) = false
+          end
+          """)
+
+    @test (@test_warn "overwritten in module OverwriteMethodError" Base.compilecache(Base.PkgId("OverwriteMethodError"))) == Base.PrecompilableError() # due to piracy
+
     UseBaz_file = joinpath(dir, "UseBaz.jl")
     write(UseBaz_file,
           """
@@ -607,7 +630,7 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    cachefile, _ = Base.compilecache(Base.PkgId("FooBar"))
+    cachefile, _ = @test_logs (:debug, r"Precompiling FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
@@ -1671,13 +1694,14 @@ precompile_test_harness("Issue #46558") do load_path
     @test (@eval $Foo.foo(1)) == 2
 end
 
+# TODO: Decide if we need to keep supporting this.
 precompile_test_harness("issue #46296") do load_path
     write(joinpath(load_path, "CodeInstancePrecompile.jl"),
         """
         module CodeInstancePrecompile
 
         mi = first(Base.specializations(first(methods(identity))))
-        ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
+        ci = Core.CodeInstance(mi, nothing, Any, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
         __init__() = @assert ci isa Core.CodeInstance
@@ -1686,6 +1710,149 @@ precompile_test_harness("issue #46296") do load_path
         """)
     Base.compilecache(Base.PkgId("CodeInstancePrecompile"))
     (@eval (using CodeInstancePrecompile))
+end
+
+let newinterp_path = abspath("compiler/newinterp.jl")
+    precompile_test_harness("AbstractInterpreter caching") do load_path
+        write(joinpath(load_path, "SimpleModule.jl"), :(module SimpleModule
+            basic_callee(x) = x
+            basic_caller(x) = basic_callee(x)
+        end) |> string)
+
+        write(joinpath(load_path, "CustomAbstractInterpreterCaching.jl"), :(module CustomAbstractInterpreterCaching
+            import SimpleModule: basic_caller, basic_callee
+
+            module Custom
+                const CC = Core.Compiler
+                include("$($newinterp_path)")
+                @newinterp PrecompileInterpreter
+            end
+
+            Base.return_types((Float64,)) do x
+                basic_caller(x)
+            end
+            Base.return_types((Float64,); interp=Custom.PrecompileInterpreter()) do x
+                basic_caller(x)
+            end
+            Base.return_types((Vector{Float64},)) do x
+                sum(x)
+            end
+            Base.return_types((Vector{Float64},); interp=Custom.PrecompileInterpreter()) do x
+                sum(x)
+            end
+        end) |> string)
+        Base.compilecache(Base.PkgId("CustomAbstractInterpreterCaching"))
+        @eval let
+            using CustomAbstractInterpreterCaching
+            cache_owner = Core.Compiler.cache_owner(
+                CustomAbstractInterpreterCaching.Custom.PrecompileInterpreter())
+            let m = only(methods(CustomAbstractInterpreterCaching.basic_callee))
+                mi = only(Base.specializations(m))
+                ci = mi.cache
+                @test isdefined(ci, :next)
+                @test ci.owner === nothing
+                @test ci.max_world == typemax(UInt)
+                ci = ci.next
+                @test !isdefined(ci, :next)
+                @test ci.owner === cache_owner
+                @test ci.max_world == typemax(UInt)
+            end
+            let m = only(methods(sum, (Vector{Float64},)))
+                found = false
+                for mi in Base.specializations(m)
+                    if mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(sum),Vector{Float64}}
+                        ci = mi.cache
+                        @test isdefined(ci, :next)
+                        @test ci.owner === cache_owner
+                        @test ci.max_world == typemax(UInt)
+                        ci = ci.next
+                        @test !isdefined(ci, :next)
+                        @test ci.owner === nothing
+                        @test ci.max_world == typemax(UInt)
+                        found = true
+                        break
+                    end
+                end
+                @test found
+            end
+        end
+
+        write(joinpath(load_path, "CustomAbstractInterpreterCaching2.jl"), :(module CustomAbstractInterpreterCaching2
+            import SimpleModule: basic_caller, basic_callee
+
+            module Custom
+                const CC = Core.Compiler
+                include("$($newinterp_path)")
+                @newinterp PrecompileInterpreter
+                struct CustomData
+                    inferred
+                    CustomData(@nospecialize inferred) = new(inferred)
+                end
+                function CC.transform_result_for_cache(interp::PrecompileInterpreter,
+                        mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
+                    inferred_result = @invoke CC.transform_result_for_cache(interp::CC.AbstractInterpreter,
+                        mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
+                    return CustomData(inferred_result)
+                end
+                function CC.inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
+                                            @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)
+                    if src isa CustomData
+                        src = src.inferred
+                    end
+                    return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter, src::Any,
+                                                    info::CC.CallInfo, stmt_flag::UInt32)
+                end
+            end
+
+            Base.return_types((Float64,)) do x
+                basic_caller(x)
+            end
+            Base.return_types((Float64,); interp=Custom.PrecompileInterpreter()) do x
+                basic_caller(x)
+            end
+            Base.return_types((Vector{Float64},)) do x
+                sum(x)
+            end
+            Base.return_types((Vector{Float64},); interp=Custom.PrecompileInterpreter()) do x
+                sum(x)
+            end
+        end) |> string)
+        Base.compilecache(Base.PkgId("CustomAbstractInterpreterCaching2"))
+        @eval let
+            using CustomAbstractInterpreterCaching2
+            cache_owner = Core.Compiler.cache_owner(
+                CustomAbstractInterpreterCaching2.Custom.PrecompileInterpreter())
+            let m = only(methods(CustomAbstractInterpreterCaching.basic_callee))
+                mi = only(Base.specializations(m))
+                ci = mi.cache
+                @test isdefined(ci, :next)
+                @test ci.owner === nothing
+                @test ci.max_world == typemax(UInt)
+                ci = ci.next
+                @test !isdefined(ci, :next)
+                @test ci.owner === cache_owner
+                @test ci.max_world == typemax(UInt)
+            end
+            let m = only(methods(sum, (Vector{Float64},)))
+                found = false
+                for mi = Base.specializations(m)
+                    if mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(sum),Vector{Float64}}
+                        ci = mi.cache
+                        @test isdefined(ci, :next)
+                        @test ci.owner === cache_owner
+                        @test ci.max_world == typemax(UInt)
+                        ci = ci.next
+                        @test !isdefined(ci, :next)
+                        @test ci.owner === nothing
+                        @test ci.max_world == typemax(UInt)
+                        found = true
+                        break
+                    end
+                end
+                @test found
+            end
+        end
+    end
 end
 
 precompile_test_harness("Recursive types") do load_path
@@ -1771,15 +1938,15 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     if ocachefile !== nothing
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring), ocachefile, depmods, true, "PCI")
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachefile, depmods, true, "PCI", false)
     else
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), cachefile, depmods, true, "PCI")
     end
 
-    modules, init_order, external_methods, new_specializations, new_method_roots, external_targets, edges = sv
-    m = only(external_methods)
+    modules, init_order, external_methods, new_ext_cis, new_method_roots, external_targets, edges = sv
+    m = only(external_methods).func::Method
     @test m.name == :repl_cmd && m.nargs < 2
-    @test any(new_specializations) do ci
+    @test new_ext_cis === nothing || any(new_ext_cis) do ci
         mi = ci.def
         mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end
@@ -1897,6 +2064,34 @@ precompile_test_harness("Issue #50538") do load_path
     Core.set_binding_type!(I50538, :undefglobal, Any)
     @test Core.get_binding_type(I50538, :undefglobal) === Any
     @test !isdefined(I50538, :undefglobal)
+end
+
+precompile_test_harness("Test flags") do load_path
+    write(joinpath(load_path, "TestFlags.jl"),
+          """
+          module TestFlags
+          end
+          """)
+
+    current_flags = Base.CacheFlags()
+    modified_flags = Base.CacheFlags(
+        current_flags.use_pkgimages,
+        current_flags.debug_level,
+        2,
+        current_flags.inline,
+        3
+    )
+    ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
+    open(ji, "r") do io
+        Base.isvalid_cache_header(io)
+        _, _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
+        cacheflags = Base.CacheFlags(flags)
+        @test cacheflags.check_bounds == 2
+        @test cacheflags.opt_level == 3
+    end
+    id = Base.identify_package("TestFlags")
+    @test Base.isprecompiled(id, ;flags=modified_flags)
+    @test !Base.isprecompiled(id, ;flags=current_flags)
 end
 
 empty!(Base.DEPOT_PATH)

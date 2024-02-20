@@ -97,6 +97,8 @@ Base.Broadcast.result_style
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
+Base.nextind
+Base.prevind
 Base.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
 Base.copy!
 Base.isassigned
@@ -137,6 +139,7 @@ Base.reshape
 Base.dropdims
 Base.vec
 Base.SubArray
+Base.wrap
 ```
 
 ## Concatenation and permutation

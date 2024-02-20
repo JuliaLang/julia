@@ -13,7 +13,7 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :new => 1:typemax(Int),
     :splatnew => 2:2,
     :the_exception => 0:0,
-    :enter => 1:1,
+    :enter => 1:2,
     :leave => 1:typemax(Int),
     :pop_exception => 1:1,
     :inbounds => 1:1,
@@ -34,7 +34,10 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :throw_undef_if_not => 2:2,
     :aliasscope => 0:0,
     :popaliasscope => 0:0,
-    :new_opaque_closure => 4:typemax(Int)
+    :new_opaque_closure => 4:typemax(Int),
+    :import => 1:typemax(Int),
+    :using => 1:typemax(Int),
+    :export => 1:typemax(Int),
 )
 
 # @enum isn't defined yet, otherwise I'd use it for this
@@ -61,9 +64,8 @@ struct InvalidCodeError <: Exception
 end
 InvalidCodeError(kind::AbstractString) = InvalidCodeError(kind, nothing)
 
-function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind::String)
-    if JLOptions().debug_level == 2
-        # this is a debug build of julia, so let's validate linfo
+function maybe_validate_code(linfo::MethodInstance, src::CodeInfo, kind::String)
+    if is_asserts()
         errors = validate_code(linfo, src)
         if !isempty(errors)
             for e in errors
@@ -75,6 +77,7 @@ function validate_code_in_debug_mode(linfo::MethodInstance, src::CodeInfo, kind:
                             linfo.def, ": ", e)
                 end
             end
+            error("")
         end
     end
 end
@@ -160,6 +163,13 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
                 push!(errors, InvalidCodeError(INVALID_CALL_ARG, x.cond))
             end
             validate_val!(x.cond)
+        elseif isa(x, EnterNode)
+            if isdefined(x, :scope)
+                if !is_valid_argument(x.scope)
+                    push!(errors, InvalidCodeError(INVALID_CALL_ARG, x.scope))
+                end
+                validate_val!(x.scope)
+            end
         elseif isa(x, ReturnNode)
             if isdefined(x, :val)
                 if !is_valid_return(x.val)
@@ -246,12 +256,10 @@ end
 
 function is_valid_rvalue(@nospecialize(x))
     is_valid_argument(x) && return true
-    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call, :invoke, :invoke_modify, :foreigncall, :cfunction, :gc_preserve_begin, :copyast)
+    if isa(x, Expr) && x.head in (:new, :splatnew, :the_exception, :isdefined, :call, :invoke, :invoke_modify, :foreigncall, :cfunction, :gc_preserve_begin, :copyast, :new_opaque_closure)
         return true
     end
     return false
 end
 
 is_valid_return(@nospecialize(x)) = is_valid_argument(x) || (isa(x, Expr) && x.head === :lambda)
-
-is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag
