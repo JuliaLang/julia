@@ -3092,11 +3092,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
 
     // in --build mode only use sysimg data, not precompiled native code
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
-    if (!imaging_mode && jl_options.use_sysimage_native_code == JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
-        if (image->gvars_base)
-            assert(image->fptrs.ptrs);
-    }
-    else {
+    if (imaging_mode || jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
         memset(&image->fptrs, 0, sizeof(image->fptrs));
         image->gvars_base = NULL;
     }
