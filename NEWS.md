@@ -1,16 +1,63 @@
 Julia v1.11 Release Notes
-========================
+=========================
 
 New language features
 ---------------------
+
 * `public` is a new keyword. Symbols marked with `public` are considered public
   API. Symbols marked with `export` are now also treated as public API. The
   difference between `public` and `export` is that `public` names do not become
   available when `using` a package/module ([#50105]).
 * `ScopedValue` implements dynamic scope with inheritance across tasks ([#50958]).
-* The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
-  but allows to add keyword arguments to the function call ([#51501]).
 * Support for Unicode 15.1 ([#51799]).
+* `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
+  to be preferentially picked up by the given julia version. i.e. in the same folder,
+  a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
+  version. This makes managing environments for multiple julia versions at the same time
+  easier ([#43845]).
+
+Language changes
+----------------
+
+* During precompilation, `atexit` hooks now run before saving the output file. This
+  allows users to safely tear down background state (such as closing Timers and sending
+  disconnect notifications to heartbeat tasks) and cleanup other resources when the program
+  wants to begin exiting.
+* Code coverage and malloc tracking is no longer generated during the package precompilation stage.
+  Further, during these modes pkgimage caches are now used for packages that are not being tracked.
+  This means that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
+  pkgimage caches for all other packages than the package being tested, likely meaning faster test
+  execution ([#52123]).
+* Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
+  omit the default user depot ([#51448]).
+
+Compiler/Runtime improvements
+-----------------------------
+
+* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
+* Added support for annotating `Base.@assume_effects` on code blocks ([#52400]).
+
+Command-line option changes
+---------------------------
+
+* The entry point for Julia has been standardized to `Main.main(ARGS)`. This must be explicitly opted into using the `@main` macro
+  (see the docstring for further details). When opted-in, and julia is invoked to run a script or expression
+  (i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically.
+  This is intended to unify script and compilation workflows, where code loading may happen
+  in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
+  difference between defining a `main` function and executing the code directly at the end of the script ([50974]).
+* The `--compiled-modules` and `--pkgimages` flags can now be set to `existing`, which will
+  cause Julia to consider loading existing cache files, but not to create new ones ([#50586], [#52573]).
+
+Multi-threading changes
+-----------------------
+
+* `Threads.@threads` now supports the `:greedy` scheduler, intended for non-uniform workloads ([#52096]).
+* A new exported struct `Lockable{T, L<:AbstractLock}` makes it easy to bundle a resource and its lock together ([#52898]).
+
+New library functions
+---------------------
+
 * Three new types around the idea of text with "annotations" (`Pair{Symbol, Any}`
   entries, e.g. `:lang => "en"` or `:face => :magenta`). These annotations
   are preserved across operations (e.g. string concatenation with `*`) when
@@ -25,70 +72,20 @@ New language features
     specialised `read`/`write` methods for annotated content. This can be
     thought of both as a "string builder" of sorts and also as glue between
     annotated and unannotated content.
-* `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
-  to be preferentially picked up by the given julia version. i.e. in the same folder,
-  a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
-  version. This makes managing environments for multiple julia versions at the same time
-  easier ([#43845]).
-* `@time` now reports a count of any lock conflicts where a `ReentrantLock` had to wait, plus a new macro
-  `@lock_conflicts` which returns that count ([#52883]).
-
-Language changes
-----------------
-* During precompilation, the `atexit` hooks now run before saving the output file. This
-  allows users to safely tear down background state (such as closing Timers and sending
-  disconnect notifications to heartbeat tasks) and cleanup other resources when the program
-  wants to begin exiting.
-* Code coverage and malloc tracking is no longer generated during the package precompilation stage.
-  Further, during these modes pkgimage caches are now used for packages that are not being tracked.
-  This means that coverage testing (the default for `julia-actions/julia-runtest`) will by default use
-  pkgimage caches for all other packages than the package being tested, likely meaning faster test
-  execution. ([#52123])
-
-* Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
-  omit the default user depot ([#51448]).
-
-Compiler/Runtime improvements
------------------------------
-* Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
-* A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
-  loads, primarily to be used within JLLs ([#50074]).
-* Added support for annotating `Base.@assume_effects` on code blocks ([#52400]).
-* The libuv library has been updated from a base of v1.44.2 to v1.48.0 ([#49937]).
-
-Command-line option changes
----------------------------
-
-* The entry point for Julia has been standardized to `Main.main(ARGS)`. This must be explicitly opted into using the `@main` macro
-(see the docstring for further details). When opted-in, and julia is invoked to run a script or expression
-(i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically.
-This is intended to unify script and compilation workflows, where code loading may happen
-in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
-difference between defining a `main` function and executing the code directly at the end of the script ([50974]).
-* The `--compiled-modules` and `--pkgimages` flags can now be set to `existing`, which will
-  cause Julia to consider loading existing cache files, but not to create new ones ([#50586]
-  and [#52573]).
-
-Multi-threading changes
------------------------
-
-* `Threads.@threads` now supports the `:greedy` scheduler, intended for non-uniform workloads ([#52096]).
-* A new exported struct `Lockable{T, L<:AbstractLock}` makes it easy to bundle a resource and its lock together ([#52898]).
-
-Build system changes
---------------------
-
-New library functions
----------------------
-
-* `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not.
+* `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not ([#45156], [#51636]).
 * The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
-* `eachrsplit(string, pattern)` iterates split substrings right to left.
+* `eachrsplit(string, pattern)` iterates split substrings right to left ([#51646]).
 * `Sys.username()` can be used to return the current user's username ([#51897]).
 * `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` is the safe counterpart to `unsafe_wrap` ([#52049]).
 * `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
 * `IdSet` is now exported from Base and considered public ([#53262]).
+* `@time` now reports a count of any lock conflicts where a `ReentrantLock` had to wait, plus a new macro
+  `@lock_conflicts` which returns that count ([#52883]).
+* The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
+  but allows adding keyword arguments to the function call ([#51501]).
+* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
+* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
 
 New library features
 --------------------
@@ -99,23 +96,18 @@ New library features
   write the output to a stream rather than returning a string ([#48625]).
 * New methods `allequal(f, itr)` and `allunique(f, itr)` taking a predicate function ([#47679]).
 * `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
-* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
-* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
 * Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
   expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
   no longer required there for correctness to avoid data races ([#52461]).
 * After a process exits, `closewrite` will no longer be automatically called on
   the stream passed to it. Call `wait` on the process instead to ensure the
   content is fully written, then call `closewrite` manually to avoid
-  data-races. Or use the callback form of `open` to have all that handled
-  automatically.
-* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
+  data races, or use the callback form of `open` to have all that handled
+  automatically ([#52461]).
+* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889]).
 * `filter` can now act on a `NamedTuple` ([#50795]).
-* `Iterators.cycle(iter, n)` runs over `iter` a fixed number of times, instead of forever ([#47354])
+* `Iterators.cycle(iter, n)` runs over `iter` a fixed number of times, instead of forever ([#47354]).
 * `zero(::AbstractArray)` now applies recursively, so `zero([[1,2],[3,4,5]])` now produces the additive identity `[[0,0],[0,0,0]]` rather than erroring ([#38064]).
-
-Standard library changes
-------------------------
 
 #### StyledStrings
 
@@ -134,9 +126,13 @@ Standard library changes
   uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
   that creates an `AnnotatedString` with syntax highlighting applied.
 
-#### Package Manager
+#### Libdl
+
+* A new `LazyLibrary` type is exported from `Libdl` for use in building chained lazy library
+  loads, primarily to be used within JLLs ([#50074]).
 
 #### LinearAlgebra
+
 * `cbrt(::AbstractMatrix{<:Real})` is now defined and returns real-valued matrix cube roots of real-valued matrices ([#50661]).
 * `eigvals/eigen(A, bunchkaufman(B))` and `eigvals/eigen(A, lu(B))`, which utilize the Bunchkaufman (LDL) and LU decomposition of `B`,
    respectively, now efficiently compute the generalized eigenvalues (`eigen`: and eigenvectors) of `A` and `B`. Note: The second
@@ -148,15 +144,13 @@ Standard library changes
 * `lu` and `issuccess(::LU)` now accept an `allowsingular` keyword argument. When set to `true`, a valid factorization with rank-deficient U factor will be treated as success instead of throwing an error. Such factorizations are now shown by printing the factors together with a "rank-deficient" note rather than printing a "Failed Factorization" message ([#52957]).
 
 #### Logging
+
 * New `@create_log_macro` macro for creating new log macros like `@info`, `@warn` etc. For instance
   `@create_log_macro MyLog 1500 :magenta` will create `@mylog` to be used like `@mylog "hello"` which
-  will show as `┌ MyLog: hello` etc. ([#52196])
-
-#### Printf
-
-#### Profile
+  will show as `┌ MyLog: hello` etc. ([#52196]).
 
 #### Random
+
 * `rand` now supports sampling over `Tuple` types ([#35856], [#50251]).
 * `rand` now supports sampling over `Pair` types ([#28705]).
 * When seeding RNGs provided by `Random`, negative integer seeds can now be used ([#51416]).
@@ -175,18 +169,11 @@ Standard library changes
   end
   ``` ([#51229]).
 * Meta-M with an empty prompt now toggles the contextual module between the previous non-Main
-  contextual module and Main so that switching back and forth is simple. ([#51616], [#52670])
-
-#### SuiteSparse
-
-
-#### SparseArrays
-
-#### Test
+  contextual module and Main so that switching back and forth is simple ([#51616], [#52670]).
 
 #### Dates
 
-The undocumented function `adjust` is no longer exported but is now documented
+The undocumented function `adjust` is no longer exported but is now documented ([#53092]).
 
 #### Statistics
 
@@ -196,23 +183,16 @@ The undocumented function `adjust` is no longer exported but is now documented
 
 * `pmap` now defaults to using a `CachingPool` ([#33892]).
 
-#### Unicode
-
-
-#### DelimitedFiles
-
-
-#### InteractiveUtils
-
 Deprecated or removed
 ---------------------
 
 * `Base.map`, `Iterators.map`, and `foreach` lost their single-argument methods ([#52631]).
 
-
 External dependencies
 ---------------------
-* `tput` is no longer called to check terminal capabilities, it has been replaced with a pure-Julia terminfo parser ([#50797]).
+
+* The libuv library has been updated from a base of v1.44.2 to v1.48.0 ([#49937]).
+* `tput` is no longer called to check terminal capabilities; it has been replaced with a pure-Julia terminfo parser ([#50797]).
 
 Tooling Improvements
 --------------------
@@ -222,3 +202,62 @@ Tooling Improvements
   runs on PRs that edit those same files ([#51704]).
 
 <!--- generated by NEWS-update.jl: -->
+[#28705]: https://github.com/JuliaLang/julia/issues/28705
+[#33892]: https://github.com/JuliaLang/julia/issues/33892
+[#34587]: https://github.com/JuliaLang/julia/issues/34587
+[#35856]: https://github.com/JuliaLang/julia/issues/35856
+[#38064]: https://github.com/JuliaLang/julia/issues/38064
+[#43845]: https://github.com/JuliaLang/julia/issues/43845
+[#45156]: https://github.com/JuliaLang/julia/issues/45156
+[#46501]: https://github.com/JuliaLang/julia/issues/46501
+[#47354]: https://github.com/JuliaLang/julia/issues/47354
+[#47679]: https://github.com/JuliaLang/julia/issues/47679
+[#48273]: https://github.com/JuliaLang/julia/issues/48273
+[#48625]: https://github.com/JuliaLang/julia/issues/48625
+[#49546]: https://github.com/JuliaLang/julia/issues/49546
+[#49586]: https://github.com/JuliaLang/julia/issues/49586
+[#49937]: https://github.com/JuliaLang/julia/issues/49937
+[#50074]: https://github.com/JuliaLang/julia/issues/50074
+[#50105]: https://github.com/JuliaLang/julia/issues/50105
+[#50144]: https://github.com/JuliaLang/julia/issues/50144
+[#50251]: https://github.com/JuliaLang/julia/issues/50251
+[#50471]: https://github.com/JuliaLang/julia/issues/50471
+[#50586]: https://github.com/JuliaLang/julia/issues/50586
+[#50661]: https://github.com/JuliaLang/julia/issues/50661
+[#50795]: https://github.com/JuliaLang/julia/issues/50795
+[#50797]: https://github.com/JuliaLang/julia/issues/50797
+[#50958]: https://github.com/JuliaLang/julia/issues/50958
+[#51229]: https://github.com/JuliaLang/julia/issues/51229
+[#51416]: https://github.com/JuliaLang/julia/issues/51416
+[#51448]: https://github.com/JuliaLang/julia/issues/51448
+[#51487]: https://github.com/JuliaLang/julia/issues/51487
+[#51501]: https://github.com/JuliaLang/julia/issues/51501
+[#51527]: https://github.com/JuliaLang/julia/issues/51527
+[#51616]: https://github.com/JuliaLang/julia/issues/51616
+[#51636]: https://github.com/JuliaLang/julia/issues/51636
+[#51646]: https://github.com/JuliaLang/julia/issues/51646
+[#51647]: https://github.com/JuliaLang/julia/issues/51647
+[#51704]: https://github.com/JuliaLang/julia/issues/51704
+[#51799]: https://github.com/JuliaLang/julia/issues/51799
+[#51897]: https://github.com/JuliaLang/julia/issues/51897
+[#51929]: https://github.com/JuliaLang/julia/issues/51929
+[#52049]: https://github.com/JuliaLang/julia/issues/52049
+[#52096]: https://github.com/JuliaLang/julia/issues/52096
+[#52123]: https://github.com/JuliaLang/julia/issues/52123
+[#52139]: https://github.com/JuliaLang/julia/issues/52139
+[#52180]: https://github.com/JuliaLang/julia/issues/52180
+[#52196]: https://github.com/JuliaLang/julia/issues/52196
+[#52400]: https://github.com/JuliaLang/julia/issues/52400
+[#52413]: https://github.com/JuliaLang/julia/issues/52413
+[#52461]: https://github.com/JuliaLang/julia/issues/52461
+[#52480]: https://github.com/JuliaLang/julia/issues/52480
+[#52573]: https://github.com/JuliaLang/julia/issues/52573
+[#52631]: https://github.com/JuliaLang/julia/issues/52631
+[#52670]: https://github.com/JuliaLang/julia/issues/52670
+[#52837]: https://github.com/JuliaLang/julia/issues/52837
+[#52883]: https://github.com/JuliaLang/julia/issues/52883
+[#52889]: https://github.com/JuliaLang/julia/issues/52889
+[#52898]: https://github.com/JuliaLang/julia/issues/52898
+[#52957]: https://github.com/JuliaLang/julia/issues/52957
+[#53092]: https://github.com/JuliaLang/julia/issues/53092
+[#53262]: https://github.com/JuliaLang/julia/issues/53262
