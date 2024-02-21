@@ -107,19 +107,17 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # OptimizationState #
 #####################
 
-is_source_inferred(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
-
 function inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(src, MaybeCompressed)
-        is_source_inferred(src) || return nothing
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable ? src : nothing
     elseif isa(src, IRCode)
         return src
     elseif isa(src, SemiConcreteResult)
         return src
+    elseif isa(src, CodeInstance)
+        return inlining_policy(interp, src.inferred, info, stmt_flag)
     end
     return nothing
 end
@@ -222,7 +220,6 @@ end
 function ir_to_codeinf!(src::CodeInfo, ir::IRCode)
     replace_code_newstyle!(src, ir)
     widen_all_consts!(src)
-    src.inferred = true
     return src
 end
 
@@ -239,8 +236,6 @@ function widen_all_consts!(src::CodeInfo)
             src.code[i] = PiNode(x.val, widenconst(x.typ))
         end
     end
-
-    src.rettype = widenconst(src.rettype)
 
     return src
 end

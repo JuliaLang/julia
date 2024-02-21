@@ -318,7 +318,7 @@ mutable struct InferenceState
         dont_work_on_me = false
         parent = nothing
 
-        valid_worlds = WorldRange(src.min_world, src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
+        valid_worlds = WorldRange(1, get_world_counter())
         bestguess = Bottom
         exc_bestguess = Bottom
         ipo_effects = EFFECTS_TOTAL
@@ -338,13 +338,21 @@ mutable struct InferenceState
         InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
         !iszero(cache_mode & CACHE_MODE_LOCAL) && push!(get_inference_cache(interp), result)
 
-        return new(
+        this = new(
             linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
             currbb, currpc, ip, handlers, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
+
+        # Apply generated function restrictions
+        if src.min_world != 1 || src.max_world != typemax(UInt)
+            # From generated functions
+            this.valid_worlds = WorldRange(src.min_world, src.max_world)
+        end
+
+        return this
     end
 end
 
@@ -799,7 +807,7 @@ function IRInterpretationState(interp::AbstractInterpreter,
     method_info = MethodInfo(src)
     ir = inflate_ir(src, mi)
     return IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
-                                 src.min_world, src.max_world)
+                                 code.min_world, code.max_world)
 end
 
 # AbsIntState

@@ -247,7 +247,6 @@ struct jl_codegen_params_t {
     std::unique_ptr<Module> _shared_module;
     inline Module &shared_module();
     // inputs
-    size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
     bool external_linkage = false;
@@ -263,7 +262,8 @@ jl_llvm_functions_t jl_emit_code(
         jl_method_instance_t *mi,
         jl_code_info_t *src,
         jl_value_t *jlrettype,
-        jl_codegen_params_t &params);
+        jl_codegen_params_t &params,
+        size_t min_world, size_t max_world);
 
 jl_llvm_functions_t jl_emit_codeinst(
         orc::ThreadSafeModule &M,
