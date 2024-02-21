@@ -41,7 +41,6 @@ function repl_cmd(cmd, out)
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
-        new_oldpwd = pwd()
         if length(cmd.exec) > 2
             throw(ArgumentError("cd method only takes one argument"))
         elseif length(cmd.exec) == 2
@@ -52,11 +51,15 @@ function repl_cmd(cmd, out)
                 end
                 dir = ENV["OLDPWD"]
             end
+            try
+                ENV["OLDPWD"] = pwd()
+                catch # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
+                delete!(ENV, "OLDPWD")
+            end
             cd(dir)
         else
             cd()
         end
-        ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
         @static if !Sys.iswindows()
