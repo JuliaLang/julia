@@ -545,6 +545,69 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         @test isempty(got)
         rm(covfile)
+
+        function coverage_info_for(src::String)
+            mktemp(dir) do srcfile, io
+                write(io, src); close(io)
+                outfile = tempname(dir, cleanup=false)*".info"
+                run(`$exename --code-coverage=$outfile $srcfile`)
+                result = read(outfile, String)
+                rm(outfile, force=true)
+                result
+            end
+        end
+        @test contains(coverage_info_for("""
+            function cov_bug(x, p)
+                if p > 2
+                    print("")  # runs
+                end
+                if Base.compilerbarrier(:const, false)
+                    println("Does not run")
+                end
+            end
+            function do_test()
+                cov_bug(5, 3)
+            end
+            do_test()
+            """), """
+            DA:1,1
+            DA:2,1
+            DA:3,1
+            DA:5,1
+            DA:6,0
+            DA:9,1
+            DA:10,1
+            LH:6
+            LF:7
+            """)
+        @test contains(coverage_info_for("""
+            function cov_bug()
+                if Base.compilerbarrier(:const, true)
+                    if Base.compilerbarrier(:const, true)
+                        if Base.compilerbarrier(:const, false)
+                            println("Does not run")
+                        end
+                    else
+                        print("Does not run either")
+                    end
+                else
+                    print("")
+                end
+                return nothing
+            end
+            cov_bug()
+            """), """
+            DA:1,1
+            DA:2,1
+            DA:3,1
+            DA:4,1
+            DA:5,0
+            DA:8,0
+            DA:11,0
+            DA:13,1
+            LH:5
+            LF:8
+            """)
     end
 
     # --track-allocation

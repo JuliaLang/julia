@@ -1472,7 +1472,20 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) whe
     r
 end
 
-_unsetindex!(A::AbstractArray, i::Integer) = _unsetindex!(A, to_index(i))
+function _unsetindex!(A::AbstractArray, i::Integer...)
+    @_propagate_inbounds_meta
+    _unsetindex!(A, map(to_index, i)...)
+end
+
+function _unsetindex!(A::AbstractArray{T}, i::Int...) where T
+    # this provides a fallback method which is a no-op if the element is already unassigned
+    # such that copying into an uninitialized object generally always will work,
+    # even if the specific custom array type has not implemented `_unsetindex!`
+    @inline
+    @boundscheck checkbounds(A, i...)
+    allocatedinline(T) || @inbounds(!isassigned(A, i...)) || throw(MethodError(_unsetindex!, (A, i...)))
+    return A
+end
 
 """
     parent(A)
