@@ -181,9 +181,7 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBWHICH), 0)
-ifneq ($(OS), WINNT)
 DEP_LIBS += libwhich
-endif
 endif
 
 DEP_LIBS_STAGED := $(DEP_LIBS)
