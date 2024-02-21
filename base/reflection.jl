@@ -1127,20 +1127,23 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     end
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    return map(method_instances(f, t, world)) do m
+    ret = CodeInfo[]
+    for m in method_instances(f, t, world)
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
-                return ccall(:jl_code_for_staged, Any, (Any, UInt), m, world)::CodeInfo
+                code = ccall(:jl_code_for_staged, Any, (Any, UInt), m, world)::CodeInfo
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
                       "not leaf types, but the `generated` argument is `true`.")
             end
+        else
+            code = uncompressed_ir(m.def::Method)
+            debuginfo === :none && remove_linenums!(code)
         end
-        code = uncompressed_ir(m.def::Method)
-        debuginfo === :none && remove_linenums!(code)
-        return code
+        push!(ret, code)
     end
+    return ret
 end
 
 hasgenerator(m::Method) = isdefined(m, :generator)
