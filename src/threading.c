@@ -991,6 +991,8 @@ JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize) {
 
     // TODO: use correct lock. system_id is only legal if the thread is alive.
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        jl_error("retrieved ptls2 is NULL")
     uv_thread_t uvtid = ptls2->system_id;
 
     // returns 0 in case of success and a value != 0 otherwise
@@ -1004,6 +1006,8 @@ JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
 
     // TODO: use correct lock. system_id is only legal if the thread is alive.
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL)
+        jl_error("retrieved ptls2 is NULL")
     uv_thread_t uvtid = ptls2->system_id;
 
     // returns 0 in case of success and a value != 0 otherwise
