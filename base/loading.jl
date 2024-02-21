@@ -2641,6 +2641,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         error("LOAD_PATH entries cannot contain $(repr(path_sep))")
 
     deps_strs = String[]
+    # protects against PkgId and UUID being imported and losing Base prefix
     function pkg_str(_pkg::PkgId)
         if _pkg.uuid === nothing
             "Base.PkgId($(repr(_pkg.name)))"
@@ -2651,6 +2652,9 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     for (pkg, build_id) in concrete_deps
         push!(deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
     end
+    deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
+    deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
+    precomp_stack = "Base.PkgId[$(join(map(pkg_str, vcat(Base.precompilation_stack, pkg)), ", "))]"
 
     if output_o !== nothing
         @debug "Generating object cache file for $(repr("text/plain", pkg))"
@@ -2662,11 +2666,6 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         opts = `-O0 --output-ji $(output) --output-incremental=yes`
     end
 
-    deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
-    deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
-    # protect against PkgId and UUID being imported and losing Base prefix
-    precomp_stack_pkgs = map(p->"Base.PkgId(Base.UUID(\"$(p.uuid)\"), \"$(p.name)\")", vcat(Base.precompilation_stack, pkg))
-    precomp_stack = "Base.PkgId[$(join(precomp_stack_pkgs, ", "))]"
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd)
                              $(flags)
