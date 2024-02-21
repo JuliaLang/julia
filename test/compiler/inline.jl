@@ -466,7 +466,8 @@ end
         @test all(code) do @nospecialize x
             !isinvoke(:simple_caller, x) &&
             !isinvoke(x) do mi
-                startswith(string(mi.def.name), '#')
+                m = isa(mi, CodeInstance) ? mi.def.def : mi.def
+                startswith(string(m.name), '#')
             end
         end
     end
@@ -474,7 +475,8 @@ end
         # the anonymous function that the `do` block created shouldn't be inlined here
         @test any(code) do @nospecialize x
             isinvoke(x) do mi
-                startswith(string(mi.def.name), '#')
+                m = isa(mi, CodeInstance) ? mi.def.def : mi.def
+                startswith(string(m.name), '#')
             end
         end
     end
@@ -722,8 +724,10 @@ mktempdir() do dir
             let
                 ci, rt = only(code_typed(issue42246))
                 if any(ci.code) do stmt
-                       Meta.isexpr(stmt, :invoke) &&
-                       stmt.args[1].def.name === nameof(IOBuffer)
+                       Meta.isexpr(stmt, :invoke) || return false
+                       mici = stmt.args[1]
+                       m = isa(mici, Core.CodeInstance) ? mici.def.def : mici.def
+                       m.name === nameof(IOBuffer)
                    end
                     exit(0)
                 else
@@ -2069,43 +2073,37 @@ end
 Core.Compiler.OptimizationParams(::NoCompileSigInvokes) =
     Core.Compiler.OptimizationParams(; compilesig_invokes=false)
 @noinline no_compile_sig_invokes(@nospecialize x) = (x !== Any && !Base.has_free_typevars(x))
+
+function count_no_compile_sig_invokes(src, argT=Any)
+    count(src.code) do @nospecialize x
+        isinvoke(:no_compile_sig_invokes, x) || return false
+        mi = x.args[1]
+        (isa(mi, CodeInstance) ? mi.def : mi).specTypes == Tuple{typeof(no_compile_sig_invokes),argT}
+    end
+end
+
 # test the single dispatch candidate case
 let src = code_typed1((Type,)) do x
         no_compile_sig_invokes(x)
     end
-    @test count(src.code) do @nospecialize x
-        isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
-    end == 1
+    @test count_no_compile_sig_invokes(src) == 1
 end
 let src = code_typed1((Type,); interp=NoCompileSigInvokes()) do x
         no_compile_sig_invokes(x)
     end
-    @test count(src.code) do @nospecialize x
-        isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Type}
-    end == 1
+    @test count_no_compile_sig_invokes(src, Type) == 1
 end
 # test the union split case
 let src = code_typed1((Union{DataType,UnionAll},)) do x
         no_compile_sig_invokes(x)
     end
-    @test count(src.code) do @nospecialize x
-        isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),Any}
-    end == 2
+    @test count_no_compile_sig_invokes(src) == 2
 end
 let src = code_typed1((Union{DataType,UnionAll},); interp=NoCompileSigInvokes()) do x
         no_compile_sig_invokes(x)
     end
-    @test count(src.code) do @nospecialize x
-        isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),DataType}
-    end == 1
-    @test count(src.code) do @nospecialize x
-        isinvoke(:no_compile_sig_invokes, x) &&
-        (x.args[1]::MethodInstance).specTypes == Tuple{typeof(no_compile_sig_invokes),UnionAll}
-    end == 1
+    @test count_no_compile_sig_invokes(src, DataType) == 1
+    @test count_no_compile_sig_invokes(src, UnionAll) == 1
 end
 
 # https://github.com/JuliaLang/julia/issues/50612

@@ -1060,7 +1060,8 @@ end
 
 # escape statically-resolved call, i.e. `Expr(:invoke, ::MethodInstance, ...)`
 function escape_invoke!(astate::AnalysisState, pc::Int, args::Vector{Any})
-    mi = first(args)::MethodInstance
+    arg1 = first(args)
+    mi = isa(arg1, Core.CodeInstance) ? arg1.def : arg1::MethodInstance
     first_idx, last_idx = 2, length(args)
     # TODO inspect `astate.ir.stmts[pc][:info]` and use const-prop'ed `InferenceResult` if available
     cache = astate.get_escape_cache(mi)

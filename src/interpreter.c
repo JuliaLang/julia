@@ -136,9 +136,20 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     size_t i;
     for (i = 1; i < nargs; i++)
         argv[i] = eval_value(args[i], s);
-    jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
-    assert(jl_is_method_instance(meth));
-    jl_value_t *result = jl_invoke(argv[1], &argv[2], nargs - 2, meth);
+    jl_value_t *arg0 = args[0];
+    if (jl_is_code_instance(arg0)) {
+        jl_code_instance_t *codeinst = (jl_code_instance_t*)arg0;
+        jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        if (invoke != NULL) {
+            jl_value_t *result = invoke(argv[1], &argv[2], nargs - 2, codeinst);
+            JL_GC_POP();
+            return result;
+        }
+        arg0 = (jl_value_t*)codeinst->def;
+    } else {
+        assert(jl_is_method_instance(arg0));
+    }
+    jl_value_t *result = jl_invoke(argv[1], &argv[2], nargs - 2, (jl_method_instance_t*)arg0);
     JL_GC_POP();
     return result;
 }
