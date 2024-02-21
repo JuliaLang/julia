@@ -294,6 +294,7 @@ typedef struct _jl_code_info_t {
     jl_array_t *slotflags;  // local var bit flags
     // the following are optional transient properties (not preserved by compression--as they typically get stored elsewhere):
     jl_value_t *slottypes; // inferred types of slots
+    jl_method_instance_t *parent; // context (after inference, otherwise nothing)
 
     // These may be used by generated functions to further constrain the resulting inputs.
     // They are not used by any other part of the system and may be moved elsewhere in the
@@ -2134,7 +2135,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED);
 
 // IR representation
 JL_DLLEXPORT jl_value_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_value_t *data);
+JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_value_t *data);
 JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_value_t *data) JL_NOTSAFEPOINT;
