@@ -32,13 +32,13 @@ function precompile_test_harness(@nospecialize(f), separate::Bool)
         try
             rm(load_path, force=true, recursive=true)
         catch err
-            @show err
+            @warn "precompile_test_harness failed to tidy up" err
         end
         if separate
             try
                 rm(load_cache_path, force=true, recursive=true)
             catch err
-                @show err
+                @warn "precompile_test_harness failed to tidy up" err
             end
         end
         filter!((≠)(load_path), LOAD_PATH)
@@ -1415,7 +1415,7 @@ end
         try
             rm(temp_path, recursive=true)
         catch err
-            @show err
+            @warn "precompile test failed to tidy up" err
         end
         pop!(test_workers) # remove myid
         rmprocs(test_workers)

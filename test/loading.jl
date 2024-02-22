@@ -756,7 +756,7 @@ for depot in depots
     try
         rm(depot, force=true, recursive=true)
     catch err
-        @show err
+        @warn "Error while cleaning up after tests" err
     end
 end
 
@@ -1147,7 +1147,7 @@ end
         try
             rm(depot_path, force=true, recursive=true)
         catch err
-            @show err
+            @warn "Extensions testset failed to tidy up" err
         end
     end
 end

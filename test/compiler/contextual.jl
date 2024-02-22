@@ -198,7 +198,7 @@ finally
     try
         rm(depot_path, force=true, recursive=true)
     catch err
-        @show err
+        @warn "contextual tests failed to tidy up" err
     end
 end
 
