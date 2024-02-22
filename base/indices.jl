@@ -413,6 +413,8 @@ end
 IdentityUnitRange(S::IdentityUnitRange) = S
 IdentityUnitRange{T}(S::IdentityUnitRange) where {T<:AbstractUnitRange} = IdentityUnitRange{T}(T(S.indices))
 
+parent(S::IdentityUnitRange) = S.indices
+
 # IdentityUnitRanges are offset and thus have offset axes, so they are their own axes
 axes(S::IdentityUnitRange) = (S,)
 axes1(S::IdentityUnitRange) = S

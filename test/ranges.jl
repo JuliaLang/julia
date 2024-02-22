@@ -2376,6 +2376,11 @@ end
     @test 0.2 * (-2:2:2) == [-0.4, 0, 0.4]
 end
 
+@testset "IdentityUnitRange" begin
+    @test parent(Base.IdentityUnitRange(2:3)) === 2:3
+    @test parent(Base.IdentityUnitRange(Base.OneTo(3))) === Base.OneTo(3)
+end
+
 @testset "Indexing OneTo with IdentityUnitRange" begin
     for endpt in Any[10, big(10), UInt(10)]
         r = Base.OneTo(endpt)
