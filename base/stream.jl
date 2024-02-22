@@ -383,8 +383,16 @@ function isopen(x::Union{LibuvStream, LibuvServer})
     return x.status != StatusClosed
 end
 
+function isclosing(x::Union{LibuvStream, LibuvServer})
+    return x.status == StatusClosing
+end
+
+function isclosed(x::Union{LibuvStream, LibuvServer})
+    return x.status == StatusClosed
+end
+
 function check_open(x::Union{LibuvStream, LibuvServer})
-    if !isopen(x) || x.status == StatusClosing
+    if !isopen(x) || isclosing(x)
         throw(IOError("stream is closed or unusable", 0))
     end
 end
