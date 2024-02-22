@@ -2562,3 +2562,12 @@ let a = Tuple{Union{Nothing, Type{Pair{T1}} where T1}}
     b = Tuple{Type{X2} where X2<:(Pair{T2, Y2} where {Src, Z2<:Src, Y2<:Union{Val{Z2}, Z2}})} where T2
     @test !Base.has_free_typevars(typeintersect(a, b))
 end
+
+#issue 53371
+struct T53371{A,B,C,D,E} end
+S53371{A} = Union{Int, <:A}
+R53371{A} = Val{V} where V<:(T53371{B,C,D,E,F} where {B<:Val{A}, C<:S53371{B}, D<:S53371{B}, E<:S53371{B}, F<:S53371{B}})
+let S = Type{T53371{A, B, C, D, E}} where {A, B<:R53371{A}, C<:R53371{A}, D<:R53371{A}, E<:R53371{A}},
+    T = Type{T53371{A, B, C, D, E} where {A, B<:R53371{A}, C<:R53371{A}, D<:R53371{A}, E<:R53371{A}}}
+    @test !(S <: T)
+end
