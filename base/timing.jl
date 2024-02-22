@@ -57,7 +57,7 @@ function GC_Diff(new::GC_Num, old::GC_Num)
                    new.poolalloc    - old.poolalloc,
                    new.bigalloc     - old.bigalloc,
                    new.freecall     - old.freecall,
-                   new.total_time   - old.total_time,
+                   (new.total_time  - old.total_time) + (new.total_time_to_safepoint - old.total_time_to_safepoint),
                    new.pause        - old.pause,
                    new.full_sweep   - old.full_sweep)
 end
