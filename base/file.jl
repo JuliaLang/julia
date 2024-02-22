@@ -296,6 +296,8 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                 catch err
                     if !(isa(err, IOError) && err.code==Base.UV_EACCES)
                         rethrow()
+                    else
+                        @warn "Cannot delete due to UV_EACCES: $fp" stat(fp)
                     end
                 end
             end
