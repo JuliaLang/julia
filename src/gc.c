@@ -1403,8 +1403,8 @@ JL_DLLEXPORT double jl_gc_page_utilization_stats[JL_GC_N_MAX_POOLS];
 STATIC_INLINE void gc_update_page_fragmentation_data(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
     gc_fragmentation_stat_t *stats = &gc_page_fragmentation_stats[pg->pool_n];
-    jl_atomic_fetch_add(&stats->n_freed_objs, pg->nfree);
-    jl_atomic_fetch_add(&stats->n_pages_allocd, 1);
+    jl_atomic_fetch_add_relaxed(&stats->n_freed_objs, pg->nfree);
+    jl_atomic_fetch_add_relaxed(&stats->n_pages_allocd, 1);
 }
 
 STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
@@ -1557,8 +1557,8 @@ done:
     gc_update_page_fragmentation_data(pg);
     gc_time_count_page(freedall, pg_skpd);
     jl_ptls_t ptls = gc_all_tls_states[pg->thread_n];
-    jl_atomic_fetch_add(&ptls->gc_num.pool_live_bytes, GC_PAGE_SZ - GC_PAGE_OFFSET - nfree * osize);
-    jl_atomic_fetch_add((_Atomic(int64_t) *)&gc_num.freed, (nfree - old_nfree) * osize);
+    jl_atomic_fetch_add_relaxed(&ptls->gc_num.pool_live_bytes, GC_PAGE_SZ - GC_PAGE_OFFSET - nfree * osize); //TODO: Could we avoid doing a fetch_add here?
+    jl_atomic_fetch_add_relaxed((_Atomic(int64_t) *)&gc_num.freed, (nfree - old_nfree) * osize);
 }
 
 // the actual sweeping over all allocated pages in a memory pool
@@ -3858,7 +3858,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         size_t localbytes = jl_atomic_load_relaxed(&ptls->gc_num.allocd) + gc_num.interval;
         jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
         static_assert(sizeof(_Atomic(uint64_t)) == sizeof(gc_num.deferred_alloc), "");
-        jl_atomic_fetch_add((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
+        jl_atomic_fetch_add_relaxed((_Atomic(uint64_t)*)&gc_num.deferred_alloc, localbytes);
         return;
     }
     jl_gc_debug_print();

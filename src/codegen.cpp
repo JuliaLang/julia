@@ -5048,7 +5048,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                         }
                     }
                     if (need_to_emit) {
-                        raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
+                        raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
                         protoname = StringRef(name);
                     }
                     jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
@@ -6523,7 +6523,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     ++EmittedToJLInvokes;
     jl_codectx_t ctx(M->getContext(), params, codeinst);
     std::string name;
-    raw_string_ostream(name) << "tojlinvoke" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
+    raw_string_ostream(name) << "tojlinvoke" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     Function *f = Function::Create(ctx.types().T_jlfunc,
             GlobalVariable::InternalLinkage,
             name, M);
@@ -6747,7 +6747,7 @@ static Function* gen_cfun_wrapper(
     }
 
     std::string funcName;
-    raw_string_ostream(funcName) << "jlcapi_" << name << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
+    raw_string_ostream(funcName) << "jlcapi_" << name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
 
     Module *M = into; // Safe because ctx lock is held by params
     AttributeList attributes = sig.attributes;
@@ -7861,7 +7861,7 @@ static std::string get_function_name(bool specsig, bool needsparams, const char 
         if (unadorned_name[0] == '@')
             unadorned_name++;
     }
-    funcName << unadorned_name << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
+    funcName << unadorned_name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     return funcName.str();
 }
 
@@ -8091,7 +8091,7 @@ static jl_llvm_functions_t
         }();
 
         std::string wrapName;
-        raw_string_ostream(wrapName) << "jfptr_" << ctx.name << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
+        raw_string_ostream(wrapName) << "jfptr_" << ctx.name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
         declarations.functionObject = wrapName;
         (void)gen_invoke_wrapper(lam, jlrettype, returninfo, retarg, declarations.functionObject, M, ctx.emission_context);
         // TODO: add attributes: maybe_mark_argument_dereferenceable(Arg, argType)

@@ -37,7 +37,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
         VirtualFree(stk, 0, MEM_RELEASE);
         return MAP_FAILED;
     }
-    jl_atomic_fetch_add(&num_stack_mappings, 1);
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
 }
 
@@ -45,7 +45,7 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
 static void free_stack(void *stkbuf, size_t bufsz)
 {
     VirtualFree(stkbuf, 0, MEM_RELEASE);
-    jl_atomic_fetch_add(&num_stack_mappings, -1);
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
 }
 
 #else
@@ -62,14 +62,14 @@ static void *malloc_stack(size_t bufsz) JL_NOTSAFEPOINT
         return MAP_FAILED;
     }
 #endif
-    jl_atomic_fetch_add(&num_stack_mappings, 1);
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, 1);
     return stk;
 }
 
 static void free_stack(void *stkbuf, size_t bufsz)
 {
     munmap(stkbuf, bufsz);
-    jl_atomic_fetch_add(&num_stack_mappings, -1);
+    jl_atomic_fetch_add_relaxed(&num_stack_mappings, -1);
 }
 #endif
 
