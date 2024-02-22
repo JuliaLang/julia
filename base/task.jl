@@ -279,6 +279,14 @@ function get_task_tls(t::Task)
 end
 
 """
+    TaskLocalStorage()
+
+An immutable singleton struct that is used to provide an `AbstractDict`-like interface to
+the current task's task-local storage.
+"""
+struct TaskLocalStorage end
+
+"""
     task_local_storage(key)
 
 Look up the value of a key in the current task's task-local storage.
@@ -286,11 +294,72 @@ Look up the value of a key in the current task's task-local storage.
 task_local_storage(key) = task_local_storage()[key]
 
 """
+    getindex(::TaskLocalStorage, key)
+
+Look up the value of a key in the current task's task-local storage.
+
+See also [`task_local_storage`](@ref).
+"""
+getindex(::TaskLocalStorage, key) = task_local_storage()[key]
+
+"""
     task_local_storage(key, value)
 
 Assign a value to a key in the current task's task-local storage.
 """
 task_local_storage(key, val) = (task_local_storage()[key] = val)
+
+"""
+    setindex!(::TaskLocalStorage, value, key)
+
+Assign a value to a key in the current task's task-local storage.
+
+See also [`task_local_storage`](@ref).
+"""
+setindex!(::TaskLocalStorage, value, key) = (task_local_storage()[key] = value)
+
+"""
+    haskey(::TaskLocalStorage, key)::Bool
+
+Determine whether the current task's task-local storage has a mapping for a given key.
+"""
+haskey(::TaskLocalStorage, key) = haskey(task_local_storage(), key)
+
+"""
+    get(::TaskLocalStorage, key, default)
+
+Return the value stored for the given key in the current task's task-local storage, or the
+given default value if no mapping for the key is present.
+"""
+get(::TaskLocalStorage, key, default) = get(task_local_storage(), key, default)
+
+"""
+    get!(::TaskLocalStorage, key, default)
+
+Return the value stored for the given key in the current task's task-local storage, or if no
+mapping for the key is present, store `key => default` and return `default`.
+"""
+get!(::TaskLocalStorage, key, default) = get!(task_local_storage(), key, default)
+
+"""
+    get(f::Function, ::TaskLocalStorage, key)
+
+Return the value stored for the given key in the current task's task-local storage, or if
+no mapping for the key is present, return f().
+
+This is intended to be called using `do` block syntax.
+"""
+get(f::Function, ::TaskLocalStorage, key) = get(f::Function, task_local_storage(), key)
+
+"""
+    get!(f::Function, ::TaskLocalStorage, key)
+
+Return the value stored for the given key in the current task's task-local storage, or if no
+mapping for the key is present, store `key => f()` and return `f()`.
+
+This is intended to be called using `do` block syntax.
+"""
+get!(f::Function, ::TaskLocalStorage, key) = get!(f, task_local_storage(), key)
 
 """
     task_local_storage(body, key, value)

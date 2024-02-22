@@ -13,6 +13,14 @@ Base.istaskfailed
 Base.task_local_storage(::Any)
 Base.task_local_storage(::Any, ::Any)
 Base.task_local_storage(::Function, ::Any, ::Any)
+Base.TaskLocalStorage
+getindex(::Base.TaskLocalStorage, key)
+setindex!(::Base.TaskLocalStorage, value, key)
+haskey(::Base.TaskLocalStorage, key)
+get(::Base.TaskLocalStorage, key, default)
+get!(::Base.TaskLocalStorage, key, default)
+get(f::Function, ::Base.TaskLocalStorage, key)
+get!(f::Function, ::Base.TaskLocalStorage, key)
 ```
 
 ## Scheduling
