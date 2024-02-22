@@ -40,6 +40,7 @@ Base.isvalid(::Any)
 Base.isvalid(::Any, ::Any)
 Base.isvalid(::AbstractString, ::Integer)
 Base.match
+Base.match(::Regex, ::Union{SubString{String}, String}, ::Ref{Int})
 Base.eachmatch
 Base.RegexMatch
 Base.keys(::RegexMatch)
