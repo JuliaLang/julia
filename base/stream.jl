@@ -387,9 +387,16 @@ function isclosing(x::Union{LibuvStream, LibuvServer})
     return x.status == StatusClosing
 end
 
+"""
+    isclosed(x)
+
+Determine whether a stream has been closed. Return true if the steram has been
+closed. In general, `isclosed(x) == !isopen(x)`.
+"""
 function isclosed(x::Union{LibuvStream, LibuvServer})
     return x.status == StatusClosed
 end
+isclosed(x) = !isopen(x)
 
 function check_open(x::Union{LibuvStream, LibuvServer})
     if !isopen(x) || isclosing(x)
