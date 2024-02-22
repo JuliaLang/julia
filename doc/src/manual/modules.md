@@ -112,7 +112,7 @@ and above. To maintain compatibility with Julia 1.10 and below, use the `@compat
 
 ### Standalone `using` and `import`
 
-Possibly the most common way of loading a module is `using ModuleName`. This [loads](@ref
+For interactive use, the most common way of loading a module is `using ModuleName`. This [loads](@ref
 code-loading) the code associated with `ModuleName`, and brings
 
 1. the module name
@@ -144,8 +144,8 @@ In contrast,
 julia> import .NiceStuff
 ```
 
-brings *only* the module name into scope. Users would need to use `NiceStuff.DOG`, `NiceStuff.Dog`, and `NiceStuff.nice` to access its contents. Usually, `import ModuleName` is used in contexts when the user wants to keep the namespace clean.
-As we will see in the next section `import .NiceStuff` is equivalent to `using .NiceStuff: NiceStuff`.
+brings *only* the module name into scope. Users would need to use `NiceStuff.DOG`, `NiceStuff.Dog`, and `NiceStuff.nice` to access its contents.
+As we will see in the next section `import .NiceStuff` is equivalent to `using .NiceStuff: NiceStuff`. Usually, `import ModuleName` or `using ModuleName: ModuleName` is used in contexts when the user wants to keep the namespace clean.
 
 You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, e.g.
 
@@ -167,6 +167,23 @@ Importantly, the module name `NiceStuff` will *not* be in the namespace. If you 
 ```jldoctest module_manual
 julia> using .NiceStuff: nice, DOG, NiceStuff
 ```
+
+!!! note
+    Qualifying the names being used as in `using NiceStuff: NiceStuff, nice` is recommended over plain
+    `using Foo` for released packages, and other code which is meant to be re-used in the future with
+    updated dependancies.
+    
+    The reason for this is if another dependency starts to export one of the
+    same names as `Foo` the code will error due to an ambiguity in which
+    package the name should be taken from. This is especially problematic in
+    released packages which needs to be forward-compatible with the future
+    releases (e.g., when `Foo = "1"` and `Bar = 2` are listed in `[deps]`
+    section of the `Project.toml` of your package, it should be compatible
+    with the future releases of Foo 1.x and Bar 2.y which both export a
+    function `baz`).
+    That issue can be avoided by explicitly listing what names you want to use
+    from which modules.
+
 
 Julia has two forms for seemingly the same thing because only `import ModuleName: f` allows adding methods to `f`
 *without a module path*.
