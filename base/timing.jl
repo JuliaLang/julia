@@ -40,6 +40,7 @@ struct GC_Diff
     bigalloc    ::Int64 # Number of big (non-pool) allocation
     freecall    ::Int64 # Number of GC aware free()
     total_time  ::Int64 # Time spent in garbage collection
+    waiting_time::Int64 # Time spent waiting for a GC safepoint
     pause       ::Int64 # Number of GC pauses
     full_sweep  ::Int64 # Number of GC full collection
 end
@@ -57,7 +58,8 @@ function GC_Diff(new::GC_Num, old::GC_Num)
                    new.poolalloc    - old.poolalloc,
                    new.bigalloc     - old.bigalloc,
                    new.freecall     - old.freecall,
-                   (new.total_time  - old.total_time) + (new.total_time_to_safepoint - old.total_time_to_safepoint),
+                   new.total_time  - old.total_time,
+                   new.total_time_to_safepoint - old.total_time_to_safepoint,
                    new.pause        - old.pause,
                    new.full_sweep   - old.full_sweep)
 end
@@ -170,7 +172,7 @@ function format_bytes(bytes; binary=true) # also used by InteractiveUtils
     end
 end
 
-function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false;
+function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_conflicts=0, compile_time=0, recompile_time=0, newline=false, gcwaittime=0;
                     msg::Union{String,Nothing}=nothing)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
@@ -191,11 +193,15 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
             end
             print(io, format_bytes(bytes))
         end
-        if gctime > 0
+        total_gc_time = gctime + gcwaittime
+        if total_gc_time > 0
             if bytes != 0 || allocs != 0
                 print(io, ", ")
             end
-            print(io, Ryu.writefixed(Float64(100*gctime/elapsedtime), 2), "% gc time")
+            print(io, Ryu.writefixed(Float64(100*total_gc_time/elapsedtime), 2), "% gc time")
+            if gcwaittime/total_gc_time > 0.5
+                print(io, ": ", Ryu.writefixed(Float64(100*gcwaittime/total_gc_time), 0), "% of which was waiting for safepoints")
+            end
         end
         if lock_conflicts > 0
             plural = lock_conflicts == 1 ? "" : "s"
@@ -223,7 +229,7 @@ function timev_print(elapsedtime, diff::GC_Diff, lock_conflicts, compile_times; 
     allocs = gc_alloc_count(diff)
     compile_time = first(compile_times)
     recompile_time = last(compile_times)
-    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, lock_conflicts, compile_time, recompile_time, true; msg)
+    time_print(stdout, elapsedtime, diff.allocd, diff.total_time, allocs, lock_conflicts, compile_time, recompile_time, true, diff.waiting_time; msg)
     padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -316,7 +322,7 @@ macro time(msg, ex)
     quote
         local ret = @timed $(esc(ex))
         local _msg = $(esc(msg))
-        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true; msg=_msg)
+        time_print(stdout, ret.time*1e9, ret.gcstats.allocd, ret.gcstats.total_time, gc_alloc_count(ret.gcstats), ret.lock_conflicts, ret.compile_time*1e9, ret.recompile_time*1e9, true, ret.gcstats.waiting_time; msg=_msg)
         ret.value
     end
 end
