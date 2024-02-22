@@ -119,6 +119,7 @@ julia> A
 """
 conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 conj!(x::AbstractArray{<:Real}) = x
+conj!(A::AbstractArray) = (foreach(conj!, A); A)
 
 """
     conj(A::AbstractArray)
@@ -264,9 +265,12 @@ circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, s
 """
     circshift(A, shifts)
 
-Circularly shift, i.e. rotate, the data in an array. The second argument is a tuple or
+Circularly shift, i.e. rotate, the data in `A`. The second argument is a tuple or
 vector giving the amount to shift in each dimension, or an integer to shift only in the
 first dimension.
+
+The generated code is most efficient when the shift amounts are known at compile-time, i.e.,
+compile-time constants.
 
 See also: [`circshift!`](@ref), [`circcopy!`](@ref), [`bitrotate`](@ref), [`<<`](@ref).
 
@@ -316,6 +320,18 @@ julia> circshift(a, -1)
  0
  1
  1
+
+julia> x = (1, 2, 3, 4, 5)
+(1, 2, 3, 4, 5)
+
+julia> circshift(x, 4)
+(2, 3, 4, 5, 1)
+
+julia> z = (1, 'a', -7.0, 3)
+(1, 'a', -7.0, 3)
+
+julia> circshift(z, -1)
+('a', -7.0, 3, 1)
 ```
 """
 function circshift(a::AbstractArray, shiftamt)
@@ -353,7 +369,7 @@ julia> repeat([1, 2, 3], 2, 3)
 ```
 """
 function repeat(A::AbstractArray, counts...)
-    return _RepeatInnerOuter.repeat(A, outer=counts)
+    return repeat(A, outer=counts)
 end
 
 """

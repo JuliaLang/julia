@@ -713,10 +713,12 @@ For the default constructor, exactly one argument must be supplied for each fiel
 ```jldoctest pointtype
 julia> Point{Float64}(1.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64)
+The type `Point{Float64}` exists, but no method is defined for this combination of argument types when trying to construct it.
 [...]
 
-julia> Point{Float64}(1.0,2.0,3.0)
+julia> Point{Float64}(1.0, 2.0, 3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
+The type `Point{Float64}` exists, but no method is defined for this combination of argument types when trying to construct it.
 [...]
 ```
 
@@ -748,6 +750,7 @@ to `Point` have the same type. When this isn't the case, the constructor will fa
 ```jldoctest pointtype
 julia> Point(1,2.5)
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
+The type `Point` exists, but no method is defined for this combination of argument types when trying to construct it.
 
 Closest candidates are:
   Point(::T, !Matched::T) where T
@@ -1413,6 +1416,8 @@ is raised:
 ```jldoctest; filter = r"Closest candidates.*"s
 julia> supertype(Union{Float64,Int64})
 ERROR: MethodError: no method matching supertype(::Type{Union{Float64, Int64}})
+The function `supertype` exists, but no method is defined for this combination of argument types.
+
 Closest candidates are:
 [...]
 ```

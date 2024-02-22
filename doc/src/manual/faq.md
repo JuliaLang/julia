@@ -22,11 +22,28 @@ On the other hand, language *interoperability* is extremely useful: we want to e
 
 ### How does Julia define its public API?
 
-Julia `Base` and standard library functionality described in the
-[the documentation](https://docs.julialang.org/) that is not marked as unstable
-(e.g. experimental and internal) is covered by [SemVer](https://semver.org/).
-Functions, types, and constants are not part of the public API if they are not
-included in the documentation, _even if they have docstrings_.
+Julia's public [API](https://en.wikipedia.org/wiki/API) is the behavior described in
+documentation of public symbols from `Base` and the standard libraries. Functions,
+types, and constants are not part of the public API if they are not public, even if
+they have docstrings or are described in the documentation. Further, only the documented
+behavior of public symbols is part of the public API. Undocumented behavior of public
+symbols is internal.
+
+Public symbols are those marked with either `public foo` or `export foo`.
+
+In other words:
+
+- Documented behavior of public symbols is part of the public API.
+- Undocumented behavior of public symbols is not part of the public API.
+- Documented behavior of private symbols is not part of the public API.
+- Undocumented behavior of private symbols is not part of the public API.
+
+You can get a complete list of the public symbols from a module with `names(MyModule)`.
+
+Package authors are encouraged to define their public API similarly.
+
+Anything in Julia's Public API is covered by [SemVer](https://semver.org/) and therefore
+will not be removed or receive meaningful breaking changes before Julia 2.0.
 
 ### There is a useful undocumented function/type/constant. Can I use it?
 
@@ -708,7 +725,7 @@ julia> module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: `Foo` not defined
+UndefVarError: `Foo` not defined in `Main`
 Stacktrace:
 [...]
 ```
@@ -729,7 +746,7 @@ julia> @everywhere module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: `gvar` not defined
+UndefVarError: `gvar` not defined in `Main.Foo`
 Stacktrace:
 [...]
 ```
@@ -765,7 +782,7 @@ bar (generic function with 1 method)
 
 julia> remotecall_fetch(bar, 2)
 ERROR: On worker 2:
-UndefVarError: `#bar` not defined
+UndefVarError: `#bar` not defined in `Main`
 [...]
 
 julia> anon_bar  = ()->1
@@ -787,6 +804,7 @@ foo (generic function with 1 method)
 
 julia> foo([1])
 ERROR: MethodError: no method matching foo(::Vector{Int64})
+The function `foo` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   foo(!Matched::Vector{Real})
@@ -1035,17 +1053,15 @@ Modifying OpenBLAS settings or compiling Julia with a different BLAS library, eg
 
 ### How do I manage precompilation caches in distributed file systems?
 
-When using `julia` in high-performance computing (HPC) facilities, invoking
-_n_ `julia` processes simultaneously creates at most _n_ temporary copies of
-precompilation cache files. If this is an issue (slow and/or small distributed
-file system), you may:
+When using Julia in high-performance computing (HPC) facilities with shared filesystems, it is recommended to use a shared
+depot (via the [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable). Since Julia v1.10, multiple Julia processes on functionally similar
+workers and using the same depot will coordinate via pidfile locks to only spend effort precompiling on one process while the
+others wait. The precompilation process will indicate when the process is precompiling or waiting for another that is
+precompiling. If non-interactive the messages are via `@debug`.
 
-1. Use `julia` with `--compiled-modules=no` flag to turn off precompilation.
-2. Configure a private writable depot using `pushfirst!(DEPOT_PATH, private_path)`
-   where `private_path` is a path unique to this `julia` process.  This
-   can also be done by setting environment variable `JULIA_DEPOT_PATH` to
-   `$private_path:$HOME/.julia`.
-3. Create a symlink from `~/.julia/compiled` to a directory in a scratch space.
+However, due to caching of binary code, the cache rejection since v1.9 is more strict and users may need to set the
+[`JULIA_CPU_TARGET`](@ref JULIA_CPU_TARGET) environment variable appropriately to get a single cache that is usable throughout the HPC
+environment.
 
 ## Julia Releases
 

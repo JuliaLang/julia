@@ -102,6 +102,7 @@ div(x::Period, y::Period, r::RoundingMode) = div(promote(x, y)..., r)
 Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
 Base.abs(a::T) where {T<:Period} = T(abs(value(a)))
 Base.sign(x::Period) = sign(value(x))
+Base.signbit(x::Period) = signbit(value(x))
 
 # return (next coarser period, conversion factor):
 coarserperiod(::Type{P}) where {P<:Period} = (P, 1)
@@ -443,8 +444,8 @@ Base.isless(x::CompoundPeriod, y::Period) = x < CompoundPeriod(y)
 Base.isless(x::CompoundPeriod, y::CompoundPeriod) = tons(x) < tons(y)
 # truncating conversions to milliseconds, nanoseconds and days:
 # overflow can happen for periods longer than ~300,000 years
-toms(c::Nanosecond)  = div(value(c), 1000000)
-toms(c::Microsecond) = div(value(c), 1000)
+toms(c::Nanosecond)  = div(value(c), 1000000, RoundNearest)
+toms(c::Microsecond) = div(value(c), 1000, RoundNearest)
 toms(c::Millisecond) = value(c)
 toms(c::Second)      = 1000 * value(c)
 toms(c::Minute)      = 60000 * value(c)

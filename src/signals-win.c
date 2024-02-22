@@ -4,7 +4,7 @@
 // Note that this file is `#include`d by "signal-handling.c"
 #include <mmsystem.h> // hidden by LEAN_AND_MEAN
 
-#define sig_stack_size 131072 // 128k reserved for SEGV handling
+static const size_t sig_stack_size = 131072; // 128k reserved for backtrace_fiber for stack overflow handling
 
 // Copied from MINGW_FLOAT_H which may not be found due to a collision with the builtin gcc float.h
 // eventually we can probably integrate this into OpenLibm.
@@ -124,10 +124,8 @@ void restore_signals(void)
     SetConsoleCtrlHandler(NULL, 0);
 }
 
-void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
+void jl_throw_in_ctx(jl_task_t *ct, jl_value_t *excpt, PCONTEXT ctxThread)
 {
-    jl_task_t *ct = jl_current_task;
-    jl_ptls_t ptls = ct->ptls;
 #if defined(_CPU_X86_64_)
     DWORD64 Rsp = (ctxThread->Rsp & (DWORD64)-16) - 8;
 #elif defined(_CPU_X86_)
@@ -135,8 +133,9 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
 #else
 #error WIN16 not supported :P
 #endif
-    if (!jl_get_safe_restore()) {
+    if (ct && !jl_get_safe_restore()) {
         assert(excpt != NULL);
+        jl_ptls_t ptls = ct->ptls;
         ptls->bt_size = 0;
         if (excpt != jl_stackovf_exception) {
             ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread,
@@ -193,7 +192,8 @@ static void jl_try_deliver_sigint(void)
             jl_safe_printf("error: GetThreadContext failed\n");
             return;
         }
-        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread);
+        jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
+        jl_throw_in_ctx(ct, jl_interrupt_exception, &ctxThread);
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(hMainThread, &ctxThread)) {
             jl_safe_printf("error: SetThreadContext failed\n");
@@ -237,14 +237,14 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         case EXCEPTION_INT_DIVIDE_BY_ZERO:
             if (ct->eh != NULL) {
                 fpreset();
-                jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord);
+                jl_throw_in_ctx(ct, jl_diverror_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
             break;
         case EXCEPTION_STACK_OVERFLOW:
             if (ct->eh != NULL) {
                 ptls->needs_resetstkoflw = 1;
-                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord);
+                jl_throw_in_ctx(ct, jl_stackovf_exception, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
             break;
@@ -259,17 +259,17 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
                 }
                 else if (jl_safepoint_consume_sigint()) {
                     jl_clear_force_sigint();
-                    jl_throw_in_ctx(jl_interrupt_exception, ExceptionInfo->ContextRecord);
+                    jl_throw_in_ctx(ct, jl_interrupt_exception, ExceptionInfo->ContextRecord);
                 }
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
             if (jl_get_safe_restore()) {
-                jl_throw_in_ctx(NULL, ExceptionInfo->ContextRecord);
+                jl_throw_in_ctx(NULL, NULL, ExceptionInfo->ContextRecord);
                 return EXCEPTION_CONTINUE_EXECUTION;
             }
             if (ct->eh != NULL) {
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
-                    jl_throw_in_ctx(jl_readonlymemory_exception, ExceptionInfo->ContextRecord);
+                    jl_throw_in_ctx(ct, jl_readonlymemory_exception, ExceptionInfo->ContextRecord);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
             }
@@ -344,6 +344,54 @@ JL_DLLEXPORT void jl_install_sigint_handler(void)
 
 static volatile HANDLE hBtThread = 0;
 
+int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
+{
+    (void)timeout;
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    if (ptls2 == NULL) // this thread is not alive
+        return 0;
+    jl_task_t *ct2 = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (ct2 == NULL) // this thread is already dead
+        return 0;
+    HANDLE hThread = ptls2->system_id;
+    if ((DWORD)-1 == SuspendThread(hThread))
+        return 0;
+    assert(sizeof(*ctx) == sizeof(CONTEXT));
+    memset(ctx, 0, sizeof(CONTEXT));
+    ctx->ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+    if (!GetThreadContext(hThread, ctx)) {
+        if ((DWORD)-1 == ResumeThread(hThread))
+            abort();
+        return 0;
+    }
+    return 1;
+}
+
+void jl_thread_resume(int tid)
+{
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    HANDLE hThread = ptls2->system_id;
+    if ((DWORD)-1 == ResumeThread(hThread)) {
+        fputs("failed to resume main thread! aborting.", stderr);
+        abort();
+    }
+}
+
+int jl_lock_stackwalk(void)
+{
+    uv_mutex_lock(&jl_in_stackwalk);
+    jl_lock_profile();
+    return 0;
+}
+
+void jl_unlock_stackwalk(int lockret)
+{
+    (void)lockret;
+    jl_unlock_profile();
+    uv_mutex_unlock(&jl_in_stackwalk);
+}
+
+
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
     // Note: illegal to use jl_* functions from this thread except for profiling-specific functions
@@ -357,58 +405,45 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 continue;
             }
             else {
-                uv_mutex_lock(&jl_in_stackwalk);
-                jl_lock_profile();
-                if ((DWORD)-1 == SuspendThread(hMainThread)) {
+                // TODO: bring this up to parity with other OS by adding loop over tid here
+                int lockret = jl_lock_stackwalk();
+                CONTEXT ctxThread;
+                if (!jl_thread_suspend_and_get_state(0, 0, &ctxThread)) {
+                    jl_unlock_stackwalk(lockret);
                     fputs("failed to suspend main thread. aborting profiling.", stderr);
+                    jl_profile_stop_timer();
                     break;
                 }
-                CONTEXT ctxThread;
-                memset(&ctxThread, 0, sizeof(CONTEXT));
-                ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-                if (!GetThreadContext(hMainThread, &ctxThread)) {
-                    fputs("failed to get context from main thread. aborting profiling.", stderr);
-                    jl_profile_stop_timer();
-                }
-                else {
-                    // Get backtrace data
-                    bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
-                            bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
+                // Get backtrace data
+                bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
+                        bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
 
-                    jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[0]; // given only profiling hMainThread
+                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[0]; // given only profiling hMainThread
 
-                    // store threadid but add 1 as 0 is preserved to indicate end of block
-                    bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+                // store threadid but add 1 as 0 is preserved to indicate end of block
+                bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
 
-                    // store task id (never null)
-                    bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
+                // store task id (never null)
+                bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
 
-                    // store cpu cycle clock
-                    bt_data_prof[bt_size_cur++].uintptr = cycleclock();
+                // store cpu cycle clock
+                bt_data_prof[bt_size_cur++].uintptr = cycleclock();
 
-                    // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
-                    bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
+                // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
+                bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
 
-                    // Mark the end of this block with two 0's
-                    bt_data_prof[bt_size_cur++].uintptr = 0;
-                    bt_data_prof[bt_size_cur++].uintptr = 0;
-                }
-                jl_unlock_profile();
-                uv_mutex_unlock(&jl_in_stackwalk);
-                if ((DWORD)-1 == ResumeThread(hMainThread)) {
-                    jl_profile_stop_timer();
-                    fputs("failed to resume main thread! aborting.", stderr);
-                    jl_gc_debug_critical_error();
-                    abort();
-                }
+                // Mark the end of this block with two 0's
+                bt_data_prof[bt_size_cur++].uintptr = 0;
+                bt_data_prof[bt_size_cur++].uintptr = 0;
+                jl_unlock_stackwalk(lockret);
+                jl_thread_resume(0);
                 jl_check_profile_autostop();
             }
         }
     }
-    jl_unlock_profile();
     uv_mutex_unlock(&jl_in_stackwalk);
     jl_profile_stop_timer();
-    hBtThread = 0;
+    hBtThread = NULL;
     return 0;
 }
 

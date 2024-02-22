@@ -3,7 +3,7 @@
 # `ntuple`, for constructing tuples of a given length
 
 """
-    ntuple(f::Function, n::Integer)
+    ntuple(f, n::Integer)
 
 Create a tuple of length `n`, computing each element as `f(i)`,
 where `i` is the index of the element.
@@ -86,5 +86,13 @@ end
         end
     else
         (t..., fill(val, N-M)...)
+    end
+end
+
+
+# Specialized extensions for NTuple
+function reverse(t::NTuple{N}) where N
+    ntuple(Val{N}()) do i
+        t[end+1-i]
     end
 end

@@ -94,8 +94,8 @@ a vector of 64-bit floats so there should be no need to allocate (heap) memory.
 
 We should clarify that what `@time` reports is specifically *heap* allocations, which are typically needed for either
 mutable objects or for creating/growing variable-sized containers (such as `Array` or `Dict`, strings, or "type-unstable"
-objects whose type is only known at runtime).  Allocating (or deallocating) such blocks of memory may require an expensive
-system call (e.g. via `malloc` in C), and they must be tracked for garbage collection.  In contrast, immutable values like
+objects whose type is only known at runtime).  Allocating (or deallocating) such blocks of memory may require an expensive function
+call to libc (e.g. via `malloc` in C), and they must be tracked for garbage collection.  In contrast, immutable values like
 numbers (except bignums), tuples, and immutable `struct`s can be stored much more cheaply, e.g. in stack or CPU-register
 memory, so one doesn’t typically worry about the performance cost of "allocating" them.
 
@@ -157,7 +157,7 @@ the performance of your code:
   * [Profiling](@ref) allows you to measure the performance of your running code and identify lines
     that serve as bottlenecks. For complex projects, the [ProfileView](https://github.com/timholy/ProfileView.jl)
     package can help you visualize your profiling results.
-  * The [Traceur](https://github.com/JunoLab/Traceur.jl) package can help you find common performance problems in your code.
+  * The [JET](https://github.com/aviatesk/JET.jl) package can help you find common performance problems in your code.
   * Unexpectedly-large memory allocations--as reported by [`@time`](@ref), [`@allocated`](@ref), or
     the profiler (through calls to the garbage-collection routines)--hint that there might be issues
     with your code. If you don't see another reason for the allocations, suspect a type problem.
@@ -1035,6 +1035,20 @@ some judgment may be required. However, for "vectorized" (element-wise) function
 syntax `x .= f.(y)` can be used for in-place operations with fused loops and no temporary arrays
 (see the [dot syntax for vectorizing functions](@ref man-vectorized)).
 
+## [Use `MutableArithmetics` for more control over allocation for mutable arithmetic types](@id man-perftips-mutablearithmetics)
+
+Some [`Number`](@ref) subtypes, such as [`BigInt`](@ref) or [`BigFloat`](@ref), may
+be implemented as [`mutable struct`](@ref) types, or they may have mutable
+components. The arithmetic interfaces in Julia `Base` usually opt for convenience
+over efficiency in such cases, so using them in a naive manner may result in
+suboptimal performance. The abstractions of the
+[`MutableArithmetics`](https://juliahub.com/ui/Packages/General/MutableArithmetics)
+package, on the other hand, make it possible to exploit the mutability of such types
+for writing fast code that allocates only as much as necessary. `MutableArithmetics`
+also makes it possible to copy values of mutable arithmetic types explicitly when
+necessary. `MutableArithmetics` is a user package and is not affiliated with the
+Julia project.
+
 ## More dots: Fuse vectorized operations
 
 Julia has a special [dot syntax](@ref man-vectorized) that converts
@@ -1081,6 +1095,33 @@ a new temporary array and executes in a separate loop. In this example
 convenient to sprinkle some dots in your expressions than to
 define a separate function for each vectorized operation.
 
+## [Fewer dots: Unfuse certain intermediate broadcasts](@id man-performance-unfuse)
+
+The dot loop fusion mentioned above enables concise and idiomatic code to express highly performant operations. However, it is important to remember that the fused operation will be computed at every iteration of the broadcast. This means that in some situations, particularly in the presence of composed or multidimensional broadcasts, an expression with dot calls may be computing a function more times than intended. As an example, say we want to build a random matrix whose rows have Euclidean norm one. We might write something like the following:
+```
+julia> x = rand(1000, 1000);
+
+julia> d = sum(abs2, x; dims=2);
+
+julia> @time x ./= sqrt.(d);
+  0.002049 seconds (4 allocations: 96 bytes)
+```
+This will work. However, this expression will actually recompute `sqrt(d[i])` for *every* element in the row `x[i, :]`, meaning that many more square roots are computed than necessary. To see precisely over which indices the broadcast will iterate, we can call `Broadcast.combine_axes` on the arguments of the fused expression. This will return a tuple of ranges whose entries correspond to the axes of iteration; the product of lengths of these ranges will be the total number of calls to the fused operation.
+
+It follows that when some components of the broadcast expression are constant along an axis—like the `sqrt` along the second dimension in the preceding example—there is potential for a performance improvement by forcibly "unfusing" those components, i.e. allocating the result of the broadcasted operation in advance and reusing the cached value along its constant axis. Some such potential approaches are to use temporary variables, wrap components of a dot expression in `identity`, or use an equivalent intrinsically vectorized (but non-fused) function.
+```
+julia> @time let s = sqrt.(d); x ./= s end;
+  0.000809 seconds (5 allocations: 8.031 KiB)
+
+julia> @time x ./= identity(sqrt.(d));
+  0.000608 seconds (5 allocations: 8.031 KiB)
+
+julia> @time x ./= map(sqrt, d);
+  0.000611 seconds (4 allocations: 8.016 KiB)
+```
+
+Any of these options yields approximately a three-fold speedup at the cost of an allocation; for large broadcastables this speedup can be asymptotically very large.
+
 ## [Consider using views for slices](@id man-performance-views)
 
 In Julia, an array "slice" expression like `array[1:5, :]` creates
@@ -1125,7 +1166,7 @@ and fewer memory accesses due to caching. These are the same reasons that it is 
 to access arrays in column-major order (see above). Irregular access patterns and non-contiguous
 views can drastically slow down computations on arrays because of non-sequential memory access.
 
-Copying irregularly-accessed data into a contiguous array before repeated access it can result
+Copying irregularly-accessed data into a contiguous array before repeatedly accessing it can result
 in a large speedup, such as in the example below. Here, a matrix is being accessed at
 randomly-shuffled indices before being multiplied. Copying into plain arrays speeds up the
 multiplication even with the added cost of copying and allocation.

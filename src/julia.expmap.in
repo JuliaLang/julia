@@ -7,7 +7,6 @@
     ios_*;
     arraylist_grow;
     small_arraylist_grow;
-    small_typeof;
     jl_*;
     ijl_*;
     _jl_mutex_*;

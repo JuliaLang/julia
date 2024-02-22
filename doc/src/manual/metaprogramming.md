@@ -379,7 +379,7 @@ julia> ex = :(a + b)
 :(a + b)
 
 julia> eval(ex)
-ERROR: UndefVarError: `b` not defined
+ERROR: UndefVarError: `b` not defined in `Main`
 [...]
 
 julia> a = 1; b = 2;
@@ -397,7 +397,7 @@ julia> ex = :(x = 1)
 :(x = 1)
 
 julia> x
-ERROR: UndefVarError: `x` not defined
+ERROR: UndefVarError: `x` not defined in `Main`
 
 julia> eval(ex)
 1
@@ -629,6 +629,15 @@ julia> @showarg(1+1)
 
 julia> @showarg(println("Yo!"))
 :(println("Yo!"))
+
+julia> @showarg(1)        # Numeric literal
+1
+
+julia> @showarg("Yo!")    # String literal
+"Yo!"
+
+julia> @showarg("Yo! $("hello")")    # String with interpolation is an Expr rather than a String
+:("Yo! $("hello")")
 ```
 
 In addition to the given argument list, every macro is passed extra arguments named `__source__` and `__module__`.
@@ -1340,8 +1349,7 @@ julia> function sub2ind_loop(dims::NTuple{N}, I::Integer...) where N
                ind = I[i]-1 + dims[i]*ind
            end
            return ind + 1
-       end
-sub2ind_loop (generic function with 1 method)
+       end;
 
 julia> sub2ind_loop((3, 5), 1, 2)
 4
@@ -1380,8 +1388,7 @@ julia> @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
                ex = :(I[$i] - 1 + dims[$i] * $ex)
            end
            return :($ex + 1)
-       end
-sub2ind_gen (generic function with 1 method)
+       end;
 
 julia> sub2ind_gen((3, 5), 1, 2)
 4
@@ -1392,11 +1399,6 @@ julia> sub2ind_gen((3, 5), 1, 2)
 An easy way to find out is to extract the body into another (regular) function:
 
 ```jldoctest sub2ind_gen2
-julia> @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
-           return sub2ind_gen_impl(dims, I...)
-       end
-sub2ind_gen (generic function with 1 method)
-
 julia> function sub2ind_gen_impl(dims::Type{T}, I...) where T <: NTuple{N,Any} where N
            length(I) == N || return :(error("partial indexing is unsupported"))
            ex = :(I[$N] - 1)
@@ -1404,8 +1406,14 @@ julia> function sub2ind_gen_impl(dims::Type{T}, I...) where T <: NTuple{N,Any} w
                ex = :(I[$i] - 1 + dims[$i] * $ex)
            end
            return :($ex + 1)
-       end
-sub2ind_gen_impl (generic function with 1 method)
+       end;
+
+julia> @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
+           return sub2ind_gen_impl(dims, I...)
+       end;
+
+julia> sub2ind_gen((3, 5), 1, 2)
+4
 ```
 
 We can now execute `sub2ind_gen_impl` and examine the expression it returns:
@@ -1434,25 +1442,34 @@ To solve this problem, the language provides syntax for writing normal, non-gene
 alternative implementations of generated functions.
 Applied to the `sub2ind` example above, it would look like this:
 
-```julia
-function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
-    if N != length(I)
-        throw(ArgumentError("Number of dimensions must match number of indices."))
-    end
-    if @generated
-        ex = :(I[$N] - 1)
-        for i = (N - 1):-1:1
-            ex = :(I[$i] - 1 + dims[$i] * $ex)
-        end
-        return :($ex + 1)
-    else
-        ind = I[N] - 1
-        for i = (N - 1):-1:1
-            ind = I[i] - 1 + dims[i]*ind
-        end
-        return ind + 1
-    end
-end
+```jldoctest sub2ind_gen_opt
+julia> function sub2ind_gen_impl(dims::Type{T}, I...) where T <: NTuple{N,Any} where N
+           ex = :(I[$N] - 1)
+           for i = (N - 1):-1:1
+               ex = :(I[$i] - 1 + dims[$i] * $ex)
+           end
+           return :($ex + 1)
+       end;
+
+julia> function sub2ind_gen_fallback(dims::NTuple{N}, I) where N
+           ind = I[N] - 1
+           for i = (N - 1):-1:1
+               ind = I[i] - 1 + dims[i]*ind
+           end
+           return ind + 1
+       end;
+
+julia> function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
+           length(I) == N || error("partial indexing is unsupported")
+           if @generated
+               return sub2ind_gen_impl(dims, I...)
+           else
+               return sub2ind_gen_fallback(dims, I)
+           end
+       end;
+
+julia> sub2ind_gen((3, 5), 1, 2)
+4
 ```
 
 Internally, this code creates two implementations of the function: a generated one where

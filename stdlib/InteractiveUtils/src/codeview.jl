@@ -54,6 +54,75 @@ function is_expected_union(u::Union)
     return true
 end
 
+function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Int; lineprinter)
+    if src.slotnames !== nothing
+        slotnames = Base.sourceinfo_slotnames(src)
+        io = IOContext(io, :SOURCE_SLOTNAMES => slotnames)
+        slottypes = src.slottypes
+        nargs > 0 && println(io, "Arguments")
+        for i = 1:length(slotnames)
+            if i == nargs + 1
+                println(io, "Locals")
+            end
+            print(io, "  ", slotnames[i])
+            if isa(slottypes, Vector{Any})
+                warntype_type_printer(io; type=slottypes[i], used=true)
+            end
+            println(io)
+        end
+    end
+    print(io, "Body")
+    warntype_type_printer(io; type=rettype, used=true)
+    println(io)
+    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
+    Base.IRShow.show_ir(io, src, irshow_config)
+    println(io)
+end
+
+function print_warntype_mi(io::IO, mi::Core.MethodInstance)
+    println(io, mi)
+    print(io, "  from ")
+    println(io, mi.def)
+    if !isempty(mi.sparam_vals)
+        println(io, "Static Parameters")
+        sig = mi.def.sig
+        warn_color = Base.warn_color() # more mild user notification
+        for i = 1:length(mi.sparam_vals)
+            sig = sig::UnionAll
+            name = sig.var.name
+            val = mi.sparam_vals[i]
+            print_highlighted(io::IO, v::String, color::Symbol) =
+                if highlighting[:warntype]
+                    Base.printstyled(io, v; color)
+                else
+                    Base.print(io, v)
+                end
+            if val isa TypeVar
+                if val.lb === Union{}
+                    print(io, "  ", name, " <: ")
+                    print_highlighted(io, "$(val.ub)", warn_color)
+                elseif val.ub === Any
+                    print(io, "  ", sig.var.name, " >: ")
+                    print_highlighted(io, "$(val.lb)", warn_color)
+                else
+                    print(io, "  ")
+                    print_highlighted(io, "$(val.lb)", warn_color)
+                    print(io, " <: ", sig.var.name, " <: ")
+                    print_highlighted(io, "$(val.ub)", warn_color)
+                end
+            elseif val isa typeof(Vararg)
+                print(io, "  ", name, "::")
+                print_highlighted(io, "Int", warn_color)
+            else
+                print(io, "  ", sig.var.name, " = ")
+                print_highlighted(io, "$(val)", :cyan) # show the "good" type
+            end
+            println(io)
+            sig = sig.body
+        end
+    end
+end
+
 """
     code_warntype([io::IO], f, types; debuginfo=:default)
 
@@ -70,94 +139,38 @@ Small unions of concrete types are usually not a concern, so these are highlight
 
 Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
 
-See [`@code_warntype`](@ref man-code-warntype) for more information.
+See the [`@code_warntype`](@ref man-code-warntype) section in the Performance Tips page of the manual for more information.
+
+See also: [`@code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref), [`code_native`](@ref).
 """
 function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt(f));
+                       world=Base.get_world_counter(),
+                       interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world),
                        debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
+    (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
+        error("code reflection cannot be used from generated functions")
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
-    for (src, rettype) in code_typed(f, t; optimize, kwargs...)
-        if !(src isa Core.CodeInfo)
-            println(io, src)
-            println(io, "  failed to infer")
-            continue
-        end
-        lambda_io::IOContext = io
-        p = src.parent
-        nargs::Int = 0
-        if p isa Core.MethodInstance
-            println(io, p)
-            print(io, "  from ")
-            println(io, p.def)
-            p.def isa Method && (nargs = p.def.nargs)
-            if !isempty(p.sparam_vals)
-                println(io, "Static Parameters")
-                sig = p.def.sig
-                warn_color = Base.warn_color() # more mild user notification
-                for i = 1:length(p.sparam_vals)
-                    sig = sig::UnionAll
-                    name = sig.var.name
-                    val = p.sparam_vals[i]
-                    print_highlighted(io::IO, v::String, color::Symbol) =
-                        if highlighting[:warntype]
-                            Base.printstyled(io, v; color)
-                        else
-                            Base.print(io, v)
-                        end
-                    if val isa TypeVar
-                        if val.lb === Union{}
-                            print(io, "  ", name, " <: ")
-                            print_highlighted(io, "$(val.ub)", warn_color)
-                        elseif val.ub === Any
-                            print(io, "  ", sig.var.name, " >: ")
-                            print_highlighted(io, "$(val.lb)", warn_color)
-                        else
-                            print(io, "  ")
-                            print_highlighted(io, "$(val.lb)", warn_color)
-                            print(io, " <: ", sig.var.name, " <: ")
-                            print_highlighted(io, "$(val.ub)", warn_color)
-                        end
-                    elseif val isa typeof(Vararg)
-                        print(io, "  ", name, "::")
-                        print_highlighted(io, "Int", warn_color)
-                    else
-                        print(io, "  ", sig.var.name, " = ")
-                        print_highlighted(io, "$(val)", :cyan) # show the "good" type
-                    end
-                    println(io)
-                    sig = sig.body
-                end
-            end
-        end
-        if src.slotnames !== nothing
-            slotnames = Base.sourceinfo_slotnames(src)
-            lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => slotnames)
-            slottypes = src.slottypes
-            nargs > 0 && println(io, "Arguments")
-            for i = 1:length(slotnames)
-                if i == nargs + 1
-                    println(io, "Locals")
-                end
-                print(io, "  ", slotnames[i])
-                if isa(slottypes, Vector{Any})
-                    warntype_type_printer(io; type=slottypes[i], used=true)
-                end
-                println(io)
-            end
-        end
-        print(io, "Body")
-        warntype_type_printer(io; type=rettype, used=true)
-        println(io)
-        irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
-        Base.IRShow.show_ir(lambda_io, src, irshow_config)
-        println(io)
+    nargs::Int = 0
+    if isa(f, Core.OpaqueClosure)
+        isa(f.source, Method) && (nargs = f.nargs)
+        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f)[1]..., nargs; lineprinter)
+        return nothing
+    end
+    matches = Base._methods_by_ftype(Base.signature_type(f, t), #=lim=#-1, world)::Vector
+    for match in matches
+        match = match::Core.MethodMatch
+        (src, rettype) = Core.Compiler.typeinf_code(interp, match, optimize)
+        mi = Core.Compiler.specialize_method(match)
+        mi.def isa Method && (nargs = (mi.def::Method).nargs)
+        print_warntype_mi(io, mi)
+        print_warntype_codeinfo(io, src, rettype, nargs; lineprinter)
     end
     nothing
 end
-code_warntype(@nospecialize(f), @nospecialize(t=Base.default_tt(f)); kwargs...) =
-    code_warntype(stdout, f, t; kwargs...)
+code_warntype(args...; kwargs...) = (@nospecialize; code_warntype(stdout, args...; kwargs...))
 
-import Base.CodegenParams
+using Base: CodegenParams
 
 const GENERIC_SIG_WARNING = "; WARNING: This code may not match what actually runs.\n"
 const OC_MISMATCH_WARNING =
@@ -170,15 +183,8 @@ const OC_MISMATCH_WARNING =
 
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         raw::Bool, dump_module::Bool, syntax::Symbol,
-                        optimize::Bool, debuginfo::Symbol, binary::Bool)
-        params = CodegenParams(debug_info_kind=Cint(0),
-                               safepoint_on_entry=raw, gcstack_arg=raw)
-        _dump_function(f, t, native, wrapper, raw, dump_module, syntax,
-                       optimize, debuginfo, binary, params)
-end
-function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
-                        raw::Bool, dump_module::Bool, syntax::Symbol,
-                        optimize::Bool, debuginfo::Symbol, binary::Bool, params::CodegenParams)
+                        optimize::Bool, debuginfo::Symbol, binary::Bool,
+                        params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -193,14 +199,15 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
     else
         world = UInt64(f.world)
-        if Core.Compiler.is_source_inferred(f.source.source)
+        tt = Base.to_tuple_type(t)
+        if !isdefined(f.source, :source)
             # OC was constructed from inferred source. There's only one
             # specialization and we can't infer anything more precise either.
             world = f.source.primary_world
             mi = f.source.specializations::Core.MethodInstance
-            Core.Compiler.hasintersect(typeof(f).parameters[1], t) || (warning = OC_MISMATCH_WARNING)
+            Core.Compiler.hasintersect(typeof(f).parameters[1], tt) || (warning = OC_MISMATCH_WARNING)
         else
-            mi = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), t.parameters...}, Core.svec())
+            mi = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), tt.parameters...}, Core.svec())
             actual = isdispatchtuple(mi.specTypes)
             isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
         end
@@ -280,20 +287,20 @@ If the `optimize` keyword is unset, the code will be shown before LLVM optimizat
 All metadata and dbg.* calls are removed from the printed bitcode. For the full IR, set the `raw` keyword to true.
 To dump the entire module that encapsulates the function (with declarations), set the `dump_module` keyword to true.
 Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
+
+See also: [`@code_llvm`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_native`](@ref).
 """
-function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
-                   dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default)
-    d = _dump_function(f, types, false, false, raw, dump_module, :intel, optimize, debuginfo, false)
+function code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
+                   raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default,
+                   params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
+    d = _dump_function(f, types, false, false, raw, dump_module, :intel, optimize, debuginfo, false, params)
     if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
     else
         print(io, d)
     end
 end
-code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default) =
-    code_llvm(io, f, types, raw, dump_module, optimize, debuginfo)
-code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw=false, dump_module=false, optimize=true, debuginfo::Symbol=:default) =
-    code_llvm(stdout, f, types; raw, dump_module, optimize, debuginfo)
+code_llvm(args...; kwargs...) = (@nospecialize; code_llvm(stdout, args...; kwargs...))
 
 """
     code_native([io=stdout,], f, types; syntax=:intel, debuginfo=:default, binary=false, dump_module=true)
@@ -307,21 +314,20 @@ generic function and type signature to `io`.
 * If `dump_module` is `false`, do not print metadata such as rodata or directives.
 * If `raw` is `false`, uninteresting instructions (like the safepoint function prologue) are elided.
 
-See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
+See also: [`@code_native`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref).
 """
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                      dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false,
-                     debuginfo::Symbol=:default, binary::Bool=false)
-    d = _dump_function(f, types, true, false, raw, dump_module, syntax, true, debuginfo, binary)
+                     debuginfo::Symbol=:default, binary::Bool=false,
+                     params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
+    d = _dump_function(f, types, true, false, raw, dump_module, syntax, true, debuginfo, binary, params)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
     else
         print(io, d)
     end
 end
-code_native(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false, debuginfo::Symbol=:default, binary::Bool=false) =
-    code_native(stdout, f, types; dump_module, syntax, raw, debuginfo, binary)
-code_native(::IO, ::Any, ::Symbol) = error("invalid code_native call") # resolve ambiguous call
+code_native(args...; kwargs...) = (@nospecialize; code_native(stdout, args...; kwargs...))
 
 ## colorized IR and assembly printing
 
