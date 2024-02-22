@@ -800,7 +800,7 @@ function IRInterpretationState(interp::AbstractInterpreter,
     @assert code.def === mi
     src = @atomic :monotonic code.inferred
     if isa(src, String)
-        src = _uncompressed_ir(mi.def, src)
+        src = _uncompressed_ir(code, src)
     else
         isa(src, CodeInfo) || return nothing
     end

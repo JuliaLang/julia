@@ -364,7 +364,7 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
         }
     }
 #endif
-    jl_atomic_store_relaxed(&ptls->gc_state, 0); // GC unsafe
+    jl_atomic_store_relaxed(&ptls->gc_state, JL_GC_STATE_UNSAFE); // GC unsafe
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {

@@ -498,7 +498,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         if (jl_is_method(def)) {
             src = (jl_code_info_t*)def->source;
             if (src && (jl_value_t*)src != jl_nothing)
-                src = jl_uncompress_ir(def, (jl_value_t*)src);
+                src = jl_uncompress_ir(def, NULL, (jl_value_t*)src);
         }
         else {
             src = (jl_code_info_t*)jl_atomic_load_relaxed(&unspec->def->uninferred);

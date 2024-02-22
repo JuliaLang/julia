@@ -107,20 +107,22 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # OptimizationState #
 #####################
 
-function inlining_policy(interp::AbstractInterpreter,
+# return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
+function src_inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(src, MaybeCompressed)
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
-        return src_inlineable ? src : nothing
+        return src_inlineable
     elseif isa(src, IRCode)
-        return src
+        return true
     elseif isa(src, SemiConcreteResult)
-        return src
-    elseif isa(src, CodeInstance)
-        return inlining_policy(interp, src.inferred, info, stmt_flag)
+        return true
     end
-    return nothing
+    @assert !isa(src, CodeInstance) # handled by caller
+    return false
 end
+
+function inlining_policy end # deprecated legacy name used by Cthulhu
 
 struct InliningState{Interp<:AbstractInterpreter}
     edges::Vector{Any}
