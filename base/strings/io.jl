@@ -108,6 +108,9 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     s = IOBuffer(sizehint=sizehint)
     if context isa Tuple
         f(IOContext(s, context...), args...)
+    elseif context isa IO
+        # Add an explicit displaysize entry, see #42649
+        f(IOContext(IOContext(s, context), :displaysize=>displaysize(context)), args...)
     elseif context !== nothing
         f(IOContext(s, context), args...)
     else
