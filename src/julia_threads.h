@@ -192,6 +192,9 @@ typedef struct _jl_tls_states_t {
     _Atomic(volatile size_t *) safepoint; // may be changed to the suspend page by any thread
     _Atomic(int8_t) sleep_check_state; // read/write from foreign threads
     // Whether it is safe to execute GC at the same time.
+#define JL_GC_STATE_UNSAFE 0
+    // gc_state = 0 means the thread is running Julia code and is not
+    //              safe to run concurrently to the GC
 #define JL_GC_STATE_WAITING 1
     // gc_state = 1 means the thread is doing GC or is waiting for the GC to
     //              finish.
@@ -330,9 +333,7 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
                                      int8_t old_state)
 {
     jl_atomic_store_release(&ptls->gc_state, state);
-    if (state == JL_GC_STATE_SAFE && old_state == 0)
-        jl_gc_safepoint_(ptls);
-    if (state == 0 && old_state == JL_GC_STATE_SAFE)
+    if (state == JL_GC_STATE_UNSAFE || old_state == JL_GC_STATE_UNSAFE)
         jl_gc_safepoint_(ptls);
     return old_state;
 }
@@ -347,8 +348,8 @@ void jl_gc_unsafe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT JL_NOTSAFE
 int8_t jl_gc_safe_enter(jl_ptls_t ptls) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 void jl_gc_safe_leave(jl_ptls_t ptls, int8_t state) JL_NOTSAFEPOINT_LEAVE; // this might not be a safepoint, but we have to assume it could be (statically)
 #else
-#define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, 0)
-#define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), 0))
+#define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_UNSAFE)
+#define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_UNSAFE))
 #define jl_gc_safe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_SAFE)
 #define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
 #endif
