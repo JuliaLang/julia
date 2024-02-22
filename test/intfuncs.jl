@@ -309,6 +309,18 @@ end
 end
 
 @testset "nextpow/prevpow" begin
+    @testset "small BigInt: $f $R" for f ∈ (prevpow, nextpow),
+                                       P ∈ (Int8, Int16, Int32, Int64, Int128),
+                                       R ∈ (Int8, Int16, Int32, Int64, Int128),
+                                       p ∈ 1:64,
+                                       r ∈ 2:5
+        q = P(p)
+        n = R(r)
+        for a ∈ (n, unsigned(n)), b ∈ (q, unsigned(q))
+            @test f(a, b) == f(a, big(b))
+        end
+    end
+
     @test nextpow(2, 3) == 4
     @test nextpow(2, 4) == 4
     @test nextpow(2, 7) == 8
@@ -322,7 +334,14 @@ end
     @test prevpow(10, 101.0) === 100
     @test prevpow(10.0, 101) === 100.0
     @test_throws DomainError prevpow(0, 3)
-    @test_throws DomainError prevpow(0, 3)
+    @test_throws DomainError prevpow(3, 0)
+
+    # "argument is beyond the range of type of the base"
+    @test_throws DomainError prevpow(Int8(3), 243)
+    @test_throws DomainError nextpow(Int8(3), 243)
+
+    # "result is beyond the range of type of the base"
+    @test_throws OverflowError nextpow(Int8(3), 82)
 end
 
 @testset "ndigits/ndigits0z" begin
