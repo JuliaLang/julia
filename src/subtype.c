@@ -1512,6 +1512,23 @@ static int may_contain_union_decision(jl_value_t *x, jl_stenv_t *e, jl_typeenv_t
            may_contain_union_decision(xb ? xb->ub : ((jl_tvar_t *)x)->ub, e, &newlog);
 }
 
+static int has_exists_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    jl_typeenv_t *env = NULL;
+    jl_varbinding_t *v = e->vars;
+    while (v != NULL) {
+        if (v->right) {
+            jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
+            newenv->var = v->var;
+            newenv->val = NULL;
+            newenv->prev = env;
+            env = newenv;
+        }
+        v = v->prev;
+    }
+    return env != NULL && jl_has_bound_typevars(x, env);
+}
+
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow)
 {
     int16_t oldRmore = e->Runions.more;
@@ -1531,13 +1548,19 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         int count = 0, noRmore = 0;
         sub = _forall_exists_subtype(x, y, e, param, &count, &noRmore);
         pop_unionstate(&e->Runions, &oldRunions);
-        // we should not try the slow path if `forall_exists_subtype` has tested all cases;
-        // Once limit_slow == 1, also skip it if
-        // 1) `forall_exists_subtype` return false
+        // We could skip the slow path safely if
+        // 1) `_∀_∃_subtype` has tested all cases
+        // 2) `_∀_∃_subtype` returns 1 &&  `x` and `y` contain no ∃ typevar
+        // Once `limit_slow == 1`, also skip it if
+        // 1) `_∀_∃_subtype` returns 0
         // 2) the left `Union` looks big
+        // TODO: `limit_slow` ignores complexity from inner `local_∀_exists_subtype`.
         if (limit_slow == -1)
             limit_slow = kindx || kindy;
-        if (noRmore || (limit_slow && (count > 3  || !sub)))
+        int skip = noRmore || (limit_slow && (count > 3 || !sub)) ||
+                   (sub && (kindx || !has_exists_typevar(x, e)) &&
+                           (kindy || !has_exists_typevar(y, e)));
+        if (skip)
             e->Runions.more = oldRmore;
     }
     else {
