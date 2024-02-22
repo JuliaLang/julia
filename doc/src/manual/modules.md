@@ -171,7 +171,7 @@ julia> using .NiceStuff: nice, DOG, NiceStuff
 !!! note
     Qualifying the names being used as in `using NiceStuff: NiceStuff, nice` is recommended over plain
     `using Foo` for released packages, and other code which is meant to be re-used in the future with
-    updated dependancies.
+    updated dependencies.
     
     The reason for this is if another dependency starts to export one of the
     same names as `Foo` the code will error due to an ambiguity in which
