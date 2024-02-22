@@ -1334,7 +1334,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     # this make a better error message than the typeassert that follows
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     for match in _methods_by_ftype(tt, -1, world)::Vector
-        instance = Core.Compiler.specialize_method(match)
+        instance = Core.Compiler.specialize_method(match::Core.MethodMatch)
         push!(results, instance)
     end
     return results
@@ -1500,7 +1500,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
     gen_mthds isa Vector || return false
     length(gen_mthds) == 1 || return false
 
-    generator_method = first(gen_mthds).method
+    generator_method = (first(gen_mthds)::Core.MethodMatch).method
     nsparams = length(sparams)
     isdefined(generator_method, :source) || return false
     code = generator_method.source
@@ -2462,7 +2462,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
-        ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector
+        ms = collect(Core.MethodMatch, _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector)
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
             filter!(ms) do m::Core.MethodMatch
@@ -2475,7 +2475,6 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         # report the other ambiguous pair)
         have_m1 = have_m2 = false
         for match in ms
-            match = match::Core.MethodMatch
             m = match.method
             m === m1 && (have_m1 = true)
             m === m2 && (have_m2 = true)
