@@ -289,13 +289,14 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         end
     else
         if recursive
-            try
-                for p in readdir(path)
-                    rm(joinpath(path, p), force=force, recursive=true)
-                end
-            catch err
-                if !(isa(err, IOError) && err.code==Base.UV_EACCES)
-                    rethrow(err)
+            for p in readdir(path)
+                fp = joinpath(path, p)
+                try
+                    rm(fp, force=force, recursive=true)
+                catch err
+                    if !(isa(err, IOError) && err.code==Base.UV_EACCES)
+                        rethrow()
+                    end
                 end
             end
         end
