@@ -4,23 +4,28 @@ Julia v1.11 Release Notes
 New language features
 ---------------------
 
+* New `Memory` type that provides a lower-level container as an alternative to `Array`.
+  `Memory` has less overhead and a faster constructor, making it a good choice for situations
+  that do not need all the features of `Array` (e.g. multiple dimensions).
+  Most of the `Array` type is now implemented in Julia on top of `Memory`, leading to
+  significant speedups for several functions (e.g. `push!`) as well as more maintainable code ([#51319]).
 * `public` is a new keyword. Symbols marked with `public` are considered public
   API. Symbols marked with `export` are now also treated as public API. The
   difference between `public` and `export` is that `public` names do not become
   available when `using` a package/module ([#50105]).
 * `ScopedValue` implements dynamic scope with inheritance across tasks ([#50958]).
-* Support for Unicode 15.1 ([#51799]).
 * `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
   to be preferentially picked up by the given julia version. i.e. in the same folder,
   a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
   version. This makes managing environments for multiple julia versions at the same time
   easier ([#43845]).
+* Support for Unicode 15.1 ([#51799]).
 
 Language changes
 ----------------
 
 * During precompilation, `atexit` hooks now run before saving the output file. This
-  allows users to safely tear down background state (such as closing Timers and sending
+  allows users to safely tear down background state (such as closing `Timer`s and sending
   disconnect notifications to heartbeat tasks) and cleanup other resources when the program
   wants to begin exiting.
 * Code coverage and malloc tracking is no longer generated during the package precompilation stage.
@@ -227,7 +232,9 @@ Tooling Improvements
 [#50795]: https://github.com/JuliaLang/julia/issues/50795
 [#50797]: https://github.com/JuliaLang/julia/issues/50797
 [#50958]: https://github.com/JuliaLang/julia/issues/50958
+[#50974]: https://github.com/JuliaLang/julia/issues/50974
 [#51229]: https://github.com/JuliaLang/julia/issues/51229
+[#51319]: https://github.com/JuliaLang/julia/issues/51319
 [#51416]: https://github.com/JuliaLang/julia/issues/51416
 [#51448]: https://github.com/JuliaLang/julia/issues/51448
 [#51487]: https://github.com/JuliaLang/julia/issues/51487
