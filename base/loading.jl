@@ -3106,9 +3106,9 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     # determine depot for @depot replacement for include() files and include_dependency() files separately
     srcfiles_depot = resolve_depot(first(srcfiles))
     if srcfiles_depot === :no_depot_found
-        @debug("Unable to resolve @depot tag include() files from cache file $cachefile", srcfiles)
+        @debug("Unable to resolve @depot tag include() files from cache file $cachefile", srcfiles, _group=:relocatable)
     elseif srcfiles_depot === :not_relocatable
-        @debug("include() files from $cachefile are not relocatable", srcfiles)
+        @debug("include() files from $cachefile are not relocatable", srcfiles, _group=:relocatable)
     else
         for inc in includes_srcfiles
             inc.filename = restore_depot_path(inc.filename, srcfiles_depot)
@@ -3117,9 +3117,9 @@ function parse_cache_header(f::IO, cachefile::AbstractString)
     for inc in includes_depfiles
         depot = resolve_depot(inc.filename)
         if depot === :no_depot_found
-            @debug("Unable to resolve @depot tag for include_dependency() file $(inc.filename) from cache file $cachefile", srcfiles)
+            @debug("Unable to resolve @depot tag for include_dependency() file $(inc.filename) from cache file $cachefile", srcfiles, _group=:relocatable)
         elseif depot === :not_relocatable
-            @debug("include_dependency() file $(inc.filename) from $cachefile is not relocatable", srcfiles)
+            @debug("include_dependency() file $(inc.filename) from $cachefile is not relocatable", srcfiles, _group=:relocatable)
         else
             inc.filename = restore_depot_path(inc.filename, depot)
         end
