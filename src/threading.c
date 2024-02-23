@@ -435,6 +435,8 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
+void jl_free_thread_gc_state(jl_ptls_t ptls);
+
 static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 {
 #ifndef _OS_WINDOWS_
@@ -508,6 +510,12 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 #else
     pthread_mutex_unlock(&in_signal_lock);
 #endif
+    free(ptls->bt_data);
+    small_arraylist_free(&ptls->locks);
+    ptls->previous_exception = NULL;
+    // allow the page root_task is on to be freed
+    ptls->root_task = NULL;
+    jl_free_thread_gc_state(ptls);
     // then park in safe-region
     (void)jl_gc_safe_enter(ptls);
 }
