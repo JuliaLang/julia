@@ -1492,12 +1492,11 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         end
         src = @atomic :monotonic code.inferred
     else
-        src = nothing
+        return false
     end
 
-    src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL)
-    src === nothing && return false
-    src = retrieve_ir_for_inlining(mi, src)
+    src_inlining_policy(inlining.interp, src, info, IR_FLAG_NULL) || return false
+    src = retrieve_ir_for_inlining(code, src)
 
     # For now: Require finalizer to only have one basic block
     length(src.cfg.blocks) == 1 || return false
@@ -1519,8 +1518,12 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
             ssa_rename[ssa.id]
         end
         stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, ssa_substitute)
+        newline = inst[:line]
+        if newline != 0
+            newline += ssa_substitute.linetable_offset
+        end
         ssa_rename[idx′] = insert_node!(ir, idx,
-            NewInstruction(inst; stmt=stmt′, line=inst[:line]+ssa_substitute.linetable_offset),
+            NewInstruction(inst; stmt=stmt′, line=newline),
             attach_after)
     end
 

@@ -289,19 +289,22 @@ typedef struct _jl_code_info_t {
         // 1 << 11 = :inaccessiblemem_or_argmemonly
         // 1 << 12-19 = callsite effects overrides
     // miscellaneous data:
-    jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
     jl_value_t *linetable; // Table of locations [TODO: make this volatile like slotnames]
     jl_array_t *slotnames; // names of local variables
     jl_array_t *slotflags;  // local var bit flags
     // the following are optional transient properties (not preserved by compression--as they typically get stored elsewhere):
     jl_value_t *slottypes; // inferred types of slots
-    jl_value_t *rettype;
-    jl_method_instance_t *parent; // context (optionally, if available, otherwise nothing)
+    jl_method_instance_t *parent; // context (after inference, otherwise nothing)
+
+    // These may be used by generated functions to further constrain the resulting inputs.
+    // They are not used by any other part of the system and may be moved elsewhere in the
+    // future.
+    jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
     jl_value_t *edges; // forward edges to method instances that must be invalidated
     size_t min_world;
     size_t max_world;
+
     // various boolean properties:
-    uint8_t inferred;
     uint8_t propagate_inbounds;
     uint8_t has_fcall;
     uint8_t nospecializeinfer;
@@ -422,7 +425,13 @@ typedef struct _jl_code_instance_t {
     jl_value_t *rettype; // return type for fptr
     jl_value_t *exctype; // thrown type for fptr
     jl_value_t *rettype_const; // inferred constant return value, or null
-    _Atomic(jl_value_t *) inferred; // inferred jl_code_info_t (may be compressed), or jl_nothing, or null
+
+    // Inferred result. When part of the runtime cache, either
+    // - A jl_code_info_t (may be compressed) containing the inferred IR
+    // - jl_nothing, indicating that inference was completed, but the result was
+    //               deleted to save space.
+    // - null, indicating that inference was not yet completed or did not succeed
+    _Atomic(jl_value_t *) inferred;
     //TODO: jl_array_t *edges; // stored information about edges from this object
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
@@ -2127,7 +2136,6 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr JL_MAYBE_UNROOTED);
 // IR representation
 JL_DLLEXPORT jl_value_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_value_t *data);
-JL_DLLEXPORT uint8_t jl_ir_flag_inferred(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_value_t *data) JL_NOTSAFEPOINT;

@@ -197,7 +197,7 @@ static void JL_NO_ASAN JL_NO_MSAN memcpy_stack_a16(uint64_t *to, uint64_t *from,
     memcpy_noasan((char*)to_addr, (char*)from_addr, shadow_nb);
     memcpy_a16_noasan(jl_assume_aligned(to, 16), jl_assume_aligned(from, 16), nb);
 #elif defined(_COMPILER_MSAN_ENABLED_)
-# warning This function is imcompletely implemented for MSAN (TODO).
+# warning This function is incompletely implemented for MSAN (TODO).
     memcpy((char*)jl_assume_aligned(to, 16), (char*)jl_assume_aligned(from, 16), nb);
 #else
     memcpy((char*)jl_assume_aligned(to, 16), (char*)jl_assume_aligned(from, 16), nb);
@@ -884,7 +884,7 @@ then reduced to a single value by computing a dot product with a shared vector
 of random weights. The weights are common but each pedigree of each task is
 distinct, so the dot product of each task is unlikely to be the same. The DotMix
 paper provides a proof that this dot product hash value (referred to as a
-"compression function") is collision resistant in the sense the the pairwise
+"compression function") is collision resistant in the sense that the pairwise
 collision probability of two distinct tasks is 1/N where N is the number of
 possible weight values. Both DotMix and SplitMix use a prime value of N because
 the proof requires that the difference between two distinct pedigree coordinates

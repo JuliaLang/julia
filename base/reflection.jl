@@ -1127,20 +1127,23 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     end
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    return map(method_instances(f, t, world)) do m
+    ret = CodeInfo[]
+    for m in method_instances(f, t, world)
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
-                return ccall(:jl_code_for_staged, Any, (Any, UInt), m, world)::CodeInfo
+                code = ccall(:jl_code_for_staged, Any, (Any, UInt), m, world)::CodeInfo
             else
                 error("Could not expand generator for `@generated` method ", m, ". ",
                       "This can happen if the provided argument types (", t, ") are ",
                       "not leaf types, but the `generated` argument is `true`.")
             end
+        else
+            code = uncompressed_ir(m.def::Method)
+            debuginfo === :none && remove_linenums!(code)
         end
-        code = uncompressed_ir(m.def::Method)
-        debuginfo === :none && remove_linenums!(code)
-        return code
+        push!(ret, code)
     end
+    return ret
 end
 
 hasgenerator(m::Method) = isdefined(m, :generator)
@@ -1313,12 +1316,14 @@ function length(mt::Core.MethodTable)
 end
 isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 
-uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m, m.source) :
+uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                              error("Code for this Method is not available.")
-_uncompressed_ir(m::Method, s::CodeInfo) = copy(s)
-_uncompressed_ir(m::Method, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)::CodeInfo
-_uncompressed_ir(ci::Core.CodeInstance, s::String) = ccall(:jl_uncompress_ir, Any, (Any, Any, Any), ci.def.def::Method, ci, s)::CodeInfo
+function _uncompressed_ir(m::Method)
+    s = m.source
+    s isa String && (s = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, s))
+    return s::CodeInfo
+end
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
@@ -1329,7 +1334,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     # this make a better error message than the typeassert that follows
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     for match in _methods_by_ftype(tt, -1, world)::Vector
-        instance = Core.Compiler.specialize_method(match)
+        instance = Core.Compiler.specialize_method(match::Core.MethodMatch)
         push!(results, instance)
     end
     return results
@@ -1495,7 +1500,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
     gen_mthds isa Vector || return false
     length(gen_mthds) == 1 || return false
 
-    generator_method = first(gen_mthds).method
+    generator_method = (first(gen_mthds)::Core.MethodMatch).method
     nsparams = length(sparams)
     isdefined(generator_method, :source) || return false
     code = generator_method.source
@@ -1628,19 +1633,22 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
-                                   debuginfo::Symbol=:default, _...)
+function get_oc_code_rt(@nospecialize(oc::Core.OpaqueClosure))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     m = oc.source
     if isa(m, Method)
-        code = _uncompressed_ir(m, m.source)
-        debuginfo === :none && remove_linenums!(code)
-        # intersect the declared return type and the inferred return type (if available)
-        rt = typeintersect(code.rettype, typeof(oc).parameters[2])
-        return Any[code => rt]
+        code = _uncompressed_ir(m)
+        return Pair{CodeInfo,Any}(code, typeof(oc).parameters[2])
     else
         error("encountered invalid Core.OpaqueClosure object")
     end
+end
+
+function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
+                                   debuginfo::Symbol=:default, _...)
+    (code, rt) = get_oc_code_rt(oc)
+    debuginfo === :none && remove_linenums!(code)
+    return Any[Pair{CodeInfo,Any}(code, rt)]
 end
 
 """
@@ -2454,7 +2462,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
-        ms = _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector
+        ms = collect(Core.MethodMatch, _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector)
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
             filter!(ms) do m::Core.MethodMatch
@@ -2467,7 +2475,6 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         # report the other ambiguous pair)
         have_m1 = have_m2 = false
         for match in ms
-            match = match::Core.MethodMatch
             m = match.method
             m === m1 && (have_m1 = true)
             m === m2 && (have_m2 = true)

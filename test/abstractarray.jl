@@ -548,12 +548,24 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
-    # isassigned(a::AbstractArray, i::Int...)
+    @test !isassigned(B)
+    # isassigned(a::AbstractArray, i::Integer...)
     j = rand(1:length(B))
     @test isassigned(B, j)
     if T == T24Linear
         @test !isassigned(B, length(B) + 1)
     end
+    # isassigned(a::AbstractArray, i::CartesianIndex)
+    @test isassigned(B, first(CartesianIndices(B)))
+    ind = last(CartesianIndices(B))
+    @test !isassigned(B, ind + oneunit(ind))
+    # isassigned(a::AbstractArray, i::Union{Integer,CartesianIndex}...)
+    @test isassigned(B, Int16.(first.(axes(B)))..., CartesianIndex(1,1))
+    # Bool isn't a valid index
+    @test_throws ArgumentError isassigned(B, Bool.(first.(axes(B)))..., CartesianIndex(1,1))
+    @test_throws ArgumentError isassigned(B, Bool.(first.(axes(B)))...)
+    @test_throws ArgumentError isassigned(B, true)
+    @test_throws ArgumentError isassigned(B, false)
 
     # reshape(a::AbstractArray, dims::Dims)
     @test_throws DimensionMismatch reshape(B, (0, 1))
@@ -2006,4 +2018,35 @@ end
         copyto!(view(B, axes(B)...), view(A, axes(A)...))
         @test B == A
     end
+end
+
+@testset "_unsetindex!" begin
+    struct MyMatrixUnsetIndexCartInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
+        data :: A
+    end
+    Base.size(A::MyMatrixUnsetIndexCartInds) = size(A.data)
+    Base.getindex(M::MyMatrixUnsetIndexCartInds, i::Int, j::Int) = M.data[i,j]
+    Base.setindex!(M::MyMatrixUnsetIndexCartInds, v, i::Int, j::Int) = setindex!(M.data, v, i, j)
+    struct MyMatrixUnsetIndexLinInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
+        data :: A
+    end
+    Base.size(A::MyMatrixUnsetIndexLinInds) = size(A.data)
+    Base.getindex(M::MyMatrixUnsetIndexLinInds, i::Int) = M.data[i]
+    Base.setindex!(M::MyMatrixUnsetIndexLinInds, v, i::Int) = setindex!(M.data, v, i)
+    Base.IndexStyle(::Type{<:MyMatrixUnsetIndexLinInds}) = IndexLinear()
+
+    function test_unsetindex(MT)
+        M = MT(ones(2,2))
+        M2 = MT(Matrix{BigFloat}(undef, 2,2))
+        copyto!(M, M2)
+        @test all(==(1), M)
+        M3 = MT(Matrix{BigFloat}(undef, 2,2))
+        for i in eachindex(M3)
+            @test !isassigned(M3, i)
+        end
+        M3 .= 1
+        @test_throws MethodError copyto!(M3, M2)
+    end
+    test_unsetindex(MyMatrixUnsetIndexCartInds)
+    test_unsetindex(MyMatrixUnsetIndexLinInds)
 end

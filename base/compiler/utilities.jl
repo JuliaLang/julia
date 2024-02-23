@@ -128,19 +128,22 @@ function get_staged(mi::MethodInstance, world::UInt)
 end
 
 function retrieve_code_info(linfo::MethodInstance, world::UInt)
-    m = linfo.def::Method
+    def = linfo.def
+    if !isa(def, Method)
+        return linfo.uninferred
+    end
     c = nothing
-    if isdefined(m, :generator)
+    if isdefined(def, :generator)
         # user code might throw errors – ignore them
         c = get_staged(linfo, world)
     end
-    if c === nothing && isdefined(m, :source)
-        src = m.source
+    if c === nothing && isdefined(def, :source)
+        src = def.source
         if src === nothing
             # can happen in images built with --strip-ir
             return nothing
         elseif isa(src, String)
-            c = _uncompressed_ir(m, src)
+            c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), def, C_NULL, src)
         else
             c = copy(src::CodeInfo)
         end

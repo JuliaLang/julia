@@ -39,6 +39,8 @@ Base.:(:)
 Base.range
 Base.OneTo
 Base.StepRangeLen
+Base.logrange
+Base.LogRange
 Base.:(==)
 Base.:(!=)
 Base.:(!==)
