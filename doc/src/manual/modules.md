@@ -180,11 +180,11 @@ julia> using .NiceStuff: nice, DOG, NiceStuff
     released packages which needs to be forward-compatible with the future
     releases.
 	
-    For example, if your package has dependancies `Foo` version `1` and `Bar`
+    For example, if your package has dependencies `Foo` version `1` and `Bar`
     version `2`, and you write `using Foo, Bar` the current versions may not
     have any conflicting names, but if in a minor non-breaking release of `Bar`
     version 2.x it also exports the name `f`, then suddenly calling the function
-    `f` will error because the name has become ambigious. This issue can be
+    `f` will error because the name has become ambiguous. This issue can be
     avoided by explicitly listing what names you want to use from which modules.
 
 
