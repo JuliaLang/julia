@@ -1096,7 +1096,7 @@ end
 g21771(T) = T
 f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 @test @inferred(f21771(Val{Int}())) === Tuple{Int}
-@test_throws ErrorException @inferred(f21771(Val{Union{}}()))
+@test @inferred(f21771(Val{Union{}}())) === Union{}
 @test @inferred(f21771(Val{Integer}())) === Tuple{Integer}
 
 # PR #28284, check that constants propagate through calls to new

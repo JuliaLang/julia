@@ -1927,7 +1927,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 }
             }
             if (pi == jl_bottom_type)
-                jl_errorf("Tuple field type cannot be Union{}");
+                return jl_bottom_type;
             if (cacheable && !jl_is_concrete_type(pi))
                 cacheable = 0;
         }

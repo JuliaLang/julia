@@ -496,6 +496,7 @@ else
     _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
 
+# return Tuple{tt...} if the all given elements may have instances, otherwise return Union{} if any cannot have instances
 function TupleOrBottom(tt...)
     any(p -> p === Union{}, tt) && return Union{}
     return Tuple{tt...}

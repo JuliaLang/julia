@@ -596,7 +596,7 @@ function test_old()
 end
 
 const easy_menagerie =
-    Any[Any, Int, Int8, Integer, Real,
+    Any[Bottom, Any, Int, Int8, Integer, Real,
         Array{Int,1}, AbstractArray{Int,1},
         Tuple{Int,Vararg{Integer}}, Tuple{Integer,Vararg{Int}}, Tuple{},
         Union{Int,Int8},
@@ -635,10 +635,7 @@ end
 
 add_variants!(easy_menagerie)
 add_variants!(hard_menagerie)
-push!(easy_menagerie, Bottom)
-push!(easy_menagerie, Ref{Bottom})
 push!(easy_menagerie, @UnionAll N NTuple{N,Bottom})
-push!(easy_menagerie, @UnionAll S<:Bottom Ref{S})
 
 const menagerie = [easy_menagerie; hard_menagerie]
 
@@ -685,11 +682,9 @@ function test_properties()
             @test isequal_type(T, S) == isequal_type(Ref{T}, Ref{S})
 
             # covariance
-            if T !== Bottom && S !== Bottom
-                @test issubTS == issub(Tuple{T}, Tuple{S})
-                @test issubTS == issub(Tuple{Vararg{T}}, Tuple{Vararg{S}})
-                @test issubTS == issub(Tuple{T}, Tuple{Vararg{S}})
-            end
+            @test issubTS == issub(Tuple{T}, Tuple{S})
+            @test issubTS == issub(Tuple{Vararg{T}}, Tuple{Vararg{S}})
+            @test issubTS == issub(Tuple{T}, Tuple{Vararg{S}})
 
             # pseudo-contravariance
             @test issubTS == issub(¬S, ¬T)
