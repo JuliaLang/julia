@@ -273,13 +273,6 @@ Stacktrace:
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     if islink(path) || !isdir(path)
         try
-            @static if Sys.iswindows()
-                # is writable on windows actually means "is deletable"
-                st = lstat(path)
-                if ispath(st) && (filemode(st) & 0o222) == 0
-                    chmod(path, 0o777)
-                end
-            end
             unlink(path)
         catch err
             if force && isa(err, IOError) && err.code==Base.UV_ENOENT
