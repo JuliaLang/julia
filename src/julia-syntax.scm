@@ -4143,7 +4143,8 @@ f(x) = yt(x)
                         (typedef  ;; expression to define the type
                          (let* ((fieldtypes (map (lambda (v)
                                                    (if (is-var-boxed? v lam)
-                                                       (typed-box (vinfo:type (assq v (car (lam:vinfo lam)))))
+                                                      (let ((vi (assq v (car (lam:vinfo lam)))) (cv (assq v (cadr (lam:vinfo lam))))) 
+                                                        (typed-box (vinfo:type (or vi cv))))
                                                        (make-ssavalue)))
                                                  capt-vars))
                                 (para (append closure-param-syms
