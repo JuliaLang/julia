@@ -695,7 +695,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     catch
         buf = PipeBuffer()
         original_load_path = copy(Base.LOAD_PATH); empty!(Base.LOAD_PATH); pushfirst!(Base.LOAD_PATH, "@stdlib")
-        let InteractiveUtils = Base.require(Base, :InteractiveUtils)
+        let InteractiveUtils = Base.require_stdlib(Base, :InteractiveUtils)
             @invokelatest InteractiveUtils.versioninfo(buf)
         end
         empty!(Base.LOAD_PATH); append!(Base.LOAD_PATH, original_load_path)
