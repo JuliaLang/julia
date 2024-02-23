@@ -199,7 +199,7 @@ function time_print(io::IO, elapsedtime, bytes=0, gctime=0, allocs=0, lock_confl
                 print(io, ", ")
             end
             print(io, Ryu.writefixed(Float64(100*total_gc_time/elapsedtime), 2), "% gc time")
-            if gcwaittime/total_gc_time > 0.5
+            if gcwaittime/total_gc_time > 0.005
                 print(io, ": ", Ryu.writefixed(Float64(100*gcwaittime/total_gc_time), 0), "% of which was waiting for safepoints")
             end
         end
