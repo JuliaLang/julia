@@ -3768,8 +3768,11 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 
     jl_image_t pkgimage = jl_init_processor_pkgimg(pkgimg_handle);
 
-    if (ignore_native){
-        memset(&pkgimage.fptrs, 0, sizeof(pkgimage.fptrs));
+    if (ignore_native) {
+        // Must disable using native code in possible downstream users of this code:
+        // https://github.com/JuliaLang/julia/pull/52123#issuecomment-1959965395.
+        // The easiest way to do that is to disable it in all of them.
+        jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO;
     }
 
     jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname, 0);
