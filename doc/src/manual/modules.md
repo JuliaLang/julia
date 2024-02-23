@@ -176,8 +176,8 @@ julia> using .NiceStuff: nice, DOG, NiceStuff
     The reason for this is if another dependency starts to export one of the
     same names as `Foo` the code will error due to an ambiguity in which
     package the name should be taken from. This is especially problematic in
-    released packages which needs to be forward-compatible with the future
-    releases (e.g., when `Foo = "1"` and `Bar = 2` are listed in `[deps]`
+    released packages which should be forward-compatible with future releases
+    of their dependencies. For example, when `Foo = "1"` and `Bar = 2` are listed in `[deps]`
     section of the `Project.toml` of your package, it should be compatible
     with the future releases of Foo 1.x and Bar 2.y which both export a
     function `baz`).
