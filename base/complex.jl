@@ -351,7 +351,19 @@ muladd(z::Complex, w::Complex, x::Real) =
     Complex(muladd(real(z), real(w), -muladd(imag(z), imag(w), -x)),
             muladd(real(z), imag(w), imag(z) * real(w)))
 
-/(a::R, z::S) where {R<:Real,S<:Complex} = (T = promote_type(R,S); a*inv(T(z)))
+function /(a::R, z::S) where {R<:Real, S<:Complex}
+    T = promote_type(R,S)
+    z_p = T(z)
+    if z_p isa Complex{<:Rational}
+        # avoid overflow if a is zero and z isn't zero
+        if iszero(z_p)
+            throw(DivideError())
+        elseif iszero(a)
+            return a*inv(oneunit(z_p))
+        end
+    end
+    a*inv(z_p)
+end
 /(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)
 
 function /(a::Complex{T}, b::Complex{T}) where T<:Real

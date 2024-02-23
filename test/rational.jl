@@ -203,6 +203,15 @@ end
     end
 
     @test Rational(rand_int, 3)/Complex(3, 2) == Complex(Rational(rand_int, 13), -Rational(rand_int*2, 39))
+    @test iszero(zero(Rational{Int8}) / complex(Rational{Int8}(100), Rational{Int8}(100)))
+    @test iszero(zero(Int8) / complex(Rational{Int8}(100), Rational{Int8}(100)))
+    @test iszero(zero(Rational{Int8}) / complex(Int8(100), Int8(100)))
+    @test (false//true) / complex(true, true) === 0//1 + 0//1*im
+    @test (true//true) / complex(true, true) === 1//2 - 1//2*im
+    @test (false//true) / complex(true//true, true//true) === 0//1 + 0//1*im
+    @test (true//true) / complex(true//true, true//true) === 1//2 - 1//2*im
+    @test (false//true) / complex(true//false, false//true) === 0//1 + 0//1*im
+    @test (true//true) / complex(true//true, true//false) === 0//1 + 0//1*im
 
     @test Complex(rand_int, 0) == Rational(rand_int)
     @test Rational(rand_int) == Complex(rand_int, 0)

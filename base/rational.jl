@@ -401,9 +401,9 @@ function *(y::Integer, x::Rational)
     yn, xd = divgcd(promote(y, x.den)...)
     unsafe_rational(checked_mul(yn, x.num), xd)
 end
-/(x::Rational, y::Union{Rational, Integer, Complex{<:Union{Integer,Rational}}}) = x//y
-/(x::Union{Integer, Complex{<:Union{Integer,Rational}}}, y::Rational) = x//y
-inv(x::Rational{T}) where {T} = checked_den(x.den, x.num)
+/(x::Rational, y::Union{Rational, Integer}) = x//y
+/(x::Integer, y::Rational) = x//y
+inv(x::Rational) = checked_den(x.den, x.num)
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
