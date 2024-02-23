@@ -266,7 +266,6 @@
     XX(jl_ios_buffer_n) \
     XX(jl_ios_fd) \
     XX(jl_ios_get_nbyte_int) \
-    XX(jl_ir_flag_inferred) \
     XX(jl_ir_flag_has_fcall) \
     XX(jl_ir_flag_inlining) \
     XX(jl_ir_inlining_cost) \
@@ -387,6 +386,7 @@
     XX(jl_raise_debugger) \
     XX(jl_readuntil) \
     XX(jl_cache_flags) \
+    XX(jl_match_cache_flags_current) \
     XX(jl_match_cache_flags) \
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
@@ -533,9 +533,8 @@
     YY(jl_init_codegen) \
     YY(jl_getFunctionInfo) \
     YY(jl_register_fptrs) \
-    YY(jl_generate_fptr) \
     YY(jl_generate_fptr_for_unspecialized) \
-    YY(jl_generate_fptr_for_oc_wrapper) \
+    YY(jl_compile_codeinst) \
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \

@@ -1794,14 +1794,18 @@ let newinterp_path = abspath("compiler/newinterp.jl")
                         mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
                     return CustomData(inferred_result)
                 end
-                function CC.inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
+                function CC.src_inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
                                             @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)
                     if src isa CustomData
                         src = src.inferred
                     end
-                    return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter, src::Any,
-                                                    info::CC.CallInfo, stmt_flag::UInt32)
+                    return @invoke CC.src_inlining_policy(interp::CC.AbstractInterpreter, src::Any,
+                                                          info::CC.CallInfo, stmt_flag::UInt32)
                 end
+                CC.retrieve_ir_for_inlining(cached_result::Core.CodeInstance, src::CustomData) =
+                    CC.retrieve_ir_for_inlining(cached_result, src.inferred)
+                CC.retrieve_ir_for_inlining(mi::Core.MethodInstance, src::CustomData, preserve_local_sources::Bool) =
+                    CC.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
             end
 
             Base.return_types((Float64,)) do x
@@ -2072,8 +2076,16 @@ precompile_test_harness("Test flags") do load_path
           module TestFlags
           end
           """)
+
+    current_flags = Base.CacheFlags()
+    modified_flags = Base.CacheFlags(
+        current_flags.use_pkgimages,
+        current_flags.debug_level,
+        2,
+        current_flags.inline,
+        3
+    )
     ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
-    @show ji, ofile
     open(ji, "r") do io
         Base.isvalid_cache_header(io)
         _, _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
@@ -2081,6 +2093,9 @@ precompile_test_harness("Test flags") do load_path
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
     end
+    id = Base.identify_package("TestFlags")
+    @test Base.isprecompiled(id, ;flags=modified_flags)
+    @test !Base.isprecompiled(id, ;flags=current_flags)
 end
 
 empty!(Base.DEPOT_PATH)

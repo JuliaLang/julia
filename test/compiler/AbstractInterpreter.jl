@@ -334,12 +334,12 @@ function CC.abstract_call(interp::NoinlineInterpreter,
     end
     return ret
 end
-function CC.inlining_policy(interp::NoinlineInterpreter,
+function CC.src_inlining_policy(interp::NoinlineInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(info, NoinlineCallInfo)
-        return nothing
+        return false
     end
-    return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter,
+    return @invoke CC.src_inlining_policy(interp::CC.AbstractInterpreter,
         src::Any, info::CallInfo, stmt_flag::UInt32)
 end
 
@@ -437,7 +437,7 @@ function custom_lookup(mi::MethodInstance, min_world::UInt, max_world::UInt)
     for inf_result in CONST_INVOKE_INTERP.inf_cache
         if inf_result.linfo === mi
             if CC.any(inf_result.overridden_by_const)
-                return CodeInstance(CONST_INVOKE_INTERP, inf_result, inf_result.valid_worlds)
+                return CodeInstance(CONST_INVOKE_INTERP, inf_result)
             end
         end
     end
@@ -485,14 +485,18 @@ function CC.transform_result_for_cache(interp::CustomDataInterp,
         mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
     return CustomData(inferred_result)
 end
-function CC.inlining_policy(interp::CustomDataInterp, @nospecialize(src),
+function CC.src_inlining_policy(interp::CustomDataInterp, @nospecialize(src),
                             @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)
     if src isa CustomData
         src = src.inferred
     end
-    return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter, src::Any,
-                                      info::CC.CallInfo, stmt_flag::UInt32)
+    return @invoke CC.src_inlining_policy(interp::CC.AbstractInterpreter, src::Any,
+                                          info::CC.CallInfo, stmt_flag::UInt32)
 end
+CC.retrieve_ir_for_inlining(cached_result::CodeInstance, src::CustomData) =
+    CC.retrieve_ir_for_inlining(cached_result, src.inferred)
+CC.retrieve_ir_for_inlining(mi::MethodInstance, src::CustomData, preserve_local_sources::Bool) =
+    CC.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
 let src = code_typed((Int,); interp=CustomDataInterp()) do x
         return sin(x) + cos(x)
     end |> only |> first

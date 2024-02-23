@@ -1193,3 +1193,6 @@ end
 @test Base.isexported(Mod52812, :b)
 @test Base.ispublic(Mod52812, :a)
 @test Base.ispublic(Mod52812, :b)
+
+@test Base.infer_return_type(code_lowered, (Any,)) == Vector{Core.CodeInfo}
+@test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}
