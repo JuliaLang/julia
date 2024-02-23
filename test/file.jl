@@ -42,7 +42,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
     foo_file = joinpath(subdir, "new_dir", "foo")
-    nedlink = joinpath(subdir, "non_existant_dirlink")
+    nedlink = joinpath(subdir, "nonexistent_dirlink")
     symlink("new_dir", nedlink; dir_target=true)
     try
         readdir(nedlink)
@@ -355,7 +355,7 @@ chmod(file, filemode(file) | 0o222)
 @test filesize(file) == 0
 
 # issue #26685
-@test !isfile("http://google.com")
+@test !isfile("https://google.com")
 
 if Sys.iswindows()
     permissions = 0o444
@@ -598,6 +598,17 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
+@testset "invalid read/write flags" begin
+    @test try
+        open("this file is not expected to exist", read=false, write=false)
+        false
+    catch e
+        isa(e, SystemError) || rethrow()
+        @test endswith(sprint(showerror, e), "Invalid argument")
+        true
+    end
+end
+
 @testset "quoting filenames" begin
     @test try
         open("this file is not expected to exist")
@@ -626,9 +637,11 @@ end
     MAX_PATH = (Sys.iswindows() ? 260 - length(PATH_PREFIX) : 255)  - 9
     for i = 0:9
         local tmp = joinpath(PATH_PREFIX, "x"^MAX_PATH * "123456789"[1:i])
-        @test withenv(var => tmp) do
-            tempdir()
-        end == tmp
+        no_error_logging() do
+            @test withenv(var => tmp) do
+                tempdir()
+            end == tmp
+        end
     end
 end
 
@@ -771,13 +784,13 @@ end
 mktempdir() do tmpdir
     # rename file
     file = joinpath(tmpdir, "afile.txt")
-    files_stat = stat(file)
     close(open(file, "w")) # like touch, but lets the operating system update
+    files_stat = stat(file)
     # the timestamp for greater precision on some platforms (windows)
 
     newfile = joinpath(tmpdir, "bfile.txt")
     mv(file, newfile)
-    newfile_stat = stat(file)
+    newfile_stat = stat(newfile)
 
     @test !ispath(file)
     @test isfile(newfile)
@@ -1253,7 +1266,7 @@ let f = open(file, "w")
     if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     else
-        f = RawFD(ccall(:open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
+        f = RawFD(ccall(:open, Cint, (Cstring, Cint, UInt32...), file, Base.Filesystem.JL_O_RDONLY))
     end
     test_LibcFILE(Libc.FILE(f, Libc.modestr(true, false)))
 end
@@ -1453,7 +1466,7 @@ rm(dir)
 ####################
 mktempdir() do dir
     name1 = joinpath(dir, "apples")
-    name2 = joinpath(dir, "bannanas")
+    name2 = joinpath(dir, "bananas")
     @test !ispath(name1)
     @test touch(name1) == name1
     @test isfile(name1)
@@ -1520,11 +1533,11 @@ if !Sys.iswindows()
             chmod(joinpath(d, "empty_outer", "empty_inner"), 0o333)
 
             # Test that an empty directory, even when we can't read its contents, is deletable
-            rm(joinpath(d, "empty_outer"); recursive=true, force=true)
+            rm(joinpath(d, "empty_outer"); recursive=true)
             @test !isdir(joinpath(d, "empty_outer"))
 
             # But a non-empty directory is not
-            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
             chmod(joinpath(d, "nonempty"), 0o777)
             rm(joinpath(d, "nonempty"); recursive=true, force=true)
             @test !isdir(joinpath(d, "nonempty"))
@@ -1625,23 +1638,66 @@ end
     end
 end
 
-@testset "chmod/isexecutable" begin
+if Sys.isunix()
+    @testset "mkfifo" begin
+        mktempdir() do dir
+            path = Libc.mkfifo(joinpath(dir, "fifo"))
+            @sync begin
+                @async write(path, "hello")
+                cat_exec = `$(Base.julia_cmd()) --startup-file=no -e "write(stdout, read(ARGS[1]))"`
+                @test read(`$cat_exec $path`, String) == "hello"
+            end
+
+            existing_file = joinpath(dir, "existing")
+            write(existing_file, "")
+            @test_throws SystemError Libc.mkfifo(existing_file)
+        end
+    end
+else
+    @test_throws(
+        "mkfifo: Operation not supported",
+        Libc.mkfifo(joinpath(pwd(), "dummy_path")),
+    )
+end
+
+@testset "chmod/isexecutable/isreadable/iswriteable" begin
     mktempdir() do dir
-        mkdir(joinpath(dir, "subdir"))
+        subdir = joinpath(dir, "subdir")
         fpath = joinpath(dir, "subdir", "foo")
 
-        # Test that we can actually set the executable bit on all platforms.
+        @test !ispath(subdir)
+        mkdir(subdir)
+        @test ispath(subdir)
+
+        @test !ispath(fpath)
         touch(fpath)
+        @test ispath(fpath)
+
+        # Test that we can actually set the executable/readable/writeable bit on all platforms.
         chmod(fpath, 0o644)
         @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        Sys.iswindows() ? @test_skip(Sys.iswriteable(fpath)) : @test(Sys.iswriteable(fpath))
         chmod(fpath, 0o755)
         @test Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        Sys.iswindows() ? @test_skip(Sys.iswriteable(fpath)) : @test(Sys.iswriteable(fpath))
+        chmod(fpath, 0o444)
+        @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test !Sys.iswriteable(fpath)
+        chmod(fpath, 0o244)
+        @test !Sys.isexecutable(fpath)
+        Sys.iswindows() ? @test_skip(!Sys.isreadable(fpath)) : @test(!Sys.isreadable(fpath))
+        Sys.iswindows() ? @test_skip(Sys.iswriteable(fpath)) : @test(Sys.iswriteable(fpath))
 
         # Ensure that, on Windows, where inheritance is default,
         # chmod still behaves as we expect.
         if Sys.iswindows()
-            chmod(joinpath(dir, "subdir"), 0o666)
-            @test Sys.isexecutable(fpath)
+            chmod(subdir, 0o666)
+            @test !Sys.isexecutable(fpath)
+            @test Sys.isreadable(fpath)
+            @test_skip Sys.iswriteable(fpath)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.
@@ -1651,7 +1707,7 @@ end
 
 if Sys.iswindows()
 @testset "mkdir/rm permissions" begin
-    # test delete permission in system folders (i.e. impliclty test chmod permissions)
+    # test delete permission in system folders (i.e. implicitly test chmod permissions)
     # issue #38433
     @test withenv("TMP" => "C:\\") do
         mktempdir() do dir end
@@ -1660,6 +1716,28 @@ if Sys.iswindows()
     tmp = mkdir(tempname("C:\\"))
     @test rm(tmp) === nothing
 end
+end
+
+# Unusually for structs, we test this explicitly because the fields of StatStruct
+# is part of its documentation, and therefore cannot change.
+@testset "StatStruct has promised fields" begin
+    f, io = mktemp()
+    s = stat(f)
+    @test s isa Base.StatStruct
+
+    @test s.desc isa Union{String, Base.OS_HANDLE}
+    @test s.size isa Int64
+    @test s.device isa UInt
+    @test s.inode isa UInt
+    @test s.mode isa UInt
+    @test s.nlink isa Int
+    @test s.uid isa UInt
+    @test s.gid isa UInt
+    @test s.rdev isa UInt
+    @test s.blksize isa Int64
+    @test s.blocks isa Int64
+    @test s.mtime isa Float64
+    @test s.ctime isa Float64
 end
 
 @testset "StatStruct show's extended details" begin

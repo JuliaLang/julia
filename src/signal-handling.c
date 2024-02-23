@@ -6,8 +6,8 @@
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
-#ifndef _OS_WINDOWS_
 #include <unistd.h>
+#ifndef _OS_WINDOWS_
 #include <sys/mman.h>
 #endif
 
@@ -155,8 +155,7 @@ static void jl_shuffle_int_array_inplace(int *carray, int size, uint64_t *seed)
     // The "modern Fisher–Yates shuffle" - O(n) algorithm
     // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
     for (int i = size; i-- > 1; ) {
-        uint64_t unbias = UINT64_MAX; // slightly biased, but i is very small
-        size_t j = cong(i, unbias, seed);
+        size_t j = cong(i, seed);
         uint64_t tmp = carray[j];
         carray[j] = carray[i];
         carray[i] = tmp;
@@ -182,14 +181,10 @@ static int *profile_get_randperm(int size)
 
 JL_DLLEXPORT int jl_profile_is_buffer_full(void)
 {
-    // declare buffer full if there isn't enough room to take samples across all threads
-    #if defined(_OS_WINDOWS_)
-        uint64_t nthreads = 1; // windows only profiles the main thread
-    #else
-        uint64_t nthreads = jl_n_threads;
-    #endif
-    // the `+ 6` is for the two block terminators `0` plus 4 metadata entries
-    return bt_size_cur + (((JL_BT_MAX_ENTRY_SIZE + 1) + 6) * nthreads) > bt_size_max;
+    // Declare buffer full if there isn't enough room to sample even just the
+    // thread metadata and one max-sized frame. The `+ 6` is for the two block
+    // terminator `0`'s plus the 4 metadata entries.
+    return bt_size_cur + ((JL_BT_MAX_ENTRY_SIZE + 1) + 6) > bt_size_max;
 }
 
 static uint64_t jl_last_sigint_trigger = 0;
@@ -290,21 +285,27 @@ void jl_set_profile_peek_duration(double t)
     profile_peek_duration = t;
 }
 
-uintptr_t profile_show_peek_cond_loc;
-JL_DLLEXPORT void jl_set_peek_cond(uintptr_t cond)
+jl_mutex_t profile_show_peek_cond_lock;
+static uv_async_t *profile_show_peek_cond_loc;
+JL_DLLEXPORT void jl_set_peek_cond(uv_async_t *cond)
 {
+    JL_LOCK_NOGC(&profile_show_peek_cond_lock);
     profile_show_peek_cond_loc = cond;
+    JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
 }
 
 static void jl_check_profile_autostop(void)
 {
-    if ((profile_autostop_time != -1.0) && (jl_hrtime() > profile_autostop_time)) {
+    if (profile_show_peek_cond_loc != NULL && profile_autostop_time != -1.0 && jl_hrtime() > profile_autostop_time) {
         profile_autostop_time = -1.0;
         jl_profile_stop_timer();
         jl_safe_printf("\n==============================================================\n");
         jl_safe_printf("Profile collected. A report will print at the next yield point\n");
         jl_safe_printf("==============================================================\n\n");
-        uv_async_send((uv_async_t*)profile_show_peek_cond_loc);
+        JL_LOCK_NOGC(&profile_show_peek_cond_lock);
+        if (profile_show_peek_cond_loc != NULL)
+            uv_async_send(profile_show_peek_cond_loc);
+        JL_UNLOCK_NOGC(&profile_show_peek_cond_lock);
     }
 }
 
@@ -419,24 +420,41 @@ void jl_show_sigill(void *_ctx)
 #endif
 }
 
+// make it invalid for a task to return from this point to its stack
+// this is generally quite an foolish operation, but does free you up to do
+// arbitrary things on this stack now without worrying about corrupt state that
+// existed already on it
+void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    jl_set_safe_restore(NULL);
+    if (ct) {
+        ct->gcstack = NULL;
+        ct->eh = NULL;
+        ct->world_age = 1;
+        // Force all locks to drop. Is this a good idea? Of course not. But the alternative would probably deadlock instead of crashing.
+        small_arraylist_t *locks = &ct->ptls->locks;
+        for (size_t i = locks->len; i > 0; i--)
+            jl_mutex_unlock_nogc((jl_mutex_t*)locks->items[i - 1]);
+        locks->len = 0;
+        ct->ptls->in_pure_callback = 0;
+        ct->ptls->in_finalizer = 0;
+        ct->ptls->defer_signal = 0;
+        // forcibly exit GC (if we were in it) or safe into unsafe, without the mandatory safepoint
+        jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_UNSAFE);
+        // allow continuing to use a Task that should have already died--unsafe necromancy!
+        jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
+    }
+}
+
 // what to do on a critical error on a thread
-void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
+void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct)
 {
     jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
     size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
     size_t i, n = ct ? *bt_size : 0;
     if (sig) {
         // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jlbacktrace in jl_exit)
-        jl_set_safe_restore(NULL);
-        if (ct) {
-            ct->gcstack = NULL;
-            ct->eh = NULL;
-            ct->excstack = NULL;
-            ct->ptls->locks.len = 0;
-            ct->ptls->in_pure_callback = 0;
-            ct->ptls->in_finalizer = 1;
-            ct->world_age = 1;
-        }
+        jl_task_frame_noreturn(ct);
 #ifndef _OS_WINDOWS_
         sigset_t sset;
         sigemptyset(&sset);
@@ -457,7 +475,10 @@ void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
             sigaddset(&sset, sig);
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
-        jl_safe_printf("\n[%d] signal (%d): %s\n", getpid(), sig, strsignal(sig));
+        if (si_code)
+            jl_safe_printf("\n[%d] signal %d (%d): %s\n", getpid(), sig, si_code, strsignal(sig));
+        else
+            jl_safe_printf("\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
     }
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
     if (context && ct) {

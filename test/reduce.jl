@@ -33,8 +33,12 @@ using .Main.OffsetArrays
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 2:5; init=10) == -4
-@test @inferred(mapfoldr(x -> x + 1, (x, y) -> (x, y...), (1, 2.0, '3');
-                         init = ())) == (2, 3.0, '4')
+for t in Any[(1, 2.0, '3'), (;a = 1, b = 2.0, c = '3')]
+    @test @inferred(mapfoldr(x -> x + 1, (x, y) -> (x, y...), t;
+                            init = ())) == (2, 3.0, '4')
+    @test @inferred(mapfoldl(x -> x + 1, (x, y) -> (x..., y), t;
+                            init = ())) == (2, 3.0, '4')
+end
 
 @test foldr((x, y) -> ('⟨' * x * '|' * y * '⟩'), "λ 🐨.α") == "⟨λ|⟨ |⟨🐨|⟨.|α⟩⟩⟩⟩" # issue #31780
 let x = rand(10)
@@ -49,8 +53,8 @@ end
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1:5; init=1000) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+, 1) == 1
-@test_throws "reducing with * over an empty collection of element type Union{} is not allowed" reduce(*, ())
-@test_throws "reducing with * over an empty collection of element type Union{} is not allowed" reduce(*, Union{}[])
+@test_throws "reducing over an empty collection is not allowed" reduce(*, ())
+@test_throws "reducing over an empty collection is not allowed" reduce(*, Union{}[])
 
 # mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
@@ -87,8 +91,7 @@ end
 @test mapreduce(abs2, *, Float64[]) === 1.0
 @test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
-@test_throws ["reducing over an empty collection is not allowed",
-              "consider supplying `init`"] mapreduce(abs2, &, Float64[])
+@test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, &, Float64[])
 @test_throws str -> !occursin("Closest candidates are", str) mapreduce(abs2, &, Float64[])
 @test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, |, Float64[])
 
@@ -140,9 +143,8 @@ fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
-@test_throws "reducing with add_sum over an empty collection of element type Union{} is not allowed" sum(Union{}[])
-@test_throws ["reducing over an empty collection is not allowed",
-              "consider supplying `init`"] sum(sin, Int[])
+@test_throws "reducing over an empty collection is not allowed" sum(Union{}[])
+@test_throws "reducing over an empty collection is not allowed" sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
 a = sum(sin, z)
@@ -160,12 +162,14 @@ plus(x,y) = x + y
 sum3(A) = reduce(plus, A)
 sum4(itr) = invoke(reduce, Tuple{Function, Any}, plus, itr)
 sum5(A) = reduce(plus, A; init=0)
-sum6(itr) = invoke(Core.kwfunc(reduce), Tuple{NamedTuple{(:init,), Tuple{Int}}, typeof(reduce), Function, Any}, (init=0,), reduce, plus, itr)
+sum6(itr) = invoke(Core.kwcall, Tuple{NamedTuple{(:init,), Tuple{Int}}, typeof(reduce), Function, Any}, (init=0,), reduce, plus, itr)
+sum61(itr) = invoke(reduce, Tuple{Function, Any}, init=0, plus, itr)
 sum7(A) = mapreduce(x->x, plus, A)
 sum8(itr) = invoke(mapreduce, Tuple{Function, Function, Any}, x->x, plus, itr)
 sum9(A) = mapreduce(x->x, plus, A; init=0)
-sum10(itr) = invoke(Core.kwfunc(mapreduce), Tuple{NamedTuple{(:init,),Tuple{Int}}, typeof(mapreduce), Function, Function, Any}, (init=0,), mapreduce, x->x, plus, itr)
-for f in (sum2, sum5, sum6, sum9, sum10)
+sum10(itr) = invoke(Core.kwcall, Tuple{NamedTuple{(:init,),Tuple{Int}}, typeof(mapreduce), Function, Function, Any}, (init=0,), mapreduce, x->x, plus, itr)
+sum11(itr) = invoke(mapreduce, Tuple{Function, Function, Any}, init=0, x->x, plus, itr)
+for f in (sum2, sum5, sum6, sum61, sum9, sum10, sum11)
     @test sum(z) == f(z)
     @test sum(Int[]) == f(Int[]) == 0
     @test sum(Int[7]) == f(Int[7]) == 7
@@ -263,7 +267,6 @@ let x = [4,3,5,2]
     @test maximum(x) == 5
     @test minimum(x) == 2
     @test extrema(x) == (2, 5)
-    @test Core.Compiler.extrema(x) == (2, 5)
 
     @test maximum(abs2, x) == 25
     @test minimum(abs2, x) == 4
@@ -434,39 +437,39 @@ end
 
 # any & all
 
-@test @inferred any([]) == false
-@test @inferred any(Bool[]) == false
-@test @inferred any([true]) == true
-@test @inferred any([false, false]) == false
-@test @inferred any([false, true]) == true
-@test @inferred any([true, false]) == true
-@test @inferred any([true, true]) == true
-@test @inferred any([true, true, true]) == true
-@test @inferred any([true, false, true]) == true
-@test @inferred any([false, false, false]) == false
+@test @inferred(Union{Missing,Bool}, any([])) == false
+@test @inferred(any(Bool[])) == false
+@test @inferred(any([true])) == true
+@test @inferred(any([false, false])) == false
+@test @inferred(any([false, true])) == true
+@test @inferred(any([true, false])) == true
+@test @inferred(any([true, true])) == true
+@test @inferred(any([true, true, true])) == true
+@test @inferred(any([true, false, true])) == true
+@test @inferred(any([false, false, false])) == false
 
-@test @inferred all([]) == true
-@test @inferred all(Bool[]) == true
-@test @inferred all([true]) == true
-@test @inferred all([false, false]) == false
-@test @inferred all([false, true]) == false
-@test @inferred all([true, false]) == false
-@test @inferred all([true, true]) == true
-@test @inferred all([true, true, true]) == true
-@test @inferred all([true, false, true]) == false
-@test @inferred all([false, false, false]) == false
+@test @inferred(Union{Missing,Bool}, all([])) == true
+@test @inferred(all(Bool[])) == true
+@test @inferred(all([true])) == true
+@test @inferred(all([false, false])) == false
+@test @inferred(all([false, true])) == false
+@test @inferred(all([true, false])) == false
+@test @inferred(all([true, true])) == true
+@test @inferred(all([true, true, true])) == true
+@test @inferred(all([true, false, true])) == false
+@test @inferred(all([false, false, false])) == false
 
-@test @inferred any(x->x>0, []) == false
-@test @inferred any(x->x>0, Int[]) == false
-@test @inferred any(x->x>0, [-3]) == false
-@test @inferred any(x->x>0, [4]) == true
-@test @inferred any(x->x>0, [-3, 4, 5]) == true
+@test @inferred(Union{Missing,Bool}, any(x->x>0, [])) == false
+@test @inferred(any(x->x>0, Int[])) == false
+@test @inferred(any(x->x>0, [-3])) == false
+@test @inferred(any(x->x>0, [4])) == true
+@test @inferred(any(x->x>0, [-3, 4, 5])) == true
 
-@test @inferred all(x->x>0, []) == true
-@test @inferred all(x->x>0, Int[]) == true
-@test @inferred all(x->x>0, [-3]) == false
-@test @inferred all(x->x>0, [4]) == true
-@test @inferred all(x->x>0, [-3, 4, 5]) == false
+@test @inferred(Union{Missing,Bool}, all(x->x>0, [])) == true
+@test @inferred(all(x->x>0, Int[])) == true
+@test @inferred(all(x->x>0, [-3])) == false
+@test @inferred(all(x->x>0, [4])) == true
+@test @inferred(all(x->x>0, [-3, 4, 5])) == false
 
 @test reduce((a, b) -> a .| b, fill(trues(5), 24))  == trues(5)
 @test reduce((a, b) -> a .| b, fill(falses(5), 24)) == falses(5)
@@ -689,4 +692,43 @@ end
     @test @inferred(maximum(c)) == maximum(collect(c))
     @test @inferred(prod(b)) == prod(collect(b))
     @test @inferred(minimum(a)) == minimum(collect(a))
+end
+
+function fold_alloc(a)
+    sum(a)
+    foldr(+, a)
+    max(@allocated(sum(a)), @allocated(foldr(+, a)))
+end
+let a = NamedTuple(Symbol(:x,i) => i for i in 1:33),
+    b = (a...,)
+    @test fold_alloc(a) == fold_alloc(b) == 0
+end
+
+@testset "concrete eval `[any|all](f, itr::Tuple)`" begin
+    intf = in((1,2,3)); Intf = typeof(intf)
+    symf = in((:one,:two,:three)); Symf = typeof(symf)
+    @test Core.Compiler.is_foldable(Base.infer_effects(intf, (Int,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(symf, (Symbol,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Intf,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Symf,Tuple{Symbol,Symbol,Symbol})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Intf,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Symf,Tuple{Symbol,Symbol,Symbol})))
+    @test Base.return_types() do
+        Val(all(in((1,2,3)), (1,2,3)))
+    end |> only == Val{true}
+    @test Base.return_types() do
+        Val(all(in((1,2,3)), (1,2,3,4)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(any(in((1,2,3)), (4,5,3)))
+    end |> only == Val{true}
+    @test Base.return_types() do
+        Val(any(in((1,2,3)), (4,5,6)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(all(in((:one,:two,:three)),(:three,:four)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(any(in((:one,:two,:three)),(:four,:three)))
+    end |> only == Val{true}
 end

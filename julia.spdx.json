@@ -24,7 +24,7 @@
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2009-2022: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, and other contributors: https://github.com/JuliaLang/julia/contributors",
             "summary": "Julia is a high-level, high-performance dynamic language for technical computing.",
-            "comment": "In addition to the source code described by this package, Julia pulls in code from many other respositories, which are also described in this document. See relationships for details."
+            "comment": "In addition to the source code described by this package, Julia pulls in code from many other repositories, which are also described in this document. See relationships for details."
         },
         {
             "name": "Pkg.jl",
@@ -371,6 +371,32 @@
             "summary": "utf8proc is a small, clean C library that provides Unicode normalization, case-folding, and other operations for data in the UTF-8 encoding."
         },
         {
+            "name": "LibTracyClient",
+            "SPDXID": "SPDXRef-LibTracyClient",
+            "downloadLocation": "git+https://github.com/wolfpld/tracy.git",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/wolfpld/tracy",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/libtracyclient.version",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "BSD-3-Clause",
+            "copyrightText": "Copyright (c) 2017-2024, Bartosz Taudul <wolf@nereid.pl>",
+            "summary": "A real time, nanosecond resolution, remote telemetry, hybrid frame and sampling profiler for games and other applications.",
+            "comment": "LibTracyClient is an optional dependency that is not built by default"
+        },
+        {
+            "name": "ittapi",
+            "SPDXID": "SPDXRef-ittapi",
+            "downloadLocation": "git+https://github.com/intel/ittapi.git",
+            "filesAnalyzed": false,
+            "homepage": "https://github.com/intel/ittapi",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/ittapi.version",
+            "licenseConcluded": "BSD-3-Clause AND GPL-2.0-only",
+            "licenseDeclared": "BSD-3-Clause AND GPL-2.0-only",
+            "copyrightText": "Copyright (c) 2019 Intel Corporation",
+            "summary": "The Instrumentation and Tracing Technology (ITT) API enables your application to generate and control the collection of trace data during its execution across different Intel tools.",
+            "comment": "ITTAPI is an optional dependency that is not built by default"
+        },
+        {
             "name": "7-Zip",
             "SPDXID": "SPDXRef-7zip",
             "downloadLocation": "https://sourceforge.net/projects/p7zip/files/p7zip",
@@ -405,7 +431,7 @@
             "licenseDeclared": "GPL-3.0-or-later",
             "copyrightText": "Copyright (C) 2007 Free Software Foundation, Inc. <http://fsf.org/>",
             "summary": "A small utility to modify the dynamic linker and RPATH of ELF executables.",
-            "comment": "PATCHELF is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+            "comment": "PATCHELF is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convenience."
         },
         {
             "name": "objconv",
@@ -417,7 +443,7 @@
             "licenseDeclared": "GPL-3.0-or-later",
             "copyrightText": "By Agner Fog © 2018",
             "summary": "A utility for cross-platform development of function libraries, for converting and modifying object files and for dumping and disassembling object and executable files for all x86 and x86-64 platforms.",
-            "comment": "OBJCONV is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+            "comment": "OBJCONV is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convenience."
         },
         {
             "name": "libwhich",
@@ -430,7 +456,7 @@
             "licenseDeclared": "MIT",
             "copyrightText": "Copyright (c) 2017 Jameson Nash",
             "summary": "Like `which`, for dynamic libraries",
-            "comment": "LIBWHICH is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convienence."
+            "comment": "LIBWHICH is not part of the Julia binary. It is a tool used as part of building the binary, a bit like a compiler. Julia chooses to build the tool from source during the build process as a convenience."
         }
     ],
     "hasExtractedLicensingInfos": [
@@ -579,6 +605,16 @@
         {
             "spdxElementId": "SPDXRef-utf8proc",
             "relationshipType": "BUILD_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-LibTracyClient",
+            "relationshipType": "OPTIONAL_DEPENDENCY_OF",
+            "relatedSpdxElement": "SPDXRef-JuliaMain"
+        },
+        {
+            "spdxElementId": "SPDXRef-ittapi",
+            "relationshipType": "OPTIONAL_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {

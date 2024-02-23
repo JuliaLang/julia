@@ -4,7 +4,6 @@
 #include <map>
 #include <string>
 #include <llvm/ADT/StringMap.h>
-#include <llvm/Support/Host.h>
 #include <llvm/Support/raw_ostream.h>
 
 #include "julia.h"
@@ -31,14 +30,12 @@ void *jl_get_library_(const char *f_lib, int throw_err)
 {
     if (f_lib == NULL)
         return jl_RTLD_DEFAULT_handle;
-#ifdef _OS_WINDOWS_
     if (f_lib == JL_EXE_LIBNAME)
         return jl_exe_handle;
     if (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME)
         return jl_libjulia_internal_handle;
     if (f_lib == JL_LIBJULIA_DL_LIBNAME)
         return jl_libjulia_handle;
-#endif
     JL_LOCK(&libmap_lock);
     // This is the only operation we do on the map, which doesn't invalidate
     // any references or iterators.
@@ -68,56 +65,24 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *
 extern "C" JL_DLLEXPORT
 void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name)
 {
-    char *f_lib;
+    void *lib_ptr;
 
     if (jl_is_symbol(lib_val))
-        f_lib = jl_symbol_name((jl_sym_t*)lib_val);
+        lib_ptr = jl_get_library(jl_symbol_name((jl_sym_t*)lib_val));
     else if (jl_is_string(lib_val))
-        f_lib = jl_string_data(lib_val);
-    else
+        lib_ptr = jl_get_library(jl_string_data(lib_val));
+    else if (jl_libdl_dlopen_func != NULL) {
+        // Call `dlopen(lib_val)`; this is the correct path for the `LazyLibrary` case,
+        // but it also takes any other value, and so we define `dlopen(x::Any) = throw(TypeError(...))`.
+        lib_ptr = jl_unbox_voidpointer(jl_apply_generic(jl_libdl_dlopen_func, &lib_val, 1));
+    } else
         jl_type_error("ccall", (jl_value_t*)jl_symbol_type, lib_val);
     void *ptr;
-    jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
+    jl_dlsym(lib_ptr, f_name, &ptr, 1);
     return ptr;
 }
 
 // miscellany
-std::string jl_get_cpu_name_llvm(void)
-{
-    return llvm::sys::getHostCPUName().str();
-}
-
-std::string jl_get_cpu_features_llvm(void)
-{
-    StringMap<bool> HostFeatures;
-    llvm::sys::getHostCPUFeatures(HostFeatures);
-    std::string attr;
-    for (auto &ele: HostFeatures) {
-        if (ele.getValue()) {
-            if (!attr.empty()) {
-                attr.append(",+");
-            }
-            else {
-                attr.append("+");
-            }
-            attr.append(ele.getKey().str());
-        }
-    }
-    // Explicitly disabled features need to be added at the end so that
-    // they are not re-enabled by other features that implies them by default.
-    for (auto &ele: HostFeatures) {
-        if (!ele.getValue()) {
-            if (!attr.empty()) {
-                attr.append(",-");
-            }
-            else {
-                attr.append("-");
-            }
-            attr.append(ele.getKey().str());
-        }
-    }
-    return attr;
-}
 
 extern "C" JL_DLLEXPORT
 jl_value_t *jl_get_JIT(void)
@@ -353,7 +318,7 @@ jl_value_t *jl_get_cfunction_trampoline(
     uv_mutex_lock(&trampoline_lock);
     tramp = trampoline_alloc();
     ((void**)result)[0] = tramp;
-    tramp = init_trampoline(tramp, nval);
+    init_trampoline(tramp, nval);
     ptrhash_put(cache, (void*)fobj, result);
     uv_mutex_unlock(&trampoline_lock);
     return result;
@@ -362,6 +327,6 @@ JL_GCC_IGNORE_STOP
 
 void jl_init_runtime_ccall(void)
 {
-    JL_MUTEX_INIT(&libmap_lock);
+    JL_MUTEX_INIT(&libmap_lock, "libmap_lock");
     uv_mutex_init(&trampoline_lock);
 }

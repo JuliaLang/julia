@@ -7,11 +7,11 @@ const ThreadSynchronizer = GenericCondition{Threads.SpinLock}
     ReentrantLock()
 
 Creates a re-entrant lock for synchronizing [`Task`](@ref)s. The same task can
-acquire the lock as many times as required. Each [`lock`](@ref) must be matched
-with an [`unlock`](@ref).
+acquire the lock as many times as required (this is what the "Reentrant" part
+of the name means). Each [`lock`](@ref) must be matched with an [`unlock`](@ref).
 
-Calling 'lock' will also inhibit running of finalizers on that thread until the
-corresponding 'unlock'. Use of the standard lock pattern illustrated below
+Calling `lock` will also inhibit running of finalizers on that thread until the
+corresponding `unlock`. Use of the standard lock pattern illustrated below
 should naturally be supported, but beware of inverting the try/lock order or
 missing the try block entirely (e.g. attempting to return with the lock still
 held):
@@ -145,6 +145,7 @@ Each `lock` must be matched by an [`unlock`](@ref).
 """
 @inline function lock(rl::ReentrantLock)
     trylock(rl) || (@noinline function slowlock(rl::ReentrantLock)
+        Threads.lock_profiling() && Threads.inc_lock_conflict_count()
         c = rl.cond_wait
         lock(c.lock)
         try
@@ -220,6 +221,8 @@ available.
 When this function returns, the `lock` has been released, so the caller should
 not attempt to `unlock` it.
 
+See also: [`@lock`](@ref).
+
 !!! compat "Julia 1.7"
     Using a [`Channel`](@ref) as the second argument requires Julia 1.7 or later.
 """
@@ -258,6 +261,9 @@ end
 ```
 This is similar to using [`lock`](@ref) with a `do` block, but avoids creating a closure
 and thus can improve the performance.
+
+!!! compat
+    `@lock` was added in Julia 1.3, and exported in Julia 1.10.
 """
 macro lock(l, expr)
     quote
@@ -287,6 +293,63 @@ macro lock_nofail(l, expr)
         val
     end
 end
+
+"""
+  Lockable(value, lock = ReentrantLock())
+
+Creates a `Lockable` object that wraps `value` and
+associates it with the provided `lock`. This object
+supports [`@lock`](@ref), [`lock`](@ref), [`trylock`](@ref),
+[`unlock`](@ref). To access the value, index the lockable object while
+holding the lock.
+
+!!! compat "Julia 1.11"
+    Requires at least Julia 1.11.
+
+## Example
+
+```jldoctest
+julia> locked_list = Base.Lockable(Int[]);
+
+julia> @lock(locked_list, push!(locked_list[], 1)) # must hold the lock to access the value
+1-element Vector{Int64}:
+ 1
+
+julia> lock(summary, locked_list)
+"1-element Vector{Int64}"
+```
+"""
+struct Lockable{T, L <: AbstractLock}
+    value::T
+    lock::L
+end
+
+Lockable(value) = Lockable(value, ReentrantLock())
+getindex(l::Lockable) = (assert_havelock(l.lock); l.value)
+
+"""
+  lock(f::Function, l::Lockable)
+
+Acquire the lock associated with `l`, execute `f` with the lock held,
+and release the lock when `f` returns. `f` will receive one positional
+argument: the value wrapped by `l`. If the lock is already locked by a
+different task/thread, wait for it to become available.
+When this function returns, the `lock` has been released, so the caller should
+not attempt to `unlock` it.
+
+!!! compat "Julia 1.11"
+    Requires at least Julia 1.11.
+"""
+function lock(f, l::Lockable)
+    lock(l.lock) do
+        f(l.value)
+    end
+end
+
+# implement the rest of the Lock interface on Lockable
+lock(l::Lockable) = lock(l.lock)
+trylock(l::Lockable) = trylock(l.lock)
+unlock(l::Lockable) = unlock(l.lock)
 
 @eval Threads begin
     """
@@ -435,10 +498,10 @@ This provides an acquire & release memory ordering on notify/wait.
     The `autoreset` functionality and memory ordering guarantee requires at least Julia 1.8.
 """
 mutable struct Event
-    notify::Threads.Condition
-    autoreset::Bool
+    const notify::ThreadSynchronizer
+    const autoreset::Bool
     @atomic set::Bool
-    Event(autoreset::Bool=false) = new(Threads.Condition(), autoreset, false)
+    Event(autoreset::Bool=false) = new(ThreadSynchronizer(), autoreset, false)
 end
 
 function wait(e::Event)
@@ -481,8 +544,8 @@ end
 """
     reset(::Event)
 
-Reset an Event back into an un-set state. Then any future calls to `wait` will
-block until `notify` is called again.
+Reset an [`Event`](@ref) back into an un-set state. Then any future calls to `wait` will
+block until [`notify`](@ref) is called again.
 """
 function reset(e::Event)
     @atomic e.set = false # full barrier

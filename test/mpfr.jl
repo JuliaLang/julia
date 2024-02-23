@@ -1039,3 +1039,10 @@ end
         end
     end
 end
+
+@testset "issue #50642" begin
+    setprecision(BigFloat, 500) do
+        bf = big"1.4901162082026128889687591176485489397376143775948511e-07"
+        @test Float16(bf) == Float16(2.0e-7)
+    end
+end

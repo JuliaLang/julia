@@ -13,9 +13,9 @@ export libnghttp2
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libnghttp2_handle = C_NULL
-libnghttp2_path = ""
+artifact_dir::String = ""
+libnghttp2_handle::Ptr{Cvoid} = C_NULL
+libnghttp2_path::String = ""
 
 if Sys.iswindows()
     const libnghttp2 = "libnghttp2-14.dll"

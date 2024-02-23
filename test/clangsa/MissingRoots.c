@@ -352,6 +352,9 @@ void assoc_exact_broken(jl_value_t **args, size_t n, int8_t offs, size_t world) 
 }
 */
 
+// declare
+jl_typemap_level_t *jl_new_typemap_level(void);
+
 void assoc_exact_ok(jl_value_t *args1, jl_value_t **args, size_t n, int8_t offs, size_t world) {
     jl_typemap_level_t *cache = jl_new_typemap_level();
     JL_GC_PUSH1(&cache);
@@ -412,7 +415,7 @@ void stack_rooted(jl_value_t *lb JL_MAYBE_UNROOTED, jl_value_t *ub JL_MAYBE_UNRO
 JL_DLLEXPORT jl_value_t *jl_totally_used_function(int i)
 {
     jl_value_t *v = jl_box_int32(i); // expected-note{{Started tracking value here}}
-    jl_safepoint(); // expected-note{{Value may have been GCed here}}
+    jl_gc_safepoint(); // expected-note{{Value may have been GCed here}}
     return v; // expected-warning{{Return value may have been GCed}}
               // expected-note@-1{{Return value may have been GCed}}
 }

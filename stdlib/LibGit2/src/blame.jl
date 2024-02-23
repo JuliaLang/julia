@@ -11,7 +11,7 @@ which commits to probe - see [`BlameOptions`](@ref) for more information.
 function GitBlame(repo::GitRepo, path::AbstractString; options::BlameOptions=BlameOptions())
     ensure_initialized()
     blame_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_blame_file, :libgit2), Cint,
+    @check ccall((:git_blame_file, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Ptr{BlameOptions}),
                    blame_ptr_ptr, repo.ptr, path, Ref(options))
     return GitBlame(repo, blame_ptr_ptr[])
@@ -27,7 +27,7 @@ that function later.
 """
 function counthunks(blame::GitBlame)
     ensure_initialized()
-    return ccall((:git_blame_get_hunk_count, :libgit2), Int32, (Ptr{Cvoid},), blame.ptr)
+    return ccall((:git_blame_get_hunk_count, libgit2), Int32, (Ptr{Cvoid},), blame.ptr)
 end
 
 function Base.getindex(blame::GitBlame, i::Integer)
@@ -36,7 +36,7 @@ function Base.getindex(blame::GitBlame, i::Integer)
     end
     ensure_initialized()
     GC.@preserve blame begin
-        hunk_ptr = ccall((:git_blame_get_hunk_byindex, :libgit2),
+        hunk_ptr = ccall((:git_blame_get_hunk_byindex, libgit2),
                           Ptr{BlameHunk},
                           (Ptr{Cvoid}, Csize_t), blame.ptr, i-1)
         elem = unsafe_load(hunk_ptr)

@@ -9,7 +9,7 @@
 """
 module Experimental
 
-using Base: Threads, sync_varname
+using Base: Threads, sync_varname, is_function_def, @propagate_inbounds
 using Base.Meta
 
 """
@@ -28,10 +28,7 @@ end
 Base.IndexStyle(::Type{<:Const}) = IndexLinear()
 Base.size(C::Const) = size(C.a)
 Base.axes(C::Const) = axes(C.a)
-@eval Base.getindex(A::Const, i1::Int) =
-    (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1))
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =
-  (Base.@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+@propagate_inbounds Base.getindex(A::Const, i1::Int, I::Int...) = A.a[i1, I...]
 
 """
     @aliasscope expr
@@ -86,10 +83,15 @@ end
 """
     Experimental.@sync
 
-Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn),
+`Distributed.@spawnat` and `Distributed.@distributed`
 are complete, or at least one of them has errored. The first exception is immediately
 rethrown. It is the responsibility of the user to cancel any still-running operations
 during error handling.
+
+!!! Note
+    This is different to [`@sync`](@ref) in that errors from wrapped tasks are thrown immediately,
+    potentially before all tasks have returned.
 
 !!! Note
     This interface is experimental and subject to change or removal without notice.
@@ -141,7 +143,7 @@ code to resort to runtime dispatch instead.
 Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to `3`).
 """
 macro max_methods(n::Int)
-    0 < n < 5 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
+    1 <= n <= 4 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
     return Expr(:meta, :max_methods, n)
 end
 
@@ -154,13 +156,13 @@ for max_methods. This setting is global for the entire generic function (or more
 the MethodTable).
 """
 macro max_methods(n::Int, fdef::Expr)
-    0 < n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
+    1 <= n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
     (fdef.head === :function && length(fdef.args) == 1) || error("Second argument must be a function forward declaration")
     return :(typeof($(esc(fdef))).name.max_methods = $(UInt8(n)))
 end
 
 """
-    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,...}
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,4}
 
 Set compiler options for code in the enclosing module. Options correspond directly to
 command-line options with the same name, where applicable. The following options
@@ -193,7 +195,7 @@ macro compiler_options(args...)
             elseif ex.args[1] === :max_methods
                 a = ex.args[2]
                 a = a === :default ? 3 :
-                  a isa Int ? ((0 < a < 5) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
+                  a isa Int ? ((1 <= a <= 4) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
                   error("invalid argument to \"max_methods\" option")
                 push!(opts.args, Expr(:meta, :max_methods, a))
             else
@@ -252,7 +254,7 @@ When issuing a hint, the output should typically start with `\\n`.
 If you define custom exception types, your `showerror` method can
 support hints by calling [`Experimental.show_error_hints`](@ref).
 
-# Example
+# Examples
 
 ```
 julia> module Hinter
@@ -278,6 +280,7 @@ Then if you call `Hinter.only_int` on something that isn't an `Int` (thereby tri
 ```
 julia> Hinter.only_int(1.0)
 ERROR: MethodError: no method matching only_int(::Float64)
+The function `only_int` exists, but no method is defined for this combination of argument types.
 Did you mean to call `any_number`?
 Closest candidates are:
     ...
@@ -333,21 +336,25 @@ Define a method and add it to the method table `mt` instead of to the global met
 This can be used to implement a method override mechanism. Regular compilation will not
 consider these methods, and you should customize the compilation flow to look in these
 method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
-
 """
 macro overlay(mt, def)
     def = macroexpand(__module__, def) # to expand @inline, @generated, etc
-    if !isexpr(def, [:function, :(=)])
-        error("@overlay requires a function Expr")
-    end
-    if isexpr(def.args[1], :call)
-        def.args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1])
-    elseif isexpr(def.args[1], :where)
-        def.args[1].args[1].args[1] = Expr(:overlay, mt, def.args[1].args[1].args[1])
+    is_function_def(def) || error("@overlay requires a function definition")
+    return esc(overlay_def!(mt, def))
+end
+
+function overlay_def!(mt, @nospecialize ex)
+    arg1 = ex.args[1]
+    if isexpr(arg1, :call)
+        arg1.args[1] = Expr(:overlay, mt, arg1.args[1])
+    elseif isexpr(arg1, :(::))
+        overlay_def!(mt, arg1)
+    elseif isexpr(arg1, :where)
+        overlay_def!(mt, arg1)
     else
-        error("@overlay requires a function Expr")
+        error("@overlay requires a function definition")
     end
-    esc(def)
+    return ex
 end
 
 let new_mt(name::Symbol, mod::Module) = begin

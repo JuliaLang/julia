@@ -33,7 +33,7 @@
 @test convert(Union{Int, Nothing}, 1) === 1
 @test convert(Union{Int, Nothing}, 1.0) === 1
 @test convert(Nothing, nothing) === nothing
-@test_throws MethodError convert(Nothing, 1)
+@test_throws ErrorException("cannot convert a value to nothing for assignment") convert(Nothing, 1)
 
 ## show()
 

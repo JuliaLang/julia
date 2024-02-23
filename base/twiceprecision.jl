@@ -112,8 +112,8 @@ julia> Float64(hi) + Float64(lo)
 ```
 """
 function mul12(x::T, y::T) where {T<:AbstractFloat}
-    h = x * y
-    ifelse(iszero(h) | !isfinite(h), (h, h), canonicalize2(h, fma(x, y, -h)))
+    (h, l) = Math.two_mul(x, y)
+    ifelse(!isfinite(h), (h, h), (h, l))
 end
 mul12(x::T, y::T) where {T} = (p = x * y; (p, zero(p)))
 mul12(x, y) = mul12(promote(x, y)...)
@@ -141,6 +141,7 @@ julia> hi, lo = Base.div12(x, y)
 
 julia> Float64(hi) + Float64(lo)
 1.0134170444063066
+```
 """
 function div12(x::T, y::T) where {T<:AbstractFloat}
     # We lose precision if any intermediate calculation results in a subnormal.
@@ -164,7 +165,7 @@ div12(x, y) = div12(promote(x, y)...)
 A number with twice the precision of `T`, e.g., quad-precision if `T =
 Float64`.
 
-!!! warn
+!!! warning
     `TwicePrecision` is an internal type used to increase the
     precision of floating-point ranges, and not intended for external use.
     If you encounter them in real code, the most likely explanation is
@@ -199,14 +200,12 @@ end
 
 TwicePrecision{T}(x::T) where {T} = TwicePrecision{T}(x, zero(T))
 
+TwicePrecision{T}(x::TwicePrecision{T}) where {T} = x
+
 function TwicePrecision{T}(x) where {T}
-    xT = convert(T, x)
+    xT = T(x)
     Δx = x - xT
     TwicePrecision{T}(xT, T(Δx))
-end
-
-function TwicePrecision{T}(x::TwicePrecision) where {T}
-    TwicePrecision{T}(x.hi, x.lo)
 end
 
 TwicePrecision{T}(i::Integer) where {T<:AbstractFloat} =
@@ -254,7 +253,7 @@ nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
     min(cld(precision(T), 2), nbitslen(len, offset))
 # The +1 here is for safety, because the precision of the significand
 # is 1 bit higher than the number that are explicitly stored.
-nbitslen(len, offset) = len < 2 ? 0 : ceil(Int, log2(max(offset-1, len-offset))) + 1
+nbitslen(len, offset) = len < 2 ? 0 : top_set_bit(max(offset-1, len-offset) - 1) + 1
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T
 
@@ -263,15 +262,14 @@ promote_rule(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) where {R,S} =
 promote_rule(::Type{TwicePrecision{R}}, ::Type{S}) where {R,S<:Number} =
     TwicePrecision{promote_type(R,S)}
 
-(::Type{T})(x::TwicePrecision) where {T<:Number} = T(x.hi + x.lo)::T
-TwicePrecision{T}(x::Number) where {T} = TwicePrecision{T}(T(x), zero(T))
+(::Type{T})(x::TwicePrecision) where {T<:Number} = (T(x.hi) + T(x.lo))::T
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
-    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))
+    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))::TwicePrecision{T}
 
-convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)
-convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)
+convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)::T
+convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)::TwicePrecision{T}
 
 float(x::TwicePrecision{<:AbstractFloat}) = x
 float(x::TwicePrecision) = TwicePrecision(float(x.hi), float(x.lo))
@@ -310,7 +308,7 @@ function *(x::TwicePrecision, v::Number)
 end
 function *(x::TwicePrecision{<:IEEEFloat}, v::Integer)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
-    nb = ceil(Int, log2(abs(v)))
+    nb = top_set_bit(abs(v)-1)
     u = truncbits(x.hi, nb)
     TwicePrecision(canonicalize2(u*v, ((x.hi-u) + x.lo)*v)...)
 end
@@ -478,9 +476,7 @@ end
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
 function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer) where T
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add12
-    @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
     T(x_hi + (x_lo + (shift_lo + r.ref.lo)))
@@ -488,7 +484,7 @@ end
 
 function _getindex_hiprec(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Integer)
     i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    u = i - r.offset
+    u = oftype(r.offset, i) - r.offset
     shift_hi, shift_lo = u*r.step.hi, u*r.step.lo
     x_hi, x_lo = add12(r.ref.hi, shift_hi)
     x_hi, x_lo = add12(x_hi, x_lo + (shift_lo + r.ref.lo))
@@ -789,3 +785,19 @@ _tp_prod(t::TwicePrecision) = t
     x.hi < y.hi || ((x.hi == y.hi) & (x.lo < y.lo))
 
 isbetween(a, x, b) = a <= x <= b || b <= x <= a
+
+# These functions exist for use in LogRange:
+
+_exp_allowing_twice64(x::Number) = exp(x)
+_exp_allowing_twice64(x::TwicePrecision{Float64}) = Math.exp_impl(x.hi, x.lo, Val(:ℯ))
+
+# No error on negative x, and for NaN/Inf this returns junk:
+function _log_twice64_unchecked(x::Float64)
+    xu = reinterpret(UInt64, x)
+    if xu < (UInt64(1)<<52) # x is subnormal
+        xu = reinterpret(UInt64, x * 0x1p52) # normalize x
+        xu &= ~sign_mask(Float64)
+        xu -= UInt64(52) << 52 # mess with the exponent
+    end
+    TwicePrecision(Math._log_ext(xu)...)
+end
