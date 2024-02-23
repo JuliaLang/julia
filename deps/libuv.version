@@ -4,4 +4,4 @@ LIBUV_JLL_NAME := LibUV
 ## source build
 LIBUV_VER := 2
 LIBUV_BRANCH=ib/posix_rm_test
-LIBUV_SHA1=d01b381d4a6d71afdd50e98497e2caf0d0a5de8b
+LIBUV_SHA1=7d5a80d35512b12973d7fed4f36dc9044a27e14a
