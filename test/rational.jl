@@ -212,7 +212,7 @@ end
     @test (true//true) / complex(true//true, true//true) === 1//2 - 1//2*im
     @test (false//true) / complex(true//false, false//true) === 0//1 + 0//1*im
     @test (true//true) / complex(true//true, true//false) === 0//1 + 0//1*im
-    
+
     # 1//200 - 1//200*im cannot be represented as Complex{Rational{Int8}}
     @test_throws OverflowError (Int8(1)//Int8(1)) / (Int8(100) + Int8(100)im)
 
