@@ -330,7 +330,7 @@ function showerror(io::IO, ex::MethodError)
         if ex.world == typemax(UInt) || isempty(kwargs)
             print(io, "\nThis error has been manually thrown, explicitly, so the method may exist but be intentionally marked as unimplemented.")
         else
-            print(io, "\nThis method may not support any kwargs.")
+            print(io, "\nThis method may not support any keyword arguments.")
         end
     elseif hasmethod(f, arg_types) && !hasmethod(f, arg_types, world=ex.world)
         curworld = get_world_counter()
