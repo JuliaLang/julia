@@ -3100,6 +3100,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     if (imaging_mode || jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES || IMAGE_NATIVE_CODE_TAINTED) {
         memset(&image->fptrs, 0, sizeof(image->fptrs));
         image->gvars_base = NULL;
+        IMAGE_NATIVE_CODE_TAINTED = 1;
     }
 
     // step 1: read section map
