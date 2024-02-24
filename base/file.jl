@@ -275,8 +275,16 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         try
             unlink(path)
         catch err
-            if force && isa(err, IOError) && err.code==Base.UV_ENOENT
-                return
+            if isa(err, IOError)
+                force && err.code==Base.UV_ENOENT && return
+                @static if Sys.iswindows()
+                    if err.code==Base.UV_EACCES && endswith(path, ".dll")
+                        # Loaded DLLs cannot be deleted on Windows, even with posix delete mode
+                        # but they can be moved. So move out to allow the dir to be deleted
+                        # and DLL deleted via the temp dir cleanup on next reboot
+                        mv(path, tempname() * "_" * basename(path))
+                    end
+                end
             end
             rethrow()
         end
