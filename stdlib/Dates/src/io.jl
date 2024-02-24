@@ -55,7 +55,7 @@ Base.show(io::IO, ::MIME"text/plain", t::Time) = print(io, t)
 Base.print(io::IO, t::Time) = print(io, string(t))
 
 function Base.show(io::IO, t::Time)
-    if get(io, :compact, false)
+    if get(io, :compact, false)::Bool
         print(io, t)
     else
         values = [
@@ -356,23 +356,23 @@ Construct a date formatting object that can be used for parsing date strings or
 formatting a date object as a string. The following character codes can be used to construct the `format`
 string:
 
-| Code       | Matches   | Comment                                                      |
-|:-----------|:----------|:-------------------------------------------------------------|
-| `y`        | 1996, 96  | Returns year of 1996, 0096                                   |
-| `Y`        | 1996, 96  | Returns year of 1996, 0096. Equivalent to `y`                |
-| `m`        | 1, 01     | Matches 1 or 2-digit months                                  |
-| `u`        | Jan       | Matches abbreviated months according to the `locale` keyword |
-| `U`        | January   | Matches full month names according to the `locale` keyword   |
-| `d`        | 1, 01     | Matches 1 or 2-digit days                                    |
-| `H`        | 00        | Matches hours (24-hour clock)                                |
-| `I`        | 00        | For outputting hours with 12-hour clock                      |
-| `M`        | 00        | Matches minutes                                              |
-| `S`        | 00        | Matches seconds                                              |
-| `s`        | .500      | Matches milliseconds                                         |
-| `e`        | Mon, Tues | Matches abbreviated days of the week                         |
-| `E`        | Monday    | Matches full name days of the week                           |
-| `p`        | AM        | Matches AM/PM (case-insensitive)                             |
-| `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                     |
+| Code       | Matches   | Comment                                                       |
+|:-----------|:----------|:--------------------------------------------------------------|
+| `Y`        | 1996, 96  | Returns year of 1996, 0096                                    |
+| `y`        | 1996, 96  | Same as `Y` on `parse` but discards excess digits on `format` |
+| `m`        | 1, 01     | Matches 1 or 2-digit months                                   |
+| `u`        | Jan       | Matches abbreviated months according to the `locale` keyword  |
+| `U`        | January   | Matches full month names according to the `locale` keyword    |
+| `d`        | 1, 01     | Matches 1 or 2-digit days                                     |
+| `H`        | 00        | Matches hours (24-hour clock)                                 |
+| `I`        | 00        | For outputting hours with 12-hour clock                       |
+| `M`        | 00        | Matches minutes                                               |
+| `S`        | 00        | Matches seconds                                               |
+| `s`        | .500      | Matches milliseconds                                          |
+| `e`        | Mon, Tues | Matches abbreviated days of the week                          |
+| `E`        | Monday    | Matches full name days of the week                            |
+| `p`        | AM        | Matches AM/PM (case-insensitive)                              |
+| `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                      |
 
 Characters not listed above are normally treated as delimiters between date and time slots.
 For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
@@ -414,8 +414,6 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
         if !isempty(prev)
             letter, width = prev
-            typ = CONVERSION_SPECIFIERS[letter]
-
             push!(tokens, DatePart{letter}(width, isempty(tran)))
         end
 
@@ -434,8 +432,6 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     if !isempty(prev)
         letter, width = prev
-        typ = CONVERSION_SPECIFIERS[letter]
-
         push!(tokens, DatePart{letter}(width, false))
     end
 
@@ -451,12 +447,8 @@ function DateFormat(f::AbstractString, locale::AbstractString)
     DateFormat(f, LOCALES[locale])
 end
 
-function Base.show(io::IO, df::DateFormat)
-    print(io, "dateformat\"")
-    for t in df.tokens
-        _show_content(io, t)
-    end
-    print(io, '"')
+function Base.show(io::IO, df::DateFormat{S,T}) where {S,T}
+    print(io, "dateformat\"", S, '"')
 end
 Base.Broadcast.broadcastable(x::DateFormat) = Ref(x)
 
@@ -480,7 +472,7 @@ end
 Describes the ISO8601 formatting for a date and time. This is the default value for `Dates.format`
 of a `DateTime`.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.format(DateTime(2018, 8, 8, 12, 0, 43, 1), ISODateTimeFormat)
 "2018-08-08T12:00:43.001"
@@ -494,7 +486,7 @@ default_format(::Type{DateTime}) = ISODateTimeFormat
 
 Describes the ISO8601 formatting for a date. This is the default value for `Dates.format` of a `Date`.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.format(Date(2018, 8, 8), ISODateFormat)
 "2018-08-08"
@@ -508,7 +500,7 @@ default_format(::Type{Date}) = ISODateFormat
 
 Describes the ISO8601 formatting for a time. This is the default value for `Dates.format` of a `Time`.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.format(Time(12, 0, 43, 1), ISOTimeFormat)
 "12:00:43.001"
@@ -522,7 +514,7 @@ default_format(::Type{Time}) = ISOTimeFormat
 
 Describes the RFC1123 formatting for a date and time.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.format(DateTime(2018, 8, 8, 12, 0, 43, 1), RFC1123Format)
 "Wed, 08 Aug 2018 12:00:43"
@@ -546,7 +538,7 @@ pattern given in the `format` string (see [`DateFormat`](@ref)  for syntax).
     that you create a [`DateFormat`](@ref) object instead and use that as the second
     argument to avoid performance loss when using the same format repeatedly.
 
-# Example
+# Examples
 ```jldoctest
 julia> DateTime("2020-01-01", "yyyy-mm-dd")
 2020-01-01T00:00:00
@@ -586,7 +578,7 @@ in the `format` string (see [`DateFormat`](@ref) for syntax).
     that you create a [`DateFormat`](@ref) object instead and use that as the second
     argument to avoid performance loss when using the same format repeatedly.
 
-# Example
+# Examples
 ```jldoctest
 julia> Date("2020-01-01", "yyyy-mm-dd")
 2020-01-01
@@ -626,7 +618,7 @@ in the `format` string (see [`DateFormat`](@ref) for syntax).
     that you create a [`DateFormat`](@ref) object instead and use that as the second
     argument to avoid performance loss when using the same format repeatedly.
 
-# Example
+# Examples
 ```jldoctest
 julia> Time("12:34pm", "HH:MMp")
 12:34:00

@@ -1,4 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+#
 
 module BaseDocs
 
@@ -52,12 +53,47 @@ kw"import"
 """
     export
 
-`export` is used within modules to tell Julia which functions should be
+`export` is used within modules to tell Julia which names should be
 made available to the user. For example: `export foo` makes the name
 `foo` available when [`using`](@ref) the module.
 See the [manual section about modules](@ref modules) for details.
 """
 kw"export"
+
+"""
+    public
+
+`public` is used within modules to tell Julia which names are part of the
+public API of the module . For example: `public foo` indicates that the name
+`foo` is public, without making it available when [`using`](@ref)
+the module. See the [manual section about modules](@ref modules) for details.
+
+!!! compat "Julia 1.11"
+    The public keyword was added in Julia 1.11. Prior to this the notion
+    of publicness was less explicit.
+"""
+kw"public"
+
+"""
+    as
+
+`as` is used as a keyword to rename an identifier brought into scope by
+`import` or `using`, for the purpose of working around name conflicts as
+well as for shortening names.  (Outside of `import` or `using` statements,
+`as` is not a keyword and can be used as an ordinary identifier.)
+
+`import LinearAlgebra as LA` brings the imported `LinearAlgebra` standard library
+into scope as `LA`.
+
+`import LinearAlgebra: eigen as eig, cholesky as chol` brings the `eigen` and `cholesky` methods
+from `LinearAlgebra` into scope as `eig` and `chol` respectively.
+
+`as` works with `using` only when individual identifiers are brought into scope.
+For example, `using LinearAlgebra: eigen as eig` or `using LinearAlgebra: eigen as eig, cholesky as chol` works,
+but `using LinearAlgebra as LA` is invalid syntax, since it is nonsensical to
+rename *all* exported names from `LinearAlgebra` to `LA`.
+"""
+kw"as"
 
 """
     abstract type
@@ -80,7 +116,7 @@ kw"abstract type", kw"abstract"
 
 `module` declares a [`Module`](@ref), which is a separate global variable workspace. Within a
 module, you can control which names from other modules are visible (via importing), and
-specify which of your names are intended to be public (via exporting).
+specify which of your names are intended to be public (via `export` and `public`).
 Modules allow you to create top-level definitions without worrying about name conflicts
 when your code is used together with somebody else’s.
 See the [manual section about modules](@ref modules) for more details.
@@ -106,10 +142,10 @@ kw"module"
 """
     __init__
 
-`__init__()` function in your module would executes immediately *after* the module is loaded at
-runtime for the first time (i.e., it is only called once and only after all statements in the
-module have been executed). Because it is called *after* fully importing the module, `__init__`
-functions of submodules will be executed *first*. Two typical uses of `__init__` are calling
+The `__init__()` function in a module executes immediately *after* the module is loaded at
+runtime for the first time. It is called once, after all other statements in the module
+have been executed. Because it is called after fully importing the module, `__init__`
+functions of submodules will be executed first. Two typical uses of `__init__` are calling
 runtime initialization functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
@@ -130,7 +166,7 @@ kw"__init__"
     baremodule
 
 `baremodule` declares a module that does not contain `using Base` or local definitions of
-[`eval`](@ref Base.MainInclude.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
+[`eval`](@ref Main.eval) and [`include`](@ref Base.include). It does still import `Core`. In other words,
 
 ```julia
 module Mod
@@ -182,13 +218,15 @@ kw"primitive type"
 A macro maps a sequence of argument expressions to a returned expression, and the
 resulting expression is substituted directly into the program at the point where
 the macro is invoked.
-Macros are a way to run generated code without calling [`eval`](@ref Base.MainInclude.eval),
+Macros are a way to run generated code without calling [`eval`](@ref Main.eval),
 since the generated code instead simply becomes part of the surrounding program.
 Macro arguments may include expressions, literal values, and symbols. Macros can be defined for
 variable number of arguments (varargs), but do not accept keyword arguments.
 Every macro also implicitly gets passed the arguments `__source__`, which contains the line number
 and file name the macro is called from, and `__module__`, which is the module the macro is expanded
 in.
+
+See the manual section on [Metaprogramming](@ref) for more information about how to write a macro.
 
 # Examples
 ```jldoctest
@@ -280,6 +318,53 @@ julia> z
 kw"global"
 
 """
+    for outer
+
+Reuse an existing local variable for iteration in a `for` loop.
+
+See the [manual section on variable scoping](@ref scope-of-variables) for more information.
+
+See also [`for`](@ref).
+
+
+# Examples
+```jldoctest
+julia> function f()
+           i = 0
+           for i = 1:3
+               # empty
+           end
+           return i
+       end;
+
+julia> f()
+0
+```
+
+```jldoctest
+julia> function f()
+           i = 0
+           for outer i = 1:3
+               # empty
+           end
+           return i
+       end;
+
+julia> f()
+3
+```
+
+```jldoctest
+julia> i = 0 # global variable
+       for outer i = 1:3
+       end
+ERROR: syntax: no outer local variable declaration exists for "for outer"
+[...]
+```
+"""
+kw"outer"
+
+"""
     ' '
 
 A pair of single-quote characters delimit a [`Char`](@ref) (that is, character) literal.
@@ -365,7 +450,7 @@ julia> push!(a, 2, 3)
 Assigning `[]` does not eliminate elements from a collection; instead use [`filter!`](@ref).
 ```jldoctest
 julia> a = collect(1:3); a[a .<= 1] = []
-ERROR: DimensionMismatch("tried to assign 0 elements to 1 destinations")
+ERROR: DimensionMismatch: tried to assign 0 elements to 1 destinations
 [...]
 
 julia> filter!(x -> x > 1, a) # in-place & thus more efficient than a = a[a .> 1]
@@ -430,22 +515,99 @@ kw"."
 """
     let
 
-`let` statements create a new hard scope block and introduce new variable bindings
-each time they run. Whereas assignments might reassign a new value to an existing value location,
-`let` always creates a new location.
-This difference is only detectable in the case of variables that outlive their scope via
-closures. The `let` syntax accepts a comma-separated series of assignments and variable
-names:
+`let` blocks create a new hard scope and optionally introduce new local bindings.
+
+Just like the [other scope constructs](@ref man-scope-table), `let` blocks define
+the block of code where newly introduced local variables are accessible.
+Additionally, the syntax has a special meaning for comma-separated assignments
+and variable names that may optionally appear on the same line as the `let`:
 
 ```julia
 let var1 = value1, var2, var3 = value3
     code
 end
 ```
-The assignments are evaluated in order, with each right-hand side evaluated in the scope
-before the new variable on the left-hand side has been introduced. Therefore it makes
-sense to write something like `let x = x`, since the two `x` variables are distinct and
-have separate storage.
+
+The variables introduced on this line are local to the `let` block and the assignments are
+evaluated in order, with each right-hand side evaluated in the scope
+without considering the name on the left-hand side. Therefore it makes
+sense to write something like `let x = x`, since the two `x` variables are distinct with
+the left-hand side locally shadowing the `x` from the outer scope. This can even
+be a useful idiom as new local variables are freshly created each time local scopes
+are entered, but this is only observable in the case of variables that outlive their
+scope via closures.  A `let` variable without an assignment, such as `var2` in the
+example above, declares a new local variable that is not yet bound to a value.
+
+By contrast, [`begin`](@ref) blocks also group multiple expressions together but do
+not introduce scope or have the special assignment syntax.
+
+### Examples
+
+In the function below, there is a single `x` that is iteratively updated three times by the `map`.
+The closures returned all reference that one `x` at its final value:
+
+```jldoctest
+julia> function test_outer_x()
+           x = 0
+           map(1:3) do _
+               x += 1
+               return ()->x
+           end
+       end
+test_outer_x (generic function with 1 method)
+
+julia> [f() for f in test_outer_x()]
+3-element Vector{Int64}:
+ 3
+ 3
+ 3
+```
+
+If, however, we add a `let` block that introduces a _new_ local variable we will end up
+with three distinct variables being captured (one at each iteration) even though we
+chose to use (shadow) the same name.
+
+```jldoctest
+julia> function test_let_x()
+           x = 0
+           map(1:3) do _
+               x += 1
+               let x = x
+                   return ()->x
+               end
+           end
+       end
+test_let_x (generic function with 1 method)
+
+julia> [f() for f in test_let_x()]
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
+
+All scope constructs that introduce new local variables behave this way
+when repeatedly run; the distinctive feature of `let` is its ability
+to succinctly declare new `local`s that may shadow outer variables of the same
+name. For example, directly using the argument of the `do` function similarly
+captures three distinct variables:
+
+```jldoctest
+julia> function test_do_x()
+           map(1:3) do x
+               return ()->x
+           end
+       end
+test_do_x (generic function with 1 method)
+
+julia> [f() for f in test_do_x()]
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
+
+
 """
 kw"let"
 
@@ -560,6 +722,32 @@ Expr
 Expr
 
 """
+    :expr
+
+Quote an expression `expr`, returning the abstract syntax tree (AST) of `expr`.
+The AST may be of type `Expr`, `Symbol`, or a literal value.
+The syntax `:identifier` evaluates to a `Symbol`.
+
+See also: [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref)
+
+# Examples
+```jldoctest
+julia> expr = :(a = b + 2*x)
+:(a = b + 2x)
+
+julia> sym = :some_identifier
+:some_identifier
+
+julia> value = :0xff
+0xff
+
+julia> typeof((expr, sym, value))
+Tuple{Expr, Symbol, UInt8}
+```
+"""
+(:)
+
+"""
     \$
 
 Interpolation operator for interpolating into e.g. [strings](@ref string-interpolation)
@@ -643,7 +831,7 @@ julia> f(2)
 7
 ```
 
-Anonymous functions can also be defined for multiple argumets.
+Anonymous functions can also be defined for multiple arguments.
 ```jldoctest
 julia> g = (x,y) -> x^2 + y^2
 #2 (generic function with 1 method)
@@ -757,6 +945,10 @@ kw"?", kw"?:"
 
 `for` loops repeatedly evaluate a block of statements while
 iterating over a sequence of values.
+
+The iteration variable is always a new variable, even if a variable of the same name
+exists in the enclosing scope.
+Use [`outer`](@ref) to reuse an existing local variable for iteration.
 
 # Examples
 ```jldoctest
@@ -986,8 +1178,16 @@ Adding `;` at the end of a line in the REPL will suppress printing the result of
 
 In function declarations, and optionally in calls, `;` separates regular arguments from keywords.
 
-While constructing arrays, if the arguments inside the square brackets are separated by `;`
-then their contents are vertically concatenated together.
+In array literals, arguments separated by semicolons have their contents
+concatenated together. A separator made of a single `;` concatenates vertically
+(i.e. along the first dimension), `;;` concatenates horizontally (second
+dimension), `;;;` concatenates along the third dimension, etc. Such a separator
+can also be used in last position in the square brackets to add trailing
+dimensions of length 1.
+
+A `;` in first position inside of parentheses can be used to construct a named
+tuple. The same `(; ...)` syntax on the left side of an assignment allows for
+property destructuring.
 
 In the standard REPL, typing `;` on an empty line will switch to shell mode.
 
@@ -1011,10 +1211,39 @@ julia> function plot(x, y; style="solid", width=1, color="black")
            ###
        end
 
-julia> [1 2; 3 4]
+julia> A = [1 2; 3 4]
 2×2 Matrix{Int64}:
  1  2
  3  4
+
+julia> [1; 3;; 2; 4;;; 10*A]
+2×2×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  2
+ 3  4
+
+[:, :, 2] =
+ 10  20
+ 30  40
+
+julia> [2; 3;;;]
+2×1×1 Array{Int64, 3}:
+[:, :, 1] =
+ 2
+ 3
+
+julia> nt = (; x=1) # without the ; or a trailing comma this would assign to x
+(x = 1,)
+
+julia> key = :a; c = 3;
+
+julia> nt2 = (; key => 1, b=2, c, nt.x)
+(a = 1, b = 2, c = 3, x = 1)
+
+julia> (; b, x) = nt2; # set variables b and x using property destructuring
+
+julia> b, x
+(2, 1)
 
 julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 shell> echo hello
@@ -1094,14 +1323,18 @@ first argument:
   with arguments are available as consecutive unnamed SSA variables (%0, %1, etc.);
 - as a 2-element tuple, containing a string of module IR and a string representing the name
   of the entry-point function to call;
-- as a 2-element tuple, but with the module provided as an `Vector{UINt8}` with bitcode.
+- as a 2-element tuple, but with the module provided as an `Vector{UInt8}` with bitcode.
 
 Note that contrary to `ccall`, the argument types must be specified as a tuple type, and not
 a tuple of types. All types, as well as the LLVM code, should be specified as literals, and
 not as variables or expressions (it may be necessary to use `@eval` to generate these
 literals).
 
-See `test/llvmcall.jl` for usage examples.
+[Opaque pointers](https://llvm.org/docs/OpaquePointers.html) (written as `ptr`) are not allowed in the LLVM code.
+
+See
+[`test/llvmcall.jl`](https://github.com/JuliaLang/julia/blob/v$VERSION/test/llvmcall.jl)
+for usage examples.
 """
 Core.Intrinsics.llvmcall
 
@@ -1255,13 +1488,6 @@ parser rather than being implemented as a normal string macro `@var_str`.
 
 """
 kw"var\"name\"", kw"@var_str"
-
-"""
-    ans
-
-A variable referring to the last computed value, automatically set at the interactive prompt.
-"""
-kw"ans"
 
 """
     devnull
@@ -1523,7 +1749,7 @@ The argument `val` to a function or constructor is outside the valid domain.
 ```jldoctest
 julia> sqrt(-1)
 ERROR: DomainError with -1.0:
-sqrt will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
+sqrt was called with a negative real argument but will only return a complex result if called with a complex argument. Try sqrt(Complex(x)).
 Stacktrace:
 [...]
 ```
@@ -1536,6 +1762,12 @@ DomainError
 Create a `Task` (i.e. coroutine) to execute the given function `func` (which
 must be callable with no arguments). The task exits when this function returns.
 The task will run in the "world age" from the parent at construction when [`schedule`](@ref)d.
+
+!!! warning
+    By default tasks will have the sticky bit set to true `t.sticky`. This models the
+    historic default for [`@async`](@ref). Sticky tasks can only be run on the worker thread
+    they are first scheduled on. To obtain the behavior of [`Threads.@spawn`](@ref) set the sticky
+    bit manually to `false`.
 
 # Examples
 ```jldoctest
@@ -1587,14 +1819,14 @@ In these examples, `a` is a [`Rational`](@ref), which has two fields.
 nfields
 
 """
-    UndefVarError(var::Symbol)
+    UndefVarError(var::Symbol, [scope])
 
 A symbol in the current scope is not defined.
 
 # Examples
 ```jldoctest
 julia> a
-ERROR: UndefVarError: a not defined
+ERROR: UndefVarError: `a` not defined in `Main`
 
 julia> a = 1;
 
@@ -1617,7 +1849,7 @@ julia> function my_func(;my_arg)
 my_func (generic function with 1 method)
 
 julia> my_func()
-ERROR: UndefKeywordError: keyword argument my_arg not assigned
+ERROR: UndefKeywordError: keyword argument `my_arg` not assigned
 Stacktrace:
  [1] my_func() at ./REPL[1]:2
  [2] top-level scope at REPL[2]:1
@@ -1796,7 +2028,21 @@ AbstractFloat
 """
     Integer <: Real
 
-Abstract supertype for all integers.
+Abstract supertype for all integers (e.g. [`Signed`](@ref), [`Unsigned`](@ref), and [`Bool`](@ref)).
+
+See also [`isinteger`](@ref), [`trunc`](@ref), [`div`](@ref).
+
+# Examples
+```
+julia> 42 isa Integer
+true
+
+julia> 1.0 isa Integer
+false
+
+julia> isinteger(1.0)
+true
+```
 """
 Integer
 
@@ -1811,6 +2057,21 @@ Signed
     Unsigned <: Integer
 
 Abstract supertype for all unsigned integers.
+
+Built-in unsigned integers are printed in hexadecimal, with prefix `0x`,
+and can be entered in the same way.
+
+# Examples
+```
+julia> typemax(UInt8)
+0xff
+
+julia> Int(0x00d)
+13
+
+julia> unsigned(true)
+0x0000000000000001
+```
 """
 Unsigned
 
@@ -1821,56 +2082,146 @@ Boolean type, containing the values `true` and `false`.
 
 `Bool` is a kind of number: `false` is numerically
 equal to `0` and `true` is numerically equal to `1`.
-Moreover, `false` acts as a multiplicative "strong zero":
+Moreover, `false` acts as a multiplicative "strong zero"
+against [`NaN`](@ref) and [`Inf`](@ref):
 
 ```jldoctest
-julia> false == 0
+julia> [true, false] == [1, 0]
 true
 
-julia> true == 1
-true
+julia> 42.0 + true
+43.0
 
-julia> 0 * NaN
-NaN
+julia> 0 .* (NaN, Inf, -Inf)
+(NaN, NaN, NaN)
 
-julia> false * NaN
-0.0
+julia> false .* (NaN, Inf, -Inf)
+(0.0, 0.0, -0.0)
 ```
 
-See also: [`digits`](@ref), [`iszero`](@ref), [`NaN`](@ref).
+Branches via [`if`](@ref) and other conditionals only accept `Bool`.
+There are no "truthy" values in Julia.
+
+Comparisons typically return `Bool`, and broadcasted comparisons may
+return [`BitArray`](@ref) instead of an `Array{Bool}`.
+
+```jldoctest
+julia> [1 2 3 4 5] .< pi
+1×5 BitMatrix:
+ 1  1  1  0  0
+
+julia> map(>(pi), [1 2 3 4 5])
+1×5 Matrix{Bool}:
+ 0  0  0  1  1
+```
+
+See also [`trues`](@ref), [`falses`](@ref), [`ifelse`](@ref).
 """
 Bool
 
-for (bit, sign, exp, frac) in ((16, 1, 5, 10), (32, 1, 8, 23), (64, 1, 11, 52))
-    @eval begin
-        """
-            Float$($bit) <: AbstractFloat
+"""
+    Float64 <: AbstractFloat <: Real
 
-        $($bit)-bit floating point number type (IEEE 754 standard).
+64-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 11 exponent, 52 fraction bits.
+See [`bitstring`](@ref), [`signbit`](@ref), [`exponent`](@ref), [`frexp`](@ref),
+and [`significand`](@ref) to access various bits.
 
-        Binary format: $($sign) sign, $($exp) exponent, $($frac) fraction bits.
-        """
-        $(Symbol("Float", bit))
-    end
-end
+This is the default for floating point literals, `1.0 isa Float64`,
+and for many operations such as `1/2, 2pi, log(2), range(0,90,length=4)`.
+Unlike integers, this default does not change with `Sys.WORD_SIZE`.
+
+The exponent for scientific notation can be entered as `e` or `E`,
+thus `2e3 === 2.0E3 === 2.0 * 10^3`. Doing so is strongly preferred over
+`10^n` because integers overflow, thus `2.0 * 10^19 < 0` but `2e19 > 0`.
+
+See also [`Inf`](@ref), [`NaN`](@ref), [`floatmax`](@ref), [`Float32`](@ref), [`Complex`](@ref).
+"""
+Float64
+
+"""
+    Float32 <: AbstractFloat <: Real
+
+32-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 8 exponent, 23 fraction bits.
+
+The exponent for scientific notation should be entered as lower-case `f`,
+thus `2f3 === 2.0f0 * 10^3 === Float32(2_000)`.
+For array literals and comprehensions, the element type can be specified before
+the square brackets: `Float32[1,4,9] == Float32[i^2 for i in 1:3]`.
+
+See also [`Inf32`](@ref), [`NaN32`](@ref), [`Float16`](@ref), [`exponent`](@ref), [`frexp`](@ref).
+"""
+Float32
+
+"""
+    Float16 <: AbstractFloat <: Real
+
+16-bit floating point number type (IEEE 754 standard).
+Binary format is 1 sign, 5 exponent, 10 fraction bits.
+"""
+Float16
 
 for bit in (8, 16, 32, 64, 128)
+    type = Symbol(:Int, bit)
+    srange = bit > 31 ? "" : "Represents numbers `n ∈ " * repr(eval(:(typemin($type):typemax($type)))) * "`.\n"
+    unshow = repr(eval(Symbol(:UInt, bit))(bit-1))
+
     @eval begin
         """
-            Int$($bit) <: Signed
+            Int$($bit) <: Signed <: Integer
 
         $($bit)-bit signed integer type.
+
+        $($(srange))Note that such integers overflow without warning,
+        thus `typemax($($type)) + $($type)(1) < 0`.
+
+        See also [`Int`](@ref $Int), [`widen`](@ref), [`BigInt`](@ref).
         """
         $(Symbol("Int", bit))
 
         """
-            UInt$($bit) <: Unsigned
+            UInt$($bit) <: Unsigned <: Integer
 
         $($bit)-bit unsigned integer type.
+
+        Printed in hexadecimal, thus $($(unshow)) == $($(bit-1)).
         """
         $(Symbol("UInt", bit))
     end
 end
+
+"""
+    Int
+
+Sys.WORD_SIZE-bit signed integer type, `Int <: Signed <: Integer <: Real`.
+
+This is the default type of most integer literals and is an alias for either `Int32`
+or `Int64`, depending on `Sys.WORD_SIZE`. It is the type returned by functions such as
+[`length`](@ref), and the standard type for indexing arrays.
+
+Note that integers overflow without warning, thus `typemax(Int) + 1 < 0` and `10^19 < 0`.
+Overflow can be avoided by using [`BigInt`](@ref).
+Very large integer literals will use a wider type, for instance `10_000_000_000_000_000_000 isa Int128`.
+
+Integer division is [`div`](@ref) alias `÷`,
+whereas [`/`](@ref) acting on integers returns [`Float64`](@ref).
+
+See also [`$(Symbol("Int", Sys.WORD_SIZE))`](@ref), [`widen`](@ref), [`typemax`](@ref), [`bitstring`](@ref).
+"""
+Int
+
+"""
+    UInt
+
+Sys.WORD_SIZE-bit unsigned integer type, `UInt <: Unsigned <: Integer`.
+
+Like [`Int`](@ref Int), the alias `UInt` may point to either `UInt32` or `UInt64`,
+according to the value of `Sys.WORD_SIZE` on a given computer.
+
+Printed and parsed in hexadecimal: `UInt(15) === $(repr(UInt(15)))`.
+"""
+UInt
 
 """
     Symbol
@@ -1894,9 +2245,8 @@ julia> eval(:x)
 `Symbol`s can also be constructed from strings or other values by calling the
 constructor `Symbol(x...)`.
 
-`Symbol`s are immutable and should be compared using `===`.
-The implementation re-uses the same object for all `Symbol`s with the same name,
-so comparison tends to be efficient (it can just compare pointers).
+`Symbol`s are immutable and their implementation re-uses the same object for all `Symbol`s
+with the same name.
 
 Unlike strings, `Symbol`s are "atomic" or "scalar" entities that do not support
 iteration over characters.
@@ -1924,7 +2274,7 @@ Symbol(x...)
 
 Construct a tuple of the given objects.
 
-See also [`Tuple`](@ref), [`NamedTuple`](@ref).
+See also [`Tuple`](@ref), [`ntuple`](@ref), [`NamedTuple`](@ref).
 
 # Examples
 ```jldoctest
@@ -2005,11 +2355,14 @@ setfield!
     swapfield!(value, name::Symbol, x, [order::Symbol])
     swapfield!(value, i::Int, x, [order::Symbol])
 
-These atomically perform the operations to simultaneously get and set a field:
+Atomically perform the operations to simultaneously get and set a field:
 
     y = getfield(value, name)
     setfield!(value, name, x)
     return y
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 swapfield!
 
@@ -2017,7 +2370,7 @@ swapfield!
     modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
     modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
 
-These atomically perform the operations to get and set a field after applying
+Atomically perform the operations to get and set a field after applying
 the function `op`.
 
     y = getfield(value, name)
@@ -2027,6 +2380,9 @@ the function `op`.
 
 If supported by the hardware (for example, atomic increment), this may be
 optimized to the appropriate hardware instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 modifyfield!
 
@@ -2036,7 +2392,7 @@ modifyfield!
     replacefield!(value, i::Int, expected, desired,
                   [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
 
-These atomically perform the operations to get and conditionally set a field to
+Atomically perform the operations to get and conditionally set a field to
 a given value.
 
     y = getfield(value, name, fail_order)
@@ -2048,8 +2404,182 @@ a given value.
 
 If supported by the hardware, this may be optimized to the appropriate hardware
 instruction, otherwise it'll use a loop.
+
+!!! compat "Julia 1.7"
+    This function requires Julia 1.7 or later.
 """
 replacefield!
+
+"""
+    setfieldonce!(value, name::Union{Int,Symbol}, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> success::Bool
+
+Atomically perform the operations to set a field to
+a given value, only if it was previously not set.
+
+    ok = !isdefined(value, name, fail_order)
+    if ok
+        setfield!(value, name, desired, success_order)
+    end
+    return ok
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+setfieldonce!
+
+"""
+    getglobal(module::Module, name::Symbol, [order::Symbol=:monotonic])
+
+Retrieve the value of the binding `name` from the module `module`. Optionally, an
+atomic ordering can be defined for the operation, otherwise it defaults to
+monotonic.
+
+While accessing module bindings using [`getfield`](@ref) is still supported to
+maintain compatibility, using `getglobal` should always be preferred since
+`getglobal` allows for control over atomic ordering (`getfield` is always
+monotonic) and better signifies the code's intent both to the user as well as the
+compiler.
+
+Most users should not have to call this function directly -- The
+[`getproperty`](@ref Base.getproperty) function or corresponding syntax (i.e.
+`module.name`) should be preferred in all but few very specific use cases.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+
+See also [`getproperty`](@ref Base.getproperty) and [`setglobal!`](@ref).
+
+# Examples
+```jldoctest
+julia> a = 1
+1
+
+julia> module M
+       a = 2
+       end;
+
+julia> getglobal(@__MODULE__, :a)
+1
+
+julia> getglobal(M, :a)
+2
+```
+"""
+getglobal
+
+
+"""
+    setglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
+
+Set or change the value of the binding `name` in the module `module` to `x`. No
+type conversion is performed, so if a type has already been declared for the
+binding, `x` must be of appropriate type or an error is thrown.
+
+Additionally, an atomic ordering can be specified for this operation, otherwise it
+defaults to monotonic.
+
+Users will typically access this functionality through the
+[`setproperty!`](@ref Base.setproperty!) function or corresponding syntax
+(i.e. `module.name = x`) instead, so this is intended only for very specific use
+cases.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+
+See also [`setproperty!`](@ref Base.setproperty!) and [`getglobal`](@ref)
+
+# Examples
+```jldoctest
+julia> module M end;
+
+julia> M.a  # same as `getglobal(M, :a)`
+ERROR: UndefVarError: `a` not defined in `M`
+Suggestion: check for spelling errors or missing imports.
+
+julia> setglobal!(M, :a, 1)
+1
+
+julia> M.a
+1
+```
+"""
+setglobal!
+
+"""
+    Core.get_binding_type(module::Module, name::Symbol)
+
+Retrieve the declared type of the binding `name` from the module `module`.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+"""
+Core.get_binding_type
+
+"""
+    Core.set_binding_type!(module::Module, name::Symbol, [type::Type])
+
+Set the declared type of the binding `name` in the module `module` to `type`. Error if the
+binding already has a type that is not equivalent to `type`. If the `type` argument is
+absent, set the binding type to `Any` if unset, but do not error.
+
+!!! compat "Julia 1.9"
+    This function requires Julia 1.9 or later.
+"""
+Core.set_binding_type!
+
+"""
+    swapglobal!(module::Module, name::Symbol, x, [order::Symbol=:monotonic])
+
+Atomically perform the operations to simultaneously get and set a global.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`swapproperty!`](@ref Base.swapproperty!) and [`setglobal!`](@ref).
+"""
+swapglobal!
+
+"""
+    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic]) -> Pair
+
+Atomically perform the operations to get and set a global after applying
+the function `op`.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`modifyproperty!`](@ref Base.modifyproperty!) and [`setglobal!`](@ref).
+"""
+modifyglobal!
+
+"""
+    replaceglobal!(module::Module, name::Symbol, expected, desired,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> (; old, success::Bool)
+
+Atomically perform the operations to get and conditionally set a global to
+a given value.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`replaceproperty!`](@ref Base.replaceproperty!) and [`setglobal!`](@ref).
+"""
+replaceglobal!
+
+"""
+    setglobalonce!(module::Module, name::Symbol, value,
+                  [success_order::Symbol, [fail_order::Symbol=success_order]) -> success::Bool
+
+Atomically perform the operations to set a global to
+a given value, only if it was previously not set.
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+
+See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@ref).
+"""
+setglobalonce!
 
 """
     typeof(x)
@@ -2114,6 +2644,42 @@ false
 """
 isdefined
 
+"""
+    Memory{T}(undef, n)
+
+Construct an uninitialized [`Memory{T}`](@ref) of length `n`. All Memory
+objects of length 0 might alias, since there is no reachable mutable content
+from them.
+
+# Examples
+```julia-repl
+julia> Memory{Float64}(undef, 3)
+3-element Memory{Float64}:
+ 6.90966e-310
+ 6.90966e-310
+ 6.90966e-310
+```
+"""
+Memory{T}(::UndefInitializer, n)
+
+"""
+    MemoryRef(memory)
+
+Construct a MemoryRef from a memory object. This does not fail, but the
+resulting memory may point out-of-bounds if the memory is empty.
+"""
+MemoryRef(::Memory)
+
+"""
+    MemoryRef(::Memory, index::Integer)
+    MemoryRef(::MemoryRef, index::Integer)
+
+Construct a MemoryRef from a memory object and an offset index (1-based) which
+can also be negative. This always returns an inbounds object, and will throw an
+error if that is not possible (because the index would result in a shift
+out-of-bounds of the underlying memory).
+"""
+MemoryRef(::Union{Memory,MemoryRef}, ::Integer)
 
 """
     Vector{T}(undef, n)
@@ -2349,7 +2915,13 @@ Ptr{T}()
 """
     +(x, y...)
 
-Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
+Addition operator.
+
+Infix `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`,
+which by default then calls `(x+y) + z + ...` starting from the left.
+
+Note that overflow is possible for most integer types, including the
+default `Int`, when adding large numbers.
 
 # Examples
 ```jldoctest
@@ -2358,6 +2930,14 @@ julia> 1 + 20 + 4
 
 julia> +(1, 20, 4)
 25
+
+julia> [1,2] + [3,4]
+2-element Vector{Int64}:
+ 4
+ 6
+
+julia> typemax(Int) + 1 < 0
+true
 ```
 """
 (+)(x, y...)
@@ -2381,6 +2961,12 @@ julia> -[1 2; 3 4]
 2×2 Matrix{Int64}:
  -1  -2
  -3  -4
+
+julia> -(true)  # promotes to Int
+-1
+
+julia> -(0x003)
+0xfffd
 ```
 """
 -(x)
@@ -2404,7 +2990,18 @@ julia> -(2, 4.5)
 """
     *(x, y...)
 
-Multiplication operator. `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`.
+Multiplication operator.
+
+Infix `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`,
+which by default then calls `(x*y) * z * ...` starting from the left.
+
+Juxtaposition such as `2pi` also calls `*(2, pi)`. Note that this operation
+has higher precedence than a literal `*`. Note also that juxtaposition "0x..."
+(integer zero times a variable whose name starts with `x`) is forbidden as
+it clashes with unsigned integer literals: `0x01 isa UInt8`.
+
+Note that overflow is possible for most integer types, including the default `Int`,
+when multiplying large numbers.
 
 # Examples
 ```jldoctest
@@ -2413,6 +3010,17 @@ julia> 2 * 7 * 8
 
 julia> *(2, 7, 8)
 112
+
+julia> [2 0; 0 3] * [1, 10]  # matrix * vector
+2-element Vector{Int64}:
+  2
+ 30
+
+julia> 1/2pi, 1/2*pi  # juxtaposition has higher precedence
+(0.15915494309189535, 1.5707963267948966)
+
+julia> x = [1, 2]; x'x  # adjoint vector * vector
+5
 ```
 """
 (*)(x, y...)
@@ -2420,8 +3028,10 @@ julia> *(2, 7, 8)
 """
     /(x, y)
 
-Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
-floating-point results for integer arguments.
+Right division operator: multiplication of `x` by the inverse of `y` on the right.
+
+Gives floating-point results for integer arguments.
+See [`÷`](@ref div) for integer division, or [`//`](@ref) for [`Rational`](@ref) results.
 
 # Examples
 ```jldoctest
@@ -2515,23 +3125,33 @@ kw"Union{}", Base.Bottom
 """
     Union{Types...}
 
-A type union is an abstract type which includes all instances of any of its argument types. The empty
-union [`Union{}`](@ref) is the bottom type of Julia.
+A `Union` type is an abstract type which includes all instances of any of its argument types.
+This means that `T <: Union{T,S}` and `S <: Union{T,S}`.
+
+Like other abstract types, it cannot be instantiated, even if all of its arguments are non
+abstract.
 
 # Examples
 ```jldoctest
 julia> IntOrString = Union{Int,AbstractString}
 Union{Int64, AbstractString}
 
-julia> 1 :: IntOrString
-1
+julia> 1 isa IntOrString # instance of Int is included in the union
+true
 
-julia> "Hello!" :: IntOrString
-"Hello!"
+julia> "Hello!" isa IntOrString # String is also included
+true
 
-julia> 1.0 :: IntOrString
-ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a value of type Float64
+julia> 1.0 isa IntOrString # Float64 is not included because it is neither Int nor AbstractString
+false
 ```
+
+# Extended Help
+
+Unlike most other parametric types, unions are covariant in their parameters. For example,
+`Union{Real, String}` is a subtype of `Union{Number, AbstractString}`.
+
+The empty union [`Union{}`](@ref) is the bottom type of Julia.
 """
 Union
 
@@ -2540,7 +3160,7 @@ Union
     UnionAll
 
 A union of types over all values of a type parameter. `UnionAll` is used to describe parametric types
-where the values of some parameters are not known.
+where the values of some parameters are not known. See the manual section on [UnionAll Types](@ref).
 
 # Examples
 ```jldoctest
@@ -2622,17 +3242,48 @@ Vararg
 """
     Tuple{Types...}
 
-Tuples are an abstraction of the arguments of a function – without the function itself. The salient aspects of
-a function's arguments are their order and their types. Therefore a tuple type is similar to a parameterized
-immutable type where each parameter is the type of one field. Tuple types may have any number of parameters.
+A tuple is a fixed-length container that can hold any values of different
+types, but cannot be modified (it is immutable). The values can be accessed via
+indexing. Tuple literals are written with commas and parentheses:
+
+```jldoctest
+julia> (1, 1+1)
+(1, 2)
+
+julia> (1,)
+(1,)
+
+julia> x = (0.0, "hello", 6*7)
+(0.0, "hello", 42)
+
+julia> x[2]
+"hello"
+
+julia> typeof(x)
+Tuple{Float64, String, Int64}
+```
+
+A length-1 tuple must be written with a comma, `(1,)`, since `(1)` would just
+be a parenthesized value. `()` represents the empty (length-0) tuple.
+
+A tuple can be constructed from an iterator by using a `Tuple` type as constructor:
+
+```jldoctest
+julia> Tuple(["a", 1])
+("a", 1)
+
+julia> Tuple{String, Float64}(["a", 1])
+("a", 1.0)
+```
 
 Tuple types are covariant in their parameters: `Tuple{Int}` is a subtype of `Tuple{Any}`. Therefore `Tuple{Any}`
 is considered an abstract type, and tuple types are only concrete if their parameters are. Tuples do not have
 field names; fields are only accessed by index.
+Tuple types may have any number of parameters.
 
 See the manual section on [Tuple Types](@ref).
 
-See also [`Vararg`](@ref), [`NTuple`](@ref), [`tuple`](@ref), [`NamedTuple`](@ref).
+See also [`Vararg`](@ref), [`NTuple`](@ref), [`ntuple`](@ref), [`tuple`](@ref), [`NamedTuple`](@ref).
 """
 Tuple
 
@@ -2696,8 +3347,8 @@ the syntax `@atomic a.b` calls `getproperty(a, :b, :sequentially_consistent)`.
 
 # Examples
 ```jldoctest
-julia> struct MyType
-           x
+julia> struct MyType{T <: Number}
+           x::T
        end
 
 julia> function Base.getproperty(obj::MyType, sym::Symbol)
@@ -2717,6 +3368,11 @@ julia> obj.x
 1
 ```
 
+One should overload `getproperty` only when necessary, as it can be confusing if
+the behavior of the syntax `obj.f` is unusual.
+Also note that using methods is often preferable. See also this style guide documentation
+for more information: [Prefer exported methods over direct field access](@ref).
+
 See also [`getfield`](@ref Core.getfield),
 [`propertynames`](@ref Base.propertynames) and
 [`setproperty!`](@ref Base.setproperty!).
@@ -2729,7 +3385,10 @@ Base.getproperty
 
 The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
-and the syntax `@atomic a.b = c` calls `getproperty(a, :b, :sequentially_consistent)`.
+and the syntax `@atomic a.b = c` calls `setproperty!(a, :b, c, :sequentially_consistent)`.
+
+!!! compat "Julia 1.8"
+    `setproperty!` on modules requires at least Julia 1.8.
 
 See also [`setfield!`](@ref Core.setfield!),
 [`propertynames`](@ref Base.propertynames) and
@@ -2741,7 +3400,7 @@ Base.setproperty!
     swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic)
 
 The syntax `@atomic a.b, _ = c, a.b` returns `(c, swapproperty!(a, :b, c, :sequentially_consistent))`,
-where there must be one getfield expression common to both sides.
+where there must be one `getproperty` expression common to both sides.
 
 See also [`swapfield!`](@ref Core.swapfield!)
 and [`setproperty!`](@ref Base.setproperty!).
@@ -2751,9 +3410,14 @@ Base.swapproperty!
 """
     modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
 
-The syntax `@atomic! max(a().b, c)` returns `modifyproperty!(a(), :b,
-max, c, :sequentially_consistent))`, where the first argument must be a
-`getfield` expression and is modified atomically.
+The syntax `@atomic op(x.f, v)` (and its equivalent `@atomic x.f op v`) returns
+`modifyproperty!(x, :f, op, v, :sequentially_consistent)`, where the first argument
+must be a `getproperty` expression and is modified atomically.
+
+Invocation of `op(getproperty(x, f), v)` must return a value that can be stored in the field
+`f` of the object `x` by default.  In particular, unlike the default behavior of
+[`setproperty!`](@ref Base.setproperty!), the `convert` function is not called
+automatically.
 
 See also [`modifyfield!`](@ref Core.modifyfield!)
 and [`setproperty!`](@ref Base.setproperty!).
@@ -2764,13 +3428,29 @@ Base.modifyproperty!
     replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
 
 Perform a compare-and-swap operation on `x.f` from `expected` to `desired`, per
-egal. The syntax `@atomic_replace! x.f expected => desired` can be used instead
+egal. The syntax `@atomicreplace x.f expected => desired` can be used instead
 of the function call form.
 
 See also [`replacefield!`](@ref Core.replacefield!)
-and [`setproperty!`](@ref Base.setproperty!).
+[`setproperty!`](@ref Base.setproperty!),
+[`setpropertyonce!`](@ref Base.setpropertyonce!).
 """
 Base.replaceproperty!
+
+"""
+    setpropertyonce!(x, f::Symbol, value, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order)
+
+Perform a compare-and-swap operation on `x.f` to set it to `value` if previously unset.
+The syntax `@atomiconce x.f = value` can be used instead of the function call form.
+
+See also [`setfieldonce!`](@ref Core.replacefield!),
+[`setproperty!`](@ref Base.setproperty!),
+[`replaceproperty!`](@ref Base.replaceproperty!).
+
+!!! compat "Julia 1.11"
+    This function requires Julia 1.11 or later.
+"""
+Base.setpropertyonce!
 
 
 """
@@ -2782,7 +3462,7 @@ with elements of type `T` and `N` dimensions.
 If `A` is a `StridedArray`, then its elements are stored in memory with offsets, which may
 vary between dimensions but are constant within a dimension. For example, `A` could
 have stride 2 in dimension 1, and stride 3 in dimension 2. Incrementing `A` along
-dimension `d` jumps in memory by [`strides(A, d)`] slots. Strided arrays are
+dimension `d` jumps in memory by [`stride(A, d)`] slots. Strided arrays are
 particularly important and useful because they can sometimes be passed directly
 as pointers to foreign language libraries like BLAS.
 """
@@ -2858,7 +3538,7 @@ QuoteNode
 
 """
     "
-`"` Is used to delimit string literals.
+`"` Is used to delimit string literals. A trailing `\\` can be used to continue a string literal on the next line.
 
 # Examples
 
@@ -2868,6 +3548,10 @@ julia> "Hello World!"
 
 julia> "Hello World!\\n"
 "Hello World!\\n"
+
+julia> "Hello \\
+        World"
+"Hello World"
 ```
 
 See also [`\"""`](@ref \"\"\").
@@ -2898,11 +3582,20 @@ See also [`"`](@ref \")
 kw"\"\"\""
 
 """
-    donotdelete(args...)
+Unsafe pointer operations are compatible with loading and storing pointers declared with
+`_Atomic` and `std::atomic` type in C11 and C++23 respectively. An error may be thrown if
+there is not support for atomically loading the Julia type `T`.
+
+See also: [`unsafe_load`](@ref), [`unsafe_modify!`](@ref), [`unsafe_replace!`](@ref), [`unsafe_store!`](@ref), [`unsafe_swap!`](@ref)
+"""
+kw"atomic"
+
+"""
+    Base.donotdelete(args...)
 
 This function prevents dead-code elimination (DCE) of itself and any arguments
 passed to it, but is otherwise the lightest barrier possible. In particular,
-it is not a GC safepoint, does model an observable heap effect, does not expand
+it is not a GC safepoint, does not model an observable heap effect, does not expand
 to any code itself and may be re-ordered with respect to other side effects
 (though the total number of executions may not change).
 
@@ -2915,21 +3608,109 @@ This is intended for use in benchmarks that want to guarantee that `args` are
 actually computed. (Otherwise DCE may see that the result of the benchmark is
 unused and delete the entire benchmark code).
 
-**Note**: `donotdelete` does not affect constant folding. For example, in
-          `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
-          the code is semantically equivalent to `donotdelete(2).`
+!!! note
+    `donotdelete` does not affect constant folding. For example, in
+    `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
+    the code is semantically equivalent to `donotdelete(2).`
+
+!!! note
+    This intrinsic does not affect the semantics of code that is dead because it is
+    *unreachable*. For example, the body of the function `f(x) = false && donotdelete(x)`
+    may be deleted in its entirety. The semantics of this intrinsic only guarantee that
+    *if* the intrinsic is semantically executed, then there is some program state at
+    which the value of the arguments of this intrinsic were available (in a register,
+    in memory, etc.).
 
 # Examples
 
+```julia
 function loop()
     for i = 1:1000
-        # The complier must guarantee that there are 1000 program points (in the correct
+        # The compiler must guarantee that there are 1000 program points (in the correct
         # order) at which the value of `i` is in a register, but has otherwise
         # total control over the program.
         donotdelete(i)
     end
 end
+```
 """
 Base.donotdelete
+
+"""
+    Base.compilerbarrier(setting::Symbol, val)
+
+This function acts a compiler barrier at a specified compilation phase.
+The dynamic semantics of this intrinsic are to return the `val` argument, unmodified.
+However, depending on the `setting`, the compiler is prevented from assuming this behavior.
+
+Currently either of the following `setting`s is allowed:
+- Barriers on abstract interpretation:
+  * `:type`: the return type of this function call will be inferred as `Any` always
+    (the strongest barrier on abstract interpretation)
+  * `:const`: the return type of this function call will be inferred with widening
+    constant information on `val`
+  * `:conditional`: the return type of this function call will be inferred with widening
+    conditional information on `val` (see the example below)
+- Any barriers on optimization aren't implemented yet
+
+!!! note
+    This function is expected to be used with `setting` known precisely at compile-time.
+    If the `setting` is not known precisely at compile-time, the compiler will emit the
+    strongest barrier(s). No compile-time warning is issued.
+
+# Examples
+
+```julia
+julia> Base.return_types((Int,)) do a
+           x = compilerbarrier(:type, a) # `x` won't be inferred as `x::Int`
+           return x
+       end |> only
+Any
+
+julia> Base.return_types() do
+           x = compilerbarrier(:const, 42)
+           if x == 42 # no constant information here, so inference also accounts for the else branch
+               return x # but `x` is still inferred as `x::Int` at least here
+           else
+               return nothing
+           end
+       end |> only
+Union{Nothing, Int64}
+
+julia> Base.return_types((Union{Int,Nothing},)) do a
+           if compilerbarrier(:conditional, isa(a, Int))
+               # the conditional information `a::Int` isn't available here (leading to less accurate return type inference)
+               return a
+           else
+               return nothing
+           end
+       end |> only
+Union{Nothing, Int64}
+```
+"""
+Base.compilerbarrier
+
+"""
+    Core.finalizer(f, o)
+
+This builtin is an implementation detail of [`Base.finalizer`](@ref) and end-users
+should use the latter instead.
+
+# Differences from `Base.finalizer`
+
+The interface of `Core.finalizer` is essentially the same as `Base.finalizer`,
+but there are a number of small differences. They are documented here for
+completeness only and (unlike `Base.finalizer`) have no stability guarantees.
+
+The current differences are:
+- `Core.finalizer` does not check for mutability of `o`. Attempting to register
+  a finalizer for an immutable object is undefined behavior.
+- The value `f` must be a Julia object. `Core.finalizer` does not support a
+  raw C function pointer.
+- `Core.finalizer` returns `nothing` rather than `o`.
+"""
+Core.finalizer
+
+Base.include(BaseDocs, "intrinsicsdocs.jl")
 
 end

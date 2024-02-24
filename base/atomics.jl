@@ -20,7 +20,7 @@ export
 # - LLVM doesn't currently support atomics on floats for ppc64
 #   C++20 is adding limited support for atomics on float, but as of
 #   now Clang does not support that yet.
-if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
+if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
    Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     const inttypes = (Int8, Int16, Int32, Int64,
                       UInt8, UInt16, UInt32, UInt64)
@@ -79,6 +79,13 @@ mutable struct Atomic{T<:AtomicTypes}
 end
 
 Atomic() = Atomic{Int}()
+
+const LOCK_PROFILING = Atomic{Int}(0)
+lock_profiling(state::Bool) = state ? atomic_add!(LOCK_PROFILING, 1) : atomic_sub!(LOCK_PROFILING, 1)
+lock_profiling() = LOCK_PROFILING[] > 0
+
+const LOCK_CONFLICT_COUNT = Atomic{Int}(0);
+inc_lock_conflict_count() = atomic_add!(LOCK_CONFLICT_COUNT, 1)
 
 """
     Threads.atomic_cas!(x::Atomic{T}, cmp::T, newval::T) where T

@@ -28,10 +28,10 @@ end
 With a custom array-like type `MyArray` having:
 
 ```julia
-@inline getindex(A::MyArray, i::Real) = (@boundscheck checkbounds(A,i); A.data[to_index(i)])
+@inline getindex(A::MyArray, i::Real) = (@boundscheck checkbounds(A, i); A.data[to_index(i)])
 ```
 
-Then when `getindex` is inlined into `sum`, the call to `checkbounds(A,i)` will be elided. If
+Then when `getindex` is inlined into `sum`, the call to `checkbounds(A, i)` will be elided. If
 your function contains multiple layers of inlining, only `@boundscheck` blocks at most one level
 of inlining deeper are eliminated. The rule prevents unintended changes in program behavior from
 code further up the stack.
@@ -47,17 +47,17 @@ function sum(A::AbstractArray)
     for i in 1:length(A)
         @inbounds r += A[i]
     end
-	return r
+    return r
 end
 ```
 
 Which quietly assumes 1-based indexing and therefore exposes unsafe memory access when used
-with [`OffsetArrays`](@ref man-custom-indice):
+with [`OffsetArrays`](@ref man-custom-indices):
 
 ```julia-repl
 julia> using OffsetArrays
 
-julia> sum(OffsetArray([1,2,3], -10))
+julia> sum(OffsetArray([1, 2, 3], -10))
 9164911648 # inconsistent results or segfault
 ```
 
@@ -123,4 +123,4 @@ the last argument).
 
 ## Emit bounds checks
 
-Julia can be launched with `--check-bounds={yes|no|auto}` to emit bounds checks always, never, or respect @inbounds declarations.
+Julia can be launched with `--check-bounds={yes|no|auto}` to emit bounds checks always, never, or respect `@inbounds` declarations.

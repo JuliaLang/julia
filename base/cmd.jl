@@ -3,9 +3,10 @@
 abstract type AbstractCmd end
 
 # libuv process option flags
-const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS = UInt8(1 << 2)
-const UV_PROCESS_DETACHED = UInt8(1 << 3)
-const UV_PROCESS_WINDOWS_HIDE = UInt8(1 << 4)
+const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS = UInt32(1 << 2)
+const UV_PROCESS_DETACHED = UInt32(1 << 3)
+const UV_PROCESS_WINDOWS_HIDE = UInt32(1 << 4)
+const UV_PROCESS_WINDOWS_DISABLE_EXACT_NAME = UInt32(1 << 7)
 
 struct Cmd <: AbstractCmd
     exec::Vector{String}
@@ -14,7 +15,7 @@ struct Cmd <: AbstractCmd
     env::Union{Vector{String},Nothing}
     dir::String
     cpus::Union{Nothing,Vector{UInt16}}
-    Cmd(exec::Vector{String}) =
+    Cmd(exec::Vector{<:AbstractString}) =
         new(exec, false, 0x00, nothing, "", nothing)
     Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing) =
         new(cmd.exec, ignorestatus, flags, env,
@@ -41,6 +42,7 @@ has_nondefault_cmd_flags(c::Cmd) =
 
 """
     Cmd(cmd::Cmd; ignorestatus, detach, windows_verbatim, windows_hide, env, dir)
+    Cmd(exec::Vector{String})
 
 Construct a new `Cmd` object, representing an external program and arguments, from `cmd`,
 while changing the settings of the optional keyword arguments:
@@ -70,8 +72,15 @@ while changing the settings of the optional keyword arguments:
 * `dir::AbstractString`: Specify a working directory for the command (instead
   of the current directory).
 
-For any keywords that are not specified, the current settings from `cmd` are used. Normally,
-to create a `Cmd` object in the first place, one uses backticks, e.g.
+For any keywords that are not specified, the current settings from `cmd` are used.
+
+Note that the `Cmd(exec)` constructor does not create a copy of `exec`. Any subsequent changes to `exec` will be reflected in the `Cmd` object.
+
+The most common way to construct a `Cmd` object is with command literals (backticks), e.g.
+
+    `ls -l`
+
+This can then be passed to the `Cmd` constructor to modify its settings, e.g.
 
     Cmd(`echo "Hello world"`, ignorestatus=true, detach=false)
 """
@@ -130,7 +139,7 @@ function show(io::IO, cmd::Cmd)
     print(io, '`')
     if print_cpus
         print(io, ", ")
-        show(io, collect(Int, cmd.cpus))
+        show(io, collect(Int, something(cmd.cpus)))
         print(io, ")")
     end
     print_env && (print(io, ","); show(io, cmd.env))
@@ -230,7 +239,7 @@ function cstr(s)
     if Base.containsnul(s)
         throw(ArgumentError("strings containing NUL cannot be passed to spawned processes"))
     end
-    return String(s)
+    return String(s)::String
 end
 
 # convert various env representations into an array of "key=val" strings
@@ -262,6 +271,15 @@ setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir=cmd.dir) =
     setenv(cmd, env; dir=dir)
 setenv(cmd::Cmd; dir=cmd.dir) = Cmd(cmd; dir=dir)
 
+# split environment entry string into before and after first `=` (key and value)
+function splitenv(e::String)
+    i = findnext('=', e, 2)
+    if i === nothing
+        throw(ArgumentError("malformed environment entry"))
+    end
+    e[1:prevind(e, i)], e[nextind(e, i):end]
+end
+
 """
     addenv(command::Cmd, env...; inherit::Bool = true)
 
@@ -282,7 +300,7 @@ function addenv(cmd::Cmd, env::Dict; inherit::Bool = true)
             merge!(new_env, ENV)
         end
     else
-        for (k, v) in eachsplit.(cmd.env, "=")
+        for (k, v) in splitenv.(cmd.env)
             new_env[string(k)::String] = string(v)::String
         end
     end
@@ -301,7 +319,7 @@ function addenv(cmd::Cmd, pairs::Pair{<:AbstractString}...; inherit::Bool = true
 end
 
 function addenv(cmd::Cmd, env::Vector{<:AbstractString}; inherit::Bool = true)
-    return addenv(cmd, Dict(k => v for (k, v) in eachsplit.(env, "=")); inherit)
+    return addenv(cmd, Dict(k => v for (k, v) in splitenv.(env)); inherit)
 end
 
 """
@@ -453,7 +471,7 @@ function cmd_gen(parsed)
         (ignorestatus, flags, env, dir) = (cmd.ignorestatus, cmd.flags, cmd.env, cmd.dir)
         append!(args, cmd.exec)
         for arg in tail(parsed)
-            append!(args, arg_gen(arg...)::Vector{String})
+            append!(args, Base.invokelatest(arg_gen, arg...)::Vector{String})
         end
         return Cmd(Cmd(args), ignorestatus, flags, env, dir)
     else
@@ -462,6 +480,12 @@ function cmd_gen(parsed)
         end
         return Cmd(args)
     end
+end
+
+@assume_effects :effect_free :terminates_globally :noub function cmd_gen(
+    parsed::Tuple{Vararg{Tuple{Vararg{Union{String, SubString{String}}}}}}
+)
+    return @invoke cmd_gen(parsed::Any)
 end
 
 """

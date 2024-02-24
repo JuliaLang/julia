@@ -42,6 +42,8 @@ end
     cumsum!(B, A; dims::Integer)
 
 Cumulative sum of `A` along the dimension `dims`, storing the result in `B`. See also [`cumsum`](@ref).
+
+$(_DOCS_ALIASING_WARNING)
 """
 cumsum!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(add_sum, B, A, dims=dims)
@@ -150,6 +152,8 @@ cumsum(itr) = accumulate(add_sum, itr)
 
 Cumulative product of `A` along the dimension `dims`, storing the result in `B`.
 See also [`cumprod`](@ref).
+
+$(_DOCS_ALIASING_WARNING)
 """
 cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
     accumulate!(mul_prod, B, A, dims=dims)
@@ -159,6 +163,8 @@ cumprod!(B::AbstractArray{T}, A; dims::Integer) where {T} =
 
 Cumulative product of a vector `x`, storing the result in `y`.
 See also [`cumprod`](@ref).
+
+$(_DOCS_ALIASING_WARNING)
 """
 cumprod!(y::AbstractVector, x::AbstractVector) = cumprod!(y, x, dims=1)
 
@@ -280,7 +286,7 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
     elseif keys(nt) === (:init,)
         out = similar(A, promote_op(op, typeof(nt.init), eltype(A)))
     else
-        throw(ArgumentError("acccumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
+        throw(ArgumentError("accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
     accumulate!(op, out, A; dims=dims, kw...)
 end
@@ -300,6 +306,8 @@ end
 Cumulative operation `op` on `A` along the dimension `dims`, storing the result in `B`.
 Providing `dims` is optional for vectors.  If the keyword argument `init` is given, its
 value is used to instantiate the accumulation.
+
+$(_DOCS_ALIASING_WARNING)
 
 See also [`accumulate`](@ref), [`cumsum!`](@ref), [`cumprod!`](@ref).
 
@@ -341,7 +349,7 @@ function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
     elseif keys(kw) === (:init,)
         _accumulate!(op, B, A, dims, Some(nt.init))
     else
-        throw(ArgumentError("acccumulate! does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
+        throw(ArgumentError("accumulate! does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
 end
 

@@ -51,6 +51,23 @@ tag = "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
+for u in Any[
+    Union{Int, UInt},
+    Union{Nothing, Vector{Tuple{String, Tuple{Char, Char}}}},
+    Union{Char, UInt8, UInt},
+    Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
+    Union{Missing, Nothing}
+]
+    @test InteractiveUtils.is_expected_union(u)
+end
+
+for u in Any[
+    Union{Nothing, Tuple{Vararg{Char}}},
+    Union{Missing, Array},
+    Union{Int, Tuple{Any, Int}}
+]
+    @test !InteractiveUtils.is_expected_union(u)
+end
 mutable struct Stable{T,N}
     A::Array{T,N}
 end
@@ -212,7 +229,7 @@ module Tmp14173
 end
 varinfo(Tmp14173) # warm up
 const MEMDEBUG = ccall(:jl_is_memdebug, Bool, ())
-@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 100000)
+@test @allocated(varinfo(Tmp14173)) < (MEMDEBUG ? 300000 : 125000)
 
 # PR #24997: test that `varinfo` doesn't fail when encountering `missing`
 module A
@@ -245,7 +262,7 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
 # issue #13264
-@test (@which vcat(1...)).name == :vcat
+@test (@which vcat(1...)).name === :vcat
 
 # PR #28122, issue #25474
 @test (@which [1][1]).name === :getindex
@@ -267,7 +284,7 @@ try
     @which x = 1
     error("unexpected")
 catch err13464
-    @test startswith(err13464.msg, "expression is not a function call, or is too complex")
+    @test startswith(err13464.msg, "expression is not a function call")
 end
 
 module MacroTest
@@ -313,8 +330,10 @@ let _true = Ref(true), f, g, h
 end
 
 # manually generate a broken function, which will break codegen
-# and make sure Julia doesn't crash
-@eval @noinline @Base.constprop :none f_broken_code() = 0
+# and make sure Julia doesn't crash (when using a non-asserts build)
+is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+if !is_asserts()
+@eval @noinline Base.@constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
        src.code = Any[
@@ -328,9 +347,9 @@ _true = true
 # and show that we can still work around it
 @noinline g_broken_code() = _true ? 0 : h_broken_code()
 @noinline h_broken_code() = (g_broken_code(); f_broken_code())
-let err = tempname(),
+let errf = tempname(),
     old_stderr = stderr,
-    new_stderr = open(err, "w")
+    new_stderr = open(errf, "w")
     try
         redirect_stderr(new_stderr)
         println(new_stderr, "start")
@@ -343,24 +362,27 @@ let err = tempname(),
     finally
         redirect_stderr(old_stderr)
         close(new_stderr)
-        let errstr = read(err, String)
+        let errstr = read(errf, String)
             @test startswith(errstr, """start
                 end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
-                ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """) || errstr
             @test !endswith(errstr, "\nend\n") || errstr
         end
-        rm(err)
+        rm(errf)
     end
+end
 end
 
 # Issue #33163
 A33163(x; y) = x + y
 B33163(x) = x
-@test (@code_typed A33163(1, y=2))[1].inferred
-@test !(@code_typed optimize=false A33163(1, y=2))[1].inferred
-@test !(@code_typed optimize=false B33163(1))[1].inferred
+let
+    (@code_typed A33163(1, y=2))[1]
+    (@code_typed optimize=false A33163(1, y=2))[1]
+    (@code_typed optimize=false B33163(1))[1]
+end
 
 @test_throws MethodError (@code_lowered wrongkeyword=true 3 + 4)
 
@@ -373,7 +395,7 @@ struct A14637
     x
 end
 a14637 = A14637(0)
-@test (@which a14637.x).name == :getproperty
+@test (@which a14637.x).name === :getproperty
 @test (@functionloc a14637.x)[2] isa Integer
 
 # Issue #28615
@@ -383,14 +405,22 @@ a14637 = A14637(0)
 @test (@code_typed max.(Ref(true).x))[2] == Bool
 @test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
 
+# Issue # 45889
+@test !isempty(@code_typed 3 .+ 6)
+@test !isempty(@code_typed 3 .+ 6 .+ 7)
+@test !isempty(@code_typed optimize=false (.- [3,4]))
+@test !isempty(@code_typed optimize=false (6 .- [3,4]))
+@test !isempty(@code_typed optimize=false (.- 0.5))
+
 # Issue #36261
 @test (@code_typed max.(1 .+ 3, 5 - 7))[2] == Int
 f36261(x,y) = 3x + 4y
 A36261 = Float64[1.0, 2.0, 3.0]
-@test (@code_typed f36261.(A36261, pi))[1].inferred
-@test (@code_typed f36261.(A36261, 1 .+ pi))[1].inferred
-@test (@code_typed f36261.(A36261, 1 + pi))[1].inferred
-
+let
+    @code_typed f36261.(A36261, pi)[1]
+    @code_typed f36261.(A36261, 1 .+ pi)[1]
+    @code_typed f36261.(A36261, 1 + pi)[1]
+end
 
 module ReflectionTest
 using Test, Random, InteractiveUtils
@@ -432,6 +462,8 @@ end # module ReflectionTest
 
 @test_throws ArgumentError("argument is not a generic function") code_llvm(===, Tuple{Int, Int})
 @test_throws ArgumentError("argument is not a generic function") code_native(===, Tuple{Int, Int})
+@test_throws ErrorException("argument tuple type must contain only types") code_native(sum, (Int64,1))
+@test_throws ErrorException("expected tuple type") code_native(sum, Vector{Int64})
 
 # Issue #18883, code_llvm/code_native for generated functions
 @generated f18883() = nothing
@@ -579,7 +611,7 @@ file, ln = functionloc(versioninfo, Tuple{})
     @test e isa MethodError
     m = @which versioninfo()
     s = sprint(showerror, e)
-    m = match(Regex("at (.*?):$(m.line)"), s)
+    m = match(Regex("@ .+ (.*?):$(m.line)"), s)
     @test isfile(expanduser(m.captures[1]))
 
     g() = x
@@ -608,13 +640,14 @@ end
     export B41010
 
     ms = methodswith(A41010, @__MODULE__) |> collect
-    @test ms[1].name == :B41010
+    @test ms[1].name === :B41010
 end
 
 # macro options should accept both literals and variables
 let
     opt = false
-    @test !(first(@code_typed optimize=opt sum(1:10)).inferred)
+    @test length(first(@code_typed optimize=opt sum(1:10)).code) ==
+        length((@code_lowered sum(1:10)).code)
 end
 
 @testset "@time_imports" begin
@@ -641,7 +674,7 @@ end
                 buf = read(fname)
                 rm(fname)
 
-                @test occursin("ms  Foo3242\n", String(buf))
+                @test occursin("ms  Foo3242", String(buf))
 
             finally
                 filter!((≠)(dir), LOAD_PATH)
@@ -669,4 +702,33 @@ let # `default_tt` should work with any function with one method
     @test (code_native(devnull, function (a::Int)
         sin(a)
     end); true)
+end
+
+@testset "code_llvm on opaque_closure" begin
+    let ci = code_typed(+, (Int, Int))[1][1]
+        ir = Core.Compiler.inflate_ir(ci)
+        oc = Core.OpaqueClosure(ir)
+        @test (code_llvm(devnull, oc, Tuple{Int, Int}); true)
+        let io = IOBuffer()
+            code_llvm(io, oc, Tuple{})
+            @test occursin(InteractiveUtils.OC_MISMATCH_WARNING, String(take!(io)))
+        end
+    end
+end
+
+@testset "begin/end in gen_call_with_extracted_types users" begin
+    mktemp() do f, io
+        redirect_stdout(io) do
+            a = [1,2]
+            @test (@code_typed a[1:end]).second == Vector{Int}
+            @test (@code_llvm a[begin:2]) === nothing
+            @test (@code_native a[begin:end]) === nothing
+        end
+    end
+end
+
+@test Base.infer_effects(sin, (Int,)) == InteractiveUtils.@infer_effects sin(42)
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(InteractiveUtils))
 end

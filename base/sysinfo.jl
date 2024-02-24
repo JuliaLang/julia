@@ -20,6 +20,8 @@ export BINDIR,
        loadavg,
        free_memory,
        total_memory,
+       free_physical_memory,
+       total_physical_memory,
        isapple,
        isbsd,
        isdragonfly,
@@ -31,24 +33,26 @@ export BINDIR,
        iswindows,
        isjsvm,
        isexecutable,
+       isreadable,
+       iswriteable,
+       username,
        which
 
 import ..Base: show
 
-global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
 """
-    Sys.BINDIR
+    Sys.BINDIR::String
 
 A string containing the full path to the directory containing the `julia` executable.
 """
-:BINDIR
+global BINDIR::String = ccall(:jl_get_julia_bindir, Any, ())::String
 
 """
-    Sys.STDLIB
+    Sys.STDLIB::String
 
 A string containing the full path to the directory containing the `stdlib` packages.
 """
-STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
@@ -56,7 +60,7 @@ const BUILD_STDLIB_PATH = STDLIB
 # helper to avoid triggering precompile warnings
 
 """
-    Sys.CPU_THREADS
+    Sys.CPU_THREADS::Int
 
 The number of logical CPU cores available in the system, i.e. the number of threads
 that the CPU can run concurrently. Note that this is not necessarily the number of
@@ -65,36 +69,76 @@ CPU cores, for example, in the presence of
 
 See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
 """
-CPU_THREADS = 1 # for bootstrap, changed on startup
+global CPU_THREADS::Int = 1 # for bootstrap, changed on startup
 
 """
-    Sys.ARCH
+    Sys.ARCH::Symbol
 
 A symbol representing the architecture of the build configuration.
 """
-const ARCH = ccall(:jl_get_ARCH, Any, ())
+const ARCH = ccall(:jl_get_ARCH, Any, ())::Symbol
 
 
 """
-    Sys.KERNEL
+    Sys.KERNEL::Symbol
 
 A symbol representing the name of the operating system, as returned by `uname` of the build configuration.
 """
-const KERNEL = ccall(:jl_get_UNAME, Any, ())
+const KERNEL = ccall(:jl_get_UNAME, Any, ())::Symbol
 
 """
-    Sys.MACHINE
+    Sys.MACHINE::String
 
 A string containing the build triple.
 """
-const MACHINE = Base.MACHINE
+const MACHINE = Base.MACHINE::String
 
 """
-    Sys.WORD_SIZE
+    Sys.WORD_SIZE::Int
 
 Standard word size on the current machine, in bits.
 """
 const WORD_SIZE = Core.sizeof(Int) * 8
+
+"""
+    Sys.SC_CLK_TCK:
+
+The number of system "clock ticks" per second, corresponding to `sysconf(_SC_CLK_TCK)` on
+POSIX systems, or `0` if it is unknown.
+
+CPU times, e.g. as returned by `Sys.cpu_info()`, are in units of ticks, i.e. units of `1 / Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`.
+"""
+global SC_CLK_TCK::Clong
+
+"""
+    Sys.CPU_NAME::String
+
+A string representing the name of CPU.
+
+# Examples
+For example, `Sys.CPU_NAME` might equal `"tigerlake"` on an
+[Intel Core "Tiger Lake" CPU](https://en.wikipedia.org/wiki/Tiger_Lake),
+or `"apple-m1"` on an [Apple M1 CPU](https://en.wikipedia.org/wiki/Apple_M1).
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+"""
+global CPU_NAME::String
+
+"""
+    Sys.JIT::String
+
+A string representing the specific Just-In-Time (JIT) compiler being utilized in the current runtime.
+
+# Examples
+Currently, this equals `"ORCJIT"` for the LLVM "ORC" ("On-Request Compilation") JIT library:
+```jldoctest
+julia> Sys.JIT
+"ORCJIT"
+```
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+"""
+global JIT::String
 
 function __init__()
     env_threads = nothing
@@ -122,7 +166,7 @@ end
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    global STDLIB = abspath(BINDIR::String, "..", "share", "julia", "stdlib", vers)
+    global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
     nothing
 end
 
@@ -135,6 +179,24 @@ mutable struct UV_cpu_info_t
     cpu_times!idle::UInt64
     cpu_times!irq::UInt64
 end
+
+"""
+    Sys.CPUinfo
+
+The `CPUinfo` type is a mutable struct with the following fields:
+- `model::String`: CPU model information.
+- `speed::Int32`: CPU speed (in MHz).
+- `cpu_times!user::UInt64`: Time spent in user mode. CPU state shows CPU time used by user space processes.
+- `cpu_times!nice::UInt64`: Time spent in nice mode. CPU state is a subset of the "user" state and shows the CPU time used by processes that have a positive niceness, meaning a lower priority than other tasks.
+- `cpu_times!sys::UInt64`: Time spent in system mode. CPU state shows the amount of CPU time used by the kernel.
+- `cpu_times!idle::UInt64`: Time spent in idle mode. CPU state shows the CPU time that's not actively being used.
+- `cpu_times!irq::UInt64`: Time spent handling interrupts. CPU state shows the amount of time the CPU has been servicing hardware interrupts.
+
+The times are in units of `1/Sys.SC_CLK_TCK` seconds if `Sys.SC_CLK_TCK > 0`; otherwise they are in
+unknown units.
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+"""
 mutable struct CPUinfo
     model::String
     speed::Int32
@@ -148,6 +210,8 @@ end
 CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
     info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
     info.cpu_times!idle, info.cpu_times!irq)
+
+public CPUinfo
 
 function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::AbstractString="    ")
     tck = SC_CLK_TCK
@@ -170,7 +234,7 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
     end
 end
 
-show(io::IO, info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
+show(io::IO, ::MIME"text/plain", info::CPUinfo) = _show_cpuinfo(io, info, true, "    ")
 
 function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     if j-i < 9
@@ -197,6 +261,17 @@ function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     println(io)
 end
 
+"""
+    Sys.cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo}=cpu_info())
+
+Print a summary of CPU information to the `io` stream (defaulting to [`stdout`](@ref)), organizing and displaying aggregated data for CPUs with the same model, for a given array of `CPUinfo` data structures
+describing a set of CPUs (which defaults to the return value of the [`Sys.cpu_info`](@ref) function).
+
+The summary includes aggregated information for each distinct CPU model,
+providing details such as average CPU speed and total time spent in different modes (user, nice, sys, idle, irq) across all cores with the same model.
+
+Note: Included in the detailed system information via `versioninfo(verbose=true)`.
+"""
 function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
     first = 1
@@ -209,6 +284,18 @@ function cpu_summary(io::IO=stdout, cpu::AbstractVector{CPUinfo} = cpu_info())
     _cpu_summary(io, cpu, first, length(cpu))
 end
 
+"""
+    Sys.cpu_info()
+
+Return a vector of `CPUinfo` objects, where each object represents information about a CPU core.
+
+This is pretty-printed in a tabular format by `Sys.cpu_summary`, which is included in the output
+of `versioninfo(verbose=true)`, so most users will not need to access the `CPUinfo`
+data structures directly.
+
+The function provides information about each CPU, including model, speed, and usage statistics such as user time, nice time, system time, idle time, and interrupt time.
+
+"""
 function cpu_info()
     UVcpus = Ref{Ptr{UV_cpu_info_t}}()
     count = Ref{Int32}()
@@ -246,18 +333,44 @@ function loadavg()
 end
 
 """
+    Sys.free_physical_memory()
+
+Get the free memory of the system in bytes. The entire amount may not be available to the
+current process; use `Sys.free_memory()` for the actually available amount.
+"""
+free_physical_memory() = ccall(:uv_get_free_memory, UInt64, ())
+
+"""
+    Sys.total_physical_memory()
+
+Get the total memory in RAM (including that which is currently used) in bytes. The entire
+amount may not be available to the current process; see `Sys.total_memory()`.
+"""
+total_physical_memory() = ccall(:uv_get_total_memory, UInt64, ())
+
+"""
     Sys.free_memory()
 
 Get the total free memory in RAM in bytes.
 """
-free_memory() = ccall(:uv_get_free_memory, UInt64, ())
+free_memory() = ccall(:uv_get_available_memory, UInt64, ())
 
 """
     Sys.total_memory()
 
 Get the total memory in RAM (including that which is currently used) in bytes.
+This amount may be constrained, e.g., by Linux control groups. For the unconstrained
+amount, see `Sys.total_physical_memory()`.
 """
-total_memory() = ccall(:uv_get_total_memory, UInt64, ())
+function total_memory()
+    constrained = ccall(:uv_get_constrained_memory, UInt64, ())
+    physical = total_physical_memory()
+    if 0 < constrained <= physical
+        return constrained
+    else
+        return physical
+    end
+end
 
 """
     Sys.get_process_title()
@@ -305,7 +418,7 @@ function isunix(os::Symbol)
     elseif os === :Emscripten
         # Emscripten implements the POSIX ABI and provides traditional
         # Unix-style operating system functions such as file system support.
-        # Therefor, we consider it a unix, even though this need not be
+        # Therefore, we consider it a unix, even though this need not be
         # generally true for a jsvm embedding.
         return true
     else
@@ -446,18 +559,79 @@ const WINDOWS_VISTA_VER = v"6.0"
 Return `true` if the given `path` has executable permissions.
 
 !!! note
+    This permission may change before the user executes `path`,
+    so it is recommended to execute the file and handle the error if that fails,
+    rather than calling `isexecutable` first.
+
+!!! note
     Prior to Julia 1.6, this did not correctly interrogate filesystem
     ACLs on Windows, therefore it would return `true` for any
     file.  From Julia 1.6 on, it correctly determines whether the
     file is marked as executable or not.
+
+See also [`ispath`](@ref), [`isreadable`](@ref), [`iswriteable`](@ref).
 """
 function isexecutable(path::String)
     # We use `access()` and `X_OK` to determine if a given path is
     # executable by the current user.  `X_OK` comes from `unistd.h`.
     X_OK = 0x01
-    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, X_OK) == 0
 end
 isexecutable(path::AbstractString) = isexecutable(String(path))
+
+"""
+    Sys.isreadable(path::String)
+
+Return `true` if the access permissions for the given `path` permitted reading by the current user.
+
+!!! note
+    This permission may change before the user calls `open`,
+    so it is recommended to just call `open` alone and handle the error if that fails,
+    rather than calling `isreadable` first.
+
+!!! note
+    Currently this function does not correctly interrogate filesystem
+    ACLs on Windows, therefore it can return wrong results.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+
+See also [`ispath`](@ref), [`isexecutable`](@ref), [`iswriteable`](@ref).
+"""
+function isreadable(path::String)
+    # We use `access()` and `R_OK` to determine if a given path is
+    # readable by the current user.  `R_OK` comes from `unistd.h`.
+    R_OK = 0x04
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, R_OK) == 0
+end
+isreadable(path::AbstractString) = isreadable(String(path))
+
+"""
+    Sys.iswriteable(path::String)
+
+Return `true` if the access permissions for the given `path` permitted writing by the current user.
+
+!!! note
+    This permission may change before the user calls `open`,
+    so it is recommended to just call `open` alone and handle the error if that fails,
+    rather than calling `iswriteable` first.
+
+!!! note
+    Currently this function does not correctly interrogate filesystem
+    ACLs on Windows, therefore it can return wrong results.
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+
+See also [`ispath`](@ref), [`isexecutable`](@ref), [`isreadable`](@ref).
+"""
+function iswriteable(path::String)
+    # We use `access()` and `W_OK` to determine if a given path is
+    # writeable by the current user.  `W_OK` comes from `unistd.h`.
+    W_OK = 0x02
+    return ccall(:jl_fs_access, Cint, (Cstring, Cint), path, W_OK) == 0
+end
+iswriteable(path::AbstractString) = iswriteable(String(path))
 
 """
     Sys.which(program_name::String)
@@ -514,9 +688,21 @@ function which(program_name::String)
     for path_dir in path_dirs
         for pname in program_names
             program_path = joinpath(path_dir, pname)
-            # If we find something that matches our name and we can execute
-            if isfile(program_path) && isexecutable(program_path)
-                return program_path
+            try
+                # If we find something that matches our name and we can execute
+                if isfile(program_path) && isexecutable(program_path)
+                    return program_path
+                end
+            catch e
+                # If we encounter a permission error, we skip this directory
+                # and continue to the next directory in the PATH variable.
+                if isa(e, Base.IOError) && e.code == Base.UV_EACCES
+                    # Permission denied, continue searching
+                    continue
+                else
+                    # Rethrow the exception if it's not a permission error
+                    rethrow(e)
+                end
             end
         end
     end
@@ -525,5 +711,28 @@ function which(program_name::String)
     nothing
 end
 which(program_name::AbstractString) = which(String(program_name))
+
+"""
+    Sys.username() -> String
+
+Return the username for the current user. If the username cannot be determined
+or is empty, this function throws an error.
+
+To retrieve a username that is overridable via an environment variable,
+e.g., `USER`, consider using
+```julia
+user = get(Sys.username, ENV, "USER")
+```
+
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
+
+See also [`homedir`](@ref).
+"""
+function username()
+    pw = Libc.getpw()
+    isempty(pw.username) && Base.uv_error("username", Base.UV_ENOENT)
+    return pw.username
+end
 
 end # module Sys

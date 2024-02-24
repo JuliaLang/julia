@@ -97,7 +97,9 @@ dimg  = randn(n)/2
             dlu = convert.(eltya, [1, 1])
             dia = convert.(eltya, [-2, -2, -2])
             tri = Tridiagonal(dlu, dia, dlu)
-            @test_throws ArgumentError lu!(tri)
+            L = lu(tri)
+            @test lu!(tri) == L
+            @test UpperTriangular(tri) == L.U
         end
     end
     @testset for eltyb in (Float32, Float64, ComplexF32, ComplexF64, Int)
@@ -224,6 +226,11 @@ dimg  = randn(n)/2
     end
 end
 
+@testset "Small tridiagonal matrices" for T in (Float64, ComplexF64)
+    A = Tridiagonal(T[], T[1], T[])
+    @test inv(A) == A
+end
+
 @testset "Singular matrices" for T in (Float64, ComplexF64)
     A = T[1 2; 0 0]
     @test_throws SingularException lu(A)
@@ -238,9 +245,13 @@ end
     @test_throws ZeroPivotException lu!(copy(A), NoPivot(); check = true)
     @test !issuccess(lu(A, NoPivot(); check = false))
     @test !issuccess(lu!(copy(A), NoPivot(); check = false))
-    F = lu(A; check = false)
+    F = lu(A, NoPivot(); check = false)
     @test sprint((io, x) -> show(io, "text/plain", x), F) ==
         "Failed factorization of type $(typeof(F))"
+    F2 = lu(A; allowsingular = true)
+    @test !issuccess(F2)
+    @test issuccess(F2, allowsingular = true)
+    @test occursin("U factor (rank-deficient)", sprint((io, x) -> show(io, "text/plain", x), F2))
 end
 
 @testset "conversion" begin
@@ -296,7 +307,7 @@ end
         show(bf, "text/plain", lu(Matrix(I, 4, 4)))
         seekstart(bf)
         @test String(take!(bf)) == """
-LinearAlgebra.LU{Float64, Matrix{Float64}}
+$(LinearAlgebra.LU){Float64, Matrix{Float64}, Vector{$Int}}
 L factor:
 4×4 Matrix{Float64}:
  1.0  0.0  0.0  0.0
@@ -386,6 +397,15 @@ end
         B = randn(elty, 5, 5)
         @test rdiv!(transform(A), transform(lu(B))) ≈ transform(C) / transform(B)
     end
+    for elty in (Float32, Float64, ComplexF64), transF in (identity, transpose),
+            transB in (transpose, adjoint), transT in (identity, complex)
+        A = randn(elty, 5, 5)
+        F = lu(A)
+        b = randn(transT(elty), 5)
+        @test rdiv!(transB(copy(b)), transF(F)) ≈ transB(b) / transF(F) ≈ transB(b) / transF(A)
+        B = randn(transT(elty), 5, 5)
+        @test rdiv!(copy(B), transF(F)) ≈ B / transF(F) ≈ B / transF(A)
+    end
 end
 
 @testset "transpose(A) / lu(B)' should not overwrite A (#36657)" begin
@@ -424,6 +444,46 @@ end
             @test lu(A, pivot; check = false) isa LU{Float64, Tridiagonal{Float64, Vector{Float64}}}
         end
     end
+end
+
+@testset "can push to vector after 3-arg ldiv! (#43507)" begin
+    u = rand(3)
+    A = rand(3,3)
+    b = rand(3)
+    ldiv!(u,lu(A),b)
+    push!(b,4.0)
+    @test length(b) == 4
+end
+
+@testset "NaN matrix should throw error" begin
+    for eltya in (NaN16, NaN32, NaN64, BigFloat(NaN))
+        r = fill(eltya, 2, 3)
+        c = fill(complex(eltya, eltya), 2, 3)
+        @test_throws ArgumentError lu(r)
+        @test_throws ArgumentError lu(c)
+    end
+end
+
+@testset "more generic ldiv! #35419" begin
+    A = rand(3, 3)
+    b = rand(3)
+    @test A * ldiv!(lu(A), Base.ReshapedArray(copy(b)', (3,), ())) ≈ b
+end
+
+@testset "generic lu!" begin
+    A = rand(3,3); B = deepcopy(A); C = A[2:3,2:3]
+    Asub1 = @view(A[2:3,2:3])
+    F1 = lu!(Asub1)
+    Asub2 = @view(B[[2,3],[2,3]])
+    F2 = lu!(Asub2)
+    @test Matrix(F1) ≈ Matrix(F2) ≈ C
+end
+
+@testset "matrix with Nonfinite" begin
+    lu(fill(NaN, 2, 2), check=false)
+    lu(fill(Inf, 2, 2), check=false)
+    LinearAlgebra.generic_lufact!(fill(NaN, 2, 2), check=false)
+    LinearAlgebra.generic_lufact!(fill(Inf, 2, 2), check=false)
 end
 
 end # module TestLU

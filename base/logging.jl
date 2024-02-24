@@ -42,7 +42,7 @@ function handle_message end
 """
     shouldlog(logger, level, _module, group, id)
 
-Return true when `logger` accepts a message at `level`, generated for
+Return `true` when `logger` accepts a message at `level`, generated for
 `_module`, `group` and with unique log identifier `id`.
 """
 function shouldlog end
@@ -58,7 +58,7 @@ function min_enabled_level end
 """
     catch_exceptions(logger)
 
-Return true if the logger should catch exceptions which happen during log
+Return `true` if the logger should catch exceptions which happen during log
 record construction.  By default, messages are caught
 
 By default all exceptions are caught to prevent log message generation from
@@ -132,6 +132,11 @@ isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
 -(level::LogLevel, inc::Integer) = LogLevel(level.level-inc)
 convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
+"""
+    BelowMinLevel
+
+Alias for [`LogLevel(-1_000_001)`](@ref LogLevel).
+"""
 const BelowMinLevel = LogLevel(-1000001)
 """
     Debug
@@ -157,16 +162,28 @@ const Warn          = LogLevel(    1000)
 Alias for [`LogLevel(2000)`](@ref LogLevel).
 """
 const Error         = LogLevel(    2000)
+"""
+    AboveMaxLevel
+
+Alias for [`LogLevel(1_000_001)`](@ref LogLevel).
+"""
 const AboveMaxLevel = LogLevel( 1000001)
 
+# Global log limiting mechanism for super fast but inflexible global log limiting.
+const _min_enabled_level = Ref{LogLevel}(Debug)
+
+# stored as LogLevel => (name, color)
+const custom_log_levels = Dict{LogLevel,Tuple{Symbol,Union{Symbol,Int}}}()
+
 function show(io::IO, level::LogLevel)
-    if     level == BelowMinLevel  print(io, "BelowMinLevel")
-    elseif level == Debug          print(io, "Debug")
-    elseif level == Info           print(io, "Info")
-    elseif level == Warn           print(io, "Warn")
-    elseif level == Error          print(io, "Error")
-    elseif level == AboveMaxLevel  print(io, "AboveMaxLevel")
-    else                           print(io, "LogLevel($(level.level))")
+    if     haskey(custom_log_levels, level) print(io, custom_log_levels[level][1])
+    elseif level == BelowMinLevel           print(io, "BelowMinLevel")
+    elseif level == Debug                   print(io, "Debug")
+    elseif level == Info                    print(io, "Info")
+    elseif level == Warn                    print(io, "Warn")
+    elseif level == Error                   print(io, "Error")
+    elseif level == AboveMaxLevel           print(io, "AboveMaxLevel")
+    else                                    print(io, "LogLevel($(level.level))")
     end
 end
 
@@ -319,6 +336,15 @@ function issimplekw(@nospecialize val)
     return false
 end
 
+# helper function to get the current logger, if enabled for the specified message type
+@noinline Base.@constprop :none function current_logger_for_env(std_level::LogLevel, group, _module)
+    logstate = @inline current_logstate()
+    if std_level >= logstate.min_enabled_level || env_override_minlevel(group, _module)
+        return logstate.logger
+    end
+    return nothing
+end
+
 # Generate code for logging macros
 function logmsg_code(_module, file, line, level, message, exs...)
     @nospecialize
@@ -335,12 +361,12 @@ function logmsg_code(_module, file, line, level, message, exs...)
         checkerrors = nothing
         for kwarg in reverse(log_data.kwargs)
             if isa(kwarg.args[2].args[1], Symbol)
-                checkerrors = Expr(:if, Expr(:isdefined, kwarg.args[2]), checkerrors, Expr(:call, Expr(:core, :UndefVarError), QuoteNode(kwarg.args[2].args[1])))
+                checkerrors = Expr(:if, Expr(:isdefined, kwarg.args[2]), checkerrors, Expr(:call, Expr(:core, :UndefVarError), QuoteNode(kwarg.args[2].args[1]), QuoteNode(:local)))
             end
         end
         if isa(message, Symbol)
             message = esc(message)
-            checkerrors = Expr(:if, Expr(:isdefined, message), checkerrors, Expr(:call, Expr(:core, :UndefVarError), QuoteNode(message.args[1])))
+            checkerrors = Expr(:if, Expr(:isdefined, message), checkerrors, Expr(:call, Expr(:core, :UndefVarError), QuoteNode(message.args[1]), QuoteNode(:local)))
         end
         logrecord = quote
             let err = $checkerrors
@@ -349,7 +375,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     kwargs = (;$(log_data.kwargs...))
                     true
                 else
-                    logging_error(logger, level, _module, group, id, file, line, err, false)
+                    @invokelatest logging_error(logger, level, _module, group, id, file, line, err, false)
                     false
                 end
             end
@@ -361,7 +387,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 kwargs = (;$(log_data.kwargs...))
                 true
             catch err
-                logging_error(logger, level, _module, group, id, file, line, err, true)
+                @invokelatest logging_error(logger, level, _module, group, id, file, line, err, true)
                 false
             end
         end
@@ -369,20 +395,24 @@ function logmsg_code(_module, file, line, level, message, exs...)
     return quote
         let
             level = $level
-            std_level = convert(LogLevel, level)
-            if std_level >= _min_enabled_level[]
+            # simplify std_level code emitted, if we know it is one of our global constants
+            std_level = $(level isa Symbol ? :level : :(level isa $LogLevel ? level : convert($LogLevel, level)::$LogLevel))
+            if std_level >= $(_min_enabled_level)[]
                 group = $(log_data._group)
                 _module = $(log_data._module)
-                logger = current_logger_for_env(std_level, group, _module)
+                logger = $(current_logger_for_env)(std_level, group, _module)
                 if !(logger === nothing)
                     id = $(log_data._id)
                     # Second chance at an early bail-out (before computing the message),
                     # based on arbitrary logger-specific logic.
-                    if _invoked_shouldlog(logger, level, _module, group, id)
+                    if invokelatest($shouldlog, logger, level, _module, group, id)
                         file = $(log_data._file)
+                        if file isa String
+                            file = Base.fixup_stdlib_path(file)
+                        end
                         line = $(log_data._line)
                         local msg, kwargs
-                        $(logrecord) && handle_message(
+                        $(logrecord) && invokelatest($handle_message,
                             logger, level, msg, _module, group, id, file, line;
                             kwargs...)
                     end
@@ -442,7 +472,7 @@ function default_group_code(file)
         QuoteNode(default_group(file))  # precompute if we can
     else
         ref = Ref{Symbol}()  # memoized run-time execution
-        :(isassigned($ref) ? $ref[] : $ref[] = default_group(something($file, "")))
+        :(isassigned($ref) ? $ref[] : $ref[] = default_group(something($file, ""))::Symbol)
     end
 end
 
@@ -457,7 +487,7 @@ end
     msg = try
               "Exception while generating log record in module $_module at $filepath:$line"
           catch ex
-              "Exception handling log message: $ex"
+              LazyString("Exception handling log message: ", ex)
           end
     bt = real ? catch_backtrace() : backtrace()
     handle_message(
@@ -477,9 +507,6 @@ function logmsg_shim(level, message, _module, group, id, file, line, kwargs)
     nothing
 end
 
-# Global log limiting mechanism for super fast but inflexible global log limiting.
-const _min_enabled_level = Ref{LogLevel}(Debug)
-
 # LogState - a cache of data extracted from the logger, plus the logger itself.
 struct LogState
     min_enabled_level::LogLevel
@@ -488,31 +515,14 @@ end
 
 LogState(logger) = LogState(LogLevel(_invoked_min_enabled_level(logger)), logger)
 
+const CURRENT_LOGSTATE = ScopedValue{LogState}()
+
 function current_logstate()
-    logstate = current_task().logstate
-    return (logstate !== nothing ? logstate : _global_logstate)::LogState
+    maybe = @inline Base.ScopedValues.get(CURRENT_LOGSTATE)
+    return something(maybe, _global_logstate)::LogState
 end
 
-# helper function to get the current logger, if enabled for the specified message type
-@noinline Base.@constprop :none function current_logger_for_env(std_level::LogLevel, group, _module)
-    logstate = current_logstate()
-    if std_level >= logstate.min_enabled_level || env_override_minlevel(group, _module)
-        return logstate.logger
-    end
-    return nothing
-end
-
-function with_logstate(f::Function, logstate)
-    @nospecialize
-    t = current_task()
-    old = t.logstate
-    try
-        t.logstate = logstate
-        f()
-    finally
-        t.logstate = old
-    end
-end
+with_logstate(f::Function, logstate) = @with(CURRENT_LOGSTATE => logstate, f())
 
 #-------------------------------------------------------------------------------
 # Control of the current logger and early log filtering
@@ -583,6 +593,8 @@ end
 end
 
 
+global _global_logstate::LogState
+
 """
     global_logger()
 
@@ -606,7 +618,7 @@ end
 
 Execute `function`, directing all log messages to `logger`.
 
-# Example
+# Examples
 
 ```julia
 function test(x)
@@ -668,13 +680,13 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
         remaining > 0 || return
     end
     buf = IOBuffer()
-    stream = logger.stream
-    if !isopen(stream)
+    stream::IO = logger.stream
+    if !(isopen(stream)::Bool)
         stream = stderr
     end
     iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
-    msglines = eachsplit(chomp(string(message)::String), '\n')
+    msglines = eachsplit(chomp(convert(String, string(message))::String), '\n')
     msg1, rest = Iterators.peel(msglines)
     println(iob, "┌ ", levelstr, ": ", msg1)
     for msg in rest

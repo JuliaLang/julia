@@ -132,8 +132,20 @@ bimg  = randn(n,2)/2
         @testset "Lyapunov/Sylvester" begin
             x = lyap(a, a2)
             @test -a2 ≈ a*x + x*a'
+            y = lyap(a', a2')
+            @test y ≈ lyap(Array(a'), Array(a2'))
+            @test -a2' ≈ a'y + y*a
+            z = lyap(Tridiagonal(a)', Diagonal(a2))
+            @test z ≈ lyap(Array(Tridiagonal(a)'), Array(Diagonal(a2)))
+            @test -Diagonal(a2) ≈ Tridiagonal(a)'*z + z*Tridiagonal(a)
             x2 = sylvester(a[1:3, 1:3], a[4:n, 4:n], a2[1:3,4:n])
             @test -a2[1:3, 4:n] ≈ a[1:3, 1:3]*x2 + x2*a[4:n, 4:n]
+            y2 = sylvester(a[1:3, 1:3]', a[4:n, 4:n]', a2[4:n,1:3]')
+            @test y2 ≈ sylvester(Array(a[1:3, 1:3]'), Array(a[4:n, 4:n]'), Array(a2[4:n,1:3]'))
+            @test -a2[4:n, 1:3]' ≈ a[1:3, 1:3]'*y2 + y2*a[4:n, 4:n]'
+            z2 = sylvester(Tridiagonal(a[1:3, 1:3]), Diagonal(a[4:n, 4:n]), a2[1:3,4:n])
+            @test z2 ≈ sylvester(Array(Tridiagonal(a[1:3, 1:3])), Array(Diagonal(a[4:n, 4:n])), Array(a2[1:3,4:n]))
+            @test -a2[1:3, 4:n] ≈ Tridiagonal(a[1:3, 1:3])*z2 + z2*Diagonal(a[4:n, 4:n])
         end
 
         @testset "Matrix square root" begin
@@ -224,6 +236,15 @@ end
     M = [1 0 0; 0 1 0; 0 0 0]
     @test pinv(M,atol=1)== zeros(3,3)
     @test pinv(M,rtol=0.5)== M
+end
+
+@testset "Test inv of matrix of NaNs" begin
+    for eltya in (NaN16, NaN32, NaN32)
+        r = fill(eltya, 2, 2)
+        @test_throws ArgumentError inv(r)
+        c = fill(complex(eltya, eltya), 2, 2)
+        @test_throws ArgumentError inv(c)
+    end
 end
 
 @testset "test out of bounds triu/tril" begin
@@ -857,7 +878,7 @@ end
     end
 end
 
-@testset "matrix logarithm is type-inferrable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
+@testset "matrix logarithm is type-inferable" for elty in (Float32,Float64,ComplexF32,ComplexF64)
     A1 = randn(elty, 4, 4)
     @inferred Union{Matrix{elty},Matrix{complex(elty)}} log(A1)
 end
@@ -1007,8 +1028,8 @@ end
     @test lyap(1.0+2.0im, 3.0+4.0im) == -1.5 - 2.0im
 end
 
-@testset "Matrix to real power" for elty in (Float64, ComplexF64)
-# Tests proposed at Higham, Deadman: Testing Matrix Function Algorithms Using Identities, March 2014
+@testset "$elty Matrix to real power" for elty in (Float64, ComplexF64)
+    # Tests proposed at Higham, Deadman: Testing Matrix Function Algorithms Using Identities, March 2014
     #Aa : only positive real eigenvalues
     Aa = convert(Matrix{elty}, [5 4 2 1; 0 1 -1 -1; -1 -1 3 0; 1 1 -1 2])
 
@@ -1044,6 +1065,14 @@ end
         @test (A^(2/3))*(A^(1/3)) ≈ A
         @test (A^im)^(-im) ≈ A
     end
+
+    Tschurpow = Union{Matrix{real(elty)}, Matrix{complex(elty)}}
+    @test (@inferred Tschurpow LinearAlgebra.schurpow(Aa, 2.0)) ≈ Aa^2
+end
+
+@testset "BigFloat triangular real power" begin
+    A = Float64[3 1; 0 3]
+    @test A^(3/4) ≈ big.(A)^(3/4)
 end
 
 @testset "diagonal integer matrix to real power" begin
@@ -1192,6 +1221,11 @@ end
     @test exp(log(A2)) ≈ A2
 end
 
+@testset "sqrt of empty Matrix of type $T" for T in [Int,Float32,Float64,ComplexF32,ComplexF64]
+    @test sqrt(Matrix{T}(undef, 0, 0)) == Matrix{T}(undef, 0, 0)
+    @test_throws DimensionMismatch sqrt(Matrix{T}(undef, 0, 3))
+end
+
 struct TypeWithoutZero end
 Base.zero(::Type{TypeWithoutZero}) = TypeWithZero()
 struct TypeWithZero end
@@ -1201,6 +1235,54 @@ Base.:+(x::TypeWithZero, ::TypeWithoutZero) = x
 
 @testset "diagm for type with no zero" begin
     @test diagm(0 => [TypeWithoutZero()]) isa Matrix{TypeWithZero}
+end
+
+@testset "cbrt(A::AbstractMatrix{T})" begin
+    N = 10
+
+    # Non-square
+    A = randn(N,N+2)
+    @test_throws DimensionMismatch cbrt(A)
+
+    # Real valued diagonal
+    D = Diagonal(randn(N))
+    T = cbrt(D)
+    @test T*T*T ≈ D
+    @test eltype(D) == eltype(T)
+    # Real valued triangular
+    U = UpperTriangular(randn(N,N))
+    T = cbrt(U)
+    @test T*T*T ≈ U
+    @test eltype(U) == eltype(T)
+    L = LowerTriangular(randn(N,N))
+    T = cbrt(L)
+    @test T*T*T ≈ L
+    @test eltype(L) == eltype(T)
+    # Real valued symmetric
+    S =  (A -> (A+A')/2)(randn(N,N))
+    T = cbrt(Symmetric(S,:U))
+    @test T*T*T ≈ S
+    @test eltype(S) == eltype(T)
+    # Real valued symmetric
+    S =  (A -> (A+A')/2)(randn(N,N))
+    T = cbrt(Symmetric(S,:L))
+    @test T*T*T ≈ S
+    @test eltype(S) == eltype(T)
+    # Real valued Hermitian
+    S =  (A -> (A+A')/2)(randn(N,N))
+    T = cbrt(Hermitian(S,:U))
+    @test T*T*T ≈ S
+    @test eltype(S) == eltype(T)
+    # Real valued Hermitian
+    S =  (A -> (A+A')/2)(randn(N,N))
+    T = cbrt(Hermitian(S,:L))
+    @test T*T*T ≈ S
+    @test eltype(S) == eltype(T)
+    # Real valued arbitrary
+    A = randn(N,N)
+    T = cbrt(A)
+    @test T*T*T ≈ A
+    @test eltype(A) == eltype(T)
 end
 
 end # module TestDense
