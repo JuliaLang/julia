@@ -2902,27 +2902,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             end
 
             if cache_objects
-                try
-                    rename(tmppath_so, ocachefile::String; force=true)
-                catch e
-                    e isa IOError || rethrow()
-                    isfile(ocachefile::String) || rethrow()
-                    # Windows prevents renaming a file that is in use so if there is a Julia session started
-                    # with a package image loaded, we cannot rename that file.
-                    # The code belows append a `_i` to the name of the cache file where `i` is the smallest number such that
-                    # that cache file does not exist.
-                    ocachename, ocacheext = splitext(ocachefile::String)
-                    old_cachefiles = Set(readdir(cachepath))
-                    num = 1
-                    while true
-                        ocachefile = ocachename * "_$num" * ocacheext
-                        in(basename(ocachefile), old_cachefiles) || break
-                        num += 1
-                    end
-                    # TODO: Risk for a race here if some other process grabs this name before us
-                    cachefile = cachefile_from_ocachefile(ocachefile)
-                    rename(tmppath_so, ocachefile::String; force=true)
-                end
+                ocachefile = rename_unique_ocachefile(tmppath_so, ocachefile)
                 @static if Sys.isapple()
                     run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), Base.DevNull())
                 end
@@ -2943,6 +2923,27 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     else
         error("Failed to precompile $(repr("text/plain", pkg)) to $(repr(tmppath)).")
     end
+end
+
+function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 1)
+    try
+        rename(tmppath_so, ocachefile; force=true)
+    catch e
+        e isa IOError || rethrow()
+        # If `rm` was called on a dir containing a loaded DLL, we moved it to temp for cleanup
+        # on restart. However the old path cannot be used (UV_EACCES) while the DLL is loaded
+        if !isfile(ocachefile) && e.code != Base.UV_EACCES
+            rethrow()
+        end
+        # Windows prevents renaming a file that is in use so if there is a Julia session started
+        # with a package image loaded, we cannot rename that file.
+        # The code belows append a `_i` to the name of the cache file where `i` is the smallest number such that
+        # that cache file does not exist.
+        ocachename, ocacheext = splitext(ocachefile_orig)
+        ocachefile_unique = ocachename * "_$num" * ocacheext
+        ocachefile = rename_unique_ocachefile(tmppath_so, ocachefile_orig, ocachefile_unique, num + 1)
+    end
+    return ocachefile
 end
 
 function module_build_id(m::Module)
