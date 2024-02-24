@@ -39,6 +39,8 @@ Base.:(:)
 Base.range
 Base.OneTo
 Base.StepRangeLen
+Base.logrange
+Base.LogRange
 Base.:(==)
 Base.:(!=)
 Base.:(!==)
@@ -151,6 +153,7 @@ Base.Checked.checked_rem
 Base.Checked.checked_fld
 Base.Checked.checked_mod
 Base.Checked.checked_cld
+Base.Checked.checked_pow
 Base.Checked.add_with_overflow
 Base.Checked.sub_with_overflow
 Base.Checked.mul_with_overflow

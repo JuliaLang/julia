@@ -1465,7 +1465,7 @@ end
 end
 
 struct t_docs_abc end
-@test "t_docs_abc" in accessible(@__MODULE__)
+@test "t_docs_abc" in string.(accessible(@__MODULE__))
 
 # Call overloading issues #20087 and #44889
 """
@@ -1556,3 +1556,9 @@ Base.@ccallable c51586_long()::Int = 3
 
 @test docstrings_equal(@doc(c51586_short()), doc"ensure we can document ccallable functions")
 @test docstrings_equal(@doc(c51586_long()), doc"ensure we can document ccallable functions")
+
+@testset "Docs docstrings" begin
+    undoc = Docs.undocumented_names(Docs)
+    @test_broken isempty(undoc)
+    @test undoc == [Symbol("@var")]
+end

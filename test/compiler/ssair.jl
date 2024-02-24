@@ -92,18 +92,15 @@ let cfg = CFG(BasicBlock[
     end
 end
 
-# test >:
-let
-    f(a, b) = a >: b
-    code_typed(f, Tuple{Any, Any})
-    # XXX: missing @test
+# test code execution with the default compile-mode
+module CompilerExecTest
+include("interpreter_exec.jl")
 end
 
-for compile in ("min", "yes")
-    cmd = `$(Base.julia_cmd()) --compile=$compile interpreter_exec.jl`
-    if !success(pipeline(Cmd(cmd, dir=@__DIR__); stdout=stdout, stderr=stderr))
-        error("Interpreter test failed, cmd : $cmd")
-    end
+# test code execution with the interpreter mode (compile=min)
+module InterpreterExecTest
+Base.Experimental.@compiler_options compile=min
+include("interpreter_exec.jl")
 end
 
 # PR #32145
@@ -549,21 +546,23 @@ import Core.Compiler: NewInstruction, insert_node!
 let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         a^b
     end |> only |> first
-    @test length(ir.stmts) == 2
-    @test Meta.isexpr(ir.stmts[1][:stmt], :invoke)
+    nstmts = length(ir.stmts)
+    invoke_idx = findfirst(@nospecialize(stmt)->Meta.isexpr(stmt, :invoke), ir.stmts.stmt)
+    @test invoke !== nothing
 
-    newssa = insert_node!(ir, SSAValue(1), NewInstruction(Expr(:call, println, SSAValue(1)), Nothing), #=attach_after=#true)
+    invoke_ssa = SSAValue(invoke_idx)
+    newssa = insert_node!(ir, invoke_ssa, NewInstruction(Expr(:call, println, invoke_ssa), Nothing), #=attach_after=#true)
     newssa = insert_node!(ir, newssa, NewInstruction(Expr(:call, println, newssa), Nothing), #=attach_after=#true)
 
     ir = Core.Compiler.compact!(ir)
-    @test length(ir.stmts) == 4
-    @test Meta.isexpr(ir.stmts[1][:stmt], :invoke)
-    call1 = ir.stmts[2][:stmt]
+    @test length(ir.stmts) == nstmts + 2
+    @test Meta.isexpr(ir.stmts[invoke_idx][:stmt], :invoke)
+    call1 = ir.stmts[invoke_idx+1][:stmt]
     @test iscall((ir,println), call1)
-    @test call1.args[2] === SSAValue(1)
-    call2 = ir.stmts[3][:stmt]
+    @test call1.args[2] === invoke_ssa
+    call2 = ir.stmts[invoke_idx+2][:stmt]
     @test iscall((ir,println), call2)
-    @test call2.args[2] === SSAValue(2)
+    @test call2.args[2] === SSAValue(invoke_idx+1)
 end
 
 # Issue #50379 - insert_node!(::IncrementalCompact, ...) at end of basic block
@@ -608,26 +607,23 @@ end
 let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         a^b
     end |> only |> first
-    invoke_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
-        Meta.isexpr(x, :invoke)
-    end
+    invoke_idx = findfirst(@nospecialize(stmt)->Meta.isexpr(stmt, :invoke), ir.stmts.stmt)
     @test invoke_idx !== nothing
     invoke_expr = ir.stmts.stmt[invoke_idx]
+    invoke_ssa = SSAValue(invoke_idx)
 
     # effect-ful node
     let compact = Core.Compiler.IncrementalCompact(Core.Compiler.copy(ir))
-        insert_node!(compact, SSAValue(1), NewInstruction(Expr(:call, println, SSAValue(1)), Nothing), #=attach_after=#true)
+        insert_node!(compact, invoke_ssa, NewInstruction(Expr(:call, println, invoke_ssa), Nothing), #=attach_after=#true)
         state = Core.Compiler.iterate(compact)
         while state !== nothing
             state = Core.Compiler.iterate(compact, state[2])
         end
         ir = Core.Compiler.finish(compact)
-        new_invoke_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
-            x == invoke_expr
-        end
+        new_invoke_idx = findfirst(@nospecialize(stmt)->stmt==invoke_expr, ir.stmts.stmt)
         @test new_invoke_idx !== nothing
-        new_call_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
-            iscall((ir,println), x) && x.args[2] === SSAValue(invoke_idx)
+        new_call_idx = findfirst(ir.stmts.stmt) do @nospecialize(stmt)
+            iscall((ir,println), stmt) && stmt.args[2] === SSAValue(new_invoke_idx)
         end
         @test new_call_idx !== nothing
         @test new_call_idx == new_invoke_idx+1
@@ -635,7 +631,7 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
 
     # effect-free node
     let compact = Core.Compiler.IncrementalCompact(Core.Compiler.copy(ir))
-        insert_node!(compact, SSAValue(1), NewInstruction(Expr(:call, GlobalRef(Base, :add_int), SSAValue(1), SSAValue(1)), Int), #=attach_after=#true)
+        insert_node!(compact, invoke_ssa, NewInstruction(Expr(:call, GlobalRef(Base, :add_int), invoke_ssa, invoke_ssa), Int), #=attach_after=#true)
         state = Core.Compiler.iterate(compact)
         while state !== nothing
             state = Core.Compiler.iterate(compact, state[2])
@@ -643,12 +639,10 @@ let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         ir = Core.Compiler.finish(compact)
 
         ir = Core.Compiler.finish(compact)
-        new_invoke_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
-            x == invoke_expr
-        end
+        new_invoke_idx = findfirst(@nospecialize(stmt)->stmt==invoke_expr, ir.stmts.stmt)
         @test new_invoke_idx !== nothing
         new_call_idx = findfirst(ir.stmts.stmt) do @nospecialize(x)
-            iscall((ir,Base.add_int), x) && x.args[2] === SSAValue(invoke_idx)
+            iscall((ir,Base.add_int), x) && x.args[2] === SSAValue(new_invoke_idx)
         end
         @test new_call_idx === nothing # should be deleted during the compaction
     end

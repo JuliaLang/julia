@@ -805,7 +805,7 @@ static int subtype_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int R, int pa
 // check that a type is concrete or quasi-concrete (Type{T}).
 // this is used to check concrete typevars:
 // issubtype is false if the lower bound of a concrete type var is not concrete.
-static int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
+int is_leaf_bound(jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (v == jl_bottom_type)
         return 1;
@@ -1512,6 +1512,23 @@ static int may_contain_union_decision(jl_value_t *x, jl_stenv_t *e, jl_typeenv_t
            may_contain_union_decision(xb ? xb->ub : ((jl_tvar_t *)x)->ub, e, &newlog);
 }
 
+static int has_exists_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    jl_typeenv_t *env = NULL;
+    jl_varbinding_t *v = e->vars;
+    while (v != NULL) {
+        if (v->right) {
+            jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
+            newenv->var = v->var;
+            newenv->val = NULL;
+            newenv->prev = env;
+            env = newenv;
+        }
+        v = v->prev;
+    }
+    return env != NULL && jl_has_bound_typevars(x, env);
+}
+
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow)
 {
     int16_t oldRmore = e->Runions.more;
@@ -1531,13 +1548,19 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         int count = 0, noRmore = 0;
         sub = _forall_exists_subtype(x, y, e, param, &count, &noRmore);
         pop_unionstate(&e->Runions, &oldRunions);
-        // we should not try the slow path if `forall_exists_subtype` has tested all cases;
-        // Once limit_slow == 1, also skip it if
-        // 1) `forall_exists_subtype` return false
+        // We could skip the slow path safely if
+        // 1) `_∀_∃_subtype` has tested all cases
+        // 2) `_∀_∃_subtype` returns 1 &&  `x` and `y` contain no ∃ typevar
+        // Once `limit_slow == 1`, also skip it if
+        // 1) `_∀_∃_subtype` returns 0
         // 2) the left `Union` looks big
+        // TODO: `limit_slow` ignores complexity from inner `local_∀_exists_subtype`.
         if (limit_slow == -1)
             limit_slow = kindx || kindy;
-        if (noRmore || (limit_slow && (count > 3  || !sub)))
+        int skip = noRmore || (limit_slow && (count > 3 || !sub)) ||
+                   (sub && (kindx || !has_exists_typevar(x, e)) &&
+                           (kindy || !has_exists_typevar(y, e)));
+        if (skip)
             e->Runions.more = oldRmore;
     }
     else {
@@ -1997,7 +2020,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                     if (var_occurs_invariant(body, (jl_tvar_t*)b))
                         return 0;
                 }
-                if (nparams_expanded_x > npy && jl_is_typevar(b) && concrete_min(a1) > 1) {
+                if (nparams_expanded_x > npy && jl_is_typevar(b) && is_leaf_typevar((jl_tvar_t *)b) && concrete_min(a1) > 1) {
                     // diagonal rule for 2 or more elements: they must all be concrete on the LHS
                     *subtype = 0;
                     return 1;
@@ -2008,7 +2031,7 @@ static int obvious_subtype(jl_value_t *x, jl_value_t *y, jl_value_t *y0, int *su
                 }
                 for (; i < nparams_expanded_x; i++) {
                     jl_value_t *a = (vx != JL_VARARG_NONE && i >= npx - 1) ? vxt : jl_tparam(x, i);
-                    if (i > npy && jl_is_typevar(b)) { // i == npy implies a == a1
+                    if (i > npy && jl_is_typevar(b) && is_leaf_typevar((jl_tvar_t *)b)) { // i == npy implies a == a1
                         // diagonal rule: all the later parameters are also constrained to be type-equal to the first
                         jl_value_t *a2 = a;
                         jl_value_t *au = jl_unwrap_unionall(a);
@@ -4460,19 +4483,18 @@ static jl_value_t *insert_nondiagonal(jl_value_t *type, jl_varbinding_t *troot, 
         jl_value_t *newbody = insert_nondiagonal(body, troot, widen2ub);
         if (v) v->var = var; // And restore it after inner insertation.
         jl_value_t *newvar = NULL;
-        JL_GC_PUSH2(&newbody, &newvar);
+        JL_GC_PUSH3(&newbody, &newvar, &type);
         if (body == newbody || jl_has_typevar(newbody, var)) {
             if (body != newbody)
-                newbody = jl_new_struct(jl_unionall_type, var, newbody);
+                type = jl_new_struct(jl_unionall_type, var, newbody);
             // n.b. we do not widen lb, since that would be the wrong direction
             newvar = insert_nondiagonal(var->ub, troot, widen2ub);
             if (newvar != var->ub) {
                 newvar = (jl_value_t*)jl_new_typevar(var->name, var->lb, newvar);
-                newbody = jl_apply_type1(newbody, newvar);
-                newbody = jl_type_unionall((jl_tvar_t*)newvar, newbody);
+                newbody = jl_apply_type1(type, newvar);
+                type = jl_type_unionall((jl_tvar_t*)newvar, newbody);
             }
         }
-        type = newbody;
         JL_GC_POP();
     }
     else if (jl_is_uniontype(type)) {

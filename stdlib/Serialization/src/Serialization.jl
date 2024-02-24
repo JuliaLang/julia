@@ -7,7 +7,7 @@ Provide serialization of Julia objects via the functions
 """
 module Serialization
 
-import Base: GMP, Bottom, unsafe_convert, uncompressed_ast
+import Base: GMP, Bottom, unsafe_convert
 import Core: svec, SimpleVector
 using Base: unaliascopy, unwrap_unionall, require_one_based_indexing, ntupleany
 using Core.IR
@@ -80,7 +80,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 26 # do not make changes without bumping the version #!
+const ser_version = 27 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -447,7 +447,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.constprop)
     serialize(s, meth.purity)
     if isdefined(meth, :source)
-        serialize(s, Base._uncompressed_ast(meth, meth.source))
+        serialize(s, Base._uncompressed_ast(meth))
     else
         serialize(s, nothing)
     end
@@ -1201,26 +1201,39 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     if pre_12
         ci.slotflags = deserialize(s)
     else
-        ci.method_for_inference_limit_heuristics = deserialize(s)
+        if format_version(s) <= 26
+            ci.method_for_inference_limit_heuristics = deserialize(s)
+        end
         ci.linetable = deserialize(s)
     end
     ci.slotnames = deserialize(s)
     if !pre_12
         ci.slotflags = deserialize(s)
         ci.slottypes = deserialize(s)
-        ci.rettype = deserialize(s)
-        ci.parent = deserialize(s)
-        world_or_edges = deserialize(s)
-        pre_13 = isa(world_or_edges, Integer)
-        if pre_13
-            ci.min_world = world_or_edges
+        if format_version(s) <= 26
+            deserialize(s) # rettype
+            ci.parent = deserialize(s)
+            world_or_edges = deserialize(s)
+            pre_13 = isa(world_or_edges, Union{UInt, Int})
+            if pre_13
+                ci.min_world = reinterpret(UInt, world_or_edges)
+                ci.max_world = reinterpret(UInt, deserialize(s))
+            else
+                ci.edges = world_or_edges
+                ci.min_world = deserialize(s)::UInt
+                ci.max_world = deserialize(s)::UInt
+            end
         else
-            ci.edges = world_or_edges
-            ci.min_world = reinterpret(UInt, deserialize(s))
-            ci.max_world = reinterpret(UInt, deserialize(s))
+            ci.parent = deserialize(s)
+            ci.method_for_inference_limit_heuristics = deserialize(s)
+            ci.edges = deserialize(s)
+            ci.min_world = deserialize(s)::UInt
+            ci.max_world = deserialize(s)::UInt
         end
     end
-    ci.inferred = deserialize(s)
+    if format_version(s) <= 26
+        deserialize(s)::Bool # inferred
+    end
     if format_version(s) < 22
         inlining_cost = deserialize(s)
         if isa(inlining_cost, Bool)
@@ -1448,16 +1461,9 @@ function deserialize_typename(s::AbstractSerializer, number)
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
             kws = handle_deserialize(s, tag)
-            if makenew
-                if kws isa Vector{Method}
-                    for def in kws
-                        kwmt = typeof(Core.kwcall).name.mt
-                        ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, def, C_NULL)
-                    end
-                else
-                    # old object format -- try to forward from old to new
-                    @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
-                end
+            if makenew && !(kws isa Vector{Method})
+                # old object format -- try to forward from old to new
+                @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
             end
         end
     elseif makenew

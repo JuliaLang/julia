@@ -820,7 +820,7 @@ function perform_lifting!(compact::IncrementalCompact,
         old_node = old_inst[:stmt]::Union{PhiNode,Expr}
         if isa(old_node, PhiNode)
             new_node = PhiNode()
-            ssa = insert_node!(compact, old_ssa, effect_free_and_nothrow(NewInstruction(new_node, result_t)))
+            ssa = insert_node!(compact, old_ssa, removable_if_unused(NewInstruction(new_node, result_t)))
             lifted_philikes[i] = LiftedPhilike(ssa, new_node, true)
         else
             @assert is_known_call(old_node, Core.ifelse, compact)
@@ -1101,22 +1101,22 @@ end
 
 function refine_new_effects!(𝕃ₒ::AbstractLattice, compact::IncrementalCompact, idx::Int, stmt::Expr)
     inst = compact[SSAValue(idx)]
-    if has_flag(inst, (IR_FLAG_NOTHROW | IR_FLAG_EFFECT_FREE))
+    if has_flag(inst, IR_FLAGS_REMOVABLE)
         return # already accurate
     end
-    (consistent, effect_free_and_nothrow, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
+    (consistent, removable, nothrow) = new_expr_effect_flags(𝕃ₒ, stmt.args, compact, pattern_match_typeof)
     if consistent
         add_flag!(inst, IR_FLAG_CONSISTENT)
     end
-    if effect_free_and_nothrow
-        add_flag!(inst, IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW)
+    if removable
+        add_flag!(inst, IR_FLAGS_REMOVABLE)
     elseif nothrow
         add_flag!(inst, IR_FLAG_NOTHROW)
     end
     return nothing
 end
 
-function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr)
+function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
     length(stmt.args) == 4 || return false
     condarg = stmt.args[2]
     condtyp = argextype(condarg, compact)
@@ -1128,6 +1128,9 @@ function fold_ifelse!(compact::IncrementalCompact, idx::Int, stmt::Expr)
             compact[idx] = stmt.args[4]
             return true
         end
+    elseif ⊑(𝕃ₒ, condtyp, Bool) && stmt.args[3] === stmt.args[4]
+        compact[idx] = stmt.args[3]
+        return true
     end
     return false
 end
@@ -1147,7 +1150,18 @@ function (this::IntermediaryCollector)(@nospecialize(pi), @nospecialize(ssa))
 end
 
 function update_scope_mapping!(scope_mapping, bb, val)
-    @assert (scope_mapping[bb] in (val, SSAValue(0)))
+    current_mapping = scope_mapping[bb]
+    if current_mapping != SSAValue(0)
+        if val == SSAValue(0)
+            # Unreachable bbs will have SSAValue(0), but can branch into
+            # try/catch regions. We could validate with the domtree, but that's
+            # quite expensive for a debug check, so simply allow this without
+            # making any changes to mapping.
+            return
+        end
+        @assert current_mapping == val
+        return
+    end
     scope_mapping[bb] = val
 end
 
@@ -1302,7 +1316,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             elseif is_known_call(stmt, isa, compact)
                 lift_comparison!(isa, compact, idx, stmt, 𝕃ₒ)
             elseif is_known_call(stmt, Core.ifelse, compact)
-                fold_ifelse!(compact, idx, stmt)
+                fold_ifelse!(compact, idx, stmt, 𝕃ₒ)
             elseif is_known_invoke_or_call(stmt, Core.OptimizedGenerics.KeyValue.get, compact)
                 2 == (length(stmt.args) - (isexpr(stmt, :invoke) ? 2 : 1)) || continue
                 lift_keyvalue_get!(compact, idx, stmt, 𝕃ₒ)
@@ -1392,7 +1406,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         (lifted_val, nest) = perform_lifting!(compact,
             visited_philikes, field, result_t, lifted_leaves, val, lazydomtree)
 
-        node_was_deleted = false
+        should_delete_node = false
         line = compact[SSAValue(idx)][:line]
         if lifted_val !== nothing && !⊑(𝕃ₒ, compact[SSAValue(idx)][:type], result_t)
             compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
@@ -1401,9 +1415,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             # Save some work in a later compaction, by inserting this into the renamer now,
             # but only do this if we didn't set the REFINED flag, to save work for irinterp
             # in revisiting only the renamings that came through *this* idx.
-            delete_inst_here!(compact)
             compact.ssa_rename[old_idx] = lifted_val === nothing ? nothing : lifted_val.val
-            node_was_deleted = true
+            should_delete_node = true
         else
             compact[idx] = lifted_val === nothing ? nothing : lifted_val.val
         end
@@ -1424,17 +1437,24 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 def_val = (def_val::LiftedValue).val
                 finish_phi_nest!(compact, nest)
             end
-            ni = NewInstruction(
-                Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val), Nothing, line)
-            if node_was_deleted
-                insert_node_here!(compact, ni, true)
+            throw_expr = Expr(:throw_undef_if_not, Symbol("##getfield##"), def_val)
+            if should_delete_node
+                # Replace the node we already have rather than deleting/re-inserting.
+                # This way it is easier to handle BB boundary corner cases.
+                compact[SSAValue(idx)] = throw_expr
+                compact[SSAValue(idx)][:type] = Nothing
+                compact[SSAValue(idx)][:flag] = IR_FLAG_EFFECT_FREE | IR_FLAG_CONSISTENT | IR_FLAG_NOUB
+                should_delete_node = false
             else
+                ni = NewInstruction(throw_expr, Nothing, line)
                 insert_node!(compact, SSAValue(idx), ni)
             end
         else
             # val must be defined
             @assert lifted_val !== nothing
         end
+
+        should_delete_node && delete_inst_here!(compact)
     end
 
     non_dce_finish!(compact)
@@ -1472,12 +1492,11 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         end
         src = @atomic :monotonic code.inferred
     else
-        src = nothing
+        return false
     end
 
-    src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL)
-    src === nothing && return false
-    src = retrieve_ir_for_inlining(mi, src)
+    src_inlining_policy(inlining.interp, src, info, IR_FLAG_NULL) || return false
+    src = retrieve_ir_for_inlining(code, src)
 
     # For now: Require finalizer to only have one basic block
     length(src.cfg.blocks) == 1 || return false
@@ -1499,8 +1518,12 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
             ssa_rename[ssa.id]
         end
         stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, ssa_substitute)
+        newline = inst[:line]
+        if newline != 0
+            newline += ssa_substitute.linetable_offset
+        end
         ssa_rename[idx′] = insert_node!(ir, idx,
-            NewInstruction(inst; stmt=stmt′, line=inst[:line]+ssa_substitute.linetable_offset),
+            NewInstruction(inst; stmt=stmt′, line=newline),
             attach_after)
     end
 

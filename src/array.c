@@ -82,7 +82,9 @@ STATIC_INLINE jl_array_t *_new_array(jl_value_t *atype, jl_genericmemory_t *mem,
 STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
 {
     size_t nel;
-    if (jl_array_validate_dims(&nel, ndims, dims) || *(size_t*)jl_tparam1(atype) != ndims)
+    if (jl_array_validate_dims(&nel, ndims, dims))
+        jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions: too large for system address width");
+    if (*(size_t*)jl_tparam1(atype) != ndims)
         jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
     jl_value_t *mtype = jl_field_type_concrete((jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)atype, 0), 1);
     // extra byte for all julia allocated byte vectors
@@ -96,21 +98,6 @@ STATIC_INLINE jl_array_t *new_array(jl_value_t *atype, uint32_t ndims, size_t *d
 jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t isunion, int8_t zeroinit, size_t elsz);
 
 JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str);
-
-JL_DLLEXPORT jl_array_t *jl_string_to_array(jl_value_t *str)
-{
-    jl_task_t *ct = jl_current_task;
-    jl_genericmemory_t *mem = jl_string_to_genericmemory(str);
-    JL_GC_PUSH1(&mem);
-    int ndimwords = 1;
-    int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
-    jl_array_t *a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, jl_array_uint8_type);
-    a->ref.mem = mem;
-    a->ref.ptr_or_offset = mem->ptr;
-    a->dimsize[0] = mem->length;
-    JL_GC_POP();
-    return a;
-}
 
 JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
                                             size_t nel, int own_buffer)
@@ -132,7 +119,9 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     assert(is_ntuple_long(_dims));
     size_t *dims = (size_t*)_dims;
     size_t nel;
-    if (jl_array_validate_dims(&nel, ndims, dims) || *(size_t*)jl_tparam1(atype) != ndims)
+    if (jl_array_validate_dims(&nel, ndims, dims))
+        jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions: too large for system address width");
+    if (*(size_t*)jl_tparam1(atype) != ndims)
         jl_exceptionf(jl_argumenterror_type, "invalid Array dimensions");
     jl_value_t *mtype = jl_field_type_concrete((jl_datatype_t*)jl_field_type_concrete((jl_datatype_t*)atype, 0), 1);
     jl_genericmemory_t *mem = jl_ptr_to_genericmemory(mtype, data, nel, own_buffer);

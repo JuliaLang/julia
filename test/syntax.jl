@@ -713,7 +713,7 @@ m1_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m1 end))
 let low3 = Meta.lower(@__MODULE__, quote @m3 end)
     m3_exprs = get_expr_list(low3)
     ci = low3.args[1]::Core.CodeInfo
-    @test ci.codelocs in ([4, 4, 2], [4, 2])
+    @test ci.codelocs in ([4, 4, 0], [4, 0])
     @test is_return_ssavalue(m3_exprs[end])
 end
 
@@ -3618,4 +3618,22 @@ end
     @test p("public = 4") == Expr(:(=), :public, 4)
     @test p("public[7] = 5") == Expr(:(=), Expr(:ref, :public, 7), 5)
     @test p("public() = 6") == Expr(:(=), Expr(:call, :public), Expr(:block, 6))
+end
+
+@testset "removing argument sideeffects" begin
+    # Allow let blocks in broadcasted LHSes, but only evaluate them once:
+    execs = 0
+    array = [1]
+    let x = array; execs += 1; x; end .+= 2
+    @test array == [3]
+    @test execs == 1
+    let; execs += 1; array; end .= 4
+    @test array == [4]
+    @test execs == 2
+    let x = array; execs += 1; x; end::Vector{Int} .+= 2
+    @test array == [6]
+    @test execs == 3
+    let; execs += 1; array; end::Vector{Int} .= 7
+    @test array == [7]
+    @test execs == 4
 end

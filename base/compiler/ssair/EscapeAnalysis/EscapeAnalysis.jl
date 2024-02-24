@@ -25,9 +25,9 @@ using ._TOP_MOD:     # Base definitions
     unwrap_unionall, !, !=, !==, &, *, +, -, :, <, <<, =>, >, |, ∈, ∉, ∩, ∪, ≠, ≤, ≥, ⊆
 using Core.Compiler: # Core.Compiler specific definitions
     Bottom, IRCode, IR_FLAG_NOTHROW, InferenceResult, SimpleInferenceLattice,
-    argextype, check_effect_free!, fieldcount_noerror, hasintersect, has_flag,
-    intrinsic_nothrow, is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow,
-    singleton_type, try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
+    argextype, fieldcount_noerror, hasintersect, has_flag, intrinsic_nothrow,
+    is_meta_expr_head, isbitstype, isexpr, println, setfield!_nothrow, singleton_type,
+    try_compute_field, try_compute_fieldidx, widenconst, ⊑, AbstractLattice
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -597,12 +597,12 @@ struct LivenessChange <: Change
 end
 const Changes = Vector{Change}
 
-struct AnalysisState{T, L <: AbstractLattice}
+struct AnalysisState{GetEscapeCache, Lattice<:AbstractLattice}
     ir::IRCode
     estate::EscapeState
     changes::Changes
-    𝕃ₒ::L
-    get_escape_cache::T
+    𝕃ₒ::Lattice
+    get_escape_cache::GetEscapeCache
 end
 
 """
