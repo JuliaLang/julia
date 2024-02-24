@@ -271,6 +271,7 @@ Stacktrace:
 ```
 """
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
+    @info "rm $path"
     if islink(path) || !isdir(path)
         try
             unlink(path)
@@ -1024,6 +1025,7 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
 end
 
 function unlink(p::AbstractString)
+    @info "unlink $p"
     err = ccall(:jl_fs_unlink, Int32, (Cstring,), p)
     err < 0 && uv_error("unlink($(repr(p)))", err)
     nothing
