@@ -28,10 +28,12 @@ finalize(m); m=nothing; GC.gc()
 @test length(@inferred mmap(file, Matrix{Int8}, (12,1), 0)) == 12
 @test length(@inferred mmap(file, Matrix{Int8}, (12,1), 0; grow=false)) == 12
 @test length(@inferred mmap(file, Matrix{Int8}, (12,1), 0; shared=false)) == 12
+@test length(@inferred mmap(file, Matrix{Int8}, (12,1), 0; exec=true)) == 12
 @test length(@inferred mmap(file, Vector{Int8}, 12)) == 12
 @test length(@inferred mmap(file, Vector{Int8}, 12, 0)) == 12
 @test length(@inferred mmap(file, Vector{Int8}, 12, 0; grow=false)) == 12
 @test length(@inferred mmap(file, Vector{Int8}, 12, 0; shared=false)) == 12
+@test length(@inferred mmap(file, Vector{Int8}, 12, 0; exec=true)) == 12
 s = open(file)
 @test length(@inferred mmap(s)) == 12
 @test length(@inferred mmap(s, Vector{Int8})) == 12
@@ -39,10 +41,12 @@ s = open(file)
 @test length(@inferred mmap(s, Matrix{Int8}, (12,1), 0)) == 12
 @test length(@inferred mmap(s, Matrix{Int8}, (12,1), 0; grow=false)) == 12
 @test length(@inferred mmap(s, Matrix{Int8}, (12,1), 0; shared=false)) == 12
+@test length(@inferred mmap(s, Matrix{Int8}, (12,1), 0; exec=true)) == 12
 @test length(@inferred mmap(s, Vector{Int8}, 12)) == 12
 @test length(@inferred mmap(s, Vector{Int8}, 12, 0)) == 12
 @test length(@inferred mmap(s, Vector{Int8}, 12, 0; grow=false)) == 12
 @test length(@inferred mmap(s, Vector{Int8}, 12, 0; shared=false)) == 12
+@test length(@inferred mmap(s, Vector{Int8}, 12, 0; exec=true)) == 12
 close(s)
 @test_throws ArgumentError mmap(file, Vector{Ref}) # must be bit-type
 GC.gc(); GC.gc()
@@ -294,6 +298,7 @@ m[1] = 0x0a
 Mmap.sync!(m)
 @test m[1] === 0x0a
 m = mmap(Vector{UInt8}, 12; shared=false)
+m = mmap(Vector{UInt8}, 12; exec=true)
 m = mmap(Vector{Int}, 12)
 @test length(m) == 12
 @test all(m .== 0)
