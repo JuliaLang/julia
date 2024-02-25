@@ -3066,6 +3066,11 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 extern void rebuild_image_blob_tree(void);
 extern void export_jl_small_typeof(void);
 
+// When an image is loaded with ignore_native, all subsequent image loads must ignore
+// native code in the cache-file since we can't gurantuee that there are no call edges
+// into the native code of the image. See https://github.com/JuliaLang/julia/pull/52123#issuecomment-1959965395.
+int IMAGE_NATIVE_CODE_TAINTED = 0;
+
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
                                                  jl_array_t **extext_methods, jl_array_t **internal_methods,
@@ -3092,9 +3097,10 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
 
     // in --build mode only use sysimg data, not precompiled native code
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
-    if (imaging_mode || jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
+    if (imaging_mode || jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES || IMAGE_NATIVE_CODE_TAINTED) {
         memset(&image->fptrs, 0, sizeof(image->fptrs));
         image->gvars_base = NULL;
+        IMAGE_NATIVE_CODE_TAINTED = 1;
     }
 
     // step 1: read section map
@@ -3772,7 +3778,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
         // Must disable using native code in possible downstream users of this code:
         // https://github.com/JuliaLang/julia/pull/52123#issuecomment-1959965395.
         // The easiest way to do that is to disable it in all of them.
-        jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO;
+        IMAGE_NATIVE_CODE_TAINTED = 1;
     }
 
     jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname, 0);

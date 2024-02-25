@@ -1746,6 +1746,19 @@ void gc_free_pages(void)
     }
 }
 
+void gc_move_to_global_page_pool(jl_gc_page_stack_t *pgstack)
+{
+    while (1) {
+        jl_gc_pagemeta_t *pg = pop_lf_back(pgstack);
+        if (pg == NULL) {
+            break;
+        }
+        jl_gc_free_page(pg);
+        jl_atomic_fetch_add_relaxed(&gc_heap_stats.heap_size, -GC_PAGE_SZ);
+        push_lf_back(&global_page_pool_freed, pg);
+    }
+}
+
 // setup the data-structures for a sweep over all memory pools
 static void gc_sweep_pool(void)
 {
@@ -3775,6 +3788,24 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         else {
             ptls2->heap.remset->len = 0;
         }
+        // free empty GC state for threads that have exited
+        if (jl_atomic_load_relaxed(&ptls2->current_task) == NULL &&
+            (ptls->tid < gc_first_tid || ptls2->tid >= gc_first_tid + jl_n_gcthreads)) {
+            jl_thread_heap_t *heap = &ptls2->heap;
+            if (heap->weak_refs.len == 0)
+                small_arraylist_free(&heap->weak_refs);
+            if (heap->live_tasks.len == 0)
+                small_arraylist_free(&heap->live_tasks);
+            if (heap->remset->len == 0)
+                arraylist_free(heap->remset);
+            if (heap->last_remset->len == 0)
+                arraylist_free(heap->last_remset);
+            if (ptls2->finalizers.len == 0)
+                arraylist_free(&ptls2->finalizers);
+            if (ptls2->sweep_objs.len == 0)
+                arraylist_free(&ptls2->sweep_objs);
+            gc_move_to_global_page_pool(&ptls2->page_metadata_buffered);
+        }
     }
 
 #ifdef __GLIBC__
@@ -3991,6 +4022,18 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
     jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
+}
+
+void jl_free_thread_gc_state(jl_ptls_t ptls)
+{
+    jl_gc_markqueue_t *mq = &ptls->mark_queue;
+    ws_queue_t *cq = &mq->chunk_queue;
+    free_ws_array(jl_atomic_load_relaxed(&cq->array));
+    jl_atomic_store_relaxed(&cq->array, NULL);
+    ws_queue_t *q = &mq->ptr_queue;
+    free_ws_array(jl_atomic_load_relaxed(&q->array));
+    jl_atomic_store_relaxed(&q->array, NULL);
+    arraylist_free(&mq->reclaim_set);
 }
 
 // System-wide initializations
