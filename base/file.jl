@@ -281,8 +281,11 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                     if err.code==Base.UV_EACCES && endswith(path, ".dll")
                         # Loaded DLLs cannot be deleted on Windows, even with posix delete mode
                         # but they can be moved. So move out to allow the dir to be deleted
-                        # and DLL deleted via the temp dir cleanup on next reboot
-                        mv(path, tempname() * "_" * basename(path))
+                        # TODO: Add a mechanism to delete these moved files after dlclose or process exit
+                        dir = mkpath(joinpath(tempdir(), "julia_delayed_deletes"))
+                        temp_path = tempname(dir, cleanup = false) * "_" * basename(path)
+                        @debug "Could not delete DLL most likely because it is loaded, moving to tempdir" path temp_path
+                        mv(path, temp_path)
                     end
                 end
             end

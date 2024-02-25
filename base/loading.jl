@@ -2902,7 +2902,11 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             end
 
             if cache_objects
-                ocachefile = rename_unique_ocachefile(tmppath_so, ocachefile)
+                ocachefile_new = rename_unique_ocachefile(tmppath_so, ocachefile)
+                if ocachefile_new != ocachefile
+                    cachefile = cachefile_from_ocachefile(ocachefile_new)
+                    ocachefile = ocachefile_new
+                end
                 @static if Sys.isapple()
                     run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), Base.DevNull())
                 end
@@ -2925,7 +2929,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     end
 end
 
-function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 1)
+function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 0)
     try
         rename(tmppath_so, ocachefile; force=true)
     catch e
