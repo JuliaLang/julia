@@ -33,7 +33,7 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
 end
 
 function accumulate_pairwise(op, v::AbstractVector{T}) where T
-    out = similar(v, promote_op(op, T, T))
+    out = similar(v, promote_op(op, T, T; throw_error=true))
     return accumulate_pairwise!(op, out, v)
 end
 
@@ -111,7 +111,7 @@ julia> cumsum(a, dims=2)
     widening happens and integer overflow results in `Int8[100, -128]`.
 """
 function cumsum(A::AbstractArray{T}; dims::Integer) where T
-    out = similar(A, promote_op(add_sum, T, T))
+    out = similar(A, promote_op(add_sum, T, T; throw_error=true))
     cumsum!(out, A, dims=dims)
 end
 
@@ -282,9 +282,9 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
     end
     nt = values(kw)
     if isempty(kw)
-        out = similar(A, promote_op(op, eltype(A), eltype(A)))
+        out = similar(A, promote_op(op, eltype(A), eltype(A); throw_error=true))
     elseif keys(nt) === (:init,)
-        out = similar(A, promote_op(op, typeof(nt.init), eltype(A)))
+        out = similar(A, promote_op(op, typeof(nt.init), eltype(A); throw_error=true))
     else
         throw(ArgumentError("accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
