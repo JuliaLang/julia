@@ -499,6 +499,7 @@
     XX(jl_uncompress_argname_n) \
     XX(jl_uncompress_ir) \
     XX(jl_undefined_var_error) \
+    XX(jl_union_sort_cmp) \
     XX(jl_unwrap_unionall) \
     XX(jl_has_no_field_error) \
     XX(jl_value_ptr) \

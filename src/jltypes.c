@@ -458,7 +458,7 @@ static int datatype_name_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 
 // sort singletons first, then DataTypes, then UnionAlls,
 // ties broken alphabetically including module name & type parameters
-static int union_sort_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_union_sort_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 {
     if (a == NULL)
         return b == NULL ? 0 : 1;
@@ -548,7 +548,7 @@ static void isort_union(jl_value_t **a, size_t len) JL_NOTSAFEPOINT
         jl_value_t *x = a[i];
         for (j = i; j > 0; j--) {
             jl_value_t *y = a[j - 1];
-            if (!(union_sort_cmp(x, y) < 0))
+            if (!(jl_union_sort_cmp(x, y) < 0))
                 break;
             a[j] = y;
         }
