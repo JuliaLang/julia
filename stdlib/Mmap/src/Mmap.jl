@@ -253,7 +253,7 @@ function mmap(io::IO,
         handle = create ? ccall(:CreateFileMappingW, stdcall, Ptr{Cvoid}, (OS_HANDLE, Ptr{Cvoid}, DWORD, DWORD, DWORD, Cwstring),
                                 file_desc, C_NULL, page_flag, szfile >> 32, szfile & typemax(UInt32), name) :
                           ccall(:OpenFileMappingW, stdcall, Ptr{Cvoid}, (DWORD, Cint, Cwstring),
-                                page_flag, true, name)
+                                file_flag, true, name)
         Base.windowserror(:mmap, handle == C_NULL)
         ptr = ccall(:MapViewOfFile, stdcall, Ptr{Cvoid}, (Ptr{Cvoid}, DWORD, DWORD, DWORD, Csize_t),
                     handle, file_flag, offset_page >> 32, offset_page & typemax(UInt32), mmaplen)
