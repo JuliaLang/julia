@@ -2063,10 +2063,6 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
         elseif path_maybe_dir && !ispath(path)
             throw(ArgumentError("including $(repr(path)): No such file or directory"))
         end
-        readable = @static Sys.iswindows() ? uperm(path) & 0x04 == 0x04 : Sys.isreadable(path)
-        if !readable
-            throw(ArgumentError("including $(repr(path)): Missing read permission"))
-        end
     else
         @lock require_lock begin
             if track_content

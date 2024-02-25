@@ -1553,13 +1553,10 @@ end
         touch(file)
         @test include_dependency(file) === nothing
         chmod(file, 0x000)
-        @test_throws ArgumentError("including $(repr(file)): Missing read permission") include_dependency(file)
 
         # same for include_dependency: #52063
         dir = mktempdir() do dir
             @test include_dependency(dir) === nothing
-            chmod(dir, 0x000)
-            @test_throws ArgumentError("including $(repr(dir)): Missing read permission") include_dependency(dir)
             dir
         end
         @test_throws ArgumentError("including $(repr(dir)): No such file or directory") include_dependency(dir)
