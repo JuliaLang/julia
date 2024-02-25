@@ -2851,6 +2851,12 @@ end
     @inferred accumulate(*, String[])
     @test accumulate(*, ['a' 'b'; 'c' 'd'], dims=1) == ["a" "b"; "ac" "bd"]
     @test accumulate(*, ['a' 'b'; 'c' 'd'], dims=2) == ["a" "ab"; "c" "cd"]
+
+    # #53438
+    v = [(1, 2), (3, 4)]
+    @test_throws "cannot convert a value to Union{}" accumulate(+, v)
+    @test_throws "cannot convert a value to Union{}" cumsum(v)
+    @test_throws "cannot convert a value to Union{}" cumprod(v)
 end
 
 struct F21666{T <: Base.ArithmeticStyle}
