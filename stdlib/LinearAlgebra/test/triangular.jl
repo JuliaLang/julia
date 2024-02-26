@@ -1014,6 +1014,7 @@ end
             @test 2\L == 2\B
             @test real(L) == real(B)
             @test imag(L) == imag(B)
+            @test kron(L,L) == kron(B,B)
             if A isa Matrix
                 @test transpose!(MT(copy(A))) == transpose(L)
                 @test adjoint!(MT(copy(A))) == adjoint(L)
@@ -1040,6 +1041,7 @@ end
             @test 2\U == 2\B
             @test real(U) == real(B)
             @test imag(U) == imag(B)
+            @test kron(U,U) == kron(B,B)
             if A isa Matrix
                 @test transpose!(MT(copy(A))) == transpose(U)
                 @test adjoint!(MT(copy(A))) == adjoint(U)

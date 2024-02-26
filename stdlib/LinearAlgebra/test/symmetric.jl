@@ -509,6 +509,7 @@ end
         @test S - S == MS - MS
         @test S*2 == 2*S == 2*MS
         @test S/2 == MS/2
+        @test kron(S,S) == kron(MS,MS)
     end
     @testset "mixed uplo" begin
         Mu = Matrix{Complex{BigFloat}}(undef,2,2)
@@ -524,6 +525,8 @@ end
             MSl = Matrix(Sl)
             @test Su + Sl == Sl + Su == MSu + MSl
             @test Su - Sl == -(Sl - Su) == MSu - MSl
+            @test kron(Su,Sl) == kron(MSu,MSl)
+            @test kron(Sl,Su) == kron(MSl,MSu)
         end
     end
 end
