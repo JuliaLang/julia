@@ -755,6 +755,14 @@ let err_str
     @test occursin("rather than a[1][2]", err_str)
 end
 
+let err_str
+    d = Dict
+    err_str = @except_str (d[1] = 5) MethodError
+    @test occursin("\nYou attempted to index the type Dict, rather than an instance of the type. Make sure you create the type using its constructor: ", err_str)
+    @test occursin("d = Dict([...])", err_str)
+    @test occursin(" rather than d = Dict", err_str)
+end
+
 # Execute backtrace once before checking formatting, see #38858
 backtrace()
 
