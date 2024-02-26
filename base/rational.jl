@@ -403,6 +403,18 @@ function *(y::Integer, x::Rational)
 end
 /(x::Rational, y::Union{Rational, Integer}) = x//y
 /(x::Integer, y::Rational) = x//y
+# Avoid overflow for Rational math if result is zero.
+# This method is needed because previously this method didn't check for overflows
+# but would return the correct answer if `a` was zero even if 1//z was wrong.
+function /(a::Rational, z::Complex{<:Integer})
+    z_r = complex(Rational(real(z)), Rational(imag(z)))
+    if iszero(a) && !iszero(z)
+        a/oneunit(z_r)
+    else
+        a/z_r
+    end
+end
+
 inv(x::Rational) = checked_den(x.den, x.num)
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
