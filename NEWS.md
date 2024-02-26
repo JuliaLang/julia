@@ -28,7 +28,7 @@ New library features
 --------------------
 
 * `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
-  the uniquing checking ([#])
+  the uniquing checking ([#53474])
 
 Standard library changes
 ------------------------
