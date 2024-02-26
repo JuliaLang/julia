@@ -128,19 +128,22 @@ function get_staged(mi::MethodInstance, world::UInt)
 end
 
 function retrieve_code_info(linfo::MethodInstance, world::UInt)
-    m = linfo.def::Method
+    def = linfo.def
+    if !isa(def, Method)
+        return linfo.uninferred
+    end
     c = nothing
-    if isdefined(m, :generator)
+    if isdefined(def, :generator)
         # user code might throw errors – ignore them
         c = get_staged(linfo, world)
     end
-    if c === nothing && isdefined(m, :source)
-        src = m.source
+    if c === nothing && isdefined(def, :source)
+        src = def.source
         if src === nothing
             # can happen in images built with --strip-ir
             return nothing
         elseif isa(src, String)
-            c = _uncompressed_ir(m, src)
+            c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), def, C_NULL, src)
         else
             c = copy(src::CodeInfo)
         end
@@ -321,25 +324,6 @@ function iterate(iter::BackedgeIterator, i::Int=1)
     return BackedgePair(item, backedges[i+1]::MethodInstance), i+2            # `invoke` calls
 end
 
-"""
-    add_invalidation_callback!(callback, mi::MethodInstance)
-
-Register `callback` to be triggered upon the invalidation of `mi`.
-`callback` should a function taking two arguments, `callback(replaced::MethodInstance, max_world::UInt32)`,
-and it will be recursively invoked on `MethodInstance`s within the invalidation graph.
-"""
-function add_invalidation_callback!(@nospecialize(callback), mi::MethodInstance)
-    if !isdefined(mi, :callbacks)
-        callbacks = mi.callbacks = Any[callback]
-    else
-        callbacks = mi.callbacks::Vector{Any}
-        if !any(@nospecialize(cb)->cb===callback, callbacks)
-            push!(callbacks, callback)
-        end
-    end
-    return callbacks
-end
-
 #########
 # types #
 #########
@@ -415,15 +399,15 @@ function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
         if isa(e, SSAValue)
             push!(uses[e.id], line)
         elseif isa(e, Expr)
-            find_ssavalue_uses(e, uses, line)
+            find_ssavalue_uses!(uses, e, line)
         elseif isa(e, PhiNode)
-            find_ssavalue_uses(e, uses, line)
+            find_ssavalue_uses!(uses, e, line)
         end
     end
     return uses
 end
 
-function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
+function find_ssavalue_uses!(uses::Vector{BitSet}, e::Expr, line::Int)
     head = e.head
     is_meta_expr_head(head) && return
     skiparg = (head === :(=))
@@ -433,13 +417,16 @@ function find_ssavalue_uses(e::Expr, uses::Vector{BitSet}, line::Int)
         elseif isa(a, SSAValue)
             push!(uses[a.id], line)
         elseif isa(a, Expr)
-            find_ssavalue_uses(a, uses, line)
+            find_ssavalue_uses!(uses, a, line)
         end
     end
 end
 
-function find_ssavalue_uses(e::PhiNode, uses::Vector{BitSet}, line::Int)
-    for val in e.values
+function find_ssavalue_uses!(uses::Vector{BitSet}, e::PhiNode, line::Int)
+    values = e.values
+    for i = 1:length(values)
+        isassigned(values, i) || continue
+        val = values[i]
         if isa(val, SSAValue)
             push!(uses[val.id], line)
         end

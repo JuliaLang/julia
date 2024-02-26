@@ -548,12 +548,24 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
 
-    # isassigned(a::AbstractArray, i::Int...)
+    @test !isassigned(B)
+    # isassigned(a::AbstractArray, i::Integer...)
     j = rand(1:length(B))
     @test isassigned(B, j)
     if T == T24Linear
         @test !isassigned(B, length(B) + 1)
     end
+    # isassigned(a::AbstractArray, i::CartesianIndex)
+    @test isassigned(B, first(CartesianIndices(B)))
+    ind = last(CartesianIndices(B))
+    @test !isassigned(B, ind + oneunit(ind))
+    # isassigned(a::AbstractArray, i::Union{Integer,CartesianIndex}...)
+    @test isassigned(B, Int16.(first.(axes(B)))..., CartesianIndex(1,1))
+    # Bool isn't a valid index
+    @test_throws ArgumentError isassigned(B, Bool.(first.(axes(B)))..., CartesianIndex(1,1))
+    @test_throws ArgumentError isassigned(B, Bool.(first.(axes(B)))...)
+    @test_throws ArgumentError isassigned(B, true)
+    @test_throws ArgumentError isassigned(B, false)
 
     # reshape(a::AbstractArray, dims::Dims)
     @test_throws DimensionMismatch reshape(B, (0, 1))
@@ -1949,4 +1961,92 @@ end
     @test repeat(f, 2, 3) === FillArrays.Fill(3, (8, 6))
     @test repeat(f, 2, 3, 4) === FillArrays.Fill(3, (8, 6, 4))
     @test repeat(f, inner=(1,2), outer=(3,1)) === FillArrays.Fill(3, (12, 4))
+end
+
+@testset "zero" begin
+    @test zero([1 2; 3 4]) isa Matrix{Int}
+    @test zero([1 2; 3 4]) == [0 0; 0 0]
+
+    @test zero([1.0]) isa Vector{Float64}
+    @test zero([1.0]) == [0.0]
+
+    @test zero([[2,2], [3,3,3]]) isa Vector{Vector{Int}}
+    @test zero([[2,2], [3,3,3]]) == [[0,0], [0, 0, 0]]
+end
+
+@testset "`_prechecked_iterate` optimization" begin
+    function test_prechecked_iterate(iter)
+        Js = Base._prechecked_iterate(iter)
+        for I in iter
+            J, s = Js::NTuple{2,Any}
+            @test J === I
+            Js = Base._prechecked_iterate(iter, s)
+        end
+    end
+    test_prechecked_iterate(1:10)
+    test_prechecked_iterate(Base.OneTo(10))
+    test_prechecked_iterate(CartesianIndices((3, 3)))
+    test_prechecked_iterate(CartesianIndices(()))
+    test_prechecked_iterate(LinearIndices((3, 3)))
+    test_prechecked_iterate(LinearIndices(()))
+    test_prechecked_iterate(Base.SCartesianIndices2{3}(1:3))
+end
+
+@testset "IndexStyles in copyto!" begin
+    A = rand(3,2)
+    B = zeros(size(A))
+    colons = ntuple(_->:, ndims(B))
+    # Ensure that the AbstractArray methods are hit
+    # by using views instead of Arrays
+    @testset "IndexLinear - IndexLinear" begin
+        B .= 0
+        copyto!(view(B, colons...), A)
+        @test B == A
+    end
+    @testset "IndexLinear - IndexCartesian" begin
+        B .= 0
+        copyto!(view(B, colons...), view(A, axes(A)...))
+        @test B == A
+    end
+    @testset "IndexCartesian - IndexLinear" begin
+        B .= 0
+        copyto!(view(B, axes(B)...), A)
+        @test B == A
+    end
+    @testset "IndexCartesian - IndexCartesian" begin
+        B .= 0
+        copyto!(view(B, axes(B)...), view(A, axes(A)...))
+        @test B == A
+    end
+end
+
+@testset "_unsetindex!" begin
+    struct MyMatrixUnsetIndexCartInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
+        data :: A
+    end
+    Base.size(A::MyMatrixUnsetIndexCartInds) = size(A.data)
+    Base.getindex(M::MyMatrixUnsetIndexCartInds, i::Int, j::Int) = M.data[i,j]
+    Base.setindex!(M::MyMatrixUnsetIndexCartInds, v, i::Int, j::Int) = setindex!(M.data, v, i, j)
+    struct MyMatrixUnsetIndexLinInds{T,A<:AbstractMatrix{T}} <: AbstractMatrix{T}
+        data :: A
+    end
+    Base.size(A::MyMatrixUnsetIndexLinInds) = size(A.data)
+    Base.getindex(M::MyMatrixUnsetIndexLinInds, i::Int) = M.data[i]
+    Base.setindex!(M::MyMatrixUnsetIndexLinInds, v, i::Int) = setindex!(M.data, v, i)
+    Base.IndexStyle(::Type{<:MyMatrixUnsetIndexLinInds}) = IndexLinear()
+
+    function test_unsetindex(MT)
+        M = MT(ones(2,2))
+        M2 = MT(Matrix{BigFloat}(undef, 2,2))
+        copyto!(M, M2)
+        @test all(==(1), M)
+        M3 = MT(Matrix{BigFloat}(undef, 2,2))
+        for i in eachindex(M3)
+            @test !isassigned(M3, i)
+        end
+        M3 .= 1
+        @test_throws MethodError copyto!(M3, M2)
+    end
+    test_unsetindex(MyMatrixUnsetIndexCartInds)
+    test_unsetindex(MyMatrixUnsetIndexLinInds)
 end

@@ -96,7 +96,7 @@ See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectd
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator, and only a single dimension `dims` was supported.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> m = [1 2 3; 4 5 6; 7 8 9]
@@ -144,7 +144,7 @@ See also [`eachcol`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 3 4]
@@ -182,7 +182,7 @@ See also [`eachrow`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 3 4]

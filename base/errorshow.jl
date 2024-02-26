@@ -330,7 +330,7 @@ function showerror(io::IO, ex::MethodError)
         if ex.world == typemax(UInt) || isempty(kwargs)
             print(io, "\nThis error has been manually thrown, explicitly, so the method may exist but be intentionally marked as unimplemented.")
         else
-            print(io, "\nThis method may not support any kwargs.")
+            print(io, "\nThis method may not support any keyword arguments.")
         end
     elseif hasmethod(f, arg_types) && !hasmethod(f, arg_types, world=ex.world)
         curworld = get_world_counter()
@@ -421,7 +421,8 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # functions methods and counting the number of matching arguments.
     f = ex.f
     ft = typeof(f)
-    lines = []
+    lines = String[]
+    line_score = Int[]
     # These functions are special cased to only show if first argument is matched.
     special = f === convert || f === getindex || f === setindex!
     funcs = Tuple{Any,Vector{Any}}[(f, arg_types_param)]
@@ -512,85 +513,82 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                 end
             end
 
-            if right_matches > 0 || length(arg_types_param) < 2
-                if length(t_i) < length(sig)
-                    # If the methods args is longer than input then the method
-                    # arguments is printed as not a match
-                    for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
-                        sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
-                        if Base.isvarargtype(sigtype)
-                            sigstr = (unwrapva(sigtype::Core.TypeofVararg), "...")
-                        else
-                            sigstr = (sigtype,)
-                        end
-                        if !((min(length(t_i), length(sig)) == 0) && k==1)
-                            print(iob, ", ")
-                        end
-                        if k == 1 && Base.isvarargtype(sigtype)
-                            # There wasn't actually a mismatch - the method match failed for
-                            # some other reason, e.g. world age. Just print the sigstr.
-                            print(iob, sigstr...)
-                        elseif get(io, :color, false)::Bool
-                            let sigstr=sigstr
-                                Base.with_output_color(Base.error_color(), iob) do iob
-                                    print(iob, "::", sigstr...)
-                                end
-                            end
-                        else
-                            print(iob, "!Matched::", sigstr...)
-                        end
+            if length(t_i) < length(sig)
+                # If the methods args is longer than input then the method
+                # arguments is printed as not a match
+                for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
+                    sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
+                    if Base.isvarargtype(sigtype)
+                        sigstr = (unwrapva(sigtype::Core.TypeofVararg), "...")
+                    else
+                        sigstr = (sigtype,)
                     end
-                end
-                kwords = kwarg_decl(method)
-                if !isempty(kwords)
-                    print(iob, "; ")
-                    join(iob, kwords, ", ")
-                end
-                print(iob, ")")
-                show_method_params(iob0, tv)
-                file, line = updated_methodloc(method)
-                if file === nothing
-                    file = string(method.file)
-                end
-                stacktrace_contract_userdir() && (file = contractuser(file))
-
-                if !isempty(kwargs)::Bool
-                    unexpected = Symbol[]
-                    if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
-                        for (k, v) in kwargs
-                            if !(k::Symbol in kwords)
-                                push!(unexpected, k::Symbol)
+                    if !((min(length(t_i), length(sig)) == 0) && k==1)
+                        print(iob, ", ")
+                    end
+                    if k == 1 && Base.isvarargtype(sigtype)
+                        # There wasn't actually a mismatch - the method match failed for
+                        # some other reason, e.g. world age. Just print the sigstr.
+                        print(iob, sigstr...)
+                    elseif get(io, :color, false)::Bool
+                        let sigstr=sigstr
+                            Base.with_output_color(Base.error_color(), iob) do iob
+                                print(iob, "::", sigstr...)
                             end
                         end
-                    end
-                    if !isempty(unexpected)
-                        Base.with_output_color(Base.error_color(), iob) do iob
-                            plur = length(unexpected) > 1 ? "s" : ""
-                            print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
-                        end
+                    else
+                        print(iob, "!Matched::", sigstr...)
                     end
                 end
-                if ex.world < reinterpret(UInt, method.primary_world)
-                    print(iob, " (method too new to be called from this world context.)")
-                elseif ex.world > reinterpret(UInt, method.deleted_world)
-                    print(iob, " (method deleted before this world age.)")
-                end
-                println(iob)
-
-                m = parentmodule_before_main(method)
-                modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
-                print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
-
-                # TODO: indicate if it's in the wrong world
-                push!(lines, (buf, right_matches))
             end
+            kwords = kwarg_decl(method)
+            if !isempty(kwords)
+                print(iob, "; ")
+                join(iob, kwords, ", ")
+            end
+            print(iob, ")")
+            show_method_params(iob0, tv)
+            file, line = updated_methodloc(method)
+            if file === nothing
+                file = string(method.file)
+            end
+            stacktrace_contract_userdir() && (file = contractuser(file))
+
+            if !isempty(kwargs)::Bool
+                unexpected = Symbol[]
+                if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
+                    for (k, v) in kwargs
+                        if !(k::Symbol in kwords)
+                            push!(unexpected, k::Symbol)
+                        end
+                    end
+                end
+                if !isempty(unexpected)
+                    Base.with_output_color(Base.error_color(), iob) do iob
+                        plur = length(unexpected) > 1 ? "s" : ""
+                        print(iob, " got unsupported keyword argument$plur \"", join(unexpected, "\", \""), "\"")
+                    end
+                end
+            end
+            if ex.world < reinterpret(UInt, method.primary_world)
+                print(iob, " (method too new to be called from this world context.)")
+            elseif ex.world > reinterpret(UInt, method.deleted_world)
+                print(iob, " (method deleted before this world age.)")
+            end
+            println(iob)
+
+            m = parentmodule_before_main(method)
+            modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+            print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
+            push!(lines, String(take!(buf)))
+            push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
         end
     end
 
     if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
             print(io, "\n\nClosest candidates are:")
-            sort!(lines, by = x -> -x[2])
+            permute!(lines, sortperm(line_score))
             i = 0
             for line in lines
                 println(io)
@@ -599,7 +597,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
                     break
                 end
                 i += 1
-                print(io, String(take!(line[1])))
+                print(io, line)
             end
             println(io) # extra newline for spacing to stacktrace
         end

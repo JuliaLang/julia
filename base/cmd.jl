@@ -3,9 +3,10 @@
 abstract type AbstractCmd end
 
 # libuv process option flags
-const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS = UInt8(1 << 2)
-const UV_PROCESS_DETACHED = UInt8(1 << 3)
-const UV_PROCESS_WINDOWS_HIDE = UInt8(1 << 4)
+const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS = UInt32(1 << 2)
+const UV_PROCESS_DETACHED = UInt32(1 << 3)
+const UV_PROCESS_WINDOWS_HIDE = UInt32(1 << 4)
+const UV_PROCESS_WINDOWS_DISABLE_EXACT_NAME = UInt32(1 << 7)
 
 struct Cmd <: AbstractCmd
     exec::Vector{String}
@@ -14,7 +15,7 @@ struct Cmd <: AbstractCmd
     env::Union{Vector{String},Nothing}
     dir::String
     cpus::Union{Nothing,Vector{UInt16}}
-    Cmd(exec::Vector{String}) =
+    Cmd(exec::Vector{<:AbstractString}) =
         new(exec, false, 0x00, nothing, "", nothing)
     Cmd(cmd::Cmd, ignorestatus, flags, env, dir, cpus = nothing) =
         new(cmd.exec, ignorestatus, flags, env,

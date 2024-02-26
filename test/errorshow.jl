@@ -78,8 +78,12 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1., "", "")))
 @test occursin("\n\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
 
-# Have no matches so should return empty
+# Have no matches, but still print up to 3
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, 1)))
+@test occursin("\n\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
+
+function nomethodsfunc end
+Base.show_method_candidates(buf, Base.MethodError(nomethodsfunc,(1, 1, 1)))
 @test isempty(String(take!(buf)))
 
 # matches the implicit constructor -> convert method
@@ -665,7 +669,7 @@ end
 
     str = sprint(Base.showerror, MethodError(Core.kwcall, ((; a=3.0), +, 1.0, 2.0), Base.get_world_counter()))
     @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64; a::Float64)")
-    @test occursin("This method may not support any kwargs", str)
+    @test occursin("This method may not support any keyword arguments", str)
 
     @test_throws "MethodError: no method matching kwcall()" Core.kwcall()
 end
@@ -1161,3 +1165,6 @@ end
 # issue #47559"
 @test_throws("MethodError: no method matching invoke Returns(::Any, ::Val{N}) where N",
              invoke(Returns, Tuple{Any,Val{N}} where N, 1, Val(1)))
+
+f33793(x::Float32, y::Float32) = 1
+@test_throws "\nClosest candidates are:\n  f33793(!Matched::Float32, !Matched::Float32)\n" f33793(Float64(0.0), Float64(0.0))

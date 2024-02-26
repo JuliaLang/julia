@@ -173,6 +173,8 @@ The function `f` exists, but no method is defined for this combination of argume
 Closest candidates are:
   f(!Matched::Number, ::Number)
    @ Main none:1
+  f(!Matched::Float64, !Matched::Float64)
+   @ Main none:1
 
 Stacktrace:
 [...]

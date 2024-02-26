@@ -34,6 +34,12 @@ static inline ws_array_t *create_ws_array(size_t capacity, int32_t eltsz) JL_NOT
     return a;
 }
 
+static inline void free_ws_array(ws_array_t *a)
+{
+    free(a->buffer);
+    free(a);
+}
+
 typedef struct {
     _Atomic(int64_t) top;
     char _padding[JL_CACHE_BYTE_ALIGNMENT - sizeof(_Atomic(int64_t))];

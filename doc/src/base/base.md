@@ -1,4 +1,4 @@
-#replacefield Essentials
+# Essentials
 
 ## Introduction
 
@@ -374,6 +374,8 @@ Base.Sys.uptime
 Base.Sys.isjsvm
 Base.Sys.loadavg
 Base.Sys.isexecutable
+Base.Sys.isreadable
+Base.Sys.iswriteable
 Base.Sys.username
 Base.@static
 ```
@@ -468,7 +470,6 @@ Core.swapglobal!
 Core.setglobalonce!
 Core.replaceglobal!
 ```
-
 
 ## Documentation
 (See also the [documentation](@ref man-documentation) chapter.)

@@ -1131,6 +1131,18 @@ end
         cmd =  `$(Base.julia_cmd()) --startup-file=no -e $sysimg_ext_test_code`
         cmd = addenv(cmd, "JULIA_LOAD_PATH" => join([proj, "@stdlib"], sep))
         run(cmd)
+
+
+        # Extensions in implicit environments
+        old_load_path = copy(LOAD_PATH)
+        try
+            empty!(LOAD_PATH)
+            push!(LOAD_PATH, joinpath(@__DIR__, "project", "Extensions", "ImplicitEnv"))
+            pkgid_B = Base.PkgId(Base.uuid5(Base.identify_package("A").uuid, "BExt"), "BExt")
+            @test Base.identify_package(pkgid_B, "B") isa Base.PkgId
+        finally
+            copy!(LOAD_PATH, old_load_path)
+        end
     finally
         try
             rm(depot_path, force=true, recursive=true)
@@ -1329,11 +1341,11 @@ end
         mkpath(project_path)
 
         # Create fake `Foo.jl` package with two files:
-        foo_path = joinpath(depot, "dev", "Foo")
+        foo_path = joinpath(depot, "dev", "Foo51989")
         mkpath(joinpath(foo_path, "src"))
-        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+        open(joinpath(foo_path, "src", "Foo51989.jl"); write=true) do io
             println(io, """
-            module Foo
+            module Foo51989
             include("internal.jl")
             end
             """)
@@ -1343,7 +1355,7 @@ end
         end
         open(joinpath(foo_path, "Project.toml"); write=true) do io
             println(io, """
-            name = "Foo"
+            name = "Foo51989"
             uuid = "00000000-0000-0000-0000-000000000001"
             version = "1.0.0"
             """)
@@ -1351,27 +1363,27 @@ end
 
         # In our depot, `dev` and then `precompile` this `Foo` package.
         @test success(addenv(
-            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo"); Pkg.precompile(); exit(0)'`,
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'import Pkg; Pkg.develop("Foo51989"); Pkg.precompile(); exit(0)'`,
             "JULIA_DEPOT_PATH" => depot))
 
         # Get the size of the generated `.ji` file so that we can ensure that it gets altered
-        foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo")
+        foo_compiled_path = joinpath(depot, "compiled", "v$(VERSION.major).$(VERSION.minor)", "Foo51989")
         cache_path = joinpath(foo_compiled_path, only(filter(endswith(".ji"), readdir(foo_compiled_path))))
         cache_size = filesize(cache_path)
 
         # Next, remove the dependence on `internal.jl` and delete it:
         rm(joinpath(foo_path, "src", "internal.jl"))
-        open(joinpath(foo_path, "src", "Foo.jl"); write=true) do io
+        open(joinpath(foo_path, "src", "Foo51989.jl"); write=true) do io
             truncate(io, 0)
             println(io, """
-            module Foo
+            module Foo51989
             end
             """)
         end
 
         # Try to load `Foo`; this should trigger recompilation, not an error!
         @test success(addenv(
-            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo; exit(0)'`,
+            `$(Base.julia_cmd()) --project=$project_path --startup-file=no -e 'using Foo51989; exit(0)'`,
             "JULIA_DEPOT_PATH" => depot,
         ))
 
@@ -1427,7 +1439,7 @@ end
 end
 
 @testset "command-line flags" begin
-    mktempdir() do dir
+    mktempdir() do depot_path mktempdir() do dir
         # generate a Parent.jl and Child.jl package, with Parent depending on Child
         open(joinpath(dir, "Child.jl"), "w") do io
             println(io, """
@@ -1446,6 +1458,7 @@ end
             code = "using $name"
             cmd = addenv(`$(Base.julia_cmd()) -e $code $args`,
                         "JULIA_LOAD_PATH" => dir,
+                        "JULIA_DEPOT_PATH" => depot_path,
                         "JULIA_DEBUG" => "loading")
 
             out = Pipe()
@@ -1502,7 +1515,7 @@ end
         @test occursin(r"Loading object cache file .+ for Child", log)
         @test occursin(r"Generating object cache file for Parent", log)
         @test occursin(r"Loading object cache file .+ for Parent", log)
-    end
+    end end
 end
 
 @testset "including non-existent file throws proper error #52462" begin

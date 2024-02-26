@@ -1015,13 +1015,8 @@ end
             @test real(L) == real(B)
             @test imag(L) == imag(B)
             @test kron(L,L) == kron(B,B)
-            if A isa Matrix
-                @test transpose!(MT(copy(A))) == transpose(L)
-                @test adjoint!(MT(copy(A))) == adjoint(L)
-            else
-                @test_broken transpose!(MT(copy(A))) == transpose(L)
-                @test_broken adjoint!(MT(copy(A))) == adjoint(L)
-            end
+            @test transpose!(MT(copy(A))) == transpose(L) broken=!(A isa Matrix)
+            @test adjoint!(MT(copy(A))) == adjoint(L) broken=!(A isa Matrix)
         end
     end
 
@@ -1042,13 +1037,8 @@ end
             @test real(U) == real(B)
             @test imag(U) == imag(B)
             @test kron(U,U) == kron(B,B)
-            if A isa Matrix
-                @test transpose!(MT(copy(A))) == transpose(U)
-                @test adjoint!(MT(copy(A))) == adjoint(U)
-            else
-                @test_broken transpose!(MT(copy(A))) == transpose(U)
-                @test_broken adjoint!(MT(copy(A))) == adjoint(U)
-            end
+            @test transpose!(MT(copy(A))) == transpose(U) broken=!(A isa Matrix)
+            @test adjoint!(MT(copy(A))) == adjoint(U) broken=!(A isa Matrix)
         end
     end
 end

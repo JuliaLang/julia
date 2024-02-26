@@ -953,12 +953,17 @@ struct Cycle{I}
 end
 
 """
-    cycle(iter)
+    cycle(iter[, n::Int])
 
 An iterator that cycles through `iter` forever.
-If `iter` is empty, so is `cycle(iter)`.
+If `n` is specified, then it cycles through `iter` that many times.
+When `iter` is empty, so are `cycle(iter)` and `cycle(iter, n)`.
 
-See also: [`Iterators.repeated`](@ref), [`Base.repeat`](@ref).
+`Iterators.cycle(iter, n)` is the lazy equivalent of [`Base.repeat`](@ref)`(vector, n)`,
+while [`Iterators.repeated`](@ref)`(iter, n)` is the lazy [`Base.fill`](@ref)`(item, n)`.
+
+!!! compat "Julia 1.11"
+    The method `cycle(iter, n)` was added in Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -967,9 +972,19 @@ julia> for (i, v) in enumerate(Iterators.cycle("hello"))
            i > 10 && break
        end
 hellohelloh
+
+julia> foreach(print, Iterators.cycle(['j', 'u', 'l', 'i', 'a'], 3))
+juliajuliajulia
+
+julia> repeat([1,2,3], 4) == collect(Iterators.cycle([1,2,3], 4))
+true
+
+julia> fill([1,2,3], 4) == collect(Iterators.repeated([1,2,3], 4))
+true
 ```
 """
 cycle(xs) = Cycle(xs)
+cycle(xs, n::Integer) = flatten(repeated(xs, n))
 
 eltype(::Type{Cycle{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{Cycle{I}}) where {I} = IteratorEltype(I)
@@ -1000,7 +1015,7 @@ repeated(x) = Repeated(x)
 An iterator that generates the value `x` forever. If `n` is specified, generates `x` that
 many times (equivalent to `take(repeated(x), n)`).
 
-See also: [`Iterators.cycle`](@ref), [`Base.repeat`](@ref).
+See also [`fill`](@ref Base.fill), and compare [`Iterators.cycle`](@ref).
 
 # Examples
 ```jldoctest
@@ -1012,6 +1027,12 @@ julia> collect(a)
  [1 2]
  [1 2]
  [1 2]
+
+julia> ans == fill([1 2], 4)
+true
+
+julia> Iterators.cycle([1 2], 4) |> collect |> println
+[1, 2, 1, 2, 1, 2, 1, 2]
 ```
 """
 repeated(x, n::Integer) = take(repeated(x), Int(n))

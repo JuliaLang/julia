@@ -45,7 +45,7 @@ AnnotatedString(s::S<:AbstractString, annotations::Vector{Tuple{UnitRange{Int}, 
 A AnnotatedString can also be created with [`annotatedstring`](@ref), which acts much
 like [`string`](@ref) but preserves any annotations present in the arguments.
 
-# Example
+# Examples
 
 ```julia-repl
 julia> AnnotatedString("this is an example annotated string",
@@ -153,7 +153,7 @@ lastindex(s::AnnotatedString) = lastindex(s.string)
 function getindex(s::AnnotatedString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds if isvalid(s, i)
-        AnnotatedChar(s.string[i], annotations(s, i))
+        AnnotatedChar(s.string[i], map(last, annotations(s, i)))
     else
         string_index_err(s, i)
     end
@@ -200,34 +200,36 @@ julia> annotatedstring(AnnotatedString("annotated", [(1:9, :label => 1)]), ", an
 function annotatedstring(xs...)
     isempty(xs) && return AnnotatedString("")
     size = mapreduce(_str_sizehint, +, xs)
-    s = IOContext(IOBuffer(sizehint=size), :color => true)
+    buf = IOBuffer(sizehint=size)
+    s = IOContext(buf, :color => true)
     annotations = Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}()
     for x in xs
+        size = filesize(s.io)
         if x isa AnnotatedString
             for (region, annot) in x.annotations
-                push!(annotations, (s.io.size .+ (region), annot))
+                push!(annotations, (size .+ (region), annot))
             end
             print(s, x.string)
         elseif x isa SubString{<:AnnotatedString}
             for (region, annot) in x.string.annotations
                 start, stop = first(region), last(region)
                 if start <= x.offset + x.ncodeunits && stop > x.offset
-                    rstart = s.io.size + max(0, start - x.offset - 1) + 1
-                    rstop = s.io.size + min(stop, x.offset + x.ncodeunits) - x.offset
+                    rstart = size + max(0, start - x.offset - 1) + 1
+                    rstop = size + min(stop, x.offset + x.ncodeunits) - x.offset
                     push!(annotations, (rstart:rstop, annot))
                 end
             end
             print(s, SubString(x.string.string, x.offset, x.ncodeunits, Val(:noshift)))
         elseif x isa AnnotatedChar
             for annot in x.annotations
-                push!(annotations, (1+s.io.size:1+s.io.size, annot))
+                push!(annotations, (1+size:1+size, annot))
             end
             print(s, x.char)
         else
             print(s, x)
         end
     end
-    str = String(resize!(s.io.data, s.io.size))
+    str = String(take!(buf))
     AnnotatedString(str, annotations)
 end
 
@@ -314,6 +316,20 @@ reverse(s::SubString{<:AnnotatedString}) = reverse(AnnotatedString(s))
 
 ## End AbstractString interface ##
 
+function _annotate!(annlist::Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any}))
+    label, val = labelval
+    if val === nothing
+        indices = searchsorted(annlist, (range,), by=first)
+        labelindex = filter(i -> first(annlist[i][2]) === label, indices)
+        for index in Iterators.reverse(labelindex)
+            deleteat!(annlist, index)
+        end
+    else
+        sortedindex = searchsortedlast(annlist, (range,), by=first) + 1
+        insert!(annlist, sortedindex, (range, Pair{Symbol, Any}(label, val)))
+    end
+end
+
 """
     annotate!(str::AnnotatedString, [range::UnitRange{Int}], label::Symbol => value)
     annotate!(str::SubString{AnnotatedString}, [range::UnitRange{Int}], label::Symbol => value)
@@ -321,20 +337,8 @@ reverse(s::SubString{<:AnnotatedString}) = reverse(AnnotatedString(s))
 Annotate a `range` of `str` (or the entire string) with a labeled value (`label` => `value`).
 To remove existing `label` annotations, use a value of `nothing`.
 """
-function annotate!(s::AnnotatedString, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any}))
-    label, val = labelval
-    if val === nothing
-        indices = searchsorted(s.annotations, (range,), by=first)
-        labelindex = filter(i -> first(s.annotations[i][2]) === label, indices)
-        for index in Iterators.reverse(labelindex)
-            deleteat!(s.annotations, index)
-        end
-    else
-        sortedindex = searchsortedlast(s.annotations, (range,), by=first) + 1
-        insert!(s.annotations, sortedindex, (range, Pair{Symbol, Any}(label, val)))
-    end
-    s
-end
+annotate!(s::AnnotatedString, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any})) =
+    (_annotate!(s.annotations, range, labelval); s)
 
 annotate!(ss::AnnotatedString, @nospecialize(labelval::Pair{Symbol, <:Any})) =
     annotate!(ss, firstindex(ss):lastindex(ss), labelval)
@@ -354,37 +358,44 @@ annotate!(c::AnnotatedChar, @nospecialize(labelval::Pair{Symbol, <:Any})) =
     (push!(c.annotations, labelval); c)
 
 """
-    annotations(str::AnnotatedString, [position::Union{Integer, UnitRange}])
-    annotations(str::SubString{AnnotatedString}, [position::Union{Integer, UnitRange}])
+    annotations(str::Union{AnnotatedString, SubString{AnnotatedString}},
+                [position::Union{Integer, UnitRange}]) ->
+        Vector{Tuple{UnitRange{Int}, Pair{Symbol, Any}}}
 
 Get all annotations that apply to `str`. Should `position` be provided, only
 annotations that overlap with `position` will be returned.
+
+Annotations are provided together with the regions they apply to, in the form of
+a vector of region–annotation tuples.
 
 See also: `annotate!`.
 """
 annotations(s::AnnotatedString) = s.annotations
 
-annotations(s::SubString{<:AnnotatedString}) =
-    annotations(s, s.offset+1:s.offset+s.ncodeunits)
+function annotations(s::SubString{<:AnnotatedString})
+    map(((region, annot),) -> (first(region)-s.offset:last(region)-s.offset, annot),
+        annotations(s.string, s.offset+1:s.offset+s.ncodeunits))
+end
 
 function annotations(s::AnnotatedString, pos::UnitRange{<:Integer})
     # TODO optimise
-    annots = filter(label -> !isempty(intersect(pos, first(label))),
-                    s.annotations)
-    last.(annots)
+    Tuple{UnitRange{Int64}, Pair{Symbol, Any}}[
+        (max(first(pos), first(region)):min(last(pos), last(region)), annot)
+        for (region, annot) in s.annotations if !isempty(intersect(pos, region))]
 end
 
 annotations(s::AnnotatedString, pos::Integer) = annotations(s, pos:pos)
 
 annotations(s::SubString{<:AnnotatedString}, pos::Integer) =
     annotations(s.string, s.offset + pos)
+
 annotations(s::SubString{<:AnnotatedString}, pos::UnitRange{<:Integer}) =
     annotations(s.string, first(pos)+s.offset:last(pos)+s.offset)
 
 """
-    annotations(chr::AnnotatedChar)
+    annotations(chr::AnnotatedChar) -> Vector{Pair{Symbol, Any}}
 
-Get all annotations of `chr`.
+Get all annotations of `chr`, in the form of a vector of annotation pairs.
 """
 annotations(c::AnnotatedChar) = c.annotations
 
@@ -400,7 +411,8 @@ AnnotatedIOBuffer() = AnnotatedIOBuffer(IOBuffer())
 
 function show(io::IO, aio::AnnotatedIOBuffer)
     show(io, AnnotatedIOBuffer)
-    print(io, '(', aio.io.size, " byte", ifelse(aio.io.size == 1, "", "s"), ", ",
+    size = filesize(aio.io)
+    print(io, '(', size, " byte", ifelse(size == 1, "", "s"), ", ",
           length(aio.annotations), " annotation", ifelse(length(aio.annotations) == 1, "", "s"), ")")
 end
 
@@ -410,11 +422,14 @@ pipe_writer(io::AnnotatedIOBuffer) = io.io
 # Useful `IOBuffer` methods that we don't get from `AbstractPipe`
 position(io::AnnotatedIOBuffer) = position(io.io)
 seek(io::AnnotatedIOBuffer, n::Integer) = (seek(io.io, n); io)
-seekend(io::AnnotatedIOBuffer) = seekend(io.io)
+seekend(io::AnnotatedIOBuffer) = (seekend(io.io); io)
 skip(io::AnnotatedIOBuffer, n::Integer) = (skip(io.io, n); io)
 copy(io::AnnotatedIOBuffer) = AnnotatedIOBuffer(copy(io.io), copy(io.annotations))
 
 annotations(io::AnnotatedIOBuffer) = io.annotations
+
+annotate!(io::AnnotatedIOBuffer, range::UnitRange{Int}, @nospecialize(labelval::Pair{Symbol, <:Any})) =
+    (_annotate!(io.annotations, range, labelval); io)
 
 function write(io::AnnotatedIOBuffer, astr::Union{AnnotatedString, SubString{<:AnnotatedString}})
     astr = AnnotatedString(astr)
