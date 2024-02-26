@@ -114,6 +114,15 @@ New library features
 * `Iterators.cycle(iter, n)` runs over `iter` a fixed number of times, instead of forever ([#47354]).
 * `zero(::AbstractArray)` now applies recursively, so `zero([[1,2],[3,4,5]])` now produces the additive identity `[[0,0],[0,0,0]]` rather than erroring ([#38064]).
 
+Standard library changes
+------------------------
+
+* The fallback method `write(::IO, ::AbstractArray)` used to recursively call `write` on each element,
+  but now writes the in-memory representation of each value. For example, `write(io, 'a':'b')` now
+  writes 4 bytes for each character, instead of writing the UTF-8 representation of each character.
+  The new format is compatible with that used by `Array`, making it possible to use `read!` to get
+  the data back ([#42593]).
+
 #### StyledStrings
 
 * A new standard library for handling styling in a more comprehensive and structured way ([#49586]).
@@ -212,6 +221,7 @@ Tooling Improvements
 [#34587]: https://github.com/JuliaLang/julia/issues/34587
 [#35856]: https://github.com/JuliaLang/julia/issues/35856
 [#38064]: https://github.com/JuliaLang/julia/issues/38064
+[#42593]: https://github.com/JuliaLang/julia/issues/42593
 [#43845]: https://github.com/JuliaLang/julia/issues/43845
 [#45156]: https://github.com/JuliaLang/julia/issues/45156
 [#46501]: https://github.com/JuliaLang/julia/issues/46501
