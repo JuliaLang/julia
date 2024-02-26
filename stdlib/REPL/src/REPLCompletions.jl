@@ -4,7 +4,7 @@ module REPLCompletions
 
 export completions, shell_completions, bslash_completions, completion_text
 
-using Core: CodeInfo, MethodInstance, CodeInstance, Const
+using Core: Const
 const CC = Core.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
