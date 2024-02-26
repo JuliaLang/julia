@@ -620,13 +620,13 @@ end
 
 
 # Obtain a temporary filename.
-function tempname(parent::AbstractString=tempdir(); max_tries::Int = 100, cleanup::Bool=true)
+function tempname(parent::AbstractString=tempdir(); max_tries::Int = 100, cleanup::Bool=true, suffix::AbstractString="")
     isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
 
     prefix = joinpath(parent, temp_prefix)
     filename = nothing
     for i in 1:max_tries
-        filename = string(prefix, _rand_filename())
+        filename = string(prefix, _rand_filename(), suffix)
         if ispath(filename)
             filename = nothing
         else
@@ -682,7 +682,7 @@ end # os-test
 
 
 """
-    tempname(parent=tempdir(); cleanup=true) -> String
+    tempname(parent=tempdir(); cleanup=true, suffix="") -> String
 
 Generate a temporary file path. This function only returns a path; no file is
 created. The path is likely to be unique, but this cannot be guaranteed due to
@@ -693,7 +693,8 @@ existing at the time of the call to `tempname`.
 When called with no arguments, the temporary name will be an absolute path to a
 temporary name in the system temporary directory as given by `tempdir()`. If a
 `parent` directory argument is given, the temporary path will be in that
-directory instead.
+directory instead. If a suffix is given the tempname will end with that suffix
+and be tested for uniqueness with that suffix.
 
 The `cleanup` option controls whether the process attempts to delete the
 returned path automatically when the process exits. Note that the `tempname`
@@ -704,6 +705,9 @@ you do and `cleanup` is `true` it will be deleted upon process termination.
 !!! compat "Julia 1.4"
     The `parent` and `cleanup` arguments were added in 1.4. Prior to Julia 1.4
     the path `tempname` would never be cleaned up at process termination.
+
+!!! compat "Julia 1.12"
+    The `suffix` keyword argument was added in Julia 1.12.
 
 !!! warning
 
