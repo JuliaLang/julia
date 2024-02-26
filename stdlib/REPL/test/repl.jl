@@ -1700,33 +1700,30 @@ try # test the functionality of `UndefVarError_hint` against import clashes
     @assert isempty(Base.Experimental._hint_handlers)
     Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
 
-    fake_repl() do stdin_write, stdout_read, repl
-        backend = REPL.REPLBackend()
-        repltask = @async REPL.run_repl(repl; backend)
-        write(stdin_write, """
-        module X
+    @eval module X
 
-        module A
-        export x
-        x = 1
-        end # A
+    module A
+    export x
+    x = 1
+    end # A
 
-        module B
-        export x
-        x = 2
-        end # B
+    module B
+    export x
+    x = 2
+    end # B
 
-        using .A, .B
+    using .A, .B
 
-        end # X
-        """)
-        write(stdin_write,
-              "\nX.x\n\"ZZZZZ\"\n")
-        txt = readuntil(stdout_read, "ZZZZZ")
-        write(stdin_write, '\x04')
-        wait(repltask)
-        @test occursin("Hint: It looks like this name was exported by two different modules, resulting in ambiguity. Try explicitly importing it, or qualifying the name with the module it should come from.", txt)
+    end # X
+
+    str = try
+        X.x
+        @test false # should not reach this
+    catch e
+        sprint(Base.showerror, e)
     end
+
+    @test contains(str, "Hint: It looks like this name was exported by two different modules, resulting in ambiguity. Try explicitly importing it, or qualifying the name with the module it should come from.")
 finally
     empty!(Base.Experimental._hint_handlers)
 end
