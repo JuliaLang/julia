@@ -274,7 +274,8 @@ Stacktrace:
 [...]
 ```
 """
-function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
+function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allow_delayed_delete::Bool=true)
+    # allow_delayed_delete is used by Pkg.gc() but is otherwise not part of the public API
     if islink(path) || !isdir(path)
         try
             unlink(path)
@@ -282,7 +283,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
             if isa(err, IOError)
                 force && err.code==Base.UV_ENOENT && return
                 @static if Sys.iswindows()
-                    if err.code==Base.UV_EACCES && endswith(path, ".dll")
+                    if allow_delayed_delete && err.code==Base.UV_EACCES && endswith(path, ".dll")
                         # Loaded DLLs cannot be deleted on Windows, even with posix delete mode
                         # but they can be moved. So move out to allow the dir to be deleted
                         # TODO: Add a mechanism to delete these moved files after dlclose or process exit
