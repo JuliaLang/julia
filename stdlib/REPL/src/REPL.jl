@@ -44,7 +44,13 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                 if C_NULL == owner
                     # No global of this name exists in this module.
                     # This is the common case, so do not print that information.
-                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                    # It could be the binding was exported by two modules, which we can detect
+                    # by the `usingfailed` flag in the binding:
+                    if isdefined(bnd, :flags) && Bool(bnd.flags >> 4 & 1) # magic location of the `usingfailed` flag
+                        print(io, "\nHint: It looks like this name was exported by two different modules, resulting in ambiguity. Try explicitly importing it, or qualifying the name with the module it should come from.")
+                    else
+                        print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                    end
                     owner = bnd
                 else
                     owner = unsafe_pointer_to_objref(owner)::Core.Binding
