@@ -249,6 +249,10 @@ function mkpath(path::AbstractString; mode::Integer = 0o777)
     path
 end
 
+# Files that were requested to be deleted but can't be by the current process
+# i.e. loaded DLLs on Windows
+delayed_delete_dir() = joinpath(tempdir(), "julia_delayed_deletes")
+
 """
     rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
 
@@ -282,10 +286,11 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                         # Loaded DLLs cannot be deleted on Windows, even with posix delete mode
                         # but they can be moved. So move out to allow the dir to be deleted
                         # TODO: Add a mechanism to delete these moved files after dlclose or process exit
-                        dir = mkpath(joinpath(tempdir(), "julia_delayed_deletes"))
+                        dir = mkpath(delayed_delete_dir())
                         temp_path = tempname(dir, cleanup = false) * "_" * basename(path)
                         @debug "Could not delete DLL most likely because it is loaded, moving to tempdir" path temp_path
                         mv(path, temp_path)
+                        return
                     end
                 end
             end
@@ -293,14 +298,16 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         end
     else
         if recursive
-            for p in readdir(path)
-                try
-                    rm(joinpath(path, p), force=force, recursive=true)
-                catch err
-                    if !(isa(err, IOError) && err.code==Base.UV_EACCES)
-                        rethrow(err)
+            try
+                for p in readdir(path)
+                    try
+                        rm(joinpath(path, p), force=force, recursive=true)
+                    catch err
+                        (isa(err, IOError) && err.code==Base.UV_EACCES) || rethrow()
                     end
                 end
+            catch err
+                (isa(err, IOError) && err.code==Base.UV_EACCES) || rethrow()
             end
         end
         req = Libc.malloc(_sizeof_uv_fs)
