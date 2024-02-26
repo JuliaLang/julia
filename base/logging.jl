@@ -543,6 +543,21 @@ function disable_logging(level::LogLevel)
     _min_enabled_level[] = level + 1
 end
 
+"""
+    enable_logging(level)
+
+Enable all log messages at log levels equal to or greater than `level`.
+This is a *global* setting.
+
+# Examples
+```julia
+Logging.enable_logging(Logging.Debug) # Enable debug and info
+```
+"""
+function enable_logging(level::LogLevel)
+    _min_enabled_level[] = level
+end 
+
 let _debug_groups_include::Vector{Symbol} = Symbol[],
     _debug_groups_exclude::Vector{Symbol} = Symbol[],
     _debug_str::String = ""
