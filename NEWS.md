@@ -7,6 +7,16 @@ New language features
 Language changes
 ----------------
 
+ - When methods are replaced with exactly equivalent ones, the old method is no
+   longer deleted implicitly simultaneously, although the new method does take
+   priority and become more specific than the old method. Thus if the new
+   method is deleted later, the old method will resume operating. This can be
+   useful to mocking frameworks (such as in SparseArrays, Pluto, and Mocking,
+   among others), as they do not need to explicitly restore the old method.
+   While inference and compilation still must be repeated with this, it also
+   may pave the way for inference to be able to intelligently re-use the old
+   results, once the new method is deleted. ([#53415])
+
 Compiler/Runtime improvements
 -----------------------------
 

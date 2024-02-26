@@ -1465,8 +1465,6 @@ struct jl_typemap_assoc {
     size_t const world;
     // outputs
     jl_svec_t *env; // subtype env (initialize to null to perform intersection without an environment)
-    size_t min_valid;
-    size_t max_valid;
 };
 
 jl_typemap_entry_t *jl_typemap_assoc_by_type(
