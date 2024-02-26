@@ -124,6 +124,9 @@ end
     end
     @test_throws ArgumentError tempname(randstring())
 end
+@testset "tempname with suffix" begin
+    @test !isfile(tempname(suffix = "_foo.txt"))
+end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
 
