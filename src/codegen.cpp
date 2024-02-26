@@ -8267,7 +8267,7 @@ static jl_llvm_functions_t
 
     // step 7. allocate local variables slots
     // must be in the first basic block for the llvm mem2reg pass to work
-    auto allocate_local = [&](jl_varinfo_t &varinfo, jl_sym_t *s) {
+    auto allocate_local = [&ctx, &dbuilder, &debuginfo, topdebugloc, va, debug_enabled, M](jl_varinfo_t &varinfo, jl_sym_t *s, int i) {
         jl_value_t *jt = varinfo.value.typ;
         assert(!varinfo.boxroot); // variables shouldn't have memory locs already
         if (varinfo.value.constant) {
@@ -8275,10 +8275,10 @@ static jl_llvm_functions_t
             alloc_def_flag(ctx, varinfo);
             return;
         }
-        else if (varinfo.isArgument && !(specsig && i == (size_t)ctx.vaSlot)) {
-            // if we can unbox it, just use the input pointer
-            if (i != (size_t)ctx.vaSlot && jl_is_concrete_immutable(jt))
-                return;
+        else if (varinfo.isArgument && (!va || ctx.vaSlot == -1 || i != ctx.vaSlot)) {
+            // just use the input pointer, if we have it
+            // (we will need to attach debuginfo later to it)
+            return;
         }
         else if (jl_is_uniontype(jt)) {
             bool allunbox;
@@ -8289,6 +8289,7 @@ static jl_llvm_functions_t
                 varinfo.value = mark_julia_slot(lv, jt, NULL, ctx.tbaa().tbaa_stack);
                 varinfo.pTIndex = emit_static_alloca(ctx, getInt8Ty(ctx.builder.getContext()));
                 setName(ctx.emission_context, varinfo.pTIndex, "tindex");
+                // TODO: attach debug metadata to this variable
             }
             else if (allunbox) {
                 // all ghost values just need a selector allocated
@@ -8297,6 +8298,7 @@ static jl_llvm_functions_t
                 varinfo.pTIndex = lv;
                 varinfo.value.tbaa = NULL;
                 varinfo.value.isboxed = false;
+                // TODO: attach debug metadata to this variable
             }
             if (lv || allunbox)
                 alloc_def_flag(ctx, varinfo);
@@ -8323,29 +8325,21 @@ static jl_llvm_functions_t
             }
             return;
         }
-        if (!varinfo.isArgument || // always need a slot if the variable is assigned
-            specsig || // for arguments, give them stack slots if they aren't in `argArray` (otherwise, will use that pointer)
-            (va && (int)i == ctx.vaSlot) || // or it's the va arg tuple
-            i == 0) { // or it is the first argument (which isn't in `argArray`)
-            AllocaInst *av = new AllocaInst(ctx.types().T_prjlvalue, M->getDataLayout().getAllocaAddrSpace(),
-                nullptr, Align(sizeof(jl_value_t*)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
-            StoreInst *SI = new StoreInst(Constant::getNullValue(ctx.types().T_prjlvalue), av, false, Align(sizeof(void*)));
-            SI->insertAfter(ctx.topalloca);
-            varinfo.boxroot = av;
-            if (debug_enabled && varinfo.dinfo) {
-                DIExpression *expr;
-                if ((Metadata*)varinfo.dinfo->getType() == debuginfo.jl_pvalue_dillvmt) {
-                    expr = dbuilder.createExpression();
-                }
-                else {
-                    SmallVector<uint64_t, 8> addr;
-                    addr.push_back(llvm::dwarf::DW_OP_deref);
-                    expr = dbuilder.createExpression(addr);
-                }
-                dbuilder.insertDeclare(av, varinfo.dinfo, expr,
-                                            topdebugloc,
-                                ctx.builder.GetInsertBlock());
-            }
+        // otherwise give it a boxroot in this function
+        AllocaInst *av = new AllocaInst(ctx.types().T_prjlvalue, M->getDataLayout().getAllocaAddrSpace(),
+            nullptr, Align(sizeof(jl_value_t*)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
+        StoreInst *SI = new StoreInst(Constant::getNullValue(ctx.types().T_prjlvalue), av, false, Align(sizeof(void*)));
+        SI->insertAfter(ctx.topalloca);
+        varinfo.boxroot = av;
+        if (debug_enabled && varinfo.dinfo) {
+            SmallVector<uint64_t, 1> addr;
+            DIExpression *expr;
+            if ((Metadata*)varinfo.dinfo->getType() != debuginfo.jl_pvalue_dillvmt)
+                addr.push_back(llvm::dwarf::DW_OP_deref);
+            expr = dbuilder.createExpression(addr);
+            dbuilder.insertDeclare(av, varinfo.dinfo, expr,
+                                        topdebugloc,
+                            ctx.builder.GetInsertBlock());
         }
     };
 
@@ -8359,7 +8353,7 @@ static jl_llvm_functions_t
             varinfo.usedUndef = false;
             continue;
         }
-        allocate_local(varinfo, s);
+        allocate_local(varinfo, s, (int)i);
     }
 
     std::map<int, int> upsilon_to_phic;
@@ -8402,7 +8396,7 @@ static jl_llvm_functions_t
                 vi.used = true;
                 vi.isVolatile = true;
                 vi.value = mark_julia_type(ctx, (Value*)NULL, false, typ);
-                allocate_local(vi, jl_symbol("phic"));
+                allocate_local(vi, jl_symbol("phic"), -1);
             }
         }
     }
@@ -8542,7 +8536,7 @@ static jl_llvm_functions_t
                             ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, argPtr, Align(sizeof(void*))),
                             false, vi.value.typ));
                     theArg = mark_julia_type(ctx, load, true, vi.value.typ);
-                    if (debug_enabled && vi.dinfo && !vi.boxroot && !vi.value.V) {
+                    if (debug_enabled && vi.dinfo && !vi.boxroot) {
                         SmallVector<uint64_t, 8> addr;
                         addr.push_back(llvm::dwarf::DW_OP_deref);
                         addr.push_back(llvm::dwarf::DW_OP_plus_uconst);
@@ -8561,21 +8555,15 @@ static jl_llvm_functions_t
                 assert(vi.value.V == NULL && "unexpected variable slot created for argument");
                 // keep track of original (possibly boxed) value to avoid re-boxing or moving
                 vi.value = theArg;
-                if (specsig && theArg.V && debug_enabled && vi.dinfo) {
-                    SmallVector<uint64_t, 8> addr;
-                    Value *parg;
+                if (debug_enabled && vi.dinfo && theArg.V) {
                     if (theArg.ispointer()) {
-                        parg = theArg.V;
-                        if ((Metadata*)vi.dinfo->getType() != debuginfo.jl_pvalue_dillvmt)
-                            addr.push_back(llvm::dwarf::DW_OP_deref);
+                        dbuilder.insertDeclare(theArg.V, vi.dinfo, dbuilder.createExpression(),
+                                               topdebugloc, ctx.builder.GetInsertBlock());
                     }
                     else {
-                        parg = ctx.builder.CreateAlloca(theArg.V->getType(), NULL, jl_symbol_name(s));
-                        ctx.builder.CreateStore(theArg.V, parg);
+                        dbuilder.insertDbgValueIntrinsic(theArg.V, vi.dinfo, dbuilder.createExpression(),
+                                                         topdebugloc, ctx.builder.GetInsertBlock());
                     }
-                    dbuilder.insertDeclare(parg, vi.dinfo, dbuilder.createExpression(addr),
-                                                topdebugloc,
-                                                ctx.builder.GetInsertBlock());
                 }
             }
             else {

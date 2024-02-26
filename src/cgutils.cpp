@@ -2664,6 +2664,8 @@ static MDNode *best_field_tbaa(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_da
                 return ctx.tbaa().tbaa_arraysize;
         }
     }
+    if (strct.V && jl_field_isconst(jt, idx) && isa<Argument>(strct.V->stripInBoundsOffsets())) // TODO: we use our isLoadFromConstGV helper here instead instead of just isa<Argument> (but without PhiNode handling)
+        return ctx.tbaa().tbaa_const;
     return tbaa;
 }
 
