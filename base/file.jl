@@ -288,7 +288,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allo
                         # but they can be moved. So move out to allow the dir to be deleted
                         # TODO: Add a mechanism to delete these moved files after dlclose or process exit
                         dir = mkpath(delayed_delete_dir())
-                        temp_path = tempname(dir, cleanup = false) * "_" * basename(path)
+                        temp_path = tempname(dir, cleanup = false, suffix = string("_", basename(path)))
                         @debug "Could not delete DLL most likely because it is loaded, moving to tempdir" path temp_path
                         mv(path, temp_path)
                         return
