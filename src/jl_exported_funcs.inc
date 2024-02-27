@@ -479,7 +479,7 @@
     XX(jl_type_intersection) \
     XX(jl_type_intersection_with_env) \
     XX(jl_type_morespecific) \
-    XX(jl_type_morespecific_no_subtype) \
+    XX(jl_method_morespecific) \
     XX(jl_type_union) \
     XX(jl_type_unionall) \
     XX(jl_unbox_bool) \

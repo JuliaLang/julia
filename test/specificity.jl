@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function args_morespecific(a, b)
-    sp = (ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0)
+    sp = Base.morespecific(a, b)
     if sp  # make sure morespecific(a,b) implies !morespecific(b,a)
-        @test ccall(:jl_type_morespecific, Cint, (Any,Any), b, a) == 0
+        @test !Base.morespecific(b, a)
     end
     return sp
 end

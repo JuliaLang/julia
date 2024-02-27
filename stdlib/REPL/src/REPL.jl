@@ -130,12 +130,10 @@ import ..LineEdit:
     history_first,
     history_last,
     history_search,
-    accept_result,
     setmodifiers!,
     terminal,
     MIState,
     PromptState,
-    TextInterface,
     mode_idx
 
 include("REPLCompletions.jl")

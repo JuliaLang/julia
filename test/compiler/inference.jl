@@ -184,11 +184,7 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
-    if commutative
-        @test r == Core.Compiler.tuplemerge(b, a)
-    else
-        @test_broken r == Core.Compiler.tuplemerge(b, a)
-    end
+    @test r == Core.Compiler.tuplemerge(b, a) broken=!commutative
 end
 tuplemerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
 tuplemerge_test(Tuple{Int}, Tuple{String, String}, Tuple)

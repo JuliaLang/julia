@@ -887,6 +887,7 @@ A special case where exact behavior is guaranteed: when `T <: S`,
 typeintersect(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type_intersection, Any, (Any, Any), a::Type, b::Type))
 
 morespecific(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type_morespecific, Cint, (Any, Any), a::Type, b::Type) != 0)
+morespecific(a::Method, b::Method) = ccall(:jl_method_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
     fieldoffset(type, i)
@@ -2492,7 +2493,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             for match in ms
                 m = match.method
                 match.fully_covers || continue
-                if minmax === nothing || morespecific(m.sig, minmax.sig)
+                if minmax === nothing || morespecific(m, minmax)
                     minmax = m
                 end
             end
@@ -2502,8 +2503,8 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
             for match in ms
                 m = match.method
                 m === minmax && continue
-                if !morespecific(minmax.sig, m.sig)
-                    if match.fully_covers || !morespecific(m.sig, minmax.sig)
+                if !morespecific(minmax, m)
+                    if match.fully_covers || !morespecific(m, minmax)
                         return true
                     end
                 end
