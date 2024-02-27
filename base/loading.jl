@@ -1508,31 +1508,36 @@ end
 
 
 struct CacheFlags
-    # OOICCDDP - see jl_cache_flags
+    # OOJICCDDP - see jl_cache_flags
     use_pkgimages::Bool
     debug_level::Int
     check_bounds::Int
     inline::Bool
+    julia_debug::Bool
     opt_level::Int
 end
-function CacheFlags(f::UInt8)
+
+function CacheFlags(f::UInt16)
     use_pkgimages = Bool(f & 1)
     debug_level = Int((f >> 1) & 3)
     check_bounds = Int((f >> 3) & 3)
     inline = Bool((f >> 5) & 1)
-    opt_level = Int((f >> 6) & 3) # define OPT_LEVEL in statiddata_utils
-    CacheFlags(use_pkgimages, debug_level, check_bounds, inline, opt_level)
+    julia_debug = Bool((f >> 6) & 1)
+    opt_level = Int((f >> 7) & 3)
+    CacheFlags(use_pkgimages, debug_level, check_bounds, inline, julia_debug, opt_level)
 end
-CacheFlags(f::Int) = CacheFlags(UInt8(f))
-CacheFlags() = CacheFlags(ccall(:jl_cache_flags, UInt8, ()))
 
-function _cacheflag_to_uint8(cf::CacheFlags)::UInt8
-    f = UInt8(0)
-    f |= cf.use_pkgimages << 0
-    f |= cf.debug_level << 1
-    f |= cf.check_bounds << 3
-    f |= cf.inline << 5
-    f |= cf.opt_level << 6
+CacheFlags(f::Int) = CacheFlags(UInt16(f))
+CacheFlags() = CacheFlags(ccall(:jl_cache_flags, UInt16, ()))
+
+function _cacheflag_to_uint16(cf::CacheFlags)::UInt16
+    f = UInt16(0)
+    f |= UInt16(cf.use_pkgimages) << 0
+    f |= UInt16(cf.debug_level) << 1
+    f |= UInt16(cf.check_bounds) << 3
+    f |= UInt16(cf.inline) << 5
+    f |= UInt16(cf.julia_debug) << 6
+    f |= UInt16(cf.opt_level) << 7
     return f
 end
 
@@ -1541,6 +1546,7 @@ function show(io::IO, cf::CacheFlags)
     print(io, ", debug_level = ", cf.debug_level)
     print(io, ", check_bounds = ", cf.check_bounds)
     print(io, ", inline = ", cf.inline)
+    print(io, ", julia_debug = ", cf.julia_debug)
     print(io, ", opt_level = ", cf.opt_level)
 end
 
@@ -3015,7 +3021,7 @@ end
 
 
 function parse_cache_header(f::IO, cachefile::AbstractString)
-    flags = read(f, UInt8)
+    flags = read(f, UInt16)
     modules = Vector{Pair{PkgId, UInt64}}()
     while true
         n = read(f, Int32)
@@ -3473,10 +3479,10 @@ end
         if isempty(modules)
             return true # ignore empty file
         end
-        if @ccall(jl_match_cache_flags(_cacheflag_to_uint8(requested_flags)::UInt8, actual_flags::UInt8)::UInt8) == 0
+        if @ccall(jl_match_cache_flags(_cacheflag_to_uint16(requested_flags)::UInt16, actual_flags::UInt16)::UInt16) == 0
             @debug """
             Rejecting cache file $cachefile for $modkey since the flags are mismatched
-              requested flags: $(requested_flags) [$(_cacheflag_to_uint8(requested_flags))]
+              requested flags: $(requested_flags) [$(_cacheflag_to_uint16(requested_flags))]
               cache file:      $(CacheFlags(actual_flags)) [$actual_flags]
             """
             record_reason(reasons, "mismatched flags")

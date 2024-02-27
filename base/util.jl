@@ -148,8 +148,8 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
-`--compiled-modules`, `--pkgimages`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `-g`,
-`--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
+`--compiled-modules`, `--pkgimages`, `--inline`, `--check-bounds`, `--optimize`, `--min-optlevel`, `--debug`,
+`-g`, `--code-coverage`, `--track-allocation`, `--color`, `--startup-file`, and `--depwarn`
 command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
@@ -212,6 +212,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     opts.use_pkgimages == 2 && push!(addflags, "--pkgimages=existing")
     opts.opt_level == 2 || push!(addflags, "-O$(opts.opt_level)")
     opts.opt_level_min == 0 || push!(addflags, "--min-optlevel=$(opts.opt_level_min)")
+    opts.julia_debug == 0 && push!(addflags, "--debug=no")
+    opts.julia_debug == 2 && push!(addflags, "--debug=yes")
     push!(addflags, "-g$(opts.debug_level)")
     if opts.code_coverage != 0
         # Forward the code-coverage flag only if applicable (if the filename is pid-dependent)

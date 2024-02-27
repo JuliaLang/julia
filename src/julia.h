@@ -2507,6 +2507,10 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_OPTIONS_USE_PKGIMAGES_YES 1
 #define JL_OPTIONS_USE_PKGIMAGES_NO 0
 
+#define JL_OPTIONS_JULIA_DEBUG_YES 2
+#define JL_OPTIONS_JULIA_DEBUG_SCRIPT 1
+#define JL_OPTIONS_JULIA_DEBUG_NO 0
+
 // Version information
 #include <julia_version.h> // Generated file
 

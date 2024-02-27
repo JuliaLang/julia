@@ -1177,4 +1177,5 @@ public
 # misc
     notnothing,
     runtests,
-    text_colors
+    text_colors,
+    isdebug

@@ -203,11 +203,12 @@ might decide to check anyways, as an aid to debugging if they fail.
 The optional message `text` is displayed upon assertion failure.
 
 !!! warning
-    An assert might be disabled at some optimization levels.
+    Assertions can be enabled/disabled depending on the `--debug` flag passed to Julia.
     Assert should therefore only be used as a debugging tool
     and not used for authentication verification (e.g., verifying passwords or checking array bounds).
     The code must not rely on the side effects of running `cond` for the correct behavior
     of a function.
+
 
 # Examples
 ```jldoctest
@@ -218,6 +219,9 @@ julia> @assert isodd(3) "What even are numbers?"
 ```
 """
 macro assert(ex, msgs...)
+    enable_asserts = !isdefined(Main, :Base) || Main.Base.julia_debug
+    enable_asserts || return nothing
+
     msg = isempty(msgs) ? ex : msgs[1]
     if isa(msg, AbstractString)
         msg = msg # pass-through
