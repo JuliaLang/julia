@@ -903,7 +903,7 @@ being different. In DotMix and SplitMix, this is a literal dot product: the
 pseudorandom weights are multiplied by corresponding task coordinate and added
 up. While this does provably make collisions as unlikely as randomly assigned
 task seeds, this linear construction can be used to create linearly correlated
-states between states. However, it turns out that the compression construction
+states between tasks. However, it turns out that the compression construction
 need not be linear, commutative, associative, etc. which allows us to avoid any
 linear or other obvious correlations between related sets of tasks.
 
