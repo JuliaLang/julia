@@ -383,6 +383,7 @@ function _wait_multiple(waiting_tasks; all=false, failfast=false)
     nremaining::Int = 0
 
     for (i, t) in enumerate(waiting_tasks)
+        t = t::Task
         push!(tasks, t)
         if istaskdone(t)
             push!(done_mask, true)
