@@ -369,7 +369,7 @@ end
 waitany(tasks) = _wait_multiple(tasks)
 waitall(tasks; failfast=false) = _wait_multiple(tasks; all=true, failfast=failfast)
 
-function _wait_multiple(waiting_tasks::Union{AbstractVector{Task},AbstractSet{Task},Tuple{Task}}; all=false, failfast=false)::NTuple{2,Vector{Task}}
+function _wait_multiple(waiting_tasks::Union{AbstractVector{Task},AbstractSet{Task},Tuple{Task}}; all=false, failfast=false)
     chan = Channel{Tuple{Int,Task}}(Inf)
     tasks = Task[]
     done_mask = Bool[]
