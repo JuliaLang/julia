@@ -3365,21 +3365,18 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                 value_to_pointer(ctx, arg2).V;
             varg1 = emit_pointer_from_objref(ctx, varg1);
             varg2 = emit_pointer_from_objref(ctx, varg2);
-            Value *gc_uses[2];
-            int nroots = 0;
+            SmallVector<Value*, 0> gc_uses;
             // these roots may seem a bit overkill, but we want to make sure
             // that a!=b implies (a,)!=(b,) even if a and b are unused and
             // therefore could be freed and then the memory for a reused for b
-            if ((gc_uses[nroots] = get_gc_root_for(ctx, arg1)))
-                nroots++;
-            if ((gc_uses[nroots] = get_gc_root_for(ctx, arg2)))
-                nroots++;
-            OperandBundleDef OpBundle("jl_roots", ArrayRef<Value*>(gc_uses, nroots));
+            gc_uses.append(get_gc_roots_for(ctx, arg1));
+            gc_uses.append(get_gc_roots_for(ctx, arg2));
+            OperandBundleDef OpBundle("jl_roots", gc_uses);
             auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
                         ctx.builder.CreateBitCast(varg1, getInt8PtrTy(ctx.builder.getContext())),
                         ctx.builder.CreateBitCast(varg2, getInt8PtrTy(ctx.builder.getContext())),
                         ConstantInt::get(ctx.types().T_size, sz) },
-                    ArrayRef<OperandBundleDef>(&OpBundle, nroots ? 1 : 0));
+                    ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
 
             if (arg1.tbaa || arg2.tbaa) {
                 jl_aliasinfo_t ai;
@@ -6432,9 +6429,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         SmallVector<Value*, 0> vals;
         for (size_t i = 0; i < nargs; ++i) {
-            Value *gc_root = get_gc_root_for(ctx, argv[i]);
-            if (gc_root)
-                vals.push_back(gc_root);
+            vals.append(get_gc_roots_for(ctx, argv[i]));
         }
         Value *token = vals.empty()
             ? (Value*)ConstantTokenNone::get(ctx.builder.getContext())

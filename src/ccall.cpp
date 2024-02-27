@@ -1065,7 +1065,7 @@ public:
             jl_codectx_t &ctx,
             const native_sym_arg_t &symarg,
             jl_cgval_t *argv,
-            SmallVector<Value*, 16> &gc_uses,
+            SmallVectorImpl<Value*> &gc_uses,
             bool static_rt) const;
 
 private:
@@ -1389,16 +1389,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     }
 
     // emit roots
-    SmallVector<Value*, 16> gc_uses;
+    SmallVector<Value*> gc_uses;
     for (size_t i = nccallargs + fc_args_start; i <= nargs; i++) {
         // Julia (expression) value of current parameter gcroot
         jl_value_t *argi_root = args[i];
         if (jl_is_long(argi_root))
             continue;
         jl_cgval_t arg_root = emit_expr(ctx, argi_root);
-        Value *gc_root = get_gc_root_for(ctx, arg_root);
-        if (gc_root)
-            gc_uses.push_back(gc_root);
+        gc_uses.append(get_gc_roots_for(ctx, arg_root));
     }
 
     jl_unionall_t *unionall = (jl_is_method(ctx.linfo->def.method) && jl_is_unionall(ctx.linfo->def.method->sig))
@@ -1855,7 +1853,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         jl_codectx_t &ctx,
         const native_sym_arg_t &symarg,
         jl_cgval_t *argv,
-        SmallVector<Value*, 16> &gc_uses,
+        SmallVectorImpl<Value*> &gc_uses,
         bool static_rt) const
 {
     ++EmittedCCalls;
