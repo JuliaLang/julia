@@ -1716,14 +1716,7 @@ try # test the functionality of `UndefVarError_hint` against import clashes
 
     end # X
 
-    str = try
-        X.x
-        @test false # should not reach this
-    catch e
-        sprint(Base.showerror, e)
-    end
-
-    @test contains(str, "Hint: It looks like this name was exported by two different modules, resulting in ambiguity. Try explicitly importing it, or qualifying the name with the module it should come from.")
+    @test_throws "Hint: It looks like this name was exported by two different modules, resulting in ambiguity. Try explicitly importing it, or qualifying the name with the module it should come from." X.x
 finally
     empty!(Base.Experimental._hint_handlers)
 end
