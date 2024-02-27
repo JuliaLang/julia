@@ -886,7 +886,7 @@ minimum of four tasks, so doesn't constitute a collision, per se, but is clearly
 undesirable and highlights a hazard of the plain dot product construction.
 
 As in DotMix and SplitMix, each task is assigned unique task "pedigree"
-coordiates. Our pedigree construction is a bit different and uses only binary
+coordinates. Our pedigree construction is a bit different and uses only binary
 coordinates rather than arbitrary integers. Each pedigree is an infinite
 sequence of ones and zeros with only finitely many ones. Each task has a "fork
 index": the root task has index 0; the fork index of a task the jth child task
@@ -938,7 +938,7 @@ non-linear -- non-linear enough to mask the linearity of the LCG that drives the
 PCG-RXS-M-XS-64 RNG and allows it to pass statistical RNG test suites despite
 having the same size state and output. In particular, since this mixing function
 is highly non-associative and non-linear, we (hopefully) don't have any
-discernable relationship between these values:
+discernible relationship between these values:
 
     * c₀₀ = c
     * c₁₀ = f(c, wᵢ)
