@@ -146,11 +146,6 @@ macro something(args...)
     return :($something($expr))
 end
 
-==(a::Some, b::Some)::Bool = a.value == b.value
-# seperated out to ensure the above assertion works
-==(::Some{Missing}, ::Some) = missing
-==(::Some, ::Some{Missing}) = missing
-==(::Some{Missing}, ::Some{Missing}) = missing
-
+==(a::Some, b::Some) = a.value == b.value
 isequal(a::Some, b::Some)::Bool = isequal(a.value, b.value)
 hash(s::Some, h::UInt) = hash(s.value, hash(Some, h))
