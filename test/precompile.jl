@@ -1723,7 +1723,6 @@ let newinterp_path = abspath("compiler/newinterp.jl")
             import SimpleModule: basic_caller, basic_callee
 
             module Custom
-                const CC = Core.Compiler
                 include("$($newinterp_path)")
                 @newinterp PrecompileInterpreter
             end
@@ -1822,7 +1821,7 @@ let newinterp_path = abspath("compiler/newinterp.jl")
             using CustomAbstractInterpreterCaching2
             cache_owner = Core.Compiler.cache_owner(
                 CustomAbstractInterpreterCaching2.Custom.PrecompileInterpreter())
-            let m = only(methods(CustomAbstractInterpreterCaching.basic_callee))
+            let m = only(methods(CustomAbstractInterpreterCaching2.basic_callee))
                 mi = only(Base.specializations(m))
                 ci = mi.cache
                 @test isdefined(ci, :next)
