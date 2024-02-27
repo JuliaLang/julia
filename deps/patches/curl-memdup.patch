@@ -1,0 +1,24 @@
+From 5cc2b016c36aaf5a08e2feb7c068fca5bb0a8052 Mon Sep 17 00:00:00 2001
+From: Daniel Stenberg <daniel@haxx.se>
+Date: Mon, 5 Feb 2024 15:22:08 +0100
+Subject: [PATCH] md4: include strdup.h for the memdup proto
+
+Reported-by: Erik Schnetter
+Fixes #12849
+Closes #12863
+---
+ lib/md4.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/lib/md4.c b/lib/md4.c
+index 067c211e420afd..58dd1166cf924f 100644
+--- a/lib/md4.c
++++ b/lib/md4.c
+@@ -28,6 +28,7 @@
+ 
+ #include <string.h>
+ 
++#include "strdup.h"
+ #include "curl_md4.h"
+ #include "warnless.h"
+ 

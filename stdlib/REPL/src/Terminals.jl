@@ -30,9 +30,7 @@ import Base:
     displaysize,
     flush,
     pipe_reader,
-    pipe_writer,
-    read,
-    readuntil
+    pipe_writer
 
 ## AbstractTerminal: abstract supertype of all terminals ##
 

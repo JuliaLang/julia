@@ -4,12 +4,12 @@
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex, setindex!,
                   min, max, zero, oneunit, isless, eachindex,
-                  convert, show, iterate, promote_rule
+                  convert, show, iterate, promote_rule, to_indices
 
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
-    import .Base: to_indices, to_index, _to_indices1, _cutdim
-    using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail,
+    using .Base: to_index, fill_to_length, tail, safe_tail
+    using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex,
         ReshapedArray, ReshapedArrayLF, OneTo, Fix1
     using .Base.Iterators: Reverse, PartitionIterator
     using .Base: @propagate_inbounds
@@ -465,11 +465,13 @@ module IteratorsMD
     last(iter::CartesianIndices)  = CartesianIndex(map(last, iter.indices))
 
     # When used as indices themselves, CartesianIndices can simply become its tuple of ranges
-    _to_indices1(A, inds, I1::CartesianIndices) = map(Fix1(to_index, A), I1.indices)
-    _cutdim(inds::Tuple, I1::CartesianIndices) = split(inds, Val(ndims(I1)))[2]
-
+    @inline function to_indices(A, inds, I::Tuple{CartesianIndices{N}, Vararg}) where N
+        _, indstail = split(inds, Val(N))
+        (map(Fix1(to_index, A), I[1].indices)..., to_indices(A, indstail, tail(I))...)
+    end
     # but preserve CartesianIndices{0} as they consume a dimension.
-    _to_indices1(A, inds, I1::CartesianIndices{0}) = (I1,)
+    @inline to_indices(A, inds, I::Tuple{CartesianIndices{0}, Vararg}) =
+        (first(I), to_indices(A, inds, tail(I))...)
 
     @inline in(i::CartesianIndex, r::CartesianIndices) = false
     @inline in(i::CartesianIndex{N}, r::CartesianIndices{N}) where {N} = all(map(in, i.I, r.indices))
@@ -682,17 +684,15 @@ using .IteratorsMD
 
 ## Bounds-checking with CartesianIndex
 # Disallow linear indexing with CartesianIndex
-function checkbounds(::Type{Bool}, A::AbstractArray, i::Union{CartesianIndex, AbstractArray{<:CartesianIndex}})
-    @inline
+@inline checkbounds(::Type{Bool}, A::AbstractArray, i::CartesianIndex) =
     checkbounds_indices(Bool, axes(A), (i,))
+# Here we try to consume N of the indices (if there are that many available)
+@inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{CartesianIndex,Vararg})
+    inds1, rest = IteratorsMD.split(inds, Val(length(I[1])))
+    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
 end
-
-@inline checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple{CartesianIndex,Vararg{Any}}) =
-    checkbounds_indices(Bool, (), (I[1].I..., tail(I)...))
-@inline checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{CartesianIndex,Vararg{Any}}) =
-    checkbounds_indices(Bool, IA, (I[1].I..., tail(I)...))
-@inline checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{CartesianIndex,Vararg{Any}}) =
-    checkbounds_indices(Bool, IA, (I[1].I..., tail(I)...))
+@inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndex) =
+    checkbounds_indices(Bool, inds, I.I)
 
 # Indexing into Array with mixtures of Integers and CartesianIndices is
 # extremely performance-sensitive. While the abstract fallbacks support this,
@@ -702,45 +702,17 @@ end
 @propagate_inbounds setindex!(A::Array, v, i1::Union{Integer, CartesianIndex}, I::Union{Integer, CartesianIndex}...) =
     (A[to_indices(A, (i1, I...))...] = v; A)
 
-# Support indexing with an array of CartesianIndex{N}s
+## Bounds-checking with arrays of CartesianIndex{N}
+# Disallow linear indexing with an array of CartesianIndex{N}
+@inline checkbounds(::Type{Bool}, A::AbstractArray, i::AbstractArray{CartesianIndex{N}}) where {N} =
+    checkbounds_indices(Bool, axes(A), (i,))
 # Here we try to consume N of the indices (if there are that many available)
-# The first two simply handle ambiguities
-@inline function checkbounds_indices(::Type{Bool}, ::Tuple{},
-        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}}) where N
-    checkindex(Bool, (), I[1]) & checkbounds_indices(Bool, (), tail(I))
+@inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{AbstractArray{CartesianIndex{N}},Vararg}) where N
+    inds1, rest = IteratorsMD.split(inds, Val(N))
+    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
 end
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any},
-        I::Tuple{AbstractArray{CartesianIndex{0}},Vararg{Any}})
-    checkbounds_indices(Bool, IA, tail(I))
-end
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{Any},
-        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}}) where N
-    checkindex(Bool, IA, I[1]) & checkbounds_indices(Bool, (), tail(I))
-end
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple,
-        I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}}) where N
-    IA1, IArest = IteratorsMD.split(IA, Val(N))
-    checkindex(Bool, IA1, I[1]) & checkbounds_indices(Bool, IArest, tail(I))
-end
-
-
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple{},
-    I::Tuple{AbstractArray{Bool,N},Vararg{Any}}) where N
-    return checkbounds_indices(Bool, IA, (LogicalIndex(I[1]), tail(I)...))
-end
-@inline function checkbounds_indices(::Type{Bool}, IA::Tuple,
-    I::Tuple{AbstractArray{Bool,N},Vararg{Any}}) where N
-    return checkbounds_indices(Bool, IA, (LogicalIndex(I[1]), tail(I)...))
-end
-
-function checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{<:CartesianIndex})
-    b = true
-    for i in I
-        b &= checkbounds_indices(Bool, inds, (i,))
-    end
-    b
-end
-checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) = all(checkindex.(Bool, inds, I.indices))
+@inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) =
+    checkbounds_indices(Bool, inds, I.indices)
 
 # combined count of all indices, including CartesianIndex and
 # AbstractArray{CartesianIndex}
@@ -814,11 +786,11 @@ end
     n = s[1]
     n > length(L) && return nothing
     #unroll once to help inference, cf issue #29418
-    idx, i = iterate(tail(s)...)
+    idx, i = iterate(tail(s)...)::Tuple{Any,Any}
     s = (n+1, s[2], i)
     L.mask[idx] && return (idx, s)
     while true
-        idx, i = iterate(tail(s)...)
+        idx, i = iterate(tail(s)...)::Tuple{Any,Any}
         s = (n+1, s[2], i)
         L.mask[idx] && return (idx, s)
     end
@@ -848,11 +820,29 @@ end
     return eltype(L)(i1, irest...), (i1 - tz, Bi, irest, c)
 end
 
-@inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
-    eachindex(IndexLinear(), A) == eachindex(IndexLinear(), I.mask)
-@inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex) = axes(A) == axes(I.mask)
-@inline checkindex(::Type{Bool}, indx::AbstractUnitRange, I::LogicalIndex) = (indx,) == axes(I.mask)
-checkindex(::Type{Bool}, inds::Tuple, I::LogicalIndex) = checkbounds_indices(Bool, inds, axes(I.mask))
+## Boundscheck for Logicalindex
+# LogicalIndex: map all calls to mask
+checkbounds(::Type{Bool}, A::AbstractArray, i::LogicalIndex) = checkbounds(Bool, A, i.mask)
+# `checkbounds_indices` has been handled via `I::AbstractArray` fallback
+checkindex(::Type{Bool}, inds::AbstractUnitRange, i::LogicalIndex) = checkindex(Bool, inds, i.mask)
+checkindex(::Type{Bool}, inds::Tuple, i::LogicalIndex) = checkindex(Bool, inds, i.mask)
+
+## Boundscheck for AbstractArray{Bool}
+# Disallow linear indexing with AbstractArray{Bool}
+checkbounds(::Type{Bool}, A::AbstractArray, i::AbstractArray{Bool}) =
+    checkbounds_indices(Bool, axes(A), (i,))
+# But allow linear indexing with AbstractVector{Bool}
+checkbounds(::Type{Bool}, A::AbstractArray, i::AbstractVector{Bool}) =
+    checkindex(Bool, eachindex(IndexLinear(), A), i)
+@inline function checkbounds_indices(::Type{Bool}, inds::Tuple, I::Tuple{AbstractArray{Bool},Vararg})
+    inds1, rest = IteratorsMD.split(inds, Val(ndims(I[1])))
+    checkindex(Bool, inds1, I[1]) & checkbounds_indices(Bool, rest, tail(I))
+end
+checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractVector{Bool}) = axes1(I) == inds
+checkindex(::Type{Bool}, inds::AbstractUnitRange, I::AbstractRange{Bool}) = axes1(I) == inds
+checkindex(::Type{Bool}, inds::Tuple, I::AbstractArray{Bool}) = _check_boolean_axes(inds, axes(I))
+_check_boolean_axes(inds::Tuple, axes::Tuple) = (inds[1] == axes[1]) & _check_boolean_axes(tail(inds), tail(axes))
+_check_boolean_axes(::Tuple{}, axes::Tuple) = all(==(OneTo(1)), axes)
 
 ensure_indexable(I::Tuple{}) = ()
 @inline ensure_indexable(I::Tuple{Any, Vararg{Any}}) = (I[1], ensure_indexable(tail(I))...)
@@ -863,23 +853,53 @@ ensure_indexable(I::Tuple{}) = ()
 @inline to_indices(A, I::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = to_indices(A, (), I)
 # But some index types require more context spanning multiple indices
 # CartesianIndex is unfolded outside the inner to_indices for better inference
-_to_indices1(A, inds, I1::CartesianIndex) = map(Fix1(to_index, A), I1.I)
-_cutdim(inds, I1::CartesianIndex) = IteratorsMD.split(inds, Val(length(I1)))[2]
+@inline function to_indices(A, inds, I::Tuple{CartesianIndex{N}, Vararg}) where N
+    _, indstail = IteratorsMD.split(inds, Val(N))
+    (map(Fix1(to_index, A), I[1].I)..., to_indices(A, indstail, tail(I))...)
+end
 # For arrays of CartesianIndex, we just skip the appropriate number of inds
-_cutdim(inds, I1::AbstractArray{CartesianIndex{N}}) where {N} = IteratorsMD.split(inds, Val(N))[2]
+@inline function to_indices(A, inds, I::Tuple{AbstractArray{CartesianIndex{N}}, Vararg}) where N
+    _, indstail = IteratorsMD.split(inds, Val(N))
+    (to_index(A, I[1]), to_indices(A, indstail, tail(I))...)
+end
 # And boolean arrays behave similarly; they also skip their number of dimensions
-_cutdim(inds::Tuple, I1::AbstractArray{Bool}) = IteratorsMD.split(inds, Val(ndims(I1)))[2]
-# As an optimization, we allow trailing Array{Bool} and BitArray to be linear over trailing dimensions
-@inline to_indices(A, inds, I::Tuple{Union{Array{Bool,N}, BitArray{N}}}) where {N} =
-    (_maybe_linear_logical_index(IndexStyle(A), A, I[1]),)
+@inline function to_indices(A, inds, I::Tuple{AbstractArray{Bool, N}, Vararg}) where N
+    _, indstail = IteratorsMD.split(inds, Val(N))
+    (to_index(A, I[1]), to_indices(A, indstail, tail(I))...)
+end
+# As an optimization, we allow the only `AbstractArray{Bool}` to be linear-iterated
+@inline to_indices(A, I::Tuple{AbstractArray{Bool}}) = (_maybe_linear_logical_index(IndexStyle(A), A, I[1]),)
 _maybe_linear_logical_index(::IndexStyle, A, i) = to_index(A, i)
 _maybe_linear_logical_index(::IndexLinear, A, i) = LogicalIndex{Int}(i)
 
 # Colons get converted to slices by `uncolon`
-_to_indices1(A, inds, I1::Colon) = (uncolon(inds),)
+@inline to_indices(A, inds, I::Tuple{Colon, Vararg}) =
+    (uncolon(inds), to_indices(A, Base.safe_tail(inds), tail(I))...)
 
 uncolon(::Tuple{}) = Slice(OneTo(1))
 uncolon(inds::Tuple) = Slice(inds[1])
+
+"""
+    _prechecked_iterate(iter[, state])
+
+Internal function used to eliminate the dead branch in `iterate`.
+Fallback to `iterate` by default, but optimized for indices type in `Base`.
+"""
+@propagate_inbounds _prechecked_iterate(iter) = iterate(iter)
+@propagate_inbounds _prechecked_iterate(iter, state) = iterate(iter, state)
+
+_prechecked_iterate(iter::AbstractUnitRange, i = first(iter)) = i, convert(eltype(iter), i + step(iter))
+_prechecked_iterate(iter::LinearIndices, i = first(iter)) = i, i + 1
+_prechecked_iterate(iter::CartesianIndices) = first(iter), first(iter)
+function _prechecked_iterate(iter::CartesianIndices, i)
+    i′ = IteratorsMD.inc(i.I, iter.indices)
+    return i′, i′
+end
+_prechecked_iterate(iter::SCartesianIndices2) = first(iter), first(iter)
+function _prechecked_iterate(iter::SCartesianIndices2{K}, (;i, j)) where {K}
+    I = i < K ? SCartesianIndex2{K}(i + 1, j) : SCartesianIndex2{K}(1, j + 1)
+    return I, I
+end
 
 ### From abstractarray.jl: Internal multidimensional indexing definitions ###
 getindex(x::Union{Number,AbstractChar}, ::CartesianIndex{0}) = x
@@ -912,14 +932,11 @@ function _generate_unsafe_getindex!_body(N::Int)
     quote
         @inline
         D = eachindex(dest)
-        Dy = iterate(D)
+        Dy = _prechecked_iterate(D)
         @inbounds @nloops $N j d->I[d] begin
-            # This condition is never hit, but at the moment
-            # the optimizer is not clever enough to split the union without it
-            Dy === nothing && return dest
-            (idx, state) = Dy
+            (idx, state) = Dy::NTuple{2,Any}
             dest[idx] = @ncall $N getindex src j
-            Dy = iterate(D, state)
+            Dy = _prechecked_iterate(D, state)
         end
         return dest
     end
@@ -955,14 +972,12 @@ function _generate_unsafe_setindex!_body(N::Int)
         @nexprs $N d->(I_d = unalias(A, I[d]))
         idxlens = @ncall $N index_lengths I
         @ncall $N setindex_shape_check x′ (d->idxlens[d])
-        Xy = iterate(x′)
+        X = eachindex(x′)
+        Xy = _prechecked_iterate(X)
         @inbounds @nloops $N i d->I_d begin
-            # This is never reached, but serves as an assumption for
-            # the optimizer that it does not need to emit error paths
-            Xy === nothing && break
-            (val, state) = Xy
-            @ncall $N setindex! A val i
-            Xy = iterate(x′, state)
+            (idx, state) = Xy::NTuple{2,Any}
+            @ncall $N setindex! A x′[idx] i
+            Xy = _prechecked_iterate(X, state)
         end
         A
     end
@@ -1567,19 +1582,23 @@ end
     end
 end
 
-isassigned(a::AbstractArray, i::CartesianIndex) = isassigned(a, Tuple(i)...)
-function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
-    isa(i, Tuple{Vararg{Int}}) || return isassigned(A, CartesianIndex(to_indices(A, i)))
-    @boundscheck checkbounds(Bool, A, i...) || return false
+@propagate_inbounds isassigned(A::AbstractArray, i::CartesianIndex) = isassigned(A, Tuple(i)...)
+@propagate_inbounds function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
+    return isassigned(A, CartesianIndex(to_indices(A, i)))
+end
+@inline function isassigned(A::AbstractArray, i::Integer...)
+    # convert to valid indices, checking for Bool
+    inds = to_indices(A, i)
+    @boundscheck checkbounds(Bool, A, inds...) || return false
     S = IndexStyle(A)
-    ninds = length(i)
+    ninds = length(inds)
     if (isa(S, IndexLinear) && ninds != 1)
-        return @inbounds isassigned(A, _to_linear_index(A, i...))
+        return @inbounds isassigned(A, _to_linear_index(A, inds...))
     elseif (!isa(S, IndexLinear) && ninds != ndims(A))
-        return @inbounds isassigned(A, _to_subscript_indices(A, i...)...)
+        return @inbounds isassigned(A, _to_subscript_indices(A, inds...)...)
     else
        try
-            A[i...]
+            A[inds...]
             true
         catch e
             if isa(e, BoundsError) || isa(e, UndefRefError)
@@ -1589,6 +1608,12 @@ function isassigned(A::AbstractArray, i::Union{Integer, CartesianIndex}...)
             end
         end
     end
+end
+
+# _unsetindex
+@propagate_inbounds function Base._unsetindex!(A::AbstractArray, i::CartesianIndex)
+    Base._unsetindex!(A, to_indices(A, (i,))...)
+    return A
 end
 
 ## permutedims
@@ -1622,17 +1647,17 @@ for (V, PT, BT) in Any[((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArra
 
             #calculates all the strides
             native_strides = size_to_strides(1, size(B)...)
-            strides_1 = 0
-            @nexprs $N d->(strides_{d+1} = native_strides[perm[d]])
+            strides = @ntuple $N d->native_strides[perm[d]]
+            strides::NTuple{$N,Integer}
 
             #Creates offset, because indexing starts at 1
-            offset = 1 - sum(@ntuple $N d->strides_{d+1})
+            offset = 1 - reduce(+, strides, init = 0)
 
             sumc = 0
             ind = 1
             @nloops($N, i, P,
-                    d->(sumc += i_d*strides_{d+1}), # PRE
-                    d->(sumc -= i_d*strides_{d+1}), # POST
+                    d->(sumc += i_d*strides[d]), # PRE
+                    d->(sumc -= i_d*strides[d]), # POST
                     begin # BODY
                         @inbounds P[ind] = B[sumc+offset]
                         ind += 1

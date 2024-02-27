@@ -17,59 +17,21 @@ reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a)
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 
-function reduced_indices(inds::Indices{N}, d::Int) where N
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    if d == 1
-        return (reduced_index(inds[1]), tail(inds)...)::typeof(inds)
-    elseif 1 < d <= N
-        return tuple(inds[1:d-1]..., oftype(inds[d], reduced_index(inds[d])), inds[d+1:N]...)::typeof(inds)
-    else
-        return inds
-    end
+function reduced_indices(axs::Indices{N}, region) where N
+    _check_valid_region(region)
+    ntuple(d -> d in region ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
-function reduced_indices0(inds::Indices{N}, d::Int) where N
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    if d <= N
-        ind = inds[d]
-        rd = isempty(ind) ? ind : reduced_index(inds[d])
-        if d == 1
-            return (rd, tail(inds)...)::typeof(inds)
-        else
-            return tuple(inds[1:d-1]..., oftype(inds[d], rd), inds[d+1:N]...)::typeof(inds)
-        end
-    else
-        return inds
-    end
+function reduced_indices0(axs::Indices{N}, region) where N
+    _check_valid_region(region)
+    ntuple(d -> d in region && !isempty(axs[d]) ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
-function reduced_indices(inds::Indices{N}, region) where N
-    rinds = collect(inds)
-    for i in region
-        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            rinds[d] = reduced_index(rinds[d])
-        end
+function _check_valid_region(region)
+    for d in region
+        isa(d, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
+        Int(d) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
     end
-    tuple(rinds...)::typeof(inds)
-end
-
-function reduced_indices0(inds::Indices{N}, region) where N
-    rinds = collect(inds)
-    for i in region
-        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            rind = rinds[d]
-            rinds[d] = isempty(rind) ? rind : reduced_index(rind)
-        end
-    end
-    tuple(rinds...)::typeof(inds)
 end
 
 ###### Generic reduction functions #####
@@ -146,16 +108,18 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
             T = _realtype(f, promote_union(eltype(A)))
             Tr = v0 isa T ? T : typeof(v0)
 
-            # but NaNs and missing need to be avoided as initial values
+            # but NaNs, missing and unordered values need to be avoided as initial values
             if v0 isa Number && isnan(v0)
                 # v0 is NaN
                 v0 = oftype(v0, $initval)
             elseif isunordered(v0)
                 # v0 is missing or a third-party unordered value
                 Tnm = nonmissingtype(Tr)
-                # TODO: Some types, like BigInt, don't support typemin/typemax.
-                # So a Matrix{Union{BigInt, Missing}} can still error here.
-                v0 = $typeextreme(Tnm)
+                if Tnm <: Union{BitInteger, IEEEFloat, BigFloat}
+                    v0 = $typeextreme(Tnm)
+                elseif !all(isunordered, A1)
+                    v0 = mapreduce(f, $f2, Iterators.filter(!isunordered, A1))
+                end
             end
             # v0 may have changed type.
             Tr = v0 isa T ? T : typeof(v0)
@@ -186,12 +150,18 @@ function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray
 
     # but NaNs and missing need to be avoided as initial values
     if v0[1] isa Number && isnan(v0[1])
+        # v0 is NaN
         v0 = oftype(v0[1], Inf), oftype(v0[2], -Inf)
     elseif isunordered(v0[1])
         # v0 is missing or a third-party unordered value
-        # TODO: Some types, like BigInt, don't support typemin/typemax.
-        # So a Matrix{Union{BigInt, Missing}} can still error here.
-        v0 = typemax(nonmissingtype(Tmin)), typemin(nonmissingtype(Tmax))
+        Tminnm = nonmissingtype(Tmin)
+        Tmaxnm = nonmissingtype(Tmax)
+        if Tminnm <: Union{BitInteger, IEEEFloat, BigFloat} &&
+            Tmaxnm <: Union{BitInteger, IEEEFloat, BigFloat}
+            v0 = (typemax(Tminnm), typemin(Tmaxnm))
+        elseif !all(isunordered, A1)
+            v0 = reverse(mapreduce(f, op, Iterators.filter(!isunordered, A1)))
+        end
     end
     # v0 may have changed type.
     Tmin = v0[1] isa T ? T : typeof(v0[1])

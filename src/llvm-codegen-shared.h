@@ -304,8 +304,8 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
     BasicBlock *passBB = BasicBlock::Create(builder.getContext(), "safepoint", builder.GetInsertBlock()->getParent());
     BasicBlock *exitBB = BasicBlock::Create(builder.getContext(), "after_safepoint", builder.GetInsertBlock()->getParent());
     Constant *zero8 = ConstantInt::get(T_int8, 0);
-    builder.CreateCondBr(builder.CreateAnd(builder.CreateICmpNE(old_state, zero8), // if (old_state && !state)
-                                           builder.CreateICmpEQ(state, zero8)),
+    builder.CreateCondBr(builder.CreateOr(builder.CreateICmpEQ(old_state, zero8), // if (!old_state || !state)
+                                          builder.CreateICmpEQ(state, zero8)),
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
     MDNode *tbaa = get_tbaa_const(builder.getContext());
@@ -325,7 +325,7 @@ static inline llvm::Value *emit_gc_unsafe_enter(llvm::IRBuilder<> &builder, llvm
 static inline llvm::Value *emit_gc_unsafe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, bool final)
 {
     using namespace llvm;
-    Value *old_state = builder.getInt8(0);
+    Value *old_state = builder.getInt8(JL_GC_STATE_UNSAFE);
     return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
 }
 

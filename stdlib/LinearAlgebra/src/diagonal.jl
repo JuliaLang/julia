@@ -10,7 +10,6 @@ struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
         new{T,V}(diag)
     end
 end
-Diagonal{T,V}(d::Diagonal) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(d.diag)
 Diagonal(v::AbstractVector{T}) where {T} = Diagonal{T,typeof(v)}(v)
 Diagonal{T}(v::AbstractVector) where {T} = Diagonal(convert(AbstractVector{T}, v)::AbstractVector{T})
 
@@ -102,6 +101,7 @@ julia> Diagonal(A)
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
 Diagonal{T}(A::AbstractMatrix) where T = Diagonal{T}(diag(A))
+Diagonal{T,V}(A::AbstractMatrix) where {T,V<:AbstractVector{T}} = Diagonal{T,V}(diag(A))
 function convert(::Type{T}, A::AbstractMatrix) where T<:Diagonal
     checksquare(A)
     isdiag(A) ? T(A) : throw(InexactError(:convert, T, A))
@@ -202,6 +202,8 @@ function Base.replace_in_print_matrix(A::Diagonal,i::Integer,j::Integer,s::Abstr
 end
 
 parent(D::Diagonal) = D.diag
+
+copy(D::Diagonal) = Diagonal(copy(D.diag))
 
 ishermitian(D::Diagonal{<:Real}) = true
 ishermitian(D::Diagonal{<:Number}) = isreal(D.diag)
@@ -308,26 +310,8 @@ function (*)(D::Diagonal, V::AbstractVector)
     return D.diag .* V
 end
 
-(*)(A::AbstractMatrix, D::Diagonal) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D)
-(*)(A::HermOrSym, D::Diagonal) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
-(*)(D::Diagonal, A::AbstractMatrix) =
-    mul!(similar(A, promote_op(*, eltype(D.diag), eltype(A))), D, A)
-(*)(D::Diagonal, A::HermOrSym) =
-    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
-
 rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
 lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
-
-function (*)(A::AdjOrTransAbsMat, D::Diagonal)
-    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
-    rmul!(Ac, D)
-end
-function (*)(D::Diagonal, A::AdjOrTransAbsMat)
-    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
-    lmul!(D, Ac)
-end
 
 function __muldiag!(out, D::Diagonal, B, _add::MulAddMul{ais1,bis0}) where {ais1,bis0}
     require_one_based_indexing(out, B)
@@ -438,8 +422,8 @@ function (*)(Da::Diagonal, Db::Diagonal, Dc::Diagonal)
     return Diagonal(Da.diag .* Db.diag .* Dc.diag)
 end
 
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D))), A, D)
-/(A::HermOrSym, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D)), size(A)), A, D)
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(matprod_dest(A, D, promote_op(/, eltype(A), eltype(D))), A, D)
+/(A::HermOrSym, D::Diagonal) = _rdiv!(matprod_dest(A, D, promote_op(/, eltype(A), eltype(D))), A, D)
 
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
@@ -465,8 +449,8 @@ function \(D::Diagonal, B::AbstractVector)
     isnothing(j) || throw(SingularException(j))
     return D.diag .\ B
 end
-\(D::Diagonal, B::AbstractMatrix) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B))), D, B)
-\(D::Diagonal, B::HermOrSym) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B)), size(B)), D, B)
+\(D::Diagonal, B::AbstractMatrix) = ldiv!(matprod_dest(D, B, promote_op(\, eltype(D), eltype(B))), D, B)
+\(D::Diagonal, B::HermOrSym) = ldiv!(matprod_dest(D, B, promote_op(\, eltype(D), eltype(B))), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -486,8 +470,8 @@ function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
 end
 
 # Optimizations for \, / between Diagonals
-\(D::Diagonal, B::Diagonal) = ldiv!(similar(B, promote_op(\, eltype(D), eltype(B))), D, B)
-/(A::Diagonal, D::Diagonal) = _rdiv!(similar(A, promote_op(/, eltype(A), eltype(D))), A, D)
+\(D::Diagonal, B::Diagonal) = ldiv!(matprod_dest(D, B, promote_op(\, eltype(D), eltype(B))), D, B)
+/(A::Diagonal, D::Diagonal) = _rdiv!(matprod_dest(A, D, promote_op(/, eltype(A), eltype(D))), A, D)
 function _rdiv!(Dc::Diagonal, Db::Diagonal, Da::Diagonal)
     n, k = length(Db.diag), length(Da.diag)
     n == k || throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
@@ -550,7 +534,7 @@ function (/)(S::SymTridiagonal, D::Diagonal)
     dl = similar(S.ev, T, max(length(S.dv)-1, 0))
     _rdiv!(Tridiagonal(dl, d, du), S, D)
 end
-(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(similar(T, promote_op(/, eltype(T), eltype(D))), T, D)
+(/)(T::Tridiagonal, D::Diagonal) = _rdiv!(matprod_dest(T, D, promote_op(/, eltype(T), eltype(D))), T, D)
 function _rdiv!(T::Tridiagonal, S::Union{SymTridiagonal,Tridiagonal}, D::Diagonal)
     n = size(S, 2)
     dd = D.diag
@@ -736,6 +720,9 @@ for f in (:exp, :cis, :log, :sqrt,
     @eval $f(D::Diagonal) = Diagonal($f.(D.diag))
 end
 
+# Cube root of a real-valued diagonal matrix
+cbrt(A::Diagonal{<:Real}) = Diagonal(cbrt.(A.diag))
+
 function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(oneunit(T))))
     for i = 1:length(D.diag)
@@ -880,9 +867,6 @@ function svd(D::Diagonal{T}) where {T<:Number}
     return SVD(U, S, Vt)
 end
 
-# disambiguation methods: * and / of Diagonal and Adj/Trans AbsVec
-*(u::AdjointAbsVec, D::Diagonal) = (D'u')'
-*(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) * transpose(u))
 *(x::AdjointAbsVec,   D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 *(x::TransposeAbsVec, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 /(u::AdjointAbsVec, D::Diagonal) = (D' \ u')'
@@ -896,7 +880,7 @@ dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x,
 dot(A::Diagonal, B::Diagonal) = dot(A.diag, B.diag)
 function dot(D::Diagonal, B::AbstractMatrix)
     size(D) == size(B) || throw(DimensionMismatch("Matrix sizes $(size(D)) and $(size(B)) differ"))
-    return dot(D.diag, view(B, diagind(B)))
+    return dot(D.diag, view(B, diagind(B, IndexStyle(B))))
 end
 
 dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))

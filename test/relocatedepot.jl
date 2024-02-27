@@ -1,14 +1,15 @@
 using Test
-using Logging
 
 
 include("testenv.jl")
 
 
-function test_harness(@nospecialize(fn))
+function test_harness(@nospecialize(fn); empty_load_path=true, empty_depot_path=true)
     load_path = copy(LOAD_PATH)
     depot_path = copy(DEPOT_PATH)
     try
+        empty_load_path && empty!(LOAD_PATH)
+        empty_depot_path && empty!(DEPOT_PATH)
         fn()
     finally
         copy!(LOAD_PATH, load_path)
@@ -16,6 +17,10 @@ function test_harness(@nospecialize(fn))
     end
 end
 
+# We test relocation with three dummy pkgs:
+# - RelocationTestPkg1 - no include_dependency
+# - RelocationTestPkg2 - with include_dependency tracked by `mtime`
+# - RelocationTestPkg3 - with include_dependency tracked by content
 
 if !test_relocated_depot
 
@@ -66,54 +71,134 @@ if !test_relocated_depot
 
     @testset "precompile RelocationTestPkg1" begin
         pkgname = "RelocationTestPkg1"
-        test_harness() do
+        test_harness(empty_depot_path=false) do
             push!(LOAD_PATH, @__DIR__)
-            push!(DEPOT_PATH, @__DIR__)
+            push!(DEPOT_PATH, @__DIR__) # make src files available for relocation
             pkg = Base.identify_package(pkgname)
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
             @test Base.isprecompiled(pkg) == false
-            Base.require(pkg) # precompile
+            Base.require(pkg)
             @test Base.isprecompiled(pkg, ignore_loaded=true) == true
         end
     end
 
-    @testset "precompile RelocationTestPkg2 (contains include_dependency)" begin
+    @testset "precompile RelocationTestPkg2" begin
         pkgname = "RelocationTestPkg2"
-        test_harness() do
+        test_harness(empty_depot_path=false) do
             push!(LOAD_PATH, @__DIR__)
-            push!(DEPOT_PATH, string(@__DIR__, "/"))
+            push!(DEPOT_PATH, @__DIR__) # make src files available for relocation
             pkg = Base.identify_package(pkgname)
             cachefiles = Base.find_all_in_cache_path(pkg)
             rm.(cachefiles, force=true)
+            rm(joinpath(@__DIR__, pkgname, "src", "foodir"), force=true, recursive=true)
             @test Base.isprecompiled(pkg) == false
             touch(joinpath(@__DIR__, pkgname, "src", "foo.txt"))
-            Base.require(pkg) # precompile
+            mkdir(joinpath(@__DIR__, pkgname, "src", "foodir"))
+            Base.require(pkg)
             @test Base.isprecompiled(pkg, ignore_loaded=true) == true
         end
     end
 
-else
+    @testset "precompile RelocationTestPkg3" begin
+        pkgname = "RelocationTestPkg3"
+        test_harness(empty_depot_path=false) do
+            push!(LOAD_PATH, @__DIR__)
+            push!(DEPOT_PATH, @__DIR__) # make src files available for relocation
+            pkg = Base.identify_package(pkgname)
+            cachefiles = Base.find_all_in_cache_path(pkg)
+            rm.(cachefiles, force=true)
+            rm(joinpath(@__DIR__, pkgname, "src", "bardir"), force=true, recursive=true)
+            @test Base.isprecompiled(pkg) == false
+            touch(joinpath(@__DIR__, pkgname, "src", "bar.txt"))
+            mkdir(joinpath(@__DIR__, pkgname, "src", "bardir"))
+            Base.require(pkg)
+            @test Base.isprecompiled(pkg, ignore_loaded=true) == true
+        end
+    end
 
-    # must come before any of the load tests, because the will recompile and generate new cache files
-    @testset "attempt loading precompiled pkgs when depot is missing" begin
+    @testset "#52161" begin
+        # Take the src files from two pkgs Example1 and Example2,
+        # which are each located in depot1 and depot2, respectively, and
+        # add them as include_dependency()s to a new pkg Foo, which will be precompiled into depot3.
+        # After loading the include_dependency()s of Foo should refer to depot1 depot2 each.
         test_harness() do
-            empty!(LOAD_PATH)
-            push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
-            for pkgname in ("RelocationTestPkg1", "RelocationTestPkg2")
-                pkg = Base.identify_package(pkgname)
-                cachefile = only(Base.find_all_in_cache_path(pkg))
-                @test_throws ArgumentError("""
-                  Failed to determine depot from srctext files in cache file $cachefile.
-                  - Make sure you have adjusted DEPOT_PATH in case you relocated depots.""") Base.isprecompiled(pkg)
+            mktempdir() do depot1
+                # precompile Example in depot1
+                example1_root = joinpath(depot1, "Example1")
+                mkpath(joinpath(example1_root, "src"))
+                open(joinpath(example1_root, "src", "Example1.jl"); write=true) do io
+                    println(io, """
+                    module Example1
+                    greet() = println("Hello from Example1!")
+                    end
+                    """)
+                end
+                open(joinpath(example1_root, "Project.toml"); write=true) do io
+                    println(io, """
+                    name = "Example1"
+                    uuid = "00000000-0000-0000-0000-000000000001"
+                    version = "1.0.0"
+                    """)
+                end
+                pushfirst!(LOAD_PATH, depot1); pushfirst!(DEPOT_PATH, depot1)
+                pkg = Base.identify_package("Example1"); Base.require(pkg)
+                mktempdir() do depot2
+                    # precompile Example in depot2
+                    example2_root = joinpath(depot2, "Example2")
+                    mkpath(joinpath(example2_root, "src"))
+                    open(joinpath(example2_root, "src", "Example2.jl"); write=true) do io
+                        println(io, """
+                        module Example2
+                        greet() = println("Hello from Example2!")
+                        end
+                        """)
+                    end
+                    open(joinpath(example2_root, "Project.toml"); write=true) do io
+                        println(io, """
+                        name = "Example2"
+                        uuid = "00000000-0000-0000-0000-000000000002"
+                        version = "1.0.0"
+                        """)
+                    end
+                    pushfirst!(LOAD_PATH, depot2); pushfirst!(DEPOT_PATH, depot2)
+                    pkg = Base.identify_package("Example2"); Base.require(pkg)
+                    mktempdir() do depot3
+                        # precompile Foo in depot3
+                        open(joinpath(depot3, "Module52161.jl"), write=true) do io
+                            println(io, """
+                            module Module52161
+                            using Example1
+                            using Example2
+                            srcfile1 = joinpath(pkgdir(Example1), "src", "Example1.jl")
+                            srcfile2 = joinpath(pkgdir(Example2), "src", "Example2.jl")
+                            include_dependency(srcfile1)
+                            include_dependency(srcfile2)
+                            end
+                            """)
+                        end
+                        pushfirst!(LOAD_PATH, depot3); pushfirst!(DEPOT_PATH, depot3)
+                        pkg = Base.identify_package("Module52161"); Base.compilecache(pkg)
+                        cachefile = joinpath(depot3, "compiled",
+                                             "v$(VERSION.major).$(VERSION.minor)", "Module52161.ji")
+                        _, (deps, _, _), _... = Base.parse_cache_header(cachefile)
+                        @test map(x -> x.filename, deps) ==
+                            [ joinpath(depot3, "Module52161.jl"),
+                              joinpath(depot1, "Example1", "src", "Example1.jl"),
+                              joinpath(depot2, "Example2", "src", "Example2.jl") ]
+                    end
+                end
             end
         end
     end
 
+
+else
+
     @testset "load stdlib from test/relocatedepot" begin
         test_harness() do
-            push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
-            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot"))
+            push!(LOAD_PATH, "@stdlib")
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia"))
             # stdlib should be already precompiled
             pkg = Base.identify_package("DelimitedFiles")
             @test Base.isprecompiled(pkg) == true
@@ -124,23 +209,38 @@ else
         pkgname = "RelocationTestPkg1"
         test_harness() do
             push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
-            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot"))
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot")) # required to find src files
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
             pkg = Base.identify_package(pkgname)
-            @test Base.isprecompiled(pkg) == true
-            Base.require(pkg) # re-precompile
             @test Base.isprecompiled(pkg) == true
         end
     end
 
-    @testset "load RelocationTestPkg2 (contains include_dependency) from test/relocatedepot" begin
+    @testset "load RelocationTestPkg2 from test/relocatedepot" begin
         pkgname = "RelocationTestPkg2"
         test_harness() do
             push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
-            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot"))
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot")) # required to find src files
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
             pkg = Base.identify_package(pkgname)
             @test Base.isprecompiled(pkg) == false # moving depot changes mtime of include_dependency
-            Base.require(pkg) # re-precompile
+            Base.require(pkg)
             @test Base.isprecompiled(pkg) == true
+            touch(joinpath(@__DIR__, "relocatedepot", "RelocationTestPkg2", "src", "foodir", "foofoo"))
+            @test Base.isprecompiled(pkg) == false
+        end
+    end
+
+    @testset "load RelocationTestPkg3 from test/relocatedepot" begin
+        pkgname = "RelocationTestPkg3"
+        test_harness() do
+            push!(LOAD_PATH, joinpath(@__DIR__, "relocatedepot"))
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot"))
+            push!(DEPOT_PATH, joinpath(@__DIR__, "relocatedepot", "julia")) # contains cache file
+            pkg = Base.identify_package(pkgname)
+            @test Base.isprecompiled(pkg) == true
+            touch(joinpath(@__DIR__, "relocatedepot", "RelocationTestPkg3", "src", "bardir", "barbar"))
+            @test Base.isprecompiled(pkg) == false
         end
     end
 

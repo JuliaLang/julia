@@ -23,7 +23,7 @@ havebb = false
 
 function _tryonce_download_from_cache(desired_url::AbstractString)
     cache_url = "https://cache.julialang.org/$(desired_url)"
-    cache_output_filename = joinpath(mktempdir(), "myfile")
+    cache_output_filename = joinpath(mktempdir(), "busybox")
     cache_response = Downloads.request(
         cache_url;
         output = cache_output_filename,
@@ -807,8 +807,9 @@ let text = "input-test-text"
     out = Base.BufferStream()
     proc = run(catcmd, IOBuffer(text), out, wait=false)
     @test proc.out === out
-    @test read(out, String) == text
     @test success(proc)
+    closewrite(out)
+    @test read(out, String) == text
 
     out = PipeBuffer()
     proc = run(catcmd, IOBuffer(SubString(text)), out)
@@ -1030,4 +1031,11 @@ let effects = Base.infer_effects(x -> `a $x`, (Any,))
     @test !Core.Compiler.is_terminates(effects)
     @test !Core.Compiler.is_noub(effects)
     @test !Core.Compiler.is_consistent(effects)
+end
+
+# Test that Cmd accepts various AbstractStrings
+@testset "AbstractStrings" begin
+    args = split("-l /tmp")
+    @assert eltype(args) != String
+    @test Cmd(["ls", args...]) == `ls -l /tmp`
 end

@@ -41,7 +41,7 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 
 The following is a leaf lock (level 2), and only acquires level 1 locks (safepoint) internally:
 
->   * typecache
+>   * global_roots_lock
 >   * Module->lock
 >   * JLDebuginfoPlugin::PluginMutex
 >   * newly_inferred_mutex
@@ -49,6 +49,7 @@ The following is a leaf lock (level 2), and only acquires level 1 locks (safepoi
 The following is a level 3 lock, which can only acquire level 1 or level 2 locks internally:
 
 >   * Method->writelock
+>   * typecache
 
 The following is a level 4 lock, which can only recurse to acquire level 1, 2, or 3 locks:
 
@@ -154,6 +155,7 @@ MethodInstance/CodeInstance updates : Method->writelock, codegen lock
 >       * specTypes
 >       * sparam_vals
 >       * def
+>       * owner
 
 >   * These are set by `jl_type_infer` (while holding codegen lock):
 >       * cache

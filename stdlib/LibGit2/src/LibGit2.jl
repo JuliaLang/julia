@@ -6,8 +6,7 @@ Interface to [libgit2](https://libgit2.org/).
 module LibGit2
 
 import Base: ==
-using Base: something, notnothing
-using Base64: base64decode
+using Base: something
 using NetworkOptions
 using Printf: @printf
 using SHA: sha1, sha256

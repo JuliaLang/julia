@@ -31,7 +31,7 @@ export
     IPv4,
     IPv6
 
-import Base: isless, show, print, parse, bind, convert, isreadable, iswritable, alloc_buf_hook, _uv_hook_close
+import Base: isless, show, print, parse, bind, alloc_buf_hook, _uv_hook_close
 
 using Base: LibuvStream, LibuvServer, PipeEndpoint, @handle_as, uv_error, associate_julia_struct, uvfinalize,
     notify_error, uv_req_data, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,
@@ -567,7 +567,11 @@ end
 """
     nagle(socket::Union{TCPServer, TCPSocket}, enable::Bool)
 
-Enables or disables Nagle's algorithm on a given TCP server or socket.
+Nagle's algorithm batches multiple small TCP packets into larger
+ones. This can improve throughput but worsen latency. Nagle's algorithm
+is enabled by default. This function sets whether Nagle's algorithm is
+active on a given TCP server or socket. The opposite option is called
+`TCP_NODELAY` in other languages.
 
 !!! compat "Julia 1.3"
     This function requires Julia 1.3 or later.

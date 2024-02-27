@@ -999,7 +999,7 @@ A table of translations between the macro and function interfaces is given below
 | `@ccall "mylib".f(a::Cint, b::Cdouble)::Cvoid`                               | `ccall((:f, "mylib"), Cvoid, (Cint, Cdouble), (a, b))`                      |
 | `@ccall $fptr.f()::Cvoid`                                                    | `ccall(fptr, f, Cvoid, ())`                                                 |
 | `@ccall printf("%s = %d\n"::Cstring ; "foo"::Cstring, foo::Cint)::Cint`      | `<unavailable>`                                                             |
-| `@ccall printf("%s = %d\n"::Cstring ; "2 + 2"::Cstring, "5"::Cstring)::Cint` | `ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")`    |
+| `@ccall printf("%s = %s\n"::Cstring ; "2 + 2"::Cstring, "5"::Cstring)::Cint` | `ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")`    |
 | `<unavailable>`                                                              | `ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))` |
 
 ## [Calling Convention](@id calling-convention)

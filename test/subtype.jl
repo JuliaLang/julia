@@ -146,6 +146,14 @@ function test_diagonal()
     @test  isequal_type(Ref{Tuple{T, T} where Int<:T<:Int},
                         Ref{Tuple{S, S}} where Int<:S<:Int)
 
+    # issue #53021
+    @test Tuple{X, X} where {X<:Union{}} <: Tuple{X, X, Vararg{Any}} where {Int<:X<:Int}
+    @test Tuple{Integer, X, Vararg{X}} where {X<:Int} <: Tuple{Any, Vararg{X}} where {X>:Int}
+    @test Tuple{Any, X, Vararg{X}} where {X<:Int} <: Tuple{Vararg{X}} where X>:Integer
+    @test Tuple{Integer, Integer, Any, Vararg{Any}} <: Tuple{Vararg{X}} where X>:Integer
+    # issue #53019
+    @test Tuple{T,T} where {T<:Int} <: Tuple{T,T} where {T>:Int}
+
     let A = Tuple{Int,Int8,Vector{Integer}},
         B = Tuple{T,T,Vector{T}} where T>:Integer,
         C = Tuple{T,T,Vector{Union{Integer,T}}} where T
@@ -1260,14 +1268,7 @@ let a = Tuple{Tuple{T2,4},T6} where T2 where T6,
 end
 let a = Tuple{T3,Int64,Tuple{T3}} where T3,
     b = Tuple{S3,S3,S4} where S4 where S3
-    I1 = typeintersect(a, b)
-    I2 = typeintersect(b, a)
-    @test I1 <: I2
-    @test I2 <: I1
-    @test_broken I1 <: a
-    @test I2 <: a
-    @test I1 <: b
-    @test I2 <: b
+    @testintersect(a, b, Tuple{Int64, Int64, Tuple{Int64}})
 end
 let a = Tuple{T1,Val{T2},T2} where T2 where T1,
     b = Tuple{Float64,S1,S2} where S2 where S1
@@ -2210,13 +2211,19 @@ let A = Tuple{NTuple{N, Int}, NTuple{N, Int}} where N,
     Bs = (Tuple{Tuple{Int, Vararg{Any}}, Tuple{Int, Int, Vararg{Any}}},
           Tuple{Tuple{Int, Vararg{Any,N1}}, Tuple{Int, Int, Vararg{Any,N2}}} where {N1,N2},
           Tuple{Tuple{Int, Vararg{Any,N}} where {N}, Tuple{Int, Int, Vararg{Any,N}} where {N}})
-    Cerr = Tuple{Tuple{Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    C = Tuple{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
     for B in Bs
-        C = typeintersect(A, B)
-        @test C == typeintersect(B, A) != Union{}
-        @test C != Cerr
-        # TODO: The ideal result is Tuple{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
-        @test_broken C != Tuple{Tuple{Int, Vararg{Int}}, Tuple{Int, Int, Vararg{Int}}}
+        @testintersect(A, B, C)
+    end
+    A = Tuple{NTuple{N, Int}, Tuple{Int, Vararg{Int, N}}} where N
+    C = Tuple{Tuple{Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    for B in Bs
+        @testintersect(A, B, C)
+    end
+    A = Tuple{Tuple{Int, Vararg{Int, N}}, NTuple{N, Int}} where N
+    C = Tuple{Tuple{Int, Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    for B in Bs
+        @testintersect(A, B, C)
     end
 end
 
@@ -2229,9 +2236,8 @@ let A = Pair{NTuple{N, Int}, NTuple{N, Int}} where N,
     Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Tuple{Int, Int, Vararg{Int}}},
           Pair{Tuple{Int, Vararg{Int,N1}}, Tuple{Int, Int, Vararg{Int,N2}}} where {N1,N2},
           Pair{<:Tuple{Int, Vararg{Int,N}} where {N}, <:Tuple{Int, Int, Vararg{Int,N}} where {N}})
-    Cs = (Bs[2], Bs[2], Bs[3])
-    for (B, C) in zip(Bs, Cs)
-        # TODO: The ideal result is Pair{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    C = Pair{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    for B in Bs
         @testintersect(A, B, C)
     end
 end
@@ -2440,7 +2446,7 @@ abstract type P47654{A} end
     @test_broken typeintersect(Type{Tuple{Array{T,1} where T}}, UnionAll) != Union{}
 
     #issue 33137
-    @test_broken (Tuple{Q,Int} where Q<:Int) <: Tuple{T,T} where T
+    @test (Tuple{Q,Int} where Q<:Int) <: Tuple{T,T} where T
 
     # issue 24333
     @test (Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)
@@ -2564,4 +2570,13 @@ end
 let a = Tuple{Union{Nothing, Type{Pair{T1}} where T1}}
     b = Tuple{Type{X2} where X2<:(Pair{T2, Y2} where {Src, Z2<:Src, Y2<:Union{Val{Z2}, Z2}})} where T2
     @test !Base.has_free_typevars(typeintersect(a, b))
+end
+
+#issue 53371
+struct T53371{A,B,C,D,E} end
+S53371{A} = Union{Int, <:A}
+R53371{A} = Val{V} where V<:(T53371{B,C,D,E,F} where {B<:Val{A}, C<:S53371{B}, D<:S53371{B}, E<:S53371{B}, F<:S53371{B}})
+let S = Type{T53371{A, B, C, D, E}} where {A, B<:R53371{A}, C<:R53371{A}, D<:R53371{A}, E<:R53371{A}},
+    T = Type{T53371{A, B, C, D, E} where {A, B<:R53371{A}, C<:R53371{A}, D<:R53371{A}, E<:R53371{A}}}
+    @test !(S <: T)
 end

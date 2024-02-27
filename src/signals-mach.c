@@ -45,6 +45,7 @@ static void attach_exception_port(thread_port_t thread, int segv_only);
 // low 16 bits are the thread id, the next 8 bits are the original gc_state
 static arraylist_t suspended_threads;
 extern uv_mutex_t safepoint_lock;
+extern uv_cond_t safepoint_cond_begin;
 
 // see jl_safepoint_wait_thread_resume
 void jl_safepoint_resume_thread_mach(jl_ptls_t ptls2, int16_t tid2)
@@ -122,6 +123,7 @@ static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
     }
     if (relaxed_suspend_count)
         uv_mutex_unlock(&ptls2->sleep_lock);
+    uv_cond_broadcast(&safepoint_cond_begin);
     uv_mutex_unlock(&safepoint_lock);
 }
 
@@ -410,7 +412,7 @@ kern_return_t catch_mach_exception_raise_state_identity(
 static void attach_exception_port(thread_port_t thread, int segv_only)
 {
     kern_return_t ret;
-    // http://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
+    // https://www.opensource.apple.com/source/xnu/xnu-2782.1.97/osfmk/man/thread_set_exception_ports.html
     exception_mask_t mask = EXC_MASK_BAD_ACCESS;
     if (!segv_only)
         mask |= EXC_MASK_ARITHMETIC;

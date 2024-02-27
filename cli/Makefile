@@ -48,7 +48,7 @@ LIB_DOBJS := $(BUILDDIR)/loader_lib.dbg.obj
 # If this is an architecture that supports dynamic linking, link in a trampoline definition
 ifneq (,$(wildcard $(SRCDIR)/trampolines/trampolines_$(ARCH).S))
 LIB_OBJS += $(BUILDDIR)/loader_trampolines.o
-LIB_DOBJS += $(BUILDDIR)/loader_trampolines.o
+LIB_DOBJS += $(BUILDDIR)/loader_trampolines.dbg.obj
 endif
 
 default: release
@@ -65,6 +65,8 @@ $(BUILDDIR)/loader_exe.dbg.obj : $(SRCDIR)/loader_exe.c $(HEADERS) $(JULIAHOME)/
 	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) -c $< -o $@)
 $(BUILDDIR)/loader_trampolines.o : $(SRCDIR)/trampolines/trampolines_$(ARCH).S $(HEADERS) $(SRCDIR)/trampolines/common.h
 	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) $< -c -o $@)
+$(BUILDDIR)/loader_trampolines.dbg.obj : $(SRCDIR)/trampolines/trampolines_$(ARCH).S $(HEADERS) $(SRCDIR)/trampolines/common.h
+	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(LOADER_CFLAGS) $< -c -o $@)
 
 # Debugging target to help us see what kind of code is being generated for our trampolines
 dump-trampolines: $(SRCDIR)/trampolines/trampolines_$(ARCH).S

@@ -8,7 +8,7 @@ using REPL
 @testset "Check symbols previously not shown by REPL.doc_completions()" begin
     symbols = ["?","=","[]","[","]","{}","{","}",";","","'","&&","||","julia","Julia","new","@var_str"]
     for i in symbols
-        @test i ∈ REPL.doc_completions(i, Main)
+        @test i ∈ string.(REPL.doc_completions(i, Main))
     end
 end
 
@@ -141,6 +141,10 @@ let ex = quote
 
         struct WeirdNames end
         Base.propertynames(::WeirdNames) = (Symbol("oh no!"), Symbol("oh yes!"))
+
+        # https://github.com/JuliaLang/julia/issues/52551#issuecomment-1858543413
+        export exported_symbol
+        exported_symbol(::WeirdNames) = nothing
 
         end # module CompletionFoo
         test_repl_comp_dict = CompletionFoo.test_dict
@@ -644,7 +648,7 @@ let s = "CompletionFoo.?([1,2,3], 2.0)"
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 1
-    @test occursin("test(x::AbstractArray{T}, y) where T<:Real", c[1])
+    @test occursin("test(x::AbstractArray{T}, y) where T<:Real", only(c))
     # In particular, this checks that test(args...) is not a valid completion
     # since it is strictly less specific than test(x::AbstractArray{T}, y)
 end
@@ -678,15 +682,15 @@ let s = "CompletionFoo.?(false, \"a\", 3, "
     c, r, res = test_complete(s)
     @test !res
     @test length(c) == 2
-    @test occursin("test(args...)", c[1])
-    @test occursin("test11(a::Integer, b, c)", c[2])
+    @test any(s->occursin("test(args...)", s), c)
+    @test any(s->occursin("test11(a::Integer, b, c)", s), c)
 end
 
 let s = "CompletionFoo.?(false, \"a\", 3, "
     c, r, res = test_complete_noshift(s)
     @test !res
     @test length(c) == 1
-    @test occursin("test11(a::Integer, b, c)", c[1])
+    @test occursin("test11(a::Integer, b, c)", only(c))
 end
 
 let s = "CompletionFoo.?(\"a\", 3, "
@@ -709,7 +713,7 @@ let s = "CompletionFoo.?()"
     c, r, res = test_complete_noshift(s)
     @test !res
     @test length(c) == 1
-    @test occursin("test10(s::String...)", c[1])
+    @test occursin("test10(s::String...)", only(c))
 end
 
 #= TODO: restrict the number of completions when a semicolon is present in ".?(" syntax
@@ -727,7 +731,7 @@ let s = "CompletionFoo.?(3; len2=5, "
     c, r, res = test_complete_noshift(s)
     @test !res
     @test length(c) == 1
-    @test occursin("kwtest3(a::Integer; namedarg, foobar, slurp...)", c[1])
+    @test occursin("kwtest3(a::Integer; namedarg, foobar, slurp...)", only(c))
     # the other two kwtest3 methods should not appear because of specificity
 end
 =#
@@ -741,6 +745,9 @@ end
 @test test_complete("CompletionFoo.?()") == test_complete("CompletionFoo.?(;)")
 
 #TODO: @test_nocompletion("CompletionFoo.?(3; len2=5; ")
+
+# https://github.com/JuliaLang/julia/issues/52551
+@test !isempty(test_complete("?("))
 
 #################################################################
 
@@ -1139,6 +1146,15 @@ let s, c, r
             # PATH can also contain folders which we aren't actually allowed to read.
             withenv("PATH" => string(path, ":", unreadable)) do
                 s = "tmp-execu"
+                # Files reachable by PATH are cached async when PATH is seen to have been changed by `complete_path`
+                # so changes are unlikely to appear in the first complete. For testing purposes we can wait for
+                # caching to finish
+                @lock REPL.REPLCompletions.PATH_cache_lock begin
+                    # force the next cache update to happen immediately
+                    REPL.REPLCompletions.next_cache_update = 0
+                end
+                c,r = test_scomplete(s)
+                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test "tmp-executable" in c
                 @test r == 1:9
@@ -1167,6 +1183,12 @@ let s, c, r
 
             withenv("PATH" => string(tempdir(), ":", dir)) do
                 s = string("repl-completio")
+                @lock REPL.REPLCompletions.PATH_cache_lock begin
+                    # force the next cache update to happen immediately
+                    REPL.REPLCompletions.next_cache_update = 0
+                end
+                c,r = test_scomplete(s)
+                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"
@@ -2147,4 +2169,94 @@ function very_unsafe_method(i::Int)
 end
 let t = REPLCompletions.repl_eval_ex(:(unsafe_method(42)), @__MODULE__)
     @test isnothing(t)
+end
+
+# https://github.com/JuliaLang/julia/issues/52099
+const issue52099 = []
+let t = REPLCompletions.repl_eval_ex(:(Base.PersistentDict(issue52099 => 3)), @__MODULE__)
+    if t isa Core.Const
+        @test length(t.val) == 1
+    end
+end
+
+# test REPLInterpreter effects for `getindex(::Dict, key)`
+for (DictT, KeyT) = Any[(Dict{Symbol,Any}, Symbol),
+                        (Dict{Int,Any}, Int),
+                        (Dict{String,Any}, String)]
+    @testset let DictT=DictT, KeyT=KeyT
+        effects = Base.infer_effects(getindex, (DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter())
+        @test Core.Compiler.is_effect_free(effects)
+        @test Core.Compiler.is_terminates(effects)
+        @test Core.Compiler.is_noub(effects)
+        effects = Base.infer_effects((DictT,KeyT); interp=REPL.REPLCompletions.REPLInterpreter()) do d, key
+            key in keys(d)
+        end
+        @test Core.Compiler.is_effect_free(effects)
+        @test Core.Compiler.is_terminates(effects)
+        @test Core.Compiler.is_noub(effects)
+    end
+end
+
+# test invalidation support
+replinterp_invalidation_callee(c::Bool=rand(Bool)) = Some(c ? r"foo" : r"bar")
+replinterp_invalidation_caller() = replinterp_invalidation_callee().value
+@test REPLCompletions.repl_eval_ex(:(replinterp_invalidation_caller()), @__MODULE__) == Regex
+replinterp_invalidation_callee(c::Bool=rand(Bool)) = Some(c ? "foo" : "bar")
+@test REPLCompletions.repl_eval_ex(:(replinterp_invalidation_caller()), @__MODULE__) == String
+
+# JuliaLang/julia#52922
+let s = "using Base.Th"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Threads" in c
+end
+let s = "using Base."
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "BinaryPlatforms" in c
+end
+# test cases with the `.` accessor
+module Issue52922
+module Inner1
+module Inner12 end
+end
+module Inner2 end
+end
+let s = "using .Iss"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Issue52922" in c
+end
+let s = "using .Issue52922.Inn"
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Inner1" in c
+end
+let s = "using .Issue52922.Inner1."
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Inner12" in c
+end
+let s = "using .Inner1.Inn"
+    c, r, res = test_complete_context(s, Issue52922)
+    @test res
+    @test "Inner12" in c
+end
+let s = "using ..Issue52922.Inn"
+    c, r, res = test_complete_context(s, Issue52922.Inner1)
+    @test res
+    @test "Inner2" in c
+end
+let s = "using ...Issue52922.Inn"
+    c, r, res = test_complete_context(s, Issue52922.Inner1.Inner12)
+    @test res
+    @test "Inner2" in c
+end
+
+struct Issue53126 end
+Base.propertynames(::Issue53126) = error("this should not be called")
+let s = "Issue53126()."
+    c, r, res = test_complete_context(s)
+    @test res
+    @test isempty(c)
 end

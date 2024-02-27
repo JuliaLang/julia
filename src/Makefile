@@ -44,7 +44,7 @@ SRCS := \
 	jltypes gf typemap smallintset ast builtins module interpreter symbol \
 	dlload sys init task array genericmemory staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
-	threading partr stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler method \
+	threading scheduler stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler gc-page-profiler method \
 	jlapi signal-handling safepoint timing subtype rtutils gc-heap-snapshot \
 	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall
 
@@ -77,10 +77,9 @@ else
 # JULIACODEGEN != LLVM
 endif
 
-RT_LLVM_LIBS := support
-
-ifeq ($(LLVM_VER_MAJ),16)
-RT_LLVM_LIBS += targetparser
+RT_LLVM_LIBS := support # for APMath and some other useful ADT
+ifneq ($(LLVM_VER_MAJ),15)
+RT_LLVM_LIBS += targetparser # for getHostCPUName on LLVM 16+
 endif
 
 ifeq ($(OS),WINNT)
@@ -113,6 +112,10 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 
 LLVM_LDFLAGS := $(shell $(LLVM_CONFIG_HOST) --ldflags)
 LLVM_CXXFLAGS := $(shell $(LLVM_CONFIG_HOST) --cxxflags)
+
+ifeq ($(OS)_$(BINARY),WINNT_32)
+LLVM_CXXFLAGS += -I$(SRCDIR)/support/win32-clang-ABI-bug
+endif
 
 # llvm-config --cxxflags does not return -DNDEBUG
 ifeq ($(shell $(LLVM_CONFIG_HOST) --assertion-mode),OFF)
@@ -227,7 +230,7 @@ $(BUILDDIR)/jl_internal_funcs.inc: $(SRCDIR)/jl_exported_funcs.inc
 	# to have a `ijl_` prefix instead of `jl_`, to denote that they are coming from `libjulia-internal`.  This avoids
 	# potential confusion with debugging tools, when inspecting a process that has both `libjulia` and `libjulia-internal`
 	# loaded at the same time.
-	grep 'XX(.\+)' $< | sed -E 's/.*XX\((.+)\).*/#define \1 i\1/g' >$@
+	grep 'XX(..*)' $< | sed -E 's/.*XX\((.+)\).*/#define \1 i\1/g' >$@
 
 # source file rules
 $(BUILDDIR)/%.o: $(SRCDIR)/%.c $(HEADERS) | $(BUILDDIR)

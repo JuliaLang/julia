@@ -214,7 +214,6 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         (void)jl_toplevel_eval_flex(newm, form, 1, 1);
     }
-    newm->primary_world = jl_atomic_load_acquire(&jl_world_counter);
     ct->world_age = last_age;
 
 #if 0
@@ -222,7 +221,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     size_t i;
     jl_svec_t *table = jl_atomic_load_relaxed(&newm->bindings);
     for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svec_ref(table, i);
+        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
         if ((void*)b != jl_nothing) {
             // remove non-exported macros
             if (jl_symbol_name(b->name)[0]=='@' &&
@@ -462,21 +461,24 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
 }
 
+size_t jl_require_world = ~(size_t)0;
 static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Require);
     jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "%s", jl_symbol_name(var));
 
-    static jl_value_t *require_func = NULL;
-    int build_mode = jl_generating_output();
+    int build_mode = jl_options.incremental && jl_generating_output();
     jl_module_t *m = NULL;
     jl_task_t *ct = jl_current_task;
+    static jl_value_t *require_func = NULL;
     if (require_func == NULL && jl_base_module != NULL) {
         require_func = jl_get_global(jl_base_module, jl_symbol("require"));
     }
     if (require_func != NULL) {
         size_t last_age = ct->world_age;
-        ct->world_age = (build_mode ? jl_base_module->primary_world : jl_atomic_load_acquire(&jl_world_counter));
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        if (build_mode && jl_require_world < ct->world_age)
+            ct->world_age = jl_require_world;
         jl_value_t *reqargs[3];
         reqargs[0] = require_func;
         reqargs[1] = (jl_value_t*)mod;
@@ -759,14 +761,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
                 if (name != NULL)
                     u = (jl_module_t*)jl_eval_global_var(import, name);
                 if (from) {
-                    // `using A: B` syntax
+                    // `using A: B` and `using A: B.c` syntax
                     jl_module_use(m, import, name);
                 }
                 else {
                     if (!jl_is_module(u))
                         jl_eval_errorf(m, "invalid using path: \"%s\" does not name a module",
                                        jl_symbol_name(name));
-                    // `using A.B` syntax
+                    // `using A` and `using A.B` syntax
                     jl_module_using(m, u);
                     if (m == jl_main_module && name == NULL) {
                         // TODO: for now, `using A` in Main also creates an explicit binding for `A`
@@ -927,7 +929,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {
-            (void)jl_type_infer(mfunc, world, 0);
+            (void)jl_type_infer(mfunc, world, 0, SOURCE_MODE_NOT_REQUIRED);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
         ct->world_age = last_age;
@@ -1008,10 +1010,10 @@ JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
     JL_GC_PUSH1(&li);
     jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
     jl_task_t *ct = jl_current_task;
-    jl_code_info_t *src = jl_type_infer(li, ct->world_age, 0);
+    jl_code_instance_t *ci = jl_type_infer(li, ct->world_age, 0, SOURCE_MODE_NOT_REQUIRED);
     JL_GC_POP();
-    if (src)
-        return src->rettype;
+    if (ci)
+        return ci->rettype;
     return (jl_value_t*)jl_any_type;
 }
 

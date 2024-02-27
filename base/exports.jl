@@ -65,6 +65,7 @@ export
     Missing,
     NTuple,
     IdDict,
+    IdSet,
     OrdinalRange,
     Pair,
     PartialQuickSort,
@@ -411,6 +412,7 @@ export
     isperm,
     issorted,
     last,
+    logrange,
     mapslices,
     max,
     maximum!,
@@ -458,6 +460,7 @@ export
     vcat,
     vec,
     view,
+    wrap,
     zeros,
 
 # search, find, match and related functions
@@ -755,6 +758,7 @@ export
     swapproperty!,
     modifyproperty!,
     replaceproperty!,
+    setpropertyonce!,
     fieldoffset,
     fieldname,
     fieldnames,
@@ -1035,6 +1039,7 @@ export
     @elapsed,
     @allocated,
     @allocations,
+    @lock_conflicts,
 
     # tasks
     @sync,
@@ -1063,6 +1068,7 @@ export
     @atomic,
     @atomicswap,
     @atomicreplace,
+    @atomiconce,
     @__dot__,
     @enum,
     @label,
@@ -1090,6 +1096,7 @@ public
     Generator,
     ImmutableDict,
     OneTo,
+    LogRange,
     AnnotatedString,
     AnnotatedChar,
     UUID,
@@ -1133,6 +1140,7 @@ public
     summarysize,
     isexported,
     ispublic,
+    remove_linenums!,
 
 # Opperators
     operator_associativity,
@@ -1154,6 +1162,17 @@ public
     @constprop,
     @locals,
     @propagate_inbounds,
+
+# IO
+    # types
+    BufferStream,
+    IOServer,
+    OS_HANDLE,
+    PipeEndpoint,
+    TTY,
+    # functions
+    reseteof,
+    link_pipe!,
 
 # misc
     notnothing,

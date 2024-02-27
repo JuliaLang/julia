@@ -184,7 +184,6 @@ Stacktrace:
    @ none:0
  [2] top-level scope
    @ none:1
-
 ```
 
 This error prevents accidentally adding methods to functions in other modules that you only intended to use.
@@ -196,17 +195,16 @@ julia> using .NiceStuff
 julia> struct Cat end
 
 julia> NiceStuff.nice(::Cat) = "nice 😸"
-
 ```
 
 Alternatively, you can `import` the specific function name:
 ```jldoctest module_manual
 julia> import .NiceStuff: nice
 
-julia> struct Cat end
+julia> struct Mouse end
 
-julia> nice(::Cat) = "nice 😸"
-nice (generic function with 2 methods)
+julia> nice(::Mouse) = "nice 🐭"
+nice (generic function with 3 methods)
 ```
 
 Which one you choose is a matter of style. The first form makes it clear that you are adding a
@@ -599,15 +597,19 @@ A few other points to be aware of:
    an error to do this, but you simply need to be prepared that the system will try to copy some
    of these and to create a single unique instance of others.
 
-It is sometimes helpful during module development to turn off incremental precompilation. The
-command line flag `--compiled-modules={yes|no}` enables you to toggle module precompilation on and
-off. When Julia is started with `--compiled-modules=no` the serialized modules in the compile cache
-are ignored when loading modules and module dependencies.
-More fine-grained control is available with `--pkgimages=no`, which suppresses only
-native-code storage during precompilation. `Base.compilecache` can still be called
-manually. The state of this command line flag is passed to `Pkg.build` to disable automatic
-precompilation triggering when installing, updating, and explicitly building packages.
+It is sometimes helpful during module development to turn off incremental precompilation.
+The command line flag `--compiled-modules={yes|no|existing}` enables you to toggle module
+precompilation on and off. When Julia is started with `--compiled-modules=no` the serialized
+modules in the compile cache are ignored when loading modules and module dependencies. In
+some cases, you may want to load existing precompiled modules, but not create new ones. This
+can be done by starting Julia with `--compiled-modules=existing`. More fine-grained control
+is available with `--pkgimages={yes|no|existing}`, which only affects native-code storage
+during precompilation. `Base.compilecache` can still be called manually. The state of this
+command line flag is passed to `Pkg.build` to disable automatic precompilation triggering
+when installing, updating, and explicitly building packages.
 
 You can also debug some precompilation failures with environment variables. Setting
-`JULIA_VERBOSE_LINKING=true` may help resolve failures in linking shared libraries of compiled
-native code. See the **Developer Documentation** part of the Julia manual, where you will find further details in the section documenting Julia's internals under "Package Images".
+`JULIA_VERBOSE_LINKING=true` may help resolve failures in linking shared libraries of
+compiled native code. See the **Developer Documentation** part of the Julia manual, where
+you will find further details in the section documenting Julia's internals under "Package
+Images".

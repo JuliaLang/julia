@@ -16,7 +16,7 @@
 //
 //    University of Illinois at Urbana-Champaign
 //
-//    http://llvm.org
+//    https://llvm.org
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
 // this software and associated documentation files (the "Software"), to deal with
@@ -797,11 +797,7 @@ static const char *SymbolLookup(void *DisInfo, uint64_t ReferenceValue, uint64_t
 
 static int OpInfoLookup(void *DisInfo, uint64_t PC,
                         uint64_t Offset,
-#if JL_LLVM_VERSION < 150000
-                        uint64_t Size,
-#else
                         uint64_t OpSize, uint64_t InstSize,
-#endif
                         int TagType, void *TagBuf)
 {
     // SymbolTable *SymTab = (SymbolTable*)DisInfo;
@@ -910,11 +906,7 @@ static void jl_dump_asm_internal(
     std::unique_ptr<MCCodeEmitter> CE;
     std::unique_ptr<MCAsmBackend> MAB;
     if (ShowEncoding) {
-#if JL_LLVM_VERSION >= 150000
         CE.reset(TheTarget->createMCCodeEmitter(*MCII, Ctx));
-#else
-        CE.reset(TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx));
-#endif
         MAB.reset(TheTarget->createMCAsmBackend(*STI, *MRI, Options));
     }
 
@@ -929,11 +921,7 @@ static void jl_dump_asm_internal(
                                          IP.release(),
                                          std::move(CE), std::move(MAB),
                                          /*ShowInst*/ false));
-#if JL_LLVM_VERSION >= 140000
     Streamer->initSections(true, *STI);
-#else
-    Streamer->InitSections(true);
-#endif
 
     // Make the MemoryObject wrapper
     ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);
@@ -1049,9 +1037,6 @@ static void jl_dump_asm_internal(
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
             FuncMCView view = memoryObject.slice(Index);
-#if JL_LLVM_VERSION < 150000
-#define getCommentOS() GetCommentOS()
-#endif
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
                                       /*CStream*/ pass != 0 ? Streamer->getCommentOS () : nulls());
             if (pass != 0 && Streamer->getCommentOS ().tell() > 0)
@@ -1256,11 +1241,7 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;
             if (binary) { // enable MCAsmStreamer::AddEncodingComment printing
-#if JL_LLVM_VERSION >= 150000
                 MCE.reset(TM->getTarget().createMCCodeEmitter(MII, *Context));
-#else
-                MCE.reset(TM->getTarget().createMCCodeEmitter(MII, MRI, *Context));
-#endif
             }
             auto FOut = std::make_unique<formatted_raw_ostream>(asmfile);
             std::unique_ptr<MCStreamer> S(TM->getTarget().createAsmStreamer(
