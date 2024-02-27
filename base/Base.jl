@@ -137,6 +137,7 @@ if isdefined(Core, :Compiler)
 end
 
 include("exports.jl")
+include("public.jl")
 
 if false
     # simple print definitions for debugging. enable these if something
