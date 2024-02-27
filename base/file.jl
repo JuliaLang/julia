@@ -249,6 +249,10 @@ function mkpath(path::AbstractString; mode::Integer = 0o777)
     path
 end
 
+# Files that were requested to be deleted but can't be by the current process
+# i.e. loaded DLLs on Windows
+delayed_delete_dir() = joinpath(tempdir(), "julia_delayed_deletes")
+
 """
     rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
 
@@ -270,20 +274,26 @@ Stacktrace:
 [...]
 ```
 """
-function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
+function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allow_delayed_delete::Bool=true)
+    # allow_delayed_delete is used by Pkg.gc() but is otherwise not part of the public API
     if islink(path) || !isdir(path)
         try
-            @static if Sys.iswindows()
-                # is writable on windows actually means "is deletable"
-                st = lstat(path)
-                if ispath(st) && (filemode(st) & 0o222) == 0
-                    chmod(path, 0o777)
-                end
-            end
             unlink(path)
         catch err
-            if force && isa(err, IOError) && err.code==Base.UV_ENOENT
-                return
+            if isa(err, IOError)
+                force && err.code==Base.UV_ENOENT && return
+                @static if Sys.iswindows()
+                    if allow_delayed_delete && err.code==Base.UV_EACCES && endswith(path, ".dll")
+                        # Loaded DLLs cannot be deleted on Windows, even with posix delete mode
+                        # but they can be moved. So move out to allow the dir to be deleted
+                        # TODO: Add a mechanism to delete these moved files after dlclose or process exit
+                        dir = mkpath(delayed_delete_dir())
+                        temp_path = tempname(dir, cleanup = false, suffix = string("_", basename(path)))
+                        @debug "Could not delete DLL most likely because it is loaded, moving to tempdir" path temp_path
+                        mv(path, temp_path)
+                        return
+                    end
+                end
             end
             rethrow()
         end
@@ -291,12 +301,14 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
         if recursive
             try
                 for p in readdir(path)
-                    rm(joinpath(path, p), force=force, recursive=true)
+                    try
+                        rm(joinpath(path, p), force=force, recursive=true)
+                    catch err
+                        (isa(err, IOError) && err.code==Base.UV_EACCES) || rethrow()
+                    end
                 end
             catch err
-                if !(isa(err, IOError) && err.code==Base.UV_EACCES)
-                    rethrow(err)
-                end
+                (isa(err, IOError) && err.code==Base.UV_EACCES) || rethrow()
             end
         end
         req = Libc.malloc(_sizeof_uv_fs)
