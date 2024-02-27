@@ -369,7 +369,13 @@ end
 waitany(tasks) = _wait_multiple(tasks)
 waitall(tasks; failfast=false) = _wait_multiple(tasks; all=true, failfast=failfast)
 
-function _wait_multiple(waiting_tasks::Union{AbstractVector{Task},AbstractSet{Task},Tuple{Task}}; all=false, failfast=false)
+function _wait_multiple(waiting_tasks; all=false, failfast=false)
+    foreach(waiting_tasks) do @nospecialize t
+        if !(t isa Task)
+            error("Expected an iterator of `Task` object")
+        end
+    end
+
     chan = Channel{Tuple{Int,Task}}(Inf)
     tasks = Task[]
     done_mask = Bool[]
