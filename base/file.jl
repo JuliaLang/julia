@@ -285,8 +285,8 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false, allo
                 @static if Sys.iswindows()
                     if allow_delayed_delete && err.code==Base.UV_EACCES && endswith(path, ".dll")
                         # Loaded DLLs cannot be deleted on Windows, even with posix delete mode
-                        # but they can be moved. So move out to allow the dir to be deleted
-                        # TODO: Add a mechanism to delete these moved files after dlclose or process exit
+                        # but they can be moved. So move out to allow the dir to be deleted.
+                        # Pkg.gc() cleans up this dir when possible
                         dir = mkpath(delayed_delete_dir())
                         temp_path = tempname(dir, cleanup = false, suffix = string("_", basename(path)))
                         @debug "Could not delete DLL most likely because it is loaded, moving to tempdir" path temp_path
