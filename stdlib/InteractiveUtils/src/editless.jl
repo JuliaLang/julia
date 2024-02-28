@@ -90,7 +90,7 @@ The following defines the usage of terminal-based `emacs`:
     `define_editor` was introduced in Julia 1.4.
 """
 function define_editor(fn::Function, pattern; wait::Bool=false)
-    callback = function (cmd::Cmd, path::AbstractString, line::Integer, column::Integer)
+    callback = function (cmd::Cmd, path::AbstractString, line::Integer, column::Integer; wait = wait)
         editor_matches(pattern, cmd) || return false
         editor = if !applicable(fn, cmd, path, line, column)
             # Be backwards compatible with editors that did not define the newly added column argument
@@ -225,7 +225,7 @@ by setting `JULIA_EDITOR`, `VISUAL` or `EDITOR` as an environment variable.
 
 See also [`InteractiveUtils.define_editor`](@ref).
 """
-function edit(path::AbstractString, line::Integer=0, column::Integer=0)
+function edit(path::AbstractString, line::Integer=0, column::Integer=0; wait=nothing)
     path isa String || (path = convert(String, path))
     if endswith(path, ".jl")
         p = find_source_file(path)
@@ -234,9 +234,17 @@ function edit(path::AbstractString, line::Integer=0, column::Integer=0)
     cmd = editor()
     for callback in EDITOR_CALLBACKS
         if !applicable(callback, cmd, path, line, column)
-            callback(cmd, path, line) && return
+            if isnothing(wait)
+                callback(cmd, path, line) && return
+            else
+                callback(cmd, path, line; wait) && return
+            end
         else
-            callback(cmd, path, line, column) && return
+            if isnothing(wait)
+                callback(cmd, path, line, column) && return
+            else
+                callback(cmd, path, line, column; wait) && return
+            end
         end
     end
     # shouldn't happen unless someone has removed fallback entry
