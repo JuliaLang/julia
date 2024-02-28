@@ -1124,6 +1124,9 @@ function _growend!(a::Vector, delta::Integer)
         end
         newref = @inbounds GenericMemoryRef(newmem, newoffset)
         unsafe_copyto!(newref, ref, len)
+        if ref !== a.ref
+            throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
+        end
         setfield!(a, :ref, newref)
         end)()
     end
