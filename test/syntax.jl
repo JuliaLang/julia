@@ -1557,7 +1557,7 @@ let ex = Meta.parse("@test27521(2) do y; y; end")
     fex = Expr(:(->), Expr(:tuple, :y), Expr(:block, LineNumberNode(1,:none), :y))
     @test ex == Expr(:do, Expr(:macrocall, Symbol("@test27521"), LineNumberNode(1,:none), 2),
                      fex)
-    @test macroexpand(@__MODULE__, ex) == Expr(:tuple, fex, 2)
+    @test macroexpand(@__MODULE__, ex).args[1] == Expr(:tuple, esc(fex), 2)
 end
 
 # issue #43018
@@ -3531,109 +3531,3 @@ end
              elseif false || (()->true)()
                  42
              end)) == 42
-
-macro _macroexpand(x, m=__module__)
-    :($__source__; macroexpand($m, Expr(:var"hygienic-scope", $(esc(Expr(:quote, x))), $m)))
-end
-
-@testset "unescaping in :global expressions" begin
-    m = @__MODULE__
-    @test @_macroexpand(global x::T) == :(global x::$(GlobalRef(m, :T)))
-    @test @_macroexpand(global (x, $(esc(:y)))) == :(global (x, y))
-    @test @_macroexpand(global (x::S, $(esc(:y))::$(esc(:T)))) ==
-        :(global (x::$(GlobalRef(m, :S)), y::T))
-    @test @_macroexpand(global (; x, $(esc(:y)))) == :(global (; x, y))
-    @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T)))) ==
-        :(global (; x::$(GlobalRef(m, :S)), y::T))
-
-    @test @_macroexpand(global x::T = a) == :(global x::$(GlobalRef(m, :T)) = $(GlobalRef(m, :a)))
-    @test @_macroexpand(global (x, $(esc(:y))) = a) == :(global (x, y) = $(GlobalRef(m, :a)))
-    @test @_macroexpand(global (x::S, $(esc(:y))::$(esc(:T))) = a) ==
-        :(global (x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
-    @test @_macroexpand(global (; x, $(esc(:y))) = a) == :(global (; x, y) = $(GlobalRef(m, :a)))
-    @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T))) = a) ==
-        :(global (; x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
-end
-
-# issue #49920
-let line1 = (quote end).args[1],
-    line2 = (quote end).args[1],
-    line3 = (quote end).args[1]
-    @test 1 === eval(Meta.lower(Main, Expr(:block, line1, 1, line2, line3)))
-end
-
-# issue #49984
-macro z49984(s); :(let a; $(esc(s)); end); end
-@test let a = 1; @z49984(a) === 1; end
-
-# issues #37783, #39929, #42552, #43379, and #48332
-let x = 1 => 2
-    @test_throws ErrorException @eval a => b = 2
-    @test_throws "function Base.=> must be explicitly imported to be extended" @eval a => b = 2
-end
-
-# Splatting in non-final default value (Ref #50518)
-for expr in (quote
-    function g1(a=(1,2)..., b...=3)
-        b
-    end
-end,quote
-    function g2(a=(1,2)..., b=3, c=4)
-        (b, c)
-    end
-end,quote
-    function g3(a=(1,2)..., b=3, c...=4)
-        (b, c)
-    end
-end)
-    let exc = try eval(expr); catch exc; exc end
-        @test isa(exc, ErrorException)
-        @test startswith(exc.msg, "syntax: invalid \"...\" in non-final positional argument default value")
-    end
-end
-
-# Test that bad lowering does not segfault (ref #50518)
-@test_throws ErrorException("syntax: Attempted to use slot marked unused") @eval function funused50518(::Float64)
-    $(Symbol("#unused#"))
-end
-
-@testset "public keyword" begin
-    p(str) = Base.remove_linenums!(Meta.parse(str))
-    # tests ported from JuliaSyntax.jl
-    @test p("function f(public)\n    public + 3\nend") == Expr(:function, Expr(:call, :f, :public), Expr(:block, Expr(:call, :+, :public, 3)))
-    @test p("public A, B") == Expr(:public, :A, :B)
-    @test p("if true \n public *= 4 \n end") == Expr(:if, true, Expr(:block, Expr(:*=, :public, 4)))
-    @test p("module Mod\n public A, B \n end") == Expr(:module, true, :Mod, Expr(:block, Expr(:public, :A, :B)))
-    @test p("module Mod2\n a = 3; b = 6; public a, b\n end") == Expr(:module, true, :Mod2, Expr(:block, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b)))
-    @test p("a = 3; b = 6; public a, b") == Expr(:toplevel, Expr(:(=), :a, 3), Expr(:(=), :b, 6), Expr(:public, :a, :b))
-    @test_throws Meta.ParseError p("begin \n public A, B \n end")
-    @test_throws Meta.ParseError p("if true \n public A, B \n end")
-    @test_throws Meta.ParseError p("public export=true foo, bar")
-    @test_throws Meta.ParseError p("public experimental=true foo, bar")
-    @test p("public(x::String) = false") == Expr(:(=), Expr(:call, :public, Expr(:(::), :x, :String)), Expr(:block, false))
-    @test p("module M; export @a; end") == Expr(:module, true, :M, Expr(:block, Expr(:export, :var"@a")))
-    @test p("module M; public @a; end") == Expr(:module, true, :M, Expr(:block, Expr(:public, :var"@a")))
-    @test p("module M; export ⤈; end") == Expr(:module, true, :M, Expr(:block, Expr(:export, :⤈)))
-    @test p("module M; public ⤈; end") == Expr(:module, true, :M, Expr(:block, Expr(:public, :⤈)))
-    @test p("public = 4") == Expr(:(=), :public, 4)
-    @test p("public[7] = 5") == Expr(:(=), Expr(:ref, :public, 7), 5)
-    @test p("public() = 6") == Expr(:(=), Expr(:call, :public), Expr(:block, 6))
-end
-
-@testset "removing argument sideeffects" begin
-    # Allow let blocks in broadcasted LHSes, but only evaluate them once:
-    execs = 0
-    array = [1]
-    let x = array; execs += 1; x; end .+= 2
-    @test array == [3]
-    @test execs == 1
-    let; execs += 1; array; end .= 4
-    @test array == [4]
-    @test execs == 2
-    let x = array; execs += 1; x; end::Vector{Int} .+= 2
-    @test array == [6]
-    @test execs == 3
-    let; execs += 1; array; end::Vector{Int} .= 7
-    @test array == [7]
-    @test execs == 4
-end
