@@ -611,7 +611,7 @@ may fit your package better.
 
 8. Avoid using a distinctive name that is already in use in another unrelated project.
      * Don't use the names `Tkinter.jl`, `TkinterGUI.jl`, etc. for a package that is unrelated
-       to the popular `tkinter` python package. Users are likely to assume an affiliation that
+       to the popular `tkinter` python package. Users are likely to assume a connection that
        does not exist.
      * It's okay to name a package `HTTP.jl` even though it is unrelated to the popular rust
        crate `http` because in most usages the name "http" refers to the hypertext transfer protocol, not to the `http` python package.
