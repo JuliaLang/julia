@@ -474,7 +474,7 @@ fLargeTable() = 4
 fLargeTable(::Union, ::Union) = "a"
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "a"
 fLargeTable(::Union, ::Union) = "b"
-@test length(methods(fLargeTable)) == 205
+@test length(methods(fLargeTable)) == 206
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
 # issue #15280
@@ -1193,3 +1193,6 @@ end
 @test Base.isexported(Mod52812, :b)
 @test Base.ispublic(Mod52812, :a)
 @test Base.ispublic(Mod52812, :b)
+
+@test Base.infer_return_type(code_lowered, (Any,)) == Vector{Core.CodeInfo}
+@test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}

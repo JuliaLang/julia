@@ -407,11 +407,11 @@ precompile_test_harness(false) do dir
         else
             ocachefile = nothing
         end
-            # use _require_from_serialized to ensure that the test fails if
-            # the module doesn't reload from the image:
+        # use _require_from_serialized to ensure that the test fails if
+        # the module doesn't reload from the image:
         @test_warn "@ccallable was already defined for this method name" begin
             @test_logs (:warn, "Replacing module `$Foo_module`") begin
-                m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile)
+                m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile, Foo_file)
                 @test isa(m, Module)
             end
         end
@@ -1723,7 +1723,6 @@ let newinterp_path = abspath("compiler/newinterp.jl")
             import SimpleModule: basic_caller, basic_callee
 
             module Custom
-                const CC = Core.Compiler
                 include("$($newinterp_path)")
                 @newinterp PrecompileInterpreter
             end
@@ -1794,14 +1793,18 @@ let newinterp_path = abspath("compiler/newinterp.jl")
                         mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
                     return CustomData(inferred_result)
                 end
-                function CC.inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
+                function CC.src_inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
                                             @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)
                     if src isa CustomData
                         src = src.inferred
                     end
-                    return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter, src::Any,
-                                                    info::CC.CallInfo, stmt_flag::UInt32)
+                    return @invoke CC.src_inlining_policy(interp::CC.AbstractInterpreter, src::Any,
+                                                          info::CC.CallInfo, stmt_flag::UInt32)
                 end
+                CC.retrieve_ir_for_inlining(cached_result::Core.CodeInstance, src::CustomData) =
+                    CC.retrieve_ir_for_inlining(cached_result, src.inferred)
+                CC.retrieve_ir_for_inlining(mi::Core.MethodInstance, src::CustomData, preserve_local_sources::Bool) =
+                    CC.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
             end
 
             Base.return_types((Float64,)) do x
@@ -1822,7 +1825,7 @@ let newinterp_path = abspath("compiler/newinterp.jl")
             using CustomAbstractInterpreterCaching2
             cache_owner = Core.Compiler.cache_owner(
                 CustomAbstractInterpreterCaching2.Custom.PrecompileInterpreter())
-            let m = only(methods(CustomAbstractInterpreterCaching.basic_callee))
+            let m = only(methods(CustomAbstractInterpreterCaching2.basic_callee))
                 mi = only(Base.specializations(m))
                 ci = mi.cache
                 @test isdefined(ci, :next)

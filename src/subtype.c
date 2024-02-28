@@ -1512,6 +1512,23 @@ static int may_contain_union_decision(jl_value_t *x, jl_stenv_t *e, jl_typeenv_t
            may_contain_union_decision(xb ? xb->ub : ((jl_tvar_t *)x)->ub, e, &newlog);
 }
 
+static int has_exists_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    jl_typeenv_t *env = NULL;
+    jl_varbinding_t *v = e->vars;
+    while (v != NULL) {
+        if (v->right) {
+            jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
+            newenv->var = v->var;
+            newenv->val = NULL;
+            newenv->prev = env;
+            env = newenv;
+        }
+        v = v->prev;
+    }
+    return env != NULL && jl_has_bound_typevars(x, env);
+}
+
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow)
 {
     int16_t oldRmore = e->Runions.more;
@@ -1531,13 +1548,19 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         int count = 0, noRmore = 0;
         sub = _forall_exists_subtype(x, y, e, param, &count, &noRmore);
         pop_unionstate(&e->Runions, &oldRunions);
-        // we should not try the slow path if `forall_exists_subtype` has tested all cases;
-        // Once limit_slow == 1, also skip it if
-        // 1) `forall_exists_subtype` return false
+        // We could skip the slow path safely if
+        // 1) `_∀_∃_subtype` has tested all cases
+        // 2) `_∀_∃_subtype` returns 1 &&  `x` and `y` contain no ∃ typevar
+        // Once `limit_slow == 1`, also skip it if
+        // 1) `_∀_∃_subtype` returns 0
         // 2) the left `Union` looks big
+        // TODO: `limit_slow` ignores complexity from inner `local_∀_exists_subtype`.
         if (limit_slow == -1)
             limit_slow = kindx || kindy;
-        if (noRmore || (limit_slow && (count > 3  || !sub)))
+        int skip = noRmore || (limit_slow && (count > 3 || !sub)) ||
+                   (sub && (kindx || !has_exists_typevar(x, e)) &&
+                           (kindy || !has_exists_typevar(y, e)));
+        if (skip)
             e->Runions.more = oldRmore;
     }
     else {
@@ -5124,6 +5147,26 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 
 JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b)
 {
+    return type_morespecific_(a, b, a, b, 0, NULL);
+}
+
+// Equivalent to `jl_type_morespecific` of the signatures, except that more recent
+// methods are more specific, iff the methods signatures are type-equal
+JL_DLLEXPORT int jl_method_morespecific(jl_method_t *ma, jl_method_t *mb)
+{
+    jl_value_t *a = (jl_value_t*)ma->sig;
+    jl_value_t *b = (jl_value_t*)mb->sig;
+    if (obviously_disjoint(a, b, 1))
+        return 0;
+    if (jl_has_free_typevars(a) || jl_has_free_typevars(b))
+        return 0;
+    if (jl_subtype(b, a)) {
+        if (jl_types_equal(a, b))
+            return jl_atomic_load_relaxed(&ma->primary_world) > jl_atomic_load_relaxed(&mb->primary_world);
+        return 0;
+    }
+    if (jl_subtype(a, b))
+        return 1;
     return type_morespecific_(a, b, a, b, 0, NULL);
 }
 

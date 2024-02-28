@@ -1892,6 +1892,7 @@ end
 
     @test showstr(Pair{Integer,Integer}(1, 2), :typeinfo => Pair{Integer,Integer}) == "1 => 2"
     @test showstr([Pair{Integer,Integer}(1, 2)]) == "Pair{Integer, Integer}[1 => 2]"
+    @test showstr([(a=1,)]) == "[(a = 1,)]"
     @test showstr(Dict{Integer,Integer}(1 => 2)) == "Dict{Integer, Integer}(1 => 2)"
     @test showstr(Dict(true=>false)) == "Dict{Bool, Bool}(1 => 0)"
     @test showstr(Dict((1 => 2) => (3 => 4))) == "Dict((1 => 2) => (3 => 4))"
@@ -2106,7 +2107,7 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     io = IOBuffer()
     Base.IRShow.show_ir(io, ir, Base.IRShow.default_config(ir; verbose_linetable=true))
     seekstart(io)
-    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 11
+    @test count(contains(r"@ a{80}:\d+ within `my_fun28173"), eachline(io)) == 10
 
     # Test that a bad :invoke doesn't cause an error during printing
     Core.Compiler.insert_node!(ir, 1, Core.Compiler.NewInstruction(Expr(:invoke, nothing, sin), Any), false)

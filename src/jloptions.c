@@ -8,6 +8,7 @@
 
 #include <unistd.h>
 #include <getopt.h>
+
 #include "julia_assert.h"
 
 #ifdef _OS_WINDOWS_
@@ -17,6 +18,15 @@ char *shlib_ext = ".dylib";
 #else
 char *shlib_ext = ".so";
 #endif
+
+/* This simple hand-crafted tolower exists to avoid locale-dependent effects in
+ * behaviors (and utf8proc_tolower wasn't linking properly on all platforms) */
+static char ascii_tolower(char c)
+{
+    if ('A' <= c && c <= 'Z')
+        return c - 'A' + 'a';
+    return c;
+}
 
 static const char system_image_path[256] = "\0" JL_SYSTEM_IMAGE_PATH;
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
@@ -189,9 +199,9 @@ static const char opts[]  =
     "                            expressions. It first tries to use BugReporting.jl installed in current environment and\n"
     "                            fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
     "                            --bug-report=help.\n\n"
-
-    " --heap-size-hint=<size>    Forces garbage collection if memory usage is higher than that value.\n"
-    "                            The value can be specified in units of K, M, G, T, or % of physical memory.\n\n"
+    " --heap-size-hint=<size>    Forces garbage collection if memory usage is higher than the given value.\n"
+    "                            The value may be specified as a number of bytes, optionally in units of\n"
+    "                            KB, MB, GB, or TB, or as a percentage of physical memory with %.\n\n"
 ;
 
 static const char opts_hidden[]  =
@@ -809,43 +819,47 @@ restart_switch:
             break;
         case opt_heap_size_hint:
             if (optarg != NULL) {
-                size_t endof = strlen(optarg);
                 long double value = 0.0;
-                if (sscanf(optarg, "%Lf", &value) == 1 && value > 1e-7) {
-                    char unit = optarg[endof - 1];
-                    uint64_t multiplier = 1ull;
-                    switch (unit) {
-                        case 'k':
-                        case 'K':
-                            multiplier <<= 10;
-                            break;
-                        case 'm':
-                        case 'M':
-                            multiplier <<= 20;
-                            break;
-                        case 'g':
-                        case 'G':
-                            multiplier <<= 30;
-                            break;
-                        case 't':
-                        case 'T':
-                            multiplier <<= 40;
-                            break;
-                        case '%':
-                            if (value > 100)
-                                jl_errorf("julia: invalid percentage specified in --heap-size-hint");
-                            uint64_t mem = uv_get_total_memory();
-                            uint64_t cmem = uv_get_constrained_memory();
-                            if (cmem > 0 && cmem < mem)
-                                mem = cmem;
-                            multiplier = mem/100;
-                            break;
-                        default:
-                            jl_errorf("julia: invalid unit specified in --heap-size-hint");
-                            break;
-                    }
-                    jl_options.heap_size_hint = (uint64_t)(value * multiplier);
+                char unit[4] = {0};
+                int nparsed = sscanf(optarg, "%Lf%3s", &value, unit);
+                if (nparsed == 0 || strlen(unit) > 2 || (strlen(unit) == 2 && ascii_tolower(unit[1]) != 'b')) {
+                    jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                 }
+                uint64_t multiplier = 1ull;
+                switch (ascii_tolower(unit[0])) {
+                    case '\0':
+                    case 'b':
+                        break;
+                    case 'k':
+                        multiplier <<= 10;
+                        break;
+                    case 'm':
+                        multiplier <<= 20;
+                        break;
+                    case 'g':
+                        multiplier <<= 30;
+                        break;
+                    case 't':
+                        multiplier <<= 40;
+                        break;
+                    case '%':
+                        if (value > 100)
+                            jl_errorf("julia: invalid percentage specified in --heap-size-hint");
+                        uint64_t mem = uv_get_total_memory();
+                        uint64_t cmem = uv_get_constrained_memory();
+                        if (cmem > 0 && cmem < mem)
+                            mem = cmem;
+                        multiplier = mem/100;
+                        break;
+                    default:
+                        jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
+                        break;
+                }
+                long double sz = value * multiplier;
+                if (isnan(sz) || sz < 0) {
+                    jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
+                }
+                jl_options.heap_size_hint = sz < UINT64_MAX ? (uint64_t)sz : UINT64_MAX;
             }
             if (jl_options.heap_size_hint == 0)
                 jl_errorf("julia: invalid memory size specified in --heap-size-hint");

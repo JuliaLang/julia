@@ -142,7 +142,9 @@ begin take!(GLOBAL_BUFFER)
     # this redefinition below should invalidate the cache of `pr48932_callee` but not that of `pr48932_caller`
     pr48932_callee(x) = (print(GLOBAL_BUFFER, x); nothing)
 
-    @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee))))
+    @test length(Base.methods(pr48932_callee)) == 2
+    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === first(Base.methods(pr48932_callee))
+    @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee, Tuple{Any}))))
     let mi = only(Base.specializations(Base.only(Base.methods(pr48932_caller))))
         # Base.method_instance(pr48932_callee, (Any,))
         ci = mi.cache
@@ -206,7 +208,7 @@ begin take!(GLOBAL_BUFFER)
     # this redefinition below should invalidate the cache of `pr48932_callee_inferable` but not that of `pr48932_caller_unuse`
     pr48932_callee_inferable(x) = (print(GLOBAL_BUFFER, "foo"); x)
 
-    @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee_inferable))))
+    @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee_inferable, Tuple{Any}))))
     let mi = Base.method_instance(pr48932_caller_unuse, (Int,))
         ci = mi.cache
         @test isdefined(ci, :next)
@@ -266,7 +268,7 @@ begin take!(GLOBAL_BUFFER)
     # this redefinition below should invalidate the cache of `pr48932_callee_inlined` but not that of `pr48932_caller_inlined`
     @noinline pr48932_callee_inlined(@nospecialize x) = (print(GLOBAL_BUFFER, x); nothing)
 
-    @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee_inlined))))
+    @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee_inlined, Tuple{Any}))))
     let mi = Base.method_instance(pr48932_caller_inlined, (Int,))
         ci = mi.cache
         @test isdefined(ci, :next)

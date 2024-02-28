@@ -124,6 +124,9 @@ end
     end
     @test_throws ArgumentError tempname(randstring())
 end
+@testset "tempname with suffix" begin
+    @test !isfile(tempname(suffix = "_foo.txt"))
+end
 
 child_eval(code::String) = eval(Meta.parse(readchomp(`$(Base.julia_cmd()) -E $code`)))
 
@@ -1660,23 +1663,44 @@ else
     )
 end
 
-@testset "chmod/isexecutable" begin
+@testset "chmod/isexecutable/isreadable/iswriteable" begin
     mktempdir() do dir
-        mkdir(joinpath(dir, "subdir"))
+        subdir = joinpath(dir, "subdir")
         fpath = joinpath(dir, "subdir", "foo")
 
-        # Test that we can actually set the executable bit on all platforms.
+        @test !ispath(subdir)
+        mkdir(subdir)
+        @test ispath(subdir)
+
+        @test !ispath(fpath)
         touch(fpath)
+        @test ispath(fpath)
+
+        # Test that we can actually set the executable/readable/writeable bit on all platforms.
         chmod(fpath, 0o644)
         @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswriteable(fpath) skip=Sys.iswindows()
         chmod(fpath, 0o755)
         @test Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test Sys.iswriteable(fpath) skip=Sys.iswindows()
+        chmod(fpath, 0o444)
+        @test !Sys.isexecutable(fpath)
+        @test Sys.isreadable(fpath)
+        @test !Sys.iswriteable(fpath)
+        chmod(fpath, 0o244)
+        @test !Sys.isexecutable(fpath)
+        @test !Sys.isreadable(fpath) skip=Sys.iswindows()
+        @test Sys.iswriteable(fpath) skip=Sys.iswindows()
 
         # Ensure that, on Windows, where inheritance is default,
         # chmod still behaves as we expect.
         if Sys.iswindows()
-            chmod(joinpath(dir, "subdir"), 0o666)
-            @test Sys.isexecutable(fpath)
+            chmod(subdir, 0o666)
+            @test !Sys.isexecutable(fpath)
+            @test Sys.isreadable(fpath)
+            @test_skip Sys.iswriteable(fpath)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.
