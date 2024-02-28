@@ -615,7 +615,7 @@ may fit your package better.
        does not exist.
      * It's okay to name a package `HTTP.jl` even though it is unrelated to the popular rust
        crate `http` because in most usages the name "http" refers to the hypertext transfer
-       protocol, not to the `http` python package.
+       protocol, not to the `http` rust crate.
      * It's okay to name a package `OpenSSL.jl` if it provides an interface to the OpenSSL
        library, even without explicit affiliation with the creators of the OpenSSL (provided
        there's no copyright or trademark infringement etc.)
