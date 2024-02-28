@@ -1542,6 +1542,12 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             if isa(v, SSAValue)
                 used_ssas[v.id] -= 1
             end
+            # If the type of this Phi node is wider than the type of the value we
+            # are replacing it with, request that this statement get refined in
+            # future optimization passes
+            if inst[:type] !== argextype(v, compact)
+                v = Refined(v)
+            end
             ssa_rename[idx] = v
         else
             result[result_idx][:stmt] = PhiNode(edges, values)
