@@ -1,8 +1,25 @@
 {
-    "extensions": [
-      "julialang.language-julia",
-      "ms-vscode.cpptools"
-    ],
-  
-    "dockerFile": "Dockerfile"
+	"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+	"features": {
+		"ghcr.io/julialang/devcontainer-features/julia:1": {},
+		"ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
+			"packages": ["gdb"]
+		}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"julialang.language-julia",
+				"ms-vscode.cpptools",
+				"tamasfe.even-better-toml",
+				"github.vscode-github-actions",
+				"GitHub.vscode-pull-request-github",
+				"ms-vscode.makefile-tools"
+			]
+		}
+	},
+	"postCreateCommand": "juliaup link dev /workspaces/julia/julia",
+	"hostRequirements": {
+		"memory": "8gb"
+	 }
 }
