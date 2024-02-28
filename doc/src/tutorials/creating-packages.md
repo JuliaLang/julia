@@ -614,7 +614,7 @@ may fit your package better.
        to the popular `tkinter` python package. Users are likely to assume an affiliation that
        does not exist.
      * It's okay to name a package `HTTP.jl` even though it is unrelated to the popular rust
-       crate `http` because "http" is not a distinctive name.
+       crate `http` because in most usages the name "http" refers to the hypertext transfer protocol, not to the `http` python package.
      * It's okay to name a package `AlphaZero.jl` if it provides an implementation of
        DeepMind's AlphaZero algorithm, even without explicit affiliation with the creators of
        the AlphaZero algorithm (provided there's no copyright or trademark infringement etc.)
