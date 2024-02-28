@@ -1000,7 +1000,7 @@ JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize) {
         return 2;
     uv_thread_t uvtid = ptls2->system_id;
 
-    ret_uv = uv_thread_getaffinity(&uvtid, mask, cpumasksize);
+    int ret_uv = uv_thread_getaffinity(&uvtid, mask, cpumasksize);
     if (ret_uv != 0)
         return 3;
 
@@ -1023,7 +1023,7 @@ JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
         return 2;
     uv_thread_t uvtid = ptls2->system_id;
 
-    ret_uv = uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+    int ret_uv = uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
     if (ret_uv != 0)
         return 3;
 
