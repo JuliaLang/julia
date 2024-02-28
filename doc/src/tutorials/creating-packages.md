@@ -615,7 +615,7 @@ may fit your package better.
        does not exist.
      * It's okay to name a package `HTTP.jl` even though it is unrelated to the popular rust
        crate `http` becuase "http" is not a distinctive name.
-     * It's okay to name a package `AlphaZero.jl` if it provides an implementation of the
+     * It's okay to name a package `AlphaZero.jl` if it provides an implementation of
        DeepMind's AlphaZero algorithm, even without explicit affiliation with the creators of
        the AlphaZero algorithm (provided there's no copyright or trademark infringement etc.)
 
