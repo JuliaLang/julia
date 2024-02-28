@@ -47,7 +47,10 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                     # It could be the binding was exported by two modules, which we can detect
                     # by the `usingfailed` flag in the binding:
                     if isdefined(bnd, :flags) && Bool(bnd.flags >> 4 & 1) # magic location of the `usingfailed` flag
-                        print(io, "\nHint: It looks like this name was exported by two different modules, resulting in ambiguity. Try explicitly importing it, or qualifying the name with the module it should come from.")
+                        print(io, "\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
                     else
                         print(io, "\nSuggestion: check for spelling errors or missing imports.")
                     end

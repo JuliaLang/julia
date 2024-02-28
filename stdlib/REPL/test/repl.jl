@@ -1716,7 +1716,11 @@ try # test the functionality of `UndefVarError_hint` against import clashes
 
     end # X
 
-    @test_throws "Hint: It looks like this name was exported by two different modules, resulting in ambiguity. Try explicitly importing it, or qualifying the name with the module it should come from." X.x
+    expected_message = string("\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
+    @test_throws expected_message X.x
 finally
     empty!(Base.Experimental._hint_handlers)
 end
