@@ -219,6 +219,22 @@ end
 isopen(c::Channel) = ((@atomic :acquire c.state) === :open)
 
 """
+    empty!(c::Channel)
+
+Empty a Channel `c` by calling `empty!` on the internal buffer.
+Return the empty channel.
+"""
+function Base.empty!(c::Channel)
+    @lock c begin
+        ndrop = length(c.data)
+        empty!(c.data)
+        _increment_n_avail(c, -ndrop)
+        notify(c.cond_put)
+    end
+    return c
+end
+
+"""
     bind(chnl::Channel, task::Task)
 
 Associate the lifetime of `chnl` with a task.

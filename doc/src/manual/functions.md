@@ -730,6 +730,7 @@ julia> args = [1, 2, 3]
 
 julia> baz(args...)
 ERROR: MethodError: no method matching baz(::Int64, ::Int64, ::Int64)
+The function `baz` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   baz(::Any, ::Any)

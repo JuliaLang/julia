@@ -76,6 +76,7 @@ Applying it to any other types of arguments will result in a [`MethodError`](@re
 ```jldoctest fofxy
 julia> f(2.0, 3)
 ERROR: MethodError: no method matching f(::Float64, ::Int64)
+The function `f` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   f(::Float64, !Matched::Float64)
@@ -86,6 +87,7 @@ Stacktrace:
 
 julia> f(Float32(2.0), 3.0)
 ERROR: MethodError: no method matching f(::Float32, ::Float64)
+The function `f` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   f(!Matched::Float64, ::Float64)
@@ -96,6 +98,7 @@ Stacktrace:
 
 julia> f(2.0, "3.0")
 ERROR: MethodError: no method matching f(::Float64, ::String)
+The function `f` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   f(::Float64, !Matched::Float64)
@@ -106,6 +109,7 @@ Stacktrace:
 
 julia> f("2.0", "3.0")
 ERROR: MethodError: no method matching f(::String, ::String)
+The function `f` exists, but no method is defined for this combination of argument types.
 ```
 
 As you can see, the arguments must be precisely of type [`Float64`](@ref). Other numeric
@@ -164,9 +168,12 @@ and applying it will still result in a [`MethodError`](@ref):
 ```jldoctest fofxy
 julia> f("foo", 3)
 ERROR: MethodError: no method matching f(::String, ::Int64)
+The function `f` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   f(!Matched::Number, ::Number)
+   @ Main none:1
+  f(!Matched::Float64, !Matched::Float64)
    @ Main none:1
 
 Stacktrace:
@@ -174,6 +181,7 @@ Stacktrace:
 
 julia> f()
 ERROR: MethodError: no method matching f()
+The function `f` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   f(!Matched::Float64, !Matched::Float64)
@@ -432,6 +440,7 @@ julia> myappend([1,2,3],4)
 
 julia> myappend([1,2,3],2.5)
 ERROR: MethodError: no method matching myappend(::Vector{Int64}, ::Float64)
+The function `myappend` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   myappend(::Vector{T}, !Matched::T) where T
@@ -449,6 +458,7 @@ julia> myappend([1.0,2.0,3.0],4.0)
 
 julia> myappend([1.0,2.0,3.0],4)
 ERROR: MethodError: no method matching myappend(::Vector{Float64}, ::Int64)
+The function `myappend` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   myappend(::Vector{T}, !Matched::T) where T
@@ -494,6 +504,7 @@ true
 
 julia> same_type_numeric("foo", 2.0)
 ERROR: MethodError: no method matching same_type_numeric(::String, ::Float64)
+The function `same_type_numeric` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   same_type_numeric(!Matched::T, ::T) where T<:Number
@@ -506,6 +517,7 @@ Stacktrace:
 
 julia> same_type_numeric("foo", "bar")
 ERROR: MethodError: no method matching same_type_numeric(::String, ::String)
+The function `same_type_numeric` exists, but no method is defined for this combination of argument types.
 
 julia> same_type_numeric(Int32(1), Int64(2))
 false
@@ -733,8 +745,8 @@ often it is best to separate each level of dispatch into distinct functions.
 This may sound similar in approach to single-dispatch, but as we shall see below, it is still more flexible.
 
 For example, trying to dispatch on the element-type of an array will often run into ambiguous situations.
-Instead, commonly code will dispatch first on the container type,
-then recurse down to a more specific method based on eltype.
+Instead, common code will dispatch first on the container type,
+then recurse down to a more specific method based on `eltype`.
 In most cases, the algorithms lend themselves conveniently to this hierarchical approach,
 while in other cases, this rigor must be resolved manually.
 This dispatching branching can be observed, for example, in the logic to sum two matrices:
@@ -888,6 +900,7 @@ bar (generic function with 1 method)
 
 julia> bar(1,2,3)
 ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64)
+The function `bar` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   bar(::Any, ::Any, ::Any, !Matched::Any)
@@ -901,6 +914,7 @@ julia> bar(1,2,3,4)
 
 julia> bar(1,2,3,4,5)
 ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
+The function `bar` exists, but no method is defined for this combination of argument types.
 
 Closest candidates are:
   bar(::Any, ::Any, ::Any, ::Any)

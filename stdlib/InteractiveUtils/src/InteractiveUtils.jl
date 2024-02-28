@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+The `InteractiveUtils` module provides utilities for interactive use of Julia,
+such as code introspection and clipboard access.
+It is intended for interactive work and is loaded automatically in interactive mode.
+"""
 module InteractiveUtils
 
 Base.Experimental.@optlevel 1
@@ -10,7 +15,7 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 
 import Base.Docs.apropos
 
-using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
+using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, summarysize,
     signature_type, format_bytes
 using Base.Libc
 using Markdown
@@ -333,7 +338,7 @@ export peakflops
 function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3, parallel::Bool=false)
     # Base.depwarn("`peakflops` has moved to the LinearAlgebra module, " *
     #              "add `using LinearAlgebra` to your imports.", :peakflops)
-    let LinearAlgebra = Base.require(Base.PkgId(
+    let LinearAlgebra = Base.require_stdlib(Base.PkgId(
             Base.UUID((0x37e2e46d_f89d_539d,0xb4ee_838fcccc9c8e)), "LinearAlgebra"))
         return LinearAlgebra.peakflops(n, eltype=eltype, ntrials=ntrials, parallel=parallel)
     end
@@ -348,7 +353,7 @@ function report_bug(kind)
     if Base.locate_package(BugReportingId) === nothing
         @info "Package `BugReporting` not found - attempting temporary installation"
         # Create a temporary environment and add BugReporting
-        let Pkg = Base.require(Base.PkgId(
+        let Pkg = Base.require_stdlib(Base.PkgId(
             Base.UUID((0x44cfe95a_1eb2_52ea,0xb672_e2afdf69b78f)), "Pkg"))
             mktempdir() do tmp
                 old_load_path = copy(LOAD_PATH)

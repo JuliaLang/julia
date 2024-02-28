@@ -100,7 +100,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    179
+#define NUM_TAGS    188
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -283,12 +283,17 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_swapfield);
         INSERT_TAG(jl_builtin_modifyfield);
         INSERT_TAG(jl_builtin_replacefield);
+        INSERT_TAG(jl_builtin_setfieldonce);
         INSERT_TAG(jl_builtin_fieldtype);
         INSERT_TAG(jl_builtin_memoryref);
         INSERT_TAG(jl_builtin_memoryrefoffset);
         INSERT_TAG(jl_builtin_memoryrefget);
         INSERT_TAG(jl_builtin_memoryrefset);
         INSERT_TAG(jl_builtin_memoryref_isassigned);
+        INSERT_TAG(jl_builtin_memoryrefswap);
+        INSERT_TAG(jl_builtin_memoryrefmodify);
+        INSERT_TAG(jl_builtin_memoryrefreplace);
+        INSERT_TAG(jl_builtin_memoryrefsetonce);
         INSERT_TAG(jl_builtin_apply_type);
         INSERT_TAG(jl_builtin_applicable);
         INSERT_TAG(jl_builtin_invoke);
@@ -299,6 +304,10 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_compilerbarrier);
         INSERT_TAG(jl_builtin_getglobal);
         INSERT_TAG(jl_builtin_setglobal);
+        INSERT_TAG(jl_builtin_swapglobal);
+        INSERT_TAG(jl_builtin_modifyglobal);
+        INSERT_TAG(jl_builtin_replaceglobal);
+        INSERT_TAG(jl_builtin_setglobalonce);
         // n.b. must update NUM_TAGS when you add something here
 #undef INSERT_TAG
         assert(i == NUM_TAGS - 1);
@@ -461,14 +470,16 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_typeassert, &jl_f__apply_iterate, &jl_f__apply_pure,
     &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call,
-    &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield,
+    &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield, &jl_f_setfieldonce,
     &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type,
-    &jl_f_memoryref, &jl_f_memoryrefoffset, &jl_f_memoryrefget, &jl_f_memoryrefset, &jl_f_memoryref_isassigned,
+    &jl_f_memoryref, &jl_f_memoryrefoffset, &jl_f_memoryrefget, &jl_f_memoryref_isassigned,
+    &jl_f_memoryrefset,  &jl_f_memoryrefswap, &jl_f_memoryrefmodify, &jl_f_memoryrefreplace, &jl_f_memoryrefsetonce,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
     &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
     &jl_f_set_binding_type, &jl_f_opaque_closure_call, &jl_f_donotdelete, &jl_f_compilerbarrier,
-    &jl_f_getglobal, &jl_f_setglobal, &jl_f_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref,
+    &jl_f_getglobal, &jl_f_setglobal, &jl_f_swapglobal, &jl_f_modifyglobal, &jl_f_replaceglobal, &jl_f_setglobalonce,
+    &jl_f_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref,
     &jl_f_current_scope,
     NULL };
 
@@ -596,15 +607,8 @@ extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(system_image_data_unavailable) jl_
 extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(system_image_data_unavailable) jl_system_image_size;
 static void jl_load_sysimg_so(void)
 {
-    int imaging_mode = jl_generating_output() && !jl_options.incremental;
-    // in --build mode only use sysimg data, not precompiled native code
-    if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
-        assert(sysimage.fptrs.ptrs);
-    }
-    else {
-        memset(&sysimage.fptrs, 0, sizeof(sysimage.fptrs));
-    }
     const char *sysimg_data;
+    assert(sysimage.fptrs.ptrs); // jl_init_processor_sysimg should already be run
     if (jl_sysimg_handle == jl_exe_handle &&
             &jl_system_image_data != JL_WEAK_SYMBOL_DEFAULT(system_image_data_unavailable))
         sysimg_data = (const char*)&jl_system_image_data;
@@ -792,7 +796,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // so must not be present here
             record_field_change((jl_value_t**)&mi->uninferred, NULL);
             record_field_change((jl_value_t**)&mi->backedges, NULL);
-            record_field_change((jl_value_t**)&mi->callbacks, NULL);
             record_field_change((jl_value_t**)&mi->cache, NULL);
         }
         else {
@@ -824,6 +827,11 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     if (s->incremental && jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
         // make sure we don't serialize other reachable cache entries of foreign methods
+        // Should this now be:
+        // if (ci !in ci->defs->cache)
+        //     record_field_change((jl_value_t**)&ci->next, NULL);
+        // Why are we checking that the method/module this originates from is in_image?
+        // and then disconnect this CI?
         if (jl_object_in_image((jl_value_t*)ci->def->def.value)) {
             // TODO: if (ci in ci->defs->cache)
             record_field_change((jl_value_t**)&ci->next, NULL);
@@ -2290,6 +2298,7 @@ static void jl_reinit_ccallable(arraylist_t *ccallable_list, char *base, void *s
 static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
 {
     size_t l = jl_svec_len(cache), i;
+    size_t sz = 0;
     if (l == 0)
         return cache;
     for (i = 0; i < l; i++) {
@@ -2298,11 +2307,16 @@ static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
             continue;
         if (ptrhash_get(&serialization_order, ti) == HT_NOTFOUND)
             jl_svecset(cache, i, jl_nothing);
+        else
+            sz += 1;
     }
+    if (sz < HT_N_INLINE)
+        sz = HT_N_INLINE;
+
     void *idx = ptrhash_get(&serialization_order, cache);
     assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
     assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == cache);
-    cache = cache_rehash_set(cache, l);
+    cache = cache_rehash_set(cache, sz);
     // redirect all references to the old cache to relocate to the new cache object
     ptrhash_put(&serialization_order, cache, idx);
     serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = cache;
@@ -2381,7 +2395,6 @@ static void strip_specializations_(jl_method_instance_t *mi)
     if (jl_options.strip_ir) {
         record_field_change((jl_value_t**)&mi->uninferred, NULL);
         record_field_change((jl_value_t**)&mi->backedges, NULL);
-        record_field_change((jl_value_t**)&mi->callbacks, NULL);
     }
 }
 
@@ -3053,6 +3066,11 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 extern void rebuild_image_blob_tree(void);
 extern void export_jl_small_typeof(void);
 
+// When an image is loaded with ignore_native, all subsequent image loads must ignore
+// native code in the cache-file since we can't gurantuee that there are no call edges
+// into the native code of the image. See https://github.com/JuliaLang/julia/pull/52123#issuecomment-1959965395.
+int IMAGE_NATIVE_CODE_TAINTED = 0;
+
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
                                                  jl_array_t **extext_methods, jl_array_t **internal_methods,
@@ -3076,6 +3094,14 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     htable_t new_dt_objs;
     htable_new(&new_dt_objs, 0);
     arraylist_new(&deser_sym, 0);
+
+    // in --build mode only use sysimg data, not precompiled native code
+    int imaging_mode = jl_generating_output() && !jl_options.incremental;
+    if (imaging_mode || jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES || IMAGE_NATIVE_CODE_TAINTED) {
+        memset(&image->fptrs, 0, sizeof(image->fptrs));
+        image->gvars_base = NULL;
+        IMAGE_NATIVE_CODE_TAINTED = 1;
+    }
 
     // step 1: read section map
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
@@ -3546,7 +3572,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
                 "Precompile file header verification checks failed.");
     }
     uint8_t flags = read_uint8(f);
-    if (pkgimage && !jl_match_cache_flags(flags)) {
+    if (pkgimage && !jl_match_cache_flags_current(flags)) {
         return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
     }
     if (!pkgimage) {
@@ -3748,8 +3774,11 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 
     jl_image_t pkgimage = jl_init_processor_pkgimg(pkgimg_handle);
 
-    if (ignore_native){
-        memset(&pkgimage.fptrs, 0, sizeof(pkgimage.fptrs));
+    if (ignore_native) {
+        // Must disable using native code in possible downstream users of this code:
+        // https://github.com/JuliaLang/julia/pull/52123#issuecomment-1959965395.
+        // The easiest way to do that is to disable it in all of them.
+        IMAGE_NATIVE_CODE_TAINTED = 1;
     }
 
     jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname, 0);

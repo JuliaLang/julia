@@ -62,7 +62,7 @@ __clear_cache!() = empty!(GLOBAL_EA_CODE_CACHE)
 # imports
 import .CC:
     AbstractInterpreter, NativeInterpreter, WorldView, WorldRange,
-    InferenceParams, OptimizationParams, get_world_counter, get_inference_cache, code_cache,
+    InferenceParams, OptimizationParams, get_world_counter, get_inference_cache,
     ipo_dataflow_analysis!, cache_result!
 # usings
 using Core:
@@ -71,11 +71,7 @@ using .CC:
     InferenceResult, OptimizationState, IRCode
 using .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState
 
-struct CodeCache
-    cache::IdDict{MethodInstance,CodeInstance}
-end
-CodeCache() = CodeCache(IdDict{MethodInstance,CodeInstance}())
-const GLOBAL_CODE_CACHE = CodeCache()
+struct EAToken end
 
 # when working outside of Core.Compiler,
 # cache entire escape state for later inspection and debugging
@@ -86,7 +82,7 @@ struct EscapeCacheInfo
 end
 
 struct EscapeCache
-    cache::IdDict{MethodInstance,EscapeCacheInfo}
+    cache::IdDict{MethodInstance,EscapeCacheInfo} # TODO(aviatesk) Should this be CodeInstance to EscapeCacheInfo?
 end
 EscapeCache() = EscapeCache(IdDict{MethodInstance,EscapeCacheInfo}())
 const GLOBAL_ESCAPE_CACHE = EscapeCache()
@@ -102,46 +98,23 @@ mutable struct EscapeAnalyzer <: AbstractInterpreter
     const inf_params::InferenceParams
     const opt_params::OptimizationParams
     const inf_cache::Vector{InferenceResult}
-    const code_cache::CodeCache
     const escape_cache::EscapeCache
     const entry_mi::MethodInstance
     result::EscapeResultForEntry
     function EscapeAnalyzer(world::UInt, entry_mi::MethodInstance,
-                            code_cache::CodeCache=GLOBAL_CODE_CACHE,
                             escape_cache::EscapeCache=GLOBAL_ESCAPE_CACHE)
         inf_params = InferenceParams()
         opt_params = OptimizationParams()
         inf_cache = InferenceResult[]
-        return new(world, inf_params, opt_params, inf_cache, code_cache, escape_cache, entry_mi)
+        return new(world, inf_params, opt_params, inf_cache, escape_cache, entry_mi)
     end
 end
 
 CC.InferenceParams(interp::EscapeAnalyzer) = interp.inf_params
 CC.OptimizationParams(interp::EscapeAnalyzer) = interp.opt_params
-CC.get_world_counter(interp::EscapeAnalyzer) = interp.world
+CC.get_inference_world(interp::EscapeAnalyzer) = interp.world
 CC.get_inference_cache(interp::EscapeAnalyzer) = interp.inf_cache
-
-struct EscapeAnalyzerCacheView
-    code_cache::CodeCache
-    escape_cache::EscapeCache
-end
-
-function CC.code_cache(interp::EscapeAnalyzer)
-    worlds = WorldRange(get_world_counter(interp))
-    return WorldView(EscapeAnalyzerCacheView(interp.code_cache, interp.escape_cache), worlds)
-end
-CC.haskey(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance) = haskey(wvc.cache.code_cache.cache, mi)
-CC.get(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance, default) = get(wvc.cache.code_cache.cache, mi, default)
-CC.getindex(wvc::WorldView{EscapeAnalyzerCacheView}, mi::MethodInstance) = getindex(wvc.cache.code_cache.cache, mi)
-function CC.setindex!(wvc::WorldView{EscapeAnalyzerCacheView}, ci::CodeInstance, mi::MethodInstance)
-    wvc.cache.code_cache.cache[mi] = ci
-    # register the callback on invalidation
-    CC.add_invalidation_callback!(mi) do replaced::MethodInstance, max_world::UInt32
-        delete!(wvc.cache.code_cache.cache, replaced)
-        delete!(wvc.cache.escape_cache.cache, replaced)
-    end
-    return wvc
-end
+CC.cache_owner(::EscapeAnalyzer) = EAToken()
 
 function CC.ipo_dataflow_analysis!(interp::EscapeAnalyzer, ir::IRCode, caller::InferenceResult)
     # run EA on all frames that have been optimized

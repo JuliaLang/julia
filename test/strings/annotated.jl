@@ -91,7 +91,7 @@ end
                                       (6:11, :other => 0x02)])
     str1 = Base.AnnotatedString("test", [(1:4, :label => 5)])
     str2 = Base.AnnotatedString("case", [(2:3, :label => "oomph")])
-    @test join([str1, str1], Base.AnnotatedString(" ")) ==
+    @test join([str1, str1], ' ') ==
         Base.AnnotatedString("test test",
                      [(1:4, :label => 5),
                       (6:9, :label => 5)])
@@ -115,6 +115,12 @@ end
     @test write(aio, ' ') == 1
     @test write(aio, Base.AnnotatedString("world", [(1:5, :tag => 2)])) == 5
     @test Base.annotations(aio) == [(1:5, :tag => 1), (7:11, :tag => 2)]
+    # Check `annotate!`, including region sorting
+    @test truncate(aio, 0).io.size == 0
+    @test write(aio, "hello world") == ncodeunits("hello world")
+    @test Base.annotate!(aio, 7:11, :tag => 2) === aio
+    @test Base.annotate!(aio, 1:5, :tag => 1) === aio
+    @test Base.annotations(aio) == [(1:5, :tag => 1), (7:11, :tag => 2)]
     # Reading
     @test read(seekstart(deepcopy(aio.io)), String) == "hello world"
     @test read(seekstart(deepcopy(aio)), String) == "hello world"
@@ -122,6 +128,7 @@ end
     @test read(seek(aio, 1), Base.AnnotatedString) == Base.AnnotatedString("ello world", [(1:4, :tag => 1), (6:10, :tag => 2)])
     @test read(seek(aio, 4), Base.AnnotatedString) == Base.AnnotatedString("o world", [(1:1, :tag => 1), (3:7, :tag => 2)])
     @test read(seek(aio, 5), Base.AnnotatedString) == Base.AnnotatedString(" world", [(2:6, :tag => 2)])
+    @test read(seekend(aio), Base.AnnotatedString) == Base.AnnotatedString("")
     @test read(seekstart(truncate(deepcopy(aio), 5)), Base.AnnotatedString) == Base.AnnotatedString("hello", [(1:5, :tag => 1)])
     @test read(seekstart(truncate(deepcopy(aio), 6)), Base.AnnotatedString) == Base.AnnotatedString("hello ", [(1:5, :tag => 1)])
     @test read(seekstart(truncate(deepcopy(aio), 7)), Base.AnnotatedString) == Base.AnnotatedString("hello w", [(1:5, :tag => 1), (7:7, :tag => 2)])

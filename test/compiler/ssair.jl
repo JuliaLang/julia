@@ -92,18 +92,15 @@ let cfg = CFG(BasicBlock[
     end
 end
 
-# test >:
-let
-    f(a, b) = a >: b
-    code_typed(f, Tuple{Any, Any})
-    # XXX: missing @test
+# test code execution with the default compile-mode
+module CompilerExecTest
+include("interpreter_exec.jl")
 end
 
-for compile in ("min", "yes")
-    cmd = `$(Base.julia_cmd()) --compile=$compile interpreter_exec.jl`
-    if !success(pipeline(Cmd(cmd, dir=@__DIR__); stdout=stdout, stderr=stderr))
-        error("Interpreter test failed, cmd : $cmd")
-    end
+# test code execution with the interpreter mode (compile=min)
+module InterpreterExecTest
+Base.Experimental.@compiler_options compile=min
+include("interpreter_exec.jl")
 end
 
 # PR #32145

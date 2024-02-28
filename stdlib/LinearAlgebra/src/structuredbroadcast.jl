@@ -2,7 +2,7 @@
 
 ## Broadcast styles
 import Base.Broadcast
-using Base.Broadcast: DefaultArrayStyle, Broadcasted, tail
+using Base.Broadcast: DefaultArrayStyle, Broadcasted
 
 struct StructuredMatrixStyle{T} <: Broadcast.AbstractArrayStyle{2} end
 StructuredMatrixStyle{T}(::Val{2}) where {T} = StructuredMatrixStyle{T}()
@@ -251,6 +251,8 @@ end
 # We can also implement `map` and its promotion in terms of broadcast with a stricter dimension check
 function map(f, A::StructuredMatrix, Bs::StructuredMatrix...)
     sz = size(A)
-    all(map(B->size(B)==sz, Bs)) || throw(DimensionMismatch("dimensions must match"))
+    for B in Bs
+        size(B) == sz || Base.throw_promote_shape_mismatch(sz, size(B))
+    end
     return f.(A, Bs...)
 end
