@@ -175,10 +175,10 @@ julia> using .NiceStuff: nice, DOG, NiceStuff
     or future versions of julia.
 
     The reason for this is if another dependency starts to export one of the
-    same names as `Foo` the code will error due to an ambiguity in which
-    package the name should be taken from. This is especially problematic in
-    released packages which needs to be forward-compatible with the future
-    releases.
+    same names as `Foo` and you attempt to use that name, then previously working
+    code will error due to an ambiguity in which package the name should be
+    taken from. This is especially problematic in released packages which needs
+    to be forward-compatible with the future releases.
 
     For example, if your package has dependencies `Foo` version `1` and `Bar`
     version `2`, and you write `using Foo, Bar` the current versions may not
