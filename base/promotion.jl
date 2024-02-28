@@ -502,12 +502,10 @@ function TupleOrBottom(tt...)
 end
 
 """
-    promote_op(f, argtypes...; throw_error=false)
+    promote_op(f, argtypes...)
 
 Guess what an appropriate container eltype would be for storing results of
 `f(::argtypes...)`. The guess is in part based on type inference, so can change any time.
-If `f(::argtypes...)` does not return (e.g., a method does not exist) then `Union{}` will be returned.
-Passing `throw_error=true` will cause an error rather than returning `Union{}`.
 
 Accordingly, return a type `R` such that `f(args...) isa R` where `args isa T`.
 
@@ -610,13 +608,7 @@ loosen the API guarantee:
 
 However, it is discouraged to define such unconventional API guarantees.
 """
-function promote_op(f, S::Type...; throw_error=false)
-    T = _promote_op(f, S...)
-    T === Union{} && throw_error && throw(ArgumentError(string(f, S, " does not return")))
-    return T
-end
-
-function _promote_op(f, S::Type...)
+function promote_op(f, S::Type...)
     argT = TupleOrBottom(S...)
     argT === Union{} && return Union{}
     return _return_type(f, argT)
