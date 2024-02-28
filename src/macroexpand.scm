@@ -385,6 +385,14 @@
                                ,(resolve-expansion-vars-with-new-env (caddr arg) env m lno parent-scope inarg))
                            (unescape-global-lhs arg env m lno parent-scope inarg)))
                       (cdr e))))
+           ((toplevel) ; re-wrap Expr(:toplevel) in the current hygienic-scope(s)
+            `(toplevel
+               ,@(map (lambda (arg)
+                       (let loop ((parent-scope parent-scope) (m m) (lno lno) (arg arg))
+                        (let ((wrapped `(hygienic-scope ,arg ,m ,@lno)))
+                          (if (null? parent-scope) wrapped
+                            (loop (cdr parent-scope) (cadar parent-scope) (caddar parent-scope) wrapped)))))
+                      (cdr e))))
            ((using import export meta line inbounds boundscheck loopinfo inline noinline purity) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
@@ -457,7 +465,7 @@
                         binds))
                  ,body)))
            ((hygienic-scope) ; TODO: move this lowering to resolve-scopes, instead of reimplementing it here badly
-             (let ((parent-scope (cons (list env m) parent-scope))
+             (let ((parent-scope (cons (list env m lno) parent-scope))
                    (body (cadr e))
                    (m (caddr e))
                    (lno  (cdddr e)))
