@@ -1103,6 +1103,10 @@ function _growend!(a::Vector, delta::Integer)
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
         @noinline (function()
+        if offset + len <= memlen || offset < 1
+            throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
+        end
+
         if offset - 1 > div(5 * newlen, 4)
             # If the offset is far enough that we can copy without resizing
             # while maintaining proportional spacing on both ends of the array
