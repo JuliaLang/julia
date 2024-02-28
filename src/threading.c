@@ -984,34 +984,50 @@ JL_DLLEXPORT int jl_alignment(size_t sz)
     return jl_gc_alignment(sz);
 }
 
+// Return values:
+//     0 == success
+//     1 == invalid thread id provided
+//     2 == ptls2 was NULL
+//     3 == uv_thread_getaffinity failed with a non-zero exit code
 JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize) {
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     if (tid < 0 || tid >= nthreads)
-        jl_error("invalid tid");
+        return 1;
 
     // TODO: use correct lock. system_id is only legal if the thread is alive.
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL)
-        jl_error("retrieved ptls2 is NULL")
+        return 2;
     uv_thread_t uvtid = ptls2->system_id;
 
-    // returns 0 in case of success and a value != 0 otherwise
-    return uv_thread_getaffinity(&uvtid, mask, cpumasksize);
+    ret_uv = uv_thread_getaffinity(&uvtid, mask, cpumasksize);
+    if (ret_uv != 0)
+        return 3;
+
+    return 0; // success
 }
 
+// Return values:
+//     0 == success
+//     1 == invalid thread id provided
+//     2 == ptls2 was NULL
+//     3 == uv_thread_setaffinity failed with a non-zero exit code
 JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     if (tid < 0 || tid >= nthreads)
-        jl_error("invalid tid");
+        return 1;
 
     // TODO: use correct lock. system_id is only legal if the thread is alive.
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     if (ptls2 == NULL)
-        jl_error("retrieved ptls2 is NULL")
+        return 2;
     uv_thread_t uvtid = ptls2->system_id;
 
-    // returns 0 in case of success and a value != 0 otherwise
-    return uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+    ret_uv = uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+    if (ret_uv != 0)
+        return 3;
+
+    return 0; // success
 }
 
 #ifdef __cplusplus
