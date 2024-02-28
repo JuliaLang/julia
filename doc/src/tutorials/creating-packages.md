@@ -609,7 +609,7 @@ may fit your package better.
 7. Avoid naming a package closely to an existing package
      * `Websocket` is too close to `WebSockets` and can be confusing to users. Rather use a new name such as `SimpleWebsockets`.
 
-8. Avoid using a distinctive name that is already in use in another unrelated project.
+8. Avoid using a distinctive name that is already in use in a well known, unrelated project.
      * Don't use the names `Tkinter.jl`, `TkinterGUI.jl`, etc. for a package that is unrelated
        to the popular `tkinter` python package. Users are likely to assume a connection that
        does not exist.
