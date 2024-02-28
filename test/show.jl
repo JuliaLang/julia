@@ -1263,7 +1263,7 @@ let repr = sprint(dump, :(x = 1))
     @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n"
 end
 let repr = sprint(dump, Pair{String,Int64})
-    @test repr == "Pair{String, Int64} <: Any\n  first::String\n  second::Int64\n"
+    @test repr == "Pair{String, Int64} <: Any\n  const first::String\n  const second::Int64\n"
 end
 let repr = sprint(dump, Tuple)
     @test repr == "Tuple <: Any\n"
