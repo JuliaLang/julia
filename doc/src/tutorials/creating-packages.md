@@ -605,8 +605,19 @@ may fit your package better.
 
      * `CPLEX.jl` wraps the `CPLEX` library, which can be identified easily in a web search.
      * `MATLAB.jl` provides an interface to call the MATLAB engine from within Julia.
+
 7. Avoid naming a package closely to an existing package
      * `Websocket` is too close to `WebSockets` and can be confusing to users. Rather use a new name such as `SimpleWebsockets`.
+
+8. Avoid using a distinctive name that is already in use in another unrelated project.
+     * Don't use the names `Tkinter.jl`, `TkinterGUI.jl`, etc. for a package that is unrelated
+       to the popular `tkinter` python package. Users are likey to assume an affiliation that
+       does not exist.
+     * It's okay to name a package `HTTP.jl` even though it is unrelated to the popular rust
+       crate `http` becuase "http" is not a distinctive name.
+     * It's okay to name a package `AlphaZero.jl` if it provides an implementation of the
+       DeepMind's AlphaZero algorithm, even without explicit affiliation with the creators of
+       the AlphaZero algorithm (provided there's no copyright or trademark infringement etc.)
 
 ## Registering packages
 
