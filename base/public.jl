@@ -84,6 +84,10 @@ public
     @locals,
     @propagate_inbounds,
 
+# External processes
+    shell_escape,
+    shell_split,
+
 # IO
     # types
     BufferStream,

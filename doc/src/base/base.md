@@ -338,6 +338,8 @@ Base.Cmd
 Base.setenv
 Base.addenv
 Base.withenv
+Base.shell_escape
+Base.shell_split
 Base.setcpuaffinity
 Base.pipeline(::Any, ::Any, ::Any, ::Any...)
 Base.pipeline(::Base.AbstractCmd)
