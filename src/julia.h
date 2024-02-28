@@ -636,11 +636,11 @@ typedef struct _jl_module_t {
     intptr_t hash;
 } jl_module_t;
 
-typedef struct _jl_globalref_t {
+struct _jl_globalref_t {
     jl_module_t *mod;
     jl_sym_t *name;
     jl_binding_t *binding;
-} jl_globalref_t;
+};
 
 // one Type-to-Value entry
 typedef struct _jl_typemap_entry_t {
