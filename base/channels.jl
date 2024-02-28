@@ -546,7 +546,7 @@ end
 """
     isfull(c::Channel)
 
-Determines if a [`Channel`](@ref) is full, in the sense 
+Determines if a [`Channel`](@ref) is full, in the sense
 that calling `put!(c, some_value)` would have blocked.
 Returns immediately, does not block.
 
@@ -555,7 +555,7 @@ not block after this returns `true`. Users must take
 precautions not to accidentally create live-lock bugs
 in their code by calling this method, as these are
 generally harder to debug than deadlocks. It is also
-possible that `put!` will block after this call 
+possible that `put!` will block after this call
 returns `false`, if there are multiple producer
 tasks calling `put!` in parallel.
 
