@@ -33,8 +33,11 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
 end
 
 function accumulate_pairwise(op, v::AbstractVector{T}) where T
-    out = similar(v, promote_op(op, T, T))
-    return accumulate_pairwise!(op, out, v)
+    out = _try_result(op, v)
+    out !== nothing && return accumulate_pairwise!(op, out, v)
+    # If we can't guess the container eltype then error rather than trying to fallback to a less numerically
+    # stable method.
+    throw(ArgumentError("accumulate could not determine an appropriate container eltype for `$op($T, $T)`"))
 end
 
 
@@ -111,8 +114,11 @@ julia> cumsum(a, dims=2)
     widening happens and integer overflow results in `Int8[100, -128]`.
 """
 function cumsum(A::AbstractArray{T}; dims::Integer) where T
-    out = similar(A, promote_op(add_sum, T, T))
-    cumsum!(out, A, dims=dims)
+    out = _try_result(add_sum, A)
+    out !== nothing && return cumsum!(out, A, dims=dims)
+    # Since ArithmeticStyle depends on the output type we fallback to
+    # calling `accumulate`
+    return accumulate(add_sum, A; dims=dims)
 end
 
 """
@@ -280,14 +286,25 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
         # This branch takes care of the cases not handled by `_accumulate!`.
         return collect(Iterators.accumulate(op, A; kw...))
     end
+
     nt = values(kw)
     if isempty(kw)
-        out = similar(A, promote_op(op, eltype(A), eltype(A)))
+        out = _try_result(op, A)
     elseif keys(nt) === (:init,)
-        out = similar(A, promote_op(op, typeof(nt.init), eltype(A)))
+        out = _try_result(op, A; init=nt.init)
     else
         throw(ArgumentError("accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
+
+    if dims === out === nothing
+        # If we failed to guess the container eltype then try to fallback to the iterators method
+        return collect(Iterators.accumulate(op, A; kw...))
+    elseif out === nothing
+        # If we can't fallback then error
+        T = eltype(A)
+        throw(ArgumentError("accumulate could not determine an appropriate container eltype for `$op($T, $T)"))
+    end
+
     accumulate!(op, out, A; dims=dims, kw...)
 end
 
@@ -441,4 +458,23 @@ function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
         next = iterate(inds, state)
     end
     return B
+end
+
+# Internal function used to identify the correct result array for a given op.
+# If that fails by returning `Union{}` then `nothing` will be returned, and the
+# calling function should fallback to an iterative solution.
+_try_result(args...; kwargs...) = nothing
+function _try_result(op, v::AbstractArray{T}; init=nothing) where T
+    # Try to identify the return type for the first element using `init` or `reduce_first`
+    F = isnothing(init) ? promote_op(reduce_first, typeof(op), T) : promote_op(op, typeof(init), T)
+    # Try to identify the return type fo the rest of the elements given op and eltype T
+    R = promote_op(op, T, T)
+
+    # Call promote_type for the two output types which will fallback to a
+    # typejoin if no promotion rule exists.
+    O = promote_type(F, R)
+
+    # If that output is Union{} then return `nothing`
+    O === Union{} && return nothing
+    return similar(v, O)
 end

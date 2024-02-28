@@ -2854,9 +2854,14 @@ end
 
     # #53438
     v = [(1, 2), (3, 4)]
-    @test_throws "cannot convert a value to Union{}" accumulate(+, v)
-    @test_throws "cannot convert a value to Union{}" cumsum(v)
-    @test_throws "cannot convert a value to Union{}" cumprod(v)
+    @test_throws MethodError accumulate(+, v)
+    @test_throws MethodError cumsum(v)
+    @test_throws MethodError cumprod(v)
+    # Fallback to Iterators.accumulate
+    @test_throws MethodError accumulate(+, v; init=(0, 0))
+    # Fail to fallback if `dims` is set
+    @test_throws "accumulate could not determine an appropriate container eltype" accumulate(+, v; dims=1, init=(0, 0))
+
 end
 
 struct F21666{T <: Base.ArithmeticStyle}
