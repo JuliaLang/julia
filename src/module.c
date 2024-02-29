@@ -991,11 +991,12 @@ JL_DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
     return (jl_value_t*)a;
 }
 
-uint8_t _binding_is_from_explicit_using(jl_binding_t *b, jl_module_t *from) {
-    return (b->owner != from && !b->imported &&
+uint8_t _binding_is_from_explicit_using(jl_binding_t *b) {
+    return (b->owner != b && !b->imported &&
             // Modules implicitly get all exported names from Base and Core as if they had
             // written `using Base`, but we don't show those via `names()`.
-            b->owner != jl_base_module && b->owner != jl_core_module);
+            // b->owner->value != (jl_value_t*)jl_base_module && b->owner->value != (jl_value_t*)jl_core_module);
+            b->globalref->mod != jl_base_module && b->globalref->mod != jl_core_module);
 }
 
 void _append_symbol_to_bindings_array(jl_array_t* a, jl_sym_t *name) {
@@ -1017,7 +1018,7 @@ void _jl_module_names_into_array(jl_array_t* a, jl_module_t *m, int all, int imp
         if (b->value != (jl_value_t*)m &&
             (b->publicp ||
              (imported && b->imported) ||
-             (usings && _binding_is_from_explicit_using(b, m)) ||
+             (usings && _binding_is_from_explicit_using(b)) ||
              (jl_atomic_load_relaxed(&b->owner) == b && !b->imported && (all || main_public))) &&
             (all || (!b->deprecated && !hidden))) {
             _append_symbol_to_bindings_array(a, asname);
