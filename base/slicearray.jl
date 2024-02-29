@@ -106,7 +106,7 @@ julia> m = [1 2 3; 4 5 6; 7 8 9]
  7  8  9
 
 julia> s = eachslice(m, dims=1)
-3-element RowSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+3-element RowSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubVector{Int64, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
@@ -118,7 +118,7 @@ julia> s[1]
  3
 
 julia> eachslice(m, dims=1, drop=false)
-3×1 Slices{Matrix{Int64}, Tuple{Int64, Colon}, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}, 2}:
+3×1 Slices{Matrix{Int64}, Tuple{Int64, Colon}, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}, SubVector{Int64, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}, 2}:
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
@@ -153,7 +153,7 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> s = eachrow(a)
-2-element RowSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
+2-element RowSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubVector{Int64, Matrix{Int64}, Tuple{Int64, Base.Slice{Base.OneTo{Int64}}}, true}}:
  [1, 2]
  [3, 4]
 
@@ -191,7 +191,7 @@ julia> a = [1 2; 3 4]
  3  4
 
 julia> s = eachcol(a)
-2-element ColumnSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubArray{Int64, 1, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
+2-element ColumnSlices{Matrix{Int64}, Tuple{Base.OneTo{Int64}}, SubVector{Int64, Matrix{Int64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}:
  [1, 3]
  [2, 4]
 
