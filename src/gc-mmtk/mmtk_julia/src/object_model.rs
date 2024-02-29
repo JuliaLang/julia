@@ -290,7 +290,8 @@ pub unsafe fn get_so_object_size(object: ObjectReference) -> usize {
             dtsz + JULIA_HEADER_SIZE
         );
 
-        llt_align(dtsz + JULIA_HEADER_SIZE, 16)
+        // NB: Strings are aligned to 8 and not to 16
+        llt_align(dtsz + JULIA_HEADER_SIZE, 8)
     } else if obj_type == jl_method_type {
         let dtsz = std::mem::size_of::<mmtk_jl_method_t>();
         debug_assert!(
