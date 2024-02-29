@@ -40,6 +40,8 @@ end
     c = Channel()
     @test eltype(c) == Any
     @test c.sz_max == 0
+    @test isempty(c) == true  # Nothing in it
+    @test isfull(c) == true   # But no more room
 
     c = Channel(1)
     @test eltype(c) == Any
@@ -48,6 +50,11 @@ end
     @test take!(c) == 1
     @test isready(c) == false
     @test eltype(Channel(1.0)) == Any
+
+    c = Channel(1)
+    @test isfull(c) == false
+    put!(c, 1)
+    @test isfull(c) == true
 
     c = Channel{Int}(1)
     @test eltype(c) == Int
