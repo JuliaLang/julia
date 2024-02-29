@@ -604,7 +604,7 @@ Use [`Complex`](@ref) arguments to obtain [`Complex`](@ref) results.
 
 !!! note "Branch cut"
     `log` has a branch cut along the negative real axis; `-0.0im` is taken
-    to be below the axis. 
+    to be below the axis.
 
 See also [`ℯ`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
@@ -732,7 +732,7 @@ The prefix operator `√` is equivalent to `sqrt`.
 
 !!! note "Branch cut"
     `sqrt` has a branch cut along the negative real axis; `-0.0im` is taken
-    to be below the axis. 
+    to be below the axis.
 
 See also: [`hypot`](@ref).
 
