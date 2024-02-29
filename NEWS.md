@@ -120,6 +120,8 @@ Standard library changes
 
 #### InteractiveUtils
 
+* `less`/`@less` and `edit`/`@edit` are now supported for documented variables ([#53539]).
+
 #### Dates
 
 External dependencies
