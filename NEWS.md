@@ -33,8 +33,6 @@ New library functions
 ---------------------
 
 * `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
-* `readdirx` for returning directory contents along with the type of the entries in a vector of new `DirEntry`
-  objects ([#53377])
 
 New library features
 --------------------

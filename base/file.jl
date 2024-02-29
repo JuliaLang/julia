@@ -19,7 +19,6 @@ export
     rename,
     readlink,
     readdir,
-    readdirx,
     rm,
     samefile,
     sendfile,
@@ -977,15 +976,16 @@ isfifo(obj::DirEntry) =     (isunknown(obj) || islink(obj)) ? isfifo(obj.path)  
 issocket(obj::DirEntry) =   (isunknown(obj) || islink(obj)) ? issocket(obj.path)    : obj.rawtype == UV_DIRENT_SOCKET
 ischardev(obj::DirEntry) =  (isunknown(obj) || islink(obj)) ? ischardev(obj.path)   : obj.rawtype == UV_DIRENT_CHAR
 isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(obj.path)  : obj.rawtype == UV_DIRENT_BLOCK
+realpath(obj::DirEntry) = realpath(obj.path)
 
 """
-    readdirx(dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
+    _readdirx(dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
 
 Return a vector of [`DirEntry`](@ref) objects representing the contents of the directory `dir`,
 or the current working directory if not given. If `sort` is true, the returned vector is
 sorted by name.
 
-Unlike [`readdir`](@ref), `readdirx` returns [`DirEntry`](@ref) objects, which contain the name of the
+Unlike [`readdir`](@ref), `_readdirx` returns [`DirEntry`](@ref) objects, which contain the name of the
 file, the directory it is in, and the type of the file which is determined during the
 directory scan. This means that calls to [`isfile`](@ref), [`isdir`](@ref), [`islink`](@ref), [`isfifo`](@ref),
 [`issocket`](@ref), [`ischardev`](@ref), and [`isblockdev`](@ref) can be made on the
@@ -994,12 +994,12 @@ cannot be determined without a stat call. In these cases the `rawtype` field of 
 object will be 0 (`UV_DIRENT_UNKNOWN`) and [`isfile`](@ref) etc. will fall back to a `stat` call.
 
 ```julia
-for obj in readdirx()
-    isfile(obj) && println("$(obj.name) is a file with path $(obj.path)")
+for obj in _readdirx()
+    isfile(obj) && println("\$(obj.name) is a file with path \$(obj.path)")
 end
 ```
 """
-readdirx(dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
+_readdirx(dir::AbstractString=pwd(); sort::Bool=true) = _readdir(dir; return_objects=true, sort)::Vector{DirEntry}
 
 function _readdir(dir::AbstractString; return_objects::Bool=false, join::Bool=false, sort::Bool=true)
     # Allocate space for uv_fs_t struct

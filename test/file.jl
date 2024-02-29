@@ -31,7 +31,8 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(subdir, dirlink)
     @test stat(dirlink) == stat(subdir)
     @test readdir(dirlink) == readdir(subdir)
-    @test readdirx(dirlink) == readdirx(subdir)
+    @test map(o->o.names, Base.Filesystem._readdirx(dirlink)) == map(o->o.names, Base.Filesystem._readdirx(subdir))
+    @test realpath.(Base.Filesystem._readdirx(dirlink)) == realpath.(Base.Filesystem._readdirx(subdir))
 
     # relative link
     relsubdirlink = joinpath(subdir, "rel_subdirlink")
@@ -39,7 +40,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     symlink(reldir, relsubdirlink)
     @test stat(relsubdirlink) == stat(subdir2)
     @test readdir(relsubdirlink) == readdir(subdir2)
-    @test readdirx(relsubdirlink) == readdirx(subdir2)
+    @test Base.Filesystem._readdirx(relsubdirlink) == Base.Filesystem._readdirx(subdir2)
 
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
@@ -58,7 +59,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     mkdir(new_dir)
     touch(foo_file)
     @test readdir(new_dir) == readdir(nedlink)
-    @test readdirx(new_dir) == readdirx(nedlink)
+    @test realpath.(Base.Filesystem._readdirx(new_dir)) == realpath.(Base.Filesystem._readdirx(nedlink))
 
     rm(foo_file)
     rm(new_dir)
@@ -1444,10 +1445,10 @@ rm(dirwalk, recursive=true)
                 touch(randstring())
             end
             @test issorted(readdir())
-            @test issorted(readdirx())
-            @test map(o->o.name, readdirx()) == readdir()
-            @test map(o->o.path, readdirx()) == readdir(join=true)
-            @test count(isfile, readdir(join=true)) == count(isfile, readdirx())
+            @test issorted(Base.Filesystem._readdirx())
+            @test map(o->o.name, Base.Filesystem._readdirx()) == readdir()
+            @test map(o->o.path, Base.Filesystem._readdirx()) == readdir(join=true)
+            @test count(isfile, readdir(join=true)) == count(isfile, Base.Filesystem._readdirx())
         end
     end
 end
