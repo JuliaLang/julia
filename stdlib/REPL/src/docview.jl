@@ -102,8 +102,9 @@ end
 function parsedoc(d::DocStr)
     if d.object === nothing
         md = formatdoc(d)
-        md.meta[:module] = d.data[:module]
-        md.meta[:path]   = d.data[:path]
+        md.meta[:module]     = d.data[:module]
+        md.meta[:path]       = d.data[:path]
+        md.meta[:linenumber] = d.data[:linenumber]
         d.object = md
     end
     d.object
