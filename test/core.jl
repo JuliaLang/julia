@@ -8127,3 +8127,10 @@ let M = @__MODULE__
     @test Core.set_binding_type!(M, :a_typed_global) === nothing
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
 end
+
+# Test that new macros are allowed to be defined inside Expr(:toplevel) returned by macros
+macro macroception()
+    Expr(:toplevel, :(macro foo() 1 end), :(@foo))
+end
+
+@test (@macroception()) === 1
