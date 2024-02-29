@@ -33,11 +33,8 @@ function accumulate_pairwise!(op::Op, result::AbstractVector, v::AbstractVector)
 end
 
 function accumulate_pairwise(op, v::AbstractVector{T}) where T
-    out = _try_result(op, v)
-    out !== nothing && return accumulate_pairwise!(op, out, v)
-    # If we can't guess the container eltype then error rather than trying to fallback to a less numerically
-    # stable method.
-    throw(ArgumentError("accumulate could not determine an appropriate container eltype for `$op($T, $T)`"))
+    out = similar(v, _accumulate_promote_op(op, v))
+    return accumulate_pairwise!(op, out, v)
 end
 
 
@@ -114,11 +111,8 @@ julia> cumsum(a, dims=2)
     widening happens and integer overflow results in `Int8[100, -128]`.
 """
 function cumsum(A::AbstractArray{T}; dims::Integer) where T
-    out = _try_result(add_sum, A)
-    out !== nothing && return cumsum!(out, A, dims=dims)
-    # Since ArithmeticStyle depends on the output type we fallback to
-    # calling `accumulate`
-    return accumulate(add_sum, A; dims=dims)
+    out = similar(A, _accumulate_promote_op(add_sum, A))
+    return cumsum!(out, A, dims=dims)
 end
 
 """
@@ -288,23 +282,11 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
     end
 
     nt = values(kw)
-    if isempty(kw)
-        out = _try_result(op, A)
-    elseif keys(nt) === (:init,)
-        out = _try_result(op, A; init=nt.init)
-    else
+    if !(isempty(kw) || keys(nt) === (:init,))
         throw(ArgumentError("accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
 
-    if dims === out === nothing
-        # If we failed to guess the container eltype then try to fallback to the iterators method
-        return collect(Iterators.accumulate(op, A; kw...))
-    elseif out === nothing
-        # If we can't fallback then error
-        T = eltype(A)
-        throw(ArgumentError("accumulate could not determine an appropriate container eltype for `$op($T, $T)"))
-    end
-
+    out = similar(A, _accumulate_promote_op(op, A; kw...))
     accumulate!(op, out, A; dims=dims, kw...)
 end
 
@@ -460,21 +442,20 @@ function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
     return B
 end
 
-# Internal function used to identify the correct result array for a given op.
-# If that fails by returning `Union{}` then `nothing` will be returned, and the
-# calling function should fallback to an iterative solution.
-_try_result(args...; kwargs...) = nothing
-function _try_result(op, v::AbstractArray{T}; init=nothing) where T
-    # Try to identify the return type for the first element using `init` or `reduce_first`
-    F = isnothing(init) ? promote_op(reduce_first, typeof(op), T) : promote_op(op, typeof(init), T)
-    # Try to identify the return type fo the rest of the elements given op and eltype T
-    R = promote_op(op, T, T)
-
-    # Call promote_type for the two output types which will fallback to a
-    # typejoin if no promotion rule exists.
-    O = promote_type(F, R)
-
-    # If that output is Union{} then return `nothing`
-    O === Union{} && return nothing
-    return similar(v, O)
+# Internal function used to identify the widest possible eltype required for accumulate results
+function _accumulate_promote_op(op, v; init=nothing)
+    # Nested mock function that applies the `op` to each element of `v` which is necessary
+    # to find the widest return eltype.
+    # NOTE: We are just passing this to promote_op for inference and should never be run.
+    function f(op, v, init)
+        val, iter = Iterators.peel(v)
+        r = isnothing(init) ? reduce_first(op, val) : op(init, val)
+        for val in iter
+            r = op(r, val)
+        end
+        return r
+    end
+    # May want to wrap this in a `promote_type(uniontypes( )...)` to avoid overly complicated
+    # Unions e.g. `cumsum([[true], [true], [false]])::Vector{Union{Vector{Bool}, Vector{Int}}}`
+    return promote_op(f, typeof(op), typeof(v), typeof(init))
 end
