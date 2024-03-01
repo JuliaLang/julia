@@ -234,7 +234,7 @@ end
     @test C == AB
     mul!(C, A, B, 2, -1)
     @test C == AB
-    LinearAlgebra.generic_matmatmul!(C, 'N', 'N', A, B, 2, -1)
+    LinearAlgebra.generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(2, -1))
     @test C == AB
 end
 
@@ -477,8 +477,8 @@ end
     @test *(adjoint(Asub), Asub) == *(adjoint(Aref), Aref)
 
     A5x5, A6x5 = Matrix{Float64}.(undef, ((5, 5), (6, 5)))
-    @test_throws DimensionMismatch LinearAlgebra.syrk_wrapper!(A5x5, 'N', A6x5, true, false)
-    @test_throws DimensionMismatch LinearAlgebra.herk_wrapper!(A5x5, 'N', A6x5, true, false)
+    @test_throws DimensionMismatch LinearAlgebra.syrk_wrapper!(A5x5, 'N', A6x5)
+    @test_throws DimensionMismatch LinearAlgebra.herk_wrapper!(A5x5, 'N', A6x5)
 end
 
 @testset "matmul for types w/o sizeof (issue #1282)" begin
@@ -685,8 +685,8 @@ end
     I10x10 = Matrix{elty}(I, 10, 10)
     I10x11 = Matrix{elty}(I, 10, 11)
     @test LinearAlgebra.gemm_wrapper('N', 'N', I10x10, I10x10) == I10x10
-    @test_throws DimensionMismatch LinearAlgebra.gemm_wrapper!(I10x10, 'N', 'N', I10x11, I10x10, true, false)
-    @test_throws DimensionMismatch LinearAlgebra.gemm_wrapper!(I10x10, 'N', 'N', I0x0, I0x0, true, false)
+    @test_throws DimensionMismatch LinearAlgebra.gemm_wrapper!(I10x10, 'N', 'N', I10x11, I10x10)
+    @test_throws DimensionMismatch LinearAlgebra.gemm_wrapper!(I10x10, 'N', 'N', I0x0, I0x0)
 
     A = rand(elty, 3, 3)
     @test LinearAlgebra.matmul3x3('T', 'N', A, Matrix{elty}(I, 3, 3)) == transpose(A)
@@ -927,7 +927,7 @@ end
     # Just in case dispatching on the surface API `mul!` is changed in the future,
     # let's test the function where the tiled multiplication is defined.
     fill!(C, 0)
-    LinearAlgebra.generic_matmatmul!(C, 'N', 'N', A, B, -1, 0)
+    LinearAlgebra.generic_matmatmul!(C, 'N', 'N', A, B, LinearAlgebra.MulAddMul(-1, 0))
     @test D ≈ C
 end
 
