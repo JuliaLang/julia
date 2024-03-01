@@ -11,6 +11,8 @@ import Base.Docs: doc, formatdoc, parsedoc, apropos
 
 using Base: with_output_color, mapany, isdeprecated, isexported
 
+using Base.Filesystem: _readdirx
+
 import REPL
 
 using InteractiveUtils: subtypes
@@ -379,9 +381,9 @@ function find_readme(m::Module)::Union{String, Nothing}
     path = dirname(mpath)
     top_path = pkgdir(m)
     while true
-        for file in readdir(path; join=true, sort=true)
-            isfile(file) && (basename(lowercase(file)) in ["readme.md", "readme"]) || continue
-            return file
+        for entry in _readdirx(path; sort=true)
+            isfile(entry) && (lowercase(entry.name) in ["readme.md", "readme"]) || continue
+            return entry.path
         end
         path == top_path && break # go no further than pkgdir
         path = dirname(path) # work up through nested modules
