@@ -426,7 +426,8 @@ function _wait_multiple(waiting_tasks; all=false, failfast=false)
         remaining_tasks = tasks[.~done_mask]
         for t in remaining_tasks
             waiter = pop!(waiter_tasks, t)
-            @lock t.donenotify Base.list_deletefirst!((t.donenotify::ThreadSynchronizer).waitq, waiter)
+            donenotify = t.donenotify::ThreadSynchronizer
+            @lock donenotify Base.list_deletefirst!(donenotify.waitq, waiter)
         end
         return tasks[done_mask], remaining_tasks
     end
