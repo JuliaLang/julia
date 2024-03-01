@@ -534,17 +534,22 @@ function any_stmt_may_throw(ir::IRCode, bb::Int)
     return false
 end
 
-function conditional_successors_may_throw(lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
+function visit_conditional_successors(callback, lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
     visited = BitSet((bb,))
     worklist = Int[bb]
     while !isempty(worklist)
-        thisbb = pop!(worklist)
+        thisbb = popfirst!(worklist)
         for succ in ir.cfg.blocks[thisbb].succs
             succ in visited && continue
             push!(visited, succ)
-            postdominates(get!(lazypostdomtree), succ, thisbb) && continue
-            any_stmt_may_throw(ir, succ) && return true
-            push!(worklist, succ)
+            if postdominates(get!(lazypostdomtree), succ, bb)
+                # this successor is not conditional, so no need to visit it further
+                continue
+            elseif callback(succ)
+                return true
+            else
+                push!(worklist, succ)
+            end
         end
     end
     return false
@@ -836,8 +841,10 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
             # inconsistent region.
             if !sv.result.ipo_effects.terminates
                 sv.all_retpaths_consistent = false
-            elseif conditional_successors_may_throw(sv.lazypostdomtree, sv.ir, bb)
-                # Check if there are potential throws that require
+            elseif visit_conditional_successors(sv.lazypostdomtree, sv.ir, bb) do succ::Int
+                       return any_stmt_may_throw(sv.ir, succ)
+                   end
+                # check if this `GotoIfNot` leads to conditional throws, which taints consistency
                 sv.all_retpaths_consistent = false
             else
                 (; cfg, domtree) = get!(sv.lazyagdomtree)
