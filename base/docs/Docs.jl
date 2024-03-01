@@ -453,17 +453,23 @@ function __doc__!(source, mod, meta, def, define::Bool)
     @nospecialize source mod meta def
     # Two cases must be handled here to avoid redefining all definitions contained in `def`:
     if define
-        # `def` has not been defined yet (this is the common case, i.e. when not generating
-        # the Base image). We just need to convert each `@__doc__` marker to an `@doc`.
-        finddoc(def) do each
+        function replace_meta_doc(each)
             each.head = :macrocall
             each.args = Any[Symbol("@doc"), source, mod, nothing, meta, each.args[end], define]
+        end
+
+        # `def` has not been defined yet (this is the common case, i.e. when not generating
+        # the Base image). We just need to convert each `@__doc__` marker to an `@doc`.
+        found = finddoc(replace_meta_doc, mod, def; expand_toplevel = false)
+
+        if !found
+            found = finddoc(replace_meta_doc, mod, def; expand_toplevel = true)
         end
     else
         # `def` has already been defined during Base image gen so we just need to find and
         # document any subexpressions marked with `@__doc__`.
         docs  = []
-        found = finddoc(def) do each
+        found = finddoc(mod, def; expand_toplevel = true) do each
             push!(docs, :(@doc($source, $mod, $meta, $(each.args[end]), $define)))
         end
         # If any subexpressions have been documented then replace the entire expression with
@@ -472,25 +478,30 @@ function __doc__!(source, mod, meta, def, define::Bool)
             def.head = :toplevel
             def.args = docs
         end
-        found
     end
+    return found
 end
 # Walk expression tree `def` and call `λ` when any `@__doc__` markers are found. Returns
 # `true` to signify that at least one `@__doc__` has been found, and `false` otherwise.
-function finddoc(λ, def::Expr)
+function finddoc(λ, mod::Module, def::Expr; expand_toplevel::Bool=false)
     if isexpr(def, :block, 2) && isexpr(def.args[1], :meta, 1) && (def.args[1]::Expr).args[1] === :doc
         # Found the macroexpansion of an `@__doc__` expression.
         λ(def)
         true
     else
+        if expand_toplevel && isexpr(def, :toplevel)
+            for i = 1:length(def.args)
+                def.args[i] = macroexpand(mod, def.args[i])
+            end
+        end
         found = false
         for each in def.args
-            found |= finddoc(λ, each)
+            found |= finddoc(λ, mod, each; expand_toplevel)
         end
         found
     end
 end
-finddoc(λ, @nospecialize def) = false
+finddoc(λ, mod::Module, @nospecialize def; expand_toplevel::Bool=false) = false
 
 # Predicates and helpers for `docm` expression selection:
 
