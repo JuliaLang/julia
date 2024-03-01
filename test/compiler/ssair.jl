@@ -238,6 +238,35 @@ let ci = code_lowered(()->@isdefined(_not_def_37919_), ())[1]
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 4),
+        # block 2
+        GotoNode(3),
+        # block 3
+        Expr(:call, throw, "potential throw"),
+        # block 4
+        Expr(:call, Core.Intrinsics.add_int, Argument(3), Argument(4)),
+        GotoNode(6),
+        # block 5
+        ReturnNode(SSAValue(4))
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int,Int])
+    lazypostdomtree = Core.Compiler.LazyPostDomtree(ir)
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(lazypostdomtree, ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    @test 4 ∉ visited
+    @test 5 ∉ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(false, 1, 1) == 2
+    @test_throws "potential throw" oc(true, 1, 1)
+end
+
 # Test dynamic update of domtree with edge insertions and deletions in the
 # following CFG:
 #
