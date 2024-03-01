@@ -373,20 +373,17 @@ end
 function NativeInterpreter(world::UInt = get_world_counter();
                            inf_params::InferenceParams = InferenceParams(),
                            opt_params::OptimizationParams = OptimizationParams())
+    curr_max_world = get_world_counter()
     # Sometimes the caller is lazy and passes typemax(UInt).
     # we cap it to the current world age for correctness
     if world == typemax(UInt)
-        world = get_world_counter()
+        world = curr_max_world
     end
-
     # If they didn't pass typemax(UInt) but passed something more subtly
     # incorrect, fail out loudly.
-    @assert world <= get_world_counter()
-
+    @assert world <= curr_max_world
     method_table = CachedMethodTable(InternalMethodTable(world))
-
     inf_cache = Vector{InferenceResult}() # Initially empty cache
-
     return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
 end
 

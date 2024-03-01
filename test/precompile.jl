@@ -407,11 +407,11 @@ precompile_test_harness(false) do dir
         else
             ocachefile = nothing
         end
-            # use _require_from_serialized to ensure that the test fails if
-            # the module doesn't reload from the image:
+        # use _require_from_serialized to ensure that the test fails if
+        # the module doesn't reload from the image:
         @test_warn "@ccallable was already defined for this method name" begin
             @test_logs (:warn, "Replacing module `$Foo_module`") begin
-                m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile)
+                m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile, Foo_file)
                 @test isa(m, Module)
             end
         end
@@ -1723,7 +1723,6 @@ let newinterp_path = abspath("compiler/newinterp.jl")
             import SimpleModule: basic_caller, basic_callee
 
             module Custom
-                const CC = Core.Compiler
                 include("$($newinterp_path)")
                 @newinterp PrecompileInterpreter
             end
@@ -1760,6 +1759,82 @@ let newinterp_path = abspath("compiler/newinterp.jl")
             let m = only(methods(sum, (Vector{Float64},)))
                 found = false
                 for mi in Base.specializations(m)
+                    if mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(sum),Vector{Float64}}
+                        ci = mi.cache
+                        @test isdefined(ci, :next)
+                        @test ci.owner === cache_owner
+                        @test ci.max_world == typemax(UInt)
+                        ci = ci.next
+                        @test !isdefined(ci, :next)
+                        @test ci.owner === nothing
+                        @test ci.max_world == typemax(UInt)
+                        found = true
+                        break
+                    end
+                end
+                @test found
+            end
+        end
+
+        write(joinpath(load_path, "CustomAbstractInterpreterCaching2.jl"), :(module CustomAbstractInterpreterCaching2
+            import SimpleModule: basic_caller, basic_callee
+
+            module Custom
+                const CC = Core.Compiler
+                include("$($newinterp_path)")
+                @newinterp PrecompileInterpreter
+                struct CustomData
+                    inferred
+                    CustomData(@nospecialize inferred) = new(inferred)
+                end
+                function CC.transform_result_for_cache(interp::PrecompileInterpreter,
+                        mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
+                    inferred_result = @invoke CC.transform_result_for_cache(interp::CC.AbstractInterpreter,
+                        mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
+                    return CustomData(inferred_result)
+                end
+                function CC.inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
+                                            @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)
+                    if src isa CustomData
+                        src = src.inferred
+                    end
+                    return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter, src::Any,
+                                                    info::CC.CallInfo, stmt_flag::UInt32)
+                end
+            end
+
+            Base.return_types((Float64,)) do x
+                basic_caller(x)
+            end
+            Base.return_types((Float64,); interp=Custom.PrecompileInterpreter()) do x
+                basic_caller(x)
+            end
+            Base.return_types((Vector{Float64},)) do x
+                sum(x)
+            end
+            Base.return_types((Vector{Float64},); interp=Custom.PrecompileInterpreter()) do x
+                sum(x)
+            end
+        end) |> string)
+        Base.compilecache(Base.PkgId("CustomAbstractInterpreterCaching2"))
+        @eval let
+            using CustomAbstractInterpreterCaching2
+            cache_owner = Core.Compiler.cache_owner(
+                CustomAbstractInterpreterCaching2.Custom.PrecompileInterpreter())
+            let m = only(methods(CustomAbstractInterpreterCaching2.basic_callee))
+                mi = only(Base.specializations(m))
+                ci = mi.cache
+                @test isdefined(ci, :next)
+                @test ci.owner === nothing
+                @test ci.max_world == typemax(UInt)
+                ci = ci.next
+                @test !isdefined(ci, :next)
+                @test ci.owner === cache_owner
+                @test ci.max_world == typemax(UInt)
+            end
+            let m = only(methods(sum, (Vector{Float64},)))
+                found = false
+                for mi = Base.specializations(m)
                     if mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(sum),Vector{Float64}}
                         ci = mi.cache
                         @test isdefined(ci, :next)
@@ -1996,8 +2071,16 @@ precompile_test_harness("Test flags") do load_path
           module TestFlags
           end
           """)
+
+    current_flags = Base.CacheFlags()
+    modified_flags = Base.CacheFlags(
+        current_flags.use_pkgimages,
+        current_flags.debug_level,
+        2,
+        current_flags.inline,
+        3
+    )
     ji, ofile = Base.compilecache(Base.PkgId("TestFlags"); flags=`--check-bounds=no -O3`)
-    @show ji, ofile
     open(ji, "r") do io
         Base.isvalid_cache_header(io)
         _, _, _, _, _, _, _, flags = Base.parse_cache_header(io, ji)
@@ -2005,6 +2088,9 @@ precompile_test_harness("Test flags") do load_path
         @test cacheflags.check_bounds == 2
         @test cacheflags.opt_level == 3
     end
+    id = Base.identify_package("TestFlags")
+    @test Base.isprecompiled(id, ;flags=modified_flags)
+    @test !Base.isprecompiled(id, ;flags=current_flags)
 end
 
 empty!(Base.DEPOT_PATH)

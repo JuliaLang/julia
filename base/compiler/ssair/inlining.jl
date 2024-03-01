@@ -1818,7 +1818,9 @@ end
 
 function ssa_substitute!(insert_node!::Inserter, subst_inst::Instruction, @nospecialize(val),
                          ssa_substitute::SSASubstitute)
-    subst_inst[:line] += ssa_substitute.linetable_offset
+    if subst_inst[:line] != 0
+        subst_inst[:line] += ssa_substitute.linetable_offset
+    end
     return ssa_substitute_op!(insert_node!, subst_inst, val, ssa_substitute)
 end
 
