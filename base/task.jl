@@ -394,6 +394,7 @@ function _wait_multiple(waiting_tasks; all=false, failfast=false)
     end
 
     chan = Channel{Tuple{Int,Task}}(Inf)
+    waiter_tasks = Dict{Task, Task}()
 
     for (i, done) in enumerate(done_mask)
         if !done
@@ -401,11 +402,13 @@ function _wait_multiple(waiting_tasks; all=false, failfast=false)
             waiter = @task put!(chan, (i, t))
             waiter.sticky = false
             _wait2(t, waiter)
+            waiter_tasks[t] = waiter
         end
     end
 
     while true
         i, t = take!(chan)
+        delete!(waiter_tasks, t)
         done_mask[i] = true
         exception |= istaskfailed(t)
         nremaining -= 1
@@ -420,7 +423,12 @@ function _wait_multiple(waiting_tasks; all=false, failfast=false)
     if nremaining == 0
         return tasks, Task[]
     else
-        return tasks[done_mask], tasks[.~done_mask]
+        remaining_tasks = tasks[.~done_mask]
+        for t in remaining_tasks
+            waiter = pop!(waiter_tasks, t)
+            @lock t.donenotify Base.list_deletefirst!((t.donenotify::ThreadSynchronizer).waitq, waiter)
+        end
+        return tasks[done_mask], remaining_tasks
     end
 end
 
