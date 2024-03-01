@@ -1259,64 +1259,64 @@ end
     close(s2)
 end
 
-let repr = sprint(dump, :(x = 1))
-    @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n"
-end
-let repr = sprint(dump, Pair{String,Int64})
-    @test repr == "Pair{String, Int64} <: Any\n  const first::String\n  const second::Int64\n"
-end
-let repr = sprint(dump, Tuple)
-    @test repr == "Tuple <: Any\n"
-end
-let repr = sprint(dump, Int64)
-    @test repr == "Int64 <: Signed\n"
-end
-let repr = sprint(dump, Any)
-    @test length(repr) == 4
-    @test occursin(r"^Any\n", repr)
-    @test endswith(repr, '\n')
-end
-let repr = sprint(dump, Integer)
-    @test occursin("Integer <: Real", repr)
-    @test !occursin("Any", repr)
-end
-let repr = sprint(dump, Union{Integer, Float32})
-    @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
-end
 module M30442
     struct T end
 end
-let repr = sprint(show, Union{String, M30442.T})
-    @test repr == "Union{$(curmod_prefix)M30442.T, String}" ||
-          repr == "Union{String, $(curmod_prefix)M30442.T}"
-end
-let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
-    @test repr == "Ptr{UInt8} @$(Base.repr(UInt(1)))\n"
-end
-let repr = sprint(dump, Core.svec())
-    @test repr == "empty SimpleVector\n"
-end
-let repr = sprint(dump, sin)
-    @test repr == "sin (function of type typeof(sin))\n"
-end
-let repr = sprint(dump, Test)
-    @test repr == "Module Test\n"
-end
-let repr = sprint(dump, nothing)
-    @test repr == "Nothing nothing\n"
-end
-let a = Vector{Any}(undef, 10000)
-    a[2] = "elemA"
-    a[4] = "elemB"
-    a[11] = "elemC"
-    repr = sprint(dump, a; context=(:limit => true), sizehint=0)
-    @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
-end
-@test occursin("NamedTuple", sprint(dump, NamedTuple))
+@testset "Dump types" begin
+    let repr = sprint(dump, :(x = 1))
+        @test repr == "Expr\n  head: Symbol =\n  args: Array{Any}((2,))\n    1: Symbol x\n    2: $Int 1\n"
+    end
+    let repr = sprint(dump, Pair{String,Int64})
+        @test repr == "struct Pair{String, Int64} <: Any\n  first::String\n  second::Int64\n"
+    end
+    let repr = sprint(dump, Tuple)
+        @test repr == "Tuple <: Any\n"
+    end
+    let repr = sprint(dump, Int64)
+        @test repr == "primitive type Int64 <: Signed\n"
+    end
+    let repr = sprint(dump, Any)
+        @test repr == "abstract type Any\n"
+    end
+    let repr = sprint(dump, Integer)
+        @test occursin("abstract type Integer <: Real", repr)
+        @test !occursin("Any", repr)
+    end
+    let repr = sprint(dump, Union{Integer, Float32})
+        @test repr == "Union{Integer, Float32}\n" || repr == "Union{Float32, Integer}\n"
+    end
 
-# issue 36495, dumping a partial NamedTupled shouldn't error
-@test occursin("NamedTuple", sprint(dump, NamedTuple{(:foo,:bar)}))
+    let repr = sprint(show, Union{String, M30442.T})
+        @test repr == "Union{$(curmod_prefix)M30442.T, String}" ||
+              repr == "Union{String, $(curmod_prefix)M30442.T}"
+    end
+    let repr = sprint(dump, Ptr{UInt8}(UInt(1)))
+        @test repr == "Ptr{UInt8} @$(Base.repr(UInt(1)))\n"
+    end
+    let repr = sprint(dump, Core.svec())
+        @test repr == "empty SimpleVector\n"
+    end
+    let repr = sprint(dump, sin)
+        @test repr == "sin (function of type typeof(sin))\n"
+    end
+    let repr = sprint(dump, Test)
+        @test repr == "Module Test\n"
+    end
+    let repr = sprint(dump, nothing)
+        @test repr == "Nothing nothing\n"
+    end
+    let a = Vector{Any}(undef, 10000)
+        a[2] = "elemA"
+        a[4] = "elemB"
+        a[11] = "elemC"
+        repr = sprint(dump, a; context=(:limit => true), sizehint=0)
+        @test repr == "Array{Any}((10000,))\n  1: #undef\n  2: String \"elemA\"\n  3: #undef\n  4: String \"elemB\"\n  5: #undef\n  ...\n  9996: #undef\n  9997: #undef\n  9998: #undef\n  9999: #undef\n  10000: #undef\n"
+    end
+    @test occursin("NamedTuple", sprint(dump, NamedTuple))
 
+    # issue 36495, dumping a partial NamedTupled shouldn't error
+    @test occursin("NamedTuple", sprint(dump, NamedTuple{(:foo,:bar)}))
+end
 # issue #17338
 @test repr(Core.svec(1, 2)) == "svec(1, 2)"
 
