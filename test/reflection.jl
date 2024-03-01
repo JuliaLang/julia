@@ -115,9 +115,6 @@ not_const = 1
 
 @test ismutable(1) == false
 @test ismutable([]) == true
-@test ismutabletype(Int) == false
-@test ismutabletype(Vector{Any}) == true
-@test ismutabletype(Union{Int, Vector{Any}}) == false
 
 ## find bindings tests
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base
@@ -561,29 +558,76 @@ struct ReflectionExample{T<:AbstractFloat, N}
     x::Tuple{T, N}
 end
 
-@test !isabstracttype(Union{})
-@test !isabstracttype(Union{Int,Float64})
-@test isabstracttype(AbstractArray)
-@test isabstracttype(AbstractSet{Int})
-@test !isabstracttype(ReflectionExample)
-@test !isabstracttype(Int)
-@test !isabstracttype(TLayout)
+@testset "isabstracttype" begin
+    @test isabstracttype(AbstractArray)
+    @test isabstracttype(AbstractSet{Int})
 
-@test !isprimitivetype(Union{})
-@test !isprimitivetype(Union{Int,Float64})
-@test !isprimitivetype(AbstractArray)
-@test !isprimitivetype(AbstractSet{Int})
-@test !isprimitivetype(ReflectionExample)
-@test isprimitivetype(Int)
-@test !isprimitivetype(TLayout)
+    @test !isabstracttype(Union{})
+    @test !isabstracttype(Set{T} where T <: Any)
+    @test !isabstracttype(Union{Int,Float64})
+    @test !isabstracttype(ReflectionExample)
+    @test !isabstracttype(Int)
+    @test !isabstracttype(TLayout)
+    @test !isabstracttype(nothing)
+    @test !isabstracttype(1)
+end
 
-@test !isstructtype(Union{})
-@test !isstructtype(Union{Int,Float64})
-@test !isstructtype(AbstractArray)
-@test !isstructtype(AbstractSet{Int})
-@test isstructtype(ReflectionExample)
-@test !isstructtype(Int)
-@test isstructtype(TLayout)
+@testset "isprimitivetype" begin
+    @test isprimitivetype(Int)
+
+    @test !isprimitivetype(Union{})
+    @test !isprimitivetype(Union{Int,Float64})
+    @test !isprimitivetype(AbstractArray)
+    @test !isprimitivetype(AbstractSet{Int})
+    @test !isprimitivetype(ReflectionExample)
+    @test !isprimitivetype(TLayout)
+    @test !isprimitivetype(1)
+end
+
+@testset "isstructtype" begin
+    @test isstructtype(Pair)
+    @test isstructtype(Pair{Int})
+    @test isstructtype(Pair{Int, Float32})
+    @test isstructtype(BitSet)
+    @test isstructtype(Nothing)
+    @test isstructtype(TLayout)
+    @test isstructtype(ReflectionExample)
+
+    @test !isstructtype(Union{})
+    @test !isstructtype(Union{BitSet, Nothing})
+    @test !isstructtype(Union{Int,Float64})
+    @test !isstructtype(AbstractArray)
+    @test !isstructtype(AbstractSet{Int})
+    @test !isstructtype(Float32)
+    @test !isstructtype(Tuple{BitSet})
+
+    @test !isstructtype(1.0)
+    @test !isstructtype(nothing)
+end
+
+mutable struct EmptyMutable end
+
+@testset "ismutabletype"
+    @test ismutabletype(Dict{Int, String})
+
+    # True, even if not defined in regular Julia code
+    @test ismutabletype(Vector{Int})
+    @test ismutabletype(Core.Box)
+    @test ismutabletype(Memory{Float32})
+    @test ismutabletype(EmptyMutable) # even if no fields to mutate
+
+    # Sets are mutable, but mutation happens by mutating the Set's immutable fields
+    @test !ismutabletype(Set{Int})
+    @test !ismutabletype(Tuple{Dict{Int, Int}})
+    @test !ismutabletype(Union{})
+    @test !ismutabletype(Union{Vector{Any}, Dict{Int, Int}})
+    @test !ismutabletype(Int)
+    @test !ismutabletype(Nothing)
+
+    @test !ismutabletype([])
+    @test !ismutabletype(Dict())
+    @test !ismutabletype(1)
+end
 
 let
     wrapperT(T) = Base.typename(T).wrapper

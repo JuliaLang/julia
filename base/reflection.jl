@@ -645,6 +645,8 @@ If `T` is not a type, then return `false`.
 
 !!! compat "Julia 1.7"
     This function requires at least Julia 1.7.
+
+See also [`isabstracttype`](@ref), [`isstructtype`](@ref), [`isprimitivetype`](@ref).
 """
 function ismutabletype(@nospecialize t)
     @_total_meta
@@ -661,13 +663,15 @@ ismutabletypename(tn::Core.TypeName) = tn.flags & 0x2 == 0x2
 Determine whether type `T` was declared as a struct type
 (i.e. using the `struct` or `mutable struct` keyword).
 If `T` is not a type, then return `false`.
+
+See also [`isabstracttype`](@ref), [`ismutabletype`](@ref), [`isprimitivetype`](@ref).
 """
 function isstructtype(@nospecialize t)
     @_total_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    return !isprimitivetype(t) && !isabstracttype(t)
+    return !isprimitivetype(t) && !isabstracttype(t) && !(T <: Tuple)
 end
 
 """
@@ -676,6 +680,8 @@ end
 Determine whether type `T` was declared as a primitive type
 (i.e. using the `primitive type` syntax).
 If `T` is not a type, then return `false`.
+
+See also [`isabstracttype`](@ref), [`ismutabletype`](@ref), [`isstructtype`](@ref).
 """
 function isprimitivetype(@nospecialize t)
     @_total_meta
@@ -838,6 +844,8 @@ Determine whether type `T` was declared as an abstract type
 (i.e. using the `abstract type` syntax).
 Note that this is not the negation of `isconcretetype(T)`.
 If `T` is not a type, then return `false`.
+
+See also [`isprimitivetype`](@ref), [`ismutabletype`](@ref), [`isstructtype`](@ref).
 
 # Examples
 ```jldoctest
