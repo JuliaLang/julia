@@ -370,40 +370,38 @@ waitany(tasks) = _wait_multiple(tasks)
 waitall(tasks; failfast=false) = _wait_multiple(tasks; all=true, failfast=failfast)
 
 function _wait_multiple(waiting_tasks; all=false, failfast=false)
-    foreach(waiting_tasks) do @nospecialize t
-        if !(t isa Task)
-            error("Expected an iterator of `Task` object")
-        end
-    end
-
-    chan = Channel{Tuple{Int,Task}}(Inf)
     tasks = Task[]
     done_mask = Bool[]
     exception = false
     nremaining::Int = 0
 
     for (i, t) in enumerate(waiting_tasks)
-        t = t::Task
+        t isa Task || error("Expected an iterator of `Task` object")
         push!(tasks, t)
         if istaskdone(t)
             push!(done_mask, true)
             exception |= istaskfailed(t)
         else
-            nremaining += 1
             push!(done_mask, false)
-            schedule(Task(() -> begin
-                _wait(t)
-                put!(chan, (i, t))
-            end))
+            nremaining += 1
         end
     end
 
     if nremaining == 0
-        close(chan)
         return tasks, Task[]
     elseif any(done_mask) && (!all || (failfast && exception))
-        close(chan)
         return tasks[done_mask], tasks[.~done_mask]
+    end
+
+    chan = Channel{Tuple{Int,Task}}(Inf)
+
+    for (i, done) in enumerate(done_mask)
+        if !done
+            t = tasks[i]
+            waiter = @task put!(chan, (i, t))
+            waiter.sticky = false
+            _wait2(t, waiter)
+        end
     end
 
     while true
@@ -412,7 +410,7 @@ function _wait_multiple(waiting_tasks; all=false, failfast=false)
         exception |= istaskfailed(t)
         nremaining -= 1
 
-        if nremaining == 0 || failfast && exception
+        if nremaining == 0 || (!all || failfast && exception)
             break
         end
     end
