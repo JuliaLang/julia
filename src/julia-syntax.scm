@@ -1347,15 +1347,18 @@
                (else (error "invalid let syntax"))))
              (else (error "invalid let syntax")))))))))
 
+(define (valid-macro-def-name? e)
+  (or (symbol? e) (valid-modref? e) (globalref? e)))
+
 (define (expand-macro-def e)
   (cond ((and (pair? (cadr e))
               (eq? (car (cadr e)) 'call)
-              (symbol? (cadr (cadr e))))
+              (valid-macro-def-name? (cadr (cadr e))))
          (let ((anames (remove-empty-parameters (cddr (cadr e)))))
            (if (has-parameters? anames)
                (error "macros cannot accept keyword arguments"))
            (expand-forms
-            `(function (call ,(symbol (string #\@ (cadr (cadr e))))
+            `(function (call ,(macroify-name (cadr (cadr e)))
                              (|::| __source__ (core LineNumberNode))
                              (|::| __module__ (core Module))
                              ,@(map (lambda (v)
@@ -1364,8 +1367,8 @@
                                           v))
                                     anames))
                        ,@(cddr e)))))
-        ((and (length= e 2) (symbol? (cadr e)))
-         (expand-forms `(function ,(symbol (string #\@ (cadr e))))))
+        ((and (length= e 2) (valid-macro-def-name? (cadr e)))
+         (expand-forms `(function ,(macroify-name (cadr e)))))
         (else
          (error "invalid macro definition"))))
 
