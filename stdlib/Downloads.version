@@ -1,4 +1,4 @@
 DOWNLOADS_BRANCH = master
-DOWNLOADS_SHA1 = a9d274ff6588cc5dbfa90e908ee34c2408bab84a
+DOWNLOADS_SHA1 = 05f9ec216833b3ebdae00c3d19b3c68047a3c325
 DOWNLOADS_GIT_URL := https://github.com/JuliaLang/Downloads.jl.git
 DOWNLOADS_TAR_URL = https://api.github.com/repos/JuliaLang/Downloads.jl/tarball/$1
