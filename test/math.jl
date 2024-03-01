@@ -1355,6 +1355,16 @@ end
     # hypot on Complex returns Real
     @test (@inferred hypot(3, 4im)) === 5.0
     @test (@inferred hypot(3, 4im, 12)) === 13.0
+    @testset "promotion, issue #53505" begin
+        @testset "Int,$T" for T in (Float16, Float32, Float64, BigFloat)
+            for args in ((3, 4), (3, 4, 12))
+                for i in eachindex(args)
+                    targs = ntuple(j -> (j == i) ? T(args[j]) : args[j], length(args))
+                    @test (@inferred hypot(targs...)) isa float(eltype(promote(targs...)))
+                end
+            end
+        end
+    end
 end
 
 struct BadFloatWrapper <: AbstractFloat

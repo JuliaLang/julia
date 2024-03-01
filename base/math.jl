@@ -817,8 +817,8 @@ true
 ```
 """
 hypot(x::Number) = abs(float(x))
-hypot(x::Number, y::Number) = _hypot(promote(float(x), y)...)
-hypot(x::Number, y::Number, xs::Number...) = _hypot(promote(float(x), y, xs...))
+hypot(x::Number, y::Number) = _hypot(float.(promote(x, y))...)
+hypot(x::Number, y::Number, xs::Number...) = _hypot(float.(promote(x, y, xs...)))
 function _hypot(x, y)
     # preserves unit
     axu = abs(x)
