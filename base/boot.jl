@@ -648,8 +648,17 @@ end
 macro __doc__(x)
     return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
 end
-atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
-atdoc!(λ) = global atdoc = λ
+
+isbasicdoc(@nospecialize x) = (isa(x, Expr) && x.head === :.) || isa(x, Union{QuoteNode, Symbol})
+iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ? iscallexpr(ex.args[1]) : (isa(ex, Expr) && ex.head === :call)
+iscallexpr(ex) = false
+function ignoredoc(source, mod, str, expr)
+    (isbasicdoc(expr) || iscallexpr(expr)) && return Expr(:escape, nothing)
+    Expr(:escape, expr)
+end
+
+global atdoc = ignoredoc
+atdoc!(λ)    = global atdoc = λ
 
 # macros for big integer syntax
 macro int128_str end
