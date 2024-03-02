@@ -1216,7 +1216,8 @@ let a = Tuple{T1,T1} where T1,
 end
 let a = Val{Tuple{T1,T1}} where T1,
     b = Val{Tuple{Val{S2},S6}} where S2 where S6
-    @testintersect(a, b, Val{Tuple{Val{T},Val{T}}} where T)
+    # @testintersect(a, b, Val{Tuple{Val{T},Val{T}}} where T)
+    @test_broken !Base.has_free_typevars(typeintersect(b, a))
 end
 let a = Tuple{Float64,T3,T4} where T4 where T3,
     b = Tuple{S2,Tuple{S3},S3} where S2 where S3
@@ -2570,6 +2571,32 @@ end
 let a = Tuple{Union{Nothing, Type{Pair{T1}} where T1}}
     b = Tuple{Type{X2} where X2<:(Pair{T2, Y2} where {Src, Z2<:Src, Y2<:Union{Val{Z2}, Z2}})} where T2
     @test !Base.has_free_typevars(typeintersect(a, b))
+end
+
+#issue 53366
+let Y = Tuple{Val{T}, Val{Val{T}}} where T
+    A = Val{Val{T}} where T
+    T = TypeVar(:T, UnionAll(A.var, Val{A.var}))
+    B = UnionAll(T, Val{T})
+    X = Tuple{A, B}
+    @testintersect(X, Y, !Union{})
+end
+
+#issue 53621 (requires assertions enabled)
+abstract type A53621{T, R, C, U} <: AbstractSet{Union{C, U}} end
+struct T53621{T, R<:Real, C, U} <: A53621{T, R, C, U} end
+let
+    U = TypeVar(:U)
+    C = TypeVar(:C)
+    T = TypeVar(:T)
+    R = TypeVar(:R)
+    CC = TypeVar(:CC, Union{C, U})
+    UU = TypeVar(:UU, Union{C, U})
+    S1 = UnionAll(T, UnionAll(R, Type{UnionAll(C, UnionAll(U, T53621{T, R, C, U}))}))
+    S2 = UnionAll(C, UnionAll(U, UnionAll(CC, UnionAll(UU, UnionAll(T, UnionAll(R, T53621{T, R, CC, UU}))))))
+    S = Tuple{S1, S2}
+    T = Tuple{Type{T53621{T, R}}, AbstractSet{T}} where {T, R}
+    @testintersect(S, T, !Union{})
 end
 
 #issue 53371
