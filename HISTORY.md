@@ -148,9 +148,6 @@ Standard library changes
 * `lu` and `issuccess(::LU)` now accept an `allowsingular` keyword argument. When set to `true`, a valid factorization with rank-deficient U factor will be treated as success instead of throwing an error. Such factorizations are now shown by printing the factors together with a "rank-deficient" note rather than printing a "Failed Factorization" message ([#52957]).
 
 #### Logging
-* New `@create_log_macro` macro for creating new log macros like `@info`, `@warn` etc. For instance
-  `@create_log_macro MyLog 1500 :magenta` will create `@mylog` to be used like `@mylog "hello"` which
-  will show as `┌ MyLog: hello` etc. ([#52196])
 
 #### Printf
 
