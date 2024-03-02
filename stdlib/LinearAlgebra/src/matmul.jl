@@ -69,25 +69,34 @@ end
 @inline mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
                 alpha::Number, beta::Number) = _mul!(y, A, x, alpha, beta)
 
-@inline _mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
+_mul!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector,
                 alpha::Number, beta::Number) =
-    @stable_muladdmul generic_matvecmul!(y, wrapper_char(A), _unwrap(A), x, MulAddMul(alpha, beta))
+    generic_matvecmul!(y, wrapper_char(A), _unwrap(A), x, alpha, beta)
 # BLAS cases
 # equal eltypes
-@inline generic_matvecmul!(y::StridedVector{T}, tA, A::StridedVecOrMat{T}, x::StridedVector{T},
-                _add::MulAddMul=MulAddMul()) where {T<:BlasFloat} =
+generic_matvecmul!(y::StridedVector{T}, tA, A::StridedVecOrMat{T}, x::StridedVector{T},
+                alpha::Number, beta::Number) where {T<:BlasFloat} =
+    gemv!(y, tA, A, x, alpha, beta)
+generic_matvecmul!(y::StridedVector{T}, tA, A::StridedVecOrMat{T}, x::StridedVector{T},
+                _add::MulAddMul = MulAddMul()) where {T<:BlasFloat} =
     gemv!(y, tA, A, x, _add.alpha, _add.beta)
 # Real (possibly transposed) matrix times complex vector.
 # Multiply the matrix with the real and imaginary parts separately
-@inline generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
-                _add::MulAddMul=MulAddMul()) where {T<:BlasReal} =
+generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
+                alpha::Number, beta::Number) where {T<:BlasReal} =
+    gemv!(y, tA, A, x, alpha, beta)
+generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{T}, x::StridedVector{Complex{T}},
+                _add::MulAddMul = MulAddMul()) where {T<:BlasReal} =
     gemv!(y, tA, A, x, _add.alpha, _add.beta)
 # Complex matrix times real vector.
 # Reinterpret the matrix as a real matrix and do real matvec computation.
 # works only in cooperation with BLAS when A is untransposed (tA == 'N')
 # but that check is included in gemv! anyway
-@inline generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
-                _add::MulAddMul=MulAddMul()) where {T<:BlasReal} =
+generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
+                alpha::Number, beta::Number) where {T<:BlasReal} =
+    gemv!(y, tA, A, x, alpha, beta)
+generic_matvecmul!(y::StridedVector{Complex{T}}, tA, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
+                _add::MulAddMul = MulAddMul()) where {T<:BlasReal} =
     gemv!(y, tA, A, x, _add.alpha, _add.beta)
 
 # Vector-Matrix multiplication
@@ -404,11 +413,9 @@ Base.@constprop :aggressive function generic_matmatmul!(C::StridedMatrix{T}, tA,
     end
     return @stable_muladdmul _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
 end
-# legacy methods
-Base.@constprop :aggressive generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    generic_matmatmul!(C, tA, tB, A, B, true, false)
+# legacy method
 Base.@constprop :aggressive generic_matmatmul!(C::StridedMatrix{T}, tA, tB, A::StridedVecOrMat{T}, B::StridedVecOrMat{T},
-        _add::MulAddMul) where {T<:BlasFloat} =
+        _add::MulAddMul = MulAddMul()) where {T<:BlasFloat} =
     generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
 
 # Complex matrix times (transposed) real matrix. Reinterpret the first matrix to real for efficiency.
@@ -420,11 +427,9 @@ Base.@constprop :aggressive function generic_matmatmul!(C::StridedVecOrMat{Compl
         @stable_muladdmul _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
     end
 end
-# legacy methods
-Base.@constprop :aggressive generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
-    generic_matmatmul!(C, tA, tB, A, B, true, false)
+# legacy method
 Base.@constprop :aggressive generic_matmatmul!(C::StridedVecOrMat{Complex{T}}, tA, tB, A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T},
-        _add::MulAddMul) where {T<:BlasReal} =
+        _add::MulAddMul = MulAddMul()) where {T<:BlasReal} =
     generic_matmatmul!(C, tA, tB, A, B, _add.alpha, _add.beta)
 
 # Supporting functions for matrix multiplication
@@ -556,12 +561,9 @@ function syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat
     end
     return gemm_wrapper!(C, tA, tAt, A, A, alpha, beta)
 end
-# legacy methods
-syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    syrk_wrapper!(C, tA, A, true, false)
-syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T}, _add::MulAddMul) where {T<:BlasFloat} =
+# legacy method
+syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T}, _add::MulAddMul = MulAddMul()) where {T<:BlasFloat} =
     syrk_wrapper!(C, tA, A, _add.alpha, _add.beta)
-
 
 function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}},
         α::Number, β::Number) where {T<:BlasReal}
@@ -592,11 +594,9 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
     end
     return gemm_wrapper!(C, tA, tAt, A, A, α, β)
 end
-# legacy methods
-herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}}) where {T<:BlasReal} =
-    herk_wrapper!(C, tA, A, true, false)
+# legacy method
 herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}},
-        _add::MulAddMul) where {T<:BlasReal} =
+        _add::MulAddMul = MulAddMul()) where {T<:BlasReal} =
     herk_wrapper!(C, tA, A, _add.alpha, _add.beta)
 
 function gemm_wrapper(tA::AbstractChar, tB::AbstractChar,
@@ -637,12 +637,9 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
     end
     @stable_muladdmul _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
 end
-# legacy methods
+# legacy method
 gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
-        A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    gemm_wrapper!(C, tA, tB, A, B, true, false)
-gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar,
-        A::StridedVecOrMat{T}, B::StridedVecOrMat{T}, _add::MulAddMul) where {T<:BlasFloat} =
+        A::StridedVecOrMat{T}, B::StridedVecOrMat{T}, _add::MulAddMul = MulAddMul()) where {T<:BlasFloat} =
     gemm_wrapper!(C, tA, tB, A, B, _add.alpha, _add.beta)
 
 function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
@@ -675,10 +672,7 @@ function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::Abs
 end
 # legacy method
 gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
-        A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
-    gemm_wrapper!(C, tA, tB, A, B, true, false)
-gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
-        A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T}, _add::MulAddMul) where {T<:BlasReal} =
+        A::StridedVecOrMat{Complex{T}}, B::StridedVecOrMat{T}, _add::MulAddMul = MulAddMul()) where {T<:BlasReal} =
     gemm_wrapper!(C, tA, tB, A, B, _add.alpha, _add.beta)
 
 # blas.jl defines matmul for floats; other integer and mixed precision
@@ -835,8 +829,8 @@ function generic_matmatmul(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatrix{S})
 end
 
 # aggressive const prop makes mixed eltype mul!(C, A, B) invoke _generic_matmatmul! directly
-# legacy methods
-Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul) =
+# legacy method
+Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, _add::MulAddMul = MulAddMul()) =
     _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), _add)
 Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number, β::Number) =
     @stable_muladdmul _generic_matmatmul!(C, wrap(A, tA), wrap(B, tB), MulAddMul(α, β))
