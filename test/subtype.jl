@@ -1216,8 +1216,7 @@ let a = Tuple{T1,T1} where T1,
 end
 let a = Val{Tuple{T1,T1}} where T1,
     b = Val{Tuple{Val{S2},S6}} where S2 where S6
-    # @testintersect(a, b, Val{Tuple{Val{T},Val{T}}} where T)
-    @test_broken !Base.has_free_typevars(typeintersect(b, a))
+    @testintersect(a, b, Val{Tuple{Val{T},Val{T}}} where T)
 end
 let a = Tuple{Float64,T3,T4} where T4 where T3,
     b = Tuple{S2,Tuple{S3},S3} where S2 where S3

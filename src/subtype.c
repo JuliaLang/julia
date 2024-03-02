@@ -2849,7 +2849,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
 
     // I. Handle indirect innervars (make them behave like direct innervars).
     //   1) record if btemp->lb/ub has indirect innervars.
-    //   2) substitute `vb->var` with `varval`/`varval`
+    //   2) substitute `vb->var` with `varval`/`newvar`
     //   note: We only store the innervar in the outmost `varbinding`,
     //       thus we must check all inner env to ensure the recording/substitution
     //       is complete
@@ -2913,6 +2913,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                     }
                     envind++;
                 }
+                // FIXME: innervar that depend on `ivar` should also be updated.
             }
         }
     }
@@ -3028,7 +3029,8 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     }
 
     if (vb->innervars != NULL) {
-        for (size_t i = 0; i < jl_array_nrows(vb->innervars); i++) {
+        size_t len = jl_array_nrows(vb->innervars), count = 0;
+        for (size_t i = 0; i < len; i++) {
             jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
             // the `btemp->prev` walk is only giving a sort of post-order guarantee (since we are
             // iterating 2 trees at once), so once we set `wrap`, there might remain other branches
@@ -3042,11 +3044,45 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             if (wrap) {
                 if (wrap->innervars == NULL)
                     wrap->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
+                // FIXME: `var`'s dependence should also be pushed into `wrap->innervars`.
                 jl_array_ptr_1d_push(wrap->innervars, (jl_value_t*)var);
+                jl_array_ptr_set(vb->innervars, i, (jl_value_t*)NULL);
             }
-            else if (res != jl_bottom_type) {
-                if (jl_has_typevar(res, var))
-                    res = jl_type_unionall((jl_tvar_t*)var, res);
+        }
+        for (size_t i = 0; i < len; i++) {
+            jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
+            if (var) {
+                if (count < i)
+                    jl_array_ptr_set(vb->innervars, count, (jl_value_t*)var);
+                count++;
+            }
+        }
+        if (count != len)
+            jl_array_del_end(vb->innervars, len - count);
+        if (res != jl_bottom_type) {
+            while (count > 1) {
+                int changed = 0;
+                // Now need to re-sort the vb->innervars using the partial-ordering predicate `jl_has_typevar`.
+                // If this is slow, we could possibly switch to a simpler graph sort than this triple loop, such as Tarjan's SCC.
+                // But for now we use a variant on selection sort for partial-orders.
+                for (size_t i = 0; i < count - 1; i++) {
+                    jl_tvar_t *vari = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
+                    for (size_t j = i+1; j < count; j++) {
+                        jl_tvar_t *varj = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, j);
+                        if (jl_has_typevar(varj->lb, vari) || jl_has_typevar(varj->ub, vari)) {
+                            jl_array_ptr_set(vb->innervars, j, (jl_value_t*)vari);
+                            jl_array_ptr_set(vb->innervars, i, (jl_value_t*)varj);
+                            changed = 1;
+                            break;
+                        }
+                    }
+                    if (changed) break;
+                }
+                if (!changed) break;
+            }
+            for (size_t i = 0; i < count; i++) {
+                jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
+                res = jl_type_unionall(var, res);
             }
         }
     }
