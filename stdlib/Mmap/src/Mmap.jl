@@ -160,7 +160,7 @@ privileges are required to grow the file.
 The `shared` keyword argument specifies whether the resulting `Array` and changes made to it
 will be visible to other processes mapping the same file.
 
-The `exec` keyword argument specifies whether the underlying mmap data will be executale.
+The `exec` keyword argument specifies whether the underlying mmap data will be executable.
 
 For example, the following code
 
