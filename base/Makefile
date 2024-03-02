@@ -49,6 +49,11 @@ else
 	@echo "const MACHINE = \"$(XC_HOST)\"" >> $@
 endif
 	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
+ifeq ($(USE_SYSTEM_LIBM),1)
+	@echo "const libm_file = \"$(LIBMNAME).$(SHLIB_EXT).$(LIBM_VERSION)\"" >> $@
+else
+	@echo "const libm_file = \"$(LIBMNAME).$(SHLIB_EXT)\"" >> $@
+endif
 ifeq ($(USE_BLAS64), 1)
 	@echo "const USE_BLAS64 = true" >> $@
 else
@@ -226,7 +231,7 @@ $(build_depsbindir)/dsymutil$(EXE):
 # the following excludes: libuv.a, libutf8proc.a
 
 ifneq ($(USE_SYSTEM_LIBM),0)
-$(eval $(call symlink_system_library,LIBM,$(LIBMNAME)))
+$(eval $(call symlink_system_library,LIBM,$(LIBMNAME),$(LIBM_VERSION)))
 else ifneq ($(USE_SYSTEM_OPENLIBM),0)
 $(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
 endif
@@ -251,10 +256,11 @@ $(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))
 endif
 $(eval $(call symlink_system_library,CSL,libquadmath,0))
 $(eval $(call symlink_system_library,CSL,libstdc++,6))
-# We allow libssp, libatomic and libgomp to fail as they are not available on all systems
+# We allow libssp, libatomic, libgomp and libpthread to fail as they are not available on all systems
 $(eval $(call symlink_system_library,CSL,libssp,0,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libatomic,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libgomp,1,ALLOW_FAILURE))
+$(eval $(call symlink_system_library,CSL,libpthread,0,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,PCRE,libpcre2-8))
 $(eval $(call symlink_system_library,DSFMT,libdSFMT))
 $(eval $(call symlink_system_library,LIBBLASTRAMPOLINE,libblastrampoline))
