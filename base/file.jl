@@ -401,10 +401,12 @@ function cp(src::AbstractString, dst::AbstractString; force::Bool=false,
 end
 
 """
-    mv(src::AbstractString, dst::AbstractString; force::Bool=false)
+    mv(src::AbstractString, dst::AbstractString; into::Bool=false, force::Bool=false)
 
 Move the file, link, or directory from `src` to `dst`.
 `force=true` will first remove an existing `dst`.
+`into=true` moves `src` into `dst` which must be an existing directory;
+the full destination path will be `joinpath(dst, basename(src))`.
 Return `dst`.
 
 # Examples
@@ -435,7 +437,10 @@ julia> rm("goodbye.txt");
 
 ```
 """
-function mv(src::AbstractString, dst::AbstractString; force::Bool=false)
+function mv(src::AbstractString, dst::AbstractString; into::Bool=false, force::Bool=false)
+    if into
+        dst = joinpath(dst, basename(src))
+    end
     checkfor_mv_cp_cptree(src, dst, "moving"; force=force)
     rename(src, dst)
     dst
