@@ -190,9 +190,6 @@ julia> foldl(=>, 1:4)
 
 julia> foldl(=>, 1:4; init=0)
 (((0 => 1) => 2) => 3) => 4
-
-julia> accumulate(=>, (1,2,3,4))
-(1, 1 => 2, (1 => 2) => 3, ((1 => 2) => 3) => 4)
 ```
 """
 foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)

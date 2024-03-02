@@ -257,6 +257,9 @@ julia> accumulate(min, (1, -2, 3, -4, 5), init=0)
 julia> accumulate(/, (2, 4, Inf), init=100)
 (50.0, 12.5, 0.0)
 
+julia> accumulate(=>, (1,2,3,4))
+(1, 1 => 2, (1 => 2) => 3, ((1 => 2) => 3) => 4)
+
 julia> accumulate(=>, i^2 for i in 1:3)
 3-element Vector{Any}:
           1
