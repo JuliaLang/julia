@@ -804,7 +804,7 @@ end
     @test circshift!(a, 1) == []
     a = [1:5;]
     @test circshift!(a, 10) === a
-    @test circshift!(a, 10) == [1:5;]
+    @test circshift!(a, 10) == 1:5
 end
 
 @testset "circcopy" begin
