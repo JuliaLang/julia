@@ -645,6 +645,7 @@
   (cond ((not (pair? e)) e)
         ((eq? (car e) 'inert) e)
         ((eq? (car e) 'module) e)
+        ((eq? (car e) 'toplevel) e)
         ((eq? (car e) 'hygienic-scope)
          (let ((form (cadr e)) ;; form is the expression returned from expand-macros
                (modu (caddr e)) ;; m is the macro's def module
