@@ -16,16 +16,16 @@ $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured: $(BUILDDIR)/$(BLASTRAMPO
 BLASTRAMPOLINE_BUILD_ROOT := $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured
 	cd $(dir $@)/src && $(MAKE) $(BLASTRAMPOLINE_BUILD_OPTS)
-ifeq ($(OS), WINNT)
-	# Windows doesn't like soft link, use hard link
-	cd $(BLASTRAMPOLINE_BUILD_ROOT)/build/ && \
-		cp -f --dereference --link libblastrampoline.dll libblastrampoline.dll
-endif
 	echo 1 > $@
 
 define BLASTRAMPOLINE_INSTALL
 	$(MAKE) -C $(BLASTRAMPOLINE_BUILD_ROOT) install $(BLASTRAMPOLINE_BUILD_OPTS) DESTDIR="$2"
 endef
+ifeq ($(OS), WINNT)
+# Windows doesn't like soft link, use hard link to copy file without version suffix
+BLASTRAMPOLINE_INSTALL += && cd $2$$(build_prefix)/bin && \
+$$(WIN_MAKE_HARD_LINK) libblastrampoline-*.dll libblastrampoline.dll
+endif
 $(eval $(call staged-install, \
 	blastrampoline,$(BLASTRAMPOLINE_SRC_DIR), \
 	BLASTRAMPOLINE_INSTALL,, \
