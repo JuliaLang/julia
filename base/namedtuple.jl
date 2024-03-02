@@ -385,6 +385,24 @@ function merge(a::NamedTuple, itr)
     merge(a, NamedTuple{(names...,)}((vals...,)))
 end
 
+function mergewith(combine, a::NamedTuple{an}, b::NamedTuple{bn}) where {an, bn}
+    if @generated
+        names = merge_names(an, bn)
+        vals = map(names) do n
+            if sym_in(n, an) && sym_in(n, bn)
+                :(combine(a.$n, b.$n))
+            elseif sym_in(n, an)
+                :(a.$n)
+            elseif sym_in(n, bn)
+                :(b.$n)
+            end
+        end
+        :( NamedTuple{$names}(($(vals...),)) )
+    else
+        # todo
+    end
+end
+
 keys(nt::NamedTuple{names}) where {names} = names::Tuple{Vararg{Symbol}}
 values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
