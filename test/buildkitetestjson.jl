@@ -55,7 +55,6 @@ json_repr(io::IO, val::Any; indent::Int=0) = json_repr(io, string(val))
 
 function result_dict(testset::Test.DefaultTestSet, prefix::String="")
     Dict{String, Any}(
-        "id" => Base.UUID(rand(UInt128)),
         "scope" => join((prefix, testset.description), '/'),
         "history" => if !isnothing(testset.time_end)
             Dict{String, Any}(
@@ -83,6 +82,7 @@ function result_dict(result::Test.Result)
         "unknown"
     end
     data = Dict{String, Any}(
+        "id" => Base.UUID(rand(UInt128)),
         "name" => "$(result.test_type): $(result.orig_expr)",
         "location" => string(file, ':', line),
         "file_name" => file,
