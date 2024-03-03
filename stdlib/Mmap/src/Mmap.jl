@@ -219,8 +219,8 @@ function _mmap(io::IO,
     # check inputs
     isopen(io) || throw(ArgumentError("$io must be open to mmap"))
     isbitstype(T)  || throw(ArgumentError("unable to mmap $T; must satisfy isbitstype(T) == true"))
-    if exec && !(io isa Anonymous)
-        throw(ArgumentError("unable to mmap a file with exec=true"))
+    if exec && !iswritable(io)
+        throw(ArgumentError("$io must be writeable to mmap with exec = true"))
     end
 
     len = Base.aligned_sizeof(T)
