@@ -16,7 +16,7 @@ alphanumeric annotations.
 `VersionNumber` objects can be compared with all of the standard comparison
 operators (`==`, `<`, `<=`, etc.), with the result following semver rules.
 
-`VersionNumber` has the the following public fields:
+`VersionNumber` has the following public fields:
 - `v.major::Integer`
 - `v.minor::Integer`
 - `v.patch::Integer`

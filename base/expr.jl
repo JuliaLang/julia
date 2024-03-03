@@ -79,7 +79,7 @@ function copy(c::CodeInfo)
     cnew.slotnames = copy(cnew.slotnames)
     cnew.slotflags = copy(cnew.slotflags)
     if cnew.slottypes !== nothing
-        cnew.slottypes = copy(cnew.slottypes)
+        cnew.slottypes = copy(cnew.slottypes::Vector{Any})
     end
     cnew.codelocs  = copy(cnew.codelocs)
     cnew.linetable = copy(cnew.linetable::Union{Vector{Any},Vector{Core.LineInfoNode}})
@@ -831,7 +831,7 @@ end
 Tells the compiler to infer `f` using the declared types of `@nospecialize`d arguments.
 This can be used to limit the number of compiler-generated specializations during inference.
 
-# Example
+# Examples
 
 ```julia
 julia> f(A::AbstractArray) = g(A)
@@ -1019,14 +1019,12 @@ function remove_linenums!(@nospecialize ex)
         return ex
     elseif ex isa CodeInfo
         ex.codelocs .= 0
-        length(ex.linetable) > 1 && resize!(ex.linetable, 1)
+        length(ex.linetable::Vector) > 1 && resize!(ex.linetable::Vector, 1)
         return ex
     else
         return ex
     end
 end
-
-public remove_linenums!
 
 replace_linenums!(ex, ln::LineNumberNode) = ex
 function replace_linenums!(ex::Expr, ln::LineNumberNode)

@@ -483,13 +483,13 @@ eval(Core, quote
 end)
 
 function CodeInstance(
-    mi::MethodInstance, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
+    mi::MethodInstance, owner, @nospecialize(rettype), @nospecialize(exctype), @nospecialize(inferred_const),
     @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
     ipo_effects::UInt32, effects::UInt32, @nospecialize(analysis_results),
     relocatability::UInt8)
     return ccall(:jl_new_codeinst, Ref{CodeInstance},
-        (Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
-        mi, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
+        (Any, Any, Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
+        mi, owner, rettype, exctype, inferred_const, inferred, const_flags, min_world, max_world,
         ipo_effects, effects, analysis_results,
         relocatability)
 end
@@ -648,8 +648,17 @@ end
 macro __doc__(x)
     return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
 end
-atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
-atdoc!(λ) = global atdoc = λ
+
+isbasicdoc(@nospecialize x) = (isa(x, Expr) && x.head === :.) || isa(x, Union{QuoteNode, Symbol})
+iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ? iscallexpr(ex.args[1]) : (isa(ex, Expr) && ex.head === :call)
+iscallexpr(ex) = false
+function ignoredoc(source, mod, str, expr)
+    (isbasicdoc(expr) || iscallexpr(expr)) && return Expr(:escape, nothing)
+    Expr(:escape, expr)
+end
+
+global atdoc = ignoredoc
+atdoc!(λ)    = global atdoc = λ
 
 # macros for big integer syntax
 macro int128_str end
@@ -969,6 +978,7 @@ arrayset(inbounds::Bool, A::Array{T}, x::Any, i::Int...) where {T} = Main.Base.s
 arraysize(a::Array) = a.size
 arraysize(a::Array, i::Int) = sle_int(i, nfields(a.size)) ? getfield(a.size, i) : 1
 export arrayref, arrayset, arraysize, const_arrayref
+const check_top_bit = check_sign_bit
 
 # For convenience
 EnterNode(old::EnterNode, new_dest::Int) = isdefined(old, :scope) ?

@@ -1,13 +1,23 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},Set{<:AbstractChar}}
+"""
+    Base.Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},AbstractSet{<:AbstractChar}}
+
+An alias type for a either single character or a tuple/vector/set of characters, used to describe arguments
+of several string-matching functions such as [`startswith`](@ref) and [`strip`](@ref).
+
+!!! compat "Julia 1.11"
+    Julia versions prior to 1.11 only included `Set`, not `AbstractSet`, in `Base.Chars` types.
+"""
+const Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},AbstractSet{<:AbstractChar}}
 
 # starts with and ends with predicates
 
 """
-    startswith(s::AbstractString, prefix::AbstractString)
+    startswith(s::AbstractString, prefix::Union{AbstractString,Base.Chars})
 
-Return `true` if `s` starts with `prefix`. If `prefix` is a vector or set
+Return `true` if `s` starts with `prefix`, which can be a string, a character,
+or a tuple/vector/set of characters. If `prefix` is a tuple/vector/set
 of characters, test whether the first character of `s` belongs to that set.
 
 See also [`endswith`](@ref), [`contains`](@ref).
@@ -30,10 +40,11 @@ end
 startswith(str::AbstractString, chars::Chars) = !isempty(str) && first(str)::AbstractChar in chars
 
 """
-    endswith(s::AbstractString, suffix::AbstractString)
+    endswith(s::AbstractString, suffix::Union{AbstractString,Base.Chars})
 
-Return `true` if `s` ends with `suffix`. If `suffix` is a vector or set of
-characters, test whether the last character of `s` belongs to that set.
+Return `true` if `s` ends with `suffix`, which can be a string, a character,
+or a tuple/vector/set of characters. If `suffix` is a tuple/vector/set
+of characters, test whether the last character of `s` belongs to that set.
 
 See also [`startswith`](@ref), [`contains`](@ref).
 
@@ -70,7 +81,8 @@ end
 """
     startswith(io::IO, prefix::Union{AbstractString,Base.Chars})
 
-Check if an `IO` object starts with a prefix.  See also [`peek`](@ref).
+Check if an `IO` object starts with a prefix, which can be either a string, a
+character, or a tuple/vector/set of characters.  See also [`peek`](@ref).
 """
 function Base.startswith(io::IO, prefix::Base.Chars)
     mark(io)

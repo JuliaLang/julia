@@ -20,9 +20,6 @@ extern jl_value_t *jl_builtin_tuple;
 jl_methtable_t *jl_kwcall_mt;
 jl_method_t *jl_opaque_closure_method;
 
-jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
-
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 {
     if (jl_is_svec(rt))
@@ -124,7 +121,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 } else if (!jl_is_long(oc_nargs)) {
                     jl_type_error("opaque_closure_method", (jl_value_t*)jl_long_type, oc_nargs);
                 }
-                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(oc_nargs), functionloc, (jl_code_info_t*)ci, isva);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(oc_nargs), functionloc, ci, isva);
                 return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
@@ -488,7 +485,6 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     mi->sparam_vals = jl_emptysvec;
     jl_atomic_store_relaxed(&mi->uninferred, NULL);
     mi->backedges = NULL;
-    mi->callbacks = NULL;
     jl_atomic_store_relaxed(&mi->cache, NULL);
     mi->inInference = 0;
     mi->cache_with_orig = 0;
@@ -512,14 +508,12 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->slotnames = NULL;
     src->slottypes = jl_nothing;
     src->parent = (jl_method_instance_t*)jl_nothing;
-    src->rettype = (jl_value_t*)jl_any_type;
     src->min_world = 1;
     src->max_world = ~(size_t)0;
-    src->inferred = 0;
+    src->edges = jl_nothing;
     src->propagate_inbounds = 0;
     src->has_fcall = 0;
     src->nospecializeinfer = 0;
-    src->edges = jl_nothing;
     src->constprop = 0;
     src->inlining = 0;
     src->purity.bits = 0;
@@ -910,7 +904,7 @@ void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_method_instance_t *ca
 // method definition ----------------------------------------------------------
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva)
+    int nargs, jl_value_t *functionloc, jl_value_t *uninferred_source, int isva)
 {
     jl_method_t *m = jl_new_method_uninit(module);
     JL_GC_PUSH1(&m);
@@ -929,7 +923,8 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     jl_value_t *file = jl_linenode_file(functionloc);
     m->file = jl_is_symbol(file) ? (jl_sym_t*)file : jl_empty_sym;
     m->line = jl_linenode_line(functionloc);
-    jl_method_set_source(m, ci);
+    if (jl_is_code_info(uninferred_source))
+        jl_method_set_source(m, (jl_code_info_t*)uninferred_source);
     JL_GC_POP();
     return m;
 }

@@ -107,22 +107,22 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # OptimizationState #
 #####################
 
-is_source_inferred(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
-
-function inlining_policy(interp::AbstractInterpreter,
+# return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
+function src_inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(src, MaybeCompressed)
-        is_source_inferred(src) || return nothing
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
-        return src_inlineable ? src : nothing
+        return src_inlineable
     elseif isa(src, IRCode)
-        return src
+        return true
     elseif isa(src, SemiConcreteResult)
-        return src
+        return true
     end
-    return nothing
+    @assert !isa(src, CodeInstance) # handled by caller
+    return false
 end
+
+function inlining_policy end # deprecated legacy name used by Cthulhu
 
 struct InliningState{Interp<:AbstractInterpreter}
     edges::Vector{Any}
@@ -222,7 +222,6 @@ end
 function ir_to_codeinf!(src::CodeInfo, ir::IRCode)
     replace_code_newstyle!(src, ir)
     widen_all_consts!(src)
-    src.inferred = true
     return src
 end
 
@@ -239,8 +238,6 @@ function widen_all_consts!(src::CodeInfo)
             src.code[i] = PiNode(x.val, widenconst(x.typ))
         end
     end
-
-    src.rettype = widenconst(src.rettype)
 
     return src
 end
@@ -534,17 +531,22 @@ function any_stmt_may_throw(ir::IRCode, bb::Int)
     return false
 end
 
-function conditional_successors_may_throw(lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
+function visit_conditional_successors(callback, lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
     visited = BitSet((bb,))
     worklist = Int[bb]
     while !isempty(worklist)
-        thisbb = pop!(worklist)
+        thisbb = popfirst!(worklist)
         for succ in ir.cfg.blocks[thisbb].succs
             succ in visited && continue
             push!(visited, succ)
-            postdominates(get!(lazypostdomtree), succ, thisbb) && continue
-            any_stmt_may_throw(ir, succ) && return true
-            push!(worklist, succ)
+            if postdominates(get!(lazypostdomtree), succ, bb)
+                # this successor is not conditional, so no need to visit it further
+                continue
+            elseif callback(succ)
+                return true
+            else
+                push!(worklist, succ)
+            end
         end
     end
     return false
@@ -836,8 +838,10 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
             # inconsistent region.
             if !sv.result.ipo_effects.terminates
                 sv.all_retpaths_consistent = false
-            elseif conditional_successors_may_throw(sv.lazypostdomtree, sv.ir, bb)
-                # Check if there are potential throws that require
+            elseif visit_conditional_successors(sv.lazypostdomtree, sv.ir, bb) do succ::Int
+                       return any_stmt_may_throw(sv.ir, succ)
+                   end
+                # check if this `GotoIfNot` leads to conditional throws, which taints consistency
                 sv.all_retpaths_consistent = false
             else
                 (; cfg, domtree) = get!(sv.lazyagdomtree)
@@ -1086,7 +1090,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             idx += 1
             prevloc = codeloc
         end
-        if ssavaluetypes[idx] === Union{} && !(oldidx in sv.unreachable)
+        if ssavaluetypes[idx] === Union{} && !(oldidx in sv.unreachable) && !isa(code[idx], PhiNode)
             # We should have converted any must-throw terminators to an equivalent w/o control-flow edges
             @assert !isterminator(code[idx])
 

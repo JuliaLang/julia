@@ -345,7 +345,7 @@ thread other than 1.
     In newly written library functions, `:static` scheduling is discouraged because the
     functions using this option cannot be called from arbitrary worker threads.
 
-## Example
+## Examples
 
 To illustrate of the different scheduling strategies, consider the following function
 `busywait` containing a non-yielding timed loop that runs for a given number of seconds.

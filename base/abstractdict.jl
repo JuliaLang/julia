@@ -416,7 +416,7 @@ end
 Update `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
-# Example
+# Examples
 ```jldoctest
 julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
 Dict{Int64, String} with 3 entries:
@@ -578,6 +578,55 @@ end
 _tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<(top_set_bit(x-one(T)))
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
+
+# This error is thrown if `grow_to!` cannot validate the contents of the iterator argument to it, which it does by testing the iteration protocol (isiterable) on it each time it is about to start iteration on it
+_throw_dict_kv_error() = throw(ArgumentError("AbstractDict(kv): kv needs to be an iterator of 2-tuples or pairs"))
+
+function grow_to!(dest::AbstractDict, itr)
+    applicable(iterate, itr) || _throw_dict_kv_error()
+    y = iterate(itr)
+    y === nothing && return dest
+    kv, st = y
+    applicable(iterate, kv) || _throw_dict_kv_error()
+    k = iterate(kv)
+    k === nothing && _throw_dict_kv_error()
+    k, kvst = k
+    v = iterate(kv, kvst)
+    v === nothing && _throw_dict_kv_error()
+    v, kvst = v
+    iterate(kv, kvst) === nothing || _throw_dict_kv_error()
+    if !(dest isa AbstractDict{typeof(k), typeof(v)})
+        dest = empty(dest, typeof(k), typeof(v))
+    end
+    dest[k] = v
+    return grow_to!(dest, itr, st)
+end
+
+function grow_to!(dest::AbstractDict{K,V}, itr, st) where {K, V}
+    y = iterate(itr, st)
+    while y !== nothing
+        kv, st = y
+        applicable(iterate, kv) || _throw_dict_kv_error()
+        kst = iterate(kv)
+        kst === nothing && _throw_dict_kv_error()
+        k, kvst = kst
+        vst = iterate(kv, kvst)
+        vst === nothing && _throw_dict_kv_error()
+        v, kvst = vst
+        iterate(kv, kvst) === nothing || _throw_dict_kv_error()
+        if isa(k, K) && isa(v, V)
+            dest[k] = v
+        else
+            new = empty(dest, promote_typejoin(K, typeof(k)), promote_typejoin(V, typeof(v)))
+            merge!(new, dest)
+            new[k] = v
+            return grow_to!(new, itr, st)
+        end
+        y = iterate(itr, st)
+    end
+    return dest
+end
+
 
 dict_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
 dict_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)

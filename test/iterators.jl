@@ -254,6 +254,22 @@ let i = 0
     @test !Base.isdone(cycle(0:3), 1)
 end
 
+@testset "cycle(iter, n)"  begin
+    @test collect(cycle(0:3, 2)) == [0, 1, 2, 3, 0, 1, 2, 3]
+    @test collect(cycle(Iterators.filter(iseven, 1:4), 2)) == [2, 4, 2, 4]
+    @test collect(take(cycle(countfrom(11), 3), 4)) == 11:14
+
+    @test isempty(cycle(1:0)) == isempty(cycle(1:0, 3)) == true
+    @test isempty(cycle(1:5, 0))
+    @test isempty(cycle(Iterators.filter(iseven, 1:4), 0))
+
+    @test eltype(cycle(0:3, 2)) === Int
+    @test Base.IteratorEltype(cycle(0:3, 2)) == Base.HasEltype()
+
+    Base.haslength(cycle(0:3, 2)) == false  # but not sure we should test these
+    Base.IteratorSize(cycle(0:3, 2)) == Base.SizeUnknown()
+end
+
 # repeated
 # --------
 let i = 0

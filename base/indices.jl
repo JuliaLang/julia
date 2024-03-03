@@ -464,7 +464,7 @@ julia> extrema(b)
 
 Return a `LinearIndices` array with the specified shape or [`axes`](@ref).
 
-# Example
+# Examples
 
 The main purpose of this constructor is intuitive conversion
 from cartesian to linear indexing:

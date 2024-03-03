@@ -2,7 +2,7 @@
 
 ## Broadcast styles
 import Base.Broadcast
-using Base.Broadcast: DefaultArrayStyle, Broadcasted, tail
+using Base.Broadcast: DefaultArrayStyle, Broadcasted
 
 struct StructuredMatrixStyle{T} <: Broadcast.AbstractArrayStyle{2} end
 StructuredMatrixStyle{T}(::Val{2}) where {T} = StructuredMatrixStyle{T}()

@@ -1114,6 +1114,27 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TE
     return t
 end
 
+"""
+    print_verbose(::AbstractTestSet) -> Bool
+
+Whether printing involving this `AbstractTestSet` should be verbose or not.
+
+Defaults to `false`.
+"""
+function print_verbose end
+
+"""
+    results(::AbstractTestSet)
+
+Return an iterator of results aggregated by this `AbstractTestSet`, if any were recorded.
+
+Defaults to the empty tuple.
+"""
+function results end
+
+print_verbose(ts::DefaultTestSet) = ts.verbose
+results(ts::DefaultTestSet) = ts.results
+
 # When a DefaultTestSet finishes, it records itself to its parent
 # testset, if there is one. This allows for recursive printing of
 # the results at the end of the tests
@@ -1121,26 +1142,42 @@ record(ts::DefaultTestSet, t::AbstractTestSet) = push!(ts.results, t)
 
 @specialize
 
-function print_test_errors(ts::DefaultTestSet)
-    for t in ts.results
+"""
+    print_test_errors(::AbstractTestSet)
+
+Prints the errors that were recorded by this `AbstractTestSet` after it
+was `finish`ed.
+"""
+function print_test_errors(ts::AbstractTestSet)
+    for t in results(ts)
         if isa(t, Error) || isa(t, Fail)
             println("Error in testset $(ts.description):")
             show(t)
             println()
-        elseif isa(t, DefaultTestSet)
+        elseif isa(t, AbstractTestSet)
             print_test_errors(t)
         end
     end
 end
 
-function print_test_results(ts::DefaultTestSet, depth_pad=0)
+"""
+    print_test_results(ts::AbstractTestSet, depth_pad=0)
+
+Print the results of an `AbstractTestSet` as a formatted table.
+
+`depth_pad` refers to how much padding should be added in front of all output.
+
+Called inside of `Test.finish`, if the `finish`ed testset is the topmost
+testset.
+"""
+function print_test_results(ts::AbstractTestSet, depth_pad=0)
     # Calculate the overall number for each type so each of
     # the test result types are aligned
-    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration = get_test_counts(ts)
-    total_pass   = passes + c_passes
-    total_fail   = fails  + c_fails
-    total_error  = errors + c_errors
-    total_broken = broken + c_broken
+    tc = get_test_counts(ts)
+    total_pass   = tc.passes + tc.cumulative_passes
+    total_fail   = tc.fails  + tc.cumulative_fails
+    total_error  = tc.errors + tc.cumulative_errors
+    total_broken = tc.broken + tc.cumulative_broken
     dig_pass   = total_pass   > 0 ? ndigits(total_pass)   : 0
     dig_fail   = total_fail   > 0 ? ndigits(total_fail)   : 0
     dig_error  = total_error  > 0 ? ndigits(total_error)  : 0
@@ -1153,14 +1190,13 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     fail_width   = dig_fail   > 0 ? max(length("Fail"),   dig_fail)   : 0
     error_width  = dig_error  > 0 ? max(length("Error"),  dig_error)  : 0
     broken_width = dig_broken > 0 ? max(length("Broken"), dig_broken) : 0
-    total_width  = dig_total  > 0 ? max(length("Total"),  dig_total)  : 0
-    duration_width = max(length("Time"), length(duration))
+    total_width  = max(textwidth("Total"),  dig_total)
+    duration_width = max(textwidth("Time"), textwidth(tc.duration))
     # Calculate the alignment of the test result counts by
     # recursively walking the tree of test sets
-    align = max(get_alignment(ts, 0), length("Test Summary:"))
+    align = max(get_alignment(ts, 0), textwidth("Test Summary:"))
     # Print the outer test set header once
-    pad = total == 0 ? "" : " "
-    printstyled(rpad("Test Summary:", align, " "), " |", pad; bold=true)
+    printstyled(rpad("Test Summary:", align, " "), " |", " "; bold=true)
     if pass_width > 0
         printstyled(lpad("Pass", pass_width, " "), "  "; bold=true, color=:green)
     end
@@ -1173,15 +1209,16 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     if broken_width > 0
         printstyled(lpad("Broken", broken_width, " "), "  "; bold=true, color=Base.warn_color())
     end
-    if total_width > 0
+    if total_width > 0 || total == 0
         printstyled(lpad("Total", total_width, " "), "  "; bold=true, color=Base.info_color())
     end
-    if ts.showtiming
+    timing = isdefined(ts, :showtiming) ? ts.showtiming : false
+    if timing
         printstyled(lpad("Time", duration_width, " "); bold=true)
     end
     println()
     # Recursively print a summary at every level
-    print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width, duration_width, ts.showtiming)
+    print_counts(ts, depth_pad, align, pass_width, fail_width, error_width, broken_width, total_width, duration_width, timing)
 end
 
 
@@ -1199,11 +1236,11 @@ function finish(ts::DefaultTestSet; print_results::Bool=TESTSET_PRINT_ENABLE[])
         record(parent_ts, ts)
         return ts
     end
-    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration = get_test_counts(ts)
-    total_pass   = passes + c_passes
-    total_fail   = fails  + c_fails
-    total_error  = errors + c_errors
-    total_broken = broken + c_broken
+    tc = get_test_counts(ts)
+    total_pass   = tc.passes + tc.cumulative_passes
+    total_fail   = tc.fails  + tc.cumulative_fails
+    total_error  = tc.errors + tc.cumulative_errors
+    total_broken = tc.broken + tc.cumulative_broken
     total = total_pass + total_fail + total_error + total_broken
 
     if print_results
@@ -1253,100 +1290,165 @@ function filter_errors(ts::DefaultTestSet)
     efs
 end
 
-# Recursive function that counts the number of test results of each
-# type directly in the testset, and totals across the child testsets
+"""
+    TestCounts
+
+Holds the state for recursively gathering the results of a test set for display purposes.
+
+Fields:
+
+ * `customized`: Whether the function `get_test_counts` was customized for the `AbstractTestSet`
+                 this counts object is for. If a custom method was defined, always pass `true`
+                 to the constructor.
+ * `passes`: The number of passing `@test` invocations.
+ * `fails`: The number of failing `@test` invocations.
+ * `errors`: The number of erroring `@test` invocations.
+ * `broken`: The number of broken `@test` invocations.
+ * `passes`: The cumulative number of passing `@test` invocations.
+ * `fails`: The cumulative number of failing `@test` invocations.
+ * `errors`: The cumulative number of erroring `@test` invocations.
+ * `broken`: The cumulative number of broken `@test` invocations.
+ * `duration`: The total duration the `AbstractTestSet` in question ran for, as a formatted `String`.
+"""
+struct TestCounts
+    customized::Bool
+    passes::Int
+    fails::Int
+    errors::Int
+    broken::Int
+    cumulative_passes::Int
+    cumulative_fails::Int
+    cumulative_errors::Int
+    cumulative_broken::Int
+    duration::String
+end
+
+""""
+    get_test_counts(::AbstractTestSet) -> TestCounts
+
+Recursive function that counts the number of test results of each
+type directly in the testset, and totals across the child testsets.
+
+Custom `AbstractTestSet` should implement this function to get their totals
+counted & displayed with `DefaultTestSet` as well.
+
+If this is not implemented for a custom `TestSet`, the printing falls back to
+reporting `x` for failures and `?s` for the duration.
+"""
+function get_test_counts end
+
+get_test_counts(ts::AbstractTestSet) = TestCounts(false, 0,0,0,0,0,0,0,0, format_duration(ts))
+
 function get_test_counts(ts::DefaultTestSet)
     passes, fails, errors, broken = ts.n_passed, 0, 0, 0
+    # cumulative results
     c_passes, c_fails, c_errors, c_broken = 0, 0, 0, 0
     for t in ts.results
         isa(t, Fail)   && (fails  += 1)
         isa(t, Error)  && (errors += 1)
         isa(t, Broken) && (broken += 1)
-        if isa(t, DefaultTestSet)
-            np, nf, ne, nb, ncp, ncf, nce , ncb, duration = get_test_counts(t)
-            c_passes += np + ncp
-            c_fails  += nf + ncf
-            c_errors += ne + nce
-            c_broken += nb + ncb
+        if isa(t, AbstractTestSet)
+            tc = get_test_counts(t)::TestCounts
+            c_passes += tc.passes + tc.cumulative_passes
+            c_fails  += tc.fails + tc.cumulative_fails
+            c_errors += tc.errors + tc.cumulative_errors
+            c_broken += tc.broken + tc.cumulative_broken
         end
     end
+    duration = format_duration(ts)
     ts.anynonpass = (fails + errors + c_fails + c_errors > 0)
-    (; time_start, time_end) = ts
-    duration = if isnothing(time_end)
-        ""
-    else
-        dur_s = time_end - time_start
-        if dur_s < 60
-            string(round(dur_s, digits = 1), "s")
-        else
-            m, s = divrem(dur_s, 60)
-            s = lpad(string(round(s, digits = 1)), 4, "0")
-            string(round(Int, m), "m", s, "s")
-        end
-    end
-    return passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration
+    return TestCounts(true, passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration)
 end
+
+"""
+    format_duration(::AbstractTestSet)
+
+Return a formatted string for printing the duration the testset ran for.
+
+If not defined, falls back to `"?s"`.
+"""
+format_duration(::AbstractTestSet) = "?s"
+
+function format_duration(ts::DefaultTestSet)
+    (; time_start, time_end) = ts
+    isnothing(time_end) && return ""
+
+    dur_s = time_end - time_start
+    if dur_s < 60
+        string(round(dur_s, digits = 1), "s")
+    else
+        m, s = divrem(dur_s, 60)
+        s = lpad(string(round(s, digits = 1)), 4, "0")
+        string(round(Int, m), "m", s, "s")
+    end
+end
+
+print_verbose(::AbstractTestSet) = false
+results(::AbstractTestSet) = ()
 
 # Recursive function that prints out the results at each level of
 # the tree of test sets
-function print_counts(ts::DefaultTestSet, depth, align,
+function print_counts(ts::AbstractTestSet, depth, align,
                       pass_width, fail_width, error_width, broken_width, total_width, duration_width, showtiming)
     # Count results by each type at this level, and recursively
     # through any child test sets
-    passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration = get_test_counts(ts)
-    subtotal = passes + fails + errors + broken + c_passes + c_fails + c_errors + c_broken
+    tc = get_test_counts(ts)
+    fallbackstr = tc.customized ? " " : "x"
+    subtotal = tc.passes + tc.fails + tc.errors + tc.broken +
+               tc.cumulative_passes + tc.cumulative_fails + tc.cumulative_errors + tc.cumulative_broken
     # Print test set header, with an alignment that ensures all
     # the test results appear above each other
     print(rpad(string("  "^depth, ts.description), align, " "), " | ")
 
-    np = passes + c_passes
-    if np > 0
-        printstyled(lpad(string(np), pass_width, " "), "  ", color=:green)
+    n_passes = tc.passes + tc.cumulative_passes
+    if n_passes > 0
+        printstyled(lpad(string(n_passes), pass_width, " "), "  ", color=:green)
     elseif pass_width > 0
         # No passes at this level, but some at another level
-        print(lpad(" ", pass_width), "  ")
+        printstyled(lpad(fallbackstr, pass_width, " "), "  ", color=:green)
     end
 
-    nf = fails + c_fails
-    if nf > 0
-        printstyled(lpad(string(nf), fail_width, " "), "  ", color=Base.error_color())
+    n_fails = tc.fails + tc.cumulative_fails
+    if n_fails > 0
+        printstyled(lpad(string(n_fails), fail_width, " "), "  ", color=Base.error_color())
     elseif fail_width > 0
         # No fails at this level, but some at another level
-        print(lpad(" ", fail_width), "  ")
+        printstyled(lpad(fallbackstr, fail_width, " "), "  ", color=Base.error_color())
     end
 
-    ne = errors + c_errors
-    if ne > 0
-        printstyled(lpad(string(ne), error_width, " "), "  ", color=Base.error_color())
+    n_errors = tc.errors + tc.cumulative_errors
+    if n_errors > 0
+        printstyled(lpad(string(n_errors), error_width, " "), "  ", color=Base.error_color())
     elseif error_width > 0
         # No errors at this level, but some at another level
-        print(lpad(" ", error_width), "  ")
+        printstyled(lpad(fallbackstr, error_width, " "), "  ", color=Base.error_color())
     end
 
-    nb = broken + c_broken
-    if nb > 0
-        printstyled(lpad(string(nb), broken_width, " "), "  ", color=Base.warn_color())
+    n_broken = tc.broken + tc.cumulative_broken
+    if n_broken > 0
+        printstyled(lpad(string(n_broken), broken_width, " "), "  ", color=Base.warn_color())
     elseif broken_width > 0
         # None broken at this level, but some at another level
-        print(lpad(" ", broken_width), "  ")
+        printstyled(lpad(fallbackstr, broken_width, " "), "  ", color=Base.warn_color())
     end
 
-    if np == 0 && nf == 0 && ne == 0 && nb == 0
-        printstyled(lpad("None", total_width, " "), "  ", color=Base.info_color())
+    if n_passes == 0 && n_fails == 0 && n_errors == 0 && n_broken == 0
+        total_str = tc.customized ? string(subtotal) : "?"
+        printstyled(lpad(total_str, total_width, " "), "  ", color=Base.info_color())
     else
         printstyled(lpad(string(subtotal), total_width, " "), "  ", color=Base.info_color())
     end
 
     if showtiming
-        printstyled(lpad(string(duration), duration_width, " "))
+        printstyled(lpad(tc.duration, duration_width, " "))
     end
     println()
 
     # Only print results at lower levels if we had failures or if the user
-    # wants.
-    if (np + nb != subtotal) || (ts.verbose)
-        for t in ts.results
-            if isa(t, DefaultTestSet)
+    # wants. Requires the given `AbstractTestSet` to have a vector of results
+    if ((n_passes + n_broken != subtotal) || print_verbose(ts))
+        for t in results(ts)
+            if isa(t, AbstractTestSet)
                 print_counts(t, depth + 1, align,
                     pass_width, fail_width, error_width, broken_width, total_width, duration_width, ts.showtiming)
             end
@@ -1731,7 +1833,8 @@ function parse_testset_args(args)
     options = :(Dict{Symbol, Any}())
     for arg in args
         # a standalone symbol is assumed to be the test set we should use
-        if isa(arg, Symbol)
+        # the same is true for a symbol that's not exported from a module
+        if isa(arg, Symbol) || Base.isexpr(arg, :.)
             testsettype = esc(arg)
         # a string is the description
         elseif isa(arg, AbstractString) || (isa(arg, Expr) && arg.head === :string)

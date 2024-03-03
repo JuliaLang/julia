@@ -54,6 +54,75 @@ function is_expected_union(u::Union)
     return true
 end
 
+function print_warntype_codeinfo(io::IO, src::Core.CodeInfo, @nospecialize(rettype), nargs::Int; lineprinter)
+    if src.slotnames !== nothing
+        slotnames = Base.sourceinfo_slotnames(src)
+        io = IOContext(io, :SOURCE_SLOTNAMES => slotnames)
+        slottypes = src.slottypes
+        nargs > 0 && println(io, "Arguments")
+        for i = 1:length(slotnames)
+            if i == nargs + 1
+                println(io, "Locals")
+            end
+            print(io, "  ", slotnames[i])
+            if isa(slottypes, Vector{Any})
+                warntype_type_printer(io; type=slottypes[i], used=true)
+            end
+            println(io)
+        end
+    end
+    print(io, "Body")
+    warntype_type_printer(io; type=rettype, used=true)
+    println(io)
+    irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
+    Base.IRShow.show_ir(io, src, irshow_config)
+    println(io)
+end
+
+function print_warntype_mi(io::IO, mi::Core.MethodInstance)
+    println(io, mi)
+    print(io, "  from ")
+    println(io, mi.def)
+    if !isempty(mi.sparam_vals)
+        println(io, "Static Parameters")
+        sig = mi.def.sig
+        warn_color = Base.warn_color() # more mild user notification
+        for i = 1:length(mi.sparam_vals)
+            sig = sig::UnionAll
+            name = sig.var.name
+            val = mi.sparam_vals[i]
+            print_highlighted(io::IO, v::String, color::Symbol) =
+                if highlighting[:warntype]
+                    Base.printstyled(io, v; color)
+                else
+                    Base.print(io, v)
+                end
+            if val isa TypeVar
+                if val.lb === Union{}
+                    print(io, "  ", name, " <: ")
+                    print_highlighted(io, "$(val.ub)", warn_color)
+                elseif val.ub === Any
+                    print(io, "  ", sig.var.name, " >: ")
+                    print_highlighted(io, "$(val.lb)", warn_color)
+                else
+                    print(io, "  ")
+                    print_highlighted(io, "$(val.lb)", warn_color)
+                    print(io, " <: ", sig.var.name, " <: ")
+                    print_highlighted(io, "$(val.ub)", warn_color)
+                end
+            elseif val isa typeof(Vararg)
+                print(io, "  ", name, "::")
+                print_highlighted(io, "Int", warn_color)
+            else
+                print(io, "  ", sig.var.name, " = ")
+                print_highlighted(io, "$(val)", :cyan) # show the "good" type
+            end
+            println(io)
+            sig = sig.body
+        end
+    end
+end
+
 """
     code_warntype([io::IO], f, types; debuginfo=:default)
 
@@ -70,89 +139,32 @@ Small unions of concrete types are usually not a concern, so these are highlight
 
 Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
 
-See [`@code_warntype`](@ref man-code-warntype) for more information.
+See the [`@code_warntype`](@ref man-code-warntype) section in the Performance Tips page of the manual for more information.
 
 See also: [`@code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref), [`code_native`](@ref).
 """
 function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt(f));
+                       world=Base.get_world_counter(),
+                       interp::Core.Compiler.AbstractInterpreter=Core.Compiler.NativeInterpreter(world),
                        debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
+    (ccall(:jl_is_in_pure_context, Bool, ()) || world == typemax(UInt)) &&
+        error("code reflection cannot be used from generated functions")
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
-    for (src, rettype) in code_typed(f, t; optimize, kwargs...)
-        if !(src isa Core.CodeInfo)
-            println(io, src)
-            println(io, "  failed to infer")
-            continue
-        end
-        lambda_io::IOContext = io
-        p = src.parent
-        nargs::Int = 0
-        if p isa Core.MethodInstance
-            println(io, p)
-            print(io, "  from ")
-            println(io, p.def)
-            p.def isa Method && (nargs = p.def.nargs)
-            if !isempty(p.sparam_vals)
-                println(io, "Static Parameters")
-                sig = p.def.sig
-                warn_color = Base.warn_color() # more mild user notification
-                for i = 1:length(p.sparam_vals)
-                    sig = sig::UnionAll
-                    name = sig.var.name
-                    val = p.sparam_vals[i]
-                    print_highlighted(io::IO, v::String, color::Symbol) =
-                        if highlighting[:warntype]
-                            Base.printstyled(io, v; color)
-                        else
-                            Base.print(io, v)
-                        end
-                    if val isa TypeVar
-                        if val.lb === Union{}
-                            print(io, "  ", name, " <: ")
-                            print_highlighted(io, "$(val.ub)", warn_color)
-                        elseif val.ub === Any
-                            print(io, "  ", sig.var.name, " >: ")
-                            print_highlighted(io, "$(val.lb)", warn_color)
-                        else
-                            print(io, "  ")
-                            print_highlighted(io, "$(val.lb)", warn_color)
-                            print(io, " <: ", sig.var.name, " <: ")
-                            print_highlighted(io, "$(val.ub)", warn_color)
-                        end
-                    elseif val isa typeof(Vararg)
-                        print(io, "  ", name, "::")
-                        print_highlighted(io, "Int", warn_color)
-                    else
-                        print(io, "  ", sig.var.name, " = ")
-                        print_highlighted(io, "$(val)", :cyan) # show the "good" type
-                    end
-                    println(io)
-                    sig = sig.body
-                end
-            end
-        end
-        if src.slotnames !== nothing
-            slotnames = Base.sourceinfo_slotnames(src)
-            lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => slotnames)
-            slottypes = src.slottypes
-            nargs > 0 && println(io, "Arguments")
-            for i = 1:length(slotnames)
-                if i == nargs + 1
-                    println(io, "Locals")
-                end
-                print(io, "  ", slotnames[i])
-                if isa(slottypes, Vector{Any})
-                    warntype_type_printer(io; type=slottypes[i], used=true)
-                end
-                println(io)
-            end
-        end
-        print(io, "Body")
-        warntype_type_printer(io; type=rettype, used=true)
-        println(io)
-        irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
-        Base.IRShow.show_ir(lambda_io, src, irshow_config)
-        println(io)
+    nargs::Int = 0
+    if isa(f, Core.OpaqueClosure)
+        isa(f.source, Method) && (nargs = f.nargs)
+        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f)[1]..., nargs; lineprinter)
+        return nothing
+    end
+    matches = Base._methods_by_ftype(Base.signature_type(f, t), #=lim=#-1, world)::Vector
+    for match in matches
+        match = match::Core.MethodMatch
+        (src, rettype) = Core.Compiler.typeinf_code(interp, match, optimize)
+        mi = Core.Compiler.specialize_method(match)
+        mi.def isa Method && (nargs = (mi.def::Method).nargs)
+        print_warntype_mi(io, mi)
+        print_warntype_codeinfo(io, src, rettype, nargs; lineprinter)
     end
     nothing
 end
@@ -188,7 +200,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     else
         world = UInt64(f.world)
         tt = Base.to_tuple_type(t)
-        if Core.Compiler.is_source_inferred(f.source.source)
+        if !isdefined(f.source, :source)
             # OC was constructed from inferred source. There's only one
             # specialization and we can't infer anything more precise either.
             world = f.source.primary_world

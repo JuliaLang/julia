@@ -1166,7 +1166,7 @@ and fewer memory accesses due to caching. These are the same reasons that it is 
 to access arrays in column-major order (see above). Irregular access patterns and non-contiguous
 views can drastically slow down computations on arrays because of non-sequential memory access.
 
-Copying irregularly-accessed data into a contiguous array before repeated access it can result
+Copying irregularly-accessed data into a contiguous array before repeatedly accessing it can result
 in a large speedup, such as in the example below. Here, a matrix is being accessed at
 randomly-shuffled indices before being multiplied. Copying into plain arrays speeds up the
 multiplication even with the added cost of copying and allocation.

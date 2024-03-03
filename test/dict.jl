@@ -162,6 +162,30 @@ end
 
     # issue #39117
     @test Dict(t[1]=>t[2] for t in zip((1,"2"), (2,"2"))) == Dict{Any,Any}(1=>2, "2"=>"2")
+
+    @testset "issue #33147" begin
+        expected = try; Base._throw_dict_kv_error(); catch e; e; end
+        @test_throws expected Dict(i for i in 1:2)
+        @test_throws expected Dict(nothing for i in 1:2)
+        @test_throws expected Dict(() for i in 1:2)
+        @test_throws expected Dict((i, i, i) for i in 1:2)
+        @test_throws expected Dict(nothing)
+        @test_throws expected Dict((1,))
+        @test_throws expected Dict(1:2)
+        @test_throws expected Dict(((),))
+        @test_throws expected IdDict(((),))
+        @test_throws expected WeakKeyDict(((),))
+        @test_throws expected IdDict(nothing)
+        @test_throws expected WeakKeyDict(nothing)
+        @test Dict(1:0) isa Dict
+        @test Dict(()) isa Dict
+        try
+            Dict(i => error("$i") for i in 1:3)
+        catch ex
+            @test ex isa ErrorException
+            @test length(Base.current_exceptions()) == 1
+        end
+    end
 end
 
 @testset "empty tuple ctor" begin

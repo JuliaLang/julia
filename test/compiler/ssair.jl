@@ -92,18 +92,15 @@ let cfg = CFG(BasicBlock[
     end
 end
 
-# test >:
-let
-    f(a, b) = a >: b
-    code_typed(f, Tuple{Any, Any})
-    # XXX: missing @test
+# test code execution with the default compile-mode
+module CompilerExecTest
+include("interpreter_exec.jl")
 end
 
-for compile in ("min", "yes")
-    cmd = `$(Base.julia_cmd()) --compile=$compile interpreter_exec.jl`
-    if !success(pipeline(Cmd(cmd, dir=@__DIR__); stdout=stdout, stderr=stderr))
-        error("Interpreter test failed, cmd : $cmd")
-    end
+# test code execution with the interpreter mode (compile=min)
+module InterpreterExecTest
+Base.Experimental.@compiler_options compile=min
+include("interpreter_exec.jl")
 end
 
 # PR #32145
@@ -239,6 +236,35 @@ end
 let ci = code_lowered(()->@isdefined(_not_def_37919_), ())[1]
     ir = Core.Compiler.inflate_ir(ci)
     @test Core.Compiler.verify_ir(ir) === nothing
+end
+
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 4),
+        # block 2
+        GotoNode(3),
+        # block 3
+        Expr(:call, throw, "potential throw"),
+        # block 4
+        Expr(:call, Core.Intrinsics.add_int, Argument(3), Argument(4)),
+        GotoNode(6),
+        # block 5
+        ReturnNode(SSAValue(4))
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int,Int])
+    lazypostdomtree = Core.Compiler.LazyPostDomtree(ir)
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(lazypostdomtree, ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    @test 4 ∉ visited
+    @test 5 ∉ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(false, 1, 1) == 2
+    @test_throws "potential throw" oc(true, 1, 1)
 end
 
 # Test dynamic update of domtree with edge insertions and deletions in the

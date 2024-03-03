@@ -6,7 +6,5 @@ for file in readlines(joinpath(@__DIR__, "testgroups"))
 end
 
 @testset "Docstrings" begin
-    undoc = Docs.undocumented_names(LinearAlgebra)
-    @test_broken isempty(undoc)
-    @test undoc == [:ColumnNorm, :LAPACKException, :NoPivot, :RankDeficientException, :RowMaximum, :RowNonZero, :copy_transpose!]
+    @test isempty(Docs.undocumented_names(LinearAlgebra))
 end

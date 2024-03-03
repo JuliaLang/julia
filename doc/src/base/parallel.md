@@ -51,6 +51,7 @@ Base.trylock
 Base.islocked
 Base.ReentrantLock
 Base.@lock
+Base.Lockable
 ```
 
 ## Channels
@@ -61,6 +62,7 @@ Base.Channel
 Base.Channel(::Function)
 Base.put!(::Channel, ::Any)
 Base.take!(::Channel)
+Base.isfull(::Channel)
 Base.isready(::Channel)
 Base.fetch(::Channel)
 Base.close(::Channel)

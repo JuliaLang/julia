@@ -474,7 +474,7 @@ fLargeTable() = 4
 fLargeTable(::Union, ::Union) = "a"
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "a"
 fLargeTable(::Union, ::Union) = "b"
-@test length(methods(fLargeTable)) == 205
+@test length(methods(fLargeTable)) == 206
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
 # issue #15280
@@ -1006,8 +1006,9 @@ end
 
 @testset "lookup mi" begin
     @test 1+1 == 2
-    mi1 = @ccall jl_method_lookup_by_tt(Tuple{typeof(+), Int, Int}::Any, Base.get_world_counter()::Csize_t, nothing::Any)::Ref{Core.MethodInstance}
+    mi1 = Base.method_instance(+, (Int, Int))
     @test mi1.def.name == :+
+    # Note `jl_method_lookup` doesn't returns CNull if not found
     mi2 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
     @test mi1 == mi2
 end
@@ -1192,3 +1193,6 @@ end
 @test Base.isexported(Mod52812, :b)
 @test Base.ispublic(Mod52812, :a)
 @test Base.ispublic(Mod52812, :b)
+
+@test Base.infer_return_type(code_lowered, (Any,)) == Vector{Core.CodeInfo}
+@test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}

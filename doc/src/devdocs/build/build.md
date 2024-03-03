@@ -269,7 +269,7 @@ DEPS_GIT = llvm
 #  LLVM_GIT_URL = ...
 #Name of the alternate branch to clone from git
 #  LLVM_BRANCH = julia-16.0.6-0
-#SHA hash of the alterate commit to check out automatically
+#SHA hash of the alternate commit to check out automatically
 #  LLVM_SHA1 = $(LLVM_BRANCH)
 #List of LLVM targets to build.  It is strongly recommended to keep at least all the
 #default targets listed in `deps/llvm.mk`, even if you don't necessarily need all of them.

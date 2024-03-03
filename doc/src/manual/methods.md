@@ -173,6 +173,8 @@ The function `f` exists, but no method is defined for this combination of argume
 Closest candidates are:
   f(!Matched::Number, ::Number)
    @ Main none:1
+  f(!Matched::Float64, !Matched::Float64)
+   @ Main none:1
 
 Stacktrace:
 [...]
@@ -743,8 +745,8 @@ often it is best to separate each level of dispatch into distinct functions.
 This may sound similar in approach to single-dispatch, but as we shall see below, it is still more flexible.
 
 For example, trying to dispatch on the element-type of an array will often run into ambiguous situations.
-Instead, commonly code will dispatch first on the container type,
-then recurse down to a more specific method based on eltype.
+Instead, common code will dispatch first on the container type,
+then recurse down to a more specific method based on `eltype`.
 In most cases, the algorithms lend themselves conveniently to this hierarchical approach,
 while in other cases, this rigor must be resolved manually.
 This dispatching branching can be observed, for example, in the logic to sum two matrices:

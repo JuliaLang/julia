@@ -1465,7 +1465,7 @@ end
 end
 
 struct t_docs_abc end
-@test "t_docs_abc" in accessible(@__MODULE__)
+@test "t_docs_abc" in string.(accessible(@__MODULE__))
 
 # Call overloading issues #20087 and #44889
 """

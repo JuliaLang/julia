@@ -66,9 +66,10 @@ struct TermInfo
     numbers::Dict{Symbol, Int}
     strings::Dict{Symbol, String}
     extensions::Union{Nothing, Set{Symbol}}
+    aliases::Dict{Symbol, Symbol}
 end
 
-TermInfo() = TermInfo([], Dict(), Dict(), Dict(), nothing)
+TermInfo() = TermInfo([], Dict(), Dict(), Dict(), nothing, Dict())
 
 function read(data::IO, ::Type{TermInfoRaw})
     # Parse according to `term(5)`
@@ -175,24 +176,28 @@ function TermInfo(raw::TermInfoRaw)
     flags = Dict{Symbol, Bool}()
     numbers = Dict{Symbol, Int}()
     strings = Dict{Symbol, String}()
+    aliases = Dict{Symbol, Symbol}()
     extensions = nothing
     for (flag, value) in zip(TERM_FLAGS, raw.flags)
-        flags[flag.short] = value
-        flags[flag.long] = value
+        flags[flag.name] = value
+        aliases[flag.capname] = flag.name
     end
     for (num, value) in zip(TERM_NUMBERS, raw.numbers)
-        numbers[num.short] = Int(value)
-        numbers[num.long] = Int(value)
+        numbers[num.name] = Int(value)
+        aliases[num.capname] = num.name
     end
     for (str, value) in zip(TERM_STRINGS, raw.strings)
         if !isnothing(value)
-            strings[str.short] = value
-            strings[str.long] = value
+            strings[str.name] = value
+            aliases[str.capname] = str.name
         end
     end
     if !isnothing(raw.extended)
         extensions = Set{Symbol}()
-        for (key, value) in raw.extended
+        longalias(key, value) = first(get(TERM_USER, (typeof(value), key), (nothing, "")))
+        for (short, value) in raw.extended
+            long = longalias(short, value)
+            key = something(long, short)
             push!(extensions, key)
             if value isa Bool
                 flags[key] = value
@@ -201,26 +206,30 @@ function TermInfo(raw::TermInfoRaw)
             elseif value isa String
                 strings[key] = value
             end
+            if !isnothing(long)
+                aliases[short] = long
+            end
         end
     end
-    TermInfo(raw.names, flags, numbers, strings, extensions)
+    TermInfo(raw.names, flags, numbers, strings, extensions, aliases)
 end
 
-get(ti::TermInfo, key::Symbol, default::Bool) = get(ti.flags, key, default)
-get(ti::TermInfo, key::Symbol, default::Int) = get(ti.numbers, key, default)
-get(ti::TermInfo, key::Symbol, default::String) = get(ti.strings, key, default)
+get(ti::TermInfo, key::Symbol, default::Bool)   = get(ti.flags,   get(ti.aliases, key, key), default)
+get(ti::TermInfo, key::Symbol, default::Int)    = get(ti.numbers, get(ti.aliases, key, key), default)
+get(ti::TermInfo, key::Symbol, default::String) = get(ti.strings, get(ti.aliases, key, key), default)
 
 haskey(ti::TermInfo, key::Symbol) =
-    haskey(ti.flags, key) || haskey(ti.numbers, key) || haskey(ti.strings, key)
+    haskey(ti.flags, key) || haskey(ti.numbers, key) || haskey(ti.strings, key) || haskey(ti.aliases, key)
 
 function getindex(ti::TermInfo, key::Symbol)
     haskey(ti.flags, key) && return ti.flags[key]
     haskey(ti.numbers, key) && return ti.numbers[key]
     haskey(ti.strings, key) && return ti.strings[key]
+    haskey(ti.aliases, key) && return getindex(ti, ti.aliases[key])
     throw(KeyError(key))
 end
 
-keys(ti::TermInfo) = keys(ti.flags) ∪ keys(ti.numbers) ∪ keys(ti.strings)
+keys(ti::TermInfo) = keys(ti.flags) ∪ keys(ti.numbers) ∪ keys(ti.strings) ∪ keys(ti.aliases)
 
 function show(io::IO, ::MIME"text/plain", ti::TermInfo)
     print(io, "TermInfo(", ti.names, "; ", length(ti.flags), " flags, ",
@@ -253,7 +262,7 @@ function find_terminfo_file(term::String)
                 replace(split(ENV["TERMINFO_DIRS"], ':'),
                         "" => "/usr/share/terminfo"))
     Sys.isunix() &&
-        push!(terminfo_dirs, "/etc/terminfo", "/usr/share/terminfo")
+        push!(terminfo_dirs, "/etc/terminfo", "/lib/terminfo", "/usr/share/terminfo")
     for dir in terminfo_dirs
         if isfile(joinpath(dir, chr, term))
             return joinpath(dir, chr, term)
@@ -303,19 +312,50 @@ end
 
 Return a boolean signifying whether the current terminal supports 24-bit colors.
 
-This uses the `COLORTERM` environment variable if possible, returning true if it
-is set to either `"truecolor"` or `"24bit"`.
+Multiple conditions are taken as signifying truecolor support, specifically any of the following:
+- The `COLORTERM` environment variable is set to `"truecolor"` or `"24bit"`
+- The current terminfo sets the [`RGB`[^1]
+  capability](https://invisible-island.net/ncurses/man/user_caps.5.html#h3-Recognized-Capabilities)
+  (or the legacy `Tc` capability[^2]) flag
+- The current terminfo provides `setrgbf` and `setrgbb` strings[^3]
+- The current terminfo has a `colors` number greater that `256`, on a unix system
+- The VTE version is at least 3600 (detected via the `VTE_VERSION` environment variable)
+- The current terminal has the `XTERM_VERSION` environment variable set
+- The current terminal appears to be iTerm according to the `TERMINAL_PROGRAM` environment variable
+- The `TERM` environment variable corresponds to: linuxvt, rxvt, or st
 
-As a fallback, first on unix systems the `colors` terminal capability is checked
-— should more than 256 colors be reported, this is taken to signify 24-bit
-support.
+[^1]: Added to Ncurses 6.1, and used in `TERM=*-direct` terminfos.
+[^2]: Convention [added to tmux in 2016](https://github.com/tmux/tmux/commit/427b8204268af5548d09b830e101c59daa095df9),
+      superseded by `RGB`.
+[^3]: Proposed by [Rüdiger Sonderfeld in 2013](https://lists.gnu.org/archive/html/bug-ncurses/2013-10/msg00007.html),
+      adopted by a few terminal emulators.
+
+!!! note
+    The set of conditions is messy, because the situation is a mess, and there's
+    no resolution in sight. `COLORTERM` is widely accepted, but an imperfect
+    solution because only `TERM` is passed across `ssh` sessions. Terminfo is
+    the obvious place for a terminal to declare capabilities, but it's taken
+    enough years for ncurses/terminfo to declare a standard capability (`RGB`)
+    that a number of other approaches have taken root. Furthermore, the official
+    `RGB` capability is *incompatible* with 256-color operation, and so is
+    unable to resolve the fragmentation in the terminal ecosystem.
 """
 function ttyhastruecolor()
+    # Lasciate ogne speranza, voi ch'intrate
     get(ENV, "COLORTERM", "") ∈ ("truecolor", "24bit") ||
-        @static if Sys.isunix()
-            get(current_terminfo, :colors, 0) > 256
-        else
-            false
+        get(current_terminfo, :RGB, false) || get(current_terminfo, :Tc, false) ||
+        (haskey(current_terminfo, :setrgbf) && haskey(current_terminfo, :setrgbb)) ||
+        @static if Sys.isunix() get(current_terminfo, :colors, 0) > 256 else false end ||
+        (Sys.iswindows() && Sys.windows_version() ≥ v"10.0.14931") || # See <https://devblogs.microsoft.com/commandline/24-bit-color-in-the-windows-console/>
+        something(tryparse(Int, get(ENV, "VTE_VERSION", "")), 0) >= 3600 || # Per GNOME bug #685759 <https://bugzilla.gnome.org/show_bug.cgi?id=685759>
+        haskey(ENV, "XTERM_VERSION") ||
+        get(ENV, "TERMINAL_PROGRAM", "") == "iTerm.app" || # Why does Apple need to be special?
+        haskey(ENV, "KONSOLE_PROFILE_NAME") || # Per commentary in VT102Emulation.cpp
+        haskey(ENV, "KONSOLE_DBUS_SESSION") ||
+        let term = get(ENV, "TERM", "")
+            startswith(term, "linux") || # Linux 4.8+ supports true-colour SGR.
+                startswith(term, "rxvt") || # See <http://lists.schmorp.de/pipermail/rxvt-unicode/2016q2/002261.html>
+                startswith(term, "st") # From experimentation
         end
 end
 

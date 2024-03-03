@@ -239,11 +239,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);
             if (found == 1 && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
-                void **bp = ptrhash_bp(&visited, mi);
-                if (*bp != (void*)((char*)HT_NOTFOUND + 3)) {
-                    *bp = (void*)((char*)HT_NOTFOUND + 3);
-                    jl_array_ptr_1d_push(new_ext_cis, (jl_value_t*)ci);
-                }
+                jl_array_ptr_1d_push(new_ext_cis, (jl_value_t*)ci);
             }
         }
     }
@@ -607,32 +603,62 @@ JL_DLLEXPORT uint8_t jl_cache_flags(void)
     return flags;
 }
 
-JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
+
+JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t requested_flags, uint8_t actual_flags)
 {
-    // 1. Check which flags are relevant
-    uint8_t current_flags = jl_cache_flags();
-    uint8_t supports_pkgimage = (current_flags & 1);
-    uint8_t is_pkgimage = (flags & 1);
+    uint8_t supports_pkgimage = (requested_flags & 1);
+    uint8_t is_pkgimage = (actual_flags & 1);
 
     // For .ji packages ignore other flags
     if (!supports_pkgimage && !is_pkgimage) {
         return 1;
     }
 
-    // If package images are optional, ignore that bit (it will be unset in current_flags)
+    // If package images are optional, ignore that bit (it will be unset in requested_flags)
     if (jl_options.use_pkgimages == JL_OPTIONS_USE_PKGIMAGES_EXISTING) {
-        flags &= ~1;
+        actual_flags &= ~1;
     }
 
     // 2. Check all flags, execept opt level must be exact
     uint8_t mask = (1 << OPT_LEVEL)-1;
-    if ((flags & mask) != (current_flags & mask))
+    if ((actual_flags & mask) != (requested_flags & mask))
         return 0;
     // 3. allow for higher optimization flags in cache
-    flags >>= OPT_LEVEL;
-    current_flags >>= OPT_LEVEL;
-    return flags >= current_flags;
+    actual_flags >>= OPT_LEVEL;
+    requested_flags >>= OPT_LEVEL;
+    return actual_flags >= requested_flags;
 }
+
+JL_DLLEXPORT uint8_t jl_match_cache_flags_current(uint8_t flags)
+{
+    return jl_match_cache_flags(jl_cache_flags(), flags);
+}
+
+// return char* from String field in Base.GIT_VERSION_INFO
+static const char *git_info_string(const char *fld)
+{
+    static jl_value_t *GIT_VERSION_INFO = NULL;
+    if (!GIT_VERSION_INFO)
+        GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
+    jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
+    assert(jl_is_string(f));
+    return jl_string_data(f);
+}
+
+static const char *jl_git_branch(void)
+{
+    static const char *branch = NULL;
+    if (!branch) branch = git_info_string("branch");
+    return branch;
+}
+
+static const char *jl_git_commit(void)
+{
+    static const char *commit = NULL;
+    if (!commit) commit = git_info_string("commit");
+    return commit;
+}
+
 
 // "magic" string and version header of .ji file
 static const int JI_FORMAT_VERSION = 12;
@@ -1162,13 +1188,23 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
         jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(ext_ci_list, i);
         if (jl_atomic_load_relaxed(&ci->max_world) == WORLD_AGE_REVALIDATION_SENTINEL) {
             assert(jl_atomic_load_relaxed(&ci->min_world) == minworld);
-            ptrhash_put(&cis_pending_validation, (void*)ci->def, (void*)ci);
+            void **bp = ptrhash_bp(&cis_pending_validation, (void*)ci->def);
+            assert(!jl_atomic_load_relaxed(&ci->next));
+            if (*bp == HT_NOTFOUND)
+                *bp = (void*)ci;
+            else {
+                // Do ci->owner bifurcates the cache, we temporarily
+                // form a linked list of all the CI that need to be connected later
+                jl_code_instance_t *prev_ci = (jl_code_instance_t *)*bp;
+                jl_atomic_store_relaxed(&ci->next, prev_ci);
+                *bp = (void*)ci;
+            }
         }
         else {
             assert(jl_atomic_load_relaxed(&ci->min_world) == 1);
             assert(jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0);
             jl_method_instance_t *caller = ci->def;
-            if (jl_atomic_load_relaxed(&ci->inferred) && jl_rettype_inferred(caller, minworld, ~(size_t)0) == jl_nothing) {
+            if (jl_atomic_load_relaxed(&ci->inferred) && jl_rettype_inferred(ci->owner, caller, minworld, ~(size_t)0) == jl_nothing) {
                 jl_mi_cache_insert(caller, ci);
             }
             //jl_static_show((JL_STREAM*)ios_stderr, (jl_value_t*)caller);
@@ -1211,18 +1247,26 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
             // Update any external CIs and add them to the cache.
             assert(jl_is_code_instance(ci));
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-            assert(jl_atomic_load_relaxed(&codeinst->min_world) == minworld);
-            assert(jl_atomic_load_relaxed(&codeinst->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
-            assert(jl_atomic_load_relaxed(&codeinst->inferred));
-            jl_atomic_store_relaxed(&codeinst->max_world, maxvalid);
+            while (codeinst) {
+                jl_code_instance_t *next_ci = jl_atomic_load_relaxed(&codeinst->next);
+                jl_atomic_store_relaxed(&codeinst->next, NULL);
 
-            if (jl_rettype_inferred(caller, minworld, maxvalid) != jl_nothing) {
-                // We already got a code instance for this world age range from somewhere else - we don't need
-                // this one.
-                continue;
+                jl_value_t *owner = codeinst->owner;
+                JL_GC_PROMISE_ROOTED(owner);
+
+                assert(jl_atomic_load_relaxed(&codeinst->min_world) == minworld);
+                assert(jl_atomic_load_relaxed(&codeinst->max_world) == WORLD_AGE_REVALIDATION_SENTINEL);
+                assert(jl_atomic_load_relaxed(&codeinst->inferred));
+                jl_atomic_store_relaxed(&codeinst->max_world, maxvalid);
+
+                if (jl_rettype_inferred(owner, caller, minworld, maxvalid) != jl_nothing) {
+                    // We already got a code instance for this world age range from somewhere else - we don't need
+                    // this one.
+                } else {
+                    jl_mi_cache_insert(caller, codeinst);
+                }
+                codeinst = next_ci;
             }
-
-            jl_mi_cache_insert(caller, codeinst);
         }
         else {
             // Likely internal. Find the CI already in the cache hierarchy.
