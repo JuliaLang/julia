@@ -312,32 +312,64 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
 static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt);
 static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, MDNode *tbaa_dest, unsigned alignment, bool isVolatile=false);
 
-static Value *get_gc_root_for(jl_codectx_t &ctx, const jl_cgval_t &x)
+static bool type_is_permalloc(jl_value_t *typ)
+{
+    // Singleton should almost always be handled by the later optimization passes.
+    // Also do it here since it is cheap and save some effort in LLVM passes.
+    if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ))
+        return true;
+    return typ == (jl_value_t*)jl_symbol_type ||
+        typ == (jl_value_t*)jl_int8_type ||
+        typ == (jl_value_t*)jl_uint8_type;
+}
+
+
+static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res, unsigned offset)
+{
+    // This is a inlined field at `offset`.
+    if (!typ->layout || typ->layout->npointers == 0)
+        return;
+    jl_svec_t *types = jl_get_fieldtypes(typ);
+    size_t nf = jl_svec_len(types);
+    for (size_t i = 0; i < nf; i++) {
+        jl_value_t *_fld = jl_svecref(types, i);
+        if (!jl_is_datatype(_fld))
+            continue;
+        jl_datatype_t *fld = (jl_datatype_t*)_fld;
+        if (jl_field_isptr(typ, i)) {
+            // pointer field, check if field is perm-alloc
+            if (type_is_permalloc((jl_value_t*)fld))
+                res.push_back(offset + jl_field_offset(typ, i));
+            continue;
+        }
+        // inline field
+        find_perm_offsets(fld, res, offset + jl_field_offset(typ, i));
+    }
+}
+
+static llvm::SmallVector<llvm::Value*, 0> get_gc_roots_for(jl_codectx_t &ctx, const jl_cgval_t &x)
 {
     if (x.constant || x.typ == jl_bottom_type)
-        return nullptr;
+        return {};
     if (x.Vboxed) // superset of x.isboxed
-        return x.Vboxed;
+        return {x.Vboxed};
     assert(!x.isboxed);
-#ifndef NDEBUG
     if (x.ispointer()) {
         assert(x.V);
-        if (PointerType *T = dyn_cast<PointerType>(x.V->getType())) {
-            assert(T->getAddressSpace() != AddressSpace::Tracked);
-            if (T->getAddressSpace() == AddressSpace::Derived) {
-                // n.b. this IR would not be valid after LLVM-level inlining,
-                // since codegen does not have a way to determine the whether
-                // this argument value needs to be re-rooted
-            }
-        }
+        assert(x.V->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
+        return {x.V};
     }
-#endif
-    if (jl_is_concrete_immutable(x.typ) && !jl_is_pointerfree(x.typ)) {
-        Type *T = julia_type_to_llvm(ctx, x.typ);
-        return emit_unbox(ctx, T, x, x.typ);
+    else if (jl_is_concrete_immutable(x.typ) && !jl_is_pointerfree(x.typ)) {
+        jl_value_t *jltype = x.typ;
+        Type *T = julia_type_to_llvm(ctx, jltype);
+        Value *agg = emit_unbox(ctx, T, x, jltype);
+        SmallVector<unsigned,4> perm_offsets;
+        if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout)
+            find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
+        return ExtractTrackedValues(agg, agg->getType(), false, ctx.builder, perm_offsets);
     }
     // nothing here to root, move along
-    return nullptr;
+    return {};
 }
 
 // --- emitting pointers directly into code ---
@@ -589,17 +621,6 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 }
 
 // --- mapping between julia and llvm types ---
-
-static bool type_is_permalloc(jl_value_t *typ)
-{
-    // Singleton should almost always be handled by the later optimization passes.
-    // Also do it here since it is cheap and save some effort in LLVM passes.
-    if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ))
-        return true;
-    return typ == (jl_value_t*)jl_symbol_type ||
-        typ == (jl_value_t*)jl_int8_type ||
-        typ == (jl_value_t*)jl_uint8_type;
-}
 
 static unsigned convert_struct_offset(const llvm::DataLayout &DL, Type *lty, unsigned byte_offset)
 {
@@ -1905,7 +1926,7 @@ Value *extract_first_ptr(jl_codectx_t &ctx, Value *V)
     if (path.empty())
         return NULL;
     std::reverse(std::begin(path), std::end(path));
-    return ctx.builder.CreateExtractValue(V, path);
+    return CreateSimplifiedExtractValue(ctx, V, path);
 }
 
 
@@ -3588,29 +3609,6 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*
         decay_ptrs.push_back(maybe_decay_untracked(ctx, emit_bitcast(ctx, ptr, ctx.types().T_prjlvalue)));
     }
     ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
-}
-
-static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res, unsigned offset)
-{
-    // This is a inlined field at `offset`.
-    if (!typ->layout || typ->layout->npointers == 0)
-        return;
-    jl_svec_t *types = jl_get_fieldtypes(typ);
-    size_t nf = jl_svec_len(types);
-    for (size_t i = 0; i < nf; i++) {
-        jl_value_t *_fld = jl_svecref(types, i);
-        if (!jl_is_datatype(_fld))
-            continue;
-        jl_datatype_t *fld = (jl_datatype_t*)_fld;
-        if (jl_field_isptr(typ, i)) {
-            // pointer field, check if field is perm-alloc
-            if (type_is_permalloc((jl_value_t*)fld))
-                res.push_back(offset + jl_field_offset(typ, i));
-            continue;
-        }
-        // inline field
-        find_perm_offsets(fld, res, offset + jl_field_offset(typ, i));
-    }
 }
 
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg,

@@ -23,6 +23,9 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
+  This `main` function should be declared using `@main` to indicate that it is an entry point.
+
 Multi-threading changes
 -----------------------
 
@@ -33,6 +36,7 @@ New library functions
 ---------------------
 
 * `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
+* The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
 
 New library features
 --------------------
