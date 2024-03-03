@@ -510,7 +510,7 @@ end
     # accept these empty matrices. now, the `geqrt!` call should be forwarded only
     # if both matrix dimensions are positive.
 
-    for dimA in (1, 2, 4)
+    for dimA in (0, 1, 2, 4)
         for F in (Float32, Float64, ComplexF32, ComplexF64)
             # this should have worked before, Q is square, and R is 0 × 0:
             A_zero_cols = rand(F, dimA, 0)
