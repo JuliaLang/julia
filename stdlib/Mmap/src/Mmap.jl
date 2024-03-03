@@ -398,6 +398,10 @@ will be visible to other processes mapping the same file.
 
 The `exec` keyword argument specifies whether the underlying mmap data will be executable.
 
+!!! note
+    On MacOS `exec=true` implies `shared=false`, because each thread has its own access permissions to `mmap` regions.
+
+
 For example, the following code
 
 ```julia
