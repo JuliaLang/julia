@@ -206,7 +206,7 @@ function mmap(io::Anonymous,
               type::Type{Array{T,N}}=Vector{UInt8},
               dims::NTuple{N,Integer}=(div(filesize(io)-position(io),sizeof(T)),),
               offset::Integer=position(io); grow::Bool=true, shared::Bool=true,
-              exec::Bool=true) where {T,N}
+              exec::Bool=false) where {T,N}
     _mmap(io, type, dims, offset; grow, shared, exec)
 end
 
