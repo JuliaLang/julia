@@ -752,23 +752,23 @@ for op in (:+, :-)
     end
 end
 
-function kron(A::UpperTriangular{T}, B::UpperTriangular{S}) where {T,S}
+function kron(A::UpperTriangular{T}, B::UpperTriangular{S}) where {T<:Number,S<:Number}
     C = UpperTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
 
-function kron(A::LowerTriangular{T}, B::LowerTriangular{S}) where {T,S}
+function kron(A::LowerTriangular{T}, B::LowerTriangular{S}) where {T<:Number,S<:Number}
     C = LowerTriangular(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)))
     return kron!(C, A, B)
 end
 
-function kron!(C::UpperTriangular, A::UpperTriangular, B::UpperTriangular)
+function kron!(C::UpperTriangular{<:Number}, A::UpperTriangular{<:Number}, B::UpperTriangular{<:Number})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _triukron!(C.data, A.data, B.data)
     return C
 end
 
-function kron!(C::LowerTriangular, A::LowerTriangular, B::LowerTriangular)
+function kron!(C::LowerTriangular{<:Number}, A::LowerTriangular{<:Number}, B::LowerTriangular{<:Number})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     _trilkron!(C.data, A.data, B.data)
     return C

@@ -527,7 +527,7 @@ function kron(A::Hermitian{T}, B::Hermitian{S}) where {T<:Union{Real,Complex},S<
     return kron!(C, A, B)
 end
 
-function kron(A::Symmetric{T}, B::Symmetric{S}) where {T,S}
+function kron(A::Symmetric{T}, B::Symmetric{S}) where {T<:Number,S<:Number}
     resultuplo = A.uplo == 'U' || B.uplo == 'U' ? :U : :L
     C = Symmetric(Matrix{promote_op(*, T, S)}(undef, _kronsize(A, B)), resultuplo)
     return kron!(C, A, B)
@@ -542,7 +542,7 @@ function kron!(C::Hermitian{<:Union{Real,Complex}}, A::Hermitian{<:Union{Real,Co
     return C
 end
 
-function kron!(C::Symmetric, A::Symmetric, B::Symmetric)
+function kron!(C::Symmetric{<:Number}, A::Symmetric{<:Number}, B::Symmetric{<:Number})
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
     if ((A.uplo == 'U' || B.uplo == 'U') && C.uplo != 'U') || ((A.uplo == 'L' && B.uplo == 'L') && C.uplo != 'L')
         throw(ArgumentError("C.uplo must match A.uplo and B.uplo, got $(C.uplo) $(A.uplo) $(B.uplo)"))
