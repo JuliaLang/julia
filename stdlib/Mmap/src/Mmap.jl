@@ -77,7 +77,13 @@ function settings(s::RawFD, shared::Bool, exec::Bool=false)
             throw(ArgumentError("mmap requires read permissions on the file (open with \"r+\" mode to override)"))
         end
     end
-    exec && (prot |= PROT_EXEC)
+    if exec
+       prot |= PROT_EXEC
+       @static if Sys.isapple()
+          MAP_JIT = Cint(0x0800)
+          flags |= MAP_JIT
+       end
+    end
     return prot, flags, (prot & PROT_WRITE) > 0
 end
 
