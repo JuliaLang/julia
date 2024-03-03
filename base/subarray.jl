@@ -412,19 +412,19 @@ end
 
 function _unsetindex!(V::FastSubArray, i::Int)
     @inline
-    @boundscheck checkbounds(Bool, V, i)
+    @boundscheck checkbounds(V, i)
     @inbounds _unsetindex!(V.parent, _reindexlinear(V, i))
     return V
 end
 function _unsetindex!(V::FastSubArray{<:Any,1}, i::Int)
     @inline
-    @boundscheck checkbounds(Bool, V, i)
+    @boundscheck checkbounds(V, i)
     @inbounds _unsetindex!(V.parent, _reindexlinear(V, i))
     return V
 end
 function _unsetindex!(V::SubArray{T,N}, i::Vararg{Int,N}) where {T,N}
     @inline
-    @boundscheck checkbounds(Bool, V, i...)
+    @boundscheck checkbounds(V, i...)
     @inbounds _unsetindex!(V.parent, reindex(V.indices, i)...)
     return V
 end

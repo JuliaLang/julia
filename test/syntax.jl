@@ -3637,3 +3637,16 @@ end
     @test array == [7]
     @test execs == 4
 end
+
+# Allow GlobalRefs in macro definition
+module MyMacroModule
+    macro mymacro end
+end
+macro MyMacroModule.mymacro()
+    1
+end
+@eval macro $(GlobalRef(MyMacroModule, :mymacro))(x)
+    2
+end
+@test (@MyMacroModule.mymacro) == 1
+@test (@MyMacroModule.mymacro(a)) == 2
