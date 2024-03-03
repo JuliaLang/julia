@@ -448,14 +448,17 @@ function _accumulate_promote_op(op, v; init=nothing)
     # to find the widest return eltype.
     # NOTE: We are just passing this to promote_op for inference and should never be run.
     function f(op, v, init)
-        val, iter = Iterators.peel(v)
-        r = isnothing(init) ? reduce_first(op, val) : op(init, val)
-        for val in iter
+        val = first(something(iterate(v)))
+        r = isnothing(init) ? Base.reduce_first(op, val) : op(init, val)
+        # first compute `k`, the type of the cumsum with just `r`
+        for val in v
             r = op(r, val)
         end
         return r
     end
-    # May want to wrap this in a `promote_type(uniontypes( )...)` to avoid overly complicated
-    # Unions e.g. `cumsum([[true], [true], [false]])::Vector{Union{Vector{Bool}, Vector{Int}}}`
-    return promote_op(f, typeof(op), typeof(v), typeof(init))
+
+    T = Base.promote_op(f, typeof(op), typeof(v), typeof(init))
+
+    # Simplify any union types before returning
+    return Base.promote_union(T)
 end

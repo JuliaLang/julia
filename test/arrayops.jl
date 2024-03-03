@@ -2589,7 +2589,7 @@ end
     @test accumulate(+, 0x00:0xff)[end] === 0x80         # overflow
     @test_throws InexactError cumsum!(similar(0x00:0xff), 0x00:0xff) # overflow
 
-    @test cumsum([[true], [true], [false]])::Vector{Union{Vector{Bool}, Vector{Int}}} == [[1], [2], [2]]
+    @test cumsum([[true], [true], [false]])::Vector{Vector{Int}} == [[1], [2], [2]]
 end
 #issue #18336
 @test cumsum([-0.0, -0.0])[1] === cumsum([-0.0, -0.0])[2] === -0.0
@@ -2871,11 +2871,12 @@ end
         foo(x::ComplexF64, y::Int)::String = string(x, "+", y)
 
         v = collect(1:5)
-        @test Base._accumulate_promote_op(foo, v; init=true) === Union{Int, Float64, ComplexF64, String}
-        @test Base._accumulate_promote_op(foo, v) === Union{Int, Float64, ComplexF64, String}
-        @test Base._accumulate_promote_op(/, v; init=0) === Float64
-        @test Base._accumulate_promote_op(/, v) === Union{Int, Float64}
+        @test Base._accumulate_promote_op(foo, v; init=true) === Base._accumulate_promote_op(foo, v) == Any
+        @test Base._accumulate_promote_op(/, v) === Base._accumulate_promote_op(/, v; init=0) == Float64
         @test Base._accumulate_promote_op(+, v) === Base._accumulate_promote_op(+, v; init=0) === Int
+        @test Base._accumulate_promote_op(+, v; init=0.0) === Float64
+        @test Base._accumulate_promote_op(+, Union{Int, Missing}[v...]) === Union{Int, Missing}
+        @test Base._accumulate_promote_op(+, Union{Int, Nothing}[v...]) === Union{Int, Nothing}
     end
 end
 
