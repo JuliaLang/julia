@@ -504,6 +504,17 @@ end
             @test Su - Sl == -(Sl - Su) == MSu - MSl
         end
     end
+    @testset "non-strided" begin
+        for ST in (Symmetric, Hermitian)
+            id = ST(I(2))
+            m = ST(Matrix{BigFloat}(undef,2,2))
+            m.data[1,1] = 1
+            m.data[1,2] = 2
+            m.data[2,2] = 3
+            A = Array(m)
+            @test m + id == A + id
+        end
+    end
 end
 
 # bug identified in PR #52318: dot products of quaternionic Hermitian matrices,
