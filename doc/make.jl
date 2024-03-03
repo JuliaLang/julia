@@ -365,6 +365,7 @@ else
         ansicolor = true,
         size_threshold = 800 * 2^10, # 800 KiB
         size_threshold_warn = 200 * 2^10, # the manual has quite a few large pages, so we warn at 200+ KiB only
+        inventory_version = VERSION,
     )
 end
 
