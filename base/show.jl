@@ -2986,6 +2986,13 @@ end
 
 # Types
 function dump(io::IOContext, x::DataType, n::Int, indent)
+    # For some reason, tuples are structs
+    is_struct = isstructtype(x) && !(x <: Tuple)
+    is_mut = is_struct && ismutabletype(x)
+    is_mut && print(io, "mutable ")
+    is_struct && print(io, "struct ")
+    isprimitivetype(x) && print(io, "primitive type ")
+    isabstracttype(x) && print(io, "abstract type ")
     print(io, x)
     if x !== Any
         print(io, " <: ", supertype(x))
@@ -3007,7 +3014,9 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
         fieldtypes = datatype_fieldtypes(x)
         for idx in 1:length(fields)
             println(io)
-            print(io, indent, "  ", fields[idx])
+            print(io, indent, "  ")
+            is_mut && isconst(x, idx) && print(io, "const ")
+            print(io, fields[idx])
             if isassigned(fieldtypes, idx)
                 print(io, "::")
                 print(tvar_io, fieldtypes[idx])

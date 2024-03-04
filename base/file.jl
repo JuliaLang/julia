@@ -1089,18 +1089,16 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
                 end
                 return
             end
-        content = tryf(readdir, root)
-        content === nothing && return
-        dirs = Vector{eltype(content)}()
-        files = Vector{eltype(content)}()
-        for name in content
-            path = joinpath(root, name)
-
+        entries = tryf(_readdirx, root)
+        entries === nothing && return
+        dirs = Vector{String}()
+        files = Vector{String}()
+        for entry in entries
             # If we're not following symlinks, then treat all symlinks as files
-            if (!follow_symlinks && something(tryf(islink, path), true)) || !something(tryf(isdir, path), false)
-                push!(files, name)
+            if (!follow_symlinks && something(tryf(islink, entry), true)) || !something(tryf(isdir, entry), false)
+                push!(files, entry.name)
             else
-                push!(dirs, name)
+                push!(dirs, entry.name)
             end
         end
 
