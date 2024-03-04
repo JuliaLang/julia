@@ -353,6 +353,7 @@ function precompilepkgs(pkgs::Vector{String}=String[]; internal_call::Bool=false
     num_tasks = parse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks)))
     parallel_limiter = Base.Semaphore(num_tasks)
 
+    # asking for timing disables fancy mode, as timing is shown in non-fancy mode
     fancyprint = can_fancyprint(io) && !timing
 
     if _from_loading && !Sys.isinteractive()
@@ -755,15 +756,14 @@ function precompilepkgs(pkgs::Vector{String}=String[]; internal_call::Bool=false
                                 Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, false; flags)
                             end
                         end
-                        t_str = timing ? string(lpad(round(t * 1e3, digits = 1), 9), " ms") : ""
                         if ret isa Base.PrecompilableError
                             push!(precomperr_deps, pkg)
                             !fancyprint && lock(print_lock) do
-                                println(io, t_str, color_string("  ? ", Base.warn_color()), name)
+                                println(io, _timing_string(t), color_string("  ? ", Base.warn_color()), name)
                             end
                         else
                             !fancyprint && lock(print_lock) do
-                                println(io, t_str, color_string("  ✓ ", loaded ? Base.warn_color() : :green), name)
+                                println(io, _timing_string(t), color_string("  ✓ ", loaded ? Base.warn_color() : :green), name)
                             end
                             was_recompiled[pkg] = true
                         end
@@ -775,7 +775,7 @@ function precompilepkgs(pkgs::Vector{String}=String[]; internal_call::Bool=false
                             failed_deps[pkg] = (strict || is_direct_dep) ? string(sprint(showerror, err), "\n", strip(get(std_outputs, pkg, ""))) : ""
                             delete!(std_outputs, pkg) # so it's not shown as warnings, given error report
                             !fancyprint && lock(print_lock) do
-                                println(io, timing ? " "^9 : "", color_string("  ✗ ", Base.error_color()), name)
+                                println(io, " "^9, color_string("  ✗ ", Base.error_color()), name)
                             end
                         else
                             rethrow()
@@ -898,6 +898,8 @@ function precompilepkgs(pkgs::Vector{String}=String[]; internal_call::Bool=false
     end
     nothing
 end
+
+_timing_string(t) = string(lpad(round(t * 1e3, digits = 1), 9), " ms")
 
 function _color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
     if hascolor
