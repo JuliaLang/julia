@@ -543,7 +543,7 @@ if isdefined(Core, :Compiler) && is_primary_base_module
     Docs.loaddocs(Core.Compiler.CoreDocs.DOCS)
 end
 
-include("precompile.jl")
+include("precompilation.jl")
 
 # finally, now make `include` point to the full version
 for m in methods(include)

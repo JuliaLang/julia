@@ -1,4 +1,4 @@
-module PrecompilePkgs
+module Precompilation
 
 using Base: PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_names,
             project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive

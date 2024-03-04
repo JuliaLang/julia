@@ -2314,12 +2314,12 @@ function _require(pkg::PkgId, env=nothing)
         if JLOptions().use_compiled_modules == 1
             if !generating_output(#=incremental=#false)
                 project = active_project()
-                if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(PrecompilePkgs) && project !== nothing &&
+                if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation) && project !== nothing &&
                         isfile(project) && project_file_manifest_path(project) !== nothing
                     parallel_precompile_attempted = true
                     unlock(require_lock)
                     try
-                        PrecompilePkgs.precompilepkgs([pkg.name]; _from_loading=true)
+                        Precompilation.precompilepkgs([pkg.name]; _from_loading=true)
                     finally
                         lock(require_lock)
                     end
