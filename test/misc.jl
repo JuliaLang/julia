@@ -1363,9 +1363,10 @@ end
 @test isdefined(KwdefWithEsc_TestModule, :Struct)
 
 @testset "exports of modules" begin
-    for (_, mod) in Base.loaded_modules
+    @testset "$mod" for (_, mod) in Base.loaded_modules
         mod === Main && continue # Main exports everything
-        for v in names(mod)
+        @testset "$v" for v in names(mod)
+            isdefined(mod, v) || @error "missing $v in $mod"
             @test isdefined(mod, v)
         end
     end

@@ -44,7 +44,16 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                 if C_NULL == owner
                     # No global of this name exists in this module.
                     # This is the common case, so do not print that information.
-                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                    # It could be the binding was exported by two modules, which we can detect
+                    # by the `usingfailed` flag in the binding:
+                    if isdefined(bnd, :flags) && Bool(bnd.flags >> 4 & 1) # magic location of the `usingfailed` flag
+                        print(io, "\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
+                    else
+                        print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                    end
                     owner = bnd
                 else
                     owner = unsafe_pointer_to_objref(owner)::Core.Binding
@@ -130,12 +139,10 @@ import ..LineEdit:
     history_first,
     history_last,
     history_search,
-    accept_result,
     setmodifiers!,
     terminal,
     MIState,
     PromptState,
-    TextInterface,
     mode_idx
 
 include("REPLCompletions.jl")
@@ -1188,25 +1195,23 @@ function setup_interface(
         ']' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-                if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
-                    Pkg = Base.require(pkgid)
-                    REPLExt = Base.get_extension(Pkg, :REPLExt)
-                    # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
-                    pkg_mode = nothing
+                REPLExt = Base.require_stdlib(pkgid, "REPLExt")
+                pkg_mode = nothing
+                if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
                     for mode in repl.interface.modes
                         if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
                             pkg_mode = mode
                             break
                         end
                     end
-                    # TODO: Cache the `pkg_mode`?
-                    if pkg_mode !== nothing
-                        buf = copy(LineEdit.buffer(s))
-                        transition(s, pkg_mode) do
-                            LineEdit.state(s, pkg_mode).input_buffer = buf
-                        end
-                        return
+                end
+                # TODO: Cache the `pkg_mode`?
+                if pkg_mode !== nothing
+                    buf = copy(LineEdit.buffer(s))
+                    transition(s, pkg_mode) do
+                        LineEdit.state(s, pkg_mode).input_buffer = buf
                     end
+                    return
                 end
             end
             edit_insert(s, ']')

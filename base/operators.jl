@@ -1397,7 +1397,7 @@ or `k in keys(dict)`. For the collections mentioned above,
 the result is always a `Bool`.
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
-`item` and `collection` are broadcasted over, which is often not what is intended.
+`items` and `collection` are broadcasted over, which is often not what is intended.
 For example, if both arguments are vectors (and the dimensions match), the result is
 a vector indicating whether each value in collection `items` is `in` the value at the
 corresponding position in `collection`. To get a vector indicating whether each value
@@ -1451,7 +1451,7 @@ in
 
 Negation of `∈` and `∋`, i.e. checks that `item` is not in `collection`.
 
-When broadcasting with `items .∉ collection`, both `item` and `collection` are
+When broadcasting with `items .∉ collection`, both `items` and `collection` are
 broadcasted over, which is often not what is intended. For example, if both arguments
 are vectors (and the dimensions match), the result is a vector indicating whether
 each value in collection `items` is not in the value at the corresponding position

@@ -1062,6 +1062,8 @@ end
             for i in eachindex(A)
                 @test !isassigned(A, i)
             end
+            inds = eachindex(A)
+            @test_throws BoundsError Base._unsetindex!(A, last(inds) + oneunit(eltype(inds)))
         end
         @testset "dest IndexLinear, src IndexLinear" begin
             for p in (fill(BigInt(2)), BigInt[1, 2], BigInt[1 2; 3 4])

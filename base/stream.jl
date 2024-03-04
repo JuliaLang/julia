@@ -304,7 +304,7 @@ function init_stdio(handle::Ptr{Cvoid})
     elseif t == UV_TTY
         io = TTY(handle, StatusOpen)
     elseif t == UV_TCP
-        Sockets = require(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
+        Sockets = require_stdlib(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
         io = Sockets.TCPSocket(handle, StatusOpen)
     elseif t == UV_NAMED_PIPE
         io = PipeEndpoint(handle, StatusOpen)
@@ -341,7 +341,7 @@ function open(h::OS_HANDLE)
     elseif t == UV_TTY
         io = TTY(h)
     elseif t == UV_TCP
-        Sockets = require(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
+        Sockets = require_stdlib(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
         io = Sockets.TCPSocket(h)
     elseif t == UV_NAMED_PIPE
         io = PipeEndpoint(h)
@@ -619,6 +619,7 @@ function notify_filled(buffer::IOBuffer, nread::Int)
         buffer.size += nread
     else
         buffer.ptr += nread
+        buffer.size = max(buffer.size, buffer.ptr - 1)
     end
     nothing
 end

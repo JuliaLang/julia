@@ -3373,21 +3373,18 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, jl_cgval_t arg1, jl_cgval_t a
                 value_to_pointer(ctx, arg2).V;
             varg1 = emit_pointer_from_objref(ctx, varg1);
             varg2 = emit_pointer_from_objref(ctx, varg2);
-            Value *gc_uses[2];
-            int nroots = 0;
+            SmallVector<Value*, 0> gc_uses;
             // these roots may seem a bit overkill, but we want to make sure
             // that a!=b implies (a,)!=(b,) even if a and b are unused and
             // therefore could be freed and then the memory for a reused for b
-            if ((gc_uses[nroots] = get_gc_root_for(ctx, arg1)))
-                nroots++;
-            if ((gc_uses[nroots] = get_gc_root_for(ctx, arg2)))
-                nroots++;
-            OperandBundleDef OpBundle("jl_roots", ArrayRef<Value*>(gc_uses, nroots));
+            gc_uses.append(get_gc_roots_for(ctx, arg1));
+            gc_uses.append(get_gc_roots_for(ctx, arg2));
+            OperandBundleDef OpBundle("jl_roots", gc_uses);
             auto answer = ctx.builder.CreateCall(prepare_call(memcmp_func), {
                         ctx.builder.CreateBitCast(varg1, getInt8PtrTy(ctx.builder.getContext())),
                         ctx.builder.CreateBitCast(varg2, getInt8PtrTy(ctx.builder.getContext())),
                         ConstantInt::get(ctx.types().T_size, sz) },
-                    ArrayRef<OperandBundleDef>(&OpBundle, nroots ? 1 : 0));
+                    ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
 
             if (arg1.tbaa || arg2.tbaa) {
                 jl_aliasinfo_t ai;
@@ -5058,7 +5055,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                         }
                     }
                     if (need_to_emit) {
-                        raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
+                        raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
                         protoname = StringRef(name);
                     }
                     jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
@@ -6025,7 +6022,7 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
 
     if (it == ctx.emission_context.compiled_functions.end()) {
         ++EmittedOpaqueClosureFunctions;
-        jl_code_info_t *ir = jl_uncompress_ir(closure_method, (jl_value_t*)inferred);
+        jl_code_info_t *ir = jl_uncompress_ir(closure_method, ci, (jl_value_t*)inferred);
         JL_GC_PUSH1(&ir);
         // TODO: Emit this inline and outline it late using LLVM's coroutine support.
         orc::ThreadSafeModule closure_m = jl_create_ts_module(
@@ -6442,9 +6439,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         SmallVector<Value*, 0> vals;
         for (size_t i = 0; i < nargs; ++i) {
-            Value *gc_root = get_gc_root_for(ctx, argv[i]);
-            if (gc_root)
-                vals.push_back(gc_root);
+            vals.append(get_gc_roots_for(ctx, argv[i]));
         }
         Value *token = vals.empty()
             ? (Value*)ConstantTokenNone::get(ctx.builder.getContext())
@@ -6533,7 +6528,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     ++EmittedToJLInvokes;
     jl_codectx_t ctx(M->getContext(), params, codeinst);
     std::string name;
-    raw_string_ostream(name) << "tojlinvoke" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
+    raw_string_ostream(name) << "tojlinvoke" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     Function *f = Function::Create(ctx.types().T_jlfunc,
             GlobalVariable::InternalLinkage,
             name, M);
@@ -6759,7 +6754,7 @@ static Function* gen_cfun_wrapper(
     }
 
     std::string funcName;
-    raw_string_ostream(funcName) << "jlcapi_" << name << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
+    raw_string_ostream(funcName) << "jlcapi_" << name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
 
     Module *M = into; // Safe because ctx lock is held by params
     AttributeList attributes = sig.attributes;
@@ -7883,7 +7878,7 @@ static std::string get_function_name(bool specsig, bool needsparams, const char 
         if (unadorned_name[0] == '@')
             unadorned_name++;
     }
-    funcName << unadorned_name << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
+    funcName << unadorned_name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     return funcName.str();
 }
 
@@ -8113,7 +8108,7 @@ static jl_llvm_functions_t
         }();
 
         std::string wrapName;
-        raw_string_ostream(wrapName) << "jfptr_" << ctx.name << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
+        raw_string_ostream(wrapName) << "jfptr_" << ctx.name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
         declarations.functionObject = wrapName;
         (void)gen_invoke_wrapper(lam, jlrettype, returninfo, retarg, declarations.functionObject, M, ctx.emission_context);
         // TODO: add attributes: maybe_mark_argument_dereferenceable(Arg, argType)
@@ -9592,7 +9587,7 @@ jl_llvm_functions_t jl_emit_codeinst(
             return jl_emit_oc_wrapper(m, params, codeinst->def, codeinst->rettype);
         }
         if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def))
-            src = jl_uncompress_ir(def, (jl_value_t*)src);
+            src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
         if (!src || !jl_is_code_info(src)) {
             JL_GC_POP();
             m = orc::ThreadSafeModule();

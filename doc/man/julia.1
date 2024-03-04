@@ -107,6 +107,11 @@ Enable or disable usage of native code caching in the form of pkgimages
 Evaluate <expr>
 
 .TP
+-m, --module <Package> [args]
+Run entry point of `Package` (`@main` function) with `args'.
+
+
+.TP
 -E, --print <expr>
 Evaluate <expr> and display the result
 
@@ -228,9 +233,10 @@ fallbacks to the latest compatible BugReporting.jl if not. For more information,
 --bug-report=help.
 
 .TP
---heap-size-hint=<size>
-Forces garbage collection if memory usage is higher than that value. The value can be
-specified in units of K, M, G, T, or % of physical memory.
+--heap-size-hint=<value>
+Forces garbage collection if memory usage is higher than the given value.
+The value may be specified as a number of bytes, optionally in units of
+KB, MB, GB, or TB, or as a percentage of physical memory with %.
 
 .TP
 --compile={yes*|no|all|min}

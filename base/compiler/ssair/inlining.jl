@@ -838,7 +838,7 @@ function compileable_specialization(match::MethodMatch, effects::Effects,
 end
 
 struct InferredResult
-    src::Any
+    src::Any # CodeInfo or IRCode
     effects::Effects
     InferredResult(@nospecialize(src), effects::Effects) = new(src, effects)
 end
@@ -849,11 +849,9 @@ end
             # in this case function can be inlined to a constant
             return ConstantCase(quoted(code.rettype_const))
         end
-        src = @atomic :monotonic code.inferred
-        effects = decode_effects(code.ipo_purity_bits)
-        return InferredResult(src, effects)
+        return code
     end
-    return InferredResult(nothing, Effects())
+    return nothing
 end
 @inline function get_local_result(inf_result::InferenceResult)
     effects = inf_result.ipo_effects
@@ -887,7 +885,15 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
         add_inlining_backedge!(et, mi)
         return inferred_result
     end
-    (; src, effects) = inferred_result
+    if inferred_result isa InferredResult
+        (; src, effects) = inferred_result
+    elseif inferred_result isa CodeInstance
+        src = @atomic :monotonic inferred_result.inferred
+        effects = decode_effects(inferred_result.ipo_purity_bits)
+    else
+        src = nothing
+        effects = Effects()
+    end
 
     # the duplicated check might have been done already within `analyze_method!`, but still
     # we need it here too since we may come here directly using a constant-prop' result
@@ -896,12 +902,13 @@ function resolve_todo(mi::MethodInstance, result::Union{Nothing,InferenceResult,
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     end
 
-    src = inlining_policy(state.interp, src, info, flag)
-    src === nothing && return compileable_specialization(mi, effects, et, info;
-        compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
+    src_inlining_policy(state.interp, src, info, flag) ||
+        return compileable_specialization(mi, effects, et, info;
+            compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
 
     add_inlining_backedge!(et, mi)
-    ir = retrieve_ir_for_inlining(mi, src, preserve_local_sources)
+    ir = inferred_result isa CodeInstance  ? retrieve_ir_for_inlining(inferred_result, src) :
+                                             retrieve_ir_for_inlining(mi, src, preserve_local_sources)
     return InliningTodo(mi, ir, effects)
 end
 
@@ -919,14 +926,22 @@ function resolve_todo(mi::MethodInstance, @nospecialize(info::CallInfo), flag::U
         add_inlining_backedge!(et, mi)
         return cached_result
     end
-    (; src, effects) = cached_result
+    if cached_result isa InferredResult
+        (; src, effects) = cached_result
+    elseif cached_result isa CodeInstance
+        src = @atomic :monotonic cached_result.inferred
+        effects = decode_effects(cached_result.ipo_purity_bits)
+    else
+        src = nothing
+        effects = Effects()
+    end
 
-    src = inlining_policy(state.interp, src, info, flag)
-
-    src === nothing && return nothing
-
+    preserve_local_sources = true
+    src_inlining_policy(state.interp, src, info, flag) || return nothing
+    ir = cached_result isa CodeInstance  ? retrieve_ir_for_inlining(cached_result, src) :
+                                           retrieve_ir_for_inlining(mi, src, preserve_local_sources)
     add_inlining_backedge!(et, mi)
-    return InliningTodo(mi, retrieve_ir_for_inlining(mi, src), effects)
+    return InliningTodo(mi, ir, effects)
 end
 
 function validate_sparams(sparams::SimpleVector)
@@ -979,17 +994,17 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     return resolve_todo(mi, volatile_inf_result, info, flag, state; invokesig)
 end
 
-function retrieve_ir_for_inlining(mi::MethodInstance, src::String, ::Bool=true)
-    src = _uncompressed_ir(mi.def, src)
-    return inflate_ir!(src, mi)
+function retrieve_ir_for_inlining(cached_result::CodeInstance, src::MaybeCompressed)
+    src = _uncompressed_ir(cached_result, src)::CodeInfo
+    return inflate_ir!(src, cached_result.def)
 end
-function retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo, preserve_local_sources::Bool=true)
+function retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo, preserve_local_sources::Bool)
     if preserve_local_sources
         src = copy(src)
     end
     return inflate_ir!(src, mi)
 end
-function retrieve_ir_for_inlining(::MethodInstance, ir::IRCode, preserve_local_sources::Bool=true)
+function retrieve_ir_for_inlining(mi::MethodInstance, ir::IRCode, preserve_local_sources::Bool)
     if preserve_local_sources
         ir = copy(ir)
     end
@@ -1494,13 +1509,13 @@ function semiconcrete_result_item(result::SemiConcreteResult,
         return compileable_specialization(mi, result.effects, et, info;
             compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
     end
-    ir = inlining_policy(state.interp, result.ir, info, flag)
-    ir === nothing && return compileable_specialization(mi, result.effects, et, info;
-        compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
+    src_inlining_policy(state.interp, result.ir, info, flag) ||
+        return compileable_specialization(mi, result.effects, et, info;
+            compilesig_invokes=OptimizationParams(state.interp).compilesig_invokes)
 
     add_inlining_backedge!(et, mi)
     preserve_local_sources = OptimizationParams(state.interp).preserve_local_sources
-    ir = retrieve_ir_for_inlining(mi, ir, preserve_local_sources)
+    ir = retrieve_ir_for_inlining(mi, result.ir, preserve_local_sources)
     return InliningTodo(mi, ir, result.effects)
 end
 

@@ -1382,3 +1382,8 @@ let; Base.Experimental.@force_compile; func52843(); end
 # pointerref nothrow for invalid pointer
 @test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{Vector{Int64}}}, Int, Int])
 @test !Core.Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{T}} where T, Int, Int])
+
+# post-opt :consistent-cy analysis correctness
+# https://github.com/JuliaLang/julia/issues/53508
+@test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (UnitRange{Int},Int)))
+@test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (Base.OneTo{Int},Int)))

@@ -1492,12 +1492,11 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
         end
         src = @atomic :monotonic code.inferred
     else
-        src = nothing
+        return false
     end
 
-    src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL)
-    src === nothing && return false
-    src = retrieve_ir_for_inlining(mi, src)
+    src_inlining_policy(inlining.interp, src, info, IR_FLAG_NULL) || return false
+    src = retrieve_ir_for_inlining(code, src)
 
     # For now: Require finalizer to only have one basic block
     length(src.cfg.blocks) == 1 || return false
