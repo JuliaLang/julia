@@ -2435,6 +2435,7 @@ static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
     jl_svec_t * bindings = jl_atomic_load_relaxed(&m->bindings);
     size_t l = jl_svec_len(bindings), i;
     arraylist_t bindings_list;
+    arraylist_new(&bindings_list, 0);
     if (l == 0)
         return;
     for (i = 0; i < l; i++) {
@@ -2448,16 +2449,30 @@ static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
             arraylist_push(&bindings_list, ref);
         }
     }
-    _Atomic(jl_genericmemory_t*)bindingkeyset;
-    jl_atomic_store_relaxed(&bindingkeyset,(jl_genericmemory_t*)jl_an_empty_memory_any);
+    jl_genericmemory_t* bindingkeyset = jl_atomic_load_relaxed(&m->bindingkeyset);
+    _Atomic(jl_genericmemory_t*)bindingkeyset2;
+    jl_atomic_store_relaxed(&bindingkeyset2,(jl_genericmemory_t*)jl_an_empty_memory_any);
     jl_svec_t *bindings2 = jl_alloc_svec_uninit(bindings_list.len);
     for (i = 0; i < bindings_list.len; i++) {
         jl_binding_t *ref = (jl_binding_t*)bindings_list.items[i];
         jl_svecset(bindings2, i, ref);
-        jl_smallintset_insert(&bindingkeyset, (jl_value_t*)m, bindingkey_hash, i, (jl_value_t*)bindings2);
+        jl_smallintset_insert(&bindingkeyset2, (jl_value_t*)m, bindingkey_hash, i, (jl_value_t*)bindings2);
     }
+    void *idx = ptrhash_get(&serialization_order, bindings);
+    assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
+    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == bindings);
+    ptrhash_put(&serialization_order, bindings2, idx);
+    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = bindings2;
+
+    idx = ptrhash_get(&serialization_order, bindingkeyset);
+    assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
+    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == bindingkeyset);
+    ptrhash_put(&serialization_order, jl_atomic_load_relaxed(&bindingkeyset2), idx);
+    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = jl_atomic_load_relaxed(&bindingkeyset2);
     jl_atomic_store_relaxed(&m->bindings, bindings2);
-    jl_atomic_store_relaxed(&m->bindingkeyset, bindingkeyset);
+    jl_atomic_store_relaxed(&m->bindingkeyset, jl_atomic_load_relaxed(&bindingkeyset2));
+    jl_gc_wb(m, bindings2);
+    jl_gc_wb(m, jl_atomic_load_relaxed(&bindingkeyset2));
 }
 
 static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig)
