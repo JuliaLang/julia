@@ -26,6 +26,7 @@ static jl_gc_callback_list_t *gc_cblist_pre_gc;
 static jl_gc_callback_list_t *gc_cblist_post_gc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_alloc;
 static jl_gc_callback_list_t *gc_cblist_notify_external_free;
+static jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
 
 #define gc_invoke_callbacks(ty, list, args) \
     do { \
@@ -110,6 +111,14 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_external_free(jl_gc_cb_notify_external_fre
         jl_gc_register_callback(&gc_cblist_notify_external_free, (jl_gc_cb_func_t)cb);
     else
         jl_gc_deregister_callback(&gc_cblist_notify_external_free, (jl_gc_cb_func_t)cb);
+}
+
+JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t cb, int enable)
+{
+    if (enable)
+        jl_gc_register_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
+    else
+        jl_gc_deregister_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
 }
 
 // Save/restore local mark stack to/from thread-local storage.
@@ -845,6 +854,7 @@ static int mark_reset_age = 0;
 static int64_t scanned_bytes; // young bytes scanned while marking
 static int64_t perm_scanned_bytes; // old bytes scanned while marking
 int prev_sweep_full = 1;
+int under_pressure = 0;
 
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1
 
@@ -3634,6 +3644,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             // We can't stay under our goal so let's go back to
             // the minimum interval and hope things get better
             gc_num.interval = default_collect_interval;
+            under_pressure = 1;
         }
     }
 
@@ -3735,6 +3746,9 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 
     gc_invoke_callbacks(jl_gc_cb_post_gc_t,
         gc_cblist_post_gc, (collection));
+    if (under_pressure) {
+        gc_invoke_callbacks(jl_gc_cb_notify_gc_pressure_t, gc_cblist_notify_gc_pressure, ());
+    }
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
