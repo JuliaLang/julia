@@ -371,19 +371,22 @@ waitall(tasks; failfast=false) = _wait_multiple(tasks; all=true, failfast=failfa
 
 function _wait_multiple(waiting_tasks; all=false, failfast=false)
     tasks = Task[]
-    done_mask = Bool[]
-    exception = false
-    nremaining::Int = 0
 
     for (i, t) in enumerate(waiting_tasks)
         t isa Task || error("Expected an iterator of `Task` object")
         push!(tasks, t)
+    end
+
+    exception = false
+    nremaining::Int = length(tasks)
+    done_mask = falses(nremaining)
+    for (i, t) in enumerate(tasks)
         if istaskdone(t)
-            push!(done_mask, true)
+            done_mask[i] = true
             exception |= istaskfailed(t)
+            nremaining -= 1
         else
-            push!(done_mask, false)
-            nremaining += 1
+            done_mask[i] = false
         end
     end
 
