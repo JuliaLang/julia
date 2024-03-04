@@ -975,22 +975,22 @@ correlation issue would have been to also apply a non-linear finalizer
 (MurmurHash3 is one of the best) to our dot product before using it to perturb
 the xoshiro256 state. There are two problems with that fix, however:
 
-    1. It requires accumulating the dot product somewhere. The old approach
-       accumulates dot products directly in the xoshiro registers; if we were to
-       accumulate and then finalize, the dot product has to be stored somewhere
-       in each task. We want our tasks to be as small as possible, so adding
-       another 64-bit field that we never change would be unfortunate.
+1. It requires accumulating the dot product somewhere. The old approach
+   accumulates dot products directly in the xoshiro registers; if we were to
+   accumulate and then finalize, the dot product has to be stored somewhere
+   in each task. We want our tasks to be as small as possible, so adding
+   another 64-bit field that we never change would be unfortunate.
 
-    2. We still need to apply the PCG finalizer to the internal LCG in order to
-       generate dot product weights. SplitMix uses a shared static array of
-       1024 pre-generated random weights; we could do the same, but that limits
-       the number of task splits to a max of 1024 before weights have to be
-       reused. We can't use the LCG directly because it's highly linear and we
-       need four variations of the internal RNG stream for the four xoshiro256
-       registers. That means we'd have to apply the PCG finalizer, add it to
-       our dot product accumulator field in the child task, then apply the
-       MurmurHash3 finalizer to that dot product and use the result to purturb
-       the main RNG state.
+2. We still need to apply the PCG finalizer to the internal LCG in order to
+   generate dot product weights. SplitMix uses a shared static array of
+   1024 pre-generated random weights; we could do the same, but that limits
+   the number of task splits to a max of 1024 before weights have to be
+   reused. We can't use the LCG directly because it's highly linear and we
+   need four variations of the internal RNG stream for the four xoshiro256
+   registers. That means we'd have to apply the PCG finalizer, add it to
+   our dot product accumulator field in the child task, then apply the
+   MurmurHash3 finalizer to that dot product and use the result to purturb
+   the main RNG state.
 
 We avoid both problems by recognizing that the mixing function can be much less
 simple while still allowing the essential collision resistance proof to go
