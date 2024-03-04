@@ -897,7 +897,12 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Concrete eval disabled for overlayed methods")
         end
         if !any_conditional(arginfo)
-            return :semi_concrete_eval
+            if may_optimize(interp)
+                return :semi_concrete_eval
+            else
+                # disable irinterp if optimization is disabled, since it requires optimized IR
+                add_remark!(interp, sv, "[constprop] Semi-concrete interpretation disabled for non-optimizing interpreter")
+            end
         end
     end
     return :none
