@@ -2390,6 +2390,19 @@ jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi JL_PROP
 
 jl_mutex_t precomp_statement_out_lock;
 
+static void print_codeloc(JL_STREAM* io, const char* func_name, const char* file_name,
+                          int line, int inlined)
+{
+    const char *inlined_str = inlined ? " [inlined]" : "";
+    if (line != -1) {
+        jl_printf(io, "%s at %s:%d%s", func_name, file_name, line, inlined_str);
+    }
+    else {
+        jl_printf(io, "%s at %s (unknown line)%s", func_name, file_name, inlined_str);
+    }
+}
+
+
 static void record_precompile_statement(jl_method_instance_t *mi)
 {
     static ios_t f_precompile;
@@ -2415,7 +2428,27 @@ static void record_precompile_statement(jl_method_instance_t *mi)
     if (!jl_has_free_typevars(mi->specTypes)) {
         jl_printf(s_precompile, "precompile(");
         jl_static_show(s_precompile, mi->specTypes);
-        jl_printf(s_precompile, ")\n");
+        jl_printf(s_precompile, ")");
+        if (jl_options.trace_compile_locations) {
+            jl_bt_element_t *bt = (jl_bt_element_t*)malloc((JL_BT_MAX_ENTRY_SIZE+1)*sizeof(jl_bt_element_t));
+            if (jl_get_current_julia_loc(bt)) {
+                char *func, *file;
+                int line, inlined;
+                if (jl_get_bt_entry_codeloc(bt, &func, &file, &line, &inlined)) {
+                    jl_printf(s_precompile, " # ");
+                    if (func == NULL) {
+                        jl_printf(s_precompile, "unknown function (ip: %p)", (void*)bt[0].uintptr);
+                    }
+                    else {
+                        print_codeloc(s_precompile, func, file, line, inlined);
+                    }
+                    free(func);
+                    free(file);
+                }
+            }
+            free(bt);
+        }
+        jl_printf(s_precompile, "\n");
         if (s_precompile != JL_STDERR)
             ios_flush(&f_precompile);
     }

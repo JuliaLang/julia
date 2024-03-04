@@ -1136,6 +1136,10 @@ STATIC_INLINE size_t jl_bt_entry_size(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
         1 : 2 + jl_bt_num_jlvals(bt_entry) + jl_bt_num_uintvals(bt_entry);
 }
 
+int jl_get_current_julia_loc(jl_bt_element_t *bt_entry);
+int jl_get_bt_entry_codeloc(jl_bt_element_t *bt_entry, char **func_name, char **file_name,
+                            int *line, int *inlined);
+
 //------------------------------
 // Stack walking and debug info lookup
 

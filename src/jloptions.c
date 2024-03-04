@@ -100,6 +100,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // strip-ir
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
+                        0, // trace-compile-locations
     };
     jl_options_initialized = 1;
 }
@@ -224,6 +225,8 @@ static const char opts_hidden[]  =
     "                          Generate an incremental output file (rather than complete)\n"
     " --trace-compile={stderr,name}\n"
     "                          Print precompile statements for methods compiled during execution or save to a path\n"
+    " --trace-compile-locations\n"
+    "                          Show source locations of callers triggering compilation\n"
     " --image-codegen          Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*} Copy the data section of package images into memory\n"
 ;
@@ -246,6 +249,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_inline,
            opt_polly,
            opt_trace_compile,
+           opt_trace_compile_locations,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -334,6 +338,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "strip-ir",        no_argument,       0, opt_strip_ir },
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
+        { "trace-compile-locations", no_argument, 0, opt_trace_compile_locations },
         { 0, 0, 0, 0 }
     };
 
@@ -773,6 +778,9 @@ restart_switch:
             jl_options.trace_compile = strdup(optarg);
             if (!jl_options.trace_compile)
                 jl_errorf("fatal error: failed to allocate memory: %s", strerror(errno));
+            break;
+        case opt_trace_compile_locations:
+            jl_options.trace_compile_locations = 1;
             break;
         case opt_math_mode:
             if (!strcmp(optarg,"ieee"))
