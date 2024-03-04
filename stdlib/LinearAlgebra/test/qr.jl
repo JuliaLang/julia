@@ -506,7 +506,7 @@ end
 
 @testset "issue #53451" begin
     # in the issue it was noted that QR factorizations of zero-column matrices
-    # were possible, but zero row-matrices errored, because LAPACK does not 
+    # were possible, but zero row-matrices errored, because LAPACK does not
     # accept these empty matrices. now, the `geqrt!` call should be forwarded only
     # if both matrix dimensions are positive.
 
