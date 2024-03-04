@@ -1103,7 +1103,7 @@ function _growend!(a::Vector, delta::Integer)
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
         @noinline (function()
-        if offset + len <= memlen || offset < 1
+        if offset + len - 1 > memlen || offset < 1
             throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
         end
 
