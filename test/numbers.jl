@@ -679,6 +679,9 @@ end
     @test copysign(big(-1), 0x02) == 1
     @test copysign(big(-1.0), 0x02) == 1.0
     @test copysign(-1//2, 0x01) == 1//2
+
+    # Verify overflow is checked with rational
+    @test_throws OverflowError copysign(typemin(Int)//1, 1)
 end
 
 @testset "isnan/isinf/isfinite" begin

@@ -6,8 +6,7 @@ import ..REPL
 using REPL: AbstractREPL, Options
 
 using ..Terminals
-import ..Terminals: raw!, width, height, cmove, getX,
-                       getY, clear_line, beep
+import ..Terminals: raw!, width, height, clear_line, beep
 
 import Base: ensureroom, show, AnyDict, position
 using Base: something

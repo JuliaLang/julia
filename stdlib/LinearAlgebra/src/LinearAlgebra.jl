@@ -16,7 +16,7 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     permutedims, permuterows!, power_by_squaring, promote_rule, real, sec, sech, setindex!,
     show, similar, sin, sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc,
     typed_hcat, vec, view, zero
-using Base: IndexLinear, promote_eltype, promote_op, promote_typeof, print_matrix,
+using Base: IndexLinear, promote_eltype, promote_op, print_matrix,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
 using Base.Broadcast: Broadcasted, broadcasted
@@ -691,7 +691,7 @@ function peakflops(n::Integer=4096; eltype::DataType=Float64, ntrials::Integer=3
     end
 
     if parallel
-        let Distributed = Base.require(Base.PkgId(
+        let Distributed = Base.require_stdlib(Base.PkgId(
                 Base.UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
             nworkers = @invokelatest Distributed.nworkers()
             results = @invokelatest Distributed.pmap(peakflops, fill(n, nworkers))

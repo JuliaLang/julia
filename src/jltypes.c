@@ -217,7 +217,7 @@ JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v)
 }
 
 // test whether a type has vars bound by the given environment
-static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
+int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
     while (1) {
         if (jl_is_typevar(v)) {
@@ -3142,7 +3142,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(19,
+                        jl_perm_symsvec(20,
                             "code",
                             "codelocs",
                             "ssavaluetypes",
@@ -3151,6 +3151,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "slotnames",
                             "slotflags",
                             "slottypes",
+                            "parent",
                             "method_for_inference_limit_heuristics",
                             "edges",
                             "min_world",
@@ -3162,7 +3163,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "constprop",
                             "purity",
                             "inlining_cost"),
-                        jl_svec(19,
+                        jl_svec(20,
                             jl_array_any_type,
                             jl_array_int32_type,
                             jl_any_type,
@@ -3170,6 +3171,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_array_symbol_type,
                             jl_array_uint8_type,
+                            jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
@@ -3183,7 +3185,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint16_type,
                             jl_uint16_type),
                         jl_emptysvec,
-                        0, 1, 19);
+                        0, 1, 20);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,

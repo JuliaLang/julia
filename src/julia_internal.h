@@ -97,23 +97,6 @@ JL_DLLIMPORT void *__tsan_get_current_fiber(void);
 JL_DLLIMPORT void __tsan_destroy_fiber(void *fiber);
 JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 #endif
-#ifdef __cplusplus
-}
-#endif
-
-// Remove when C11 is required for C code.
-#ifndef static_assert
-#  ifndef __cplusplus
-// C11 should already have `static_assert` from `<assert.h>` so there's no need
-// to check C version.
-#    ifdef __GNUC__
-#      define static_assert _Static_assert
-#    else
-#      define static_assert(...)
-#    endif
-#  endif
-// For C++, C++11 or MSVC is required. Both provide `static_assert`.
-#endif
 
 #ifndef alignof
 #  ifndef __cplusplus
@@ -182,10 +165,8 @@ extern jl_mutex_t jl_uv_mutex;
 extern _Atomic(int) jl_uv_n_waiters;
 void JL_UV_LOCK(void);
 #define JL_UV_UNLOCK() JL_UNLOCK(&jl_uv_mutex)
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+extern _Atomic(unsigned) _threadedregion;
+extern _Atomic(uint16_t) io_loop_tid;
 
 int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
 
@@ -750,6 +731,7 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry);
 jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype);
 jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED;
 int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
+int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v);
 int jl_has_fixed_layout(jl_datatype_t *t);
 JL_DLLEXPORT int jl_struct_try_layout(jl_datatype_t *dt);
@@ -1483,8 +1465,6 @@ struct jl_typemap_assoc {
     size_t const world;
     // outputs
     jl_svec_t *env; // subtype env (initialize to null to perform intersection without an environment)
-    size_t min_valid;
-    size_t max_valid;
 };
 
 jl_typemap_entry_t *jl_typemap_assoc_by_type(

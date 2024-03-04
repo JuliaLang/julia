@@ -325,7 +325,7 @@ static inline llvm::Value *emit_gc_unsafe_enter(llvm::IRBuilder<> &builder, llvm
 static inline llvm::Value *emit_gc_unsafe_leave(llvm::IRBuilder<> &builder, llvm::Type *T_size, llvm::Value *ptls, llvm::Value *state, bool final)
 {
     using namespace llvm;
-    Value *old_state = builder.getInt8(0);
+    Value *old_state = builder.getInt8(JL_GC_STATE_UNSAFE);
     return emit_gc_state_set(builder, T_size, ptls, state, old_state, final);
 }
 

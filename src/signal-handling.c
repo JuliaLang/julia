@@ -440,7 +440,7 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_NOTSAFEPOINT
         ct->ptls->in_finalizer = 0;
         ct->ptls->defer_signal = 0;
         // forcibly exit GC (if we were in it) or safe into unsafe, without the mandatory safepoint
-        jl_atomic_store_release(&ct->ptls->gc_state, 0);
+        jl_atomic_store_release(&ct->ptls->gc_state, JL_GC_STATE_UNSAFE);
         // allow continuing to use a Task that should have already died--unsafe necromancy!
         jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
     }
