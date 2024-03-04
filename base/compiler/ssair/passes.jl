@@ -2564,3 +2564,209 @@ function cfg_simplify!(ir::IRCode)
     compact.active_result_bb = length(bb_starts)
     return finish(compact)
 end
+
+"""
+    LoopInfo
+
+Describes a loop within the IR. Each loop should have one header, and at least one latch.
+
+```
+entry:
+  goto #exit if not %cond
+header:
+  goto #exit if not %cond
+latch:
+  goto #header
+exit:
+  return
+```
+"""
+struct LoopInfo
+    header::Int
+    latches::Vector{Int}
+    blocks::Vector{Int}
+end
+
+function construct_loopinfo(ir, domtree)
+    cfg = ir.cfg
+
+    # 1. find backedges
+    # Edge n -> h, where h dominates n
+    backedges = Pair{Int, Int}[]
+    for (n, bb) in enumerate(cfg.blocks)
+        for succ in bb.succs
+            if dominates(domtree, succ, n)
+                push!(backedges, n => succ)
+            end
+        end
+    end
+    isempty(backedges) && return nothing
+
+    loops = IdDict{Int, LoopInfo}()
+    for (n, h) in backedges
+        # merge loops that have the same header
+        if haskey(loops, h)
+            visited = BitSet(loops[h].blocks)
+            latches = loops[h].latches
+        else
+            visited = BitSet((h,))
+            latches = Int[]
+        end
+        push!(visited, n)
+        push!(latches, n)
+
+        # Create {n′ | n is reachable from n′ in CFG \ {h}} ∪ {h}
+        worklist = copy(cfg.blocks[n].preds)
+        while !isempty(worklist)
+            idx = pop!(worklist)
+            idx ∈ visited && continue
+
+            push!(visited, idx)
+            append!(worklist, cfg.blocks[idx].preds)
+        end
+
+        blocks = collect(visited)
+        # Assume sorted in CFG order
+        loops[h] = LoopInfo(h, latches, blocks)
+    end
+
+    # Find exiting and exit blocks 
+    # LLVM calculates this on the fly
+    # for loop in values(loops)
+    #     for bb in loop.blocks
+    #         for succ in cfg.blocks[bb].succs
+    #             succ ∈ loop.blocks && continue
+    #             push!(loop.exiting, bb)
+    #             push!(loop.exits, succ)
+    #         end
+    #     end
+    # end
+    
+    # TODO: Loop nesting/Control tree
+    return loops 
+end
+
+function invariant(ir, LI, invariant_stmts, stmt)
+    if stmt isa Argument || stmt isa GlobalRef || stmt isa QuoteNode || is_self_quoting(stmt)
+        return true
+    elseif stmt isa SSAValue
+        id = stmt.id
+        bb = block_for_inst(ir.cfg, id)
+        if bb ∉ LI.blocks
+            return true
+        end
+        return id ∈ invariant_stmts 
+    end
+    return false
+end
+
+function invariant_expr(ir, LI, invariant_stmts, stmt)
+    invar = true
+    for useref in userefs(stmt)
+        invar &= invariant(ir, LI, invariant_stmts, useref[])
+    end
+    return invar
+end
+
+function invariant_stmt(ir, loop, invariant_stmts, stmt)
+    if stmt isa Expr
+        return invariant_expr(ir, loop, invariant_stmts, stmt)
+    end
+    return invariant(ir, loop, invariant_stmts, stmt)
+end
+
+function find_invariant_stmts(ir, LI)
+    stmts = Int[]
+    for BB in LI.blocks
+        for stmt in ir.cfg.blocks[BB].stmts
+            # Okay to throw
+            if (ir.stmts[stmt][:flag] & IR_FLAG_EFFECT_FREE) != 0
+                # Check if stmt is invariant
+                if invariant_stmt(ir, LI, stmts, ir.stmts[stmt][:inst])
+                    push!(stmts, stmt)
+                end
+            end
+        end
+    end
+    return stmts
+end
+
+function insert_preheader!(ir, LI)
+    header = LI.header
+    preds = ir.cfg.blocks[header].preds
+    entering = filter(BB->BB ∉ LI.blocks, preds)
+    
+    # split the header
+    split = first(ir.cfg.blocks[header].stmts)
+    info = allocate_goto_sequence!(ir, [split => 0])
+
+    map!(BB->info.bbchangemap[BB], entering, entering)
+    
+    preheader = header
+    header = info.bbchangemap[header]
+    
+    on_phi_label(i) = i ∈ entering ? preheader : i
+
+    for stmt in ir.cfg.blocks[header].stmts
+        inst = ir.stmts[stmt][:inst]
+        if inst isa PhiNode
+            edges = inst.edges::Vector{Int32}
+            for i in 1:length(edges)
+                edges[i] = on_phi_label(edges[i])
+            end
+        else
+            continue
+        end
+    end
+
+    # TODO: should we mutate LI instead?
+    blocks = map(BB->info.bbchangemap[BB], LI.blocks)
+    latches = map(BB->info.bbchangemap[BB], LI.latches)
+
+    for latch in latches
+        cfg_delete_edge!(ir.cfg, latch, preheader)
+        cfg_insert_edge!(ir.cfg, latch, header)
+        stmt = ir.stmts[last(ir.cfg.blocks[4].stmts)]
+        stmt[:inst] = GotoNode(header)
+    end
+
+    verify_ir(ir)
+    
+    return preheader, LoopInfo(header, latches, blocks)
+end
+
+function move_invariant!(ir, preheader, LI)
+    insertion_point = last(ir.cfg.blocks[preheader].stmts)
+    stmts = find_invariant_stmts(ir, LI)
+    inserter = InsertBefore(ir, SSAValue(insertion_point))
+
+    # When moving multiple invariant statements, we need to fix their SSAValue
+    stmt_map = IdDict{SSAValue, SSAValue}()
+    function fixup(inst::NewInstruction)
+        for useref in userefs(inst)
+            if haskey(stmt_map, useref[])
+                useref[] = stmt_map[useref[]]
+            end
+        end
+        return inst
+    end
+
+    for stmt in stmts
+        new_stmt = inserter(fixup(NewInstruction(ir.stmts[stmt])))
+        stmt_map[SSAValue(stmt)] = new_stmt
+        ir.stmts[stmt] = new_stmt
+    end
+
+end
+
+function licm_pass!(ir::IRCode, loops=construct_loopinfo(ir, construct_domtree(ir.cfg.blocks)))
+    # TODO: Check for benefit
+    # TODO: More than one Loop in the function. `LI` become stale and would need to be recalculated
+    # TODO: Processing order, we should proceess innermost to outermost loops,
+    for (h, LI) in loops
+        # Find stmts that are invariant w.r.t this loop
+        preheader, LI = insert_preheader!(ir, LI)
+        move_invariant!(ir, preheader, LI)
+    end
+    ir = compact!(ir)
+end

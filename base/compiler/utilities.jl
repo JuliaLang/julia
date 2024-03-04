@@ -42,6 +42,29 @@ end
 
 anymap(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i in 1:length(a) ]
 
+function _cumsum!(ys)
+    isempty(ys) && return ys
+    acc = ys[1]
+    for i in 2:length(ys)
+        acc += ys[i]
+        ys[i] = acc
+    end
+    return ys
+end
+
+function isincreasing(xs; by = identity)
+    y = iterate(xs)
+    y === nothing && return true
+    x1, state = y
+    while true
+        y = iterate(xs, state)
+        y === nothing && return true
+        x2, state = y
+        isless(by(x1), by(x2)) || return false
+        x1 = x2
+    end
+end
+
 ###########
 # scoping #
 ###########
