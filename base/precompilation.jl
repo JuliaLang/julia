@@ -915,7 +915,7 @@ end
 function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg::Base.PkgId, pkgspidlocked::Dict{Base.PkgId,String}, hascolor, cacheflags)
     FileWatching = Base.loaded_modules[Base.PkgId(Base.UUID("7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"), "FileWatching")]
     stale_age = Base.compilecache_pidlock_stale_age
-    pidfile = Base.compilecache_pidfile_path(pkg)
+    pidfile = Base.compilecache_pidfile_path(pkg, flags=cacheflags)
     cachefile = FileWatching.trymkpidlock(f, pidfile; stale_age)
     if cachefile === false
         pid, hostname, age = FileWatching.Pidfile.parse_pidfile(pidfile)

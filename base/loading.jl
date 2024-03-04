@@ -2768,7 +2768,7 @@ function compilecache_dir(pkg::PkgId)
     return joinpath(DEPOT_PATH[1], entrypath)
 end
 
-function compilecache_path(pkg::PkgId, prefs_hash::UInt64; project::String=something(Base.active_project(), ""))::String
+function compilecache_path(pkg::PkgId, prefs_hash::UInt64; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""))::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
@@ -2778,7 +2778,7 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64; project::String=somet
         crc = _crc32c(project)
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
-        crc = _crc32c(ccall(:jl_cache_flags, UInt8, ()), crc)
+        crc = _crc32c(_cacheflag_to_uint8(flags), crc)
 
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         if cpu_target === nothing
@@ -3408,7 +3408,7 @@ global parse_pidfile_hook
 # The preferences hash is only known after precompilation so just assume no preferences.
 # Also ignore the active project, which means that if all other conditions are equal,
 # the same package cannot be precompiled from different projects and/or different preferences at the same time.
-compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); project="") * ".pidfile"
+compilecache_pidfile_path(pkg::PkgId; flags::CacheFlags=CacheFlags()) = compilecache_path(pkg, UInt64(0); project="", flags) * ".pidfile"
 
 const compilecache_pidlock_stale_age = 10
 
