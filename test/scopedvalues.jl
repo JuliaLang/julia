@@ -73,7 +73,7 @@ end
     with(sval => 2.0) do
         @test sprint(show, sval) == "Base.ScopedValues.ScopedValue{$Int}(2)"
         objid = sprint(show, Base.objectid(sval))
-        @test sprint(show, Core.current_scope()) == "Base.ScopedValues.Scope(ScopedValue{$Int}@$objid => 2)"
+        @test sprint(show, Core.current_scope()) == "Base.ScopedValues.Scope(Base.ScopedValues.ScopedValue{$Int}@$objid => 2)"
     end
 end
 
