@@ -150,3 +150,19 @@ end
 let code = code_typed(with_macro_slot_cross)[1][1].code
     @test !any(x->isa(x, Core.PhiCNode), code)
 end
+
+const sval_53584 = ScopedValue([0])
+@noinline function issue_53584()
+    dvec = sval_53584[]
+    dvec[1] += 1
+    return nothing
+end
+
+@testset "get() allocations" begin
+    @with sval_53584=>[0] begin
+        bytes = @allocated for _ in 1:1000_000
+            issue_53584()
+        end
+        @test bytes == 0
+    end
+end
