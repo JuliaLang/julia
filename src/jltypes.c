@@ -1858,6 +1858,7 @@ static jl_value_t *normalize_unionalls(jl_value_t *t)
                 t = jl_instantiate_unionall(u, u->var->ub);
             }
             JL_CATCH {
+                t = NULL; // This is to make the analyzer happy see #define JL_TRY
                 // just skip normalization
                 // (may happen for bounds inconsistent with the wrapper's bounds)
             }

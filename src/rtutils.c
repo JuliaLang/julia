@@ -297,6 +297,16 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     }
 }
 
+JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_handler_t *eh)
+{
+    jl_task_t *ct = jl_current_task;
+    ct->eh = eh->prev;
+    ct->gcstack = eh->gcstack;
+    ct->world_age = eh->world_age;
+    ct->ptls->defer_signal = eh->defer_signal;
+    return;
+}
+
 JL_DLLEXPORT void jl_pop_handler(int n)
 {
     jl_task_t *ct = jl_current_task;

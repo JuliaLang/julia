@@ -263,6 +263,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                                 val = jl_interpret_toplevel_expr_in(module, (jl_value_t*)e, NULL, sparam_vals);
                             }
                             JL_CATCH {
+                                val = NULL; // To make the analyzer happy see #define JL_TRY
                             }
                             if (val)
                                 return val;

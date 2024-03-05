@@ -2282,8 +2282,9 @@ extern JL_DLLIMPORT int jl_task_ptls_offset;
 
 #include "julia_locks.h"   // requires jl_task_t definition
 
-JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
+JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh) JL_NOTSAFEPOINT ;
 JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh);
+JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_handler_t *eh) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_pop_handler(int n);
 JL_DLLEXPORT size_t jl_excstack_state(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT;
@@ -2337,24 +2338,34 @@ extern void (*real_siglongjmp)(jmp_buf _Buf, int _Value);
 
 #ifdef __clang_gcanalyzer__
 
-// This is hard. Ideally we'd teach the static analyzer about the extra control
-// flow edges. But for now, just hide this as best we can
 extern int had_exception;
-#define JL_TRY if (1)
-#define JL_CATCH if (had_exception)
+
+// The analyzer assumes that the TRY block always executes to completion because we do not model throwing
+// This means it might add both false positives and negatives, because it doesn't model the fact that we can leave the try block early (by erroring).
+#define JL_TRY                                                    \
+    int i__try, i__catch; jl_handler_t __eh;                      \
+    size_t __excstack_state = jl_excstack_state();                \
+    jl_enter_handler(&__eh);                                      \
+    if (1)
+    /* TRY BLOCK; */
+#define JL_CATCH                                                \
+    if (!had_exception)                                         \
+        jl_eh_restore_state_noexcept(&__eh);                          \
+    else                                                        \
+        for (i__catch=1, jl_eh_restore_state(&__eh); i__catch; i__catch=0, /* CATCH BLOCK; */ jl_restore_excstack(__excstack_state))
 
 #else
 
 #define JL_TRY                                                    \
-    int i__tr, i__ca; jl_handler_t __eh;                          \
+    int i__try, i__catch; jl_handler_t __eh;                          \
     size_t __excstack_state = jl_excstack_state();                \
     jl_enter_handler(&__eh);                                      \
     if (!jl_setjmp(__eh.eh_ctx,0))                                \
-        for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__eh))
+        for (i__try=1; i__try; i__try=0, /* TRY BLOCK; */  jl_eh_restore_state_noexcept(&__eh))
 
 #define JL_CATCH                                                \
     else                                                        \
-        for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0, jl_restore_excstack(__excstack_state))
+        for (i__catch=1, jl_eh_restore_state(&__eh); i__catch; i__catch=0, /* CATCH BLOCK; */ jl_restore_excstack(__excstack_state))
 
 #endif
 
