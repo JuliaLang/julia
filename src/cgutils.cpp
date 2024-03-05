@@ -2644,6 +2644,104 @@ static jl_cgval_t emit_unionload(jl_codectx_t &ctx, Value *addr, Value *ptindex,
     return mark_julia_slot(fsz > 0 ? addr : nullptr, jfty, tindex, tbaa);
 }
 
+static bool isTBAA(MDNode *TBAA, std::initializer_list<const char*> const strset)
+{
+    if (!TBAA)
+        return false;
+    while (TBAA->getNumOperands() > 1) {
+        TBAA = cast<MDNode>(TBAA->getOperand(1).get());
+        auto str = cast<MDString>(TBAA->getOperand(0))->getString();
+        for (auto str2 : strset) {
+            if (str == str2) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Check if this is a load from an immutable value. The easiest
+// way to do so is to look at the tbaa and see if it derives from
+// jtbaa_immut.
+static bool isLoadFromImmut(LoadInst *LI)
+{
+    if (LI->getMetadata(LLVMContext::MD_invariant_load))
+        return true;
+    MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
+    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype", "jtbaa_memoryptr", "jtbaa_memorylen", "jtbaa_memoryown"}))
+        return true;
+    return false;
+}
+
+static bool isConstGV(GlobalVariable *gv)
+{
+    return gv->isConstant() || gv->getMetadata("julia.constgv");
+}
+
+// Check if this is can be traced through constant loads to an constant global
+// or otherwise globally rooted value.
+// Almost all `tbaa_const` loads satisfies this with the exception of
+// task local constants which are constant as far as the code is concerned but aren't
+// global constants. For task local constant `task_local` will be true when this function
+// returns.
+// Unlike this function in llvm-late-gc-lowering, we do not examine PhiNode, as those are not emitted yet
+static bool isLoadFromConstGV(LoadInst *LI);
+static bool isLoadFromConstGV(Value *v)
+{
+    v = v->stripInBoundsOffsets();
+    if (auto LI = dyn_cast<LoadInst>(v))
+        return isLoadFromConstGV(LI);
+    if (auto gv = dyn_cast<GlobalVariable>(v))
+        return isConstGV(gv);
+    // null pointer
+    if (isa<ConstantData>(v))
+        return true;
+    // literal pointers
+    if (auto CE = dyn_cast<ConstantExpr>(v))
+        return (CE->getOpcode() == Instruction::IntToPtr &&
+                isa<ConstantData>(CE->getOperand(0)));
+    if (auto SL = dyn_cast<SelectInst>(v))
+        return (isLoadFromConstGV(SL->getTrueValue()) &&
+                isLoadFromConstGV(SL->getFalseValue()));
+    if (auto call = dyn_cast<CallInst>(v)) {
+        auto callee = call->getCalledFunction();
+        if (callee && callee->getName() == "julia.typeof") {
+            return true;
+        }
+        if (callee && callee->getName() == "julia.get_pgcstack") {
+            return true;
+        }
+        if (callee && callee->getName() == "julia.gc_loaded") {
+            return isLoadFromConstGV(call->getArgOperand(0)) &&
+                   isLoadFromConstGV(call->getArgOperand(1));
+        }
+    }
+    if (isa<Argument>(v)) {
+        return true;
+    }
+    return false;
+}
+
+// The white list implemented here and above in `isLoadFromConstGV(Value*)` should
+// cover all the cases we and LLVM generates.
+static bool isLoadFromConstGV(LoadInst *LI)
+{
+    // We only emit single slot GV in codegen
+    // but LLVM global merging can change the pointer operands to GEPs/bitcasts
+    auto load_base = LI->getPointerOperand()->stripInBoundsOffsets();
+    assert(load_base); // Static analyzer
+    auto gv = dyn_cast<GlobalVariable>(load_base);
+    if (isLoadFromImmut(LI)) {
+        if (gv)
+            return true;
+        return isLoadFromConstGV(load_base);
+    }
+    if (gv)
+        return isConstGV(gv);
+    return false;
+}
+
+
 static MDNode *best_field_tbaa(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_datatype_t *jt, unsigned idx, size_t byte_offset)
 {
     auto tbaa = strct.tbaa;
@@ -2664,6 +2762,8 @@ static MDNode *best_field_tbaa(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_da
                 return ctx.tbaa().tbaa_arraysize;
         }
     }
+    if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
+        return ctx.tbaa().tbaa_const;
     return tbaa;
 }
 
