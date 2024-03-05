@@ -2510,7 +2510,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("Expr", (jl_value_t*)jl_expr_type);
     add_builtin("LineNumberNode", (jl_value_t*)jl_linenumbernode_type);
-    add_builtin("LineInfoNode", (jl_value_t*)jl_lineinfonode_type);
+    add_builtin("LegacyLineInfoNode", (jl_value_t*)jl_lineinfonode_type);
+    add_builtin("DebugInfo", (jl_value_t*)jl_debuginfo_type);
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
     add_builtin("GotoIfNot", (jl_value_t*)jl_gotoifnot_type);
     add_builtin("EnterNode", (jl_value_t*)jl_enternode_type);

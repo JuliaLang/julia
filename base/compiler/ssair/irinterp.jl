@@ -163,6 +163,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         elseif head === :leave
             return false
         else
+            Core.println(stmt)
             error("reprocess_instruction!: unhandled expression found")
         end
     elseif isa(stmt, PhiNode)

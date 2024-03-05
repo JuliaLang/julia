@@ -3074,10 +3074,10 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec, 0, 0, 2);
 
     jl_lineinfonode_type =
-        jl_new_datatype(jl_symbol("LineInfoNode"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(5, "module", "method", "file", "line", "inlined_at"),
-                        jl_svec(5, jl_module_type, jl_any_type, jl_symbol_type, jl_int32_type, jl_int32_type),
-                        jl_emptysvec, 0, 0, 5);
+        jl_new_datatype(jl_symbol("LegacyLineInfoNode"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(3, "file", "line", "inlined_at"),
+                        jl_svec(3, jl_symbol_type, jl_int32_type, jl_int32_type),
+                        jl_emptysvec, 0, 0, 3);
 
     jl_gotonode_type =
         jl_new_datatype(jl_symbol("GotoNode"), core, jl_any_type, jl_emptysvec,
@@ -3139,15 +3139,30 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_svec(1, jl_slotnumber_type),
                         jl_emptysvec, 0, 0, 1);
 
+    jl_debuginfo_type =
+        jl_new_datatype(jl_symbol("DebugInfo"), core,
+                        jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(4,
+                            "def",
+                            "linetable",
+                            "edges",
+                            "codelocs"),
+                        jl_svec(4,
+                            jl_any_type, // union(jl_method_instance_type, jl_method_type, jl_symbol_type),
+                            jl_any_type, // union(jl_nothing, jl_debuginfo_type)
+                            jl_simplevector_type, // memory{debuginfo}
+                            jl_string_type),
+                        jl_emptysvec, 0, 0, 4);
+    jl_debuginfo_type->name->mayinlinealloc = 0;
+
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(20,
+                        jl_perm_symsvec(19,
                             "code",
-                            "codelocs",
+                            "debuginfo",
                             "ssavaluetypes",
                             "ssaflags",
-                            "linetable",
                             "slotnames",
                             "slotflags",
                             "slottypes",
@@ -3163,12 +3178,11 @@ void jl_init_types(void) JL_GC_DISABLED
                             "constprop",
                             "purity",
                             "inlining_cost"),
-                        jl_svec(20,
+                        jl_svec(19,
                             jl_array_any_type,
-                            jl_array_int32_type,
+                            jl_debuginfo_type,
                             jl_any_type,
                             jl_array_uint32_type,
-                            jl_any_type,
                             jl_array_symbol_type,
                             jl_array_uint8_type,
                             jl_any_type,
@@ -3185,12 +3199,12 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint16_type,
                             jl_uint16_type),
                         jl_emptysvec,
-                        0, 1, 20);
+                        0, 1, 19);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(30,
+                        jl_perm_symsvec(31,
                             "name",
                             "module",
                             "file",
@@ -3203,6 +3217,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "slot_syms",
                             "external_mt",
                             "source", // !const
+                            "debuginfo", // !const
                             "unspecialized", // !const
                             "generator", // !const
                             "roots", // !const
@@ -3221,7 +3236,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "constprop",
                             "max_varargs",
                             "purity"),
-                        jl_svec(30,
+                        jl_svec(31,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -3234,6 +3249,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_string_type,
                             jl_any_type,
                             jl_any_type,
+                            jl_debuginfo_type,
                             jl_any_type, // jl_method_instance_type
                             jl_any_type,
                             jl_array_any_type,
@@ -3254,7 +3270,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint16_type),
                         jl_emptysvec,
                         0, 1, 10);
-    //const static uint32_t method_constfields[1] = { 0x03fc065f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<9)|(1<<10)|(1<<18)|(1<<19)|(1<<20)|(1<<21)|(1<<22)|(1<<23)|(1<<24)|(1<<25);
+    //const static uint32_t method_constfields[1] = { 0b0 }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<9)|(1<<10)|(1<<17)|(1<<21)|(1<<22)|(1<<23)|(1<<24)|(1<<25)|(1<<26)|(1<<27)|(1<<28)|(1<<29)|(1<<30);
     //jl_method_type->name->constfields = method_constfields;
     const static uint32_t method_atomicfields[1] = { 0x00000030 }; // (1<<4)|(1<<5)
     jl_method_type->name->atomicfields = method_atomicfields;
@@ -3278,7 +3294,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_simplevector_type,
                             jl_any_type,
                             jl_array_any_type,
-                            jl_any_type,
+                            jl_any_type/*jl_code_instance_type*/,
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
@@ -3294,7 +3310,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(17,
+                        jl_perm_symsvec(18,
                             "def",
                             "owner",
                             "next",
@@ -3304,13 +3320,13 @@ void jl_init_types(void) JL_GC_DISABLED
                             "exctype",
                             "rettype_const",
                             "inferred",
-                            //"edges",
+                            "debuginfo", // TODO: rename to edges?
                             //"absolute_max",
                             "ipo_purity_bits", "purity_bits",
                             "analysis_results",
                             "specsigflags", "precompile", "relocatability",
                             "invoke", "specptr"), // function object decls
-                        jl_svec(17,
+                        jl_svec(18,
                             jl_method_instance_type,
                             jl_any_type,
                             jl_any_type,
@@ -3320,7 +3336,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
-                            //jl_any_type,
+                            jl_debuginfo_type,
                             //jl_bool_type,
                             jl_uint32_type, jl_uint32_type,
                             jl_any_type,
@@ -3331,10 +3347,11 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 2, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1]  = { 0b00000101011100011 }; // Set fields 1, 2, 6-8, 10, 12 as const
-    const static uint32_t code_instance_atomicfields[1] = { 0b11011010100011100 }; // Set fields 3-5, 9, 11, 13-14, 16-17 as atomic
+    const static uint32_t code_instance_constfields[1]  = { 0b000001010011100011 }; // Set fields 1, 2, 6-8, 11, 13 as const
+    const static uint32_t code_instance_atomicfields[1] = { 0b110110101100011100 }; // Set fields 3-5, 9, 10, 12, 14-15, 17-18 as atomic
     //Fields 4-5 are only operated on by construction and deserialization, so are const at runtime
-    //Fields 12 and 16 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
+    //Fields 13 and 17 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
+    //Except for field 9 (inferred), which is volatile unless you know which other places are currently using it
     jl_code_instance_type->name->constfields = code_instance_constfields;
     jl_code_instance_type->name->atomicfields = code_instance_atomicfields;
 
@@ -3472,10 +3489,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 8, jl_long_type); // uint32_t plus alignment
     jl_svecset(jl_methtable_type->types, 9, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
-    jl_svecset(jl_method_type->types, 12, jl_method_instance_type);
+    jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
+    //jl_svecset(jl_debuginfo_type->types, 0, jl_method_instance_type); // union(jl_method_instance_type, jl_method_type, jl_symbol_type)
     jl_svecset(jl_method_instance_type->types, 5, jl_code_instance_type);
-    jl_svecset(jl_code_instance_type->types, 15, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 16, jl_voidpointer_type);
+    jl_svecset(jl_code_instance_type->types, 17, jl_voidpointer_type);
     jl_svecset(jl_binding_type->types, 1, jl_globalref_type);
     jl_svecset(jl_binding_type->types, 2, jl_binding_type);
 
@@ -3503,9 +3521,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_module_type->ismutationfree = 1;
     // Module object identity is determined by its name and parent name.
     jl_module_type->isidentityfree = 1;
-
-    // override the preferred layout for a couple types
-    jl_lineinfonode_type->name->mayinlinealloc = 0; // FIXME: assumed to be a pointer by codegen
 
     export_jl_small_typeof();
 }

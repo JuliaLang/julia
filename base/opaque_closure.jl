@@ -61,6 +61,8 @@ function Core.OpaqueClosure(ir::IRCode, @nospecialize env...;
                             do_compile::Bool = true)
     # NOTE: we need ir.argtypes[1] == typeof(env)
     ir = Core.Compiler.copy(ir)
+    # if the user didn't specify a definition MethodInstance or filename Symbol to use for the debuginfo, set a filename now
+    ir.debuginfo.def === nothing && (ir.debuginfo.def = :var"generated IR for OpaqueClosure")
     nargs = length(ir.argtypes)-1
     sig = compute_oc_signature(ir, nargs, isva)
     rt = compute_ir_rettype(ir)

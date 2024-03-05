@@ -245,6 +245,19 @@ typedef struct _jl_line_info_node_t {
     int32_t inlined_at;
 } jl_line_info_node_t;
 
+struct jl_codeloc_t {
+    int32_t line;
+    int32_t to;
+    int32_t pc;
+};
+
+typedef struct _jl_debuginfo_t {
+    jl_value_t *def;
+    struct _jl_debuginfo_t *linetable; // or nothing
+    jl_svec_t *edges; // Memory{DebugInfo}
+    jl_value_t *codelocs; // String // Memory{UInt8} // compressed info
+} jl_debuginfo_t;
+
 // the following mirrors `struct EffectsOverride` in `base/compiler/effects.jl`
 typedef union __jl_purity_overrides_t {
     struct {
@@ -272,7 +285,7 @@ typedef union __jl_purity_overrides_t {
 typedef struct _jl_code_info_t {
     // ssavalue-indexed arrays of properties:
     jl_array_t *code;  // Any array of statements
-    jl_value_t *codelocs; // Int32 array of indices into the line table
+    jl_debuginfo_t *debuginfo; // Table of edge data for each statement
     jl_value_t *ssavaluetypes; // types of ssa values (or count of them)
     jl_array_t *ssaflags; // 32 bits flags associated with each statement:
         // 1 << 0 = inbounds region
@@ -289,7 +302,6 @@ typedef struct _jl_code_info_t {
         // 1 << 11 = :inaccessiblemem_or_argmemonly
         // 1 << 12-19 = callsite effects overrides
     // miscellaneous data:
-    jl_value_t *linetable; // Table of locations [TODO: make this volatile like slotnames]
     jl_array_t *slotnames; // names of local variables
     jl_array_t *slotflags;  // local var bit flags
     // the following are optional transient properties (not preserved by compression--as they typically get stored elsewhere):
@@ -300,7 +312,7 @@ typedef struct _jl_code_info_t {
     // They are not used by any other part of the system and may be moved elsewhere in the
     // future.
     jl_value_t *method_for_inference_limit_heuristics; // optional method used during inference
-    jl_value_t *edges; // forward edges to method instances that must be invalidated
+    jl_value_t *edges; // forward edges to method instances that must be invalidated (for copying to debuginfo)
     size_t min_world;
     size_t max_world;
 
@@ -337,6 +349,7 @@ typedef struct _jl_method_t {
     jl_value_t *slot_syms; // compacted list of slot names (String)
     jl_value_t *external_mt; // reference to the method table this method is part of, null if part of the internal table
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
+    jl_debuginfo_t *debuginfo;  // fixed linetable from the source argument, null if not available
     _Atomic(jl_method_instance_t*) unspecialized;  // unspecialized executable method instance, or null
     jl_value_t *generator;  // executable code-generating function if available
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
@@ -432,7 +445,7 @@ typedef struct _jl_code_instance_t {
     //               deleted to save space.
     // - null, indicating that inference was not yet completed or did not succeed
     _Atomic(jl_value_t *) inferred;
-    //TODO: jl_array_t *edges; // stored information about edges from this object
+    _Atomic(jl_debuginfo_t *) debuginfo; // stored information about edges from this object (set once, with a happens-before both source and invoke)
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
     // purity results
@@ -822,6 +835,7 @@ extern JL_DLLIMPORT jl_value_t *jl_bottom_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_instance_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_code_instance_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_code_info_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_debuginfo_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_method_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_module_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_unionall_t *jl_addrspace_type JL_GLOBALLY_ROOTED;
@@ -2145,7 +2159,9 @@ JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_value_t *data, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
-
+JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_value_t *cl, size_t pc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_compress_codelocs(int32_t firstline, jl_value_t *codelocs, size_t nstmts);
+JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_value_t *cl, size_t nstmts);
 
 JL_DLLEXPORT int jl_is_operator(const char *sym);
 JL_DLLEXPORT int jl_is_unary_operator(const char *sym);

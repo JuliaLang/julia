@@ -22,7 +22,7 @@ let m = Meta.@lower 1 + 1
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
-    src.codelocs = fill(Int32(1), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
@@ -62,7 +62,7 @@ let m = Meta.@lower 1 + 1
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
-    src.codelocs = fill(Int32(1), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
     m.args[1] = copy(src)
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
@@ -81,7 +81,7 @@ let m = Meta.@lower 1 + 1
         QuoteNode(:b),
         GlobalRef(@__MODULE__, :test29262),
         # block 2
-        EnterNode(11),
+        EnterNode(12),
         # block 3
         UpsilonNode(),
         UpsilonNode(),
@@ -91,19 +91,22 @@ let m = Meta.@lower 1 + 1
         UpsilonNode(SSAValue(1)),
         # block 5
         Expr(:throw_undef_if_not, :expected, false),
+        ReturnNode(), # unreachable
         # block 6
         PhiCNode(Any[SSAValue(5), SSAValue(7), SSAValue(9)]), # NULL, :a, :b
         PhiCNode(Any[SSAValue(6)]), # NULL
+        Expr(:pop_exception, SSAValue(4)),
         # block 7
-        ReturnNode(SSAValue(11)),
+        ReturnNode(SSAValue(12)),
     ]
     nstmts = length(src.code)
     src.ssavaluetypes = nstmts
     src.ssaflags = fill(UInt8(0x00), nstmts)
-    src.codelocs = fill(Int32(1), nstmts)
+    src.debuginfo = Core.DebugInfo(:none)
     Core.Compiler.verify_ir(Core.Compiler.inflate_ir(src))
     global test29262 = true
     @test :a === @eval $m
     global test29262 = false
     @test :b === @eval $m
+    @test isempty(current_exceptions())
 end
