@@ -335,14 +335,15 @@ function printpkgstyle(io, header, msg; color=:light_green)
     println(io, " ", msg)
 end
 
-# for each package x configuration
-const PkgConfig = Tuple{Base.PkgId,Pair{Cmd, Base.CacheFlags}}
+const Config = Pair{Cmd, Base.CacheFlags}
+const PkgConfig = Tuple{Base.PkgId,Config}
 
 function precompilepkgs(pkgs::Vector{String}=String[]; internal_call::Bool=false,
                     strict::Bool=false, warn_loaded = true, timing::Bool = false,
-                    _from_loading::Bool=false, configs::Vector{Pair{Cmd, Base.CacheFlags}}=Pair{Cmd, Base.CacheFlags}[(``=>Base.CacheFlags())],
+                    _from_loading::Bool=false, configs::Union{Config,Vector{Config}}=(``=>Base.CacheFlags()),
                     io::IO=stderr)
     time_start = time_ns()
+    configs = configs isa Config ? [configs] : configs
 
     env = ExplicitEnv()
 
@@ -729,12 +730,12 @@ function precompilepkgs(pkgs::Vector{String}=String[]; internal_call::Bool=false
             pkg_config = (pkg, config)
             if sourcepath === nothing
                 failed_deps[pkg_config] = "Error: Missing source file for $(pkg)"
-                foreach(notify, was_processed[pkg_config]) # notify all to allow skipping
+                notify(was_processed[pkg_config])
                 continue
             end
             # Heuristic for when precompilation is disabled
             if occursin(r"\b__precompile__\(\s*false\s*\)", read(sourcepath, String))
-                foreach(notify, was_processed[pkg_config]) # notify all to allow skipping
+                notify(was_processed[pkg_config])
                 continue
             end
             flags, cacheflags = config
@@ -815,8 +816,7 @@ function precompilepkgs(pkgs::Vector{String}=String[]; internal_call::Bool=false
                     notify(was_processed[pkg_config])
                 catch err_outer
                     # For debugging:
-                    println("here")
-                    @error "Task failed" exception=(err_outer, catch_backtrace())
+                    # println("Task failed $err_outer") # logging doesn't show here
                     handle_interrupt(err_outer) || rethrow()
                     notify(was_processed[pkg_config])
                 finally
