@@ -419,7 +419,7 @@ function _wait_multiple(waiting_tasks; all=false, failfast=false)
         end
     end
 
-    while true
+    while nremaining > 0
         i = take!(chan)
         t = tasks[i]
         waiter_tasks[i] = sentinel
@@ -427,7 +427,9 @@ function _wait_multiple(waiting_tasks; all=false, failfast=false)
         exception |= istaskfailed(t)
         nremaining -= 1
 
-        if nremaining == 0 || (!all || failfast && exception)
+        # stop early if requested, unless there is something immediately
+        # ready to consume from the channel (using a race-y check)
+        if (!all || (failfast && exception)) && !isready(chan)
             break
         end
     end
