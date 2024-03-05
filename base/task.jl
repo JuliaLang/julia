@@ -377,6 +377,15 @@ function _wait_multiple(waiting_tasks; all=false, failfast=false)
         push!(tasks, t)
     end
 
+    if all && !failfast
+        # Force everything to finish synchronously for the case of waitall
+        # with failfast=false
+        for t in tasks
+            _wait(t)
+        end
+        return tasks, Task[]
+    end
+
     exception = false
     nremaining::Int = length(tasks)
     done_mask = falses(nremaining)
