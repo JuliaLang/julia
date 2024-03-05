@@ -410,8 +410,14 @@ function _wait_multiple(waiting_tasks; all=false, failfast=false)
     waiter_tasks = fill(sentinel, length(tasks))
 
     for (i, done) in enumerate(done_mask)
-        if !done
-            t = tasks[i]
+        done && continue
+        t = tasks[i]
+        if istaskdone(t)
+            done_mask[i] = true
+            exception |= istaskfailed(t)
+            nremaining -= 1
+            exception && failfast && break
+        else
             waiter = @task put!(chan, i)
             waiter.sticky = false
             _wait2(t, waiter)
