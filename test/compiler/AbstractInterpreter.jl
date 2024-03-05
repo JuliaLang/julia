@@ -6,6 +6,17 @@ const CC = Core.Compiler
 include("irutils.jl")
 include("newinterp.jl")
 
+# interpreter that performs abstract interpretation only
+# (semi-concrete interpretation should be disabled automatically)
+@newinterp AbsIntOnlyInterp1
+CC.may_optimize(::AbsIntOnlyInterp1) = false
+@test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp1()) >: IO
+
+# it should work even if the interpreter discards inferred source entirely
+@newinterp AbsIntOnlyInterp2
+CC.may_optimize(::AbsIntOnlyInterp2) = false
+CC.transform_result_for_cache(::AbsIntOnlyInterp2, ::Core.MethodInstance, ::CC.WorldRange, ::CC.InferenceResult) = nothing
+@test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp2()) >: IO
 
 # OverlayMethodTable
 # ==================
