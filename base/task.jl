@@ -372,7 +372,7 @@ waitall(tasks; failfast=false) = _wait_multiple(tasks; all=true, failfast=failfa
 function _wait_multiple(waiting_tasks; all=false, failfast=false)
     tasks = Task[]
 
-    for (i, t) in enumerate(waiting_tasks)
+    for t in waiting_tasks
         t isa Task || error("Expected an iterator of `Task` object")
         push!(tasks, t)
     end
