@@ -2340,8 +2340,8 @@ extern void (*real_siglongjmp)(jmp_buf _Buf, int _Value);
 
 extern int had_exception;
 
-// The analyzer assumes that the TRY block always executes to completion because we do not model throwing
-// This means it might add both false positives and negatives, because it doesn't model the fact that we can leave the try block early (by erroring).
+// The analyzer assumes that the TRY block always executes to completion.
+// This can lead to both false positives and false negatives, since it doesn't model the fact that throwing always leaves the try block early.
 #define JL_TRY                                                    \
     int i__try, i__catch; jl_handler_t __eh;                      \
     size_t __excstack_state = jl_excstack_state();                \
