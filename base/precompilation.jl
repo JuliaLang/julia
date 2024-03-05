@@ -436,7 +436,7 @@ function precompilepkgs(pkgs::Vector{String}=String[]; internal_call::Bool=false
             # TODO: actually handle packages from other envs in the stack
             return
         else
-            error("No direct dependencies outside of the sysimage found matching $(repr([p.name for p in pkgs]))")
+            error("No direct dependencies outside of the sysimage found matching $(pkgs)")
         end
     end
 
