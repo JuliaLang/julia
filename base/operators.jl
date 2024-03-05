@@ -514,7 +514,7 @@ julia> max(5, missing, 6)
 missing
 ```
 """
-max(x, y) = ifelse(isless(y, x), x, y)
+max(x, y) = Core.ifelse(isless(y, x), x, y)
 
 """
     min(x, y, ...)
