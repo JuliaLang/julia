@@ -164,7 +164,7 @@ end
 Base.filesize(io::SharedMemory) = io.handle == INVALID_OS_HANDLE ? io.size : stat(io.handle).size
 
 # Determine a stream's read/write mode, and return prot & flags appropriate for mmap
-function settings(s::RawFD, shared::Bool, exec::Bool=false)
+function settings(s::RawFD, shared::Bool, exec::Bool)
     flags = shared ? MAP_SHARED : MAP_PRIVATE
     if s == INVALID_OS_HANDLE
         flags |= MAP_ANONYMOUS
