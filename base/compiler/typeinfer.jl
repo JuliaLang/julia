@@ -873,7 +873,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
         # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
         # note that this result is cached globally exclusively, we can use this local result destructively
-        volatile_inf_result = isinferred && (force_inline || src_inlining_policy(interp, result.src, NoCallInfo(), IR_FLAG_NULL) !== nothing) ?
+        volatile_inf_result = (isinferred && (force_inline ||
+            src_inlining_policy(interp, result.src, NoCallInfo(), IR_FLAG_NULL))) ?
             VolatileInferenceResult(result) : nothing
         return EdgeCallResult(frame.bestguess, exc_bestguess, edge, effects, volatile_inf_result)
     elseif frame === true
