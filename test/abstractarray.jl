@@ -1981,6 +1981,7 @@ end
     Base.zero(::Type{CustomNumber}) = CustomNumber(0.0)
     @test zero([CustomNumber(5.0)]) == [CustomNumber(0.0)]
     @test zero(Union{CustomNumber, Missing}[missing]) == [CustomNumber(0.0)]
+    @test zero(Vector{Union{CustomNumber, Missing}}(undef, 1)) == [CustomNumber(0.0)]
 end
 
 @testset "`_prechecked_iterate` optimization" begin
