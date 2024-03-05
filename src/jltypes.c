@@ -1846,7 +1846,7 @@ static jl_value_t *normalize_unionalls(jl_value_t *t)
     else if (jl_is_unionall(t)) {
         jl_unionall_t *u = (jl_unionall_t*)t;
         jl_value_t *body = normalize_unionalls(u->body);
-        JL_GC_PUSH1(&body);
+        JL_GC_PUSH2(&body, &t);
         if (body != u->body) {
             t = jl_new_struct(jl_unionall_type, u->var, body);
             u = (jl_unionall_t*)t;
@@ -1858,7 +1858,6 @@ static jl_value_t *normalize_unionalls(jl_value_t *t)
                 t = jl_instantiate_unionall(u, u->var->ub);
             }
             JL_CATCH {
-                t = NULL; // This is to make the analyzer happy see #define JL_TRY
                 // just skip normalization
                 // (may happen for bounds inconsistent with the wrapper's bounds)
             }
