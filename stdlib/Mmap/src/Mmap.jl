@@ -137,7 +137,7 @@ end # os-test
 """
     mmap(io::Union{IOStream,AbstractString}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
     mmap(io::Anonymous[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true, exec::Bool=false)
-    mmap(type::Type{Array{T,N}}, dims)
+    mmap(type::Type{Array{T,N}}, dims; shared::Bool=true, exec::Bool=false)
 
 Create an `Array` whose values are linked to a file, using memory-mapping. This provides a
 convenient way of working with data too large to fit in the computer's memory.
