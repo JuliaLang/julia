@@ -115,14 +115,10 @@ function src_inlining_policy(interp::AbstractInterpreter,
         return src_inlineable
     elseif isa(src, IRCode)
         return true
-    elseif isa(src, SemiConcreteResult)
-        return true
     end
     @assert !isa(src, CodeInstance) # handled by caller
     return false
 end
-
-function inlining_policy end # deprecated legacy name used by Cthulhu
 
 struct InliningState{Interp<:AbstractInterpreter}
     edges::Vector{Any}
