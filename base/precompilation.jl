@@ -855,27 +855,27 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     if ndeps > 0 || !isempty(failed_deps) || (quick_exit && !isempty(std_outputs))
         str = sprint() do iostr
             if !quick_exit
-                plural = ndeps == 1 ? "y" : "ies"
-                print(iostr, "  $(ndeps) dependenc$(plural) successfully precompiled in $(seconds_elapsed) seconds")
+                plural = length(configs) > 1 ? "dependency configurations" : ndeps == 1 ? "dependency" : "dependencies"
+                print(iostr, "  $(ndeps) $(plural) successfully precompiled in $(seconds_elapsed) seconds")
                 if n_already_precomp > 0 || !isempty(circular_deps)
                     n_already_precomp > 0 && (print(iostr, ". $n_already_precomp already precompiled"))
                     !isempty(circular_deps) && (print(iostr, ". $(length(circular_deps)) skipped due to circular dependency"))
                     print(iostr, ".")
                 end
                 if n_loaded > 0
-                    plural1 = n_loaded == 1 ? "y" : "ies"
+                    plural1 = length(configs) > 1 ? "dependency configurations" : n_loaded == 1 ? "dependency" : "dependencies"
                     plural2 = n_loaded == 1 ? "a different version is" : "different versions are"
                     plural3 = n_loaded == 1 ? "" : "s"
                     print(iostr, "\n  ",
                         color_string(string(n_loaded), Base.warn_color()),
-                        " dependenc$(plural1) precompiled but $(plural2) currently loaded. Restart julia to access the new version$(plural3)"
+                        " $(plural1) precompiled but $(plural2) currently loaded. Restart julia to access the new version$(plural3)"
                     )
                 end
                 if !isempty(precomperr_deps)
-                    pluralpc = length(precomperr_deps) == 1 ? "y" : "ies"
+                    pluralpc = length(configs) > 1 ? "dependency configurations" : precomperr_deps == 1 ? "dependency" : "dependencies"
                     print(iostr, "\n  ",
                         color_string(string(length(precomperr_deps)), Base.warn_color()),
-                        " dependenc$(pluralpc) failed but may be precompilable after restarting julia"
+                        " $(pluralpc) failed but may be precompilable after restarting julia"
                     )
                 end
             end
