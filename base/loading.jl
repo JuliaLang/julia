@@ -1524,7 +1524,21 @@ function CacheFlags(f::UInt8)
     CacheFlags(use_pkgimages, debug_level, check_bounds, inline, opt_level)
 end
 CacheFlags(f::Int) = CacheFlags(UInt8(f))
-CacheFlags() = CacheFlags(ccall(:jl_cache_flags, UInt8, ()))
+function CacheFlags(cf::CacheFlags=CacheFlags(ccall(:jl_cache_flags, UInt8, ()));
+            use_pkgimages::Union{Nothing,Bool}=nothing,
+            debug_level::Union{Nothing,Int}=nothing,
+            check_bounds::Union{Nothing,Int}=nothing,
+            inline::Union{Nothing,Bool}=nothing,
+            opt_level::Union{Nothing,Int}=nothing
+        )
+    return CacheFlags(
+        use_pkgimages === nothing ? cf.use_pkgimages : use_pkgimages,
+        debug_level === nothing ? cf.debug_level : debug_level,
+        check_bounds === nothing ? cf.check_bounds : check_bounds,
+        inline === nothing ? cf.inline : inline,
+        opt_level === nothing ? cf.opt_level : opt_level
+    )
+end
 
 function _cacheflag_to_uint8(cf::CacheFlags)::UInt8
     f = UInt8(0)

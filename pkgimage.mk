@@ -25,4 +25,4 @@ print-depot-path:
 	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e '@show Base.DEPOT_PATH')
 
 all-release all-debug:
-	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.Precompilation.precompilepkgs(;configs=[``=>Base.CacheFlags(), `--check-bounds=yes`=>Base.CacheFlags(true, 1, 1, true, 2)])')
+	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --startup-file=no -e 'Base.Precompilation.precompilepkgs(;configs=[``=>Base.CacheFlags(), `--check-bounds=yes`=>Base.CacheFlags(;check_bounds=1)])')
