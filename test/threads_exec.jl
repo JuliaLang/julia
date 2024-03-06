@@ -1210,6 +1210,12 @@ end
         return tasks, event
     end
 
+    function teardown(tasks, event)
+        notify(event)
+        yield()
+        wait(tasks[3])
+    end
+
     for tasks_type in (Vector{Task}, Set{Task}, Tuple{Task})
         @testset "waitany" begin
             tasks, event = create_tasks()
@@ -1220,9 +1226,7 @@ end
             @test tasks[2] ∈ done
             @test length(pending) == 1
             @test tasks[3] ∈ pending
-            notify(event)
-            yield()
-            wait(tasks[3])
+            teardown(tasks, event)
         end
 
         @testset "waitall" begin
@@ -1257,9 +1261,36 @@ end
                 @test length(pending) == 1
                 @test tasks[3] ∈ pending
 
+                teardown(tasks, event)
+            end
+
+            @testset "throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                sleep(0.1)
                 notify(event)
-                yield()
-                wait(tasks[3])
+
+                @test_throws CompositeException begin
+                    waitall(convert_tasks(tasks_type, tasks); throw=true)
+                end
+
+                @test all(istaskdone.(tasks))
+
+                teardown(tasks, event)
+            end
+
+            @testset "failfast=true and throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                @test_throws CompositeException begin
+                    waitall(convert_tasks(tasks_type, tasks); failfast=true, throw=true)
+                end
+
+                @test !istaskdone(tasks[3])
+
+                teardown(tasks, event)
             end
         end
     end

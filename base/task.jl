@@ -367,9 +367,9 @@ end
 
 # Wait multiple tasks
 waitany(tasks) = _wait_multiple(tasks)
-waitall(tasks; failfast=false) = _wait_multiple(tasks, true, failfast)
+waitall(tasks; failfast=false, throw=false) = _wait_multiple(tasks, true, failfast, throw)
 
-function _wait_multiple(waiting_tasks, all=false, failfast=false)
+function _wait_multiple(waiting_tasks, all=false, failfast=false, throwexc=false)
     tasks = Task[]
 
     for t in waiting_tasks
@@ -378,12 +378,19 @@ function _wait_multiple(waiting_tasks, all=false, failfast=false)
     end
 
     if all && !failfast
+        exception = false
         # Force everything to finish synchronously for the case of waitall
         # with failfast=false
         for t in tasks
             _wait(t)
+            exception |= istaskfailed(t)
         end
-        return tasks, Task[]
+        if exception && throwexc
+            exceptions = [t.exception for t in tasks if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        else
+            return tasks, Task[]
+        end
     end
 
     exception = false
@@ -402,7 +409,12 @@ function _wait_multiple(waiting_tasks, all=false, failfast=false)
     if nremaining == 0
         return tasks, Task[]
     elseif any(done_mask) && (!all || (failfast && exception))
-        return tasks[done_mask], tasks[.~done_mask]
+        if throwexc && failfast && exception
+            exceptions = [t.exception for t in tasks[done_mask] if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        else
+            return tasks[done_mask], tasks[.~done_mask]
+        end
     end
 
     chan = Channel{Int}(Inf)
@@ -451,7 +463,13 @@ function _wait_multiple(waiting_tasks, all=false, failfast=false)
             donenotify = tasks[i].donenotify::ThreadSynchronizer
             @lock donenotify Base.list_deletefirst!(donenotify.waitq, waiter)
         end
-        return tasks[done_mask], tasks[remaining_mask]
+        done_tasks = tasks[done_mask]
+        if throwexc && exception
+            exceptions = [t.exception for t in done_tasks if istaskfailed(t)]
+            throw(CompositeException(exceptions))
+        else
+            return done_tasks, tasks[remaining_mask]
+        end
     end
 end
 
