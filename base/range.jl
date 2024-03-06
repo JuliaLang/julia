@@ -41,7 +41,7 @@ equal to +1, which produces:
 `a:s:b` is similar but uses a step size of `s` (a [`StepRange`](@ref) or
 [`StepRangeLen`](@ref)). See also [`range`](@ref) for more control.
 
-To create a reverse range, use `reverse(a:b)` or a negative step size, e.g. `a:-1:b`.
+To create a reverse range, use `reverse(a:b)` or a negative step size, e.g. `b:-1:a`.
 
 The operator `:` is also used in indexing to select whole dimensions, e.g. in `A[:, 1]`.
 
