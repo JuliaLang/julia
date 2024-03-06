@@ -289,6 +289,7 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 	-$(INSTALL_M) $(build_libdir)/libjulia-internal-debug.dll.a $(DESTDIR)$(libdir)/
 endif
 	-$(INSTALL_M) $(wildcard $(build_private_libdir)/*.a) $(DESTDIR)$(private_libdir)/
+	-rm -f $(DESTDIR)$(private_libdir)/sys-o.a
 
 	# We have a single exception; we want 7z.dll to live in private_libexecdir,
 	# not bindir, so that 7z.exe can find it.

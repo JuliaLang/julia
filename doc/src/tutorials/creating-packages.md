@@ -563,10 +563,10 @@ duplicated into `[extras]`. This is an unfortunate duplication, but without
 doing this the project verifier under older Julia versions will throw an error
 if it finds packages under `[compat]` that is not listed in `[extras]`.
 
-## Package naming guidelines
+## Package naming rules
 
 Package names should be sensible to most Julia users, *even to those who are not domain experts*.
-The following guidelines apply to the `General` registry but may be useful for other package
+The following rules apply to the `General` registry but may be useful for other package
 registries as well.
 
 Since the `General` registry belongs to the entire community, people may have opinions about
