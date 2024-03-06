@@ -366,10 +366,10 @@ function wait(t::Task)
 end
 
 # Wait multiple tasks
-waitany(tasks) = _wait_multiple(tasks)
-waitall(tasks; failfast=false, throw=false) = _wait_multiple(tasks, true, failfast, throw)
+waitany(tasks; throw=false) = _wait_multiple(tasks, throw)
+waitall(tasks; failfast=false, throw=false) = _wait_multiple(tasks, throw, true, failfast)
 
-function _wait_multiple(waiting_tasks, all=false, failfast=false, throwexc=false)
+function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false)
     tasks = Task[]
 
     for t in waiting_tasks
@@ -409,7 +409,7 @@ function _wait_multiple(waiting_tasks, all=false, failfast=false, throwexc=false
     if nremaining == 0
         return tasks, Task[]
     elseif any(done_mask) && (!all || (failfast && exception))
-        if throwexc && failfast && exception
+        if throwexc && (!all || failfast) && exception
             exceptions = [t.exception for t in tasks[done_mask] if istaskfailed(t)]
             throw(CompositeException(exceptions))
         else

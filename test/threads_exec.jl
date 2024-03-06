@@ -1218,15 +1218,28 @@ end
 
     for tasks_type in (Vector{Task}, Set{Task}, Tuple{Task})
         @testset "waitany" begin
-            tasks, event = create_tasks()
-            sleep(0.1)
-            done,  pending = waitany(convert_tasks(tasks_type, tasks))
-            @test length(done) == 2
-            @test tasks[1] ∈ done
-            @test tasks[2] ∈ done
-            @test length(pending) == 1
-            @test tasks[3] ∈ pending
-            teardown(tasks, event)
+            @testset "no options" begin
+                tasks, event = create_tasks()
+                sleep(0.1)
+                done,  pending = waitany(convert_tasks(tasks_type, tasks))
+                @test length(done) == 2
+                @test tasks[1] ∈ done
+                @test tasks[2] ∈ done
+                @test length(pending) == 1
+                @test tasks[3] ∈ pending
+                teardown(tasks, event)
+            end
+
+            @testset "throw=true" begin
+                tasks, event = create_tasks()
+                push!(tasks, Threads.@spawn error("Error"))
+
+                @test_throws CompositeException begin
+                    waitany(convert_tasks(tasks_type, tasks); throw=true)
+                end
+
+                teardown(tasks, event)
+            end
         end
 
         @testset "waitall" begin
