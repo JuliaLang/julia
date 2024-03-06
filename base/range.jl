@@ -68,8 +68,10 @@ Mathematically a range is uniquely determined by any three of `start`, `step`, `
 Valid invocations of range are:
 * Call `range` with any three of `start`, `step`, `stop`, `length`.
 * Call `range` with two of `start`, `stop`, `length`. In this case `step` will be assumed
-  to be one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
+  to be positive one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
 * Call `range` with one of `stop` or `length`. `start` and `step` will be assumed to be one.
+
+To construct a reverse range, specify a step size of -1.
 
 See Extended Help for additional details on the returned type.
 See also [`logrange`](@ref) for logarithmically spaced points.
