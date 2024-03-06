@@ -17,8 +17,8 @@ concurrently.
     Scoped values were introduced in Julia 1.11. In Julia 1.8+ a compatible
     implementation is available from the package ScopedValues.jl.
 
-In its simplest form you can create a [`ScopedValue`](@ref) with a
-default value and then use [`with`](@ref Base.with) or [`@with`](@ref) to
+In its simplest form you can create a [`Base.ScopedValue`](@ref) with a
+default value and then use [`Base.with`](@ref with) or [`Base.@with`](@ref) to
 enter a new dynamic scope.
 
 The new scope will inherit all values from the parent scope
@@ -54,6 +54,8 @@ f() # 1
 Now using a `ScopedValue` we can use **dynamic** scoping.
 
 ```julia
+using Base.ScopedValues
+
 x = ScopedValue(1)
 f() = @show x[]
 with(x=>5) do
@@ -70,6 +72,8 @@ and you can set the value of multiple `ScopedValue`s with one call to `with`.
 
 
 ```julia
+using Base.ScopedValues
+
 const scoped_val = ScopedValue(1)
 const scoped_val2 = ScopedValue(0)
 
@@ -94,6 +98,8 @@ Since `with` requires a closure or a function and creates another call-frame,
 it can sometimes be beneficial to use the macro form.
 
 ```julia
+using Base.ScopedValues
+
 const STATE = ScopedValue{State}()
 with_state(f, state::State) = @with(STATE => state, f())
 ```
@@ -106,7 +112,9 @@ The parent task and the two child tasks observe independent values of the
 same scoped value at the same time.
 
 ```julia
+using Base.ScopedValues
 import Base.Threads: @spawn
+
 const scoped_val = ScopedValue(1)
 @sync begin
     with(scoped_val => 2)
@@ -128,7 +136,9 @@ values. You might want to explicitly [unshare mutable state](@ref unshare_mutabl
 when entering a new dynamic scope.
 
 ```julia
+using Base.ScopedValues
 import Base.Threads: @spawn
+
 const sval_dict = ScopedValue(Dict())
 
 # Example of using a mutable value wrongly
@@ -161,6 +171,8 @@ are not well suited for this kind of propagation; our only alternative would hav
 been to thread a value through the entire call-chain.
 
 ```julia
+using Base.ScopedValues
+
 const LEVEL = ScopedValue(:GUEST)
 
 function serve(request, response)
@@ -189,7 +201,9 @@ end
 ### [Unshare mutable state](@id unshare_mutable_state)
 
 ```julia
+using Base.ScopedValues
 import Base.Threads: @spawn
+
 const sval_dict = ScopedValue(Dict())
 
 # If you want to add new values to the dict, instead of replacing
@@ -210,6 +224,7 @@ be in (lexical) scope. This means most often you likely want to use scoped value
 as constant globals.
 
 ```julia
+using Base.ScopedValues
 const sval = ScopedValue(1)
 ```
 
@@ -218,7 +233,9 @@ Indeed one can think of scoped values as hidden function arguments.
 This does not preclude their use as non-globals.
 
 ```julia
+using Base.ScopedValues
 import Base.Threads: @spawn
+
 function main()
     role = ScopedValue(:client)
 
@@ -241,6 +258,8 @@ If you find yourself creating many `ScopedValue`'s for one given module,
 it may be better to use a dedicated struct to hold them.
 
 ```julia
+using Base.ScopedValues
+
 Base.@kwdef struct Configuration
     color::Bool = false
     verbose::Bool = false
@@ -260,7 +279,7 @@ end
 Base.ScopedValues.ScopedValue
 Base.ScopedValues.with
 Base.ScopedValues.@with
-Base.isassigned(::ScopedValue)
+Base.isassigned(::Base.ScopedValues.ScopedValue)
 Base.ScopedValues.get
 ```
 
