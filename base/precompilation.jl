@@ -338,12 +338,23 @@ end
 const Config = Pair{Cmd, Base.CacheFlags}
 const PkgConfig = Tuple{Base.PkgId,Config}
 
-function precompilepkgs(pkgs::Vector{String}=String[]; internal_call::Bool=false,
-                    strict::Bool=false, warn_loaded = true, timing::Bool = false,
-                    _from_loading::Bool=false, configs::Union{Config,Vector{Config}}=(``=>Base.CacheFlags()),
-                    io::IO=stderr)
-    time_start = time_ns()
+function precompilepkgs(pkgs::Vector{String}=String[];
+                        internal_call::Bool=false,
+                        strict::Bool = false,
+                        warn_loaded::Bool = true,
+                        timing::Bool = false,
+                        _from_loading::Bool=false,
+                        configs::Union{Config,Vector{Config}}=(``=>Base.CacheFlags()),
+                        io::IO=stderr,
+                        flags_cacheflags=nothing)
+
+    if flags_cacheflags !== nothing
+        # TODO: Remove `flags_cacheflags` once Pkg moves to the renamed kwarg `configs`
+        configs = flags_cacheflags
+    end
     configs = configs isa Config ? [configs] : configs
+
+    time_start = time_ns()
 
     env = ExplicitEnv()
 
