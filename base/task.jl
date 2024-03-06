@@ -367,9 +367,9 @@ end
 
 # Wait multiple tasks
 waitany(tasks) = _wait_multiple(tasks)
-waitall(tasks; failfast=false) = _wait_multiple(tasks; all=true, failfast=failfast)
+waitall(tasks; failfast=false) = _wait_multiple(tasks, true, failfast)
 
-function _wait_multiple(waiting_tasks; all=false, failfast=false)
+function _wait_multiple(waiting_tasks, all=false, failfast=false)
     tasks = Task[]
 
     for t in waiting_tasks
