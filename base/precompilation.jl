@@ -549,11 +549,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         target = "project"
     end
     if length(configs) > 1 || !isempty(only(configs)[1]) # if multiple configs or only one is not default
-        target *= " for $(length(configs)) compilation configurations:"
-        for (i, config) in enumerate(configs)
-            conf = config[1] == `` ? "$(repr(config[1])) (default)" : "$(repr(config[1]))"
-            target *= "\n" * color_string("  $i) $conf", :light_black)
-        end
+        target *= " for $(length(configs)) compilation configurations..."
     else
         target *= "..."
     end
@@ -678,8 +674,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             _name = haskey(exts, dep) ? string(exts[dep], " → ", dep.name) : dep.name
                             name = dep in direct_deps ? _name : string(color_string(_name, :light_black))
                             if length(configs) > 1
-                                config_num = findfirst(isequal(config), configs) # TODO: make more efficient
-                                name *= color_string(" ($(config_num))", :light_black)
+                                config_str = isempty(config[1]) ? "" : "$(join(config[1], " "))"
+                                name *= color_string(" $(config_str)", :light_black)
                             end
                             line = if dep_config in precomperr_deps
                                 string(color_string("  ? ", Base.warn_color()), name)
@@ -738,7 +734,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         cachepaths = Base.find_all_in_cache_path(pkg)
         sourcepath = Base.locate_package(pkg)
         single_requested_pkg = length(pkgs) == 1 && only(pkgs) == pkg.name
-        for (config_num, config) in enumerate(configs)
+        for config in configs
             pkg_config = (pkg, config)
             if sourcepath === nothing
                 failed_deps[pkg_config] = "Error: Missing source file for $(pkg)"
@@ -770,7 +766,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         _name = haskey(exts, pkg) ? string(exts[pkg], " → ", pkg.name) : pkg.name
                         name = is_direct_dep ? _name : string(color_string(_name, :light_black))
                         if length(configs) > 1
-                            name *= color_string(" ($(config_num))", :light_black)
+                            config_str = isempty(config[1]) ? "" : "$(join(config[1], " "))"
+                            name *= color_string(" $(config_str)", :light_black)
                         end
                         !fancyprint && lock(print_lock) do
                             isempty(pkg_queue) && printpkgstyle(io, :Precompiling, target)
