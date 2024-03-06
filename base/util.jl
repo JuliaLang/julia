@@ -282,6 +282,9 @@ suffix ': ' will be appended to `message`.
     `Base.winprompt` for securely retrieving username/password pairs from a
     graphical interface.
 
+!!! compat "Julia 1.12"
+    The `with_suffix` keyword argument requires at least Julia 1.12.
+
 # Examples
 
 ```julia-repl
