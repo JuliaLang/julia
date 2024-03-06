@@ -358,7 +358,8 @@ function precompilepkgs(pkgs::Vector{String}=String[]; internal_call::Bool=false
     # asking for timing disables fancy mode, as timing is shown in non-fancy mode
     fancyprint = can_fancyprint(io) && !timing
 
-    if _from_loading && !Sys.isinteractive()
+    if _from_loading && !Sys.isinteractive() && Base.get_bool_env("JULIA_TESTS", false)
+        # suppress passive loading printing in julia test suite. `JULIA_TESTS` is set in Base.runtests
         io = devnull
     end
 
