@@ -8,6 +8,7 @@ include $(JULIAHOME)/stdlib/stdlib.mk
 # set some influential environment variables
 export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
 export JULIA_LOAD_PATH := @stdlib:$(JULIAHOME)/stdlib
+export JULIA_CPU_TARGET := $(JULIA_CPU_TARGET)
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
