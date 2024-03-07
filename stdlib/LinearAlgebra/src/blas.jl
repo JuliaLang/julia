@@ -168,7 +168,7 @@ end
 "Check that upper/lower (for special matrices) is correctly specified"
 function chkuplo(uplo::AbstractChar)
     if !(uplo == 'U' || uplo == 'L')
-        throw(ArgumentError(lazy"uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
+        throw(ArgumentError(lazy"uplo argument must be 'U' (upper) or 'L' (lower), got '$uplo'"))
     end
     uplo
 end
