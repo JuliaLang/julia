@@ -71,9 +71,9 @@ Valid invocations of range are:
   to be positive one. If both arguments are Integers, a [`UnitRange`](@ref) will be returned.
 * Call `range` with one of `stop` or `length`. `start` and `step` will be assumed to be positive one.
 
-To construct a descending range, specify a negative step size, e.g. `5:-1:1 == [5,4,3,2,1]`.  Otherwise,
-the default step of `+1` means that a range like `5:1` indicates an empty range (which is normalized to `5:4`,
-so that the end of the range is one before the starting element).
+To construct a descending range, specify a negative step size, e.g. `range(5, 1; step = -1)` => [5,4,3,2,1]. Otherwise,
+a `stop` value less than the `start` value, with the default `step` of `+1`, constructs an empty range. Empty ranges
+are normalized such that the `stop` is one less than the `start`, e.g. `range(5, 1) == 5:4`.
 
 See Extended Help for additional details on the returned type.
 See also [`logrange`](@ref) for logarithmically spaced points.
