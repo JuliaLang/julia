@@ -1331,11 +1331,11 @@ function handle_any_const_result!(cases::Vector{InliningCase},
     @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
     allow_abstract::Bool, allow_typevars::Bool)
     if isa(result, ConcreteResult)
-        return handle_concrete_result!(cases, result, info, state)
+        return handle_concrete_result!(cases, result, match, info, state)
     elseif isa(result, SemiConcreteResult)
-        return handle_semi_concrete_result!(cases, result, info, flag, state; allow_abstract)
+        return handle_semi_concrete_result!(cases, result, match, info, flag, state; allow_abstract)
     elseif isa(result, ConstPropResult)
-        return handle_const_prop_result!(cases, result, info, flag, state; allow_abstract, allow_typevars)
+        return handle_const_prop_result!(cases, result, match, info, flag, state; allow_abstract, allow_typevars)
     else
         @assert result === nothing || result isa VolatileInferenceResult
         return handle_match!(cases, match, argtypes, info, flag, state; allow_abstract, allow_typevars, volatile_inf_result = result)
@@ -1481,11 +1481,11 @@ function handle_match!(cases::Vector{InliningCase},
     return true
 end
 
-function handle_const_prop_result!(cases::Vector{InliningCase},
-    result::ConstPropResult, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
+function handle_const_prop_result!(cases::Vector{InliningCase}, result::ConstPropResult,
+    match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
     allow_abstract::Bool, allow_typevars::Bool)
     mi = result.result.linfo
-    spec_types = mi.specTypes
+    spec_types = match.spec_types
     allow_abstract || isdispatchtuple(spec_types) || return false
     if !validate_sparams(mi.sparam_vals)
         (allow_typevars && !may_have_fcalls(mi.def::Method)) || return false
@@ -1520,10 +1520,10 @@ function semiconcrete_result_item(result::SemiConcreteResult,
 end
 
 function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiConcreteResult,
-        @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
-        allow_abstract::Bool)
+    match::MethodMatch, @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
+    allow_abstract::Bool)
     mi = result.mi
-    spec_types = mi.specTypes
+    spec_types = match.spec_types
     allow_abstract || isdispatchtuple(spec_types) || return false
     validate_sparams(mi.sparam_vals) || return false
     item = semiconcrete_result_item(result, info, flag, state)
@@ -1532,10 +1532,11 @@ function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiC
     return true
 end
 
-function handle_concrete_result!(cases::Vector{InliningCase}, result::ConcreteResult, @nospecialize(info::CallInfo), state::InliningState)
+function handle_concrete_result!(cases::Vector{InliningCase}, result::ConcreteResult,
+    match::MethodMatch, @nospecialize(info::CallInfo), state::InliningState)
     case = concrete_result_item(result, info, state)
     case === nothing && return false
-    push!(cases, InliningCase(result.mi.specTypes, case))
+    push!(cases, InliningCase(match.spec_types, case))
     return true
 end
 

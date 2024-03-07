@@ -5627,3 +5627,15 @@ end
 
 # Issue #52613
 @test (code_typed((Any,)) do x; TypeVar(x...); end)[1][2] === TypeVar
+
+# https://github.com/JuliaLang/julia/issues/53590
+func53590(b) = b ? Int : Float64
+function issue53590(b1, b2)
+    T1 = func53590(b1)
+    T2 = func53590(b2)
+    return typejoin(T1, T2)
+end
+@test issue53590(true, true) == Int
+@test issue53590(true, false) == Real
+@test issue53590(false, false) == Float64
+@test issue53590(false, true) == Real
