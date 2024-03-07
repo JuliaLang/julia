@@ -99,9 +99,8 @@ g() # b[] = 2
 `ScopedValues` provides a macro version of `with`. The expression `@with var=>val expr`
 evaluates `expr` in a new dynamic scope with `var` set to `val`. `@with var=>val expr`
 is equivalent to `with(var=>val) do expr end`. However, `with` requires a zero-argument
-closure or function, which results in an extra call-frame. If you wish to avoid the
-extra call-frame, then you can use the macro form. As an example, consider the following
-function `f`:
+closure or function, which results in an extra call-frame. As an example, consider the
+following function `f`:
 
 ```julia
 using Base.ScopedValues
