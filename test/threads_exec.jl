@@ -1212,7 +1212,6 @@ end
 
     function teardown(tasks, event)
         notify(event)
-        yield()
         wait(tasks[3])
     end
 
