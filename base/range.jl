@@ -42,6 +42,7 @@ equal to +1, which produces:
 [`StepRangeLen`](@ref)). See also [`range`](@ref) for more control.
 
 To create a descending range, use `reverse(a:b)` or a negative step size, e.g. `b:-1:a`.
+Otherwise, when `b < a`, an empty range will be constructed, normalized to `a:a-1`.
 
 The operator `:` is also used in indexing to select whole dimensions, e.g. in `A[:, 1]`.
 
