@@ -634,6 +634,17 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
     }
 }
 
+#elif defined(__OpenBSD__)
+
+JL_DLLEXPORT int jl_profile_start_timer(void)
+{
+	return -1;
+}
+
+JL_DLLEXPORT void jl_profile_stop_timer(void)
+{
+}
+
 #else
 
 #error no profile tools available
