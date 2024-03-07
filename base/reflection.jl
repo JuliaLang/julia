@@ -1585,9 +1585,13 @@ function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f)); kwargs
     return code_typed_by_type(tt; kwargs...)
 end
 
-# returns argument tuple type which is supposed to be used for `code_typed` and its family;
-# if there is a single method this functions returns the method argument signature,
-# otherwise returns `Tuple` that doesn't match with any signature
+"""
+    default_tt(f)
+
+Returns the argument tuple type for use in calls to [`code_typed`](@ref);
+if there is a single method this functions returns the method argument signature,
+otherwise returns `Tuple` which will not match with any signature.
+"""
 function default_tt(@nospecialize(f))
     ms = methods(f)
     if length(ms) == 1
