@@ -746,7 +746,7 @@ function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, 
 end
 
 function is_same_frame(interp::AbstractInterpreter, mi::MethodInstance, frame::InferenceState)
-    return mi === frame_instance(frame) && interp === frame.interp
+    return mi === frame_instance(frame) && cache_owner(interp) === cache_owner(frame.interp)
 end
 
 function poison_callstack!(infstate::InferenceState, topmost::InferenceState)
