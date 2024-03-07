@@ -1212,7 +1212,7 @@ end
 
     function teardown(tasks, event)
         notify(event)
-        wait(tasks[3])
+        waitall(resize!(tasks, 3), throw=true)
     end
 
     for tasks_type in (Vector{Task}, Set{Task}, Tuple{Task})
