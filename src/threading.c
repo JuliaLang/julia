@@ -985,10 +985,10 @@ JL_DLLEXPORT int jl_alignment(size_t sz)
 }
 
 // Return values:
-//     0 == success
-//     1 == invalid thread id provided
-//     2 == ptls2 was NULL
-//     3 == uv_thread_getaffinity failed with a non-zero exit code
+//     0  == success
+//     1  == invalid thread id provided
+//     2  == ptls2 was NULL
+//     <0 == uv_thread_getaffinity exit code
 JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize) {
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     if (tid < 0 || tid >= nthreads)
@@ -1002,16 +1002,16 @@ JL_DLLEXPORT int jl_getaffinity(int16_t tid, char *mask, int cpumasksize) {
 
     int ret_uv = uv_thread_getaffinity(&uvtid, mask, cpumasksize);
     if (ret_uv != 0)
-        return 3;
+        return ret_uv;
 
     return 0; // success
 }
 
 // Return values:
-//     0 == success
-//     1 == invalid thread id provided
-//     2 == ptls2 was NULL
-//     3 == uv_thread_setaffinity failed with a non-zero exit code
+//     0  == success
+//     1  == invalid thread id provided
+//     2  == ptls2 was NULL
+//     <0 == uv_thread_getaffinity exit code
 JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     if (tid < 0 || tid >= nthreads)
@@ -1025,7 +1025,7 @@ JL_DLLEXPORT int jl_setaffinity(int16_t tid, char *mask, int cpumasksize) {
 
     int ret_uv = uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
     if (ret_uv != 0)
-        return 3;
+        return ret_uv;
 
     return 0; // success
 }
