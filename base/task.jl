@@ -414,7 +414,7 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
             exception |= istaskfailed(t)
         end
         if exception && throwexc
-            exceptions = [t.exception for t in tasks if istaskfailed(t)]
+            exceptions = [TaskFailedException(t) for t in tasks if istaskfailed(t)]
             throw(CompositeException(exceptions))
         else
             return tasks, Task[]
@@ -438,7 +438,7 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
         return tasks, Task[]
     elseif any(done_mask) && (!all || (failfast && exception))
         if throwexc && (!all || failfast) && exception
-            exceptions = [t.exception for t in tasks[done_mask] if istaskfailed(t)]
+            exceptions = [TaskFailedException(t) for t in tasks[done_mask] if istaskfailed(t)]
             throw(CompositeException(exceptions))
         else
             return tasks[done_mask], tasks[.~done_mask]
@@ -493,7 +493,7 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
         end
         done_tasks = tasks[done_mask]
         if throwexc && exception
-            exceptions = [t.exception for t in done_tasks if istaskfailed(t)]
+            exceptions = [TaskFailedException(t) for t in done_tasks if istaskfailed(t)]
             throw(CompositeException(exceptions))
         else
             return done_tasks, tasks[remaining_mask]
