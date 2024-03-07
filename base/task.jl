@@ -366,7 +366,35 @@ function wait(t::Task)
 end
 
 # Wait multiple tasks
+
+"""
+    waitany(tasks; throw=false) -> (done_tasks, remaining_tasks)
+
+Wait until at least one of the given tasks have been completed.
+
+If `throw` is `true`, the `CompositeException` will be thrown when one of the
+completed tasks completes with an exception.
+
+The return value consists of two task vectors. The first one consists of
+completed tasks, and the other consists of uncompleted tasks.
+"""
 waitany(tasks; throw=false) = _wait_multiple(tasks, throw)
+
+"""
+    waitall(tasks; failfast=false, throw=false) -> (done_tasks, remaining_tasks)
+
+Wait until all the given tasks have been completed.
+
+If `failfast` is `true`, the function will return when at least one of the
+given tasks is finished by exception. If `throw` is `true`, the
+`CompositeException` will be thrown when one of the completed tasks has failed.
+
+`failfast` and `throw` keyword arguments work independently; when only
+`throw=true` is specified, this function waits for all the tasks to complete.
+
+The return value consists of two task vectors. The first one consists of
+completed tasks, and the other consists of uncompleted tasks.
+"""
 waitall(tasks; failfast=false, throw=false) = _wait_multiple(tasks, throw, true, failfast)
 
 function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false)
