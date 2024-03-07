@@ -61,6 +61,8 @@ See also: [`ScopedValues.with`](@ref), [`ScopedValues.@with`](@ref), [`ScopedVal
 
 # Examples
 ```jldoctest
+julia> using Base.ScopedValues
+
 julia> a = ScopedValue(1); b = ScopedValue{Int}();
 
 julia> isassigned(a)
