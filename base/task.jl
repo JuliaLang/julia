@@ -405,7 +405,7 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
         push!(tasks, t)
     end
 
-    if all && !failfast
+    if (all && !failfast) || length(tasks) <= 1
         exception = false
         # Force everything to finish synchronously for the case of waitall
         # with failfast=false
