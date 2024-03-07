@@ -1220,7 +1220,8 @@ end
         @testset "waitany" begin
             @testset "no options" begin
                 tasks, event = create_tasks()
-                sleep(0.1)
+                wait(tasks[1])
+                wait(tasks[2])
                 done,  pending = waitany(convert_tasks(tasks_type, tasks))
                 @test length(done) == 2
                 @test tasks[1] ∈ done
@@ -1246,7 +1247,8 @@ end
             @testset "All tasks succeed" begin
                 tasks, event = create_tasks()
 
-                sleep(0.1)
+                wait(tasks[1])
+                wait(tasks[2])
                 waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks))
                 @test !istaskdone(waiter)
 
@@ -1263,7 +1265,8 @@ end
                 tasks, event = create_tasks()
                 push!(tasks, Threads.@spawn error("Error"))
 
-                sleep(0.1)
+                wait(tasks[1])
+                wait(tasks[2])
                 waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks); failfast=true)
 
                 done, pending = fetch(waiter)
@@ -1281,7 +1284,6 @@ end
                 tasks, event = create_tasks()
                 push!(tasks, Threads.@spawn error("Error"))
 
-                sleep(0.1)
                 notify(event)
 
                 @test_throws CompositeException begin
