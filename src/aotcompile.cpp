@@ -303,6 +303,12 @@ jl_code_instance_t *jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_
         }
         else {
             codeinst = jl_type_infer(mi, world, 0, SOURCE_MODE_ABI);
+            /* Even if this codeinst is ordinarily not cacheable, we need to force
+             * it into the cache here, since it was explicitly requested and is
+             * otherwise not reachable from anywhere in the system image.
+             */
+            if (!jl_mi_cache_has_ci(mi, codeinst))
+                jl_mi_cache_insert(mi, codeinst);
         }
     }
     return codeinst;

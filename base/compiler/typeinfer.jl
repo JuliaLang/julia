@@ -1139,11 +1139,13 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
             return code
         end
     end
+
     # Inference result is not cacheable or is was cacheable, but we do not want to
     # store the source in the cache, but the caller wanted it anyway (e.g. for reflection).
     # We construct a new CodeInstance for it that is not part of the cache hierarchy.
     code = CodeInstance(interp, result, can_discard_trees=(
-        source_mode != SOURCE_MODE_FORCE_SOURCE && source_mode != SOURCE_MODE_FORCE_SOURCE_UNCACHED))
+        source_mode != SOURCE_MODE_FORCE_SOURCE && source_mode != SOURCE_MODE_FORCE_SOURCE_UNCACHED &&
+        is_result_constabi_eligible(result)))
 
     # If the caller cares about the code and this is constabi, still use our synthesis function
     # anyway, because we will have not finished inferring the code inside the CodeInstance once
@@ -1151,6 +1153,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     if use_const_api(code) && source_mode in (SOURCE_MODE_FORCE_SOURCE, SOURCE_MODE_FORCE_SOURCE_UNCACHED)
         return codeinstance_for_const_with_code(interp, code)
     end
+    @assert ci_meets_requirement(code, source_mode, false)
     return code
 end
 
