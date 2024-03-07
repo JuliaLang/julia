@@ -31,3 +31,7 @@ $(BUILDDIR)/stdlib/%.image: | $(JULIAHOME)/stdlib/Project.toml $(JULIAHOME)/stdl
 
 $(BUILDDIR)/stdlib/release.image: | $(build_private_libdir)/sys.$(SHLIB_EXT)
 $(BUILDDIR)/stdlib/debug.image: | $(build_private_libdir)/sys-debug.$(SHLIB_EXT)
+
+clean:
+	rm -rf $(JULIA_DEPOT_PATH)/compiled
+	rm -f $(BUILDDIR)/stdlib/*.image
