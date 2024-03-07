@@ -96,16 +96,6 @@ f() # a[] = 1
 g() # b[] = 2
 ```
 
-Since `with` requires a closure or a function and creates another call-frame,
-it can sometimes be beneficial to use the macro form.
-
-```julia
-using Base.ScopedValues
-
-const STATE = ScopedValue{State}()
-with_state(f, state::State) = @with(STATE => state, f())
-```
-
 `ScopedValues` provides a macro version of `with`. The expression `@with var=>val expr`
 evaluates `expr` in a new dynamic scope with `var` set to `val`. `@with var=>val expr`
 is equivalent to `with(var=>val) do expr end`. However, `with` requires a zero-argument
