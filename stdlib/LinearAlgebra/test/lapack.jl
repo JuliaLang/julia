@@ -9,7 +9,7 @@ using LinearAlgebra: BlasInt
 @test_throws ArgumentError LinearAlgebra.LAPACK.chkside('Z')
 @test_throws ArgumentError LinearAlgebra.LAPACK.chkdiag('Z')
 @test_throws ArgumentError LinearAlgebra.LAPACK.chktrans('Z')
-@test_throws ArgumentError LinearAlgebra.LAPACK.chkvalidparam("job", 2, (0,1))
+@test_throws ArgumentError LinearAlgebra.LAPACK.chkvalidparam(1, "job", 2, (0,1))
 
 @testset "syevr" begin
     Random.seed!(123)
