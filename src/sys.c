@@ -638,15 +638,15 @@ JL_DLLEXPORT long jl_SC_CLK_TCK(void)
 #ifdef _OS_OPENBSD_
 // Helper for jl_pathname_for_handle()
 struct dlinfo_data {
-	void       *searched;
-	const char *result;
+    void       *searched;
+    const char *result;
 };
 
 static int dlinfo_helper(struct dl_phdr_info *info, size_t size, void *vdata)
 {
     struct dlinfo_data *data = (struct dlinfo_data *)vdata;
     void *handle;
-    
+
     /* ensure dl_phdr_info at compile-time to be compatible with the one at runtime */
     if (sizeof(*info) < size)
         return -1;
@@ -659,7 +659,7 @@ static int dlinfo_helper(struct dl_phdr_info *info, size_t size, void *vdata)
     /* check if the opened library is the same as the searched handle */
     if (data->searched == handle)
         data->result = info->dlpi_name;
-    
+
     dlclose(handle);
 
     /* continue if still not found */

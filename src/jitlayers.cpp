@@ -119,7 +119,7 @@ extern "C" {
     __int128 __modti3(__int128, __int128);
     unsigned __int128 __udivti3(unsigned __int128, unsigned __int128);
     unsigned __int128 __umodti3(unsigned __int128, unsigned __int128);
-}   
+}
 #endif
 
 // Snooping on which functions are being compiled, and how long it takes
@@ -1742,10 +1742,10 @@ JuliaOJIT::JuliaOJIT()
     i128_crt[mangle("__modti3")] = JITEvaluatedSymbol::fromPointer(&__modti3, JITSymbolFlags::Exported);
     i128_crt[mangle("__udivti3")] = JITEvaluatedSymbol::fromPointer(&__udivti3, JITSymbolFlags::Exported);
     i128_crt[mangle("__umodti3")] = JITEvaluatedSymbol::fromPointer(&__umodti3, JITSymbolFlags::Exported);
-    
+
     cantFail(GlobalJD.define(orc::absoluteSymbols(i128_crt)));
 #endif
-    
+
 #ifdef MSAN_EMUTLS_WORKAROUND
     orc::SymbolMap msan_crt;
     msan_crt[mangle("__emutls_get_address")] = JITEvaluatedSymbol::fromPointer(msan_workaround::getTLSAddress, JITSymbolFlags::Exported);

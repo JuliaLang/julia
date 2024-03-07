@@ -638,7 +638,7 @@ JL_DLLEXPORT void jl_profile_stop_timer(void)
 
 JL_DLLEXPORT int jl_profile_start_timer(void)
 {
-	return -1;
+    return -1;
 }
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
@@ -683,7 +683,7 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     ss.ss_flags = 0;
     ss.ss_size = ssize;
     assert(ssize != 0);
-    
+
 #ifndef _OS_OPENBSD_
     /* fallback to malloc(), but it isn't possible on OpenBSD */
     if (signal_stack == NULL) {
