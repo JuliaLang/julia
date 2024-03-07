@@ -17,8 +17,8 @@ concurrently.
     Scoped values were introduced in Julia 1.11. In Julia 1.8+ a compatible
     implementation is available from the package ScopedValues.jl.
 
-In its simplest form you can create a [`ScopedValues.ScopedValue`](@ref) with a
-default value and then use [`ScopedValues.with`](@ref) or [`ScopedValues.@with`](@ref)
+In its simplest form you can create a [`ScopedValue`](@ref Base.ScopedValue) with a
+default value and then use [`with`](@ref Base.with) or [`@with`](@ref Base.@with)
 to enter a new dynamic scope. The new scope will inherit all values from the parent scope
 (and recursively from all outer scopes) with the provided scoped
 value taking priority over previous definitions.
