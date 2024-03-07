@@ -1802,7 +1802,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     auto Lookups = ES.lookup({{&JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}}, NewExports);
     if (!Lookups) {
         ES.reportError(Lookups.takeError());
-        errs() << "Failed to lookup symbols in module!";
+        errs() << "Failed to lookup symbols in module!\n";
         if (CurrentlyCompiling) {
             CurrentlyCompiling.withModuleDo([](Module &M) JL_NOTSAFEPOINT { errs() << "Dumping failing module\n" << M << "\n"; });
         } else {
