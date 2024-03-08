@@ -19,7 +19,8 @@ Number
 """
 typejoin() = Bottom
 typejoin(@nospecialize(t)) = (@_nospecializeinfer_meta; t)
-typejoin(@nospecialize(t), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(t, typejoin(ts...)))
+typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u)) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(typejoin(t, s), u))
+typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; afoldl(typejoin, typejoin(t, s, u), ts...))
 function typejoin(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
     @_nospecializeinfer_meta
@@ -299,7 +300,8 @@ function promote_type end
 
 promote_type()  = Bottom
 promote_type(T) = T
-promote_type(T, S, U, V...) = (@inline; promote_type(T, promote_type(S, U, V...)))
+promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
+promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
 promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type(::Type{T}, ::Type{T}) where {T} = T
@@ -373,7 +375,9 @@ function _promote(x::T, y::S) where {T,S}
     return (convert(R, x), convert(R, y))
 end
 promote_typeof(x) = typeof(x)
-promote_typeof(x, xs...) = (@inline; promote_type(typeof(x), promote_typeof(xs...)))
+promote_typeof(x, y) = (@inline; promote_type(typeof(x), typeof(y)))
+promote_typeof(x, y, z) = (@inline; promote_type(typeof(x), typeof(y), typeof(z)))
+promote_typeof(x, y, z, a...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, typeof(y)), promote_typeof(x, y, z), a...))
 function _promote(x, y, z)
     @inline
     R = promote_typeof(x, y, z)
