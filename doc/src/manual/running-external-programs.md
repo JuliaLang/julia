@@ -307,7 +307,9 @@ IO redirection can be accomplished by passing keyword arguments `stdin`, `stdout
 ```julia
 pipeline(`do_work`, stdout=pipeline(`sort`, "out.txt"), stderr="errs.txt")
 ```
-For example, you can pass a `IOBuffer`, and later read from it, after resetting the stream back to its beginning.
+
+For example, you can pass a `IOBuffer`, and later read from it, after resetting the stream back to its beginning:
+
 ```julia
 julia> io = IOBuffer();
 
