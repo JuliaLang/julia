@@ -29,7 +29,7 @@ let code = Any[
         ReturnNode(Core.SSAValue(10)),
     ]
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
     phi = ir.stmts.stmt[3]
@@ -47,7 +47,7 @@ let code = Any[]
     push!(code, Expr(:call, :opaque))
     push!(code, ReturnNode(nothing))
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
 end
