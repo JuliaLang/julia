@@ -1788,6 +1788,9 @@ void jl_dump_native_impl(void *native_code,
         // reflect the address of the jl_RTLD_DEFAULT_handle variable
         // back to the caller, so that we can check for consistency issues
         GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(&metadataM);
+        if (TheTriple.isOSBinFormatCOFF()) {
+            jlRTLD_DEFAULT_var->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
+        }
         addComdat(new GlobalVariable(metadataM,
                                     jlRTLD_DEFAULT_var->getType(),
                                     true,
