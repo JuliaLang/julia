@@ -689,6 +689,10 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
     if callee_method2 !== inf_method2
         return false
     end
+    if isa(frame, InferenceState) && cache_owner(frame.interp) !== cache_owner(interp)
+        # Don't assume that frames in different interpreters are the same
+        return false
+    end
     if !hardlimit || InferenceParams(interp).ignore_recursion_hardlimit
         # if this is a soft limit,
         # also inspect the parent of this edge,
