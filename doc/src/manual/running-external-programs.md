@@ -307,7 +307,18 @@ IO redirection can be accomplished by passing keyword arguments `stdin`, `stdout
 ```julia
 pipeline(`do_work`, stdout=pipeline(`sort`, "out.txt"), stderr="errs.txt")
 ```
+For example, you can pass a `IOBuffer`, and later read from it, after resetting the stream back to its beginning.
+```julia
+julia> io = IOBuffer();
 
+julia> run(pipeline(`echo world`; stdout=io));
+
+julia> seekstart(io);
+
+julia> readlines(io)
+1-element Vector{String}:
+ "world"
+```
 ### Avoiding Deadlock in Pipelines
 
 When reading and writing to both ends of a pipeline from a single process, it is important to
