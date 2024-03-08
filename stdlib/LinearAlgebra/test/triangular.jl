@@ -1000,6 +1000,8 @@ end
     M = rand(2,2)
     @test LinearAlgebra.uppertriangular(M) === UpperTriangular(M)
     @test LinearAlgebra.lowertriangular(M) === LowerTriangular(M)
+    @test LinearAlgebra.uppertriangular(UnitUpperTriangular(M)) === UnitUpperTriangular(M)
+    @test LinearAlgebra.lowertriangular(UnitLowerTriangular(M)) === UnitLowerTriangular(M)
 end
 
 @testset "arithmetic with partly uninitialized matrices" begin
