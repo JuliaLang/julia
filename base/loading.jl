@@ -726,6 +726,19 @@ function project_file_path(project_file::String)
     joinpath(dirname(project_file), get(d, "path", "")::String)
 end
 
+function subproject_manifest(project_file)
+    base_dir = joinpath(dirname(project_file), "..")
+    base_project = env_project_file(base_dir)
+    base_project isa String || return nothing
+    d = parsed_toml(base_project)
+    subprojects = get(d, "subprojects", nothing)::Union{Vector{String}, Nothing}
+    subprojects === nothing && return nothing
+    if basename(dirname(project_file)) in subprojects
+        return project_file_manifest_path(base_project)
+    end
+    return nothing
+end
+
 # find project file's corresponding manifest file
 function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     @lock require_lock begin
@@ -736,6 +749,10 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
     end
     dir = abspath(dirname(project_file))
     d = parsed_toml(project_file)
+    base_manifest = subproject_manifest(project_file)
+    if base_manifest !== nothing
+        return base_manifest
+    end
     explicit_manifest = get(d, "manifest", nothing)::Union{String, Nothing}
     manifest_path = nothing
     if explicit_manifest !== nothing

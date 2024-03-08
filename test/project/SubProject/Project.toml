@@ -1,0 +1,4 @@
+subprojects = ["sub"]
+
+[deps]
+Devved = "cbce3a6e-7a3d-4e84-8e6d-b87208df7599"

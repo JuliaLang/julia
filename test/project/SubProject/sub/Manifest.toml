@@ -1,0 +1,10 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.10.2"
+manifest_format = "2.0"
+project_hash = "b351377615643474208e078d0f552ff422673065"
+
+[[deps.Devved]]
+path = "../Devved"
+uuid = "cbce3a6e-7a3d-4e84-8e6d-b87208df7599"
+version = "0.1.0"

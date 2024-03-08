@@ -1550,3 +1550,16 @@ end
     rot13proj = joinpath(@__DIR__, "project", "Rot13")
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --project=$rot13proj -m Rot13 --project nowhere ABJURER`) == "--cebwrpg abjurer NOWHERE "
 end
+
+@testset "subproject loading" begin
+   # subproject loading
+   old_load_path = copy(LOAD_PATH)
+   try
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "sub"))
+       id = Base.identify_package("Devved")
+       @test isfile(Base.locate_package(id))
+   finally
+       copy!(LOAD_PATH, old_load_path)
+   end
+end
