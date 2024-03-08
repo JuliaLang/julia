@@ -321,6 +321,14 @@ julia> readlines(io)
 1-element Vector{String}:
  "world"
 ```
+
+However, keep in mind that a similar functionality can be easier accomplished by directly passing the command:
+```julia
+julia> readlines(`echo world`)
+1-element Vector{String}:
+ "world"
+ ```
+
 ### Avoiding Deadlock in Pipelines
 
 When reading and writing to both ends of a pipeline from a single process, it is important to
