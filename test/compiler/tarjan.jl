@@ -102,7 +102,7 @@ function test_reachability(V, E; deletions = 2E ÷ 3, all_checks=false)
     end
 
     cfg = rand_cfg(V, E)
-    domtree = Core.Compiler.construct_domtree(cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(cfg)
     reachability = CFGReachability(cfg, domtree)
     check_reachability(reachability, cfg, domtree, all_checks)
 
