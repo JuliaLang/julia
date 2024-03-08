@@ -687,6 +687,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     pathsep = Sys.iswindows() ? ";" : ":"
     ENV2["JULIA_DEPOT_PATH"] = string(mktempdir(; cleanup = true), pathsep) # make sure the default depots can be loaded
     ENV2["JULIA_LOAD_PATH"] = string("@", pathsep, "@stdlib")
+    ENV2["JULIA_TESTS"] = "true"
     delete!(ENV2, "JULIA_PROJECT")
     try
         run(setenv(`$(julia_cmd()) $(joinpath(Sys.BINDIR,
