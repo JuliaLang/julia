@@ -1217,11 +1217,11 @@ end
 
     for tasks_type in (Vector{Task}, Set{Task}, Tuple{Task})
         @testset "waitany" begin
-            @testset "no options" begin
+            @testset "throw=false" begin
                 tasks, event = create_tasks()
                 wait(tasks[1])
                 wait(tasks[2])
-                done,  pending = waitany(convert_tasks(tasks_type, tasks))
+                done,  pending = waitany(convert_tasks(tasks_type, tasks); throw=false)
                 @test length(done) == 2
                 @test tasks[1] ∈ done
                 @test tasks[2] ∈ done
@@ -1260,13 +1260,13 @@ end
                 @test length(pending) == 0
             end
 
-            @testset "failfast=true" begin
+            @testset "failfast=true, throw=false" begin
                 tasks, event = create_tasks()
                 push!(tasks, Threads.@spawn error("Error"))
 
                 wait(tasks[1])
                 wait(tasks[2])
-                waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks); failfast=true)
+                waiter = Threads.@spawn waitall(convert_tasks(tasks_type, tasks); failfast=true, throw=false)
 
                 done, pending = fetch(waiter)
                 @test length(done) == 3
@@ -1279,14 +1279,14 @@ end
                 teardown(tasks, event)
             end
 
-            @testset "throw=true" begin
+            @testset "failfast=false, throw=true" begin
                 tasks, event = create_tasks()
                 push!(tasks, Threads.@spawn error("Error"))
 
                 notify(event)
 
                 @test_throws CompositeException begin
-                    waitall(convert_tasks(tasks_type, tasks); throw=true)
+                    waitall(convert_tasks(tasks_type, tasks); failfast=false, throw=true)
                 end
 
                 @test all(istaskdone.(tasks))
@@ -1294,7 +1294,7 @@ end
                 teardown(tasks, event)
             end
 
-            @testset "failfast=true and throw=true" begin
+            @testset "failfast=true, throw=true" begin
                 tasks, event = create_tasks()
                 push!(tasks, Threads.@spawn error("Error"))
 

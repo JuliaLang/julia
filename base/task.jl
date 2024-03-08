@@ -368,7 +368,7 @@ end
 # Wait multiple tasks
 
 """
-    waitany(tasks; throw=false) -> (done_tasks, remaining_tasks)
+    waitany(tasks; throw=true) -> (done_tasks, remaining_tasks)
 
 Wait until at least one of the given tasks have been completed.
 
@@ -378,10 +378,10 @@ completed tasks completes with an exception.
 The return value consists of two task vectors. The first one consists of
 completed tasks, and the other consists of uncompleted tasks.
 """
-waitany(tasks; throw=false) = _wait_multiple(tasks, throw)
+waitany(tasks; throw=true) = _wait_multiple(tasks, throw)
 
 """
-    waitall(tasks; failfast=false, throw=false) -> (done_tasks, remaining_tasks)
+    waitall(tasks; failfast=true, throw=true) -> (done_tasks, remaining_tasks)
 
 Wait until all the given tasks have been completed.
 
@@ -395,7 +395,7 @@ given tasks is finished by exception. If `throw` is `true`, throw
 The return value consists of two task vectors. The first one consists of
 completed tasks, and the other consists of uncompleted tasks.
 """
-waitall(tasks; failfast=false, throw=false) = _wait_multiple(tasks, throw, true, failfast)
+waitall(tasks; failfast=true, throw=true) = _wait_multiple(tasks, throw, true, failfast)
 
 function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false)
     tasks = Task[]
