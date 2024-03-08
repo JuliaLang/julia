@@ -1658,7 +1658,11 @@ void jl_dump_native_impl(void *native_code,
                                      data, "jl_system_image_data");
         sysdata->setAlignment(Align(64));
         if (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())
+#if JL_LLVM_VERSION >= 180000
+            sysdata->setCodeModel(CodeModel::Large);
+#else
             sysdata->setSection(".ldata");
+#endif
         addComdat(sysdata, TheTriple);
         Constant *len = ConstantInt::get(sysimgM.getDataLayout().getIntPtrType(Context), z->size);
         addComdat(new GlobalVariable(sysimgM, len->getType(), true,
