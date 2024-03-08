@@ -1801,3 +1801,22 @@ let n = 1000
     end
 end
 @test f_1000_blocks() == 0
+
+# https://github.com/JuliaLang/julia/issues/53521
+# Incorrect scope counting in :leave
+using Base.ScopedValues
+function f53521()
+    VALUE = ScopedValue(1)
+    @with VALUE => 2 begin
+        for i = 1
+            @with VALUE => 3 begin
+                try
+                    foo()
+                catch
+                    nothing
+                end
+            end
+        end
+    end
+end
+@test code_typed(f53521)[1][2] === Nothing
