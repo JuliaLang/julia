@@ -2888,6 +2888,12 @@ show(io::IO, ::Core.Compiler.NativeInterpreter) =
 show(io::IO, cache::Core.Compiler.CachedMethodTable) =
     print(io, typeof(cache), "(", Core.Compiler.length(cache.cache), " entries)")
 
+function show(io::IO, limited::Core.Compiler.LimitedAccuracy)
+    print(io, "Core.Compiler.LimitedAccuracy(")
+    show(io, limited.typ)
+    print(io, ", #= ", Core.Compiler.length(limited.causes), " cause(s) =#)")
+end
+
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     if isempty(x)
         print(io, "empty SimpleVector")

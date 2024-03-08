@@ -177,7 +177,7 @@ mutable struct LazyCFGReachability
 end
 function get!(x::LazyCFGReachability)
     isdefined(x, :reachability) && return x.reachability
-    domtree = construct_domtree(x.ir.cfg.blocks)
+    domtree = construct_domtree(x.ir)
     return x.reachability = CFGReachability(x.ir.cfg, domtree)
 end
 
@@ -189,8 +189,8 @@ end
 function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
     isdefined(x, :domtree) && return x.domtree
     return @timeit "domtree 2" x.domtree = IsPostDom ?
-        construct_postdomtree(x.ir.cfg.blocks) :
-        construct_domtree(x.ir.cfg.blocks)
+        construct_postdomtree(x.ir) :
+        construct_domtree(x.ir)
 end
 
 const LazyDomtree = LazyGenericDomtree{false}
@@ -731,7 +731,16 @@ function empty_backedges!(frame::InferenceState, currpc::Int=frame.currpc)
 end
 
 function print_callstack(sv::InferenceState)
+    print("=================== Callstack: ==================\n")
+    idx = 0
     while sv !== nothing
+        print("[")
+        print(idx)
+        if !isa(sv.interp, NativeInterpreter)
+            print(", ")
+            print(typeof(sv.interp))
+        end
+        print("] ")
         print(sv.linfo)
         is_cached(sv) || print("  [uncached]")
         println()
@@ -740,7 +749,9 @@ function print_callstack(sv::InferenceState)
             println()
         end
         sv = sv.parent
+        idx += 1
     end
+    print("================= End callstack ==================\n")
 end
 
 function narguments(sv::InferenceState, include_va::Bool=true)

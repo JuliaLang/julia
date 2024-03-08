@@ -19,6 +19,8 @@ Dynamic scopes are propagated across tasks.
 # Examples
 
 ```jldoctest
+julia> using Base.ScopedValues;
+
 julia> const sval = ScopedValue(1);
 
 julia> sval[]

@@ -671,7 +671,7 @@ end
 
     str = sprint(Base.showerror, MethodError(Core.kwcall, ((; a=3.0), +, 1.0, 2.0), Base.get_world_counter()))
     @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64; a::Float64)")
-    @test occursin("This method may not support any keyword arguments", str)
+    @test occursin("This method does not support all of the given keyword arguments", str)
 
     @test_throws "MethodError: no method matching kwcall()" Core.kwcall()
 end
