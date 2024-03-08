@@ -1,16 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    inflate_ir!(ci::CodeInfo, linfo::MethodInstance) -> ir::IRCode
+    inflate_ir!(ci::CodeInfo, mi::MethodInstance) -> ir::IRCode
     inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) -> ir::IRCode
 
 Inflates `ci::CodeInfo`-IR to `ir::IRCode`-format.
 This should be used with caution as it is a in-place transformation where the fields of
 the original `ci::CodeInfo` are modified.
 """
-function inflate_ir!(ci::CodeInfo, linfo::MethodInstance)
-    sptypes = sptypes_from_meth_instance(linfo)
-    argtypes, _ = matching_cache_argtypes(fallback_lattice, linfo)
+function inflate_ir!(ci::CodeInfo, mi::MethodInstance)
+    sptypes = sptypes_from_meth_instance(mi)
+    argtypes, _ = matching_cache_argtypes(fallback_lattice, mi)
     return inflate_ir!(ci, sptypes, argtypes)
 end
 function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any})
@@ -42,14 +42,16 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{A
 end
 
 """
-    inflate_ir(ci::CodeInfo, linfo::MethodInstance) -> ir::IRCode
-    inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) -> ir::IRCode
     inflate_ir(ci::CodeInfo) -> ir::IRCode
+    inflate_ir(ci::CodeInfo, mi::MethodInstance) -> ir::IRCode
+    inflate_ir(ci::CodeInfo, argtypes::Vector{Any}) -> ir::IRCode
+    inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) -> ir::IRCode
 
 Non-destructive version of `inflate_ir!`.
 Mainly used for testing or interactive use.
 """
-inflate_ir(ci::CodeInfo, linfo::MethodInstance) = inflate_ir!(copy(ci), linfo)
+inflate_ir(ci::CodeInfo, mi::MethodInstance) = inflate_ir!(copy(ci), mi)
+inflate_ir(ci::CodeInfo, argtypes::Vector{Any}) = inflate_ir(ci, VarState[], argtypes)
 inflate_ir(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, argtypes)
 function inflate_ir(ci::CodeInfo)
     parent = ci.parent

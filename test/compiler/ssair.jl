@@ -265,6 +265,17 @@ let code = Any[
     oc = Core.OpaqueClosure(ir)
     @test oc(false, 1, 1) == 2
     @test_throws "potential throw" oc(true, 1, 1)
+
+    let buf = IOBuffer()
+        oc = Core.OpaqueClosure(ir; slotnames=Symbol[:ocfunc, :x, :y, :z])
+        try
+            oc(true, 1, 1)
+        catch
+            Base.show_backtrace(buf, catch_backtrace())
+        end
+        s = String(take!(buf))
+        @test occursin("(x::Bool, y::$Int, z::$Int)", s)
+    end
 end
 
 # Test dynamic update of domtree with edge insertions and deletions in the

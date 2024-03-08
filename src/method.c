@@ -121,7 +121,8 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 } else if (!jl_is_long(oc_nargs)) {
                     jl_type_error("opaque_closure_method", (jl_value_t*)jl_long_type, oc_nargs);
                 }
-                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(oc_nargs), functionloc, ci, isva);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name,
+                    jl_unbox_long(oc_nargs), functionloc, (jl_code_info_t*)ci, isva, /*isinferred*/0);
                 return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
@@ -997,7 +998,7 @@ void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_method_instance_t *ca
 // method definition ----------------------------------------------------------
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    int nargs, jl_value_t *functionloc, jl_value_t *uninferred_source, int isva)
+    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva, int isinferred)
 {
     jl_method_t *m = jl_new_method_uninit(module);
     JL_GC_PUSH1(&m);
@@ -1016,8 +1017,12 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     jl_value_t *file = jl_linenode_file(functionloc);
     m->file = jl_is_symbol(file) ? (jl_sym_t*)file : jl_empty_sym;
     m->line = jl_linenode_line(functionloc);
-    if (jl_is_code_info(uninferred_source))
-        jl_method_set_source(m, (jl_code_info_t*)uninferred_source);
+    if (isinferred) {
+        m->slot_syms = jl_compress_argnames(ci->slotnames);
+        jl_gc_wb(m, m->slot_syms);
+    } else {
+        jl_method_set_source(m, ci);
+    }
     JL_GC_POP();
     return m;
 }
