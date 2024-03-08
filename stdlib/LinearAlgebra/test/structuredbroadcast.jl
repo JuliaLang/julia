@@ -89,7 +89,7 @@ using Test, LinearAlgebra
         @test X .^ 0 == fX .^ 0
         @test X .^ -1 == fX .^ -1
 
-        for (Y, fY) in zip(structuredarrays, fstructuredarrays)
+        for (Y, fY) in zip(unittriangulars, funittriangulars)
             @test broadcast(+, X, Y) == broadcast(+, fX, fY)
             @test broadcast!(+, Z, X, Y) == broadcast(+, fX, fY)
             @test broadcast(*, X, Y) == broadcast(*, fX, fY)
