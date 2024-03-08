@@ -105,7 +105,6 @@ $(eval $(call stdlib_builder,libLLVM_jll,Artifacts Libdl))
 $(eval $(call stdlib_builder,libblastrampoline_jll,Artifacts Libdl))
 $(eval $(call stdlib_builder,p7zip_jll,Artifacts Libdl))
 $(eval $(call stdlib_builder,OpenBLAS_jll,Artifacts Libdl))
-$(eval $(call stdlib_builder,Markdown,Base64))
 $(eval $(call stdlib_builder,Printf,Unicode))
 $(eval $(call stdlib_builder,Random,SHA))
 $(eval $(call stdlib_builder,Logging,StyledStrings))
@@ -122,17 +121,18 @@ $(eval $(call stdlib_builder,Dates,Printf))
 $(eval $(call stdlib_builder,Distributed,Random Serialization Sockets))
 $(eval $(call stdlib_builder,Future,Random))
 $(eval $(call stdlib_builder,UUIDs,Random SHA))
-$(eval $(call stdlib_builder,InteractiveUtils,Markdown))
+$(eval $(call stdlib_builder,Markdown,Base64 JuliaSyntaxHighlighting StyledStrings))
 
  # 3-depth packages
 $(eval $(call stdlib_builder,LibGit2_jll,MbedTLS_jll LibSSH2_jll Artifacts Libdl))
 $(eval $(call stdlib_builder,LibCURL_jll,LibSSH2_jll nghttp2_jll MbedTLS_jll Zlib_jll Artifacts Libdl))
-$(eval $(call stdlib_builder,REPL,InteractiveUtils Markdown Sockets StyledStrings Unicode))
 $(eval $(call stdlib_builder,SharedArrays,Distributed Mmap Random Serialization))
+$(eval $(call stdlib_builder,InteractiveUtils,Markdown))
 $(eval $(call stdlib_builder,TOML,Dates))
 $(eval $(call stdlib_builder,Test,Logging Random Serialization InteractiveUtils))
 
 # 4-depth packages
+$(eval $(call stdlib_builder,REPL,InteractiveUtils Markdown Sockets StyledStrings Unicode))
 $(eval $(call stdlib_builder,LibGit2,LibGit2_jll NetworkOptions Printf SHA Base64))
 $(eval $(call stdlib_builder,LibCURL,LibCURL_jll MozillaCACerts_jll))
 
