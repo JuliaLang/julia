@@ -26,6 +26,9 @@ struct ExplicitEnv
 end
 
 function ExplicitEnv(envpath::String=Base.active_project())
+    if !isfile(envpath)
+        error("expected a project file at $(repr(envpath))")
+    end
     envpath = abspath(envpath)
     project_d = parsed_toml(envpath)
 
@@ -49,6 +52,11 @@ function ExplicitEnv(envpath::String=Base.active_project())
             names[UUID(uuid)] = name
             project_uuid_to_name[name] = UUID(uuid)
         end
+    end
+
+    # A package in both deps and weakdeps is in fact only a weakdep
+    for (name, _) in project_weakdeps
+        delete!(project_deps, name)
     end
 
     project_extensions = Dict{String, Vector{UUID}}()
