@@ -2285,7 +2285,7 @@ extern JL_DLLIMPORT int jl_task_ptls_offset;
 JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh) JL_NOTSAFEPOINT ;
 JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh);
 JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_handler_t *eh) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_pop_handler(int n);
+JL_DLLEXPORT void jl_pop_handler(int n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t jl_excstack_state(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT;
 

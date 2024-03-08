@@ -540,13 +540,15 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     jl_unreachable();
                 }
             }
-            jl_eh_restore_state(&__eh);
+
             if (s->continue_at) { // means we reached a :leave expression
+                jl_eh_restore_state_noexcept(&__eh);
                 ip = s->continue_at;
                 s->continue_at = 0;
                 continue;
             }
             else { // a real exception
+                jl_eh_restore_state(&__eh);
                 ip = catch_ip;
                 assert(jl_enternode_catch_dest(stmt) != 0);
                 continue;

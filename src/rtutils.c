@@ -315,7 +315,7 @@ JL_DLLEXPORT void jl_pop_handler(int n)
     jl_handler_t *eh = ct->eh;
     while (--n > 0)
         eh = eh->prev;
-    jl_eh_restore_state(eh);
+    jl_eh_restore_state_noexcept(eh);
 }
 
 JL_DLLEXPORT size_t jl_excstack_state(void) JL_NOTSAFEPOINT
