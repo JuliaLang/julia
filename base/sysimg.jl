@@ -75,6 +75,7 @@ let
         :Artifacts, # Transitive through LinAlg
         :SHA, # transitive through Random
         :Sockets, # used by stream.jl
+        :Logging, # so the preferred ConsoleLogger is always available
 
         # Transitive through LingAlg
         # OpenBLAS_jll
