@@ -727,8 +727,8 @@ eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
 
 using .Intrinsics: sle_int, add_int
 
-eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
-             $(Expr(:splatnew, :(NamedTuple{names,T}), :args))))
+eval(Core, :((NT::Type{NamedTuple{names,T}})(args::T) where {names, T <: Tuple} =
+             $(Expr(:splatnew, :NT, :args))))
 
 # constructors for built-in types
 

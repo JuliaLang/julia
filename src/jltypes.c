@@ -2141,15 +2141,20 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                         jl_errorf("duplicate field name in NamedTuple: \"%s\" is not unique", jl_symbol_name((jl_sym_t*)ni));
                 }
             }
-            if (!jl_is_datatype(values_tt))
-                jl_error("NamedTuple field type must be a tuple type");
-            if (jl_is_va_tuple((jl_datatype_t*)values_tt) || jl_nparams(values_tt) != nf)
-                jl_error("NamedTuple names and field types must have matching lengths");
-            ndt->types = ((jl_datatype_t*)values_tt)->parameters;
+            if (values_tt == jl_bottom_type && nf > 0) {
+                ndt->types = jl_svec_fill(nf, jl_bottom_type);
+            }
+            else {
+                if (!jl_is_datatype(values_tt))
+                    jl_error("NamedTuple field type must be a tuple datatype");
+                if (jl_is_va_tuple((jl_datatype_t*)values_tt) || jl_nparams(values_tt) != nf)
+                    jl_error("NamedTuple names and field types must have matching lengths");
+                ndt->types = ((jl_datatype_t*)values_tt)->parameters;
+            }
             jl_gc_wb(ndt, ndt->types);
         }
         else {
-            ndt->types = jl_emptysvec; // XXX: this is essentially always false
+            ndt->types = jl_emptysvec; // XXX: this is essentially always incorrect
         }
     }
     else if (tn == jl_genericmemoryref_typename || tn == jl_genericmemory_typename) {
