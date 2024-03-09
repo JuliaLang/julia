@@ -732,3 +732,7 @@ end
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(InteractiveUtils))
 end
+
+@testset "code_llvm returns an object" begin
+    @test (@code_llvm sin(0.5)) isa InteractiveUtils.LLVMCode
+end

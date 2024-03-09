@@ -290,17 +290,29 @@ Keyword argument `debuginfo` may be one of source (default) or none, to specify 
 
 See also: [`@code_llvm`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_native`](@ref).
 """
-function code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
-                   raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default,
-                   params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
-    d = _dump_function(f, types, false, false, raw, dump_module, :intel, optimize, debuginfo, false, params)
+function code_llvm end
+
+struct LLVMCode
+    str::String
+end
+
+function Base.show(io::IO, code::LLVMCode)
     if highlighting[:llvm] && get(io, :color, false)::Bool
-        print_llvm(io, d)
+        print_llvm(io, code.str)
     else
-        print(io, d)
+        print(io, code.str)
     end
 end
-code_llvm(args...; kwargs...) = (@nospecialize; code_llvm(stdout, args...; kwargs...))
+
+function code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
+    raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default,
+    params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
+    d = _dump_function(f, types, false, false, raw, dump_module, :intel, optimize, debuginfo, false, params)
+    return LLVMCode(d)
+end
+
+code_llvm(io::IO, args...; kwargs...) = show(io, code_llvm(args...; kwargs...))
+
 
 """
     code_native([io=stdout,], f, types; syntax=:intel, debuginfo=:default, binary=false, dump_module=true)
