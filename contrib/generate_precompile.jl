@@ -39,6 +39,8 @@ precompile(Base.unsafe_string, (Ptr{Int8},))
 # loading.jl
 precompile(Base.__require_prelocked, (Base.PkgId, Nothing))
 precompile(Base._require, (Base.PkgId, Nothing))
+precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
+precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
 
 # REPL
 precompile(isequal, (String, String))
@@ -66,6 +68,10 @@ precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Fu
 precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
 precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
 precompile(Tuple{typeof(push!), Vector{Function}, Function})
+
+# preferences
+precompile(Base.get_preferences, (Base.UUID,))
+precompile(Base.record_compiletime_preference, (Base.UUID, String))
 
 # miscellaneous
 precompile(Tuple{typeof(Base.exit)})
@@ -131,11 +137,8 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     push!(Expr[], Expr(:return, false))
     vcat(String[], String[])
     k, v = (:hello => nothing)
-    precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
-    precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+
     # Preferences uses these
-    precompile(Base.get_preferences, (Base.UUID,))
-    precompile(Base.record_compiletime_preference, (Base.UUID, String))
     get(Dict{String,Any}(), "missing", nothing)
     delete!(Dict{String,Any}(), "missing")
     for (k, v) in Dict{String,Any}()
