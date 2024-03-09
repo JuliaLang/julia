@@ -246,7 +246,7 @@ procenv = Dict{String,Any}(
         "JULIA_LOAD_PATH" => "@$(Sys.iswindows() ? ";" : ":")@stdlib",
         "JULIA_DEPOT_PATH" => Sys.iswindows() ? ";" : ":",
         "TERM" => "",
-        "JULIA_DEBUG" => "precompilation",
+        # "JULIA_DEBUG" => "precompilation",
         "JULIA_FALLBACK_REPL" => "true")
 
 generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed

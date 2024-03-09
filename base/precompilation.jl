@@ -434,7 +434,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         end
     end
 
-    @debug "precompile: deps collected" _group=:precompile
+    @debug "precompile: deps collected"
     # this loop must be run after the full depsmap has been populated
     for (pkg, pkg_exts) in pkg_exts_map
         # find any packages that depend on the extension(s)'s deps and replace those deps in their deps list with the extension(s),
@@ -446,7 +446,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
             end
         end
     end
-    @debug "precompile: extensions collected" _group=:precompile
+    @debug "precompile: extensions collected"
 
     # return early if no deps
     if isempty(depsmap)
@@ -474,7 +474,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
             was_recompiled[dep_config] = false
         end
     end
-    @debug "precompile: signalling initialized"  _group=:precompile
+    @debug "precompile: signalling initialized"
 
 
     # find and guard against circular deps
@@ -515,7 +515,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     if !isempty(circular_deps)
         @warn """Circular dependency detected. Precompilation will be skipped for:\n  $(join(string.(circular_deps), "\n  "))"""
     end
-    @debug "precompile: circular dep check done"  _group=:precompile
+    @debug "precompile: circular dep check done"
 
     # if a list of packages is given, restrict to dependencies of given packages
     if !isempty(pkgs)
@@ -562,7 +562,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     else
         target *= "..."
     end
-    @debug "precompile: packages filtered"  _group=:precompile
+    @debug "precompile: packages filtered"
 
     pkg_queue = PkgConfig[]
     failed_deps = Dict{PkgConfig, String}()
@@ -737,7 +737,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     if !_from_loading
         Base.LOADING_CACHE[] = Base.LoadingCache()
     end
-    @debug "precompile: starting precompilation loop"  _group=:precompile
+    @debug "precompile: starting precompilation loop" depsmap direct_deps
     ## precompilation loop
     for (pkg, deps) in depsmap
         cachepaths = Base.find_all_in_cache_path(pkg)
