@@ -26,7 +26,7 @@ endif
 JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
 ifeq ($(USECLANG),1)
-FLAGS += -Wno-return-type-c-linkage
+FLAGS += -Wno-return-type-c-linkage -Wno-atomic-alignment
 endif
 
 FLAGS += -DJL_BUILD_ARCH='"$(ARCH)"'
