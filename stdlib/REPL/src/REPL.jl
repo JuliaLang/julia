@@ -222,9 +222,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
             else
                 backend.in_eval = true
-                if !isempty(install_packages_hooks)
-                    check_for_missing_packages_and_run_hooks(ast)
-                end
+                check_for_missing_packages_and_run_hooks(ast)
                 for xf in backend.ast_transforms
                     ast = Base.invokelatest(xf, ast)
                 end
@@ -251,6 +249,7 @@ function check_for_missing_packages_and_run_hooks(ast)
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
     if !isempty(mods)
+        isempty(install_packages_hooks) && Base.require_stdlib(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
         for f in install_packages_hooks
             Base.invokelatest(f, mods) && return
         end
@@ -1657,7 +1656,6 @@ function __current_ast_transforms(backend)
         backend.ast_transforms
     end
 end
-
 
 function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     n = Ref{Int}(0)
