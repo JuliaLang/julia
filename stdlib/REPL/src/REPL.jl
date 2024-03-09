@@ -1586,6 +1586,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
 end
 
 function load_pkg()
+    Base.generating_output(true) && return nothing
     pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
     if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
         Pkg = Base.require(pkgid)
