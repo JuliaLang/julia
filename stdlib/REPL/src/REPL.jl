@@ -249,7 +249,7 @@ function check_for_missing_packages_and_run_hooks(ast)
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
     if !isempty(mods)
-        isempty(install_packages_hooks) && load_pkg()
+        isempty(install_packages_hooks) && Base.require_stdlib(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
         for f in install_packages_hooks
             Base.invokelatest(f, mods) && return
         end
@@ -1583,16 +1583,6 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     put!(backend.repl_channel, (nothing, -1))
     dopushdisplay && popdisplay(d)
     nothing
-end
-
-function load_pkg()
-    Base.generating_output(true) && return nothing
-    pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-    if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
-        Pkg = Base.require(pkgid)
-        return Pkg
-    end
-    return nothing
 end
 
 module Numbered
