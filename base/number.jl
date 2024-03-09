@@ -136,6 +136,11 @@ true
 """
 signbit(x::Real) = x < 0
 
+ispositive(x) = !isnonnegative(x)
+isnegative(x) = signbit(x) && !iszero(x)
+isnonnegative(x) = signbit(x) || iszero(x)
+isnonpositive(x) = !signbit(x) || iszero(x)
+
 """
     sign(x)
 
