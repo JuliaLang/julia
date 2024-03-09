@@ -375,7 +375,7 @@ function os()
         return "windows"
     elseif Sys.isapple()
         return "macos"
-    elseif Sys.isbsd()
+    elseif Sys.isfreebsd()
         return "freebsd"
     elseif Sys.isopenbsd()
         return "openbsd"
