@@ -1972,6 +1972,16 @@ end
 
     @test zero([[2,2], [3,3,3]]) isa Vector{Vector{Int}}
     @test zero([[2,2], [3,3,3]]) == [[0,0], [0, 0, 0]]
+
+
+    @test zero(Union{Float64, Missing}[missing]) == [0.0]
+    struct CustomNumber <: Number
+        val::Float64
+    end
+    Base.zero(::Type{CustomNumber}) = CustomNumber(0.0)
+    @test zero([CustomNumber(5.0)]) == [CustomNumber(0.0)]
+    @test zero(Union{CustomNumber, Missing}[missing]) == [CustomNumber(0.0)]
+    @test zero(Vector{Union{CustomNumber, Missing}}(undef, 1)) == [CustomNumber(0.0)]
 end
 
 @testset "`_prechecked_iterate` optimization" begin
