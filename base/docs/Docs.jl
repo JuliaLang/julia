@@ -585,8 +585,37 @@ iscallexpr(ex) = false
 function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true)
     @nospecialize meta ex
     # Some documented expressions may be decorated with macro calls which obscure the actual
-    # expression. Expand the macro calls and remove extra blocks.
-    x = unblock(macroexpand(mod, ex))
+    # expression. Expand the macro calls.
+    x = macroexpand(mod, ex)
+    return _docm(source, mod, meta, x, define)
+end
+
+function _docm(source::LineNumberNode, mod::Module, meta, x, define::Bool = true)
+    if isexpr(x, :var"hygienic-scope")
+        x.args[1] = _docm(source, mod, meta, x.args[1])
+        return x
+    elseif isexpr(x, :escape)
+        x.args[1] = _docm(source, mod, meta, x.args[1])
+        return x
+    elseif isexpr(x, :block)
+        docarg = 0
+        for i = 1:length(x.args)
+            isa(x.args[i], LineNumberNode) && continue
+            if docarg == 0
+                docarg = i
+                continue
+            end
+            # More than one documentable expression in the block, treat it as a whole
+            # expression, which will fall through and look for (Expr(:meta, doc))
+            docarg = 0
+            break
+        end
+        if docarg != 0
+            x.args[docarg] = _docm(source, mod, meta, x.args[docarg], define)
+            return x
+        end
+    end
+
     # Don't try to redefine expressions. This is only needed for `Base` img gen since
     # otherwise calling `loaddocs` would redefine all documented functions and types.
     def = define ? x : nothing
@@ -651,7 +680,7 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define::Bool = true
     # All other expressions are undocumentable and should be handled on a case-by-case basis
     # with `@__doc__`. Unbound string literals are also undocumentable since they cannot be
     # retrieved from the module's metadata `IdDict` without a reference to the string.
-    docerror(ex)
+    docerror(x)
 
     return doc
 end
