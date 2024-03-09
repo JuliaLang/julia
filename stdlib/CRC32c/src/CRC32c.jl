@@ -35,7 +35,13 @@ but note that the result may be endian-dependent.
 function crc32c end
 
 
-crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) = Base._crc32c(a, crc)
+function crc32c(
+    a::Union{DenseArray{UInt8}, FastContiguousSubArray{UInt8,N,<:DenseArray{UInt8}} where N},
+    crc::UInt32=0x00000000
+)
+    Base._crc32c(a, crc)
+end
+
 crc32c(s::Union{String, SubString{String}}, crc::UInt32=0x00000000) = Base._crc32c(s, crc)
 
 """

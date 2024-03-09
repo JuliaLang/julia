@@ -219,7 +219,7 @@ function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    if isbitstype(T) && isa(a,Array)
+    if isbitstype(T) && isa(a,MutableByteArray)
         nb = UInt(nel * sizeof(T))
         GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     else
@@ -542,8 +542,15 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
-function readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb::Int)
+const MutableByteArray = Union{
+    Array{UInt8},
+    Memory{UInt8},
+    FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}},
+    FastContiguousSubArray{UInt8,<:Any,<:Memory{UInt8}},
+}
+
+readbytes!(io::GenericIOBuffer, b::MutableByteArray, nb=length(b)) = readbytes!(io, b, Int(nb))
+function readbytes!(io::GenericIOBuffer, b::MutableByteArray, nb::Int)
     nr = min(nb, bytesavailable(io))
     if length(b) < nr
         resize!(b, nr)

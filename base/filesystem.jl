@@ -140,7 +140,8 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
+    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize,
+    MutableByteArray
 
 import .Base.RefValue
 
@@ -308,7 +309,7 @@ bytesavailable(f::File) = max(0, filesize(f) - position(f)) # position can be > 
 
 eof(f::File) = bytesavailable(f) == 0
 
-function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
+function readbytes!(f::File, b::MutableByteArray, nb=length(b))
     nr = min(nb, bytesavailable(f))
     if length(b) < nr
         resize!(b, nr)

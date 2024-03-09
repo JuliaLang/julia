@@ -491,8 +491,13 @@ unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_
 
 _crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
     unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
-_crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
+
+function _crc32c(
+    a::Union{DenseArray{UInt8}, FastContiguousSubArray{UInt8,N,<:DenseArray{UInt8}} where N},
+    crc::UInt32=0x00000000
+)
     unsafe_crc32c(a, length(a) % Csize_t, crc)
+end
 
 function _crc32c(s::Union{String, SubString{String}}, crc::UInt32=0x00000000)
     unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
