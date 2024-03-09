@@ -2052,8 +2052,10 @@ end
 end
 
 @testset "reshape for offset arrays" begin
-    r = reshape(Base.IdentityUnitRange(0:1), (2,1))
-    @test r[eachindex(r)] == [0:1;]
+    p = Base.IdentityUnitRange(3:4)
+    r = reshape(p, :, 1)
+    @test r[eachindex(r)] == UnitRange(p)
+    @test collect(r) == r
 
     struct ZeroBasedArray{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
         a :: A
@@ -2069,7 +2071,7 @@ end
     Base.setindex!(z::ZeroBasedArray{<:Any, N}, val, i::Vararg{Int,N}) where {N} = parent(z)[map(x -> x + 1, i)...] = val
 
     z = ZeroBasedArray(collect(1:4))
-    r2 = reshape(z, (4, 1))
+    r2 = reshape(z, :, 1)
     @test r2[CartesianIndices(r2)] == r2[LinearIndices(r2)]
     r2[firstindex(r2)] = 34
     @test z[0] == 34

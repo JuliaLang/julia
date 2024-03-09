@@ -238,7 +238,8 @@ offset_if_vec(i::Integer, axs::Tuple) = i
 
 @inline function isassigned(A::ReshapedArrayLF, index::Int)
     @boundscheck checkbounds(Bool, A, index) || return false
-    @inbounds ret = isassigned(parent(A), index)
+    indexparent = index - firstindex(A) + firstindex(parent(A))
+    @inbounds ret = isassigned(parent(A), indexparent)
     ret
 end
 @inline function isassigned(A::ReshapedArray{T,N}, indices::Vararg{Int, N}) where {T,N}
