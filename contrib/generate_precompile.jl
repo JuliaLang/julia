@@ -93,7 +93,7 @@ end
 
 # Precompiles for Revise and other packages
 precompile_script = """
-for match = _methods(+, (Int, Int), -1, get_world_counter())
+for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     m = match.method
     delete!(push!(Set{Method}(), m), m)
     copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match), typemax(UInt)))
@@ -125,17 +125,17 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
     # Code loading uses this
     sortperm(mtime.(readdir(".")), rev=true)
     # JLLWrappers uses these
-    Dict{UUID,Set{String}}()[UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
-    get!(Set{String}, Dict{UUID,Set{String}}(), UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
+    Dict{Base.UUID,Set{String}}()[Base.UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
+    get!(Set{String}, Dict{Base.UUID,Set{String}}(), Base.UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
     eachindex(IndexLinear(), Expr[])
     push!(Expr[], Expr(:return, false))
     vcat(String[], String[])
     k, v = (:hello => nothing)
-    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
-    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+    precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
+    precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
     # Preferences uses these
-    precompile(get_preferences, (UUID,))
-    precompile(record_compiletime_preference, (UUID, String))
+    precompile(Base.get_preferences, (Base.UUID,))
+    precompile(Base.record_compiletime_preference, (Base.UUID, String))
     get(Dict{String,Any}(), "missing", nothing)
     delete!(Dict{String,Any}(), "missing")
     for (k, v) in Dict{String,Any}()
