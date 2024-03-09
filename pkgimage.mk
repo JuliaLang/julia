@@ -6,8 +6,8 @@ include $(JULIAHOME)/stdlib/stdlib.mk
 
 
 # set some influential environment variables
-export JULIA_DEPOT_PATH := $(build_prefix)/share/julia
-export JULIA_LOAD_PATH := @stdlib:$(JULIAHOME)/stdlib
+export JULIA_DEPOT_PATH := $(shell echo $(call cygpath_w,$(build_prefix)/share/julia))
+export JULIA_LOAD_PATH := @stdlib$(PATHSEP)$(shell echo $(call cygpath_w,$(JULIAHOME)/stdlib))
 unexport JULIA_PROJECT :=
 unexport JULIA_BINDIR :=
 
