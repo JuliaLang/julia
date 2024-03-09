@@ -315,8 +315,6 @@ denominator(x::Rational) = x.den
 
 sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)
-copysign(x::Rational, y::Real) = unsafe_rational(copysign(x.num, y), x.den)
-copysign(x::Rational, y::Rational) = unsafe_rational(copysign(x.num, y.num), x.den)
 
 abs(x::Rational) = unsafe_rational(checked_abs(x.num), x.den)
 

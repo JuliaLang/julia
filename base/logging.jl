@@ -3,6 +3,7 @@
 module CoreLogging
 
 import Base: isless, +, -, convert, show
+import Base: ScopedValue, with, @with
 
 export
     AbstractLogger,
@@ -172,18 +173,14 @@ const AboveMaxLevel = LogLevel( 1000001)
 # Global log limiting mechanism for super fast but inflexible global log limiting.
 const _min_enabled_level = Ref{LogLevel}(Debug)
 
-# stored as LogLevel => (name, color)
-const custom_log_levels = Dict{LogLevel,Tuple{Symbol,Union{Symbol,Int}}}()
-
 function show(io::IO, level::LogLevel)
-    if     haskey(custom_log_levels, level) print(io, custom_log_levels[level][1])
-    elseif level == BelowMinLevel           print(io, "BelowMinLevel")
-    elseif level == Debug                   print(io, "Debug")
-    elseif level == Info                    print(io, "Info")
-    elseif level == Warn                    print(io, "Warn")
-    elseif level == Error                   print(io, "Error")
-    elseif level == AboveMaxLevel           print(io, "AboveMaxLevel")
-    else                                    print(io, "LogLevel($(level.level))")
+    if     level == BelowMinLevel  print(io, "BelowMinLevel")
+    elseif level == Debug          print(io, "Debug")
+    elseif level == Info           print(io, "Info")
+    elseif level == Warn           print(io, "Warn")
+    elseif level == Error          print(io, "Error")
+    elseif level == AboveMaxLevel  print(io, "AboveMaxLevel")
+    else                           print(io, "LogLevel($(level.level))")
     end
 end
 

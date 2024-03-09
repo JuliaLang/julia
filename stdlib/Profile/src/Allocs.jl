@@ -40,7 +40,7 @@ end
     Profile.Allocs.@profile [sample_rate=0.1] expr
 
 Profile allocations that happen during `expr`, returning
-both the result and and AllocResults struct.
+both the result and AllocResults struct.
 
 A sample rate of 1.0 will record everything; 0.0 will record nothing.
 

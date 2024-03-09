@@ -338,7 +338,7 @@ function flatten(bc::Broadcasted)
     # concatenate the nested arguments into {a, b, c, d}
     args = cat_nested(bc)
     # build a tuple of functions `makeargs`. Its elements take
-    # the whole "flat" argument list and and generate the appropriate
+    # the whole "flat" argument list and generate the appropriate
     # input arguments for the broadcasted function `f`, e.g.,
     #          makeargs[1] = ((w, x, y, z)) -> w
     #          makeargs[2] = ((w, x, y, z)) -> g(x, y)

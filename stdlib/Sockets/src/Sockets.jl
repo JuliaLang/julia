@@ -31,7 +31,7 @@ export
     IPv4,
     IPv6
 
-import Base: isless, show, print, parse, bind, convert, isreadable, iswritable, alloc_buf_hook, _uv_hook_close
+import Base: isless, show, print, parse, bind, alloc_buf_hook, _uv_hook_close
 
 using Base: LibuvStream, LibuvServer, PipeEndpoint, @handle_as, uv_error, associate_julia_struct, uvfinalize,
     notify_error, uv_req_data, uv_req_set_data, preserve_handle, unpreserve_handle, _UVError, IOError,

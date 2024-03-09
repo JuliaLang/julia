@@ -234,7 +234,7 @@ void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT
     jl_task_t *ct = jl_current_task; (void)ct;
     JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
     // The thread should have set this is already
-    assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) != 0);
+    assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) != JL_GC_STATE_UNSAFE);
     // Use normal volatile load in the loop for speed until GC finishes.
     // Then use an acquire load to make sure the GC result is visible on this thread.
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
@@ -309,7 +309,7 @@ int jl_safepoint_suspend_thread(int tid, int waitstate)
         }
         while (jl_atomic_load_acquire(&ptls2->suspend_count) != 0) {
             int8_t state2 = jl_atomic_load_acquire(&ptls2->gc_state);
-            if (waitstate <= 2 && state2 != 0)
+            if (waitstate <= 2 && state2 != JL_GC_STATE_UNSAFE)
                 break;
             if (waitstate == 3 && state2 == JL_GC_STATE_WAITING)
                 break;

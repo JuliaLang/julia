@@ -162,7 +162,7 @@ end
 ## keyword arg lowering generates calls to this ##
 function kwerr(kw, args::Vararg{Any,N}) where {N}
     @noinline
-    throw(MethodError(Core.kwcall, (kw, args...)))
+    throw(MethodError(Core.kwcall, (kw, args...), tls_world_age()))
 end
 
 ## system error handling ##

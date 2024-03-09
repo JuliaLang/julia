@@ -322,6 +322,11 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         jl_encode_value(s, jl_get_nth_field(v, 0));
         jl_encode_value(s, jl_get_nth_field(v, 1));
     }
+    else if (jl_is_enternode(v)) {
+        write_uint8(s->s, TAG_ENTERNODE);
+        jl_encode_value(s, jl_get_nth_field(v, 0));
+        jl_encode_value(s, jl_get_nth_field(v, 1));
+    }
     else if (jl_is_argument(v)) {
         write_uint8(s->s, TAG_ARGUMENT);
         jl_encode_value(s, jl_get_nth_field(v, 0));
@@ -721,6 +726,11 @@ static jl_value_t *jl_decode_value(jl_ircode_state *s) JL_GC_DISABLED
         set_nth_field(jl_gotoifnot_type, v, 0, jl_decode_value(s), 0);
         set_nth_field(jl_gotoifnot_type, v, 1, jl_decode_value(s), 0);
         return v;
+    case TAG_ENTERNODE:
+        v = jl_new_struct_uninit(jl_enternode_type);
+        set_nth_field(jl_enternode_type, v, 0, jl_decode_value(s), 0);
+        set_nth_field(jl_enternode_type, v, 1, jl_decode_value(s), 0);
+        return v;
     case TAG_ARGUMENT:
         v = jl_new_struct_uninit(jl_argument_type);
         set_nth_field(jl_argument_type, v, 0, jl_decode_value(s), 0);
@@ -894,7 +904,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     return v;
 }
 
-JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_string_t *data)
+JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_string_t *data)
 {
     if (jl_is_code_info(data))
         return (jl_code_info_t*)data;
@@ -969,6 +979,9 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_string_t *data)
     jl_gc_enable(en);
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
+    if (metadata) {
+        code->parent = metadata->def;
+    }
 
     return code;
 }

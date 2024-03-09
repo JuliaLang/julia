@@ -696,7 +696,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
         }
         if (src && (jl_value_t*)src != jl_nothing) {
             JL_GC_PUSH1(&src);
-            src = jl_uncompress_ir(mi->def.method, (jl_value_t*)src);
+            src = jl_uncompress_ir(mi->def.method, NULL, (jl_value_t*)src);
             jl_atomic_store_release(&mi->uninferred, (jl_value_t*)src);
             jl_gc_wb(mi, src);
             JL_GC_POP();
@@ -758,7 +758,7 @@ JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_method_t *source = oc->source;
-    jl_code_info_t *code = jl_uncompress_ir(source, (jl_value_t*)source->source);
+    jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_value_t*)source->source);
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
     jl_task_t *ct = jl_current_task;

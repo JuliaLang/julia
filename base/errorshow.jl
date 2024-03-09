@@ -327,10 +327,11 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     if ex.world == typemax(UInt) || hasmethod(f, arg_types, world=ex.world)
+        if !isempty(kwargs)
+            print(io, "\nThis method does not support all of the given keyword arguments (and may not support any).")
+        end
         if ex.world == typemax(UInt) || isempty(kwargs)
             print(io, "\nThis error has been manually thrown, explicitly, so the method may exist but be intentionally marked as unimplemented.")
-        else
-            print(io, "\nThis method may not support any kwargs.")
         end
     elseif hasmethod(f, arg_types) && !hasmethod(f, arg_types, world=ex.world)
         curworld = get_world_counter()
@@ -1022,6 +1023,31 @@ end
 
 Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 
+# handler for displaying a hint in case the user tries to call setindex! on
+# something that doesn't support it:
+#  - a number (probably attempting to use wrong indexing)
+#    eg: a = [1 2; 3 4]; a[1][2] = 5
+#  - a type (probably tried to initialize without parentheses)
+#    eg: d = Dict; d["key"] = 2
+function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
+    if ex.f == setindex!
+        T = arg_types[1]
+        if T <: Number
+            print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
+            printstyled(io, "a[1, 2]", color=:cyan)
+            print(io, " rather than a[1][2]")
+        else isType(T)
+            Tx = T.parameters[1]
+            print(io, "\nYou attempted to index the type $Tx, rather than an instance of the type. Make sure you create the type using its constructor: ")
+            printstyled(io, "d = $Tx([...])", color=:cyan)
+            print(io, " rather than d = $Tx")
+        end
+    end
+end
+
+Experimental.register_error_hint(nonsetable_type_hint_handler, MethodError)
+
 # Display a hint in case the user tries to use the + operator on strings
 # (probably attempting concatenation)
 function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
@@ -1034,7 +1060,6 @@ function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
 end
 
 Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
-
 
 # Display a hint in case the user tries to use the min or max function on an iterable
 # or tries to use something like `collect` on an iterator without defining either IteratorSize or length
@@ -1060,7 +1085,6 @@ function methods_on_iterable(io, ex, arg_types, kwargs)
 end
 
 Experimental.register_error_hint(methods_on_iterable, MethodError)
-
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

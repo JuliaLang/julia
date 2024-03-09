@@ -713,7 +713,7 @@ m1_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m1 end))
 let low3 = Meta.lower(@__MODULE__, quote @m3 end)
     m3_exprs = get_expr_list(low3)
     ci = low3.args[1]::Core.CodeInfo
-    @test ci.codelocs in ([4, 4, 2], [4, 2])
+    @test ci.codelocs in ([4, 4, 0], [4, 0])
     @test is_return_ssavalue(m3_exprs[end])
 end
 
@@ -3637,3 +3637,16 @@ end
     @test array == [7]
     @test execs == 4
 end
+
+# Allow GlobalRefs in macro definition
+module MyMacroModule
+    macro mymacro end
+end
+macro MyMacroModule.mymacro()
+    1
+end
+@eval macro $(GlobalRef(MyMacroModule, :mymacro))(x)
+    2
+end
+@test (@MyMacroModule.mymacro) == 1
+@test (@MyMacroModule.mymacro(a)) == 2

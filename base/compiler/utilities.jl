@@ -143,12 +143,13 @@ function retrieve_code_info(linfo::MethodInstance, world::UInt)
             # can happen in images built with --strip-ir
             return nothing
         elseif isa(src, String)
-            c = _uncompressed_ir(def, src)
+            c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), def, C_NULL, src)
         else
             c = copy(src::CodeInfo)
         end
     end
     if c isa CodeInfo
+        c.parent = linfo
         return c
     end
     return nothing

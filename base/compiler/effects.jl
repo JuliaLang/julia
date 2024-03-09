@@ -43,15 +43,16 @@ following meanings:
     except that it may access or modify mutable memory pointed to by its call arguments.
     This may later be refined to `ALWAYS_TRUE` in a case when call arguments are known to be immutable.
     This state corresponds to LLVM's `inaccessiblemem_or_argmemonly` function attribute.
-- `noub::Bool`: indicates that the method will not execute any undefined behavior (for any input).
+- `noub::UInt8`: indicates that the method will not execute any undefined behavior (for any input).
   Note that undefined behavior may technically cause the method to violate any other effect
   assertions (such as `:consistent` or `:effect_free`) as well, but we do not model this,
   and they assume the absence of undefined behavior.
+  * `ALWAYS_TRUE`: this method is guaranteed to not execute any undefined behavior.
+  * `ALWAYS_FALSE`: this method may execute undefined behavior.
+  * `NOUB_IF_NOINBOUNDS`: this method is guaranteed to not execute any undefined behavior
+    if the caller does not set nor propagate the `@inbounds` context.
 - `nonoverlayed::Bool`: indicates that any methods that may be called within this method
   are not defined in an [overlayed method table](@ref OverlayMethodTable).
-- `noinbounds::Bool`: If set, indicates that this method does not read the parent's `:inbounds`
-  state. In particular, it does not have any reached `:boundscheck` exprs, not propagates inbounds
-  to any children that do.
 
 Note that the representations above are just internal implementation details and thus likely
 to change in the future. See [`Base.@assume_effects`](@ref) for more detailed explanation
@@ -92,9 +93,7 @@ The output represents the state of different effect properties in the following 
 7. `noub` (`u`):
     - `+u` (green): `true`
     - `-u` (red): `false`
-8. `noinbounds` (`i`):
-    - `+i` (green): `true`
-    - `-i` (red): `false`
+    - `?u` (yellow): `NOUB_IF_NOINBOUNDS`
 
 Additionally, if the `nonoverlayed` property is false, a red prime symbol (′) is displayed after the tuple.
 """

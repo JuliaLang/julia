@@ -301,7 +301,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
         if ((jl_value_t*)*src_out == jl_nothing)
             *src_out = NULL;
         if (*src_out && jl_is_method(def))
-            *src_out = jl_uncompress_ir(def, (jl_value_t*)*src_out);
+            *src_out = jl_uncompress_ir(def, codeinst, (jl_value_t*)*src_out);
     }
     if (*src_out == NULL || !jl_is_code_info(*src_out)) {
         if (cgparams.lookup != jl_rettype_inferred_addr) {
@@ -1950,7 +1950,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
         src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method)) {
             JL_GC_PUSH2(&codeinst, &src);
-            src = jl_uncompress_ir(mi->def.method, (jl_value_t*)src);
+            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_value_t*)src);
             JL_GC_POP();
         }
     }
@@ -1989,7 +1989,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
     }
     if (src) {
         if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
-            src = jl_uncompress_ir(mi->def.method, (jl_value_t*)src);
+            src = jl_uncompress_ir(mi->def.method, codeinst, (jl_value_t*)src);
     }
 
     // emit this function into a new llvm module

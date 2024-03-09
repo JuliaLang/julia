@@ -102,7 +102,7 @@ value_t fl_table(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
         else
             k = arg;
     }
-    if (h->table != &h->_space[0]) {
+    if (cnt <= HT_N_INLINE && h->table != &h->_space[0]) {
         // We expected to use the inline table, but we ended up outgrowing it.
         // Make sure to register the finalizer.
         add_finalizer(fl_ctx, (cvalue_t*)ptr(nt));

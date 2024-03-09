@@ -118,6 +118,8 @@ typedef struct _jl_gc_chunk_t {
 #define GC_PTR_QUEUE_INIT_SIZE (1 << 18)    // initial size of queue of `jl_value_t *`
 #define GC_CHUNK_QUEUE_INIT_SIZE (1 << 14)  // initial size of chunk-queue
 
+#define GC_REMSET_PTR_TAG (0x1)             // lowest bit of `jl_value_t *` is tagged if it's in the remset
+
 // layout for big (>2k) objects
 
 JL_EXTENSION typedef struct _bigval_t {

@@ -454,3 +454,27 @@ let e = ExceptionUnwrapping.X(nothing)
     @test ExceptionUnwrapping.result == [false, true]
     empty!(ExceptionUnwrapping.result)
 end
+
+fshadow() = 1
+gshadow() = fshadow()
+@test fshadow() === 1
+@test gshadow() === 1
+fshadow_m1 = which(fshadow, ())
+fshadow() = 2
+fshadow() = 3
+@test fshadow() === 3
+@test gshadow() === 3
+fshadow_m3 = which(fshadow, ())
+Base.delete_method(fshadow_m1)
+@test fshadow() === 3
+@test gshadow() === 3
+Base.delete_method(fshadow_m3)
+fshadow_m2 = which(fshadow, ())
+@test fshadow() === 2
+@test gshadow() === 2
+Base.delete_method(fshadow_m2)
+@test_throws MethodError(fshadow, (), Base.tls_world_age()) gshadow()
+@test Base.morespecific(fshadow_m3, fshadow_m2)
+@test Base.morespecific(fshadow_m2, fshadow_m1)
+@test Base.morespecific(fshadow_m3, fshadow_m1)
+@test !Base.morespecific(fshadow_m2, fshadow_m3)

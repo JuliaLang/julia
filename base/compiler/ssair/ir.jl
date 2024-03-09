@@ -397,6 +397,12 @@ function IRCode()
     return ir
 end
 
+construct_domtree(ir::IRCode) = construct_domtree(ir.cfg)
+construct_domtree(cfg::CFG) = construct_domtree(cfg.blocks)
+
+construct_postdomtree(ir::IRCode) = construct_postdomtree(ir.cfg)
+construct_postdomtree(cfg::CFG) = construct_postdomtree(cfg.blocks)
+
 function block_for_inst(ir::IRCode, inst::Int)
     if inst > length(ir.stmts)
         inst = ir.new_nodes.info[inst - length(ir.stmts)].pos

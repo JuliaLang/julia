@@ -3,6 +3,8 @@
 #ifndef WORK_STEALING_QUEUE_H
 #define WORK_STEALING_QUEUE_H
 
+#include <stdalign.h>
+
 #include "julia_atomics.h"
 #include "assert.h"
 
@@ -34,11 +36,17 @@ static inline ws_array_t *create_ws_array(size_t capacity, int32_t eltsz) JL_NOT
     return a;
 }
 
+static inline void free_ws_array(ws_array_t *a)
+{
+    free(a->buffer);
+    free(a);
+}
+
 typedef struct {
-    _Atomic(int64_t) top;
-    char _padding[JL_CACHE_BYTE_ALIGNMENT - sizeof(_Atomic(int64_t))];
-    _Atomic(int64_t) bottom; // put on a separate cache line. conservatively estimate cache line size as 128 bytes
-    _Atomic(ws_array_t *) array;
+    // align to JL_CACHE_BYTE_ALIGNMENT
+    alignas(JL_CACHE_BYTE_ALIGNMENT) _Atomic(int64_t) top;
+    alignas(JL_CACHE_BYTE_ALIGNMENT) _Atomic(int64_t) bottom;
+    alignas(JL_CACHE_BYTE_ALIGNMENT) _Atomic(ws_array_t *) array;
 } ws_queue_t;
 
 static inline ws_array_t *ws_queue_push(ws_queue_t *q, void *elt, int32_t eltsz) JL_NOTSAFEPOINT

@@ -107,19 +107,17 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # OptimizationState #
 #####################
 
-function inlining_policy(interp::AbstractInterpreter,
+# return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
+function src_inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(src, MaybeCompressed)
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
-        return src_inlineable ? src : nothing
+        return src_inlineable
     elseif isa(src, IRCode)
-        return src
-    elseif isa(src, SemiConcreteResult)
-        return src
-    elseif isa(src, CodeInstance)
-        return inlining_policy(interp, src.inferred, info, stmt_flag)
+        return true
     end
-    return nothing
+    @assert !isa(src, CodeInstance) # handled by caller
+    return false
 end
 
 struct InliningState{Interp<:AbstractInterpreter}
@@ -529,17 +527,22 @@ function any_stmt_may_throw(ir::IRCode, bb::Int)
     return false
 end
 
-function conditional_successors_may_throw(lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
+function visit_conditional_successors(callback, lazypostdomtree::LazyPostDomtree, ir::IRCode, bb::Int)
     visited = BitSet((bb,))
     worklist = Int[bb]
     while !isempty(worklist)
-        thisbb = pop!(worklist)
+        thisbb = popfirst!(worklist)
         for succ in ir.cfg.blocks[thisbb].succs
             succ in visited && continue
             push!(visited, succ)
-            postdominates(get!(lazypostdomtree), succ, thisbb) && continue
-            any_stmt_may_throw(ir, succ) && return true
-            push!(worklist, succ)
+            if postdominates(get!(lazypostdomtree), succ, bb)
+                # this successor is not conditional, so no need to visit it further
+                continue
+            elseif callback(succ)
+                return true
+            else
+                push!(worklist, succ)
+            end
         end
     end
     return false
@@ -568,7 +571,7 @@ function get!(lazyagdomtree::LazyAugmentedDomtree)
             cfg_insert_edge!(cfg, bb, length(cfg.blocks))
         end
     end
-    domtree = construct_domtree(cfg.blocks)
+    domtree = construct_domtree(cfg)
     return lazyagdomtree.agdomtree = AugmentedDomtree(cfg, domtree)
 end
 
@@ -831,8 +834,10 @@ function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
             # inconsistent region.
             if !sv.result.ipo_effects.terminates
                 sv.all_retpaths_consistent = false
-            elseif conditional_successors_may_throw(sv.lazypostdomtree, sv.ir, bb)
-                # Check if there are potential throws that require
+            elseif visit_conditional_successors(sv.lazypostdomtree, sv.ir, bb) do succ::Int
+                       return any_stmt_may_throw(sv.ir, succ)
+                   end
+                # check if this `GotoIfNot` leads to conditional throws, which taints consistency
                 sv.all_retpaths_consistent = false
             else
                 (; cfg, domtree) = get!(sv.lazyagdomtree)
@@ -1175,7 +1180,7 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     svdef = sv.linfo.def
     nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
-    @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
+    @timeit "domtree 1" domtree = construct_domtree(ir)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
     @timeit "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`

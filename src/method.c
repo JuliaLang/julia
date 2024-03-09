@@ -507,6 +507,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->slotflags = NULL;
     src->slotnames = NULL;
     src->slottypes = jl_nothing;
+    src->parent = (jl_method_instance_t*)jl_nothing;
     src->min_world = 1;
     src->max_world = ~(size_t)0;
     src->edges = jl_nothing;

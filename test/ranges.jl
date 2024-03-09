@@ -2376,13 +2376,46 @@ end
     @test 0.2 * (-2:2:2) == [-0.4, 0, 0.4]
 end
 
-@testset "Indexing OneTo with IdentityUnitRange" begin
-    for endpt in Any[10, big(10), UInt(10)]
-        r = Base.OneTo(endpt)
-        inds = Base.IdentityUnitRange(3:5)
-        rs = r[inds]
-        @test rs === inds
-        @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
+@testset "IdentityUnitRange indexing" begin
+    @testset "Indexing into an IdentityUnitRange" begin
+        @testset for r in Any[-1:20, Base.OneTo(20)]
+            ri = Base.IdentityUnitRange(r)
+            @test_throws "invalid index" ri[true]
+            @testset for s in Any[Base.OneTo(6), Base.OneTo{BigInt}(6), 3:6, big(3):big(6), 3:2:7]
+                @test mapreduce(==, &, ri[s], ri[s[begin]]:step(s):ri[s[end]])
+                @test axes(ri[s]) == axes(s)
+                @test eltype(ri[s]) == eltype(ri)
+            end
+        end
+        @testset "Bool indices" begin
+            r = 1:1
+            @test Base.IdentityUnitRange(r)[true:true] == r[true:true]
+            @test Base.IdentityUnitRange(r)[true:true:true] == r[true:true:true]
+            @test_throws BoundsError Base.IdentityUnitRange(1:2)[true:true]
+            @test_throws BoundsError Base.IdentityUnitRange(1:2)[true:true:true]
+        end
+    end
+    @testset "Indexing with IdentityUnitRange" begin
+        @testset "OneTo" begin
+            @testset for endpt in Any[10, big(12), UInt(11)]
+                r = Base.OneTo(endpt)
+                inds = Base.IdentityUnitRange(3:5)
+                rs = r[inds]
+                @test rs == inds
+                @test axes(rs) == axes(inds)
+                @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
+            end
+        end
+        @testset "IdentityUnitRange" begin
+            @testset for r in Any[Base.IdentityUnitRange(1:4), Base.IdentityUnitRange(Base.OneTo(4)), Base.Slice(1:4), Base.Slice(Base.OneTo(4))]
+                @testset for s in Any[Base.IdentityUnitRange(3:3), Base.IdentityUnitRange(Base.OneTo(2)), Base.Slice(3:3), Base.Slice(Base.OneTo(2))]
+                    rs = r[s]
+                    @test rs == s
+                    @test axes(rs) == axes(s)
+                end
+                @test_throws BoundsError r[Base.IdentityUnitRange(first(r):last(r) + 1)]
+            end
+        end
     end
 end
 

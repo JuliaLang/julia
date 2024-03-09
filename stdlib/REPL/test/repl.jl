@@ -1696,6 +1696,35 @@ finally
     empty!(Base.Experimental._hint_handlers)
 end
 
+try # test the functionality of `UndefVarError_hint` against import clashes
+    @assert isempty(Base.Experimental._hint_handlers)
+    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
+
+    @eval module X
+
+    module A
+    export x
+    x = 1
+    end # A
+
+    module B
+    export x
+    x = 2
+    end # B
+
+    using .A, .B
+
+    end # X
+
+    expected_message = string("\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
+    @test_throws expected_message X.x
+finally
+    empty!(Base.Experimental._hint_handlers)
+end
+
 # Hints for tab completes
 
 fake_repl() do stdin_write, stdout_read, repl

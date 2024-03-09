@@ -217,7 +217,7 @@ JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v)
 }
 
 // test whether a type has vars bound by the given environment
-static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
+int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 {
     while (1) {
         if (jl_is_typevar(v)) {
@@ -2141,15 +2141,20 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                         jl_errorf("duplicate field name in NamedTuple: \"%s\" is not unique", jl_symbol_name((jl_sym_t*)ni));
                 }
             }
-            if (!jl_is_datatype(values_tt))
-                jl_error("NamedTuple field type must be a tuple type");
-            if (jl_is_va_tuple((jl_datatype_t*)values_tt) || jl_nparams(values_tt) != nf)
-                jl_error("NamedTuple names and field types must have matching lengths");
-            ndt->types = ((jl_datatype_t*)values_tt)->parameters;
+            if (values_tt == jl_bottom_type && nf > 0) {
+                ndt->types = jl_svec_fill(nf, jl_bottom_type);
+            }
+            else {
+                if (!jl_is_datatype(values_tt))
+                    jl_error("NamedTuple field type must be a tuple datatype");
+                if (jl_is_va_tuple((jl_datatype_t*)values_tt) || jl_nparams(values_tt) != nf)
+                    jl_error("NamedTuple names and field types must have matching lengths");
+                ndt->types = ((jl_datatype_t*)values_tt)->parameters;
+            }
             jl_gc_wb(ndt, ndt->types);
         }
         else {
-            ndt->types = jl_emptysvec; // XXX: this is essentially always false
+            ndt->types = jl_emptysvec; // XXX: this is essentially always incorrect
         }
     }
     else if (tn == jl_genericmemoryref_typename || tn == jl_genericmemory_typename) {
@@ -3142,7 +3147,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(19,
+                        jl_perm_symsvec(20,
                             "code",
                             "codelocs",
                             "ssavaluetypes",
@@ -3151,6 +3156,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "slotnames",
                             "slotflags",
                             "slottypes",
+                            "parent",
                             "method_for_inference_limit_heuristics",
                             "edges",
                             "min_world",
@@ -3162,7 +3168,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "constprop",
                             "purity",
                             "inlining_cost"),
-                        jl_svec(19,
+                        jl_svec(20,
                             jl_array_any_type,
                             jl_array_int32_type,
                             jl_any_type,
@@ -3170,6 +3176,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_array_symbol_type,
                             jl_array_uint8_type,
+                            jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_any_type,
@@ -3183,7 +3190,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_uint16_type,
                             jl_uint16_type),
                         jl_emptysvec,
-                        0, 1, 19);
+                        0, 1, 20);
 
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,

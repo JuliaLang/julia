@@ -58,7 +58,6 @@ end
 showvalue(io, ex::Exception) = showerror(io, ex)
 
 function default_logcolor(level::LogLevel)
-    level in keys(custom_log_levels) ? custom_log_levels[level][2] :
     level < Info  ? :log_debug :
     level < Warn  ? :log_info  :
     level < Error ? :log_warn  :

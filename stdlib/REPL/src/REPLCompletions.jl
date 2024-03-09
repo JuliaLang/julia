@@ -4,10 +4,11 @@ module REPLCompletions
 
 export completions, shell_completions, bslash_completions, completion_text
 
-using Core: CodeInfo, MethodInstance, CodeInstance, Const
+using Core: Const
 const CC = Core.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
+using Base.Filesystem: _readdirx
 
 abstract type Completion end
 
@@ -317,8 +318,8 @@ function cache_PATH()
             continue
         end
 
-        filesinpath = try
-            readdir(pathdir)
+        path_entries = try
+            _readdirx(pathdir)
         catch e
             # Bash allows dirs in PATH that can't be read, so we should as well.
             if isa(e, Base.IOError) || isa(e, Base.ArgumentError)
@@ -328,13 +329,13 @@ function cache_PATH()
                 rethrow()
             end
         end
-        for file in filesinpath
+        for entry in path_entries
             # In a perfect world, we would filter on whether the file is executable
             # here, or even on whether the current user can execute the file in question.
             try
-                if isfile(joinpath(pathdir, file))
-                    @lock PATH_cache_lock push!(PATH_cache, file)
-                    push!(this_PATH_cache, file)
+                if isfile(entry)
+                    @lock PATH_cache_lock push!(PATH_cache, entry.name)
+                    push!(this_PATH_cache, entry.name)
                 end
             catch e
                 # `isfile()` can throw in rare cases such as when probing a
@@ -378,11 +379,11 @@ function complete_path(path::AbstractString;
     else
         dir, prefix = splitdir(path)
     end
-    files = try
+    entries = try
         if isempty(dir)
-            readdir()
+            _readdirx()
         elseif isdir(dir)
-            readdir(dir)
+            _readdirx(dir)
         else
             return Completion[], dir, false
         end
@@ -392,11 +393,10 @@ function complete_path(path::AbstractString;
     end
 
     matches = Set{String}()
-    for file in files
-        if startswith(file, prefix)
-            p = joinpath(dir, file)
-            is_dir = try isdir(p) catch ex; ex isa Base.IOError ? false : rethrow() end
-            push!(matches, is_dir ? file * "/" : file)
+    for entry in entries
+        if startswith(entry.name, prefix)
+            is_dir = try isdir(entry) catch ex; ex isa Base.IOError ? false : rethrow() end
+            push!(matches, is_dir ? entry.name * "/" : entry.name)
         end
     end
 
@@ -1349,14 +1349,15 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                     append!(suggestions, project_deps_get_completion_candidates(s, dir))
                 end
                 isdir(dir) || continue
-                for pname in readdir(dir)
+                for entry in _readdirx(dir)
+                    pname = entry.name
                     if pname[1] != '.' && pname != "METADATA" &&
                         pname != "REQUIRE" && startswith(pname, s)
                         # Valid file paths are
                         #   <Mod>.jl
                         #   <Mod>/src/<Mod>.jl
                         #   <Mod>.jl/src/<Mod>.jl
-                        if isfile(joinpath(dir, pname))
+                        if isfile(entry)
                             endswith(pname, ".jl") && push!(suggestions,
                                                             PackageCompletion(pname[1:prevind(pname, end-2)]))
                         else
@@ -1365,7 +1366,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
                             else
                                 pname
                             end
-                            if isfile(joinpath(dir, pname, "src",
+                            if isfile(joinpath(entry, "src",
                                                "$mod_name.jl"))
                                 push!(suggestions, PackageCompletion(mod_name))
                             end
