@@ -312,32 +312,64 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
 static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_value_t *jt);
 static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, MDNode *tbaa_dest, unsigned alignment, bool isVolatile=false);
 
-static Value *get_gc_root_for(jl_codectx_t &ctx, const jl_cgval_t &x)
+static bool type_is_permalloc(jl_value_t *typ)
+{
+    // Singleton should almost always be handled by the later optimization passes.
+    // Also do it here since it is cheap and save some effort in LLVM passes.
+    if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ))
+        return true;
+    return typ == (jl_value_t*)jl_symbol_type ||
+        typ == (jl_value_t*)jl_int8_type ||
+        typ == (jl_value_t*)jl_uint8_type;
+}
+
+
+static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res, unsigned offset)
+{
+    // This is a inlined field at `offset`.
+    if (!typ->layout || typ->layout->npointers == 0)
+        return;
+    jl_svec_t *types = jl_get_fieldtypes(typ);
+    size_t nf = jl_svec_len(types);
+    for (size_t i = 0; i < nf; i++) {
+        jl_value_t *_fld = jl_svecref(types, i);
+        if (!jl_is_datatype(_fld))
+            continue;
+        jl_datatype_t *fld = (jl_datatype_t*)_fld;
+        if (jl_field_isptr(typ, i)) {
+            // pointer field, check if field is perm-alloc
+            if (type_is_permalloc((jl_value_t*)fld))
+                res.push_back(offset + jl_field_offset(typ, i));
+            continue;
+        }
+        // inline field
+        find_perm_offsets(fld, res, offset + jl_field_offset(typ, i));
+    }
+}
+
+static llvm::SmallVector<llvm::Value*, 0> get_gc_roots_for(jl_codectx_t &ctx, const jl_cgval_t &x)
 {
     if (x.constant || x.typ == jl_bottom_type)
-        return nullptr;
+        return {};
     if (x.Vboxed) // superset of x.isboxed
-        return x.Vboxed;
+        return {x.Vboxed};
     assert(!x.isboxed);
-#ifndef NDEBUG
     if (x.ispointer()) {
         assert(x.V);
-        if (PointerType *T = dyn_cast<PointerType>(x.V->getType())) {
-            assert(T->getAddressSpace() != AddressSpace::Tracked);
-            if (T->getAddressSpace() == AddressSpace::Derived) {
-                // n.b. this IR would not be valid after LLVM-level inlining,
-                // since codegen does not have a way to determine the whether
-                // this argument value needs to be re-rooted
-            }
-        }
+        assert(x.V->getType()->getPointerAddressSpace() != AddressSpace::Tracked);
+        return {x.V};
     }
-#endif
-    if (jl_is_concrete_immutable(x.typ) && !jl_is_pointerfree(x.typ)) {
-        Type *T = julia_type_to_llvm(ctx, x.typ);
-        return emit_unbox(ctx, T, x, x.typ);
+    else if (jl_is_concrete_immutable(x.typ) && !jl_is_pointerfree(x.typ)) {
+        jl_value_t *jltype = x.typ;
+        Type *T = julia_type_to_llvm(ctx, jltype);
+        Value *agg = emit_unbox(ctx, T, x, jltype);
+        SmallVector<unsigned,4> perm_offsets;
+        if (jltype && jl_is_datatype(jltype) && ((jl_datatype_t*)jltype)->layout)
+            find_perm_offsets((jl_datatype_t*)jltype, perm_offsets, 0);
+        return ExtractTrackedValues(agg, agg->getType(), false, ctx.builder, perm_offsets);
     }
     // nothing here to root, move along
-    return nullptr;
+    return {};
 }
 
 // --- emitting pointers directly into code ---
@@ -355,7 +387,7 @@ static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     StringRef localname;
     std::string gvname;
     if (!gv) {
-        uint64_t id = jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1); // TODO: use ctx.emission_context.global_targets.size()
+        uint64_t id = jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1); // TODO: use ctx.emission_context.global_targets.size()
         raw_string_ostream(gvname) << cname << id;
         localname = StringRef(gvname);
     }
@@ -589,17 +621,6 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 }
 
 // --- mapping between julia and llvm types ---
-
-static bool type_is_permalloc(jl_value_t *typ)
-{
-    // Singleton should almost always be handled by the later optimization passes.
-    // Also do it here since it is cheap and save some effort in LLVM passes.
-    if (jl_is_datatype(typ) && jl_is_datatype_singleton((jl_datatype_t*)typ))
-        return true;
-    return typ == (jl_value_t*)jl_symbol_type ||
-        typ == (jl_value_t*)jl_int8_type ||
-        typ == (jl_value_t*)jl_uint8_type;
-}
 
 static unsigned convert_struct_offset(const llvm::DataLayout &DL, Type *lty, unsigned byte_offset)
 {
@@ -1905,7 +1926,7 @@ Value *extract_first_ptr(jl_codectx_t &ctx, Value *V)
     if (path.empty())
         return NULL;
     std::reverse(std::begin(path), std::end(path));
-    return ctx.builder.CreateExtractValue(V, path);
+    return CreateSimplifiedExtractValue(ctx, V, path);
 }
 
 
@@ -2623,6 +2644,104 @@ static jl_cgval_t emit_unionload(jl_codectx_t &ctx, Value *addr, Value *ptindex,
     return mark_julia_slot(fsz > 0 ? addr : nullptr, jfty, tindex, tbaa);
 }
 
+static bool isTBAA(MDNode *TBAA, std::initializer_list<const char*> const strset)
+{
+    if (!TBAA)
+        return false;
+    while (TBAA->getNumOperands() > 1) {
+        TBAA = cast<MDNode>(TBAA->getOperand(1).get());
+        auto str = cast<MDString>(TBAA->getOperand(0))->getString();
+        for (auto str2 : strset) {
+            if (str == str2) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Check if this is a load from an immutable value. The easiest
+// way to do so is to look at the tbaa and see if it derives from
+// jtbaa_immut.
+static bool isLoadFromImmut(LoadInst *LI)
+{
+    if (LI->getMetadata(LLVMContext::MD_invariant_load))
+        return true;
+    MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
+    if (isTBAA(TBAA, {"jtbaa_immut", "jtbaa_const", "jtbaa_datatype", "jtbaa_memoryptr", "jtbaa_memorylen", "jtbaa_memoryown"}))
+        return true;
+    return false;
+}
+
+static bool isConstGV(GlobalVariable *gv)
+{
+    return gv->isConstant() || gv->getMetadata("julia.constgv");
+}
+
+// Check if this is can be traced through constant loads to an constant global
+// or otherwise globally rooted value.
+// Almost all `tbaa_const` loads satisfies this with the exception of
+// task local constants which are constant as far as the code is concerned but aren't
+// global constants. For task local constant `task_local` will be true when this function
+// returns.
+// Unlike this function in llvm-late-gc-lowering, we do not examine PhiNode, as those are not emitted yet
+static bool isLoadFromConstGV(LoadInst *LI);
+static bool isLoadFromConstGV(Value *v)
+{
+    v = v->stripInBoundsOffsets();
+    if (auto LI = dyn_cast<LoadInst>(v))
+        return isLoadFromConstGV(LI);
+    if (auto gv = dyn_cast<GlobalVariable>(v))
+        return isConstGV(gv);
+    // null pointer
+    if (isa<ConstantData>(v))
+        return true;
+    // literal pointers
+    if (auto CE = dyn_cast<ConstantExpr>(v))
+        return (CE->getOpcode() == Instruction::IntToPtr &&
+                isa<ConstantData>(CE->getOperand(0)));
+    if (auto SL = dyn_cast<SelectInst>(v))
+        return (isLoadFromConstGV(SL->getTrueValue()) &&
+                isLoadFromConstGV(SL->getFalseValue()));
+    if (auto call = dyn_cast<CallInst>(v)) {
+        auto callee = call->getCalledFunction();
+        if (callee && callee->getName() == "julia.typeof") {
+            return true;
+        }
+        if (callee && callee->getName() == "julia.get_pgcstack") {
+            return true;
+        }
+        if (callee && callee->getName() == "julia.gc_loaded") {
+            return isLoadFromConstGV(call->getArgOperand(0)) &&
+                   isLoadFromConstGV(call->getArgOperand(1));
+        }
+    }
+    if (isa<Argument>(v)) {
+        return true;
+    }
+    return false;
+}
+
+// The white list implemented here and above in `isLoadFromConstGV(Value*)` should
+// cover all the cases we and LLVM generates.
+static bool isLoadFromConstGV(LoadInst *LI)
+{
+    // We only emit single slot GV in codegen
+    // but LLVM global merging can change the pointer operands to GEPs/bitcasts
+    auto load_base = LI->getPointerOperand()->stripInBoundsOffsets();
+    assert(load_base); // Static analyzer
+    auto gv = dyn_cast<GlobalVariable>(load_base);
+    if (isLoadFromImmut(LI)) {
+        if (gv)
+            return true;
+        return isLoadFromConstGV(load_base);
+    }
+    if (gv)
+        return isConstGV(gv);
+    return false;
+}
+
+
 static MDNode *best_field_tbaa(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_datatype_t *jt, unsigned idx, size_t byte_offset)
 {
     auto tbaa = strct.tbaa;
@@ -2643,6 +2762,8 @@ static MDNode *best_field_tbaa(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_da
                 return ctx.tbaa().tbaa_arraysize;
         }
     }
+    if (strct.V && jl_field_isconst(jt, idx) && isLoadFromConstGV(strct.V))
+        return ctx.tbaa().tbaa_const;
     return tbaa;
 }
 
@@ -3590,29 +3711,6 @@ static void emit_write_barrier(jl_codectx_t &ctx, Value *parent, ArrayRef<Value*
     ctx.builder.CreateCall(prepare_call(jl_write_barrier_func), decay_ptrs);
 }
 
-static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res, unsigned offset)
-{
-    // This is a inlined field at `offset`.
-    if (!typ->layout || typ->layout->npointers == 0)
-        return;
-    jl_svec_t *types = jl_get_fieldtypes(typ);
-    size_t nf = jl_svec_len(types);
-    for (size_t i = 0; i < nf; i++) {
-        jl_value_t *_fld = jl_svecref(types, i);
-        if (!jl_is_datatype(_fld))
-            continue;
-        jl_datatype_t *fld = (jl_datatype_t*)_fld;
-        if (jl_field_isptr(typ, i)) {
-            // pointer field, check if field is perm-alloc
-            if (type_is_permalloc((jl_value_t*)fld))
-                res.push_back(offset + jl_field_offset(typ, i));
-            continue;
-        }
-        // inline field
-        find_perm_offsets(fld, res, offset + jl_field_offset(typ, i));
-    }
-}
-
 static void emit_write_multibarrier(jl_codectx_t &ctx, Value *parent, Value *agg,
                                     jl_value_t *jltype)
 {
@@ -4255,6 +4353,22 @@ static Value *emit_memoryref_ptr(jl_codectx_t &ctx, const jl_cgval_t &ref, const
         }
     }
     return data;
+}
+
+jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+{
+    // This relies on the invariant that the JIT will have set the invoke ptr
+    // by the time it releases the codegen lock. If the code is refactored to make the
+    // codegen lock more fine-grained, this will have to be replaced by a per-codeinstance futex.
+    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    // This should only be possible if there's more than one thread. If not, either there's a bug somewhere
+    // that resulted in this not getting cleared, or we're about to deadlock. Either way, that's bad.
+    if (nthreads == 1) {
+        jl_error("Internal error: Reached jl_fptr_wait_for_compiled in single-threaded execution.");
+    }
+    JL_LOCK(&jl_codegen_lock);
+    JL_UNLOCK(&jl_codegen_lock);
+    return jl_atomic_load_acquire(&m->invoke)(f, args, nargs, m);
 }
 
 // Reset us back to codegen debug type

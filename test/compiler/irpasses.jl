@@ -29,7 +29,7 @@ let code = Any[
         ReturnNode(Core.SSAValue(10)),
     ]
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
     phi = ir.stmts.stmt[3]
@@ -47,7 +47,7 @@ let code = Any[]
     push!(code, Expr(:call, :opaque))
     push!(code, ReturnNode(nothing))
     ir = make_ircode(code)
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     ir = Core.Compiler.domsort_ssa!(ir, domtree)
     Core.Compiler.verify_ir(ir)
 end
@@ -1787,3 +1787,36 @@ let code = Any[
     @test !any(iscall((ir, getfield)), ir.stmts.stmt)
     @test length(ir.cfg.blocks[end].stmts) == 1
 end
+
+# https://github.com/JuliaLang/julia/issues/47065
+# `Core.Compiler.sort!` should be able to handle a big list
+let n = 1000
+    ex = :(return 1)
+    for _ in 1:n
+        ex = :(rand() < .1 && $(ex))
+    end
+    @eval global function f_1000_blocks()
+        $ex
+        return 0
+    end
+end
+@test f_1000_blocks() == 0
+
+# https://github.com/JuliaLang/julia/issues/53521
+# Incorrect scope counting in :leave
+using Base.ScopedValues
+function f53521()
+    VALUE = ScopedValue(1)
+    @with VALUE => 2 begin
+        for i = 1
+            @with VALUE => 3 begin
+                try
+                    foo()
+                catch
+                    nothing
+                end
+            end
+        end
+    end
+end
+@test code_typed(f53521)[1][2] === Nothing

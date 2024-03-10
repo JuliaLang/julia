@@ -306,7 +306,7 @@ function compare_version_cap(a::String, b::String, a_requested::Bool, b_requeste
         return a == b
     end
 
-    # Otherwise, do the comparison between the the single version cap and the single version:
+    # Otherwise, do the comparison between the single version cap and the single version:
     if a_requested
         return b <= a
     else

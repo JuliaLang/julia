@@ -184,11 +184,7 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)
     @test r == Core.Compiler.tuplemerge(a, b)
-    if commutative
-        @test r == Core.Compiler.tuplemerge(b, a)
-    else
-        @test_broken r == Core.Compiler.tuplemerge(b, a)
-    end
+    @test r == Core.Compiler.tuplemerge(b, a) broken=!commutative
 end
 tuplemerge_test(Tuple{Int}, Tuple{String}, Tuple{Union{Int, String}})
 tuplemerge_test(Tuple{Int}, Tuple{String, String}, Tuple)
@@ -680,7 +676,6 @@ end
 function test_inferred_static(arrow::Pair, all_ssa)
     code, rt = arrow
     @test isdispatchelem(rt)
-    @test code.inferred
     for i = 1:length(code.code)
         e = code.code[i]
         test_inferred_static(e)
@@ -1703,7 +1698,6 @@ let linfo = get_linfo(Base.convert, Tuple{Type{Int64}, Int32}),
     @test opt.src !== linfo.def.source
     @test length(opt.src.slotflags) == linfo.def.nargs <= length(opt.src.slotnames)
     @test opt.src.ssavaluetypes isa Vector{Any}
-    @test !opt.src.inferred
     @test opt.mod === Base
 end
 
@@ -5633,3 +5627,15 @@ end
 
 # Issue #52613
 @test (code_typed((Any,)) do x; TypeVar(x...); end)[1][2] === TypeVar
+
+# https://github.com/JuliaLang/julia/issues/53590
+func53590(b) = b ? Int : Float64
+function issue53590(b1, b2)
+    T1 = func53590(b1)
+    T2 = func53590(b2)
+    return typejoin(T1, T2)
+end
+@test issue53590(true, true) == Int
+@test issue53590(true, false) == Real
+@test issue53590(false, false) == Float64
+@test issue53590(false, true) == Real

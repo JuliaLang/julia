@@ -689,6 +689,10 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
     if callee_method2 !== inf_method2
         return false
     end
+    if isa(frame, InferenceState) && cache_owner(frame.interp) !== cache_owner(interp)
+        # Don't assume that frames in different interpreters are the same
+        return false
+    end
     if !hardlimit || InferenceParams(interp).ignore_recursion_hardlimit
         # if this is a soft limit,
         # also inspect the parent of this edge,
@@ -897,7 +901,12 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Concrete eval disabled for overlayed methods")
         end
         if !any_conditional(arginfo)
-            return :semi_concrete_eval
+            if may_optimize(interp)
+                return :semi_concrete_eval
+            else
+                # disable irinterp if optimization is disabled, since it requires optimized IR
+                add_remark!(interp, sv, "[constprop] Semi-concrete interpretation disabled for non-optimizing interpreter")
+            end
         end
     end
     return :none
@@ -1181,7 +1190,7 @@ function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
         if isa(code, CodeInstance)
             inferred = @atomic :monotonic code.inferred
             # TODO propagate a specific `CallInfo` that conveys information about this call
-            if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL) !== nothing
+            if src_inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL)
                 return true
             end
         end
@@ -1221,45 +1230,53 @@ function semi_concrete_eval_call(interp::AbstractInterpreter,
     return nothing
 end
 
+const_prop_result(inf_result::InferenceResult) =
+    ConstCallResults(inf_result.result, inf_result.exc_result, ConstPropResult(inf_result),
+                     inf_result.ipo_effects, inf_result.linfo)
+
+# return cached constant analysis result
+return_cached_result(::AbstractInterpreter, inf_result::InferenceResult, ::AbsIntState) =
+    const_prop_result(inf_result)
+
 function const_prop_call(interp::AbstractInterpreter,
     mi::MethodInstance, result::MethodCallResult, arginfo::ArgInfo, sv::AbsIntState,
     concrete_eval_result::Union{Nothing, ConstCallResults}=nothing)
     inf_cache = get_inference_cache(interp)
     𝕃ᵢ = typeinf_lattice(interp)
     inf_result = cache_lookup(𝕃ᵢ, mi, arginfo.argtypes, inf_cache)
-    if inf_result === nothing
-        # fresh constant prop'
-        argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
-        inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
-        if !any(inf_result.overridden_by_const)
-            add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
-            return nothing
-        end
-        frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
-        if frame === nothing
-            add_remark!(interp, sv, "[constprop] Could not retrieve the source")
-            return nothing # this is probably a bad generated function (unsound), but just ignore it
-        end
-        frame.parent = sv
-        if !typeinf(interp, frame)
-            add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
-            return nothing
-        end
-        @assert inf_result.result !== nothing
-        if concrete_eval_result !== nothing
-            # override return type and effects with concrete evaluation result if available
-            inf_result.result = concrete_eval_result.rt
-            inf_result.ipo_effects = concrete_eval_result.effects
-        end
-    else
+    if inf_result !== nothing
         # found the cache for this constant prop'
         if inf_result.result === nothing
             add_remark!(interp, sv, "[constprop] Found cached constant inference in a cycle")
             return nothing
         end
+        @assert inf_result.linfo === mi "MethodInstance for cached inference result does not match"
+        return return_cached_result(interp, inf_result, sv)
     end
-    return ConstCallResults(inf_result.result, inf_result.exc_result,
-        ConstPropResult(inf_result), inf_result.ipo_effects, mi)
+    # perform fresh constant prop'
+    argtypes = has_conditional(𝕃ᵢ, sv) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
+    inf_result = InferenceResult(mi, argtypes, typeinf_lattice(interp))
+    if !any(inf_result.overridden_by_const)
+        add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
+        return nothing
+    end
+    frame = InferenceState(inf_result, #=cache_mode=#:local, interp)
+    if frame === nothing
+        add_remark!(interp, sv, "[constprop] Could not retrieve the source")
+        return nothing # this is probably a bad generated function (unsound), but just ignore it
+    end
+    frame.parent = sv
+    if !typeinf(interp, frame)
+        add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
+        return nothing
+    end
+    @assert inf_result.result !== nothing
+    if concrete_eval_result !== nothing
+        # override return type and effects with concrete evaluation result if available
+        inf_result.result = concrete_eval_result.rt
+        inf_result.ipo_effects = concrete_eval_result.effects
+    end
+    return const_prop_result(inf_result)
 end
 
 # TODO implement MustAlias forwarding
@@ -2678,7 +2695,7 @@ function refine_partial_type(@nospecialize t)
         # if the first/second parameter of `NamedTuple` is known to be empty,
         # the second/first argument should also be empty tuple type,
         # so refine it here
-        return Const(NamedTuple())
+        return Const((;))
     end
     return t
 end
@@ -3304,6 +3321,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
             end
             if rt === Bottom
                 ssavaluetypes[currpc] = Bottom
+                # Special case: Bottom-typed PhiNodes do not error (but must also be unused)
+                if isa(stmt, PhiNode)
+                    continue
+                end
                 @goto find_next_bb
             end
             if changes !== nothing

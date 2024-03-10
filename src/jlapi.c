@@ -438,20 +438,6 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
 }
 
 /**
- * @brief Yield to the Julia scheduler.
- *
- * Yields control to the Julia scheduler, allowing other Julia tasks to run.
- */
-JL_DLLEXPORT void jl_yield(void)
-{
-    static jl_function_t *yieldfunc = NULL;
-    if (yieldfunc == NULL)
-        yieldfunc = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("yield"));
-    if (yieldfunc != NULL)
-        jl_call0(yieldfunc);
-}
-
-/**
  * @brief Get a field from a Julia object.
  *
  * @param o A pointer to `jl_value_t` representing the Julia object.
@@ -617,41 +603,6 @@ JL_DLLEXPORT int jl_ver_is_release(void)
 JL_DLLEXPORT const char *jl_ver_string(void)
 {
    return JULIA_VERSION_STRING;
-}
-
-// return char* from String field in Base.GIT_VERSION_INFO
-static const char *git_info_string(const char *fld)
-{
-    static jl_value_t *GIT_VERSION_INFO = NULL;
-    if (!GIT_VERSION_INFO)
-        GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
-    jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
-    assert(jl_is_string(f));
-    return jl_string_data(f);
-}
-
-/**
- * @brief Get the name of the Git branch for the Julia build.
- *
- * @return A C string containing the name of the Git branch.
- */
-JL_DLLEXPORT const char *jl_git_branch(void)
-{
-    static const char *branch = NULL;
-    if (!branch) branch = git_info_string("branch");
-    return branch;
-}
-
-/**
- * @brief Get the Git commit hash for the Julia build.
- *
- * @return A C string containing the Git commit hash.
- */
-JL_DLLEXPORT const char *jl_git_commit(void)
-{
-    static const char *commit = NULL;
-    if (!commit) commit = git_info_string("commit");
-    return commit;
 }
 
 /**

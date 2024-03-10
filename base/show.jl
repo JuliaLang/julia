@@ -23,6 +23,13 @@ function show(io::IO, ::MIME"text/plain", r::LinRange)
     print_range(io, r)
 end
 
+function show(io::IO, ::MIME"text/plain", r::LogRange)  # display LogRange like LinRange
+    isempty(r) && return show(io, r)
+    summary(io, r)
+    println(io, ":")
+    print_range(io, r, " ", ", ", "", " \u2026 ")
+end
+
 function _isself(ft::DataType)
     ftname = ft.name
     isdefined(ftname, :mt) || return false
@@ -2881,6 +2888,12 @@ show(io::IO, ::Core.Compiler.NativeInterpreter) =
 show(io::IO, cache::Core.Compiler.CachedMethodTable) =
     print(io, typeof(cache), "(", Core.Compiler.length(cache.cache), " entries)")
 
+function show(io::IO, limited::Core.Compiler.LimitedAccuracy)
+    print(io, "Core.Compiler.LimitedAccuracy(")
+    show(io, limited.typ)
+    print(io, ", #= ", Core.Compiler.length(limited.causes), " cause(s) =#)")
+end
+
 function dump(io::IOContext, x::SimpleVector, n::Int, indent)
     if isempty(x)
         print(io, "empty SimpleVector")
@@ -2979,6 +2992,13 @@ end
 
 # Types
 function dump(io::IOContext, x::DataType, n::Int, indent)
+    # For some reason, tuples are structs
+    is_struct = isstructtype(x) && !(x <: Tuple)
+    is_mut = is_struct && ismutabletype(x)
+    is_mut && print(io, "mutable ")
+    is_struct && print(io, "struct ")
+    isprimitivetype(x) && print(io, "primitive type ")
+    isabstracttype(x) && print(io, "abstract type ")
     print(io, x)
     if x !== Any
         print(io, " <: ", supertype(x))
@@ -3000,7 +3020,9 @@ function dump(io::IOContext, x::DataType, n::Int, indent)
         fieldtypes = datatype_fieldtypes(x)
         for idx in 1:length(fields)
             println(io)
-            print(io, indent, "  ", fields[idx])
+            print(io, indent, "  ")
+            is_mut && isconst(x, idx) && print(io, "const ")
+            print(io, fields[idx])
             if isassigned(fieldtypes, idx)
                 print(io, "::")
                 print(tvar_io, fieldtypes[idx])
@@ -3174,7 +3196,7 @@ representing argument `x` in terms of its type. (The double-colon is
 omitted if `toplevel=true`.) However, you can
 specialize this function for specific types to customize printing.
 
-# Example
+# Examples
 
 A SubArray created as `view(a, :, 3, 2:5)`, where `a` is a
 3-dimensional Float64 array, has type

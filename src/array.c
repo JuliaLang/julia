@@ -99,21 +99,6 @@ jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t is
 
 JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str);
 
-JL_DLLEXPORT jl_array_t *jl_string_to_array(jl_value_t *str)
-{
-    jl_task_t *ct = jl_current_task;
-    jl_genericmemory_t *mem = jl_string_to_genericmemory(str);
-    JL_GC_PUSH1(&mem);
-    int ndimwords = 1;
-    int tsz = sizeof(jl_array_t) + ndimwords*sizeof(size_t);
-    jl_array_t *a = (jl_array_t*)jl_gc_alloc(ct->ptls, tsz, jl_array_uint8_type);
-    a->ref.mem = mem;
-    a->ref.ptr_or_offset = mem->ptr;
-    a->dimsize[0] = mem->length;
-    JL_GC_POP();
-    return a;
-}
-
 JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
                                             size_t nel, int own_buffer)
 {

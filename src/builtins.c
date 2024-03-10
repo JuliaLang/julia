@@ -1219,6 +1219,8 @@ static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f, int dothrow)
             tt = ((jl_tvar_t*)tt)->ub;
         if (tt == (jl_value_t*)jl_any_type)
             return (jl_value_t*)jl_any_type;
+        if (tt == (jl_value_t*)jl_bottom_type)
+            return (jl_value_t*)jl_bottom_type;
         JL_GC_PUSH1(&f);
         if (jl_is_symbol(f))
             f = jl_box_long(field_index+1);
@@ -2378,6 +2380,7 @@ jl_fptr_args_t jl_get_builtin_fptr(jl_datatype_t *dt)
     jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_atomic_load_relaxed(&dt->name->mt->defs);
     jl_method_instance_t *mi = jl_atomic_load_relaxed(&entry->func.method->unspecialized);
     jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
+    assert(ci->owner == jl_nothing);
     return jl_atomic_load_relaxed(&ci->specptr.fptr1);
 }
 

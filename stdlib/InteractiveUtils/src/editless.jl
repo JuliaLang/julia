@@ -77,7 +77,7 @@ already work:
 - pycharm
 - bbedit
 
-# Example:
+# Examples
 
 The following defines the usage of terminal-based `emacs`:
 

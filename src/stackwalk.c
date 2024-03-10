@@ -1087,8 +1087,6 @@ static void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
       #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown system")
       (void)c;
      #endif
-#elif defined(JL_HAVE_ASYNCIFY)
-     #pragma message("jl_rec_backtrace not defined for ASYNCIFY")
 #elif defined(JL_HAVE_SIGALTSTACK)
      #pragma message("jl_rec_backtrace not defined for SIGALTSTACK")
 #else

@@ -177,7 +177,7 @@ mutable struct LazyCFGReachability
 end
 function get!(x::LazyCFGReachability)
     isdefined(x, :reachability) && return x.reachability
-    domtree = construct_domtree(x.ir.cfg.blocks)
+    domtree = construct_domtree(x.ir)
     return x.reachability = CFGReachability(x.ir.cfg, domtree)
 end
 
@@ -189,8 +189,8 @@ end
 function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
     isdefined(x, :domtree) && return x.domtree
     return @timeit "domtree 2" x.domtree = IsPostDom ?
-        construct_postdomtree(x.ir.cfg.blocks) :
-        construct_domtree(x.ir.cfg.blocks)
+        construct_postdomtree(x.ir) :
+        construct_domtree(x.ir)
 end
 
 const LazyDomtree = LazyGenericDomtree{false}
@@ -318,7 +318,7 @@ mutable struct InferenceState
         dont_work_on_me = false
         parent = nothing
 
-        valid_worlds = WorldRange(src.min_world, src.max_world == typemax(UInt) ? get_world_counter() : src.max_world)
+        valid_worlds = WorldRange(1, get_world_counter())
         bestguess = Bottom
         exc_bestguess = Bottom
         ipo_effects = EFFECTS_TOTAL
@@ -338,13 +338,21 @@ mutable struct InferenceState
         InferenceParams(interp).unoptimize_throw_blocks && mark_throw_blocks!(src, handler_at)
         !iszero(cache_mode & CACHE_MODE_LOCAL) && push!(get_inference_cache(interp), result)
 
-        return new(
+        this = new(
             linfo, world, mod, sptypes, slottypes, src, cfg, method_info,
             currbb, currpc, ip, handlers, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent,
             result, unreachable, valid_worlds, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)
+
+        # Apply generated function restrictions
+        if src.min_world != 1 || src.max_world != typemax(UInt)
+            # From generated functions
+            this.valid_worlds = WorldRange(src.min_world, src.max_world)
+        end
+
+        return this
     end
 end
 
@@ -723,7 +731,16 @@ function empty_backedges!(frame::InferenceState, currpc::Int=frame.currpc)
 end
 
 function print_callstack(sv::InferenceState)
+    print("=================== Callstack: ==================\n")
+    idx = 0
     while sv !== nothing
+        print("[")
+        print(idx)
+        if !isa(sv.interp, NativeInterpreter)
+            print(", ")
+            print(typeof(sv.interp))
+        end
+        print("] ")
         print(sv.linfo)
         is_cached(sv) || print("  [uncached]")
         println()
@@ -732,7 +749,9 @@ function print_callstack(sv::InferenceState)
             println()
         end
         sv = sv.parent
+        idx += 1
     end
+    print("================= End callstack ==================\n")
 end
 
 function narguments(sv::InferenceState, include_va::Bool=true)
@@ -792,14 +811,14 @@ function IRInterpretationState(interp::AbstractInterpreter,
     @assert code.def === mi
     src = @atomic :monotonic code.inferred
     if isa(src, String)
-        src = _uncompressed_ir(mi.def, src)
+        src = _uncompressed_ir(code, src)
     else
         isa(src, CodeInfo) || return nothing
     end
     method_info = MethodInfo(src)
     ir = inflate_ir(src, mi)
     return IRInterpretationState(interp, method_info, ir, mi, argtypes, world,
-                                 src.min_world, src.max_world)
+                                 code.min_world, code.max_world)
 end
 
 # AbsIntState

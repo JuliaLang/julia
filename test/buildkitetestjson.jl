@@ -8,7 +8,7 @@ module BuildKiteTestJSON
 using Test
 using Dates
 
-export write_testset_json
+export write_testset_json_files
 
 # Bootleg JSON writer
 
@@ -29,7 +29,7 @@ function json_repr(io::IO, val::String; indent::Int=0)
 end
 json_repr(io::IO, val::Integer; indent::Int=0) = print(io, val)
 json_repr(io::IO, val::Float64; indent::Int=0) = print(io, val)
-function json_repr(io::IO, val::Vector; indent::Int=0)
+function json_repr(io::IO, val::AbstractVector; indent::Int=0)
     print(io, '[')
     for elt in val
         print(io, '\n', ' '^(indent + 2))
@@ -123,20 +123,45 @@ end
 
 function collect_results!(results::Vector{Dict{String, Any}}, testset::Test.DefaultTestSet, prefix::String="")
     common_data = result_dict(testset, prefix)
+    result_offset = length(results) + 1
+    result_counts = Dict{Tuple{String, String}, Int}()
     for (i, result) in enumerate(testset.results)
         if result isa Test.Result
-            push!(results, merge(common_data, result_dict(result)))
+            rdata = result_dict(result)
+            rid = (rdata["location"], rdata["result"])
+            if haskey(result_counts, rid)
+                result_counts[rid] += 1
+            else
+                result_counts[rid] = 1
+                push!(results, merge(common_data, rdata))
+            end
         elseif result isa Test.DefaultTestSet
             collect_results!(results, result, common_data["scope"])
+        end
+    end
+    # Modify names to hold `result_counts`
+    for i in result_offset:length(results)
+        result = results[i]
+        rid = (result["location"], result["result"])
+        if get(result_counts, rid, 0) > 1
+            result["name"] = replace(result["name"], r"^([^:]):" =>
+                SubstitutionString("\\1 (x$(result_counts[rid])):"))
         end
     end
     results
 end
 
-function write_testset_json(io::IO, testset::Test.DefaultTestSet)
+function write_testset_json_files(dir::String, testset::Test.DefaultTestSet)
     data = Dict{String, Any}[]
     collect_results!(data, testset)
-    json_repr(io, data)
+    files = String[]
+    # Buildkite is limited to 5000 results per file https://buildkite.com/docs/test-analytics/importing-json
+    for (i, chunk) in enumerate(Iterators.partition(data, 5000))
+        res_file = joinpath(dir, "results_$i.json")
+        open(io -> json_repr(io, chunk), res_file, "w")
+        push!(files, res_file)
+    end
+    return files
 end
 
 end

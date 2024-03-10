@@ -2232,6 +2232,11 @@ let s = "using .Issue52922.Inn"
     @test res
     @test "Inner1" in c
 end
+let s = "using .Issue52922.Inner1."
+    c, r, res = test_complete_context(s)
+    @test res
+    @test "Inner12" in c
+end
 let s = "using .Inner1.Inn"
     c, r, res = test_complete_context(s, Issue52922)
     @test res

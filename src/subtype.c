@@ -881,10 +881,20 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
     // in the environment, rename to get a fresh var.
     JL_GC_PUSH1(&u);
     while (btemp != NULL) {
-        if (btemp->var == u->var ||
-            // outer var can only refer to inner var if bounds changed
+        int aliased = btemp->var == u->var ||
+            // outer var can only refer to inner var if bounds changed (mainly for subtyping path)
             (btemp->lb != btemp->var->lb && jl_has_typevar(btemp->lb, u->var)) ||
-            (btemp->ub != btemp->var->ub && jl_has_typevar(btemp->ub, u->var))) {
+            (btemp->ub != btemp->var->ub && jl_has_typevar(btemp->ub, u->var));
+        if (!aliased && btemp->innervars != NULL) {
+            for (size_t i = 0; i < jl_array_len(btemp->innervars); i++) {
+                jl_tvar_t *ivar = (jl_tvar_t*)jl_array_ptr_ref(btemp->innervars, i);
+                if (ivar == u->var) {
+                    aliased = 1;
+                    break;
+                }
+            }
+        }
+        if (aliased) {
             u = jl_rename_unionall(u);
             break;
         }
@@ -1512,6 +1522,23 @@ static int may_contain_union_decision(jl_value_t *x, jl_stenv_t *e, jl_typeenv_t
            may_contain_union_decision(xb ? xb->ub : ((jl_tvar_t *)x)->ub, e, &newlog);
 }
 
+static int has_exists_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
+{
+    jl_typeenv_t *env = NULL;
+    jl_varbinding_t *v = e->vars;
+    while (v != NULL) {
+        if (v->right) {
+            jl_typeenv_t *newenv = (jl_typeenv_t*)alloca(sizeof(jl_typeenv_t));
+            newenv->var = v->var;
+            newenv->val = NULL;
+            newenv->prev = env;
+            env = newenv;
+        }
+        v = v->prev;
+    }
+    return env != NULL && jl_has_bound_typevars(x, env);
+}
+
 static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param, int limit_slow)
 {
     int16_t oldRmore = e->Runions.more;
@@ -1531,13 +1558,19 @@ static int local_forall_exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t 
         int count = 0, noRmore = 0;
         sub = _forall_exists_subtype(x, y, e, param, &count, &noRmore);
         pop_unionstate(&e->Runions, &oldRunions);
-        // we should not try the slow path if `forall_exists_subtype` has tested all cases;
-        // Once limit_slow == 1, also skip it if
-        // 1) `forall_exists_subtype` return false
+        // We could skip the slow path safely if
+        // 1) `_∀_∃_subtype` has tested all cases
+        // 2) `_∀_∃_subtype` returns 1 &&  `x` and `y` contain no ∃ typevar
+        // Once `limit_slow == 1`, also skip it if
+        // 1) `_∀_∃_subtype` returns 0
         // 2) the left `Union` looks big
+        // TODO: `limit_slow` ignores complexity from inner `local_∀_exists_subtype`.
         if (limit_slow == -1)
             limit_slow = kindx || kindy;
-        if (noRmore || (limit_slow && (count > 3  || !sub)))
+        int skip = noRmore || (limit_slow && (count > 3 || !sub)) ||
+                   (sub && (kindx || !has_exists_typevar(x, e)) &&
+                           (kindy || !has_exists_typevar(y, e)));
+        if (skip)
             e->Runions.more = oldRmore;
     }
     else {
@@ -2816,7 +2849,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
 
     // I. Handle indirect innervars (make them behave like direct innervars).
     //   1) record if btemp->lb/ub has indirect innervars.
-    //   2) substitute `vb->var` with `varval`/`varval`
+    //   2) substitute `vb->var` with `varval`/`newvar`
     //   note: We only store the innervar in the outmost `varbinding`,
     //       thus we must check all inner env to ensure the recording/substitution
     //       is complete
@@ -2880,6 +2913,7 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
                     }
                     envind++;
                 }
+                // FIXME: innervar that depend on `ivar` should also be updated.
             }
         }
     }
@@ -2995,7 +3029,8 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     }
 
     if (vb->innervars != NULL) {
-        for (size_t i = 0; i < jl_array_nrows(vb->innervars); i++) {
+        size_t len = jl_array_nrows(vb->innervars), count = 0;
+        for (size_t i = 0; i < len; i++) {
             jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
             // the `btemp->prev` walk is only giving a sort of post-order guarantee (since we are
             // iterating 2 trees at once), so once we set `wrap`, there might remain other branches
@@ -3009,11 +3044,45 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
             if (wrap) {
                 if (wrap->innervars == NULL)
                     wrap->innervars = jl_alloc_array_1d(jl_array_any_type, 0);
+                // FIXME: `var`'s dependence should also be pushed into `wrap->innervars`.
                 jl_array_ptr_1d_push(wrap->innervars, (jl_value_t*)var);
+                jl_array_ptr_set(vb->innervars, i, (jl_value_t*)NULL);
             }
-            else if (res != jl_bottom_type) {
-                if (jl_has_typevar(res, var))
-                    res = jl_type_unionall((jl_tvar_t*)var, res);
+        }
+        for (size_t i = 0; i < len; i++) {
+            jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
+            if (var) {
+                if (count < i)
+                    jl_array_ptr_set(vb->innervars, count, (jl_value_t*)var);
+                count++;
+            }
+        }
+        if (count != len)
+            jl_array_del_end(vb->innervars, len - count);
+        if (res != jl_bottom_type) {
+            while (count > 1) {
+                int changed = 0;
+                // Now need to re-sort the vb->innervars using the partial-ordering predicate `jl_has_typevar`.
+                // If this is slow, we could possibly switch to a simpler graph sort than this triple loop, such as Tarjan's SCC.
+                // But for now we use a variant on selection sort for partial-orders.
+                for (size_t i = 0; i < count - 1; i++) {
+                    jl_tvar_t *vari = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
+                    for (size_t j = i+1; j < count; j++) {
+                        jl_tvar_t *varj = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, j);
+                        if (jl_has_typevar(varj->lb, vari) || jl_has_typevar(varj->ub, vari)) {
+                            jl_array_ptr_set(vb->innervars, j, (jl_value_t*)vari);
+                            jl_array_ptr_set(vb->innervars, i, (jl_value_t*)varj);
+                            changed = 1;
+                            break;
+                        }
+                    }
+                    if (changed) break;
+                }
+                if (!changed) break;
+            }
+            for (size_t i = 0; i < count; i++) {
+                jl_tvar_t *var = (jl_tvar_t*)jl_array_ptr_ref(vb->innervars, i);
+                res = jl_type_unionall(var, res);
             }
         }
     }
@@ -3033,9 +3102,6 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
 static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param, jl_varbinding_t *vb)
 {
     jl_varbinding_t *btemp = e->vars;
-    // if the var for this unionall (based on identity) already appears somewhere
-    // in the environment, rename to get a fresh var.
-    // TODO: might need to look inside types in btemp->lb and btemp->ub
     int envsize = 0;
     while (btemp != NULL) {
         envsize++;
@@ -3043,13 +3109,9 @@ static jl_value_t *intersect_unionall_(jl_value_t *t, jl_unionall_t *u, jl_stenv
             vb->limited = 1;
             return t;
         }
-        if (btemp->var == u->var || btemp->lb == (jl_value_t*)u->var ||
-            btemp->ub == (jl_value_t*)u->var) {
-            u = jl_rename_unionall(u);
-            break;
-        }
         btemp = btemp->prev;
     }
+    u = unalias_unionall(u, e);
     JL_GC_PUSH1(&u);
     vb->var = u->var;
     e->vars = vb;
@@ -5124,6 +5186,26 @@ JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b)
 
 JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b)
 {
+    return type_morespecific_(a, b, a, b, 0, NULL);
+}
+
+// Equivalent to `jl_type_morespecific` of the signatures, except that more recent
+// methods are more specific, iff the methods signatures are type-equal
+JL_DLLEXPORT int jl_method_morespecific(jl_method_t *ma, jl_method_t *mb)
+{
+    jl_value_t *a = (jl_value_t*)ma->sig;
+    jl_value_t *b = (jl_value_t*)mb->sig;
+    if (obviously_disjoint(a, b, 1))
+        return 0;
+    if (jl_has_free_typevars(a) || jl_has_free_typevars(b))
+        return 0;
+    if (jl_subtype(b, a)) {
+        if (jl_types_equal(a, b))
+            return jl_atomic_load_relaxed(&ma->primary_world) > jl_atomic_load_relaxed(&mb->primary_world);
+        return 0;
+    }
+    if (jl_subtype(a, b))
+        return 1;
     return type_morespecific_(a, b, a, b, 0, NULL);
 }
 

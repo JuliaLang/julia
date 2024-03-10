@@ -110,7 +110,7 @@ const ParserError = Internals.ParserError
 
 
 """
-    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sorted=false, by=identity, inline_tables::Base.IdSet{<:AbstractDict})
+    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sorted=false, by=identity, inline_tables::IdSet{<:AbstractDict})
 
 Write `data` as TOML syntax to the stream `io`. If the keyword argument `sorted` is set to `true`,
 sort tables according to the function given by the keyword argument `by`. If the keyword argument

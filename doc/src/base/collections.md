@@ -225,14 +225,15 @@ Base.valtype
 
 Fully implemented by:
 
-  * [`IdDict`](@ref)
   * [`Dict`](@ref)
+  * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
 
 Partially implemented by:
 
-  * [`BitSet`](@ref)
   * [`Set`](@ref)
+  * [`BitSet`](@ref)
+  * [`IdSet`](@ref)
   * [`EnvDict`](@ref Base.EnvDict)
   * [`Array`](@ref)
   * [`BitArray`](@ref)
@@ -246,6 +247,7 @@ Partially implemented by:
 Base.AbstractSet
 Base.Set
 Base.BitSet
+Base.IdSet
 Base.union
 Base.union!
 Base.intersect
@@ -264,8 +266,10 @@ Base.isdisjoint
 
 Fully implemented by:
 
-  * [`BitSet`](@ref)
   * [`Set`](@ref)
+  * [`BitSet`](@ref)
+  * [`IdSet`](@ref)
+
 
 Partially implemented by:
 

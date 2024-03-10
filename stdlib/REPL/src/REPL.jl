@@ -44,7 +44,16 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                 if C_NULL == owner
                     # No global of this name exists in this module.
                     # This is the common case, so do not print that information.
-                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                    # It could be the binding was exported by two modules, which we can detect
+                    # by the `usingfailed` flag in the binding:
+                    if isdefined(bnd, :flags) && Bool(bnd.flags >> 4 & 1) # magic location of the `usingfailed` flag
+                        print(io, "\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
+                    else
+                        print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                    end
                     owner = bnd
                 else
                     owner = unsafe_pointer_to_objref(owner)::Core.Binding
@@ -130,12 +139,10 @@ import ..LineEdit:
     history_first,
     history_last,
     history_search,
-    accept_result,
     setmodifiers!,
     terminal,
     MIState,
     PromptState,
-    TextInterface,
     mode_idx
 
 include("REPLCompletions.jl")
@@ -215,9 +222,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
                 put!(backend.response_channel, Pair{Any, Bool}(lasterr, true))
             else
                 backend.in_eval = true
-                if !isempty(install_packages_hooks)
-                    check_for_missing_packages_and_run_hooks(ast)
-                end
+                check_for_missing_packages_and_run_hooks(ast)
                 for xf in backend.ast_transforms
                     ast = Base.invokelatest(xf, ast)
                 end
@@ -244,6 +249,7 @@ function check_for_missing_packages_and_run_hooks(ast)
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
     if !isempty(mods)
+        isempty(install_packages_hooks) && Base.require_stdlib(Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
         for f in install_packages_hooks
             Base.invokelatest(f, mods) && return
         end
@@ -955,7 +961,7 @@ end
 
 find_hist_file() = get(ENV, "JULIA_HISTORY",
                        !isempty(DEPOT_PATH) ? joinpath(DEPOT_PATH[1], "logs", "repl_history.jl") :
-                       error("DEPOT_PATH is empty and and ENV[\"JULIA_HISTORY\"] not set."))
+                       error("DEPOT_PATH is empty and ENV[\"JULIA_HISTORY\"] not set."))
 
 backend(r::AbstractREPL) = r.backendref
 
@@ -1188,25 +1194,23 @@ function setup_interface(
         ']' => function (s::MIState,o...)
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 pkgid = Base.PkgId(Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg")
-                if Base.locate_package(pkgid) !== nothing # Only try load Pkg if we can find it
-                    Pkg = Base.require(pkgid)
-                    REPLExt = Base.get_extension(Pkg, :REPLExt)
-                    # Pkg should have loaded its REPL mode by now, let's find it so we can transition to it.
-                    pkg_mode = nothing
+                REPLExt = Base.require_stdlib(pkgid, "REPLExt")
+                pkg_mode = nothing
+                if REPLExt isa Module && isdefined(REPLExt, :PkgCompletionProvider)
                     for mode in repl.interface.modes
                         if mode isa LineEdit.Prompt && mode.complete isa REPLExt.PkgCompletionProvider
                             pkg_mode = mode
                             break
                         end
                     end
-                    # TODO: Cache the `pkg_mode`?
-                    if pkg_mode !== nothing
-                        buf = copy(LineEdit.buffer(s))
-                        transition(s, pkg_mode) do
-                            LineEdit.state(s, pkg_mode).input_buffer = buf
-                        end
-                        return
+                end
+                # TODO: Cache the `pkg_mode`?
+                if pkg_mode !== nothing
+                    buf = copy(LineEdit.buffer(s))
+                    transition(s, pkg_mode) do
+                        LineEdit.state(s, pkg_mode).input_buffer = buf
                     end
+                    return
                 end
             end
             edit_insert(s, ']')
@@ -1652,7 +1656,6 @@ function __current_ast_transforms(backend)
         backend.ast_transforms
     end
 end
-
 
 function numbered_prompt!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     n = Ref{Int}(0)

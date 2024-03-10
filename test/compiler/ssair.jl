@@ -73,8 +73,8 @@ let cfg = CFG(BasicBlock[
     @test dfs.from_pre[dfs.to_parent_pre[dfs.to_pre[5]]] == 4
     let correct_idoms = Compiler.naive_idoms(cfg.blocks),
         correct_pidoms = Compiler.naive_idoms(cfg.blocks, true)
-        @test Compiler.construct_domtree(cfg.blocks).idoms_bb == correct_idoms
-        @test Compiler.construct_postdomtree(cfg.blocks).idoms_bb == correct_pidoms
+        @test Compiler.construct_domtree(cfg).idoms_bb == correct_idoms
+        @test Compiler.construct_postdomtree(cfg).idoms_bb == correct_pidoms
         # For completeness, reverse the order of pred/succ in the CFG and verify
         # the answer doesn't change (it does change the which node is chosen
         # as the semi-dominator, since it changes the DFS numbering).
@@ -85,18 +85,22 @@ let cfg = CFG(BasicBlock[
                 c && (blocks[4] = make_bb(reverse(blocks[4].preds), blocks[4].succs))
                 d && (blocks[5] = make_bb(reverse(blocks[5].preds), blocks[5].succs))
                 cfg′ = CFG(blocks, cfg.index)
-                @test Compiler.construct_domtree(cfg′.blocks).idoms_bb == correct_idoms
-                @test Compiler.construct_postdomtree(cfg′.blocks).idoms_bb == correct_pidoms
+                @test Compiler.construct_domtree(cfg′).idoms_bb == correct_idoms
+                @test Compiler.construct_postdomtree(cfg′).idoms_bb == correct_pidoms
             end
         end
     end
 end
 
-for compile in ("min", "yes")
-    cmd = `$(Base.julia_cmd()) --compile=$compile interpreter_exec.jl`
-    if !success(pipeline(Cmd(cmd, dir=@__DIR__); stdout=stdout, stderr=stderr))
-        error("Interpreter test failed, cmd : $cmd")
-    end
+# test code execution with the default compile-mode
+module CompilerExecTest
+include("interpreter_exec.jl")
+end
+
+# test code execution with the interpreter mode (compile=min)
+module InterpreterExecTest
+Base.Experimental.@compiler_options compile=min
+include("interpreter_exec.jl")
 end
 
 # PR #32145
@@ -234,6 +238,35 @@ let ci = code_lowered(()->@isdefined(_not_def_37919_), ())[1]
     @test Core.Compiler.verify_ir(ir) === nothing
 end
 
+let code = Any[
+        # block 1
+        GotoIfNot(Argument(2), 4),
+        # block 2
+        GotoNode(3),
+        # block 3
+        Expr(:call, throw, "potential throw"),
+        # block 4
+        Expr(:call, Core.Intrinsics.add_int, Argument(3), Argument(4)),
+        GotoNode(6),
+        # block 5
+        ReturnNode(SSAValue(4))
+    ]
+    ir = make_ircode(code; slottypes=Any[Any,Bool,Int,Int])
+    lazypostdomtree = Core.Compiler.LazyPostDomtree(ir)
+    visited = BitSet()
+    @test !Core.Compiler.visit_conditional_successors(lazypostdomtree, ir, #=bb=#1) do succ::Int
+        push!(visited, succ)
+        return false
+    end
+    @test 2 ∈ visited
+    @test 3 ∈ visited
+    @test 4 ∉ visited
+    @test 5 ∉ visited
+    oc = Core.OpaqueClosure(ir)
+    @test oc(false, 1, 1) == 2
+    @test_throws "potential throw" oc(true, 1, 1)
+end
+
 # Test dynamic update of domtree with edge insertions and deletions in the
 # following CFG:
 #
@@ -259,7 +292,7 @@ let cfg = CFG(BasicBlock[
         make_bb([2, 6], []),
         make_bb([4],    [5, 3]),
     ], Int[])
-    domtree = Compiler.construct_domtree(cfg.blocks)
+    domtree = Compiler.construct_domtree(cfg)
     @test domtree.dfs_tree.to_pre == [1, 2, 4, 5, 3, 6]
     @test domtree.idoms_bb == Compiler.naive_idoms(cfg.blocks) == [0, 1, 1, 3, 1, 4]
 
@@ -453,7 +486,7 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
         end
     end
     # domination analysis
-    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    domtree = Core.Compiler.construct_domtree(ir)
     @test Core.Compiler.dominates(domtree, 1, 2)
     @test Core.Compiler.dominates(domtree, 1, 3)
     @test Core.Compiler.dominates(domtree, 1, 4)
@@ -464,7 +497,7 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
         end
     end
     # post domination analysis
-    post_domtree = Core.Compiler.construct_postdomtree(ir.cfg.blocks)
+    post_domtree = Core.Compiler.construct_postdomtree(ir)
     @test Core.Compiler.postdominates(post_domtree, 4, 1)
     @test Core.Compiler.postdominates(post_domtree, 4, 2)
     @test Core.Compiler.postdominates(post_domtree, 4, 3)

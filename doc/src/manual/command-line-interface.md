@@ -172,8 +172,8 @@ The following is a complete list of command-line switches available when launchi
 |`--startup-file={yes*\|no}`            |Load `JULIA_DEPOT_PATH/config/startup.jl`; if [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) environment variable is unset, load `~/.julia/config/startup.jl`|
 |`--handle-signals={yes*\|no}`          |Enable or disable Julia's default signal handlers|
 |`--sysimage-native-code={yes*\|no}`    |Use native code from system image if available|
-|`--compiled-modules={yes*\|no\|existing}` |Enable or disable incremental precompilation of modules. The `existing` option allows use of existing compiled modules that were previously precompiled, but disallows creation of new precompile files.|
-|`--pkgimages={yes*\|no}`               |Enable or disable usage of native code caching in the form of pkgimages|
+|`--compiled-modules={yes*\|no\|existing|strict}` |Enable or disable incremental precompilation of modules. The `existing` option allows use of existing compiled modules that were previously precompiled, but disallows creation of new precompile files. The `strict` option is similar, but will error if no precompile file is found. |
+|`--pkgimages={yes*\|no|existing}`               |Enable or disable usage of native code caching in the form of pkgimages. The `existing` option allows use of existing pkgimages but disallows creation of new ones|
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
@@ -213,7 +213,7 @@ The following is a complete list of command-line switches available when launchi
 |`--output-incremental={yes\|no*}`      |Generate an incremental output file (rather than complete)|
 |`--trace-compile={stderr,name}`        |Print precompile statements for methods compiled during execution or save to a path|
 |`--image-codegen`                      |Force generate code in imaging mode|
-|`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than that value. The memory hint might be specified in megabytes (e.g., 500M) or gigabytes (e.g., 1G)|
+|`--heap-size-hint=<size>`              |Forces garbage collection if memory usage is higher than the given value. The value may be specified as a number of bytes, optionally in units of KB, MB, GB, or TB, or as a percentage of physical memory with %.|
 
 
 !!! compat "Julia 1.1"

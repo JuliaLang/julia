@@ -346,7 +346,7 @@ eigvals(A::AbstractMatrix{T}; kws...) where T =
 """
 For a scalar input, `eigvals` will return a scalar.
 
-# Example
+# Examples
 ```jldoctest
 julia> eigvals(-2)
 -2

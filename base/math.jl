@@ -177,7 +177,7 @@ a Goertzel-like [^DK62] algorithm if `x` is complex.
 !!! compat "Julia 1.4"
     This function requires Julia 1.4 or later.
 
-# Example
+# Examples
 ```jldoctest
 julia> evalpoly(2, (1, 2, 3))
 17
@@ -359,7 +359,7 @@ log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 """
     log(b,x)
 
-Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative
+Compute the base `b` logarithm of `x`. Throw a [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
 # Examples
@@ -408,6 +408,8 @@ const libm = Base.libm_name
     sinh(x)
 
 Compute hyperbolic sine of `x`.
+
+See also [`sin`](@ref).
 """
 sinh(x::Number)
 
@@ -415,6 +417,8 @@ sinh(x::Number)
     cosh(x)
 
 Compute hyperbolic cosine of `x`.
+
+See also [`cos`](@ref).
 """
 cosh(x::Number)
 
@@ -493,9 +497,11 @@ asinh(x::Number)
 
 # functions that return NaN on non-NaN argument for domain error
 """
-    sin(x)
+    sin(x::T) where {T <: Number} -> float(T)
 
 Compute sine of `x`, where `x` is in radians.
+
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also [`sind`](@ref), [`sinpi`](@ref), [`sincos`](@ref), [`cis`](@ref), [`asin`](@ref).
 
@@ -524,25 +530,33 @@ julia> round(exp(im*pi/6), digits=3)
 sin(x::Number)
 
 """
-    cos(x)
+    cos(x::T) where {T <: Number} -> float(T)
 
 Compute cosine of `x`, where `x` is in radians.
+
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
 
 See also [`cosd`](@ref), [`cospi`](@ref), [`sincos`](@ref), [`cis`](@ref).
 """
 cos(x::Number)
 
 """
-    tan(x)
+    tan(x::T) where {T <: Number} -> float(T)
 
 Compute tangent of `x`, where `x` is in radians.
+
+Throw a [`DomainError`](@ref) if `isinf(x)`, return a `T(NaN)` if `isnan(x)`.
+
+See also [`tanh`](@ref).
 """
 tan(x::Number)
 
 """
-    asin(x)
+    asin(x::T) where {T <: Number} -> float(T)
 
 Compute the inverse sine of `x`, where the output is in radians.
+
+Return a `T(NaN)` if `isnan(x)`.
 
 See also [`asind`](@ref) for output in degrees.
 
@@ -558,9 +572,11 @@ julia> asind.((0, 1/2, 1))
 asin(x::Number)
 
 """
-    acos(x)
+    acos(x::T) where {T <: Number} -> float(T)
 
 Compute the inverse cosine of `x`, where the output is in radians
+
+Return a `T(NaN)` if `isnan(x)`.
 """
 acos(x::Number)
 
@@ -583,9 +599,12 @@ atanh(x::Number)
 
 Compute the natural logarithm of `x`.
 
-Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
-Use complex arguments to obtain complex results.
-Has a branch cut along the negative real axis, for which `-0.0im` is taken to be below the axis.
+Throw a [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use [`Complex`](@ref) arguments to obtain [`Complex`](@ref) results.
+
+!!! note "Branch cut"
+    `log` has a branch cut along the negative real axis; `-0.0im` is taken
+    to be below the axis.
 
 See also [`ℯ`](@ref), [`log1p`](@ref), [`log2`](@ref), [`log10`](@ref).
 
@@ -619,7 +638,7 @@ log(x::Number)
 """
     log2(x)
 
-Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative
+Compute the logarithm of `x` to base 2. Throw a [`DomainError`](@ref) for negative
 [`Real`](@ref) arguments.
 
 See also: [`exp2`](@ref), [`ldexp`](@ref), [`ispow2`](@ref).
@@ -652,7 +671,7 @@ log2(x)
     log10(x)
 
 Compute the logarithm of `x` to base 10.
-Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Throw a [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
@@ -675,7 +694,7 @@ log10(x)
 """
     log1p(x)
 
-Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@ref)
+Accurate natural logarithm of `1+x`. Throw a [`DomainError`](@ref) for [`Real`](@ref)
 arguments less than -1.
 
 # Examples
@@ -706,11 +725,14 @@ end
 
 Return ``\\sqrt{x}``.
 
-Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
-Use complex negative arguments instead. Note that `sqrt` has a branch cut
-along the negative real axis.
+Throw a [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use [`Complex`](@ref) negative arguments instead to obtain a [`Complex`](@ref) result.
 
 The prefix operator `√` is equivalent to `sqrt`.
+
+!!! note "Branch cut"
+    `sqrt` has a branch cut along the negative real axis; `-0.0im` is taken
+    to be below the axis.
 
 See also: [`hypot`](@ref).
 
@@ -795,8 +817,8 @@ true
 ```
 """
 hypot(x::Number) = abs(float(x))
-hypot(x::Number, y::Number) = _hypot(promote(float(x), y)...)
-hypot(x::Number, y::Number, xs::Number...) = _hypot(promote(float(x), y, xs...))
+hypot(x::Number, y::Number) = _hypot(float.(promote(x, y))...)
+hypot(x::Number, y::Number, xs::Number...) = _hypot(float.(promote(x, y, xs...)))
 function _hypot(x, y)
     # preserves unit
     axu = abs(x)
@@ -949,9 +971,11 @@ end
 
 Compute ``x \\times 2^n``.
 
+See also [`frexp`](@ref), [`exponent`](@ref).
+
 # Examples
 ```jldoctest
-julia> ldexp(5., 2)
+julia> ldexp(5.0, 2)
 20.0
 ```
 """
@@ -1003,13 +1027,13 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 """
     exponent(x::Real) -> Int
 
-Returns the largest integer `y` such that `2^y ≤ abs(x)`.
+Return the largest integer `y` such that `2^y ≤ abs(x)`.
+For a normalized floating-point number `x`, this corresponds to the exponent of `x`.
 
 Throws a `DomainError` when `x` is zero, infinite, or [`NaN`](@ref).
 For any other non-subnormal floating-point number `x`, this corresponds to the exponent bits of `x`.
 
-See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref).
-
+See also [`signbit`](@ref), [`significand`](@ref), [`frexp`](@ref), [`issubnormal`](@ref), [`log2`](@ref), [`ldexp`](@ref).
 # Examples
 ```jldoctest
 julia> exponent(8)
@@ -1021,8 +1045,16 @@ julia> exponent(6.5)
 julia> exponent(-1//4)
 -2
 
+julia> exponent(3.142e-4)
+-12
+
 julia> exponent(floatmin(Float32)), exponent(nextfloat(0.0f0))
 (-126, -149)
+
+julia> exponent(0.0)
+ERROR: DomainError with 0.0:
+Cannot be ±0.0.
+[...]
 ```
 """
 function exponent(x::T) where T<:IEEEFloat
@@ -1062,6 +1094,8 @@ a non-zero finite number, then the result will be a number of the same type and
 sign as `x`, and whose absolute value is on the interval ``[1,2)``. Otherwise
 `x` is returned.
 
+See also [`frexp`](@ref), [`exponent`](@ref).
+
 # Examples
 ```jldoctest
 julia> significand(15.2)
@@ -1096,10 +1130,19 @@ end
 
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and `val` is equal to ``x \\times 2^{exp}``.
+
+See also [`significand`](@ref), [`exponent`](@ref), [`ldexp`](@ref).
+
 # Examples
 ```jldoctest
-julia> frexp(12.8)
-(0.8, 4)
+julia> frexp(6.0)
+(0.75, 3)
+
+julia> significand(6.0), exponent(6.0)  # interval [1, 2) instead
+(1.5, 2)
+
+julia> frexp(0.0), frexp(NaN), frexp(-Inf)  # exponent would give an error
+((0.0, 0), (NaN, 0), (-Inf, 0))
 ```
 """
 function frexp(x::T) where T<:IEEEFloat
@@ -1310,8 +1353,8 @@ end
 
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # This algorithm, due to Dekker, computes the sum of two
-    # double-double numbers and returns the high double. References:
-    # [1] https://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
+    # double-double numbers and return the high double. References:
+    # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
     # [2] https://doi.org/10.1007/BF01397083
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)

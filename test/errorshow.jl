@@ -9,6 +9,8 @@ include("testenv.jl")
 Base.Experimental.register_error_hint(Base.noncallable_number_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.string_concatenation_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
+Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
+
 
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
@@ -78,8 +80,12 @@ Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, "", "")))
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1., "", "")))
 @test occursin("\n\nClosest candidates are:\n  method_c1(::Float64, ::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
 
-# Have no matches so should return empty
+# Have no matches, but still print up to 3
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, 1)))
+@test occursin("\n\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)$cmod$cfile$c1line\n", String(take!(buf)))
+
+function nomethodsfunc end
+Base.show_method_candidates(buf, Base.MethodError(nomethodsfunc,(1, 1, 1)))
 @test isempty(String(take!(buf)))
 
 # matches the implicit constructor -> convert method
@@ -665,7 +671,7 @@ end
 
     str = sprint(Base.showerror, MethodError(Core.kwcall, ((; a=3.0), +, 1.0, 2.0), Base.get_world_counter()))
     @test startswith(str, "MethodError: no method matching +(::Float64, ::Float64; a::Float64)")
-    @test occursin("This method may not support any kwargs", str)
+    @test occursin("This method does not support all of the given keyword arguments", str)
 
     @test_throws "MethodError: no method matching kwcall()" Core.kwcall()
 end
@@ -739,6 +745,22 @@ let err_str
     # issue 40478
     err_str = @except_str ANumber()(3 + 4) MethodError
     @test count(==("Maybe you forgot to use an operator such as *, ^, %, / etc. ?"), split(err_str, '\n')) == 1
+end
+
+let err_str
+    a = [1 2; 3 4];
+    err_str = @except_str (a[1][2] = 5) MethodError
+    @test occursin("\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ", err_str)
+    @test occursin("a[1, 2]", err_str)
+    @test occursin("rather than a[1][2]", err_str)
+end
+
+let err_str
+    d = Dict
+    err_str = @except_str (d[1] = 5) MethodError
+    @test occursin("\nYou attempted to index the type Dict, rather than an instance of the type. Make sure you create the type using its constructor: ", err_str)
+    @test occursin("d = Dict([...])", err_str)
+    @test occursin(" rather than d = Dict", err_str)
 end
 
 # Execute backtrace once before checking formatting, see #38858
@@ -1161,3 +1183,6 @@ end
 # issue #47559"
 @test_throws("MethodError: no method matching invoke Returns(::Any, ::Val{N}) where N",
              invoke(Returns, Tuple{Any,Val{N}} where N, 1, Val(1)))
+
+f33793(x::Float32, y::Float32) = 1
+@test_throws "\nClosest candidates are:\n  f33793(!Matched::Float32, !Matched::Float32)\n" f33793(Float64(0.0), Float64(0.0))

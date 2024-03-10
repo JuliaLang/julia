@@ -68,19 +68,12 @@ function Core.OpaqueClosure(ir::IRCode, @nospecialize env...;
     src.slotnames = fill(:none, nargs+1)
     src.slotflags = fill(zero(UInt8), length(ir.argtypes))
     src.slottypes = copy(ir.argtypes)
-    src.rettype = rt
     src = Core.Compiler.ir_to_codeinf!(src, ir)
     return generate_opaque_closure(sig, Union{}, rt, src, nargs, isva, env...; do_compile)
 end
 
-function Core.OpaqueClosure(src::CodeInfo, @nospecialize env...)
-    src.inferred || throw(ArgumentError("Expected inferred src::CodeInfo"))
-    mi = src.parent::Core.MethodInstance
-    sig = Base.tuple_type_tail(mi.specTypes)
-    method = mi.def::Method
-    nargs = method.nargs-1
-    isva = method.isva
-    return generate_opaque_closure(sig, Union{}, src.rettype, src, nargs, isva, env...)
+function Core.OpaqueClosure(src::CodeInfo, @nospecialize env...; rettype, sig, nargs, isva=false)
+    return generate_opaque_closure(sig, Union{}, rettype, src, nargs, isva, env...)
 end
 
 function generate_opaque_closure(@nospecialize(sig), @nospecialize(rt_lb), @nospecialize(rt_ub),
@@ -88,7 +81,8 @@ function generate_opaque_closure(@nospecialize(sig), @nospecialize(rt_lb), @nosp
                                  mod::Module=@__MODULE__,
                                  lineno::Int=0,
                                  file::Union{Nothing,Symbol}=nothing,
+                                 isinferred::Bool=true,
                                  do_compile::Bool=true)
-    return ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
-        sig, rt_lb, rt_ub, mod, src, lineno, file, nargs, isva, env, do_compile)
+    return ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint, Cint),
+        sig, rt_lb, rt_ub, mod, src, lineno, file, nargs, isva, env, do_compile, isinferred)
 end

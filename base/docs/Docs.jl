@@ -194,7 +194,7 @@ docexpr(__source__, __module__, args...) = Expr(:call, docstr, args...)
 Stores a collection of docstrings for related objects, ie. a `Function`/`DataType` and
 associated `Method` objects.
 
-Each documented object in a `MultiDoc` is referred to by it's signature which is represented
+Each documented object in a `MultiDoc` is referred to by its signature which is represented
 by a `Union` of `Tuple` types. For example, the following `Method` definition
 
     f(x, y) = ...
@@ -243,7 +243,7 @@ function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = U
             @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
-        # are initially added. Replacing a specific docstring does not change it's ordering.
+        # are initially added. Replacing a specific docstring does not change its ordering.
         push!(m.order, sig)
     end
     m.docs[sig] = str

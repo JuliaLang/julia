@@ -1,5 +1,28 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    IdSet{T}([itr])
+    IdSet()
+
+IdSet{T}() constructs a set (see [`Set`](@ref)) using
+`===` as equality with values of type `V`.
+
+In the example below, the values are all `isequal` so they get overwritten.
+The `IdSet` compares by `===` so preserves the 3 different keys.
+
+Examples
+≡≡≡≡≡≡≡≡
+
+julia> Set(Any[true, 1, 1.0])
+Set{Any} with 1 element:
+  1.0
+
+julia> IdSet{Any}(Any[true, 1, 1.0])
+IdSet{Any} with 3 elements:
+  1.0
+  1
+  true
+"""
 mutable struct IdSet{K} <: AbstractSet{K}
     list::Memory{Any}
     idxs::Union{Memory{UInt8}, Memory{UInt16}, Memory{UInt32}}

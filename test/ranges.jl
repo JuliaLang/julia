@@ -3,6 +3,9 @@
 using Base.Checked: checked_length
 using InteractiveUtils: code_llvm
 
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
 @testset "range construction" begin
     @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
     @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
@@ -232,9 +235,23 @@ end
             @test cmp_sn2(Tw(xw/yw), astuple(x/y)..., slopbits)
         end
     end
+    @testset "high precision of varying types" begin
+        x = Float32(π)
+        y = Float64(Base.MathConstants.γ)
+        @test Base.mul12(x, y)[1] ≈ Base.mul12(Float64(π), y)[1] rtol=1e-6
+        @test Base.mul12(x, y)[2] ≈ Base.mul12(Float64(π), y)[2] atol=1e-15
+        @test Base.div12(x, y)[1] ≈ Base.div12(Float64(π), y)[1] rtol=1e-6
+        @test Base.div12(x, y)[2] ≈ Base.div12(Float64(π), y)[2] atol=1e-15
+        xtp = Base.TwicePrecision{Float32}(π)
+        ytp = Base.TwicePrecision{Float64}(Base.MathConstants.γ)
+        @test Float32(xtp + ytp) ≈ Float32(Base.TwicePrecision{Float64}(π) + ytp)
+    end
 
     x1 = Base.TwicePrecision{Float64}(1)
     x0 = Base.TwicePrecision{Float64}(0)
+    @test eltype(x1) == Float64
+    @test eltype(typeof(x1)) == Float64
+    @test zero(typeof(x1)) === x0
     xinf = Base.TwicePrecision{Float64}(Inf)
     @test Float64(x1+x0)  == 1
     @test Float64(x1+0)   == 1
@@ -545,6 +562,13 @@ end
         @test sort(1:10, rev=true) == 10:-1:1
         @test sort(-3:3, by=abs) == [0,-1,1,-2,2,-3,3]
         @test partialsort(1:10, 4) == 4
+
+        @testset "offset ranges" begin
+            x = OffsetArrays.IdOffsetRange(values=4:13, indices=4:13)
+            @test sort(x) === x === sort!(x)
+            @test sortperm(x) == eachindex(x)
+            @test issorted(x[sortperm(x)])
+        end
     end
     @testset "in" begin
         @test 0 in UInt(0):100:typemax(UInt)
@@ -2352,13 +2376,46 @@ end
     @test 0.2 * (-2:2:2) == [-0.4, 0, 0.4]
 end
 
-@testset "Indexing OneTo with IdentityUnitRange" begin
-    for endpt in Any[10, big(10), UInt(10)]
-        r = Base.OneTo(endpt)
-        inds = Base.IdentityUnitRange(3:5)
-        rs = r[inds]
-        @test rs === inds
-        @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
+@testset "IdentityUnitRange indexing" begin
+    @testset "Indexing into an IdentityUnitRange" begin
+        @testset for r in Any[-1:20, Base.OneTo(20)]
+            ri = Base.IdentityUnitRange(r)
+            @test_throws "invalid index" ri[true]
+            @testset for s in Any[Base.OneTo(6), Base.OneTo{BigInt}(6), 3:6, big(3):big(6), 3:2:7]
+                @test mapreduce(==, &, ri[s], ri[s[begin]]:step(s):ri[s[end]])
+                @test axes(ri[s]) == axes(s)
+                @test eltype(ri[s]) == eltype(ri)
+            end
+        end
+        @testset "Bool indices" begin
+            r = 1:1
+            @test Base.IdentityUnitRange(r)[true:true] == r[true:true]
+            @test Base.IdentityUnitRange(r)[true:true:true] == r[true:true:true]
+            @test_throws BoundsError Base.IdentityUnitRange(1:2)[true:true]
+            @test_throws BoundsError Base.IdentityUnitRange(1:2)[true:true:true]
+        end
+    end
+    @testset "Indexing with IdentityUnitRange" begin
+        @testset "OneTo" begin
+            @testset for endpt in Any[10, big(12), UInt(11)]
+                r = Base.OneTo(endpt)
+                inds = Base.IdentityUnitRange(3:5)
+                rs = r[inds]
+                @test rs == inds
+                @test axes(rs) == axes(inds)
+                @test_throws BoundsError r[Base.IdentityUnitRange(-1:100)]
+            end
+        end
+        @testset "IdentityUnitRange" begin
+            @testset for r in Any[Base.IdentityUnitRange(1:4), Base.IdentityUnitRange(Base.OneTo(4)), Base.Slice(1:4), Base.Slice(Base.OneTo(4))]
+                @testset for s in Any[Base.IdentityUnitRange(3:3), Base.IdentityUnitRange(Base.OneTo(2)), Base.Slice(3:3), Base.Slice(Base.OneTo(2))]
+                    rs = r[s]
+                    @test rs == s
+                    @test axes(rs) == axes(s)
+                end
+                @test_throws BoundsError r[Base.IdentityUnitRange(first(r):last(r) + 1)]
+            end
+        end
     end
 end
 
@@ -2578,4 +2635,87 @@ end
 
     errmsg = ("deliberately unsupported for CartesianIndex", "StepRangeLen")
     @test_throws errmsg range(CartesianIndex(1), step=CartesianIndex(1), length=3)
+end
+
+@testset "logrange" begin
+    # basic idea
+    @test logrange(2, 16, 4) ≈ [2, 4, 8, 16]
+    @test logrange(1/8, 8.0, 7) ≈ [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+    @test logrange(1000, 1, 4) ≈ [1000, 100, 10, 1]
+    @test logrange(1, 10^9, 19)[1:2:end] ≈ 10 .^ (0:9)
+
+    # endpoints
+    @test logrange(0.1f0, 100, 33)[1] === 0.1f0
+    @test logrange(0.789, 123_456, 135_790)[[begin, end]] == [0.789, 123_456]
+    @test logrange(nextfloat(0f0), floatmax(Float32), typemax(Int))[end] === floatmax(Float32)
+    @test logrange(nextfloat(Float16(0)), floatmax(Float16), 66_000)[end] === floatmax(Float16)
+    @test first(logrange(pi, 2pi, 3000)) === logrange(pi, 2pi, 3000)[1] === Float64(pi)
+    if Int == Int64
+        @test logrange(0.1, 1000, 2^54)[end] === 1000.0
+    end
+
+    # empty, only, constant
+    @test first(logrange(1, 2, 0)) === 1.0
+    @test last(logrange(1, 2, 0)) === 2.0
+    @test collect(logrange(1, 2, 0)) == Float64[]
+    @test only(logrange(2pi, 2pi, 1)) === logrange(2pi, 2pi, 1)[1] === 2pi
+    @test logrange(1, 1, 3) == fill(1.0, 3)
+
+    # subnormal Float64
+    x = logrange(1e-320, 1e-300, 21) .* 1e300
+    @test x ≈ logrange(1e-20, 1, 21) rtol=1e-6
+
+    # types
+    @test eltype(logrange(1, 10, 3)) == Float64
+    @test eltype(logrange(1, 10, Int32(3))) == Float64
+    @test eltype(logrange(1, 10f0, 3)) == Float32
+    @test eltype(logrange(1f0, 10, 3)) == Float32
+    @test eltype(logrange(1, big(10), 3)) == BigFloat
+    @test logrange(big"0.3", big(pi), 50)[1] == big"0.3"
+    @test logrange(big"0.3", big(pi), 50)[end] == big(pi)
+
+    # more constructors
+    @test logrange(1,2,length=3) === Base.LogRange(1,2,3) == Base.LogRange{Float64}(1,2,3)
+    @test logrange(1f0, 2f0, length=3) == Base.LogRange{Float32}(1,2,3)
+
+    # errors
+    @test_throws UndefKeywordError logrange(1, 10)  # no default length
+    @test_throws ArgumentError logrange(1, 10, -1)  # negative length
+    @test_throws ArgumentError logrange(1, 10, 1) # endpoints must not differ
+    @test_throws DomainError logrange(1, -1, 3)   # needs complex numbers
+    @test_throws DomainError logrange(-1, -2, 3)  # not supported, for now
+    @test_throws MethodError logrange(1, 2+3im, length=4)  # not supported, for now
+    @test_throws ArgumentError logrange(1, 10, 2)[true]  # bad index
+    @test_throws BoundsError logrange(1, 10, 2)[3]
+    @test_throws ArgumentError Base.LogRange{Int}(1,4,5)  # no integer ranges
+    @test_throws MethodError Base.LogRange(1,4, length=5)  # type does not take keyword
+    # (not sure if these should ideally be DomainError or ArgumentError)
+    @test_throws DomainError logrange(1, Inf, 3)
+    @test_throws DomainError logrange(0, 2, 3)
+    @test_throws DomainError logrange(1, NaN, 3)
+    @test_throws DomainError logrange(NaN, 2, 3)
+
+    # printing
+    @test repr(Base.LogRange(1,2,3)) == "LogRange{Float64}(1.0, 2.0, 3)"  # like 2-arg show
+    @test repr("text/plain", Base.LogRange(1,2,3)) == "3-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:\n 1.0, 1.41421, 2.0"
+    @test repr("text/plain", Base.LogRange(1,2,0)) == "LogRange{Float64}(1.0, 2.0, 0)"  # empty case
+end
+
+@testset "_log_twice64_unchecked" begin
+    # it roughly works
+    @test big(Base._log_twice64_unchecked(exp(1))) ≈ 1.0
+    @test big(Base._log_twice64_unchecked(exp(123))) ≈ 123.0
+
+    # it gets high accuracy
+    @test abs(big(log(4.0)) - log(big(4.0))) < 1e-16
+    @test abs(big(Base._log_twice64_unchecked(4.0)) - log(big(4.0))) < 1e-30
+
+    # it handles subnormals
+    @test abs(big(Base._log_twice64_unchecked(1e-310)) - log(big(1e-310))) < 1e-20
+
+    # it accepts negative, NaN, etc without complaint:
+    @test Base._log_twice64_unchecked(-0.0).lo isa Float64
+    @test Base._log_twice64_unchecked(-1.23).lo isa Float64
+    @test Base._log_twice64_unchecked(NaN).lo isa Float64
+    @test Base._log_twice64_unchecked(Inf).lo isa Float64
 end

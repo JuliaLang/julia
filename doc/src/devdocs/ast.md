@@ -627,6 +627,10 @@ for important details on how to modify these fields safely.
 
     The `MethodInstance` that this cache entry is derived from.
 
+  * `owner`
+
+    A token that represents the owner of this `CodeInstance`. Will use `jl_egal` to match.
+
 
   * `rettype`/`rettype_const`
 
