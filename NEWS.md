@@ -117,7 +117,7 @@ New library features
 * `filter` can now act on a `NamedTuple` ([#50795]).
 * `Iterators.cycle(iter, n)` runs over `iter` a fixed number of times, instead of forever ([#47354]).
 * `zero(::AbstractArray)` now applies recursively, so `zero([[1,2],[3,4,5]])` now produces the additive identity `[[0,0],[0,0,0]]` rather than erroring ([#38064]).
-* `include_dependency(path; track_content=true)` allows to switch from using `mtime`
+* `include_dependency(path; track_content=true)` allows switching from using `mtime`
   to hashing of the precompilation dependency in order to restore relocatability of precompilation caches ([#51798]).
 
 Standard library changes
