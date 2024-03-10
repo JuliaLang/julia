@@ -81,7 +81,8 @@ function settings(s::RawFD, shared::Bool, exec::Bool)
        prot |= PROT_EXEC
        @static if Sys.isapple()
           MAP_JIT = Cint(0x0800)
-          flags |= MAP_JIT
+          # Bypassing W^X protections requires the MAP_JIT permission
+          ((prot & PROT_WRITE) > 0) && (flags |= MAP_JIT)
        end
     end
     return prot, flags, (prot & PROT_WRITE) > 0
