@@ -356,11 +356,11 @@ function _wait2(t::Task, waiter::Task)
     nothing
 end
 
-function wait(t::Task)
+function wait(t::Task; throw=true)
     t === current_task() && error("deadlock detected: cannot wait on current task")
     _wait(t)
-    if istaskfailed(t)
-        throw(TaskFailedException(t))
+    if throw && istaskfailed(t)
+        Core.throw(TaskFailedException(t))
     end
     nothing
 end
