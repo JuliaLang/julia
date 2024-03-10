@@ -303,7 +303,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         s = """
             pushfirst!(DEPOT_PATH, $(repr(joinpath(prec_path,"depot"))));
             Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
-            Base.Precompilation.precompilepkgs();
+            Base.Precompilation.precompilepkgs(;fancyprint=true);
             $precompile_script
             """
         p = run(pipeline(addenv(`$(julia_exepath()) -O0 --trace-compile=$tmp_proc --sysimage $sysimg

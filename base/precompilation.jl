@@ -354,6 +354,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         _from_loading::Bool=false,
                         configs::Union{Config,Vector{Config}}=(``=>Base.CacheFlags()),
                         io::IO=stderr,
+                        # asking for timing disables fancy mode, as timing is shown in non-fancy mode
+                        fancyprint::Bool = can_fancyprint(io) && !timing,
                         flags_cacheflags=nothing)
 
     if flags_cacheflags !== nothing
@@ -373,9 +375,6 @@ function precompilepkgs(pkgs::Vector{String}=String[];
 
     num_tasks = parse(Int, get(ENV, "JULIA_NUM_PRECOMPILE_TASKS", string(default_num_tasks)))
     parallel_limiter = Base.Semaphore(num_tasks)
-
-    # asking for timing disables fancy mode, as timing is shown in non-fancy mode
-    fancyprint = can_fancyprint(io) && !timing
 
     if _from_loading && !Sys.isinteractive() && Base.get_bool_env("JULIA_TESTS", false)
         # suppress passive loading printing in julia test suite. `JULIA_TESTS` is set in Base.runtests
