@@ -167,6 +167,7 @@ The `shared` keyword argument specifies whether the resulting `Array` and change
 will be visible to other processes mapping the same file.
 
 The `exec` keyword argument specifies whether the underlying mmap data will be executable.
+Warning: on most CPUs, you must call a platform-specific function after creating this region and after writing to it, before executing it, or risk unpredictable behavior and corruption.
 
 !!! note
     On MacOS `exec=true` implies `shared=false`.
