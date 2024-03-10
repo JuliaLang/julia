@@ -169,7 +169,7 @@ will be visible to other processes mapping the same file.
 The `exec` keyword argument specifies whether the underlying mmap data will be executable.
 
 !!! note
-    On MacOS `exec=true` implies `shared=false`, because each thread has its own access permissions to `mmap` regions.
+    On MacOS `exec=true` implies `shared=false`.
 
 
 For example, the following code
@@ -227,8 +227,9 @@ function _mmap(io::IO,
         throw(ArgumentError("$io must be writeable to mmap with exec = true"))
     end
     @static if Sys.isapple()
-       # on MacOS each thread has its own access permissions, so we can't share when exec=true
-       # https://developer.apple.com/documentation/apple-silicon/porting-just-in-time-compilers-to-apple-silicon#Disable-Write-Protections-Before-You-Generate-Instructions
+       # on MacOS exec=true requires the MAP_JIT flag to bypass W^X protections
+       # but combining MAP_JIT with MAP_SHARED is disallowed on MacOS, although its undocumented
+       # https://github.com/apple-oss-distributions/xnu/blob/1031c584a5e37aff177559b9f69dbd3c8c3fd30a/bsd/kern/kern_mman.c#L328-L337
        exec && (shared = false)
     end
 
