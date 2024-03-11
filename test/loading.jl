@@ -1559,6 +1559,8 @@ end
        push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "sub"))
        id = Base.identify_package("Devved")
        @test isfile(Base.locate_package(id))
+       id2 = Base.identify_package("Devved2")
+       @test isfile(Base.locate_package(id2))
    finally
        copy!(LOAD_PATH, old_load_path)
    end

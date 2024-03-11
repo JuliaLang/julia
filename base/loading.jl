@@ -611,10 +611,34 @@ function env_project_file(env::String)::Union{Bool,String}
     end
 end
 
+function base_project(project_file)
+    base_dir = abspath(joinpath(dirname(project_file), ".."))
+    base_project = env_project_file(base_dir)
+    base_project isa String || return nothing
+    d = parsed_toml(base_project)
+    subprojects = get(d, "subprojects", nothing)::Union{Vector{String}, Nothing}
+    subprojects === nothing && return nothing
+    if basename(dirname(project_file)) in subprojects
+        return base_project
+    end
+    return nothing
+end
+
+function base_project_deps_get(project_file::String, name::String)::Union{Nothing,UUID}
+    base = base_project(project_file)
+    if base !== nothing
+        return explicit_project_deps_get(base, name)
+    end
+    return nothing
+end
+
 function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
     project_file = env_project_file(env)
     if project_file isa String
         pkg_uuid = explicit_project_deps_get(project_file, name)
+        if pkg_uuid === nothing
+            pkg_uuid = base_project_deps_get(project_file, name)
+        end
         pkg_uuid === nothing || return PkgId(pkg_uuid, name)
     elseif project_file
         return implicit_project_deps_get(env, name)
@@ -727,14 +751,9 @@ function project_file_path(project_file::String)
 end
 
 function subproject_manifest(project_file)
-    base_dir = joinpath(dirname(project_file), "..")
-    base_project = env_project_file(base_dir)
-    base_project isa String || return nothing
-    d = parsed_toml(base_project)
-    subprojects = get(d, "subprojects", nothing)::Union{Vector{String}, Nothing}
-    subprojects === nothing && return nothing
-    if basename(dirname(project_file)) in subprojects
-        return project_file_manifest_path(base_project)
+    base = base_project(project_file)
+    if base !== nothing
+        return project_file_manifest_path(base)
     end
     return nothing
 end
