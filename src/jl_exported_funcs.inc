@@ -367,6 +367,7 @@
     XX(jl_pointerref) \
     XX(jl_pointerset) \
     XX(jl_pop_handler) \
+    XX(jl_pop_handler_noexcept) \
     XX(jl_preload_sysimg_so) \
     XX(jl_prepend_cwd) \
     XX(jl_printf) \

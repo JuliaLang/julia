@@ -113,6 +113,7 @@ static bool lowerExcHandlers(Function &F) {
         return false; // No EH frames in this module
     ensure_enter_function(M, TT);
     Function *leave_func = M.getFunction(XSTR(jl_pop_handler));
+    Function *leave_noexcept_func = M.getFunction(XSTR(jl_pop_handler));
     Function *jlenter_func = M.getFunction(XSTR(jl_enter_handler));
     Function *setjmp_func = M.getFunction(jl_setjmp_name);
 
@@ -150,7 +151,7 @@ static bool lowerExcHandlers(Function &F) {
                 continue;
             if (Callee == except_enter_func)
                 EnterDepth[CI] = Depth++;
-            else if (Callee == leave_func) {
+            else if (Callee == leave_func || Callee == leave_noexcept_func) {
                 LeaveDepth[CI] = Depth;
                 Depth -= cast<ConstantInt>(CI->getArgOperand(0))->getLimitedValue();
             }

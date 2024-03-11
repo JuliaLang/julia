@@ -315,6 +315,17 @@ JL_DLLEXPORT void jl_pop_handler(int n)
     jl_handler_t *eh = ct->eh;
     while (--n > 0)
         eh = eh->prev;
+    jl_eh_restore_state(eh);
+}
+
+JL_DLLEXPORT void jl_pop_handler_noexcept(int n)
+{
+    jl_task_t *ct = jl_current_task;
+    if (__unlikely(n <= 0))
+        return;
+    jl_handler_t *eh = ct->eh;
+    while (--n > 0)
+        eh = eh->prev;
     jl_eh_restore_state_noexcept(eh);
 }
 

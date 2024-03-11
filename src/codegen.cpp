@@ -1061,7 +1061,31 @@ static const auto jlleave_func = new JuliaFunction<>{
     XSTR(jl_pop_handler),
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
             {getInt32Ty(C)}, false); },
-    nullptr,
+    [](LLVMContext &C) {
+            auto FnAttrs = AttrBuilder(C);
+            FnAttrs.addAttribute(Attribute::WillReturn);
+            FnAttrs.addAttribute(Attribute::NoUnwind);
+            auto RetAttrs = AttrBuilder(C);
+            return AttributeList::get(C,
+                AttributeSet::get(C, FnAttrs),
+                AttributeSet(),
+                None);
+        },
+};
+static const auto jlleave_noexcept_func = new JuliaFunction<>{
+    XSTR(jl_pop_handler_noexcept),
+    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
+            {getInt32Ty(C)}, false); },
+    [](LLVMContext &C) {
+            auto FnAttrs = AttrBuilder(C);
+            FnAttrs.addAttribute(Attribute::WillReturn);
+            FnAttrs.addAttribute(Attribute::NoUnwind);
+            auto RetAttrs = AttrBuilder(C);
+            return AttributeList::get(C,
+                AttributeSet::get(C, FnAttrs),
+                AttributeSet(),
+                None);
+        },
 };
 static const auto jl_restore_excstack_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_restore_excstack),
@@ -5961,7 +5985,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
                 hand_n_leave += 1;
             }
         }
-        ctx.builder.CreateCall(prepare_call(jlleave_func),
+        ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func),
                            ConstantInt::get(getInt32Ty(ctx.builder.getContext()), hand_n_leave));
         if (scope_to_restore) {
             jl_aliasinfo_t scope_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
@@ -9800,6 +9824,7 @@ static void init_jit_functions(void)
     add_named_global(jlgenericfunction_func, &jl_generic_function_def);
     add_named_global(jlenter_func, &jl_enter_handler);
     add_named_global(jl_current_exception_func, &jl_current_exception);
+    add_named_global(jlleave_noexcept_func, &jl_pop_handler_noexcept);
     add_named_global(jlleave_func, &jl_pop_handler);
     add_named_global(jl_restore_excstack_func, &jl_restore_excstack);
     add_named_global(jl_excstack_state_func, &jl_excstack_state);
