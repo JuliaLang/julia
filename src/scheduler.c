@@ -183,8 +183,6 @@ void jl_threadfun(void *arg)
     jl_init_stack_limits(0, &stack_lo, &stack_hi);
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
-    int wasrunning = jl_atomic_fetch_add_relaxed(&nrunning, 1);
-    assert(wasrunning); (void)wasrunning;
     JL_GC_PROMISE_ROOTED(ct);
 
     // wait for all threads
