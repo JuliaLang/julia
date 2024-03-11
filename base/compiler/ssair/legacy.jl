@@ -35,13 +35,10 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{A
         ssavaluetypes = Any[ Any for i = 1:ssavaluetypes::Int ]
     end
     info = CallInfo[NoCallInfo() for i = 1:nstmts]
-    stmts = InstructionStream(code, ssavaluetypes, info, ci.codelocs, ci.ssaflags)
-    linetable = ci.linetable
-    if !isa(linetable, Vector{LineInfoNode})
-        linetable = collect(LineInfoNode, linetable::Vector{Any})::Vector{LineInfoNode}
-    end
+    di = DebugInfoStream(nothing, ci.debuginfo, nstmts)
+    stmts = InstructionStream(code, ssavaluetypes, info, di.codelocs, ci.ssaflags)
     meta = Expr[]
-    return IRCode(stmts, cfg, linetable, argtypes, meta, sptypes)
+    return IRCode(stmts, cfg, di, argtypes, meta, sptypes)
 end
 
 """
@@ -73,15 +70,17 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode)
     stmts = ir.stmts
     code = ci.code = stmts.stmt
     ssavaluetypes = ci.ssavaluetypes = stmts.type
-    codelocs = ci.codelocs = stmts.line
+    codelocs = stmts.line
     ssaflags = ci.ssaflags = stmts.flag
-    linetable = ci.linetable = ir.linetable
+    debuginfo = ir.debuginfo
     for metanode in ir.meta
         push!(code, metanode)
-        push!(codelocs, 1)
+        push!(codelocs, 1, 0, 0)
         push!(ssavaluetypes, Any)
         push!(ssaflags, IR_FLAG_NULL)
     end
+    @assert debuginfo.codelocs === stmts.line "line table not from debuginfo"
+    ci.debuginfo = DebugInfo(debuginfo, length(code))
     # Translate BB Edges to statement edges
     # (and undo normalization for now)
     for i = 1:length(code)

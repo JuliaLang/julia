@@ -71,7 +71,7 @@ let m = Meta.@lower 1 + 1
         else
             src.ssavaluetypes = ssavaluetypes
         end
-        src.codelocs = fill(one(Int32), nstmts)
+        src.debuginfo = Core.DebugInfo(:none)
         src.ssaflags = fill(zero(UInt32), nstmts)
         if slottypes !== nothing
             src.slottypes = slottypes

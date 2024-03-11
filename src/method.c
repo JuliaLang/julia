@@ -290,20 +290,140 @@ jl_value_t *expr_arg1(jl_value_t *expr) {
     return jl_array_ptr_ref(args, 0);
 }
 
-// copy a :lambda Expr into its CodeInfo representation,
-// including popping of known meta nodes
-static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
+static jl_value_t *alloc_edges(arraylist_t *edges_list)
 {
-    assert(jl_is_expr(ir));
-    jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ir, 2);
-    jl_value_t *codelocs = jl_exprarg(ir, 3);
-    li->linetable = jl_exprarg(ir, 4);
-    size_t nlocs = jl_array_nrows(codelocs);
-    li->codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nlocs);
+    jl_value_t *jledges = (jl_value_t*)jl_alloc_svec(edges_list->len);
+    jl_value_t *jledges2 = NULL;
+    jl_value_t *codelocs = NULL;
+    JL_GC_PUSH3(&jledges, &jledges2, &codelocs);
+    size_t i;
+    for (i = 0; i < edges_list->len; i++) {
+        arraylist_t *edge = (arraylist_t*)edges_list->items[i];
+        jl_value_t *file = (jl_value_t*)edge->items[0];
+        int32_t line = 0; // not preserved by lowering (and probably lost even before that)
+        arraylist_t *edges_list2 = (arraylist_t*)edge->items[1];
+        size_t j, nlocs = (edge->len - 2) / 3;
+        codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nlocs * 3);
+        for (j = 0; j < nlocs; j++) {
+            jl_array_data(codelocs,int32_t)[3 * j + 0] = (intptr_t)edge->items[3 * j + 0 + 2];
+            jl_array_data(codelocs,int32_t)[3 * j + 1] = (intptr_t)edge->items[3 * j + 1 + 2];
+            jl_array_data(codelocs,int32_t)[3 * j + 2] = (intptr_t)edge->items[3 * j + 2 + 2];
+        }
+        codelocs = (jl_value_t*)jl_compress_codelocs(line, codelocs, nlocs);
+        jledges2 = alloc_edges(edges_list2);
+        jl_value_t *debuginfo = jl_new_struct(jl_debuginfo_type, file, jl_nothing, jledges2, codelocs);
+        jledges2 = NULL;
+        jl_svecset(jledges, i, debuginfo);
+        free(edges_list2);
+        free(edge);
+    }
+    JL_GC_POP();
+    return jledges;
+}
+
+static void add_edge(arraylist_t *edges_list, arraylist_t *inlinestack, int32_t *p_to, int32_t *p_pc)
+{
+    jl_value_t *locinfo = (jl_value_t*)arraylist_pop(inlinestack);
+    jl_sym_t *filesym = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 0);
+    int32_t line = jl_unbox_int32(jl_fieldref(locinfo, 1));
+    size_t i;
+    arraylist_t *edge = NULL;
+    for (i = 0; i < edges_list->len; i++) {
+        edge = (arraylist_t*)edges_list->items[i];
+        if (edge->items[0] == filesym)
+            break;
+    }
+    if (i == edges_list->len) {
+        edge = (arraylist_t*)malloc(sizeof(arraylist_t));
+        arraylist_t *edge_list2 = (arraylist_t*)malloc(sizeof(arraylist_t));
+        arraylist_new(edge, 0);
+        arraylist_new(edge_list2, 0);
+        arraylist_push(edge, (void*)filesym);
+        arraylist_push(edge, (void*)edge_list2);
+        arraylist_push(edges_list, (void*)edge);
+    }
+    *p_to = i + 1;
+    int32_t to = 0, pc = 0;
+    if (inlinestack->len) {
+        arraylist_t *edge_list2 = (arraylist_t*)edge->items[1];
+        add_edge(edge_list2, inlinestack, &to, &pc);
+    }
+    for (i = 2; i < edge->len; i += 3) {
+        if ((intptr_t)edge->items[i + 0] == line &&
+            (intptr_t)edge->items[i + 1] == to &&
+            (intptr_t)edge->items[i + 2] == pc) {
+            break;
+        }
+    }
+    if (i == edge->len) {
+        arraylist_push(edge, (void*)(intptr_t)line);
+        arraylist_push(edge, (void*)(intptr_t)to);
+        arraylist_push(edge, (void*)(intptr_t)pc);
+    }
+    *p_pc = (i - 2) / 3 + 1;
+}
+
+jl_debuginfo_t *jl_linetable_to_debuginfo(jl_array_t *codelocs_any, jl_array_t *linetable)
+{
+    size_t nlocs = jl_array_nrows(codelocs_any);
+    jl_value_t *toplocinfo = jl_array_ptr_ref(linetable, 0);
+    jl_sym_t *topfile = (jl_sym_t*)jl_fieldref_noalloc(toplocinfo, 0);
+    int32_t topline = jl_unbox_int32(jl_fieldref(toplocinfo, 1));
+    arraylist_t inlinestack;
+    arraylist_new(&inlinestack, 0);
+    arraylist_t edges_list;
+    arraylist_new(&edges_list, 0);
+    jl_value_t *jledges = NULL;
+    jl_value_t *codelocs = (jl_value_t*)jl_alloc_array_1d(jl_array_int32_type, nlocs * 3);
+    jl_debuginfo_t *debuginfo = NULL;
+    JL_GC_PUSH3(&jledges, &codelocs, &debuginfo);
+    int32_t *codelocs32 = jl_array_data(codelocs,int32_t);
     size_t j;
     for (j = 0; j < nlocs; j++) {
-        jl_array_uint32_set((jl_array_t*)li->codelocs, j, jl_unbox_long(jl_array_ptr_ref((jl_array_t*)codelocs, j)));
+        size_t lineidx = jl_unbox_long(jl_array_ptr_ref((jl_array_t*)codelocs_any, j)); // 1 indexed!
+        while (lineidx != 0) {
+            jl_value_t *locinfo = jl_array_ptr_ref(linetable, lineidx - 1);
+            lineidx = jl_unbox_int32(jl_fieldref(locinfo, 2));
+            arraylist_push(&inlinestack, locinfo);
+        }
+        int32_t line = 0, to = 0, pc = 0;
+        if (inlinestack.len) {
+            jl_value_t *locinfo = (jl_value_t*)arraylist_pop(&inlinestack);
+            jl_sym_t *filesym = (jl_sym_t*)jl_fieldref_noalloc(locinfo, 0);
+            if (filesym == topfile)
+                line = jl_unbox_int32(jl_fieldref(locinfo, 1));
+            else
+                arraylist_push(&inlinestack, locinfo);
+            if (inlinestack.len) {
+                add_edge(&edges_list, &inlinestack, &to, &pc);
+            }
+        }
+        codelocs32[j * 3 + 0] = line;
+        codelocs32[j * 3 + 1] = to;
+        codelocs32[j * 3 + 2] = pc;
     }
+    codelocs = (jl_value_t*)jl_compress_codelocs(topline, codelocs, nlocs);
+    jledges = alloc_edges(&edges_list);
+    debuginfo = (jl_debuginfo_t*)jl_new_struct(jl_debuginfo_type, topfile, jl_nothing, jledges, codelocs);
+    JL_GC_POP();
+    return debuginfo;
+}
+
+// copy a :lambda Expr into its CodeInfo representation,
+// including popping of known meta nodes
+jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
+{
+    jl_code_info_t *li = NULL;
+    JL_GC_PUSH1(&li);
+    li = jl_new_code_info_uninit();
+    assert(jl_is_expr(ir));
+    jl_expr_t *bodyex = (jl_expr_t*)jl_exprarg(ir, 2);
+
+    jl_array_t *codelocs_any = (jl_array_t*)jl_exprarg(ir, 3);
+    jl_array_t *linetable = (jl_array_t*)jl_exprarg(ir, 4);
+    li->debuginfo = jl_linetable_to_debuginfo(codelocs_any, linetable);
+    jl_gc_wb(li, li->debuginfo);
+
     assert(jl_is_expr(bodyex));
     jl_array_t *body = bodyex->args;
     li->code = body;
@@ -318,6 +438,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
     // last(inline_flags) == 0: callsite noinline region
     arraylist_t *inline_flags = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
     arraylist_t *purity_exprs = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
+    size_t j;
     for (j = 0; j < n; j++) {
         jl_value_t *st = bd[j];
         int is_flag_stmt = 0;
@@ -472,6 +593,8 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
         jl_array_ptr_set(li->slotnames, i, name);
         jl_array_uint8_set(li->slotflags, i, vinfo_mask & jl_unbox_long(jl_array_ptr_ref(vi, 2)));
     }
+    JL_GC_POP();
+    return li;
 }
 
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
@@ -499,11 +622,10 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
         (jl_code_info_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_info_t),
                                        jl_code_info_type);
     src->code = NULL;
-    src->codelocs = NULL;
+    src->debuginfo = NULL;
     src->ssavaluetypes = NULL;
     src->ssaflags = NULL;
     src->method_for_inference_limit_heuristics = jl_nothing;
-    src->linetable = jl_nothing;
     src->slotflags = NULL;
     src->slotnames = NULL;
     src->slottypes = jl_nothing;
@@ -519,40 +641,6 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->purity.bits = 0;
     src->inlining_cost = UINT16_MAX;
     return src;
-}
-
-jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
-{
-    jl_code_info_t *src = NULL;
-    JL_GC_PUSH1(&src);
-    src = jl_new_code_info_uninit();
-    jl_code_info_set_ir(src, ir);
-    JL_GC_POP();
-    return src;
-}
-
-void jl_add_function_to_lineinfo(jl_code_info_t *ci, jl_value_t *func)
-{
-    // func may contain jl_symbol (function name), jl_method_t, or jl_method_instance_t
-    jl_array_t *li = (jl_array_t*)ci->linetable;
-    size_t i, n = jl_array_nrows(li);
-    jl_value_t *rt = NULL, *lno = NULL, *inl = NULL;
-    JL_GC_PUSH3(&rt, &lno, &inl);
-    for (i = 0; i < n; i++) {
-        jl_value_t *ln = jl_array_ptr_ref(li, i);
-        assert(jl_typetagis(ln, jl_lineinfonode_type));
-        jl_value_t *mod = jl_fieldref_noalloc(ln, 0);
-        jl_value_t *file = jl_fieldref_noalloc(ln, 2);
-        lno = jl_fieldref(ln, 3);
-        inl = jl_fieldref(ln, 4);
-        // respect a given linetable if available
-        jl_value_t *ln_func = jl_fieldref_noalloc(ln, 1);
-        if (jl_is_symbol(ln_func) && (jl_sym_t*)ln_func == jl_symbol("none") && jl_is_int32(inl) && jl_unbox_int32(inl) == 0)
-            ln_func = func;
-        rt = jl_new_struct(jl_lineinfonode_type, mod, ln_func, file, lno, inl);
-        jl_array_ptr_set(li, i, rt);
-    }
-    JL_GC_POP();
 }
 
 // invoke (compiling if necessary) the jlcall function pointer for a method template
@@ -644,7 +732,6 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, siz
                 jl_error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.");
             }
         }
-        jl_add_function_to_lineinfo(func, (jl_value_t*)def->name);
 
         // If this generated function has an opaque closure, cache it for
         // correctness of method identity
@@ -723,7 +810,6 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     m->nospecializeinfer = src->nospecializeinfer;
     m->constprop = src->constprop;
     m->purity.bits = src->purity.bits;
-    jl_add_function_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
@@ -811,11 +897,17 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     jl_gc_wb(src, copy);
     m->slot_syms = jl_compress_argnames(src->slotnames);
     jl_gc_wb(m, m->slot_syms);
-    if (gen_only)
+    if (gen_only) {
         m->source = NULL;
-    else
-        m->source = (jl_value_t*)jl_compress_ir(m, src);
-    jl_gc_wb(m, m->source);
+    }
+    else {
+        m->debuginfo = src->debuginfo;
+        jl_gc_wb(m, m->debuginfo);
+        m->source = (jl_value_t*)src;
+        jl_gc_wb(m, m->source);
+        m->source = (jl_value_t*)jl_compress_ir(m, NULL);
+        jl_gc_wb(m, m->source);
+    }
     JL_GC_POP();
 }
 
@@ -835,6 +927,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->module = module;
     m->external_mt = NULL;
     m->source = NULL;
+    m->debuginfo = NULL;
     jl_atomic_store_relaxed(&m->unspecialized, NULL);
     m->generator = NULL;
     m->name = NULL;

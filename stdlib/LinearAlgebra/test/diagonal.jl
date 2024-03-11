@@ -1277,4 +1277,15 @@ end
     @test c == Diagonal([2,2,2,2])
 end
 
+@testset "mul/div with an adjoint vector" begin
+    A = [1.0;;]
+    x = [1.0]
+    yadj = Diagonal(A) \ x'
+    @test typeof(yadj) == typeof(x')
+    @test yadj == x'
+    yadj = Diagonal(A) * x'
+    @test typeof(yadj) == typeof(x')
+    @test yadj == x'
+end
+
 end # module TestDiagonal

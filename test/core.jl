@@ -32,7 +32,7 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :debuginfo, :purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
         (Core.Method, [:primary_world, :deleted_world]),
         (Core.MethodInstance, [:uninferred, :cache, :precompiled]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
@@ -8062,10 +8062,6 @@ end
 # `SimpleVector`-operations should be concrete-eval eligible
 @test Core.Compiler.is_foldable(Base.infer_effects(length, (Core.SimpleVector,)))
 @test Core.Compiler.is_foldable(Base.infer_effects(getindex, (Core.SimpleVector,Int)))
-
-let lin = Core.LineInfoNode(Base, first(methods(convert)), :foo, Int32(5), Int32(0))
-    @test convert(LineNumberNode, lin) == LineNumberNode(5, :foo)
-end
 
 # Test that a nothrow-globalref doesn't get outlined during lowering
 module WellKnownGlobal
