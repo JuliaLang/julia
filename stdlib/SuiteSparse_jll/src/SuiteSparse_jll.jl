@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl
 baremodule SuiteSparse_jll
 using Base, Libdl, libblastrampoline_jll
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -110,6 +109,7 @@ function __init__()
     end
     global artifact_dir = dirname(Sys.BINDIR)
 end
+precompile(Tuple{typeof(__init__)})
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
 # For instance, `find_artifact_dir()` won't actually be the artifact directory, because
