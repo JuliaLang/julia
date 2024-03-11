@@ -582,6 +582,9 @@ matprod_dest(A::StructuredMatrix, B::Diagonal, TS) = similar(A, TS)
 matprod_dest(A::Diagonal, B::StructuredMatrix, TS) = similar(B, TS)
 matprod_dest(A::Diagonal, B::Diagonal, TS) = similar(B, TS)
 
+# Special handling for adj/trans vec
+matprod_dest(A::Diagonal, B::AdjOrTransAbsVec, TS) = similar(B, TS)
+
 # TODO: remove once not used anymore in SparseArrays.jl
 # some trait like this would be cool
 # onedefined(::Type{T}) where {T} = hasmethod(one, (T,))

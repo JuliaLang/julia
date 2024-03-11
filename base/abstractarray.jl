@@ -1218,6 +1218,7 @@ end
 copymutable(itr) = collect(itr)
 
 zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
 zero(x::AbstractArray) = map(zero, x)
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##

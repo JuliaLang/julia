@@ -91,39 +91,59 @@ for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base
     hardcoded_precompile_statements *= "precompile(Tuple{typeof(show), $IO, $T})\n"
 end
 
+# Precompiles for Revise and other packages
 precompile_script = """
-# NOTE: these were moved to the end of Base.jl. TODO: move back here.
-# # Used by Revise & its dependencies
-# while true  # force inference
-# delete!(push!(Set{Module}(), Base), Main)
-# m = first(methods(+))
-# delete!(push!(Set{Method}(), m), m)
-# empty!(Set())
-# push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
-# (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
-# (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
-# (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
-# (setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
-# (setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
-# Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
-# Dict(Base => [:(1+1)])[Base]
-# Dict(:one => [1])[:one]
-# Dict("abc" => Set())["abc"]
-# pushfirst!([], sum)
-# get(Base.pkgorigins, Base.PkgId(Base), nothing)
-# sort!([1,2,3])
-# unique!([1,2,3])
-# cumsum([1,2,3])
-# append!(Int[], BitSet())
-# isempty(BitSet())
-# delete!(BitSet([1,2]), 3)
-# deleteat!(Int32[1,2,3], [1,3])
-# deleteat!(Any[1,2,3], [1,3])
-# Core.svec(1, 2) == Core.svec(3, 4)
-# # copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(which(+, (Int, Int)), [Int, Int], Core.svec())))
-# any(t->t[1].line > 1, [(LineNumberNode(2,:none),:(1+1))])
-# break   # end force inference
-# end
+for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
+    m = match.method
+    delete!(push!(Set{Method}(), m), m)
+    copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(match), typemax(UInt)))
+
+    empty!(Set())
+    push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
+    (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
+    (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
+    (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
+    (setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
+    (setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
+    Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
+    Dict(Base => [:(1+1)])[Base]
+    Dict(:one => [1])[:one]
+    Dict("abc" => Set())["abc"]
+    pushfirst!([], sum)
+    get(Base.pkgorigins, Base.PkgId(Base), nothing)
+    sort!([1,2,3])
+    unique!([1,2,3])
+    cumsum([1,2,3])
+    append!(Int[], BitSet())
+    isempty(BitSet())
+    delete!(BitSet([1,2]), 3)
+    deleteat!(Int32[1,2,3], [1,3])
+    deleteat!(Any[1,2,3], [1,3])
+    Core.svec(1, 2) == Core.svec(3, 4)
+    any(t->t[1].line > 1, [(LineNumberNode(2,:none), :(1+1))])
+
+    # Code loading uses this
+    sortperm(mtime.(readdir(".")), rev=true)
+    # JLLWrappers uses these
+    Dict{Base.UUID,Set{String}}()[Base.UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
+    get!(Set{String}, Dict{Base.UUID,Set{String}}(), Base.UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
+    eachindex(IndexLinear(), Expr[])
+    push!(Expr[], Expr(:return, false))
+    vcat(String[], String[])
+    k, v = (:hello => nothing)
+    precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
+    precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+    # Preferences uses these
+    precompile(Base.get_preferences, (Base.UUID,))
+    precompile(Base.record_compiletime_preference, (Base.UUID, String))
+    get(Dict{String,Any}(), "missing", nothing)
+    delete!(Dict{String,Any}(), "missing")
+    for (k, v) in Dict{String,Any}()
+        println(k)
+    end
+
+    break   # only actually need to do this once
+end
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())

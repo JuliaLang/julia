@@ -2644,13 +2644,12 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
     gc_mark_objarray(ptls, parent, objs, objs + nobjs, 1, nptr);
 }
 
-// Enqueue and mark all outgoing references from `new_obj` which have not been marked
-// yet. `meta_updated` is mostly used to make sure we don't update metadata twice for
-// objects which have been enqueued into the `remset`
-FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_obj,
-                              int meta_updated)
+// Enqueue and mark all outgoing references from `new_obj` which have not been marked yet.
+// `_new_obj` has its lowest bit tagged if it's in the remset (in which case we shouldn't update page metadata)
+FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_obj)
 {
-    jl_value_t *new_obj = (jl_value_t *)_new_obj;
+    int meta_updated = (uintptr_t)_new_obj & GC_REMSET_PTR_TAG;
+    jl_value_t *new_obj = (jl_value_t *)((uintptr_t)_new_obj & ~(uintptr_t)GC_REMSET_PTR_TAG);
     mark_obj: {
         jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);
         uintptr_t vtag = o->header & ~(uintptr_t)0xf;
@@ -2948,7 +2947,7 @@ void gc_mark_loop_serial_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
         if (__unlikely(new_obj == NULL)) {
             return;
         }
-        gc_mark_outrefs(ptls, mq, new_obj, 0);
+        gc_mark_outrefs(ptls, mq, new_obj);
     }
 }
 
@@ -2997,7 +2996,7 @@ void gc_mark_and_steal(jl_ptls_t ptls)
         goto steal;
     }
     mark : {
-        gc_mark_outrefs(ptls, mq, new_obj, 0);
+        gc_mark_outrefs(ptls, mq, new_obj);
         goto pop;
     }
     // Note that for the stealing heuristics, we try to
@@ -3260,9 +3259,9 @@ static void gc_queue_remset(jl_ptls_t ptls, jl_ptls_t ptls2)
     size_t len = ptls2->heap.last_remset->len;
     void **items = ptls2->heap.last_remset->items;
     for (size_t i = 0; i < len; i++) {
-        // Objects in the `remset` are already marked,
-        // so a `gc_try_claim_and_push` wouldn't work here
-        gc_mark_outrefs(ptls, &ptls->mark_queue, (jl_value_t *)items[i], 1);
+        // Tag the pointer to indicate it's in the remset
+        jl_value_t *v = (jl_value_t *)((uintptr_t)items[i] | GC_REMSET_PTR_TAG);
+        gc_ptr_queue_push(&ptls->mark_queue, v);
     }
 }
 
