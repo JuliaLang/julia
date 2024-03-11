@@ -30,6 +30,8 @@ Base.schedule
 Base.errormonitor
 Base.@sync
 Base.wait
+Base.waitany
+Base.waitall
 Base.fetch(t::Task)
 Base.fetch(x::Any)
 Base.timedwait
