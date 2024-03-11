@@ -42,6 +42,15 @@ precompile(Base._require, (Base.PkgId, Nothing))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
 precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
 
+# Pkg loading
+precompile(Tuple{typeof(Base.Filesystem.normpath), String, String, Vararg{String}})
+precompile(Tuple{typeof(Base.append!), Array{String, 1}, Array{String, 1}})
+precompile(Tuple{typeof(Base.join), Array{String, 1}, Char})
+precompile(Tuple{typeof(Base.getindex), Base.Dict{Any, Any}, Char})
+precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, Char})
+precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Base.Dict{String, String}}}, Base.Dict{String, Any}})
+precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Array{String, 1}}}, Base.Dict{String, Any}})
+
 # REPL
 precompile(isequal, (String, String))
 precompile(Base.check_open, (Base.TTY,))
@@ -161,6 +170,9 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
     for (k, v) in Dict{String,Any}()
         println(k)
     end
+
+    # interactive statup uses this
+    write(IOBuffer(), "")
 
     break   # only actually need to do this once
 end
