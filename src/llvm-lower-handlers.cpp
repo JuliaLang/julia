@@ -113,7 +113,7 @@ static bool lowerExcHandlers(Function &F) {
         return false; // No EH frames in this module
     ensure_enter_function(M, TT);
     Function *leave_func = M.getFunction(XSTR(jl_pop_handler));
-    Function *leave_noexcept_func = M.getFunction(XSTR(jl_pop_handler));
+    Function *leave_noexcept_func = M.getFunction(XSTR(jl_pop_handler_noexcept));
     Function *jlenter_func = M.getFunction(XSTR(jl_enter_handler));
     Function *setjmp_func = M.getFunction(jl_setjmp_name);
 
