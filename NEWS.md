@@ -36,7 +36,7 @@ Language changes
 * Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
   omit the default user depot ([#51448]).
 * Precompilation cache files are now relocatable and their validity is now verified through
-  a content hash of the `include` files instead of their `mtime` ([#49866]).
+  a content hash of their source files instead of their `mtime` ([#49866]).
 
 Compiler/Runtime improvements
 -----------------------------
