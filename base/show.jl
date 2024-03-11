@@ -1185,7 +1185,7 @@ function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
         if !first
             print(io, ", ")
         end
-        print(io, syms[i])
+        show_sym(io, syms[i])
         typ = types.parameters[i]
         if typ !== Any
             print(io, "::")
