@@ -1277,4 +1277,10 @@ end
     @test c == Diagonal([2,2,2,2])
 end
 
+@testset "uppertriangular/lowertriangular" begin
+    D = Diagonal([1,2])
+    @test LinearAlgebra.uppertriangular(D) === D
+    @test LinearAlgebra.lowertriangular(D) === D
+end
+
 end # module TestDiagonal
