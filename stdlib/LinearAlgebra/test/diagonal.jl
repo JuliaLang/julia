@@ -826,7 +826,7 @@ end
     @test rdiv!(copy(B), D) ≈ B * Diagonal(inv.(D.diag))
 end
 
-@testset "multiplication with Symmetric/Hermitian" begin
+@testset "multiplication/division with Symmetric/Hermitian" begin
     for T in (Float64, ComplexF64)
         D = Diagonal(randn(T, n))
         A = randn(T, n, n); A = A'A
@@ -839,6 +839,10 @@ end
             @test *(transform1(D), transform2(H)) ≈ *(transform1(Matrix(D)), transform2(Matrix(H)))
             @test *(transform1(S), transform2(D)) ≈ *(transform1(Matrix(S)), transform2(Matrix(D)))
             @test *(transform1(S), transform2(H)) ≈ *(transform1(Matrix(S)), transform2(Matrix(H)))
+            @test (transform1(H)/D) * D ≈ transform1(H)
+            @test (transform1(S)/D) * D ≈ transform1(S)
+            @test D * (D\transform2(H)) ≈ transform2(H)
+            @test D * (D\transform2(S)) ≈ transform2(S)
         end
     end
 end
