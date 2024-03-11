@@ -651,17 +651,21 @@ JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li, size_t 
 JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
         jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_value_t *rettype,
-        size_t min_world, size_t max_world);
-jl_method_instance_t *jl_get_unspecialized_from_mi(jl_method_instance_t *method JL_PROPAGATES_ROOT);
+        size_t min_world, size_t max_world, jl_debuginfo_t *edges);
 jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT);
 
-JL_DLLEXPORT jl_code_instance_t* jl_new_codeinst(
+JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         jl_method_instance_t *mi, jl_value_t *owner,
         jl_value_t *rettype, jl_value_t *exctype,
         jl_value_t *inferred_const, jl_value_t *inferred,
         int32_t const_flags, size_t min_world, size_t max_world,
         uint32_t ipo_effects, uint32_t effects, jl_value_t *analysis_results,
-        uint8_t relocatability);
+        uint8_t relocatability, jl_debuginfo_t *edges /* , int absolute_max*/);
+
+JL_DLLEXPORT const char *jl_debuginfo_file(jl_debuginfo_t *debuginfo) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_debuginfo_file1(jl_debuginfo_t *debuginfo) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_module_t *jl_debuginfo_module1(jl_value_t *debuginfo_def) JL_NOTSAFEPOINT;
+JL_DLLEXPORT const char *jl_debuginfo_name(jl_value_t *func) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tupletype_t *types, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);

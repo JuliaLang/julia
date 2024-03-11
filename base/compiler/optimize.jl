@@ -990,22 +990,79 @@ function run_passes_ipo_safe(
     if is_asserts()
         @timeit "verify 3" begin
             verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp))
-            verify_linetable(ir.linetable)
+            verify_linetable(ir.debuginfo, length(ir.stmts))
         end
     end
     @label __done__  # used by @pass
     return ir
 end
 
-function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
-    linetable = ci.linetable
-    if !isa(linetable, Vector{LineInfoNode})
-        linetable = collect(LineInfoNode, linetable::Vector{Any})::Vector{LineInfoNode}
+function strip_trailing_junk!(code::Vector{Any}, ssavaluetypes::Vector{Any}, ssaflags::Vector, debuginfo::DebugInfoStream, cfg::CFG, info::Vector{CallInfo})
+    # Remove `nothing`s at the end, we don't handle them well
+    # (we expect the last instruction to be a terminator)
+    codelocs = debuginfo.codelocs
+    for i = length(code):-1:1
+        if code[i] !== nothing
+            resize!(code, i)
+            resize!(ssavaluetypes, i)
+            resize!(codelocs, 3i)
+            resize!(info, i)
+            resize!(ssaflags, i)
+            break
+        end
     end
+    # If the last instruction is not a terminator, add one. This can
+    # happen for implicit return on dead branches.
+    term = code[end]
+    if !isa(term, GotoIfNot) && !isa(term, GotoNode) && !isa(term, ReturnNode)
+        push!(code, ReturnNode())
+        push!(ssavaluetypes, Union{})
+        push!(codelocs, 0, 0, 0)
+        push!(info, NoCallInfo())
+        push!(ssaflags, IR_FLAG_NOTHROW)
 
+        # Update CFG to include appended terminator
+        old_range = cfg.blocks[end].stmts
+        new_range = StmtRange(first(old_range), last(old_range) + 1)
+        cfg.blocks[end] = BasicBlock(cfg.blocks[end], new_range)
+        (length(cfg.index) == length(cfg.blocks)) && (cfg.index[end] += 1)
+    end
+    nothing
+end
+
+function changed_lineinfo(di::DebugInfo, codeloc::Int, prevloc::Int)
+    while true
+        next = getdebugidx(di, codeloc)
+        next[1] < 0 && return false # invalid info
+        next[1] == 0 && next[2] == 0 && return false # no new info
+        prevloc <= 0 && return true # no old info
+        prev = getdebugidx(di, prevloc)
+        next === prev && return false # exactly identical
+        prev[1] < 0 && return true # previous invalid info, now valid
+        edge = next[2]
+        edge === prev[2] || return true # change to this edge
+        linetable = di.linetable
+        # check for change to line number here
+        if linetable === nothing || next[1] == 0
+            next[1] == prev[1] || return true
+        else
+            changed_lineinfo(linetable, next[1], prev[1]) && return true
+        end
+        # check for change to edge here
+        edge == 0 && return false # no edge here
+        di = di.edges[Int(edge)]::DebugInfo
+        codeloc = Int(next[3])
+        prevloc = Int(prev[3])
+    end
+end
+
+function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # Update control-flow to reflect any unreachable branches.
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
-    code = copy_exprargs(ci.code)
+    ci.code = code = copy_exprargs(ci.code)
+    di = DebugInfoStream(sv.linfo, ci.debuginfo, length(code))
+    codelocs = di.codelocs
+    ssaflags = ci.ssaflags
     for i = 1:length(code)
         expr = code[i]
         if !(i in sv.unreachable)
@@ -1021,11 +1078,11 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                     ((block + 1) != destblock) && cfg_delete_edge!(sv.cfg, block, destblock)
                     expr = Expr(:call, Core.typeassert, expr.cond, Bool)
                 elseif i + 1 in sv.unreachable
-                    @assert has_flag(ci.ssaflags[i], IR_FLAG_NOTHROW)
+                    @assert has_flag(ssaflags[i], IR_FLAG_NOTHROW)
                     cfg_delete_edge!(sv.cfg, block, block + 1)
                     expr = GotoNode(expr.dest)
                 elseif expr.dest in sv.unreachable
-                    @assert has_flag(ci.ssaflags[i], IR_FLAG_NOTHROW)
+                    @assert has_flag(ssaflags[i], IR_FLAG_NOTHROW)
                     cfg_delete_edge!(sv.cfg, block, block_for_inst(sv.cfg, expr.dest))
                     expr = nothing
                 end
@@ -1052,20 +1109,17 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # Go through and add an unreachable node after every
     # Union{} call. Then reindex labels.
     stmtinfo = sv.stmt_info
-    codelocs = ci.codelocs
-    ssaflags = ci.ssaflags
     meta = Expr[]
     idx = 1
     oldidx = 1
     nstmts = length(code)
     ssachangemap = labelchangemap = blockchangemap = nothing
-    prevloc = zero(eltype(ci.codelocs))
+    prevloc = 0
     while idx <= length(code)
-        codeloc = codelocs[idx]
-        if sv.insert_coverage && codeloc != prevloc && codeloc != 0
+        if sv.insert_coverage && changed_lineinfo(ci.debuginfo, oldidx, prevloc)
             # insert a side-effect instruction before the current instruction in the same basic block
             insert!(code, idx, Expr(:code_coverage_effect))
-            insert!(codelocs, idx, codeloc)
+            splice!(codelocs, 3idx-2:3idx-3, (codelocs[3idx-2], codelocs[3idx-1], codelocs[3idx-0]))
             insert!(ssavaluetypes, idx, Nothing)
             insert!(stmtinfo, idx, NoCallInfo())
             insert!(ssaflags, idx, IR_FLAG_NULL)
@@ -1084,7 +1138,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             end
             blockchangemap[block_for_inst(sv.cfg, oldidx)] += 1
             idx += 1
-            prevloc = codeloc
+            prevloc = oldidx
         end
         if ssavaluetypes[idx] === Union{} && !(oldidx in sv.unreachable) && !isa(code[idx], PhiNode)
             # We should have converted any must-throw terminators to an equivalent w/o control-flow edges
@@ -1106,7 +1160,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 # terminator with an explicit `unreachable` marker.
                 if block_end > idx
                     code[block_end] = ReturnNode()
-                    codelocs[block_end] = codelocs[idx]
+                    codelocs[3block_end-2], codelocs[3block_end-1], codelocs[3block_end-0] = (codelocs[3idx-2], codelocs[3idx-1], codelocs[3idx-0])
                     ssavaluetypes[block_end] = Union{}
                     stmtinfo[block_end] = NoCallInfo()
                     ssaflags[block_end] = IR_FLAG_NOTHROW
@@ -1121,7 +1175,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                     idx += block_end - idx
                 else
                     insert!(code, idx + 1, ReturnNode())
-                    insert!(codelocs, idx + 1, codelocs[idx])
+                    splice!(codelocs, 3idx-2:3idx-3, (codelocs[3idx-2], codelocs[3idx-1], codelocs[3idx-0]))
                     insert!(ssavaluetypes, idx + 1, Union{})
                     insert!(stmtinfo, idx + 1, NoCallInfo())
                     insert!(ssaflags, idx + 1, IR_FLAG_NOTHROW)
@@ -1158,14 +1212,14 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     for i = 1:length(code)
         code[i] = process_meta!(meta, code[i])
     end
-    strip_trailing_junk!(ci, sv.cfg, code, stmtinfo)
+    strip_trailing_junk!(code, ssavaluetypes, ssaflags, di, sv.cfg, stmtinfo)
     types = Any[]
     stmts = InstructionStream(code, types, stmtinfo, codelocs, ssaflags)
     # NOTE this `argtypes` contains types of slots yet: it will be modified to contain the
     # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
     # and eliminates slots (see below)
     argtypes = sv.slottypes
-    return IRCode(stmts, sv.cfg, linetable, argtypes, meta, sv.sptypes)
+    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes)
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)

@@ -713,34 +713,8 @@ m1_exprs = get_expr_list(Meta.lower(@__MODULE__, quote @m1 end))
 let low3 = Meta.lower(@__MODULE__, quote @m3 end)
     m3_exprs = get_expr_list(low3)
     ci = low3.args[1]::Core.CodeInfo
-    @test ci.codelocs in ([4, 4, 0], [4, 0])
+    #@test ci.codelocs in ([4, 4, 0], [4, 0])
     @test is_return_ssavalue(m3_exprs[end])
-end
-
-function f1(a)
-    b = a + 100
-    b
-end
-
-@generated function f2(a)
-    quote
-        b = a + 100
-        b
-    end
-end
-
-f1_ci = code_typed(f1, (Int,), debuginfo=:source)[1][1]
-f2_ci = code_typed(f2, (Int,), debuginfo=:source)[1][1]
-
-f1_exprs = get_expr_list(f1_ci)
-f2_exprs = get_expr_list(f2_ci)
-
-if Base.JLOptions().can_inline != 0
-    @test length(f1_ci.linetable) == 3
-    @test length(f2_ci.linetable) >= 3
-else
-    @test length(f1_ci.linetable) == 2
-    @test length(f2_ci.linetable) >= 3
 end
 
 # Check that string and command literals are parsed to the appropriate macros

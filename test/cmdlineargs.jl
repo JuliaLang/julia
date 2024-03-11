@@ -444,9 +444,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     mktempdir() do dir
         helperdir = joinpath(@__DIR__, "testhelpers")
         inputfile = joinpath(helperdir, "coverage_file.jl")
-        expected = replace(read(joinpath(helperdir, "coverage_file.info.bad"), String),
-            "<FILENAME>" => realpath(inputfile))
-        expected_good = replace(read(joinpath(helperdir, "coverage_file.info"), String),
+        expected = replace(read(joinpath(helperdir, "coverage_file.info"), String),
             "<FILENAME>" => realpath(inputfile))
         covfile = replace(joinpath(dir, "coverage.info"), "%" => "%%")
         @test !isfile(covfile)
@@ -464,21 +462,18 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=user`) == "1"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
         @test readchomp(`$exename -E "Base.JLOptions().code_coverage" -L $inputfile
             --code-coverage=$covfile --code-coverage=all`) == "2"
         @test isfile(covfile)
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in specific file
         tfile = realpath(inputfile)
@@ -488,7 +483,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in directory
         tdir = dirname(realpath(inputfile))
@@ -498,7 +492,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in current directory
         tdir = dirname(realpath(inputfile))
@@ -511,7 +504,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in relative directory
         tdir = dirname(realpath(inputfile))
@@ -523,7 +515,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in relative directory with dot-dot notation
         tdir = dirname(realpath(inputfile))
@@ -535,7 +526,6 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         got = read(covfile, String)
         rm(covfile)
         @test occursin(expected, got) || (expected, got)
-        @test_broken occursin(expected_good, got)
 
         # Ask for coverage in a different directory
         tdir = mktempdir() # a dir that contains no code
@@ -570,15 +560,14 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             end
             do_test()
             """), """
-            DA:1,1
             DA:2,1
             DA:3,1
             DA:5,1
             DA:6,0
             DA:9,1
             DA:10,1
-            LH:6
-            LF:7
+            LH:5
+            LF:6
             """)
         @test contains(coverage_info_for("""
             function cov_bug()

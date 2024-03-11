@@ -2695,7 +2695,7 @@ function refine_partial_type(@nospecialize t)
         # if the first/second parameter of `NamedTuple` is known to be empty,
         # the second/first argument should also be empty tuple type,
         # so refine it here
-        return Const(NamedTuple())
+        return Const((;))
     end
     return t
 end

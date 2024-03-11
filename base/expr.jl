@@ -33,9 +33,6 @@ macro gensym(names...)
     return blk
 end
 
-## line numbers ##
-convert(::Type{LineNumberNode}, lin::Core.LineInfoNode) = LineNumberNode(Int(lin.line), lin.file)
-
 ## expressions ##
 
 isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
@@ -81,8 +78,6 @@ function copy(c::CodeInfo)
     if cnew.slottypes !== nothing
         cnew.slottypes = copy(cnew.slottypes::Vector{Any})
     end
-    cnew.codelocs  = copy(cnew.codelocs)
-    cnew.linetable = copy(cnew.linetable::Union{Vector{Any},Vector{Core.LineInfoNode}})
     cnew.ssaflags  = copy(cnew.ssaflags)
     cnew.edges     = cnew.edges === nothing ? nothing : copy(cnew.edges::Vector)
     ssavaluetypes  = cnew.ssavaluetypes
@@ -1016,14 +1011,10 @@ function remove_linenums!(@nospecialize ex)
         for subex in ex.args
             subex isa Expr && remove_linenums!(subex)
         end
-        return ex
     elseif ex isa CodeInfo
-        ex.codelocs .= 0
-        length(ex.linetable::Vector) > 1 && resize!(ex.linetable::Vector, 1)
-        return ex
-    else
-        return ex
+        ex.debuginfo = Core.DebugInfo(ex.debuginfo.def) # TODO: filter partially, but keep edges
     end
+    return ex
 end
 
 replace_linenums!(ex, ln::LineNumberNode) = ex

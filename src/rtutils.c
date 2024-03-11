@@ -864,6 +864,17 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             }
             return n;
         }
+        if (jl_genericmemory_type && dv->name == jl_genericmemory_typename) {
+            jl_value_t *isatomic = jl_tparam0(dv);
+            jl_value_t *el_type = jl_tparam1(dv);
+            jl_value_t *addrspace = jl_tparam2(dv);
+            if (isatomic == (jl_value_t*)jl_not_atomic_sym && addrspace && jl_is_addrspacecore(addrspace) && jl_unbox_uint8(addrspace) == 0) {
+                n += jl_printf(out, "Memory{");
+                n += jl_static_show_x(out, el_type, depth, ctx);
+                n += jl_printf(out, "}");
+                return n;
+            }
+        }
         if (ctx.quiet) {
             return jl_static_show_symbol(out, dv->name->name);
         }
@@ -1104,7 +1115,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (jl_genericmemoryref_type && jl_is_genericmemoryref_type(vt)) {
         jl_genericmemoryref_t *ref = (jl_genericmemoryref_t*)v;
-        n += jl_printf(out, "MemoryRef(offset=");
+        n += jl_printf(out, "GenericMemoryRef(offset=");
         size_t offset = (size_t)ref->ptr_or_offset;
         if (ref->mem) {
             const jl_datatype_layout_t *layout = ((jl_datatype_t*)jl_typeof(ref->mem))->layout;
@@ -1117,30 +1128,19 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (jl_genericmemory_type && jl_is_genericmemory_type(vt)) {
         jl_genericmemory_t *m = (jl_genericmemory_t*)v;
-        jl_value_t *isatomic = jl_tparam0(vt);
-        jl_value_t *addrspace = jl_tparam2(vt);
-        if (isatomic == (jl_value_t*)jl_not_atomic_sym && jl_is_addrspacecore(addrspace) && jl_unbox_uint8(addrspace) == 0) {
-            n += jl_printf(out, "Memory{");
-        }
-        else {
-            n += jl_printf(out, "GenericMemory{");
-            n += jl_static_show_x(out, isatomic, depth, ctx);
-            n += jl_printf(out, ", ");
-            n += jl_static_show_x(out, addrspace, depth, ctx);
-            n += jl_printf(out, ", ");
-        }
+        //jl_value_t *isatomic = jl_tparam0(vt);
         jl_value_t *el_type = jl_tparam1(vt);
-        n += jl_static_show_x(out, el_type, depth, ctx);
+        jl_value_t *addrspace = jl_tparam2(vt);
+        n += jl_static_show_x(out, (jl_value_t*)vt, depth, ctx);
         size_t j, tlen = m->length;
-        n += jl_printf(out, "}(%" PRIdPTR ", %p)[", tlen, m->ptr);
-//#ifdef _P64
-//        n += jl_printf(out, "0x%016" PRIx64, tlen);
-//#else
-//        n += jl_printf(out, "0x%08" PRIx32, tlen);
-//#endif
+        n += jl_printf(out, "(%" PRIdPTR ", %p)[", tlen, m->ptr);
+        if (!(addrspace && jl_is_addrspacecore(addrspace) && jl_unbox_uint8(addrspace) == 0)) {
+            n += jl_printf(out, "...]");
+            return n;
+        }
+        const char *typetagdata = NULL;
         const jl_datatype_layout_t *layout = vt->layout;
         int nlsep = 0;
-        const char *typetagdata = NULL;
         if (layout->flags.arrayelem_isboxed) {
             // print arrays with newlines, unless the elements are probably small
             for (j = 0; j < tlen; j++) {

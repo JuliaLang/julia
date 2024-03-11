@@ -576,20 +576,16 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             JL_GC_POP();
             return temp;
         }
-        else if (sym == jl_lineinfo_sym && n == 5) {
-            jl_value_t *modu=NULL, *name=NULL, *file=NULL, *linenum=NULL, *inlinedat=NULL;
-            JL_GC_PUSH5(&modu, &name, &file, &linenum, &inlinedat);
+        else if (sym == jl_lineinfo_sym && n == 3) {
+            jl_value_t *file=NULL, *linenum=NULL, *inlinedat=NULL;
+            JL_GC_PUSH3(&file, &linenum, &inlinedat);
             value_t lst = e;
-            modu = scm_to_julia_(fl_ctx, car_(lst), mod);
-            lst = cdr_(lst);
-            name = scm_to_julia_(fl_ctx, car_(lst), mod);
-            lst = cdr_(lst);
             file = scm_to_julia_(fl_ctx, car_(lst), mod);
             lst = cdr_(lst);
             linenum = scm_to_julia_(fl_ctx, car_(lst), mod);
             lst = cdr_(lst);
             inlinedat = scm_to_julia_(fl_ctx, car_(lst), mod);
-            temp = jl_new_struct(jl_lineinfonode_type, modu, name, file, linenum, inlinedat);
+            temp = jl_new_struct(jl_lineinfonode_type, file, linenum, inlinedat);
             JL_GC_POP();
             return temp;
         }
@@ -938,10 +934,6 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         jl_gc_wb(new_ci, new_ci->slotnames);
         new_ci->slotflags = jl_array_copy(new_ci->slotflags);
         jl_gc_wb(new_ci, new_ci->slotflags);
-        new_ci->codelocs = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->codelocs);
-        jl_gc_wb(new_ci, new_ci->codelocs);
-        new_ci->linetable = (jl_value_t*)jl_array_copy((jl_array_t*)new_ci->linetable);
-        jl_gc_wb(new_ci, new_ci->linetable);
         new_ci->ssaflags = jl_array_copy(new_ci->ssaflags);
         jl_gc_wb(new_ci, new_ci->ssaflags);
 
