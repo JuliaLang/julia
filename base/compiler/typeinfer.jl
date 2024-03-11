@@ -317,6 +317,7 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
     else
         inferred_result = transform_result_for_cache(interp, result.linfo, result.valid_worlds, result, can_discard_trees)
         if inferred_result isa CodeInfo
+            edges = inferred_result.debuginfo
             uncompressed = inferred_result
             inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result, can_discard_trees)
             result.is_src_volatile |= uncompressed !== inferred_result
@@ -333,12 +334,15 @@ function CodeInstance(interp::AbstractInterpreter, result::InferenceResult;
         end
     end
     # n.b. relocatability = (isa(inferred_result, String) && inferred_result[end]) || inferred_result === nothing
+    if !@isdefined edges
+        edges = Core.DebugInfo(result.linfo)
+    end
     return CodeInstance(result.linfo, owner,
         widenconst(result_type), widenconst(result.exc_result), rettype_const, inferred_result,
         const_flags, first(result.valid_worlds), last(result.valid_worlds),
         # TODO: Actually do something with non-IPO effects
         encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.analysis_results,
-        relocatability)
+        relocatability, edges)
 end
 
 function transform_result_for_cache(interp::AbstractInterpreter,
@@ -926,8 +930,7 @@ function codeinfo_for_const(interp::AbstractInterpreter, mi::MethodInstance, @no
     tree.slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), method.slot_syms)
     tree.slotflags = fill(0x00, nargs)
     tree.ssavaluetypes = 1
-    tree.codelocs = Int32[1]
-    tree.linetable = LineInfoNode[LineInfoNode(method.module, method.name, method.file, method.line, Int32(0))]
+    tree.debuginfo = Core.DebugInfo(mi)
     tree.ssaflags = UInt32[0]
     set_inlineable!(tree, true)
     tree.parent = mi
@@ -946,7 +949,7 @@ function codeinstance_for_const_with_code(interp::AbstractInterpreter, code::Cod
     return CodeInstance(code.def, cache_owner(interp), code.rettype, code.exctype, code.rettype_const, src,
         Int32(0x3), code.min_world, code.max_world,
         code.ipo_purity_bits, code.purity_bits, code.analysis_results,
-        code.relocatability)
+        code.relocatability, src.debuginfo)
 end
 
 result_is_constabi(interp::AbstractInterpreter, run_optimizer::Bool, result::InferenceResult) =
@@ -1114,9 +1117,10 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     if isa(def, Method)
         if ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && !generating_output(#=incremental=#false)
             src = retrieve_code_info(mi, get_inference_world(interp))
+            src isa CodeInfo || return nothing
             return CodeInstance(mi, cache_owner(interp), Any, Any, nothing, src, Int32(0),
                 get_inference_world(interp), get_inference_world(interp),
-                UInt32(0), UInt32(0), nothing, UInt8(0))
+                UInt32(0), UInt32(0), nothing, UInt8(0), src.debuginfo)
         end
     end
     lock_mi_inference(interp, mi)
