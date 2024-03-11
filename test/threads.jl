@@ -362,7 +362,8 @@ end
         jl_getaffinity = (tid, mask, cpumasksize) -> ccall(:jl_getaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
         jl_setaffinity = (tid, mask, cpumasksize) -> ccall(:jl_setaffinity, Int32, (Int16, Ptr{Cchar}, Int32), tid, mask, cpumasksize)
         @test jl_getaffinity(1, mask, cpumasksize) == 0
-        fill!(mask, 1)
+        fill!(mask, 0)
+        mask[1] = 1
         @test jl_setaffinity(1, mask, cpumasksize) == 0
     end
 end
