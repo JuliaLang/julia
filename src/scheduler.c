@@ -129,7 +129,7 @@ void jl_parallel_gc_threadfun(void *arg)
 
     // initialize this thread (set tid and create heap)
     jl_ptls_t ptls = jl_init_threadtls(targ->tid);
-
+    (void)jl_atomic_fetch_add_relaxed(&nrunning, -1);
     // wait for all threads
     jl_gc_state_set(ptls, JL_GC_STATE_WAITING, JL_GC_STATE_UNSAFE);
     uv_barrier_wait(targ->barrier);
@@ -158,7 +158,7 @@ void jl_concurrent_gc_threadfun(void *arg)
 
     // initialize this thread (set tid and create heap)
     jl_ptls_t ptls = jl_init_threadtls(targ->tid);
-
+    (void)jl_atomic_fetch_add_relaxed(&nrunning, -1);
     // wait for all threads
     jl_gc_state_set(ptls, JL_GC_STATE_WAITING, JL_GC_STATE_UNSAFE);
     uv_barrier_wait(targ->barrier);
