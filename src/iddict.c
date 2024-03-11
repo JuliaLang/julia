@@ -8,7 +8,7 @@
 #define keyhash(k) jl_object_id_(jl_typetagof(k), k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
-static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val);
+static inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, int insert_val);
 
 JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t newsz)
 {
@@ -22,14 +22,16 @@ JL_DLLEXPORT jl_genericmemory_t *jl_idtable_rehash(jl_genericmemory_t *a, size_t
     newa = jl_alloc_memory_any(newsz);
     for (i = 0; i < sz; i += 2) {
         if (ol[i + 1] != NULL) {
-            jl_table_assign_bp(&newa, ol[i], ol[i + 1]);
+            jl_table_assign_bp(&newa, ol[i], ol[i + 1], 1);
         }
     }
     JL_GC_POP();
     return newa;
 }
 
-static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val)
+// returns where a key is stored, or -pos if the key was not present and was inserted at pos
+// result is 1-indexed
+static inline ssize_t jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, jl_value_t *val, int insert_val)
 {
     // pa points to a **un**rooted address
     uint_t hv;
@@ -61,9 +63,11 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
             }
             if (jl_egal(key, k2)) {
                 if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL) {
-                    jl_atomic_store_release(&tab[index + 1], val);
-                    jl_gc_wb(a, val);
-                    return 0;
+                    if (insert_val == 1) {
+                        jl_atomic_store_release(&tab[index + 1], val);
+                        jl_gc_wb(a, val);
+                    }
+                    return index+1;
                 }
                 // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
                 assert(key == jl_nothing);
@@ -82,9 +86,11 @@ static inline int jl_table_assign_bp(jl_genericmemory_t **pa, jl_value_t *key, j
         if (empty_slot != -1) {
             jl_atomic_store_release(&tab[empty_slot], key);
             jl_gc_wb(a, key);
-            jl_atomic_store_release(&tab[empty_slot + 1], val);
-            jl_gc_wb(a, val);
-            return 1;
+            if (insert_val == 1) {
+                jl_atomic_store_release(&tab[empty_slot + 1], val);
+                jl_gc_wb(a, val);
+            }
+            return -(empty_slot+1);
         }
 
         /* table full */
@@ -143,9 +149,9 @@ inline _Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t 
 JL_DLLEXPORT
 jl_genericmemory_t *jl_eqtable_put(jl_genericmemory_t *h, jl_value_t *key, jl_value_t *val, int *p_inserted)
 {
-    int inserted = jl_table_assign_bp(&h, key, val);
+    ssize_t result = jl_table_assign_bp(&h, key, val, 1);
     if (p_inserted)
-        *p_inserted = inserted;
+        *p_inserted = (result < 0);
     return h;
 }
 
@@ -189,6 +195,18 @@ size_t jl_eqtable_nextind(jl_genericmemory_t *t, size_t i)
     if (i >= alen)
         return (size_t)-1;
     return i;
+}
+
+JL_DLLEXPORT
+ssize_t jl_eqtable_keyindex(jl_id_dict_t *d, jl_value_t *key)
+{
+    jl_genericmemory_t *h = d->ht;
+
+    ssize_t index = jl_table_assign_bp(&h, key, NULL, 0);
+    jl_atomic_store_release((_Atomic(jl_genericmemory_t*)*)&d->ht, h);
+    jl_gc_wb(d, h);
+
+    return index;
 }
 
 #undef hash_size

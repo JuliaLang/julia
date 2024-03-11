@@ -725,6 +725,81 @@ end
     @test_throws ArgumentError IdDict([1, 2, 3, 4])
     # test rethrow of error in ctor
     @test_throws DomainError   IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
+
+    h = IdDict()
+    for i=1:500
+        get!(h, i, i+1)
+    end
+    for i=1:500
+        @test (h[i] == i+1)
+    end
+
+    h = IdDict()
+    for i=1:500
+        h[i] = i+1
+    end
+    for i=1:500
+        @test (h[i] == i+1)
+    end
+    for i=1:2:500
+        delete!(h, i)
+    end
+    for i=1:2:500
+        h[i] = i+1
+    end
+    for i=1:500
+        @test (h[i] == i+1)
+    end
+    for i=1:500
+        delete!(h, i)
+    end
+    @test isempty(h)
+    h[77] = 100
+    @test h[77] == 100
+    for i=1:500
+        h[i] = i+1
+    end
+    for i=1:2:500
+        delete!(h, i)
+    end
+    for i=501:1000
+        h[i] = i+1
+    end
+    for i=2:2:499
+        @test h[i] == i+1
+    end
+    for i=500:1000
+        @test h[i] == i+1
+    end
+
+    h = IdDict{Any,Any}("a" => 3)
+    @test h["a"] == 3
+    h["a","b"] = 4
+    @test h["a","b"] == h[("a","b")] == 4
+    h["a","b","c"] = 4
+    @test h["a","b","c"] == h[("a","b","c")] == 4
+
+    @testset "eltype, keytype and valtype" begin
+        @test eltype(h) == Pair{Any,Any}
+        @test keytype(h) == Any
+        @test valtype(h) == Any
+
+        td = IdDict{AbstractString,Float64}()
+        @test eltype(td) == Pair{AbstractString,Float64}
+        @test keytype(td) == AbstractString
+        @test valtype(td) == Float64
+        @test keytype(IdDict{AbstractString,Float64}) === AbstractString
+        @test valtype(IdDict{AbstractString,Float64}) === Float64
+    end
+    # test rethrow of error in ctor
+    @test_throws DomainError IdDict((sqrt(p[1]), sqrt(p[2])) for p in zip(-1:2, -1:2))
+
+    h = IdDict()
+    h[1] = 2
+    h[1] = 4
+    @test h[1] == 4
+    @test length(h) == 1
+    @test length(keys(h)) == 1
 end
 
 @testset "issue 30165, get! for IdDict" begin
@@ -1563,4 +1638,14 @@ end
         @test_throws MethodError valtype(D{K      })
         @test                    valtype(D{K,    V}) == V
     end
+end
+
+# Check mutating IdDict during get! works
+let d = IdDict()
+    function f()
+        d[1] = 4
+        return -2
+    end
+    @test get!(f, d, 1) === -2
+    @test length(d) == 1
 end
