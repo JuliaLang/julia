@@ -328,6 +328,7 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
     return native_code;
 }
 
+JL_DLLIMPORT int emitting_small_image = 0;
 static void *jl_precompile_small_image(void)
 {
     // array of MethodInstances and ccallable aliases to include in the output
@@ -346,6 +347,10 @@ static void *jl_precompile_small_image(void)
         if (ccallable)
             jl_array_ptr_1d_push(m, ccallable);
     }
+    jl_safe_printf("Precompiling %zu methods\n", jl_array_nrows(m));
+    jl_(m);
+    if (getenv("JULIA_NO_DISPATCH_CHECK"))
+        emitting_small_image = 1;
     void *native_code = jl_create_native(m, NULL, NULL, 0, 1, 0,
                                          jl_atomic_load_acquire(&jl_world_counter));
     JL_GC_POP();

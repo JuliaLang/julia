@@ -5157,6 +5157,8 @@ static jl_cgval_t emit_specsig_oc_call(jl_codectx_t &ctx, jl_value_t *oc_type, j
     return r;
 }
 
+extern int emitting_small_image;
+
 static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bool is_promotable)
 {
     ++EmittedCalls;
@@ -5172,7 +5174,6 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         JL_I::intrinsic fi = (intrinsic)*(uint32_t*)jl_data_ptr(f.constant);
         return emit_intrinsic(ctx, fi, args, nargs - 1);
     }
-
     size_t n_generic_args = nargs;
 
     SmallVector<jl_cgval_t, 0> argv(n_generic_args);
@@ -5235,6 +5236,15 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         }
     }
 
+    if (emitting_small_image){
+        errs() << "Tried emitting dynamic dispatch from ";
+        jl_(ctx.linfo);
+        errs() << " in module ";
+        jl_(ctx.linfo->def.method->module);
+        errs() << "for call to ";
+        jl_(args[0]);
+        abort();
+    }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, n_generic_args, julia_call);
     return mark_julia_type(ctx, callval, true, rt);
@@ -6137,7 +6147,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         assert(ssaidx_0based >= 0);
         jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
             jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
-        return emit_invoke(ctx, ex, expr_t);
+        jl_cgval_t res = emit_invoke(ctx, ex, expr_t);
+        return res;
     }
     else if (head == jl_invoke_modify_sym) {
         assert(ssaidx_0based >= 0);

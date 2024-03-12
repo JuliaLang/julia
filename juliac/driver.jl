@@ -20,6 +20,11 @@ if idx !== nothing
     deleteat!(ARGS, idx)
 end
 
+strict = findfirst(x->x == "-strict", ARGS)
+if strict !== nothing
+    println("Strict mode on, no dynamic dispatches allowed")
+end
+
 if length(ARGS) != 1
     println("Unexpected number of arguments, usage is: julia driver.jl [-shared] <file.jl>")
     exit(1)
@@ -60,8 +65,14 @@ write(io, """
 """)
 close(io)
 if small_image
-    withenv("JULIA_SMALL_IMAGE" => 1, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1) do
-        global result = run(`$cmd --project --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $tmp`)
+    if strict
+        withenv("JULIA_SMALL_IMAGE" => 1, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1, "JULIA_NO_DISPATCH_CHECK" => 1) do
+            global result = run(`$cmd --project --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $tmp`)
+        end
+    else
+        withenv("JULIA_SMALL_IMAGE" => 1, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1) do
+            global result = run(`$cmd --project --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $tmp`)
+        end
     end
 
 else
