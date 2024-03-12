@@ -1,0 +1,6 @@
+name = "PackageThatIsSub"
+uuid = "1efb588c-9412-4e40-90a4-710420bd84aa"
+version = "0.1.0"
+
+[deps]
+Devved2 = "08f74b90-50f5-462f-80b9-a72b1258a17b"

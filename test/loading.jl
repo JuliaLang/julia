@@ -1563,7 +1563,15 @@ end
        @test isfile(Base.locate_package(id2))
        id3 = Base.identify_package("MyPkg")
        @test isfile(Base.locate_package(id3))
-   finally
+
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "PackageThatIsSub"))
+       id_pkg = Base.identify_package("PackageThatIsSub")
+       @test Base.identify_package(id_pkg, "Devved") == nothing
+       id_dev2 = Base.identify_package(id_pkg, "Devved2")
+       @test isfile(Base.locate_package(id_dev2))
+
+    finally
        copy!(LOAD_PATH, old_load_path)
    end
 end
