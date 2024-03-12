@@ -274,8 +274,35 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
     end
 end
 
-mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
-    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
+# vararg version
+@noinline function mapreduce_impl(f::F, op, A::AbstractArrayOrBroadcasted,
+                                  ifirst::Integer, ilast::Integer, blksize::Int,
+                                  Bs::Vararg{AbstractArrayOrBroadcasted,N}) where {F,N}
+    Xs = (A, Bs...)
+    if ifirst == ilast
+        @inbounds x1 = ith_all(ifirst, Xs)
+        return mapreduce_first(f, op, x1...)
+    elseif ilast - ifirst < blksize
+        # sequential portion
+        @inbounds x1 = ith_all(ifirst, Xs)
+        @inbounds x2 = ith_all(ifirst+1, Xs)
+        v = op(f(x1...), f(x2...))
+        @simd for i = ifirst + 2 : ilast
+            @inbounds xi = ith_all(i, Xs)
+            v = op(v, f(xi...))
+        end
+        return v
+    else
+        # pairwise portion
+        imid = ifirst + (ilast - ifirst) >> 1
+        v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize, Bs...)
+        v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize, Bs...)
+        return op(v1, v2)
+    end
+end
+
+mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer, Bs::AbstractArrayOrBroadcasted...) =
+    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op), Bs...)
 
 """
     mapreduce(f, op, itrs...; [init])
@@ -419,6 +446,7 @@ single element `x`. This value may also be used to initialise the recursion, so 
 The default is `reduce_first(op, f(x))`.
 """
 mapreduce_first(f, op, x) = reduce_first(op, f(x))
+mapreduce_first(f, op, x, ys...) = reduce_first(op, f(x, ys...))
 
 _mapreduce(f, op, A::AbstractArrayOrBroadcasted) = _mapreduce(f, op, IndexStyle(A), A)
 

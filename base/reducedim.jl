@@ -253,16 +253,21 @@ _firstslice(i::OneTo) = OneTo(1)
 _firstslice(i::Slice) = Slice(_firstslice(i.indices))
 _firstslice(i) = i[firstindex(i):firstindex(i)]
 
-function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
+function _mapreducedim!(f::F, op, R::AbstractArray, As::Vararg{AbstractArrayOrBroadcasted,N}) where {F,N}
+    @assert N >= 1
+    A = As[1]
+    for B in tail(As)
+        axes(A) == axes(B) || throw(DimensionMismatch(
+            "mapreducedim expects all arguments to agree, but got first $(axes(A)) and later $(axes(B))"))
+    end
     lsiz = check_reducedims(R,A)
     isempty(A) && return R
-
-    if has_fast_linear_indexing(A) && lsiz > 16
+    if all(has_fast_linear_indexing, As) && lsiz > 16
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
         nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i = 1:nslices
-            @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
+            @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz, tail(As)...))
             ibase += lsiz
         end
         return R
@@ -276,7 +281,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
             IR = Broadcast.newindex(IA, keep, Idefault)
             r = R[i1,IR]
             @simd for i in axes(A, 1)
-                r = op(r, f(A[i, IA]))
+                r = op(r, f(ith_all(i,IA, As)...))
             end
             R[i1,IR] = r
         end
@@ -284,15 +289,21 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
         @inbounds for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             @simd for i in axes(A, 1)
-                R[i,IR] = op(R[i,IR], f(A[i,IA]))
+                R[i,IR] = op(R[i,IR], f(ith_all(i, IA, As)...))
             end
         end
     end
     return R
 end
 
-mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted) =
-    (_mapreducedim!(f, op, R, A); R)
+@inline ith_all(i, I, ::Tuple{}) = () # ith_all(i, as) used for map, in abstractarray.jl
+function ith_all(i, I, as::Tuple)
+    @_propagate_inbounds_meta
+    return (as[1][i, I], ith_all(i, I, tail(as))...)
+end
+
+mapreducedim!(f, op, R::AbstractArray, A::Vararg{AbstractArrayOrBroadcasted,N}) where {N} =
+    (_mapreducedim!(f, op, R, A...); R)
 
 reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
     mapreducedim!(identity, op, R, A)
@@ -326,8 +337,9 @@ julia> mapreduce(isodd, |, a, dims=1)
 """
 mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
     _mapreduce_dim(f, op, init, A, dims)
-mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
-    reduce(op, map(f, A...); kw...)
+
+mapreduce(f, op, A::AbstractArrayOrBroadcasted, Bs::AbstractArrayOrBroadcasted...; dims=:, init=_InitialValue()) =
+    _mapreduce_dim_vararg(f, op, init, (A, Bs...), dims)
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
     mapfoldl_impl(f, op, nt, A)
@@ -340,6 +352,30 @@ _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
 
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
+
+
+_mapreduce_dim_vararg(f, op, init, As::Tuple, ::Colon) =
+    only(_mapreduce_dim_vararg(f, op, init, As, 1:maximum(ndims, As)))
+
+_mapreduce_dim_vararg(f, op, ::_InitialValue, As::Tuple, ::Colon) =
+    mapreduce(splat(f), op, zip(As...)) # fallback, without init -- needs vararg _mapreduce
+
+mapreduce_empty(f::typeof(splat(+)).name.wrapper, op, ::Type{T}) where {T<:Tuple} =
+    reduce_empty(op, Core.Compiler.return_type(op, T))  # for mapreduce(+, +, Int[], Int[])
+
+
+_mapreduce_dim_vararg(f, op, ::_InitialValue, As::Tuple, dims) =
+    _mapreduce_dim(identity, op, _InitialValue(), map(f, As...), dims) # fallback, without init -- no vararg reducedim_init
+
+_mapreduce_dim_vararg(f, op, init, As::Tuple, dims) =
+    _mapreduce_dim_vararg(f, op, init, As, dims, IteratorSize(Generator(f, As...)))
+
+_mapreduce_dim_vararg(f, op, init, As::Tuple, dims, ::HasShape) =
+    mapreducedim!(f, op, reducedim_initarray(first(As), dims, init), As...)
+
+_mapreduce_dim_vararg(f, op, init, As::Tuple, dims, ::SizeUnknown) = 1 in dims ?
+    fill(mapreduce(f, op, As...; init), 1) :
+    map((xs...) -> op(init, f(xs...)), As...)
 
 """
     reduce(f, A::AbstractArray; dims=:, [init])
