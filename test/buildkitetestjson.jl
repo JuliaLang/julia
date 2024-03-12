@@ -105,9 +105,9 @@ function add_failure_info!(data::Dict{String, Any}, result::Test.Result)
         data["failure_reason"] = if result.test_type === :test_error
             if occursin("\nStacktrace:\n", result.backtrace)
                 err, trace = split(result.backtrace, "\nStacktrace:\n", limit=2)
-                data["failure_expanded"] = Dict{String, Any}(
-                    "expanded" => split(err, '\n'),
-                    "backtrace" => split(trace, '\n'))
+                data["failure_expanded"] =
+                    [Dict{String,Any}("expanded" => split(err, '\n'),
+                                      "backtrace" => split(trace, '\n'))]
             end
             "Exception (unexpectedly) thrown during test"
         elseif result.test_type === :test_nonbool
