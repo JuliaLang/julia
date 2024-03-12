@@ -1,7 +1,8 @@
 module Precompilation
 
 using Base: PkgId, UUID, SHA1, parsed_toml, project_file_name_uuid, project_names,
-            project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive
+            project_file_manifest_path, get_deps, preferences_names, isaccessibledir, isfile_casesensitive,
+            base_project
 
 # This is currently only used for pkgprecompile but the plan is to use this in code loading in the future
 # see the `kc/codeloading2.0` branch
@@ -57,6 +58,17 @@ function ExplicitEnv(envpath::String=Base.active_project())
     # A package in both deps and weakdeps is in fact only a weakdep
     for (name, _) in project_weakdeps
         delete!(project_deps, name)
+    end
+
+    base_project_file = base_project(envpath)
+    if base_project_file !== nothing
+        base_project_d = parsed_toml(base_project_file)
+        for (name, _uuid) in get(Dict{String, Any}, base_project_d, "deps")::Dict{String, Any}
+            uuid = UUID(_uuid)
+            project_deps[name] = uuid
+            names[UUID(uuid)] = name
+            project_uuid_to_name[name] = UUID(uuid)
+        end
     end
 
     project_extensions = Dict{String, Vector{UUID}}()
