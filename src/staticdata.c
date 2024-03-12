@@ -74,6 +74,8 @@ External links:
 #include <stdio.h> // printf
 #include <inttypes.h> // PRIxPTR
 
+#include "support/strhash.h"
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_gcext.h"

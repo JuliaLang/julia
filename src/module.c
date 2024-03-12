@@ -66,6 +66,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
         jl_module_public(m, name, 1);
         JL_GC_POP();
     }
+    m->counter_table = NULL;
     return m;
 }
 

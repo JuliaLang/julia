@@ -13,6 +13,7 @@
 #include "support/strtod.h"
 #include "gc-alloc-profiler.h"
 #include "support/rle.h"
+#include <ctype.h>
 #include <stdint.h>
 #include <uv.h>
 #include <llvm-c/Types.h>
@@ -952,7 +953,23 @@ STATIC_INLINE int is_anonfn_typename(char *name)
     if (name[0] != '#' || name[1] == '#')
         return 0;
     char *other = strrchr(name, '#');
-    return other > &name[1] && other[1] > '0' && other[1] <= '9';
+    return other > &name[1] && isdigit(other[1]);
+}
+
+// Returns true for typenames of anounymous functions that have been canonicalized (i.e.
+// we mangled the name of the outermost enclosing function in their name).
+STATIC_INLINE int is_canonicalized_anonfn_typename(char *name) JL_NOTSAFEPOINT
+{
+    if (name[0] != '#')
+        return 0;
+    char *delim = strchr(&name[1], '#');
+    if (delim == NULL)
+        return 0;
+    if (delim[1] != '#')
+        return 0;
+    if (!isdigit(delim[2]))
+        return 0;
+    return 1;
 }
 
 // Each tuple can exist in one of 4 Vararg states:
