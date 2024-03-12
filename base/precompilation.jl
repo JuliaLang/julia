@@ -355,13 +355,9 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         configs::Union{Config,Vector{Config}}=(``=>Base.CacheFlags()),
                         io::IO=stderr,
                         # asking for timing disables fancy mode, as timing is shown in non-fancy mode
-                        fancyprint::Bool = can_fancyprint(io) && !timing,
-                        flags_cacheflags=nothing)
+                        fancyprint::Bool = can_fancyprint(io) && !timing
+                    )
 
-    if flags_cacheflags !== nothing
-        # TODO: Remove `flags_cacheflags` once Pkg moves to the renamed kwarg `configs`
-        configs = flags_cacheflags
-    end
     configs = configs isa Config ? [configs] : configs
 
     time_start = time_ns()
