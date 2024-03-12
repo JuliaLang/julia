@@ -734,9 +734,16 @@
     (if (has-parameters? argl)
         ;; has keywords
         (begin (check-kw-args (cdar argl))
-               (keywords-method-def-expr name sparams argl body rett))
+          (julia-push-method-name name)
+          (let ((ret (keywords-method-def-expr name sparams argl body rett)))
+            (julia-pop-method-name)
+            ret))
         ;; no keywords
-        (method-def-expr- name sparams argl body rett))))
+        (begin
+          (julia-push-method-name name)
+          (let ((ret (method-def-expr- name sparams argl body rett)))
+            (julia-pop-method-name)
+            ret)))))
 
 (define (struct-def-expr name params super fields mut)
   (receive

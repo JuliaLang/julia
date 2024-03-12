@@ -212,7 +212,14 @@ static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, ui
 {
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     assert(ctx->module);
-    return fixnum(jl_module_next_counter(ctx->module));
+    // Create a string of the form $module_name<$counter>, where $counter is the next counter
+    // obtained by calling `jl_module_next_counter`
+    char *modname = jl_symbol_name(ctx->module->name);
+    size_t modlen = strlen(modname);
+    char *buf = (char*)alloca(modlen + 20);
+    snprintf(buf, modlen + 20, "%s<%d>", modname, jl_module_next_counter(ctx->module));
+    // return the string as a symbol
+    return symbol(fl_ctx, buf);
 }
 
 static value_t fl_julia_current_file(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
@@ -250,6 +257,20 @@ static value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nar
     return fl_ctx->F;
 }
 
+arraylist_t parsed_method_stack;
+
+static value_t fl_julia_push_method_name(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    arraylist_push(&parsed_method_stack, (void*)args[0]);
+    return fl_ctx->NIL;
+}
+
+static value_t fl_julia_pop_method_name(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    arraylist_pop(&parsed_method_stack);
+    return fl_ctx->NIL;
+}
+
 static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
@@ -259,6 +280,8 @@ static const builtinspec_t julia_flisp_ast_ext[] = {
     { "julia-scalar?", fl_julia_scalar },
     { "julia-current-file", fl_julia_current_file },
     { "julia-current-line", fl_julia_current_line },
+    { "julia-push-method-name", fl_julia_push_method_name },
+    { "julia-pop-method-name", fl_julia_pop_method_name },
     { NULL, NULL }
 };
 

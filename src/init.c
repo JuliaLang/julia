@@ -742,6 +742,8 @@ static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
 }
 
+extern arraylist_t parsed_method_stack;
+
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
     // initialize many things, in no particular order
@@ -824,6 +826,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_init();
 
+    arraylist_new(&parsed_method_stack, 0);
     arraylist_new(&jl_linkage_blobs, 0);
     arraylist_new(&jl_image_relocs, 0);
     arraylist_new(&eytzinger_image_tree, 0);
