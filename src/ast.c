@@ -149,6 +149,9 @@ struct macroctx_stack {
     struct macroctx_stack *parent;
 };
 
+// Map of scheme symbols to forwared julia symbols
+htable_t scm_to_jl_sym_map;
+
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v);
 static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, struct macroctx_stack *macroctx, int onelevel, size_t world, int throw_load_error);
@@ -156,14 +159,57 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
 static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
 {
     assert(issymbol(s));
+    jl_sym_t *sym = ptrhash_get(&scm_to_jl_sym_map, (void*)s);
+    // Symbol has already been forwarded
+    if (sym != HT_NOTFOUND) {
+        return sym;
+    }
+    char *n = NULL;
     if (fl_isgensym(fl_ctx, s)) {
         char gsname[16];
-        char *n = uint2str(&gsname[1], sizeof(gsname)-1,
+        n = uint2str(&gsname[1], sizeof(gsname)-1,
                            ((gensym_t*)ptr(s))->id, 10);
         *(--n) = '#';
-        return jl_symbol(n);
     }
-    return jl_symbol(symbol_name(fl_ctx, s));
+    else {
+        n = symbol_name(fl_ctx, s);
+    }
+    if (has_gensym_suffix(n)) {
+        // Transform a symbol such as `#foo#42` into `#foo#{module}<{counter}>`
+        jl_module_t *m = jl_ast_ctx(fl_ctx)->module;
+        assert(m != NULL);
+        // Get the module name
+        const char *mname = jl_symbol_name(m->name);
+        size_t l = strlen(n) + 1 + strlen(mname) + 1;
+        char *nn = (char*)malloc_s(l);
+        // Get the last `#` in the symbol
+        char *p = strrchr(n, '#');
+        assert(p != NULL);
+        // Copy the prefix
+        size_t pl = p - n;
+        memcpy(nn, n, pl);
+        nn[pl] = '#';
+        // Copy the module name
+        memcpy(nn + pl + 1, mname, l - pl - 1);
+        nn[l - 1] = '\0';
+        n = nn;
+        // Now add the numeric suffix of m->sym_counter++
+        uint32_t nxt = ++m->sym_counter;
+        // Convert it to string adding a leading `<` and a trailing `>`
+        char *q = uint2str((char*)alloca(16), 16, nxt, 10);
+        // Add the leading `<` and the trailing `>`
+        char *qq = alloca(strlen(q) + 2);
+        memset(qq, 0, strlen(q) + 2);
+        qq[0] = '<';
+        memcpy(qq + 1, q, strlen(q) + 1);
+        qq[strlen(q) + 1] = '>';
+        q = qq;
+        // Append it to the symbol, without a leading `#`
+        memcpy(nn + pl + 1 + strlen(mname), q, strlen(q) + 1);
+        // Add it to the hash table of forwarded symbols
+        ptrhash_put(&scm_to_jl_sym_map, (void*)s, (void*)jl_symbol(n));
+    }
+    return jl_symbol(n);
 }
 
 static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
