@@ -63,7 +63,13 @@ write(io, """
     ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
     Core.Compiler.track_newly_inferred.x = true
-    Base.include(Base.__toplevel__, "$absfile")
+    let mod = Base.include(Base.__toplevel__, "$absfile")
+        if $(!shared_lib) && isa(mod, Module) && isdefined(mod, :main)
+            precompile(mod.main, ())
+        end
+        precompile(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
+        precompile(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
+    end
     Core.Compiler.track_newly_inferred.x = false
 """)
 close(io)
