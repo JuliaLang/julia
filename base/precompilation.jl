@@ -60,14 +60,29 @@ function ExplicitEnv(envpath::String=Base.active_project())
         delete!(project_deps, name)
     end
 
-    base_project_file = base_project(envpath)
-    if base_project_file !== nothing
-        base_project_d = parsed_toml(base_project_file)
-        for (name, _uuid) in get(Dict{String, Any}, base_project_d, "deps")::Dict{String, Any}
-            uuid = UUID(_uuid)
-            project_deps[name] = uuid
-            names[UUID(uuid)] = name
-            project_uuid_to_name[name] = UUID(uuid)
+    # This project might be a package, in that case, that is also a "dependency"
+    # of the project.
+    proj_name = get(project_d, "name", nothing)::Union{String, Nothing}
+    _proj_uuid = get(project_d, "uuid", nothing)::Union{String, Nothing}
+    proj_uuid = _proj_uuid === nothing ? nothing : UUID(_proj_uuid)
+
+    project_is_package = proj_name !== nothing && proj_uuid !== nothing
+    if project_is_package
+        # TODO: Error on missing uuid?
+        project_deps[proj_name] = UUID(proj_uuid)
+        names[UUID(proj_uuid)] = proj_name
+    end
+
+    if !project_is_package
+        base_project_file = base_project(envpath)
+        if base_project_file !== nothing
+            base_project_d = parsed_toml(base_project_file)
+            for (name, _uuid) in get(Dict{String, Any}, base_project_d, "deps")::Dict{String, Any}
+                uuid = UUID(_uuid)
+                project_deps[name] = uuid
+                names[UUID(uuid)] = name
+                project_uuid_to_name[name] = UUID(uuid)
+            end
         end
     end
 
@@ -86,18 +101,6 @@ function ExplicitEnv(envpath::String=Base.active_project())
             push!(uuids, uuid)
         end
         project_extensions[name] = uuids
-    end
-
-    # This project might be a package, in that case, that is also a "dependency"
-    # of the project.
-    proj_name = get(project_d, "name", nothing)::Union{String, Nothing}
-    _proj_uuid = get(project_d, "uuid", nothing)::Union{String, Nothing}
-    proj_uuid = _proj_uuid === nothing ? nothing : UUID(_proj_uuid)
-
-    if proj_name !== nothing && proj_uuid !== nothing
-        # TODO: Error on missing uuid?
-        project_deps[proj_name] = UUID(proj_uuid)
-        names[UUID(proj_uuid)] = proj_name
     end
 
     manifest = project_file_manifest_path(envpath)
@@ -524,44 +527,11 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     end
     @debug "precompile: circular dep check done"
 
-    # if a list of packages is given, restrict to dependencies of given packages
-    if !isempty(pkgs)
-         function collect_all_deps(depsmap, dep, alldeps=Set{Base.PkgId}())
-            for _dep in depsmap[dep]
-                if !(_dep in alldeps)
-                    push!(alldeps, _dep)
-                    collect_all_deps(depsmap, _dep, alldeps)
-                end
-            end
-            return alldeps
-        end
-        keep = Set{Base.PkgId}()
-        for dep in depsmap
-            dep_pkgid = first(dep)
-            if dep_pkgid.name in pkgs
-                push!(keep, dep_pkgid)
-                collect_all_deps(depsmap, dep_pkgid, keep)
-            end
-        end
-        for ext in keys(exts)
-            if issubset(collect_all_deps(depsmap, ext), keep) # if all extension deps are kept
-                push!(keep, ext)
-            end
-        end
-        filter!(d->in(first(d), keep), depsmap)
-        if isempty(depsmap)
-            if _from_loading
-                # if called from loading precompilation it may be a package from another environment stack so
-                # don't error and allow serial precompilation to try
-                # TODO: actually handle packages from other envs in the stack
-                return
-            else
-                error("No direct dependencies outside of the sysimage found matching $(repr(pkgs))")
-            end
-        end
-        target = join(pkgs, ", ")
+    if isempty(pkgs)
+        pkgs = [pkg.name for pkg in direct_deps]
+        target = "all packages"
     else
-        target = "project"
+        target = join(pkgs, ", ")
     end
     nconfigs = length(configs)
     if nconfigs == 1
@@ -571,6 +541,41 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         target *= "..."
     else
         target *= " for $nconfigs compilation configurations..."
+    end
+
+    # restrict to dependencies of given packages
+    function collect_all_deps(depsmap, dep, alldeps=Set{Base.PkgId}())
+        for _dep in depsmap[dep]
+            if !(_dep in alldeps)
+                push!(alldeps, _dep)
+                collect_all_deps(depsmap, _dep, alldeps)
+            end
+        end
+        return alldeps
+    end
+    keep = Set{Base.PkgId}()
+    for dep in depsmap
+        dep_pkgid = first(dep)
+        if dep_pkgid.name in pkgs
+            push!(keep, dep_pkgid)
+            collect_all_deps(depsmap, dep_pkgid, keep)
+        end
+    end
+    for ext in keys(exts)
+        if issubset(collect_all_deps(depsmap, ext), keep) # if all extension deps are kept
+            push!(keep, ext)
+        end
+    end
+    filter!(d->in(first(d), keep), depsmap)
+    if isempty(depsmap)
+        if _from_loading
+            # if called from loading precompilation it may be a package from another environment stack so
+            # don't error and allow serial precompilation to try
+            # TODO: actually handle packages from other envs in the stack
+            return
+        else
+            error("No direct dependencies outside of the sysimage found matching $(repr(pkgs))")
+        end
     end
     @debug "precompile: packages filtered"
 
