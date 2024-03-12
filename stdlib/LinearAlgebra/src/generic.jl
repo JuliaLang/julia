@@ -1120,14 +1120,16 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
     m, n = size(A)
     if m == n
         if istril(A)
+            dest = similar(B, promote_op(\, eltype(A), eltype(B)), size(B))
             if istriu(A)
-                return Diagonal(A) \ B
+                return ldiv!(dest, Diagonal(A), B)
             else
-                return LowerTriangular(A) \ B
+                return ldiv!(dest, LowerTriangular(A), B)
             end
         end
         if istriu(A)
-            return UpperTriangular(A) \ B
+            dest = similar(B, promote_op(\, eltype(A), eltype(B)), size(B))
+            return ldiv!(dest, UpperTriangular(A), B)
         end
         return lu(A) \ B
     end
