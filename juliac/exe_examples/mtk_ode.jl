@@ -1,12 +1,10 @@
-#!/usr/bin/env -S julia --project=@scriptdir
-
 module Main2
 using OrdinaryDiffEq
 using OpenBLAS_jll
 using LinearAlgebra
 using PrecompileTools
 using OrdinaryDiffEq, ModelingToolkit
-using ModelingToolkit: t_nounits as t, D_nounits as D
+
 function take_heap_snapshot()
     flags = Base.open_flags(
         read = true,
@@ -41,13 +39,15 @@ end
 
 
 @parameters σ ρ β
-@variables x(t) y(t) z(t)
+@variables t x(t) y(t) z(t)
+const D = Differential(t)
 
 const eqs = [D(D(x)) ~ σ * (y - x),
     D(y) ~ x * (ρ - z) - y,
     D(z) ~ x * y - β * z]
 
-@mtkbuild sys = ODESystem(eqs, t)
+@named sys = ODESystem(eqs)
+sys = structural_simplify(sys)
 
 const u0 = [D(x) => 2.0,
     x => 1.0,
@@ -60,7 +60,7 @@ const p = [σ => 28.0,
 
 const tspan = (0.0, 100.0)
 const prob = ODEProblem(sys, u0, tspan, p, jac = true)
-solve(prob, Tsit5())
+
 
 Base.@ccallable function main() :: Cint
     Sys.__init__()
@@ -99,6 +99,8 @@ end
         end
     end
 end
+
+
 precompile(main, ())
 precompile(Base._str_sizehint, (String,))
 precompile(Base._str_sizehint, (UInt32,))
@@ -109,6 +111,5 @@ precompile(join , (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
 precompile(Base.showerror_nostdio, (Core.MissingCodeError, String))
 precompile(Base.VersionNumber, (UInt32, UInt32, UInt32, Tuple{}, Tuple{}))
 precompile(! ,(Bool,))
-precompile(Base.iterate, (ModelingToolkit.MTKParameters{Tuple{Array{Float64, 1}}, Tuple{}, Tuple{}, Tuple{}, Tuple{}, Nothing, Nothing},))
 # precompile()
 end
