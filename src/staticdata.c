@@ -802,7 +802,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
             }
             if (small_image) {
                 jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
-                if ((b != NULL) && (b->value != NULL) && jl_is_module(jl_atomic_load_relaxed(&b->value))) {
+                if ((b != NULL) && (b->value != NULL) && (jl_is_module(jl_atomic_load_relaxed(&b->value)) || (strcmp(jl_symbol_name(b->globalref->name), "__init__") == 0))) {
                     jl_(jl_atomic_load_relaxed(&b->value));
                     jl_queue_for_serialization(s, b, m);
                 }

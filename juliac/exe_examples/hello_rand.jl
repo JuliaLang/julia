@@ -1,7 +1,7 @@
 #!/usr/bin/env -S julia --project=@scriptdir
 
 module Main2
-
+using LinearAlgebra
 function take_heap_snapshot()
     flags = Base.open_flags(
         read = true,
@@ -43,15 +43,10 @@ end
 
 Base.@ccallable function main() :: Cint
     # println("Hello, world!")
-    task = current_task()
-    task.rngState0 = 0x5156087469e170ab
-    task.rngState1 = 0x7431eaead385992c
-    task.rngState2 = 0x503e1d32781c2608
-    task.rngState3 = 0x3a77f7189200c20b
-    task.rngState4 = 0x5502376d099035ae
     a = rand(10)
     b = sum(a)
     ccall(:printf, Int32, (Ptr{UInt8},Float64...), "hello_world %lf", b)
+    ccall(:jl_,Cvoid, (Any,), lu(rand(10,10)))
     take_heap_snapshot()
     return 0
 end
@@ -59,12 +54,11 @@ end
 precompile(main, ())
 precompile(Base._str_sizehint, (String,))
 precompile(Base._str_sizehint, (UInt32,))
-precompile(print, (Base.GenericIOBuffer{Array{UInt8, 1}}, String))
-precompile(print, (Base.GenericIOBuffer{Array{UInt8, 1}}, UInt32))
-precompile(join , (Base.GenericIOBuffer{Array{UInt8, 1}}, Array{Base.SubString{String}, 1}, String))
-precompile(join , (Base.GenericIOBuffer{Array{UInt8, 1}}, Array{String, 1}, Char))
+precompile(print, (Base.GenericIOBuffer{Memory{UInt8}}, String))
+precompile(print, (Base.GenericIOBuffer{Memory{UInt8}}, UInt32))
+precompile(join , (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
+precompile(join , (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
 precompile(Base.showerror_nostdio, (Core.MissingCodeError, String))
 precompile(Base.VersionNumber, (UInt32, UInt32, UInt32, Tuple{}, Tuple{}))
 precompile(! ,(Bool,))
-# precompile()
 end
