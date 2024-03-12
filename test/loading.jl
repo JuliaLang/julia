@@ -1561,6 +1561,8 @@ end
        @test isfile(Base.locate_package(id))
        id2 = Base.identify_package("Devved2")
        @test isfile(Base.locate_package(id2))
+       id3 = Base.identify_package("MyPkg")
+       @test isfile(Base.locate_package(id3))
    finally
        copy!(LOAD_PATH, old_load_path)
    end

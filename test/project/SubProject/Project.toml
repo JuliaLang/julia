@@ -1,3 +1,6 @@
+name = "MyPkg"
+uuid = "0cafdeb2-d7a2-40d0-8d22-4411fcc2c4ee"
+
 subprojects = ["sub"]
 
 [deps]

@@ -693,6 +693,14 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             # if `pkg` matches the project, return the project itself
             return project_file_path(project_file)
         end
+        base_project_file = base_project(project_file)
+        if base_project_file !== nothing
+            base_proj = project_file_name_uuid(base_project_file, pkg.name)
+            if base_proj == pkg
+                # if `pkg` matches the project, return the project itself
+                return project_file_path(base_project_file)
+            end
+        end
         mby_ext = project_file_ext_path(project_file, pkg.name)
         mby_ext === nothing || return mby_ext
         # look for manifest file and `where` stanza
