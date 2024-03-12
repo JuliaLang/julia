@@ -95,6 +95,11 @@ public
     reseteof,
     link_pipe!,
 
+# ScopedValue
+    with,
+    @with,
+    ScopedValue,
+
 # misc
     notnothing,
     runtests,
