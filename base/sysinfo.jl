@@ -553,6 +553,10 @@ windows_version
 
 const WINDOWS_VISTA_VER = v"6.0"
 
+const isexecutable = Base.isexecutable
+const isreadable   = Base.isreadable
+const iswritable   = Base.iswritable
+
 """
     Sys.which(program_name::String)
 

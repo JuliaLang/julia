@@ -446,12 +446,5 @@ function iswritable(path::String)
 end
 iswritable(path::AbstractString) = iswritable(String(path))
 
-# define aliases in Sys for backwards compatibility
-for f in (isexecutable, isreadable, iswritable)
-    Sys.eval(quote
-        const $(Symbol(f)) = $f
-    end)
-end
-
 
 end
