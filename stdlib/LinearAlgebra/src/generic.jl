@@ -676,13 +676,33 @@ function opnorm1(A::AbstractMatrix{T}) where T
     return convert(Tnorm, nrm)
 end
 
+# Uses power iteration to compute the maximal singular value.
+# falls back to svdvals if it runs into numerics issues.
 function opnorm2(A::AbstractMatrix{T}) where T
     require_one_based_indexing(A)
     m,n = size(A)
     Tnorm = typeof(float(real(zero(T))))
     if m == 0 || n == 0 return zero(Tnorm) end
     if m == 1 || n == 1 return norm2(A) end
-    return svdvals(A)[1]
+    At = A'
+    # to minimize the chance of x being orthogonal to the largest eigenvector
+    x = randn(T, n)
+    tmp = A * x
+    # this will converge quickly as long as the top two eigenvalues are distinct
+    for i in 1:n
+        mul!(tmp, A, x)
+        v1 = norm(tmp)
+        !isfinite(v1) && return v1
+        tmp .*= inv(v1)
+        mul!(x, At, tmp)
+        v2 = norm(x)
+        !isfinite(v2) && return v2
+        # tune this better
+        isapprox(v1, v2) && return v2
+        x .*= inv(v2)
+    end
+    # iteration failed to converge
+    return first(svdvals(A))
 end
 
 function opnormInf(A::AbstractMatrix{T}) where T
