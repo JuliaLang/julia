@@ -353,3 +353,8 @@ end
 foopaque() = Base.Experimental.@opaque(@noinline x::Int->println(x))(1)
 
 code_llvm(devnull,foopaque,()) #shouldn't crash
+
+let ir = first(only(Base.code_ircode(sin, (Int,))))
+    oc = Core.OpaqueClosure(ir)
+    @test (Base.show_method(IOBuffer(), oc.source::Method); true)
+end

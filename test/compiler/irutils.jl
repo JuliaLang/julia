@@ -62,7 +62,8 @@ let m = Meta.@lower 1 + 1
     orig_src = m.args[1]::CodeInfo
     global function make_codeinfo(code::Vector{Any};
                                   ssavaluetypes::Union{Nothing,Vector{Any}}=nothing,
-                                  slottypes::Union{Nothing,Vector{Any}}=nothing)
+                                  slottypes::Union{Nothing,Vector{Any}}=nothing,
+                                  slotnames::Union{Nothing,Vector{Symbol}}=nothing)
         src = copy(orig_src)
         src.code = code
         nstmts = length(src.code)
@@ -77,14 +78,21 @@ let m = Meta.@lower 1 + 1
             src.slottypes = slottypes
             src.slotflags = fill(zero(UInt8), length(slottypes))
         end
+        if slotnames !== nothing
+            src.slotnames = slotnames
+        end
         return src
     end
     global function make_ircode(code::Vector{Any};
-                                ssavaluetypes::Union{Nothing,Vector{Any}}=nothing,
                                 slottypes::Union{Nothing,Vector{Any}}=nothing,
-                                verify::Bool=true)
-        src = make_codeinfo(code; ssavaluetypes, slottypes)
-        ir = Core.Compiler.inflate_ir(src)
+                                verify::Bool=true,
+                                kwargs...)
+        src = make_codeinfo(code; slottypes, kwargs...)
+        if slottypes !== nothing
+            ir = Core.Compiler.inflate_ir(src, slottypes)
+        else
+            ir = Core.Compiler.inflate_ir(src)
+        end
         verify && Core.Compiler.verify_ir(ir)
         return ir
     end

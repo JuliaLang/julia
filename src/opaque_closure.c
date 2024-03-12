@@ -139,7 +139,7 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
     JL_GC_PUSH3(&root, &sigtype, &inst);
     root = jl_box_long(lineno);
     root = jl_new_struct(jl_linenumbernode_type, root, file);
-    jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, isinferred ? jl_nothing : (jl_value_t*)ci, isva);
+    jl_method_t *meth = jl_make_opaque_closure_method(mod, jl_nothing, nargs, root, ci, isva, isinferred);
     root = (jl_value_t*)meth;
     size_t world = jl_current_task->world_age;
     // these are only legal in the current world since they are not in any tables

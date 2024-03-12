@@ -839,7 +839,7 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert) JL_GLOBA
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
     jl_value_t *source,  jl_value_t **env, size_t nenv, int do_compile);
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    int nargs, jl_value_t *functionloc, jl_value_t *uninferred_source, int isva);
+    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva, int isinferred);
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
 // Each tuple can exist in one of 4 Vararg states:
