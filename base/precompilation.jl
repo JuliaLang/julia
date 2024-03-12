@@ -556,8 +556,9 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     else
         target = "project"
     end
-    if length(configs) > 1 || !isempty(only(configs)[1]) # if multiple configs or only one is not default
-        target *= " for $(length(configs)) compilation configurations..."
+    nconfig = length(configs)
+    if nconfig > 1 || !isempty(only(configs)[1]) # if multiple configs or only one is not default
+        target *= " for $nconfig compilation configuration$(nconfig > 1 ? "s" : "")..."
     else
         target *= "..."
     end
