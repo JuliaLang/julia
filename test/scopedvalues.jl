@@ -52,6 +52,16 @@ emptyf() = nothing
 @testset "conversion" begin
     with(emptyf, sval_float=>2)
     @test_throws MethodError with(emptyf, sval_float=>"hello")
+    a = ScopedValue(1)
+    with(a => 2.0) do
+        @test a[] == 2
+        @test a[] isa Int
+    end
+    a = ScopedValue(1.0)
+    with(a => 2) do
+        @test a[] == 2.0
+        @test a[] isa Float64
+    end
 end
 
 import Base.Threads: @spawn
