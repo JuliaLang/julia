@@ -34,7 +34,7 @@ export BINDIR,
        isjsvm,
        isexecutable,
        isreadable,
-       iswriteable,
+       iswritable,
        username,
        which
 
