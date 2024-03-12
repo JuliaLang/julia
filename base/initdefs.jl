@@ -480,7 +480,7 @@ end
 
 ## hook for disabling threaded libraries ##
 
-library_threading_enabled = true
+library_threading_enabled::Bool = true
 const disable_library_threading_hooks = []
 
 function at_disable_library_threading(f)
