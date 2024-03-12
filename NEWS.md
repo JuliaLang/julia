@@ -84,7 +84,7 @@ New library functions
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 * `eachrsplit(string, pattern)` iterates split substrings right to left ([#51646]).
 * `Sys.username()` can be used to return the current user's username ([#51897]).
-* `Sys.isreadable(), Sys.iswriteable` can be used to check if the current user has access permissions
+* `Sys.isreadable(), Sys.iswriteable()` can be used to check if the current user has access permissions
   that permit reading and writing, respectively. ([#53320]).
 * `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` is the safe counterpart to `unsafe_wrap` ([#52049]).
 * `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
