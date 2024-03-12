@@ -32,7 +32,6 @@ function __init__()
     LIBPATH[] = dirname(libssh2_path)
     push!(LIBPATH_list, LIBPATH[])
 end
-precompile(Tuple{typeof(__init__)})
 
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.

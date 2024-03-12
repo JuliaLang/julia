@@ -46,7 +46,6 @@ function __init__()
     LIBPATH[] = dirname(libmbedtls_path)
     push!(LIBPATH_list, LIBPATH[])
 end
-precompile(Tuple{typeof(__init__)})
 
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
 # For instance, `find_artifact_dir()` won't actually be the artifact directory, because
