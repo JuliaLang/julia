@@ -2,13 +2,12 @@
 
 module TerminalMenus
 
-terminal = nothing  # The user terminal
+using REPL: REPL
 
-import REPL
-
+global terminal::REPL.Terminals.TTYTerminal  # The user terminal
 function __init__()
-    global terminal
-    terminal = REPL.Terminals.TTYTerminal(get(ENV, "TERM", Sys.iswindows() ? "" : "dumb"), stdin, stdout, stderr)
+    global terminal = REPL.Terminals.TTYTerminal(
+        get(ENV, "TERM", Sys.iswindows() ? "" : "dumb"), stdin, stdout, stderr)
 end
 
 include("util.jl")
