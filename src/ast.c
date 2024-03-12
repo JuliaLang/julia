@@ -149,7 +149,7 @@ struct macroctx_stack {
     struct macroctx_stack *parent;
 };
 
-// Map of scheme symbols to forwared julia symbols
+// Map of scheme symbols to forwarded julia symbols
 htable_t scm_to_jl_sym_map;
 
 static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
@@ -181,34 +181,50 @@ static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
         // Get the module name
         const char *mname = jl_symbol_name(m->name);
         size_t l = strlen(n) + 1 + strlen(mname) + 1;
-        char *nn = (char*)malloc_s(l);
+        char *nn = (char*)calloc_s(l);
         // Get the last `#` in the symbol
         char *p = strrchr(n, '#');
         assert(p != NULL);
-        // Copy the prefix
-        size_t pl = p - n;
-        memcpy(nn, n, pl);
+        size_t pl;
+        // Now we check if the prefix itself is gensym'ed, i.e. #some_number
+        if (n[0] == '#' && '0' < n[1] && n[1] <= '9') {
+            // It is, so we forward the prefix as well
+            uint32_t nxt = ++m->sym_counter;
+            // Now convert it to module_name<counter>
+            char str[strlen(mname) + 16];
+            snprintf(str, sizeof(str), "#%s<%d>", mname, nxt);
+            // Copy the prefix
+            memcpy(nn, str, strlen(str) + 1);
+            pl = strlen(str);
+            // First get the flisp symbol corresponding to the prefix
+            char pp[strlen(n) + 1];
+            memcpy(pp, n, p - n);
+            pp[p - n] = '\0';
+            value_t ps = symbol(fl_ctx, pp);
+            // Then forward it
+            ptrhash_put(&scm_to_jl_sym_map, (void*)ps, (void*)jl_symbol(nn));
+            // If there is exactly one occurrence of `#` (instead of something like `#foo#42`), we are done
+            if (p == n) {
+                n = nn;
+                goto done;
+            }
+        }
+        else {
+            pl = p - n;
+            // Copy the prefix
+            memcpy(nn, n, pl);
+        }
         nn[pl] = '#';
-        // Copy the module name
-        memcpy(nn + pl + 1, mname, l - pl - 1);
-        nn[l - 1] = '\0';
-        n = nn;
-        // Now add the numeric suffix of m->sym_counter++
+        // Append the module_name<counter>
         uint32_t nxt = ++m->sym_counter;
-        // Convert it to string adding a leading `<` and a trailing `>`
-        char *q = uint2str((char*)alloca(16), 16, nxt, 10);
-        // Add the leading `<` and the trailing `>`
-        char *qq = alloca(strlen(q) + 2);
-        memset(qq, 0, strlen(q) + 2);
-        qq[0] = '<';
-        memcpy(qq + 1, q, strlen(q) + 1);
-        qq[strlen(q) + 1] = '>';
-        q = qq;
-        // Append it to the symbol, without a leading `#`
-        memcpy(nn + pl + 1 + strlen(mname), q, strlen(q) + 1);
+        char str[strlen(mname) + 16];
+        snprintf(str, sizeof(str), "%s<%d>", mname, nxt);
+        memcpy(nn + pl + 1, str, strlen(str) + 1);
         // Add it to the hash table of forwarded symbols
+        n = nn;
         ptrhash_put(&scm_to_jl_sym_map, (void*)s, (void*)jl_symbol(n));
     }
+done:
     return jl_symbol(n);
 }
 
