@@ -248,7 +248,7 @@ _topmod(sv::OptimizationState) = _topmod(sv.mod)
 
 is_stmt_inline(stmt_flag::UInt32)      = has_flag(stmt_flag, IR_FLAG_INLINE)
 is_stmt_noinline(stmt_flag::UInt32)    = has_flag(stmt_flag, IR_FLAG_NOINLINE)
-is_stmt_throw_block(stmt_flag::UInt32) = has_flag(stmt_flag, IR_FLAG_THROW_BLOCK)
+is_stmt_throw_block(stmt_flag::UInt32) = false #has_flag(stmt_flag, IR_FLAG_THROW_BLOCK)
 
 function new_expr_effect_flags(𝕃ₒ::AbstractLattice, args::Vector{Any}, src::Union{IRCode,IncrementalCompact}, pattern_match=nothing)
     Targ = args[1]

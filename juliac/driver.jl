@@ -1,6 +1,7 @@
 cmd = Base.julia_cmd()
 shared_lib = false
 small_image = true
+strict = false
 help = findfirst(x->x == "--help", ARGS)
 
 if help !== nothing
@@ -20,9 +21,11 @@ if idx !== nothing
     deleteat!(ARGS, idx)
 end
 
-strict = findfirst(x->x == "-strict", ARGS)
-if strict !== nothing
-    println("Strict mode on, no dynamic dispatches allowed")
+idx = findfirst(x->x == "-strict", ARGS)
+if idx !== nothing
+    strict = true
+    println("Using strict mode. Dispatch will cause compile time errors")
+    deleteat!(ARGS, idx)
 end
 
 if length(ARGS) != 1
