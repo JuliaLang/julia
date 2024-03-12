@@ -208,11 +208,54 @@ static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     return b != NULL && jl_atomic_load_relaxed(&b->value) != NULL ? fl_ctx->T : fl_ctx->F;
 }
 
+arraylist_t parsed_method_stack; // for keeping track of which methods are being parsed
+uv_mutex_t counter_table_lock;
+htable_t counter_table; // map from module_name -> inner htable; inner htable maps from char * -> uint32_t
+
 static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
 {
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     assert(ctx->module);
-    return fixnum(jl_module_next_counter(ctx->module));
+    // Create a string of the form <$outermost_func_name>$counter
+    // where counter is the next counter for the module obtained by calling `jl_module_next_counter`
+    // Get the module name
+    char *modname = jl_symbol_name(ctx->module->name);
+    // Get the outermost function name from the `parsed_method_stack` top
+    char *funcname = NULL;
+    value_t funcname_v = parsed_method_stack.len > 0 ? (value_t)parsed_method_stack.items[0] : fl_ctx->NIL;
+    if (funcname_v != fl_ctx->NIL) {
+        funcname = symbol_name(fl_ctx, funcname_v);
+    }
+    // Create the string
+    char buf[(funcname != NULL ? strlen(funcname) : 0) + 20];
+    if (funcname != NULL && funcname[0] != '#') {
+        uint32_t nxt;
+        uv_mutex_lock(&counter_table_lock);
+        // try to find the module name in the counter table, if it's not create a symbol table for it
+        if (ptrhash_get(&counter_table, modname) == HT_NOTFOUND) {
+            // if not found, add it to the counter table
+            htable_t *new_table = (htable_t*)malloc_s(sizeof(htable_t));
+            htable_new(new_table, 0);
+            ptrhash_put(&counter_table, modname, new_table);
+        }
+        htable_t *mod_table = (htable_t*)ptrhash_get(&counter_table, modname);
+        // try to find the function name in the module's counter table, if it's not found, add it
+        if (ptrhash_get(mod_table, funcname) == HT_NOTFOUND) {
+            // Don't forget to shift the counter by 2 and or it with 3
+            // to avoid the counter being 0 or 1, which are reserved
+            ptrhash_put(mod_table, funcname, (void*)(uintptr_t)3);
+        }
+        nxt = ((uint32_t)(uintptr_t)ptrhash_get(mod_table, funcname) >> 2);
+        // Increment the counter and don't forget to shift it by 2 and or it with 3
+        // to avoid the counter being 0 or 1, which are reserved
+        ptrhash_put(mod_table, funcname, (void*)(uintptr_t)((nxt + 1) << 2 | 3));
+        uv_mutex_unlock(&counter_table_lock);
+        snprintf(buf, sizeof(buf), "%s%d", funcname, nxt);
+    }
+    else {
+        snprintf(buf, sizeof(buf), "%d", jl_module_next_counter(ctx->module));
+    }
+    return symbol(fl_ctx, buf);
 }
 
 static int jl_is_number(jl_value_t *v)
@@ -240,6 +283,42 @@ static value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nar
     return fl_ctx->F;
 }
 
+static value_t fl_julia_push_closure_expr(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "julia-push-closure-expr", nargs, 1);
+    // Check if the head of the symbol at `args[0]` is (method <name>) or (method (outerref <name>))
+    // and if so, push the name onto the `parsed_method_stack`
+    value_t arg = args[0];
+    if (iscons(arg)) {
+        value_t head = car_(arg);
+        if (head == symbol(fl_ctx, "method")) {
+            value_t name = car_(cdr_(arg));
+            if (issymbol(name)) {
+                arraylist_push(&parsed_method_stack, (void*)name);
+                return fl_ctx->T;
+            }
+            if (iscons(name)) {
+                value_t head = car_(name);
+                if (head == symbol(fl_ctx, "outerref")) {
+                    value_t name_inner = car_(cdr_(name));
+                    assert(issymbol(name_inner));
+                    arraylist_push(&parsed_method_stack, (void*)name_inner);
+                    return fl_ctx->T;
+                }
+            }
+        }
+    }
+    return fl_ctx->F;
+}
+
+static value_t fl_julia_pop_closure_expr(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "julia-pop-closure-expr", nargs, 0);
+    // Pop the top of the `parsed_method_stack`
+    arraylist_pop(&parsed_method_stack);
+    return fl_ctx->NIL;
+}
+
 static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *mod);
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
@@ -247,6 +326,8 @@ static const builtinspec_t julia_flisp_ast_ext[] = {
     { "nothrow-julia-global", fl_nothrow_julia_global },
     { "current-julia-module-counter", fl_current_module_counter },
     { "julia-scalar?", fl_julia_scalar },
+    { "julia-push-closure-expr", fl_julia_push_closure_expr },
+    { "julia-pop-closure-expr", fl_julia_pop_closure_expr },
     { NULL, NULL }
 };
 
