@@ -470,16 +470,17 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
     return codeinst;
 }
 
-//JL_DLLEXPORT jl_code_instance_t *jl_get_codeinst_for_src(
-//        jl_method_instance_t *mi JL_PROPAGATES_ROOT, jl_code_info_t *src)
-//{
-//    // TODO: copy backedges from src to mi
-//    size_t max_world = src->max_world;
-//    if (max_world >= jl_atomic_load_acquire(&jl_world_counter))
-//        max_world = ~(size_t)0;
-//    // TODO: this should clone all fields from src that it could to avoid poisoning the IPO cache
-//    return jl_get_method_inferred(mi, src->rettype, src->min_world, max_world, src->debuginfo);
-//}
+JL_DLLEXPORT int jl_mi_cache_has_ci(jl_method_instance_t *mi,
+                                     jl_code_instance_t *ci)
+{
+    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
+    while (codeinst) {
+        if (codeinst == ci)
+            return 1;
+        codeinst = jl_atomic_load_relaxed(&codeinst->next);
+    }
+    return 0;
+}
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         jl_method_instance_t *mi, jl_value_t *owner,

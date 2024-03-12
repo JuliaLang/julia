@@ -288,7 +288,7 @@ static void makeSafeName(GlobalObject &G)
         G.setName(StringRef(SafeName.data(), SafeName.size()));
 }
 
-static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance_t *mi, size_t world, jl_code_instance_t **ci_out, jl_code_info_t **src_out)
+jl_code_instance_t *jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance_t *mi, size_t world)
 {
     ++CICacheLookups;
     jl_value_t *ci = cgparams.lookup(mi, world, world);
@@ -296,22 +296,22 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
     jl_code_instance_t *codeinst = NULL;
     if (ci != jl_nothing) {
         codeinst = (jl_code_instance_t*)ci;
-        *src_out = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
-        jl_method_t *def = codeinst->def->def.method;
-        if ((jl_value_t*)*src_out == jl_nothing)
-            *src_out = NULL;
-        if (*src_out && jl_is_method(def))
-            *src_out = jl_uncompress_ir(def, codeinst, (jl_value_t*)*src_out);
     }
-    if (*src_out == NULL || !jl_is_code_info(*src_out)) {
+    else {
         if (cgparams.lookup != jl_rettype_inferred_addr) {
             jl_error("Refusing to automatically run type inference with custom cache lookup.");
         }
         else {
-            *ci_out = jl_type_infer(mi, world, 0, SOURCE_MODE_ABI);
+            codeinst = jl_type_infer(mi, world, 0, SOURCE_MODE_ABI);
+            /* Even if this codeinst is ordinarily not cacheable, we need to force
+             * it into the cache here, since it was explicitly requested and is
+             * otherwise not reachable from anywhere in the system image.
+             */
+            if (!jl_mi_cache_has_ci(mi, codeinst))
+                jl_mi_cache_insert(mi, codeinst);
         }
     }
-    *ci_out = codeinst;
+    return codeinst;
 }
 
 // takes the running content that has collected in the shadow module and dump it to disk
@@ -390,16 +390,14 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
             // then we want to compile and emit this
             if (jl_atomic_load_relaxed(&mi->def.method->primary_world) <= this_world && this_world <= jl_atomic_load_relaxed(&mi->def.method->deleted_world)) {
                 // find and prepare the source code to compile
-                jl_code_instance_t *codeinst = NULL;
-                jl_ci_cache_lookup(*cgparams, mi, this_world, &codeinst, &src);
-                if (src && !params.compiled_functions.count(codeinst)) {
+                jl_code_instance_t *codeinst = jl_ci_cache_lookup(*cgparams, mi, this_world);
+                if (codeinst && !params.compiled_functions.count(codeinst)) {
                     // now add it to our compilation results
                     JL_GC_PROMISE_ROOTED(codeinst->rettype);
                     orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(codeinst->def),
                             params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
                             Triple(clone.getModuleUnlocked()->getTargetTriple()));
-                    jl_llvm_functions_t decls = jl_emit_code(result_m, mi, src, codeinst->rettype, params, jl_atomic_load_relaxed(&codeinst->min_world),
-                        jl_atomic_load_relaxed(&codeinst->max_world));
+                    jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, NULL, params);
                     if (result_m)
                         params.compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
                 }
@@ -1790,6 +1788,9 @@ void jl_dump_native_impl(void *native_code,
         // reflect the address of the jl_RTLD_DEFAULT_handle variable
         // back to the caller, so that we can check for consistency issues
         GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(&metadataM);
+        if (TheTriple.isOSBinFormatCOFF()) {
+            jlRTLD_DEFAULT_var->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
+        }
         addComdat(new GlobalVariable(metadataM,
                                     jlRTLD_DEFAULT_var->getType(),
                                     true,
