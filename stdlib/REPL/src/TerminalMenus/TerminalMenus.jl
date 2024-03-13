@@ -4,10 +4,9 @@ module TerminalMenus
 
 using REPL: REPL
 
-global terminal::REPL.Terminals.TTYTerminal  # The user terminal
-function __init__()
-    global terminal = REPL.Terminals.TTYTerminal(
-        get(ENV, "TERM", Sys.iswindows() ? "" : "dumb"), stdin, stdout, stderr)
+function default_terminal(; in::IO=stdin, out::IO=stdout, err::IO=stderr)
+    return REPL.Terminals.TTYTerminal(
+        get(ENV, "TERM", Sys.iswindows() ? "" : "dumb"), in, out, err)
 end
 
 include("util.jl")
