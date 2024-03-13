@@ -315,7 +315,9 @@ julia> io = IOBuffer();
 
 julia> run(pipeline(`echo world`; stdout=io));
 
-julia> seekstart(io);
+julia> io = PipeBuffer();
+
+julia> run(`echo world`, devnull, io, stderr);
 
 julia> readlines(io)
 1-element Vector{String}:
