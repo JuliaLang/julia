@@ -1571,6 +1571,12 @@ end
        id_dev2 = Base.identify_package(id_pkg, "Devved2")
        @test isfile(Base.locate_package(id_dev2))
 
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "test"))
+       id_pkg = Base.identify_package("MyPkg")
+       id_dev = Base.identify_package(id_pkg, "Devved")
+       @test isfile(Base.locate_package(id_dev))
+
     finally
        copy!(LOAD_PATH, old_load_path)
    end

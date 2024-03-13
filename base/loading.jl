@@ -658,6 +658,16 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
             pkg_uuid = explicit_project_deps_get(project_file, name)
             return PkgId(pkg_uuid, name)
         end
+        # then check if `where` names the base Project itself
+        base_project_file = base_project(project_file)
+        if base_project_file !== nothing
+            base_proj = project_file_name_uuid(base_project_file, where.name)
+            if base_proj == where
+                # if `where` matches the project, use [deps] section as manifest, and stop searching
+                pkg_uuid = explicit_project_deps_get(base_project_file, name)
+                return PkgId(pkg_uuid, name)
+            end
+        end
         d = parsed_toml(project_file)
         exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
         if exts !== nothing
