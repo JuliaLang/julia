@@ -249,6 +249,8 @@ void jl_dump_emitted_mi_name_impl(void *s)
     **jl_ExecutionEngine->get_dump_emitted_mi_name_stream() = (ios_t*)s;
 }
 
+extern int emitting_small_image;
+
 extern "C" {
 
 #include "builtin_proto.h"
@@ -3976,6 +3978,14 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 #ifdef _P64
                 nva = ctx.builder.CreateTrunc(nva, getInt32Ty(ctx.builder.getContext()));
 #endif
+                if (emitting_small_image){
+                    errs() << "Tried emitting dynamic dispatch from ";
+                    jl_(ctx.linfo);
+                    errs() << " in module ";
+                    jl_(ctx.linfo->def.method->module);
+                    errs() << "for call to Core._apply_iterarate";
+                    abort();
+                }
                 Value *theArgs = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs));
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
                 *ret = mark_julia_type(ctx, r, true, jl_any_type);
@@ -5067,6 +5077,15 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         }
     }
     if (!handled) {
+        if (emitting_small_image){
+            errs() << "Tried emitting dynamic dispatch from ";
+            jl_(ctx.linfo);
+            errs() << " in module ";
+            jl_(ctx.linfo->def.method->module);
+            errs() << "for call to ";
+            jl_(args[0]);
+            abort();
+        }
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
         result = mark_julia_type(ctx, r, true, rt);
     }
@@ -5122,7 +5141,15 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
             return mark_julia_type(ctx, oldnew, true, rt);
         }
     }
-
+    if (emitting_small_image){
+        errs() << "Tried emitting dynamic dispatch from ";
+        jl_(ctx.linfo);
+        errs() << " in module ";
+        jl_(ctx.linfo->def.method->module);
+        errs() << "for call to ";
+        jl_(args[0]);
+        abort();
+    }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, julia_call);
     return mark_julia_type(ctx, callval, true, rt);
@@ -5157,7 +5184,7 @@ static jl_cgval_t emit_specsig_oc_call(jl_codectx_t &ctx, jl_value_t *oc_type, j
     return r;
 }
 
-extern int emitting_small_image;
+
 
 static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bool is_promotable)
 {
@@ -6695,6 +6722,14 @@ static void emit_cfunc_invalidate(
         size_t nargs, jl_codegen_params_t &params,
         size_t min_world, size_t max_world)
 {
+    if (emitting_small_image){
+        errs() << "Tried emitting dynamic dispatch from ";
+        jl_(ctx.linfo);
+        errs() << " in module ";
+        jl_(ctx.linfo->def.method->module);
+        errs() << "for call to";
+        abort();
+    }
     emit_cfunc_invalidate(gf_thunk, cc, return_roots, calltype, rettype, is_for_opaque_closure, nargs, params,
         prepare_call_in(gf_thunk->getParent(), jlapplygeneric_func), min_world, max_world);
 }
