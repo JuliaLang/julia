@@ -49,15 +49,13 @@ end
 """
     fd(x)
 
-Return the file descriptor backing the stream, file, or socket. Note that this
-function only applies to synchronous `File`'s, `IOStream`'s, and sockets; not to
-any of the asynchronous streams.
+Return the file descriptor backing an [`IOStream`](@ref), `File`, or socket.
 
 !!! warning
-    Use `Libc.dup(x_fd)` on the returned file descriptor before passing it to
-    another system that will take ownership of it (e.g. a C library). Otherwise
-    both the Julia object `x` and the other system may try to close the file
-    descriptor, which will cause errors.
+    Duplicate the returned file descriptor with [`Libc.dup()`](@ref) before
+    passing it to another system that will take ownership of it (e.g. a C
+    library). Otherwise both the Julia object `x` and the other system may try
+    to close the file descriptor, which will cause errors.
 """
 fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
