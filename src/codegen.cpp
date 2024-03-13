@@ -5083,7 +5083,10 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
             errs() << " in module ";
             jl_(ctx.linfo->def.method->module);
             errs() << "for call to ";
-            jl_(args[0]);
+            if (lival.constant)
+                jl_(lival.constant);
+            else
+                errs() << "unknown";
             abort();
         }
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
@@ -6722,14 +6725,6 @@ static void emit_cfunc_invalidate(
         size_t nargs, jl_codegen_params_t &params,
         size_t min_world, size_t max_world)
 {
-    if (emitting_small_image){
-        errs() << "Tried emitting dynamic dispatch from ";
-        jl_(ctx.linfo);
-        errs() << " in module ";
-        jl_(ctx.linfo->def.method->module);
-        errs() << "for call to";
-        abort();
-    }
     emit_cfunc_invalidate(gf_thunk, cc, return_roots, calltype, rettype, is_for_opaque_closure, nargs, params,
         prepare_call_in(gf_thunk->getParent(), jlapplygeneric_func), min_world, max_world);
 }
