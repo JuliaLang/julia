@@ -1668,7 +1668,7 @@ else
     )
 end
 
-@testset "chmod/isexecutable/isreadable/iswriteable" begin
+@testset "chmod/isexecutable/isreadable/iswritable" begin
     mktempdir() do dir
         subdir = joinpath(dir, "subdir")
         fpath = joinpath(dir, "subdir", "foo")
@@ -1685,19 +1685,19 @@ end
         chmod(fpath, 0o644)
         @test !Sys.isexecutable(fpath)
         @test Sys.isreadable(fpath)
-        @test Sys.iswriteable(fpath) skip=Sys.iswindows()
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
         chmod(fpath, 0o755)
         @test Sys.isexecutable(fpath)
         @test Sys.isreadable(fpath)
-        @test Sys.iswriteable(fpath) skip=Sys.iswindows()
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
         chmod(fpath, 0o444)
         @test !Sys.isexecutable(fpath)
         @test Sys.isreadable(fpath)
-        @test !Sys.iswriteable(fpath)
+        @test !Sys.iswritable(fpath)
         chmod(fpath, 0o244)
         @test !Sys.isexecutable(fpath)
         @test !Sys.isreadable(fpath) skip=Sys.iswindows()
-        @test Sys.iswriteable(fpath) skip=Sys.iswindows()
+        @test Sys.iswritable(fpath) skip=Sys.iswindows()
 
         # Ensure that, on Windows, where inheritance is default,
         # chmod still behaves as we expect.
@@ -1705,7 +1705,7 @@ end
             chmod(subdir, 0o666)
             @test !Sys.isexecutable(fpath)
             @test Sys.isreadable(fpath)
-            @test_skip Sys.iswriteable(fpath)
+            @test_skip Sys.iswritable(fpath)
         end
 
         # Reset permissions to all at the end, so it can be deleted properly.
