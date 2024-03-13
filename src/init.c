@@ -819,7 +819,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_init_tasks();
     jl_init_threading();
     jl_init_threadinginfra();
-    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+    if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_OFF)
         jl_install_default_signal_handlers();
 
     jl_gc_init();
