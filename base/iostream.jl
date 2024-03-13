@@ -47,10 +47,9 @@ macro _lock_ios(s, expr)
 end
 
 """
-    fd(stream) -> RawFD
+    fd(x) -> RawFD
 
-Return the file descriptor backing the stream or file. Note that this function only applies
-to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
+Return the file descriptor backing the stream, file, or socket.
 
 `RawFD` objects can be passed directly to other languages via the `ccall` interface.
 
@@ -59,10 +58,10 @@ to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
     `RawFD(fd(x))` to produce a `RawFD` in all Julia versions.
 
 !!! warning
-    Use `Libc.dup(x_fd)` on the returned file descriptor before passing it to
-    another system that will take ownership of it (e.g. a C library). Otherwise
-    both the Julia object `x` and the other system may try to close the file
-    descriptor, which will cause errors.
+    Duplicate the returned file descriptor with [`Libc.dup()`](@ref) before
+    passing it to another system that will take ownership of it (e.g. a C
+    library). Otherwise both the Julia object `x` and the other system may try
+    to close the file descriptor, which will cause errors.
 """
 fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
