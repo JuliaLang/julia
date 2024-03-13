@@ -79,6 +79,18 @@ julia> `echo "foo bar"`[2]
 "foo bar"
 ```
 
+You can also pass a `IOBuffer`, and later read from it:
+
+```jldoctest
+julia> io = PipeBuffer();
+
+julia> run(`echo world`, devnull, io, stderr);
+
+julia> readlines(io)
+1-element Vector{String}:
+ "world"
+```
+
 ## [Interpolation](@id command-interpolation)
 
 Suppose you want to do something a bit more complicated and use the name of a file in the variable
@@ -307,29 +319,6 @@ IO redirection can be accomplished by passing keyword arguments `stdin`, `stdout
 ```julia
 pipeline(`do_work`, stdout=pipeline(`sort`, "out.txt"), stderr="errs.txt")
 ```
-
-For example, you can pass a `IOBuffer`, and later read from it, after resetting the stream back to its beginning:
-
-```julia
-julia> io = IOBuffer();
-
-julia> run(pipeline(`echo world`; stdout=io));
-
-julia> io = PipeBuffer();
-
-julia> run(`echo world`, devnull, io, stderr);
-
-julia> readlines(io)
-1-element Vector{String}:
- "world"
-```
-
-However, keep in mind that a similar functionality can be easier accomplished by directly passing the command:
-```julia
-julia> readlines(`echo world`)
-1-element Vector{String}:
- "world"
- ```
 
 ### Avoiding Deadlock in Pipelines
 
