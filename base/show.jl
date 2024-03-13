@@ -2504,6 +2504,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     elseif head === :meta && nargs == 2 && args[1] === :pop_loc
         print(io, "# meta: pop locations ($(args[2]::Int))")
     # print anything else as "Expr(head, args...)"
+    elseif head === :toplevel
+        # Reset SOURCE_SLOTNAMES. Raw SlotNumbers are not valid in Expr(:toplevel), but
+        # we want to show bad ASTs reasonably to make errors understandable.
+        lambda_io = IOContext(io, :SOURCE_SLOTNAMES => false)
+        show_unquoted_expr_fallback(lambda_io, ex, indent, quote_level)
     else
         unhandled = true
     end
