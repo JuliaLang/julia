@@ -3624,3 +3624,48 @@ end
 end
 @test (@MyMacroModule.mymacro) == 1
 @test (@MyMacroModule.mymacro(a)) == 2
+
+# Issue #53673 - missing macro hygiene for for/generator
+baremodule MacroHygieneFor
+    import ..Base
+    using Base: esc, Expr, +
+    macro for1()
+        :(let a=(for i=10; end; 1); a; end)
+    end
+    macro for2()
+        :(let b=(for j=11, k=12; end; 2); b; end)
+    end
+    macro for3()
+        :(let c=($(Expr(:for, esc(Expr(:block, :(j=11), :(k=12))), :())); 3); c; end)
+    end
+    macro for4()
+        :(begin; local j; let a=(for outer j=10; end; 4); j+a; end; end)
+    end
+end
+let nnames = length(names(MacroHygieneFor; all=true))
+    @test (@MacroHygieneFor.for1) == 1
+    @test (@MacroHygieneFor.for2) == 2
+    @test (@MacroHygieneFor.for3) == 3
+    @test (@MacroHygieneFor.for4) == 14
+    @test length(names(MacroHygieneFor; all=true)) == nnames
+end
+
+baremodule MacroHygieneGenerator
+    using ..Base: Any, !
+    my!(x) = !x
+    macro gen1()
+        :(let a=Any[x for x in 1]; a; end)
+    end
+    macro gen2()
+        :(let a=Bool[x for x in (true, false) if my!(x)]; a; end)
+    end
+    macro gen3()
+        :(let a=Bool[x for x in (true, false), y in (true, false) if my!(x) && my!(y)]; a; end)
+    end
+end
+let nnames = length(names(MacroHygieneGenerator; all=true))
+    @test (MacroHygieneGenerator.@gen1) == Any[x for x in 1]
+    @test (MacroHygieneGenerator.@gen2) == Bool[false]
+    @test (MacroHygieneGenerator.@gen3) == Bool[false]
+    @test length(names(MacroHygieneGenerator; all=true)) == nnames
+end

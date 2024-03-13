@@ -126,6 +126,16 @@
                                  (else '())))
                                (else '()))))))
 
+   ;; for/generator
+   (pattern-lambda (for assgn body)
+                   (if (eq? (car assgn) 'block)
+                    `(varlist ,@(map cadr (cdr assgn)))
+                     (cons 'varlist (cadr assgn))))
+   (pattern-lambda (generator body (filter filt . assgn))
+                    (cons 'varlist (map (lambda (x) (cadr x)) assgn)))
+   (pattern-lambda (generator body . assgn)
+                    (cons 'varlist (map (lambda (x) (cadr x)) assgn)))
+
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
                    `(-> (tuple ,@argl) ,body))
@@ -357,6 +367,25 @@
         (else
          (resolve-expansion-vars-with-new-env x env m parent-scope inarg)))))
 
+(define (resolve-letlike-assign bind env newenv m parent-scope inarg)
+  (if (assignment? bind)
+    (make-assignment
+      ;; expand binds in newenv with dummy RHS
+      (cadr (resolve-expansion-vars- (make-assignment (cadr bind) 0)
+                                    newenv m parent-scope inarg))
+      ;; expand initial values in old env
+      (resolve-expansion-vars- (caddr bind) env m parent-scope inarg))
+    ;; Just expand everything else that's not an assignment. N.B.: This includes
+    ;; assignments inside escapes, which probably need special handling (TODO).
+    (resolve-expansion-vars- bind newenv m parent-scope inarg)))
+
+(define (for-ranges-list ranges)
+  (if (eq? (car ranges) 'escape)
+    (map (lambda (range) `(escape ,range)) (for-ranges-list (cadr ranges)))
+    (if (eq? (car ranges) 'block)
+      (cdr ranges)
+      (list ranges))))
+
 (define (resolve-expansion-vars- e env m parent-scope inarg)
   (cond ((or (eq? e 'begin) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal) (underscore-symbol? e))
          e)
@@ -446,16 +475,28 @@
               `(let (block
                      ,@(map
                         (lambda (bind)
-                          (if (assignment? bind)
-                              (make-assignment
-                               ;; expand binds in old env with dummy RHS
-                               (cadr (resolve-expansion-vars- (make-assignment (cadr bind) 0)
-                                                              newenv m parent-scope inarg))
-                               ;; expand initial values in old env
-                               (resolve-expansion-vars- (caddr bind) env m parent-scope inarg))
-                              (resolve-expansion-vars- bind newenv m parent-scope inarg)))
+                          (resolve-letlike-assign bind env newenv m parent-scope inarg))
                         binds))
                  ,body)))
+           ((for)
+            (let* ((newenv (new-expansion-env-for e env))
+                   (body   (resolve-expansion-vars- (caddr e) newenv m parent-scope inarg))
+                   (expanded-ranges (map (lambda (range)
+                      (resolve-letlike-assign range env newenv m parent-scope inarg)) (for-ranges-list (cadr e)))))
+              (if (length= expanded-ranges 1)
+                `(for ,@expanded-ranges ,body))
+                `(for (block ,@expanded-ranges) ,body)))
+           ((generator)
+            (let* ((newenv (new-expansion-env-for e env))
+                   (body   (resolve-expansion-vars- (cadr e) newenv m parent-scope inarg))
+                   (filt? (eq? (car (caddr e)) 'filter))
+                   (range-exprs (if filt? (cddr (caddr e)) (cddr e)))
+                   (filt (if filt? (resolve-expansion-vars- (cadr (caddr e)) newenv m parent-scope inarg)))
+                   (expanded-ranges (map (lambda (range)
+                      (resolve-letlike-assign range env newenv m parent-scope inarg)) range-exprs)))
+              (if filt?
+                `(generator ,body (filter ,filt ,@expanded-ranges))
+                `(generator ,body ,@expanded-ranges))))
            ((hygienic-scope) ; TODO: move this lowering to resolve-scopes, instead of reimplementing it here badly
              (let ((parent-scope (cons (list env m) parent-scope))
                    (body (cadr e))
