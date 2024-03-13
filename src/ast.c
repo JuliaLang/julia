@@ -212,25 +212,26 @@ arraylist_t parsed_method_stack;
 
 static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
 {
-    // Print the `parsed_method_stack`
-    jl_safe_printf("Parsed method stack length: %d\n", parsed_method_stack.len);
-    for (size_t i = 0; i < parsed_method_stack.len; i++) {
-        value_t name = (value_t)parsed_method_stack.items[i];
-        ios_t ios;
-        ios_mem(&ios, 0);
-        fl_print(fl_ctx, ios_stderr, name);
-        fprintf(stderr, "\n");
-        fprintf(stderr, "----------------\n");
-    }
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     assert(ctx->module);
-    // Create a string of the form $module_name<$counter>, where $counter is the next counter
-    // obtained by calling `jl_module_next_counter`
+    // Create a string of the form <$module_name>$<$outermost_func_name>$counter
+    // where counter is the next counter for the module obtained by calling `jl_module_next_counter`
+    // Get the module name
     char *modname = jl_symbol_name(ctx->module->name);
-    size_t modlen = strlen(modname);
-    char *buf = (char*)alloca(modlen + 20);
-    snprintf(buf, modlen + 20, "<%s>%d", modname, jl_module_next_counter(ctx->module));
-    // return the string as a symbol
+    // Get the outermost function name from the `parsed_method_stack` top
+    char *funcname = NULL;
+    value_t funcname_v = parsed_method_stack.len > 0 ? (value_t)parsed_method_stack.items[0] : fl_ctx->NIL;
+    if (funcname_v != fl_ctx->NIL) {
+        funcname = symbol_name(fl_ctx, funcname_v);
+    }
+    // Create the string
+    char buf[strlen(modname) + (funcname ? strlen(funcname) : 0) + 20];
+    if (funcname) {
+        snprintf(buf, sizeof(buf), "<%s><%s>%d", modname, funcname, jl_module_next_counter(ctx->module));
+    }
+    else {
+        snprintf(buf, sizeof(buf), "<%s>%d", modname, jl_module_next_counter(ctx->module));
+    }
     return symbol(fl_ctx, buf);
 }
 
@@ -272,20 +273,25 @@ static value_t fl_julia_scalar(fl_context_t *fl_ctx, value_t *args, uint32_t nar
 static value_t fl_julia_push_method_name(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "julia-push-method-name", nargs, 1);
-    // Check if the head of the symbol at `args[0]` is (outerref <name>) or (method <name>),
+    // Check if the head of the symbol at `args[0]` is (method <name>) or (method (outerref <name>))
     // and if so, push the name onto the `parsed_method_stack`
     value_t arg = args[0];
     if (iscons(arg)) {
         value_t head = car_(arg);
-        if (head == symbol(fl_ctx, "outerref") || head == symbol(fl_ctx, "method")) {
-            // Get the name
+        if (head == symbol(fl_ctx, "method")) {
             value_t name = car_(cdr_(arg));
-            if (name) {
+            if (issymbol(name)) {
                 arraylist_push(&parsed_method_stack, (void*)name);
-                jl_safe_printf("Pushing method name onto stack: ");
-                fl_print(fl_ctx, ios_stderr, name);
-                fprintf(stderr, "\n");
                 return fl_ctx->T;
+            }
+            if (iscons(name)) {
+                value_t head = car_(name);
+                if (head == symbol(fl_ctx, "outerref")) {
+                    value_t name_inner = car_(cdr_(name));
+                    assert(issymbol(name_inner));
+                    arraylist_push(&parsed_method_stack, (void*)name_inner);
+                    return fl_ctx->T;
+                }
             }
         }
     }
@@ -296,12 +302,7 @@ static value_t fl_julia_pop_method_name(fl_context_t *fl_ctx, value_t *args, uin
 {
     argcount(fl_ctx, "julia-pop-method-name", nargs, 0);
     // Pop the top of the `parsed_method_stack`
-    value_t name = (value_t)arraylist_pop(&parsed_method_stack);
-    if (name) {
-        jl_safe_printf("Popping method name from stack: ");
-        fl_print(fl_ctx, ios_stderr, name);
-        fprintf(stderr, "\n");
-    }
+    arraylist_pop(&parsed_method_stack);
     return fl_ctx->NIL;
 }
 
