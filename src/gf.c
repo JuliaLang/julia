@@ -1463,7 +1463,6 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATE
     jl_method_match_t *matc = NULL;
     JL_GC_PUSH2(&tt, &matc);
     JL_LOCK(&mt->writelock);
-    assert(tt->isdispatchtuple || tt->hasfreetypevars);
     jl_method_instance_t *mi = NULL;
     if (tt->isdispatchtuple) {
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
@@ -3139,7 +3138,7 @@ have_entry:
         mfunc = entry->func.linfo;
     }
     else {
-        assert(tt);
+        assert(tt && (tt->isdispatchtuple || tt->hasfreetypevars));
         // cache miss case
         mfunc = jl_mt_assoc_by_type(mt, tt, world);
         if (jl_options.malloc_log)
