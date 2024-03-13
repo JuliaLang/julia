@@ -356,8 +356,18 @@ function _wait2(t::Task, waiter::Task)
     nothing
 end
 
+"""
+    wait(t::Task; throw=true)
+
+Wait for a `Task` to finish.
+
+The keyword `throw` (defaults to `true`) controls whether a failed task results
+in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed task.
+
+Throws an error if `t` is the currently running task, to prevent deadlocks.
+"""
 function wait(t::Task; throw=true)
-    t === current_task() && error("deadlock detected: cannot wait on current task")
+    t === current_task() && throw(ArgumentError("deadlock detected: cannot wait on current task"))
     _wait(t)
     if throw && istaskfailed(t)
         Core.throw(TaskFailedException(t))
