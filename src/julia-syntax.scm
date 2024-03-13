@@ -734,16 +734,9 @@
     (if (has-parameters? argl)
         ;; has keywords
         (begin (check-kw-args (cdar argl))
-          (julia-push-method-name name)
-          (let ((ret (keywords-method-def-expr name sparams argl body rett)))
-            (julia-pop-method-name)
-            ret))
+               (keywords-method-def-expr name sparams argl body rett))
         ;; no keywords
-        (begin
-          (julia-push-method-name name)
-          (let ((ret (method-def-expr- name sparams argl body rett)))
-            (julia-pop-method-name)
-            ret)))))
+        (method-def-expr- name sparams argl body rett))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
@@ -3897,7 +3890,7 @@ f(x) = yt(x)
             (list-tail (car (lam:vinfo lam)) (length (lam:args lam))))
   (lambda-optimize-vars! lam))
 
-(define (cl-convert e fname lam namemap defined toplevel interp opaq (globals (table)) (locals (table)))
+(define (cl-convert- e fname lam namemap defined toplevel interp opaq (globals (table)) (locals (table)))
   (if (and (not lam)
            (not (and (pair? e) (memq (car e) '(lambda method macro opaque_closure)))))
       (if (atom? e) e
@@ -4251,6 +4244,14 @@ f(x) = yt(x)
           (else
            (cons (car e)
                  (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq globals locals))))))))
+
+;; wrapper for `cl-convert-`
+(define (cl-convert e fname lam namemap defined toplevel interp opaq (globals (table)) (locals (table)))
+  (let ((pushed (julia-push-method-name e)))
+    (let ((res (cl-convert- e fname lam namemap defined toplevel interp opaq globals locals)))
+      (if pushed
+          (julia-pop-method-name))
+      res)))
 
 (define (closure-convert e) (cl-convert e #f #f (table) (table) #f #f #f))
 
