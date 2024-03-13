@@ -4247,10 +4247,10 @@ f(x) = yt(x)
 
 ;; wrapper for `cl-convert-`
 (define (cl-convert e fname lam namemap defined toplevel interp opaq (globals (table)) (locals (table)))
-  (let ((pushed (julia-push-method-name e)))
+  (let ((pushed (julia-push-closure-expr e)))
     (let ((res (cl-convert- e fname lam namemap defined toplevel interp opaq globals locals)))
       (if pushed
-          (julia-pop-method-name))
+          (julia-pop-closure-expr))
       res)))
 
 (define (closure-convert e) (cl-convert e #f #f (table) (table) #f #f #f))

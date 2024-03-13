@@ -742,7 +742,9 @@ static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
 }
 
-extern arraylist_t parsed_method_stack;
+extern arraylist_t converted_closure_stack;
+extern uv_mutex_t counter_table_lock;
+extern htable_t counter_table;
 
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 {
@@ -826,7 +828,9 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_init();
 
-    arraylist_new(&parsed_method_stack, 0);
+    uv_mutex_init(&counter_table_lock);
+    htable_new(&counter_table, 0);
+    arraylist_new(&converted_closure_stack, 0);
     arraylist_new(&jl_linkage_blobs, 0);
     arraylist_new(&jl_image_relocs, 0);
     arraylist_new(&eytzinger_image_tree, 0);
