@@ -57,6 +57,12 @@ to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 !!! compat "Julia 1.12"
     Prior to 1.12, this function returned an `Int` instead of a `RawFD`. You may use
     `RawFD(fd(x))` to produce a `RawFD` in all Julia versions.
+
+!!! warning
+    Use `Libc.dup(x_fd)` on the returned file descriptor before passing it to
+    another system that will take ownership of it (e.g. a C library). Otherwise
+    both the Julia object `x` and the other system may try to close the file
+    descriptor, which will cause errors.
 """
 fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
