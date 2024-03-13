@@ -468,6 +468,11 @@ function uv_fspollcb(handle::Ptr{Cvoid}, status::Int32, prev::Ptr, curr::Ptr)
     nothing
 end
 
+global uv_jl_pollcb::Any
+global uv_jl_fspollcb::Any
+global uv_jl_fseventscb_file::Any
+global uv_jl_fseventscb_folder::Any
+
 function __init__()
     global uv_jl_pollcb = @cfunction(uv_pollcb, Cvoid, (Ptr{Cvoid}, Cint, Cint))
     global uv_jl_fspollcb = @cfunction(uv_fspollcb, Cvoid, (Ptr{Cvoid}, Cint, Ptr{Cvoid}, Ptr{Cvoid}))

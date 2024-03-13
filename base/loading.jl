@@ -3333,9 +3333,9 @@ function check_clone_targets(clone_targets)
 end
 
 # Set by FileWatching.__init__()
-global mkpidlock_hook
-global trymkpidlock_hook
-global parse_pidfile_hook
+global mkpidlock_hook::Any
+global trymkpidlock_hook::Any
+global parse_pidfile_hook::Any
 
 # The preferences hash is only known after precompilation so just assume no preferences.
 # Also ignore the active project, which means that if all other conditions are equal,
