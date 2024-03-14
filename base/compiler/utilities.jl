@@ -504,8 +504,6 @@ end
 # options #
 ###########
 
-is_root_module(m::Module) = false
-
 inlining_enabled() = (JLOptions().can_inline == 1)
 
 function coverage_enabled(m::Module)
