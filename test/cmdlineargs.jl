@@ -668,7 +668,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 @test occursin("llvm.dbg.cu", code)
                 # TODO: consider moving test to llvmpasses as this fails on some platforms
                 # without clear reason
-                @test skip=true occursin("int.jl", code)
+                @test_skip occursin("int.jl", code)
                 @test !occursin("name: \"Int64\"", code)
             end
             let code = readchomperrors(`$exename -g2 -E "@eval Int64(1)+Int64(1)"`)
@@ -678,7 +678,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                 @test occursin("llvm.dbg.cu", code)
                 # TODO: consider moving test to llvmpasses as this fails on some platforms
                 # without clear reason
-                @test skip=true occursin("int.jl", code)
+                @test_skip occursin("int.jl", code)
                 @test occursin("name: \"Int64\"", code)
             end
         end
