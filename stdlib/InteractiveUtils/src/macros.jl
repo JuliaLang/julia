@@ -106,9 +106,12 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                        $(kws...))
             end
         elseif ex0.head === :call
-            if ex0.args[1] === :^ && length(ex0.args) >= 3 && isa(ex0.args[3], Int) && ex0.args[3] >= -2^61 && ex0.args[3] < 2^61
+            lim = -(typemin(Int) ÷ 4)
+            if ex0.args[1] === :^ && length(ex0.args) >= 3 &&
+               isa(ex0.args[3], Int) && ex0.args[3] >= -lim && ex0.args[3] < lim
                 return Expr(:call, fcn, :(Base.literal_pow),
-                            Expr(:call, typesof, esc(ex0.args[1]), esc(ex0.args[2]), esc(Val(ex0.args[3]))))
+                            Expr(:call, typesof, esc(ex0.args[1]), esc(ex0.args[2]),
+                                 esc(Val(ex0.args[3]))))
             end
             return Expr(:call, fcn, esc(ex0.args[1]),
                         Expr(:call, typesof, map(esc, ex0.args[2:end])...),

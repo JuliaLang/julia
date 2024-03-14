@@ -282,7 +282,9 @@ end
 # issue #53691
 let a = -1
     @test (@which 2^a).name === :^
+    @test (@which 2^0x1).name === :^
 end
+
 let w = Vector{Any}(undef, 9)
     @testset "@which x^literal" begin
         w[1] = @which 2^0
@@ -299,12 +301,19 @@ let w = Vector{Any}(undef, 9)
     end
 end
 
-# literal_pow only for exponents x: -2^61 <= x < 2^61
-@test (@which 2^-2305843009213693953).name === :^
-@test (@which 2^-2305843009213693952).name === :literal_pow
-@test (@which 2^2305843009213693951).name === :literal_pow
-@test (@which 2^2305843009213693952).name === :^
-@test (@which 2^0x1).name === :^
+if Int === Int64
+    # literal_pow only for exponents x: -2^61 <= x < 2^61
+    @test (@which 2^-2305843009213693953).name === :^
+    @test (@which 2^-2305843009213693952).name === :literal_pow
+    @test (@which 2^2305843009213693951).name === :literal_pow
+    @test (@which 2^2305843009213693952).name === :^
+else
+    # literal_pow only for exponents x: -2^29 <= x < 2^29
+    @test (@which 2^-536870913).name === :^
+    @test (@which 2^-536870912).name === :literal_pow
+    @test (@which 2^536870911).name === :literal_pow
+    @test (@which 2^536870912).name === :^
+end
 
 # issue #13464
 try
