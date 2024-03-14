@@ -15,7 +15,7 @@
 #endif
 
 #if JL_LLVM_VERSION >= 160000
-#define JL_LLVM_OPAQUE_POINTERS 1
+    #define JL_LLVM_OPAQUE_POINTERS 1
 #endif
 
 #ifdef __cplusplus

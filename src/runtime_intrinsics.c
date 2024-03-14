@@ -9,6 +9,7 @@
 #include "APInt-C.h"
 #include "julia.h"
 #include "julia_internal.h"
+#include "llvm-version.h"
 
 const unsigned int host_char_bit = 8;
 
@@ -1576,6 +1577,16 @@ bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, , 1)
 //un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
 un_iintrinsic_slow(LLVMByteSwap, bswap_int, u)
 //#define ctpop_op(a) __builtin_ctpop(a)
+#if JL_LLVM_VERSION >= 170000
+//uu_iintrinsic_fast(LLVMPopcount, ctpop_op, ctpop_int, u)
+uu_iintrinsic_slow(LLVMPopcount, ctpop_int, u)
+//#define ctlz_op(a) __builtin_ctlz(a)
+//uu_iintrinsic_fast(LLVMCountl_zero, ctlz_op, ctlz_int, u)
+uu_iintrinsic_slow(LLVMCountl_zero, ctlz_int, u)
+//#define cttz_op(a) __builtin_cttz(a)
+//uu_iintrinsic_fast(LLVMCountr_zero, cttz_op, cttz_int, u)
+uu_iintrinsic_slow(LLVMCountr_zero, cttz_int, u)
+#else
 //uu_iintrinsic_fast(LLVMCountPopulation, ctpop_op, ctpop_int, u)
 uu_iintrinsic_slow(LLVMCountPopulation, ctpop_int, u)
 //#define ctlz_op(a) __builtin_ctlz(a)
@@ -1584,6 +1595,7 @@ uu_iintrinsic_slow(LLVMCountLeadingZeros, ctlz_int, u)
 //#define cttz_op(a) __builtin_cttz(a)
 //uu_iintrinsic_fast(LLVMCountTrailingZeros, cttz_op, cttz_int, u)
 uu_iintrinsic_slow(LLVMCountTrailingZeros, cttz_int, u)
+#endif
 #define not_op(a) ~a
 un_iintrinsic_fast(LLVMFlipAllBits, not_op, not_int, u)
 

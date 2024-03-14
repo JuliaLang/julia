@@ -4,6 +4,10 @@ namespace JL_I {
 #include "intrinsics.h"
 }
 
+#include <array>
+#include <bitset>
+#include <string>
+
 #include "ccall.cpp"
 
 //Mark our stats as being from intrinsics irgen

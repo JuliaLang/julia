@@ -1,46 +1,25 @@
 ; COM: This is a newpm-only test, no legacypm command
 ; COM: we run all the prefixes even though some don't have tests because we want to make sure they don't crash
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREOPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeEarlySimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREEARLYSIMPLIFICATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterEarlySimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTEREARLYSIMPLIFICATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeEarlyOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREEARLYOPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterEarlyOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTEREARLYOPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeLoopOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORELOOPOPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeLICM -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORELICM
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterLICM -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERLICM
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeLoopSimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORELOOPSIMPLIFICATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterLoopSimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERLOOPSIMPLIFICATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterLoopOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERLOOPOPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeScalarOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORESCALAROPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterScalarOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERSCALAROPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeVectorization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREVECTORIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterVectorization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERVECTORIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeIntrinsicLowering -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREINTRINSICLOWERING
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterIntrinsicLowering -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERINTRINSICLOWERING
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeCleanup -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORECLEANUP
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterCleanup -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERCLEANUP
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTEROPTIMIZATION
-
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREOPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeEarlySimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREEARLYSIMPLIFICATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterEarlySimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTEREARLYSIMPLIFICATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeEarlyOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREEARLYOPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterEarlyOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTEREARLYOPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeLoopOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORELOOPOPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeLICM -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORELICM
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterLICM -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERLICM
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeLoopSimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORELOOPSIMPLIFICATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterLoopSimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERLOOPSIMPLIFICATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterLoopOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERLOOPOPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeScalarOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORESCALAROPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterScalarOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERSCALAROPTIMIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeVectorization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREVECTORIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterVectorization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERVECTORIZATION
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeIntrinsicLowering -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREINTRINSICLOWERING
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterIntrinsicLowering -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERINTRINSICLOWERING
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeCleanup -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORECLEANUP
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterCleanup -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERCLEANUP
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTEROPTIMIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREOPTIMIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeEarlySimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREEARLYSIMPLIFICATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterEarlySimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTEREARLYSIMPLIFICATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeEarlyOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREEARLYOPTIMIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterEarlyOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTEREARLYOPTIMIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeLoopOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORELOOPOPTIMIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeLICM -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORELICM
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterLICM -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERLICM
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeLoopSimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORELOOPSIMPLIFICATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterLoopSimplification -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERLOOPSIMPLIFICATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterLoopOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERLOOPOPTIMIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeScalarOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORESCALAROPTIMIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterScalarOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERSCALAROPTIMIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeVectorization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREVECTORIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterVectorization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERVECTORIZATION
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeIntrinsicLowering -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFOREINTRINSICLOWERING
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterIntrinsicLowering -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERINTRINSICLOWERING
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=BeforeCleanup -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=BEFORECLEANUP
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterCleanup -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTERCLEANUP
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='julia' --print-before=AfterOptimization -o /dev/null %s 2>&1 | FileCheck %s --check-prefixes=AFTEROPTIMIZATION
 
 ; ModuleID = 'f'
 source_filename = "f"

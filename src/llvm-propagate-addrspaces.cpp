@@ -163,14 +163,22 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
             Instruction *InstV = cast<Instruction>(V);
             Instruction *NewV = InstV->clone();
             ToInsert.push_back(std::make_pair(NewV, InstV));
+            #if JL_LLVM_VERSION >= 170000
+            Type *NewRetTy = PointerType::get(InstV->getType(), allocaAddressSpace);
+            #else
             Type *NewRetTy = PointerType::getWithSamePointeeType(cast<PointerType>(InstV->getType()), allocaAddressSpace);
+            #endif
             NewV->mutateType(NewRetTy);
             LiftingMap[InstV] = NewV;
             ToRevisit.push_back(NewV);
         }
     }
     auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) -> Value * {
+        #if JL_LLVM_VERSION >= 170000
+        PointerType *TargetType = PointerType::get(CurrentV->getType(), allocaAddressSpace);
+        #else
         PointerType *TargetType = PointerType::getWithSamePointeeType(cast<PointerType>(CurrentV->getType()), allocaAddressSpace);
+        #endif
         while (!LiftingMap.count(CurrentV)) {
             if (isa<BitCastInst>(CurrentV))
                 CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
@@ -184,6 +192,9 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
         }
         if (LiftingMap.count(CurrentV))
             CurrentV = LiftingMap[CurrentV];
+        #if JL_LLVM_VERSION >= 170000
+        assert(CurrentV->getType() == TargetType);
+        #else
         if (CurrentV->getType() != TargetType) {
             // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
             assert(CurrentV->getContext().supportsTypedPointers());
@@ -191,6 +202,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
             ToInsert.push_back(std::make_pair(BCI, InsertPt));
             CurrentV = BCI;
         }
+        #endif
         return CurrentV;
     };
 
