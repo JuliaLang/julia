@@ -426,7 +426,6 @@ function _unsetindex!(V::SubArray{T,N}, i::Vararg{Int,N}) where {T,N}
 end
 
 IndexStyle(::Type{<:FastSubArray}) = IndexLinear()
-IndexStyle(::Type{<:SubArray}) = IndexCartesian()
 
 # Strides are the distance in memory between adjacent elements in a given dimension
 # which we determine from the strides of the parent
