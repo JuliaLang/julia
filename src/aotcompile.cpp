@@ -1657,10 +1657,10 @@ void jl_dump_native_impl(void *native_code,
                                      GlobalVariable::ExternalLinkage,
                                      data, "jl_system_image_data");
         sysdata->setAlignment(Align(64));
-        if (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())
 #if JL_LLVM_VERSION >= 180000
-            sysdata->setCodeModel(CodeModel::Large);
+        sysdata->setCodeModel(CodeModel::Large);
 #else
+        if (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())
             sysdata->setSection(".ldata");
 #endif
         addComdat(sysdata, TheTriple);
