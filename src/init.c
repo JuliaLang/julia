@@ -906,10 +906,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         }
         JL_GC_POP();
     }
-    if (getenv("JULIA_SMALL_IMAGE")) {
-        small_image = 1;
-    }
-    if (small_image){
+    if (jl_options.small_image){
         jl_precompile_mis = (arraylist_t *)malloc_s(sizeof(arraylist_t));
         arraylist_new(jl_precompile_mis, 0);
     }

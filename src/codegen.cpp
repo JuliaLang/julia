@@ -2082,6 +2082,28 @@ static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
     return G->realize(M);
 }
 
+static void print_stack_crumbs(jl_codectx_t &ctx) {
+    errs() << "\n";
+    errs() << "Stacktrace:\n";
+    jl_method_instance_t *caller = ctx.linfo;
+    jl_((jl_value_t*)caller);
+    while (true) {
+        auto it = parents.find(caller);
+        if (it != parents.end()) {
+            caller = it->second;
+        } else {
+            break;
+        }
+        if (caller) {
+            if (jl_is_method_instance(caller))
+                jl_((jl_value_t*)caller);
+        }
+        else
+            break;
+    }
+    abort();
+}
+
 template<typename TypeFn_t>
 static Function *prepare_call_in(Module *M, JuliaFunction<TypeFn_t> *G)
 {
@@ -3982,27 +4004,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 if (emitting_small_image && rt != jl_bottom_type) {
                     errs() << "Tried emitting dynamic dispatch from ";
                     jl_(ctx.linfo);
-                    errs() << " in module ";
+                    errs() << "in module ";
                     jl_(ctx.linfo->def.method->module);
                     errs() << "for call to Core._apply_iterate\n";
-                    errs() << "stackcrumbs\n";
-                    jl_method_instance_t *caller = ctx.linfo;
-                    jl_(caller);
-                    while (true) {
-                        auto it = parents.find(caller);
-                        if (it != parents.end()) {
-                            caller = it->second;
-                        } else {
-                            break;
-                        }
-                        if (caller) {
-                            if (jl_is_method_instance(caller))
-                                jl_(caller);
-                        }
-                        else
-                            break;
-                    }
-                    abort();
+                    print_stack_crumbs(ctx);
                 }
                 Value *theArgs = ctx.builder.CreateInBoundsGEP(ctx.types().T_prjlvalue, ctx.argArray, ConstantInt::get(ctx.types().T_size, ctx.nReqArgs));
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
@@ -5102,7 +5107,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         if (0 && emitting_small_image && rt != jl_bottom_type) {
                 errs() << "Tried emitting dynamic dispatch from ";
                 jl_(ctx.linfo);
-                errs() << " in module ";
+                errs() << "in module ";
                 jl_(ctx.linfo->def.method->module);
                 errs() << "for call to ";
                 if (lival.constant)
@@ -5110,24 +5115,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                 else
                     errs() << "unknown";
 
-                errs() << "stackcrumbs\n";
-                jl_method_instance_t *caller = ctx.linfo;
-                jl_(caller);
-                while (true) {
-                    auto it = parents.find(caller);
-                    if (it != parents.end()) {
-                        caller = it->second;
-                    } else {
-                        break;
-                    }
-                    if (caller) {
-                        if (jl_is_method_instance(caller))
-                            jl_(caller);
-                    }
-                    else
-                        break;
-                }
-                abort();
+                print_stack_crumbs(ctx);
             }
 
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
@@ -5188,29 +5176,11 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
     if (emitting_small_image && rt != jl_bottom_type) {
             errs() << "Tried emitting dynamic dispatch from ";
             jl_(ctx.linfo);
-            errs() << " in module ";
+            errs() << "in module ";
             jl_(ctx.linfo->def.method->module);
             errs() << "for call to ";
             jl_(args[0]);
-
-            errs() << "stackcrumbs\n";
-            jl_method_instance_t *caller = ctx.linfo;
-            jl_(caller);
-            while (true) {
-                auto it = parents.find(caller);
-                if (it != parents.end()) {
-                    caller = it->second;
-                } else {
-                    break;
-                }
-                if (caller) {
-                    if (jl_is_method_instance(caller))
-                        jl_(caller);
-                }
-                else
-                    break;
-            }
-            abort();
+            print_stack_crumbs(ctx);
         }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, julia_call);
@@ -5327,29 +5297,11 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     if (emitting_small_image && rt != jl_bottom_type) {
             errs() << "Tried emitting dynamic dispatch from ";
             jl_(ctx.linfo);
-            errs() << " in module ";
+            errs() << "in module ";
             jl_(ctx.linfo->def.method->module);
             errs() << "for call to ";
             jl_(args[0]);
-
-            errs() << "stackcrumbs\n";
-            jl_method_instance_t *caller = ctx.linfo;
-            jl_(caller);
-            while (true) {
-                auto it = parents.find(caller);
-                if (it != parents.end()) {
-                    caller = it->second;
-                } else {
-                    break;
-                }
-                if (caller) {
-                    if (jl_is_method_instance(caller))
-                        jl_(caller);
-                }
-                else
-                    break;
-            }
-            abort();
+            print_stack_crumbs(ctx);
         }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, n_generic_args, julia_call);
