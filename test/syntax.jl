@@ -3669,3 +3669,7 @@ let nnames = length(names(MacroHygieneGenerator; all=true))
     @test (MacroHygieneGenerator.@gen3) == Bool[false]
     @test length(names(MacroHygieneGenerator; all=true)) == nnames
 end
+
+# Issue #53729 - Lowering recursion into Expr(:toplevel)
+@test eval(Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel, :(f53729(x) = x)), :(x=1)))) == 1
+@test f53729(2) == 2

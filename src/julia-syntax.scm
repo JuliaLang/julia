@@ -5131,7 +5131,7 @@ f(x) = yt(x)
             ((nospecialize-meta? e)
              ;; convert nospecialize vars to slot numbers
              `(meta ,(cadr e) ,@(map renumber-stuff (cddr e))))
-            ((or (atom? e) (quoted? e) (eq? (car e) 'global))
+            ((or (atom? e) (quoted? e) (eq? (car e) 'global) (eq? (car e) 'toplevel))
              e)
             ((ssavalue? e)
              (let ((idx (get ssavalue-table (cadr e) #f)))
