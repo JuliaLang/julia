@@ -650,7 +650,7 @@ function __init__()
     # Base library init
     global _atexit_hooks_finished = false
     Filesystem.__postinit__()
-    #reinit_stdio()
+    reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
     init_depot_path()
