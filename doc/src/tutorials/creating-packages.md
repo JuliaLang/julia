@@ -275,13 +275,17 @@ test-specific dependencies, are available, see below.
 
 ### Test-specific dependencies
 
-There are two ways of adding test-specific dependencies (dependencies that are not dependencies of the package but will still be available to
-load when the package is tested).
+There are two ways of adding test-specific dependencies (dependencies that are not dependencies of the package but
+will still be available to load when the package is tested). If no `test/Project.toml` exists Pkg will default to
+using the `target` based test specific dependencies.
 
 #### `target` based test specific dependencies
 
-Using this method of adding test-specific dependencies, the packages are added under an `[extras]` section and to a test target,
-e.g. to add `Markdown` and `Test` as test dependencies, add the following to the `Project.toml` file:
+!!! compat
+    This method of adding test-specific dependencies is supported for all Julia 1.x releases since v1.0.
+
+Using this method of adding test-specific dependencies, the packages are added under an `[extras]` section and to a test target.
+E.g. to add `Markdown` and `Test` as test dependencies, add the following to the projects `Project.toml` file:
 
 ```toml
 [extras]
@@ -292,22 +296,26 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 test = ["Markdown", "Test"]
 ```
 
+During testing the file `test/runtests.jl` will be executed with all dependencies from the `Project.toml` and the test dependencies
+loaded. This special dependency handling is done during a `Pkg.test` call and doesn't happen if `runtest.jl` is executed directly.
+
 Note that the only supported targets are `test` and `build`, the latter of which (not recommended) can be used
-for any `deps/build.jl` scripts.
+for any `deps/build.jl` scripts. This `target` based approach can't be used for other uses such as building
+documentation.
 
 #### Alternative approach: `test/Project.toml` file test specific dependencies
 
-!!! note
+!!! compat
+    This method of adding test-specific dependencies is supported for all Julia 1.x releases since v1.2.
+    
+Test dependencies can alternatively be declared in `test/Project.toml`. This is similar
+to `test/` being a project but when running tests, Pkg will automatically merge `test/Project.toml`
+and the `Project.toml` to create the test environment.
+
+!!! compat
     The exact interaction between `Project.toml`, `test/Project.toml` and their corresponding
-    `Manifest.toml`s are not fully worked out and may be subject to change in future versions.
-    The older method of adding test-specific dependencies, described in the previous section,
-    will therefore be supported throughout all Julia 1.X releases.
-
-In Julia 1.2 and later test dependencies can be declared in `test/Project.toml`. When running
-tests, Pkg will automatically merge this and the package Projects to create the test environment.
-
-!!! note
-    If no `test/Project.toml` exists Pkg will use the `target` based test specific dependencies.
+    `Manifest.toml`s are not fully worked out and might not work as intended on older and
+    especially unsupported Julia versions.
 
 To add a test-specific dependency, i.e. a dependency that is available only when testing,
 it is thus enough to add this dependency to the `test/Project.toml` project. This can be
@@ -335,7 +343,7 @@ julia> write("test/runtests.jl",
              @test 1 == 1
              """);
 
-(test) pkg> activate .
+(test) pkg> activate
 
 (HelloWorld) pkg> test
    Testing HelloWorld
