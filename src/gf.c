@@ -95,7 +95,7 @@ void jl_call_tracer(tracer_cb callback, jl_value_t *tracee)
     JL_CATCH {
         ct->ptls->in_pure_callback = last_in;
         jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: tracer callback function threw an error:\n");
-        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
     }
@@ -393,7 +393,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int fo
         ci = (jl_code_instance_t*)jl_apply(fargs, 4);
     }
     JL_CATCH {
-        jl_value_t *e = jl_current_exception();
+        jl_value_t *e = jl_current_exception(ct);
         jl_printf((JL_STREAM*)STDERR_FILENO, "Internal error: during type inference of\n");
         jl_static_show_func_sig((JL_STREAM*)STDERR_FILENO, (jl_value_t*)mi->specTypes);
         jl_printf((JL_STREAM*)STDERR_FILENO, "\nEncountered ");
