@@ -415,6 +415,45 @@ end
         @test norm(Float64[1e-300, 1], -3)*1e300 ≈ 1
         @test norm(Float64[1e300, 1], 3)*1e-300 ≈ 1
     end
+
+    @testset "norm(array; dims)" begin
+        _norm(A, p=2; dims) = mapslices(x -> norm(x, p), A; dims)
+
+        A = randn(5, 7)
+        @test norm(A; dims=2) ≈ _norm(A; dims=2)
+
+        B = zeros(3, 4, 2)
+        B[1] = pi
+        B[2] = -pi
+        B[2,2,2] = Inf
+        B[3,3,1] = NaN
+
+        for p in [-Inf,-2,-1.5,-1,-0.5,0.5,1,1.5,2,Inf]
+            @test norm(A, p; dims=1) ≈ _norm(A, p; dims=1) broken=(p==-Inf)  # TODO fix -Inf
+            @test norm(B, p; dims=3) ≈ _norm(B, p; dims=3) nans=true
+            @test norm(B, p; dims=(1,3)) ≈ _norm(B, p; dims=(1,3)) nans=true
+        end
+
+        for p in [-Inf,-1,1,2,3,Inf]  #10234 above
+            @test isnan(only(norm([0, NaN], p; dims=1)))
+            @test isnan(only(norm([NaN32, 0], p; dims=1)))
+            @test isnan(only(norm([im, NaN], p; dims=1)))
+        end
+
+        for p in [-2,-1,1,1.5,2,Inf] #10234 above
+            @test only(norm([Inf], p; dims=1)) == Inf
+        end
+        @test only(norm([Inf], 0; dims=1)) == norm([Inf], 0)
+        @test_broken only(norm([Inf], -Inf; dims=1)) == norm([Inf], -Inf)  # TODO fix this!
+
+        @test only(norm([0, 1e300]; dims=1)) ≈ norm([0, 1e300])
+        @test only(norm([0, 1e-300]; dims=1)) ≈ norm([0, 1e-300])
+        @test only(norm([0f0, 1f30]; dims=1)) ≈ norm([0f0, 1f30])
+        @test only(norm([0f0, 1f-30]; dims=1)) ≈ norm([0f0, 1f-30])
+
+        @test only(norm([1, 1e300], 3; dims=1))*1e-300 ≈ norm([1, 1e300], 3)*1e-300
+        @test only(norm([1, 1e-300], -3; dims=1))*1e300 ≈ norm([1, 1e-300], -3)*1e300
+    end
 end
 
 ## Issue related tests
