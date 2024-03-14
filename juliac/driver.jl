@@ -1,6 +1,7 @@
 cmd = Base.julia_cmd()
 shared_lib = false
 small_image = true
+sysimage = false
 strict = false
 help = findfirst(x->x == "--help", ARGS)
 
@@ -12,6 +13,14 @@ end
 idx = findfirst(x->x == "-shared", ARGS)
 if idx !== nothing
     shared_lib = true
+    deleteat!(ARGS, idx)
+end
+idx = findfirst(x->x == "-sysimage", ARGS)
+if idx !== nothing
+    if shared_lib
+        error("Cannot specify both -shared and -sysimage")
+    end
+    sysimage = true
     deleteat!(ARGS, idx)
 end
 idx = findfirst(x->x == "-not-small", ARGS)
@@ -92,8 +101,10 @@ result.exitcode == 0 || error("Failed to compile $file")
 
 run(`cc $(cflags) -g -c -o $init_path $(joinpath(@__DIR__, "init.c"))`)
 
-if !shared_lib
-    run(`cc $(allflags) -o ./test-o -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path -ljulia -ljulia-internal`)
-else
+if shared_lib
     run(`cc $(allflags) -o ./libtest.$(Base.BinaryPlatforms.platform_dlext()) -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path  -ljulia -ljulia-internal`)
+elseif sysimage
+    run(`cc $(allflags) -o ./libtest.$(Base.BinaryPlatforms.platform_dlext()) -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             -ljulia -ljulia-internal`)
+else
+    run(`cc $(allflags) -o ./test-o -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path -ljulia -ljulia-internal`)
 end
