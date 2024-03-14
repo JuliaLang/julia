@@ -2370,7 +2370,7 @@
                 (= ,lhs ,(car rr))))
       `(= ,lhs ,rhs)))
 
-(define (expand-forms e)
+(define (expand-forms- e)
   (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref module toplevel ssavalue null true false meta using import export public thismodule toplevel-only)))
       e
       (let ((ex (get expand-table (car e) #f)))
@@ -2378,6 +2378,14 @@
             (ex e)
             (cons (car e)
                   (map expand-forms (cdr e)))))))
+
+;; wrapper for `cl-convert-`
+(define (expand-forms e)
+  (let ((pushed (julia-push-closure-expr e)))
+    (let ((res (expand-forms- e)))
+      (if pushed
+          (julia-pop-closure-expr))
+      res)))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table

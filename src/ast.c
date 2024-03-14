@@ -210,13 +210,13 @@ static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint
 
 arraylist_t converted_closure_stack; // for keeping track of which closures are being converted
 uv_mutex_t counter_table_lock;
-htable_t counter_table; // map from char* to uint32_t
+htable_t counter_table; // map from module_name -> inner htable; inner htable maps from char * -> uint32_t
 
 static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) JL_NOTSAFEPOINT
 {
     jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
     assert(ctx->module);
-    // Create a string of the form <$module_name>$<$outermost_func_name>$counter
+    // Create a string of the form <$outermost_func_name>$counter
     // where counter is the next counter for the module obtained by calling `jl_module_next_counter`
     // Get the module name
     char *modname = jl_symbol_name(ctx->module->name);
@@ -227,8 +227,8 @@ static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, ui
         funcname = symbol_name(fl_ctx, funcname_v);
     }
     // Create the string
-    char buf[strlen(modname) + (funcname ? strlen(funcname) : 0) + 20];
-    if (funcname != NULL) {
+    char buf[(funcname != NULL ? strlen(funcname) : 0) + 20];
+    if (funcname != NULL && funcname[0] != '#' /* don't prepend to the counter if the function name is a gensym */) {
         uint32_t nxt;
         uv_mutex_lock(&counter_table_lock);
         // try to find the module name in the counter table, if it's not create a symbol table for it
@@ -250,10 +250,10 @@ static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, ui
         // to avoid the counter being 0 or 1, which are reserved
         ptrhash_put(mod_table, funcname, (void*)(uintptr_t)((nxt + 1) << 2 | 3));
         uv_mutex_unlock(&counter_table_lock);
-        snprintf(buf, sizeof(buf), "<%s><%s>%d", modname, funcname, nxt);
+        snprintf(buf, sizeof(buf), "%s%d", funcname, nxt);
     }
     else {
-        snprintf(buf, sizeof(buf), "<%s>%d", modname, jl_module_next_counter(ctx->module));
+        snprintf(buf, sizeof(buf), "%d", jl_module_next_counter(ctx->module));
     }
     return symbol(fl_ctx, buf);
 }
