@@ -5634,7 +5634,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *ptr = ctx.builder.CreateSelect(isboxed,
                 maybe_bitcast(ctx, decay_derived(ctx, ptr_phi), getInt8PtrTy(ctx.builder.getContext())),
                 maybe_bitcast(ctx, decay_derived(ctx, phi), getInt8PtrTy(ctx.builder.getContext())));
-            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, ctx.tbaa().tbaa_stack); // XXX: this TBAA is wrong for ptr_phi
+            jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, best_tbaa(ctx.tbaa(), phiType));
             val.Vboxed = ptr_phi;
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, ptr_phi, r));
             ctx.SAvalues[idx] = val;
