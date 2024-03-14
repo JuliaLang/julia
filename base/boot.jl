@@ -745,7 +745,7 @@ function is_top_bit_set(x::Union{Int8,UInt8})
 end
 
 # n.b. This function exists for CUDA to overload to configure error behavior (see #48097)
-throw_inexacterror(args...) = throw(InexactError(args...))
+throw_inexacterror(a,b,c) = throw(InexactError(a,b,c))
 
 function check_sign_bit(::Type{To}, x) where {To}
     @inline

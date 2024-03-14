@@ -650,7 +650,7 @@ function __init__()
     # Base library init
     global _atexit_hooks_finished = false
     Filesystem.__postinit__()
-    reinit_stdio()
+    #reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
     # initialize loading
     init_depot_path()
@@ -684,9 +684,9 @@ function __init__()
     _require_world_age[] = get_world_counter()
     # Prevent spawned Julia process from getting stuck waiting on Tracy to connect.
     delete!(ENV, "JULIA_WAIT_FOR_TRACY")
-    if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
-        JuliaSyntax.enable_in_core!()
-    end
+    #if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
+    #    JuliaSyntax.enable_in_core!()
+    #end
     nothing
 end
 

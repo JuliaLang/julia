@@ -61,7 +61,7 @@ static size_t get_max_varargs(
         if (may_increase != NULL)
             *may_increase = 1; // `max_args` can increase as new methods are inserted
 
-        max_varargs = jl_atomic_load_relaxed(&kwmt->max_args) + 2;
+        max_varargs = jl_atomic_load_relaxed(&kwmt->max_args) + 3;
         if (mt == jl_kwcall_mt)
             max_varargs += 2;
         max_varargs -= m->nargs;

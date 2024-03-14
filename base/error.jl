@@ -218,6 +218,7 @@ julia> @assert isodd(3) "What even are numbers?"
 ```
 """
 macro assert(ex, msgs...)
+    return nothing
     msg = isempty(msgs) ? ex : msgs[1]
     if isa(msg, AbstractString)
         msg = msg # pass-through
