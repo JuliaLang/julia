@@ -21,6 +21,20 @@ Base
 parentmodule(m::Module) = ccall(:jl_module_parent, Ref{Module}, (Any,), m)
 
 """
+    @__MODULE__ -> Module
+
+Get the `Module` of the toplevel eval,
+which is the `Module` code is currently being read from.
+"""
+macro __MODULE__()
+    return __module__
+end
+
+# NOTE: overridden in loading.jl and compiler/utilities.jl
+# we need a definition early to allow inferring `show` methods
+is_root_module(m) = m === Core || m === Base || m === Main
+
+"""
     moduleroot(m::Module) -> Module
 
 Find the root module of a given module. This is the first module in the chain of
@@ -34,16 +48,6 @@ function moduleroot(m::Module)
         p === m && return m
         m = p
     end
-end
-
-"""
-    @__MODULE__ -> Module
-
-Get the `Module` of the toplevel eval,
-which is the `Module` code is currently being read from.
-"""
-macro __MODULE__()
-    return __module__
 end
 
 """

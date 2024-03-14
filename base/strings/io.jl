@@ -104,7 +104,7 @@ julia> sprint(showerror, BoundsError([1], 100))
 "BoundsError: attempt to access 1-element Vector{Int64} at index [100]"
 ```
 """
-function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
+function sprint(f::F, args...; context=nothing, sizehint::Integer=0) where F<:Function
     s = IOBuffer(sizehint=sizehint)
     if context isa Tuple
         f(IOContext(s, context...), args...)
@@ -149,6 +149,7 @@ function print_to_string(xs...)
     end
     String(_unsafe_take!(s))
 end
+setfield!(typeof(print_to_string).name.mt, :max_args, 8, :monotonic)
 
 function string_with_env(env, xs...)
     if isempty(xs)
