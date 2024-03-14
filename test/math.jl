@@ -1459,6 +1459,13 @@ end
     # two cases where we have observed > 1 ULP in the past
     @test 0.0013653274095082324^-97.60372292227069 == 4.088393948750035e279
     @test 8.758520413376658e-5^70.55863059215994 == 5.052076767078296e-287
+    # test literal pow for base = -1
+    @test (-1)^(-1) === (-1)^((-1,)[1])
+    @test (-1)^(-2) === (-1)^((-2,)[1])
+    @test (-1)^(-3) === (-1)^((-3,)[1])
+    @test (-1)^(1) === (-1)^((1,)[1])
+    @test (-1)^(2) === (-1)^((2,)[1])
+    @test (-1)^(3) === (-1)^((3,)[1])
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.
