@@ -49,7 +49,6 @@ img_path = joinpath(tmpdir, "img.a")
 bc_path = joinpath(tmpdir, "img-bc.a")
 tmp,io = mktemp(tmpdir, cleanup=false)
 write(io, """
-    Base.reinit_stdio()
     Sys.__init__()
     copy!(LOAD_PATH, ["."]) # Only allow loading packages from current project
     Base.init_depot_path()
