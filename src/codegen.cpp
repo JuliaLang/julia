@@ -5099,7 +5099,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         }
     }
     if (!handled) {
-        if (emitting_small_image && rt != jl_bottom_type) {
+        if (0 && emitting_small_image && rt != jl_bottom_type) {
                 errs() << "Tried emitting dynamic dispatch from ";
                 jl_(ctx.linfo);
                 errs() << " in module ";
