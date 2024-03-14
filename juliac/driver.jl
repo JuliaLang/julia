@@ -3,6 +3,7 @@ shared_lib = false
 small_image = true
 sysimage = false
 strict = false
+verbose = false
 help = findfirst(x->x == "--help", ARGS)
 
 if help !== nothing
@@ -37,6 +38,12 @@ if idx !== nothing
     deleteat!(ARGS, idx)
 end
 
+idx = findfirst(x->x == "-verbose", ARGS)
+if idx !== nothing
+    verbose = true
+    println("Using verbose mode")
+    deleteat!(ARGS, idx)
+end
 if length(ARGS) != 1
     println("Unexpected number of arguments, usage is: julia driver.jl [-shared] <file.jl>")
     exit(1)
@@ -81,30 +88,21 @@ write(io, """
     Core.Compiler.track_newly_inferred.x = false
 """)
 close(io)
-if small_image
-    if strict
-        withenv("JULIA_SMALL_IMAGE" => 1, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1, "JULIA_NO_DISPATCH_CHECK" => 1) do
-            global result = run(`$cmd --project --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $tmp`)
-        end
-    else
-        withenv("JULIA_SMALL_IMAGE" => 1, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1) do
-            global result = run(`$cmd --project --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $tmp`)
-        end
-    end
 
-else
-    withenv( "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1) do
-        global result = run(`$cmd --project  --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $tmp`)
-    end
-end
+is_small_image() = small_image ? `--small-image=yes` : ``
+is_strict() = strict ? `--no-dispatch-precompile=yes` : ``
+is_verbose() = verbose ? `--verbose-compilation=yes` : ``
+cmd = addenv(`$cmd --project --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $(is_small_image()) $(is_strict()) $(is_verbose()) $tmp`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+result = run(cmd)
+
 result.exitcode == 0 || error("Failed to compile $file")
 
-run(`cc $(cflags) -g -c -o $init_path $(joinpath(@__DIR__, "init.c"))`)
+success(`cc $(cflags) -g -c -o $init_path $(joinpath(@__DIR__, "init.c"))`)
 
 if shared_lib
-    run(`cc $(allflags) -o ./libtest.$(Base.BinaryPlatforms.platform_dlext()) -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path  -ljulia -ljulia-internal`)
+    success(`cc $(allflags) -o ./libtest.$(Base.BinaryPlatforms.platform_dlext()) -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path  -ljulia -ljulia-internal`)
 elseif sysimage
-    run(`cc $(allflags) -o ./libtest.$(Base.BinaryPlatforms.platform_dlext()) -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             -ljulia -ljulia-internal`)
+    success(`cc $(allflags) -o ./libtest.$(Base.BinaryPlatforms.platform_dlext()) -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             -ljulia -ljulia-internal`)
 else
-    run(`cc $(allflags) -o ./test-o -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path -ljulia -ljulia-internal`)
+    success(`cc $(allflags) -o ./test-o -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path -ljulia -ljulia-internal`)
 end

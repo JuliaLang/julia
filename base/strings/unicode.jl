@@ -163,7 +163,7 @@ function utf8proc_decompose(str, options, buffer, nwords, chartransform::T) wher
     return ret
 end
 
-function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform=identity)
+function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform::F = identity) where F
     nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
     buffer = Base.StringVector(nwords*4)
     nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)

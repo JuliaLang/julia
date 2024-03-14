@@ -347,10 +347,12 @@ static void *jl_precompile_small_image(void)
         if (ccallable)
             jl_array_ptr_1d_push(m, ccallable);
     }
-    jl_safe_printf("Precompiling %zu methods\n", jl_array_nrows(m));
-    jl_(m);
+    if (jl_options.verbose_compilation) {
+        jl_safe_printf("Precompiling %zu methods\n", jl_array_nrows(m));
+        jl_(m);
+    }
     emitting_small_image = 0;
-    if (getenv("JULIA_NO_DISPATCH_CHECK"))
+    if (jl_options.no_dispatch_precompile)
         emitting_small_image = 1;
     void *native_code = jl_create_native(m, NULL, NULL, 0, 1, 0,
                                          jl_atomic_load_acquire(&jl_world_counter));

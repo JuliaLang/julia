@@ -35,6 +35,10 @@
 .idea/*
 .vscode/*
 *.heapsnapshot
+*.edges
+*.metadata.json
+*.nodes
+*.strings
 .cache
 # Buildkite: Ignore the entire .buildkite directory
 /.buildkite

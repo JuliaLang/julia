@@ -2870,11 +2870,13 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
     jl_atomic_store_relaxed(&mi->precompiled, 1);
     if (jl_generating_output()) {
         jl_compile_now(mi);
-        if (small_image){
-            jl_safe_printf("adding code root from jl_compile_method_instance\n for:");
-            jl_(mi);
-            jl_safe_printf("from module: ");
-            jl_(mi->def.method->module);
+        if (jl_options.small_image){
+            if (jl_options.verbose_compilation > 0) {
+                jl_safe_printf("adding code root from jl_compile_method_instance\n for:");
+                jl_(mi);
+                jl_safe_printf("from module: ");
+                jl_(mi->def.method->module);
+            }
             arraylist_push(jl_precompile_mis, mi);
         }
         // In addition to full compilation of the compilation-signature, if `types` is more specific (e.g. due to nospecialize),
@@ -2890,11 +2892,13 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
             jl_method_instance_t *mi2 = jl_specializations_get_linfo(mi->def.method, (jl_value_t*)types2, tpenv2);
             JL_GC_POP();
             jl_atomic_store_relaxed(&mi2->precompiled, 1);
-            if (small_image){
-                jl_safe_printf("adding code root from jl_compile_method_instance\n for:");
-                jl_(mi2);
-                jl_safe_printf("from module: ");
-                jl_(mi2->def.method->module);
+            if (jl_options.small_image){
+                if (jl_options.verbose_compilation > 0) {
+                    jl_safe_printf("adding code root from jl_compile_method_instance\n for:");
+                    jl_(mi2);
+                    jl_safe_printf("from module: ");
+                    jl_(mi2->def.method->module);
+                }
                 arraylist_push(jl_precompile_mis, mi2);
             }
             if (jl_typeinf_func && jl_atomic_load_relaxed(&mi->def.method->primary_world) <= tworld) {
