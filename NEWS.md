@@ -48,6 +48,12 @@ Language changes
 * Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
   omit the default user depot ([#51448]).
 
+ - Macro expansion will no longer eargerly recurse into into `Expr(:toplevel)`
+   expressions returned from macros. Instead, macro expansion of `:toplevel`
+   expressions will be delayed until evaluation time. This allows a later
+   expression within a given `:toplevel` expression to make use of macros
+   defined earlier in the same `:toplevel` expression. ([#53515])
+
 Compiler/Runtime improvements
 -----------------------------
 * Updated GC heuristics to count allocated pages instead of individual objects ([#50144]).
