@@ -110,7 +110,7 @@ void jl_init_threadinginfra(void)
 }
 
 
-void JL_NORETURN jl_finish_task(jl_task_t *t);
+void JL_NORETURN jl_finish_task(jl_task_t *ct);
 
 static inline int may_mark(void) JL_NOTSAFEPOINT
 {

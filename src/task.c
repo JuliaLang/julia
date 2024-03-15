@@ -290,18 +290,17 @@ JL_NO_ASAN static void restore_stack2(jl_task_t *t, jl_ptls_t ptls, jl_task_t *l
 /* Rooted by the base module */
 static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
-void JL_NORETURN jl_finish_task(jl_task_t *t)
+void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
-    jl_task_t *ct = jl_current_task;
     JL_PROBE_RT_FINISH_TASK(ct);
     JL_SIGATOMIC_BEGIN();
-    if (jl_atomic_load_relaxed(&t->_isexception))
-        jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
+    if (jl_atomic_load_relaxed(&ct->_isexception))
+        jl_atomic_store_release(&ct->_state, JL_TASK_STATE_FAILED);
     else
-        jl_atomic_store_release(&t->_state, JL_TASK_STATE_DONE);
-    if (t->copy_stack) { // early free of stkbuf
-        asan_free_copy_stack(t->stkbuf, t->bufsz);
-        t->stkbuf = NULL;
+        jl_atomic_store_release(&ct->_state, JL_TASK_STATE_DONE);
+    if (ct->copy_stack) { // early free of stkbuf
+        asan_free_copy_stack(ct->stkbuf, ct->bufsz);
+        ct->stkbuf = NULL;
     }
     // ensure that state is cleared
     ct->ptls->in_finalizer = 0;
@@ -315,12 +314,12 @@ void JL_NORETURN jl_finish_task(jl_task_t *t)
             jl_atomic_store_release(&task_done_hook_func, done);
     }
     if (done != NULL) {
-        jl_value_t *args[2] = {done, (jl_value_t*)t};
+        jl_value_t *args[2] = {done, (jl_value_t*)ct};
         JL_TRY {
             jl_apply(args, 2);
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_current_exception(), ct);
+            jl_no_exc_handler(jl_current_exception(ct), ct);
         }
     }
     jl_gc_debug_critical_error();
@@ -688,7 +687,7 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
     // NULL exception objects are used when rethrowing. we don't have a handler to process
     // the exception stack, so at least report the exception at the top of the stack.
     if (!e)
-        e = jl_current_exception();
+        e = jl_current_exception(ct);
 
     jl_printf((JL_STREAM*)STDERR_FILENO, "fatal: error thrown and no exception handler available.\n");
     jl_static_show((JL_STREAM*)STDERR_FILENO, e);
@@ -721,8 +720,8 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
         /* The temporary ptls->bt_data is rooted by special purpose code in the\
            GC. This exists only for the purpose of preserving bt_data until we \
            set ptls->bt_size=0 below. */                                       \
-        jl_push_excstack(ct, &ct->excstack, exception,                             \
-                          ptls->bt_data, ptls->bt_size);                       \
+        jl_push_excstack(ct, &ct->excstack, exception,                         \
+                         ptls->bt_data, ptls->bt_size);                        \
         ptls->bt_size = 0;                                                     \
     }                                                                          \
     assert(ct->excstack && ct->excstack->top);                                 \
@@ -1203,7 +1202,7 @@ CFI_NORETURN
             res = jl_apply(&ct->start, 1);
         }
         JL_CATCH {
-            res = jl_current_exception();
+            res = jl_current_exception(ct);
             jl_atomic_store_relaxed(&ct->_isexception, 1);
             goto skip_pop_exception;
         }

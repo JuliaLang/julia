@@ -431,7 +431,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `the_exception`
 
-    Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
+    Yields the caught exception inside a `catch` block, as returned by `jl_current_exception(ct)`.
 
   * `enter`
 

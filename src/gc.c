@@ -301,7 +301,7 @@ static void run_finalizer(jl_task_t *ct, void *o, void *ff)
     }
     JL_CATCH {
         jl_printf((JL_STREAM*)STDERR_FILENO, "error in running finalizer: ");
-        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
     }
