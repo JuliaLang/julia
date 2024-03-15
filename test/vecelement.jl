@@ -124,5 +124,5 @@ end
     io = IOBuffer()
     code_llvm(io,getindex, (Array{NTuple{5, VecElement{Float64}}, 1}, Int64), optimize=false)
     ir = String(take!(io))
-    @test match(r"align 64",str)
+    @test match(r"align 64", ir) === nothing
 end
