@@ -367,7 +367,7 @@ in an error, thrown as a [`TaskFailedException`](@ref) which wraps the failed ta
 Throws a `ConcurrencyViolationError` if `t` is the currently running task, to prevent deadlocks.
 """
 function wait(t::Task; throw=true)
-    t === current_task() && throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
+    t === current_task() && Core.throw(ConcurrencyViolationError("deadlock detected: cannot wait on current task"))
     _wait(t)
     if throw && istaskfailed(t)
         Core.throw(TaskFailedException(t))
