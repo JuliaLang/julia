@@ -376,7 +376,7 @@ affinitized. Otherwise, Julia lets the operating system handle thread policy.
 ## REPL formatting
 
 Environment variables that determine how REPL output should be formatted at the
-terminal. Generally, these variables should be set to [ANSI terminal escape
+terminal. The `JULIA_*_COLOR` variables should be set to [ANSI terminal escape
 sequences](https://en.wikipedia.org/wiki/ANSI_escape_code). Julia provides
 a high-level interface with much of the same functionality; see the section on
 [The Julia REPL](@ref).
@@ -405,6 +405,14 @@ should have at the terminal.
 
 The formatting `Base.answer_color()` (default: normal, `"\033[0m"`) that output
 should have at the terminal.
+
+### `NO_COLOR`
+
+If set to anything besides `""`, then colored text will be disabled on the REPL. Can be overridden with the `--color=yes` flag. This environmental variable is [commonly recognized by command-line applications](https://no-color.org/).
+
+### `FORCE_COLOR`
+
+If set to anything besides `""`, then colored text will be forced on the REPL. Can *not* be overridden with the `--color` flag. This environmental variable is [commonly recognized by command-line applications](https://force-color.org/).
 
 ## System and Package Image Building
 
