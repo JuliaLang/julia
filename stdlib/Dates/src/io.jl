@@ -568,6 +568,22 @@ repeatedly parsing similarly formatted date time strings with a pre-created
 DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) = parse(DateTime, dt, df)
 
 """
+    @dt_str(isodt)
+
+Construct a [`DateTime`](@ref) from the given input string.
+Equivalent to writing `DateTime(isodt)`.
+
+# Example
+
+```julia
+dt"2020-12-31T15:16:17.18"
+```
+"""
+macro dt_str(isodt)
+    DateTime(isodt)
+end
+
+"""
     Date(d::AbstractString, format::AbstractString; locale="english") -> Date
 
 Construct a `Date` by parsing the `d` date string following the pattern given
