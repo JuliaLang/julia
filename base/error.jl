@@ -218,7 +218,6 @@ julia> @assert isodd(3) "What even are numbers?"
 ```
 """
 macro assert(ex, msgs...)
-    return nothing
     msg = isempty(msgs) ? ex : msgs[1]
     if isa(msg, AbstractString)
         msg = msg # pass-through
@@ -229,14 +228,13 @@ macro assert(ex, msgs...)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = quote
-            msg = $(Expr(:quote,msg))
-            isdefined(Main, :Base) ? Main.Base.string(msg) :
-                (Core.println(msg); "Error during bootstrap. See stdout.")
-        end
+        msg = :(_assert_tostring($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
+
+_assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
+    (Core.println(msg); "Error during bootstrap. See stdout.")
 
 struct ExponentialBackOff
     n::Int

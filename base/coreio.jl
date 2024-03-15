@@ -31,5 +31,5 @@ let CoreIO = Union{Core.CoreSTDOUT, Core.CoreSTDERR}
 end
 
 stdin::IO = devnull
-const stdout::IO = Core.stdout
-const stderr::IO = Core.stderr
+stdout::IO = Core.stdout
+stderr::IO = Core.stderr

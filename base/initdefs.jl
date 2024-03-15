@@ -354,13 +354,13 @@ Set the active `Project.toml` file to `projfile`. See also [`Base.active_project
 """
 function set_active_project(projfile::Union{AbstractString,Nothing})
     ACTIVE_PROJECT[] = projfile
-    #for f in active_project_callbacks
-    #    try
-    #        Base.invokelatest(f)
-    #    catch
-    #        @error "active project callback $f failed" maxlog=1
-    #    end
-    #end
+    for f in active_project_callbacks
+        try
+            Base.invokelatest(f)
+        catch
+            @error "active project callback $f failed" maxlog=1
+        end
+    end
 end
 
 

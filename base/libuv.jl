@@ -134,10 +134,9 @@ function uv_asynccb end
 function uv_timercb end
 
 function reinit_stdio()
-    #=
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))::IO
-    global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))
-    global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))
+    global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))::IO
+    global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))::IO
     opts = JLOptions()
     if opts.color != 0
         have_color = (opts.color == 1)
@@ -148,7 +147,6 @@ function reinit_stdio()
             global stderr = IOContext(stderr, :color => have_color)
         end
     end
-    =#
     nothing
 end
 

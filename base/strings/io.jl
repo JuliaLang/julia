@@ -149,7 +149,7 @@ function print_to_string(xs...)
     end
     String(_unsafe_take!(s))
 end
-setfield!(typeof(print_to_string).name.mt, :max_args, 8, :monotonic)
+setfield!(typeof(print_to_string).name.mt, :max_args, 10, :monotonic)
 
 function string_with_env(env, xs...)
     if isempty(xs)

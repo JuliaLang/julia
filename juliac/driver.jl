@@ -86,6 +86,13 @@ write(io, """
         precompile(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
     end
     Core.Compiler.track_newly_inferred.x = false
+    @eval Base begin
+        _assert_tostring(msg) = nothing
+        reinit_stdio() = nothing
+        JuliaSyntax.enable_in_core!() = nothing
+        set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
+        disable_library_threading() = nothing
+    end
 """)
 close(io)
 
