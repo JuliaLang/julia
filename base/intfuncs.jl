@@ -371,7 +371,7 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 @inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
 @inline function literal_pow(::typeof(^), x::HWNumber, ::Val{-1})
     if x == -one(x)
-        return isodd(p) ? one(x) : -one(x)
+        return x
     end
     inv(x)
 end
