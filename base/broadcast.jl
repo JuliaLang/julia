@@ -1282,6 +1282,9 @@ If you want to *avoid* adding dots for selected function calls in
 `@. sqrt(abs(\$sort(x)))` is equivalent to `sqrt.(abs.(sort(x)))`
 (no dot for `sort`).
 
+Note that the postfix `'` and infix `:` operators don't have a broadcasted
+version (`.'` and `.:` are not valid operators), and are not affected by `@.`.
+
 (`@.` is equivalent to a call to `@__dot__`.)
 
 # Examples
@@ -1294,6 +1297,18 @@ julia> @. y = x + 3 * sin(x)
  4.727892280477045
  3.4233600241796016
 ```
+
+The postfix `'` being unaffected by `@.` can be convenient to broadcast vectors
+along different dimensions:
+
+```jldoctest
+julia> @. (10:10:30) + (1:4)'
+3×4 Matrix{Int64}:
+ 11  12  13  14
+ 21  22  23  24
+ 31  32  33  34
+```
+
 """
 macro __dot__(x)
     esc(__dot__(x))
