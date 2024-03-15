@@ -419,7 +419,7 @@ end
 global active_repl
 
 # run the requested sort of evaluation loop on stdio
-function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool, color_set::Bool)
+function run_main_repl(interactive::Bool, quiet::Bool, banner::Symbol, history_file::Bool)
     fallback_repl = parse(Bool, get(ENV, "JULIA_FALLBACK_REPL", "false"))
     if !fallback_repl && interactive
         load_InteractiveUtils()
@@ -565,8 +565,7 @@ function repl_main(_)
 
     quiet                 = (opts.quiet != 0)
     history_file          = (opts.historyfile != 0)
-    color_set             = (opts.color != 0) # --color!=auto
-    return run_main_repl(interactiveinput, quiet, banner, history_file, color_set)
+    return run_main_repl(interactiveinput, quiet, banner, history_file)
 end
 
 """
