@@ -229,7 +229,7 @@ incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
 cmd_suppresses_program(cmd) = cmd in ('e', 'E')
 function exec_options(opts)
     startup               = (opts.startupfile != 2)
-    global have_color     = (opts.color != 0) ? (opts.color == 1) : nothing # --color=on
+    global have_color     = colored_text(opts)
     global is_interactive = (opts.isinteractive != 0)
 
     # pre-process command line argument list

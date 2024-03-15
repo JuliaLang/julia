@@ -2,7 +2,6 @@
 
 #include <limits.h>
 #include <errno.h>
-#include <stdlib.h>
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -930,18 +929,6 @@ restart_switch:
         }
     }
     parsing_args_done:
-
-    if (jl_options.color == JL_OPTIONS_COLOR_AUTO) {
-        char *no_color = getenv("NO_COLOR");
-        if (no_color != NULL && no_color[0] != '\0')
-            jl_options.color = JL_OPTIONS_COLOR_OFF;
-    }
-    else if (jl_options.color != JL_OPTIONS_COLOR_ON) {
-        char *force_color = getenv("FORCE_COLOR");
-        if (force_color != NULL && force_color[0] != '\0')
-            jl_options.color = JL_OPTIONS_COLOR_ON;
-    }
-
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
     int proc_args = *argcp < optind ? *argcp : optind;
