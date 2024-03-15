@@ -17,6 +17,8 @@ STATISTIC(EmittedRuntimeCalls, "Number of runtime intrinsic calls emitted");
 STATISTIC(EmittedIntrinsics, "Number of intrinsic calls emitted");
 STATISTIC(Emitted_pointerref, "Number of pointerref calls emitted");
 STATISTIC(Emitted_pointerset, "Number of pointerset calls emitted");
+STATISTIC(Emitted_add_ptr, "Number of add_ptr calls emitted")
+STATISTIC(Emitted_sub_ptr, "Number of sub_ptr calls emitted")
 STATISTIC(Emitted_atomic_fence, "Number of atomic_fence calls emitted");
 STATISTIC(Emitted_atomic_pointerref, "Number of atomic_pointerref calls emitted");
 STATISTIC(Emitted_atomic_pointerop, "Number of atomic_pointerop calls emitted");
@@ -1277,6 +1279,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return emit_pointerset(ctx, argv);
 
     case add_ptr: {
+        ++Emitted_add_ptr;
         assert(nargs == 2);
         if (!jl_is_cpointer_type(argv[0].typ) || jl_has_free_typevars(argv[0].typ) ||
             argv[1].typ != (jl_value_t*)jl_ulong_type)
@@ -1287,6 +1290,7 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return mark_julia_type(ctx, ans, false, argv[0].typ);
     }
     case sub_ptr: {
+        ++Emitted_sub_ptr;
         assert(nargs == 2);
         if (!jl_is_cpointer_type(argv[0].typ) || jl_has_free_typevars(argv[0].typ) ||
             argv[1].typ != (jl_value_t*)jl_ulong_type)
