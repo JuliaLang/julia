@@ -577,11 +577,11 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         @assert nparams == fieldcount(mtype)
         if i != ncases || !fully_covered || !params.trust_inference
             for i = 1:nparams
-                a, m = fieldtype(atype, i), fieldtype(mtype, i)
+                aft, mft = fieldtype(atype, i), fieldtype(mtype, i)
                 # If this is always true, we don't need to check for it
-                a <: m && continue
+                aft <: mft && continue
                 # Generate isa check
-                isa_expr = Expr(:call, isa, argexprs[i], m)
+                isa_expr = Expr(:call, isa, argexprs[i], mft)
                 ssa = insert_node_here!(compact, NewInstruction(isa_expr, Bool, line))
                 if cond === true
                     cond = ssa
@@ -600,10 +600,10 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
             for i = 1:nparams
                 argex = argexprs[i]
                 (isa(argex, SSAValue) || isa(argex, Argument)) || continue
-                a, m = fieldtype(atype, i), fieldtype(mtype, i)
-                if !(a <: m)
+                aft, mft = fieldtype(atype, i), fieldtype(mtype, i)
+                if !(aft <: mft)
                     argexprs′[i] = insert_node_here!(compact,
-                        NewInstruction(PiNode(argex, m), m, line))
+                        NewInstruction(PiNode(argex, mft), mft, line))
                 end
             end
         end
@@ -966,7 +966,8 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     if !match.fully_covers
         # type-intersection was not able to give us a simple list of types, so
         # ir_inline_unionsplit won't be able to deal with inlining this
-        if !(spec_types isa DataType && length(spec_types.parameters) == length(argtypes) && !isvarargtype(spec_types.parameters[end]))
+        if !(spec_types isa DataType && length(spec_types.parameters) == npassedargs &&
+             !isvarargtype(spec_types.parameters[end]))
             return nothing
         end
     end
@@ -1377,16 +1378,18 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
             joint_effects = merge_effects(joint_effects, info_effects(result, match, state))
             split_fully_covered |= match.fully_covers
             if !validate_sparams(match.sparams)
-                if !match.fully_covers
-                    handled_all_cases = false
-                    continue
-                end
-                if revisit_idx === nothing
-                    revisit_idx = (i, j, all_result_count)
+                if match.fully_covers
+                    if revisit_idx === nothing
+                        revisit_idx = (i, j, all_result_count)
+                    else
+                        handled_all_cases = false
+                        revisit_idx = nothing
+                    end
                 else
                     handled_all_cases = false
-                    revisit_idx = nothing
                 end
+            elseif !(match.spec_types <: match.method.sig) # the requirement for correct union-split
+                handled_all_cases = false
             else
                 handled_all_cases &= handle_any_const_result!(cases,
                     result, match, argtypes, info, flag, state; allow_abstract=true, allow_typevars=false)
@@ -1506,19 +1509,19 @@ function concrete_result_item(result::ConcreteResult, @nospecialize(info::CallIn
 end
 
 function handle_cases!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stmt::Expr,
-    @nospecialize(atype), cases::Vector{InliningCase}, fully_covered::Bool,
+    @nospecialize(atype), cases::Vector{InliningCase}, all_covered::Bool,
     joint_effects::Effects)
     # If we only have one case and that case is fully covered, we may either
     # be able to do the inlining now (for constant cases), or push it directly
     # onto the todo list
-    if fully_covered && length(cases) == 1
+    if all_covered && length(cases) == 1
         handle_single_case!(todo, ir, idx, stmt, cases[1].item)
     elseif length(cases) > 0
         isa(atype, DataType) || return nothing
         for case in cases
             isa(case.sig, DataType) || return nothing
         end
-        push!(todo, idx=>UnionSplit(fully_covered, atype, cases))
+        push!(todo, idx=>UnionSplit(all_covered, atype, cases))
     else
         ir[SSAValue(idx)][:flag] |= flags_for_effects(joint_effects)
     end
