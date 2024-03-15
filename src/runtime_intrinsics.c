@@ -1699,7 +1699,7 @@ JL_DLLEXPORT jl_value_t *jl_add_ptr(jl_value_t *ptr, jl_value_t *offset)
 {
     JL_TYPECHK(add_ptr, pointer, ptr);
     JL_TYPECHK(add_ptr, ulong, offset);
-    long ptrval = jl_unbox_long(ptr) + jl_unbox_long(offset);
+    long ptrval = jl_unbox_long(ptr) + jl_unbox_ulong(offset);
     return jl_new_bits(jl_typeof(ptr), &ptrval);
 }
 
@@ -1707,6 +1707,6 @@ JL_DLLEXPORT jl_value_t *jl_sub_ptr(jl_value_t *ptr, jl_value_t *offset)
 {
     JL_TYPECHK(sub_ptr, pointer, ptr);
     JL_TYPECHK(sub_ptr, ulong, offset);
-    long ptrval = jl_unbox_long(ptr) - jl_unbox_long(offset);
+    long ptrval = jl_unbox_long(ptr) - jl_unbox_ulong(offset);
     return jl_new_bits(jl_typeof(ptr), &ptrval);
 }
