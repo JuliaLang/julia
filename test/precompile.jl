@@ -1,10 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-original_depot_path = copy(Base.DEPOT_PATH)
-original_load_path = copy(Base.LOAD_PATH)
-
 using Test, Distributed, Random, Logging
 using REPL # doc lookup function
+
+include("precompile_utils.jl")
 
 Foo_module = :Foo4b3a94a1a081a8cb
 Foo2_module = :F2oo4b3a94a1a081a8cb
@@ -15,37 +14,6 @@ FooBase_module = :FooBase4b3a94a1a081a8cb
     $FooBase_module = 9134
 end
 using .ConflictingBindings
-
-function precompile_test_harness(@nospecialize(f), testset::String)
-    @testset "$testset" begin
-        precompile_test_harness(f, true)
-    end
-end
-function precompile_test_harness(@nospecialize(f), separate::Bool)
-    load_path = mktempdir()
-    load_cache_path = separate ? mktempdir() : load_path
-    try
-        pushfirst!(LOAD_PATH, load_path)
-        pushfirst!(DEPOT_PATH, load_cache_path)
-        f(load_path)
-    finally
-        try
-            rm(load_path, force=true, recursive=true)
-        catch err
-            @show err
-        end
-        if separate
-            try
-                rm(load_cache_path, force=true, recursive=true)
-            catch err
-                @show err
-            end
-        end
-        filter!((≠)(load_path), LOAD_PATH)
-        separate && filter!((≠)(load_cache_path), DEPOT_PATH)
-    end
-    nothing
-end
 
 # method root provenance
 
@@ -1713,150 +1681,10 @@ precompile_test_harness("issue #46296") do load_path
     (@eval (using CodeInstancePrecompile))
 end
 
-let newinterp_path = abspath("compiler/newinterp.jl")
-    precompile_test_harness("AbstractInterpreter caching") do load_path
-        write(joinpath(load_path, "SimpleModule.jl"), :(module SimpleModule
-            basic_callee(x) = x
-            basic_caller(x) = basic_callee(x)
-        end) |> string)
-
-        write(joinpath(load_path, "CustomAbstractInterpreterCaching.jl"), :(module CustomAbstractInterpreterCaching
-            import SimpleModule: basic_caller, basic_callee
-
-            module Custom
-                include("$($newinterp_path)")
-                @newinterp PrecompileInterpreter
-            end
-
-            Base.return_types((Float64,)) do x
-                basic_caller(x)
-            end
-            Base.return_types((Float64,); interp=Custom.PrecompileInterpreter()) do x
-                basic_caller(x)
-            end
-            Base.return_types((Vector{Float64},)) do x
-                sum(x)
-            end
-            Base.return_types((Vector{Float64},); interp=Custom.PrecompileInterpreter()) do x
-                sum(x)
-            end
-        end) |> string)
-        Base.compilecache(Base.PkgId("CustomAbstractInterpreterCaching"))
-        @eval let
-            using CustomAbstractInterpreterCaching
-            cache_owner = Core.Compiler.cache_owner(
-                CustomAbstractInterpreterCaching.Custom.PrecompileInterpreter())
-            let m = only(methods(CustomAbstractInterpreterCaching.basic_callee))
-                mi = only(Base.specializations(m))
-                ci = mi.cache
-                @test isdefined(ci, :next)
-                @test ci.owner === nothing
-                @test ci.max_world == typemax(UInt)
-                ci = ci.next
-                @test !isdefined(ci, :next)
-                @test ci.owner === cache_owner
-                @test ci.max_world == typemax(UInt)
-            end
-            let m = only(methods(sum, (Vector{Float64},)))
-                found = false
-                for mi in Base.specializations(m)
-                    if mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(sum),Vector{Float64}}
-                        ci = mi.cache
-                        @test isdefined(ci, :next)
-                        @test ci.owner === cache_owner
-                        @test ci.max_world == typemax(UInt)
-                        ci = ci.next
-                        @test !isdefined(ci, :next)
-                        @test ci.owner === nothing
-                        @test ci.max_world == typemax(UInt)
-                        found = true
-                        break
-                    end
-                end
-                @test found
-            end
-        end
-
-        write(joinpath(load_path, "CustomAbstractInterpreterCaching2.jl"), :(module CustomAbstractInterpreterCaching2
-            import SimpleModule: basic_caller, basic_callee
-
-            module Custom
-                const CC = Core.Compiler
-                include("$($newinterp_path)")
-                @newinterp PrecompileInterpreter
-                struct CustomData
-                    inferred
-                    CustomData(@nospecialize inferred) = new(inferred)
-                end
-                function CC.transform_result_for_cache(interp::PrecompileInterpreter,
-                        mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
-                    inferred_result = @invoke CC.transform_result_for_cache(interp::CC.AbstractInterpreter,
-                        mi::Core.MethodInstance, valid_worlds::CC.WorldRange, result::CC.InferenceResult)
-                    return CustomData(inferred_result)
-                end
-                function CC.src_inlining_policy(interp::PrecompileInterpreter, @nospecialize(src),
-                                            @nospecialize(info::CC.CallInfo), stmt_flag::UInt32)
-                    if src isa CustomData
-                        src = src.inferred
-                    end
-                    return @invoke CC.src_inlining_policy(interp::CC.AbstractInterpreter, src::Any,
-                                                          info::CC.CallInfo, stmt_flag::UInt32)
-                end
-                CC.retrieve_ir_for_inlining(cached_result::Core.CodeInstance, src::CustomData) =
-                    CC.retrieve_ir_for_inlining(cached_result, src.inferred)
-                CC.retrieve_ir_for_inlining(mi::Core.MethodInstance, src::CustomData, preserve_local_sources::Bool) =
-                    CC.retrieve_ir_for_inlining(mi, src.inferred, preserve_local_sources)
-            end
-
-            Base.return_types((Float64,)) do x
-                basic_caller(x)
-            end
-            Base.return_types((Float64,); interp=Custom.PrecompileInterpreter()) do x
-                basic_caller(x)
-            end
-            Base.return_types((Vector{Float64},)) do x
-                sum(x)
-            end
-            Base.return_types((Vector{Float64},); interp=Custom.PrecompileInterpreter()) do x
-                sum(x)
-            end
-        end) |> string)
-        Base.compilecache(Base.PkgId("CustomAbstractInterpreterCaching2"))
-        @eval let
-            using CustomAbstractInterpreterCaching2
-            cache_owner = Core.Compiler.cache_owner(
-                CustomAbstractInterpreterCaching2.Custom.PrecompileInterpreter())
-            let m = only(methods(CustomAbstractInterpreterCaching2.basic_callee))
-                mi = only(Base.specializations(m))
-                ci = mi.cache
-                @test isdefined(ci, :next)
-                @test ci.owner === nothing
-                @test ci.max_world == typemax(UInt)
-                ci = ci.next
-                @test !isdefined(ci, :next)
-                @test ci.owner === cache_owner
-                @test ci.max_world == typemax(UInt)
-            end
-            let m = only(methods(sum, (Vector{Float64},)))
-                found = false
-                for mi = Base.specializations(m)
-                    if mi isa Core.MethodInstance && mi.specTypes == Tuple{typeof(sum),Vector{Float64}}
-                        ci = mi.cache
-                        @test isdefined(ci, :next)
-                        @test ci.owner === cache_owner
-                        @test ci.max_world == typemax(UInt)
-                        ci = ci.next
-                        @test !isdefined(ci, :next)
-                        @test ci.owner === nothing
-                        @test ci.max_world == typemax(UInt)
-                        found = true
-                        break
-                    end
-                end
-                @test found
-            end
-        end
-    end
+@testset "Precompile external abstract interpreter" begin
+    dir = @__DIR__
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) precompile_absint1.jl`; dir); stdout, stderr))
+    @test success(pipeline(Cmd(`$(Base.julia_cmd()) precompile_absint2.jl`; dir); stdout, stderr))
 end
 
 precompile_test_harness("Recursive types") do load_path
@@ -2098,7 +1926,4 @@ precompile_test_harness("Test flags") do load_path
     @test !Base.isprecompiled(id, ;flags=current_flags)
 end
 
-empty!(Base.DEPOT_PATH)
-append!(Base.DEPOT_PATH, original_depot_path)
-empty!(Base.LOAD_PATH)
-append!(Base.LOAD_PATH, original_load_path)
+finish_precompile_test!()
