@@ -1048,30 +1048,64 @@ static const auto jlunlockfield_func = new JuliaFunction<>{
 };
 static const auto jlenter_func = new JuliaFunction<>{
     XSTR(jl_enter_handler),
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {getInt8PtrTy(C)}, false); },
+    [](LLVMContext &C) {
+        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
+        return FunctionType::get(getVoidTy(C),
+            {T_pjlvalue, getInt8PtrTy(C)}, false); },
     nullptr,
 };
 static const auto jl_current_exception_func = new JuliaFunction<>{
     XSTR(jl_current_exception),
-    [](LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), false); },
+    [](LLVMContext &C) { return FunctionType::get(JuliaType::get_prjlvalue_ty(C), {JuliaType::get_pjlvalue_ty(C)}, false); },
     nullptr,
 };
 static const auto jlleave_func = new JuliaFunction<>{
     XSTR(jl_pop_handler),
-    [](LLVMContext &C) { return FunctionType::get(getVoidTy(C),
-            {getInt32Ty(C)}, false); },
-    nullptr,
+    [](LLVMContext &C) {
+        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
+        return FunctionType::get(getVoidTy(C),
+            {T_pjlvalue, getInt32Ty(C)}, false); },
+    [](LLVMContext &C) {
+            auto FnAttrs = AttrBuilder(C);
+            FnAttrs.addAttribute(Attribute::WillReturn);
+            FnAttrs.addAttribute(Attribute::NoUnwind);
+            auto RetAttrs = AttrBuilder(C);
+            return AttributeList::get(C,
+                AttributeSet::get(C, FnAttrs),
+                AttributeSet(),
+                None);
+        },
+};
+static const auto jlleave_noexcept_func = new JuliaFunction<>{
+    XSTR(jl_pop_handler_noexcept),
+    [](LLVMContext &C) {
+        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
+        return FunctionType::get(getVoidTy(C),
+            {T_pjlvalue, getInt32Ty(C)}, false); },
+    [](LLVMContext &C) {
+            auto FnAttrs = AttrBuilder(C);
+            FnAttrs.addAttribute(Attribute::WillReturn);
+            FnAttrs.addAttribute(Attribute::NoUnwind);
+            auto RetAttrs = AttrBuilder(C);
+            return AttributeList::get(C,
+                AttributeSet::get(C, FnAttrs),
+                AttributeSet(),
+                None);
+        },
 };
 static const auto jl_restore_excstack_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_restore_excstack),
-    [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
-            {T_size}, false); },
+    [](LLVMContext &C, Type *T_size) {
+        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
+        return FunctionType::get(getVoidTy(C),
+            {T_pjlvalue, T_size}, false); },
     nullptr,
 };
 static const auto jl_excstack_state_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_excstack_state),
-    [](LLVMContext &C, Type *T_size) { return FunctionType::get(T_size, false); },
+    [](LLVMContext &C, Type *T_size) {
+        auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
+        return FunctionType::get(T_size, {T_pjlvalue}, false); },
     nullptr,
 };
 static const auto jlegalx_func = new JuliaFunction<TypeFnContextAndSizeT>{
@@ -1098,9 +1132,9 @@ static const auto jl_alloc_obj_func = new JuliaFunction<TypeFnContextAndSizeT>{
     [](LLVMContext &C, Type *T_size) {
         auto T_jlvalue = JuliaType::get_jlvalue_ty(C);
         auto T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
-        auto T_ppjlvalue = PointerType::get(PointerType::get(T_jlvalue, 0), 0);
+        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
         return FunctionType::get(T_prjlvalue,
-                {T_ppjlvalue, T_size, T_prjlvalue}, false);
+                {T_pjlvalue, T_size, T_prjlvalue}, false);
     },
     [](LLVMContext &C) {
         auto FnAttrs = AttrBuilder(C);
@@ -1442,7 +1476,9 @@ static const auto gc_preserve_end_func = new JuliaFunction<> {
 };
 static const auto except_enter_func = new JuliaFunction<>{
     "julia.except_enter",
-    [](LLVMContext &C) { return FunctionType::get(getInt32Ty(C), false); },
+    [](LLVMContext &C) {
+         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
+         return FunctionType::get(getInt32Ty(C), {T_pjlvalue}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             Attributes(C, {Attribute::ReturnsTwice}),
             AttributeSet(),
@@ -5961,8 +5997,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
                 hand_n_leave += 1;
             }
         }
-        ctx.builder.CreateCall(prepare_call(jlleave_func),
-                           ConstantInt::get(getInt32Ty(ctx.builder.getContext()), hand_n_leave));
+        ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), hand_n_leave)});
         if (scope_to_restore) {
             jl_aliasinfo_t scope_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
             scope_ai.decorateInst(
@@ -5972,7 +6007,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     else if (head == jl_pop_exception_sym) {
         jl_cgval_t excstack_state = emit_expr(ctx, jl_exprarg(expr, 0));
         assert(excstack_state.V && excstack_state.V->getType() == ctx.types().T_size);
-        ctx.builder.CreateCall(prepare_call(jl_restore_excstack_func), excstack_state.V);
+        ctx.builder.CreateCall(prepare_call(jl_restore_excstack_func), {get_current_task(ctx), excstack_state.V});
         return;
     }
     else {
@@ -6203,7 +6238,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                     bnd = jl_get_binding_for_method_def(mod, (jl_sym_t*)mn);
                 }
                 JL_CATCH {
-                    jl_value_t *e = jl_current_exception();
+                    jl_value_t *e = jl_current_exception(jl_current_task);
                     // errors. boo. :(
                     JL_GC_PUSH1(&e);
                     e = jl_as_global_root(e, 1);
@@ -6379,7 +6414,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     else if (head == jl_exc_sym) {
         assert(nargs == 0);
         return mark_julia_type(ctx,
-                ctx.builder.CreateCall(prepare_call(jl_current_exception_func)),
+                ctx.builder.CreateCall(prepare_call(jl_current_exception_func), {get_current_task(ctx)}),
                 true, jl_any_type);
     }
     else if (head == jl_copyast_sym) {
@@ -6481,9 +6516,14 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0, bool or_new=fal
     ctx.pgcstack->setName("pgcstack");
 }
 
+static Value *get_current_task(jl_codectx_t &ctx, Type *T)
+{
+    return emit_bitcast(ctx, get_current_task_from_pgcstack(ctx.builder, ctx.types().T_size, ctx.pgcstack), T);
+}
+
 static Value *get_current_task(jl_codectx_t &ctx)
 {
-    return get_current_task_from_pgcstack(ctx.builder, ctx.types().T_size, ctx.pgcstack);
+    return get_current_task(ctx, ctx.types().T_pjlvalue);
 }
 
 // Get PTLS through current task.
@@ -6495,20 +6535,20 @@ static Value *get_current_ptls(jl_codectx_t &ctx)
 // Get the address of the world age of the current task
 static Value *get_last_age_field(jl_codectx_t &ctx)
 {
-    Value *ct = get_current_task(ctx);
+    Value *ct = get_current_task(ctx, ctx.types().T_size->getPointerTo());
     return ctx.builder.CreateInBoundsGEP(
             ctx.types().T_size,
-            ctx.builder.CreateBitCast(ct, ctx.types().T_size->getPointerTo()),
+            ct,
             ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, world_age) / ctx.types().sizeof_ptr),
             "world_age");
 }
 
 static Value *get_scope_field(jl_codectx_t &ctx)
 {
-    Value *ct = get_current_task(ctx);
+    Value *ct = get_current_task(ctx, ctx.types().T_prjlvalue->getPointerTo());
     return ctx.builder.CreateInBoundsGEP(
             ctx.types().T_prjlvalue,
-            ctx.builder.CreateBitCast(ct, ctx.types().T_prjlvalue->getPointerTo()),
+            ct,
             ConstantInt::get(ctx.types().T_size, offsetof(jl_task_t, scope) / ctx.types().sizeof_ptr),
             "current_scope");
 }
@@ -9156,12 +9196,12 @@ static jl_llvm_functions_t
             if (lname) {
                 // Save exception stack depth at enter for use in pop_exception
                 Value *excstack_state =
-                    ctx.builder.CreateCall(prepare_call(jl_excstack_state_func));
+                    ctx.builder.CreateCall(prepare_call(jl_excstack_state_func), {get_current_task(ctx)});
                 assert(!ctx.ssavalue_assigned[cursor]);
                 ctx.SAvalues[cursor] = jl_cgval_t(excstack_state, (jl_value_t*)jl_ulong_type, NULL);
                 ctx.ssavalue_assigned[cursor] = true;
                 // Actually enter the exception frame
-                CallInst *sj = ctx.builder.CreateCall(prepare_call(except_enter_func));
+                CallInst *sj = ctx.builder.CreateCall(prepare_call(except_enter_func), {get_current_task(ctx)});
                 // We need to mark this on the call site as well. See issue #6757
                 sj->setCanReturnTwice();
                 Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
@@ -9174,8 +9214,7 @@ static jl_llvm_functions_t
                 ctx.builder.CreateCondBr(isz, tryblk, catchpop);
                 ctx.builder.SetInsertPoint(catchpop);
                 {
-                    ctx.builder.CreateCall(prepare_call(jlleave_func),
-                                    ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1));
+                    ctx.builder.CreateCall(prepare_call(jlleave_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1)});
                     if (old_scope) {
                         scope_ai.decorateInst(
                             ctx.builder.CreateAlignedStore(old_scope, scope_ptr, ctx.types().alignof_ptr));
@@ -9542,7 +9581,7 @@ jl_llvm_functions_t jl_emit_code(
         decls.functionObject = "";
         decls.specFunctionObject = "";
         jl_printf((JL_STREAM*)STDERR_FILENO, "Internal error: encountered unexpected error during compilation of %s:\n", mname.c_str());
-        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(jl_current_task));
         jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
         jlbacktrace(); // written to STDERR_FILENO
 #ifndef JL_NDEBUG
@@ -9849,6 +9888,7 @@ static void init_jit_functions(void)
     add_named_global(jlgenericfunction_func, &jl_generic_function_def);
     add_named_global(jlenter_func, &jl_enter_handler);
     add_named_global(jl_current_exception_func, &jl_current_exception);
+    add_named_global(jlleave_noexcept_func, &jl_pop_handler_noexcept);
     add_named_global(jlleave_func, &jl_pop_handler);
     add_named_global(jl_restore_excstack_func, &jl_restore_excstack);
     add_named_global(jl_excstack_state_func, &jl_excstack_state);
