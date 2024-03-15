@@ -114,8 +114,12 @@ static int type_in_worklist(jl_value_t *v) JL_NOTSAFEPOINT
     if (jl_object_in_image(v))
         return 0; // fast-path for rejection
     //TODO: is the hash table faster than the eytzinger tree?
-    if (ptrhash_has(&type_in_worklist_table, v))
+    void* value = ptrhash_get(&type_in_worklist_table, v);
+    if (value == v)
         return 1;
+    else if (value == NULL)
+        return 0;
+
     if (jl_is_uniontype(v)) {
         jl_uniontype_t *u = (jl_uniontype_t*)v;
         if (type_in_worklist(u->a) || type_in_worklist(u->b))
@@ -161,6 +165,7 @@ static int type_in_worklist(jl_value_t *v) JL_NOTSAFEPOINT
     }
 
     not_found:
+    ptrhash_put(&type_in_worklist_table, v, NULL);
     return 0;
 
     found:
