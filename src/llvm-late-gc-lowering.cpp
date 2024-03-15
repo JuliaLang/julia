@@ -1541,9 +1541,40 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     assert(cast<PointerType>(CI->getArgOperand(0)->getType())->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType()));
                     auto tracked = CountTrackedPointers(ElT, true);
                     if (tracked.count) {
-                        AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
-                        assert(SRet);
-                        {
+                        SmallVector<AllocaInst *> allocas;
+                        Value *SRetArg = (CI->arg_begin()[0])->stripInBoundsOffsets();
+                        if (AllocaInst *OneSRet = dyn_cast<AllocaInst>(SRetArg)) {
+                            allocas.push_back(OneSRet);
+                        } else {
+                            SmallVector<Value *> worklist;
+                            worklist.push_back(SRetArg);
+                            while (!worklist.empty()) {
+                                Value *V = worklist.pop_back_val();
+                                if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
+                                    allocas.push_back(Alloca);
+                                } else if (PHINode *Phi = dyn_cast<PHINode>(V)) {
+                                    for (Value *Incoming : Phi->incoming_values()) {
+                                        worklist.push_back(Incoming);
+                                    }
+                                } else if (SelectInst *SI = dyn_cast<SelectInst>(SRetArg)) {
+                                    AllocaInst *TrueSRet = dyn_cast<AllocaInst>(SI->getTrueValue());
+                                    AllocaInst *FalseSRet = dyn_cast<AllocaInst>(SI->getFalseValue());
+                                    if (TrueSRet && FalseSRet) {
+                                        worklist.push_back(TrueSRet);
+                                        worklist.push_back(FalseSRet);
+                                    } else {
+                                        llvm_dump(SI);
+                                        assert(false && "Malformed Select");
+                                    }
+                                } else {
+                                    llvm_dump(V);
+                                    assert(false && "Unexpected SRet argument");
+                                }
+                            }
+                        }
+                        assert(allocas.size() > 0);
+                        assert(std::all_of(allocas.begin(), allocas.end(), [&] (AllocaInst* SRetAlloca) {return (SRetAlloca->getArraySize() == allocas[0]->getArraySize() && SRetAlloca->getAllocatedType() == allocas[0]->getAllocatedType());}));
+                        for (AllocaInst *SRet : allocas) {
                             if (!(SRet->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
                                 assert(!tracked.derived);
                                 if (tracked.all) {
@@ -1551,35 +1582,38 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                                 }
                                 else {
                                     Value *arg1 = (CI->arg_begin()[1])->stripInBoundsOffsets();
-                                    AllocaInst *SRet_gc = nullptr;
-                                    if (PHINode *Phi = dyn_cast<PHINode>(arg1)) {
-                                        for (Value *V : Phi->incoming_values()) {
-                                            if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
-                                                if (SRet_gc == nullptr) {
-                                                    SRet_gc = Alloca;
-                                                } else if (SRet_gc == Alloca) {
-                                                    continue;
-                                                } else {
-                                                    llvm_dump(Alloca);
-                                                    llvm_dump(SRet_gc);
-                                                    assert(false && "Allocas in Phi node should match");
-                                                }
-                                            } else {
-                                                llvm_dump(V->stripInBoundsOffsets());
-                                                assert(false && "Expected alloca");
+                                    SmallVector<AllocaInst *> gc_allocas;
+                                    SmallVector<Value*> worklist;
+                                    worklist.push_back(arg1);
+                                    while (!worklist.empty()) {
+                                        Value *V = worklist.pop_back_val();
+                                        if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
+                                            gc_allocas.push_back(Alloca);
+                                        } else if (PHINode *Phi = dyn_cast<PHINode>(V)) {
+                                            for (Value *Incoming : Phi->incoming_values()) {
+                                                worklist.push_back(Incoming);
                                             }
+                                        } else if (SelectInst *SI = dyn_cast<SelectInst>(arg1)) {
+                                            AllocaInst *TrueSRet = dyn_cast<AllocaInst>(SI->getTrueValue());
+                                            AllocaInst *FalseSRet = dyn_cast<AllocaInst>(SI->getFalseValue());
+                                            if (TrueSRet && FalseSRet) {
+                                                worklist.push_back(TrueSRet);
+                                                worklist.push_back(FalseSRet);
+                                            } else {
+                                                llvm_dump(SI);
+                                                assert(false && "Malformed Select");
+                                            }
+                                        } else {
+                                            llvm_dump(V);
+                                            assert(false && "Unexpected SRet argument");
                                         }
-                                    } else {
-                                        SRet_gc = dyn_cast<AllocaInst>(arg1);
                                     }
-                                    if (!SRet_gc) {
-                                        llvm_dump(CI);
-                                        llvm_dump(arg1);
-                                        assert(false && "Expected alloca");
-                                    }
-                                    Type *ElT = SRet_gc->getAllocatedType();
-                                    if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
-                                        S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
+
+                                    assert(gc_allocas.size() > 0);
+                                    assert(std::all_of(gc_allocas.begin(), gc_allocas.end(), [&] (AllocaInst* SRetAlloca) {return (SRetAlloca->getArraySize() == gc_allocas[0]->getArraySize() && SRetAlloca->getAllocatedType() == gc_allocas[0]->getAllocatedType());}));
+                                    for (AllocaInst *SRet_gc : gc_allocas) {
+                                        if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked))
+                                            S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
                                     }
                                 }
                             }
