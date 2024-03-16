@@ -8,7 +8,7 @@
 Type inference friendly replacement for `Meta.isexpr`.
 
 When using the pattern
-```
+```julia
 if @isexpr(ex, headsym)
     body
 end
