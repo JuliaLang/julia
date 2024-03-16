@@ -115,7 +115,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@latest
         with:
-          version: '1.9'
+          version: '1.10'
       - run: julia --project=docs -e '
           using Pkg;
           Pkg.develop(PackageSpec(; path=pwd()));

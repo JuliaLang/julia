@@ -214,7 +214,7 @@ Here's some behaviors which seem to be bugs. (Some of these we replicate in the
 name of compatibility, perhaps with a warning.)
 
 * Macro module paths allow calls which gives weird stateful semantics!
-  ```
+  ```julia
   b() = rand() > 0.5 ? Base : Core
   b().@info "hi"
   ```
@@ -225,7 +225,7 @@ name of compatibility, perhaps with a warning.)
   keyword parameters are separated by commas. A tuple is produced instead.
 * `const` and `global` allow chained assignment, but the right hand side is not
   constant. `a` const here but not `b`.
-  ```
+  ```julia
   const a = b = 1
   ```
 * Parsing the `ncat` array concatenation syntax within braces gives
@@ -397,7 +397,7 @@ parsing `key=val` pairs inside parentheses.
   It's this last case which seems problematic (why not *require* the second
   form as a more explicit way to indicate flattening?). It's not even pretty
   printed correctly:
-  ```
+  ```julia-repl
   julia> :([(x,y) for x in 1:10, y in 1:10 if y < x])
   :([(x, y) for $(Expr(:filter, :(y < x), :(x = 1:10), :(y = 1:10)))])
   ```
