@@ -154,7 +154,6 @@ false
 ```
 """
 ispositive(x) = !isnan(x) && !signbit(x) && !iszero(x)
-ispositive(x::IEEEFloat) = x>0
 
 """
     isnegative(x)
@@ -175,7 +174,6 @@ false
 """
 isnegative(x) = !isnan(x) && signbit(x) && !iszero(x)
 isnegative(x::Integer) = signbit(x) # skip iszero
-isnegative(x::IEEEFloat) = x<0
 
 """
     sign(x)
