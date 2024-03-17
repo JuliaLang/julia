@@ -831,45 +831,43 @@ end
     @test cmp(isless, NaN, NaN) == 0
 end
 @testset "ispositive/isnegative" begin
-    @test ispositive(1)        == true
-    @test ispositive(0)        == false
-    @test ispositive(-1)       == false
-    @test ispositive(1.0)      == true
-    @test ispositive(0.0)      == false
-    @test ispositive(-0.0)     == false
-    @test ispositive(-1.0)     == false
-    @test ispositive(1.0/0.0)  == true
-    @test ispositive(-1.0/0.0) == false
-    @test ispositive(Inf)      == true
-    @test ispositive(-Inf)     == false
-    @test ispositive(NaN)      == false
-    @test ispositive(-NaN)     == false
-    @test ispositive(2//3)     == true
-    @test ispositive(-2//3)    == false
-    @test ispositive(0//1)     == false
-    @test ispositive(-0//1)    == false
-    @test ispositive(1//0)     == true
-    @test ispositive(-1//0)    == false
+    for T in Base.uniontypes(Base.IEEEFloat)
+        @test ispositive(one(T))
+        @test !ispositive(zero(T))
+        @test !ispositive(-zero(T))
+        @test !ispositive(-one(T))
+        @test !isnegative(one(T))
+        @test !isnegative(zero(T))
+        @test !isnegative(-zero(T))
+        @test isnegative(-one(T))
+        @test ispositive(T(Inf))
+        @test !ispositive(T(-Inf))
+        @test !ispositive(T(NaN))
+        @test !ispositive(T(-NaN))
+    end
+    
+    for T in Base.uniontypes(Base.BitInteger)
+        @test ispositive(one(T))
+        @test !ispositive(zero(T))
+        @test !ispositive(-one(T))
+        @test !isnegative(one(T))
+        @test !isnegative(zero(T))
+        @test isnegative(-one(T))
+    end
 
-    @test isnegative(1)        == false
-    @test isnegative(0)        == false
-    @test isnegative(-1)       == true
-    @test isnegative(1.0)      == false
-    @test isnegative(0.0)      == false
-    @test isnegative(-0.0)     == false
-    @test isnegative(-1.0)     == true
-    @test isnegative(1.0/0.0)  == false
-    @test isnegative(-1.0/0.0) == true
-    @test isnegative(Inf)      == false
-    @test isnegative(-Inf)     == true
-    @test isnegative(NaN)      == false
-    @test isnegative(-NaN)     == false
-    @test isnegative(2//3)     == false
-    @test isnegative(-2//3)    == true
-    @test isnegative(0//1)     == false
-    @test isnegative(-0//1)    == false
-    @test isnegative(1//0)     == false
-    @test isnegative(-1//0)    == true
+    @test ispositive(2//3)
+    @test !ispositive(-2//3)
+    @test !ispositive(0//1)
+    @test !ispositive(-0//1)
+    @test ispositive(1//0)
+    @test !ispositive(-1//0)
+
+    @test !isnegative(2//3)
+    @test isnegative(-2//3)
+    @test !isnegative(0//1)
+    @test !isnegative(-0//1)
+    @test !isnegative(1//0)
+    @test isnegative(-1//0)
 end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5
