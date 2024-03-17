@@ -10,6 +10,16 @@
 #include "threading.h"
 #include "julia_assert.h"
 
+#ifdef _WIN32
+#  ifdef _WIN64
+#    define PRI_SIZET PRIu64
+#  else
+#    define PRI_SIZET PRIu32
+#  endif
+#else
+#  define PRI_SIZET "zu"
+#endif
+
 // define `jl_unw_get` as a macro, since (like setjmp)
 // returning from the callee function will invalidate the context
 #ifdef _OS_WINDOWS_
@@ -1224,7 +1234,7 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
         jl_task_t *t = ptls2->root_task;
         if (t != NULL)
             t_state = jl_atomic_load_relaxed(&t->_state);
-        jl_safe_printf("==== Thread %d created %zu live tasks\n",
+        jl_safe_printf("==== Thread %d created %" PRI_SIZET " live tasks\n",
                 ptls2->tid + 1, n + (t_state != JL_TASK_STATE_DONE));
         if (show_done || t_state != JL_TASK_STATE_DONE) {
             jl_safe_printf("     ---- Root task (%p)\n", ptls2->root_task);
@@ -1249,7 +1259,7 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
             int t_state = jl_atomic_load_relaxed(&t->_state);
             if (!show_done && t_state == JL_TASK_STATE_DONE)
                 continue;
-            jl_safe_printf("     ---- Task %zu (%p)\n", j + 1, t);
+            jl_safe_printf("     ---- Task %" PRI_SIZET " (%p)\n", j + 1, t);
             // n.b. this information might not be consistent with the stack printing after it, since it could start running or change tid, etc.
             jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
                     t->sticky, t->started, t_state,
