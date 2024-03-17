@@ -830,6 +830,47 @@ end
     @test cmp(isless, 1, NaN) == -1
     @test cmp(isless, NaN, NaN) == 0
 end
+@testset "ispositive/isnegative" begin
+    @test ispositive(1)        == true
+    @test ispositive(0)        == false
+    @test ispositive(-1)       == false
+    @test ispositive(1.0)      == true
+    @test ispositive(0.0)      == false
+    @test ispositive(-0.0)     == false
+    @test ispositive(-1.0)     == false
+    @test ispositive(1.0/0.0)  == true
+    @test ispositive(-1.0/0.0) == false
+    @test ispositive(Inf)      == true
+    @test ispositive(-Inf)     == false
+    @test ispositive(NaN)      == false
+    @test ispositive(-NaN)     == false
+    @test ispositive(2//3)     == true
+    @test ispositive(-2//3)    == false
+    @test ispositive(0//1)     == false
+    @test ispositive(-0//1)    == false
+    @test ispositive(1//0)     == true
+    @test ispositive(-1//0)    == false
+
+    @test isnegative(1)        == false
+    @test isnegative(0)        == false
+    @test isnegative(-1)       == true
+    @test isnegative(1.0)      == false
+    @test isnegative(0.0)      == false
+    @test isnegative(-0.0)     == false
+    @test isnegative(-1.0)     == true
+    @test isnegative(1.0/0.0)  == false
+    @test isnegative(-1.0/0.0) == true
+    @test isnegative(Inf)      == false
+    @test isnegative(-Inf)     == true
+    @test isnegative(NaN)      == false
+    @test isnegative(-NaN)     == false
+    @test isnegative(2//3)     == false
+    @test isnegative(-2//3)    == true
+    @test isnegative(0//1)     == false
+    @test isnegative(-0//1)    == false
+    @test isnegative(1//0)     == false
+    @test isnegative(-1//0)    == true
+end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5
         @test (x==y)==(Float64(x)==Int64(y))
