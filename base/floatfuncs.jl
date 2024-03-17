@@ -16,6 +16,9 @@ signbit(x::Float64) = signbit(bitcast(Int64, x))
 signbit(x::Float32) = signbit(bitcast(Int32, x))
 signbit(x::Float16) = signbit(bitcast(Int16, x))
 
+ispositive(x::IEEEFloat) = x>0
+isnegative(x::IEEEFloat) = x<0
+
 """
     maxintfloat(T=Float64)
 
