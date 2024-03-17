@@ -79,6 +79,7 @@ New library functions
     annotated and unannotated content.
 * `in!(x, s::AbstractSet)` will return whether `x` is in `s`, and insert `x` in `s` if not ([#45156], [#51636]).
 * The new `Libc.mkfifo` function wraps the `mkfifo` C function on Unix platforms ([#34587]).
+* `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 * `eachrsplit(string, pattern)` iterates split substrings right to left ([#51646]).
 * `Sys.username()` can be used to return the current user's username ([#51897]).
@@ -156,12 +157,6 @@ Standard library changes
 * `bunchkaufman` and `bunchkaufman!` now work for any `AbstractFloat`, `Rational` and their complex variants. `bunchkaufman` now supports `Integer` types, by making an internal conversion to `Rational{BigInt}`. Added new function `inertia` that computes the inertia of the diagonal factor given by the `BunchKaufman` factorization object of a real symmetric or Hermitian matrix. For complex symmetric matrices, `inertia` only computes the number of zero eigenvalues of the diagonal factor ([#51487]).
 * Packages that specialize matrix-matrix `mul!` with a method signature of the form `mul!(::AbstractMatrix, ::MyMatrix, ::AbstractMatrix, ::Number, ::Number)` no longer encounter method ambiguities when interacting with `LinearAlgebra`. Previously, ambiguities used to arise when multiplying a `MyMatrix` with a structured matrix type provided by LinearAlgebra, such as `AbstractTriangular`, which used to necessitate additional methods to resolve such ambiguities. Similar sources of ambiguities have also been removed for matrix-vector `mul!` operations ([#52837]).
 * `lu` and `issuccess(::LU)` now accept an `allowsingular` keyword argument. When set to `true`, a valid factorization with rank-deficient U factor will be treated as success instead of throwing an error. Such factorizations are now shown by printing the factors together with a "rank-deficient" note rather than printing a "Failed Factorization" message ([#52957]).
-
-#### Logging
-
-* New `@create_log_macro` macro for creating new log macros like `@info`, `@warn` etc. For instance
-  `@create_log_macro MyLog 1500 :magenta` will create `@mylog` to be used like `@mylog "hello"` which
-  will show as `┌ MyLog: hello` etc. ([#52196]).
 
 #### Random
 

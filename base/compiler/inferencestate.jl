@@ -177,7 +177,7 @@ mutable struct LazyCFGReachability
 end
 function get!(x::LazyCFGReachability)
     isdefined(x, :reachability) && return x.reachability
-    domtree = construct_domtree(x.ir.cfg.blocks)
+    domtree = construct_domtree(x.ir)
     return x.reachability = CFGReachability(x.ir.cfg, domtree)
 end
 
@@ -189,8 +189,8 @@ end
 function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
     isdefined(x, :domtree) && return x.domtree
     return @timeit "domtree 2" x.domtree = IsPostDom ?
-        construct_postdomtree(x.ir.cfg.blocks) :
-        construct_domtree(x.ir.cfg.blocks)
+        construct_postdomtree(x.ir) :
+        construct_domtree(x.ir)
 end
 
 const LazyDomtree = LazyGenericDomtree{false}

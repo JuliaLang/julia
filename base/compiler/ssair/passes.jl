@@ -1225,10 +1225,21 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             bb = compact.active_result_bb - 1
             bbs = scope_mapping[bb]
             if isexpr(stmt, :leave) && bbs != SSAValue(0)
-                update_scope_mapping!(scope_mapping, bb+1, scope_mapping[block_for_inst(compact, bbs)])
-            else
-                update_scope_mapping!(scope_mapping, bb+1, bbs)
+                # Here we want to count the number of scopes that we're leaving,
+                # which is the same as the number of EnterNodes being referenced
+                # by `stmt.args`. Which have :scope set. In practice, the frontend
+                # does emit these in order, so we could simply go to the last one,
+                # but we want to avoid making that semantic assumption.
+                for i = 1:length(stmt.args)
+                    scope = stmt.args[i]
+                    scope === nothing && continue
+                    enter = compact[scope][:inst]
+                    @assert isa(enter, EnterNode)
+                    isdefined(enter, :scope) || continue
+                    bbs = scope_mapping[block_for_inst(compact, bbs)]
+                end
             end
+            update_scope_mapping!(scope_mapping, bb+1, bbs)
         end
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         is_setfield = is_isdefined = is_finalizer = is_keyvalue_get = false

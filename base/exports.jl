@@ -412,6 +412,7 @@ export
     isperm,
     issorted,
     last,
+    logrange,
     mapslices,
     max,
     maximum!,
@@ -651,11 +652,6 @@ export
     showerror,
     sprint,
     summary,
-
-# ScopedValue
-    with,
-    @with,
-    ScopedValue,
 
 # logging
     @debug,
@@ -934,6 +930,7 @@ export
     isblockdev,
     ischardev,
     isdir,
+    isexecutable,
     isfifo,
     isfile,
     islink,
@@ -1095,6 +1092,7 @@ public
     Generator,
     ImmutableDict,
     OneTo,
+    LogRange,
     AnnotatedString,
     AnnotatedChar,
     UUID,

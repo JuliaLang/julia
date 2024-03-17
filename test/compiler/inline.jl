@@ -2159,3 +2159,24 @@ end
 @test !Core.Compiler.is_nothrow(Base.infer_effects(issue53062, (Bool,)))
 @test issue53062(false) == -1
 @test_throws MethodError issue53062(true)
+
+struct Issue52644
+    tuple::Type{<:Tuple}
+end
+issue52644(::DataType) = :DataType
+issue52644(::UnionAll) = :UnionAll
+let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
+        issue52644(t.tuple)
+    end |> only |> first
+    irfunc = Core.OpaqueClosure(ir)
+    @test irfunc(Issue52644(Tuple{})) === :DataType
+    @test irfunc(Issue52644(Tuple{<:Integer})) === :UnionAll
+end
+issue52644_single(x::DataType) = :DataType
+let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
+        issue52644_single(t.tuple)
+    end |> only |> first
+    irfunc = Core.OpaqueClosure(ir)
+    @test irfunc(Issue52644(Tuple{})) === :DataType
+    @test_throws MethodError irfunc(Issue52644(Tuple{<:Integer}))
+end

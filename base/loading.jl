@@ -1524,7 +1524,21 @@ function CacheFlags(f::UInt8)
     CacheFlags(use_pkgimages, debug_level, check_bounds, inline, opt_level)
 end
 CacheFlags(f::Int) = CacheFlags(UInt8(f))
-CacheFlags() = CacheFlags(ccall(:jl_cache_flags, UInt8, ()))
+function CacheFlags(cf::CacheFlags=CacheFlags(ccall(:jl_cache_flags, UInt8, ()));
+            use_pkgimages::Union{Nothing,Bool}=nothing,
+            debug_level::Union{Nothing,Int}=nothing,
+            check_bounds::Union{Nothing,Int}=nothing,
+            inline::Union{Nothing,Bool}=nothing,
+            opt_level::Union{Nothing,Int}=nothing
+        )
+    return CacheFlags(
+        use_pkgimages === nothing ? cf.use_pkgimages : use_pkgimages,
+        debug_level === nothing ? cf.debug_level : debug_level,
+        check_bounds === nothing ? cf.check_bounds : check_bounds,
+        inline === nothing ? cf.inline : inline,
+        opt_level === nothing ? cf.opt_level : opt_level
+    )
+end
 
 function _cacheflag_to_uint8(cf::CacheFlags)::UInt8
     f = UInt8(0)
@@ -2147,8 +2161,6 @@ end
 
 require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 
-const REPL_PKGID = PkgId(UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL")
-
 function _require_prelocked(uuidkey::PkgId, env=nothing)
     if _require_world_age[] != typemax(UInt)
         Base.invoke_in_world(_require_world_age[], __require_prelocked, uuidkey, env)
@@ -2262,8 +2274,9 @@ function set_pkgorigin_version_path(pkg::PkgId, path::String)
     nothing
 end
 
-# A hook to allow code load to use Pkg.precompile
+# Unused
 const PKG_PRECOMPILE_HOOK = Ref{Function}()
+disable_parallel_precompile::Bool = false
 
 # Returns `nothing` or the new(ish) module
 function _require(pkg::PkgId, env=nothing)
@@ -2284,7 +2297,7 @@ function _require(pkg::PkgId, env=nothing)
         end
         set_pkgorigin_version_path(pkg, path)
 
-        pkg_precompile_attempted = false # being safe to avoid getting stuck in a Pkg.precompile loop
+        parallel_precompile_attempted = false # being safe to avoid getting stuck in a precompilepkgs loop
         reasons = Dict{String,Int}()
         # attempt to load the module file via the precompile cache locations
         if JLOptions().use_compiled_modules != 0
@@ -2314,11 +2327,13 @@ function _require(pkg::PkgId, env=nothing)
 
         if JLOptions().use_compiled_modules == 1
             if !generating_output(#=incremental=#false)
-                if !pkg_precompile_attempted && isinteractive() && isassigned(PKG_PRECOMPILE_HOOK)
-                    pkg_precompile_attempted = true
+                project = active_project()
+                if !generating_output() && !parallel_precompile_attempted && !disable_parallel_precompile && @isdefined(Precompilation) && project !== nothing &&
+                        isfile(project) && project_file_manifest_path(project) !== nothing
+                    parallel_precompile_attempted = true
                     unlock(require_lock)
                     try
-                        @invokelatest PKG_PRECOMPILE_HOOK[](pkg.name, _from_loading = true)
+                        Precompilation.precompilepkgs([pkg.name]; _from_loading=true)
                     finally
                         lock(require_lock)
                     end
@@ -2767,7 +2782,7 @@ function compilecache_dir(pkg::PkgId)
     return joinpath(DEPOT_PATH[1], entrypath)
 end
 
-function compilecache_path(pkg::PkgId, prefs_hash::UInt64; project::String=something(Base.active_project(), ""))::String
+function compilecache_path(pkg::PkgId, prefs_hash::UInt64; flags::CacheFlags=CacheFlags(), project::String=something(Base.active_project(), ""))::String
     entrypath, entryfile = cache_file_entry(pkg)
     cachepath = joinpath(DEPOT_PATH[1], entrypath)
     isdir(cachepath) || mkpath(cachepath)
@@ -2777,7 +2792,7 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64; project::String=somet
         crc = _crc32c(project)
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
-        crc = _crc32c(ccall(:jl_cache_flags, UInt8, ()), crc)
+        crc = _crc32c(_cacheflag_to_uint8(flags), crc)
 
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         if cpu_target === nothing
@@ -2809,7 +2824,8 @@ end
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
-                      keep_loaded_modules::Bool = true; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
+                      keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
+                      reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}())
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
@@ -2858,7 +2874,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             # Read preferences hash back from .ji file (we can't precompute because
             # we don't actually know what the list of compile-time preferences are without compiling)
             prefs_hash = preferences_hash(tmppath)
-            cachefile = compilecache_path(pkg, prefs_hash)
+            cachefile = compilecache_path(pkg, prefs_hash; flags=cacheflags)
             ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
             # append checksum for so to the end of the .ji file:
@@ -3402,7 +3418,7 @@ global parse_pidfile_hook
 # The preferences hash is only known after precompilation so just assume no preferences.
 # Also ignore the active project, which means that if all other conditions are equal,
 # the same package cannot be precompiled from different projects and/or different preferences at the same time.
-compilecache_pidfile_path(pkg::PkgId) = compilecache_path(pkg, UInt64(0); project="") * ".pidfile"
+compilecache_pidfile_path(pkg::PkgId; flags::CacheFlags=CacheFlags()) = compilecache_path(pkg, UInt64(0); project="", flags) * ".pidfile"
 
 const compilecache_pidlock_stale_age = 10
 
@@ -3530,12 +3546,16 @@ end
                 M = root_module(req_key)
                 if PkgId(M) == req_key && module_build_id(M) === req_build_id
                     depmods[i] = M
+                elseif M == Core
+                    @debug "Rejecting cache file $cachefile because it was made with a different julia version"
+                    record_reason(reasons, "wrong julia version")
+                    return true # Won't be able to fulfill dependency
                 elseif ignore_loaded || !stalecheck
                     # Used by Pkg.precompile given that there it's ok to precompile different versions of loaded packages
                     @goto locate_branch
                 else
                     @debug "Rejecting cache file $cachefile because module $req_key is already loaded and incompatible."
-                    record_reason(reasons, req_key == PkgId(Core) ? "wrong julia version" : "wrong dep version loaded")
+                    record_reason(reasons, "wrong dep version loaded")
                     return true # Won't be able to fulfill dependency
                 end
             else

@@ -727,8 +727,8 @@ eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
 
 using .Intrinsics: sle_int, add_int
 
-eval(Core, :(NamedTuple{names,T}(args::T) where {names, T <: Tuple} =
-             $(Expr(:splatnew, :(NamedTuple{names,T}), :args))))
+eval(Core, :((NT::Type{NamedTuple{names,T}})(args::T) where {names, T <: Tuple} =
+             $(Expr(:splatnew, :NT, :args))))
 
 # constructors for built-in types
 
@@ -969,6 +969,7 @@ arrayset(inbounds::Bool, A::Array{T}, x::Any, i::Int...) where {T} = Main.Base.s
 arraysize(a::Array) = a.size
 arraysize(a::Array, i::Int) = sle_int(i, nfields(a.size)) ? getfield(a.size, i) : 1
 export arrayref, arrayset, arraysize, const_arrayref
+const check_top_bit = check_sign_bit
 
 # For convenience
 EnterNode(old::EnterNode, new_dest::Int) = isdefined(old, :scope) ?

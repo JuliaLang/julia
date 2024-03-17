@@ -1218,6 +1218,7 @@ end
 copymutable(itr) = collect(itr)
 
 zero(x::AbstractArray{T}) where {T<:Number} = fill!(similar(x, typeof(zero(T))), zero(T))
+zero(x::AbstractArray{S}) where {S<:Union{Missing, Number}} = fill!(similar(x, typeof(zero(S))), zero(S))
 zero(x::AbstractArray) = map(zero, x)
 
 ## iteration support for arrays by iterating over `eachindex` in the array ##
@@ -3643,9 +3644,9 @@ end
 ## 1-d circshift ##
 function circshift!(a::AbstractVector, shift::Integer)
     n = length(a)
-    n == 0 && return
+    n == 0 && return a
     shift = mod(shift, n)
-    shift == 0 && return
+    shift == 0 && return a
     l = lastindex(a)
     reverse!(a, firstindex(a), l-shift)
     reverse!(a, l-shift+1, lastindex(a))
