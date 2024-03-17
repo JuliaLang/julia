@@ -36,6 +36,7 @@ struct Spec{T} # T => %type => Val{'type'}
     space::Bool
     zero::Bool
     hash::Bool
+    apostrophe::Bool
     width::Int
     precision::Int
     dynamic_width::Bool
@@ -50,6 +51,7 @@ Base.string(f::Spec{T}; modifier::String="") where {T} =
            f.space ? " " : "",
            f.zero ? "0" : "",
            f.hash ? "#" : "",
+           f.apostrophe ? "'" : "",
            f.dynamic_width ? "*" : (f.width > 0 ? f.width : ""),
            f.dynamic_precision ? ".*" : (f.precision == 0 ? ".0" : (f.precision > 0 ? ".$(f.precision)" : "")),
            modifier,
@@ -58,9 +60,9 @@ Base.string(f::Spec{T}; modifier::String="") where {T} =
 Base.show(io::IO, f::Spec) = print(io, string(f))
 
 floatfmt(s::Spec{T}) where {T} =
-    Spec{Val{'f'}}(s.leftalign, s.plus, s.space, s.zero, s.hash, s.width, 0, s.dynamic_width, s.dynamic_precision)
+    Spec{Val{'f'}}(s.leftalign, s.plus, s.space, s.zero, s.hash, s.apostrophe, s.width, 0, s.dynamic_width, s.dynamic_precision)
 ptrfmt(s::Spec{T}, x) where {T} =
-    Spec{Val{'x'}}(s.leftalign, s.plus, s.space, s.zero, true, s.width, sizeof(x) == 8 ? 16 : 8, s.dynamic_width, s.dynamic_precision)
+    Spec{Val{'x'}}(s.leftalign, s.plus, s.space, s.zero, true, s.apostrophe, s.width, sizeof(x) == 8 ? 16 : 8, s.dynamic_width, s.dynamic_precision)
 
 """
     Printf.Format(format_str)
@@ -157,7 +159,7 @@ function Format(f::AbstractString)
         pos += 1
         # positioned at start of first format str %
         # parse flags
-        leftalign = plus = space = zero = hash = false
+        leftalign = plus = space = zero = hash = apostrophe = false
         while true
             if b == UInt8('-')
                 leftalign = true
@@ -169,6 +171,8 @@ function Format(f::AbstractString)
                 zero = true
             elseif b == UInt8('#')
                 hash = true
+            elseif b == UInt8(''')
+                apostrophe = true
             else
                 break
             end
@@ -252,7 +256,7 @@ function Format(f::AbstractString)
             precision = 6
         end
         numarguments += 1
-        push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, width, precision, dynamic_width, dynamic_precision))
+        push!(fmts, Spec{type}(leftalign, plus, space, zero, hash, apostrophe, width, precision, dynamic_width, dynamic_precision))
         start = pos
         while pos <= len
             b = bytes[pos]
@@ -307,7 +311,7 @@ end
         end
         argp += 1
     end
-    (Spec{T}(spec.leftalign, spec.plus, spec.space, zero, spec.hash, width, precision, false, false), argp)
+    (Spec{T}(spec.leftalign, spec.plus, spec.space, zero, spec.hash, spec.apostrophe, width, precision, false, false), argp)
 end
 
 @inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T}
@@ -384,17 +388,18 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     fmt(buf, pos, arg, floatfmt(spec))
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
-    leftalign, plus, space, zero, hash, width, prec =
-        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+    leftalign, plus, space, zero, hash, apostrophe, width, prec =
+        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.apostrophe, spec.width, spec.precision
     bs = base(T)
     arg2 = toint(arg)
     n = i = ndigits(arg2, base=bs, pad=1)
+    numsep = apostrophe ? countthousandsep(spec, arg2) : 0
     neg = arg2 < 0
     x = arg2 isa Base.BitSigned ? unsigned(abs(arg2)) : abs(arg2)
-    arglen = n + (neg || (plus | space)) +
+    arglen = n + (neg || (plus | space)) + numsep +
         (T == Val{'o'} && hash ? 1 : 0) +
         (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
-    arglen2 = arglen < width && prec > 0 ? arglen + min(max(0, prec - n), width - arglen) : arglen
+    arglen2 = arglen < width && prec > 0 ? arglen + min(max(0, prec - n), width - arglen) - numsep : arglen
     if !leftalign && !zero && arglen2 < width
         # pad left w/ spaces
         for _ = 1:(width - arglen2)
@@ -426,14 +431,22 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
             buf[pos] = UInt8('0')
             pos += 1
         end
-    elseif n < prec
-        for _ = 1:(prec - n)
+    elseif (n + numsep) < prec
+        for _ = 1:(prec - (n + numsep))
             buf[pos] = UInt8('0')
             pos += 1
         end
     elseif arglen < arglen2
         for _ = 1:(arglen2 - arglen)
             buf[pos] = UInt8('0')
+            pos += 1
+        end
+    end
+    headpos = pos
+    if apostrophe && numsep > 0 && T in (Val{'d'}, Val{'i'}, Val{'u'})
+        # pad left for thousand separators
+        for _ = 1:numsep
+            buf[pos] = UInt8(' ')
             pos += 1
         end
     end
@@ -451,6 +464,10 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
         i -= 1
     end
     pos += n
+    if apostrophe && numsep > 0
+        onesplace = pos - 1
+        insertsep(buf, headpos, numsep, onesplace)
+    end
     if leftalign && arglen2 < width
         # pad right
         for _ = 1:(width - arglen2)
@@ -498,11 +515,33 @@ _snprintf(ptr, siz, str, arg) =
 const __BIG_FLOAT_MAX__ = 8192
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
-    leftalign, plus, space, zero, hash, width, prec =
-        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+    leftalign, plus, space, zero, hash, apostrophe, width, prec =
+        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.apostrophe, spec.width, spec.precision
     x = tofloat(arg)
+    numsep = countthousandsep(spec, x)
+    hassep = apostrophe && numsep > 0 && T in (Val{'f'}, Val{'F'}, Val{'g'}, Val{'G'})
+    headpos = pos
     if x isa BigFloat
         if isfinite(x)
+            if hassep
+                # pad left for thousand separators
+                for _ = 1:numsep
+                    buf[pos] = UInt8(' ')
+                    pos += 1
+                end
+                spec = Spec{T}(
+                    spec.leftalign,
+                    spec.plus,
+                    spec.space,
+                    spec.zero,
+                    spec.hash,
+                    spec.apostrophe,
+                    spec.width - numsep,
+                    spec.precision,
+                    spec.dynamic_width,
+                    spec.dynamic_precision
+                )
+            end
             GC.@preserve buf begin
                 siz = length(buf) - pos + 1
                 str = string(spec; modifier="R")
@@ -514,6 +553,32 @@ const __BIG_FLOAT_MAX__ = 8192
                     required_length = _snprintf(pointer(buf, pos), required_length + 1, str, x)
                 end
                 required_length > 0 || throw(ArgumentError("The given BigFloat would produce less than the maximum allowed number of bytes $__BIG_FLOAT_MAX__, but still couldn't be printed fully for an unknown reason."))
+                isexp = UInt8('e') in buf[pos:(pos + required_length- 1)] || UInt8('E') in buf[pos:(pos + required_length- 1)]
+                if hassep && isexp
+                    # fix left padding when scientific notation is used
+                    for _ = 1:numsep
+                        pos -= 1
+                    end
+                    spec = Spec{T}(
+                        spec.leftalign,
+                        spec.plus,
+                        spec.space,
+                        spec.zero,
+                        spec.hash,
+                        spec.apostrophe,
+                        spec.width + numsep,
+                        spec.precision,
+                    )
+                    siz = length(buf) - pos + 1
+                    str = string(spec; modifier="R")
+                    required_length= _snprintf(pointer(buf, pos), siz, str, x)
+                end
+                if hassep && !isexp
+                    neg = x < 0 || x === -Base.zero(x)
+                    lenleftpad = findfirst(!=(UInt(' ')), buf[headpos:(pos + required_length- 1)]) - numsep - 1
+                    onesplace = findonesplace(buf, headpos, pos + required_length- 1)
+                    insertsep(buf, headpos, numsep, onesplace, numskip=(neg ? 1 : 0) + lenleftpad)
+                end
                 return pos + required_length
             end
         end
@@ -522,7 +587,20 @@ const __BIG_FLOAT_MAX__ = 8192
     if T == Val{'e'} || T == Val{'E'}
         newpos = Ryu.writeexp(buf, pos, x, prec, plus, space, hash, char(T), UInt8('.'))
     elseif T == Val{'f'} || T == Val{'F'}
+        if hassep
+            # pad left for thousand separators
+            for _ = 1:numsep
+                buf[pos] = UInt8(' ')
+                pos += 1
+            end
+        end
         newpos = Ryu.writefixed(buf, pos, x, prec, plus, space, hash, UInt8('.'))
+        if hassep
+            neg = x < 0 || x === -Base.zero(x)
+            onesplace = findonesplace(buf, headpos, newpos - 1)
+            insertsep(buf, headpos, numsep, onesplace, numskip=(neg ? 1 : 0))
+            pos -= numsep
+        end
     elseif T == Val{'g'} || T == Val{'G'}
         if isinf(x) || isnan(x)
             newpos = Ryu.writeshortest(buf, pos, x, plus, space)
@@ -545,7 +623,20 @@ const __BIG_FLOAT_MAX__ = 8192
                 flipsign(exp, sign)
             end
             if -4 ≤ exp < prec
+                if hassep
+                    # pad left for thousand separators
+                    for _ = 1:numsep
+                        buf[pos] = UInt8(' ')
+                        pos += 1
+                    end
+                end
                 newpos = Ryu.writefixed(buf, pos, x, prec - (exp + 1), plus, space, hash, UInt8('.'), !hash)
+                if hassep
+                    neg = x < 0 || x === -Base.zero(x)
+                    onesplace = findonesplace(buf, headpos, newpos - 1)
+                    insertsep(buf, headpos, numsep, onesplace, numskip=(neg ? 1 : 0))
+                    pos -= numsep
+                end
             else
                 newpos = Ryu.writeexp(buf, pos, x, prec - 1, plus, space, hash, T == Val{'g'} ? UInt8('e') : UInt8('E'), UInt8('.'), !hash)
             end
@@ -690,8 +781,8 @@ function ini_dec end
 
 # generic fallback
 function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
-    leftalign, plus, space, zero, hash, width, prec =
-        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
+    leftalign, plus, space, zero, hash, apostrophe, width, prec =
+        spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.apostrophe, spec.width, spec.precision
     buf2 = Base.StringVector(
         MAX_INTEGER_PART_WIDTH + MAX_FRACTIONAL_PART_WIDTH + MAX_FMT_CHARS_WIDTH
     )
@@ -864,6 +955,51 @@ const UNROLL_UPTO = 16
     return pos
 end
 
+@inline function findonesplace(buf, lbound, rbound)
+    decimalpoint = findlast(==(UInt8('.')), view(buf, lbound:rbound))
+    # find last digit of rounded float
+    if isnothing(decimalpoint)
+        for i in lbound:(rbound - 1)
+            if 0x30 <= buf[i] <= 0x39 && buf[i + 1] == UInt(' ')
+                decimalpoint = i + 1
+                break
+            end
+        end
+    end
+    onesplace = isnothing(decimalpoint) ? rbound : decimalpoint - 1
+    return onesplace
+end
+
+
+function insertsep(buf, headpos, numsep, onesplace; numskip=0)
+    intlength = (onesplace - headpos + 1) - numsep - numskip
+
+    headdivlength = mod1(intlength, 3) + numskip
+    seconddiv = headpos + numsep + headdivlength
+    separation = headpos + headdivlength
+    buf[headpos:(separation - 1)] = view(buf, (headpos + numsep):(headpos + numsep + headdivlength - 1))
+
+    for i in 1:numsep
+        div = seconddiv + 3 * (i - 1)
+        buf[separation] = UInt8(',')
+        buf[(separation + 1):(separation + 3)] = view(buf, div:(div + 2))
+        separation += 4
+    end
+end
+
+
+countthousandsep(::Spec, x) = 0
+@inline function countthousandsep(f::Spec{T}, x) where {T <: Union{Ints, Floats}}
+    (isnan(x) || isinf(x) || base(T) != 10) && return 0
+    x isa Base.BitSigned && x == typemin(x) && return countthousandsep(f, unsigned(x))
+    x < 0 && return countthousandsep(f, -x)
+    x2 = round(x, digits=f.precision)
+    x2 < 1000 && return 0
+    numdig = log10(x2)
+    numsep = Int(div(numdig, 3))
+    return numsep
+end
+
 @inline function plength(f::Spec{T}, args, argp) where {T}
     f, argp = rmdynamic(f, args, argp)
     (plength(f, args[argp]), argp+1)
@@ -888,14 +1024,14 @@ function plength(f::Spec{T}, x) where {T <: Ints}
     x2 = toint(x)
     return max(
         f.width,
-        f.precision + ndigits(x2, base=base(T), pad=1) + MAX_FMT_CHARS_WIDTH
+        f.precision + ndigits(x2, base=base(T), pad=1) + countthousandsep(f, x) + MAX_FMT_CHARS_WIDTH
     )
 end
 
 plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
-    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + 0 + MAX_FMT_CHARS_WIDTH)
+    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + 0 + countthousandsep(f, x) + MAX_FMT_CHARS_WIDTH)
 plength(f::Spec{T}, x) where {T <: Floats} =
-    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + f.precision + MAX_FMT_CHARS_WIDTH)
+    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + f.precision + countthousandsep(f, x) + MAX_FMT_CHARS_WIDTH)
 plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
@@ -974,6 +1110,10 @@ Padded with zeros to length 6 000123
 
 julia> @printf "Use shorter of decimal or scientific %g %g" 1.23 12300000.0
 Use shorter of decimal or scientific 1.23 1.23e+07
+
+julia> @printf "Use thousand separators %'d" 1234567
+Use thousand separators 1,234,567
+```
 
 julia> @printf "Use dynamic width and precision  %*.*f" 10 2 0.12345
 Use dynamic width and precision        0.12
