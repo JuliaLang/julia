@@ -136,10 +136,45 @@ true
 """
 signbit(x::Real) = x < 0
 
+"""
+    ispositive(x)
+
+Test whether `x` is positive. Falls back to [`isnan`](@ref), [`signbit`](@ref) and [`iszero`](@ref). See also [`isnegative`](@ref).
+
+# Examples
+```jldoctest
+julia> ispositive(-4.0)
+false
+
+julia> ispositive(99)
+true
+
+julia> ispositive(0.0)
+false
+```
+"""
 ispositive(x) = !isnan(x) && !signbit(x) && !iszero(x)
+ispositive(x::IEEEFloat) = x>0
+
+"""
+    isnegative(x)
+
+Test whether `x` is positive. Falls back to [`isnan`](@ref), [`signbit`](@ref) and [`iszero`](@ref). See also [`ispositive`](@ref).
+
+# Examples
+```jldoctest
+julia> isnegative(-4.0)
+true
+
+julia> isnegative(99)
+false
+
+julia> isnegative(-0.0)
+false
+```
+"""
 isnegative(x) = !isnan(x) && signbit(x) && !iszero(x)
 isnegative(x::Integer) = signbit(x) # skip iszero
-ispositive(x::IEEEFloat) = x>0
 isnegative(x::IEEEFloat) = x<0
 
 """
