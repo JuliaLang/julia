@@ -1268,7 +1268,7 @@ JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
                 jlbacktracet(t);
             else
                 jl_safe_printf("      no stack\n");
-            jl_safe_printf("     ---- End task %zu\n", j + 1);
+            jl_safe_printf("     ---- End task %" PRI_SIZET "\n", j + 1);
         }
         jl_safe_printf("==== End thread %d\n", ptls2->tid + 1);
     }
