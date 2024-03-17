@@ -1,4 +1,4 @@
-PKG_BRANCH = master
+PKG_BRANCH = release-1.11
 PKG_SHA1 = 1e6fa605f5554f37d2ebf47de9763152f6f78232
 PKG_GIT_URL := https://github.com/JuliaLang/Pkg.jl.git
 PKG_TAR_URL = https://api.github.com/repos/JuliaLang/Pkg.jl/tarball/$1
