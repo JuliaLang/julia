@@ -955,6 +955,51 @@ fake_repl() do stdin_write, stdout_read, repl
     nothing
 end
 
+function rollbackglobal(f, name)
+    was_defined = isdefined(Base, name)
+    if was_defined
+        old = getproperty(Base, name)
+    end
+    try
+        f(was_defined)
+    finally
+        if was_defined
+            Base.eval(Base, :($name = $old))
+        end
+    end
+end
+
+@testset "afterreplinit" begin
+    saved_hooks = copy(Base._afterreplinit_hooks)
+    rollbackglobal(:active_repl) do repl_was_defined
+        rollbackglobal(:active_repl_backend) do backend_was_defined
+            try
+                empty!(Base._afterreplinit_hooks)
+                called = Ref(false)
+                Base.afterreplinit((_, _) -> (called[] = true))
+                if !(repl_was_defined && backend_was_defined)
+                    Base._afterreplinit(nothing, nothing)
+                end
+                @test called[]
+
+                Base.eval(Base, :(active_repl = :DUMMY_REPL))
+                Base.eval(Base, :(active_repl_backend = :DUMMY_BACKEND))
+                called = Ref(false)
+                n = length(Base._afterreplinit_hooks)
+                Base.afterreplinit() do repl, backend
+                    @test repl == :DUMMY_REPL
+                    @test backend == :DUMMY_BACKEND
+                    called[] = true
+                end
+                @test called[]
+                @test n == length(Base._afterreplinit_hooks)
+            finally
+                append!(empty!(Base._afterreplinit_hooks), saved_hooks)
+            end
+        end
+    end
+end
+
 let ends_with_semicolon = REPL.ends_with_semicolon
     @test !ends_with_semicolon("")
     @test ends_with_semicolon(";")
