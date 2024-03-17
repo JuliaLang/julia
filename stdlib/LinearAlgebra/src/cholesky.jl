@@ -844,7 +844,7 @@ return the diag(Array(C)).
 """
 function diag(C::Cholesky{T}) where {T}
     N = size(C, 1)
-    z = zeros(F, N)
+    z = zeros(T, N)
     U = C.U
     for i=1:N
         for j=1:i
