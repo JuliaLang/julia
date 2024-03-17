@@ -835,3 +835,22 @@ then `CC = cholesky(C.U'C.U - v*v')` but the computation of `CC` only uses
 `O(n^2)` operations.
 """
 lowrankdowndate(C::Cholesky, v::AbstractVector) = lowrankdowndate!(copy(C), copy(v))
+
+
+"""
+    diag(C::Cholesky) -> Vector
+
+return the diag(Array(C)).
+"""
+function diag(C::Cholesky{T}) where {T}
+    N = size(C, 1)
+    z = zeros(F, N)
+    U = C.U
+    for i=1:N
+        for j=1:i
+        z[i] += U[j, i]^2
+        end
+    end
+    return z
+end
+

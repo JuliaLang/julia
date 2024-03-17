@@ -548,4 +548,15 @@ end
     @test logabsdet(B)[1] == -Inf
  end
 
+@testset "diag" begin
+    A = randn(100, 100)
+    P = A' * A
+    C = cholesky(P)
+    @test diag(P) ≈ diag(C)
+end
+
+
+
 end # module TestCholesky
+
+
