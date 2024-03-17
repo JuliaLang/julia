@@ -555,8 +555,6 @@ end
     @test diag(P) ≈ diag(C)
 end
 
-
-
 end # module TestCholesky
 
 

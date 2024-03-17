@@ -853,4 +853,3 @@ function diag(C::Cholesky{T}) where {T}
     end
     return z
 end
-
