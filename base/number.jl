@@ -136,8 +136,11 @@ true
 """
 signbit(x::Real) = x < 0
 
-ispositive(x) = !signbit(x) && !iszero(x)
-isnegative(x) = signbit(x) && !iszero(x)
+ispositive(x) = !isnan(x) && !signbit(x) && !iszero(x)
+isnegative(x) = !isnan(x) && signbit(x) && !iszero(x)
+isnegative(x::Integer) = signbit(x) # skip iszero
+ispositive(x::IEEEFloat) = x>0
+isnegative(x::IEEEFloat) = x<0
 
 """
     sign(x)
