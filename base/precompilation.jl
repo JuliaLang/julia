@@ -552,8 +552,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         target = "project"
     end
     nconfig = length(configs)
-    if nconfig > 1 || !isempty(only(configs)[1]) # if multiple configs or only one is not default
-        target *= " for $nconfig compilation configuration$(nconfig > 1 ? "s" : "")..."
+    if nconfig > 1
+        target *= " for $nconfig compilation configurations..."
     else
         target *= "..."
     end
@@ -677,8 +677,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             loaded = warn_loaded && haskey(Base.loaded_modules, dep)
                             _name = haskey(exts, dep) ? string(exts[dep], " → ", dep.name) : dep.name
                             name = dep in direct_deps ? _name : string(color_string(_name, :light_black))
-                            if length(configs) > 1
-                                config_str = isempty(config[1]) ? "" : "$(join(config[1], " "))"
+                            if !isempty(config[1])
+                                config_str = "$(join(config[1], " "))"
                                 name *= color_string(" $(config_str)", :light_black)
                             end
                             line = if dep_config in precomperr_deps
@@ -769,8 +769,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
 
                         _name = haskey(exts, pkg) ? string(exts[pkg], " → ", pkg.name) : pkg.name
                         name = is_direct_dep ? _name : string(color_string(_name, :light_black))
-                        if length(configs) > 1
-                            config_str = isempty(config[1]) ? "" : "$(join(config[1], " "))"
+                        if !isempty(flags)
+                            config_str = "$(join(flags, " "))"
                             name *= color_string(" $(config_str)", :light_black)
                         end
                         !fancyprint && lock(print_lock) do
