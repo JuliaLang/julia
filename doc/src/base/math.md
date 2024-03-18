@@ -142,7 +142,6 @@ Base.minmax
 Base.Math.clamp
 Base.Math.clamp!
 Base.abs
-Base.uabs
 Base.Checked
 Base.Checked.checked_abs
 Base.Checked.checked_neg
@@ -186,6 +185,7 @@ Base.invmod
 Base.powermod
 Base.ndigits
 Base.add_sum
+Base.uabs
 Base.widemul
 Base.Math.evalpoly
 Base.Math.@evalpoly
