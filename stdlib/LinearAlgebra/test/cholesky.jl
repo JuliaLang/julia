@@ -556,5 +556,3 @@ end
 end
 
 end # module TestCholesky
-
-

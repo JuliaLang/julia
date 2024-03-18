@@ -836,7 +836,6 @@ then `CC = cholesky(C.U'C.U - v*v')` but the computation of `CC` only uses
 """
 lowrankdowndate(C::Cholesky, v::AbstractVector) = lowrankdowndate!(copy(C), copy(v))
 
-
 function diag(C::Cholesky{T}) where {T}
     N = size(C, 1)
     z = Vector{T}(undef, N)
