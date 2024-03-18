@@ -228,7 +228,7 @@ static value_t fl_current_module_counter(fl_context_t *fl_ctx, value_t *args, ui
     }
     // Create the string
     char buf[(funcname != NULL ? strlen(funcname) : 0) + 20];
-    if (funcname != NULL && funcname[0] != '#' /* don't prepend to the counter if the function name is a gensym */) {
+    if (funcname != NULL && !is_anonfn_typename(funcname)) {
         uint32_t nxt;
         uv_mutex_lock(&counter_table_lock);
         // try to find the module name in the counter table, if it's not create a symbol table for it
