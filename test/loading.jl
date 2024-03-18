@@ -1559,23 +1559,39 @@ end
        push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "sub"))
        id = Base.identify_package("Devved")
        @test isfile(Base.locate_package(id))
-       id2 = Base.identify_package("Devved2")
-       @test isfile(Base.locate_package(id2))
+       @test Base.identify_package("Devved2") === nothing
        id3 = Base.identify_package("MyPkg")
        @test isfile(Base.locate_package(id3))
 
        empty!(LOAD_PATH)
        push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "PackageThatIsSub"))
        id_pkg = Base.identify_package("PackageThatIsSub")
-       @test Base.identify_package(id_pkg, "Devved") == nothing
+       @test Base.identify_package(id_pkg, "Devved") === nothing
        id_dev2 = Base.identify_package(id_pkg, "Devved2")
        @test isfile(Base.locate_package(id_dev2))
+       id_mypkg = Base.identify_package("MyPkg")
+       @test isfile(Base.locate_package(id_mypkg))
+       id_dev = Base.identify_package(id_mypkg, "Devved")
+       @test isfile(Base.locate_package(id_dev))
+
+       empty!(LOAD_PATH)
+       push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "PackageThatIsSub", "test"))
+       id_pkg = Base.identify_package("PackageThatIsSub")
+       @test isfile(Base.locate_package(id_pkg))
+       @test Base.identify_package(id_pkg, "Devved") === nothing
+       id_dev2 = Base.identify_package(id_pkg, "Devved2")
+       @test isfile(Base.locate_package(id_dev2))
+       id_mypkg = Base.identify_package("MyPkg")
+       @test isfile(Base.locate_package(id_mypkg))
+       id_dev = Base.identify_package(id_mypkg, "Devved")
+       @test isfile(Base.locate_package(id_dev))
 
        empty!(LOAD_PATH)
        push!(LOAD_PATH, joinpath(@__DIR__, "project", "SubProject", "test"))
-       id_pkg = Base.identify_package("MyPkg")
-       id_dev = Base.identify_package(id_pkg, "Devved")
+       id_mypkg = Base.identify_package("MyPkg")
+       id_dev = Base.identify_package(id_mypkg, "Devved")
        @test isfile(Base.locate_package(id_dev))
+       @test Base.identify_package("Devved2") === nothing
 
     finally
        copy!(LOAD_PATH, old_load_path)

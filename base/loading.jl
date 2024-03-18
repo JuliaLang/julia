@@ -628,24 +628,51 @@ function base_project(project_file)
     return nothing
 end
 
+#=
 function base_project_deps_get(project_file::String, name::String)::Union{Nothing,UUID}
     base = base_project(project_file)
     if base !== nothing
-        return explicit_project_deps_get(base, name)
+        return project_deps_get(base, name)
     end
     return nothing
 end
+=#
 
 function project_deps_get(env::String, name::String)::Union{Nothing,PkgId}
     project_file = env_project_file(env)
     if project_file isa String
         pkg_uuid = explicit_project_deps_get(project_file, name)
+        #=
         if pkg_uuid === nothing
             pkg_uuid = base_project_deps_get(project_file, name)
         end
+        =#
         pkg_uuid === nothing || return PkgId(pkg_uuid, name)
     elseif project_file
         return implicit_project_deps_get(env, name)
+    end
+    return nothing
+end
+
+function base_package_get(project_file::String, where::PkgId, name::String)
+    base = base_project(project_file)
+    if base !== nothing
+        pkg = package_get(base, where, name)
+        if pkg !== nothing
+            return pkg
+        else
+            return base_package_get(base, where, name)
+        end
+    end
+    return nothing
+end
+
+function package_get(project_file, where::PkgId, name::String)
+    proj = project_file_name_uuid(project_file, where.name)
+    if proj == where
+        # if `where` matches the project, use [deps] section as manifest, and stop searching
+        pkg_uuid = explicit_project_deps_get(project_file, name)
+        return PkgId(pkg_uuid, name)
     end
     return nothing
 end
@@ -655,23 +682,10 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
     @assert uuid !== nothing
     project_file = env_project_file(env)
     if project_file isa String
-        # first check if `where` names the Project itself
-        proj = project_file_name_uuid(project_file, where.name)
-        if proj == where
-            # if `where` matches the project, use [deps] section as manifest, and stop searching
-            pkg_uuid = explicit_project_deps_get(project_file, name)
-            return PkgId(pkg_uuid, name)
-        end
-        # then check if `where` names the base Project itself
-        base_project_file = base_project(project_file)
-        if base_project_file !== nothing
-            base_proj = project_file_name_uuid(base_project_file, where.name)
-            if base_proj == where
-                # if `where` matches the project, use [deps] section as manifest, and stop searching
-                pkg_uuid = explicit_project_deps_get(base_project_file, name)
-                return PkgId(pkg_uuid, name)
-            end
-        end
+        pkg = package_get(project_file, where, name)
+        pkg === nothing || return pkg
+        pkg = base_package_get(project_file, where, name)
+        pkg === nothing || return pkg
         d = parsed_toml(project_file)
         exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
         if exts !== nothing
@@ -707,6 +721,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             # if `pkg` matches the project, return the project itself
             return project_file_path(project_file)
         end
+        #=
         base_project_file = base_project(project_file)
         if base_project_file !== nothing
             base_proj = project_file_name_uuid(base_project_file, pkg.name)
@@ -715,6 +730,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
                 return project_file_path(base_project_file)
             end
         end
+        =#
         mby_ext = project_file_ext_path(project_file, pkg.name)
         mby_ext === nothing || return mby_ext
         # look for manifest file and `where` stanza
