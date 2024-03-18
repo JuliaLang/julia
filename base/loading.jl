@@ -616,7 +616,11 @@ function base_project(project_file)
     base_project_file = env_project_file(base_dir)
     base_project_file isa String || return nothing
     d = parsed_toml(base_project_file)
-    subprojects = get(d, "subprojects", nothing)::Union{Vector{String}, Nothing, String}
+    workspace = get(d, "workspace", nothing)::Union{Dict{String, Any}, Nothing}
+    if workspace === nothing
+        return nothing
+    end
+    subprojects = get(workspace, "subprojects", nothing)::Union{Vector{String}, Nothing, String}
     subprojects === nothing && return nothing
     if (subprojects isa String && subprojects == "*" )|| (subprojects isa Vector && basename(dirname(project_file)) in subprojects)
         return base_project_file
