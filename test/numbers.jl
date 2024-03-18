@@ -845,7 +845,7 @@ end
         @test !ispositive(T(NaN))
         @test !ispositive(T(-NaN))
     end
-    
+
     for T in Base.uniontypes(Base.BitInteger)
         @test ispositive(one(T))
         @test !ispositive(zero(T))
