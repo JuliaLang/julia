@@ -8125,3 +8125,10 @@ let M = @__MODULE__
 end
 
 @test Base.unsafe_convert(Ptr{Int}, [1]) !== C_NULL
+
+# Test that new macros are allowed to be defined inside Expr(:toplevel) returned by macros
+macro macroception()
+    Expr(:toplevel, :(macro foo() 1 end), :(@foo))
+end
+
+@test (@macroception()) === 1

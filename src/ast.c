@@ -475,7 +475,7 @@ static jl_value_t *scm_to_julia(fl_context_t *fl_ctx, value_t e, jl_module_t *mo
     }
     JL_CATCH {
         // if expression cannot be converted, replace with error expr
-        //jl_(jl_current_exception());
+        //jl_(jl_current_exception(ct));
         //jlbacktrace();
         jl_expr_t *ex = jl_exprn(jl_error_sym, 1);
         v = (jl_value_t*)ex;
@@ -1138,7 +1138,7 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
                 margs[0] = jl_cstr_to_string("<macrocall>");
             margs[1] = jl_fieldref(lno, 0); // extract and allocate line number
             jl_rethrow_other(jl_new_struct(jl_loaderror_type, margs[0], margs[1],
-                                           jl_current_exception()));
+                                           jl_current_exception(ct)));
         }
     }
     ct->world_age = last_age;
@@ -1154,7 +1154,7 @@ static jl_value_t *jl_expand_macros(jl_value_t *expr, jl_module_t *inmodule, str
     jl_expr_t *e = (jl_expr_t*)expr;
     if (e->head == jl_inert_sym ||
         e->head == jl_module_sym ||
-        //e->head == jl_toplevel_sym || // TODO: enable this once julia-expand-macroscope is fixed / removed
+        e->head == jl_toplevel_sym ||
         e->head == jl_meta_sym) {
         return expr;
     }

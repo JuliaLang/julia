@@ -239,9 +239,8 @@ JL_DLLEXPORT void __stack_chk_fail(void)
 
 // exceptions -----------------------------------------------------------------
 
-JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
+JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh)
 {
-    jl_task_t *ct = jl_current_task;
     // Must have no safepoint
     eh->prev = ct->eh;
     eh->gcstack = ct->gcstack;
@@ -260,9 +259,8 @@ JL_DLLEXPORT void jl_enter_handler(jl_handler_t *eh)
 // * We leave a try block through normal control flow
 // * An exception causes a nonlocal jump to the catch block. In this case
 //   there's additional cleanup required, eg pushing the exception stack.
-JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
+JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
 {
-    jl_task_t *ct = jl_current_task;
 #ifdef _OS_WINDOWS_
     if (ct->ptls->needs_resetstkoflw) {
         _resetstkoflw();
@@ -297,27 +295,40 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_handler_t *eh)
     }
 }
 
-JL_DLLEXPORT void jl_pop_handler(int n)
+JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
 {
-    jl_task_t *ct = jl_current_task;
+    ct->eh = eh->prev;
+    ct->ptls->defer_signal = eh->defer_signal; // optional, but certain try-finally (in stream.jl) may be slightly harder to write without this
+}
+
+JL_DLLEXPORT void jl_pop_handler(jl_task_t *ct, int n)
+{
     if (__unlikely(n <= 0))
         return;
     jl_handler_t *eh = ct->eh;
     while (--n > 0)
         eh = eh->prev;
-    jl_eh_restore_state(eh);
+    jl_eh_restore_state(ct, eh);
 }
 
-JL_DLLEXPORT size_t jl_excstack_state(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_pop_handler_noexcept(jl_task_t *ct, int n)
 {
-    jl_task_t *ct = jl_current_task;
+    if (__unlikely(n <= 0))
+        return;
+    jl_handler_t *eh = ct->eh;
+    while (--n > 0)
+        eh = eh->prev;
+    jl_eh_restore_state_noexcept(ct, eh);
+}
+
+JL_DLLEXPORT size_t jl_excstack_state(jl_task_t *ct) JL_NOTSAFEPOINT
+{
     jl_excstack_t *s = ct->excstack;
     return s ? s->top : 0;
 }
 
-JL_DLLEXPORT void jl_restore_excstack(size_t state) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_restore_excstack(jl_task_t *ct, size_t state) JL_NOTSAFEPOINT
 {
-    jl_task_t *ct = jl_current_task;
     jl_excstack_t *s = ct->excstack;
     if (s) {
         assert(s->top >= state);
@@ -332,28 +343,27 @@ static void jl_copy_excstack(jl_excstack_t *dest, jl_excstack_t *src) JL_NOTSAFE
     dest->top = src->top;
 }
 
-static void jl_reserve_excstack(jl_task_t* task, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
+static void jl_reserve_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT,
                                 size_t reserved_size)
 {
     jl_excstack_t *s = *stack;
     if (s && s->reserved_size >= reserved_size)
         return;
     size_t bufsz = sizeof(jl_excstack_t) + sizeof(uintptr_t)*reserved_size;
-    jl_task_t *ct = jl_current_task;
     jl_excstack_t *new_s = (jl_excstack_t*)jl_gc_alloc_buf(ct->ptls, bufsz);
     new_s->top = 0;
     new_s->reserved_size = reserved_size;
     if (s)
         jl_copy_excstack(new_s, s);
     *stack = new_s;
-    jl_gc_wb(task, new_s);
+    jl_gc_wb(ct, new_s);
 }
 
-void jl_push_excstack(jl_task_t* task, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
+void jl_push_excstack(jl_task_t *ct, jl_excstack_t **stack JL_REQUIRE_ROOTED_SLOT JL_ROOTING_ARGUMENT,
                       jl_value_t *exception JL_ROOTED_ARGUMENT,
                       jl_bt_element_t *bt_data, size_t bt_size)
 {
-    jl_reserve_excstack(task, stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
+    jl_reserve_excstack(ct, stack, (*stack ? (*stack)->top : 0) + bt_size + 2);
     jl_excstack_t *s = *stack;
     jl_bt_element_t *rawstack = jl_excstack_raw(s);
     memcpy(rawstack + s->top, bt_data, sizeof(jl_bt_element_t)*bt_size);

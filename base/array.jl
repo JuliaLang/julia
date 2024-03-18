@@ -2635,7 +2635,7 @@ Dict{Symbol, Int64} with 3 entries:
   :B => -1
   :C => 0
 
-julia> findall(x -> x >= 0, d)
+julia> findall(≥(0), d)
 2-element Vector{Symbol}:
  :A
  :C
