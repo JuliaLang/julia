@@ -35,6 +35,8 @@ Language changes
   execution ([#52123]).
 * Specifying a path in `JULIA_DEPOT_PATH` now results in the expansion of empty strings to
   omit the default user depot ([#51448]).
+* Precompilation cache files are now relocatable and their validity is now verified through
+  a content hash of their source files instead of their `mtime` ([#49866]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -83,6 +85,8 @@ New library functions
 * `copyuntil(out, io, delim)` and `copyline(out, io)` copy data into an `out::IO` stream ([#48273]).
 * `eachrsplit(string, pattern)` iterates split substrings right to left ([#51646]).
 * `Sys.username()` can be used to return the current user's username ([#51897]).
+* `Sys.isreadable(), Sys.iswritable()` can be used to check if the current user has access permissions
+  that permit reading and writing, respectively. ([#53320]).
 * `wrap(Array, m::Union{MemoryRef{T}, Memory{T}}, dims)` is the safe counterpart to `unsafe_wrap` ([#52049]).
 * `GC.logging_enabled()` can be used to test whether GC logging has been enabled via `GC.enable_logging` ([#51647]).
 * `IdSet` is now exported from Base and considered public ([#53262]).
@@ -114,6 +118,8 @@ New library features
 * `filter` can now act on a `NamedTuple` ([#50795]).
 * `Iterators.cycle(iter, n)` runs over `iter` a fixed number of times, instead of forever ([#47354]).
 * `zero(::AbstractArray)` now applies recursively, so `zero([[1,2],[3,4,5]])` now produces the additive identity `[[0,0],[0,0,0]]` rather than erroring ([#38064]).
+* `include_dependency(path; track_content=true)` allows switching from using `mtime`
+  to hashing of the precompilation dependency in order to restore relocatability of precompilation caches ([#51798]).
 
 Standard library changes
 ------------------------
@@ -226,6 +232,7 @@ Tooling Improvements
 [#48625]: https://github.com/JuliaLang/julia/issues/48625
 [#49546]: https://github.com/JuliaLang/julia/issues/49546
 [#49586]: https://github.com/JuliaLang/julia/issues/49586
+[#49866]: https://github.com/JuliaLang/julia/issues/49866
 [#49937]: https://github.com/JuliaLang/julia/issues/49937
 [#50074]: https://github.com/JuliaLang/julia/issues/50074
 [#50105]: https://github.com/JuliaLang/julia/issues/50105
@@ -250,6 +257,7 @@ Tooling Improvements
 [#51646]: https://github.com/JuliaLang/julia/issues/51646
 [#51647]: https://github.com/JuliaLang/julia/issues/51647
 [#51704]: https://github.com/JuliaLang/julia/issues/51704
+[#51798]: https://github.com/JuliaLang/julia/issues/51798
 [#51799]: https://github.com/JuliaLang/julia/issues/51799
 [#51897]: https://github.com/JuliaLang/julia/issues/51897
 [#51929]: https://github.com/JuliaLang/julia/issues/51929
@@ -273,3 +281,4 @@ Tooling Improvements
 [#52957]: https://github.com/JuliaLang/julia/issues/52957
 [#53092]: https://github.com/JuliaLang/julia/issues/53092
 [#53262]: https://github.com/JuliaLang/julia/issues/53262
+[#53320]: https://github.com/JuliaLang/julia/issues/53320
