@@ -689,6 +689,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
         d = parsed_toml(project_file)
         exts = get(d, "extensions", nothing)::Union{Dict{String, Any}, Nothing}
         if exts !== nothing
+            proj = project_file_name_uuid(project_file, where.name)
             # Check if `where` is an extension of the project
             if where.name in keys(exts) && where.uuid == uuid5(proj.uuid::UUID, where.name)
                 # Extensions can load weak deps...
