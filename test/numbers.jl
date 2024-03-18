@@ -831,7 +831,7 @@ end
     @test cmp(isless, NaN, NaN) == 0
 end
 @testset "ispositive/isnegative" begin
-    for T in Base.uniontypes(Base.IEEEFloat)
+    @testset "Type $(T)" for T in Base.uniontypes(Base.IEEEFloat)
         @test ispositive(one(T))
         @test !ispositive(zero(T))
         @test !ispositive(-zero(T))
