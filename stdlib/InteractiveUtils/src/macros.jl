@@ -40,6 +40,9 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
         return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
     end
+    if isa(ex0, Symbol) && (fcn === :which || fcn === :less || fcn === :edit)
+        return Expr(:call, fcn, __module__, QuoteNode(ex0))
+    end
     if isa(ex0, Expr)
         if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
@@ -79,8 +82,8 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                     return quote
                         local arg1 = $(esc(ex0.args[1]))
                         if isa(arg1, Module)
-                            $(if string(fcn) == "which"
-                                  :(which(arg1, $(ex0.args[2])))
+                            $(if fcn === :which || fcn === :less || fcn === :edit
+                                  :(($fcn)(arg1, $(ex0.args[2])))
                               else
                                   :(error("expression is not a function call"))
                               end)
@@ -209,11 +212,6 @@ for fname in [:which, :less, :edit, :functionloc]
             gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0)
         end
     end
-end
-
-macro which(ex0::Symbol)
-    ex0 = QuoteNode(ex0)
-    return :(which($__module__, $ex0))
 end
 
 for fname in [:code_warntype, :code_llvm, :code_native, :infer_effects]
