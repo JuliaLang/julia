@@ -844,11 +844,12 @@ return the diag(Array(C)).
 """
 function diag(C::Cholesky{T}) where {T}
     N = size(C, 1)
-    z = zeros(T, N)
+    z = Vector{T}(undef, N)
     U = C.U
     for i=1:N
+        z[i] = zero(T)
         for j=1:i
-        z[i] += U[j, i]^2
+          z[i] += U[j, i]^2
         end
     end
     return z
