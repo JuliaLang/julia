@@ -846,13 +846,22 @@ end
         @test !ispositive(T(-NaN))
     end
 
-    for T in Base.uniontypes(Base.BitInteger)
+    for T in Base.BitSigned_types
         @test ispositive(one(T))
         @test !ispositive(zero(T))
         @test !ispositive(-one(T))
         @test !isnegative(one(T))
         @test !isnegative(zero(T))
         @test isnegative(-one(T))
+    end
+
+    for T in Base.BitUnsigned_types
+        @test ispositive(one(T))
+        @test !ispositive(zero(T))
+        @test ispositive(-one(T))
+        @test !isnegative(one(T))
+        @test !isnegative(zero(T))
+        @test !isnegative(-one(T))
     end
 
     @test ispositive(2//3)
