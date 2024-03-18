@@ -50,9 +50,11 @@ Rational(n::Integer, d::Integer) = Rational(promote(n, d)...)
 Rational(n::Integer) = unsafe_rational(n, one(n))
 
 """
-    divgcd(x, y)
+    divgcd(x::Integer, y::Integer)
 
-Returns `(x÷gcd(x,y), y÷gcd(x,y))`. See also [`gcd`](@ref).
+Returns `(x÷gcd(x,y), y÷gcd(x,y))`.
+
+See also [`div`](@ref), [`gcd`](@ref).
 """
 function divgcd(x::TX, y::TY)::Tuple{TX, TY} where {TX<:Integer, TY<:Integer}
     g = gcd(uabs(x), uabs(y))
