@@ -842,7 +842,7 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva, int isinferred);
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
-STATIC_INLINE int is_anonfn_typename(char *name)
+STATIC_INLINE int is_anonfn_typename(char *name) JL_NOTSAFEPOINT
 {
     if (name[0] != '#' || name[1] == '#')
         return 0;
