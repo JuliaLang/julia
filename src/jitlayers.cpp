@@ -461,10 +461,11 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_compile_codeinst_impl(jl_code_instance_t *ci)
+int jl_compile_codeinst_impl(jl_code_instance_t *ci)
 {
+    int newly_compiled = 0;
     if (jl_atomic_load_relaxed(&ci->invoke) != NULL) {
-        return;
+        return newly_compiled;
     }
     JL_LOCK(&jl_codegen_lock);
     if (jl_atomic_load_relaxed(&ci->invoke) == NULL) {
@@ -472,8 +473,10 @@ void jl_compile_codeinst_impl(jl_code_instance_t *ci)
         uint64_t start = jl_typeinf_timing_begin();
         _jl_compile_codeinst(ci, NULL, *jl_ExecutionEngine->getContext());
         jl_typeinf_timing_end(start, 0);
+        newly_compiled = 1;
     }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
+    return newly_compiled;
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
