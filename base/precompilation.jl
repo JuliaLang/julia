@@ -809,7 +809,7 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                             close(std_pipe.in) # close pipe to end the std output monitor
                             wait(t_monitor)
                             if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
-                                failed_deps[dep_config] = (strict || is_direct_dep) ? string(sprint(showerror, err), "\n", strip(get(std_outputs, pkg, ""))) : ""
+                                failed_deps[pkg_config] = (strict || is_direct_dep) ? string(sprint(showerror, err), "\n", strip(get(std_outputs, pkg, ""))) : ""
                                 delete!(std_outputs, pkg_config) # so it's not shown as warnings, given error report
                                 !fancyprint && lock(print_lock) do
                                     println(io, " "^9, color_string("  ✗ ", Base.error_color()), name)
@@ -907,9 +907,11 @@ function precompilepkgs(pkgs::Vector{String}=String[];
         quick_exit && return
         err_str = ""
         n_direct_errs = 0
-        for (dep, err) in failed_deps
+        for (dep_config, err) in failed_deps
+            dep, config = dep_config
             if strict || (dep in direct_deps)
-                err_str = string(err_str, "\n$dep\n\n$err", (n_direct_errs > 0 ? "\n" : ""))
+                config_str = isempty(config[1]) ? "" : "$(join(config[1], " ")) "
+                err_str = string(err_str, "\n$(dep.name) $config_str\n\n$err", (n_direct_errs > 0 ? "\n" : ""))
                 n_direct_errs += 1
             end
         end
