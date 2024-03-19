@@ -831,7 +831,7 @@ end
     @test cmp(isless, NaN, NaN) == 0
 end
 @testset "ispositive/isnegative" begin
-    @testset "Type $(T)" for T in Base.uniontypes(Base.IEEEFloat)
+    @testset "Type $(T)" for T in union(Base.uniontypes(Base.IEEEFloat), (BigFloat,))
         @test ispositive(one(T))
         @test !ispositive(zero(T))
         @test !ispositive(-zero(T))
@@ -846,7 +846,7 @@ end
         @test !ispositive(T(-NaN))
     end
 
-    for T in Base.BitSigned_types
+    @testset "Type $(T)" for T in union(Base.BitSigned_types, (BigInt,))
         @test ispositive(one(T))
         @test !ispositive(zero(T))
         @test !ispositive(-one(T))
@@ -855,7 +855,7 @@ end
         @test isnegative(-one(T))
     end
 
-    for T in Base.BitUnsigned_types
+    @testset "Type $(T)" for T in Base.BitUnsigned_types
         @test ispositive(one(T))
         @test !ispositive(zero(T))
         @test ispositive(-one(T))
