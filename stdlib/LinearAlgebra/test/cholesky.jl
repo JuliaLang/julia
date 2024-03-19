@@ -549,10 +549,12 @@ end
  end
 
 @testset "diag" begin
-    A = randn(100, 100)
-    P = A' * A
-    C = cholesky(P)
-    @test diag(P) ≈ diag(C)
+    for T in (Float64, ComplexF64), k in (0, 1, -3), uplo in (:U, :L)
+        A = randn(T, 100, 100)
+        P = Hermitian(A' * A, uplo)
+        C = cholesky(P)
+        @test diag(P, k) ≈ diag(C, k)
+    end
 end
 
 end # module TestCholesky
