@@ -213,11 +213,12 @@ For example, it is not clear whether `1.+x` means `1. + x` or `1 .+ x`.
 Therefore this syntax is disallowed, and spaces must be used around
 the operator in such cases.
 
-There are two exceptions to the above rules: the postfix adjoint operator `'`
-and the infix range operator `:` don't have a dotted version (they can still be
-broadcasted using the function call syntax as in `adjoint.(A)` and `(:).(a,
-b)`). These operators are also unaffected by the `@.` macro. In
-the case of `'` this can be convenient to broadcast vectors along different
+There are some exceptions to the above rules: the postfix adjoint operator `'`,
+the infix range operator `:` and the property access operator `.` don't have a
+dotted version (they can still be broadcasted using the function call syntax as
+in `adjoint.(A)`, `(:).(a, b)` and `getproperty.(a, x)`). These operators are
+also unaffected by the `@.` macro. In the case of `'` this can be convenient to
+broadcast vectors along different
 dimensions:
 
 ```jldoctest

@@ -1284,6 +1284,7 @@ If you want to *avoid* adding dots for selected function calls in
 
 Note that the postfix `'` and infix `:` operators don't have a broadcasted
 version (`.'` and `.:` are not valid operators), and are not affected by `@.`.
+The dot operator for property access as in `a.x` is also unaffected.
 
 (`@.` is equivalent to a call to `@__dot__`.)
 
