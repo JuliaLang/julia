@@ -913,7 +913,7 @@ module MPQ
 
 # Rational{BigInt}
 import .Base: unsafe_rational, __throw_rational_argerror_zero
-import ..GMP: BigInt, MPZ, Limb, isnegative, libgmp
+import ..GMP: BigInt, MPZ, Limb, libgmp
 
 gmpq(op::Symbol) = (Symbol(:__gmpq_, op), libgmp)
 
