@@ -372,8 +372,8 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         configs::Union{Config,Vector{Config}}=(``=>Base.CacheFlags()),
                         io::IO=stderr,
                         # asking for timing disables fancy mode, as timing is shown in non-fancy mode
-                        fancyprint::Bool = can_fancyprint(io) && !timing
-                    )
+                        fancyprint::Bool = can_fancyprint(io) && !timing,
+                        manifest::Bool=false,)
 
     configs = configs isa Config ? [configs] : configs
 
@@ -529,55 +529,56 @@ function precompilepkgs(pkgs::Vector{String}=String[];
     end
     @debug "precompile: circular dep check done"
 
-    if isempty(pkgs)
-        pkgs = [pkg.name for pkg in direct_deps]
-        target = "all packages"
-    else
-        target = join(pkgs, ", ")
-    end
-    nconfigs = length(configs)
-    if nconfigs == 1
-        if !isempty(only(configs)[1])
-            target *= " for configuration $(join(only(configs)[1], " "))"
+    if !manifest
+        if isempty(pkgs)
+            pkgs = [pkg.name for pkg in direct_deps]
+            target = "all packages"
+        else
+            target = join(pkgs, ", ")
         end
-        target *= "..."
-    else
-        target *= " for $nconfigs compilation configurations..."
-    end
-
-    # restrict to dependencies of given packages
-    function collect_all_deps(depsmap, dep, alldeps=Set{Base.PkgId}())
-        for _dep in depsmap[dep]
-            if !(_dep in alldeps)
-                push!(alldeps, _dep)
-                collect_all_deps(depsmap, _dep, alldeps)
+        # restrict to dependencies of given packages
+        function collect_all_deps(depsmap, dep, alldeps=Set{Base.PkgId}())
+            for _dep in depsmap[dep]
+                if !(_dep in alldeps)
+                    push!(alldeps, _dep)
+                    collect_all_deps(depsmap, _dep, alldeps)
+                end
+            end
+            return alldeps
+        end
+        keep = Set{Base.PkgId}()
+        for dep in depsmap
+            dep_pkgid = first(dep)
+            if dep_pkgid.name in pkgs
+                push!(keep, dep_pkgid)
+                collect_all_deps(depsmap, dep_pkgid, keep)
             end
         end
-        return alldeps
-    end
-    keep = Set{Base.PkgId}()
-    for dep in depsmap
-        dep_pkgid = first(dep)
-        if dep_pkgid.name in pkgs
-            push!(keep, dep_pkgid)
-            collect_all_deps(depsmap, dep_pkgid, keep)
+        for ext in keys(exts)
+            if issubset(collect_all_deps(depsmap, ext), keep) # if all extension deps are kept
+                push!(keep, ext)
+            end
         end
-    end
-    for ext in keys(exts)
-        if issubset(collect_all_deps(depsmap, ext), keep) # if all extension deps are kept
-            push!(keep, ext)
+        filter!(d->in(first(d), keep), depsmap)
+        if isempty(depsmap)
+            if _from_loading
+                # if called from loading precompilation it may be a package from another environment stack so
+                # don't error and allow serial precompilation to try
+                # TODO: actually handle packages from other envs in the stack
+                return
+            else
+                return
+            end
         end
+    else
+        target = "manifest"
     end
-    filter!(d->in(first(d), keep), depsmap)
-    if isempty(depsmap)
-        if _from_loading
-            # if called from loading precompilation it may be a package from another environment stack so
-            # don't error and allow serial precompilation to try
-            # TODO: actually handle packages from other envs in the stack
-            return
-        else
-            error("No direct dependencies outside of the sysimage found matching $(repr(pkgs))")
-        end
+
+    nconfig = length(configs)
+    if nconfig > 1
+        target *= " for $nconfig compilation configurations..."
+    else
+        target *= "..."
     end
     @debug "precompile: packages filtered"
 
