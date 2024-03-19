@@ -153,7 +153,7 @@ julia> ispositive(0.0)
 false
 ```
 """
-ispositive(x) = !isnan(x) && !signbit(x) && !iszero(x)
+ispositive(x) = x>0
 
 """
     isnegative(x)
@@ -172,8 +172,7 @@ julia> isnegative(-0.0)
 false
 ```
 """
-isnegative(x) = !isnan(x) && signbit(x) && !iszero(x)
-isnegative(x::Integer) = signbit(x) # skip iszero
+isnegative(x) = x<0
 
 """
     sign(x)
