@@ -139,6 +139,10 @@ iseven(n::Real) = isinteger(n) && iszero(rem(Integer(n), 2))
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
 
+ispositive(x::Integer) = x > 0
+isnegative(x::Integer) = x < 0
+isnegative(x::Unsigned) = false
+
 flipsign(x::T, y::T) where {T<:BitSigned} = flipsign_int(x, y)
 flipsign(x::BitSigned, y::BitSigned) = flipsign_int(promote(x, y)...) % typeof(x)
 
