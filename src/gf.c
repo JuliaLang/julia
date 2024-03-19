@@ -2568,12 +2568,12 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         }
 
         JL_GC_PUSH1(&codeinst);
-        jl_compile_codeinst(codeinst);
+        int did_compile = jl_compile_codeinst(codeinst);
 
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
             // Something went wrong. Bail to the fallback path.
             codeinst = NULL;
-        } else {
+        } else if (did_compile) {
             record_precompile_statement(mi);
         }
         JL_GC_POP();
