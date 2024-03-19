@@ -836,15 +836,28 @@ then `CC = cholesky(C.U'C.U - v*v')` but the computation of `CC` only uses
 """
 lowrankdowndate(C::Cholesky, v::AbstractVector) = lowrankdowndate!(copy(C), copy(v))
 
-function diag(C::Cholesky{T}) where {T}
+function diag(C::Cholesky{T}, k::Int = 0) where {T}
     N = size(C, 1)
-    z = Vector{T}(undef, N)
-    U = C.U
-    for i=1:N
-        z[i] = zero(T)
-        for j=1:i
-          z[i] += U[j, i]^2
+    absk = abs(k)
+    z = Vector{T}(undef, N - absk)
+    UL = C.factors
+    if C.uplo == 'U'
+        for i in 1:N - abs(k)
+            z[i] = zero(T)
+            for j in 1:min(i, i+absk)
+                z[i] += UL[j, i]'UL[j, i+absk]
+            end
         end
+    else
+        for i in 1:N - abs(k)
+            z[i] = zero(T)
+            for j in 1:min(i, i+absk)
+                z[i] += UL[i, j]*UL[i+absk, j]'
+            end
+        end
+    end
+    if !(T <: Real) && k < 0
+        z .= adjoint.(z)
     end
     return z
 end
